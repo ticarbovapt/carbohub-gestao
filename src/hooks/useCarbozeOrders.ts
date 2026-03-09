@@ -1,0 +1,364 @@
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
+import type { Json } from "@/integrations/supabase/types";
+
+export type OrderStatus = "pending" | "confirmed" | "invoiced" | "shipped" | "delivered" | "cancelled";
+export type OrderType = "spot" | "recorrente";
+
+export interface OrderItem {
+  product_id?: string;
+  name: string;
+  quantity: number;
+  unit_price: number;
+  total: number;
+}
+
+export interface CarbozeOrder {
+  id: string;
+  order_number: string;
+  licensee_id: string | null;
+  customer_name: string;
+  customer_email: string | null;
+  customer_phone: string | null;
+  delivery_address: string | null;
+  delivery_city: string | null;
+  delivery_state: string | null;
+  delivery_zip: string | null;
+  items: Json;
+  subtotal: number;
+  shipping_cost: number;
+  discount: number;
+  total: number;
+  status: OrderStatus;
+  confirmed_at: string | null;
+  invoiced_at: string | null;
+  invoice_number: string | null;
+  shipped_at: string | null;
+  tracking_code: string | null;
+  tracking_url: string | null;
+  delivered_at: string | null;
+  cancelled_at: string | null;
+  cancellation_reason: string | null;
+  has_commission: boolean;
+  commission_rate: number;
+  commission_amount: number;
+  commission_paid_at: string | null;
+  notes: string | null;
+  internal_notes: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+  // Recurrence fields
+  order_type: OrderType;
+  is_recurring: boolean;
+  recurrence_interval_days: number | null;
+  next_delivery_date: string | null;
+  parent_order_id: string | null;
+  last_recurrence_order_id: string | null;
+  // Import/governance fields
+  is_test: boolean;
+  source_file: string | null;
+  external_ref: string | null;
+  // Joined data
+  licensee?: {
+    id: string;
+    name: string;
+    code: string;
+  } | null;
+}
+
+export interface OrderInsert {
+  customer_name: string;
+  customer_email?: string;
+  customer_phone?: string;
+  licensee_id?: string;
+  delivery_address?: string;
+  delivery_city?: string;
+  delivery_state?: string;
+  delivery_zip?: string;
+  items: Json;
+  subtotal: number;
+  shipping_cost?: number;
+  discount?: number;
+  total: number;
+  has_commission?: boolean;
+  commission_rate?: number;
+  notes?: string;
+  // Recurrence fields
+  order_type?: OrderType;
+  is_recurring?: boolean;
+  recurrence_interval_days?: number;
+  next_delivery_date?: string;
+  // Strategic V2.1 fields
+  cnpj?: string;
+  legal_name?: string;
+  trade_name?: string;
+  cnae?: string;
+  situacao_cadastral?: string;
+  point_type?: string;
+  avg_monthly_vehicles?: number;
+  works_with_diesel?: boolean;
+  works_with_fleets?: boolean;
+  internal_classification?: string;
+  latitude?: number;
+  longitude?: number;
+}
+
+export const ORDER_TYPE_LABELS: Record<OrderType, string> = {
+  spot: "Spot",
+  recorrente: "Recorrente",
+};
+
+const ORDER_STATUS_LABELS: Record<OrderStatus, string> = {
+  pending: "Pendente",
+  confirmed: "Confirmado",
+  invoiced: "Faturado",
+  shipped: "Enviado",
+  delivered: "Entregue",
+  cancelled: "Cancelado",
+};
+
+export function useOrders(statusFilter?: OrderStatus | "all") {
+  return useQuery({
+    queryKey: ["carboze-orders", statusFilter],
+    queryFn: async () => {
+      let query = supabase
+        .from("carboze_orders_secure")
+        .select(`
+          *,
+          licensee:licensees(id, name, code)
+        `)
+        .order("created_at", { ascending: false });
+
+      if (statusFilter && statusFilter !== "all") {
+        query = query.eq("status", statusFilter);
+      }
+
+      const { data, error } = await query;
+      if (error) throw error;
+      return data as CarbozeOrder[];
+    },
+  });
+}
+
+export function useOrder(id: string | undefined) {
+  return useQuery({
+    queryKey: ["carboze-order", id],
+    queryFn: async () => {
+      if (!id) return null;
+      const { data, error } = await supabase
+        .from("carboze_orders_secure")
+        .select(`
+          *,
+          licensee:licensees(id, name, code)
+        `)
+        .eq("id", id)
+        .single();
+      if (error) throw error;
+      return data as CarbozeOrder;
+    },
+    enabled: !!id,
+  });
+}
+
+export function useCreateOrder() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (data: OrderInsert) => {
+      const { data: user } = await supabase.auth.getUser();
+      
+      // Calculate commission if applicable
+      let commissionAmount = 0;
+      if (data.has_commission && data.commission_rate) {
+        commissionAmount = data.total * (data.commission_rate / 100);
+      }
+
+      const { data: result, error } = await supabase
+        .from("carboze_orders")
+        .insert({
+          ...data,
+          order_number: "", // Auto-generated by trigger
+          commission_amount: commissionAmount,
+          created_by: user.user?.id,
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      // Add to status history
+      await supabase.from("order_status_history").insert({
+        order_id: result.id,
+        status: "pending",
+        notes: "Pedido criado",
+        changed_by: user.user?.id,
+      });
+
+      return result;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["carboze-orders"] });
+      toast.success("Pedido criado com sucesso!");
+    },
+    onError: (error: Error) => {
+      toast.error("Erro ao criar pedido: " + error.message);
+    },
+  });
+}
+
+export function useUpdateOrderStatus() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      id,
+      status,
+      notes,
+      tracking_code,
+      tracking_url,
+      invoice_number,
+      cancellation_reason,
+    }: {
+      id: string;
+      status: OrderStatus;
+      notes?: string;
+      tracking_code?: string;
+      tracking_url?: string;
+      invoice_number?: string;
+      cancellation_reason?: string;
+    }) => {
+      const { data: user } = await supabase.auth.getUser();
+      
+      // Build update object
+      const updateData: Record<string, unknown> = { status };
+      const now = new Date().toISOString();
+
+      switch (status) {
+        case "confirmed":
+          updateData.confirmed_at = now;
+          break;
+        case "invoiced":
+          updateData.invoiced_at = now;
+          if (invoice_number) updateData.invoice_number = invoice_number;
+          break;
+        case "shipped":
+          updateData.shipped_at = now;
+          if (tracking_code) updateData.tracking_code = tracking_code;
+          if (tracking_url) updateData.tracking_url = tracking_url;
+          break;
+        case "delivered":
+          updateData.delivered_at = now;
+          break;
+        case "cancelled":
+          updateData.cancelled_at = now;
+          if (cancellation_reason) updateData.cancellation_reason = cancellation_reason;
+          break;
+      }
+
+      const { data: result, error } = await supabase
+        .from("carboze_orders")
+        .update(updateData)
+        .eq("id", id)
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      // Add to status history
+      await supabase.from("order_status_history").insert({
+        order_id: id,
+        status,
+        notes: notes || `Status atualizado para ${ORDER_STATUS_LABELS[status]}`,
+        changed_by: user.user?.id,
+      });
+
+      return result;
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["carboze-orders"] });
+      queryClient.invalidateQueries({ queryKey: ["carboze-order", variables.id] });
+      toast.success("Status do pedido atualizado!");
+    },
+    onError: (error: Error) => {
+      toast.error("Erro ao atualizar status: " + error.message);
+    },
+  });
+}
+
+export function useUpdateOrder() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ id, ...data }: { id: string } & Partial<Omit<CarbozeOrder, 'id' | 'order_number' | 'created_at' | 'updated_at' | 'licensee'>>) => {
+      const { data: result, error } = await supabase
+        .from("carboze_orders")
+        .update(data)
+        .eq("id", id)
+        .select()
+        .single();
+
+      if (error) throw error;
+      return result;
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["carboze-orders"] });
+      queryClient.invalidateQueries({ queryKey: ["carboze-order", variables.id] });
+      toast.success("Pedido atualizado com sucesso!");
+    },
+    onError: (error: Error) => {
+      toast.error("Erro ao atualizar pedido: " + error.message);
+    },
+  });
+}
+
+export function useOrderStats() {
+  return useQuery({
+    queryKey: ["order-stats"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("carboze_orders_secure")
+        .select("status, total, has_commission, commission_amount");
+
+      if (error) throw error;
+
+      const stats = {
+        total: data.length,
+        pending: data.filter((o) => o.status === "pending").length,
+        confirmed: data.filter((o) => o.status === "confirmed").length,
+        shipped: data.filter((o) => o.status === "shipped").length,
+        delivered: data.filter((o) => o.status === "delivered").length,
+        cancelled: data.filter((o) => o.status === "cancelled").length,
+        totalRevenue: data
+          .filter((o) => o.status === "delivered")
+          .reduce((sum, o) => sum + Number(o.total || 0), 0),
+        totalCommissions: data
+          .filter((o) => o.has_commission && o.status === "delivered")
+          .reduce((sum, o) => sum + Number(o.commission_amount || 0), 0),
+      };
+
+      return stats;
+    },
+  });
+}
+
+export function useOrderHistory(orderId: string | undefined) {
+  return useQuery({
+    queryKey: ["order-history", orderId],
+    queryFn: async () => {
+      if (!orderId) return [];
+      const { data, error } = await supabase
+        .from("order_status_history")
+        .select("*")
+        .eq("order_id", orderId)
+        .order("created_at", { ascending: false });
+
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!orderId,
+  });
+}
+
+export { ORDER_STATUS_LABELS };

@@ -1,0 +1,49 @@
+project_id = "spigkskwypbnaiwkaher"
+
+[functions.send-welcome-email]
+verify_jwt = false
+
+[functions.create-team-member]
+verify_jwt = false
+
+[functions.check-inactive-users]
+verify_jwt = false
+
+[functions.check-low-stock-alerts]
+verify_jwt = false
+
+[functions.process-recurring-orders]
+verify_jwt = false
+
+[functions.process-licensee-checkout]
+verify_jwt = false
+
+[functions.licensee-ai-recommendations]
+verify_jwt = false
+
+[functions.calculate-licensee-gamification]
+verify_jwt = false
+
+[functions.bulk-create-org-users]
+verify_jwt = false
+
+[functions.check-password-hibp]
+verify_jwt = false
+
+[functions.resolve-password-reset]
+verify_jwt = false
+
+[functions.cnpj-lookup]
+verify_jwt = false
+
+[functions.intelligence-engine]
+verify_jwt = false
+
+[functions.forecast-engine]
+verify_jwt = false
+
+[functions.text-enhancer]
+verify_jwt = false
+
+[functions.ai-chat]
+verify_jwt = false

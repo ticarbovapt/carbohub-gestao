@@ -1,0 +1,237 @@
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
+import type { PDV, PDVReplenishmentHistory } from "@/types/pdv";
+
+// Hook para verificar se o usuário é de um PDV
+export function usePDVStatus() {
+  const { user } = useAuth();
+
+  return useQuery({
+    queryKey: ["pdv-status", user?.id],
+    queryFn: async () => {
+      if (!user) return null;
+
+      const { data, error } = await supabase
+        .from("pdv_users")
+        .select(`
+          *,
+          pdv:pdvs(*)
+        `)
+        .eq("user_id", user.id)
+        .single();
+
+      if (error && error.code !== "PGRST116") throw error;
+      return data;
+    },
+    enabled: !!user,
+  });
+}
+
+// Hook para buscar dados do PDV
+export function usePDVData(pdvId: string | undefined) {
+  return useQuery({
+    queryKey: ["pdv-data", pdvId],
+    queryFn: async () => {
+      if (!pdvId) return null;
+
+      const { data, error } = await supabase
+        .from("pdvs")
+        .select("*")
+        .eq("id", pdvId)
+        .single();
+
+      if (error) throw error;
+
+      return {
+        id: data.id,
+        pdvCode: data.pdv_code,
+        name: data.name,
+        cnpj: data.cnpj,
+        contactName: data.contact_name,
+        contactPhone: data.contact_phone,
+        email: data.email,
+        addressStreet: data.address_street,
+        addressCity: data.address_city,
+        addressState: data.address_state,
+        addressZip: data.address_zip,
+        latitude: data.latitude,
+        longitude: data.longitude,
+        currentStock: data.current_stock,
+        minStockThreshold: data.min_stock_threshold,
+        avgDailyConsumption: data.avg_daily_consumption,
+        lastReplenishmentAt: data.last_replenishment_at,
+        lastReplenishmentQty: data.last_replenishment_qty,
+        status: data.status as PDV['status'],
+        hasStockAlert: data.has_stock_alert,
+        lastAlertAt: data.last_alert_at,
+        assignedLicenseeId: data.assigned_licensee_id,
+        notes: data.notes,
+        createdAt: data.created_at,
+        updatedAt: data.updated_at,
+      } as PDV;
+    },
+    enabled: !!pdvId,
+  });
+}
+
+// Hook para buscar histórico de reposições
+export function usePDVReplenishmentHistory(pdvId: string | undefined) {
+  return useQuery({
+    queryKey: ["pdv-replenishment-history", pdvId],
+    queryFn: async () => {
+      if (!pdvId) return [];
+
+      const { data, error } = await supabase
+        .from("pdv_replenishment_history")
+        .select("*")
+        .eq("pdv_id", pdvId)
+        .order("created_at", { ascending: false })
+        .limit(20);
+
+      if (error) throw error;
+
+      return data.map((r) => ({
+        id: r.id,
+        pdvId: r.pdv_id,
+        quantity: r.quantity,
+        previousStock: r.previous_stock,
+        newStock: r.new_stock,
+        serviceOrderId: r.service_order_id,
+        notes: r.notes,
+        replenishedBy: r.replenished_by,
+        createdAt: r.created_at,
+      })) as PDVReplenishmentHistory[];
+    },
+    enabled: !!pdvId,
+  });
+}
+
+// Hook para listar todos os PDVs (admin)
+export function usePDVList() {
+  return useQuery({
+    queryKey: ["pdv-list"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("pdvs")
+        .select(`
+          *,
+          licensee:licensees(id, name, code)
+        `)
+        .order("created_at", { ascending: false });
+
+      if (error) throw error;
+
+      return data.map((p) => ({
+        id: p.id,
+        pdvCode: p.pdv_code,
+        name: p.name,
+        contactName: p.contact_name,
+        contactPhone: p.contact_phone,
+        email: p.email,
+        addressCity: p.address_city,
+        addressState: p.address_state,
+        currentStock: p.current_stock,
+        minStockThreshold: p.min_stock_threshold,
+        avgDailyConsumption: p.avg_daily_consumption,
+        status: p.status as PDV['status'],
+        hasStockAlert: p.has_stock_alert,
+        assignedLicenseeId: p.assigned_licensee_id,
+        licensee: p.licensee,
+        createdAt: p.created_at,
+      }));
+    },
+  });
+}
+
+// Hook para solicitar reposição
+export function useRequestReplenishment() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (data: {
+      pdvId: string;
+      quantity: number;
+      notes?: string;
+    }) => {
+      const user = (await supabase.auth.getUser()).data.user;
+      
+      // Get PDV data
+      const { data: pdv, error: pdvError } = await supabase
+        .from("pdvs")
+        .select("*, licensee:licensees(id, name)")
+        .eq("id", data.pdvId)
+        .single();
+      
+      if (pdvError) throw pdvError;
+
+      // Create OS for replenishment
+      const { data: os, error: osError } = await supabase
+        .from("service_orders")
+        .insert([{
+          os_number: "TEMP", // Will be generated by trigger
+          title: `Reposição PDV ${pdv.pdv_code} - ${pdv.name}`,
+          description: `Solicitação de reposição: ${data.quantity} unidades\n\nEndereço: ${pdv.address_street || 'N/A'}, ${pdv.address_city || ''} - ${pdv.address_state || ''}\n\nObservações: ${data.notes || 'Nenhuma'}`,
+          current_department: "expedicao" as const,
+          status: "active" as const,
+          created_by: user?.id || "",
+          priority: pdv.has_stock_alert ? 1 : 2,
+          metadata: {
+            pdv_id: data.pdvId,
+            pdv_code: pdv.pdv_code,
+            requested_quantity: data.quantity,
+            replenishment_type: "pdv_request",
+          },
+        }])
+        .select()
+        .single();
+
+      if (osError) throw osError;
+
+      return os;
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["pdv-data", variables.pdvId] });
+    },
+  });
+}
+
+// Hook para criar PDV (admin)
+export function useCreatePDV() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (data: Partial<PDV>) => {
+      const user = (await supabase.auth.getUser()).data.user;
+
+      const { data: newPdv, error } = await supabase
+        .from("pdvs")
+        .insert({
+          pdv_code: "", // Will be generated by trigger
+          name: data.name || "",
+          contact_name: data.contactName,
+          contact_phone: data.contactPhone,
+          email: data.email,
+          address_street: data.addressStreet,
+          address_city: data.addressCity,
+          address_state: data.addressState,
+          address_zip: data.addressZip,
+          latitude: data.latitude,
+          longitude: data.longitude,
+          current_stock: data.currentStock || 0,
+          min_stock_threshold: data.minStockThreshold || 10,
+          assigned_licensee_id: data.assignedLicenseeId,
+          notes: data.notes,
+          created_by: user?.id,
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+      return newPdv;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["pdv-list"] });
+    },
+  });
+}
