@@ -62,7 +62,7 @@ const Team = () => {
   const updateRole = useUpdateUserRole();
   const updateDepartment = useUpdateUserDepartment();
   const resendEmail = useResendWelcomeEmail();
-  const { isAdmin, isManager, isMasterAdmin, user } = useAuth();
+  const { isAdmin, isManager, isMasterAdmin, isCeo, isAnyGestor, user } = useAuth();
   
   // Filter states
   const [departmentFilter, setDepartmentFilter] = useState<DepartmentType | "all">("all");
@@ -73,9 +73,10 @@ const Team = () => {
   // Filter only approved members (exclude deleted)
   const approvedMembers = members?.filter((m) => m.status === "approved") || [];
   
-  // For managers, also show members they created
-  const visibleMembers = isAdmin 
-    ? approvedMembers 
+  // For admins/CEO, show all. For managers/gestores, show members they created
+  const canSeeAll = isAdmin || isCeo || isMasterAdmin;
+  const visibleMembers = canSeeAll
+    ? approvedMembers
     : approvedMembers.filter((m) => m.created_by_manager === user?.id || !m.password_must_change);
   
   // Apply filters
@@ -186,7 +187,7 @@ const Team = () => {
               Gerenciamento de usuários e permissões da plataforma
             </p>
           </div>
-          {(isAdmin || isManager) && <AddMemberDialog onMemberAdded={() => refetch()} />}
+          {(isAdmin || isManager || isCeo || isAnyGestor) && <AddMemberDialog onMemberAdded={() => refetch()} />}
         </div>
 
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
@@ -298,7 +299,7 @@ const Team = () => {
           ) : (
             filteredMembers.map((member) => {
               const status = getMemberStatus(member);
-              const canManageMember = isAdmin || (isManager && member.created_by_manager === user?.id);
+              const canManageMember = isAdmin || isCeo || isMasterAdmin || ((isManager || isAnyGestor) && member.created_by_manager === user?.id);
               
               return (
                 <div key={member.id} className="flex items-center justify-between px-6 py-4">
@@ -329,7 +330,7 @@ const Team = () => {
                         )}
                       </div>
                       <div className="flex items-center gap-2 text-sm text-board-muted">
-                        {isAdmin ? (
+                        {(isAdmin || isCeo) ? (
                           <>
                             <Select
                               value={getPrimaryRole(member.roles)}
@@ -407,7 +408,7 @@ const Team = () => {
                       {getRoleDisplay(member.roles)}
                     </Badge>
                     
-                    {isAdmin && (
+                    {(isAdmin || isCeo) && (
                       <>
                         <EditMemberDialog member={member} onUpdated={() => refetch()} />
                         <DeleteMemberDialog member={member} onDeleted={() => refetch()} />
