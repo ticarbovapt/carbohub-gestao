@@ -1,15 +1,29 @@
-import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { Resend } from "https://esm.sh/resend@4.0.0";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 
 const resend = new Resend(Deno.env.get("RESEND_API_KEY"));
 
 // SECURITY FIX: Restrict CORS to known origins
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "https://carbohub.com.br",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
-};
+const ALLOWED_ORIGINS = [
+  "https://carbohub.com.br",
+  "https://www.carbohub.com.br",
+  "http://localhost:8080",
+  "http://localhost:5173",
+  "http://localhost:3000",
+];
+
+function getCorsHeaders(req: Request) {
+  const origin = req.headers.get("origin") || "";
+  const allowedOrigin = ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0];
+  return {
+    "Access-Control-Allow-Origin": allowedOrigin,
+    "Access-Control-Allow-Methods": "GET, POST, OPTIONS, PUT, DELETE",
+    "Access-Control-Allow-Headers":
+      "authorization, x-client-info, apikey, content-type, x-region, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
+    "Access-Control-Max-Age": "86400",
+    "Vary": "Origin",
+  };
+}
 
 interface WelcomeEmailRequest {
   email?: string;
@@ -21,14 +35,16 @@ interface WelcomeEmailRequest {
   managerName?: string;
 }
 
-const handler = async (req: Request): Promise<Response> => {
+Deno.serve(async (req: Request): Promise<Response> => {
+  const corsHeaders = getCorsHeaders(req);
+
   // Handle CORS preflight requests
   if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
+    return new Response(null, { status: 204, headers: corsHeaders });
   }
 
   try {
-    // SECURITY FIX: Require authentication - only managers/admins or service role can send welcome emails
+    // SECURITY FIX: Require authentication
     const authHeader = req.headers.get("authorization");
     if (!authHeader) {
       return new Response(
@@ -84,20 +100,26 @@ const handler = async (req: Request): Promise<Response> => {
     if (!email && userId) {
       const { data: userData, error: userError } = await supabaseAdmin.auth.admin.getUserById(userId);
       if (userError || !userData?.user?.email) {
-        throw new Error("Não foi possível encontrar o e-mail do usuário");
+        return new Response(
+          JSON.stringify({ success: false, error: "Não foi possível encontrar o e-mail do usuário" }),
+          { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } }
+        );
       }
       email = userData.user.email;
     }
 
     // Validate required fields
     if (!email || !fullName || !username || !tempPassword || !platformUrl) {
-      throw new Error("Missing required fields");
+      return new Response(
+        JSON.stringify({ success: false, error: "Missing required fields" }),
+        { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } }
+      );
     }
 
     const emailResponse = await resend.emails.send({
       from: "Carbo OPS <onboarding@resend.dev>",
       to: [email],
-      subject: "🚀 Acesso à Plataforma Carbo OPS",
+      subject: "Acesso à Plataforma Carbo OPS",
       html: `
         <!DOCTYPE html>
         <html>
@@ -105,8 +127,8 @@ const handler = async (req: Request): Promise<Response> => {
           <meta charset="utf-8">
           <meta name="viewport" content="width=device-width, initial-scale=1.0">
           <style>
-            body { 
-              font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif; 
+            body {
+              font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
               line-height: 1.6;
               color: #1a1a2e;
               margin: 0;
@@ -190,10 +212,10 @@ const handler = async (req: Request): Promise<Response> => {
               <h1>Bem-vindo ao Carbo OPS</h1>
             </div>
             <div class="content">
-              <p>Olá, <strong>${fullName}</strong>! 👋</p>
-              
+              <p>Olá, <strong>${fullName}</strong>!</p>
+
               <p>Seu acesso à plataforma Carbo OPS foi criado${managerName ? ` por ${managerName}` : ''}. Agora você faz parte da nossa operação!</p>
-              
+
               <div class="credentials">
                 <div class="credential-item">
                   <span class="credential-label">Usuário:</span>
@@ -204,15 +226,15 @@ const handler = async (req: Request): Promise<Response> => {
                   <span class="credential-value">${tempPassword}</span>
                 </div>
               </div>
-              
+
               <div class="warning">
-                ⚠️ <strong>Importante:</strong> Esta é uma senha temporária. Ao acessar pela primeira vez, você será solicitado a criar uma nova senha.
+                <strong>Importante:</strong> Esta é uma senha temporária. Ao acessar pela primeira vez, você será solicitado a criar uma nova senha.
               </div>
-              
+
               <center>
                 <a href="${platformUrl}" class="cta-button">Acessar a Plataforma</a>
               </center>
-              
+
               <p style="font-size: 14px; color: #64748b; margin-top: 24px;">
                 Se você tiver qualquer dúvida, entre em contato com seu gestor direto.
               </p>
@@ -229,29 +251,24 @@ const handler = async (req: Request): Promise<Response> => {
 
     if (emailResponse.error) {
       console.error("Failed to send welcome email:", emailResponse.error);
-      throw new Error(emailResponse.error.message || "Falha ao enviar e-mail de boas-vindas");
+      return new Response(
+        JSON.stringify({ success: false, error: emailResponse.error.message || "Falha ao enviar e-mail" }),
+        { status: 500, headers: { "Content-Type": "application/json", ...corsHeaders } }
+      );
     }
 
     console.log("Welcome email sent successfully:", emailResponse);
 
     return new Response(JSON.stringify({ success: true, data: emailResponse }), {
       status: 200,
-      headers: {
-        "Content-Type": "application/json",
-        ...corsHeaders,
-      },
+      headers: { "Content-Type": "application/json", ...corsHeaders },
     });
   } catch (error: unknown) {
     console.error("Error in send-welcome-email function:", error);
     const errorMessage = error instanceof Error ? error.message : "Unknown error";
     return new Response(
       JSON.stringify({ success: false, error: errorMessage }),
-      {
-        status: 500,
-        headers: { "Content-Type": "application/json", ...corsHeaders },
-      }
+      { status: 500, headers: { "Content-Type": "application/json", ...getCorsHeaders(req) } }
     );
   }
-};
-
-serve(handler);
+});
