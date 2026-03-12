@@ -1,8 +1,22 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.39.3";
 
+// SECURITY FIX: Restrict CORS to known origins
+const ALLOWED_ORIGINS = ["https://carbohub.com.br", "https://www.carbohub.com.br", "http://localhost:8080", "http://localhost:5173"];
+
+function getCorsHeaders(req: Request) {
+  const origin = req.headers.get("origin") || "";
+  const allowedOrigin = ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0];
+  return {
+    "Access-Control-Allow-Origin": allowedOrigin,
+    "Access-Control-Allow-Headers":
+      "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
+  };
+}
+
+// Keep for backward compatibility in existing code
 const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Origin": ALLOWED_ORIGINS[0],
   "Access-Control-Allow-Headers":
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
@@ -176,6 +190,8 @@ const handler = async (req: Request): Promise<Response> => {
 
     const emailResult = await emailResponse.json();
 
+    // SECURITY FIX: Never return tempPassword in API response
+    // The password is sent via email only
     return new Response(
       JSON.stringify({
         success: true,
@@ -183,7 +199,6 @@ const handler = async (req: Request): Promise<Response> => {
           userId: newUserId,
           username,
           email,
-          tempPassword,
           emailSent: emailResponse.ok,
         },
       }),

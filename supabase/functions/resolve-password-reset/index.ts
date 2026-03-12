@@ -1,8 +1,9 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.39.3";
 
+// SECURITY FIX: Restrict CORS to known origins
 const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Origin": "https://carbohub.com.br",
   "Access-Control-Allow-Headers":
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
@@ -123,11 +124,41 @@ const handler = async (req: Request): Promise<Response> => {
       details: { target_user_id: resetRequest.user_id },
     });
 
+    // SECURITY FIX: Never return tempPassword in API response
+    // The password is sent via email to the user
+    // Send welcome/reset email with temp password
+    const { data: userProfile } = await supabaseAdmin
+      .from("profiles")
+      .select("full_name, username")
+      .eq("id", resetRequest.user_id)
+      .single();
+
+    if (userProfile) {
+      const { data: userData } = await supabaseAdmin.auth.admin.getUserById(resetRequest.user_id);
+      if (userData?.user?.email) {
+        await fetch(`${supabaseUrl}/functions/v1/send-welcome-email`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${supabaseServiceKey}`,
+          },
+          body: JSON.stringify({
+            email: userData.user.email,
+            fullName: userProfile.full_name || "Usuário",
+            username: userProfile.username || "",
+            tempPassword,
+            platformUrl: Deno.env.get("PLATFORM_URL") || "https://carbohub.com.br",
+            managerName: "Gestor (reset de senha)",
+          }),
+        });
+      }
+    }
+
     return new Response(
       JSON.stringify({
         success: true,
         action: "approved",
-        tempPassword,
+        message: "Nova senha temporária enviada por e-mail ao usuário.",
       }),
       { status: 200, headers: { "Content-Type": "application/json", ...corsHeaders } }
     );

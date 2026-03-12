@@ -4,8 +4,9 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 
 const resend = new Resend(Deno.env.get("RESEND_API_KEY"));
 
+// SECURITY FIX: Restrict CORS to known origins
 const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Origin": "https://carbohub.com.br",
   "Access-Control-Allow-Headers":
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
@@ -27,24 +28,60 @@ const handler = async (req: Request): Promise<Response> => {
   }
 
   try {
-    const { 
-      email: providedEmail, 
+    // SECURITY FIX: Require authentication - only managers/admins or service role can send welcome emails
+    const authHeader = req.headers.get("authorization");
+    if (!authHeader) {
+      return new Response(
+        JSON.stringify({ success: false, error: "Missing authorization header" }),
+        { status: 401, headers: { "Content-Type": "application/json", ...corsHeaders } }
+      );
+    }
+
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey);
+
+    const token = authHeader.replace("Bearer ", "");
+
+    // Allow service_role key (internal calls from create-team-member)
+    const isServiceRole = token === serviceRoleKey;
+
+    if (!isServiceRole) {
+      // Verify the caller is a valid authenticated user with manager/admin role
+      const { data: { user: callingUser }, error: authError } = await supabaseAdmin.auth.getUser(token);
+      if (authError || !callingUser) {
+        return new Response(
+          JSON.stringify({ success: false, error: "Unauthorized: Invalid session" }),
+          { status: 401, headers: { "Content-Type": "application/json", ...corsHeaders } }
+        );
+      }
+
+      const { data: roleCheck } = await supabaseAdmin.rpc("is_manager_or_admin", {
+        _user_id: callingUser.id,
+      });
+
+      if (!roleCheck) {
+        return new Response(
+          JSON.stringify({ success: false, error: "Unauthorized: Insufficient permissions" }),
+          { status: 403, headers: { "Content-Type": "application/json", ...corsHeaders } }
+        );
+      }
+    }
+
+    const {
+      email: providedEmail,
       userId,
-      fullName, 
-      username, 
-      tempPassword, 
+      fullName,
+      username,
+      tempPassword,
       platformUrl,
-      managerName 
+      managerName
     }: WelcomeEmailRequest = await req.json();
 
     let email = providedEmail;
 
     // If no email provided but userId is, look it up from auth.users
     if (!email && userId) {
-      const supabaseAdmin = createClient(
-        Deno.env.get("SUPABASE_URL")!,
-        Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
-      );
       const { data: userData, error: userError } = await supabaseAdmin.auth.admin.getUserById(userId);
       if (userError || !userData?.user?.email) {
         throw new Error("Não foi possível encontrar o e-mail do usuário");

@@ -5,8 +5,10 @@ import { cn } from "@/lib/utils";
 import { useAIChat } from "@/hooks/useAIChat";
 import { useNavigate } from "react-router-dom";
 import { BoardLayout } from "@/components/layouts/BoardLayout";
+import DOMPurify from "dompurify";
 
 function MarkdownText({ content }: { content: string }) {
+  // SECURITY FIX: All HTML is sanitized with DOMPurify before rendering
   const lines = content.split("\n");
   return (
     <div className="space-y-1.5 text-sm leading-relaxed">
@@ -15,14 +17,15 @@ function MarkdownText({ content }: { content: string }) {
           .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
           .replace(/\*(.+?)\*/g, "<em>$1</em>")
           .replace(/`(.+?)`/g, '<code class="bg-muted px-1 py-0.5 rounded text-xs font-mono">$1</code>');
+        const sanitized = DOMPurify.sanitize(processed);
 
         if (line.startsWith("- ") || line.startsWith("• ")) {
-          return <div key={i} className="flex gap-2 ml-3"><span className="text-primary">•</span><span dangerouslySetInnerHTML={{ __html: processed.slice(2) }} /></div>;
+          return <div key={i} className="flex gap-2 ml-3"><span className="text-primary">•</span><span dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(processed.slice(2)) }} /></div>;
         }
-        if (line.startsWith("# ")) return <h2 key={i} className="text-lg font-bold text-foreground mt-2" dangerouslySetInnerHTML={{ __html: processed.slice(2) }} />;
-        if (line.startsWith("## ")) return <h3 key={i} className="text-base font-semibold text-foreground mt-2" dangerouslySetInnerHTML={{ __html: processed.slice(3) }} />;
+        if (line.startsWith("# ")) return <h2 key={i} className="text-lg font-bold text-foreground mt-2" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(processed.slice(2)) }} />;
+        if (line.startsWith("## ")) return <h3 key={i} className="text-base font-semibold text-foreground mt-2" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(processed.slice(3)) }} />;
         if (line.trim() === "") return <div key={i} className="h-3" />;
-        return <p key={i} dangerouslySetInnerHTML={{ __html: processed }} />;
+        return <p key={i} dangerouslySetInnerHTML={{ __html: sanitized }} />;
       })}
     </div>
   );

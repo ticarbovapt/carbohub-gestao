@@ -4,9 +4,11 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useAIChat } from "@/hooks/useAIChat";
 import { useNavigate } from "react-router-dom";
+import DOMPurify from "dompurify";
 
 function MarkdownText({ content }: { content: string }) {
   // Simple markdown-like rendering for bold, italic, lists
+  // SECURITY FIX: All HTML is sanitized with DOMPurify before rendering
   const lines = content.split("\n");
   return (
     <div className="space-y-1 text-sm leading-relaxed">
@@ -15,12 +17,13 @@ function MarkdownText({ content }: { content: string }) {
           .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
           .replace(/\*(.+?)\*/g, "<em>$1</em>")
           .replace(/`(.+?)`/g, '<code class="bg-muted px-1 py-0.5 rounded text-xs">$1</code>');
+        const sanitized = DOMPurify.sanitize(processed);
 
         if (line.startsWith("- ") || line.startsWith("• ")) {
-          return <div key={i} className="flex gap-1.5 ml-2"><span>•</span><span dangerouslySetInnerHTML={{ __html: processed.slice(2) }} /></div>;
+          return <div key={i} className="flex gap-1.5 ml-2"><span>•</span><span dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(processed.slice(2)) }} /></div>;
         }
         if (line.trim() === "") return <div key={i} className="h-2" />;
-        return <p key={i} dangerouslySetInnerHTML={{ __html: processed }} />;
+        return <p key={i} dangerouslySetInnerHTML={{ __html: sanitized }} />;
       })}
     </div>
   );

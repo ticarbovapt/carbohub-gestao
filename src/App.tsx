@@ -380,12 +380,12 @@ function AnimatedRoutes() {
           <Route path="/licenciado/carboVAPT/pagamento" element={<ProtectedRoute><CarboVAPTPayment /></ProtectedRoute>} />
           <Route path="/licenciado/carboVAPT/confirmacao" element={<ProtectedRoute><CarboVAPTConfirmation /></ProtectedRoute>} />
 
-          {/* Legacy portal redirects */}
-          <Route path="/portal" element={<LicenseeDashboard />} />
-          <Route path="/portal/vapt" element={<ServiceCatalog operationType="carbo_vapt" />} />
-          <Route path="/portal/ze" element={<ServiceCatalog operationType="carbo_ze" />} />
-          <Route path="/portal/pedidos" element={<LicenseeRequests />} />
-          <Route path="/portal/creditos" element={<LicenseeCredits />} />
+          {/* Legacy portal redirects - SECURITY FIX: Wrapped with ProtectedRoute */}
+          <Route path="/portal" element={<ProtectedRoute><LicenseeDashboard /></ProtectedRoute>} />
+          <Route path="/portal/vapt" element={<ProtectedRoute><ServiceCatalog operationType="carbo_vapt" /></ProtectedRoute>} />
+          <Route path="/portal/ze" element={<ProtectedRoute><ServiceCatalog operationType="carbo_ze" /></ProtectedRoute>} />
+          <Route path="/portal/pedidos" element={<ProtectedRoute><LicenseeRequests /></ProtectedRoute>} />
+          <Route path="/portal/creditos" element={<ProtectedRoute><LicenseeCredits /></ProtectedRoute>} />
 
           {/* PDV Routes */}
           <Route

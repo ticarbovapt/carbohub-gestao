@@ -246,9 +246,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const isAnyGestor = isCeo || isGestorAdm || isGestorFin || isGestorCompras;
   const isAnyOperador = isOperadorFiscal || isOperador;
 
-  // MasterAdmin: Admin legado + CEO carbo OU requested_role MasterAdmin
-  // Simplificado para evitar falsos negativos — qualquer uma das condições garante acesso
-  const isMasterAdmin = (isAdmin && isCeo) || profile?.requested_role === "MasterAdmin";
+  // MasterAdmin: SOMENTE Admin legado + CEO carbo (dual-role obrigatório)
+  // SECURITY FIX: Removido bypass via requested_role que permitia escalação de privilégios
+  const isMasterAdmin = isAdmin && isCeo;
   
   // Governance & Cockpit access — strictly MasterAdmin only
   const canAccessGovernance = isMasterAdmin;
