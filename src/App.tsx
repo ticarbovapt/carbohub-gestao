@@ -45,6 +45,8 @@ import MrpSuppliers from "./pages/MrpSuppliers";
 import NotFound from "./pages/NotFound";
 import AIAssistantPage from "./pages/AIAssistantPage";
 import { AIChatDrawer } from "./components/ai/AIChatDrawer";
+import BlingIntegration from "./pages/BlingIntegration";
+import BlingCallback from "./pages/BlingCallback";
 
 // Licensee Portal Pages
 import LicenseeDashboard from "./pages/licensee/LicenseeDashboard";
@@ -400,6 +402,17 @@ function AnimatedRoutes() {
             <Route path="stock" element={<PDVStock />} />
             <Route path="history" element={<PDVHistory />} />
           </Route>
+
+          {/* Bling Integration */}
+          <Route path="/integrations/bling/callback" element={<BlingCallback />} />
+          <Route
+            path="/integrations/bling"
+            element={
+              <ProtectedRoute>
+                <BlingIntegration />
+              </ProtectedRoute>
+            }
+          />
 
           {/* AI Assistant */}
           <Route
