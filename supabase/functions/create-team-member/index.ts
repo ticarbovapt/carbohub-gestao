@@ -1,25 +1,26 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.39.3";
 
 // SECURITY FIX: Restrict CORS to known origins
-const ALLOWED_ORIGINS = ["https://carbohub.com.br", "https://www.carbohub.com.br", "http://localhost:8080", "http://localhost:5173"];
+const ALLOWED_ORIGINS = [
+  "https://carbohub.com.br",
+  "https://www.carbohub.com.br",
+  "http://localhost:8080",
+  "http://localhost:5173",
+  "http://localhost:3000",
+];
 
 function getCorsHeaders(req: Request) {
   const origin = req.headers.get("origin") || "";
   const allowedOrigin = ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0];
   return {
     "Access-Control-Allow-Origin": allowedOrigin,
+    "Access-Control-Allow-Methods": "GET, POST, OPTIONS, PUT, DELETE",
     "Access-Control-Allow-Headers":
-      "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
+      "authorization, x-client-info, apikey, content-type, x-region, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
+    "Access-Control-Max-Age": "86400",
+    "Vary": "Origin",
   };
 }
-
-// Keep for backward compatibility in existing code
-const corsHeaders = {
-  "Access-Control-Allow-Origin": ALLOWED_ORIGINS[0],
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
-};
 
 const DEPARTMENT_PREFIXES: Record<string, string> = {
   // Novos departamentos organizacionais
@@ -50,9 +51,12 @@ interface CreateMemberRequest {
   platformUrl: string;
 }
 
-const handler = async (req: Request): Promise<Response> => {
+Deno.serve(async (req: Request): Promise<Response> => {
+  const corsHeaders = getCorsHeaders(req);
+
+  // Handle CORS preflight
   if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
+    return new Response(null, { status: 204, headers: corsHeaders });
   }
 
   try {
@@ -61,7 +65,10 @@ const handler = async (req: Request): Promise<Response> => {
     const resendApiKey = Deno.env.get("RESEND_API_KEY");
 
     if (!supabaseUrl || !supabaseServiceKey) {
-      throw new Error("Missing Supabase configuration");
+      return new Response(
+        JSON.stringify({ success: false, error: "Missing Supabase configuration" }),
+        { status: 500, headers: { "Content-Type": "application/json", ...corsHeaders } }
+      );
     }
 
     // RESEND_API_KEY is optional - user will be created even without email
@@ -72,7 +79,10 @@ const handler = async (req: Request): Promise<Response> => {
 
     const authHeader = req.headers.get("authorization");
     if (!authHeader) {
-      throw new Error("Missing authorization header");
+      return new Response(
+        JSON.stringify({ success: false, error: "Missing authorization header" }),
+        { status: 401, headers: { "Content-Type": "application/json", ...corsHeaders } }
+      );
     }
 
     const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
@@ -80,7 +90,10 @@ const handler = async (req: Request): Promise<Response> => {
 
     const { data: { user: callingUser }, error: userError } = await supabaseAdmin.auth.getUser(token);
     if (userError || !callingUser) {
-      throw new Error("Unauthorized: Invalid user session");
+      return new Response(
+        JSON.stringify({ success: false, error: "Unauthorized: Invalid user session" }),
+        { status: 401, headers: { "Content-Type": "application/json", ...corsHeaders } }
+      );
     }
 
     const { data: roleCheck } = await supabaseAdmin.rpc("is_manager_or_admin", {
@@ -88,7 +101,10 @@ const handler = async (req: Request): Promise<Response> => {
     });
 
     if (!roleCheck) {
-      throw new Error("Unauthorized: Only managers and admins can create team members");
+      return new Response(
+        JSON.stringify({ success: false, error: "Unauthorized: Only managers and admins can create team members" }),
+        { status: 403, headers: { "Content-Type": "application/json", ...corsHeaders } }
+      );
     }
 
     const {
@@ -105,12 +121,18 @@ const handler = async (req: Request): Promise<Response> => {
     }: CreateMemberRequest = await req.json();
 
     if (!email || !fullName || !department || !role || !platformUrl) {
-      throw new Error("Missing required fields: email, fullName, department, role, platformUrl");
+      return new Response(
+        JSON.stringify({ success: false, error: "Missing required fields: email, fullName, department, role, platformUrl" }),
+        { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } }
+      );
     }
 
     const deptPrefix = DEPARTMENT_PREFIXES[department];
     if (!deptPrefix) {
-      throw new Error(`Invalid department: ${department}`);
+      return new Response(
+        JSON.stringify({ success: false, error: `Invalid department: ${department}` }),
+        { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } }
+      );
     }
 
     const { data: username, error: usernameError } = await supabaseAdmin.rpc("generate_username", {
@@ -118,13 +140,21 @@ const handler = async (req: Request): Promise<Response> => {
     });
 
     if (usernameError || !username) {
-      throw new Error("Failed to generate username");
+      console.error("Username generation error:", usernameError);
+      return new Response(
+        JSON.stringify({ success: false, error: "Failed to generate username" }),
+        { status: 500, headers: { "Content-Type": "application/json", ...corsHeaders } }
+      );
     }
 
     const { data: tempPassword, error: passwordError } = await supabaseAdmin.rpc("generate_temp_password");
 
     if (passwordError || !tempPassword) {
-      throw new Error("Failed to generate temporary password");
+      console.error("Password generation error:", passwordError);
+      return new Response(
+        JSON.stringify({ success: false, error: "Failed to generate temporary password" }),
+        { status: 500, headers: { "Content-Type": "application/json", ...corsHeaders } }
+      );
     }
 
     const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
@@ -135,7 +165,10 @@ const handler = async (req: Request): Promise<Response> => {
     });
 
     if (authError) {
-      throw new Error(`Failed to create user: ${authError.message}`);
+      return new Response(
+        JSON.stringify({ success: false, error: `Failed to create user: ${authError.message}` }),
+        { status: 500, headers: { "Content-Type": "application/json", ...corsHeaders } }
+      );
     }
 
     const newUserId = authData.user.id;
@@ -202,10 +235,6 @@ const handler = async (req: Request): Promise<Response> => {
       }
     }
 
-    // SECURITY FIX: Never return tempPassword in API response
-    // The password is sent via email only (when RESEND is configured)
-    // When RESEND is not configured, the temp password is shown once in the response
-    // so the manager can share it manually
     const responseData: Record<string, unknown> = {
       userId: newUserId,
       username,
@@ -220,26 +249,15 @@ const handler = async (req: Request): Promise<Response> => {
     }
 
     return new Response(
-      JSON.stringify({
-        success: true,
-        data: responseData,
-      }),
-      {
-        status: 200,
-        headers: { "Content-Type": "application/json", ...corsHeaders },
-      }
+      JSON.stringify({ success: true, data: responseData }),
+      { status: 200, headers: { "Content-Type": "application/json", ...corsHeaders } }
     );
   } catch (error: unknown) {
     console.error("Error in create-team-member function:", error);
     const errorMessage = error instanceof Error ? error.message : "Unknown error";
     return new Response(
       JSON.stringify({ success: false, error: errorMessage }),
-      {
-        status: 500,
-        headers: { "Content-Type": "application/json", ...corsHeaders },
-      }
+      { status: 500, headers: { "Content-Type": "application/json", ...getCorsHeaders(req) } }
     );
   }
-};
-
-serve(handler);
+});
