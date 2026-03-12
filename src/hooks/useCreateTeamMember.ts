@@ -17,6 +17,8 @@ interface CreateMemberResult {
   username: string;
   email: string;
   emailSent: boolean;
+  tempPassword?: string;
+  emailWarning?: string;
 }
 
 export function useCreateTeamMember() {

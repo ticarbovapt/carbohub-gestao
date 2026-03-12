@@ -64,8 +64,10 @@ const handler = async (req: Request): Promise<Response> => {
       throw new Error("Missing Supabase configuration");
     }
 
-    if (!resendApiKey) {
-      throw new Error("RESEND_API_KEY is not configured");
+    // RESEND_API_KEY is optional - user will be created even without email
+    const hasEmailCapability = !!resendApiKey;
+    if (!hasEmailCapability) {
+      console.warn("RESEND_API_KEY not configured - welcome emails will not be sent");
     }
 
     const authHeader = req.headers.get("authorization");
@@ -171,36 +173,56 @@ const handler = async (req: Request): Promise<Response> => {
       console.error("Role update error:", roleError);
     }
 
-    // Send welcome email
-    const emailResponse = await fetch(`${supabaseUrl}/functions/v1/send-welcome-email`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${supabaseServiceKey}`,
-      },
-      body: JSON.stringify({
-        email,
-        fullName,
-        username,
-        tempPassword,
-        platformUrl,
-        managerName,
-      }),
-    });
-
-    const emailResult = await emailResponse.json();
+    // Send welcome email (only if RESEND_API_KEY is configured)
+    let emailSent = false;
+    if (hasEmailCapability) {
+      try {
+        const emailResponse = await fetch(`${supabaseUrl}/functions/v1/send-welcome-email`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${supabaseServiceKey}`,
+          },
+          body: JSON.stringify({
+            email,
+            fullName,
+            username,
+            tempPassword,
+            platformUrl,
+            managerName,
+          }),
+        });
+        const emailResult = await emailResponse.json();
+        emailSent = emailResponse.ok;
+        if (!emailSent) {
+          console.error("Welcome email failed:", emailResult);
+        }
+      } catch (emailError) {
+        console.error("Failed to send welcome email:", emailError);
+      }
+    }
 
     // SECURITY FIX: Never return tempPassword in API response
-    // The password is sent via email only
+    // The password is sent via email only (when RESEND is configured)
+    // When RESEND is not configured, the temp password is shown once in the response
+    // so the manager can share it manually
+    const responseData: Record<string, unknown> = {
+      userId: newUserId,
+      username,
+      email,
+      emailSent,
+    };
+
+    // If email was NOT sent, include temp password so manager can share it manually
+    if (!emailSent) {
+      responseData.tempPassword = tempPassword;
+      responseData.emailWarning = "E-mail não enviado. Compartilhe a senha temporária manualmente.";
+    }
+
     return new Response(
       JSON.stringify({
         success: true,
-        data: {
-          userId: newUserId,
-          username,
-          email,
-          emailSent: emailResponse.ok,
-        },
+        data: responseData,
       }),
       {
         status: 200,

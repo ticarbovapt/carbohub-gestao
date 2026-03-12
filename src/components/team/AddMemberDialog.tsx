@@ -17,7 +17,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { UserPlus, Loader2, CheckCircle, Mail, User, Shield, Briefcase, Users, Store } from "lucide-react";
+import { UserPlus, Loader2, CheckCircle, Mail, User, Shield, Briefcase, Users, Store, Copy, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import { useCreateTeamMember } from "@/hooks/useCreateTeamMember";
 import { cn } from "@/lib/utils";
@@ -82,7 +82,7 @@ interface AddMemberDialogProps {
 export function AddMemberDialog({ onMemberAdded, defaultArea = "carbo_ops", variant = "default" }: AddMemberDialogProps) {
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState<"area" | "form" | "success">("area");
-  const [createdMember, setCreatedMember] = useState<{ username: string; email: string } | null>(null);
+  const [createdMember, setCreatedMember] = useState<{ username: string; email: string; tempPassword?: string; emailSent?: boolean } | null>(null);
   const [selectedArea, setSelectedArea] = useState<PlatformArea>(defaultArea);
   
   const createMember = useCreateTeamMember();
@@ -111,13 +111,18 @@ export function AddMemberDialog({ onMemberAdded, defaultArea = "carbo_ops", vari
         role,
       });
 
-      setCreatedMember({ username: result.username, email: result.email });
+      setCreatedMember({
+        username: result.username,
+        email: result.email,
+        tempPassword: result.tempPassword,
+        emailSent: result.emailSent,
+      });
       setStep("success");
-      
+
       if (result.emailSent) {
         toast.success("Conta criada e e-mail enviado com sucesso!");
       } else {
-        toast.warning("Conta criada, mas houve erro no envio do e-mail.");
+        toast.warning("Conta criada! Compartilhe a senha temporária manualmente.");
       }
 
       onMemberAdded?.();
@@ -372,7 +377,9 @@ export function AddMemberDialog({ onMemberAdded, defaultArea = "carbo_ops", vari
               </div>
               <DialogTitle className="text-xl">Conta Criada com Sucesso!</DialogTitle>
               <DialogDescription>
-                O acesso foi criado e um e-mail foi enviado com as credenciais.
+                {createdMember?.emailSent
+                  ? "O acesso foi criado e um e-mail foi enviado com as credenciais."
+                  : "O acesso foi criado. Compartilhe as credenciais manualmente."}
               </DialogDescription>
             </DialogHeader>
 
@@ -391,18 +398,60 @@ export function AddMemberDialog({ onMemberAdded, defaultArea = "carbo_ops", vari
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-sm text-muted-foreground">Usuário:</span>
-                <code className="font-mono font-bold text-primary bg-primary/10 px-2 py-1 rounded">
-                  {createdMember?.username}
-                </code>
+                <div className="flex items-center gap-1.5">
+                  <code className="font-mono font-bold text-primary bg-primary/10 px-2 py-1 rounded">
+                    {createdMember?.username}
+                  </code>
+                  <button
+                    type="button"
+                    className="p-1 rounded hover:bg-muted transition-colors"
+                    onClick={() => {
+                      navigator.clipboard.writeText(createdMember?.username || "");
+                      toast.success("Usuário copiado!");
+                    }}
+                  >
+                    <Copy className="h-3.5 w-3.5 text-muted-foreground" />
+                  </button>
+                </div>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-sm text-muted-foreground">E-mail:</span>
                 <span className="text-sm font-medium">{createdMember?.email}</span>
               </div>
+
+              {/* Show temp password when email was NOT sent */}
+              {createdMember?.tempPassword && !createdMember?.emailSent && (
+                <div className="border-t pt-4 mt-2">
+                  <div className="flex items-center gap-2 mb-2">
+                    <AlertTriangle className="h-4 w-4 text-amber-500" />
+                    <span className="text-sm font-semibold text-amber-600">Senha Temporária</span>
+                  </div>
+                  <div className="flex items-center justify-between bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-lg p-3">
+                    <code className="font-mono font-bold text-amber-700 dark:text-amber-400 text-base">
+                      {createdMember.tempPassword}
+                    </code>
+                    <button
+                      type="button"
+                      className="p-1.5 rounded-md hover:bg-amber-200/50 dark:hover:bg-amber-800/30 transition-colors"
+                      onClick={() => {
+                        navigator.clipboard.writeText(createdMember.tempPassword || "");
+                        toast.success("Senha temporária copiada!");
+                      }}
+                    >
+                      <Copy className="h-4 w-4 text-amber-600" />
+                    </button>
+                  </div>
+                  <p className="text-xs text-amber-600 dark:text-amber-500 mt-2">
+                    Copie e envie esta senha ao colaborador. Ela expira em 24h.
+                  </p>
+                </div>
+              )}
             </div>
 
             <p className="text-sm text-muted-foreground text-center">
-              O usuário receberá um e-mail com a senha temporária e deverá alterá-la no primeiro acesso.
+              {createdMember?.emailSent
+                ? "O usuário receberá um e-mail com a senha temporária e deverá alterá-la no primeiro acesso."
+                : "O usuário deverá alterar esta senha no primeiro acesso."}
             </p>
 
             <Button className="w-full mt-4 carbo-gradient text-white" onClick={handleClose}>
