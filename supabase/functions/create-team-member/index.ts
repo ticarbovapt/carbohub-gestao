@@ -147,19 +147,23 @@ Deno.serve(async (req: Request): Promise<Response> => {
       );
     }
 
-    const { data: tempPassword, error: passwordError } = await supabaseAdmin.rpc("generate_temp_password");
+    // Generate a random internal password (user never sees this)
+    const internalPassword = crypto.randomUUID() + "!Aa1";
 
-    if (passwordError || !tempPassword) {
-      console.error("Password generation error:", passwordError);
+    // Generate invite token for passwordless first-access link
+    const { data: inviteToken, error: tokenError } = await supabaseAdmin.rpc("generate_invite_token");
+
+    if (tokenError || !inviteToken) {
+      console.error("Invite token generation error:", tokenError);
       return new Response(
-        JSON.stringify({ success: false, error: "Failed to generate temporary password" }),
+        JSON.stringify({ success: false, error: "Failed to generate invite token" }),
         { status: 500, headers: { "Content-Type": "application/json", ...corsHeaders } }
       );
     }
 
     const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
       email,
-      password: tempPassword,
+      password: internalPassword,
       email_confirm: true,
       user_metadata: { full_name: fullName },
     });
@@ -173,8 +177,8 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
     const newUserId = authData.user.id;
 
-    const tempPasswordExpiresAt = new Date();
-    tempPasswordExpiresAt.setHours(tempPasswordExpiresAt.getHours() + 24);
+    const inviteTokenExpiresAt = new Date();
+    inviteTokenExpiresAt.setHours(inviteTokenExpiresAt.getHours() + 72); // 72h to set password
 
     const { error: profileError } = await supabaseAdmin
       .from("profiles")
@@ -184,8 +188,8 @@ Deno.serve(async (req: Request): Promise<Response> => {
         password_must_change: true,
         created_by_manager: callingUser.id,
         status: "approved",
-        temp_password_sent_at: new Date().toISOString(),
-        temp_password_expires_at: tempPasswordExpiresAt.toISOString(),
+        invite_token: inviteToken,
+        invite_token_expires_at: inviteTokenExpiresAt.toISOString(),
         manager_user_id: managerUserId || callingUser.id,
         funcao: funcao || null,
         escopo: escopo || null,
@@ -206,6 +210,9 @@ Deno.serve(async (req: Request): Promise<Response> => {
       console.error("Role update error:", roleError);
     }
 
+    // Build the invite link
+    const setPasswordUrl = `${platformUrl}/set-password?token=${inviteToken}`;
+
     // Send welcome email (only if RESEND_API_KEY is configured)
     let emailSent = false;
     if (hasEmailCapability) {
@@ -220,7 +227,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
             email,
             fullName,
             username,
-            tempPassword,
+            setPasswordUrl,
             platformUrl,
             managerName,
           }),
@@ -240,12 +247,12 @@ Deno.serve(async (req: Request): Promise<Response> => {
       username,
       email,
       emailSent,
+      setPasswordUrl,
     };
 
-    // If email was NOT sent, include temp password so manager can share it manually
+    // If email was NOT sent, include the invite link so manager can share manually
     if (!emailSent) {
-      responseData.tempPassword = tempPassword;
-      responseData.emailWarning = "E-mail não enviado. Compartilhe a senha temporária manualmente.";
+      responseData.emailWarning = "E-mail não enviado. Compartilhe o link de acesso manualmente.";
     }
 
     return new Response(

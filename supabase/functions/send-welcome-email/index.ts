@@ -30,7 +30,8 @@ interface WelcomeEmailRequest {
   userId?: string;
   fullName: string;
   username: string;
-  tempPassword: string;
+  setPasswordUrl?: string;
+  tempPassword?: string; // Legacy — kept for backward compat
   platformUrl: string;
   managerName?: string;
 }
@@ -89,6 +90,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
       userId,
       fullName,
       username,
+      setPasswordUrl,
       tempPassword,
       platformUrl,
       managerName
@@ -109,17 +111,57 @@ Deno.serve(async (req: Request): Promise<Response> => {
     }
 
     // Validate required fields
-    if (!email || !fullName || !username || !tempPassword || !platformUrl) {
+    if (!email || !fullName || !username || !platformUrl) {
       return new Response(
         JSON.stringify({ success: false, error: "Missing required fields" }),
         { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } }
       );
     }
 
+    // New flow: invite link (no password) — or legacy flow with temp password
+    const useNewFlow = !!setPasswordUrl;
+
+    const credentialsSection = useNewFlow
+      ? `
+        <div class="credentials">
+          <div class="credential-item">
+            <span class="credential-label">Seu UserID:</span>
+            <span class="credential-value">${username}</span>
+          </div>
+        </div>
+        <div class="warning">
+          <strong>Importante:</strong> Anote seu UserID acima. Você usará ele ou seu e-mail para fazer login. Clique no botão abaixo para cadastrar sua senha de acesso.
+        </div>
+        <center>
+          <a href="${setPasswordUrl}" class="cta-button">Cadastrar Minha Senha</a>
+        </center>
+        <p style="font-size: 13px; color: #94a3b8; margin-top: 16px;">
+          Este link é válido por 72 horas. Se expirar, solicite ao seu gestor um novo convite.
+        </p>
+      `
+      : `
+        <div class="credentials">
+          <div class="credential-item">
+            <span class="credential-label">Usuário:</span>
+            <span class="credential-value">${username}</span>
+          </div>
+          <div class="credential-item">
+            <span class="credential-label">Senha temporária:</span>
+            <span class="credential-value">${tempPassword || "—"}</span>
+          </div>
+        </div>
+        <div class="warning">
+          <strong>Importante:</strong> Esta é uma senha temporária. Ao acessar pela primeira vez, você será solicitado a criar uma nova senha.
+        </div>
+        <center>
+          <a href="${platformUrl}" class="cta-button">Acessar a Plataforma</a>
+        </center>
+      `;
+
     const emailResponse = await resend.emails.send({
       from: "Carbo OPS <noreply@carbohub.com.br>",
       to: [email],
-      subject: "Acesso à Plataforma Carbo OPS",
+      subject: useNewFlow ? "Seu acesso ao Carbo OPS — Cadastre sua senha" : "Acesso à Plataforma Carbo OPS",
       html: `
         <!DOCTYPE html>
         <html>
@@ -176,6 +218,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
               font-family: 'Courier New', monospace;
               color: #0f4c75;
               font-weight: bold;
+              font-size: 18px;
             }
             .cta-button {
               display: inline-block;
@@ -216,24 +259,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
               <p>Seu acesso à plataforma Carbo OPS foi criado${managerName ? ` por ${managerName}` : ''}. Agora você faz parte da nossa operação!</p>
 
-              <div class="credentials">
-                <div class="credential-item">
-                  <span class="credential-label">Usuário:</span>
-                  <span class="credential-value">${username}</span>
-                </div>
-                <div class="credential-item">
-                  <span class="credential-label">Senha temporária:</span>
-                  <span class="credential-value">${tempPassword}</span>
-                </div>
-              </div>
-
-              <div class="warning">
-                <strong>Importante:</strong> Esta é uma senha temporária. Ao acessar pela primeira vez, você será solicitado a criar uma nova senha.
-              </div>
-
-              <center>
-                <a href="${platformUrl}" class="cta-button">Acessar a Plataforma</a>
-              </center>
+              ${credentialsSection}
 
               <p style="font-size: 14px; color: #64748b; margin-top: 24px;">
                 Se você tiver qualquer dúvida, entre em contato com seu gestor direto.

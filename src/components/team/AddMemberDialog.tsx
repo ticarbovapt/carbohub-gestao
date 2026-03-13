@@ -82,7 +82,7 @@ interface AddMemberDialogProps {
 export function AddMemberDialog({ onMemberAdded, defaultArea = "carbo_ops", variant = "default" }: AddMemberDialogProps) {
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState<"area" | "form" | "success">("area");
-  const [createdMember, setCreatedMember] = useState<{ username: string; email: string; tempPassword?: string; emailSent?: boolean } | null>(null);
+  const [createdMember, setCreatedMember] = useState<{ username: string; email: string; setPasswordUrl?: string; emailSent?: boolean } | null>(null);
   const [selectedArea, setSelectedArea] = useState<PlatformArea>(defaultArea);
   
   const createMember = useCreateTeamMember();
@@ -114,15 +114,15 @@ export function AddMemberDialog({ onMemberAdded, defaultArea = "carbo_ops", vari
       setCreatedMember({
         username: result.username,
         email: result.email,
-        tempPassword: result.tempPassword,
+        setPasswordUrl: (result as any).setPasswordUrl,
         emailSent: result.emailSent,
       });
       setStep("success");
 
       if (result.emailSent) {
-        toast.success("Conta criada e e-mail enviado com sucesso!");
+        toast.success("Conta criada e convite enviado por e-mail!");
       } else {
-        toast.warning("Conta criada! Compartilhe a senha temporária manualmente.");
+        toast.warning("Conta criada! Compartilhe o link de acesso manualmente.");
       }
 
       onMemberAdded?.();
@@ -378,8 +378,8 @@ export function AddMemberDialog({ onMemberAdded, defaultArea = "carbo_ops", vari
               <DialogTitle className="text-xl">Conta Criada com Sucesso!</DialogTitle>
               <DialogDescription>
                 {createdMember?.emailSent
-                  ? "O acesso foi criado e um e-mail foi enviado com as credenciais."
-                  : "O acesso foi criado. Compartilhe as credenciais manualmente."}
+                  ? "O convite foi enviado por e-mail com o link para cadastro de senha."
+                  : "O acesso foi criado. Compartilhe o link de cadastro manualmente."}
               </DialogDescription>
             </DialogHeader>
 
@@ -397,7 +397,7 @@ export function AddMemberDialog({ onMemberAdded, defaultArea = "carbo_ops", vari
                 </div>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-sm text-muted-foreground">Usuário:</span>
+                <span className="text-sm text-muted-foreground">UserID:</span>
                 <div className="flex items-center gap-1.5">
                   <code className="font-mono font-bold text-primary bg-primary/10 px-2 py-1 rounded">
                     {createdMember?.username}
@@ -407,7 +407,7 @@ export function AddMemberDialog({ onMemberAdded, defaultArea = "carbo_ops", vari
                     className="p-1 rounded hover:bg-muted transition-colors"
                     onClick={() => {
                       navigator.clipboard.writeText(createdMember?.username || "");
-                      toast.success("Usuário copiado!");
+                      toast.success("UserID copiado!");
                     }}
                   >
                     <Copy className="h-3.5 w-3.5 text-muted-foreground" />
@@ -419,30 +419,30 @@ export function AddMemberDialog({ onMemberAdded, defaultArea = "carbo_ops", vari
                 <span className="text-sm font-medium">{createdMember?.email}</span>
               </div>
 
-              {/* Show temp password when email was NOT sent */}
-              {createdMember?.tempPassword && !createdMember?.emailSent && (
+              {/* Show invite link when email was NOT sent */}
+              {createdMember?.setPasswordUrl && !createdMember?.emailSent && (
                 <div className="border-t pt-4 mt-2">
                   <div className="flex items-center gap-2 mb-2">
                     <AlertTriangle className="h-4 w-4 text-amber-500" />
-                    <span className="text-sm font-semibold text-amber-600">Senha Temporária</span>
+                    <span className="text-sm font-semibold text-amber-600">Link de Cadastro de Senha</span>
                   </div>
-                  <div className="flex items-center justify-between bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-lg p-3">
-                    <code className="font-mono font-bold text-amber-700 dark:text-amber-400 text-base">
-                      {createdMember.tempPassword}
+                  <div className="flex items-center gap-2 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-lg p-3">
+                    <code className="font-mono text-xs text-amber-700 dark:text-amber-400 break-all flex-1">
+                      {createdMember.setPasswordUrl}
                     </code>
                     <button
                       type="button"
-                      className="p-1.5 rounded-md hover:bg-amber-200/50 dark:hover:bg-amber-800/30 transition-colors"
+                      className="p-1.5 rounded-md hover:bg-amber-200/50 dark:hover:bg-amber-800/30 transition-colors flex-shrink-0"
                       onClick={() => {
-                        navigator.clipboard.writeText(createdMember.tempPassword || "");
-                        toast.success("Senha temporária copiada!");
+                        navigator.clipboard.writeText(createdMember.setPasswordUrl || "");
+                        toast.success("Link copiado!");
                       }}
                     >
                       <Copy className="h-4 w-4 text-amber-600" />
                     </button>
                   </div>
                   <p className="text-xs text-amber-600 dark:text-amber-500 mt-2">
-                    Copie e envie esta senha ao colaborador. Ela expira em 24h.
+                    Envie este link ao colaborador. Ele expira em 72 horas.
                   </p>
                 </div>
               )}
@@ -450,8 +450,8 @@ export function AddMemberDialog({ onMemberAdded, defaultArea = "carbo_ops", vari
 
             <p className="text-sm text-muted-foreground text-center">
               {createdMember?.emailSent
-                ? "O usuário receberá um e-mail com a senha temporária e deverá alterá-la no primeiro acesso."
-                : "O usuário deverá alterar esta senha no primeiro acesso."}
+                ? "O colaborador receberá um e-mail com seu UserID e um link para cadastrar a senha."
+                : "Envie o link acima ao colaborador para que ele cadastre sua senha de acesso."}
             </p>
 
             <Button className="w-full mt-4 carbo-gradient text-white" onClick={handleClose}>

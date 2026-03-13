@@ -50,6 +50,8 @@ import AIAssistantPage from "./pages/AIAssistantPage";
 import { AIChatDrawer } from "./components/ai/AIChatDrawer";
 import BlingIntegration from "./pages/BlingIntegration";
 import BlingCallback from "./pages/BlingCallback";
+import SetPassword from "./pages/SetPassword";
+import ResetPassword from "./pages/ResetPassword";
 
 // Licensee Portal Pages
 import LicenseeDashboard from "./pages/licensee/LicenseeDashboard";
@@ -88,6 +90,8 @@ function AnimatedRoutes() {
           <Route path="/" element={<AreaSelector />} />
           <Route path="/login/:area" element={<LoginArea />} />
           <Route path="/change-password" element={<ChangePassword />} />
+          <Route path="/set-password" element={<SetPassword />} />
+          <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="/onboarding" element={<Onboarding />} />
           
           {/* Home Hub - Central access point after login */}

@@ -437,7 +437,7 @@ const LoginArea = () => {
 
                         <button
                           type="button"
-                          onClick={() => setViewMode("forgot-password")}
+                          onClick={() => navigate("/reset-password")}
                           className="w-full text-sm text-muted-foreground hover:text-foreground transition-colors py-1"
                         >
                           Esqueceu sua senha?
