@@ -3,7 +3,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
+import { BrowserRouter, Routes, Route, useLocation, Navigate } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
@@ -42,6 +42,7 @@ import Financeiro from "./pages/Financeiro";
 import Suprimentos from "./pages/Suprimentos";
 import MrpProducts from "./pages/MrpProducts";
 import MrpSuppliers from "./pages/MrpSuppliers";
+import Skus from "./pages/Skus";
 import NotFound from "./pages/NotFound";
 import AIAssistantPage from "./pages/AIAssistantPage";
 import { AIChatDrawer } from "./components/ai/AIChatDrawer";
@@ -251,6 +252,7 @@ function AnimatedRoutes() {
             }
           />
           {/* MRP Routes */}
+          <Route path="/mrp" element={<Navigate to="/mrp/dashboard" replace />} />
           <Route
             path="/mrp/dashboard"
             element={
@@ -272,6 +274,14 @@ function AnimatedRoutes() {
             element={
               <ProtectedRoute>
                 <MrpSuppliers />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/skus"
+            element={
+              <ProtectedRoute>
+                <Skus />
               </ProtectedRoute>
             }
           />

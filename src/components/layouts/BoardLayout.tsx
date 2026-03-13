@@ -28,6 +28,7 @@ import {
   Package,
   Factory,
   Database,
+  Boxes,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -121,6 +122,7 @@ const dadosMestresItems = [
   { href: "/mrp/dashboard", label: "Dashboard Estratégico", icon: LayoutDashboard },
   { href: "/mrp/products", label: "Produtos", icon: Package },
   { href: "/mrp/suppliers", label: "Fornecedores", icon: Factory },
+  { href: "/skus", label: "SKUs / BOM", icon: Boxes },
   { href: "/licensees", label: "Licenciados", icon: Building2 },
   { href: "/machines", label: "Máquinas", icon: Cpu },
   { href: "/team", label: "Equipe", icon: Users },
