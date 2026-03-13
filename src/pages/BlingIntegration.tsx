@@ -94,12 +94,22 @@ export default function BlingIntegration() {
       const response = await supabase.functions.invoke("bling-auth", {
         body: { action: "authorize" },
       });
+
+      if (response.error) {
+        console.error("Bling auth invoke error:", response.error);
+        toast.error(`Erro: ${response.error.message || JSON.stringify(response.error)}`);
+        return;
+      }
+
       if (response.data?.success) {
         window.location.href = response.data.data.authUrl;
       } else {
-        toast.error(response.data?.error || "Erro ao gerar URL de autorização");
+        const errorMsg = response.data?.error || "Erro desconhecido ao gerar URL";
+        console.error("Bling auth response error:", response.data);
+        toast.error(errorMsg);
       }
     } catch (error: any) {
+      console.error("Bling auth exception:", error);
       toast.error(error.message || "Erro ao conectar");
     }
   };
