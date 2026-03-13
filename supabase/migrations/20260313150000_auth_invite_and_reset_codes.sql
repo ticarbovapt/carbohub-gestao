@@ -50,13 +50,16 @@ END;
 $$;
 
 -- 4. Helper function: generate secure invite token
+-- Ensure pgcrypto is available
+CREATE EXTENSION IF NOT EXISTS pgcrypto SCHEMA extensions;
+
 CREATE OR REPLACE FUNCTION public.generate_invite_token()
 RETURNS TEXT
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = public
+SET search_path = public, extensions
 AS $$
 BEGIN
-  RETURN encode(gen_random_bytes(32), 'hex');
+  RETURN encode(extensions.gen_random_bytes(32), 'hex');
 END;
 $$;
