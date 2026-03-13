@@ -134,7 +134,8 @@ const dadosMestresItems = [
 
 const operacoesItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/os", label: "Ordens de Produção", icon: ClipboardList },
+  { href: "/production-orders", label: "Ordens de Produção (OP)", icon: Factory },
+  { href: "/os", label: "Ordens de Serviço", icon: ClipboardList },
   { href: "/logistics", label: "Logística", icon: Truck },
   { href: "/scheduling", label: "Agendamentos", icon: Calendar },
   { href: "/orders", label: "Controle de Pedidos", icon: ShoppingCart },
@@ -180,6 +181,7 @@ const ROUTE_LABELS: Record<string, string> = {
   skus: "SKUs",
   integrations: "Integrações",
   bling: "Bling ERP",
+  "production-orders": "Ordens de Produção",
 };
 
 function Breadcrumb({ area }: { area: string }) {
@@ -227,8 +229,8 @@ export function BoardLayout({ children }: BoardLayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   // Determine active tab from route
-  const isDadosRoute = location.pathname.startsWith("/mrp") || 
-    ["/licensees", "/machines", "/team", "/import"].some(p => location.pathname.startsWith(p));
+  const isDadosRoute = location.pathname.startsWith("/mrp") ||
+    ["/licensees", "/machines", "/team", "/import", "/skus", "/lots", "/integrations"].some(p => location.pathname.startsWith(p));
   const [activeTab, setActiveTab] = useState<SidebarTab>(isDadosRoute ? "dados" : "operacoes");
 
   const getInitials = (name: string | null | undefined) => {

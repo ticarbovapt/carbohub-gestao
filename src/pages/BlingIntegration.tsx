@@ -14,10 +14,10 @@ import {
   CheckCircle,
   XCircle,
   Clock,
-  ArrowLeft,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
+import { BoardLayout } from "@/components/layouts/BoardLayout";
 
 interface SyncResult {
   synced: number;
@@ -177,17 +177,16 @@ export default function BlingIntegration() {
   }
 
   return (
-    <div className="space-y-6 p-6 max-w-5xl mx-auto">
-      <div className="flex items-center gap-4">
-        <Button variant="ghost" size="icon" onClick={() => navigate("/dashboard")}>
-          <ArrowLeft className="h-5 w-5" />
-        </Button>
-        <div>
-          <h1 className="text-2xl font-bold">Integração Bling ERP</h1>
-          <p className="text-muted-foreground">
-            Sincronize pedidos, produtos, clientes e fornecedores
-          </p>
-        </div>
+    <BoardLayout>
+    <div className="space-y-6 max-w-5xl mx-auto">
+      <div>
+        <h1 className="text-2xl font-bold flex items-center gap-3">
+          <Link2 className="h-6 w-6 text-green-500" />
+          Integração Bling ERP
+        </h1>
+        <p className="text-muted-foreground mt-1">
+          Sincronize pedidos, produtos, clientes e fornecedores
+        </p>
       </div>
 
       {/* Connection Status */}
@@ -375,5 +374,6 @@ export default function BlingIntegration() {
         </>
       )}
     </div>
+    </BoardLayout>
   );
 }

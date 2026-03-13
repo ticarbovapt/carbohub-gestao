@@ -44,6 +44,7 @@ import MrpProducts from "./pages/MrpProducts";
 import MrpSuppliers from "./pages/MrpSuppliers";
 import Skus from "./pages/Skus";
 import Lots from "./pages/Lots";
+import ProductionOrdersOP from "./pages/ProductionOrdersOP";
 import NotFound from "./pages/NotFound";
 import AIAssistantPage from "./pages/AIAssistantPage";
 import { AIChatDrawer } from "./components/ai/AIChatDrawer";
@@ -291,6 +292,14 @@ function AnimatedRoutes() {
             element={
               <ProtectedRoute>
                 <Lots />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/production-orders"
+            element={
+              <ProtectedRoute>
+                <ProductionOrdersOP />
               </ProtectedRoute>
             }
           />

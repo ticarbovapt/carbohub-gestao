@@ -51,7 +51,7 @@ export function LotsTable({ lots, onEdit, onDelete, canManage }: LotsTableProps)
             </TableRow>
           </TableHeader>
           <TableBody>
-            {pagination.currentPageData.map((lot) => {
+            {pagination.paginatedData.map((lot) => {
               const pct = volumePercent(lot.available_volume_ml, lot.initial_volume_ml);
               return (
                 <TableRow key={lot.id}>
@@ -131,7 +131,19 @@ export function LotsTable({ lots, onEdit, onDelete, canManage }: LotsTableProps)
           </TableBody>
         </Table>
       </div>
-      <PaginationControls {...pagination} />
+      <PaginationControls
+        currentPage={pagination.currentPage}
+        totalPages={pagination.totalPages}
+        totalItems={pagination.totalItems}
+        startIndex={pagination.startIndex}
+        endIndex={pagination.endIndex}
+        pageSize={pagination.pageSize}
+        pageSizeOptions={pagination.pageSizeOptions}
+        hasNextPage={pagination.hasNextPage}
+        hasPrevPage={pagination.hasPrevPage}
+        onPageChange={pagination.goToPage}
+        onPageSizeChange={pagination.setPageSize}
+      />
     </div>
   );
 }
