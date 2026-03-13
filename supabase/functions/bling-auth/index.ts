@@ -23,6 +23,7 @@ function getCorsHeaders(req: Request) {
 
 const BLING_AUTH_URL = "https://www.bling.com.br/Api/v3/oauth/authorize";
 const BLING_TOKEN_URL = "https://www.bling.com.br/Api/v3/oauth/token";
+const REDIRECT_URI = "https://www.carbohub.com.br/integrations/bling/callback";
 
 Deno.serve(async (req: Request): Promise<Response> => {
   const corsHeaders = getCorsHeaders(req);
@@ -64,13 +65,17 @@ Deno.serve(async (req: Request): Promise<Response> => {
       );
     }
 
-    const url = new URL(req.url);
-    const action = url.searchParams.get("action") || (await req.json().catch(() => ({}))).action;
+    // Read body ONCE and reuse — req.json() consumes the stream
+    const body = await req.json().catch(() => ({}));
+    const action = body.action;
+
+    console.log("[bling-auth] action:", action, "user:", user.id);
 
     // ACTION: Get authorization URL
     if (action === "authorize") {
       const state = crypto.randomUUID();
-      const authUrl = `${BLING_AUTH_URL}?response_type=code&client_id=${blingClientId}&state=${state}`;
+      const authUrl = `${BLING_AUTH_URL}?response_type=code&client_id=${blingClientId}&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&state=${state}`;
+      console.log("[bling-auth] Generated auth URL, redirecting user to Bling");
       return new Response(
         JSON.stringify({ success: true, data: { authUrl, state } }),
         { status: 200, headers: { "Content-Type": "application/json", ...corsHeaders } }
@@ -79,7 +84,6 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
     // ACTION: Exchange authorization code for tokens
     if (action === "callback") {
-      const body = await req.json();
       const code = body.code;
       if (!code) {
         return new Response(
@@ -87,6 +91,8 @@ Deno.serve(async (req: Request): Promise<Response> => {
           { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } }
         );
       }
+
+      console.log("[bling-auth] Exchanging code for token, code length:", code?.length);
 
       const basicAuth = btoa(`${blingClientId}:${blingClientSecret}`);
       const tokenResponse = await fetch(BLING_TOKEN_URL, {
@@ -104,7 +110,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
       const tokenData = await tokenResponse.json();
 
       if (!tokenResponse.ok || tokenData.error) {
-        console.error("Bling token error:", tokenData);
+        console.error("[bling-auth] Token exchange FAILED:", JSON.stringify(tokenData));
         return new Response(
           JSON.stringify({ success: false, error: tokenData.error_description || tokenData.error || "Token exchange failed" }),
           { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } }
@@ -134,13 +140,14 @@ Deno.serve(async (req: Request): Promise<Response> => {
         });
 
       if (insertError) {
-        console.error("Failed to store tokens:", insertError);
+        console.error("[bling-auth] Failed to store tokens:", insertError);
         return new Response(
           JSON.stringify({ success: false, error: "Failed to store tokens" }),
           { status: 500, headers: { "Content-Type": "application/json", ...corsHeaders } }
         );
       }
 
+      console.log("[bling-auth] Successfully connected! Token expires at:", expiresAt.toISOString());
       return new Response(
         JSON.stringify({ success: true, data: { connected: true, expires_at: expiresAt } }),
         { status: 200, headers: { "Content-Type": "application/json", ...corsHeaders } }

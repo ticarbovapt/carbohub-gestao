@@ -11,21 +11,39 @@ export default function BlingCallback() {
 
   useEffect(() => {
     const code = searchParams.get("code");
+    const state = searchParams.get("state");
+    const error = searchParams.get("error");
+
+    console.log("[BlingCallback] URL params:", { code: code?.slice(0, 10) + "...", state, error });
+
+    if (error) {
+      setStatus("error");
+      setMessage(`Bling retornou um erro: ${error}. Tente novamente.`);
+      return;
+    }
 
     if (!code) {
       setStatus("error");
-      setMessage("Código de autorização não encontrado. Tente novamente.");
+      setMessage("Código de autorização não encontrado na URL. Verifique a configuração do redirect no Bling.");
       return;
     }
 
     const exchangeCode = async () => {
       try {
+        console.log("[BlingCallback] Exchanging code for token...");
         const response = await supabase.functions.invoke("bling-auth", {
           body: { action: "callback", code },
         });
 
-        if (response.error || !response.data?.success) {
-          throw new Error(response.data?.error || response.error?.message || "Erro ao conectar");
+        console.log("[BlingCallback] Response:", JSON.stringify(response.data));
+
+        if (response.error) {
+          console.error("[BlingCallback] Invoke error:", response.error);
+          throw new Error(response.error.message || "Erro ao chamar edge function");
+        }
+
+        if (!response.data?.success) {
+          throw new Error(response.data?.error || "Erro ao conectar");
         }
 
         setStatus("success");
@@ -34,10 +52,10 @@ export default function BlingCallback() {
         setTimeout(() => {
           navigate("/integrations/bling");
         }, 2000);
-      } catch (error: any) {
-        console.error("Bling callback error:", error);
+      } catch (err: any) {
+        console.error("[BlingCallback] Error:", err);
         setStatus("error");
-        setMessage(error.message || "Erro ao conectar com o Bling");
+        setMessage(err.message || "Erro ao conectar com o Bling");
       }
     };
 
