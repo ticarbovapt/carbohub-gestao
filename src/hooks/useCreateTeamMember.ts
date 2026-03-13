@@ -18,6 +18,7 @@ interface CreateMemberResult {
   email: string;
   emailSent: boolean;
   tempPassword?: string;
+  setPasswordUrl?: string;
   emailWarning?: string;
 }
 
@@ -65,32 +66,41 @@ export function useCreateTeamMember() {
 
 export function useResendWelcomeEmail() {
   return useMutation({
-    mutationFn: async ({ 
+    mutationFn: async ({
       userId,
-      email, 
-      fullName, 
-      username 
-    }: { 
+      email,
+      fullName,
+      username
+    }: {
       userId: string;
-      email?: string; 
-      fullName: string; 
+      email?: string;
+      fullName: string;
       username: string;
     }) => {
-      // Generate a new temporary password
-      const { data: tempPassword, error: passError } = await supabase.rpc("generate_temp_password");
-      
-      if (passError || !tempPassword) {
-        throw new Error("Erro ao gerar nova senha temporária");
+      // Re-invite: generate a new invite token and send the email again
+      // This calls create-team-member's logic but we'll use a dedicated approach:
+      // Generate invite token via RPC, update profile, send email
+      const { data: inviteToken, error: tokenError } = await supabase.rpc("generate_invite_token");
+
+      if (tokenError || !inviteToken) {
+        throw new Error("Erro ao gerar novo convite");
       }
 
-      // We need to update the user's password via admin API (edge function)
+      // Update profile with new invite token (72h expiry)
+      const expiresAt = new Date(Date.now() + 72 * 60 * 60 * 1000).toISOString();
+      await (supabase as any).from("profiles").update({
+        invite_token: inviteToken,
+        invite_token_expires_at: expiresAt,
+      }).eq("id", userId);
+
+      const setPasswordUrl = `${window.location.origin}/set-password?token=${inviteToken}`;
+
       const response = await supabase.functions.invoke("send-welcome-email", {
         body: {
-          userId,
           email: email || undefined,
           fullName,
           username,
-          tempPassword,
+          setPasswordUrl,
           platformUrl: window.location.origin,
         },
       });

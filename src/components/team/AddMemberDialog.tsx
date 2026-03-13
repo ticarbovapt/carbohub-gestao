@@ -114,7 +114,7 @@ export function AddMemberDialog({ onMemberAdded, defaultArea = "carbo_ops", vari
       setCreatedMember({
         username: result.username,
         email: result.email,
-        setPasswordUrl: (result as any).setPasswordUrl,
+        setPasswordUrl: result.setPasswordUrl,
         emailSent: result.emailSent,
       });
       setStep("success");
