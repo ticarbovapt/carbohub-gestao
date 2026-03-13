@@ -29,6 +29,8 @@ import {
   Factory,
   Database,
   Boxes,
+  FlaskConical,
+  Link2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -123,6 +125,7 @@ const dadosMestresItems = [
   { href: "/mrp/products", label: "Produtos", icon: Package },
   { href: "/mrp/suppliers", label: "Fornecedores", icon: Factory },
   { href: "/skus", label: "SKUs / BOM", icon: Boxes },
+  { href: "/lots", label: "Lotes / Qualidade", icon: FlaskConical },
   { href: "/licensees", label: "Licenciados", icon: Building2 },
   { href: "/machines", label: "Máquinas", icon: Cpu },
   { href: "/team", label: "Equipe", icon: Users },
@@ -144,6 +147,7 @@ const operacoesItems = [
 const globalItems = [
   { href: "/admin/approval", label: "Aprovações", icon: UserCheck, adminOnly: true },
   { href: "/governance", label: "Governança", icon: Shield, adminOnly: true },
+  { href: "/integrations/bling", label: "Integração Bling", icon: Link2, adminOnly: false, financeOrMasterOnly: true },
 ];
 
 /** Derive a human-readable breadcrumb label from a pathname segment */
@@ -172,6 +176,10 @@ const ROUTE_LABELS: Record<string, string> = {
   mrp: "Dados Mestres",
   products: "Produtos",
   suppliers: "Fornecedores",
+  lots: "Lotes / Qualidade",
+  skus: "SKUs",
+  integrations: "Integrações",
+  bling: "Bling ERP",
 };
 
 function Breadcrumb({ area }: { area: string }) {
@@ -214,7 +222,7 @@ function Breadcrumb({ area }: { area: string }) {
 export function BoardLayout({ children }: BoardLayoutProps) {
   const location = useLocation();
   const navigate = useNavigate();
-  const { isAdmin, profile, signOut, passwordMustChange, isCeo, isAnyGestor, carboRoles, isMasterAdmin } = useAuth();
+  const { isAdmin, profile, signOut, passwordMustChange, isCeo, isAnyGestor, carboRoles, isMasterAdmin, isGestorFin } = useAuth();
   const isMobile = useIsMobile();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
@@ -243,7 +251,8 @@ export function BoardLayout({ children }: BoardLayoutProps) {
     if (item.adminOnly && !isAdmin && !isCeo) return false;
     return true;
   });
-  const filteredGlobalItems = globalItems.filter(item => {
+  const filteredGlobalItems = globalItems.filter((item: any) => {
+    if (item.financeOrMasterOnly && !isMasterAdmin && !isGestorFin) return false;
     if (item.adminOnly && !isAdmin && !isCeo) return false;
     return true;
   });

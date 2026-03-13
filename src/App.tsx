@@ -43,6 +43,7 @@ import Suprimentos from "./pages/Suprimentos";
 import MrpProducts from "./pages/MrpProducts";
 import MrpSuppliers from "./pages/MrpSuppliers";
 import Skus from "./pages/Skus";
+import Lots from "./pages/Lots";
 import NotFound from "./pages/NotFound";
 import AIAssistantPage from "./pages/AIAssistantPage";
 import { AIChatDrawer } from "./components/ai/AIChatDrawer";
@@ -282,6 +283,14 @@ function AnimatedRoutes() {
             element={
               <ProtectedRoute>
                 <Skus />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/lots"
+            element={
+              <ProtectedRoute>
+                <Lots />
               </ProtectedRoute>
             }
           />

@@ -117,7 +117,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
     }
 
     const emailResponse = await resend.emails.send({
-      from: "Carbo OPS <onboarding@resend.dev>",
+      from: "Carbo OPS <noreply@carbohub.com.br>",
       to: [email],
       subject: "Acesso à Plataforma Carbo OPS",
       html: `
