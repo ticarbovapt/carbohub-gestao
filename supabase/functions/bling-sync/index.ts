@@ -31,10 +31,62 @@ interface BlingIntegration {
   expires_at: string;
 }
 
+// Refresh buffer: refresh proactively if token expires within 5 minutes
+const REFRESH_BUFFER_MS = 5 * 60 * 1000;
+
+async function refreshBlingToken(
+  supabaseAdmin: ReturnType<typeof createClient>,
+  integration: any,
+  blingClientId: string,
+  blingClientSecret: string
+): Promise<{ token: string; error?: string }> {
+  console.log("[bling-sync] Refreshing token for integration:", integration.id);
+  const basicAuth = btoa(`${blingClientId}:${blingClientSecret}`);
+  const refreshResponse = await fetch(BLING_TOKEN_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded",
+      "Authorization": `Basic ${basicAuth}`,
+    },
+    body: new URLSearchParams({
+      grant_type: "refresh_token",
+      refresh_token: integration.refresh_token,
+    }),
+  });
+
+  const refreshData = await refreshResponse.json();
+
+  if (!refreshResponse.ok || refreshData.error) {
+    console.error("[bling-sync] Token refresh FAILED:", JSON.stringify(refreshData));
+    // Deactivate integration
+    await supabaseAdmin
+      .from("bling_integration")
+      .update({ is_active: false })
+      .eq("id", integration.id);
+    return { token: "", error: `Token refresh failed: ${refreshData.error_description || refreshData.error || "unknown"}. Please reconnect to Bling.` };
+  }
+
+  const expiresAt = new Date(Date.now() + (refreshData.expires_in || 21600) * 1000);
+
+  await supabaseAdmin
+    .from("bling_integration")
+    .update({
+      access_token: refreshData.access_token,
+      refresh_token: refreshData.refresh_token,
+      expires_at: expiresAt.toISOString(),
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", integration.id);
+
+  console.log("[bling-sync] Token refreshed successfully, new expiry:", expiresAt.toISOString());
+  return { token: refreshData.access_token };
+}
+
 async function getValidToken(
   supabaseAdmin: ReturnType<typeof createClient>,
   blingClientId: string,
-  blingClientSecret: string
+  blingClientSecret: string,
+  forceRefresh = false
 ): Promise<{ token: string; error?: string }> {
   const { data: integration, error } = await supabaseAdmin
     .from("bling_integration")
@@ -46,48 +98,19 @@ async function getValidToken(
     return { token: "", error: "No active Bling integration. Please connect first." };
   }
 
-  // Check if token is expired
-  if (new Date(integration.expires_at) < new Date()) {
-    // Refresh the token
-    const basicAuth = btoa(`${blingClientId}:${blingClientSecret}`);
-    const refreshResponse = await fetch(BLING_TOKEN_URL, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/x-www-form-urlencoded",
-        "Authorization": `Basic ${basicAuth}`,
-      },
-      body: new URLSearchParams({
-        grant_type: "refresh_token",
-        refresh_token: integration.refresh_token,
-      }),
-    });
+  const expiresAt = new Date(integration.expires_at);
+  const now = new Date();
+  const isExpired = expiresAt < now;
+  const isExpiringSoon = expiresAt.getTime() - now.getTime() < REFRESH_BUFFER_MS;
 
-    const refreshData = await refreshResponse.json();
-
-    if (!refreshResponse.ok || refreshData.error) {
-      // Deactivate integration
-      await supabaseAdmin
-        .from("bling_integration")
-        .update({ is_active: false })
-        .eq("id", integration.id);
-      return { token: "", error: "Token expired and refresh failed. Please reconnect." };
-    }
-
-    const expiresAt = new Date(Date.now() + (refreshData.expires_in || 21600) * 1000);
-
-    await supabaseAdmin
-      .from("bling_integration")
-      .update({
-        access_token: refreshData.access_token,
-        refresh_token: refreshData.refresh_token,
-        expires_at: expiresAt.toISOString(),
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", integration.id);
-
-    return { token: refreshData.access_token };
+  // Refresh if: forced, expired, or expiring within 5 minutes
+  if (forceRefresh || isExpired || isExpiringSoon) {
+    const reason = forceRefresh ? "forced (401 retry)" : isExpired ? "expired" : "expiring soon";
+    console.log(`[bling-sync] Token needs refresh: ${reason}. Expires at: ${integration.expires_at}`);
+    return refreshBlingToken(supabaseAdmin, integration, blingClientId, blingClientSecret);
   }
 
+  console.log("[bling-sync] Using existing token, expires at:", integration.expires_at);
   return { token: integration.access_token };
 }
 
@@ -375,8 +398,8 @@ Deno.serve(async (req: Request): Promise<Response> => {
       );
     }
 
-    // Get valid token (auto-refreshes if expired)
-    const { token, error: tokenError } = await getValidToken(
+    // Get valid token (auto-refreshes if expired or expiring soon)
+    let { token, error: tokenError } = await getValidToken(
       supabaseAdmin,
       blingClientId,
       blingClientSecret
@@ -394,6 +417,30 @@ Deno.serve(async (req: Request): Promise<Response> => {
     const entitiesToSync = entity === "all"
       ? ["products", "contacts", "orders"]
       : [entity];
+
+    // Helper to run a sync function with automatic 401 retry
+    async function syncWithRetry(
+      entityType: string,
+      syncFn: (admin: any, tkn: string, logId: string) => Promise<{ synced: number; failed: number }>,
+      logId: string
+    ): Promise<{ synced: number; failed: number }> {
+      try {
+        return await syncFn(supabaseAdmin, token, logId);
+      } catch (e) {
+        const errMsg = e instanceof Error ? e.message : "";
+        // If Bling returned 401, force-refresh token and retry ONCE
+        if (errMsg.includes("error 401") || errMsg.includes("invalid_token")) {
+          console.log(`[bling-sync] Got 401 for ${entityType}, force-refreshing token and retrying...`);
+          const refreshed = await getValidToken(supabaseAdmin, blingClientId, blingClientSecret, true);
+          if (refreshed.error || !refreshed.token) {
+            throw new Error(refreshed.error || "Token refresh failed on 401 retry");
+          }
+          token = refreshed.token; // Update token for subsequent entities too
+          return await syncFn(supabaseAdmin, refreshed.token, logId);
+        }
+        throw e; // Non-401 error, rethrow
+      }
+    }
 
     for (const entityType of entitiesToSync) {
       // Create sync log entry
@@ -413,13 +460,13 @@ Deno.serve(async (req: Request): Promise<Response> => {
         let result;
         switch (entityType) {
           case "products":
-            result = await syncProducts(supabaseAdmin, token, logId);
+            result = await syncWithRetry(entityType, syncProducts, logId);
             break;
           case "contacts":
-            result = await syncContacts(supabaseAdmin, token, logId);
+            result = await syncWithRetry(entityType, syncContacts, logId);
             break;
           case "orders":
-            result = await syncOrders(supabaseAdmin, token, logId);
+            result = await syncWithRetry(entityType, syncOrders, logId);
             break;
           default:
             throw new Error(`Unknown entity: ${entityType}`);
@@ -438,7 +485,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
         results[entityType] = result;
       } catch (e) {
         const errMsg = e instanceof Error ? e.message : "Unknown error";
-        console.error(`Sync error for ${entityType}:`, errMsg);
+        console.error(`[bling-sync] Sync FAILED for ${entityType}:`, errMsg);
 
         await supabaseAdmin
           .from("bling_sync_log")

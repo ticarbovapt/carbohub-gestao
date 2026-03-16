@@ -1,11 +1,10 @@
 import { useState, useMemo } from "react";
 import { BoardLayout } from "@/components/layouts/BoardLayout";
 import { Button } from "@/components/ui/button";
-import { Loader2, Factory, Plus, ClipboardList, CheckCircle, AlertTriangle } from "lucide-react";
+import { Loader2, Factory, Plus } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import {
   useProductionOrdersOP,
-  OP_STATUS_LABELS,
   type ProductionOrder,
 } from "@/hooks/useProductionOrders";
 import { OPFilters } from "@/components/production-orders/OPFilters";
@@ -13,6 +12,8 @@ import { OPTable } from "@/components/production-orders/OPTable";
 import { CreateOPDialog } from "@/components/production-orders/CreateOPDialog";
 import { EditOPDialog } from "@/components/production-orders/EditOPDialog";
 import { DeleteOPDialog } from "@/components/production-orders/DeleteOPDialog";
+import { ConfirmOPDialog } from "@/components/production-orders/ConfirmOPDialog";
+import { OPKpiCards } from "@/components/production-orders/OPKpiCards";
 
 export default function ProductionOrdersOP() {
   const { isManager, isAdmin } = useAuth();
@@ -24,23 +25,13 @@ export default function ProductionOrdersOP() {
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
+  const [isConfirmOpen, setIsConfirmOpen] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<ProductionOrder | null>(null);
 
   // Filter state
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [priorityFilter, setPriorityFilter] = useState("all");
-
-  // Stats
-  const stats = useMemo(() => {
-    const total = orders.length;
-    const emProducao = orders.filter((o) => o.op_status === "em_producao").length;
-    const concluidas = orders.filter((o) => o.op_status === "concluida").length;
-    const bloqueadasPendentes = orders.filter(
-      (o) => o.op_status === "bloqueada" || o.op_status?.startsWith("aguardando_")
-    ).length;
-    return { total, emProducao, concluidas, bloqueadasPendentes };
-  }, [orders]);
 
   // Filtering
   const filteredOrders = useMemo(() => {
@@ -67,6 +58,11 @@ export default function ProductionOrdersOP() {
   const handleDelete = (order: ProductionOrder) => {
     setSelectedOrder(order);
     setIsDeleteOpen(true);
+  };
+
+  const handleConfirm = (order: ProductionOrder) => {
+    setSelectedOrder(order);
+    setIsConfirmOpen(true);
   };
 
   if (isLoading) {
@@ -101,37 +97,8 @@ export default function ProductionOrdersOP() {
           )}
         </div>
 
-        {/* KPIs */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <div className="rounded-xl border bg-card p-4 space-y-1">
-            <div className="flex items-center gap-2 text-muted-foreground text-sm">
-              <ClipboardList className="h-4 w-4" />
-              <span>Total OPs</span>
-            </div>
-            <p className="text-2xl font-bold">{stats.total}</p>
-          </div>
-          <div className="rounded-xl border bg-card p-4 space-y-1">
-            <div className="flex items-center gap-2 text-orange-500 text-sm">
-              <Factory className="h-4 w-4" />
-              <span>Em Produção</span>
-            </div>
-            <p className="text-2xl font-bold">{stats.emProducao}</p>
-          </div>
-          <div className="rounded-xl border bg-card p-4 space-y-1">
-            <div className="flex items-center gap-2 text-green-500 text-sm">
-              <CheckCircle className="h-4 w-4" />
-              <span>Concluídas</span>
-            </div>
-            <p className="text-2xl font-bold">{stats.concluidas}</p>
-          </div>
-          <div className="rounded-xl border bg-card p-4 space-y-1">
-            <div className="flex items-center gap-2 text-red-500 text-sm">
-              <AlertTriangle className="h-4 w-4" />
-              <span>Bloqueadas / Pendentes</span>
-            </div>
-            <p className="text-2xl font-bold">{stats.bloqueadasPendentes}</p>
-          </div>
-        </div>
+        {/* KPIs — Confirmation metrics (last 30 days) */}
+        <OPKpiCards />
 
         {/* Filters */}
         <OPFilters
@@ -165,6 +132,7 @@ export default function ProductionOrdersOP() {
             orders={filteredOrders}
             onEdit={handleEdit}
             onDelete={handleDelete}
+            onConfirm={handleConfirm}
             canManage={canManage}
           />
         )}
@@ -173,6 +141,7 @@ export default function ProductionOrdersOP() {
         <CreateOPDialog open={isCreateOpen} onOpenChange={setIsCreateOpen} />
         <EditOPDialog open={isEditOpen} onOpenChange={setIsEditOpen} order={selectedOrder} />
         <DeleteOPDialog open={isDeleteOpen} onOpenChange={setIsDeleteOpen} order={selectedOrder} />
+        <ConfirmOPDialog open={isConfirmOpen} onOpenChange={setIsConfirmOpen} order={selectedOrder} />
       </div>
     </BoardLayout>
   );

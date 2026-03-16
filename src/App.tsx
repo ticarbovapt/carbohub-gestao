@@ -53,6 +53,11 @@ import BlingCallback from "./pages/BlingCallback";
 import SetPassword from "./pages/SetPassword";
 import ResetPassword from "./pages/ResetPassword";
 
+// Network Intelligence Pages
+import NetworkMap from "./pages/NetworkMap";
+import LicenseeRanking from "./pages/LicenseeRanking";
+import TerritoryExpansion from "./pages/TerritoryExpansion";
+
 // Licensee Portal Pages
 import LicenseeDashboard from "./pages/licensee/LicenseeDashboard";
 import ServiceCatalog from "./pages/licensee/ServiceCatalog";
@@ -225,6 +230,33 @@ function AnimatedRoutes() {
               </ProtectedRoute>
             }
           />
+
+          {/* Network Intelligence */}
+          <Route
+            path="/ops/network-map"
+            element={
+              <ProtectedRoute>
+                <NetworkMap />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/ops/licensee-ranking"
+            element={
+              <ProtectedRoute>
+                <LicenseeRanking />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/ops/territory-expansion"
+            element={
+              <ProtectedRoute>
+                <TerritoryExpansion />
+              </ProtectedRoute>
+            }
+          />
+
           <Route
             path="/logistics"
             element={

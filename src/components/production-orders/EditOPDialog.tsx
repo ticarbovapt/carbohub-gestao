@@ -26,6 +26,7 @@ import {
   PRIORITY_LABELS,
 } from "@/hooks/useProductionOrders";
 import { cn } from "@/lib/utils";
+import { ConfirmationDetail } from "@/components/production-orders/ConfirmationDetail";
 
 interface EditOPDialogProps {
   open: boolean;
@@ -49,6 +50,8 @@ export function EditOPDialog({ open, onOpenChange, order }: EditOPDialogProps) {
   if (!order) return null;
 
   const nextStatuses = OP_STATUS_TRANSITIONS[order.op_status] || [];
+  const CONFIRMED_STATUSES = ["confirmada", "concluida", "expedida", "entregue"];
+  const isConfirmedOP = CONFIRMED_STATUSES.includes(order.op_status);
 
   const handleStatusChange = async (newStatus: OpStatus) => {
     const updates: any = { id: order.id, op_status: newStatus };
@@ -95,9 +98,10 @@ export function EditOPDialog({ open, onOpenChange, order }: EditOPDialogProps) {
         </DialogHeader>
 
         <Tabs defaultValue="dados">
-          <TabsList className="grid w-full grid-cols-2">
+          <TabsList className={cn("grid w-full", isConfirmedOP ? "grid-cols-3" : "grid-cols-2")}>
             <TabsTrigger value="dados">Dados da OP</TabsTrigger>
             <TabsTrigger value="materiais">Materiais</TabsTrigger>
+            {isConfirmedOP && <TabsTrigger value="confirmacao">Confirmação</TabsTrigger>}
           </TabsList>
 
           {/* Tab 1: Dados */}
@@ -238,6 +242,13 @@ export function EditOPDialog({ open, onOpenChange, order }: EditOPDialogProps) {
               </div>
             )}
           </TabsContent>
+
+          {/* Tab 3: Confirmação (only for confirmed OPs) */}
+          {isConfirmedOP && (
+            <TabsContent value="confirmacao" className="mt-4">
+              <ConfirmationDetail opId={order.id} plannedQuantity={order.planned_quantity} />
+            </TabsContent>
+          )}
         </Tabs>
       </DialogContent>
     </Dialog>

@@ -8,7 +8,7 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Pencil, Trash2 } from "lucide-react";
+import { Pencil, Trash2, ClipboardCheck } from "lucide-react";
 import {
   ProductionOrder,
   OP_STATUS_LABELS,
@@ -24,6 +24,7 @@ interface OPTableProps {
   orders: ProductionOrder[];
   onEdit: (order: ProductionOrder) => void;
   onDelete: (order: ProductionOrder) => void;
+  onConfirm?: (order: ProductionOrder) => void;
   canManage: boolean;
 }
 
@@ -35,7 +36,7 @@ const PRIORITY_BADGE_COLORS: Record<number, string> = {
   5: "bg-gray-300",
 };
 
-export function OPTable({ orders, onEdit, onDelete, canManage }: OPTableProps) {
+export function OPTable({ orders, onEdit, onDelete, onConfirm, canManage }: OPTableProps) {
   const pagination = usePagination(orders, { initialPageSize: 10 });
 
   return (
@@ -117,6 +118,17 @@ export function OPTable({ orders, onEdit, onDelete, canManage }: OPTableProps) {
                 {canManage && (
                   <TableCell className="text-right">
                     <div className="flex justify-end gap-1">
+                      {order.op_status === "aguardando_confirmacao" && onConfirm && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-purple-500 hover:text-purple-600"
+                          onClick={() => onConfirm(order)}
+                          title="Confirmar Produção"
+                        >
+                          <ClipboardCheck className="h-4 w-4" />
+                        </Button>
+                      )}
                       <Button
                         variant="ghost"
                         size="icon"

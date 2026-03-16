@@ -31,6 +31,9 @@ import {
   Boxes,
   FlaskConical,
   Link2,
+  MapPin,
+  Trophy,
+  Target,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -128,6 +131,9 @@ const dadosMestresItems = [
   { href: "/lots", label: "Lotes / Qualidade", icon: FlaskConical },
   { href: "/licensees", label: "Licenciados", icon: Building2 },
   { href: "/machines", label: "Máquinas", icon: Cpu },
+  { href: "/ops/network-map", label: "Mapa da Rede", icon: MapPin },
+  { href: "/ops/licensee-ranking", label: "Ranking Licenciados", icon: Trophy },
+  { href: "/ops/territory-expansion", label: "Expansão Territorial", icon: Target },
   { href: "/team", label: "Equipe", icon: Users },
   { href: "/import", label: "Importar Dados", icon: FileSpreadsheet },
 ];
@@ -182,6 +188,10 @@ const ROUTE_LABELS: Record<string, string> = {
   integrations: "Integrações",
   bling: "Bling ERP",
   "production-orders": "Ordens de Produção",
+  ops: "Inteligência",
+  "network-map": "Mapa da Rede",
+  "licensee-ranking": "Ranking Licenciados",
+  "territory-expansion": "Expansão Territorial",
 };
 
 function Breadcrumb({ area }: { area: string }) {
