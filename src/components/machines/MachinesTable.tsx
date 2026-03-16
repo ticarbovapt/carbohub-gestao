@@ -4,9 +4,10 @@ import { CarboBadge } from "@/components/ui/carbo-badge";
 import { CarboButton } from "@/components/ui/carbo-button";
 import { PaginationControls } from "@/components/ui/pagination-controls";
 import { usePagination } from "@/hooks/usePagination";
-import { MapPin, ChevronRight, AlertTriangle, Pencil } from "lucide-react";
-import type { Machine, MachineStatus } from "@/hooks/useMachines";
-import type { NavigateFunction } from "react-router-dom";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { MapPin, AlertTriangle, Pencil } from "lucide-react";
+import { useUpdateMachine, type Machine, type MachineStatus } from "@/hooks/useMachines";
+import { toast } from "sonner";
 
 const STATUS_LABELS: Record<MachineStatus, string> = {
   operational: "Operacional",
@@ -22,20 +23,40 @@ const STATUS_VARIANTS: Record<MachineStatus, "success" | "warning" | "destructiv
   retired: "secondary",
 };
 
+const STATUS_COLORS: Record<MachineStatus, string> = {
+  operational: "text-green-500 border-green-500/30 bg-green-500/10",
+  maintenance: "text-yellow-500 border-yellow-500/30 bg-yellow-500/10",
+  offline: "text-red-500 border-red-500/30 bg-red-500/10",
+  retired: "text-gray-400 border-gray-400/30 bg-gray-400/10",
+};
+
 interface MachinesTableProps {
   machines: Machine[];
-  navigate: NavigateFunction;
   onEdit?: (machine: Machine) => void;
 }
 
-export function MachinesTable({ machines, navigate, onEdit }: MachinesTableProps) {
+export function MachinesTable({ machines, onEdit }: MachinesTableProps) {
   const pagination = usePagination(machines, { initialPageSize: 10 });
+  const updateMachine = useUpdateMachine();
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat("pt-BR", {
       style: "currency",
       currency: "BRL",
     }).format(value);
+  };
+
+  const handleStatusChange = async (machine: Machine, newStatus: MachineStatus) => {
+    if (newStatus === machine.status) return;
+    try {
+      await updateMachine.mutateAsync({
+        id: machine.id,
+        status: newStatus,
+      });
+      toast.success(`Status de ${machine.machine_id} alterado para ${STATUS_LABELS[newStatus]}`);
+    } catch {
+      toast.error("Erro ao alterar status");
+    }
   };
 
   return (
@@ -50,8 +71,7 @@ export function MachinesTable({ machines, navigate, onEdit }: MachinesTableProps
             <CarboTableHead>Estoque</CarboTableHead>
             <CarboTableHead>Créditos</CarboTableHead>
             <CarboTableHead>Status</CarboTableHead>
-            {onEdit && <CarboTableHead className="w-10">Editar</CarboTableHead>}
-            <CarboTableHead className="w-10"></CarboTableHead>
+            {onEdit && <CarboTableHead className="w-24 text-center">Ações</CarboTableHead>}
           </CarboTableRow>
         </CarboTableHeader>
         <CarboTableBody>
@@ -62,11 +82,7 @@ export function MachinesTable({ machines, navigate, onEdit }: MachinesTableProps
             const isLowStock = machine.units_since_last_refill <= machine.low_stock_threshold;
 
             return (
-              <CarboTableRow
-                key={machine.id}
-                interactive
-                onClick={() => navigate(`/machines/${machine.id}`)}
-              >
+              <CarboTableRow key={machine.id}>
                 <CarboTableCell>
                   <div className="flex items-center gap-2">
                     <span className="font-mono text-sm font-medium text-carbo-green">
@@ -126,28 +142,50 @@ export function MachinesTable({ machines, navigate, onEdit }: MachinesTableProps
                   </span>
                 </CarboTableCell>
                 <CarboTableCell>
-                  <CarboBadge variant={STATUS_VARIANTS[machine.status]} dot>
-                    {STATUS_LABELS[machine.status]}
-                  </CarboBadge>
+                  {onEdit ? (
+                    <Select
+                      value={machine.status}
+                      onValueChange={(v) => handleStatusChange(machine, v as MachineStatus)}
+                    >
+                      <SelectTrigger
+                        className={`h-8 w-[140px] text-xs font-medium rounded-full border ${STATUS_COLORS[machine.status]}`}
+                      >
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {Object.entries(STATUS_LABELS).map(([key, label]) => (
+                          <SelectItem key={key} value={key}>
+                            <div className="flex items-center gap-2">
+                              <div className={`h-2 w-2 rounded-full ${
+                                key === "operational" ? "bg-green-500" :
+                                key === "maintenance" ? "bg-yellow-500" :
+                                key === "offline" ? "bg-red-500" : "bg-gray-400"
+                              }`} />
+                              {label}
+                            </div>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <CarboBadge variant={STATUS_VARIANTS[machine.status]} dot>
+                      {STATUS_LABELS[machine.status]}
+                    </CarboBadge>
+                  )}
                 </CarboTableCell>
                 {onEdit && (
-                  <CarboTableCell>
+                  <CarboTableCell className="text-center">
                     <CarboButton
-                      variant="ghost"
-                      size="icon"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onEdit(machine);
-                      }}
-                      className="h-8 w-8"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => onEdit(machine)}
+                      className="h-8 gap-1.5 text-xs"
                     >
-                      <Pencil className="h-4 w-4" />
+                      <Pencil className="h-3.5 w-3.5" />
+                      Editar
                     </CarboButton>
                   </CarboTableCell>
                 )}
-                <CarboTableCell>
-                  <ChevronRight className="h-4 w-4 text-muted-foreground" />
-                </CarboTableCell>
               </CarboTableRow>
             );
           })}

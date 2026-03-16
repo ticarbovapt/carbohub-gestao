@@ -28,7 +28,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { useMachines, useMachineStats, useMachineAlerts, MachineStatus, Machine } from "@/hooks/useMachines";
 import { useLicensees } from "@/hooks/useLicensees";
 import { useAuth } from "@/contexts/AuthContext";
-import { useNavigate } from "react-router-dom";
+// navigate removed — no machine detail page
 import { CreateMachineDialog } from "@/components/machines/CreateMachineDialog";
 import { EditMachineDialog } from "@/components/machines/EditMachineDialog";
 import { MachinesTable } from "@/components/machines/MachinesTable";
@@ -50,7 +50,6 @@ const STATUS_VARIANTS: Record<MachineStatus, "success" | "warning" | "destructiv
 };
 
 export default function Machines() {
-  const navigate = useNavigate();
   const { isManager, isAdmin } = useAuth();
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<MachineStatus | "all">("all");
@@ -266,10 +265,9 @@ export default function Machines() {
             />
           </CarboCard>
         ) : (
-          <MachinesTable 
-            machines={filteredMachines} 
-            navigate={navigate}
-            onEdit={isAdmin ? (machine: Machine) => {
+          <MachinesTable
+            machines={filteredMachines}
+            onEdit={(isAdmin || isManager) ? (machine: Machine) => {
               setSelectedMachine(machine);
               setIsEditDialogOpen(true);
             } : undefined}
