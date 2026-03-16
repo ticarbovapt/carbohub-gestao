@@ -34,7 +34,7 @@ export interface RankedLicensee {
   machines_100ml: number | null;
   current_level: string | null;
   computed_score: number;
-  tier: "S" | "A" | "B" | "C" | "D";
+  tier: "Elite" | "Gold" | "Silver" | "Bronze";
 }
 
 export interface Territory {
@@ -65,13 +65,22 @@ export interface NetworkStats {
 
 // ─── Tier Assignment ─────────────────────────────────────────────────────────
 
-function assignTier(rank: number, total: number): "S" | "A" | "B" | "C" | "D" {
+function assignTier(rank: number, total: number): "Elite" | "Gold" | "Silver" | "Bronze" {
   const pct = rank / total;
-  if (pct <= 0.1) return "S";
-  if (pct <= 0.3) return "A";
-  if (pct <= 0.55) return "B";
-  if (pct <= 0.8) return "C";
-  return "D";
+  if (pct <= 0.1) return "Elite";
+  if (pct <= 0.3) return "Gold";
+  if (pct <= 0.6) return "Silver";
+  return "Bronze";
+}
+
+// ─── Score Calculation ──────────────────────────────────────────────────────
+
+function computeLicenseeScore(l: any): number {
+  const machineCount = l.total_machines || 0;
+  const territoryCoverage = ((l.machines_1l || 0) + (l.machines_100ml || 0)) * 0.5;
+  const activityLevel = l.performance_score || 0;
+  const growthRate = Math.min((l.machines_100ml || 0) * 2, 100);
+  return (machineCount * 0.4) + (territoryCoverage * 0.2) + (activityLevel * 0.2) + (growthRate * 0.2);
 }
 
 // ─── 1. Licensee Ranking ─────────────────────────────────────────────────────
@@ -88,12 +97,9 @@ export function useLicenseeRanking() {
       if (error) throw error;
       if (!data || data.length === 0) return [];
 
-      // Compute scores
+      // Compute scores using new model
       const scored = data.map((l: any) => {
-        const m100 = l.machines_100ml || 0;
-        const m1l = l.machines_1l || 0;
-        const perf = l.performance_score || 0;
-        const computed_score = (m100 * 3) + (m1l * 1) + (perf * 2);
+        const computed_score = computeLicenseeScore(l);
         return { ...l, computed_score };
       });
 
@@ -301,10 +307,10 @@ export function useUpdateLicenseeRanking() {
       if (error) throw error;
       if (!licensees || licensees.length === 0) return;
 
-      // Compute scores
+      // Compute scores using new model
       const scored = licensees.map((l: any) => ({
         id: l.id,
-        score: ((l.machines_100ml || 0) * 3) + ((l.machines_1l || 0) * 1) + ((l.performance_score || 0) * 2),
+        score: computeLicenseeScore(l),
       }));
 
       scored.sort((a: any, b: any) => b.score - a.score);
@@ -313,7 +319,7 @@ export function useUpdateLicenseeRanking() {
       const total = scored.length;
       for (let i = 0; i < scored.length; i++) {
         const tier = assignTier(i + 1, total);
-        const tierMap: Record<string, string> = { S: "ouro", A: "prata", B: "bronze", C: "bronze", D: "bronze" };
+        const tierMap: Record<string, string> = { Elite: "elite", Gold: "ouro", Silver: "prata", Bronze: "bronze" };
 
         await (supabase as any)
           .from("licensees")

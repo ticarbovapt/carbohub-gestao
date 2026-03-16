@@ -2,35 +2,41 @@ import { useState, useMemo } from "react";
 import { BoardLayout } from "@/components/layouts/BoardLayout";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Trophy, Loader2, Search } from "lucide-react";
+import { Trophy, Loader2, Search, Crown, Medal, Award, Shield } from "lucide-react";
 import { useLicenseeRanking } from "@/hooks/useNetworkIntelligence";
 
 const TIERS = [
-  { label: "S", color: "bg-purple-500" },
-  { label: "A", color: "bg-blue-500" },
-  { label: "B", color: "bg-green-500" },
-  { label: "C", color: "bg-yellow-500" },
-  { label: "D", color: "bg-gray-500" },
+  { label: "Elite", color: "bg-purple-600", icon: Crown },
+  { label: "Gold", color: "bg-yellow-500", icon: Medal },
+  { label: "Silver", color: "bg-gray-400", icon: Award },
+  { label: "Bronze", color: "bg-orange-600", icon: Shield },
 ] as const;
 
 const TIER_COLORS: Record<string, string> = {
-  S: "bg-purple-500",
-  A: "bg-blue-500",
-  B: "bg-green-500",
-  C: "bg-yellow-500",
-  D: "bg-gray-500",
+  Elite: "bg-purple-600",
+  Gold: "bg-yellow-500",
+  Silver: "bg-gray-400",
+  Bronze: "bg-orange-600",
 };
 
 const STATUS_COLORS: Record<string, string> = {
   ativo: "bg-green-500",
+  active: "bg-green-500",
   inativo: "bg-red-500",
+  inactive: "bg-red-500",
   suspenso: "bg-yellow-500",
+  suspended: "bg-yellow-500",
+  pending: "bg-blue-500",
 };
 
 const STATUS_LABELS: Record<string, string> = {
   ativo: "Ativo",
+  active: "Ativo",
   inativo: "Inativo",
+  inactive: "Inativo",
   suspenso: "Suspenso",
+  suspended: "Suspenso",
+  pending: "Pendente",
 };
 
 export default function LicenseeRanking() {
@@ -46,12 +52,15 @@ export default function LicenseeRanking() {
       items = items.filter(
         (item) =>
           item.name?.toLowerCase().includes(q) ||
-          item.code?.toLowerCase().includes(q)
+          item.code?.toLowerCase().includes(q) ||
+          item.address_city?.toLowerCase().includes(q)
       );
     }
 
     items.sort((a, b) =>
-      sortAsc ? (a.score ?? 0) - (b.score ?? 0) : (b.score ?? 0) - (a.score ?? 0)
+      sortAsc
+        ? (a.computed_score ?? 0) - (b.computed_score ?? 0)
+        : (b.computed_score ?? 0) - (a.computed_score ?? 0)
     );
 
     return items;
@@ -60,9 +69,9 @@ export default function LicenseeRanking() {
   const totalLicenciados = ranking.length;
   const scoreMedio =
     ranking.length > 0
-      ? (ranking.reduce((sum, r) => sum + (r.score ?? 0), 0) / ranking.length).toFixed(1)
+      ? (ranking.reduce((sum, r) => sum + (r.computed_score ?? 0), 0) / ranking.length).toFixed(1)
       : "0";
-  const tierSCount = ranking.filter((r) => r.tier === "S").length;
+  const tierEliteCount = ranking.filter((r) => r.tier === "Elite").length;
   const totalMaquinas = ranking.reduce((sum, r) => sum + (r.total_machines ?? 0), 0);
 
   return (
@@ -83,12 +92,13 @@ export default function LicenseeRanking() {
 
         {/* Tier Legend */}
         <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-sm font-medium text-muted-foreground mr-1">Tiers:</span>
+          <span className="text-sm font-medium text-muted-foreground mr-1">Níveis:</span>
           {TIERS.map((tier) => (
             <Badge
               key={tier.label}
-              className={`${tier.color} text-white border-transparent text-xs`}
+              className={`${tier.color} text-white border-transparent text-xs gap-1`}
             >
+              <tier.icon className="h-3 w-3" />
               {tier.label}
             </Badge>
           ))}
@@ -107,15 +117,15 @@ export default function LicenseeRanking() {
                 <p className="text-2xl font-bold text-foreground mt-1">{totalLicenciados}</p>
               </div>
               <div className="rounded-xl border bg-card p-4">
-                <p className="text-xs font-medium text-muted-foreground">Score Medio</p>
+                <p className="text-xs font-medium text-muted-foreground">Score Médio</p>
                 <p className="text-2xl font-bold text-foreground mt-1">{scoreMedio}</p>
               </div>
               <div className="rounded-xl border bg-card p-4">
-                <p className="text-xs font-medium text-muted-foreground">Tier S</p>
-                <p className="text-2xl font-bold text-purple-500 mt-1">{tierSCount}</p>
+                <p className="text-xs font-medium text-muted-foreground">Elite</p>
+                <p className="text-2xl font-bold text-purple-600 mt-1">{tierEliteCount}</p>
               </div>
               <div className="rounded-xl border bg-card p-4">
-                <p className="text-xs font-medium text-muted-foreground">Total Maquinas</p>
+                <p className="text-xs font-medium text-muted-foreground">Total Máquinas</p>
                 <p className="text-2xl font-bold text-foreground mt-1">{totalMaquinas}</p>
               </div>
             </div>
@@ -125,7 +135,7 @@ export default function LicenseeRanking() {
               <div className="relative flex-1 min-w-[200px] max-w-sm">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
-                  placeholder="Buscar por nome ou codigo..."
+                  placeholder="Buscar por nome, código ou cidade..."
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   className="pl-9"
@@ -148,9 +158,9 @@ export default function LicenseeRanking() {
                       <th className="px-4 py-3 text-left font-medium">#</th>
                       <th className="px-4 py-3 text-left font-medium">Licenciado</th>
                       <th className="px-4 py-3 text-left font-medium">Cidade/UF</th>
-                      <th className="px-4 py-3 text-left font-medium">Tier</th>
+                      <th className="px-4 py-3 text-left font-medium">Nível</th>
                       <th className="px-4 py-3 text-left font-medium">Score</th>
-                      <th className="px-4 py-3 text-right font-medium">Maquinas Total</th>
+                      <th className="px-4 py-3 text-right font-medium">Máquinas Total</th>
                       <th className="px-4 py-3 text-right font-medium">1L</th>
                       <th className="px-4 py-3 text-right font-medium">100ml</th>
                       <th className="px-4 py-3 text-left font-medium">Status</th>
@@ -176,9 +186,9 @@ export default function LicenseeRanking() {
                             </div>
                           </td>
                           <td className="px-4 py-3 text-muted-foreground">
-                            {item.city && item.uf
-                              ? `${item.city}/${item.uf}`
-                              : item.city || item.uf || "-"}
+                            {item.address_city && item.address_state
+                              ? `${item.address_city}/${item.address_state}`
+                              : item.address_city || item.address_state || "-"}
                           </td>
                           <td className="px-4 py-3">
                             <Badge
@@ -188,7 +198,7 @@ export default function LicenseeRanking() {
                             </Badge>
                           </td>
                           <td className="px-4 py-3 font-semibold text-foreground">
-                            {item.score?.toFixed(1) ?? "-"}
+                            {item.computed_score?.toFixed(1) ?? "-"}
                           </td>
                           <td className="px-4 py-3 text-right text-foreground">
                             {item.total_machines ?? 0}

@@ -14,14 +14,22 @@ import { useNetworkMap, useNetworkStats } from "@/hooks/useNetworkIntelligence";
 
 const STATUS_COLORS: Record<string, string> = {
   ativa: "#22c55e",
+  operational: "#22c55e",
   manutencao: "#eab308",
+  maintenance: "#eab308",
   inativa: "#ef4444",
+  offline: "#ef4444",
+  retired: "#6b7280",
 };
 
 const STATUS_LABELS: Record<string, string> = {
   ativa: "Ativa",
+  operational: "Operacional",
   manutencao: "Manutenção",
+  maintenance: "Manutenção",
   inativa: "Inativa",
+  offline: "Offline",
+  retired: "Desativada",
 };
 
 export default function NetworkMap() {
@@ -36,7 +44,7 @@ export default function NetworkMap() {
   const uniqueStates = useMemo(() => {
     const states = new Set<string>();
     machines.forEach((m: any) => {
-      if (m.state) states.add(m.state);
+      if (m.location_state) states.add(m.location_state);
     });
     return Array.from(states).sort();
   }, [machines]);
@@ -44,8 +52,8 @@ export default function NetworkMap() {
   const uniqueLicensees = useMemo(() => {
     const map = new Map<string, string>();
     machines.forEach((m: any) => {
-      if (m.licensee_id && m.licensee_name) {
-        map.set(m.licensee_id, m.licensee_name);
+      if (m.licensee_code && m.licensee_name) {
+        map.set(m.licensee_name, m.licensee_name);
       }
     });
     return Array.from(map.entries()).sort((a, b) => a[1].localeCompare(b[1]));
@@ -54,8 +62,8 @@ export default function NetworkMap() {
   // Apply filters
   const filteredMachines = useMemo(() => {
     return machines.filter((m: any) => {
-      if (stateFilter !== "all" && m.state !== stateFilter) return false;
-      if (licenseeFilter !== "all" && m.licensee_id !== licenseeFilter) return false;
+      if (stateFilter !== "all" && m.location_state !== stateFilter) return false;
+      if (licenseeFilter !== "all" && m.licensee_name !== licenseeFilter) return false;
       if (statusFilter !== "all" && m.status !== statusFilter) return false;
       return true;
     });
@@ -91,7 +99,7 @@ export default function NetworkMap() {
                 {statsLoading ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
                 ) : (
-                  stats?.totalMachines ?? 0
+                  stats?.total_machines ?? 0
                 )}
               </p>
             </div>
@@ -104,7 +112,7 @@ export default function NetworkMap() {
                 {statsLoading ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
                 ) : (
-                  stats?.activeMachines ?? 0
+                  stats?.total_active_machines ?? 0
                 )}
               </p>
             </div>
@@ -117,7 +125,7 @@ export default function NetworkMap() {
                 {statsLoading ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
                 ) : (
-                  stats?.totalLicensees ?? 0
+                  stats?.total_licensees ?? 0
                 )}
               </p>
             </div>
@@ -130,7 +138,7 @@ export default function NetworkMap() {
                 {statsLoading ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
                 ) : (
-                  stats?.totalStates ?? 0
+                  stats?.machines_by_state?.length ?? 0
                 )}
               </p>
             </div>
@@ -235,7 +243,7 @@ export default function NetworkMap() {
                       </p>
                       <p className="text-muted-foreground">
                         <span className="font-medium">Local:</span>{" "}
-                        {machine.city}, {machine.state}
+                        {machine.location_city}, {machine.location_state}
                       </p>
                       <p>
                         <span

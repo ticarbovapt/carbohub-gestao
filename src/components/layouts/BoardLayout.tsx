@@ -34,6 +34,7 @@ import {
   MapPin,
   Trophy,
   Target,
+  Brain,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -133,6 +134,7 @@ const dadosMestresItems = [
   { href: "/machines", label: "Máquinas", icon: Cpu },
   { href: "/ops/network-map", label: "Mapa da Rede", icon: MapPin },
   { href: "/ops/licensee-ranking", label: "Ranking Licenciados", icon: Trophy },
+  { href: "/ops/territory-intelligence", label: "Inteligência Territorial", icon: Brain },
   { href: "/ops/territory-expansion", label: "Expansão Territorial", icon: Target },
   { href: "/team", label: "Equipe", icon: Users },
   { href: "/import", label: "Importar Dados", icon: FileSpreadsheet },
@@ -191,6 +193,7 @@ const ROUTE_LABELS: Record<string, string> = {
   ops: "Inteligência",
   "network-map": "Mapa da Rede",
   "licensee-ranking": "Ranking Licenciados",
+  "territory-intelligence": "Inteligência Territorial",
   "territory-expansion": "Expansão Territorial",
 };
 

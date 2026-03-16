@@ -57,6 +57,7 @@ import ResetPassword from "./pages/ResetPassword";
 import NetworkMap from "./pages/NetworkMap";
 import LicenseeRanking from "./pages/LicenseeRanking";
 import TerritoryExpansion from "./pages/TerritoryExpansion";
+import TerritoryIntelligence from "./pages/TerritoryIntelligence";
 
 // Licensee Portal Pages
 import LicenseeDashboard from "./pages/licensee/LicenseeDashboard";
@@ -245,6 +246,14 @@ function AnimatedRoutes() {
             element={
               <ProtectedRoute>
                 <LicenseeRanking />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/ops/territory-intelligence"
+            element={
+              <ProtectedRoute>
+                <TerritoryIntelligence />
               </ProtectedRoute>
             }
           />
