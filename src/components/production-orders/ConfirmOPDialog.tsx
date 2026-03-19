@@ -40,6 +40,7 @@ import {
 } from "@/hooks/useProductionConfirmation";
 import { useLots } from "@/hooks/useLots";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 
 interface ConfirmOPDialogProps {
   open: boolean;
@@ -327,29 +328,33 @@ export function ConfirmOPDialog({ open, onOpenChange, order }: ConfirmOPDialogPr
                           className="h-9 bg-muted"
                         />
                       </div>
-                      {lots.length > 0 && (
-                        <div className="space-y-1">
-                          <Label className="text-xs flex items-center gap-1">
-                            <Beaker className="h-3 w-3" /> Lote
+                      <div className="space-y-1">
+                          <Label className={cn("text-xs flex items-center gap-1", lots.length > 0 && !item.lot_id && "text-destructive")}>
+                            <Beaker className="h-3 w-3" /> Lote {lots.length > 0 && <span className="text-destructive">*</span>}
                           </Label>
-                          <Select
-                            value={item.lot_id || "none"}
-                            onValueChange={(v) => updateItem(index, "lot_id", v === "none" ? null : v)}
-                          >
-                            <SelectTrigger className="h-9 text-xs">
-                              <SelectValue placeholder="Selecionar" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="none">Nenhum</SelectItem>
-                              {lots.map((lot) => (
-                                <SelectItem key={lot.id} value={lot.id}>
-                                  {lot.lot_code} ({lot.available_volume_ml}ml)
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
+                          {lots.length > 0 ? (
+                            <Select
+                              value={item.lot_id || ""}
+                              onValueChange={(v) => updateItem(index, "lot_id", v || null)}
+                            >
+                              <SelectTrigger className={cn("h-9 text-xs", lots.length > 0 && !item.lot_id && "border-destructive")}>
+                                <SelectValue placeholder="Selecionar lote *" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {lots.map((lot) => (
+                                  <SelectItem key={lot.id} value={lot.id}>
+                                    {lot.lot_code} ({lot.available_volume_ml}ml)
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          ) : (
+                            <p className="text-xs text-amber-600 flex items-center gap-1 py-1">
+                              <AlertTriangle className="h-3 w-3" />
+                              Nenhum lote aprovado disponível
+                            </p>
+                          )}
                         </div>
-                      )}
                     </div>
 
                     {overConsumed && (
@@ -373,7 +378,17 @@ export function ConfirmOPDialog({ open, onOpenChange, order }: ConfirmOPDialogPr
                 <ArrowLeft className="h-4 w-4 mr-2" />
                 Voltar
               </Button>
-              <Button onClick={() => setStep("summary")}>
+              <Button onClick={() => {
+                const missingLots = items.some((item) => {
+                  const lots = getLotsForProduct(item.product_id);
+                  return lots.length > 0 && !item.lot_id;
+                });
+                if (missingLots) {
+                  toast.error("Selecione o lote para todos os materiais que possuem lotes disponíveis");
+                  return;
+                }
+                setStep("summary");
+              }}>
                 Próximo: Resumo
                 <ArrowRight className="h-4 w-4 ml-2" />
               </Button>
