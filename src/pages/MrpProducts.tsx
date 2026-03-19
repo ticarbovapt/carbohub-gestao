@@ -190,8 +190,8 @@ export default function MrpProducts() {
     <BoardLayout>
       <div className="space-y-6">
         <CarboPageHeader
-          title="Produtos (MRP)"
-          description="Cadastro mestre de produtos do ecossistema"
+          title="Insumos (MRP)"
+          description="Cadastro mestre de insumos do ecossistema"
           icon={Package}
           actions={canEdit ? (
             <CarboButton onClick={() => { setEditProduct(undefined); setDialogOpen(true); }}>

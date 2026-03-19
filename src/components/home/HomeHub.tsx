@@ -143,8 +143,8 @@ export function HomeHub() {
     },
     {
       key: "pdv",
-      title: "Área Produtos",
-      description: "Estoque, reposição e logística",
+      title: "Insumos",
+      description: "Estoque de insumos, reposição e logística",
       icon: <Store className="h-5 w-5 text-white" />,
       accentBg: "bg-area-products",
       accentBorder: "hover:border-area-products",

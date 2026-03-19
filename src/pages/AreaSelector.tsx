@@ -53,9 +53,9 @@ const areas: AreaConfig[] = [
   },
   {
     id: "pdv",
-    title: "Área Produtos",
-    subtitle: "Pontos de Venda",
-    description: "Estoque, reposição e logística integrada.",
+    title: "Insumos",
+    subtitle: "Estoque de Insumos",
+    description: "Gestão de insumos, reposição e logística integrada.",
     icon: <Store className="h-8 w-8" />,
     gradient: "from-amber-500 to-orange-600",
     shadowColor: "shadow-amber-500/30",

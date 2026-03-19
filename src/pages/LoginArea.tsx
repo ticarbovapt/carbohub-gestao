@@ -60,8 +60,8 @@ const areaConfigs: Record<AreaType, AreaConfig> = {
   },
   pdv: {
     id: "pdv",
-    title: "Área Produtos",
-    subtitle: "Estoque, reposição e logística",
+    title: "Insumos",
+    subtitle: "Estoque de insumos, reposição e logística",
     icon: <Store className="h-5 w-5" />,
     gradient: "from-area-products to-area-products-dark",
     dashboardRoute: "/pdv/dashboard",

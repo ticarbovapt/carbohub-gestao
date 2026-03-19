@@ -130,7 +130,7 @@ export function TerritorialMap({
   const [selectedState, setSelectedState] = useState<string | null>(null);
   const [layers, setLayers] = useState<LayerConfig[]>([
     { id: "licensees", label: "Licenciados", icon: <Building2 className="h-4 w-4" />, color: "#3BC770", enabled: initialLayers.includes("licensees") },
-    { id: "pdvs", label: "Área Produtos", icon: <Store className="h-4 w-4" />, color: "#F59E0B", enabled: initialLayers.includes("pdvs") },
+    { id: "pdvs", label: "Insumos", icon: <Store className="h-4 w-4" />, color: "#F59E0B", enabled: initialLayers.includes("pdvs") },
     { id: "os", label: "Operações", icon: <Wrench className="h-4 w-4" />, color: "#4FA4E8", enabled: initialLayers.includes("os") },
     { id: "machines", label: "Máquinas", icon: <Cpu className="h-4 w-4" />, color: "#8B5CF6", enabled: initialLayers.includes("machines") },
   ]);

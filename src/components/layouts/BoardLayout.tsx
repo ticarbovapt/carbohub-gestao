@@ -126,7 +126,7 @@ type SidebarTab = "dados" | "operacoes";
 
 const dadosMestresItems = [
   { href: "/mrp/dashboard", label: "Dashboard Estratégico", icon: LayoutDashboard },
-  { href: "/mrp/products", label: "Produtos", icon: Package },
+  { href: "/mrp/products", label: "Insumos", icon: Package },
   { href: "/mrp/suppliers", label: "Fornecedores", icon: Factory },
   { href: "/skus", label: "SKUs / BOM", icon: Boxes },
   { href: "/lots", label: "Lotes / Qualidade", icon: FlaskConical },
@@ -183,7 +183,7 @@ const ROUTE_LABELS: Record<string, string> = {
   checklist: "Checklist",
   mapa: "Mapa Territorial",
   mrp: "Dados Mestres",
-  products: "Produtos",
+  products: "Insumos",
   suppliers: "Fornecedores",
   lots: "Lotes / Qualidade",
   skus: "SKUs",
