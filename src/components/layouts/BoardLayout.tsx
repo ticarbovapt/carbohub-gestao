@@ -147,6 +147,7 @@ const operacoesItems = [
   { href: "/logistics", label: "Logística", icon: Truck },
   { href: "/scheduling", label: "Agendamentos", icon: Calendar },
   { href: "/orders", label: "Controle de Pedidos", icon: ShoppingCart },
+  { href: "/b2b/funnel", label: "Funil B2B", icon: Target },
   { href: "/financeiro", label: "Financeiro", icon: Wallet },
   { href: "/suprimentos", label: "Suprimentos", icon: Package },
   { href: "/analytics", label: "Analytics", icon: TrendingUp },
