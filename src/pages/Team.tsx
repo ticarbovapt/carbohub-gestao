@@ -1,6 +1,9 @@
 import { useState } from "react";
 import { BoardLayout } from "@/components/layouts/BoardLayout";
-import { Users, Shield, Building2, Filter, Mail, Clock, CheckCircle, Loader2, CheckCheck } from "lucide-react";
+import { Users, Shield, Building2, Filter, Mail, Clock, CheckCircle, Loader2, CheckCheck, Network } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { OrgChart } from "@/components/team/OrgChart";
+import { useOrgChart } from "@/hooks/useOrgChart";
 import { useTeamMembers, useUpdateUserRole, useUpdateUserDepartment, TeamMember } from "@/hooks/useTeamMembers";
 import { AddMemberDialog } from "@/components/team/AddMemberDialog";
 import { EditMemberDialog } from "@/components/team/EditMemberDialog";
@@ -63,7 +66,8 @@ const Team = () => {
   const updateDepartment = useUpdateUserDepartment();
   const resendEmail = useResendWelcomeEmail();
   const { isAdmin, isManager, isMasterAdmin, isCeo, isAnyGestor, user } = useAuth();
-  
+  const { data: orgTree = [], isLoading: isOrgLoading } = useOrgChart();
+
   // Filter states
   const [departmentFilter, setDepartmentFilter] = useState<DepartmentType | "all">("all");
   const [roleFilter, setRoleFilter] = useState<AppRole | "all">("all");
@@ -190,6 +194,19 @@ const Team = () => {
           {(isAdmin || isManager || isCeo || isAnyGestor) && <AddMemberDialog onMemberAdded={() => refetch()} />}
         </div>
 
+        <Tabs defaultValue="equipe" className="w-full">
+          <TabsList>
+            <TabsTrigger value="equipe" className="gap-2">
+              <Users className="h-4 w-4" />
+              Equipe
+            </TabsTrigger>
+            <TabsTrigger value="organograma" className="gap-2">
+              <Network className="h-4 w-4" />
+              Organograma
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="equipe" className="space-y-6 mt-6">
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
         {[
           { icon: Users, title: "Total de Membros", value: approvedMembers.length.toString() },
@@ -426,6 +443,14 @@ const Team = () => {
           )}
         </div>
       </div>
+          </TabsContent>
+
+          <TabsContent value="organograma" className="mt-6">
+            <div className="rounded-xl border border-border bg-board-surface p-6">
+              <OrgChart tree={orgTree} isLoading={isOrgLoading} />
+            </div>
+          </TabsContent>
+        </Tabs>
       </div>
 
       {/* Confirmation Dialog */}
