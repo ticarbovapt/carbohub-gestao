@@ -35,6 +35,7 @@ import {
   Trophy,
   Target,
   Brain,
+  Network,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -132,6 +133,7 @@ const dadosMestresItems = [
   { href: "/lots", label: "Lotes / Qualidade", icon: FlaskConical },
   { href: "/licensees", label: "Licenciados", icon: Building2 },
   { href: "/team", label: "Equipe", icon: Users },
+  { href: "/org-chart", label: "Organograma", icon: Network },
   { href: "/import", label: "Importar Dados", icon: FileSpreadsheet },
 ];
 

@@ -46,6 +46,7 @@ import Skus from "./pages/Skus";
 import Lots from "./pages/Lots";
 import ProductionOrdersOP from "./pages/ProductionOrdersOP";
 import B2BFunnel from "./pages/B2BFunnel";
+import OrgChartPage from "./pages/OrgChartPage";
 import NotFound from "./pages/NotFound";
 import AIAssistantPage from "./pages/AIAssistantPage";
 import { AIChatDrawer } from "./components/ai/AIChatDrawer";
@@ -133,6 +134,14 @@ function AnimatedRoutes() {
             element={
               <ProtectedRoute>
                 <Team />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/org-chart"
+            element={
+              <ProtectedRoute>
+                <OrgChartPage />
               </ProtectedRoute>
             }
           />
