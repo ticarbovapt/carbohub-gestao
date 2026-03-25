@@ -25,11 +25,7 @@ import { useDashboardStats, useRecentChecklists } from "@/hooks/useDashboardStat
 import { useChecklistTrend, useOSTrend, useDepartmentDistribution } from "@/hooks/useDashboardCharts";
 import { TrendChart } from "@/components/dashboard/TrendChart";
 import { DepartmentChart } from "@/components/dashboard/DepartmentChart";
-// Legacy dashboards (mantidos para compatibilidade)
-import { LegacyOperatorDashboard } from "@/components/dashboard/LegacyOperatorDashboard";
-import { ManagerDashboard } from "@/components/dashboard/ManagerDashboard";
-import { AdminDashboard } from "@/components/dashboard/AdminDashboard";
-// Novos dashboards Carbo
+// Dashboards Carbo (por role)
 import { CeoDashboard } from "@/components/dashboard/CeoDashboard";
 import { GestorDashboard } from "@/components/dashboard/GestorDashboard";
 import { OperadorDashboard } from "@/components/dashboard/OperadorDashboard";
@@ -41,98 +37,70 @@ import { useAuth } from "@/contexts/AuthContext";
 import { DEPARTMENT_LABELS } from "@/constants/departments";
 
 const Dashboard = () => {
-  const { 
-    // Roles legados
-    isAdmin, isManager, roles,
-    // Novos roles Carbo
-    isCeo, isGestorAdm, isGestorFin, isGestorCompras, 
+  const {
+    isAdmin, isManager,
+    isCeo, isGestorAdm, isGestorFin, isGestorCompras,
     isOperadorFiscal, isOperador, isAnyGestor, isAnyOperador,
-    carboRoles
   } = useAuth();
   
-  // Verificar se tem roles Carbo configurados
-  const hasCarboRoles = carboRoles.length > 0;
-
-  // Se tem roles Carbo, usar os novos dashboards
-  if (hasCarboRoles) {
-    if (isCeo) {
-      return (
-        <BoardLayout>
-          <CeoDashboard />
-        </BoardLayout>
-      );
-    }
-
-    if (isGestorAdm) {
-      return (
-        <BoardLayout>
-          <GestorDashboard role="gestor_adm" />
-        </BoardLayout>
-      );
-    }
-
-    if (isGestorFin) {
-      return (
-        <BoardLayout>
-          <GestorDashboard role="gestor_fin" />
-        </BoardLayout>
-      );
-    }
-
-    if (isGestorCompras) {
-      return (
-        <BoardLayout>
-          <GestorDashboard role="gestor_compras" />
-        </BoardLayout>
-      );
-    }
-
-    if (isOperadorFiscal) {
-      return (
-        <BoardLayout>
-          <OperadorDashboard role="operador_fiscal" />
-        </BoardLayout>
-      );
-    }
-
-    if (isOperador) {
-      return (
-        <BoardLayout>
-          <OperadorDashboard role="operador" />
-        </BoardLayout>
-      );
-    }
-  }
-
-  // Fallback para roles legados
-  const isOperatorOnly = !isAdmin && !isManager && roles.includes("operator");
-  const isManagerOnly = isManager && !isAdmin;
-
-  if (isAdmin) {
+  // Dashboard por role Carbo — sem fallback legacy
+  if (isCeo || isAdmin) {
     return (
       <BoardLayout>
-        <AdminDashboard />
+        <CeoDashboard />
       </BoardLayout>
     );
   }
 
-  if (isManagerOnly) {
+  if (isGestorAdm) {
     return (
       <BoardLayout>
-        <ManagerDashboard />
+        <GestorDashboard role="gestor_adm" />
       </BoardLayout>
     );
   }
 
-  if (isOperatorOnly) {
+  if (isGestorFin) {
     return (
       <BoardLayout>
-        <LegacyOperatorDashboard />
+        <GestorDashboard role="gestor_fin" />
       </BoardLayout>
     );
   }
 
-  // Default dashboard for other users (or viewers)
+  if (isGestorCompras) {
+    return (
+      <BoardLayout>
+        <GestorDashboard role="gestor_compras" />
+      </BoardLayout>
+    );
+  }
+
+  if (isAnyGestor || isManager) {
+    return (
+      <BoardLayout>
+        <GestorDashboard role="gestor_adm" />
+      </BoardLayout>
+    );
+  }
+
+  if (isOperadorFiscal) {
+    return (
+      <BoardLayout>
+        <OperadorDashboard role="operador_fiscal" />
+      </BoardLayout>
+    );
+  }
+
+  if (isAnyOperador || isOperador) {
+    return (
+      <BoardLayout>
+        <OperadorDashboard role="operador" />
+      </BoardLayout>
+    );
+  }
+
+  // Default: dashboard geral para qualquer usuário
   return <DefaultDashboard />;
 };
 

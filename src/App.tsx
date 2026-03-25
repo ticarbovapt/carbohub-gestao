@@ -16,7 +16,6 @@ import LoginArea from "./pages/LoginArea";
 import { HomeHub } from "./components/home/HomeHub";
 import Onboarding from "./pages/Onboarding";
 import Dashboard from "./pages/Dashboard";
-import Analytics from "./pages/Analytics";
 import Team from "./pages/Team";
 import OSBoard from "./pages/OSBoard";
 import OSDetails from "./pages/OSDetails";
@@ -118,14 +117,6 @@ function AnimatedRoutes() {
             element={
               <ProtectedRoute>
                 <Dashboard />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/analytics"
-            element={
-              <ProtectedRoute>
-                <Analytics />
               </ProtectedRoute>
             }
           />

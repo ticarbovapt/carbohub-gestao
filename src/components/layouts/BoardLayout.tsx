@@ -4,7 +4,6 @@ import {
   LayoutDashboard, 
   ClipboardList, 
   Settings, 
-  TrendingUp,
   Users,
   LogOut,
   UserCheck,
@@ -141,7 +140,6 @@ const operacoesItems = [
   { href: "/b2b/funnel", label: "Funil B2B", icon: Target },
   { href: "/financeiro", label: "Financeiro", icon: Wallet },
   { href: "/suprimentos", label: "Suprimentos", icon: Package },
-  { href: "/analytics", label: "Analytics", icon: TrendingUp },
   { href: "/admin", label: "Sistema", icon: Settings, adminOnly: true },
 ];
 
