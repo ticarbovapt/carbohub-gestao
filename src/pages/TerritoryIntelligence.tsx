@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { BoardLayout } from "@/components/layouts/BoardLayout";
+import { LicenseeSubNav } from "@/components/licensees/LicenseeSubNav";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Loader2, Brain, MapPin, Target, TrendingUp, Users, Search, BarChart3 } from "lucide-react";
@@ -144,6 +145,8 @@ export default function TerritoryIntelligence() {
             </p>
           </div>
         </div>
+
+        <LicenseeSubNav />
 
         {/* Density Legend */}
         <div className="flex items-center gap-2 flex-wrap">

@@ -131,11 +131,6 @@ const dadosMestresItems = [
   { href: "/skus", label: "SKUs / BOM", icon: Boxes },
   { href: "/lots", label: "Lotes / Qualidade", icon: FlaskConical },
   { href: "/licensees", label: "Licenciados", icon: Building2 },
-  { href: "/machines", label: "Máquinas", icon: Cpu },
-  { href: "/ops/network-map", label: "Mapa da Rede", icon: MapPin },
-  { href: "/ops/licensee-ranking", label: "Ranking Licenciados", icon: Trophy },
-  { href: "/ops/territory-intelligence", label: "Inteligência Territorial", icon: Brain },
-  { href: "/ops/territory-expansion", label: "Expansão Territorial", icon: Target },
   { href: "/team", label: "Equipe", icon: Users },
   { href: "/import", label: "Importar Dados", icon: FileSpreadsheet },
 ];

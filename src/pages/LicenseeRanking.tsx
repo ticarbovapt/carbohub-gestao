@@ -1,5 +1,6 @@
 import { useState, useMemo } from "react";
 import { BoardLayout } from "@/components/layouts/BoardLayout";
+import { LicenseeSubNav } from "@/components/licensees/LicenseeSubNav";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Trophy, Loader2, Search, Crown, Medal, Award, Shield } from "lucide-react";
@@ -89,6 +90,8 @@ export default function LicenseeRanking() {
             </p>
           </div>
         </div>
+
+        <LicenseeSubNav />
 
         {/* Tier Legend */}
         <div className="flex items-center gap-2 flex-wrap">

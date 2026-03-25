@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from "react";
 import { BoardLayout } from "@/components/layouts/BoardLayout";
+import { LicenseeSubNav } from "@/components/licensees/LicenseeSubNav";
 import { MapContainer, TileLayer, CircleMarker, Popup } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 import { MapPin, Loader2, Cpu, Users, Activity, Map } from "lucide-react";
@@ -88,6 +89,8 @@ export default function NetworkMap() {
             </p>
           </div>
         </div>
+
+        <LicenseeSubNav />
 
         {/* Stats Bar */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">

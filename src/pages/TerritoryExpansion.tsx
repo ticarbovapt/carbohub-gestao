@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import { BoardLayout } from "@/components/layouts/BoardLayout";
+import { LicenseeSubNav } from "@/components/licensees/LicenseeSubNav";
 import { Badge } from "@/components/ui/badge";
 import { Loader2, TrendingUp, MapPin, Target, Users } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -58,6 +59,8 @@ export default function TerritoryExpansion() {
             Oportunidades de expansão identificadas por inteligência territorial
           </p>
         </div>
+
+        <LicenseeSubNav />
 
         {/* Stats Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">

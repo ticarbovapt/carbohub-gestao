@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { BoardLayout } from "@/components/layouts/BoardLayout";
+import { LicenseeSubNav } from "@/components/licensees/LicenseeSubNav";
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
 import { CarboButton } from "@/components/ui/carbo-button";
 import { CarboCard, CarboCardContent, CarboCardHeader, CarboCardTitle } from "@/components/ui/carbo-card";
@@ -132,6 +133,8 @@ export default function Machines() {
             </>
           }
         />
+
+        <LicenseeSubNav />
 
         {/* Alerts Banner */}
         {alerts && (alerts.alerts.length > 0 || alerts.lowStock.length > 0) && (

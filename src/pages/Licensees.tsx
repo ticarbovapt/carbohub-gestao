@@ -9,12 +9,12 @@ import { CarboTable, CarboTableHeader, CarboTableBody, CarboTableRow, CarboTable
 import { CarboEmptyState } from "@/components/ui/carbo-empty-state";
 import { CarboSkeleton } from "@/components/ui/CarboSkeleton";
 import { PaginationControls } from "@/components/ui/pagination-controls";
-import { 
-  Building2, 
-  Plus, 
-  RefreshCw, 
-  MapPin, 
-  Phone, 
+import {
+  Building2,
+  Plus,
+  RefreshCw,
+  MapPin,
+  Phone,
   Mail,
   ChevronRight,
   Users,
@@ -27,6 +27,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { useLicensees, useLicenseeStats, LicenseeStatus, Licensee } from "@/hooks/useLicensees";
 import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate, useSearchParams } from "react-router-dom";
+import { LicenseeSubNav } from "@/components/licensees/LicenseeSubNav";
 import { CreateLicenseeDialog } from "@/components/licensees/CreateLicenseeDialog";
 import { EditLicenseeDialog } from "@/components/licensees/EditLicenseeDialog";
 import { LicenseesFilters } from "@/components/licensees/LicenseesFilters";
@@ -221,6 +222,8 @@ export default function Licensees() {
             </>
           }
         />
+
+        <LicenseeSubNav />
 
         {/* KPIs */}
         <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
