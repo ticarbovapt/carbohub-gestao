@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState, useMemo, useCallback } from "react";
+import React, { useEffect, useRef, useState, useMemo } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -14,81 +14,32 @@ import {
   Wrench,
   Cpu,
   AlertTriangle,
-  Filter,
   Layers,
   X,
-  TrendingUp,
-  Clock,
-  CheckCircle2,
 } from "lucide-react";
 import { useTerritorialData, type TerritorialFilters } from "@/hooks/useTerritorialData";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { cn } from "@/lib/utils";
+import {
+  patchLeafletIcons,
+  STATE_COORDS,
+  NAME_TO_SIGLA,
+  BRAZIL_CENTER,
+  BRAZIL_ZOOM,
+  createEmojiIcon,
+  choroplethStyle,
+} from "@/lib/mapUtils";
 
-// Fix for default marker icons in Leaflet with Vite
-import markerIcon2x from "leaflet/dist/images/marker-icon-2x.png";
-import markerIcon from "leaflet/dist/images/marker-icon.png";
-import markerShadow from "leaflet/dist/images/marker-shadow.png";
-
-delete (L.Icon.Default.prototype as unknown as { _getIconUrl?: unknown })._getIconUrl;
-L.Icon.Default.mergeOptions({
-  iconRetinaUrl: markerIcon2x,
-  iconUrl: markerIcon,
-  shadowUrl: markerShadow,
-});
-
-// Brazil state coordinates for approximate positioning
-const STATE_COORDS: Record<string, [number, number]> = {
-  AC: [-9.0238, -70.812], AL: [-9.5713, -36.782], AP: [0.902, -52.003],
-  AM: [-3.4168, -65.8561], BA: [-12.5797, -41.7007], CE: [-5.4984, -39.3206],
-  DF: [-15.8267, -47.9218], ES: [-19.1834, -40.3089], GO: [-15.827, -49.8362],
-  MA: [-4.9609, -45.2744], MT: [-12.6819, -56.9211], MS: [-20.7722, -54.7852],
-  MG: [-18.5122, -44.555], PA: [-3.4168, -52.2167], PB: [-7.24, -36.782],
-  PR: [-25.2521, -52.0215], PE: [-8.8137, -36.9541], PI: [-7.7183, -42.7289],
-  RJ: [-22.2587, -42.6592], RN: [-5.4026, -36.9541], RS: [-30.0346, -51.2177],
-  RO: [-11.5057, -63.5806], RR: [2.7376, -62.0751], SC: [-27.2423, -50.2189],
-  SP: [-23.5505, -46.6333], SE: [-10.9091, -37.0677], TO: [-10.1753, -48.2982],
-};
-
-// Custom marker icons
-const createCustomIcon = (color: string, iconHtml: string) =>
-  new L.DivIcon({
-    className: "custom-territorial-marker",
-    html: `
-      <div style="
-        background-color: ${color};
-        width: 32px;
-        height: 32px;
-        border-radius: 50%;
-        border: 3px solid white;
-        box-shadow: 0 3px 8px rgba(0,0,0,0.3);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        color: white;
-        font-size: 14px;
-      ">${iconHtml}</div>
-    `,
-    iconSize: [32, 32],
-    iconAnchor: [16, 32],
-    popupAnchor: [0, -32],
-  });
+patchLeafletIcons();
 
 const icons = {
-  licensee: createCustomIcon("#3BC770", "🏢"),
-  licenseeInactive: createCustomIcon("#6B7280", "🏢"),
-  pdv: createCustomIcon("#F59E0B", "🏪"),
-  pdvAlert: createCustomIcon("#EF4444", "🏪"),
-  os: createCustomIcon("#4FA4E8", "📋"),
-  osUrgent: createCustomIcon("#EF4444", "⚠️"),
-  machine: createCustomIcon("#8B5CF6", "⚙️"),
-  machineAlert: createCustomIcon("#EF4444", "⚙️"),
+  licensee: createEmojiIcon("#3BC770", "🏢"),
+  licenseeInactive: createEmojiIcon("#6B7280", "🏢"),
+  pdv: createEmojiIcon("#F59E0B", "🏪"),
+  pdvAlert: createEmojiIcon("#EF4444", "🏪"),
+  os: createEmojiIcon("#4FA4E8", "📋"),
+  osUrgent: createEmojiIcon("#EF4444", "⚠️"),
+  machine: createEmojiIcon("#8B5CF6", "⚙️"),
+  machineAlert: createEmojiIcon("#EF4444", "⚙️"),
 };
 
 interface LayerConfig {
@@ -172,8 +123,8 @@ export function TerritorialMap({
     if (!mapRef.current || mapInstanceRef.current || isLoading) return;
 
     const map = L.map(mapRef.current, {
-      center: [-14.235, -51.9253],
-      zoom: 4,
+      center: BRAZIL_CENTER,
+      zoom: BRAZIL_ZOOM,
       scrollWheelZoom: true,
       zoomControl: true,
     });
@@ -189,33 +140,14 @@ export function TerritorialMap({
     fetch("/data/brazil-states.geojson")
       .then((res) => res.json())
       .then((geoData) => {
-        const nameToSigla: Record<string, string> = {
-          "Acre": "AC", "Alagoas": "AL", "Amapá": "AP", "Amazonas": "AM",
-          "Bahia": "BA", "Ceará": "CE", "Distrito Federal": "DF", "Espírito Santo": "ES",
-          "Goiás": "GO", "Maranhão": "MA", "Mato Grosso": "MT", "Mato Grosso do Sul": "MS",
-          "Minas Gerais": "MG", "Pará": "PA", "Paraíba": "PB", "Paraná": "PR",
-          "Pernambuco": "PE", "Piauí": "PI", "Rio de Janeiro": "RJ", "Rio Grande do Norte": "RN",
-          "Rio Grande do Sul": "RS", "Rondônia": "RO", "Roraima": "RR", "Santa Catarina": "SC",
-          "São Paulo": "SP", "Sergipe": "SE", "Tocantins": "TO",
-        };
-
         const geoJsonLayer = L.geoJSON(geoData, {
           style: (feature) => {
-            const stateName = feature?.properties?.name;
-            const stateSigla = nameToSigla[stateName] || "";
-            const isActive = activeStates.has(stateSigla);
-            const isSelected = selectedState === stateSigla;
-
-            return {
-              fillColor: isSelected ? "#FCD34D" : isActive ? "#3BC770" : "#E5E7EB",
-              fillOpacity: isSelected ? 0.6 : isActive ? 0.35 : 0.1,
-              color: isSelected ? "#F59E0B" : isActive ? "#22C55E" : "#9CA3AF",
-              weight: isSelected ? 3 : isActive ? 2 : 1,
-            };
+            const stateSigla = NAME_TO_SIGLA[feature?.properties?.name] || "";
+            return choroplethStyle(stateSigla, activeStates, selectedState);
           },
           onEachFeature: (feature, layer) => {
             const stateName = feature?.properties?.name;
-            const stateSigla = nameToSigla[stateName] || "";
+            const stateSigla = NAME_TO_SIGLA[stateName] || "";
             const isActive = activeStates.has(stateSigla);
 
             layer.on({
@@ -268,28 +200,9 @@ export function TerritorialMap({
   useEffect(() => {
     if (!geoJsonRef.current) return;
 
-    const nameToSigla: Record<string, string> = {
-      "Acre": "AC", "Alagoas": "AL", "Amapá": "AP", "Amazonas": "AM",
-      "Bahia": "BA", "Ceará": "CE", "Distrito Federal": "DF", "Espírito Santo": "ES",
-      "Goiás": "GO", "Maranhão": "MA", "Mato Grosso": "MT", "Mato Grosso do Sul": "MS",
-      "Minas Gerais": "MG", "Pará": "PA", "Paraíba": "PB", "Paraná": "PR",
-      "Pernambuco": "PE", "Piauí": "PI", "Rio de Janeiro": "RJ", "Rio Grande do Norte": "RN",
-      "Rio Grande do Sul": "RS", "Rondônia": "RO", "Roraima": "RR", "Santa Catarina": "SC",
-      "São Paulo": "SP", "Sergipe": "SE", "Tocantins": "TO",
-    };
-
     geoJsonRef.current.setStyle((feature) => {
-      const stateName = feature?.properties?.name;
-      const stateSigla = nameToSigla[stateName] || "";
-      const isActive = activeStates.has(stateSigla);
-      const isSelected = selectedState === stateSigla;
-
-      return {
-        fillColor: isSelected ? "#FCD34D" : isActive ? "#3BC770" : "#E5E7EB",
-        fillOpacity: isSelected ? 0.6 : isActive ? 0.35 : 0.1,
-        color: isSelected ? "#F59E0B" : isActive ? "#22C55E" : "#9CA3AF",
-        weight: isSelected ? 3 : isActive ? 2 : 1,
-      };
+      const stateSigla = NAME_TO_SIGLA[feature?.properties?.name] || "";
+      return choroplethStyle(stateSigla, activeStates, selectedState);
     });
   }, [activeStates, selectedState]);
 

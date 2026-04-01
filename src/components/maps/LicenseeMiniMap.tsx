@@ -1,22 +1,7 @@
 import React, { useEffect, useRef, useMemo } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
-
-// State name to sigla mapping
-const NAME_TO_SIGLA: Record<string, string> = {
-  "Acre": "AC", "Alagoas": "AL", "Amapá": "AP", "Amazonas": "AM",
-  "Bahia": "BA", "Ceará": "CE", "Distrito Federal": "DF", "Espírito Santo": "ES",
-  "Goiás": "GO", "Maranhão": "MA", "Mato Grosso": "MT", "Mato Grosso do Sul": "MS",
-  "Minas Gerais": "MG", "Pará": "PA", "Paraíba": "PB", "Paraná": "PR",
-  "Pernambuco": "PE", "Piauí": "PI", "Rio de Janeiro": "RJ", "Rio Grande do Norte": "RN",
-  "Rio Grande do Sul": "RS", "Rondônia": "RO", "Roraima": "RR", "Santa Catarina": "SC",
-  "São Paulo": "SP", "Sergipe": "SE", "Tocantins": "TO",
-};
-
-// Sigla to name mapping (reverse)
-const SIGLA_TO_NAME: Record<string, string> = Object.fromEntries(
-  Object.entries(NAME_TO_SIGLA).map(([name, sigla]) => [sigla, name])
-);
+import { NAME_TO_SIGLA, SIGLA_TO_NAME, BRAZIL_CENTER, normalizeStateSigla } from "@/lib/mapUtils";
 
 interface LicenseeMiniMapProps {
   coverageStates?: string[];
@@ -32,37 +17,14 @@ export function LicenseeMiniMap({ coverageStates = [], state, className = "" }: 
   // Combine coverage states with the licensee's own state
   const allActiveStates = useMemo(() => {
     const states = new Set<string>();
-    
-    const normalizeState = (s: string): string | null => {
-      if (!s) return null;
-      const trimmed = s.trim();
-      const upper = trimmed.toUpperCase();
-      
-      // Check if it's already a sigla (2 uppercase letters)
-      if (upper.length === 2 && SIGLA_TO_NAME[upper]) {
-        return upper;
-      }
-      
-      // Check if it's a full name
-      if (NAME_TO_SIGLA[trimmed]) {
-        return NAME_TO_SIGLA[trimmed];
-      }
-      
-      return null;
-    };
-    
-    // Add coverage states (may be siglas or names)
     coverageStates.forEach((s) => {
-      const sigla = normalizeState(s);
+      const sigla = normalizeStateSigla(s);
       if (sigla) states.add(sigla);
     });
-    
-    // Add own state
     if (state) {
-      const sigla = normalizeState(state);
+      const sigla = normalizeStateSigla(state);
       if (sigla) states.add(sigla);
     }
-    
     return Array.from(states);
   }, [coverageStates, state]);
 
@@ -80,7 +42,7 @@ export function LicenseeMiniMap({ coverageStates = [], state, className = "" }: 
 
     // Initialize mini map (no controls, minimal interaction)
     const map = L.map(mapRef.current, {
-      center: [-14.235, -51.9253],
+      center: BRAZIL_CENTER,
       zoom: 3,
       zoomControl: false,
       attributionControl: false,
