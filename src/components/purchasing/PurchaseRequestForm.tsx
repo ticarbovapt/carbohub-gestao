@@ -7,7 +7,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { CarboCard, CarboCardContent, CarboCardHeader, CarboCardTitle } from "@/components/ui/carbo-card";
 import { useCreatePurchaseRequest } from "@/hooks/usePurchasing";
+import { useSuppliers } from "@/hooks/useSuppliers";
 import type { PurchaseRequestItem } from "@/types/purchasing";
+
+const UNITS_OF_MEASURE = ["un", "kg", "g", "L", "mL", "m", "cm", "m²", "m³", "pç", "cx", "pct", "par", "h", "km"];
 
 interface PurchaseRequestFormProps {
   serviceOrderId?: string;
@@ -33,6 +36,7 @@ const COST_CENTERS = [
 
 export function PurchaseRequestForm({ serviceOrderId, onClose }: PurchaseRequestFormProps) {
   const createRC = useCreatePurchaseRequest();
+  const { data: suppliers } = useSuppliers();
   const [costCenter, setCostCenter] = useState("");
   const [purchaseType, setPurchaseType] = useState("uso_direto");
   const [supplier, setSupplier] = useState("");
@@ -103,7 +107,14 @@ export function PurchaseRequestForm({ serviceOrderId, onClose }: PurchaseRequest
           </div>
           <div>
             <Label>Fornecedor Sugerido</Label>
-            <Input value={supplier} onChange={(e) => setSupplier(e.target.value)} placeholder="Nome do fornecedor" />
+            <Select value={supplier} onValueChange={setSupplier}>
+              <SelectTrigger><SelectValue placeholder="Selecione o fornecedor..." /></SelectTrigger>
+              <SelectContent>
+                {(suppliers || []).filter(s => s.is_active).map((s) => (
+                  <SelectItem key={s.id} value={s.name}>{s.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
         </div>
 
@@ -147,7 +158,14 @@ export function PurchaseRequestForm({ serviceOrderId, onClose }: PurchaseRequest
                 </div>
                 <div className="col-span-1">
                   {idx === 0 && <Label className="text-xs">Un.</Label>}
-                  <Input value={item.unidade} onChange={(e) => updateItem(idx, "unidade", e.target.value)} />
+                  <Select value={item.unidade} onValueChange={(v) => updateItem(idx, "unidade", v)}>
+                    <SelectTrigger className="h-9 px-2 text-xs"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {UNITS_OF_MEASURE.map((u) => (
+                        <SelectItem key={u} value={u}>{u}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div className="col-span-3">
                   {idx === 0 && <Label className="text-xs">Valor Unit.</Label>}
