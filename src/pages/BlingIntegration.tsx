@@ -54,8 +54,9 @@ export default function BlingIntegration() {
         setIsConnected(response.data.data.connected);
         setIsExpired(response.data.data.expired);
       }
-    } catch {
-      // Not connected
+    } catch (error) {
+      console.error("Bling status check failed:", error);
+      setIsConnected(false);
     } finally {
       setLoading(false);
     }

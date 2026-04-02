@@ -126,7 +126,7 @@ function useOSByDepartment() {
 }
 
 // Hook for orders stats
-function useOrderStats() {
+function useRecentOrderStats() {
   return useQuery({
     queryKey: ["order-stats-home"],
     queryFn: async () => {
@@ -160,7 +160,7 @@ export function EcosystemOverview({ canAccessOps, canAccessLicensee, canAccessPD
   const { data: licenseeStats, isLoading: licenseeLoading } = useLicenseeStats();
   const { data: pdvStats, isLoading: pdvLoading } = usePDVStats();
   const { data: osStats, isLoading: osLoading } = useOSByDepartment();
-  const { data: orderStats, isLoading: orderLoading } = useOrderStats();
+  const { data: orderStats, isLoading: orderLoading } = useRecentOrderStats();
 
   const isLoading = dashboardLoading || licenseeLoading || pdvLoading || osLoading || orderLoading;
 

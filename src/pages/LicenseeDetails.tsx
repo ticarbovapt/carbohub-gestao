@@ -1,4 +1,5 @@
 import React from "react";
+import { ORDER_STATUS_LABELS } from "@/hooks/useCarbozeOrders";
 import { useParams, useNavigate } from "react-router-dom";
 import { BoardLayout } from "@/components/layouts/BoardLayout";
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
@@ -64,14 +65,6 @@ const MACHINE_STATUS_VARIANTS: Record<string, "success" | "secondary" | "warning
   retired: "destructive",
 };
 
-const ORDER_STATUS_LABELS: Record<string, string> = {
-  pending: "Pendente",
-  confirmed: "Confirmado",
-  invoiced: "Faturado",
-  shipped: "Enviado",
-  delivered: "Entregue",
-  cancelled: "Cancelado",
-};
 
 const ORDER_STATUS_VARIANTS: Record<string, "success" | "secondary" | "warning" | "destructive" | "default"> = {
   pending: "warning",

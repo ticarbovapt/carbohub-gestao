@@ -23,7 +23,9 @@ function getCorsHeaders(req: Request) {
 
 const BLING_AUTH_URL = "https://www.bling.com.br/Api/v3/oauth/authorize";
 const BLING_TOKEN_URL = "https://www.bling.com.br/Api/v3/oauth/token";
-const REDIRECT_URI = "https://www.carbohub.com.br/integrations/bling/callback";
+
+// Fallback to env var or hardcoded production URL
+const REDIRECT_URI = Deno.env.get("BLING_REDIRECT_URI") || "https://www.carbohub.com.br/integrations/bling/callback";
 
 Deno.serve(async (req: Request): Promise<Response> => {
   const corsHeaders = getCorsHeaders(req);

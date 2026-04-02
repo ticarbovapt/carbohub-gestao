@@ -114,7 +114,8 @@ async function getValidToken(
   return { token: integration.access_token };
 }
 
-async function blingFetch(token: string, endpoint: string, page = 1, limit = 100): Promise<any> {
+async function blingFetch(token: string, endpoint: string, page = 1, limit = 100, _retries = 0): Promise<any> {
+  const MAX_RETRIES = 5;
   const separator = endpoint.includes("?") ? "&" : "?";
   const url = `${BLING_API_BASE}${endpoint}${separator}pagina=${page}&limite=${limit}`;
 
@@ -123,9 +124,13 @@ async function blingFetch(token: string, endpoint: string, page = 1, limit = 100
   });
 
   if (response.status === 429) {
-    // Rate limited, wait and retry
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-    return blingFetch(token, endpoint, page, limit);
+    if (_retries >= MAX_RETRIES) {
+      throw new Error(`Bling API rate limit exceeded after ${MAX_RETRIES} retries for ${endpoint}`);
+    }
+    const waitMs = Math.min(1000 * Math.pow(2, _retries), 10000);
+    console.log(`[bling-sync] Rate limited (429), retry ${_retries + 1}/${MAX_RETRIES} after ${waitMs}ms`);
+    await new Promise((resolve) => setTimeout(resolve, waitMs));
+    return blingFetch(token, endpoint, page, limit, _retries + 1);
   }
 
   if (!response.ok) {
@@ -303,8 +308,8 @@ async function syncOrders(
           const detail = await blingFetch(token, `/pedidos/vendas/${order.id}`);
           orderDetail = detail.data || order;
           await new Promise((resolve) => setTimeout(resolve, 350));
-        } catch {
-          // Use list data if detail fails
+        } catch (detailErr) {
+          console.warn(`[bling-sync] Failed to fetch order detail ${order.id}:`, detailErr);
         }
 
         const contato = orderDetail.contato || {};
@@ -429,7 +434,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
       } catch (e) {
         const errMsg = e instanceof Error ? e.message : "";
         // If Bling returned 401, force-refresh token and retry ONCE
-        if (errMsg.includes("error 401") || errMsg.includes("invalid_token")) {
+        if (errMsg.includes("error 401") || errMsg.includes("API error 401") || errMsg.includes("invalid_token")) {
           console.log(`[bling-sync] Got 401 for ${entityType}, force-refreshing token and retrying...`);
           const refreshed = await getValidToken(supabaseAdmin, blingClientId, blingClientSecret, true);
           if (refreshed.error || !refreshed.token) {
