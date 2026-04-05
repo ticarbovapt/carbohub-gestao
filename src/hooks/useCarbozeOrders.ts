@@ -56,6 +56,14 @@ export interface CarbozeOrder {
   next_delivery_date: string | null;
   parent_order_id: string | null;
   last_recurrence_order_id: string | null;
+  // Vendedor / RV fields
+  vendedor_id: string | null;
+  vendedor_name: string | null;
+  rv_flow_type: "standard" | "service" | "bonus_only";
+  linha: string | null;
+  modalidade: string | null;
+  created_op_id: string | null;
+  created_os_id: string | null;
   // Import/governance fields
   is_test: boolean;
   source_file: string | null;
@@ -90,6 +98,12 @@ export interface OrderInsert {
   is_recurring?: boolean;
   recurrence_interval_days?: number;
   next_delivery_date?: string;
+  // Vendedor / RV fields
+  vendedor_id?: string;
+  vendedor_name?: string;
+  rv_flow_type?: "standard" | "service" | "bonus_only";
+  linha?: string;
+  modalidade?: string;
   // Strategic V2.1 fields
   cnpj?: string;
   legal_name?: string;

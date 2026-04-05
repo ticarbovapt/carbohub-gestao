@@ -295,6 +295,7 @@ export default function Orders() {
                 <CarboTableHead>Pedido</CarboTableHead>
                 <CarboTableHead>Produto</CarboTableHead>
                 <CarboTableHead>Tipo</CarboTableHead>
+                <CarboTableHead>Vendedor</CarboTableHead>
                 <CarboTableHead>Cliente</CarboTableHead>
                 <CarboTableHead>Licenciado</CarboTableHead>
                 <CarboTableHead>Data</CarboTableHead>
@@ -338,6 +339,11 @@ export default function Orders() {
                         )}
                         {ORDER_TYPE_LABELS[orderType]}
                       </CarboBadge>
+                    </CarboTableCell>
+                    <CarboTableCell>
+                      <span className="text-sm">
+                        {order.vendedor_name || <span className="text-muted-foreground">—</span>}
+                      </span>
                     </CarboTableCell>
                     <CarboTableCell>
                       <div>

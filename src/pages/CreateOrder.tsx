@@ -49,7 +49,29 @@ const CLASSIFICATION_OPTIONS = [
   { value: "licenciado", label: "Licenciado" },
 ] as const;
 
+export type RvFlowType = "standard" | "service" | "bonus_only";
+export type LinhaCarbo = "carboze_100ml" | "carboze_1l" | "carbopro" | "carbovapt";
+
+const LINHAS: { value: LinhaCarbo; label: string; flow: RvFlowType }[] = [
+  { value: "carboze_100ml", label: "CarboZé 100ml", flow: "standard" },
+  { value: "carboze_1l", label: "CarboZé 1L", flow: "standard" },
+  { value: "carbopro", label: "CarboPro", flow: "standard" },
+  { value: "carbovapt", label: "CarboVapt (Serviço)", flow: "service" },
+];
+
+const MODALIDADES = [
+  { value: "poc", label: "POC — Prova de Conceito" },
+  { value: "eventual", label: "Eventual — Avulso" },
+  { value: "recorrente", label: "Recorrente — Contrato" },
+  { value: "licenciado", label: "Licenciado — Parceiro" },
+];
+
 const formSchema = z.object({
+  // Vendedor + Fluxo
+  vendedor_id: z.string().min(1, "Selecione o vendedor"),
+  linha: z.string().min(1, "Selecione a linha"),
+  rv_flow_type: z.enum(["standard", "service", "bonus_only"]).default("standard"),
+  modalidade: z.string().optional(),
   // CNPJ-first fields
   cnpj: z.string().optional(),
   legal_name: z.string().optional(),
@@ -145,6 +167,10 @@ export default function CreateOrder() {
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
     defaultValues: {
+      vendedor_id: "",
+      linha: "",
+      rv_flow_type: "standard",
+      modalidade: "",
       cnpj: "",
       legal_name: "",
       trade_name: "",
@@ -334,7 +360,14 @@ export default function CreateOrder() {
       return;
     }
 
+    const selectedVendedor = teamMembers?.find((m: any) => m.id === data.vendedor_id);
+
     await createOrder.mutateAsync({
+      vendedor_id: data.vendedor_id || undefined,
+      vendedor_name: selectedVendedor?.full_name || selectedVendedor?.name || undefined,
+      rv_flow_type: data.rv_flow_type || "standard",
+      linha: data.linha || undefined,
+      modalidade: data.modalidade || undefined,
       customer_name: data.customer_name,
       customer_email: data.customer_email || undefined,
       customer_phone: data.customer_phone || undefined,
@@ -395,6 +428,86 @@ export default function CreateOrder() {
 
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+            {/* ===== VENDEDOR + LINHA ===== */}
+            <CarboCard>
+              <div className="p-6 space-y-4">
+                <h3 className="font-semibold flex items-center gap-2">
+                  <User className="h-4 w-4" />
+                  Vendedor e Linha
+                </h3>
+                <div className="grid gap-4 sm:grid-cols-3">
+                  <FormField control={form.control} name="vendedor_id" render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Vendedor *</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value}>
+                        <FormControl>
+                          <SelectTrigger><SelectValue placeholder="Selecione o vendedor..." /></SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {(teamMembers || []).map((m: any) => (
+                            <SelectItem key={m.id} value={m.id}>
+                              {m.full_name || m.name || m.email}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )} />
+                  <FormField control={form.control} name="linha" render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Linha *</FormLabel>
+                      <Select onValueChange={(v) => {
+                        field.onChange(v);
+                        const selected = LINHAS.find(l => l.value === v);
+                        if (selected) {
+                          form.setValue("rv_flow_type", selected.flow);
+                        }
+                      }} value={field.value}>
+                        <FormControl>
+                          <SelectTrigger><SelectValue placeholder="Selecione a linha..." /></SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {LINHAS.map(l => (
+                            <SelectItem key={l.value} value={l.value}>{l.label}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )} />
+                  {form.watch("rv_flow_type") === "service" && (
+                    <FormField control={form.control} name="modalidade" render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Modalidade</FormLabel>
+                        <Select onValueChange={field.onChange} value={field.value || ""}>
+                          <FormControl>
+                            <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {MODALIDADES.map(m => (
+                              <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )} />
+                  )}
+                </div>
+                {form.watch("rv_flow_type") === "service" && (
+                  <div className="text-xs text-blue-600 bg-blue-50 rounded-lg p-2">
+                    Fluxo Serviço: ao confirmar este RV, uma OS será gerada automaticamente.
+                  </div>
+                )}
+                {form.watch("rv_flow_type") === "standard" && form.watch("linha") && (
+                  <div className="text-xs text-emerald-600 bg-emerald-50 rounded-lg p-2">
+                    Fluxo Produto: ao confirmar este RV, uma OP será gerada automaticamente.
+                  </div>
+                )}
+              </div>
+            </CarboCard>
+
             {/* ===== ORDER MODE SELECTOR ===== */}
             <CarboCard>
               <div className="p-6 space-y-4">
