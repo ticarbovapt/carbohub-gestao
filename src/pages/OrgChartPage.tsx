@@ -1,11 +1,12 @@
 import { BoardLayout } from "@/components/layouts/BoardLayout";
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
 import { OrgChart } from "@/components/team/OrgChart";
-import { useOrgChart } from "@/hooks/useOrgChart";
+import { useOrgChart, STATIC_ORG_TREE } from "@/hooks/useOrgChart";
 import { Network } from "lucide-react";
 
 export default function OrgChartPage() {
-  const { data: tree = [], isLoading } = useOrgChart();
+  const { data: tree, isLoading } = useOrgChart();
+  const displayTree = tree ?? STATIC_ORG_TREE;
 
   return (
     <BoardLayout>
@@ -16,7 +17,7 @@ export default function OrgChartPage() {
           icon={Network}
         />
 
-        <OrgChart tree={tree} isLoading={isLoading} />
+        <OrgChart tree={displayTree} isLoading={isLoading} />
       </div>
     </BoardLayout>
   );

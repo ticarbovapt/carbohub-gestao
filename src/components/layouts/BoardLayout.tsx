@@ -147,6 +147,7 @@ const operacoesItems = [
 const globalItems = [
   { href: "/admin/approval", label: "Aprovações", icon: UserCheck, adminOnly: true },
   { href: "/role-matrix", label: "Matriz de Permissões", icon: Shield, adminOnly: true },
+  { href: "/responsibility-map", label: "Mapa de Responsabilidades", icon: Users, adminOnly: true },
   { href: "/governance", label: "Governança", icon: Shield, adminOnly: true },
   { href: "/integrations/bling", label: "Integração Bling", icon: Link2, adminOnly: false, financeOrMasterOnly: true },
 ];
