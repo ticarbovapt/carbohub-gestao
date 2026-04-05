@@ -138,6 +138,7 @@ const operacoesItems = [
   { href: "/scheduling", label: "Agendamentos", icon: Calendar },
   { href: "/orders", label: "Controle de Pedidos", icon: ShoppingCart },
   { href: "/b2b", label: "Funil B2B", icon: Target },
+  { href: "/sales-targets", label: "Metas de Vendas", icon: Target },
   { href: "/financeiro", label: "Financeiro", icon: Wallet },
   { href: "/suprimentos", label: "Suprimentos", icon: Package },
   { href: "/admin", label: "Sistema", icon: Settings, adminOnly: true },

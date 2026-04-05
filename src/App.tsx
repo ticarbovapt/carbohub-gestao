@@ -46,6 +46,7 @@ import Lots from "./pages/Lots";
 import ProductionOrdersOP from "./pages/ProductionOrdersOP";
 import B2BFunnel from "./pages/B2BFunnel";
 import B2BLeads from "./pages/B2BLeads";
+import SalesTargets from "./pages/SalesTargets";
 import OrgChartPage from "./pages/OrgChartPage";
 import NotFound from "./pages/NotFound";
 import AIAssistantPage from "./pages/AIAssistantPage";
@@ -214,6 +215,14 @@ function AnimatedRoutes() {
             element={
               <ProtectedRoute>
                 <OrderDetails />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/sales-targets"
+            element={
+              <ProtectedRoute>
+                <SalesTargets />
               </ProtectedRoute>
             }
           />
