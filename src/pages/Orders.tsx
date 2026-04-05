@@ -60,7 +60,7 @@ export default function Orders() {
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<OrderStatus | "all">("all");
   const [typeFilter, setTypeFilter] = useState<"all" | "spot" | "recorrente">("all");
-  const [productFilter, setProductFilter] = useState<"all" | "CARBOZE" | "CARBOVAPT" | "OUTROS">("all");
+  const [productFilter, setProductFilter] = useState<string>("all");
   const [activeTab, setActiveTab] = useState<"list" | "analytics">("list");
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<CarbozeOrder | null>(null);
@@ -73,8 +73,8 @@ export default function Orders() {
   const filteredOrders = orders.filter((order) => {
     // Type filter
     if (typeFilter !== "all" && order.order_type !== typeFilter) return false;
-    // Product filter
-    if (productFilter !== "all" && (order as any).product_code !== productFilter) return false;
+    // Product filter (by linha)
+    if (productFilter !== "all" && order.linha !== productFilter) return false;
     
     // Search filter
     if (!searchQuery) return true;
@@ -249,16 +249,18 @@ export default function Orders() {
             </SelectContent>
           </Select>
 
-          <Select value={productFilter} onValueChange={(v) => setProductFilter(v as any)}>
-            <SelectTrigger className="w-40 h-11 rounded-xl">
+          <Select value={productFilter} onValueChange={(v) => setProductFilter(v)}>
+            <SelectTrigger className="w-48 h-11 rounded-xl">
               <Package className="h-4 w-4 mr-2" />
               <SelectValue placeholder="Produto" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Todos Produtos</SelectItem>
-              <SelectItem value="CARBOZE">CarboZé</SelectItem>
-              <SelectItem value="CARBOVAPT">CarboVAPT</SelectItem>
-              <SelectItem value="OUTROS">Outros</SelectItem>
+              <SelectItem value="carboze_100ml">CarboZé 100ml</SelectItem>
+              <SelectItem value="carboze_1l">CarboZé 1L</SelectItem>
+              <SelectItem value="carboze_sache_10ml">CarboZé Sachê 10ml</SelectItem>
+              <SelectItem value="carbopro">CarboPRO 100ml</SelectItem>
+              <SelectItem value="carbovapt">CarboVapt</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -323,8 +325,8 @@ export default function Orders() {
                       </span>
                     </CarboTableCell>
                     <CarboTableCell>
-                      <CarboBadge variant={(order as any).product_code === 'CARBOVAPT' ? 'warning' : (order as any).product_code === 'OUTROS' ? 'secondary' : 'success'} className="text-[10px]">
-                        {(order as any).product_code || 'CARBOZE'}
+                      <CarboBadge variant={order.sku?.code?.startsWith('SKU-VAPT') ? 'warning' : 'success'} className="text-[10px]">
+                        {order.sku?.name || order.linha?.replace(/_/g, ' ') || '—'}
                       </CarboBadge>
                     </CarboTableCell>
                     <CarboTableCell>

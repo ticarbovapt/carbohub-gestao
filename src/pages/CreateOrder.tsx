@@ -27,6 +27,7 @@ import { useGeocode } from "@/hooks/useGeocode";
 import { MapPreview } from "@/components/maps/MapPreview";
 import { toast } from "sonner";
 import { useTeamMembers } from "@/hooks/useTeamMembers";
+import { useSkus } from "@/hooks/useSkus";
 
 type OrderMode = "venda" | "acao_promocional";
 
@@ -50,13 +51,14 @@ const CLASSIFICATION_OPTIONS = [
 ] as const;
 
 export type RvFlowType = "standard" | "service" | "bonus_only";
-export type LinhaCarbo = "carboze_100ml" | "carboze_1l" | "carbopro" | "carbovapt";
+export type LinhaCarbo = "carboze_100ml" | "carboze_1l" | "carboze_sache_10ml" | "carbopro" | "carbovapt";
 
-const LINHAS: { value: LinhaCarbo; label: string; flow: RvFlowType }[] = [
-  { value: "carboze_100ml", label: "CarboZé 100ml", flow: "standard" },
-  { value: "carboze_1l", label: "CarboZé 1L", flow: "standard" },
-  { value: "carbopro", label: "CarboPro", flow: "standard" },
-  { value: "carbovapt", label: "CarboVapt (Serviço)", flow: "service" },
+const LINHAS: { value: LinhaCarbo; label: string; flow: RvFlowType; skuCode: string }[] = [
+  { value: "carboze_100ml", label: "CarboZé 100ml", flow: "standard", skuCode: "SKU-CZ100" },
+  { value: "carboze_1l", label: "CarboZé 1L", flow: "standard", skuCode: "SKU-CZ1L" },
+  { value: "carboze_sache_10ml", label: "CarboZé Sachê 10ml", flow: "standard", skuCode: "SKU-CZSC10" },
+  { value: "carbopro", label: "CarboPRO 100ml", flow: "standard", skuCode: "SKU-CP100" },
+  { value: "carbovapt", label: "CarboVapt (Serviço)", flow: "service", skuCode: "SKU-VAPT70" },
 ];
 
 const MODALIDADES = [
@@ -140,6 +142,7 @@ export default function CreateOrder() {
   const createOrder = useCreateOrder();
   const { data: licensees } = useLicensees();
   const { data: teamMembers } = useTeamMembers();
+  const { data: skus } = useSkus();
   const { geocodeAddress, isLoading: isGeoLoading } = useGeocode();
   const [orderMode, setOrderMode] = useState<OrderMode>("venda");
   const [items, setItems] = useState<ItemRow[]>([
@@ -361,9 +364,12 @@ export default function CreateOrder() {
     }
 
     const selectedVendedor = teamMembers?.find((m: any) => m.id === data.vendedor_id);
+    const selectedLinha = LINHAS.find((l) => l.value === data.linha);
+    const matchedSku = skus?.find((s) => s.code === selectedLinha?.skuCode);
 
     await createOrder.mutateAsync({
       vendedor_id: data.vendedor_id || undefined,
+      sku_id: matchedSku?.id || undefined,
       vendedor_name: selectedVendedor?.full_name || selectedVendedor?.name || undefined,
       rv_flow_type: data.rv_flow_type || "standard",
       linha: data.linha || undefined,

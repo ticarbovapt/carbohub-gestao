@@ -163,7 +163,7 @@ export default function OrderDetails() {
             </CarboCard>
 
             {/* Vendedor & RV Info */}
-            {(order.vendedor_name || order.rv_flow_type !== "standard" || order.linha) && (
+            {(order.vendedor_name || order.rv_flow_type !== "standard" || order.linha || order.sku) && (
               <CarboCard>
                 <div className="p-6">
                   <h3 className="font-semibold mb-4 flex items-center gap-2">
@@ -177,10 +177,11 @@ export default function OrderDetails() {
                         <p className="font-medium">{order.vendedor_name}</p>
                       </div>
                     )}
-                    {order.linha && (
+                    {(order.sku || order.linha) && (
                       <div>
-                        <p className="text-sm text-muted-foreground">Linha</p>
-                        <p className="font-medium capitalize">{order.linha.replace(/_/g, " ")}</p>
+                        <p className="text-sm text-muted-foreground">Produto</p>
+                        <p className="font-medium">{order.sku?.name || order.linha?.replace(/_/g, " ")}</p>
+                        {order.sku?.code && <p className="text-xs text-muted-foreground">{order.sku.code}</p>}
                       </div>
                     )}
                     <div>

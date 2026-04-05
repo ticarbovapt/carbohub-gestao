@@ -64,6 +64,8 @@ export interface CarbozeOrder {
   modalidade: string | null;
   created_op_id: string | null;
   created_os_id: string | null;
+  // Product catalog reference
+  sku_id: string | null;
   // Import/governance fields
   is_test: boolean;
   source_file: string | null;
@@ -73,6 +75,11 @@ export interface CarbozeOrder {
     id: string;
     name: string;
     code: string;
+  } | null;
+  sku?: {
+    id: string;
+    code: string;
+    name: string;
   } | null;
 }
 
@@ -104,6 +111,8 @@ export interface OrderInsert {
   rv_flow_type?: "standard" | "service" | "bonus_only";
   linha?: string;
   modalidade?: string;
+  // Product catalog reference
+  sku_id?: string;
   // Strategic V2.1 fields
   cnpj?: string;
   legal_name?: string;
@@ -141,7 +150,8 @@ export function useOrders(statusFilter?: OrderStatus | "all") {
         .from("carboze_orders_secure")
         .select(`
           *,
-          licensee:licensees(id, name, code)
+          licensee:licensees(id, name, code),
+          sku:sku(id, code, name)
         `)
         .order("created_at", { ascending: false });
 
@@ -165,7 +175,8 @@ export function useOrder(id: string | undefined) {
         .from("carboze_orders_secure")
         .select(`
           *,
-          licensee:licensees(id, name, code)
+          licensee:licensees(id, name, code),
+          sku:sku(id, code, name)
         `)
         .eq("id", id)
         .single();
