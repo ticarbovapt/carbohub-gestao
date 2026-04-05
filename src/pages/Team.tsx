@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { BoardLayout } from "@/components/layouts/BoardLayout";
-import { Users, Shield, Building2, Filter, Mail, Clock, CheckCircle, Loader2, CheckCheck, Network } from "lucide-react";
+import { Users, Shield, Building2, Filter, Mail, Clock, CheckCircle, Loader2, CheckCheck, Network, Upload } from "lucide-react";
+import { TeamBulkImport } from "@/components/team/TeamBulkImport";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { OrgChart } from "@/components/team/OrgChart";
 import { useOrgChart } from "@/hooks/useOrgChart";
@@ -203,6 +204,10 @@ const Team = () => {
             <TabsTrigger value="organograma" className="gap-2">
               <Network className="h-4 w-4" />
               Organograma
+            </TabsTrigger>
+            <TabsTrigger value="importar" className="gap-2">
+              <Upload className="h-4 w-4" />
+              Importar Time
             </TabsTrigger>
           </TabsList>
 
@@ -449,6 +454,10 @@ const Team = () => {
             <div className="rounded-xl border border-border bg-board-surface p-6">
               <OrgChart tree={orgTree} isLoading={isOrgLoading} />
             </div>
+          </TabsContent>
+
+          <TabsContent value="importar" className="mt-6">
+            <TeamBulkImport />
           </TabsContent>
         </Tabs>
       </div>
