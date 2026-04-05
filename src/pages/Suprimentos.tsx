@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Package, ArrowDownToLine, ArrowUpFromLine, BarChart3, AlertTriangle, Layers, History, Lightbulb } from "lucide-react";
+import { Package, ArrowDownToLine, ArrowUpFromLine, BarChart3, AlertTriangle, Layers, History, Lightbulb, Shield } from "lucide-react";
 import { BoardLayout } from "@/components/layouts/BoardLayout";
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
 import { CarboCard, CarboCardContent } from "@/components/ui/carbo-card";
@@ -14,6 +14,7 @@ import { ReceivingsList } from "@/components/purchasing/ReceivingsList";
 import { InvoicesList } from "@/components/purchasing/InvoicesList";
 
 import { PendingSuggestions } from "@/components/suprimentos/PendingSuggestions";
+import { SkuStockPolicy } from "@/components/suprimentos/SkuStockPolicy";
 
 export default function Suprimentos() {
   const [activeTab, setActiveTab] = useState("estoque");
@@ -123,6 +124,10 @@ export default function Suprimentos() {
               <BarChart3 className="h-3.5 w-3.5" />
               Notas Fiscais
             </TabsTrigger>
+            <TabsTrigger value="politica" className="gap-1.5">
+              <Shield className="h-3.5 w-3.5" />
+              Política de Estoque
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="estoque">
@@ -136,6 +141,9 @@ export default function Suprimentos() {
           </TabsContent>
           <TabsContent value="notas">
             <InvoicesList />
+          </TabsContent>
+          <TabsContent value="politica">
+            <SkuStockPolicy />
           </TabsContent>
         </Tabs>
       </div>
