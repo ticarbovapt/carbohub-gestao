@@ -1,9 +1,10 @@
 import { useState, useMemo } from "react";
+import { useNavigate } from "react-router-dom";
 import { BoardLayout } from "@/components/layouts/BoardLayout";
 import { LicenseeSubNav } from "@/components/licensees/LicenseeSubNav";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Trophy, Loader2, Search, Crown, Medal, Award, Shield } from "lucide-react";
+import { Trophy, Loader2, Search, Crown, Medal, Award, Shield, ChevronRight } from "lucide-react";
 import { useLicenseeRanking } from "@/hooks/useNetworkIntelligence";
 
 const TIERS = [
@@ -41,6 +42,7 @@ const STATUS_LABELS: Record<string, string> = {
 };
 
 export default function LicenseeRanking() {
+  const navigate = useNavigate();
   const { data: ranking = [], isLoading } = useLicenseeRanking();
   const [search, setSearch] = useState("");
   const [sortAsc, setSortAsc] = useState(false);
@@ -167,6 +169,7 @@ export default function LicenseeRanking() {
                       <th className="px-4 py-3 text-right font-medium">1L</th>
                       <th className="px-4 py-3 text-right font-medium">100ml</th>
                       <th className="px-4 py-3 text-left font-medium">Status</th>
+                      <th className="px-4 py-3 w-8" />
                     </tr>
                   </thead>
                   <tbody>
@@ -178,7 +181,11 @@ export default function LicenseeRanking() {
                       </tr>
                     ) : (
                       filtered.map((item, i) => (
-                        <tr key={item.id} className="border-t hover:bg-muted/30">
+                        <tr
+                          key={item.id}
+                          className="border-t hover:bg-muted/30 cursor-pointer"
+                          onClick={() => navigate(`/licensees/${item.id}`)}
+                        >
                           <td className="px-4 py-3 font-medium text-muted-foreground">
                             {i + 1}
                           </td>
@@ -218,6 +225,9 @@ export default function LicenseeRanking() {
                             >
                               {STATUS_LABELS[item.status] || item.status || "-"}
                             </Badge>
+                          </td>
+                          <td className="px-4 py-3">
+                            <ChevronRight className="h-4 w-4 text-muted-foreground" />
                           </td>
                         </tr>
                       ))

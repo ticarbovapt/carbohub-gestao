@@ -33,6 +33,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { EditLicenseeDialog } from "@/components/licensees/EditLicenseeDialog";
 import { InactivateLicenseeDialog } from "@/components/licensees/InactivateLicenseeDialog";
 import { ReactivateLicenseeDialog } from "@/components/licensees/ReactivateLicenseeDialog";
+import { LicenseeSubNav } from "@/components/licensees/LicenseeSubNav";
 import { LicenseePerformanceCharts } from "@/components/licensees/LicenseePerformanceCharts";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -176,7 +177,7 @@ export default function LicenseeDetails() {
             <>
               <CarboButton variant="outline" onClick={() => navigate("/licensees")}>
                 <ArrowLeft className="h-4 w-4 mr-1" />
-                Voltar
+                Licenciados
               </CarboButton>
               {isAdmin && licensee.status === "active" && (
                 <CarboButton variant="outline" onClick={() => setIsInactivateDialogOpen(true)}>
@@ -199,6 +200,8 @@ export default function LicenseeDetails() {
             </>
           }
         />
+
+        <LicenseeSubNav />
 
         {/* Status Badge */}
         <div className="flex items-center gap-4">
