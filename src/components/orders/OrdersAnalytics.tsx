@@ -3,7 +3,7 @@ import { CarboCard, CarboCardContent, CarboCardHeader, CarboCardTitle } from "@/
 import { CarboButton } from "@/components/ui/carbo-button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, PieChart, Pie, Cell, Legend } from "recharts";
-import { TrendingUp, DollarSign, Package, Calendar, ChevronUp, ChevronDown } from "lucide-react";
+import { TrendingUp, DollarSign, Package, Calendar, ChevronUp, ChevronDown, Users, Trophy } from "lucide-react";
 import { format, subMonths, startOfMonth, endOfMonth, eachMonthOfInterval, eachWeekOfInterval, subWeeks, startOfWeek, endOfWeek, parseISO, isWithinInterval } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import type { CarbozeOrder, OrderStatus } from "@/hooks/useCarbozeOrders";
@@ -379,6 +379,79 @@ export function OrdersAnalytics({ orders, isLoading }: OrdersAnalyticsProps) {
           </ResponsiveContainer>
         </CarboCardContent>
       </CarboCard>
+
+      {/* Vendedor Ranking */}
+      <VendedorRanking orders={filteredOrders} formatCurrency={formatCurrency} />
     </div>
+  );
+}
+
+// ---- Vendedor Ranking Sub-component ----
+
+const MEDAL_COLORS = ["text-yellow-500", "text-gray-400", "text-amber-600"];
+
+function VendedorRanking({ orders, formatCurrency }: { orders: CarbozeOrder[]; formatCurrency: (v: number) => string }) {
+  const ranking = useMemo(() => {
+    const map = new Map<string, { name: string; count: number; revenue: number; delivered: number }>();
+
+    for (const o of orders) {
+      const name = o.vendedor_name || "Sem vendedor";
+      const entry = map.get(name) || { name, count: 0, revenue: 0, delivered: 0 };
+      entry.count += 1;
+      if (o.status === "delivered") {
+        entry.revenue += Number(o.total || 0);
+        entry.delivered += 1;
+      }
+      map.set(name, entry);
+    }
+
+    return Array.from(map.values()).sort((a, b) => b.revenue - a.revenue);
+  }, [orders]);
+
+  if (ranking.length <= 1 && ranking[0]?.name === "Sem vendedor") return null;
+
+  const maxRevenue = ranking[0]?.revenue || 1;
+
+  return (
+    <CarboCard>
+      <CarboCardHeader>
+        <CarboCardTitle className="text-base flex items-center gap-2">
+          <Users className="h-5 w-5 text-carbo-green" />
+          Ranking de Vendedores
+        </CarboCardTitle>
+      </CarboCardHeader>
+      <CarboCardContent className="pt-0">
+        <div className="space-y-3">
+          {ranking.map((v, i) => (
+            <div key={v.name} className="flex items-center gap-4">
+              <div className="w-8 text-center">
+                {i < 3 ? (
+                  <Trophy className={`h-5 w-5 mx-auto ${MEDAL_COLORS[i]}`} />
+                ) : (
+                  <span className="text-sm text-muted-foreground font-medium">{i + 1}º</span>
+                )}
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="font-medium text-sm truncate">{v.name}</span>
+                  <span className="text-sm font-bold kpi-number ml-2">{formatCurrency(v.revenue)}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-carbo-green rounded-full transition-all"
+                      style={{ width: `${(v.revenue / maxRevenue) * 100}%` }}
+                    />
+                  </div>
+                  <span className="text-xs text-muted-foreground whitespace-nowrap">
+                    {v.count} pedidos · {v.delivered} entregues
+                  </span>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </CarboCardContent>
+    </CarboCard>
   );
 }
