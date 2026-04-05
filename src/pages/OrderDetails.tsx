@@ -2,7 +2,7 @@ import React from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { ArrowLeft, Package, Clock, Truck, CheckCircle, XCircle, RefreshCw, Calendar, User, MapPin, FileText, DollarSign, Repeat } from "lucide-react";
+import { ArrowLeft, Package, Clock, Truck, CheckCircle, XCircle, RefreshCw, Calendar, User, MapPin, FileText, DollarSign, Repeat, Briefcase, Factory, Wrench, ExternalLink } from "lucide-react";
 import { BoardLayout } from "@/components/layouts/BoardLayout";
 import { CarboButton } from "@/components/ui/carbo-button";
 import { CarboCard } from "@/components/ui/carbo-card";
@@ -161,6 +161,88 @@ export default function OrderDetails() {
                 </div>
               </div>
             </CarboCard>
+
+            {/* Vendedor & RV Info */}
+            {(order.vendedor_name || order.rv_flow_type !== "standard" || order.linha) && (
+              <CarboCard>
+                <div className="p-6">
+                  <h3 className="font-semibold mb-4 flex items-center gap-2">
+                    <Briefcase className="h-4 w-4" />
+                    Registro de Venda
+                  </h3>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    {order.vendedor_name && (
+                      <div>
+                        <p className="text-sm text-muted-foreground">Vendedor</p>
+                        <p className="font-medium">{order.vendedor_name}</p>
+                      </div>
+                    )}
+                    {order.linha && (
+                      <div>
+                        <p className="text-sm text-muted-foreground">Linha</p>
+                        <p className="font-medium capitalize">{order.linha.replace(/_/g, " ")}</p>
+                      </div>
+                    )}
+                    <div>
+                      <p className="text-sm text-muted-foreground">Fluxo</p>
+                      <CarboBadge variant={order.rv_flow_type === "service" ? "warning" : order.rv_flow_type === "bonus_only" ? "secondary" : "success"}>
+                        {order.rv_flow_type === "standard" ? "Produto → OP" : order.rv_flow_type === "service" ? "Serviço → OS" : "Bonificação"}
+                      </CarboBadge>
+                    </div>
+                    {order.modalidade && (
+                      <div>
+                        <p className="text-sm text-muted-foreground">Modalidade</p>
+                        <p className="font-medium capitalize">{order.modalidade}</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </CarboCard>
+            )}
+
+            {/* Linked OP/OS */}
+            {(order.created_op_id || order.created_os_id) && (
+              <CarboCard>
+                <div className="p-6">
+                  <h3 className="font-semibold mb-4 flex items-center gap-2">
+                    {order.created_op_id ? <Factory className="h-4 w-4" /> : <Wrench className="h-4 w-4" />}
+                    Ordens Geradas
+                  </h3>
+                  <div className="space-y-3">
+                    {order.created_op_id && (
+                      <div
+                        className="flex items-center justify-between p-3 rounded-lg border bg-muted/30 cursor-pointer hover:bg-muted/50 transition-colors"
+                        onClick={() => navigate(`/production/${order.created_op_id}`)}
+                      >
+                        <div className="flex items-center gap-3">
+                          <Factory className="h-4 w-4 text-blue-500" />
+                          <div>
+                            <p className="font-medium text-sm">Ordem de Produção</p>
+                            <p className="text-xs text-muted-foreground">Gerada automaticamente ao confirmar</p>
+                          </div>
+                        </div>
+                        <ExternalLink className="h-4 w-4 text-muted-foreground" />
+                      </div>
+                    )}
+                    {order.created_os_id && (
+                      <div
+                        className="flex items-center justify-between p-3 rounded-lg border bg-muted/30 cursor-pointer hover:bg-muted/50 transition-colors"
+                        onClick={() => navigate(`/service-orders/${order.created_os_id}`)}
+                      >
+                        <div className="flex items-center gap-3">
+                          <Wrench className="h-4 w-4 text-amber-500" />
+                          <div>
+                            <p className="font-medium text-sm">Ordem de Serviço</p>
+                            <p className="text-xs text-muted-foreground">Gerada automaticamente ao confirmar</p>
+                          </div>
+                        </div>
+                        <ExternalLink className="h-4 w-4 text-muted-foreground" />
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </CarboCard>
+            )}
 
             {/* Delivery Address */}
             {order.delivery_address && (
