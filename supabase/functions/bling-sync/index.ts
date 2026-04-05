@@ -281,6 +281,142 @@ async function syncContacts(
   return { synced: totalSynced, failed: totalFailed };
 }
 
+// ── SKU code / product name → CarboHub linha mapping ───────────────────────
+const SKU_TO_LINHA: Record<string, string> = {
+  "SKU-CZ100": "carboze_100ml",
+  "CZ100": "carboze_100ml",
+  "SKU-CZ1L": "carboze_1l",
+  "CZ1L": "carboze_1l",
+  "SKU-CZSC10": "carboze_sache_10ml",
+  "CZSC10": "carboze_sache_10ml",
+  "SKU-CP100": "carbopro",
+  "CP100": "carbopro",
+  "SKU-VAPT70": "carbovapt",
+  "VAPT70": "carbovapt",
+};
+
+function detectLinhaFromName(name: string): string {
+  const n = (name || "").toLowerCase();
+  if (n.includes("sach") || (n.includes("10ml") && !n.includes("100ml"))) return "carboze_sache_10ml";
+  if (n.includes(" 1l") || n.includes("1 l") || n.includes("1l ")) return "carboze_1l";
+  if (n.includes("carbopro") || n.includes("pro ") || n.includes("pro-")) return "carbopro";
+  if (n.includes("vapt") || n.includes("servi")) return "carbovapt";
+  return "carboze_100ml";
+}
+
+// Bling situacao → CarboHub status
+function mapBlingStatus(situacaoId: number | null, situacaoValor: string | null): string {
+  const valor = (situacaoValor || "").toLowerCase();
+  if (situacaoId === 9 || valor.includes("atendido")) return "delivered";
+  if (situacaoId === 12 || valor.includes("cancelado")) return "cancelled";
+  if (valor.includes("enviado") || valor.includes("expedido") || valor.includes("transporte")) return "shipped";
+  if (situacaoId === 17 || valor.includes("verificado") || valor.includes("faturado")) return "invoiced";
+  if (situacaoId === 15 || valor.includes("andamento") || valor.includes("confirmado")) return "confirmed";
+  return "pending";
+}
+
+// ── Bridge: bling_orders → carboze_orders ──────────────────────────────────
+async function bridgeOrdersToCarbohub(
+  supabaseAdmin: ReturnType<typeof createClient>,
+  logId: string
+): Promise<{ synced: number; failed: number }> {
+  // Load reference data
+  const [{ data: blingOrders }, { data: skus }, { data: licensees }] = await Promise.all([
+    supabaseAdmin.from("bling_orders").select("*").order("data", { ascending: false }),
+    supabaseAdmin.from("sku").select("id, code, name"),
+    supabaseAdmin.from("licensees").select("id, name, trade_name, cnpj"),
+  ]);
+
+  if (!blingOrders?.length) {
+    console.log("[bling-bridge] No bling_orders to bridge. Run orders sync first.");
+    await supabaseAdmin.from("bling_sync_log")
+      .update({ records_synced: 0, records_failed: 0 }).eq("id", logId);
+    return { synced: 0, failed: 0 };
+  }
+
+  const skuMap = new Map((skus || []).map((s: any) => [s.code, s]));
+  let totalSynced = 0, totalFailed = 0;
+
+  for (const bo of blingOrders) {
+    try {
+      const externalRef = `bling-${bo.bling_id}`;
+      const items: any[] = Array.isArray(bo.items) ? bo.items : [];
+
+      // Detect primary linha and sku_id from first product item
+      let detectedLinha = "carboze_100ml";
+      let skuId: string | null = null;
+      const carboItems = items.map((item: any) => {
+        const codigo: string = item.codigo || item.produto?.codigo || "";
+        const nome: string = item.descricao || item.produto?.nome || "";
+        const linha = SKU_TO_LINHA[codigo] || detectLinhaFromName(nome);
+        if (!skuId) {
+          const matched = skuMap.get(codigo);
+          if (matched) { skuId = matched.id; detectedLinha = linha; }
+          else { detectedLinha = linha; }
+        }
+        const qty = Number(item.quantidade) || 1;
+        const price = Number(item.valor) || 0;
+        return { product_name: nome, sku_code: codigo, quantity: qty, unit_price: price, total: qty * price };
+      });
+
+      // Fuzzy match licensee by name
+      const normalizeStr = (s: string) => (s || "").toLowerCase().trim();
+      const contato = normalizeStr(bo.contato_nome);
+      const licenseeId = (licensees || []).find(
+        (l: any) => normalizeStr(l.name) === contato || normalizeStr(l.trade_name) === contato
+      )?.id || null;
+
+      const status = mapBlingStatus(bo.situacao_id, bo.situacao_valor);
+
+      // Check if exists by external_ref
+      const { data: existing } = await supabaseAdmin
+        .from("carboze_orders")
+        .select("id, status")
+        .eq("external_ref", externalRef)
+        .single();
+
+      if (existing) {
+        // Only update status if changed
+        if (existing.status !== status) {
+          await supabaseAdmin
+            .from("carboze_orders")
+            .update({ status, updated_at: new Date().toISOString() })
+            .eq("id", existing.id);
+        }
+      } else {
+        const orderDate = bo.data ? new Date(bo.data).toISOString() : new Date().toISOString();
+        await supabaseAdmin.from("carboze_orders").insert({
+          customer_name: bo.contato_nome || "Cliente Bling",
+          items: carboItems,
+          subtotal: Number(bo.total_produtos) || 0,
+          shipping_cost: Number(bo.total_frete) || 0,
+          discount: Number(bo.total_desconto) || 0,
+          total: Number(bo.total) || 0,
+          status,
+          linha: detectedLinha,
+          sku_id: skuId,
+          licensee_id: licenseeId,
+          external_ref: externalRef,
+          notes: bo.observacoes || null,
+          source_file: "bling_sync",
+          rv_flow_type: "standard",
+          created_at: orderDate,
+        });
+      }
+      totalSynced++;
+    } catch (e) {
+      console.error("[bling-bridge] Failed for bling_id:", bo.bling_id, e);
+      totalFailed++;
+    }
+  }
+
+  await supabaseAdmin.from("bling_sync_log")
+    .update({ records_synced: totalSynced, records_failed: totalFailed }).eq("id", logId);
+
+  console.log(`[bling-bridge] Done. Bridged: ${totalSynced}, Failed: ${totalFailed}`);
+  return { synced: totalSynced, failed: totalFailed };
+}
+
 async function syncOrders(
   supabaseAdmin: ReturnType<typeof createClient>,
   token: string,
@@ -420,7 +556,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
     const results: Record<string, any> = {};
 
     const entitiesToSync = entity === "all"
-      ? ["products", "contacts", "orders"]
+      ? ["products", "contacts", "orders", "bridge"]
       : [entity];
 
     // Helper to run a sync function with automatic 401 retry
@@ -472,6 +608,9 @@ Deno.serve(async (req: Request): Promise<Response> => {
             break;
           case "orders":
             result = await syncWithRetry(entityType, syncOrders, logId);
+            break;
+          case "bridge":
+            result = await bridgeOrdersToCarbohub(supabaseAdmin, logId);
             break;
           default:
             throw new Error(`Unknown entity: ${entityType}`);

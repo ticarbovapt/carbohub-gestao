@@ -311,8 +311,8 @@ export default function BlingIntegration() {
             </Card>
           </div>
 
-          {/* Sync All Button */}
-          <div className="flex justify-center">
+          {/* Sync All + Bridge to CarboHub */}
+          <div className="flex flex-col sm:flex-row gap-3 justify-center items-center">
             <Button
               size="lg"
               disabled={!!syncing}
@@ -325,7 +325,42 @@ export default function BlingIntegration() {
                 <><RefreshCw className="h-5 w-5 mr-2" /> Sincronizar Tudo</>
               )}
             </Button>
+
+            <div className="flex items-center gap-2">
+              <div className="h-px w-8 bg-border hidden sm:block" />
+              <span className="text-xs text-muted-foreground hidden sm:block">então</span>
+              <div className="h-px w-8 bg-border hidden sm:block" />
+            </div>
+
+            <Button
+              size="lg"
+              variant="outline"
+              disabled={!!syncing}
+              onClick={() => handleSync("bridge")}
+              className="border-orange-400 text-orange-600 hover:bg-orange-50 dark:hover:bg-orange-950/20"
+            >
+              {syncing === "bridge" ? (
+                <><Loader2 className="h-5 w-5 mr-2 animate-spin" /> Transferindo para CarboHub...</>
+              ) : (
+                <><ShoppingCart className="h-5 w-5 mr-2" /> Importar Pedidos Bling → CarboHub</>
+              )}
+            </Button>
           </div>
+
+          {/* Bridge info */}
+          <Card className="border-orange-200 dark:border-orange-900/40 bg-orange-50/50 dark:bg-orange-950/10">
+            <CardContent className="p-4">
+              <p className="text-sm font-medium text-orange-700 dark:text-orange-400">Como funciona a importação de pedidos</p>
+              <ul className="text-xs text-muted-foreground mt-2 space-y-1">
+                <li>1. Clique <strong>Sincronizar Tudo</strong> para copiar os dados do Bling para a base intermediária</li>
+                <li>2. Clique <strong>Importar Pedidos Bling → CarboHub</strong> para converter e popular a tela de Controle de Pedidos</li>
+                <li>• Produtos são mapeados automaticamente por código SKU (SKU-CZ100, SKU-CZ1L, etc.)</li>
+                <li>• Licenciados são vinculados por nome/razão social</li>
+                <li>• Status Bling (Em Aberto, Atendido, Cancelado…) são convertidos para o fluxo CarboHub</li>
+                <li>• Re-executar atualiza apenas pedidos que mudaram de status</li>
+              </ul>
+            </CardContent>
+          </Card>
 
           {/* Sync History */}
           {syncLogs.length > 0 && (

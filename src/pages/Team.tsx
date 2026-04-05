@@ -1,11 +1,12 @@
 import { useState } from "react";
 import { BoardLayout } from "@/components/layouts/BoardLayout";
-import { Users, Shield, Building2, Filter, Mail, Clock, CheckCircle, Loader2, CheckCheck, Network, Upload } from "lucide-react";
+import { Users, Shield, Building2, Filter, Mail, Clock, CheckCircle, Loader2, CheckCheck, Network, Upload, ExternalLink } from "lucide-react";
 import { TeamBulkImport } from "@/components/team/TeamBulkImport";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { OrgChart } from "@/components/team/OrgChart";
 import { useOrgChart } from "@/hooks/useOrgChart";
 import { useTeamMembers, useUpdateUserRole, useUpdateUserDepartment, TeamMember } from "@/hooks/useTeamMembers";
+import { useNavigate } from "react-router-dom";
 import { AddMemberDialog } from "@/components/team/AddMemberDialog";
 import { EditMemberDialog } from "@/components/team/EditMemberDialog";
 import { DeleteMemberDialog } from "@/components/team/DeleteMemberDialog";
@@ -67,6 +68,7 @@ const Team = () => {
   const updateDepartment = useUpdateUserDepartment();
   const resendEmail = useResendWelcomeEmail();
   const { isAdmin, isManager, isMasterAdmin, isCeo, isAnyGestor, user } = useAuth();
+  const navigate = useNavigate();
   const { data: orgTree = [], isLoading: isOrgLoading } = useOrgChart();
 
   // Filter states
@@ -192,7 +194,19 @@ const Team = () => {
               Gerenciamento de usuários e permissões da plataforma
             </p>
           </div>
-          {(isAdmin || isManager || isCeo || isAnyGestor) && <AddMemberDialog onMemberAdded={() => refetch()} />}
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => navigate("/org-chart")}
+              className="gap-2"
+            >
+              <Network className="h-4 w-4" />
+              Ver Organograma
+              <ExternalLink className="h-3.5 w-3.5 opacity-50" />
+            </Button>
+            {(isAdmin || isManager || isCeo || isAnyGestor) && <AddMemberDialog onMemberAdded={() => refetch()} />}
+          </div>
         </div>
 
         <Tabs defaultValue="equipe" className="w-full">
