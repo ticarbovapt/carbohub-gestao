@@ -122,10 +122,8 @@ type SidebarTab = "dados" | "operacoes";
 
 const dadosMestresItems = [
   { href: "/mrp/dashboard", label: "Dashboard Estratégico", icon: LayoutDashboard },
-  { href: "/mrp/products", label: "Insumos", icon: Package },
+  { href: "/mrp/products", label: "Catálogo (Insumos/SKUs)", icon: Package },
   { href: "/mrp/suppliers", label: "Fornecedores", icon: Factory },
-  { href: "/skus", label: "SKUs / BOM", icon: Boxes },
-  { href: "/lots", label: "Lotes / Qualidade", icon: FlaskConical },
   { href: "/licensees", label: "Licenciados", icon: Building2 },
   { href: "/team", label: "Equipe", icon: Users },
   { href: "/import", label: "Importar Dados", icon: FileSpreadsheet },
@@ -133,25 +131,20 @@ const dadosMestresItems = [
 
 const operacoesItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/production-orders", label: "Ordens de Produção (OP)", icon: Factory },
-  { href: "/os", label: "Ordens de Serviço", icon: ClipboardList },
+  { href: "/production-orders", label: "Produção (OP/OS)", icon: Factory },
   { href: "/logistics", label: "Logística", icon: Truck },
-  { href: "/scheduling", label: "Agendamentos", icon: Calendar },
-  { href: "/orders", label: "Controle de Pedidos", icon: ShoppingCart },
+  { href: "/orders", label: "Pedidos (RV)", icon: ShoppingCart },
   { href: "/crm", label: "CRM — Funis de Venda", icon: Target },
-  { href: "/b2b", label: "Funil B2B (legado)", icon: Target },
   { href: "/sales-targets", label: "Metas de Vendas", icon: Target },
   { href: "/financeiro", label: "Financeiro", icon: Wallet },
   { href: "/suprimentos", label: "Suprimentos", icon: Package },
-  { href: "/admin", label: "Sistema", icon: Settings, adminOnly: true },
 ];
 
 const globalItems = [
   { href: "/admin/approval", label: "Aprovações", icon: UserCheck, adminOnly: true },
-  { href: "/role-matrix", label: "Matriz de Permissões", icon: Shield, adminOnly: true },
-  { href: "/responsibility-map", label: "Mapa de Responsabilidades", icon: Users, adminOnly: true },
+  { href: "/role-matrix", label: "Permissões", icon: Shield, adminOnly: true },
   { href: "/governance", label: "Governança", icon: Shield, adminOnly: true },
-  { href: "/integrations/bling", label: "Integração Bling", icon: Link2, adminOnly: false, financeOrMasterOnly: true },
+  { href: "/integrations/bling", label: "Integrações", icon: Link2, adminOnly: false, financeOrMasterOnly: true },
 ];
 
 /** Derive a human-readable breadcrumb label from a pathname segment */
