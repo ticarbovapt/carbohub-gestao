@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import { BoardLayout } from "@/components/layouts/BoardLayout";
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
 import { CarboButton } from "@/components/ui/carbo-button";
@@ -9,11 +9,11 @@ import { CarboTable, CarboTableHeader, CarboTableBody, CarboTableRow, CarboTable
 import { CarboCard } from "@/components/ui/carbo-card";
 import { CarboEmptyState } from "@/components/ui/carbo-empty-state";
 import { CarboSkeleton } from "@/components/ui/CarboSkeleton";
-import { 
-  ShoppingBag, 
-  Plus, 
-  RefreshCw, 
-  Filter, 
+import {
+  ShoppingBag,
+  Plus,
+  RefreshCw,
+  Filter,
   ChevronRight,
   Clock,
   CheckCircle,
@@ -24,17 +24,20 @@ import {
   BarChart3,
   Repeat,
   Zap,
+  Calendar,
+  Users,
 } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Button } from "@/components/ui/button";
 import { useOrders, useOrderStats, OrderStatus, ORDER_STATUS_LABELS, ORDER_TYPE_LABELS, CarbozeOrder, OrderItem } from "@/hooks/useCarbozeOrders";
 import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
-import { format } from "date-fns";
+import { format, parseISO, startOfMonth, endOfMonth, isWithinInterval } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { OrdersAnalytics } from "@/components/orders/OrdersAnalytics";
 import { EditOrderDialog } from "@/components/orders/EditOrderDialog";
-import { Pencil } from "lucide-react";
+import { Pencil, ChevronLeft } from "lucide-react";
 
 const STATUS_VARIANTS: Record<OrderStatus, "secondary" | "info" | "warning" | "success" | "destructive"> = {
   pending: "warning",
@@ -61,6 +64,10 @@ export default function Orders() {
   const [statusFilter, setStatusFilter] = useState<OrderStatus | "all">("all");
   const [typeFilter, setTypeFilter] = useState<"all" | "spot" | "recorrente">("all");
   const [productFilter, setProductFilter] = useState<string>("all");
+  const [vendedorFilter, setVendedorFilter] = useState<string>("all");
+  const [clienteFilter, setClienteFilter] = useState<string>("all");
+  const [monthOffset, setMonthOffset] = useState(0);
+  const [showAllMonths, setShowAllMonths] = useState(true);
   const [activeTab, setActiveTab] = useState<"list" | "analytics">("list");
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<CarbozeOrder | null>(null);
@@ -69,23 +76,60 @@ export default function Orders() {
   const { data: allOrders = [] } = useOrders("all");
   const { data: stats, isLoading: statsLoading } = useOrderStats();
 
-  // Filter by search and type
-  const filteredOrders = orders.filter((order) => {
-    // Type filter
-    if (typeFilter !== "all" && order.order_type !== typeFilter) return false;
-    // Product filter (by linha)
-    if (productFilter !== "all" && order.linha !== productFilter) return false;
-    
-    // Search filter
-    if (!searchQuery) return true;
-    const search = searchQuery.toLowerCase();
-    return (
-      order.order_number.toLowerCase().includes(search) ||
-      order.customer_name.toLowerCase().includes(search) ||
-      order.customer_email?.toLowerCase().includes(search) ||
-      order.licensee?.name?.toLowerCase().includes(search)
-    );
-  });
+  // Current month for date filter
+  const currentMonth = useMemo(() => {
+    const d = new Date();
+    d.setMonth(d.getMonth() + monthOffset);
+    return d;
+  }, [monthOffset]);
+
+  const monthLabel = useMemo(() => {
+    if (showAllMonths) return "Todos os períodos";
+    return format(currentMonth, "MMM yyyy", { locale: ptBR }).replace(/^\w/, (c) => c.toUpperCase());
+  }, [currentMonth, showAllMonths]);
+
+  // Unique vendedores and clients for dropdowns
+  const vendedores = useMemo(() => {
+    const names = new Set<string>();
+    orders.forEach((o) => { if (o.vendedor_name) names.add(o.vendedor_name); });
+    return Array.from(names).sort();
+  }, [orders]);
+
+  const clientes = useMemo(() => {
+    const names = new Set<string>();
+    orders.forEach((o) => { if (o.customer_name) names.add(o.customer_name); });
+    return Array.from(names).sort();
+  }, [orders]);
+
+  // Filter by all criteria
+  const filteredOrders = useMemo(() => {
+    return orders.filter((order) => {
+      // Date filter
+      if (!showAllMonths) {
+        const orderDate = parseISO(order.created_at);
+        const start = startOfMonth(currentMonth);
+        const end = endOfMonth(currentMonth);
+        if (!isWithinInterval(orderDate, { start, end })) return false;
+      }
+      // Type filter
+      if (typeFilter !== "all" && order.order_type !== typeFilter) return false;
+      // Product filter (by linha)
+      if (productFilter !== "all" && order.linha !== productFilter) return false;
+      // Vendedor filter
+      if (vendedorFilter !== "all" && order.vendedor_name !== vendedorFilter) return false;
+      // Cliente filter
+      if (clienteFilter !== "all" && order.customer_name !== clienteFilter) return false;
+      // Search filter
+      if (!searchQuery) return true;
+      const search = searchQuery.toLowerCase();
+      return (
+        order.order_number.toLowerCase().includes(search) ||
+        order.customer_name.toLowerCase().includes(search) ||
+        order.customer_email?.toLowerCase().includes(search) ||
+        order.licensee?.name?.toLowerCase().includes(search)
+      );
+    });
+  }, [orders, searchQuery, statusFilter, typeFilter, productFilter, vendedorFilter, clienteFilter, showAllMonths, currentMonth]);
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat("pt-BR", {
@@ -204,65 +248,123 @@ export default function Orders() {
           })}
         </div>
 
-        {/* Filters */}
-        <div className="flex flex-col md:flex-row gap-4">
-          <div className="flex-1 max-w-md">
-            <CarboSearchInput
-              placeholder="Buscar por número, cliente ou licenciado..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
+        {/* Filters Row 1: Search + Status + Type */}
+        <div className="flex flex-col gap-3">
+          <div className="flex flex-col md:flex-row gap-3">
+            <div className="flex-1 max-w-md">
+              <CarboSearchInput
+                placeholder="Buscar por número, cliente ou licenciado..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+            </div>
+
+            <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as OrderStatus | "all")}>
+              <SelectTrigger className="w-40 h-11 rounded-xl">
+                <Filter className="h-4 w-4 mr-2" />
+                <SelectValue placeholder="Status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos</SelectItem>
+                {Object.entries(ORDER_STATUS_LABELS).map(([key, label]) => (
+                  <SelectItem key={key} value={key}>
+                    {label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            <Select value={typeFilter} onValueChange={(v) => setTypeFilter(v as "all" | "spot" | "recorrente")}>
+              <SelectTrigger className="w-40 h-11 rounded-xl">
+                {typeFilter === "recorrente" ? <Repeat className="h-4 w-4 mr-2" /> : <Zap className="h-4 w-4 mr-2" />}
+                <SelectValue placeholder="Tipo" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos Tipos</SelectItem>
+                <SelectItem value="spot">
+                  <span className="flex items-center gap-2">
+                    <Zap className="h-3 w-3" /> Spot
+                  </span>
+                </SelectItem>
+                <SelectItem value="recorrente">
+                  <span className="flex items-center gap-2">
+                    <Repeat className="h-3 w-3" /> Recorrente
+                  </span>
+                </SelectItem>
+              </SelectContent>
+            </Select>
           </div>
 
-          <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as OrderStatus | "all")}>
-            <SelectTrigger className="w-40 h-11 rounded-xl">
-              <Filter className="h-4 w-4 mr-2" />
-              <SelectValue placeholder="Status" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todos</SelectItem>
-              {Object.entries(ORDER_STATUS_LABELS).map(([key, label]) => (
-                <SelectItem key={key} value={key}>
-                  {label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          {/* Filters Row 2: Date + Product + Vendedor + Cliente */}
+          <div className="flex flex-wrap items-center gap-3">
+            {/* Date filter */}
+            <div className="flex items-center gap-1">
+              <Calendar className="h-4 w-4 text-muted-foreground" />
+              <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => { setShowAllMonths(false); setMonthOffset((p) => p - 1); }}>
+                <ChevronLeft className="h-3 w-3" />
+              </Button>
+              <Button
+                variant={showAllMonths ? "default" : "outline"}
+                size="sm"
+                className="h-8 min-w-[130px] text-xs"
+                onClick={() => setShowAllMonths(!showAllMonths)}
+              >
+                {monthLabel}
+              </Button>
+              <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => { setShowAllMonths(false); setMonthOffset((p) => Math.min(0, p + 1)); }} disabled={monthOffset >= 0 && !showAllMonths}>
+                <ChevronRight className="h-3 w-3" />
+              </Button>
+            </div>
 
-          <Select value={typeFilter} onValueChange={(v) => setTypeFilter(v as "all" | "spot" | "recorrente")}>
-            <SelectTrigger className="w-40 h-11 rounded-xl">
-              {typeFilter === "recorrente" ? <Repeat className="h-4 w-4 mr-2" /> : <Zap className="h-4 w-4 mr-2" />}
-              <SelectValue placeholder="Tipo" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todos Tipos</SelectItem>
-              <SelectItem value="spot">
-                <span className="flex items-center gap-2">
-                  <Zap className="h-3 w-3" /> Spot
-                </span>
-              </SelectItem>
-              <SelectItem value="recorrente">
-                <span className="flex items-center gap-2">
-                  <Repeat className="h-3 w-3" /> Recorrente
-                </span>
-              </SelectItem>
-            </SelectContent>
-          </Select>
+            <div className="w-px h-6 bg-border" />
 
-          <Select value={productFilter} onValueChange={(v) => setProductFilter(v)}>
-            <SelectTrigger className="w-48 h-11 rounded-xl">
-              <Package className="h-4 w-4 mr-2" />
-              <SelectValue placeholder="Produto" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todos Produtos</SelectItem>
-              <SelectItem value="carboze_100ml">CarboZé 100ml</SelectItem>
-              <SelectItem value="carboze_1l">CarboZé 1L</SelectItem>
-              <SelectItem value="carboze_sache_10ml">CarboZé Sachê 10ml</SelectItem>
-              <SelectItem value="carbopro">CarboPRO 100ml</SelectItem>
-              <SelectItem value="carbovapt">CarboVapt</SelectItem>
-            </SelectContent>
-          </Select>
+            {/* Product filter */}
+            <Select value={productFilter} onValueChange={(v) => setProductFilter(v)}>
+              <SelectTrigger className="w-44 h-8 rounded-lg text-xs">
+                <Package className="h-3 w-3 mr-1" />
+                <SelectValue placeholder="Produto" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos Produtos</SelectItem>
+                <SelectItem value="carboze_100ml">CarboZé 100ml</SelectItem>
+                <SelectItem value="carboze_1l">CarboZé 1L</SelectItem>
+                <SelectItem value="carbopro">CarboPRO</SelectItem>
+                <SelectItem value="carbovapt">CarboVapt</SelectItem>
+              </SelectContent>
+            </Select>
+
+            {/* Vendedor filter */}
+            <Select value={vendedorFilter} onValueChange={setVendedorFilter}>
+              <SelectTrigger className="w-44 h-8 rounded-lg text-xs">
+                <Users className="h-3 w-3 mr-1" />
+                <SelectValue placeholder="Vendedor" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos Vendedores</SelectItem>
+                {vendedores.map((v) => (<SelectItem key={v} value={v}>{v}</SelectItem>))}
+              </SelectContent>
+            </Select>
+
+            {/* Cliente filter */}
+            <Select value={clienteFilter} onValueChange={setClienteFilter}>
+              <SelectTrigger className="w-52 h-8 rounded-lg text-xs">
+                <Users className="h-3 w-3 mr-1" />
+                <SelectValue placeholder="Cliente" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos Clientes</SelectItem>
+                {clientes.map((c) => (
+                  <SelectItem key={c} value={c}>
+                    {c.length > 30 ? c.slice(0, 27) + "..." : c}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            <span className="ml-auto text-xs text-muted-foreground">
+              Mostrando <strong>{filteredOrders.length}</strong> pedidos
+            </span>
+          </div>
         </div>
 
         {/* Table */}
@@ -330,7 +432,7 @@ export default function Orders() {
                       </CarboBadge>
                     </CarboTableCell>
                     <CarboTableCell>
-                      <CarboBadge 
+                      <CarboBadge
                         variant={orderType === 'recorrente' ? 'info' : 'secondary'}
                         className="gap-1"
                       >
