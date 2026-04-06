@@ -52,6 +52,11 @@ import SalesTargets from "./pages/SalesTargets";
 import RoleMatrix from "./pages/RoleMatrix";
 import ResponsibilityMap from "./pages/ResponsibilityMap";
 import OrgChartPage from "./pages/OrgChartPage";
+import DashboardProducao from "./pages/dashboards/DashboardProducao";
+import DashboardFinanceiro from "./pages/dashboards/DashboardFinanceiro";
+import DashboardLogistica from "./pages/dashboards/DashboardLogistica";
+import DashboardComercial from "./pages/dashboards/DashboardComercial";
+import DashboardEstrategico from "./pages/dashboards/DashboardEstrategico";
 import NotFound from "./pages/NotFound";
 import AIAssistantPage from "./pages/AIAssistantPage";
 import { AIChatDrawer } from "./components/ai/AIChatDrawer";
@@ -362,16 +367,17 @@ function AnimatedRoutes() {
               </ProtectedRoute>
             }
           />
+          {/* Dashboard sub-routes */}
+          <Route path="/dashboards" element={<Navigate to="/dashboards/producao" replace />} />
+          <Route path="/dashboards/producao" element={<ProtectedRoute><DashboardProducao /></ProtectedRoute>} />
+          <Route path="/dashboards/financeiro" element={<ProtectedRoute><DashboardFinanceiro /></ProtectedRoute>} />
+          <Route path="/dashboards/logistica" element={<ProtectedRoute><DashboardLogistica /></ProtectedRoute>} />
+          <Route path="/dashboards/comercial" element={<ProtectedRoute><DashboardComercial /></ProtectedRoute>} />
+          <Route path="/dashboards/estrategico" element={<ProtectedRoute><DashboardEstrategico /></ProtectedRoute>} />
+
           {/* MRP Routes */}
-          <Route path="/mrp" element={<Navigate to="/mrp/dashboard" replace />} />
-          <Route
-            path="/mrp/dashboard"
-            element={
-              <ProtectedRoute>
-                <Dashboard />
-              </ProtectedRoute>
-            }
-          />
+          <Route path="/mrp" element={<Navigate to="/dashboards/producao" replace />} />
+          <Route path="/mrp/dashboard" element={<Navigate to="/dashboards/producao" replace />} />
           <Route
             path="/mrp/products"
             element={

@@ -1,9 +1,9 @@
 import { ReactNode, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { 
-  LayoutDashboard, 
-  ClipboardList, 
-  Settings, 
+import {
+  LayoutDashboard,
+  ClipboardList,
+  Settings,
   Users,
   LogOut,
   UserCheck,
@@ -26,11 +26,13 @@ import {
   Package,
   Factory,
   Database,
-  Boxes,
-  FlaskConical,
   Link2,
   Target,
   ArrowLeft,
+  BarChart3,
+  Star,
+  TrendingUp,
+  Network,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -118,15 +120,23 @@ interface BoardLayoutProps {
   children: ReactNode;
 }
 
-type SidebarTab = "dados" | "operacoes";
+type SidebarTab = "dados" | "operacoes" | "dashboards";
 
 const dadosMestresItems = [
-  { href: "/mrp/dashboard", label: "Dashboard Estratégico", icon: LayoutDashboard },
   { href: "/mrp/products", label: "Catálogo (Insumos/SKUs)", icon: Package },
   { href: "/mrp/suppliers", label: "Fornecedores", icon: Factory },
   { href: "/licensees", label: "Licenciados", icon: Building2 },
   { href: "/team", label: "Equipe", icon: Users },
+  { href: "/org-chart", label: "Organograma", icon: Network },
   { href: "/import", label: "Importar Dados", icon: FileSpreadsheet },
+];
+
+const dashboardsItems = [
+  { href: "/dashboards/producao", label: "Produção", icon: Factory },
+  { href: "/dashboards/financeiro", label: "Financeiro", icon: Wallet },
+  { href: "/dashboards/logistica", label: "Logística", icon: Truck },
+  { href: "/dashboards/comercial", label: "Comercial", icon: TrendingUp },
+  { href: "/dashboards/estrategico", label: "Estratégico", icon: Star },
 ];
 
 const operacoesItems = [
@@ -231,9 +241,12 @@ export function BoardLayout({ children }: BoardLayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   // Determine active tab from route
-  const isDadosRoute = location.pathname.startsWith("/mrp") ||
-    ["/licensees", "/machines", "/team", "/import", "/skus", "/lots", "/integrations"].some(p => location.pathname.startsWith(p));
-  const [activeTab, setActiveTab] = useState<SidebarTab>(isDadosRoute ? "dados" : "operacoes");
+  const isDashboardRoute = location.pathname.startsWith("/dashboards");
+  const isDadosRoute = !isDashboardRoute && (location.pathname.startsWith("/mrp") ||
+    ["/licensees", "/machines", "/team", "/import", "/skus", "/lots", "/integrations", "/org-chart"].some(p => location.pathname.startsWith(p)));
+  const [activeTab, setActiveTab] = useState<SidebarTab>(
+    isDashboardRoute ? "dashboards" : isDadosRoute ? "dados" : "operacoes"
+  );
 
   const getInitials = (name: string | null | undefined) => {
     if (!name) return "??";
@@ -250,7 +263,7 @@ export function BoardLayout({ children }: BoardLayoutProps) {
       (href !== "/dashboard" && href !== "/mrp/dashboard" && location.pathname.startsWith(href) && href !== "/admin");
   };
 
-  const currentItems = activeTab === "dados" ? dadosMestresItems : operacoesItems;
+  const currentItems = activeTab === "dados" ? dadosMestresItems : activeTab === "dashboards" ? dashboardsItems : operacoesItems;
   const filteredItems = currentItems.filter((item: any) => {
     if (item.adminOnly && !isAdmin && !isCeo) return false;
     return true;
@@ -262,7 +275,7 @@ export function BoardLayout({ children }: BoardLayoutProps) {
   });
 
   const roleLabel = isMasterAdmin ? "Master Admin" : isCeo ? "CEO" : isAnyGestor ? "Gestor" : isAdmin ? "Admin" : "Operador";
-  const areaLabel = activeTab === "dados" ? "Dados Mestres" : "Operações";
+  const areaLabel = activeTab === "dados" ? "Dados Mestres" : activeTab === "dashboards" ? "Dashboards" : "Operações";
 
   const SidebarContent = () => (
     <>
@@ -279,28 +292,40 @@ export function BoardLayout({ children }: BoardLayoutProps) {
       <div className="px-3 pt-3 pb-1">
         <div className="flex rounded-lg bg-muted p-1 gap-1">
           <button
-            onClick={() => setActiveTab("dados")}
-            className={cn(
-              "flex-1 flex items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-medium transition-all",
-              activeTab === "dados"
-                ? "bg-background text-foreground shadow-sm"
-                : "text-muted-foreground hover:text-foreground"
-            )}
-          >
-            <Database className="h-3.5 w-3.5" />
-            Dados Mestres
-          </button>
-          <button
             onClick={() => setActiveTab("operacoes")}
             className={cn(
-              "flex-1 flex items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-medium transition-all",
+              "flex-1 flex items-center justify-center gap-1 rounded-md px-1.5 py-1.5 text-[10px] font-medium transition-all",
               activeTab === "operacoes"
                 ? "bg-background text-foreground shadow-sm"
                 : "text-muted-foreground hover:text-foreground"
             )}
           >
-            <Layers className="h-3.5 w-3.5" />
+            <Layers className="h-3 w-3 flex-shrink-0" />
             Operações
+          </button>
+          <button
+            onClick={() => setActiveTab("dados")}
+            className={cn(
+              "flex-1 flex items-center justify-center gap-1 rounded-md px-1.5 py-1.5 text-[10px] font-medium transition-all",
+              activeTab === "dados"
+                ? "bg-background text-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground"
+            )}
+          >
+            <Database className="h-3 w-3 flex-shrink-0" />
+            Dados
+          </button>
+          <button
+            onClick={() => setActiveTab("dashboards")}
+            className={cn(
+              "flex-1 flex items-center justify-center gap-1 rounded-md px-1.5 py-1.5 text-[10px] font-medium transition-all",
+              activeTab === "dashboards"
+                ? "bg-background text-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground"
+            )}
+          >
+            <BarChart3 className="h-3 w-3 flex-shrink-0" />
+            Dash
           </button>
         </div>
       </div>
@@ -308,7 +333,7 @@ export function BoardLayout({ children }: BoardLayoutProps) {
       {/* Navigation */}
       <nav className="flex flex-col gap-0.5 p-3 flex-1 overflow-y-auto pt-2">
         <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider px-3 mb-1">
-          {activeTab === "dados" ? "Dados Mestres" : "Operações"}
+          {activeTab === "dados" ? "Dados Mestres" : activeTab === "dashboards" ? "Dashboards" : "Operações"}
         </p>
         {filteredItems.map((item) => {
           const isActive = isItemActive(item.href);

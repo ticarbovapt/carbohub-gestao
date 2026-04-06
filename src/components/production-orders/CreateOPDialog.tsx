@@ -20,17 +20,15 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Loader2 } from "lucide-react";
-import {
-  useCreateProductionOrderOP,
-  useExplodeBOM,
-  DEMAND_SOURCE_LABELS,
-  PRIORITY_LABELS,
-} from "@/hooks/useProductionOrders";
-import { useSkus } from "@/hooks/useSkus";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
+import { useMrpProducts } from "@/hooks/useMrpProducts";
+import { DEMAND_SOURCE_LABELS, PRIORITY_LABELS } from "@/hooks/useProductionOrders";
 
 const schema = z.object({
   title: z.string().min(3, "Título deve ter ao menos 3 caracteres"),
-  sku_id: z.string().min(1, "Selecione um SKU"),
+  product_id: z.string().min(1, "Selecione um produto"),
   planned_quantity: z.coerce.number().int().positive("Quantidade deve ser positiva"),
   demand_source: z.enum(["venda", "recorrencia", "safety_stock", "pcp_manual"]).optional(),
   need_date: z.string().optional(),
@@ -45,10 +43,17 @@ interface CreateOPDialogProps {
   onOpenChange: (open: boolean) => void;
 }
 
+/** Gera número de OP no formato OP-YYYYMMDD-XXXX */
+function generateOpNumber(): string {
+  const now = new Date();
+  const date = now.toISOString().slice(0, 10).replace(/-/g, "");
+  const rand = Math.floor(1000 + Math.random() * 9000);
+  return `OP-${date}-${rand}`;
+}
+
 export function CreateOPDialog({ open, onOpenChange }: CreateOPDialogProps) {
-  const createOP = useCreateProductionOrderOP();
-  const explodeBOM = useExplodeBOM();
-  const { data: skus = [] } = useSkus();
+  const qc = useQueryClient();
+  const { data: products = [], isLoading: productsLoading } = useMrpProducts();
 
   const {
     register,
@@ -61,33 +66,48 @@ export function CreateOPDialog({ open, onOpenChange }: CreateOPDialogProps) {
     resolver: zodResolver(schema),
     defaultValues: {
       priority: 3,
-      planned_quantity: 1,
+      planned_quantity: 100,
     },
   });
 
-  const isSubmitting = createOP.isPending || explodeBOM.isPending;
+  const createOP = useMutation({
+    mutationFn: async (data: FormData) => {
+      // Resolve product info
+      const product = products.find((p) => p.id === data.product_id);
+      if (!product) throw new Error("Produto não encontrado.");
 
-  const onSubmit = async (data: FormData) => {
-    const result = await createOP.mutateAsync({
-      sku_id: data.sku_id,
-      planned_quantity: data.planned_quantity,
-      demand_source: data.demand_source || "pcp_manual",
-      need_date: data.need_date || null,
-      priority: data.priority,
-      deviation_notes: data.deviation_notes || null,
-      op_status: "rascunho",
-    });
+      const payload = {
+        // Required fields — existing schema
+        product_id: data.product_id,
+        product_code: product.product_code,
+        op_number: generateOpNumber(),
+        quantity: data.planned_quantity,
+        status: "rascunho",
+        type: data.demand_source || "pcp_manual",
+        source: data.demand_source || "pcp_manual",
+        notes: data.deviation_notes || null,
+      };
 
-    // Explode BOM after creation
-    await explodeBOM.mutateAsync({
-      orderId: result.id,
-      skuId: data.sku_id,
-      plannedQuantity: data.planned_quantity,
-    });
+      const { data: result, error } = await (supabase as any)
+        .from("production_orders")
+        .insert(payload)
+        .select()
+        .single();
 
-    reset();
-    onOpenChange(false);
-  };
+      if (error) throw error;
+      return result;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["production_orders_op"] });
+      qc.invalidateQueries({ queryKey: ["production_orders"] });
+      toast.success("Ordem de Produção criada com sucesso!");
+      reset();
+      onOpenChange(false);
+    },
+    onError: (e: Error) => toast.error("Erro ao criar OP: " + e.message),
+  });
+
+  const isSubmitting = createOP.isPending;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -95,33 +115,37 @@ export function CreateOPDialog({ open, onOpenChange }: CreateOPDialogProps) {
         <DialogHeader>
           <DialogTitle>Nova Ordem de Produção</DialogTitle>
         </DialogHeader>
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+        <form onSubmit={handleSubmit((data) => createOP.mutate(data))} className="space-y-4">
           {/* Título */}
           <div className="space-y-2">
             <Label>Título da OP *</Label>
-            <Input {...register("title")} placeholder="Ex: OP Produto X - Lote 01" />
+            <Input {...register("title")} placeholder="Ex: OP CarboZé — Lote 01" />
             {errors.title && (
               <p className="text-xs text-destructive">{errors.title.message}</p>
             )}
           </div>
 
-          {/* SKU */}
+          {/* Produto */}
           <div className="space-y-2">
-            <Label>SKU *</Label>
-            <Select onValueChange={(v) => setValue("sku_id", v)} value={watch("sku_id")}>
+            <Label>Produto *</Label>
+            <Select
+              onValueChange={(v) => setValue("product_id", v)}
+              value={watch("product_id")}
+              disabled={productsLoading}
+            >
               <SelectTrigger>
-                <SelectValue placeholder="Selecione o SKU" />
+                <SelectValue placeholder={productsLoading ? "Carregando..." : "Selecione o produto"} />
               </SelectTrigger>
               <SelectContent>
-                {skus.map((s: any) => (
-                  <SelectItem key={s.id} value={s.id}>
-                    {s.code} — {s.name}
+                {products.map((p) => (
+                  <SelectItem key={p.id} value={p.id}>
+                    {p.product_code} — {p.name}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
-            {errors.sku_id && (
-              <p className="text-xs text-destructive">{errors.sku_id.message}</p>
+            {errors.product_id && (
+              <p className="text-xs text-destructive">{errors.product_id.message}</p>
             )}
           </div>
 
@@ -187,7 +211,7 @@ export function CreateOPDialog({ open, onOpenChange }: CreateOPDialogProps) {
           </div>
 
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+            <Button type="button" variant="outline" onClick={() => { reset(); onOpenChange(false); }}>
               Cancelar
             </Button>
             <Button type="submit" disabled={isSubmitting}>
