@@ -34,6 +34,8 @@ function ProductForm({ product, onClose }: { product?: MrpProduct; onClose: () =
     weight_kg: product?.weight_kg?.toString() || "",
     notes: product?.notes || "",
     is_active: product?.is_active ?? true,
+    current_stock_qty: product?.current_stock_qty?.toString() || "0",
+    safety_stock_qty: product?.safety_stock_qty?.toString() || "0",
   });
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -46,12 +48,12 @@ function ProductForm({ product, onClose }: { product?: MrpProduct; onClose: () =
       packaging_size_g: form.packaging_size_g ? Number(form.packaging_size_g) : null,
       package_qty: form.package_qty ? Number(form.package_qty) : null,
       min_order_qty: form.min_order_qty ? Number(form.min_order_qty) : null,
-      safety_stock_qty: product?.safety_stock_qty ?? 0,
+      safety_stock_qty: form.safety_stock_qty ? Number(form.safety_stock_qty) : 0,
       weight_kg: form.weight_kg ? Number(form.weight_kg) : null,
       dimensions_cm: null,
       notes: form.notes || null,
       is_active: form.is_active,
-      current_stock_qty: product?.current_stock_qty ?? 0,
+      current_stock_qty: form.current_stock_qty ? Number(form.current_stock_qty) : 0,
       stock_updated_at: product?.stock_updated_at ?? null,
       stock_unit: product?.stock_unit ?? 'un',
     };
@@ -104,10 +106,24 @@ function ProductForm({ product, onClose }: { product?: MrpProduct; onClose: () =
           <Input type="number" step="0.01" value={form.weight_kg} onChange={e => setForm(f => ({ ...f, weight_kg: e.target.value }))} />
         </div>
       </div>
-      <div>
+      <div className="grid grid-cols-2 gap-4">
+        <div>
           <Label>Qtd mínima de pedido</Label>
           <Input type="number" value={form.min_order_qty} onChange={e => setForm(f => ({ ...f, min_order_qty: e.target.value }))} />
         </div>
+      </div>
+      {product && (
+        <div className="grid grid-cols-2 gap-4 p-3 bg-muted/50 rounded-lg border border-border">
+          <div>
+            <Label className="text-xs font-semibold uppercase text-carbo-green">Estoque Atual</Label>
+            <Input type="number" value={form.current_stock_qty} onChange={e => setForm(f => ({ ...f, current_stock_qty: e.target.value }))} />
+          </div>
+          <div>
+            <Label className="text-xs font-semibold uppercase text-carbo-green">Estoque Segurança</Label>
+            <Input type="number" value={form.safety_stock_qty} onChange={e => setForm(f => ({ ...f, safety_stock_qty: e.target.value }))} />
+          </div>
+        </div>
+      )}
       <div>
         <Label>Observações</Label>
         <Textarea value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} />
