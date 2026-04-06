@@ -46,6 +46,8 @@ import Lots from "./pages/Lots";
 import ProductionOrdersOP from "./pages/ProductionOrdersOP";
 import B2BFunnel from "./pages/B2BFunnel";
 import B2BLeads from "./pages/B2BLeads";
+import CRMDashboard from "./pages/crm/CRMDashboard";
+import CRMFunnel from "./pages/crm/CRMFunnel";
 import SalesTargets from "./pages/SalesTargets";
 import RoleMatrix from "./pages/RoleMatrix";
 import ResponsibilityMap from "./pages/ResponsibilityMap";
@@ -257,6 +259,23 @@ function AnimatedRoutes() {
             element={
               <ProtectedRoute>
                 <B2BFunnel />
+              </ProtectedRoute>
+            }
+          />
+          {/* CRM Funnels */}
+          <Route
+            path="/crm"
+            element={
+              <ProtectedRoute>
+                <CRMDashboard />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/crm/:funnelType"
+            element={
+              <ProtectedRoute>
+                <CRMFunnel />
               </ProtectedRoute>
             }
           />
