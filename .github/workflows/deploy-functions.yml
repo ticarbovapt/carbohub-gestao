@@ -16,7 +16,9 @@ jobs:
 
       - name: Install Supabase CLI
         run: |
-          curl -fsSL https://github.com/supabase/cli/releases/latest/download/supabase_linux_amd64.deb -o supabase.deb
+          LATEST=$(curl -s https://api.github.com/repos/supabase/cli/releases/latest | grep '"tag_name"' | cut -d'"' -f4)
+          VERSION=${LATEST#v}
+          curl -fsSL "https://github.com/supabase/cli/releases/download/${LATEST}/supabase_${VERSION}_linux_amd64.deb" -o supabase.deb
           sudo dpkg -i supabase.deb
 
       - name: Deploy Edge Functions
