@@ -30,6 +30,7 @@ import {
   FlaskConical,
   Link2,
   Target,
+  ArrowLeft,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -395,6 +396,15 @@ export function BoardLayout({ children }: BoardLayoutProps) {
           <div className="flex h-14 items-center justify-between px-4 lg:px-6 gap-3">
             {/* LEFT */}
             <div className="flex items-center gap-3 flex-shrink-0">
+              {location.pathname !== "/" && location.pathname !== "/dashboard" && (
+                <button
+                  onClick={() => navigate(-1)}
+                  className="flex items-center justify-center h-8 w-8 rounded-lg hover:bg-muted transition-colors"
+                  aria-label="Voltar"
+                >
+                  <ArrowLeft className="h-4 w-4" />
+                </button>
+              )}
               <Link to="/" className="flex items-center gap-2 group">
                 <img src={logoCarbo} alt="Grupo Carbo" className="h-7 w-7 object-contain transition-transform duration-200 group-hover:scale-105" />
               </Link>
