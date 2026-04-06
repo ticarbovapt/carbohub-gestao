@@ -451,7 +451,7 @@ async function syncOrders(
         const contato = orderDetail.contato || {};
         const totais = orderDetail.totais || orderDetail.total || {};
 
-        await supabaseAdmin.from("bling_orders").upsert(
+        const { error: upsertErr } = await supabaseAdmin.from("bling_orders").upsert(
           {
             bling_id: order.id,
             numero: orderDetail.numero?.toString() || null,
@@ -475,6 +475,7 @@ async function syncOrders(
           },
           { onConflict: "bling_id" }
         );
+        if (upsertErr) throw upsertErr;
         totalSynced++;
       } catch (e) {
         console.error("Failed to upsert order:", e);
