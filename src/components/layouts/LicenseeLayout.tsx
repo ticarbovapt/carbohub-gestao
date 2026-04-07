@@ -15,6 +15,8 @@ import {
   LayoutDashboard,
   Users,
   Layers,
+  ClipboardList,
+  FlaskConical,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -36,18 +38,35 @@ interface LicenseeLayoutProps {
   children: React.ReactNode;
 }
 
-const NAV_ITEMS = [
+interface NavItem {
+  href: string;
+  icon: React.ElementType;
+  label: string;
+  end?: boolean;
+  section?: string; // section header before this item
+}
+
+const NAV_ITEMS: NavItem[] = [
   { href: "/licensee/dashboard", icon: Home, label: "Dashboard", end: true },
-  { href: "/licensee/vapt", icon: Zap, label: "CarboVAPT" },
+  // — Operações —
+  { href: "/licensee/atendimentos", icon: ClipboardList, label: "Atendimentos", section: "Operações" },
+  { href: "/licensee/clientes", icon: Users, label: "Clientes" },
+  { href: "/licensee/reagentes", icon: FlaskConical, label: "Reagentes" },
+  // — Produtos & Pedidos —
+  { href: "/licensee/vapt", icon: Zap, label: "CarboVAPT", section: "Produtos & Pedidos" },
   { href: "/licensee/ze", icon: Truck, label: "CarboZé" },
   { href: "/licensee/pedidos", icon: ShoppingCart, label: "Meus Pedidos" },
-  { href: "/licensee/creditos", icon: Wallet, label: "Créditos" },
+  // — Financeiro —
+  { href: "/licensee/creditos", icon: Wallet, label: "Créditos", section: "Financeiro" },
   { href: "/licensee/comissoes", icon: DollarSign, label: "Comissões" },
 ];
 
 const ROUTE_LABELS: Record<string, string> = {
   licensee: "Área Licenciados",
   dashboard: "Dashboard",
+  atendimentos: "Atendimentos",
+  clientes: "Clientes",
+  reagentes: "Reagentes",
   vapt: "CarboVAPT",
   ze: "CarboZé",
   pedidos: "Meus Pedidos",
@@ -130,21 +149,27 @@ export function LicenseeLayout({ children }: LicenseeLayoutProps) {
         {NAV_ITEMS.map((item) => {
           const isActive = isItemActive(item.href, item.end);
           return (
-            <Link
-              key={item.href}
-              to={item.href}
-              onClick={() => setSidebarOpen(false)}
-              className={cn(
-                "flex items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm transition-all duration-200",
-                isActive
-                  ? "bg-area-licensee-soft text-area-licensee font-medium"
-                  : "text-muted-foreground hover:bg-secondary hover:text-foreground"
+            <div key={item.href}>
+              {item.section && (
+                <p className="mt-3 mb-1 px-3 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/60">
+                  {item.section}
+                </p>
               )}
-            >
-              <item.icon className="h-4 w-4 flex-shrink-0" />
-              <span>{item.label}</span>
-              {isActive && <ChevronRight className="h-3.5 w-3.5 ml-auto text-area-licensee flex-shrink-0" />}
-            </Link>
+              <Link
+                to={item.href}
+                onClick={() => setSidebarOpen(false)}
+                className={cn(
+                  "flex items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm transition-all duration-200",
+                  isActive
+                    ? "bg-area-licensee-soft text-area-licensee font-medium"
+                    : "text-muted-foreground hover:bg-secondary hover:text-foreground"
+                )}
+              >
+                <item.icon className="h-4 w-4 flex-shrink-0" />
+                <span>{item.label}</span>
+                {isActive && <ChevronRight className="h-3.5 w-3.5 ml-auto text-area-licensee flex-shrink-0" />}
+              </Link>
+            </div>
           );
         })}
       </nav>

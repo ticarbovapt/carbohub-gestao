@@ -81,6 +81,9 @@ import CarboVAPTServices from "./pages/licensee/CarboVAPTServices";
 import CarboVAPTCheckout from "./pages/licensee/CarboVAPTCheckout";
 import CarboVAPTPayment from "./pages/licensee/CarboVAPTPayment";
 import CarboVAPTConfirmation from "./pages/licensee/CarboVAPTConfirmation";
+import LicenseeAtendimento from "./pages/licensee/LicenseeAtendimento";
+import LicenseeClientes from "./pages/licensee/LicenseeClientes";
+import LicenseeReagentes from "./pages/licensee/LicenseeReagentes";
 
 // PDV Pages
 import { PDVLayout } from "./components/layouts/PDVLayout";
@@ -514,6 +517,30 @@ function AnimatedRoutes() {
             element={
               <ProtectedRoute>
                 <LicenseeCommissions />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/licensee/atendimentos"
+            element={
+              <ProtectedRoute>
+                <LicenseeAtendimento />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/licensee/clientes"
+            element={
+              <ProtectedRoute>
+                <LicenseeClientes />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/licensee/reagentes"
+            element={
+              <ProtectedRoute>
+                <LicenseeReagentes />
               </ProtectedRoute>
             }
           />

@@ -223,6 +223,7 @@ const Team = () => {
   const [selectedMember, setSelectedMember] = useState<OrgNode | null>(null);
   const [confirmEmailMember, setConfirmEmailMember] = useState<TeamMember | null>(null);
   const [emailSentMember, setEmailSentMember] = useState<TeamMember | null>(null);
+  const [isBulkSending, setIsBulkSending] = useState(false);
 
   const approvedMembers = members?.filter((m) => m.status === "approved") || [];
   const adminCount = approvedMembers.filter((m) => m.roles.includes("admin")).length;
@@ -233,6 +234,28 @@ const Team = () => {
 
   const canEdit = isAdmin || isCeo || isMasterAdmin;
   const canAddMember = isAdmin || isManager || isCeo || isAnyGestor;
+
+  const handleBulkResendAll = async () => {
+    const pending = approvedMembers.filter((m) => m.password_must_change && m.username);
+    if (pending.length === 0) return;
+    setIsBulkSending(true);
+    let sent = 0;
+    for (const m of pending) {
+      try {
+        await resendEmail.mutateAsync({
+          userId: m.id,
+          email: m.email || undefined,
+          fullName: m.full_name || "Usuário",
+          username: m.username!,
+        });
+        sent++;
+      } catch {
+        // continue even if one fails
+      }
+    }
+    setIsBulkSending(false);
+    toast.success(`${sent} e-mail${sent !== 1 ? "s" : ""} de acesso enviado${sent !== 1 ? "s" : ""}!`);
+  };
 
   const handleResendEmail = async (member: TeamMember) => {
     if (!member.username) {
@@ -279,6 +302,24 @@ const Team = () => {
             </p>
           </div>
           <div className="flex items-center gap-2">
+            {canAddMember && pendingAccessCount > 0 && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleBulkResendAll}
+                disabled={isBulkSending}
+                className="gap-2"
+              >
+                {isBulkSending ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Mail className="h-4 w-4" />
+                )}
+                {isBulkSending
+                  ? "Enviando..."
+                  : `Enviar acesso para todos (${pendingAccessCount})`}
+              </Button>
+            )}
             {canAddMember && <AddMemberDialog onMemberAdded={() => refetch()} />}
           </div>
         </div>
