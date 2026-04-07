@@ -4,8 +4,12 @@ import { BoardLayout } from "@/components/layouts/BoardLayout";
 import { LicenseeSubNav } from "@/components/licensees/LicenseeSubNav";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Trophy, Loader2, Search, Crown, Medal, Award, Shield, ChevronRight } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Trophy, Loader2, Search, Crown, Medal, Award, Shield, Pencil, HelpCircle } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { EditLicenseeDialog } from "@/components/licensees/EditLicenseeDialog";
 import { useLicenseeRanking } from "@/hooks/useNetworkIntelligence";
+import type { RankedLicensee } from "@/hooks/useNetworkIntelligence";
 
 const TIERS = [
   { label: "Elite", color: "bg-purple-600", icon: Crown },
@@ -46,6 +50,7 @@ export default function LicenseeRanking() {
   const { data: ranking = [], isLoading } = useLicenseeRanking();
   const [search, setSearch] = useState("");
   const [sortAsc, setSortAsc] = useState(false);
+  const [editingLicensee, setEditingLicensee] = useState<RankedLicensee | null>(null);
 
   const filtered = useMemo(() => {
     let items = [...ranking];
@@ -166,8 +171,26 @@ export default function LicenseeRanking() {
                       <th className="px-4 py-3 text-left font-medium">Nível</th>
                       <th className="px-4 py-3 text-left font-medium">Score</th>
                       <th className="px-4 py-3 text-right font-medium">Máquinas Total</th>
-                      <th className="px-4 py-3 text-right font-medium">1L</th>
-                      <th className="px-4 py-3 text-right font-medium">100ml</th>
+                      <th className="px-4 py-3 text-right font-medium">
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <span className="flex items-center justify-end gap-1 cursor-help">
+                              1L <HelpCircle className="h-3 w-3 text-muted-foreground" />
+                            </span>
+                          </TooltipTrigger>
+                          <TooltipContent>Máquinas CarboVAPT de 1 litro</TooltipContent>
+                        </Tooltip>
+                      </th>
+                      <th className="px-4 py-3 text-right font-medium">
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <span className="flex items-center justify-end gap-1 cursor-help">
+                              100ml <HelpCircle className="h-3 w-3 text-muted-foreground" />
+                            </span>
+                          </TooltipTrigger>
+                          <TooltipContent>Máquinas CarboVAPT de 100 mililitros</TooltipContent>
+                        </Tooltip>
+                      </th>
                       <th className="px-4 py-3 text-left font-medium">Status</th>
                       <th className="px-4 py-3 w-8" />
                     </tr>
@@ -226,8 +249,15 @@ export default function LicenseeRanking() {
                               {STATUS_LABELS[item.status] || item.status || "-"}
                             </Badge>
                           </td>
-                          <td className="px-4 py-3">
-                            <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                          <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8"
+                              onClick={() => setEditingLicensee(item)}
+                            >
+                              <Pencil className="h-3.5 w-3.5" />
+                            </Button>
                           </td>
                         </tr>
                       ))
@@ -239,6 +269,15 @@ export default function LicenseeRanking() {
           </>
         )}
       </div>
+
+      {/* Edit dialog */}
+      {editingLicensee && (
+        <EditLicenseeDialog
+          licensee={editingLicensee as any}
+          open={!!editingLicensee}
+          onOpenChange={(open) => { if (!open) setEditingLicensee(null); }}
+        />
+      )}
     </BoardLayout>
   );
 }

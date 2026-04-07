@@ -1,9 +1,9 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect, useRef } from "react";
 import { BoardLayout } from "@/components/layouts/BoardLayout";
 import { LicenseeSubNav } from "@/components/licensees/LicenseeSubNav";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Loader2, Brain, MapPin, Target, TrendingUp, Users, Search, BarChart3 } from "lucide-react";
+import { Loader2, Brain, MapPin, Target, TrendingUp, Users, Search, BarChart3, Map as MapIcon, Table2 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Select,
@@ -12,7 +12,100 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useTerritories, useTerritoryExpansion, useNetworkMap, useNetworkStats } from "@/hooks/useNetworkIntelligence";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useTerritories, useTerritoryExpansion, useNetworkMap, useNetworkStats, BRAZIL_CITIES_COORDS, getCityCoords } from "@/hooks/useNetworkIntelligence";
+import "leaflet/dist/leaflet.css";
+
+// ── Bubble Map Component ──────────────────────────────────────────────────────
+interface BubbleMapProps {
+  clusters: Array<{
+    city: string;
+    state: string;
+    machineCount: number;
+    licenseeNames: string[];
+    tier: "A" | "B" | "C" | "D";
+  }>;
+}
+
+const TIER_COLORS_MAP: Record<string, string> = {
+  A: "#22c55e",
+  B: "#3b82f6",
+  C: "#f59e0b",
+  D: "#ef4444",
+};
+
+function BubbleMap({ clusters }: BubbleMapProps) {
+  const mapRef = useRef<HTMLDivElement>(null);
+  const leafletMapRef = useRef<any>(null);
+
+  useEffect(() => {
+    if (!mapRef.current || leafletMapRef.current) return;
+
+    import("leaflet").then((L) => {
+      // Fix default icon path issues in bundlers
+      delete (L.Icon.Default.prototype as any)._getIconUrl;
+      L.Icon.Default.mergeOptions({
+        iconRetinaUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png",
+        iconUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png",
+        shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
+      });
+
+      const map = L.map(mapRef.current!, {
+        center: [-15.0, -52.0],
+        zoom: 4,
+        zoomControl: true,
+        scrollWheelZoom: false,
+      });
+
+      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        attribution: "© OpenStreetMap contributors",
+      }).addTo(map);
+
+      clusters.forEach((cluster) => {
+        const coords = getCityCoords(cluster.city, cluster.state);
+        if (!coords) return;
+
+        const radius = Math.max(10, cluster.machineCount * 6);
+        const color = TIER_COLORS_MAP[cluster.tier] || "#94a3b8";
+
+        L.circleMarker(coords, {
+          radius,
+          fillColor: color,
+          color: "#fff",
+          weight: 2,
+          opacity: 0.9,
+          fillOpacity: 0.75,
+        })
+          .bindPopup(`
+            <div style="min-width:160px">
+              <strong style="font-size:13px">${cluster.city}, ${cluster.state}</strong><br/>
+              <span style="color:${color};font-weight:600">Tier ${cluster.tier}</span><br/>
+              <span>🔧 ${cluster.machineCount} máquinas</span><br/>
+              ${cluster.licenseeNames.length ? `<span style="font-size:11px;color:#666">${cluster.licenseeNames.slice(0,3).join(", ")}</span>` : ""}
+            </div>
+          `)
+          .addTo(map);
+      });
+
+      leafletMapRef.current = map;
+    });
+
+    return () => {
+      if (leafletMapRef.current) {
+        leafletMapRef.current.remove();
+        leafletMapRef.current = null;
+      }
+    };
+  }, []);
+
+  // Update bubbles when clusters change
+  useEffect(() => {
+    if (!leafletMapRef.current) return;
+    // Re-render handled by full remount via key on parent
+  }, [clusters]);
+
+  return <div ref={mapRef} style={{ height: "440px", borderRadius: "12px", zIndex: 0 }} />;
+}
 
 type DensityTier = "A" | "B" | "C" | "D";
 
@@ -260,49 +353,69 @@ export default function TerritoryIntelligence() {
           </Select>
         </div>
 
-        {/* Territory Table */}
-        <div className="rounded-xl border bg-card overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-muted/50">
-                <tr>
-                  <th className="px-4 py-3 text-left font-medium">Cidade</th>
-                  <th className="px-4 py-3 text-left font-medium">UF</th>
-                  <th className="px-4 py-3 text-left font-medium">Tier</th>
-                  <th className="px-4 py-3 text-right font-medium">Máquinas</th>
-                  <th className="px-4 py-3 text-left font-medium">Licenciados</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.length === 0 ? (
-                  <tr>
-                    <td colSpan={5} className="px-4 py-8 text-center text-muted-foreground">
-                      Nenhum território encontrado.
-                    </td>
-                  </tr>
-                ) : (
-                  filtered.map((c, i) => (
-                    <tr key={`${c.city}-${c.state}-${i}`} className="border-t hover:bg-muted/30">
-                      <td className="px-4 py-3 font-medium">{c.city}</td>
-                      <td className="px-4 py-3">{c.state}</td>
-                      <td className="px-4 py-3">
-                        <Badge className={`${DENSITY_CONFIG[c.tier].color} text-white border-transparent text-xs`}>
-                          {c.tier}
-                        </Badge>
-                      </td>
-                      <td className="px-4 py-3 text-right font-semibold">{c.machineCount}</td>
-                      <td className="px-4 py-3 text-muted-foreground">
-                        {c.licenseeNames.length > 0
-                          ? c.licenseeNames.join(", ")
-                          : "—"}
-                      </td>
+        {/* Map + Table tabs */}
+        <Tabs defaultValue="mapa">
+          <TabsList className="mb-4">
+            <TabsTrigger value="mapa" className="gap-2">
+              <MapIcon className="h-4 w-4" /> Mapa de Bolhas
+            </TabsTrigger>
+            <TabsTrigger value="tabela" className="gap-2">
+              <Table2 className="h-4 w-4" /> Tabela
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="mapa">
+            <div className="rounded-xl border bg-card overflow-hidden p-2">
+              <BubbleMap key={clusters.length} clusters={clusters} />
+              <p className="text-xs text-muted-foreground text-center mt-2 pb-1">
+                Tamanho da bolha proporcional ao número de máquinas · Cor por Tier de densidade
+              </p>
+            </div>
+          </TabsContent>
+
+          <TabsContent value="tabela">
+            <div className="rounded-xl border bg-card overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-muted/50">
+                    <tr>
+                      <th className="px-4 py-3 text-left font-medium">Cidade</th>
+                      <th className="px-4 py-3 text-left font-medium">UF</th>
+                      <th className="px-4 py-3 text-left font-medium">Tier</th>
+                      <th className="px-4 py-3 text-right font-medium">Máquinas</th>
+                      <th className="px-4 py-3 text-left font-medium">Licenciados</th>
                     </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
+                  </thead>
+                  <tbody>
+                    {filtered.length === 0 ? (
+                      <tr>
+                        <td colSpan={5} className="px-4 py-8 text-center text-muted-foreground">
+                          Nenhum território encontrado.
+                        </td>
+                      </tr>
+                    ) : (
+                      filtered.map((c, i) => (
+                        <tr key={`${c.city}-${c.state}-${i}`} className="border-t hover:bg-muted/30">
+                          <td className="px-4 py-3 font-medium">{c.city}</td>
+                          <td className="px-4 py-3">{c.state}</td>
+                          <td className="px-4 py-3">
+                            <Badge className={`${DENSITY_CONFIG[c.tier].color} text-white border-transparent text-xs`}>
+                              {c.tier}
+                            </Badge>
+                          </td>
+                          <td className="px-4 py-3 text-right font-semibold">{c.machineCount}</td>
+                          <td className="px-4 py-3 text-muted-foreground">
+                            {c.licenseeNames.length > 0 ? c.licenseeNames.join(", ") : "—"}
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </TabsContent>
+        </Tabs>
       </div>
     </BoardLayout>
   );

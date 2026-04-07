@@ -63,6 +63,93 @@ export interface NetworkStats {
   machines_by_type: { type: string; count: number }[];
 }
 
+// ─── Brazil Cities Fallback Coordinates ─────────────────────────────────────
+// Used when machines.latitude / machines.longitude is NULL in the database.
+// Key format: "Cidade|UF"
+export const BRAZIL_CITIES_COORDS: Record<string, [number, number]> = {
+  // SP
+  "São Paulo|SP":          [-23.5505, -46.6333],
+  "Guarulhos|SP":          [-23.4543, -46.5333],
+  "Barueri|SP":            [-23.5042, -46.8761],
+  "Campinas|SP":           [-22.9056, -47.0608],
+  "Santos|SP":             [-23.9608, -46.3336],
+  "Sorocaba|SP":           [-23.5015, -47.4526],
+  "Ribeirão Preto|SP":     [-21.1704, -47.8100],
+  "Osasco|SP":             [-23.5329, -46.7919],
+  "São Bernardo do Campo|SP": [-23.6944, -46.5650],
+  "Santo André|SP":        [-23.6639, -46.5383],
+  // RN
+  "Natal|RN":              [-5.7945, -35.2110],
+  "Parnamirim|RN":         [-5.9144, -35.2640],
+  "Mossoró|RN":            [-5.1875, -37.3438],
+  // BA
+  "Salvador|BA":           [-12.9714, -38.5014],
+  "Feira de Santana|BA":   [-12.2664, -38.9663],
+  "Vitória da Conquista|BA":[-14.8661, -40.8444],
+  "Camaçari|BA":           [-12.6997, -38.3244],
+  "Balsas|MA":             [-7.5329, -46.0361],
+  // PE
+  "Recife|PE":             [-8.0543, -34.8811],
+  "Caruaru|PE":            [-8.2760, -35.9763],
+  "Petrolina|PE":          [-9.3989, -40.5001],
+  "Olinda|PE":             [-8.0089, -34.8536],
+  // MG
+  "Belo Horizonte|MG":     [-19.9167, -43.9345],
+  "Uberlândia|MG":         [-18.9186, -48.2772],
+  "Contagem|MG":           [-19.9317, -44.0536],
+  "Montes Claros|MG":      [-16.7286, -43.8611],
+  // PR
+  "Curitiba|PR":           [-25.4284, -49.2733],
+  "Maringá|PR":            [-23.4205, -51.9333],
+  "Londrina|PR":           [-23.3045, -51.1696],
+  "Cascavel|PR":           [-24.9578, -53.4596],
+  // PI
+  "Teresina|PI":           [-5.0920, -42.8038],
+  "Parnaíba|PI":           [-2.9058, -41.7769],
+  // CE
+  "Fortaleza|CE":          [-3.7319, -38.5267],
+  "Juazeiro do Norte|CE":  [-7.2133, -39.3153],
+  // MA
+  "São Luís|MA":           [-2.5297, -44.3028],
+  // SC
+  "Florianópolis|SC":      [-27.5954, -48.5480],
+  "Joinville|SC":          [-26.3045, -48.8457],
+  "Blumenau|SC":           [-26.9195, -49.0661],
+  // RS
+  "Porto Alegre|RS":       [-30.0346, -51.2177],
+  "Caxias do Sul|RS":      [-29.1678, -51.1794],
+  // GO
+  "Goiânia|GO":            [-16.6864, -49.2643],
+  // DF
+  "Brasília|DF":           [-15.7797, -47.9297],
+  // AM
+  "Manaus|AM":             [-3.1190, -60.0217],
+  // PA
+  "Belém|PA":              [-1.4558, -48.5044],
+  // RJ
+  "Rio de Janeiro|RJ":     [-22.9068, -43.1729],
+  "Niterói|RJ":            [-22.8832, -43.1036],
+  // ES
+  "Vitória|ES":            [-20.3155, -40.3128],
+  // MT
+  "Cuiabá|MT":             [-15.6010, -56.0975],
+  // MS
+  "Campo Grande|MS":       [-20.4697, -54.6201],
+  // AL
+  "Maceió|AL":             [-9.6658, -35.7353],
+  // SE
+  "Aracaju|SE":            [-10.9472, -37.0731],
+  // RO
+  "Porto Velho|RO":        [-8.7612, -63.9004],
+  // TO
+  "Palmas|TO":             [-10.2491, -48.3243],
+};
+
+export function getCityCoords(city: string | null, state: string | null): [number, number] | null {
+  if (!city || !state) return null;
+  return BRAZIL_CITIES_COORDS[`${city}|${state}`] || null;
+}
+
 // ─── Tier Assignment ─────────────────────────────────────────────────────────
 
 function assignTier(rank: number, total: number): "Elite" | "Gold" | "Silver" | "Bronze" {
@@ -122,11 +209,10 @@ export function useNetworkMap() {
   return useQuery({
     queryKey: ["network_map"],
     queryFn: async (): Promise<NetworkMachine[]> => {
+      // Fetch ALL machines — lat/long may be null in DB, we apply city fallback below
       const { data: machines, error } = await (supabase as any)
         .from("machines")
-        .select("id, machine_id, model, machine_type, latitude, longitude, location_city, location_state, status, installation_date, licensee_id")
-        .not("latitude", "is", null)
-        .not("longitude", "is", null);
+        .select("id, machine_id, model, machine_type, latitude, longitude, location_city, location_state, status, installation_date, licensee_id");
 
       if (error) throw error;
       if (!machines || machines.length === 0) return [];
@@ -146,23 +232,41 @@ export function useNetworkMap() {
         }
       }
 
-      return machines.map((m: any) => {
+      const result: NetworkMachine[] = [];
+      for (const m of machines) {
+        // Resolve coordinates: DB value → city fallback
+        let lat = m.latitude != null ? Number(m.latitude) : null;
+        let lng = m.longitude != null ? Number(m.longitude) : null;
+
+        if (lat === null || lng === null) {
+          const fallback = getCityCoords(m.location_city, m.location_state);
+          if (fallback) {
+            // Add slight jitter (±0.01°) so stacked machines spread visually
+            lat = fallback[0] + (Math.random() - 0.5) * 0.02;
+            lng = fallback[1] + (Math.random() - 0.5) * 0.02;
+          }
+        }
+
+        // Skip if we still have no coords
+        if (lat === null || lng === null) continue;
+
         const lic = licenseeMap.get(m.licensee_id);
-        return {
+        result.push({
           id: m.id,
           machine_id: m.machine_id,
           model: m.model,
           machine_type: m.machine_type,
-          latitude: Number(m.latitude),
-          longitude: Number(m.longitude),
+          latitude: lat,
+          longitude: lng,
           location_city: m.location_city,
           location_state: m.location_state,
           status: m.status,
           installation_date: m.installation_date,
           licensee_name: lic?.name || null,
           licensee_code: lic?.code || null,
-        };
-      });
+        });
+      }
+      return result;
     },
   });
 }

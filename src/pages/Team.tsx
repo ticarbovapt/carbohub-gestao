@@ -1,10 +1,8 @@
 import { useState } from "react";
 import { BoardLayout } from "@/components/layouts/BoardLayout";
-import { Users, Shield, Building2, Filter, Mail, Clock, CheckCircle, Loader2, CheckCheck, Network, Upload, ExternalLink } from "lucide-react";
+import { Users, Shield, Building2, Filter, Mail, Clock, CheckCircle, Loader2, CheckCheck, Upload } from "lucide-react";
 import { TeamBulkImport } from "@/components/team/TeamBulkImport";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { OrgChart } from "@/components/team/OrgChart";
-import { useOrgChart } from "@/hooks/useOrgChart";
 import { useTeamMembers, useUpdateUserRole, useUpdateUserDepartment, TeamMember } from "@/hooks/useTeamMembers";
 import { useNavigate } from "react-router-dom";
 import { AddMemberDialog } from "@/components/team/AddMemberDialog";
@@ -69,8 +67,6 @@ const Team = () => {
   const resendEmail = useResendWelcomeEmail();
   const { isAdmin, isManager, isMasterAdmin, isCeo, isAnyGestor, user } = useAuth();
   const navigate = useNavigate();
-  const { data: orgTree = [], isLoading: isOrgLoading } = useOrgChart();
-
   // Filter states
   const [departmentFilter, setDepartmentFilter] = useState<DepartmentType | "all">("all");
   const [roleFilter, setRoleFilter] = useState<AppRole | "all">("all");
@@ -195,16 +191,6 @@ const Team = () => {
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => navigate("/org-chart")}
-              className="gap-2"
-            >
-              <Network className="h-4 w-4" />
-              Ver Organograma
-              <ExternalLink className="h-3.5 w-3.5 opacity-50" />
-            </Button>
             {(isAdmin || isManager || isCeo || isAnyGestor) && <AddMemberDialog onMemberAdded={() => refetch()} />}
           </div>
         </div>
@@ -214,10 +200,6 @@ const Team = () => {
             <TabsTrigger value="equipe" className="gap-2">
               <Users className="h-4 w-4" />
               Equipe
-            </TabsTrigger>
-            <TabsTrigger value="organograma" className="gap-2">
-              <Network className="h-4 w-4" />
-              Organograma
             </TabsTrigger>
             <TabsTrigger value="importar" className="gap-2">
               <Upload className="h-4 w-4" />
@@ -462,12 +444,6 @@ const Team = () => {
           )}
         </div>
       </div>
-          </TabsContent>
-
-          <TabsContent value="organograma" className="mt-6">
-            <div className="rounded-xl border border-border bg-board-surface p-6">
-              <OrgChart tree={orgTree} isLoading={isOrgLoading} />
-            </div>
           </TabsContent>
 
           <TabsContent value="importar" className="mt-6">
