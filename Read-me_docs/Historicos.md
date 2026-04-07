@@ -61,6 +61,56 @@ Cada entrada registra o que foi entregue, decisões tomadas e contexto relevante
 
 ---
 
+## Sessão — 06/04/2026 (Chat 4 — UX Sprint Licenciados + Org Chart)
+
+### Commit f9a3318
+
+### Tarefa #51 — Org Chart: UX + Cores + Times da Marina ✅
+- **OrgChart.tsx**: linhas conectoras agora usam `rgba(99,102,241,0.4)` (indigo visível no dark mode)
+- **Marina dual-role**: filhos agrupados por departamento automaticamente quando `dual_role` está presente
+  - "🎨 Time Growth" (Dyanne, Mirian, Dyane, Remo, Arthur) — verde
+  - "💼 Time B2B" (Rodrigo Torquato, Marcius D'Ávilla) — rosa
+  - Divider visual com `border-dashed border-primary/20` entre os dois grupos
+- Avatares com `shadow-lg` melhorado
+
+### Tarefa #52 — /team: Remover Organograma ✅
+- Removidos: botão "Ver Organograma", aba `organograma` no Tabs, import `OrgChart`, `useOrgChart`, `Network`, `ExternalLink`
+- /team agora tem apenas: **Equipe** e **Importar Time**
+- Organograma exclusivamente em `/org-chart` via sidebar Dados Mestres
+
+### Tarefa #53 — Ranking Licenciados: Edição + Tooltips ✅
+- Botão `<Pencil>` em cada linha → abre `EditLicenseeDialog`
+- Tooltip em coluna "1L": "Máquinas CarboVAPT de 1 litro"
+- Tooltip em coluna "100ml": "Máquinas CarboVAPT de 100 mililitros"
+
+### Tarefa #54 — Network Map: Fix mapa vazio ✅
+- Causa raiz: `.not("latitude", "is", null)` filtrava todas as máquinas (DB sem lat/long)
+- Fix: `BRAZIL_CITIES_COORDS` com 60+ cidades brasileiras como fallback
+- Hook `getCityCoords(city, state)` exportado e reutilizável
+- Jitter de ±0.01° para evitar markers sobrepostos na mesma cidade
+
+### Tarefa #55 — Territory Intelligence: Mapa de Bolhas ✅
+- Adicionada aba "Mapa de Bolhas" em TerritoryIntelligence
+- Leaflet + `circleMarker` por cidade: radius = max(10, count × 6)
+- Cor por Tier: A=verde, B=azul, C=âmbar, D=vermelho
+- Popup: cidade, tier, nº máquinas, licenciados
+- Usa `BRAZIL_CITIES_COORDS` como fallback de coordenadas
+
+### Tarefa #56 — Territory Expansion: Estratégia + CRM ✅
+- Botão "⚡ Criar Estratégia" em cada card de oportunidade
+- Dialog com:
+  - Score integrado 0-100 (40% território + 30% leads CRM + 15% população + 15% concorrência)
+  - Leads do CRM f2 (Licenciados) filtrados por cidade/estado
+  - Progress bar visual do score
+  - Botão "Abrir Funil B2B no CRM" → navega para `/crm/f2`
+
+### Resposta sobre adicionar ao time
+- **Com login**: AddMemberDialog em `/team` → cria conta com email/senha
+- **No organograma** (sem login): editar `STATIC_ORG_TREE` em `useOrgChart.ts`
+- **Ambos**: Peterson roda SQL migration para sincronizar profiles.hierarchy_level
+
+---
+
 ## Sessão — 06/04/2026 (Chat 2 — Retomada)
 
 ### Tarefa #42 — Unificar Dashboards no Menu ✅

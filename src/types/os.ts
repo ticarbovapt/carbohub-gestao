@@ -144,3 +144,72 @@ export function getPreviousDepartment(current: DepartmentType): DepartmentType |
   }
   return null;
 }
+
+// ============================================================
+// CarboVAPT — Ordens de Serviço (Descarbonização)
+// ============================================================
+
+export type OsStage =
+  | "nova"
+  | "qualificacao"
+  | "agendamento"
+  | "confirmada"
+  | "em_execucao"
+  | "pos_servico"
+  | "concluida"
+  | "cancelada";
+
+export type OsServiceType = "b2c" | "b2b" | "frota";
+
+export interface OsStageConfig {
+  id: OsStage;
+  label: string;
+  emoji: string;
+  color: string;    // hex or tailwind-compatible color for border
+  bgClass: string;  // tailwind bg class
+}
+
+export const OS_STAGES: OsStageConfig[] = [
+  { id: "nova",         label: "Nova OS",      emoji: "📥", color: "#64748b", bgClass: "bg-slate-500" },
+  { id: "qualificacao", label: "Qualificação",  emoji: "📋", color: "#3b82f6", bgClass: "bg-blue-500" },
+  { id: "agendamento",  label: "Agendamento",   emoji: "📅", color: "#f59e0b", bgClass: "bg-amber-500" },
+  { id: "confirmada",   label: "Confirmada",    emoji: "✅", color: "#6366f1", bgClass: "bg-indigo-500" },
+  { id: "em_execucao",  label: "Em Execução",   emoji: "⚙️", color: "#8b5cf6", bgClass: "bg-purple-500" },
+  { id: "pos_servico",  label: "Pós-Serviço",   emoji: "📝", color: "#f97316", bgClass: "bg-orange-500" },
+  { id: "concluida",    label: "Concluída",     emoji: "✔️", color: "#22c55e", bgClass: "bg-green-500" },
+  { id: "cancelada",    label: "Cancelada",     emoji: "🔄", color: "#ef4444", bgClass: "bg-red-500" },
+];
+
+// Stages shown in the Kanban board (excludes cancelada — shown separately)
+export const OS_KANBAN_STAGES: OsStageConfig[] = OS_STAGES.filter(
+  (s) => s.id !== "cancelada"
+);
+
+// Stage progression order (without cancelada)
+const OS_STAGE_ORDER: OsStage[] = [
+  "nova", "qualificacao", "agendamento", "confirmada",
+  "em_execucao", "pos_servico", "concluida",
+];
+
+export function getNextOsStage(current: OsStage): OsStage | null {
+  const i = OS_STAGE_ORDER.indexOf(current);
+  if (i >= 0 && i < OS_STAGE_ORDER.length - 1) return OS_STAGE_ORDER[i + 1];
+  return null;
+}
+
+export function getOsStageConfig(id: OsStage): OsStageConfig {
+  return OS_STAGES.find((s) => s.id === id) ?? OS_STAGES[0];
+}
+
+// Extended ServiceOrder type with CarboVAPT fields
+export interface ServiceOrderCarboVAPT extends ServiceOrder {
+  os_stage: OsStage;
+  service_type: OsServiceType | null;
+  vehicle_plate: string | null;
+  vehicle_model: string | null;
+  scheduled_at: string | null;
+  executed_at: string | null;
+  cancelled_reason: string | null;
+  customer_name: string | null;
+  technician_id: string | null;
+}

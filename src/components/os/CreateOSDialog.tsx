@@ -1,8 +1,5 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
-import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
 import {
   Dialog,
   DialogContent,
@@ -23,59 +20,40 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { 
-  Plus, 
-  Users, 
-  Store, 
-  ShoppingCart, 
-  RefreshCw,
-  ArrowLeft,
-  CheckCircle,
-  Loader2,
-  Building2,
-  FileText,
-} from "lucide-react";
+import { Car, Users, Truck, Building2, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { toast } from "sonner";
+import { useCreateServiceOrder } from "@/hooks/useServiceOrders";
+import type { OsServiceType } from "@/types/os";
 
-type OSOriginType = "licensee" | "pdv" | "spot_sale" | "recurring_sale";
-
-interface OriginOption {
-  value: OSOriginType;
+interface ServiceTypeOption {
+  value: OsServiceType;
   label: string;
   description: string;
   icon: React.ReactNode;
   color: string;
 }
 
-const OS_ORIGINS: OriginOption[] = [
+const SERVICE_TYPES: ServiceTypeOption[] = [
   {
-    value: "licensee",
-    label: "Licenciado",
-    description: "OP vinculada a um licenciado parceiro",
-    icon: <Users className="h-5 w-5" />,
-    color: "bg-carbo-green/10 border-carbo-green/30 hover:bg-carbo-green/20 text-carbo-green",
+    value: "b2c",
+    label: "B2C — Eventual",
+    description: "Descarbonização pontual para pessoa física / consumidor",
+    icon: <Car className="h-5 w-5" />,
+    color: "bg-emerald-500/10 border-emerald-500/30 hover:bg-emerald-500/20 text-emerald-700",
   },
   {
-    value: "pdv",
-    label: "PDV CarboZé",
-    description: "OP de reposição ou operação de PDV",
-    icon: <Store className="h-5 w-5" />,
-    color: "bg-amber-500/10 border-amber-500/30 hover:bg-amber-500/20 text-amber-600",
+    value: "b2b",
+    label: "B2B — Eventual",
+    description: "Descarbonização para empresa / frota corporativa eventual",
+    icon: <Building2 className="h-5 w-5" />,
+    color: "bg-blue-500/10 border-blue-500/30 hover:bg-blue-500/20 text-blue-700",
   },
   {
-    value: "spot_sale",
-    label: "Venda Spot",
-    description: "Venda avulsa sem recorrência",
-    icon: <ShoppingCart className="h-5 w-5" />,
-    color: "bg-blue-500/10 border-blue-500/30 hover:bg-blue-500/20 text-blue-600",
-  },
-  {
-    value: "recurring_sale",
-    label: "Venda Recorrente",
-    description: "Pedido com entrega programada",
-    icon: <RefreshCw className="h-5 w-5" />,
-    color: "bg-purple-500/10 border-purple-500/30 hover:bg-purple-500/20 text-purple-600",
+    value: "frota",
+    label: "Frota — Agendamento",
+    description: "Agendamento recorrente de frota (agenda + máquina alocada)",
+    icon: <Truck className="h-5 w-5" />,
+    color: "bg-purple-500/10 border-purple-500/30 hover:bg-purple-500/20 text-purple-700",
   },
 ];
 
@@ -86,358 +64,214 @@ interface CreateOSDialogProps {
   onSuccess?: () => void;
 }
 
-export function CreateOSDialog({ 
-  trigger, 
+export function CreateOSDialog({
+  trigger,
   defaultOpen = false,
   onOpenChange,
-  onSuccess 
+  onSuccess,
 }: CreateOSDialogProps) {
-  const navigate = useNavigate();
   const { user } = useAuth();
   const [open, setOpen] = useState(defaultOpen);
-  const [step, setStep] = useState<"origin" | "form" | "success">("origin");
-  const [selectedOrigin, setSelectedOrigin] = useState<OSOriginType | null>(null);
-  const [isCreating, setIsCreating] = useState(false);
-  const [createdOS, setCreatedOS] = useState<{ osNumber: string; id: string } | null>(null);
+  const [step, setStep] = useState<"type" | "form">("type");
+  const [selectedType, setSelectedType] = useState<OsServiceType | null>(null);
 
-  // Fetch licensees for selection
-  const { data: licensees = [] } = useQuery({
-    queryKey: ["licensees-select"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("licensees")
-        .select("id, name, code")
-        .eq("status", "active")
-        .order("name");
-      if (error) throw error;
-      return data;
-    },
-    enabled: selectedOrigin === "licensee",
-  });
-
-  // Fetch PDVs for selection (from machines table)
-  const { data: pdvs = [] } = useQuery({
-    queryKey: ["pdvs-select"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("machines")
-        .select("id, machine_id, location_address, location_city")
-        .eq("status", "operational")
-        .order("machine_id");
-      if (error) throw error;
-      return data;
-    },
-    enabled: selectedOrigin === "pdv",
-  });
+  const createMutation = useCreateServiceOrder();
 
   const handleOpenChange = (isOpen: boolean) => {
     setOpen(isOpen);
     onOpenChange?.(isOpen);
     if (!isOpen) {
       setTimeout(() => {
-        setStep("origin");
-        setSelectedOrigin(null);
-        setCreatedOS(null);
+        setStep("type");
+        setSelectedType(null);
       }, 200);
     }
   };
 
-  const handleOriginSelect = (origin: OSOriginType) => {
-    setSelectedOrigin(origin);
+  const handleTypeSelect = (type: OsServiceType) => {
+    setSelectedType(type);
     setStep("form");
-  };
-
-  const handleBack = () => {
-    setStep("origin");
-    setSelectedOrigin(null);
   };
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (!user || !selectedOrigin) return;
+    if (!user || !selectedType) return;
 
-    setIsCreating(true);
-    const formData = new FormData(e.currentTarget);
+    const fd = new FormData(e.currentTarget);
 
-    try {
-      const osData: any = {
-        title: formData.get("title") as string,
-        description: formData.get("description") as string,
-        priority: parseInt(formData.get("priority") as string) || 2,
-        created_by: user.id,
-        os_number: "", // Auto-generated by trigger
-        origin_type: selectedOrigin,
-      };
+    await createMutation.mutateAsync({
+      title: (fd.get("title") as string) || `OS ${selectedType.toUpperCase()} — ${fd.get("customer_name")}`,
+      service_type: selectedType,
+      customer_name: (fd.get("customer_name") as string) || undefined,
+      vehicle_plate: (fd.get("vehicle_plate") as string) || undefined,
+      vehicle_model: (fd.get("vehicle_model") as string) || undefined,
+      priority: parseInt(fd.get("priority") as string) || 3,
+      scheduled_at: (fd.get("scheduled_at") as string) || undefined,
+      description: (fd.get("description") as string) || undefined,
+    });
 
-      // Add specific references based on origin
-      if (selectedOrigin === "licensee") {
-        osData.licensee_id = formData.get("licensee_id");
-      } else if (selectedOrigin === "pdv") {
-        osData.machine_id = formData.get("pdv_id");
-      } else if (selectedOrigin === "recurring_sale") {
-        osData.is_recurring = true;
-      }
-
-      const { data, error } = await supabase
-        .from("service_orders")
-        .insert(osData)
-        .select("id, os_number")
-        .single();
-
-      if (error) throw error;
-
-      setCreatedOS({ osNumber: data.os_number, id: data.id });
-      setStep("success");
-      toast.success("OP criada com sucesso!");
-      onSuccess?.();
-    } catch (error: any) {
-      toast.error("Erro ao criar OP: " + error.message);
-    } finally {
-      setIsCreating(false);
-    }
+    handleOpenChange(false);
+    onSuccess?.();
   };
-
-  const handleViewOS = () => {
-    if (createdOS) {
-      navigate(`/os/${createdOS.id}`);
-      handleOpenChange(false);
-    }
-  };
-
-  const selectedOriginConfig = OS_ORIGINS.find(o => o.value === selectedOrigin);
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       {trigger && <DialogTrigger asChild>{trigger}</DialogTrigger>}
+
       <DialogContent className="max-w-lg">
-        {step === "origin" ? (
+        {/* ── Step 1: Tipo de Serviço ── */}
+        {step === "type" && (
           <>
             <DialogHeader>
-              <DialogTitle className="flex items-center gap-2 text-xl">
-                <Plus className="h-5 w-5 text-carbo-green" />
-                Nova Ordem de Produção
-              </DialogTitle>
+              <DialogTitle>Nova Ordem de Serviço</DialogTitle>
               <DialogDescription>
-                Selecione a origem da OP para iniciar o fluxo
+                Selecione o tipo de descarbonização CarboVAPT
               </DialogDescription>
             </DialogHeader>
 
-            <div className="grid gap-3 py-4">
-              {OS_ORIGINS.map((origin) => (
+            <div className="grid gap-3 py-2">
+              {SERVICE_TYPES.map((opt) => (
                 <button
-                  key={origin.value}
-                  onClick={() => handleOriginSelect(origin.value)}
+                  key={opt.value}
+                  type="button"
+                  onClick={() => handleTypeSelect(opt.value)}
                   className={cn(
-                    "flex items-center gap-4 p-4 rounded-xl border-2 transition-all duration-200 text-left",
-                    origin.color
+                    "flex items-start gap-4 rounded-xl border-2 p-4 text-left transition-all",
+                    opt.color
                   )}
                 >
-                  <div className={cn(
-                    "h-12 w-12 rounded-xl flex items-center justify-center bg-background border",
-                    origin.color.split(" ")[0].replace("/10", "/20")
-                  )}>
-                    {origin.icon}
-                  </div>
-                  <div className="flex-1">
-                    <p className="font-semibold text-foreground">{origin.label}</p>
-                    <p className="text-sm text-muted-foreground">{origin.description}</p>
+                  <div className="mt-0.5 flex-shrink-0">{opt.icon}</div>
+                  <div>
+                    <p className="font-semibold text-sm">{opt.label}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">{opt.description}</p>
                   </div>
                 </button>
               ))}
             </div>
-
-            <DialogFooter>
-              <Button variant="outline" onClick={() => handleOpenChange(false)}>
-                Cancelar
-              </Button>
-            </DialogFooter>
           </>
-        ) : step === "form" ? (
-          <>
+        )}
+
+        {/* ── Step 2: Formulário ── */}
+        {step === "form" && selectedType && (
+          <form onSubmit={handleSubmit}>
             <DialogHeader>
-              <div className="flex items-center gap-2 mb-2">
-                <button 
-                  onClick={handleBack}
-                  className="text-sm text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1"
-                >
-                  <ArrowLeft className="h-3 w-3" />
-                  Voltar
-                </button>
-              </div>
-              <DialogTitle className="flex items-center gap-3">
-                <div className={cn(
-                  "h-10 w-10 rounded-xl flex items-center justify-center bg-background border",
-                  selectedOriginConfig?.color.split(" ")[0]
-                )}>
-                  {selectedOriginConfig?.icon}
-                </div>
-                <div>
-                  <span className="block">OP - {selectedOriginConfig?.label}</span>
-                  <span className="text-sm font-normal text-muted-foreground">
-                    {selectedOriginConfig?.description}
-                  </span>
-                </div>
+              <DialogTitle>
+                {SERVICE_TYPES.find((t) => t.value === selectedType)?.label}
               </DialogTitle>
+              <DialogDescription>
+                Preencha as informações da Ordem de Serviço
+              </DialogDescription>
             </DialogHeader>
 
-            <form onSubmit={handleSubmit} className="space-y-4 pt-2">
-              {/* Seletor de Licenciado */}
-              {selectedOrigin === "licensee" && (
-                <div className="space-y-2">
-                  <Label htmlFor="licensee_id" className="flex items-center gap-2">
-                    <Building2 className="h-4 w-4 text-muted-foreground" />
-                    Licenciado *
-                  </Label>
-                  <Select name="licensee_id" required>
-                    <SelectTrigger className="h-11">
-                      <SelectValue placeholder="Selecione o licenciado" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {licensees.map((lic) => (
-                        <SelectItem key={lic.id} value={lic.id}>
-                          <span className="flex items-center gap-2">
-                            <code className="text-xs bg-muted px-1 rounded">{lic.code}</code>
-                            {lic.name}
-                          </span>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
-
-              {/* Seletor de PDV */}
-              {selectedOrigin === "pdv" && (
-                <div className="space-y-2">
-                  <Label htmlFor="pdv_id" className="flex items-center gap-2">
-                    <Store className="h-4 w-4 text-muted-foreground" />
-                    PDV / Máquina *
-                  </Label>
-                  <Select name="pdv_id" required>
-                    <SelectTrigger className="h-11">
-                      <SelectValue placeholder="Selecione o PDV" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {pdvs.map((pdv) => (
-                        <SelectItem key={pdv.id} value={pdv.id}>
-                          <span className="flex items-center gap-2">
-                            <code className="text-xs bg-muted px-1 rounded">{pdv.machine_id}</code>
-                            {pdv.location_city || pdv.location_address || "Sem endereço"}
-                          </span>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
-
-              <div className="space-y-2">
-                <Label htmlFor="title" className="flex items-center gap-2">
-                  <FileText className="h-4 w-4 text-muted-foreground" />
-                  Título da OP *
+            <div className="space-y-4 py-4">
+              {/* Cliente */}
+              <div className="space-y-1.5">
+                <Label htmlFor="customer_name">
+                  {selectedType === "frota" ? "Empresa / Frota" : "Nome do Cliente"}
                 </Label>
                 <Input
-                  id="title"
-                  name="title"
-                  placeholder="Ex: Instalação CarboVapt - Cliente ABC"
-                  required
-                  className="h-11"
+                  id="customer_name"
+                  name="customer_name"
+                  placeholder={
+                    selectedType === "frota"
+                      ? "Ex: Transportadora XYZ"
+                      : "Nome do cliente"
+                  }
                 />
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="description">Descrição</Label>
-                <Textarea
-                  id="description"
-                  name="description"
-                  placeholder="Detalhes adicionais da ordem de produção..."
-                  rows={3}
+              {/* Veículo */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label htmlFor="vehicle_plate">Placa do Veículo</Label>
+                  <Input
+                    id="vehicle_plate"
+                    name="vehicle_plate"
+                    placeholder="ABC-1234"
+                    className="uppercase"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="vehicle_model">Modelo</Label>
+                  <Input
+                    id="vehicle_model"
+                    name="vehicle_model"
+                    placeholder="Ex: Fiat Uno 1.0"
+                  />
+                </div>
+              </div>
+
+              {/* Agendamento */}
+              <div className="space-y-1.5">
+                <Label htmlFor="scheduled_at">
+                  {selectedType === "frota" ? "Data do Agendamento" : "Data Prevista (opcional)"}
+                </Label>
+                <Input
+                  id="scheduled_at"
+                  name="scheduled_at"
+                  type="datetime-local"
+                  required={selectedType === "frota"}
                 />
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="priority">Prioridade</Label>
-                <Select name="priority" defaultValue="2">
-                  <SelectTrigger className="h-11">
+              {/* Prioridade */}
+              <div className="space-y-1.5">
+                <Label>Prioridade</Label>
+                <Select name="priority" defaultValue="3">
+                  <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="1">🟢 Baixa</SelectItem>
-                    <SelectItem value="2">🔵 Normal</SelectItem>
-                    <SelectItem value="3">🟡 Média</SelectItem>
-                    <SelectItem value="4">🟠 Alta</SelectItem>
-                    <SelectItem value="5">🔴 Urgente</SelectItem>
+                    <SelectItem value="1">🔴 Urgente</SelectItem>
+                    <SelectItem value="2">🟠 Alta</SelectItem>
+                    <SelectItem value="3">⚪ Normal</SelectItem>
+                    <SelectItem value="4">🔵 Baixa</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
 
-              {/* Info adicional para recorrência */}
-              {selectedOrigin === "recurring_sale" && (
-                <div className="p-4 bg-purple-500/5 border border-purple-500/20 rounded-xl">
-                  <p className="text-sm text-muted-foreground">
-                    <strong className="text-foreground">Venda Recorrente:</strong> Esta OP será 
-                     marcada como recorrente. Configure os detalhes de programação após a criação.
-                  </p>
-                </div>
-              )}
-
-              <DialogFooter className="pt-4 border-t">
-                <Button type="button" variant="outline" onClick={() => handleOpenChange(false)}>
-                  Cancelar
-                </Button>
-                <Button type="submit" disabled={isCreating} className="carbo-gradient text-white">
-                  {isCreating ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Criando...
-                    </>
-                  ) : (
-                    <>
-                      <Plus className="mr-2 h-4 w-4" />
-                      Criar OP
-                    </>
-                  )}
-                </Button>
-              </DialogFooter>
-            </form>
-          </>
-        ) : (
-          <>
-            <DialogHeader className="text-center">
-              <div className="mx-auto mb-4 flex h-20 w-20 items-center justify-center rounded-2xl bg-gradient-to-br from-carbo-green/20 to-carbo-blue/20">
-                <CheckCircle className="h-10 w-10 text-carbo-green" />
+              {/* Título / Observações */}
+              <div className="space-y-1.5">
+                <Label htmlFor="title">Título da OS</Label>
+                <Input
+                  id="title"
+                  name="title"
+                  placeholder="Ex: Descarbonização motor Honda Fit"
+                />
               </div>
-               <DialogTitle className="text-xl">OP Criada com Sucesso!</DialogTitle>
-               <DialogDescription>
-                 A ordem de produção foi criada e está pronta para execução
-              </DialogDescription>
-            </DialogHeader>
 
-            <div className="bg-muted/50 rounded-xl p-5 space-y-3 my-4">
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-muted-foreground">Número:</span>
-                <code className="font-mono font-bold text-lg text-primary bg-primary/10 px-3 py-1 rounded">
-                  {createdOS?.osNumber}
-                </code>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-muted-foreground">Origem:</span>
-                <div className="flex items-center gap-2">
-                  {selectedOriginConfig?.icon}
-                  <span className="font-medium">{selectedOriginConfig?.label}</span>
-                </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="description">Observações</Label>
+                <Textarea
+                  id="description"
+                  name="description"
+                  placeholder="Informações adicionais..."
+                  rows={2}
+                />
               </div>
             </div>
 
-            <div className="flex gap-3">
-              <Button variant="outline" className="flex-1" onClick={() => handleOpenChange(false)}>
-                Fechar
+            <DialogFooter className="gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setStep("type")}
+                disabled={createMutation.isPending}
+              >
+                Voltar
               </Button>
-              <Button className="flex-1 carbo-gradient text-white" onClick={handleViewOS}>
-                Ver OP
+              <Button type="submit" disabled={createMutation.isPending}>
+                {createMutation.isPending ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Criando...
+                  </>
+                ) : (
+                  "Criar OS"
+                )}
               </Button>
-            </div>
-          </>
+            </DialogFooter>
+          </form>
         )}
       </DialogContent>
     </Dialog>

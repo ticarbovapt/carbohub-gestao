@@ -1,4 +1,4 @@
-import { ReactNode, useState } from "react";
+import React, { ReactNode, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
   LayoutDashboard,
@@ -25,7 +25,6 @@ import {
   Layers,
   Package,
   Factory,
-  Database,
   Link2,
   Target,
   ArrowLeft,
@@ -120,9 +119,17 @@ interface BoardLayoutProps {
   children: ReactNode;
 }
 
-type SidebarTab = "dados" | "operacoes" | "dashboards";
+type SidebarTab = "controle" | "operacoes" | "dashboards";
 
-const dadosMestresItems = [
+interface NavItem {
+  href: string;
+  label: string;
+  icon: React.ComponentType<{ className?: string }>;
+  adminOnly?: boolean;
+  sectionLabel?: string;
+}
+
+const controleItems: NavItem[] = [
   { href: "/mrp/products", label: "Catálogo (Insumos/SKUs)", icon: Package },
   { href: "/mrp/suppliers", label: "Fornecedores", icon: Factory },
   { href: "/licensees", label: "Licenciados", icon: Building2 },
@@ -131,7 +138,8 @@ const dadosMestresItems = [
   { href: "/import", label: "Importar Dados", icon: FileSpreadsheet },
 ];
 
-const dashboardsItems = [
+const dashboardsItems: NavItem[] = [
+  { href: "/dashboard", label: "Visão Geral", icon: LayoutDashboard },
   { href: "/dashboards/producao", label: "Produção", icon: Factory },
   { href: "/dashboards/financeiro", label: "Financeiro", icon: Wallet },
   { href: "/dashboards/logistica", label: "Logística", icon: Truck },
@@ -139,15 +147,15 @@ const dashboardsItems = [
   { href: "/dashboards/estrategico", label: "Estratégico", icon: Star },
 ];
 
-const operacoesItems = [
-  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/production-orders", label: "Produção (OP/OS)", icon: Factory },
-  { href: "/logistics", label: "Logística", icon: Truck },
-  { href: "/orders", label: "Pedidos (RV)", icon: ShoppingCart },
-  { href: "/crm", label: "CRM — Funis de Venda", icon: Target },
-  { href: "/sales-targets", label: "Metas de Vendas", icon: Target },
-  { href: "/financeiro", label: "Financeiro", icon: Wallet },
-  { href: "/suprimentos", label: "Suprimentos", icon: Package },
+const operacoesItems: NavItem[] = [
+  { href: "/production-orders", label: "Ordens de Produção (OP)", icon: Factory,       sectionLabel: "Produção" },
+  { href: "/os",               label: "Ordens de Serviço (OS)",   icon: ClipboardList, sectionLabel: "Descarbonização" },
+  { href: "/crm",              label: "CRM — Funis de Venda",     icon: Target,        sectionLabel: "Comercial" },
+  { href: "/orders",           label: "Pedidos (RV)",             icon: ShoppingCart },
+  { href: "/sales-targets",    label: "Metas de Vendas",          icon: TrendingUp },
+  { href: "/financeiro",       label: "Financeiro",               icon: Wallet,        sectionLabel: "Financeiro & Supply" },
+  { href: "/suprimentos",      label: "Suprimentos",              icon: Package },
+  { href: "/logistics",        label: "Logística",                icon: Truck },
 ];
 
 const globalItems = [
@@ -241,11 +249,12 @@ export function BoardLayout({ children }: BoardLayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   // Determine active tab from route
-  const isDashboardRoute = location.pathname.startsWith("/dashboards");
-  const isDadosRoute = !isDashboardRoute && (location.pathname.startsWith("/mrp") ||
+  const isDashboardRoute = location.pathname.startsWith("/dashboards") ||
+    location.pathname === "/dashboard";
+  const isControleRoute = !isDashboardRoute && (location.pathname.startsWith("/mrp") ||
     ["/licensees", "/machines", "/team", "/import", "/skus", "/lots", "/integrations", "/org-chart"].some(p => location.pathname.startsWith(p)));
   const [activeTab, setActiveTab] = useState<SidebarTab>(
-    isDashboardRoute ? "dashboards" : isDadosRoute ? "dados" : "operacoes"
+    isDashboardRoute ? "dashboards" : isControleRoute ? "controle" : "operacoes"
   );
 
   const getInitials = (name: string | null | undefined) => {
@@ -259,12 +268,14 @@ export function BoardLayout({ children }: BoardLayoutProps) {
   };
 
   const isItemActive = (href: string) => {
-    return location.pathname === href || 
-      (href !== "/dashboard" && href !== "/mrp/dashboard" && location.pathname.startsWith(href) && href !== "/admin");
+    if (location.pathname === href) return true;
+    if (href === "/dashboard" || href === "/mrp/dashboard") return false;
+    if (href === "/admin") return false;
+    return location.pathname.startsWith(href);
   };
 
-  const currentItems = activeTab === "dados" ? dadosMestresItems : activeTab === "dashboards" ? dashboardsItems : operacoesItems;
-  const filteredItems = currentItems.filter((item: any) => {
+  const currentItems = activeTab === "controle" ? controleItems : activeTab === "dashboards" ? dashboardsItems : operacoesItems;
+  const filteredItems = (currentItems as NavItem[]).filter((item) => {
     if (item.adminOnly && !isAdmin && !isCeo) return false;
     return true;
   });
@@ -275,7 +286,7 @@ export function BoardLayout({ children }: BoardLayoutProps) {
   });
 
   const roleLabel = isMasterAdmin ? "Master Admin" : isCeo ? "CEO" : isAnyGestor ? "Gestor" : isAdmin ? "Admin" : "Operador";
-  const areaLabel = activeTab === "dados" ? "Dados Mestres" : activeTab === "dashboards" ? "Dashboards" : "Operações";
+  const areaLabel = activeTab === "controle" ? "Controle" : activeTab === "dashboards" ? "Dashboards" : "Operações";
 
   const SidebarContent = () => (
     <>
@@ -288,33 +299,9 @@ export function BoardLayout({ children }: BoardLayoutProps) {
         </div>
       </div>
 
-      {/* Tab Switcher */}
+      {/* Tab Switcher — order: Dash → Operações → Controle */}
       <div className="px-3 pt-3 pb-1">
         <div className="flex rounded-lg bg-muted p-1 gap-1">
-          <button
-            onClick={() => setActiveTab("operacoes")}
-            className={cn(
-              "flex-1 flex items-center justify-center gap-1 rounded-md px-1.5 py-1.5 text-[10px] font-medium transition-all",
-              activeTab === "operacoes"
-                ? "bg-background text-foreground shadow-sm"
-                : "text-muted-foreground hover:text-foreground"
-            )}
-          >
-            <Layers className="h-3 w-3 flex-shrink-0" />
-            Operações
-          </button>
-          <button
-            onClick={() => setActiveTab("dados")}
-            className={cn(
-              "flex-1 flex items-center justify-center gap-1 rounded-md px-1.5 py-1.5 text-[10px] font-medium transition-all",
-              activeTab === "dados"
-                ? "bg-background text-foreground shadow-sm"
-                : "text-muted-foreground hover:text-foreground"
-            )}
-          >
-            <Database className="h-3 w-3 flex-shrink-0" />
-            Dados
-          </button>
           <button
             onClick={() => setActiveTab("dashboards")}
             className={cn(
@@ -327,32 +314,62 @@ export function BoardLayout({ children }: BoardLayoutProps) {
             <BarChart3 className="h-3 w-3 flex-shrink-0" />
             Dash
           </button>
+          <button
+            onClick={() => setActiveTab("operacoes")}
+            className={cn(
+              "flex-1 flex items-center justify-center gap-1 rounded-md px-1.5 py-1.5 text-[10px] font-medium transition-all",
+              activeTab === "operacoes"
+                ? "bg-background text-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground"
+            )}
+          >
+            <Layers className="h-3 w-3 flex-shrink-0" />
+            Ops
+          </button>
+          <button
+            onClick={() => setActiveTab("controle")}
+            className={cn(
+              "flex-1 flex items-center justify-center gap-1 rounded-md px-1.5 py-1.5 text-[10px] font-medium transition-all",
+              activeTab === "controle"
+                ? "bg-background text-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground"
+            )}
+          >
+            <Cog className="h-3 w-3 flex-shrink-0" />
+            Controle
+          </button>
         </div>
       </div>
 
       {/* Navigation */}
       <nav className="flex flex-col gap-0.5 p-3 flex-1 overflow-y-auto pt-2">
         <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider px-3 mb-1">
-          {activeTab === "dados" ? "Dados Mestres" : activeTab === "dashboards" ? "Dashboards" : "Operações"}
+          {activeTab === "controle" ? "Controle" : activeTab === "dashboards" ? "Dashboards" : "Operações"}
         </p>
         {filteredItems.map((item) => {
           const isActive = isItemActive(item.href);
           return (
-            <Link
-              key={item.href}
-              to={item.href}
-              onClick={() => setSidebarOpen(false)}
-              className={cn(
-                "flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition-all duration-200",
-                isActive
-                  ? "bg-area-controle-soft text-area-controle font-medium"
-                  : "text-muted-foreground hover:bg-secondary hover:text-foreground"
+            <React.Fragment key={item.href}>
+              {(item as NavItem).sectionLabel && (
+                <p className="text-[9px] font-semibold text-muted-foreground/60 uppercase tracking-wider px-3 mt-3 mb-0.5">
+                  {(item as NavItem).sectionLabel}
+                </p>
               )}
-            >
-              <item.icon className="h-4 w-4 flex-shrink-0" />
-              <span className="truncate">{item.label}</span>
-              {isActive && <ChevronRight className="h-3.5 w-3.5 ml-auto text-area-controle flex-shrink-0" />}
-            </Link>
+              <Link
+                to={item.href}
+                onClick={() => setSidebarOpen(false)}
+                className={cn(
+                  "flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition-all duration-200",
+                  isActive
+                    ? "bg-area-controle-soft text-area-controle font-medium"
+                    : "text-muted-foreground hover:bg-secondary hover:text-foreground"
+                )}
+              >
+                <item.icon className="h-4 w-4 flex-shrink-0" />
+                <span className="truncate">{item.label}</span>
+                {isActive && <ChevronRight className="h-3.5 w-3.5 ml-auto text-area-controle flex-shrink-0" />}
+              </Link>
+            </React.Fragment>
           );
         })}
 

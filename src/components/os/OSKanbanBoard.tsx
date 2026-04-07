@@ -1,102 +1,96 @@
 import React from "react";
-import { cn } from "@/lib/utils";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
-import { Plus } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { ServiceOrder, DepartmentType, DEPARTMENT_INFO, DEPARTMENT_ORDER } from "@/types/os";
 import { OSCard } from "./OSCard";
+import type { ServiceOrderCarboVAPT, OsStageConfig } from "@/types/os";
+import { OS_KANBAN_STAGES } from "@/types/os";
 
 interface OSKanbanBoardProps {
-  orders: ServiceOrder[];
-  onOrderClick: (order: ServiceOrder) => void;
-  onAddOrder?: (department: DepartmentType) => void;
-  canAddOrder?: boolean;
-  className?: string;
+  orders: ServiceOrderCarboVAPT[];
+  onAdvance?: (order: ServiceOrderCarboVAPT) => void;
+  onCancel?: (order: ServiceOrderCarboVAPT) => void;
+  onCardClick?: (order: ServiceOrderCarboVAPT) => void;
 }
 
 export function OSKanbanBoard({
   orders,
-  onOrderClick,
-  onAddOrder,
-  canAddOrder = false,
-  className,
+  onAdvance,
+  onCancel,
+  onCardClick,
 }: OSKanbanBoardProps) {
-  // Group orders by current department
-  const ordersByDepartment = DEPARTMENT_ORDER.reduce((acc, dept) => {
-    acc[dept] = orders.filter((o) => o.current_department === dept);
+  // Group orders by os_stage
+  const ordersByStage = OS_KANBAN_STAGES.reduce((acc, stage) => {
+    acc[stage.id] = orders.filter((o) => o.os_stage === stage.id);
     return acc;
-  }, {} as Record<DepartmentType, ServiceOrder[]>);
+  }, {} as Record<string, ServiceOrderCarboVAPT[]>);
 
   return (
-    <div className={cn("flex gap-4 overflow-x-auto pb-4", className)}>
-      {DEPARTMENT_ORDER.map((dept) => {
-        const info = DEPARTMENT_INFO[dept];
-        const deptOrders = ordersByDepartment[dept];
-        const activeCount = deptOrders.filter((o) => o.status === "active").length;
+    <div className="flex gap-3 overflow-x-auto pb-4 min-h-[500px]">
+      {OS_KANBAN_STAGES.map((stage) => (
+        <OSKanbanColumn
+          key={stage.id}
+          stage={stage}
+          orders={ordersByStage[stage.id] ?? []}
+          onAdvance={onAdvance}
+          onCancel={onCancel}
+          onCardClick={onCardClick}
+        />
+      ))}
+    </div>
+  );
+}
 
-        return (
-          <div
-            key={dept}
-            className="flex-shrink-0 w-80 bg-muted/30 rounded-xl border border-border"
-          >
-            {/* Column header */}
-            <div
-              className="sticky top-0 p-4 border-b border-border bg-background/80 backdrop-blur-sm rounded-t-xl"
-              style={{ borderTopColor: info.color, borderTopWidth: 3 }}
-            >
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <span className="text-xl">{info.icon}</span>
-                  <h3 className="font-semibold text-board-text">{info.name}</h3>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Badge variant="secondary" className="text-xs">
-                    {deptOrders.length}
-                  </Badge>
-                  {activeCount > 0 && (
-                    <Badge className="text-xs bg-success">
-                      {activeCount} ativas
-                    </Badge>
-                  )}
-                </div>
-              </div>
-
-              {/* Add button for managers */}
-              {canAddOrder && dept === "venda" && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="w-full mt-3"
-                  onClick={() => onAddOrder?.(dept)}
-                >
-                  <Plus className="h-4 w-4 mr-1" />
-                  Nova OP
-                </Button>
-              )}
-            </div>
-
-            {/* Cards container */}
-            <ScrollArea className="h-[calc(100vh-280px)]">
-              <div className="p-3 space-y-3">
-                {deptOrders.length === 0 ? (
-                  <div className="text-center py-8 text-muted-foreground text-sm">
-                    Nenhuma OP nesta etapa
-                  </div>
-                ) : (
-                  deptOrders.map((order) => (
-                    <OSCard
-                      key={order.id}
-                      order={order}
-                      onClick={() => onOrderClick(order)}
-                    />
-                  ))
-                )}
-              </div>
-            </ScrollArea>
+function OSKanbanColumn({
+  stage,
+  orders,
+  onAdvance,
+  onCancel,
+  onCardClick,
+}: {
+  stage: OsStageConfig;
+  orders: ServiceOrderCarboVAPT[];
+  onAdvance?: (order: ServiceOrderCarboVAPT) => void;
+  onCancel?: (order: ServiceOrderCarboVAPT) => void;
+  onCardClick?: (order: ServiceOrderCarboVAPT) => void;
+}) {
+  return (
+    <div className="flex-shrink-0 w-72 bg-muted/30 rounded-xl border border-border">
+      {/* Column header */}
+      <div
+        className="sticky top-0 p-3 border-b border-border bg-background/80 backdrop-blur-sm rounded-t-xl"
+        style={{ borderTopColor: stage.color, borderTopWidth: 3 }}
+      >
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className="text-base">{stage.emoji}</span>
+            <h3 className="font-semibold text-sm">{stage.label}</h3>
           </div>
-        );
-      })}
+          <Badge variant="secondary" className="text-xs">
+            {orders.length}
+          </Badge>
+        </div>
+      </div>
+
+      {/* Cards */}
+      <ScrollArea className="h-[calc(100vh-320px)]">
+        <div className="p-2 space-y-2">
+          {orders.length === 0 ? (
+            <p className="text-xs text-muted-foreground text-center py-8 italic">
+              Nenhuma OS nesta etapa
+            </p>
+          ) : (
+            orders.map((order) => (
+              <OSCard
+                key={order.id}
+                order={order}
+                onAdvance={onAdvance}
+                onCancel={onCancel}
+                onClick={onCardClick}
+              />
+            ))
+          )}
+        </div>
+      </ScrollArea>
     </div>
   );
 }

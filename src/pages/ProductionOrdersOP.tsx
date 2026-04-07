@@ -1,7 +1,7 @@
 import { useState, useMemo } from "react";
 import { BoardLayout } from "@/components/layouts/BoardLayout";
 import { Button } from "@/components/ui/button";
-import { Loader2, Factory, Plus } from "lucide-react";
+import { Loader2, Factory, Plus, LayoutGrid, List } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import {
   useProductionOrdersOP,
@@ -9,6 +9,7 @@ import {
 } from "@/hooks/useProductionOrders";
 import { OPFilters } from "@/components/production-orders/OPFilters";
 import { OPTable } from "@/components/production-orders/OPTable";
+import { OPKanbanBoard } from "@/components/production-orders/OPKanbanBoard";
 import { CreateOPDialog } from "@/components/production-orders/CreateOPDialog";
 import { EditOPDialog } from "@/components/production-orders/EditOPDialog";
 import { DeleteOPDialog } from "@/components/production-orders/DeleteOPDialog";
@@ -18,6 +19,7 @@ import { OPKpiCards } from "@/components/production-orders/OPKpiCards";
 export default function ProductionOrdersOP() {
   const { isManager, isAdmin } = useAuth();
   const canManage = isManager || isAdmin;
+  const [viewMode, setViewMode] = useState<"list" | "kanban">("list");
 
   const { data: orders = [], isLoading } = useProductionOrdersOP();
 
@@ -89,12 +91,39 @@ export default function ProductionOrdersOP() {
               Gestão e acompanhamento de OPs
             </p>
           </div>
-          {canManage && (
-            <Button onClick={() => setIsCreateOpen(true)} className="gap-2">
-              <Plus className="h-4 w-4" />
-              Nova OP
-            </Button>
-          )}
+          <div className="flex items-center gap-2">
+            {/* View toggle */}
+            <div className="flex rounded-lg border overflow-hidden">
+              <button
+                onClick={() => setViewMode("list")}
+                className={`px-3 py-2 text-xs flex items-center gap-1.5 transition-colors ${
+                  viewMode === "list"
+                    ? "bg-primary text-primary-foreground"
+                    : "hover:bg-muted text-muted-foreground"
+                }`}
+              >
+                <List className="h-3.5 w-3.5" />
+                Lista
+              </button>
+              <button
+                onClick={() => setViewMode("kanban")}
+                className={`px-3 py-2 text-xs flex items-center gap-1.5 border-l transition-colors ${
+                  viewMode === "kanban"
+                    ? "bg-primary text-primary-foreground"
+                    : "hover:bg-muted text-muted-foreground"
+                }`}
+              >
+                <LayoutGrid className="h-3.5 w-3.5" />
+                Kanban
+              </button>
+            </div>
+            {canManage && (
+              <Button onClick={() => setIsCreateOpen(true)} className="gap-2">
+                <Plus className="h-4 w-4" />
+                Nova OP
+              </Button>
+            )}
+          </div>
         </div>
 
         {/* KPIs — Confirmation metrics (last 30 days) */}
@@ -110,8 +139,13 @@ export default function ProductionOrdersOP() {
           onPriorityChange={setPriorityFilter}
         />
 
-        {/* Table */}
-        {filteredOrders.length === 0 ? (
+        {/* Kanban or Table */}
+        {viewMode === "kanban" ? (
+          <OPKanbanBoard
+            orders={filteredOrders}
+            onCardClick={(order) => setSelectedOrder(order)}
+          />
+        ) : filteredOrders.length === 0 ? (
           <div className="text-center py-16 text-muted-foreground">
             <Factory className="h-12 w-12 mx-auto mb-4 opacity-30" />
             <p className="text-lg font-medium">Nenhuma OP encontrada</p>
