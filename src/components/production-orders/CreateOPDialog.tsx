@@ -1,4 +1,5 @@
 import { useForm } from "react-hook-form";
+import { DatePickerInput } from "@/components/ui/date-picker-input";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import {
@@ -201,7 +202,11 @@ export function CreateOPDialog({ open, onOpenChange }: CreateOPDialogProps) {
           {/* Data de Necessidade */}
           <div className="space-y-2">
             <Label>Data de Necessidade</Label>
-            <Input type="date" {...register("need_date")} />
+            <DatePickerInput
+              value={watch("need_date") ?? ""}
+              onChange={v => setValue("need_date", v)}
+              placeholder="Selecionar data"
+            />
           </div>
 
           {/* Observações */}

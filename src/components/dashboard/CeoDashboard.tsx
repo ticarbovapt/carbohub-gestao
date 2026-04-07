@@ -30,6 +30,7 @@ import {
 import { OperationalFlowMap } from "@/components/home/OperationalFlowMap";
 import { TerritorialMap } from "@/components/maps/TerritorialMap";
 import { Link } from "react-router-dom";
+import { DatePickerInput } from "@/components/ui/date-picker-input";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, PieChart, Pie, Cell } from "recharts";
 
 /**
@@ -440,18 +441,18 @@ export function CeoDashboard() {
               ))}
               {salesPeriod === "periodo" && (
                 <div className="flex items-center gap-1.5 ml-1">
-                  <input
-                    type="date"
+                  <DatePickerInput
                     value={periodFrom}
-                    onChange={e => setPeriodFrom(e.target.value)}
-                    className="h-6 text-[11px] border border-border rounded px-1.5 bg-background"
+                    onChange={setPeriodFrom}
+                    placeholder="De"
+                    className="h-6 text-[11px] px-2"
                   />
                   <span className="text-[11px] text-muted-foreground">até</span>
-                  <input
-                    type="date"
+                  <DatePickerInput
                     value={periodTo}
-                    onChange={e => setPeriodTo(e.target.value)}
-                    className="h-6 text-[11px] border border-border rounded px-1.5 bg-background"
+                    onChange={setPeriodTo}
+                    placeholder="Até"
+                    className="h-6 text-[11px] px-2"
                   />
                 </div>
               )}

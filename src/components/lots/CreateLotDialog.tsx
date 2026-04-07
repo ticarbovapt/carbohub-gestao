@@ -1,4 +1,5 @@
 import { useForm } from "react-hook-form";
+import { DatePickerInput } from "@/components/ui/date-picker-input";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import {
@@ -148,11 +149,19 @@ export function CreateLotDialog({ open, onOpenChange }: CreateLotDialogProps) {
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label>Data de Recebimento</Label>
-              <Input type="date" {...register("received_at")} />
+              <DatePickerInput
+                value={watch("received_at") ?? ""}
+                onChange={v => setValue("received_at", v)}
+                placeholder="Selecionar data"
+              />
             </div>
             <div className="space-y-2">
               <Label>Data de Validade</Label>
-              <Input type="date" {...register("expired_at")} />
+              <DatePickerInput
+                value={watch("expired_at") ?? ""}
+                onChange={v => setValue("expired_at", v)}
+                placeholder="Selecionar data"
+              />
             </div>
           </div>
 

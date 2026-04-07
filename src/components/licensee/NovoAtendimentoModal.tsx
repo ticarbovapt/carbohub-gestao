@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { DatePickerInput } from "@/components/ui/date-picker-input";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -405,7 +406,11 @@ export function NovoAtendimentoModal({ open, onClose, licenseeId }: Props) {
             {servico.is_pre_sale && (
               <div>
                 <Label>Data preferencial</Label>
-                <Input type="date" value={servico.preferred_date} onChange={e => setServico(s => ({ ...s, preferred_date: e.target.value }))} />
+                <DatePickerInput
+                  value={servico.preferred_date}
+                  onChange={v => setServico(s => ({ ...s, preferred_date: v }))}
+                  placeholder="Selecionar data preferencial"
+                />
               </div>
             )}
 

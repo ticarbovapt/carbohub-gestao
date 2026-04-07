@@ -1,0 +1,90 @@
+-- ============================================================
+-- M15 — Atualizar vendedor_name em carboze_orders
+-- Fonte: relatorio_pedidos - V02.xls
+-- 81 NFs mapeadas | 10 vendedores
+-- ============================================================
+
+UPDATE carboze_orders SET vendedor_name = 'Thelis' WHERE order_number = '000089';
+UPDATE carboze_orders SET vendedor_name = 'Thelis' WHERE order_number = '000090';
+UPDATE carboze_orders SET vendedor_name = 'Leandro' WHERE order_number = '000098';
+UPDATE carboze_orders SET vendedor_name = 'Márcio Vannucci' WHERE order_number = '000099';
+UPDATE carboze_orders SET vendedor_name = 'Thelis' WHERE order_number = '000100';
+UPDATE carboze_orders SET vendedor_name = 'Thelis' WHERE order_number = '000101';
+UPDATE carboze_orders SET vendedor_name = 'Thelis' WHERE order_number = '000102';
+UPDATE carboze_orders SET vendedor_name = 'Thelis' WHERE order_number = '000103';
+UPDATE carboze_orders SET vendedor_name = 'Thelis' WHERE order_number = '000106';
+UPDATE carboze_orders SET vendedor_name = 'Thelis' WHERE order_number = '000107';
+UPDATE carboze_orders SET vendedor_name = 'Thelis' WHERE order_number = '000110';
+UPDATE carboze_orders SET vendedor_name = 'Márcio Vannucci' WHERE order_number = '000111';
+UPDATE carboze_orders SET vendedor_name = 'Thelis' WHERE order_number = '000112';
+UPDATE carboze_orders SET vendedor_name = 'Rodrigo Torquato' WHERE order_number = '000113';
+UPDATE carboze_orders SET vendedor_name = 'Thelis' WHERE order_number = '000114';
+UPDATE carboze_orders SET vendedor_name = 'Thelis' WHERE order_number = '000115';
+UPDATE carboze_orders SET vendedor_name = 'Márcio Vannucci' WHERE order_number = '000116';
+UPDATE carboze_orders SET vendedor_name = 'Thelis' WHERE order_number = '000117';
+UPDATE carboze_orders SET vendedor_name = 'Thelis' WHERE order_number = '000118';
+UPDATE carboze_orders SET vendedor_name = 'Thelis' WHERE order_number = '000119';
+UPDATE carboze_orders SET vendedor_name = 'Thelis' WHERE order_number = '000121';
+UPDATE carboze_orders SET vendedor_name = 'Rodrigo Torquato' WHERE order_number = '000122';
+UPDATE carboze_orders SET vendedor_name = 'Rodrigo Torquato' WHERE order_number = '000123';
+UPDATE carboze_orders SET vendedor_name = 'Thelis' WHERE order_number = '000124';
+UPDATE carboze_orders SET vendedor_name = 'Thelis' WHERE order_number = '000125';
+UPDATE carboze_orders SET vendedor_name = 'Thelis' WHERE order_number = '000126';
+UPDATE carboze_orders SET vendedor_name = 'Thelis' WHERE order_number = '000127';
+UPDATE carboze_orders SET vendedor_name = 'Lígia' WHERE order_number = '000128';
+UPDATE carboze_orders SET vendedor_name = 'Thelis' WHERE order_number = '000129';
+UPDATE carboze_orders SET vendedor_name = 'Thelis' WHERE order_number = '000130';
+UPDATE carboze_orders SET vendedor_name = 'Thelis' WHERE order_number = '000131';
+UPDATE carboze_orders SET vendedor_name = 'Thelis' WHERE order_number = '000133';
+UPDATE carboze_orders SET vendedor_name = 'Thelis' WHERE order_number = '000134';
+UPDATE carboze_orders SET vendedor_name = 'Thelis' WHERE order_number = '000135';
+UPDATE carboze_orders SET vendedor_name = 'Thelis' WHERE order_number = '000136';
+UPDATE carboze_orders SET vendedor_name = 'Thelis' WHERE order_number = '000140';
+UPDATE carboze_orders SET vendedor_name = 'Márcio Vannucci' WHERE order_number = '000141';
+UPDATE carboze_orders SET vendedor_name = 'Thelis' WHERE order_number = '000142';
+UPDATE carboze_orders SET vendedor_name = 'Lígia' WHERE order_number = '000144';
+UPDATE carboze_orders SET vendedor_name = 'Thelis' WHERE order_number = '000146';
+UPDATE carboze_orders SET vendedor_name = 'Erick Almeida' WHERE order_number = '000147';
+UPDATE carboze_orders SET vendedor_name = 'Erick Almeida' WHERE order_number = '000148';
+UPDATE carboze_orders SET vendedor_name = 'Thelis' WHERE order_number = '000150';
+UPDATE carboze_orders SET vendedor_name = 'Márcio Vannucci' WHERE order_number = '000152';
+UPDATE carboze_orders SET vendedor_name = 'Márcio Vannucci' WHERE order_number = '000153';
+UPDATE carboze_orders SET vendedor_name = 'Rodrigo Torquato' WHERE order_number = '000154';
+UPDATE carboze_orders SET vendedor_name = 'Rodrigo Torquato' WHERE order_number = '000155';
+UPDATE carboze_orders SET vendedor_name = 'Erick Almeida' WHERE order_number = '000156';
+UPDATE carboze_orders SET vendedor_name = 'Thelis' WHERE order_number = '000158';
+UPDATE carboze_orders SET vendedor_name = 'Lígia' WHERE order_number = '000159';
+UPDATE carboze_orders SET vendedor_name = 'Thelis' WHERE order_number = '000161';
+UPDATE carboze_orders SET vendedor_name = 'Thelis' WHERE order_number = '000162';
+UPDATE carboze_orders SET vendedor_name = 'Rodrigo Torquato' WHERE order_number = '000163';
+UPDATE carboze_orders SET vendedor_name = 'Rodrigo Torquato' WHERE order_number = '000165';
+UPDATE carboze_orders SET vendedor_name = 'Erick Almeida' WHERE order_number = '000167';
+UPDATE carboze_orders SET vendedor_name = 'Edson França' WHERE order_number = '000169';
+UPDATE carboze_orders SET vendedor_name = 'Thiago Damasceno' WHERE order_number = '000170';
+UPDATE carboze_orders SET vendedor_name = 'Thelis' WHERE order_number = '000171';
+UPDATE carboze_orders SET vendedor_name = 'Ivo Scarpim' WHERE order_number = '000172';
+UPDATE carboze_orders SET vendedor_name = 'Márcio Vannucci' WHERE order_number = '000173';
+UPDATE carboze_orders SET vendedor_name = 'Rodrigo Torquato' WHERE order_number = '000174';
+UPDATE carboze_orders SET vendedor_name = 'Thelis' WHERE order_number = '000175';
+UPDATE carboze_orders SET vendedor_name = 'Thelis' WHERE order_number = '000176';
+UPDATE carboze_orders SET vendedor_name = 'Márcio Vannucci' WHERE order_number = '000177';
+UPDATE carboze_orders SET vendedor_name = 'Erick Almeida' WHERE order_number = '000178';
+UPDATE carboze_orders SET vendedor_name = 'Thelis' WHERE order_number = '000179';
+UPDATE carboze_orders SET vendedor_name = 'Thelis' WHERE order_number = '000180';
+UPDATE carboze_orders SET vendedor_name = 'Rodrigo Torquato' WHERE order_number = '000181';
+UPDATE carboze_orders SET vendedor_name = 'Thiago Damasceno' WHERE order_number = '000183';
+UPDATE carboze_orders SET vendedor_name = 'Erick Almeida' WHERE order_number = '000185';
+UPDATE carboze_orders SET vendedor_name = 'Erick Almeida' WHERE order_number = '000186';
+UPDATE carboze_orders SET vendedor_name = 'Márcio Vannucci' WHERE order_number = '000188';
+UPDATE carboze_orders SET vendedor_name = 'Ivo Scarpim' WHERE order_number = '000189';
+UPDATE carboze_orders SET vendedor_name = 'Rodrigo Torquato' WHERE order_number = '000190';
+UPDATE carboze_orders SET vendedor_name = 'Ivo Scarpim' WHERE order_number = '000191';
+UPDATE carboze_orders SET vendedor_name = 'Thelis' WHERE order_number = '000192';
+UPDATE carboze_orders SET vendedor_name = 'Erick Almeida' WHERE order_number = '000193';
+UPDATE carboze_orders SET vendedor_name = 'Erick Almeida' WHERE order_number = '000194';
+UPDATE carboze_orders SET vendedor_name = 'Erick Almeida' WHERE order_number = '000195';
+UPDATE carboze_orders SET vendedor_name = 'Márcio Vannucci' WHERE order_number = '000196';
+UPDATE carboze_orders SET vendedor_name = 'Erick Almeida' WHERE order_number = '000199';
+
+-- Verificação
+SELECT order_number, customer_name, vendedor_name FROM carboze_orders WHERE vendedor_name IS NOT NULL ORDER BY order_number;
