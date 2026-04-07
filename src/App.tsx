@@ -84,6 +84,7 @@ import CarboVAPTConfirmation from "./pages/licensee/CarboVAPTConfirmation";
 import LicenseeAtendimento from "./pages/licensee/LicenseeAtendimento";
 import LicenseeClientes from "./pages/licensee/LicenseeClientes";
 import LicenseeReagentes from "./pages/licensee/LicenseeReagentes";
+import LicenseeVapt from "./pages/licensee/LicenseeVapt";
 import OpsAlerts from "./pages/OpsAlerts";
 
 // PDV Pages
@@ -485,7 +486,7 @@ function AnimatedRoutes() {
             path="/licensee/vapt"
             element={
               <ProtectedRoute>
-                <ServiceCatalog operationType="carbo_vapt" />
+                <LicenseeVapt />
               </ProtectedRoute>
             }
           />

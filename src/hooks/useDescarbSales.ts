@@ -6,11 +6,11 @@ export type Modality = "P" | "M" | "G" | "G+";
 export type ReagentType = "flex" | "diesel" | "normal";
 export type PaymentType = "credits" | "money" | "card" | "pix" | "invoice" | "indicator" | "carboflix";
 
-export const MODALITY_INFO: Record<Modality, { label: string; desc: string; color: string }> = {
-  P:    { label: "Pequeno",   desc: "Carros compactos (motor até 1.0L)",      color: "#22c55e" },
-  M:    { label: "Médio",     desc: "Carros sedan/hatch (1.0–2.0L)",          color: "#3b82f6" },
-  G:    { label: "Grande",    desc: "SUVs e pickups (acima de 2.0L)",         color: "#f59e0b" },
-  "G+": { label: "Grande+",   desc: "Caminhões e veículos pesados",           color: "#ef4444" },
+export const MODALITY_INFO: Record<Modality, { label: string; desc: string; color: string; gradient: string }> = {
+  P:    { label: "Veículos Leves",    desc: "Carros compactos e sedãs",           color: "#22c55e", gradient: "from-green-900/80 to-green-700/60" },
+  M:    { label: "Veículos Médios",   desc: "Pickups, SUVs e utilitários",        color: "#3b82f6", gradient: "from-blue-900/80 to-blue-700/60" },
+  G:    { label: "Veículos Grandes",  desc: "Caminhões e ônibus",                 color: "#f59e0b", gradient: "from-amber-900/80 to-amber-700/60" },
+  "G+": { label: "Veículos Especiais",desc: "Embarcações e veículos especiais",   color: "#ef4444", gradient: "from-red-900/80 to-red-700/60" },
 };
 
 export const PAYMENT_LABELS: Record<PaymentType, string> = {
@@ -48,6 +48,12 @@ export interface DescarbSale {
   carboflix_cert_num: string | null;
   certificate_issued: boolean;
   notes: string | null;
+  // Sprint E
+  operador_name: string | null;
+  indicador_name: string | null;
+  machine_starts_used: number;
+  had_restart: boolean;
+  restart_reason: string | null;
   created_by: string | null;
   created_at: string;
   updated_at: string;
@@ -78,7 +84,7 @@ export interface CreateSalePayload {
   client_id: string | null;
   vehicle_id: string | null;
   modality: Modality;
-  reagent_type: ReagentType;
+  reagent_type?: ReagentType;
   reagent_qty_used: number;
   payment_type: PaymentType;
   total_value: number;
@@ -87,6 +93,12 @@ export interface CreateSalePayload {
   pre_sale_status?: string | null;
   preferred_date?: string | null;
   notes?: string | null;
+  // Sprint E
+  operador_name?: string | null;
+  indicador_name?: string | null;
+  machine_starts_used?: number;
+  had_restart?: boolean;
+  restart_reason?: string | null;
 }
 
 export function useCreateDescarbSale() {
@@ -101,6 +113,12 @@ export function useCreateDescarbSale() {
         .from("descarb_sales")
         .insert({
           ...payload,
+          reagent_type: payload.reagent_type ?? "flex",
+          machine_starts_used: payload.machine_starts_used ?? 1,
+          had_restart: payload.had_restart ?? false,
+          restart_reason: payload.restart_reason ?? null,
+          operador_name: payload.operador_name ?? null,
+          indicador_name: payload.indicador_name ?? null,
           created_by: auth.user?.id,
           executed_at: payload.is_pre_sale ? null : new Date().toISOString(),
           pre_sale_status: payload.is_pre_sale ? "NOT" : null,
