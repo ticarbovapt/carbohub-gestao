@@ -84,6 +84,7 @@ import CarboVAPTConfirmation from "./pages/licensee/CarboVAPTConfirmation";
 import LicenseeAtendimento from "./pages/licensee/LicenseeAtendimento";
 import LicenseeClientes from "./pages/licensee/LicenseeClientes";
 import LicenseeReagentes from "./pages/licensee/LicenseeReagentes";
+import OpsAlerts from "./pages/OpsAlerts";
 
 // PDV Pages
 import { PDVLayout } from "./components/layouts/PDVLayout";
@@ -580,6 +581,16 @@ function AnimatedRoutes() {
             element={
               <ProtectedRoute>
                 <BlingIntegration />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* CarboOPS */}
+          <Route
+            path="/ops/alerts"
+            element={
+              <ProtectedRoute>
+                <OpsAlerts />
               </ProtectedRoute>
             }
           />

@@ -1,5 +1,6 @@
 import React, { ReactNode, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
+import { useOpsAlertsBadge } from "@/hooks/useOpsAlerts";
 import {
   LayoutDashboard,
   ClipboardList,
@@ -32,6 +33,7 @@ import {
   Star,
   TrendingUp,
   Network,
+  Bell,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -149,13 +151,14 @@ const dashboardsItems: NavItem[] = [
 
 const operacoesItems: NavItem[] = [
   { href: "/production-orders", label: "Ordens de Produção (OP)", icon: Factory,       sectionLabel: "Produção" },
-  { href: "/os",               label: "Ordens de Serviço (OS)",   icon: ClipboardList, sectionLabel: "Descarbonização" },
-  { href: "/crm",              label: "CRM — Funis de Venda",     icon: Target,        sectionLabel: "Comercial" },
-  { href: "/orders",           label: "Pedidos (RV)",             icon: ShoppingCart },
-  { href: "/sales-targets",    label: "Metas de Vendas",          icon: TrendingUp },
-  { href: "/financeiro",       label: "Financeiro",               icon: Wallet,        sectionLabel: "Financeiro & Supply" },
-  { href: "/suprimentos",      label: "Suprimentos",              icon: Package },
-  { href: "/logistics",        label: "Logística",                icon: Truck },
+  { href: "/os",                label: "Ordens de Serviço (OS)",  icon: ClipboardList, sectionLabel: "Descarbonização" },
+  { href: "/ops/alerts",        label: "Central de Alertas",      icon: Bell,          sectionLabel: "CarboOPS" },
+  { href: "/crm",               label: "CRM — Funis de Venda",    icon: Target,        sectionLabel: "Comercial" },
+  { href: "/orders",            label: "Pedidos (RV)",            icon: ShoppingCart },
+  { href: "/sales-targets",     label: "Metas de Vendas",         icon: TrendingUp },
+  { href: "/financeiro",        label: "Financeiro",              icon: Wallet,        sectionLabel: "Financeiro & Supply" },
+  { href: "/suprimentos",       label: "Suprimentos",             icon: Package },
+  { href: "/logistics",         label: "Logística",               icon: Truck },
 ];
 
 const globalItems = [
@@ -195,6 +198,8 @@ const ROUTE_LABELS: Record<string, string> = {
   lots: "Lotes / Qualidade",
   skus: "SKUs",
   integrations: "Integrações",
+  "ops": "CarboOPS",
+  "alerts": "Central de Alertas",
   bling: "Bling ERP",
   "production-orders": "Ordens de Produção",
   ops: "Inteligência",
@@ -247,6 +252,7 @@ export function BoardLayout({ children }: BoardLayoutProps) {
   const { isAdmin, profile, signOut, passwordMustChange, isCeo, isAnyGestor, carboRoles, isMasterAdmin, isGestorFin } = useAuth();
   const isMobile = useIsMobile();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const { data: alertsBadge = 0 } = useOpsAlertsBadge();
 
   // Determine active tab from route
   const isDashboardRoute = location.pathname.startsWith("/dashboards") ||
@@ -367,7 +373,13 @@ export function BoardLayout({ children }: BoardLayoutProps) {
               >
                 <item.icon className="h-4 w-4 flex-shrink-0" />
                 <span className="truncate">{item.label}</span>
-                {isActive && <ChevronRight className="h-3.5 w-3.5 ml-auto text-area-controle flex-shrink-0" />}
+                {item.href === "/ops/alerts" && alertsBadge > 0 && (
+                  <span className="ml-auto flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[9px] font-bold text-white flex-shrink-0">
+                    {alertsBadge > 99 ? "99+" : alertsBadge}
+                  </span>
+                )}
+                {isActive && alertsBadge === 0 && <ChevronRight className="h-3.5 w-3.5 ml-auto text-area-controle flex-shrink-0" />}
+                {isActive && alertsBadge > 0 && item.href !== "/ops/alerts" && <ChevronRight className="h-3.5 w-3.5 ml-auto text-area-controle flex-shrink-0" />}
               </Link>
             </React.Fragment>
           );
