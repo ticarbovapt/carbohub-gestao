@@ -33,9 +33,11 @@ export default function Logistics() {
 
   const [freightResult, setFreightResult] = useState<FreightQuoteResult | null>(null);
   const [freightMeta, setFreightMeta] = useState<{
-    to_cep: string;
+    to_cep:     string;
+    to_city?:   string;
+    to_state?:  string;
     productRef: string;
-    quantity: number;
+    quantity:   number;
   } | null>(null);
 
   const handleAdvance = (id: string, nextStatus: ShipmentStatus) => {
@@ -43,14 +45,18 @@ export default function Logistics() {
   };
 
   const handleCalculate = async (payload: {
-    to_cep: string;
-    products: import("@/hooks/useFreightQuote").FreightProduct[];
+    to_cep:     string;
+    products:   import("@/hooks/useFreightQuote").FreightProduct[];
     productRef: string;
-    quantity: number;
+    quantity:   number;
+    to_city?:   string;
+    to_state?:  string;
   }) => {
     setFreightResult(null);
     setFreightMeta({
       to_cep:     payload.to_cep,
+      to_city:    payload.to_city,
+      to_state:   payload.to_state,
       productRef: payload.productRef,
       quantity:   payload.quantity,
     });
@@ -65,6 +71,8 @@ export default function Logistics() {
     if (!freightMeta) return;
     saveFreightQuote.mutate({
       to_cep:           freightMeta.to_cep,
+      to_city:          freightMeta.to_city,
+      to_state:         freightMeta.to_state,
       product_ref:      freightMeta.productRef,
       quantity:         freightMeta.quantity,
       carriers:         freightResult?.carriers ?? [],

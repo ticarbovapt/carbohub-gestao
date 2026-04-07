@@ -42,6 +42,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { DatePickerInput } from "@/components/ui/date-picker-input";
 import { useOrders, useOrderStats, OrderStatus, ORDER_STATUS_LABELS, ORDER_TYPE_LABELS, CarbozeOrder, OrderItem } from "@/hooks/useCarbozeOrders";
 import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
@@ -372,31 +373,19 @@ export default function Orders() {
             {/* Date range filter */}
             <div className="flex items-center gap-2">
               <Calendar className="h-4 w-4 text-muted-foreground shrink-0" />
-              <Input
-                type="date"
-                className="h-8 w-36 rounded-lg text-xs"
+              <DatePickerInput
                 value={dateFrom}
-                onChange={(e) => setDateFrom(e.target.value)}
+                onChange={setDateFrom}
                 placeholder="De"
+                className="w-36"
               />
               <span className="text-xs text-muted-foreground">até</span>
-              <Input
-                type="date"
-                className="h-8 w-36 rounded-lg text-xs"
+              <DatePickerInput
                 value={dateTo}
-                onChange={(e) => setDateTo(e.target.value)}
+                onChange={setDateTo}
                 placeholder="Até"
+                className="w-36"
               />
-              {(dateFrom || dateTo) && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-8 px-2 text-xs text-muted-foreground"
-                  onClick={() => { setDateFrom(""); setDateTo(""); }}
-                >
-                  Limpar
-                </Button>
-              )}
             </div>
 
             <div className="w-px h-6 bg-border" />

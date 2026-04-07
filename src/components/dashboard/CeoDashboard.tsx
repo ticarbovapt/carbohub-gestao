@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { LastLoginTab } from "./LastLoginTab";
 import { Clock } from "lucide-react";
@@ -128,40 +129,61 @@ export function CeoDashboard() {
     },
   });
 
-  // Buscar dados de vendas por semana para gráfico
-  const { data: salesData } = useQuery({
-    queryKey: ["ceo-sales-chart"],
-    queryFn: async () => {
-      const thirtyDaysAgo = new Date();
-      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+  // Período do gráfico de vendas
+  const [salesPeriod, setSalesPeriod] = useState<"semanas" | "meses" | "periodo">("semanas");
+  const [periodFrom, setPeriodFrom] = useState("");
+  const [periodTo, setPeriodTo] = useState("");
 
-      const { data, error } = await supabase
+  // Buscar dados de vendas com filtro por período
+  const { data: salesData } = useQuery({
+    queryKey: ["ceo-sales-chart", salesPeriod, periodFrom, periodTo],
+    queryFn: async () => {
+      let from: Date;
+      const now = new Date();
+
+      if (salesPeriod === "semanas") {
+        from = new Date(now);
+        from.setDate(now.getDate() - 56); // 8 semanas
+      } else if (salesPeriod === "meses") {
+        from = new Date(now.getFullYear(), now.getMonth() - 5, 1); // 6 meses
+      } else {
+        // período personalizado
+        if (!periodFrom) { from = new Date(now); from.setDate(now.getDate() - 30); }
+        else from = new Date(periodFrom + "T00:00:00");
+      }
+
+      let query = supabase
         .from("carboze_orders_secure")
         .select("total, created_at")
-        .gte("created_at", thirtyDaysAgo.toISOString())
+        .gte("created_at", from.toISOString())
         .order("created_at", { ascending: true });
 
+      if (salesPeriod === "periodo" && periodTo) {
+        query = query.lte("created_at", periodTo + "T23:59:59");
+      }
+
+      const { data, error } = await query;
       if (error) throw error;
 
-      // Agrupar por semana
-      const weeklyData: Record<string, { vendas: number; receita: number }> = {};
+      const grouped: Record<string, { vendas: number; receita: number }> = {};
+
       data?.forEach((order) => {
         const date = new Date(order.created_at);
-        const weekStart = new Date(date);
-        weekStart.setDate(date.getDate() - date.getDay());
-        const weekKey = weekStart.toLocaleDateString("pt-BR", { day: "2-digit", month: "short" });
-        
-        if (!weeklyData[weekKey]) {
-          weeklyData[weekKey] = { vendas: 0, receita: 0 };
+        let key: string;
+        if (salesPeriod === "meses") {
+          key = date.toLocaleDateString("pt-BR", { month: "short", year: "2-digit" });
+        } else {
+          // group by week
+          const weekStart = new Date(date);
+          weekStart.setDate(date.getDate() - date.getDay());
+          key = weekStart.toLocaleDateString("pt-BR", { day: "2-digit", month: "short" });
         }
-        weeklyData[weekKey].vendas++;
-        weeklyData[weekKey].receita += order.total || 0;
+        if (!grouped[key]) grouped[key] = { vendas: 0, receita: 0 };
+        grouped[key].vendas++;
+        grouped[key].receita += order.total || 0;
       });
 
-      return Object.entries(weeklyData).map(([name, values]) => ({
-        name,
-        ...values,
-      }));
+      return Object.entries(grouped).map(([name, values]) => ({ name, ...values }));
     },
   });
 
@@ -393,11 +415,46 @@ export function CeoDashboard() {
                   <BarChart3 className="h-5 w-5 text-carbo-green" />
                   Performance de Vendas
                 </CardTitle>
-                <CardDescription>Últimos 30 dias por semana</CardDescription>
+                <CardDescription>
+                  {salesPeriod === "semanas" ? "Últimas 8 semanas" : salesPeriod === "meses" ? "Últimos 6 meses" : "Período personalizado"}
+                </CardDescription>
               </div>
               <Button variant="ghost" size="sm" asChild>
-                <Link to="/analytics">Ver detalhes</Link>
+                <Link to="/orders">Ver detalhes</Link>
               </Button>
+            </div>
+            {/* Period filter pills */}
+            <div className="flex items-center gap-1.5 pt-2 flex-wrap">
+              {(["semanas", "meses", "periodo"] as const).map(p => (
+                <button
+                  key={p}
+                  onClick={() => setSalesPeriod(p)}
+                  className={`px-2.5 py-1 rounded-full text-[11px] font-medium transition-colors ${
+                    salesPeriod === p
+                      ? "bg-carbo-green text-white"
+                      : "bg-muted text-muted-foreground hover:bg-muted/80"
+                  }`}
+                >
+                  {p === "semanas" ? "Semanas" : p === "meses" ? "Meses" : "Período"}
+                </button>
+              ))}
+              {salesPeriod === "periodo" && (
+                <div className="flex items-center gap-1.5 ml-1">
+                  <input
+                    type="date"
+                    value={periodFrom}
+                    onChange={e => setPeriodFrom(e.target.value)}
+                    className="h-6 text-[11px] border border-border rounded px-1.5 bg-background"
+                  />
+                  <span className="text-[11px] text-muted-foreground">até</span>
+                  <input
+                    type="date"
+                    value={periodTo}
+                    onChange={e => setPeriodTo(e.target.value)}
+                    className="h-6 text-[11px] border border-border rounded px-1.5 bg-background"
+                  />
+                </div>
+              )}
             </div>
           </CardHeader>
           <CardContent>

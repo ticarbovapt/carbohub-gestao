@@ -1,5 +1,6 @@
 import { useState, useMemo } from "react";
-import { Package, Search, Pencil, Save, X, Warehouse, TrendingUp, TrendingDown, Calendar, BarChart3, Shield, Activity } from "lucide-react";
+import { Package, Search, Pencil, Save, X, Warehouse, TrendingUp, TrendingDown, Calendar, BarChart3, Shield, Activity, Download } from "lucide-react";
+import * as XLSX from "xlsx";
 import { Input } from "@/components/ui/input";
 import { CarboCard, CarboCardContent } from "@/components/ui/carbo-card";
 import { CarboBadge } from "@/components/ui/carbo-badge";
@@ -54,7 +55,7 @@ export function StockOverview() {
   const [reason, setReason] = useState("");
   const createMovement = useCreateStockMovement();
   const qc = useQueryClient();
-  const { user } = useAuth();
+  const { user, isMasterAdmin } = useAuth();
 
   const { data: warehouses } = useQuery({
     queryKey: ["warehouses"],
@@ -97,10 +98,36 @@ export function StockOverview() {
   const { data: movements30d } = useProductMovements30d(productIds);
 
   const filtered = (products || []).filter(p => {
+    if (p.category === "Produto Final") return false;
     if (!search) return true;
     const s = search.toLowerCase();
     return p.name.toLowerCase().includes(s) || p.product_code.toLowerCase().includes(s);
   });
+
+  const handleExport = () => {
+    const rows = filtered.map(p => {
+      const hubStocks = (warehouses || []).map(w => {
+        const ws = warehouseStock?.find(s => s.product_id === p.id && s.warehouse_id === w.id);
+        return { name: w.name, qty: ws?.quantity || 0 };
+      });
+      const totalQty = hubStocks.length > 0 ? hubStocks.reduce((s, h) => s + h.qty, 0) : p.current_stock_qty;
+      const row: Record<string, unknown> = {
+        Código: p.product_code,
+        Nome: p.name,
+        Categoria: p.category || "",
+        "Estoque Total": totalQty,
+        Unidade: p.stock_unit,
+        "Estoque Segurança": p.safety_stock_qty || 0,
+        "Última Atualização": p.stock_updated_at ? new Date(p.stock_updated_at).toLocaleDateString("pt-BR") : "",
+      };
+      hubStocks.forEach(h => { row[`Hub: ${h.name}`] = h.qty; });
+      return row;
+    });
+    const ws = XLSX.utils.json_to_sheet(rows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Estoque");
+    XLSX.writeFile(wb, `estoque_suprimentos_${new Date().toISOString().slice(0, 10)}.xlsx`);
+  };
 
   const openEdit = (p: (typeof products extends (infer T)[] ? T : never), hubId?: string) => {
     const defaultHub = hubId || (warehouses && warehouses.length > 0 ? warehouses[0].id : "");
@@ -233,6 +260,10 @@ export function StockOverview() {
             ))}
           </SelectContent>
         </Select>
+        <Button variant="outline" size="sm" className="gap-1.5 ml-auto" onClick={handleExport}>
+          <Download className="h-4 w-4" />
+          Exportar Excel
+        </Button>
       </div>
 
       {/* Cards */}
@@ -294,14 +325,16 @@ export function StockOverview() {
                         {p.category && <span className="ml-2 font-sans">· {p.category}</span>}
                       </p>
                     </div>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-7 w-7 shrink-0"
-                      onClick={() => openEdit(p)}
-                    >
-                      <Pencil className="h-3.5 w-3.5" />
-                    </Button>
+                    {isMasterAdmin && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 shrink-0"
+                        onClick={() => openEdit(p)}
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                      </Button>
+                    )}
                   </div>
 
                   {/* Central total */}

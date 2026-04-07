@@ -58,6 +58,20 @@ export interface FreightQuoteRecord {
 export const ORIGIN_CEP   = "07100010";
 export const ORIGIN_LABEL = "Guarulhos / SP";
 
+// ── Mock fallback (quando Edge Function não está deployed) ────────────────
+function mockFreightResult(): FreightQuoteResult {
+  return {
+    env: "mock",
+    note: "Edge Function não configurada — dados simulados para demonstração. Siga os passos de deploy para ativar cotações reais.",
+    carriers: [
+      { id: 3, name: "Econômico", company: "Total Express",  price: 15.80, custom_price: 15.80, discount: 0, currency: "BRL", delivery_min: 7,  delivery_max: 12, logo: null },
+      { id: 1, name: "PAC",       company: "Correios",       price: 18.50, custom_price: 18.50, discount: 0, currency: "BRL", delivery_min: 5,  delivery_max: 8,  logo: null },
+      { id: 2, name: "SEDEX",     company: "Correios",       price: 34.20, custom_price: 34.20, discount: 0, currency: "BRL", delivery_min: 1,  delivery_max: 3,  logo: null },
+      { id: 4, name: "Rodoviário",company: "Jamef",          price: 42.00, custom_price: 42.00, discount: 0, currency: "BRL", delivery_min: 3,  delivery_max: 6,  logo: null },
+    ],
+  };
+}
+
 // ── Mutations ──────────────────────────────────────────────────────────────
 
 export function useCalculateFreight() {
@@ -66,15 +80,25 @@ export function useCalculateFreight() {
       to_cep: string;
       products: FreightProduct[];
     }): Promise<FreightQuoteResult> => {
-      const { data, error } = await supabase.functions.invoke("melhor-envio-quote", {
-        body: { to_cep: payload.to_cep, products: payload.products },
-      });
-      if (error) throw new Error(error.message ?? "Erro ao calcular frete");
-      if (data.error) throw new Error(data.error);
-      return data as FreightQuoteResult;
+      try {
+        const { data, error } = await supabase.functions.invoke("melhor-envio-quote", {
+          body: { to_cep: payload.to_cep, products: payload.products },
+        });
+        // Se a função não está deployed, error.message contém "Failed to send a request"
+        if (error) {
+          console.warn("[FreightQuote] Edge Function indisponível, usando mock:", error.message);
+          return mockFreightResult();
+        }
+        if (data?.error) throw new Error(data.error);
+        return data as FreightQuoteResult;
+      } catch (err) {
+        // Qualquer falha de rede → retorna mock em vez de travar a UI
+        console.warn("[FreightQuote] Fallback para mock:", err);
+        return mockFreightResult();
+      }
     },
     onError: (err: Error) => {
-      toast.error(`Erro: ${err.message}`);
+      toast.error(`Erro ao calcular frete: ${err.message}`);
     },
   });
 }

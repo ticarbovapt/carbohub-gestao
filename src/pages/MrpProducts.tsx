@@ -8,7 +8,7 @@ import { CarboCard } from "@/components/ui/carbo-card";
 import { CarboEmptyState } from "@/components/ui/carbo-empty-state";
 import { CarboSkeleton } from "@/components/ui/CarboSkeleton";
 import { CarboBadge } from "@/components/ui/carbo-badge";
-import { Package, Plus, Pencil, Warehouse, AlertTriangle, CheckCircle, AlertCircle } from "lucide-react";
+import { Package, Plus, Pencil, Warehouse, AlertTriangle, CheckCircle, AlertCircle, ClipboardList } from "lucide-react";
 import { useMrpProducts, useCreateMrpProduct, useUpdateMrpProduct, useWarehouseStockByProduct, MrpProduct } from "@/hooks/useMrpProducts";
 import { useAuth } from "@/contexts/AuthContext";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -17,8 +17,34 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { ProductBomModal } from "@/components/mrp/ProductBomModal";
+import { cn } from "@/lib/utils";
 
 const CATEGORIES = ["Carbonatação", "Embalagem", "Insumo", "Produto Final", "Outro"];
+
+const CATEGORY_FILTER_TABS = [
+  { key: "all",           label: "Todos" },
+  { key: "Produto Final", label: "Produto Final" },
+  { key: "Insumo",        label: "Insumos" },
+  { key: "Embalagem",     label: "Embalagem" },
+  { key: "Carbonatação",  label: "Carbonatação" },
+];
+
+function CategoryBadge({ category }: { category: string | null }) {
+  if (!category) return <span className="text-muted-foreground text-sm">—</span>;
+  const cls: Record<string, string> = {
+    "Produto Final": "bg-emerald-700 text-white border-0",
+    "Insumo":        "bg-blue-600 text-white border-0",
+    "Embalagem":     "bg-amber-500 text-white border-0",
+    "Carbonatação":  "bg-purple-600 text-white border-0",
+    "Outro":         "bg-gray-500 text-white border-0",
+  };
+  return (
+    <span className={cn("inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium", cls[category] ?? "bg-gray-500 text-white border-0")}>
+      {category}
+    </span>
+  );
+}
 
 function ProductForm({ product, onClose }: { product?: MrpProduct; onClose: () => void }) {
   const createMut = useCreateMrpProduct();
@@ -193,10 +219,14 @@ export default function MrpProducts() {
   const [search, setSearch] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editProduct, setEditProduct] = useState<MrpProduct | undefined>();
+  const [categoryFilter, setCategoryFilter] = useState("all");
+  const [bomProduct, setBomProduct] = useState<MrpProduct | null>(null);
+  const [bomOpen, setBomOpen] = useState(false);
 
   const canEdit = isAdmin || isCeo;
 
   const filtered = products.filter(p => {
+    if (categoryFilter !== "all" && p.category !== categoryFilter) return false;
     if (!search) return true;
     const s = search.toLowerCase();
     return p.product_code.toLowerCase().includes(s) || p.name.toLowerCase().includes(s);
@@ -216,8 +246,26 @@ export default function MrpProducts() {
           ) : undefined}
         />
 
-        <div className="max-w-md">
-          <CarboSearchInput placeholder="Buscar por código ou nome..." value={search} onChange={e => setSearch(e.target.value)} />
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="max-w-md flex-1 min-w-[200px]">
+            <CarboSearchInput placeholder="Buscar por código ou nome..." value={search} onChange={e => setSearch(e.target.value)} />
+          </div>
+          <div className="flex items-center gap-1 flex-wrap">
+            {CATEGORY_FILTER_TABS.map(tab => (
+              <button
+                key={tab.key}
+                onClick={() => setCategoryFilter(tab.key)}
+                className={cn(
+                  "px-3 py-1.5 rounded-full text-xs font-medium transition-colors",
+                  categoryFilter === tab.key
+                    ? "bg-primary text-primary-foreground"
+                    : "bg-muted text-muted-foreground hover:bg-muted/80"
+                )}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
         </div>
 
         {isLoading ? (
@@ -250,9 +298,21 @@ export default function MrpProducts() {
 
                   return (
                     <CarboTableRow key={p.id}>
-                      <CarboTableCell className="font-medium text-foreground">{p.name}</CarboTableCell>
+                      <CarboTableCell className="font-medium text-foreground">
+                        {p.category === "Produto Final" ? (
+                          <button
+                            className="flex items-center gap-1.5 text-left hover:underline text-primary font-semibold"
+                            onClick={() => { setBomProduct(p); setBomOpen(true); }}
+                          >
+                            {p.name}
+                            <ClipboardList className="h-3.5 w-3.5 shrink-0 opacity-60" />
+                          </button>
+                        ) : (
+                          p.name
+                        )}
+                      </CarboTableCell>
                       <CarboTableCell className="font-mono text-xs text-muted-foreground">{p.product_code}</CarboTableCell>
-                      <CarboTableCell className="text-sm text-muted-foreground">{p.category || "—"}</CarboTableCell>
+                      <CarboTableCell><CategoryBadge category={p.category} /></CarboTableCell>
                       <CarboTableCell className="text-right font-semibold tabular-nums">{totalConsolidated.toLocaleString("pt-BR")} {p.stock_unit}</CarboTableCell>
                       <CarboTableCell className="text-right tabular-nums text-muted-foreground">{p.safety_stock_qty.toLocaleString("pt-BR")} {p.stock_unit}</CarboTableCell>
                       <CarboTableCell>
@@ -299,6 +359,12 @@ export default function MrpProducts() {
           <ProductForm product={editProduct} onClose={() => setDialogOpen(false)} />
         </DialogContent>
       </Dialog>
+
+      <ProductBomModal
+        product={bomProduct}
+        open={bomOpen}
+        onOpenChange={(o) => { setBomOpen(o); if (!o) setBomProduct(null); }}
+      />
     </BoardLayout>
   );
 }
