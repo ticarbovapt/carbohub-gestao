@@ -531,7 +531,7 @@ export function LastLoginTab() {
           </div>
           <div>
             <p className="text-2xl font-bold">{isLoading ? "—" : pdvs.length}</p>
-            <p className="text-xs text-muted-foreground">Insumos</p>
+            <p className="text-xs text-muted-foreground">Lojas</p>
           </div>
         </div>
       </div>
@@ -549,7 +549,7 @@ export function LastLoginTab() {
           </TabsTrigger>
           <TabsTrigger value="pdvs" className="gap-2">
             <Store className="h-4 w-4" />
-            Insumos
+            Lojas
           </TabsTrigger>
         </TabsList>
 

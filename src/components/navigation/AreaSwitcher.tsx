@@ -45,7 +45,7 @@ const AREAS: AreaConfig[] = [
   },
   {
     key: "pdv",
-    label: "Insumos",
+    label: "Lojas",
     icon: <Store className="h-4 w-4" />,
     path: "/pdv/dashboard",
     gradient: "from-amber-500 to-orange-600",

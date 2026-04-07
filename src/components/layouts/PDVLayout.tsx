@@ -37,7 +37,7 @@ const navItems = [
 ];
 
 const ROUTE_LABELS: Record<string, string> = {
-  pdv: "Insumos",
+  pdv: "Lojas",
   dashboard: "Dashboard",
   stock: "Estoque",
   history: "Histórico",
@@ -48,7 +48,7 @@ function Breadcrumb({ pdvName }: { pdvName?: string }) {
   const segments = location.pathname.split("/").filter(Boolean);
 
   const crumbs = [
-    { label: "Insumos", href: "/pdv/dashboard" },
+    { label: "Lojas", href: "/pdv/dashboard" },
     ...segments.slice(1).map((seg, i) => ({
       label: ROUTE_LABELS[seg] ?? seg.charAt(0).toUpperCase() + seg.slice(1),
       href: "/" + segments.slice(0, i + 2).join("/"),
@@ -101,7 +101,7 @@ export function PDVLayout() {
       <div className="flex items-center gap-2.5 px-4 py-4 border-b border-border">
         <img src={logoCarbo} alt="Carbo" className="h-6 w-6 object-contain" />
         <div>
-          <p className="text-sm font-bold text-foreground leading-none">Insumos</p>
+          <p className="text-sm font-bold text-foreground leading-none">Lojas</p>
           <p className="text-[10px] text-muted-foreground leading-none mt-0.5">{pdv?.name || "PDV"}</p>
         </div>
       </div>
@@ -178,7 +178,7 @@ export function PDVLayout() {
 
             <Separator orientation="vertical" className="h-5 hidden sm:block" />
 
-            {/* Insumos pill — sidebar trigger */}
+            {/* Lojas pill — sidebar trigger */}
             <Sheet open={sidebarOpen} onOpenChange={setSidebarOpen}>
               <SheetTrigger asChild>
                 <button
@@ -190,7 +190,7 @@ export function PDVLayout() {
                   )}
                 >
                   <Layers className="h-3.5 w-3.5 flex-shrink-0" />
-                  <span className="hidden sm:inline">Insumos</span>
+                  <span className="hidden sm:inline">Lojas</span>
                 </button>
               </SheetTrigger>
               <SheetContent side="left" className="w-[280px] p-0 flex flex-col">
