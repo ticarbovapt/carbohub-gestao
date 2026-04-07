@@ -41,6 +41,7 @@ import { InactivateLicenseeDialog } from "@/components/licensees/InactivateLicen
 import { ReactivateLicenseeDialog } from "@/components/licensees/ReactivateLicenseeDialog";
 import { LicenseeSubNav } from "@/components/licensees/LicenseeSubNav";
 import { LicenseePerformanceCharts } from "@/components/licensees/LicenseePerformanceCharts";
+import { LicenseeAccessCard } from "@/components/licensees/LicenseeAccessCard";
 import { useLicenseeReagentStock } from "@/hooks/useLicenseeReagentStock";
 import { MODALITY_INFO } from "@/hooks/useDescarbSales";
 import { PRIORIDADE_CONFIG } from "@/hooks/useOpsAlerts";
@@ -500,6 +501,15 @@ export default function LicenseeDetails() {
 
         {/* Info Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {/* Access Card */}
+          <LicenseeAccessCard
+            licenseeId={id!}
+            licenseeEmail={licensee.email}
+            licenseeName={licensee.name}
+            licenseeCode={licensee.code}
+            isAdmin={isAdmin}
+          />
+
           {/* Contact Info */}
           <CarboCard>
             <CarboCardHeader>

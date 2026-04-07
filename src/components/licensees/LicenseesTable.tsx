@@ -3,10 +3,18 @@ import { CarboTable, CarboTableHeader, CarboTableBody, CarboTableRow, CarboTable
 import { CarboBadge } from "@/components/ui/carbo-badge";
 import { PaginationControls } from "@/components/ui/pagination-controls";
 import { usePagination } from "@/hooks/usePagination";
-import { MapPin, Phone, Mail, ChevronRight, Pencil } from "lucide-react";
+import { MapPin, Phone, Mail, ChevronRight, Pencil, ShieldCheck, Clock, ShieldOff } from "lucide-react";
 import { CarboButton } from "@/components/ui/carbo-button";
+import { useLicenseeAccessMap, type LicenseeAccessStatus } from "@/hooks/useLicenseeAccess";
+import { cn } from "@/lib/utils";
 import type { Licensee, LicenseeStatus } from "@/hooks/useLicensees";
 import type { NavigateFunction } from "react-router-dom";
+
+const ACCESS_CONFIG: Record<LicenseeAccessStatus, { label: string; icon: typeof ShieldCheck; className: string }> = {
+  no_access: { label: "Sem acesso",  icon: ShieldOff,   className: "text-muted-foreground" },
+  pending:   { label: "Aguardando", icon: Clock,        className: "text-amber-500" },
+  active:    { label: "Ativo",       icon: ShieldCheck, className: "text-green-500" },
+};
 
 const STATUS_LABELS: Record<LicenseeStatus, string> = {
   active: "Ativo",
@@ -30,6 +38,7 @@ interface LicenseesTableProps {
 
 export function LicenseesTable({ licensees, navigate, onEdit }: LicenseesTableProps) {
   const pagination = usePagination(licensees, { initialPageSize: 10 });
+  const { data: accessMap = {} } = useLicenseeAccessMap();
 
   return (
     <div className="space-y-4">
@@ -42,6 +51,7 @@ export function LicenseesTable({ licensees, navigate, onEdit }: LicenseesTablePr
             <CarboTableHead>Contato</CarboTableHead>
             <CarboTableHead>Máquinas</CarboTableHead>
             <CarboTableHead>Status</CarboTableHead>
+            <CarboTableHead>Portal</CarboTableHead>
             {onEdit && <CarboTableHead className="w-10">Editar</CarboTableHead>}
             <CarboTableHead className="w-10"></CarboTableHead>
           </CarboTableRow>
@@ -99,6 +109,19 @@ export function LicenseesTable({ licensees, navigate, onEdit }: LicenseesTablePr
                 <CarboBadge variant={STATUS_VARIANTS[licensee.status]} dot>
                   {STATUS_LABELS[licensee.status]}
                 </CarboBadge>
+              </CarboTableCell>
+              <CarboTableCell>
+                {(() => {
+                  const accessStatus: LicenseeAccessStatus = accessMap[licensee.id] ?? "no_access";
+                  const cfg = ACCESS_CONFIG[accessStatus];
+                  const Icon = cfg.icon;
+                  return (
+                    <span className={cn("inline-flex items-center gap-1 text-xs font-medium", cfg.className)}>
+                      <Icon className="h-3.5 w-3.5" />
+                      {cfg.label}
+                    </span>
+                  );
+                })()}
               </CarboTableCell>
               {onEdit && (
                 <CarboTableCell>
