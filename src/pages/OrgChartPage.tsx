@@ -13,7 +13,7 @@ export default function OrgChartPage() {
       <div className="space-y-6">
         <CarboPageHeader
           title="Organograma"
-          description="Estrutura hierárquica do Grupo Carbo — 6 níveis"
+          description="Estrutura hierárquica do Grupo Carbo"
           icon={Network}
         />
 

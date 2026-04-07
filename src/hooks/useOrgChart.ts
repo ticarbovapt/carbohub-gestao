@@ -11,6 +11,8 @@ export interface OrgNode {
   job_title: string | null;
   job_category: string | null;
   carbo_role: string | null;
+  email?: string | null;
+  phone?: string | null;
   dual_role?: string;
   assistant?: boolean;   // quando true → exibir ao lado do superior, não abaixo
   children: OrgNode[];
@@ -160,7 +162,7 @@ export function useOrgChartFlat() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("profiles")
-        .select("id, full_name, avatar_url, hierarchy_level, reports_to, department, job_title, job_category, carbo_role")
+        .select("id, full_name, avatar_url, hierarchy_level, reports_to, department, job_title, job_category, carbo_role, email, phone")
         .not("hierarchy_level", "is", null)
         .order("hierarchy_level", { ascending: true });
 

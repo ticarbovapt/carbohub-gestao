@@ -1,38 +1,15 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { BoardLayout } from "@/components/layouts/BoardLayout";
-import { Users, Shield, Building2, Filter, Mail, Clock, CheckCircle, Loader2, CheckCheck, Upload, Network } from "lucide-react";
-import { TeamBulkImport } from "@/components/team/TeamBulkImport";
-import { STATIC_ORG_TREE, getDeptColor, getLevelLabel, type OrgNode } from "@/hooks/useOrgChart";
-
-// ── helpers para Time Completo ────────────────────────────────────────────────
-function flattenTree(nodes: OrgNode[]): OrgNode[] {
-  return nodes.flatMap((n) => [n, ...flattenTree(n.children)]);
-}
-
-const ALL_ORG_MEMBERS = flattenTree(STATIC_ORG_TREE);
-
-const DEPT_ORDER = ["Command", "Finance", "Growth & B2B", "Growth", "OPS", "B2B", "Expansão"];
-
-function getInitialsOrg(name: string) {
-  return name.split(" ").map((w) => w[0]).slice(0, 2).join("").toUpperCase();
-}
+import { Users, Shield, Building2, Clock, Network, Mail, Loader2, CheckCheck } from "lucide-react";
+import { STATIC_ORG_TREE, getDeptColor, getLevelLabel, useOrgChartFlat, type OrgNode } from "@/hooks/useOrgChart";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { useTeamMembers, useUpdateUserRole, useUpdateUserDepartment, TeamMember } from "@/hooks/useTeamMembers";
+import { useTeamMembers, TeamMember } from "@/hooks/useTeamMembers";
 import { useNavigate } from "react-router-dom";
 import { AddMemberDialog } from "@/components/team/AddMemberDialog";
 import { EditMemberDialog } from "@/components/team/EditMemberDialog";
 import { DeleteMemberDialog } from "@/components/team/DeleteMemberDialog";
-import { MasterAdminControls } from "@/components/team/MasterAdminControls";
-import { SQUAD_LOGOS } from "@/constants/squadLogos";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import {
   Dialog,
   DialogContent,
@@ -50,91 +27,218 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
 import { useResendWelcomeEmail } from "@/hooks/useCreateTeamMember";
-import type { Database } from "@/integrations/supabase/types";
 
-type AppRole = Database["public"]["Enums"]["app_role"];
-type DepartmentType = Database["public"]["Enums"]["department_type"];
+// ── helpers ───────────────────────────────────────────────────────────────────
+function flattenTree(nodes: OrgNode[]): OrgNode[] {
+  return nodes.flatMap((n) => [n, ...flattenTree(n.children)]);
+}
 
-const ROLE_LABELS: Record<string, string> = {
-  admin: "Administrador",
-  manager: "Gestor",
-  operator: "Operador",
-  viewer: "Visualizador",
-};
+function buildParentMap(
+  nodes: OrgNode[],
+  parent: OrgNode | null = null
+): Map<string, OrgNode | null> {
+  const map = new Map<string, OrgNode | null>();
+  for (const node of nodes) {
+    map.set(node.id, parent);
+    buildParentMap(node.children, node).forEach((v, k) => map.set(k, v));
+  }
+  return map;
+}
 
-import { DEPARTMENT_LABELS, ALL_DEPARTMENTS } from "@/constants/departments";
+const ALL_ORG_MEMBERS = flattenTree(STATIC_ORG_TREE);
+const PARENT_MAP = buildParentMap(STATIC_ORG_TREE);
+const DEPT_ORDER = ["Command", "Finance", "Growth & B2B", "Growth", "OPS", "B2B", "Expansão"];
 
-const DEPARTMENTS = ALL_DEPARTMENTS;
+function getInitialsOrg(name: string) {
+  return name
+    .split(" ")
+    .map((w) => w[0])
+    .slice(0, 2)
+    .join("")
+    .toUpperCase();
+}
 
-const ROLES: { value: AppRole | "all"; label: string }[] = [
-  { value: "all", label: "Todos os Cargos" },
-  { value: "admin", label: "Administrador" },
-  { value: "manager", label: "Gestor" },
-  { value: "operator", label: "Operador" },
-  { value: "viewer", label: "Visualizador" },
-];
+// ── MemberInfoModal ────────────────────────────────────────────────────────────
+interface MemberInfoModalProps {
+  member: OrgNode | null;
+  profiles: Array<{ id: string; full_name: string | null; email?: string | null; phone?: string | null }>;
+  teamMembers: TeamMember[];
+  onClose: () => void;
+  canEdit: boolean;
+  onUpdated: () => void;
+}
 
+function MemberInfoModal({
+  member,
+  profiles,
+  teamMembers,
+  onClose,
+  canEdit,
+  onUpdated,
+}: MemberInfoModalProps) {
+  if (!member) return null;
+
+  const deptColor = getDeptColor(member.department);
+  const parent = PARENT_MAP.get(member.id);
+
+  // Enrich from Supabase profiles (match by name)
+  const profile = profiles.find(
+    (p) =>
+      p.full_name?.toLowerCase().trim() === member.full_name.toLowerCase().trim()
+  );
+
+  // Try to find matching TeamMember
+  const teamMember = teamMembers.find(
+    (m) =>
+      m.full_name?.toLowerCase().trim() === member.full_name.toLowerCase().trim()
+  );
+
+  return (
+    <Dialog open={!!member} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Colaborador</DialogTitle>
+        </DialogHeader>
+
+        <div className="flex flex-col items-center gap-4 pt-1 pb-2">
+          {/* Avatar */}
+          <div
+            className="flex h-20 w-20 items-center justify-center rounded-full text-white font-bold text-xl shadow-lg ring-4 ring-offset-2 ring-offset-background"
+            style={{
+              backgroundColor: deptColor,
+              ["--tw-ring-color" as string]: deptColor,
+            }}
+          >
+            {getInitialsOrg(member.full_name)}
+          </div>
+
+          {/* Name + title */}
+          <div className="text-center">
+            <p className="text-lg font-bold text-foreground leading-tight">
+              {member.full_name}
+            </p>
+            {member.job_title && (
+              <p className="text-sm text-muted-foreground mt-1">{member.job_title}</p>
+            )}
+          </div>
+
+          {/* Badges */}
+          <div className="flex flex-wrap gap-2 justify-center">
+            <Badge className="text-white border-0" style={{ backgroundColor: deptColor }}>
+              {getLevelLabel(member.hierarchy_level)}
+            </Badge>
+            {member.department && (
+              <Badge variant="outline" style={{ borderColor: deptColor, color: deptColor }}>
+                {member.department}
+              </Badge>
+            )}
+            {member.assistant && (
+              <Badge variant="outline" className="border-dashed text-muted-foreground">
+                Assistente
+              </Badge>
+            )}
+            {member.dual_role && (
+              <Badge className="bg-violet-600 text-white border-0 text-[10px]">
+                + Head B2B
+              </Badge>
+            )}
+          </div>
+
+          {/* Separator */}
+          <div className="w-full h-px bg-border" />
+
+          {/* Info grid */}
+          <div className="w-full grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
+            <div>
+              <p className="text-[11px] text-muted-foreground font-medium uppercase tracking-wide mb-0.5">
+                Email
+              </p>
+              <p className="font-medium truncate text-foreground">
+                {profile?.email || teamMember?.email || "—"}
+              </p>
+            </div>
+            <div>
+              <p className="text-[11px] text-muted-foreground font-medium uppercase tracking-wide mb-0.5">
+                Telefone
+              </p>
+              <p className="font-medium text-foreground">
+                {(profile as any)?.phone || "—"}
+              </p>
+            </div>
+            <div>
+              <p className="text-[11px] text-muted-foreground font-medium uppercase tracking-wide mb-0.5">
+                Departamento
+              </p>
+              <p className="font-medium text-foreground">{member.department || "—"}</p>
+            </div>
+            <div>
+              <p className="text-[11px] text-muted-foreground font-medium uppercase tracking-wide mb-0.5">
+                Gestor Direto
+              </p>
+              <p className="font-medium text-foreground">{parent?.full_name || "—"}</p>
+            </div>
+            {member.dual_role && (
+              <div className="col-span-2">
+                <p className="text-[11px] text-muted-foreground font-medium uppercase tracking-wide mb-0.5">
+                  Dupla Função
+                </p>
+                <p className="font-medium text-foreground">{member.dual_role}</p>
+              </div>
+            )}
+          </div>
+
+          {/* Edit controls — admin/CEO/MasterAdmin only, and only if matched to a TeamMember */}
+          {canEdit && teamMember && (
+            <div className="w-full flex justify-end gap-2 pt-2 border-t border-border">
+              <EditMemberDialog
+                member={teamMember}
+                onUpdated={() => {
+                  onUpdated();
+                  onClose();
+                }}
+              />
+              <DeleteMemberDialog
+                member={teamMember}
+                onDeleted={() => {
+                  onUpdated();
+                  onClose();
+                }}
+              />
+            </div>
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ── Team page ──────────────────────────────────────────────────────────────────
 const Team = () => {
-  const { data: members, isLoading, refetch } = useTeamMembers();
-  const updateRole = useUpdateUserRole();
-  const updateDepartment = useUpdateUserDepartment();
+  const { data: members, isLoading: membersLoading, refetch } = useTeamMembers();
+  const { data: profiles = [] } = useOrgChartFlat();
   const resendEmail = useResendWelcomeEmail();
   const { isAdmin, isManager, isMasterAdmin, isCeo, isAnyGestor, user } = useAuth();
   const navigate = useNavigate();
-  // Filter states
-  const [departmentFilter, setDepartmentFilter] = useState<DepartmentType | "all">("all");
-  const [roleFilter, setRoleFilter] = useState<AppRole | "all">("all");
+
+  const [selectedMember, setSelectedMember] = useState<OrgNode | null>(null);
   const [confirmEmailMember, setConfirmEmailMember] = useState<TeamMember | null>(null);
   const [emailSentMember, setEmailSentMember] = useState<TeamMember | null>(null);
 
-  // Filter only approved members (exclude deleted)
   const approvedMembers = members?.filter((m) => m.status === "approved") || [];
-  
-  // For admins/CEO, show all. For managers/gestores, show members they created
-  const canSeeAll = isAdmin || isCeo || isMasterAdmin;
-  const visibleMembers = canSeeAll
-    ? approvedMembers
-    : approvedMembers.filter((m) => m.created_by_manager === user?.id || !m.password_must_change);
-  
-  // Apply filters
-  const filteredMembers = visibleMembers.filter((member) => {
-    const matchesDepartment = departmentFilter === "all" || member.department === departmentFilter;
-    const matchesRole = roleFilter === "all" || member.roles.includes(roleFilter as AppRole);
-    return matchesDepartment && matchesRole;
-  });
-  
   const adminCount = approvedMembers.filter((m) => m.roles.includes("admin")).length;
-  const uniqueDepartments = new Set(approvedMembers.map((m) => m.department).filter(Boolean)).size;
+  const uniqueDepartments = new Set(
+    approvedMembers.map((m) => m.department).filter(Boolean)
+  ).size;
   const pendingAccessCount = approvedMembers.filter((m) => m.password_must_change).length;
 
-  const getMemberStatus = (member: TeamMember): { label: string; variant: "default" | "secondary" | "destructive" | "outline"; icon: React.ReactNode } => {
-    if (member.password_must_change) {
-      return { 
-        label: "Aguardando primeiro acesso", 
-        variant: "outline",
-        icon: <Clock className="h-3 w-3" />
-      };
-    }
-    if (member.last_access) {
-      return { 
-        label: "Ativo", 
-        variant: "default",
-        icon: <CheckCircle className="h-3 w-3" />
-      };
-    }
-    return { 
-      label: "Ativo", 
-      variant: "secondary",
-      icon: <CheckCircle className="h-3 w-3" />
-    };
-  };
+  const canEdit = isAdmin || isCeo || isMasterAdmin;
+  const canAddMember = isAdmin || isManager || isCeo || isAnyGestor;
 
   const handleResendEmail = async (member: TeamMember) => {
     if (!member.username) {
       toast.error("Usuário não possui username definido");
       return;
     }
-    
     try {
       await resendEmail.mutateAsync({
         userId: member.id,
@@ -150,432 +254,212 @@ const Team = () => {
     }
   };
 
-
-  const getInitials = (name: string | null) => {
-    if (!name) return "??";
-    return name
-      .split(" ")
-      .map((n) => n[0])
-      .join("")
-      .toUpperCase()
-      .slice(0, 2);
-  };
-
-  const getRoleDisplay = (roles: AppRole[]) => {
-    if (roles.includes("admin")) return ROLE_LABELS.admin;
-    if (roles.includes("manager")) return ROLE_LABELS.manager;
-    if (roles.includes("operator")) return ROLE_LABELS.operator;
-    if (roles.includes("viewer")) return ROLE_LABELS.viewer;
-    return "Sem papel";
-  };
-
-  const getPrimaryRole = (roles: AppRole[]): AppRole => {
-    if (roles.includes("admin")) return "admin";
-    if (roles.includes("manager")) return "manager";
-    if (roles.includes("operator")) return "operator";
-    return "viewer";
-  };
-
-  const handleRoleChange = async (userId: string, newRole: AppRole) => {
-    try {
-      await updateRole.mutateAsync({ userId, role: newRole });
-      toast.success("Papel atualizado com sucesso!");
-    } catch (error: any) {
-      toast.error(error.message || "Erro ao atualizar papel");
-    }
-  };
-
-  const handleDepartmentChange = async (userId: string, department: DepartmentType) => {
-    try {
-      await updateDepartment.mutateAsync({ userId, department });
-      toast.success("Departamento atualizado com sucesso!");
-    } catch (error: any) {
-      toast.error(error.message || "Erro ao atualizar departamento");
-    }
-  };
+  // Group org members by department (deterministic order)
+  const grouped = useMemo(() => {
+    const map = new Map<string, OrgNode[]>();
+    DEPT_ORDER.forEach((d) => map.set(d, []));
+    ALL_ORG_MEMBERS.forEach((m) => {
+      const dept = m.department || "Outros";
+      if (!map.has(dept)) map.set(dept, []);
+      map.get(dept)!.push(m);
+    });
+    return Array.from(map.entries()).filter(([, deptMembers]) => deptMembers.length > 0);
+  }, []);
 
   return (
     <BoardLayout>
       <div className="space-y-6">
+
+        {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
             <h1 className="text-3xl font-semibold text-foreground">Equipe</h1>
             <p className="mt-1 text-muted-foreground">
-              Gerenciamento de usuários e permissões da plataforma
+              {ALL_ORG_MEMBERS.length} colaboradores — Grupo Carbo
             </p>
           </div>
           <div className="flex items-center gap-2">
-            {(isAdmin || isManager || isCeo || isAnyGestor) && <AddMemberDialog onMemberAdded={() => refetch()} />}
+            {canAddMember && <AddMemberDialog onMemberAdded={() => refetch()} />}
           </div>
         </div>
 
+        {/* Tab row + Organograma button */}
         <Tabs defaultValue="equipe" className="w-full">
-          <TabsList>
-            <TabsTrigger value="equipe" className="gap-2">
-              <Users className="h-4 w-4" />
-              Equipe
-            </TabsTrigger>
-            <TabsTrigger value="time-completo" className="gap-2">
-              <Network className="h-4 w-4" />
-              Time Completo
-            </TabsTrigger>
-            <TabsTrigger value="importar" className="gap-2">
-              <Upload className="h-4 w-4" />
-              Importar Time
-            </TabsTrigger>
-          </TabsList>
+          <div className="flex items-center gap-3">
+            <TabsList>
+              <TabsTrigger value="equipe" className="gap-2">
+                <Users className="h-4 w-4" />
+                Equipe
+              </TabsTrigger>
+            </TabsList>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => navigate("/org-chart")}
+            >
+              <Network className="h-4 w-4 mr-1.5" />
+              Organograma
+            </Button>
+          </div>
 
           <TabsContent value="equipe" className="space-y-6 mt-6">
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-        {[
-          { icon: Users, title: "Total de Membros", value: approvedMembers.length.toString() },
-          { icon: Shield, title: "Administradores", value: adminCount.toString() },
-          { icon: Building2, title: "Departamentos", value: uniqueDepartments.toString() },
-          { icon: Clock, title: "Aguardando Acesso", value: pendingAccessCount.toString(), highlight: pendingAccessCount > 0 },
-        ].map((item, index) => (
-          <div
-            key={index}
-            className="rounded-xl border border-border bg-board-surface p-6"
-          >
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-board-navy/10">
-                <item.icon className="h-5 w-5 text-board-navy" />
-              </div>
-              <div>
-                <p className="text-sm text-board-muted">{item.title}</p>
-                {isLoading ? (
-                  <Skeleton className="h-6 w-8" />
-                ) : (
-                  <p className="text-lg font-semibold text-board-text">{item.value}</p>
-                )}
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
 
-      {/* Filters */}
-      <div className="flex flex-wrap gap-4 mb-6">
-        <div className="flex items-center gap-2">
-          <Filter className="h-4 w-4 text-board-muted" />
-          <span className="text-sm text-board-muted">Filtros:</span>
-        </div>
-        <Select
-          value={departmentFilter}
-          onValueChange={(value) => setDepartmentFilter(value as DepartmentType | "all")}
-        >
-          <SelectTrigger className="w-40">
-            <SelectValue placeholder="Departamento" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Todos os Departamentos</SelectItem>
-            {DEPARTMENTS.map((dept) => (
-              <SelectItem key={dept.value} value={dept.value}>
-                {dept.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Select
-          value={roleFilter}
-          onValueChange={(value) => setRoleFilter(value as AppRole | "all")}
-        >
-          <SelectTrigger className="w-40">
-            <SelectValue placeholder="Cargo" />
-          </SelectTrigger>
-          <SelectContent>
-            {ROLES.map((role) => (
-              <SelectItem key={role.value} value={role.value}>
-                {role.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        {(departmentFilter !== "all" || roleFilter !== "all") && (
-          <button
-            onClick={() => {
-              setDepartmentFilter("all");
-              setRoleFilter("all");
-            }}
-            className="text-sm text-board-navy hover:underline"
-          >
-            Limpar filtros
-          </button>
-        )}
-      </div>
-
-      <div className="rounded-xl border border-border bg-board-surface overflow-hidden">
-        <div className="border-b border-border px-6 py-4">
-          <h2 className="text-lg font-semibold text-board-text">Membros da Equipe</h2>
-        </div>
-        <div className="divide-y divide-border">
-          {isLoading ? (
-            Array.from({ length: 4 }).map((_, i) => (
-              <div key={i} className="flex items-center justify-between px-6 py-4">
-                <div className="flex items-center gap-4">
-                  <Skeleton className="h-10 w-10 rounded-full" />
-                  <div>
-                    <Skeleton className="h-5 w-32 mb-1" />
-                    <Skeleton className="h-4 w-48" />
-                  </div>
-                </div>
-                <Skeleton className="h-4 w-16" />
-              </div>
-            ))
-          ) : filteredMembers.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-12 text-board-muted">
-              <Users className="h-12 w-12 mb-4 opacity-50" />
-              <p>Nenhum membro encontrado</p>
-              <p className="text-sm">
-                {departmentFilter !== "all" || roleFilter !== "all"
-                  ? "Tente ajustar os filtros"
-                  : "Adicione membros para começar"}
-              </p>
-            </div>
-          ) : (
-            filteredMembers.map((member) => {
-              const status = getMemberStatus(member);
-              const canManageMember = isAdmin || isCeo || isMasterAdmin || ((isManager || isAnyGestor) && member.created_by_manager === user?.id);
-              
-              return (
-                <div key={member.id} className="flex items-center justify-between px-6 py-4">
-                  <div className="flex items-center gap-4">
-                    <div className="relative h-10 w-10 flex-shrink-0">
-                      {member.department && SQUAD_LOGOS[member.department] ? (
-                        <img
-                          src={SQUAD_LOGOS[member.department]}
-                          alt={member.department}
-                          className="h-10 w-10 rounded-full object-cover ring-2 ring-border"
-                        />
-                      ) : (
-                        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-board-navy text-board-surface font-semibold">
-                          {getInitials(member.full_name)}
-                        </div>
-                      )}
-                      {member.password_must_change && (
-                        <span className="absolute -top-1 -right-1 h-3 w-3 bg-warning rounded-full border-2 border-background" />
-                      )}
+            {/* Stats row */}
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              {[
+                {
+                  icon: Users,
+                  title: "Colaboradores",
+                  value: ALL_ORG_MEMBERS.length.toString(),
+                },
+                {
+                  icon: Shield,
+                  title: "Administradores",
+                  value: membersLoading ? "—" : adminCount.toString(),
+                },
+                {
+                  icon: Building2,
+                  title: "Departamentos",
+                  value: uniqueDepartments.toString(),
+                  loading: membersLoading,
+                },
+                {
+                  icon: Clock,
+                  title: "Aguardando Acesso",
+                  value: membersLoading ? "—" : pendingAccessCount.toString(),
+                  highlight: pendingAccessCount > 0,
+                },
+              ].map((item, index) => (
+                <div
+                  key={index}
+                  className="rounded-xl border border-border bg-board-surface p-5"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-board-navy/10">
+                      <item.icon className="h-5 w-5 text-board-navy" />
                     </div>
                     <div>
-                      <div className="flex items-center gap-2">
-                        <p className="font-medium text-board-text">{member.full_name || "Sem nome"}</p>
-                        {member.username && (
-                          <code className="text-xs bg-muted px-1.5 py-0.5 rounded text-muted-foreground">
-                            {member.username}
-                          </code>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-2 text-sm text-board-muted">
-                        {(isAdmin || isCeo) ? (
-                          <>
-                            <Select
-                              value={getPrimaryRole(member.roles)}
-                              onValueChange={(value) => handleRoleChange(member.id, value as AppRole)}
-                            >
-                              <SelectTrigger className="h-7 w-28 text-xs">
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="operator">Operador</SelectItem>
-                                <SelectItem value="manager">Gestor</SelectItem>
-                                <SelectItem value="admin">Admin</SelectItem>
-                              </SelectContent>
-                            </Select>
-                            <span>•</span>
-                            <Select
-                              value={member.department || ""}
-                              onValueChange={(value) =>
-                                handleDepartmentChange(member.id, value as DepartmentType)
-                              }
-                            >
-                              <SelectTrigger className="h-7 w-28 text-xs">
-                                <SelectValue placeholder="Departamento" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {DEPARTMENTS.map((dept) => (
-                                  <SelectItem key={dept.value} value={dept.value}>
-                                    {dept.label}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </>
-                        ) : (
-                          <span>
-                            {getRoleDisplay(member.roles)} •{" "}
-                            {member.department
-                              ? DEPARTMENT_LABELS[member.department]
-                              : "Sem departamento"}
-                          </span>
-                        )}
-                      </div>
+                      <p className="text-sm text-board-muted">{item.title}</p>
+                      {membersLoading && item.loading ? (
+                        <Skeleton className="h-6 w-8" />
+                      ) : (
+                        <p
+                          className={`text-lg font-semibold ${
+                            item.highlight ? "text-warning" : "text-board-text"
+                          }`}
+                        >
+                          {item.value}
+                        </p>
+                      )}
                     </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Badge 
-                      variant={status.variant}
-                      className={member.password_must_change ? "bg-amber-100 text-amber-700 border-amber-300" : ""}
-                    >
-                      <span className="flex items-center gap-1">
-                        {status.icon}
-                        {status.label}
-                      </span>
-                    </Badge>
-                    
-                    {member.password_must_change && canManageMember && (
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => setConfirmEmailMember(member)}
-                            disabled={resendEmail.isPending}
-                          >
-                            <Mail className="h-4 w-4" />
-                          </Button>
-                        </TooltipTrigger>
-                        <TooltipContent>
-                          <p>Reenviar e-mail de acesso</p>
-                        </TooltipContent>
-                      </Tooltip>
-                    )}
-                    
-                    <Badge variant={member.roles.includes("admin") ? "default" : "secondary"}>
-                      {getRoleDisplay(member.roles)}
-                    </Badge>
-                    
-                    {(isAdmin || isCeo) && (
-                      <>
-                        <EditMemberDialog member={member} onUpdated={() => refetch()} />
-                        <DeleteMemberDialog member={member} onDeleted={() => refetch()} />
-                      </>
-                    )}
-
-                    {/* MasterAdmin exclusive controls */}
-                    {isMasterAdmin && (
-                      <MasterAdminControls member={member} onUpdated={() => refetch()} />
-                    )}
                   </div>
                 </div>
-              );
-            })
-          )}
-        </div>
-      </div>
-          </TabsContent>
-
-          {/* ── Time Completo ── */}
-          <TabsContent value="time-completo" className="mt-6 space-y-8">
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 className="text-lg font-semibold text-board-text">Time Completo</h2>
-                <p className="text-sm text-muted-foreground">
-                  {ALL_ORG_MEMBERS.length} colaboradores — Mapa de Responsabilidades CarboVAPT
-                </p>
-              </div>
-              <Badge variant="secondary">{ALL_ORG_MEMBERS.length} pessoas</Badge>
+              ))}
             </div>
 
-            {(() => {
-              // Agrupar por departamento, respeitando a ordem definida
-              const grouped = new Map<string, OrgNode[]>();
-              DEPT_ORDER.forEach((d) => grouped.set(d, []));
-
-              ALL_ORG_MEMBERS.forEach((m) => {
-                const dept = m.department || "Outros";
-                if (!grouped.has(dept)) grouped.set(dept, []);
-                grouped.get(dept)!.push(m);
-              });
-
-              return Array.from(grouped.entries())
-                .filter(([, members]) => members.length > 0)
-                .map(([dept, members]) => {
-                  const color = getDeptColor(dept);
-                  return (
-                    <div key={dept} className="space-y-3">
-                      {/* Section header */}
-                      <div className="flex items-center gap-3">
-                        <div
-                          className="h-1 w-6 rounded-full"
-                          style={{ backgroundColor: color }}
-                        />
-                        <h3
-                          className="text-sm font-semibold uppercase tracking-wider"
-                          style={{ color }}
-                        >
-                          {dept}
-                        </h3>
-                        <Badge
-                          variant="outline"
-                          className="text-[10px]"
-                          style={{ borderColor: color, color }}
-                        >
-                          {members.length}
-                        </Badge>
-                        <div className="flex-1 h-px bg-border" />
-                      </div>
-
-                      {/* Cards grid */}
-                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
-                        {members.map((member) => (
-                          <div
-                            key={member.id}
-                            className="flex flex-col items-center gap-2 rounded-xl border border-border bg-board-surface p-4 text-center hover:shadow-md transition-shadow"
-                          >
-                            {/* Avatar */}
-                            <div
-                              className="flex h-12 w-12 items-center justify-center rounded-full text-white font-bold text-sm ring-2 ring-offset-2 ring-offset-background shadow-md"
-                              style={{
-                                backgroundColor: color,
-                                ["--tw-ring-color" as string]: color,
-                              }}
-                            >
-                              {getInitialsOrg(member.full_name)}
-                            </div>
-
-                            {/* Name */}
-                            <p className="text-xs font-semibold text-board-text leading-tight">
-                              {member.full_name}
-                            </p>
-
-                            {/* job_title */}
-                            {member.job_title && (
-                              <p className="text-[10px] text-muted-foreground leading-tight line-clamp-2">
-                                {member.job_title}
-                              </p>
-                            )}
-
-                            {/* Level badge */}
-                            <Badge
-                              className="text-[9px] px-1.5 py-0 text-white border-0"
-                              style={{ backgroundColor: color }}
-                            >
-                              {getLevelLabel(member.hierarchy_level)}
-                            </Badge>
-
-                            {/* Assistant chip */}
-                            {member.assistant && (
-                              <Badge variant="outline" className="text-[9px] px-1.5 py-0 border-dashed">
-                                Assistente
-                              </Badge>
-                            )}
-                          </div>
-                        ))}
-                      </div>
+            {/* Dept-grouped card grid */}
+            <div className="space-y-8">
+              {grouped.map(([dept, deptMembers]) => {
+                const color = getDeptColor(dept);
+                return (
+                  <div key={dept} className="space-y-3">
+                    {/* Section header */}
+                    <div className="flex items-center gap-3">
+                      <div
+                        className="h-1 w-6 rounded-full"
+                        style={{ backgroundColor: color }}
+                      />
+                      <h3
+                        className="text-sm font-semibold uppercase tracking-wider"
+                        style={{ color }}
+                      >
+                        {dept}
+                      </h3>
+                      <Badge
+                        variant="outline"
+                        className="text-[10px]"
+                        style={{ borderColor: color, color }}
+                      >
+                        {deptMembers.length}
+                      </Badge>
+                      <div className="flex-1 h-px bg-border" />
                     </div>
-                  );
-                });
-            })()}
-          </TabsContent>
 
-          <TabsContent value="importar" className="mt-6">
-            <TeamBulkImport />
+                    {/* Cards */}
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
+                      {deptMembers.map((member) => (
+                        <div
+                          key={member.id}
+                          onClick={() => setSelectedMember(member)}
+                          className="flex flex-col items-center gap-2 rounded-xl border border-border bg-board-surface p-4 text-center cursor-pointer hover:border-primary/40 hover:shadow-lg transition-all duration-150"
+                        >
+                          {/* Avatar */}
+                          <div
+                            className="flex h-12 w-12 items-center justify-center rounded-full text-white font-bold text-sm ring-2 ring-offset-2 ring-offset-background shadow-md"
+                            style={{
+                              backgroundColor: color,
+                              ["--tw-ring-color" as string]: color,
+                            }}
+                          >
+                            {getInitialsOrg(member.full_name)}
+                          </div>
+
+                          {/* Name */}
+                          <p className="text-xs font-semibold text-board-text leading-tight">
+                            {member.full_name}
+                          </p>
+
+                          {/* Job title */}
+                          {member.job_title && (
+                            <p className="text-[10px] text-muted-foreground leading-tight line-clamp-2">
+                              {member.job_title}
+                            </p>
+                          )}
+
+                          {/* Level badge */}
+                          <Badge
+                            className="text-[9px] px-1.5 py-0 text-white border-0"
+                            style={{ backgroundColor: color }}
+                          >
+                            {getLevelLabel(member.hierarchy_level)}
+                          </Badge>
+
+                          {/* Assistant chip */}
+                          {member.assistant && (
+                            <Badge
+                              variant="outline"
+                              className="text-[9px] px-1.5 py-0 border-dashed"
+                            >
+                              Assistente
+                            </Badge>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
           </TabsContent>
         </Tabs>
       </div>
 
-      {/* Confirmation Dialog */}
-      <Dialog open={!!confirmEmailMember} onOpenChange={(open) => !open && setConfirmEmailMember(null)}>
+      {/* Member info modal */}
+      <MemberInfoModal
+        member={selectedMember}
+        profiles={profiles || []}
+        teamMembers={approvedMembers}
+        onClose={() => setSelectedMember(null)}
+        canEdit={canEdit}
+        onUpdated={() => refetch()}
+      />
+
+      {/* Confirmation dialog — resend email */}
+      <Dialog
+        open={!!confirmEmailMember}
+        onOpenChange={(open) => !open && setConfirmEmailMember(null)}
+      >
         <DialogContent className="sm:max-w-[420px]">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -591,23 +475,15 @@ const Team = () => {
               <div className="rounded-lg border border-border bg-muted/50 p-4 space-y-2">
                 <div className="flex justify-between">
                   <span className="text-sm text-muted-foreground">Nome</span>
-                  <span className="text-sm font-medium">{confirmEmailMember.full_name || "—"}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-sm text-muted-foreground">Usuário</span>
-                  <code className="text-sm font-mono bg-background px-1.5 py-0.5 rounded">{confirmEmailMember.username || "—"}</code>
+                  <span className="text-sm font-medium">
+                    {confirmEmailMember.full_name || "—"}
+                  </span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-sm text-muted-foreground">E-mail</span>
-                  <span className="text-sm font-medium">{confirmEmailMember.email || "—"}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-sm text-muted-foreground">Cargo</span>
-                  <span className="text-sm">{getRoleDisplay(confirmEmailMember.roles)}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-sm text-muted-foreground">Departamento</span>
-                  <span className="text-sm">{confirmEmailMember.department ? DEPARTMENT_LABELS[confirmEmailMember.department] || confirmEmailMember.department : "—"}</span>
+                  <span className="text-sm font-medium">
+                    {confirmEmailMember.email || "—"}
+                  </span>
                 </div>
               </div>
               <p className="text-xs text-muted-foreground">
@@ -616,11 +492,16 @@ const Team = () => {
             </div>
           )}
           <DialogFooter>
-            <Button variant="outline" onClick={() => setConfirmEmailMember(null)}>
+            <Button
+              variant="outline"
+              onClick={() => setConfirmEmailMember(null)}
+            >
               Cancelar
             </Button>
             <Button
-              onClick={() => confirmEmailMember && handleResendEmail(confirmEmailMember)}
+              onClick={() =>
+                confirmEmailMember && handleResendEmail(confirmEmailMember)
+              }
               disabled={resendEmail.isPending}
             >
               {resendEmail.isPending ? (
@@ -639,8 +520,11 @@ const Team = () => {
         </DialogContent>
       </Dialog>
 
-      {/* Success Dialog */}
-      <Dialog open={!!emailSentMember} onOpenChange={(open) => !open && setEmailSentMember(null)}>
+      {/* Success dialog */}
+      <Dialog
+        open={!!emailSentMember}
+        onOpenChange={(open) => !open && setEmailSentMember(null)}
+      >
         <DialogContent className="sm:max-w-[380px] text-center">
           <div className="flex flex-col items-center gap-4 py-4">
             <div className="flex h-14 w-14 items-center justify-center rounded-full bg-success/15">
@@ -649,9 +533,8 @@ const Team = () => {
             <div className="space-y-1">
               <h3 className="text-lg font-semibold">E-mail enviado!</h3>
               <p className="text-sm text-muted-foreground">
-                O convite de acesso foi reenviado com sucesso para{" "}
-                <strong>{emailSentMember?.full_name}</strong> no e-mail{" "}
-                <strong>{emailSentMember?.email || "cadastrado"}</strong>.
+                O convite foi reenviado para{" "}
+                <strong>{emailSentMember?.full_name}</strong>.
               </p>
             </div>
             <Button onClick={() => setEmailSentMember(null)} className="mt-2">

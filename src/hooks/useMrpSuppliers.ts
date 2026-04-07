@@ -86,3 +86,47 @@ export function useUpdateMrpSupplier() {
     onError: (e: Error) => toast.error("Erro: " + e.message),
   });
 }
+
+export function useImportSuppliersFromBling() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async () => {
+      const { data: contacts, error } = await supabase
+        .from("bling_contacts")
+        .select("*")
+        .eq("is_supplier", true);
+      if (error) throw error;
+      if (!contacts || contacts.length === 0) return { imported: 0 };
+
+      let imported = 0;
+      for (const c of contacts) {
+        const cpfCnpj = ((c as any).cpf_cnpj || "") as string;
+        const cnpj = cpfCnpj.replace(/\D/g, "");
+        if (!cnpj || cnpj.length < 11) continue;
+        const cnpjPadded = cnpj.length === 14 ? cnpj : cnpj.padStart(14, "0");
+        const { error: e } = await supabase
+          .from("mrp_suppliers")
+          .upsert({
+            cnpj: cnpjPadded,
+            legal_name: ((c as any).nome || (c as any).fantasia || "Sem nome") as string,
+            trade_name: ((c as any).fantasia || null) as string | null,
+            status: (c as any).situacao === "A" ? "active" : "inactive",
+            emails: (c as any).email ? [(c as any).email] : ([] as string[]),
+            phones: [(c as any).telefone, (c as any).celular].filter(Boolean) as string[],
+            raw: ((c as any).raw_data || {}) as Json,
+          } as any, { onConflict: "cnpj" });
+        if (!e) imported++;
+      }
+      return { imported };
+    },
+    onSuccess: ({ imported }) => {
+      if (imported === 0) {
+        toast.info("Nenhum fornecedor novo encontrado no Bling. Verifique se o Bling está conectado e possui contatos marcados como fornecedor.");
+      } else {
+        toast.success(`${imported} fornecedor(es) importado(s) do Bling`);
+      }
+      qc.invalidateQueries({ queryKey: ["mrp-suppliers"] });
+    },
+    onError: (e: Error) => toast.error("Erro ao importar do Bling: " + e.message),
+  });
+}

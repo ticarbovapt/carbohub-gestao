@@ -8,8 +8,8 @@ import { CarboCard } from "@/components/ui/carbo-card";
 import { CarboEmptyState } from "@/components/ui/carbo-empty-state";
 import { CarboSkeleton } from "@/components/ui/CarboSkeleton";
 import { CarboBadge } from "@/components/ui/carbo-badge";
-import { Factory, Plus, Search, Loader2, Pencil } from "lucide-react";
-import { useMrpSuppliers, useCnpjLookup, useCreateMrpSupplier, useUpdateMrpSupplier, MrpSupplier } from "@/hooks/useMrpSuppliers";
+import { Factory, Plus, Search, Loader2, Pencil, RefreshCw } from "lucide-react";
+import { useMrpSuppliers, useCnpjLookup, useCreateMrpSupplier, useUpdateMrpSupplier, useImportSuppliersFromBling, MrpSupplier } from "@/hooks/useMrpSuppliers";
 import { useAuth } from "@/contexts/AuthContext";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -148,6 +148,7 @@ function SupplierForm({ supplier, onClose }: { supplier?: MrpSupplier; onClose: 
 export default function MrpSuppliers() {
   const { isAdmin, isCeo } = useAuth();
   const { data: suppliers = [], isLoading } = useMrpSuppliers();
+  const importMut = useImportSuppliersFromBling();
   const [search, setSearch] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editSupplier, setEditSupplier] = useState<MrpSupplier | undefined>();
@@ -168,9 +169,21 @@ export default function MrpSuppliers() {
           description="Cadastro mestre de fornecedores — consulta automática por CNPJ"
           icon={Factory}
           actions={canEdit ? (
-            <CarboButton onClick={() => { setEditSupplier(undefined); setDialogOpen(true); }}>
-              <Plus className="h-4 w-4 mr-1" /> Novo Fornecedor
-            </CarboButton>
+            <div className="flex items-center gap-2">
+              <CarboButton
+                variant="outline"
+                onClick={() => importMut.mutateAsync()}
+                disabled={importMut.isPending}
+              >
+                {importMut.isPending
+                  ? <Loader2 className="h-4 w-4 animate-spin mr-1" />
+                  : <RefreshCw className="h-4 w-4 mr-1" />}
+                Importar do Bling
+              </CarboButton>
+              <CarboButton onClick={() => { setEditSupplier(undefined); setDialogOpen(true); }}>
+                <Plus className="h-4 w-4 mr-1" /> Novo Fornecedor
+              </CarboButton>
+            </div>
           ) : undefined}
         />
         <div className="max-w-md">

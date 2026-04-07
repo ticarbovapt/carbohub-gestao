@@ -87,6 +87,12 @@ function NodeCard({
         </p>
       )}
 
+      {node.department && size !== "sm" && (
+        <p className="text-[8px] text-muted-foreground/50 text-center max-w-[120px] leading-none -mt-0.5">
+          {node.department}
+        </p>
+      )}
+
       <Badge
         className={cn("text-white border-0 shadow-sm", badgeSize)}
         style={{ backgroundColor: deptColor }}
@@ -244,7 +250,10 @@ function OrgTreeNode({
 
       {/* Regular children */}
       {!hasDualRole && hasRegular && open && (
-        <ul className="org-children">
+        <ul
+          className="org-children"
+          style={{ ["--line-color" as string]: `${getDeptColor(node.department)}99` }}
+        >
           {regularChildren.map((child) => (
             <OrgTreeNode
               key={child.id}
@@ -330,7 +339,7 @@ export function OrgChart({ tree, isLoading }: OrgChartProps) {
           left: calc(50% / 1);
           right: calc(50% / 1);
           height: 2px;
-          background: rgba(99,102,241,0.6);
+          background: var(--line-color, rgba(99,102,241,0.6));
         }
 
         li.org-node {
@@ -350,7 +359,7 @@ export function OrgChart({ tree, isLoading }: OrgChartProps) {
           transform: translateX(-50%);
           width: 2px;
           height: 30px;
-          background: rgba(99,102,241,0.6);
+          background: var(--line-color, rgba(99,102,241,0.6));
         }
 
         /* Horizontal extenders per child */
@@ -359,7 +368,7 @@ export function OrgChart({ tree, isLoading }: OrgChartProps) {
           position: absolute;
           top: 0;
           height: 2px;
-          background: rgba(99,102,241,0.6);
+          background: var(--line-color, rgba(99,102,241,0.6));
           width: 50%;
         }
 
