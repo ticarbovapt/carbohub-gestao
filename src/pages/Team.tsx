@@ -1,7 +1,21 @@
 import { useState } from "react";
 import { BoardLayout } from "@/components/layouts/BoardLayout";
-import { Users, Shield, Building2, Filter, Mail, Clock, CheckCircle, Loader2, CheckCheck, Upload } from "lucide-react";
+import { Users, Shield, Building2, Filter, Mail, Clock, CheckCircle, Loader2, CheckCheck, Upload, Network } from "lucide-react";
 import { TeamBulkImport } from "@/components/team/TeamBulkImport";
+import { STATIC_ORG_TREE, getDeptColor, getLevelLabel, type OrgNode } from "@/hooks/useOrgChart";
+
+// ── helpers para Time Completo ────────────────────────────────────────────────
+function flattenTree(nodes: OrgNode[]): OrgNode[] {
+  return nodes.flatMap((n) => [n, ...flattenTree(n.children)]);
+}
+
+const ALL_ORG_MEMBERS = flattenTree(STATIC_ORG_TREE);
+
+const DEPT_ORDER = ["Command", "Finance", "Growth & B2B", "Growth", "OPS", "B2B", "Expansão"];
+
+function getInitialsOrg(name: string) {
+  return name.split(" ").map((w) => w[0]).slice(0, 2).join("").toUpperCase();
+}
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useTeamMembers, useUpdateUserRole, useUpdateUserDepartment, TeamMember } from "@/hooks/useTeamMembers";
 import { useNavigate } from "react-router-dom";
@@ -200,6 +214,10 @@ const Team = () => {
             <TabsTrigger value="equipe" className="gap-2">
               <Users className="h-4 w-4" />
               Equipe
+            </TabsTrigger>
+            <TabsTrigger value="time-completo" className="gap-2">
+              <Network className="h-4 w-4" />
+              Time Completo
             </TabsTrigger>
             <TabsTrigger value="importar" className="gap-2">
               <Upload className="h-4 w-4" />
@@ -444,6 +462,110 @@ const Team = () => {
           )}
         </div>
       </div>
+          </TabsContent>
+
+          {/* ── Time Completo ── */}
+          <TabsContent value="time-completo" className="mt-6 space-y-8">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-lg font-semibold text-board-text">Time Completo</h2>
+                <p className="text-sm text-muted-foreground">
+                  {ALL_ORG_MEMBERS.length} colaboradores — Mapa de Responsabilidades CarboVAPT
+                </p>
+              </div>
+              <Badge variant="secondary">{ALL_ORG_MEMBERS.length} pessoas</Badge>
+            </div>
+
+            {(() => {
+              // Agrupar por departamento, respeitando a ordem definida
+              const grouped = new Map<string, OrgNode[]>();
+              DEPT_ORDER.forEach((d) => grouped.set(d, []));
+
+              ALL_ORG_MEMBERS.forEach((m) => {
+                const dept = m.department || "Outros";
+                if (!grouped.has(dept)) grouped.set(dept, []);
+                grouped.get(dept)!.push(m);
+              });
+
+              return Array.from(grouped.entries())
+                .filter(([, members]) => members.length > 0)
+                .map(([dept, members]) => {
+                  const color = getDeptColor(dept);
+                  return (
+                    <div key={dept} className="space-y-3">
+                      {/* Section header */}
+                      <div className="flex items-center gap-3">
+                        <div
+                          className="h-1 w-6 rounded-full"
+                          style={{ backgroundColor: color }}
+                        />
+                        <h3
+                          className="text-sm font-semibold uppercase tracking-wider"
+                          style={{ color }}
+                        >
+                          {dept}
+                        </h3>
+                        <Badge
+                          variant="outline"
+                          className="text-[10px]"
+                          style={{ borderColor: color, color }}
+                        >
+                          {members.length}
+                        </Badge>
+                        <div className="flex-1 h-px bg-border" />
+                      </div>
+
+                      {/* Cards grid */}
+                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
+                        {members.map((member) => (
+                          <div
+                            key={member.id}
+                            className="flex flex-col items-center gap-2 rounded-xl border border-border bg-board-surface p-4 text-center hover:shadow-md transition-shadow"
+                          >
+                            {/* Avatar */}
+                            <div
+                              className="flex h-12 w-12 items-center justify-center rounded-full text-white font-bold text-sm ring-2 ring-offset-2 ring-offset-background shadow-md"
+                              style={{
+                                backgroundColor: color,
+                                ["--tw-ring-color" as string]: color,
+                              }}
+                            >
+                              {getInitialsOrg(member.full_name)}
+                            </div>
+
+                            {/* Name */}
+                            <p className="text-xs font-semibold text-board-text leading-tight">
+                              {member.full_name}
+                            </p>
+
+                            {/* job_title */}
+                            {member.job_title && (
+                              <p className="text-[10px] text-muted-foreground leading-tight line-clamp-2">
+                                {member.job_title}
+                              </p>
+                            )}
+
+                            {/* Level badge */}
+                            <Badge
+                              className="text-[9px] px-1.5 py-0 text-white border-0"
+                              style={{ backgroundColor: color }}
+                            >
+                              {getLevelLabel(member.hierarchy_level)}
+                            </Badge>
+
+                            {/* Assistant chip */}
+                            {member.assistant && (
+                              <Badge variant="outline" className="text-[9px] px-1.5 py-0 border-dashed">
+                                Assistente
+                              </Badge>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                });
+            })()}
           </TabsContent>
 
           <TabsContent value="importar" className="mt-6">

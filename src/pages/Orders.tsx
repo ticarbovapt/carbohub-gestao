@@ -1,4 +1,5 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useRef } from "react";
+import * as XLSX from "xlsx";
 import { BoardLayout } from "@/components/layouts/BoardLayout";
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
 import { CarboButton } from "@/components/ui/carbo-button";
@@ -26,18 +27,29 @@ import {
   Zap,
   Calendar,
   Users,
+  Download,
+  FileSpreadsheet,
+  FileText,
+  Printer,
 } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { useOrders, useOrderStats, OrderStatus, ORDER_STATUS_LABELS, ORDER_TYPE_LABELS, CarbozeOrder, OrderItem } from "@/hooks/useCarbozeOrders";
 import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
-import { format, parseISO, startOfMonth, endOfMonth, isWithinInterval } from "date-fns";
+import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { OrdersAnalytics } from "@/components/orders/OrdersAnalytics";
 import { EditOrderDialog } from "@/components/orders/EditOrderDialog";
-import { Pencil, ChevronLeft } from "lucide-react";
+import { Pencil } from "lucide-react";
 
 const STATUS_VARIANTS: Record<OrderStatus, "secondary" | "info" | "warning" | "success" | "destructive"> = {
   pending: "warning",
@@ -66,27 +78,16 @@ export default function Orders() {
   const [productFilter, setProductFilter] = useState<string>("all");
   const [vendedorFilter, setVendedorFilter] = useState<string>("all");
   const [clienteFilter, setClienteFilter] = useState<string>("all");
-  const [monthOffset, setMonthOffset] = useState(0);
-  const [showAllMonths, setShowAllMonths] = useState(true);
+  const [dateFrom, setDateFrom] = useState<string>("");
+  const [dateTo, setDateTo]     = useState<string>("");
   const [activeTab, setActiveTab] = useState<"list" | "analytics">("list");
+  const tableRef = useRef<HTMLDivElement>(null);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<CarbozeOrder | null>(null);
 
   const { data: orders = [], isLoading, refetch } = useOrders(statusFilter);
   const { data: allOrders = [] } = useOrders("all");
   const { data: stats, isLoading: statsLoading } = useOrderStats();
-
-  // Current month for date filter
-  const currentMonth = useMemo(() => {
-    const d = new Date();
-    d.setMonth(d.getMonth() + monthOffset);
-    return d;
-  }, [monthOffset]);
-
-  const monthLabel = useMemo(() => {
-    if (showAllMonths) return "Todos os períodos";
-    return format(currentMonth, "MMM yyyy", { locale: ptBR }).replace(/^\w/, (c) => c.toUpperCase());
-  }, [currentMonth, showAllMonths]);
 
   // Unique vendedores and clients for dropdowns
   const vendedores = useMemo(() => {
@@ -104,12 +105,14 @@ export default function Orders() {
   // Filter by all criteria
   const filteredOrders = useMemo(() => {
     return orders.filter((order) => {
-      // Date filter
-      if (!showAllMonths) {
-        const orderDate = parseISO(order.created_at);
-        const start = startOfMonth(currentMonth);
-        const end = endOfMonth(currentMonth);
-        if (!isWithinInterval(orderDate, { start, end })) return false;
+      // Date range filter
+      if (dateFrom) {
+        if (new Date(order.created_at) < new Date(dateFrom)) return false;
+      }
+      if (dateTo) {
+        const end = new Date(dateTo);
+        end.setDate(end.getDate() + 1);
+        if (new Date(order.created_at) >= end) return false;
       }
       // Type filter
       if (typeFilter !== "all" && order.order_type !== typeFilter) return false;
@@ -126,10 +129,54 @@ export default function Orders() {
         order.order_number.toLowerCase().includes(search) ||
         order.customer_name.toLowerCase().includes(search) ||
         order.customer_email?.toLowerCase().includes(search) ||
-        order.licensee?.name?.toLowerCase().includes(search)
+        (order.invoice_number ?? "").toLowerCase().includes(search)
       );
     });
-  }, [orders, searchQuery, statusFilter, typeFilter, productFilter, vendedorFilter, clienteFilter, showAllMonths, currentMonth]);
+  }, [orders, searchQuery, statusFilter, typeFilter, productFilter, vendedorFilter, clienteFilter, dateFrom, dateTo]);
+
+  // ── Export helpers ────────────────────────────────────────────────────────
+  const buildExportRows = () =>
+    filteredOrders.map((o) => {
+      const items = Array.isArray(o.items) ? (o.items as unknown as OrderItem[]) : [];
+      const qty = items.reduce((s, i) => s + (i.quantity || 0), 0);
+      return {
+        Pedido:       o.order_number,
+        "NF":         o.invoice_number ?? "",
+        Produto:      o.sku?.name ?? o.linha?.replace(/_/g, " ") ?? "",
+        Tipo:         ORDER_TYPE_LABELS[o.order_type] ?? o.order_type,
+        Vendedor:     o.vendedor_name ?? "",
+        Cliente:      o.customer_name,
+        Data:         format(new Date(o.created_at), "dd/MM/yyyy HH:mm", { locale: ptBR }),
+        Quantidade:   qty,
+        "Total (R$)": Number(o.total),
+        Status:       ORDER_STATUS_LABELS[o.status],
+      };
+    });
+
+  const handleExportExcel = () => {
+    const ws = XLSX.utils.json_to_sheet(buildExportRows());
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Pedidos");
+    XLSX.writeFile(wb, `pedidos_carbo_${new Date().toISOString().slice(0, 10)}.xlsx`);
+  };
+
+  const handleExportCsv = () => {
+    const rows = buildExportRows();
+    if (!rows.length) return;
+    const header = Object.keys(rows[0]).join(";");
+    const body = rows.map((r) => Object.values(r).map((v) => `"${String(v).replace(/"/g, '""')}"`).join(";")).join("\n");
+    const blob = new Blob(["\uFEFF" + header + "\n" + body], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `pedidos_carbo_${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleExportPdf = () => {
+    window.print();
+  };
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat("pt-BR", {
@@ -151,6 +198,31 @@ export default function Orders() {
                 <RefreshCw className="h-4 w-4 mr-1" />
                 Atualizar
               </CarboButton>
+
+              {/* Export dropdown */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="sm" className="gap-1.5">
+                    <Download className="h-4 w-4" />
+                    Exportar
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={handleExportExcel} className="gap-2">
+                    <FileSpreadsheet className="h-4 w-4 text-green-600" />
+                    Excel (.xlsx)
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={handleExportCsv} className="gap-2">
+                    <FileText className="h-4 w-4 text-blue-600" />
+                    CSV (.csv)
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={handleExportPdf} className="gap-2">
+                    <Printer className="h-4 w-4 text-red-600" />
+                    Imprimir / PDF
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+
               {isManager && (
                 <CarboButton onClick={() => navigate("/orders/new")}>
                   <Plus className="h-4 w-4 mr-1" />
@@ -297,23 +369,34 @@ export default function Orders() {
 
           {/* Filters Row 2: Date + Product + Vendedor + Cliente */}
           <div className="flex flex-wrap items-center gap-3">
-            {/* Date filter */}
-            <div className="flex items-center gap-1">
-              <Calendar className="h-4 w-4 text-muted-foreground" />
-              <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => { setShowAllMonths(false); setMonthOffset((p) => p - 1); }}>
-                <ChevronLeft className="h-3 w-3" />
-              </Button>
-              <Button
-                variant={showAllMonths ? "default" : "outline"}
-                size="sm"
-                className="h-8 min-w-[130px] text-xs"
-                onClick={() => setShowAllMonths(!showAllMonths)}
-              >
-                {monthLabel}
-              </Button>
-              <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => { setShowAllMonths(false); setMonthOffset((p) => Math.min(0, p + 1)); }} disabled={monthOffset >= 0 && !showAllMonths}>
-                <ChevronRight className="h-3 w-3" />
-              </Button>
+            {/* Date range filter */}
+            <div className="flex items-center gap-2">
+              <Calendar className="h-4 w-4 text-muted-foreground shrink-0" />
+              <Input
+                type="date"
+                className="h-8 w-36 rounded-lg text-xs"
+                value={dateFrom}
+                onChange={(e) => setDateFrom(e.target.value)}
+                placeholder="De"
+              />
+              <span className="text-xs text-muted-foreground">até</span>
+              <Input
+                type="date"
+                className="h-8 w-36 rounded-lg text-xs"
+                value={dateTo}
+                onChange={(e) => setDateTo(e.target.value)}
+                placeholder="Até"
+              />
+              {(dateFrom || dateTo) && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 px-2 text-xs text-muted-foreground"
+                  onClick={() => { setDateFrom(""); setDateTo(""); }}
+                >
+                  Limpar
+                </Button>
+              )}
             </div>
 
             <div className="w-px h-6 bg-border" />
@@ -397,11 +480,11 @@ export default function Orders() {
             <CarboTableHeader>
               <CarboTableRow>
                 <CarboTableHead>Pedido</CarboTableHead>
+                <CarboTableHead>NF</CarboTableHead>
                 <CarboTableHead>Produto</CarboTableHead>
                 <CarboTableHead>Tipo</CarboTableHead>
                 <CarboTableHead>Vendedor</CarboTableHead>
                 <CarboTableHead>Cliente</CarboTableHead>
-                <CarboTableHead>Licenciado</CarboTableHead>
                 <CarboTableHead>Data</CarboTableHead>
                 <CarboTableHead className="text-center">Qtd</CarboTableHead>
                 <CarboTableHead>Total</CarboTableHead>
@@ -425,6 +508,15 @@ export default function Orders() {
                       <span className="font-mono text-sm font-medium text-carbo-green">
                         {order.order_number}
                       </span>
+                    </CarboTableCell>
+                    <CarboTableCell>
+                      {order.invoice_number ? (
+                        <span className="font-mono text-xs text-muted-foreground">
+                          {order.invoice_number}
+                        </span>
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )}
                     </CarboTableCell>
                     <CarboTableCell>
                       <CarboBadge variant={order.sku?.code?.startsWith('SKU-VAPT') ? 'warning' : 'success'} className="text-[10px]">
@@ -456,16 +548,6 @@ export default function Orders() {
                           <p className="text-xs text-muted-foreground">{order.customer_email}</p>
                         )}
                       </div>
-                    </CarboTableCell>
-                    <CarboTableCell>
-                      {order.licensee ? (
-                        <div>
-                          <p className="text-sm">{order.licensee.name}</p>
-                          <p className="text-xs text-muted-foreground">{order.licensee.code}</p>
-                        </div>
-                      ) : (
-                        <span className="text-muted-foreground">—</span>
-                      )}
                     </CarboTableCell>
                     <CarboTableCell>
                       <p className="text-sm">

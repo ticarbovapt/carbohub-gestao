@@ -12,6 +12,7 @@ export interface OrgNode {
   job_category: string | null;
   carbo_role: string | null;
   dual_role?: string;
+  assistant?: boolean;   // quando true → exibir ao lado do superior, não abaixo
   children: OrgNode[];
 }
 
@@ -22,11 +23,13 @@ function makeNode(
   department: string,
   hierarchy_level: number,
   children: OrgNode[] = [],
-  dual_role?: string
+  dual_role?: string,
+  assistant?: boolean
 ): OrgNode {
   return {
     id, full_name, avatar_url: null, hierarchy_level, reports_to: null,
-    department, job_title, job_category: null, carbo_role: null, dual_role, children,
+    department, job_title, job_category: null, carbo_role: null,
+    dual_role, assistant, children,
   };
 }
 
@@ -34,7 +37,7 @@ function makeNode(
 export const STATIC_ORG_TREE: OrgNode[] = [
   makeNode("thelis", "Thelis Botelho", "CEO / Liderança Comercial", "Command", 1, [
 
-    makeNode("emmily", "Emmily Moreira", "Assistente Executiva", "Command", 4),
+    makeNode("emmily", "Emmily Moreira", "Assistente Executiva", "Command", 4, [], undefined, true),
 
     makeNode("priscilla", "Priscilla", "Sócia-Adm / Financeiro", "Finance", 2, [
       makeNode("sueilha", "Sueilha", "Financeiro", "Finance", 6),

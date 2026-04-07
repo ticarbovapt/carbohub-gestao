@@ -23,7 +23,17 @@ const GROUP_LABELS: Record<string, string> = {
 };
 
 // ── Single node card ───────────────────────────────────────────────────────────
-function NodeCard({ node, size = "md" }: { node: OrgNode; size?: "lg" | "md" | "sm" }) {
+function NodeCard({
+  node,
+  size = "md",
+  showDept = false,
+  className,
+}: {
+  node: OrgNode;
+  size?: "lg" | "md" | "sm";
+  showDept?: boolean;
+  className?: string;
+}) {
   const initials = node.full_name
     .split(" ")
     .map((w) => w[0])
@@ -32,35 +42,70 @@ function NodeCard({ node, size = "md" }: { node: OrgNode; size?: "lg" | "md" | "
     .toUpperCase();
 
   const deptColor = getDeptColor(node.department);
-  const avatarSize = size === "lg" ? "h-20 w-20" : size === "md" ? "h-14 w-14" : "h-11 w-11";
-  const textSize   = size === "lg" ? "text-sm font-bold" : size === "md" ? "text-xs font-semibold" : "text-[10px] font-medium";
-  const badgeSize  = size === "lg" ? "text-[11px] px-2.5 py-0.5" : "text-[9px] px-1.5 py-0";
+
+  const avatarSize =
+    size === "lg" ? "h-20 w-20" : size === "md" ? "h-14 w-14" : "h-11 w-11";
+  const textSize =
+    size === "lg"
+      ? "text-sm font-bold"
+      : size === "md"
+      ? "text-xs font-semibold"
+      : "text-[10px] font-medium";
+  const badgeSize =
+    size === "lg" ? "text-[11px] px-2.5 py-0.5" : "text-[9px] px-1.5 py-0";
 
   return (
-    <div className="flex flex-col items-center gap-1.5">
+    <div
+      className={cn(
+        "flex flex-col items-center gap-1.5 transition-transform duration-150 hover:scale-105 cursor-default",
+        className
+      )}
+    >
       <Avatar
         className={cn(avatarSize, "ring-2 ring-offset-2 ring-offset-background shadow-lg")}
         style={{ "--tw-ring-color": deptColor } as React.CSSProperties}
       >
         <AvatarImage src={node.avatar_url || undefined} />
         <AvatarFallback
-          className={cn("text-white font-bold", size === "lg" ? "text-lg" : size === "md" ? "text-sm" : "text-xs")}
+          className={cn(
+            "text-white font-bold",
+            size === "lg" ? "text-lg" : size === "md" ? "text-sm" : "text-xs"
+          )}
           style={{ backgroundColor: deptColor }}
         >
           {initials}
         </AvatarFallback>
       </Avatar>
 
-      <p className={cn("text-center leading-tight max-w-[110px]", textSize)}>
+      <p className={cn("text-center leading-tight max-w-[130px]", textSize)}>
         {node.full_name}
       </p>
 
-      <Badge className={cn("text-white border-0", badgeSize)} style={{ backgroundColor: deptColor }}>
+      {node.job_title && size !== "sm" && (
+        <p className="text-[9px] text-muted-foreground text-center max-w-[130px] leading-tight -mt-0.5">
+          {node.job_title}
+        </p>
+      )}
+
+      <Badge
+        className={cn("text-white border-0 shadow-sm", badgeSize)}
+        style={{ backgroundColor: deptColor }}
+      >
         {getLevelLabel(node.hierarchy_level)}
       </Badge>
 
+      {showDept && node.department && (
+        <Badge
+          variant="outline"
+          className={cn("border shadow-sm", badgeSize)}
+          style={{ borderColor: deptColor, color: deptColor }}
+        >
+          {node.department}
+        </Badge>
+      )}
+
       {node.dual_role && (
-        <Badge className={cn("bg-violet-600 text-white border-0", badgeSize)}>
+        <Badge className={cn("bg-violet-600 text-white border-0 shadow-sm", badgeSize)}>
           + Head B2B
         </Badge>
       )}
@@ -68,26 +113,59 @@ function NodeCard({ node, size = "md" }: { node: OrgNode; size?: "lg" | "md" | "
   );
 }
 
+// ── AssistantCard — rendered to the right of parent with dashed connector ──────
+function AssistantCard({ node }: { node: OrgNode }) {
+  const deptColor = getDeptColor(node.department);
+  return (
+    <div className="flex items-center gap-0 select-none">
+      {/* Dashed horizontal line */}
+      <div
+        className="w-10 h-0 border-t-2 border-dashed"
+        style={{ borderColor: `${deptColor}90` }}
+      />
+      {/* Assistant node */}
+      <div className="flex flex-col items-center gap-1 ml-1">
+        <div
+          className="relative flex flex-col items-center gap-1 px-3 py-2 rounded-xl border-2 border-dashed"
+          style={{ borderColor: `${deptColor}50`, backgroundColor: `${deptColor}08` }}
+        >
+          {/* "Assistente" label chip */}
+          <span
+            className="absolute -top-2.5 text-[8px] font-semibold px-1.5 py-0.5 rounded-full text-white"
+            style={{ backgroundColor: deptColor }}
+          >
+            Assistente
+          </span>
+          <NodeCard node={node} size="sm" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── GroupBlock — renders a named group of children under a dual-role node ─────
-function GroupBlock({ dept, nodes, depth }: { dept: string; nodes: OrgNode[]; depth: number }) {
+function GroupBlock({
+  dept,
+  nodes,
+  depth,
+}: {
+  dept: string;
+  nodes: OrgNode[];
+  depth: number;
+}) {
   const color = getDeptColor(dept);
   const label = GROUP_LABELS[dept] || dept;
 
   return (
     <div className="flex flex-col items-center gap-3 min-w-[120px]">
-      {/* Group header */}
       <div
         className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-semibold text-white shadow-sm"
         style={{ backgroundColor: color }}
       >
         {label}
       </div>
-
-      {/* Vertical connector down from group header */}
-      <div className="w-px h-4" style={{ backgroundColor: `${color}60` }} />
-
-      {/* Children row */}
-      <ul className="org-children" style={{ ["--line-color" as string]: `${color}50` }}>
+      <div className="w-px h-4" style={{ backgroundColor: `${color}70` }} />
+      <ul className="org-children" style={{ ["--line-color" as string]: `${color}60` }}>
         {nodes.map((node) => (
           <OrgTreeNode key={node.id} node={node} depth={depth} defaultOpen />
         ))}
@@ -97,37 +175,60 @@ function GroupBlock({ dept, nodes, depth }: { dept: string; nodes: OrgNode[]; de
 }
 
 // ── OrgTreeNode ───────────────────────────────────────────────────────────────
-function OrgTreeNode({ node, depth, defaultOpen }: { node: OrgNode; depth: number; defaultOpen: boolean }) {
+function OrgTreeNode({
+  node,
+  depth,
+  defaultOpen,
+}: {
+  node: OrgNode;
+  depth: number;
+  defaultOpen: boolean;
+}) {
   const [open, setOpen] = useState(defaultOpen);
-  const hasChildren = node.children.length > 0;
-  const hasDualRole  = !!node.dual_role && node.children.length > 0;
-  const cardSize: "lg" | "md" | "sm" = depth === 0 ? "lg" : depth === 1 ? "md" : "sm";
 
-  // For dual-role nodes, group children by department
+  const assistants     = node.children.filter((c) => c.assistant);
+  const regularChildren = node.children.filter((c) => !c.assistant);
+
+  const hasRegular  = regularChildren.length > 0;
+  const hasDualRole = !!node.dual_role && regularChildren.length > 0;
+  const cardSize: "lg" | "md" | "sm" =
+    depth === 0 ? "lg" : depth === 1 ? "md" : "sm";
+
+  // For dual-role nodes: group regular children by department
   const dualGroups: Array<{ dept: string; nodes: OrgNode[] }> = React.useMemo(() => {
     if (!hasDualRole) return [];
     const map = new Map<string, OrgNode[]>();
-    node.children.forEach((child) => {
+    regularChildren.forEach((child) => {
       const d = child.department || "Other";
       if (!map.has(d)) map.set(d, []);
       map.get(d)!.push(child);
     });
     return Array.from(map.entries()).map(([dept, nodes]) => ({ dept, nodes }));
-  }, [hasDualRole, node.children]);
+  }, [hasDualRole, regularChildren]);
 
   return (
     <li className="org-node">
       <div className="relative inline-flex flex-col items-center">
-        <NodeCard node={node} size={cardSize} />
+        {/* Node + assistente ao lado */}
+        <div className="flex items-start justify-center gap-0">
+          <NodeCard node={node} size={cardSize} />
+          {assistants.map((a) => (
+            <AssistantCard key={a.id} node={a} />
+          ))}
+        </div>
 
-        {hasChildren && (
+        {hasRegular && (
           <Button
             variant="ghost"
             size="sm"
             className="h-5 w-5 p-0 mt-0.5 rounded-full bg-muted hover:bg-accent"
             onClick={() => setOpen((v) => !v)}
           >
-            {open ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+            {open ? (
+              <ChevronDown className="h-3 w-3" />
+            ) : (
+              <ChevronRight className="h-3 w-3" />
+            )}
           </Button>
         )}
       </div>
@@ -142,10 +243,15 @@ function OrgTreeNode({ node, depth, defaultOpen }: { node: OrgNode; depth: numbe
       )}
 
       {/* Regular children */}
-      {!hasDualRole && hasChildren && open && (
+      {!hasDualRole && hasRegular && open && (
         <ul className="org-children">
-          {node.children.map((child) => (
-            <OrgTreeNode key={child.id} node={child} depth={depth + 1} defaultOpen={depth < 1} />
+          {regularChildren.map((child) => (
+            <OrgTreeNode
+              key={child.id}
+              node={child}
+              depth={depth + 1}
+              defaultOpen={depth < 1}
+            />
           ))}
         </ul>
       )}
@@ -205,9 +311,6 @@ export function OrgChart({ tree, isLoading }: OrgChartProps) {
           padding-bottom: 32px;
           padding-top: 8px;
         }
-        .org-root > .org-node > ul.org-children {
-          padding-top: 28px;
-        }
 
         ul.org-children {
           display: flex;
@@ -227,14 +330,14 @@ export function OrgChart({ tree, isLoading }: OrgChartProps) {
           left: calc(50% / 1);
           right: calc(50% / 1);
           height: 2px;
-          background: rgba(99,102,241,0.4);
+          background: rgba(99,102,241,0.6);
         }
 
         li.org-node {
           display: flex;
           flex-direction: column;
           align-items: center;
-          padding: 0 14px;
+          padding: 0 10px;
           position: relative;
         }
 
@@ -247,7 +350,7 @@ export function OrgChart({ tree, isLoading }: OrgChartProps) {
           transform: translateX(-50%);
           width: 2px;
           height: 30px;
-          background: rgba(99,102,241,0.4);
+          background: rgba(99,102,241,0.6);
         }
 
         /* Horizontal extenders per child */
@@ -256,7 +359,7 @@ export function OrgChart({ tree, isLoading }: OrgChartProps) {
           position: absolute;
           top: 0;
           height: 2px;
-          background: rgba(99,102,241,0.4);
+          background: rgba(99,102,241,0.6);
           width: 50%;
         }
 
@@ -271,10 +374,8 @@ export function OrgChart({ tree, isLoading }: OrgChartProps) {
           width: 100%;
         }
 
-        /* Vertical connector from parent node down to children bar — via the li::before of root item */
-        .org-root > li.org-node::before {
-          display: none;
-        }
+        /* Hide connectors on root */
+        .org-root > li.org-node::before,
         .org-root > li.org-node::after {
           display: none;
         }
@@ -282,7 +383,9 @@ export function OrgChart({ tree, isLoading }: OrgChartProps) {
 
       {/* Legend */}
       <div className="flex flex-wrap items-center gap-2">
-        <Badge variant="secondary" className="text-xs">{total} colaboradores</Badge>
+        <Badge variant="secondary" className="text-xs font-semibold">
+          {total} colaboradores
+        </Badge>
         {DEPT_LEGEND.map((d) => (
           <Badge
             key={d.key}
@@ -293,6 +396,9 @@ export function OrgChart({ tree, isLoading }: OrgChartProps) {
             {d.label}
           </Badge>
         ))}
+        <Badge variant="outline" className="text-[10px] border-dashed text-muted-foreground">
+          ╌╌ Assistente
+        </Badge>
       </div>
 
       {/* Tree */}

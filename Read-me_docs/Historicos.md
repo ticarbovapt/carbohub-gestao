@@ -61,6 +61,41 @@ Cada entrada registra o que foi entregue, decisões tomadas e contexto relevante
 
 ---
 
+## Sessão — 07/04/2026 (Chat 5 — Menu Controle + OP Kanban + OS Descarbonização)
+
+### Commit 48b1376
+
+### Tarefa #57 — Menu: Reordenar tabs + renomear "Dados Mestres" → "Controle" ✅
+- `BoardLayout.tsx`: tabs reordenados para **Dash → Ops → Controle**
+- "Dados Mestres" completamente renomeado para "Controle" em todos os pontos (tab, header, areaLabel)
+- `SidebarTab` type: `"dados"` → `"controle"`; `dadosMestresItems` → `controleItems`
+- `/dashboard` movido para `dashboardsItems` como primeiro item ("Visão Geral")
+- `operacoesItems` agora tem seções visuais: **Produção** | **Descarbonização** | **Comercial** | **Financeiro & Supply**
+- Propriedade `sectionLabel?` adicionada ao `NavItem` interface — renderiza mini-header de seção
+
+### Tarefa #58 — OP Kanban: Visão Kanban nas Ordens de Produção ✅
+- `OPKanbanBoard.tsx` criado: 8 colunas agrupando os 14 `op_status` existentes
+  - Backlog → Planejada → Materiais → Liberada → Em Produção → Qualidade → Concluída → Bloqueada
+- `OPKanbanCard.tsx` criado: OP Number, SKU, Qtd, Prioridade, Demand Source, Data Necessidade
+- `ProductionOrdersOP.tsx` modificado: toggle Lista/Kanban no header (padrão lista)
+
+### Tarefa #59 — OS Board: Funil Descarbonização CarboVAPT [NOVO MÓDULO] ✅
+- `src/types/os.ts` extendido: `OsStage`, `OsServiceType`, `OS_STAGES` (8 etapas), `OS_KANBAN_STAGES`, `getNextOsStage()`, `ServiceOrderCarboVAPT`
+- `src/hooks/useServiceOrders.ts` criado: `useServiceOrders`, `useOSStats`, `useCreateServiceOrder`, `useUpdateServiceOrder`, `useAdvanceOSStage`, `useMarkOSCancelled`
+- `OSKanbanBoard.tsx` reescrito: 7 colunas (exceto cancelada), usa `OS_KANBAN_STAGES` + `ServiceOrderCarboVAPT`
+- `OSCard.tsx` reescrito: service_type badge (B2C/B2B/Frota), placa/modelo, scheduled_at, prioridade, botões Avançar/Cancelar
+- `CreateOSDialog.tsx` reescrito: step 1 seleciona tipo (B2C/B2B/Frota), step 2 preenche cliente, placa, modelo, agendamento, prioridade
+- `OSBoard.tsx` reescrito: KPIs (Total/Agendadas hoje/Em execução/Concluídas mês), toggle Kanban/Lista, título "Ordens de Serviço — Descarbonização CarboVAPT"
+- Migration SQL: `supabase/migrations/20260407_os_carbovapt.sql` — ENUM `os_stage_type`, colunas `os_stage/service_type/vehicle_plate/vehicle_model/scheduled_at/customer_name`, trigger numeração OS-YYYY-NNNNN
+
+### Etapas do Funil OS (ciclo de vida SalesForce):
+1. 📥 Nova OS → 2. 📋 Qualificação → 3. 📅 Agendamento → 4. ✅ Confirmada → 5. ⚙️ Em Execução → 6. 📝 Pós-Serviço → 7. ✔️ Concluída | 🔄 Cancelada
+
+### Pendência Peterson:
+- Rodar `supabase/migrations/20260407_os_carbovapt.sql` no Supabase SQL Editor
+
+---
+
 ## Sessão — 06/04/2026 (Chat 4 — UX Sprint Licenciados + Org Chart)
 
 ### Commit f9a3318
