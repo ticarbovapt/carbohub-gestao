@@ -10,12 +10,13 @@ import { CarboKPI } from "@/components/ui/carbo-kpi";
 import { CarboSkeleton } from "@/components/ui/CarboSkeleton";
 import { CarboEmptyState } from "@/components/ui/carbo-empty-state";
 import { CarboTable, CarboTableHeader, CarboTableBody, CarboTableRow, CarboTableHead, CarboTableCell } from "@/components/ui/carbo-table";
-import { 
-  Building2, 
-  ArrowLeft, 
-  MapPin, 
-  Phone, 
-  Mail, 
+import { Badge } from "@/components/ui/badge";
+import {
+  Building2,
+  ArrowLeft,
+  MapPin,
+  Phone,
+  Mail,
   FileText,
   Calendar,
   Cog,
@@ -24,7 +25,12 @@ import {
   Clock,
   Pencil,
   Ban,
-  CheckCircle2
+  CheckCircle2,
+  ClipboardList,
+  Users,
+  FlaskConical,
+  AlertTriangle,
+  Car,
 } from "lucide-react";
 import { useLicensee, LicenseeStatus } from "@/hooks/useLicensees";
 import { useQuery } from "@tanstack/react-query";
@@ -35,8 +41,12 @@ import { InactivateLicenseeDialog } from "@/components/licensees/InactivateLicen
 import { ReactivateLicenseeDialog } from "@/components/licensees/ReactivateLicenseeDialog";
 import { LicenseeSubNav } from "@/components/licensees/LicenseeSubNav";
 import { LicenseePerformanceCharts } from "@/components/licensees/LicenseePerformanceCharts";
+import { useLicenseeReagentStock } from "@/hooks/useLicenseeReagentStock";
+import { MODALITY_INFO } from "@/hooks/useDescarbSales";
+import { PRIORIDADE_CONFIG } from "@/hooks/useOpsAlerts";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { cn } from "@/lib/utils";
 
 const STATUS_LABELS: Record<LicenseeStatus, string> = {
   active: "Ativo",
@@ -85,6 +95,64 @@ export default function LicenseeDetails() {
   const [isReactivateDialogOpen, setIsReactivateDialogOpen] = React.useState(false);
 
   const { data: licensee, isLoading: licenseeLoading } = useLicensee(id);
+
+  // ── Sprint B data ──────────────────────────────────────────────────────────
+  const { data: reagentStock } = useLicenseeReagentStock(id);
+
+  const { data: descarbSales = [] } = useQuery({
+    queryKey: ["licensee-descarb-sales-360", id],
+    queryFn: async () => {
+      if (!id) return [];
+      const { data, error } = await (supabase as any)
+        .from("descarb_sales")
+        .select(`*, descarb_clients(name), descarb_vehicles(license_plate)`)
+        .eq("licensee_id", id)
+        .eq("is_pre_sale", false)
+        .order("created_at", { ascending: false })
+        .limit(10);
+      if (error) throw error;
+      return data ?? [];
+    },
+    enabled: !!id,
+  });
+
+  const { data: descarbClients = [] } = useQuery({
+    queryKey: ["licensee-descarb-clients-count", id],
+    queryFn: async () => {
+      if (!id) return [];
+      const { data, error } = await (supabase as any)
+        .from("descarb_clients")
+        .select("id")
+        .eq("licensee_id", id);
+      if (error) throw error;
+      return data ?? [];
+    },
+    enabled: !!id,
+  });
+
+  const { data: openAlerts = [] } = useQuery({
+    queryKey: ["licensee-ops-alerts-360", id],
+    queryFn: async () => {
+      if (!id) return [];
+      const { data, error } = await (supabase as any)
+        .from("ops_alerts")
+        .select("*")
+        .eq("licensee_id", id)
+        .in("status", ["open", "in_progress"])
+        .order("created_at", { ascending: false })
+        .limit(5);
+      if (error) throw error;
+      return data ?? [];
+    },
+    enabled: !!id,
+  });
+
+  // Month sales
+  const now = new Date();
+  const monthSales = descarbSales.filter((s: any) => {
+    const d = new Date(s.created_at);
+    return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+  });
 
   // Fetch machines for this licensee
   const { data: machines = [], isLoading: machinesLoading } = useQuery({
@@ -246,6 +314,186 @@ export default function LicenseeDetails() {
             delay={200}
           />
         </div>
+
+        {/* Sprint B KPIs */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <CarboKPI
+            title="Atendimentos no Mês"
+            value={monthSales.length}
+            icon={ClipboardList}
+            iconColor="green"
+            delay={50}
+          />
+          <CarboKPI
+            title="Clientes Cadastrados"
+            value={descarbClients.length}
+            icon={Users}
+            iconColor="blue"
+            delay={100}
+          />
+          <CarboKPI
+            title="Alertas Abertos"
+            value={openAlerts.length}
+            icon={AlertTriangle}
+            iconColor={openAlerts.length > 0 ? "warning" : "success"}
+            delay={150}
+          />
+          <CarboKPI
+            title="Reagente Flex"
+            value={`${(reagentStock?.qty_flex ?? 0).toFixed(1)} L`}
+            icon={FlaskConical}
+            iconColor={
+              (reagentStock?.qty_flex ?? 0) <= (reagentStock?.min_qty_alert ?? 5)
+                ? "warning" : "success"
+            }
+            delay={200}
+          />
+        </div>
+
+        {/* Reagente gauges */}
+        {reagentStock && (
+          <CarboCard>
+            <CarboCardHeader>
+              <CarboCardTitle className="flex items-center gap-2">
+                <FlaskConical className="h-5 w-5 text-area-licensee" />
+                Estoque de Reagentes
+              </CarboCardTitle>
+            </CarboCardHeader>
+            <CarboCardContent>
+              <div className="grid sm:grid-cols-3 gap-4">
+                {(["flex", "diesel", "normal"] as const).map((type) => {
+                  const qty = reagentStock[`qty_${type}` as "qty_flex" | "qty_diesel" | "qty_normal"];
+                  const min = reagentStock.min_qty_alert;
+                  const pct = min > 0 ? Math.min(100, (qty / (min * 4)) * 100) : 100;
+                  const isLow = qty <= min;
+                  const colors: Record<string, string> = {
+                    flex: "#22c55e", diesel: "#f59e0b", normal: "#3b82f6",
+                  };
+                  const color = colors[type];
+                  return (
+                    <div key={type} className="space-y-2">
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm font-medium capitalize" style={{ color }}>{type}</span>
+                        <span className="text-sm font-bold" style={{ color }}>{qty.toFixed(1)} L</span>
+                      </div>
+                      <div className="h-2 rounded-full bg-muted overflow-hidden">
+                        <div
+                          className="h-full rounded-full transition-all"
+                          style={{
+                            width: `${pct}%`,
+                            backgroundColor: isLow ? "#ef4444" : color,
+                          }}
+                        />
+                      </div>
+                      {isLow && (
+                        <p className="text-[10px] text-amber-600 flex items-center gap-1">
+                          <AlertTriangle className="h-3 w-3" /> Abaixo do mínimo ({min} L)
+                        </p>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </CarboCardContent>
+          </CarboCard>
+        )}
+
+        {/* Open alerts */}
+        {openAlerts.length > 0 && (
+          <CarboCard>
+            <CarboCardHeader>
+              <CarboCardTitle className="flex items-center gap-2 text-destructive">
+                <AlertTriangle className="h-5 w-5" />
+                Alertas Abertos ({openAlerts.length})
+              </CarboCardTitle>
+            </CarboCardHeader>
+            <CarboCardContent className="space-y-2">
+              {openAlerts.map((a: any) => {
+                const cfg = PRIORIDADE_CONFIG[a.prioridade as keyof typeof PRIORIDADE_CONFIG];
+                return (
+                  <div key={a.id} className="flex items-center gap-3 rounded-lg border border-border px-3 py-2">
+                    <span
+                      className="h-2 w-2 rounded-full flex-shrink-0"
+                      style={{ backgroundColor: cfg?.color ?? "#ef4444" }}
+                    />
+                    <p className="flex-1 text-sm text-foreground truncate">{a.titulo}</p>
+                    <Badge
+                      variant="outline"
+                      className="text-[9px] flex-shrink-0"
+                      style={{ borderColor: cfg?.color, color: cfg?.color }}
+                    >
+                      {cfg?.label ?? a.prioridade}
+                    </Badge>
+                  </div>
+                );
+              })}
+            </CarboCardContent>
+          </CarboCard>
+        )}
+
+        {/* Recent atendimentos */}
+        <CarboCard>
+          <CarboCardHeader>
+            <CarboCardTitle className="flex items-center gap-2">
+              <ClipboardList className="h-5 w-5" />
+              Últimos Atendimentos ({descarbSales.length > 10 ? "10+" : descarbSales.length})
+            </CarboCardTitle>
+          </CarboCardHeader>
+          <CarboCardContent>
+            {descarbSales.length === 0 ? (
+              <CarboEmptyState
+                icon={ClipboardList}
+                title="Nenhum atendimento"
+                description="Nenhuma descarbonização registrada ainda"
+              />
+            ) : (
+              <CarboTable>
+                <CarboTableHeader>
+                  <CarboTableRow>
+                    <CarboTableHead>Mod.</CarboTableHead>
+                    <CarboTableHead>Cliente</CarboTableHead>
+                    <CarboTableHead>Placa</CarboTableHead>
+                    <CarboTableHead>Reagente</CarboTableHead>
+                    <CarboTableHead>Valor</CarboTableHead>
+                    <CarboTableHead>Data</CarboTableHead>
+                  </CarboTableRow>
+                </CarboTableHeader>
+                <CarboTableBody>
+                  {descarbSales.map((s: any) => {
+                    const mod = MODALITY_INFO[s.modality as keyof typeof MODALITY_INFO];
+                    return (
+                      <CarboTableRow key={s.id}>
+                        <CarboTableCell>
+                          <span
+                            className="inline-flex h-7 w-7 items-center justify-center rounded-full text-white font-black text-xs"
+                            style={{ backgroundColor: mod?.color ?? "#64748b" }}
+                          >
+                            {s.modality}
+                          </span>
+                        </CarboTableCell>
+                        <CarboTableCell>{s.descarb_clients?.name ?? "Avulso"}</CarboTableCell>
+                        <CarboTableCell>
+                          {s.descarb_vehicles?.license_plate ? (
+                            <span className="font-mono text-xs">{s.descarb_vehicles.license_plate}</span>
+                          ) : "—"}
+                        </CarboTableCell>
+                        <CarboTableCell>
+                          <span className="text-xs capitalize">{s.reagent_type} {s.reagent_qty_used}L</span>
+                        </CarboTableCell>
+                        <CarboTableCell>
+                          <span className="font-medium">R$ {Number(s.total_value).toFixed(2)}</span>
+                        </CarboTableCell>
+                        <CarboTableCell>
+                          {format(new Date(s.created_at), "dd/MM/yy HH:mm", { locale: ptBR })}
+                        </CarboTableCell>
+                      </CarboTableRow>
+                    );
+                  })}
+                </CarboTableBody>
+              </CarboTable>
+            )}
+          </CarboCardContent>
+        </CarboCard>
 
         {/* Performance Charts */}
         {id && <LicenseePerformanceCharts licenseeId={id} />}
