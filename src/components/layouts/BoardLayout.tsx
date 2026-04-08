@@ -162,10 +162,8 @@ const operacoesItems: NavItem[] = [
   { href: "/logistics",         label: "Logística",               icon: Truck },
 ];
 
+// Governance/admin tools moved to /team page — accessible via Controle > Equipe
 const globalItems = [
-  { href: "/admin/approval", label: "Aprovações", icon: UserCheck, adminOnly: true },
-  { href: "/role-matrix", label: "Permissões", icon: Shield, adminOnly: true },
-  { href: "/governance", label: "Governança", icon: Shield, adminOnly: true },
   { href: "/integrations/bling", label: "Integrações", icon: Link2, adminOnly: false, financeOrMasterOnly: true },
 ];
 

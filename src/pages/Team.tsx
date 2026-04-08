@@ -1,6 +1,9 @@
 import { useState, useMemo } from "react";
 import { BoardLayout } from "@/components/layouts/BoardLayout";
-import { Users, Shield, Building2, Clock, Network, Mail, Loader2, CheckCheck } from "lucide-react";
+import {
+  Users, Shield, Building2, Clock, Network, Mail, Loader2, CheckCheck,
+  GitBranch, UserCheck, Map, Link2, Lock, FileText, ChevronRight,
+} from "lucide-react";
 import { STATIC_ORG_TREE, getDeptColor, getLevelLabel, useOrgChartFlat, type OrgNode } from "@/hooks/useOrgChart";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useTeamMembers, TeamMember } from "@/hooks/useTeamMembers";
@@ -324,6 +327,40 @@ const Team = () => {
           </div>
         </div>
 
+        {/* Ferramentas de Gestão — visible to admins/CEO */}
+        {canEdit && (
+          <div className="space-y-3">
+            <div className="flex items-center gap-3">
+              <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Ferramentas de Gestão</h2>
+              <div className="flex-1 h-px bg-border" />
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+              {[
+                { href: "/org-chart",         label: "Organograma",        icon: Network,   color: "text-blue-500",   bg: "bg-blue-500/10"   },
+                { href: "/governance",         label: "Governança",         icon: GitBranch, color: "text-violet-500", bg: "bg-violet-500/10" },
+                { href: "/role-matrix",        label: "Matriz de Acesso",   icon: Lock,      color: "text-amber-500",  bg: "bg-amber-500/10"  },
+                { href: "/admin/approval",     label: "Aprovações",         icon: UserCheck, color: "text-green-500",  bg: "bg-green-500/10"  },
+                { href: "/responsibility-map", label: "Mapa de Responsab.", icon: Map,       color: "text-cyan-500",   bg: "bg-cyan-500/10"   },
+                { href: "/integrations/bling", label: "Integrações Bling",  icon: Link2,     color: "text-orange-500", bg: "bg-orange-500/10" },
+              ].map((tool) => (
+                <button
+                  key={tool.href}
+                  onClick={() => navigate(tool.href)}
+                  className="flex items-center gap-3 rounded-xl border border-border bg-card px-4 py-3 text-left hover:bg-muted/60 hover:border-primary/30 transition-all duration-150 group"
+                >
+                  <div className={`flex h-9 w-9 items-center justify-center rounded-lg flex-shrink-0 ${tool.bg}`}>
+                    <tool.icon className={`h-4 w-4 ${tool.color}`} />
+                  </div>
+                  <span className="text-sm font-medium text-foreground leading-tight flex-1 min-w-0">
+                    {tool.label}
+                  </span>
+                  <ChevronRight className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" />
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Tab row + Organograma button */}
         <Tabs defaultValue="equipe" className="w-full">
           <div className="flex items-center gap-3">
@@ -333,14 +370,6 @@ const Team = () => {
                 Equipe
               </TabsTrigger>
             </TabsList>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => navigate("/org-chart")}
-            >
-              <Network className="h-4 w-4 mr-1.5" />
-              Organograma
-            </Button>
           </div>
 
           <TabsContent value="equipe" className="space-y-6 mt-6">
