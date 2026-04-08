@@ -8,7 +8,8 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Pencil, Trash2, ClipboardCheck } from "lucide-react";
+import { Pencil, Trash2, ClipboardCheck, ExternalLink } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import {
   ProductionOrder,
   OP_STATUS_LABELS,
@@ -37,6 +38,7 @@ const PRIORITY_BADGE_COLORS: Record<number, string> = {
 };
 
 export function OPTable({ orders, onEdit, onDelete, onConfirm, canManage }: OPTableProps) {
+  const navigate = useNavigate();
   const pagination = usePagination(orders, { initialPageSize: 10 });
 
   return (
@@ -57,9 +59,13 @@ export function OPTable({ orders, onEdit, onDelete, onConfirm, canManage }: OPTa
           </TableHeader>
           <TableBody>
             {pagination.paginatedData.map((order) => (
-              <TableRow key={order.id}>
+              <TableRow
+                key={order.id}
+                className="cursor-pointer hover:bg-muted/50"
+                onClick={() => navigate(`/production-orders/${order.id}`)}
+              >
                 <TableCell>
-                  <span className="font-mono text-sm text-blue-500 font-medium">
+                  <span className="font-mono text-sm text-blue-500 font-medium hover:underline">
                     {order.title || order.id.slice(0, 8)}
                   </span>
                 </TableCell>
@@ -116,14 +122,14 @@ export function OPTable({ orders, onEdit, onDelete, onConfirm, canManage }: OPTa
                     : "—"}
                 </TableCell>
                 {canManage && (
-                  <TableCell className="text-right">
+                  <TableCell className="text-right" onClick={e => e.stopPropagation()}>
                     <div className="flex justify-end gap-1">
                       {order.op_status === "aguardando_confirmacao" && onConfirm && (
                         <Button
                           variant="ghost"
                           size="icon"
                           className="h-8 w-8 text-purple-500 hover:text-purple-600"
-                          onClick={() => onConfirm(order)}
+                          onClick={(e) => { e.stopPropagation(); onConfirm(order); }}
                           title="Confirmar Produção"
                         >
                           <ClipboardCheck className="h-4 w-4" />
@@ -133,7 +139,7 @@ export function OPTable({ orders, onEdit, onDelete, onConfirm, canManage }: OPTa
                         variant="ghost"
                         size="icon"
                         className="h-8 w-8"
-                        onClick={() => onEdit(order)}
+                        onClick={(e) => { e.stopPropagation(); onEdit(order); }}
                       >
                         <Pencil className="h-4 w-4" />
                       </Button>
@@ -141,7 +147,7 @@ export function OPTable({ orders, onEdit, onDelete, onConfirm, canManage }: OPTa
                         variant="ghost"
                         size="icon"
                         className="h-8 w-8 text-destructive hover:text-destructive"
-                        onClick={() => onDelete(order)}
+                        onClick={(e) => { e.stopPropagation(); onDelete(order); }}
                       >
                         <Trash2 className="h-4 w-4" />
                       </Button>

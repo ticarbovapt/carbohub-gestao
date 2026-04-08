@@ -5,6 +5,7 @@ import { ChevronRight, Calendar, Package } from "lucide-react";
 import type { ProductionOrder, DemandSource } from "@/hooks/useProductionOrders";
 import { formatDistanceToNow, format } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { useNavigate } from "react-router-dom";
 
 interface OPKanbanCardProps {
   order: ProductionOrder;
@@ -35,6 +36,7 @@ const DEMAND_COLORS: Record<DemandSource, string> = {
 };
 
 export function OPKanbanCard({ order, onAdvance, onClick }: OPKanbanCardProps) {
+  const navigate = useNavigate();
   const priority = PRIORITY_CONFIG[order.priority] ?? PRIORITY_CONFIG[3];
   const demand = order.demand_source as DemandSource;
 
@@ -45,10 +47,15 @@ export function OPKanbanCard({ order, onAdvance, onClick }: OPKanbanCardProps) {
     addSuffix: false,
   });
 
+  function handleClick() {
+    if (onClick) onClick(order);
+    navigate(`/production-orders/${order.id}`);
+  }
+
   return (
     <div
-      className="p-3 bg-card rounded-lg border border-border hover:shadow-md transition-all cursor-pointer group"
-      onClick={() => onClick?.(order)}
+      className="p-3 bg-card rounded-lg border border-border hover:shadow-md hover:border-primary/30 transition-all cursor-pointer group"
+      onClick={handleClick}
     >
       {/* Header */}
       <div className="flex items-start justify-between gap-2 mb-2">

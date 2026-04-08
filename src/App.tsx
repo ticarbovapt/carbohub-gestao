@@ -44,6 +44,7 @@ import MrpSuppliers from "./pages/MrpSuppliers";
 import Skus from "./pages/Skus";
 import Lots from "./pages/Lots";
 import ProductionOrdersOP from "./pages/ProductionOrdersOP";
+import ProductionOrderDetail from "./pages/ProductionOrderDetail";
 import B2BFunnel from "./pages/B2BFunnel";
 import B2BLeads from "./pages/B2BLeads";
 import CRMDashboard from "./pages/crm/CRMDashboard";
@@ -426,6 +427,14 @@ function AnimatedRoutes() {
             element={
               <ProtectedRoute>
                 <ProductionOrdersOP />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/production-orders/:id"
+            element={
+              <ProtectedRoute>
+                <ProductionOrderDetail />
               </ProtectedRoute>
             }
           />

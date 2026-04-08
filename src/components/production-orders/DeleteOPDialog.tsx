@@ -14,9 +14,10 @@ interface DeleteOPDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   order: ProductionOrder | null;
+  onDeleted?: () => void;
 }
 
-export function DeleteOPDialog({ open, onOpenChange, order }: DeleteOPDialogProps) {
+export function DeleteOPDialog({ open, onOpenChange, order, onDeleted }: DeleteOPDialogProps) {
   const deleteOP = useDeleteProductionOrderOP();
 
   if (!order) return null;
@@ -24,6 +25,7 @@ export function DeleteOPDialog({ open, onOpenChange, order }: DeleteOPDialogProp
   const handleDelete = async () => {
     await deleteOP.mutateAsync(order.id);
     onOpenChange(false);
+    onDeleted?.();
   };
 
   return (

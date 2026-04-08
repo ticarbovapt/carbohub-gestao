@@ -52,6 +52,7 @@ function PDVEstoqueManager() {
   const adjustStock = useAdjustPDVStock();
 
   const [adjustOpen, setAdjustOpen] = useState(false);
+  const [confirmStep, setConfirmStep] = useState(false); // 2-step: form → confirm
   const [adjustForm, setAdjustForm] = useState({
     productId: "",
     tipo: "ajuste" as PDVStockMovement["tipo"],
@@ -59,7 +60,12 @@ function PDVEstoqueManager() {
     notes: "",
   });
 
-  async function handleAdjust() {
+  function handleAdjustNext() {
+    if (!adjustForm.productId || !parseFloat(adjustForm.qty)) return;
+    setConfirmStep(true);
+  }
+
+  async function handleAdjustConfirm() {
     if (!pdvId || !adjustForm.productId) return;
     await adjustStock.mutateAsync({
       pdvId,
@@ -69,6 +75,13 @@ function PDVEstoqueManager() {
       notes: adjustForm.notes || undefined,
     });
     setAdjustOpen(false);
+    setConfirmStep(false);
+    setAdjustForm({ productId: "", tipo: "ajuste", qty: "1", notes: "" });
+  }
+
+  function handleAdjustClose() {
+    setAdjustOpen(false);
+    setConfirmStep(false);
     setAdjustForm({ productId: "", tipo: "ajuste", qty: "1", notes: "" });
   }
 
@@ -98,6 +111,7 @@ function PDVEstoqueManager() {
           className="ml-auto gap-1.5"
           onClick={() => {
             setAdjustForm({ productId: "", tipo: "ajuste", qty: "1", notes: "" });
+            setConfirmStep(false);
             setAdjustOpen(true);
           }}
         >
@@ -213,79 +227,91 @@ function PDVEstoqueManager() {
         </section>
       </div>
 
-      {/* Adjust dialog */}
-      <Dialog open={adjustOpen} onOpenChange={setAdjustOpen}>
+      {/* Adjust dialog — 2-step */}
+      <Dialog open={adjustOpen} onOpenChange={(o) => { if (!o) handleAdjustClose(); }}>
         <DialogContent className="sm:max-w-[420px]">
           <DialogHeader>
-            <DialogTitle>Ajuste de Estoque</DialogTitle>
+            <DialogTitle>{confirmStep ? "Confirmar Movimentação" : "Ajuste de Estoque"}</DialogTitle>
           </DialogHeader>
-          <div className="space-y-4">
-            <div>
-              <Label className="text-sm">Produto *</Label>
-              <Select
-                value={adjustForm.productId}
-                onValueChange={v => setAdjustForm(f => ({ ...f, productId: v }))}
-              >
-                <SelectTrigger className="mt-1">
-                  <SelectValue placeholder="Selecionar produto..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {productStock.map(s => (
-                    <SelectItem key={s.product_id} value={s.product_id}>
-                      {s.product?.name ?? s.product_id} — {s.qty_current.toFixed(0)} un
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+
+          {!confirmStep ? (
+            // ── Step 1: Form ──
+            <div className="space-y-4">
+              <div>
+                <Label className="text-sm">Produto *</Label>
+                <Select value={adjustForm.productId} onValueChange={v => setAdjustForm(f => ({ ...f, productId: v }))}>
+                  <SelectTrigger className="mt-1"><SelectValue placeholder="Selecionar produto..." /></SelectTrigger>
+                  <SelectContent>
+                    {productStock.map(s => (
+                      <SelectItem key={s.product_id} value={s.product_id}>
+                        {s.product?.name ?? s.product_id} — {s.qty_current.toFixed(0)} un
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label className="text-sm">Tipo de movimentação *</Label>
+                <Select value={adjustForm.tipo} onValueChange={v => setAdjustForm(f => ({ ...f, tipo: v as PDVStockMovement["tipo"] }))}>
+                  <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {(Object.keys(MOVEMENT_LABELS) as Array<PDVStockMovement["tipo"]>).map(t => (
+                      <SelectItem key={t} value={t}>{MOVEMENT_LABELS[t]}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label className="text-sm">Quantidade *</Label>
+                <Input type="number" min={0} step={1} className="mt-1" value={adjustForm.qty}
+                  onChange={e => setAdjustForm(f => ({ ...f, qty: e.target.value }))} />
+              </div>
+              <div>
+                <Label className="text-sm">Motivo / Observação</Label>
+                <Textarea className="mt-1 resize-none text-sm" rows={2} placeholder="Obrigatório para auditoria..."
+                  value={adjustForm.notes} onChange={e => setAdjustForm(f => ({ ...f, notes: e.target.value }))} />
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={handleAdjustClose}>Cancelar</Button>
+                <Button className="carbo-gradient" disabled={!adjustForm.productId || !parseFloat(adjustForm.qty)} onClick={handleAdjustNext}>
+                  Revisar →
+                </Button>
+              </DialogFooter>
             </div>
-            <div>
-              <Label className="text-sm">Tipo de movimentação *</Label>
-              <Select
-                value={adjustForm.tipo}
-                onValueChange={v => setAdjustForm(f => ({ ...f, tipo: v as PDVStockMovement["tipo"] }))}
-              >
-                <SelectTrigger className="mt-1">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {(Object.keys(MOVEMENT_LABELS) as Array<PDVStockMovement["tipo"]>).map(t => (
-                    <SelectItem key={t} value={t}>{MOVEMENT_LABELS[t]}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+          ) : (
+            // ── Step 2: Confirmation ──
+            <div className="space-y-4">
+              <div className="rounded-xl border border-border bg-muted/40 p-4 space-y-3">
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Produto</span>
+                  <span className="font-semibold">{productStock.find(s => s.product_id === adjustForm.productId)?.product?.name ?? adjustForm.productId}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Tipo</span>
+                  <Badge variant="outline">{MOVEMENT_LABELS[adjustForm.tipo]}</Badge>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Quantidade</span>
+                  <span className="font-bold font-mono text-lg">{adjustForm.qty} un</span>
+                </div>
+                {adjustForm.notes && (
+                  <div className="flex justify-between text-sm gap-4">
+                    <span className="text-muted-foreground flex-shrink-0">Motivo</span>
+                    <span className="text-right text-xs">{adjustForm.notes}</span>
+                  </div>
+                )}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Esta movimentação será registrada no log de auditoria com sua identificação e horário.
+              </p>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setConfirmStep(false)}>← Voltar</Button>
+                <Button className="carbo-gradient" disabled={adjustStock.isPending} onClick={handleAdjustConfirm}>
+                  {adjustStock.isPending ? "Registrando..." : "Confirmar e Registrar"}
+                </Button>
+              </DialogFooter>
             </div>
-            <div>
-              <Label className="text-sm">Quantidade *</Label>
-              <Input
-                type="number"
-                min={0}
-                step={1}
-                className="mt-1"
-                value={adjustForm.qty}
-                onChange={e => setAdjustForm(f => ({ ...f, qty: e.target.value }))}
-              />
-            </div>
-            <div>
-              <Label className="text-sm">Motivo / Observação</Label>
-              <Textarea
-                className="mt-1 resize-none text-sm"
-                rows={2}
-                placeholder="Opcional..."
-                value={adjustForm.notes}
-                onChange={e => setAdjustForm(f => ({ ...f, notes: e.target.value }))}
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setAdjustOpen(false)}>Cancelar</Button>
-            <Button
-              className="carbo-gradient"
-              disabled={adjustStock.isPending || !adjustForm.productId}
-              onClick={handleAdjust}
-            >
-              {adjustStock.isPending ? "Salvando..." : "Registrar"}
-            </Button>
-          </DialogFooter>
+          )}
         </DialogContent>
       </Dialog>
     </div>

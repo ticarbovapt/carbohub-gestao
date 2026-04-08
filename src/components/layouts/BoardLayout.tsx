@@ -159,13 +159,12 @@ const operacoesItems: NavItem[] = [
   { href: "/sales-targets",     label: "Metas de Vendas",         icon: TrendingUp },
   { href: "/financeiro",        label: "Financeiro",              icon: Wallet,        sectionLabel: "Financeiro & Supply" },
   { href: "/suprimentos",       label: "Suprimentos",             icon: Package },
+  { href: "/integrations/bling", label: "Integrações Bling",     icon: Link2 },
   { href: "/logistics",         label: "Logística",               icon: Truck },
 ];
 
 // Governance/admin tools moved to /team page — accessible via Controle > Equipe
-const globalItems = [
-  { href: "/integrations/bling", label: "Integrações", icon: Link2, adminOnly: false, financeOrMasterOnly: true },
-];
+const globalItems: { href: string; label: string; icon: React.ComponentType<{ className?: string }>; adminOnly?: boolean; financeOrMasterOnly?: boolean }[] = [];
 
 /** Derive a human-readable breadcrumb label from a pathname segment */
 const ROUTE_LABELS: Record<string, string> = {
