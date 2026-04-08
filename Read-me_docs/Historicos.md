@@ -5,6 +5,31 @@ Cada entrada registra o que foi entregue, decisões tomadas e contexto relevante
 
 ---
 
+## Sessão — 08/04/2026 (Sprint I + J + Team Fix)
+
+### Sprint I — Área de Licenciados + PDV Permissões ✅ (`e3185ae`)
+- **LicenseeDashboard admin view:** Peterson via `/licensee/dashboard` agora vê panorama com 4 KPI cards (ativos/pendentes/estados/score médio) + lista completa de licenciados filtrada por status. Branch `if (isAdmin || isCeo) → LicenseeDashboardAdmin`.
+- **/licensee/ze → /licensee/produtos:** Renomeada rota e nav. Nova página `LicenseeProducts.tsx` com controle de estoque PDV-style para licenciados Mood1. Tabela `licensee_product_stock` + `licensee_stock_movements`. Gatilho de reposição ao atingir safety stock.
+- **PDV Estoque 3 níveis de permissão:** MasterAdmin edita todos PDVs; Time Expansão edita qualquer PDV; Manager só edita o próprio. `canEdit(pdvId)` usando `carboRoles.some(r => r.role === "expansion")`.
+- **SQL:** `20260408_sprint_i_licensee_products.sql` — `licensee_mode` em licensees, `licensee_product_stock`, `licensee_stock_movements`.
+
+### Team Admin Tools ✅ (`03e98d5`)
+- Governança, Matriz de Acesso, Aprovações, Organograma desapareceram do sidebar → relocados como botões na seção "Ferramentas de Gestão" em `/team`.
+- `BoardLayout.tsx`: `globalItems` simplificado, itens de governance removidos do sidebar.
+
+### Sprint J — OP Detail + PDV 2-step Confirmation + Bling Routing ✅ (`3775e91`)
+- **ProductionOrderDetail.tsx (CRIADO):** Página Salesforce-style em `/production-orders/:id`. Pipeline de 12 etapas com progress bar, BOM/materiais, quantidades, metadata sidebar, dialogs integrados (Edit/Delete/Confirm).
+- **OPKanbanCard + OPTable:** `useNavigate` + click navega para detalhe da OP. `stopPropagation` nos botões de ação.
+- **PDVEstoque 2-step dialog:** Step 1 (form: produto/tipo/qtd/notas) → "Revisar →" → Step 2 (resumo) → "Confirmar e Registrar".
+- **Bling sidebar:** Movido de `globalItems` para `operacoesItems` OPS > Financeiro & Supply.
+
+### Fix /team: botões de edição para todos os 30 colaboradores ✅ (`8daf6f6`)
+- **Causa raiz:** `profiles.id REFERENCES auth.users(id)` impedia inserção de membros sem conta auth. Migration anterior `20260406_org_chart_profiles.sql` falhou silenciosamente.
+- **Solução:** `20260408_org_profiles_fix.sql` — dropa FK, add `org_only boolean`, seed seguro (UPDATE por nome se já existe, INSERT com UUID fixo se não existe). RLS policies para admin ler/editar todos.
+- **Ação manual pendente (Peterson):** Rodar `20260408_org_profiles_fix.sql` no Supabase SQL Editor.
+
+---
+
 ## Sessão — 06/04/2026 (Chat 3 — Org Chart Visual + Dashboards + Deploy)
 
 ### Tarefa #42 — Dashboard Tab + 5 Sub-páginas ✅

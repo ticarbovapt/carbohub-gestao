@@ -40,6 +40,13 @@
 | 21 | PDV | `/pdv/*` | ✅ |
 | 22 | AI Assistant | `/ai-assistant` | ✅ |
 | 23 | Integração Bling | `/integrations/bling` | ✅ |
+| 24 | OP Detail Page (Salesforce-style) | `/production-orders/:id` | ✅ |
+| 25 | PDV Estoque 2-step confirmation | `/pdv/estoque` | ✅ |
+| 26 | Licensee Dashboard Admin panorama | `/licensee/dashboard` | ✅ |
+| 27 | Licensee Produtos Mood1 | `/licensee/produtos` | ✅ |
+| 28 | Ferramentas Gestão em /team | `/team` (Organograma, Governança, etc.) | ✅ |
+| 29 | Bling sidebar OPS Financeiro & Supply | BoardLayout sidebar | ✅ |
+| 30 | PDV permissões 3 níveis (MasterAdmin/Expansão/Manager) | `/pdv/estoque` | ✅ |
 
 ---
 
@@ -47,11 +54,11 @@
 
 | # | Tarefa | Responsável |
 |---|--------|-------------|
-| 34 | Rodar SQL migration profiles no Supabase | Peterson |
-| 35 | Filtrar "Produto Final" em /suprimentos | Claude |
-| 36 | Importar 8.845 leads CRM | Claude |
-| 37 | Export PDF/Excel nas páginas de dados | Claude |
-| 39 | Onboarding licenciado (checklist 5 fases) | Claude |
+| P1 | Rodar `20260408_org_profiles_fix.sql` no Supabase SQL Editor | Peterson |
+| P2 | Rodar `20260407_freight_quotes.sql` no Supabase SQL Editor | Peterson |
+| P3 | Importar 8.845 leads CRM | Claude |
+| P4 | Onboarding licenciado (checklist 5 fases) | Claude |
+| P5 | Integração Melhor Envio Edge Function deploy | Peterson |
 
 ---
 
