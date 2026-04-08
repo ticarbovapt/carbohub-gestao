@@ -14,6 +14,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CarboSkeleton } from "@/components/ui/CarboSkeleton";
 import { usePDVStatus } from "@/hooks/usePDV";
 import { useAuth } from "@/contexts/AuthContext";
+import { toast } from "sonner";
 import {
   usePDVProductStock,
   usePDVStockMovements,
@@ -294,8 +295,49 @@ function PDVEstoqueManager() {
 // ── ADMIN VIEW ───────────────────────────────────────────────────────────────
 function PDVEstoqueAdmin() {
   const navigate = useNavigate();
+  const { isAdmin, isCeo, carboRoles } = useAuth();
+  const { data: pdvStatus } = usePDVStatus();
   const { data: allStock = [], isLoading } = useAdminAllProductStock();
+  const adjustStock = useAdjustPDVStock();
   const [filterProduct, setFilterProduct] = useState<string>("all");
+
+  // Adjust dialog state (admin selects PDV + product)
+  const [adjustOpen, setAdjustOpen] = useState(false);
+  const [adjustForm, setAdjustForm] = useState({
+    pdvId: "",
+    productId: "",
+    tipo: "ajuste" as PDVStockMovement["tipo"],
+    qty: "1",
+    notes: "",
+  });
+
+  // Permission: who can edit stock
+  const isMasterAdmin = isAdmin && isCeo;
+  const isExpansion = carboRoles.some(r => r.role === "expansion");
+  const myPDVId = pdvStatus?.pdv?.id;
+  function canEdit(pdvId: string): boolean {
+    if (isMasterAdmin) return true;
+    if (isExpansion) return true;
+    if (myPDVId === pdvId) return true;
+    return false;
+  }
+
+  async function handleAdjust() {
+    if (!adjustForm.pdvId || !adjustForm.productId) return;
+    if (!canEdit(adjustForm.pdvId)) {
+      toast.error("Sem permissão para editar este PDV");
+      return;
+    }
+    await adjustStock.mutateAsync({
+      pdvId: adjustForm.pdvId,
+      productId: adjustForm.productId,
+      tipo: adjustForm.tipo,
+      qty: Math.abs(parseFloat(adjustForm.qty)) || 0,
+      notes: adjustForm.notes || undefined,
+    });
+    setAdjustOpen(false);
+    setAdjustForm({ pdvId: "", productId: "", tipo: "ajuste", qty: "1", notes: "" });
+  }
 
   // Build unique product list
   const products = Array.from(
@@ -379,9 +421,24 @@ function PDVEstoqueAdmin() {
                         <span>{pdv.name}</span>
                         <span className="text-xs font-normal text-muted-foreground">{pdv.city}, {pdv.state}</span>
                       </div>
-                      {pdvAlert && (
-                        <Badge className="text-[10px] h-4 px-1.5 bg-amber-500/10 text-amber-600 border-0">ALERTA</Badge>
-                      )}
+                      <div className="flex items-center gap-2">
+                        {pdvAlert && (
+                          <Badge className="text-[10px] h-4 px-1.5 bg-amber-500/10 text-amber-600 border-0">ALERTA</Badge>
+                        )}
+                        {canEdit(pdv.id) && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-6 text-[11px] px-2 gap-1"
+                            onClick={() => {
+                              setAdjustForm({ pdvId: pdv.id, productId: "", tipo: "ajuste", qty: "1", notes: "" });
+                              setAdjustOpen(true);
+                            }}
+                          >
+                            <SlidersHorizontal className="h-3 w-3" /> Ajustar
+                          </Button>
+                        )}
+                      </div>
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="px-4 pb-3">
@@ -421,6 +478,77 @@ function PDVEstoqueAdmin() {
           </div>
         )}
       </div>
+
+      {/* Admin adjust dialog */}
+      <Dialog open={adjustOpen} onOpenChange={setAdjustOpen}>
+        <DialogContent className="sm:max-w-[420px]">
+          <DialogHeader>
+            <DialogTitle>Ajuste de Estoque</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label className="text-sm">Produto *</Label>
+              <Select
+                value={adjustForm.productId}
+                onValueChange={v => setAdjustForm(f => ({ ...f, productId: v }))}
+              >
+                <SelectTrigger className="mt-1">
+                  <SelectValue placeholder="Selecionar produto..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {allStock
+                    .filter(r => r.pdv_id === adjustForm.pdvId)
+                    .map(r => (
+                      <SelectItem key={r.product_id} value={r.product_id}>
+                        {r.product_name} — {r.qty_current.toFixed(0)} un
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label className="text-sm">Tipo *</Label>
+              <Select
+                value={adjustForm.tipo}
+                onValueChange={v => setAdjustForm(f => ({ ...f, tipo: v as PDVStockMovement["tipo"] }))}
+              >
+                <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {(Object.keys(MOVEMENT_LABELS) as Array<PDVStockMovement["tipo"]>).map(t => (
+                    <SelectItem key={t} value={t}>{MOVEMENT_LABELS[t]}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label className="text-sm">Quantidade *</Label>
+              <Input
+                type="number" min={0} step={1} className="mt-1"
+                value={adjustForm.qty}
+                onChange={e => setAdjustForm(f => ({ ...f, qty: e.target.value }))}
+              />
+            </div>
+            <div>
+              <Label className="text-sm">Motivo / Observação</Label>
+              <Textarea
+                className="mt-1 resize-none text-sm" rows={2} placeholder="Opcional..."
+                value={adjustForm.notes}
+                onChange={e => setAdjustForm(f => ({ ...f, notes: e.target.value }))}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAdjustOpen(false)}>Cancelar</Button>
+            <Button
+              className="carbo-gradient"
+              disabled={adjustStock.isPending || !adjustForm.productId}
+              onClick={handleAdjust}
+            >
+              {adjustStock.isPending ? "Salvando..." : "Registrar"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

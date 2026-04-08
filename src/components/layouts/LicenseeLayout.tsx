@@ -17,6 +17,7 @@ import {
   Layers,
   ClipboardList,
   FlaskConical,
+  Package,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -54,7 +55,7 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/licensee/reagentes", icon: FlaskConical, label: "Reagentes" },
   // — Produtos & Pedidos —
   { href: "/licensee/vapt", icon: Zap, label: "CarboVAPT", section: "Produtos & Pedidos" },
-  { href: "/licensee/ze", icon: Truck, label: "CarboZé" },
+  { href: "/licensee/produtos", icon: Package, label: "Produtos" },
   { href: "/licensee/pedidos", icon: ShoppingCart, label: "Meus Pedidos" },
   // — Financeiro —
   { href: "/licensee/creditos", icon: Wallet, label: "Créditos", section: "Financeiro" },
@@ -68,7 +69,8 @@ const ROUTE_LABELS: Record<string, string> = {
   clientes: "Clientes",
   reagentes: "Reagentes",
   vapt: "CarboVAPT",
-  ze: "CarboZé",
+  ze: "Produtos",
+  produtos: "Produtos",
   pedidos: "Meus Pedidos",
   creditos: "Créditos",
   comissoes: "Comissões",

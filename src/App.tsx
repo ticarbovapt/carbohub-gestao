@@ -85,6 +85,7 @@ import LicenseeAtendimento from "./pages/licensee/LicenseeAtendimento";
 import LicenseeClientes from "./pages/licensee/LicenseeClientes";
 import LicenseeReagentes from "./pages/licensee/LicenseeReagentes";
 import LicenseeVapt from "./pages/licensee/LicenseeVapt";
+import LicenseeProducts from "./pages/licensee/LicenseeProducts";
 import OpsAlerts from "./pages/OpsAlerts";
 
 // PDV Pages
@@ -497,9 +498,13 @@ function AnimatedRoutes() {
           />
           <Route
             path="/licensee/ze"
+            element={<Navigate to="/licensee/produtos" replace />}
+          />
+          <Route
+            path="/licensee/produtos"
             element={
               <ProtectedRoute>
-                <ServiceCatalog operationType="carbo_ze" />
+                <LicenseeProducts />
               </ProtectedRoute>
             }
           />

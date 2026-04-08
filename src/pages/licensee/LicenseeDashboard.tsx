@@ -1,5 +1,8 @@
+import { useState } from "react";
 import { useLicenseeStatus, useLicenseeWallet, useLicenseeSubscription, useLicenseeRequests } from "@/hooks/useLicenseePortal";
 import { useLicenseeRealtimeNotifications } from "@/hooks/useLicenseeNotifications";
+import { useLicensees, useLicenseeStats, type LicenseeStatus } from "@/hooks/useLicensees";
+import { useAuth } from "@/contexts/AuthContext";
 import { LicenseeLayout } from "@/components/layouts/LicenseeLayout";
 import { CarboKPI } from "@/components/ui/carbo-kpi";
 import { CarboCard, CarboCardContent, CarboCardHeader, CarboCardTitle } from "@/components/ui/carbo-card";
@@ -20,13 +23,169 @@ import {
   AlertCircle,
   TrendingUp,
   Package,
+  Users,
+  MapPin,
+  BarChart3,
+  Star,
 } from "lucide-react";
 import { format, formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { SLA_LEVEL_INFO, REQUEST_STATUS_INFO } from "@/types/licenseePortal";
 import { cn } from "@/lib/utils";
 
-export default function LicenseeDashboard() {
+// ── STATUS helpers ────────────────────────────────────────────────────────────
+const STATUS_LABEL: Record<string, string> = {
+  active: "Ativo", pending: "Pendente", inactive: "Inativo", suspended: "Suspenso",
+};
+const STATUS_CLASS: Record<string, string> = {
+  active: "bg-green-500/10 text-green-600 border-green-500/20",
+  pending: "bg-amber-500/10 text-amber-600 border-amber-500/20",
+  inactive: "bg-muted text-muted-foreground border-border",
+  suspended: "bg-destructive/10 text-destructive border-destructive/20",
+};
+
+// ── ADMIN VIEW ────────────────────────────────────────────────────────────────
+function LicenseeDashboardAdmin() {
+  const [statusFilter, setStatusFilter] = useState<LicenseeStatus | "all">("all");
+  const { data: stats, isLoading: statsLoading } = useLicenseeStats();
+  const { data: licensees = [], isLoading: listLoading } = useLicensees(statusFilter);
+
+  const filtered = licensees; // useLicensees already filters by status
+
+  const STATUS_TABS: Array<{ key: LicenseeStatus | "all"; label: string }> = [
+    { key: "all", label: "Todos" },
+    { key: "active", label: "Ativos" },
+    { key: "pending", label: "Pendentes" },
+    { key: "inactive", label: "Inativos" },
+    { key: "suspended", label: "Suspensos" },
+  ];
+
+  return (
+    <LicenseeLayout>
+      <div className="p-6 lg:p-8 space-y-6">
+        {/* Header */}
+        <div>
+          <h1 className="text-2xl lg:text-3xl font-bold">Rede de Licenciados</h1>
+          <p className="text-muted-foreground mt-1">Visão consolidada de toda a rede</p>
+        </div>
+
+        {/* KPI Cards */}
+        {statsLoading ? (
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            {[1,2,3,4].map(i => <Skeleton key={i} className="h-24" />)}
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <CarboKPI title="Licenciados Ativos" value={stats?.active ?? 0} icon={Users} iconColor="green" delay={0} />
+            <CarboKPI title="Pendentes" value={stats?.pending ?? 0} icon={Clock} iconColor="warning" delay={50} />
+            <CarboKPI title="Estados Cobertos" value={stats?.totalStates ?? 0} icon={MapPin} iconColor="blue" delay={100} />
+            <CarboKPI
+              title="Score Médio"
+              value={`${(stats?.avgPerformance ?? 0).toFixed(1)}`}
+              icon={Star}
+              iconColor="success"
+              delay={150}
+            />
+          </div>
+        )}
+
+        {/* Status filter tabs */}
+        <div className="flex gap-2 flex-wrap">
+          {STATUS_TABS.map(tab => (
+            <Button
+              key={tab.key}
+              size="sm"
+              variant={statusFilter === tab.key ? "default" : "outline"}
+              onClick={() => setStatusFilter(tab.key)}
+              className={statusFilter === tab.key ? "carbo-gradient" : ""}
+            >
+              {tab.label}
+              {tab.key !== "all" && stats && (
+                <span className="ml-1.5 text-xs opacity-70">
+                  {tab.key === "active" ? stats.active
+                    : tab.key === "pending" ? stats.pending
+                    : tab.key === "inactive" ? stats.inactive
+                    : 0}
+                </span>
+              )}
+            </Button>
+          ))}
+        </div>
+
+        {/* Pending alerts */}
+        {filtered.filter(l => l.status === "pending").length > 0 && statusFilter !== "active" && (
+          <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-4 space-y-2">
+            <p className="text-sm font-semibold text-amber-600 flex items-center gap-2">
+              <AlertCircle className="h-4 w-4" />
+              {filtered.filter(l => l.status === "pending").length} licenciado(s) aguardando ativação de acesso
+            </p>
+          </div>
+        )}
+
+        {/* Licensees list */}
+        {listLoading ? (
+          <div className="space-y-2">
+            {[1,2,3,4].map(i => <Skeleton key={i} className="h-16" />)}
+          </div>
+        ) : filtered.length === 0 ? (
+          <div className="text-center py-16 text-muted-foreground">
+            <Users className="h-10 w-10 mx-auto mb-3 opacity-40" />
+            <p>Nenhum licenciado encontrado.</p>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {filtered.map(lic => (
+              <div
+                key={lic.id}
+                className="flex items-center gap-4 rounded-xl border border-border bg-card px-4 py-3 hover:bg-muted/40 transition-colors"
+              >
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <p className="font-semibold text-sm">{lic.name}</p>
+                    <Badge className={cn("text-[10px] h-4 px-1.5 border", STATUS_CLASS[lic.status])}>
+                      {STATUS_LABEL[lic.status]}
+                    </Badge>
+                    {lic.address_city && (
+                      <span className="text-xs text-muted-foreground flex items-center gap-0.5">
+                        <MapPin className="h-3 w-3" />{lic.address_city}, {lic.address_state}
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-4 mt-0.5">
+                    {lic.total_machines > 0 && (
+                      <span className="text-xs text-muted-foreground">{lic.total_machines} máquinas</span>
+                    )}
+                    {lic.performance_score > 0 && (
+                      <span className="text-xs text-muted-foreground flex items-center gap-0.5">
+                        <Star className="h-3 w-3 text-amber-400" />Score: {Number(lic.performance_score).toFixed(1)}
+                      </span>
+                    )}
+                    {lic.contract_start_date && (
+                      <span className="text-xs text-muted-foreground">
+                        Desde {format(new Date(lic.contract_start_date), "MM/yyyy")}
+                      </span>
+                    )}
+                  </div>
+                </div>
+                {lic.total_revenue > 0 && (
+                  <div className="text-right flex-shrink-0">
+                    <p className="text-sm font-bold font-mono">
+                      R$ {Number(lic.total_revenue).toLocaleString("pt-BR", { minimumFractionDigits: 0 })}
+                    </p>
+                    <p className="text-[10px] text-muted-foreground">receita total</p>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </LicenseeLayout>
+  );
+}
+
+// ── MANAGER VIEW (original) ───────────────────────────────────────────────────
+function LicenseeDashboardManager() {
   const { data: licenseeStatus, isLoading: statusLoading } = useLicenseeStatus();
   const licenseeId = licenseeStatus?.licensee_id;
   const licensee = licenseeStatus?.licensee;
@@ -336,4 +495,11 @@ export default function LicenseeDashboard() {
       </div>
     </LicenseeLayout>
   );
+}
+
+// ── ROOT EXPORT ───────────────────────────────────────────────────────────────
+export default function LicenseeDashboard() {
+  const { isAdmin, isCeo } = useAuth();
+  if (isAdmin || isCeo) return <LicenseeDashboardAdmin />;
+  return <LicenseeDashboardManager />;
 }
