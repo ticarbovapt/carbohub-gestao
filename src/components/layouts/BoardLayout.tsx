@@ -34,6 +34,7 @@ import {
   TrendingUp,
   Network,
   Bell,
+  Store,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -136,7 +137,6 @@ const controleItems: NavItem[] = [
   { href: "/mrp/suppliers", label: "Fornecedores", icon: Factory },
   { href: "/licensees", label: "Licenciados", icon: Building2 },
   { href: "/team", label: "Equipe", icon: Users },
-  { href: "/org-chart", label: "Organograma", icon: Network },
   { href: "/import", label: "Importar Dados", icon: FileSpreadsheet },
 ];
 
@@ -153,6 +153,7 @@ const operacoesItems: NavItem[] = [
   { href: "/production-orders", label: "Ordens de Produção (OP)", icon: Factory,       sectionLabel: "Produção" },
   { href: "/os",                label: "Ordens de Serviço (OS)",  icon: ClipboardList, sectionLabel: "Descarbonização" },
   { href: "/ops/alerts",        label: "Central de Alertas",      icon: Bell,          sectionLabel: "CarboOPS" },
+  { href: "/ops/pdv-network",   label: "Rede PDV",                icon: Store,         sectionLabel: undefined },
   { href: "/crm",               label: "CRM — Funis de Venda",    icon: Target,        sectionLabel: "Comercial" },
   { href: "/orders",            label: "Pedidos (RV)",            icon: ShoppingCart },
   { href: "/sales-targets",     label: "Metas de Vendas",         icon: TrendingUp },
@@ -258,7 +259,7 @@ export function BoardLayout({ children }: BoardLayoutProps) {
   const isDashboardRoute = location.pathname.startsWith("/dashboards") ||
     location.pathname === "/dashboard";
   const isControleRoute = !isDashboardRoute && (location.pathname.startsWith("/mrp") ||
-    ["/licensees", "/machines", "/team", "/import", "/skus", "/lots", "/integrations", "/org-chart"].some(p => location.pathname.startsWith(p)));
+    ["/licensees", "/machines", "/team", "/import", "/skus", "/lots", "/integrations"].some(p => location.pathname.startsWith(p)));
   const [activeTab, setActiveTab] = useState<SidebarTab>(
     isDashboardRoute ? "dashboards" : isControleRoute ? "controle" : "operacoes"
   );

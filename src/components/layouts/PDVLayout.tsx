@@ -11,6 +11,9 @@ import {
   ChevronDown,
   ChevronRight,
   Layers,
+  ShoppingCart,
+  Users,
+  Trophy,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
@@ -31,16 +34,21 @@ import { cn } from "@/lib/utils";
 import logoCarbo from "@/assets/logo-carbo.png";
 
 const navItems = [
-  { path: "/pdv/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { path: "/pdv/stock", label: "Estoque", icon: Package },
-  { path: "/pdv/history", label: "Histórico", icon: History },
+  { path: "/pdv/dashboard",  label: "Dashboard",  icon: LayoutDashboard },
+  { path: "/pdv/pos",        label: "Nova Venda",  icon: ShoppingCart },
+  { path: "/pdv/estoque",    label: "Estoque",     icon: Package },
+  { path: "/pdv/vendedores", label: "Vendedores",  icon: Users },
+  { path: "/pdv/ranking",    label: "Ranking",     icon: Trophy },
 ];
 
 const ROUTE_LABELS: Record<string, string> = {
-  pdv: "Lojas",
-  dashboard: "Dashboard",
-  stock: "Estoque",
-  history: "Histórico",
+  pdv:        "Lojas",
+  dashboard:  "Dashboard",
+  pos:        "Nova Venda",
+  estoque:    "Estoque",
+  historico:  "Histórico",
+  vendedores: "Vendedores",
+  ranking:    "Ranking",
 };
 
 function Breadcrumb({ pdvName }: { pdvName?: string }) {

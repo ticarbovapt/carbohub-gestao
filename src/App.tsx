@@ -90,8 +90,13 @@ import OpsAlerts from "./pages/OpsAlerts";
 // PDV Pages
 import { PDVLayout } from "./components/layouts/PDVLayout";
 import PDVDashboard from "./pages/pdv/PDVDashboard";
+import PDVPos from "./pages/pdv/PDVPos";
+import PDVEstoque from "./pages/pdv/PDVEstoque";
+import PDVVendedores from "./pages/pdv/PDVVendedores";
+import PDVRanking from "./pages/pdv/PDVRanking";
 import PDVStock from "./pages/pdv/PDVStock";
 import PDVHistory from "./pages/pdv/PDVHistory";
+import OpsNetwork from "./pages/OpsNetwork";
 
 const queryClient = new QueryClient();
 
@@ -570,10 +575,25 @@ function AnimatedRoutes() {
               </ProtectedRoute>
             }
           >
-            <Route path="dashboard" element={<PDVDashboard />} />
-            <Route path="stock" element={<PDVStock />} />
-            <Route path="history" element={<PDVHistory />} />
+            <Route path="dashboard"  element={<PDVDashboard />} />
+            <Route path="pos"        element={<PDVPos />} />
+            <Route path="estoque"    element={<PDVEstoque />} />
+            <Route path="vendedores" element={<PDVVendedores />} />
+            <Route path="ranking"    element={<PDVRanking />} />
+            {/* Legacy redirects */}
+            <Route path="stock"   element={<Navigate to="/pdv/estoque" replace />} />
+            <Route path="history" element={<Navigate to="/pdv/estoque" replace />} />
           </Route>
+
+          {/* Rede PDV — Admin/Gestor only */}
+          <Route
+            path="/ops/pdv-network"
+            element={
+              <ProtectedRoute>
+                <OpsNetwork />
+              </ProtectedRoute>
+            }
+          />
 
           {/* Bling Integration */}
           <Route path="/integrations/bling/callback" element={<BlingCallback />} />
