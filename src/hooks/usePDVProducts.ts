@@ -184,6 +184,47 @@ export function useAdjustPDVStock() {
   });
 }
 
+export interface AdminProductStockRow {
+  pdv_id: string;
+  pdv_name: string;
+  pdv_city: string;
+  pdv_state: string;
+  product_id: string;
+  product_name: string;
+  sort_order: number;
+  qty_current: number;
+  qty_min_threshold: number;
+  qty_max_capacity: number;
+  has_alert: boolean;
+}
+
+/** Estoque de todos produtos em todos os PDVs (admin only — sem filtro de pdv_id) */
+export function useAdminAllProductStock() {
+  return useQuery({
+    queryKey: ["admin-all-product-stock"],
+    queryFn: async (): Promise<AdminProductStockRow[]> => {
+      const { data, error } = await (supabase as any)
+        .from("pdv_product_stock")
+        .select("*, pdv:pdvs(name, address_city, address_state), product:pdv_products(name, sort_order)");
+      if (error) throw error;
+      return (data ?? []).map((row: any) => ({
+        pdv_id:            row.pdv_id,
+        pdv_name:          row.pdv?.name ?? "PDV",
+        pdv_city:          row.pdv?.address_city ?? "",
+        pdv_state:         row.pdv?.address_state ?? "",
+        product_id:        row.product_id,
+        product_name:      row.product?.name ?? "Produto",
+        sort_order:        row.product?.sort_order ?? 0,
+        qty_current:       Number(row.qty_current) || 0,
+        qty_min_threshold: Number(row.qty_min_threshold) || 0,
+        qty_max_capacity:  Number(row.qty_max_capacity) || 0,
+        has_alert:         !!row.has_alert,
+      }));
+    },
+    staleTime: 30_000,
+  });
+}
+
 /** Histórico de movimentações de estoque do PDV */
 export function usePDVStockMovements(pdvId: string | undefined, limit = 50) {
   return useQuery({

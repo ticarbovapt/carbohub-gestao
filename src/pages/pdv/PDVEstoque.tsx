@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Package, ChevronLeft, ArrowUpCircle, ArrowDownCircle, RefreshCw, SlidersHorizontal } from "lucide-react";
+import { Package, ChevronLeft, ArrowUpCircle, ArrowDownCircle, SlidersHorizontal, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
@@ -10,12 +10,15 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Separator } from "@/components/ui/separator";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CarboSkeleton } from "@/components/ui/CarboSkeleton";
 import { usePDVStatus } from "@/hooks/usePDV";
+import { useAuth } from "@/contexts/AuthContext";
 import {
   usePDVProductStock,
   usePDVStockMovements,
   useAdjustPDVStock,
+  useAdminAllProductStock,
   MOVEMENT_LABELS,
   type PDVStockMovement,
 } from "@/hooks/usePDVProducts";
@@ -39,7 +42,7 @@ const MOVEMENT_SIGN: Record<PDVStockMovement["tipo"], string> = {
   entrada:   "+",
 };
 
-export default function PDVEstoque() {
+function PDVEstoqueManager() {
   const navigate = useNavigate();
   const { data: pdvStatus } = usePDVStatus();
   const pdvId = pdvStatus?.pdv?.id;
@@ -286,4 +289,146 @@ export default function PDVEstoque() {
       </Dialog>
     </div>
   );
+}
+
+// ── ADMIN VIEW ───────────────────────────────────────────────────────────────
+function PDVEstoqueAdmin() {
+  const navigate = useNavigate();
+  const { data: allStock = [], isLoading } = useAdminAllProductStock();
+  const [filterProduct, setFilterProduct] = useState<string>("all");
+
+  // Build unique product list
+  const products = Array.from(
+    new Map(allStock.map(r => [r.product_id, { id: r.product_id, name: r.product_name, sort_order: r.sort_order }])).values()
+  ).sort((a, b) => a.sort_order - b.sort_order);
+
+  // Build unique PDV list
+  const pdvs = Array.from(
+    new Map(allStock.map(r => [r.pdv_id, { id: r.pdv_id, name: r.pdv_name, city: r.pdv_city, state: r.pdv_state }])).values()
+  ).sort((a, b) => a.name.localeCompare(b.name));
+
+  const alerts = allStock.filter(r => r.has_alert);
+  const filteredProducts = filterProduct === "all" ? products : products.filter(p => p.id === filterProduct);
+
+  if (isLoading) {
+    return (
+      <div className="p-4 space-y-3">
+        <CarboSkeleton className="h-10 w-48" />
+        {[1, 2, 3].map(i => <CarboSkeleton key={i} className="h-20" />)}
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col h-full">
+      {/* Top bar */}
+      <div className="flex items-center gap-3 px-4 py-3 border-b border-border sticky top-0 bg-background z-10">
+        <Button variant="ghost" size="icon" onClick={() => navigate("/pdv/dashboard")}>
+          <ChevronLeft className="h-5 w-5" />
+        </Button>
+        <div className="flex items-center gap-2">
+          <Package className="h-5 w-5 text-primary" />
+          <h1 className="font-bold text-lg">Estoque — Todos os PDVs</h1>
+        </div>
+        {/* Product filter */}
+        <div className="ml-auto w-48">
+          <Select value={filterProduct} onValueChange={setFilterProduct}>
+            <SelectTrigger className="h-8 text-xs">
+              <SelectValue placeholder="Filtrar produto..." />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos os produtos</SelectItem>
+              {products.map(p => (
+                <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
+      <div className="p-4 space-y-6">
+        {/* Alert banner */}
+        {alerts.length > 0 && (
+          <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-3 flex items-center gap-3">
+            <AlertTriangle className="h-5 w-5 text-amber-500 flex-shrink-0" />
+            <p className="text-sm font-semibold text-amber-600">
+              {alerts.length} {alerts.length === 1 ? "item abaixo" : "itens abaixo"} do mínimo em {new Set(alerts.map(a => a.pdv_id)).size} {new Set(alerts.map(a => a.pdv_id)).size === 1 ? "PDV" : "PDVs"}
+            </p>
+          </div>
+        )}
+
+        {/* Matrix: PDV × Products */}
+        {pdvs.length === 0 ? (
+          <div className="text-center py-16 text-muted-foreground">
+            <Package className="h-10 w-10 mx-auto mb-3 opacity-40" />
+            <p>Nenhum estoque inicializado.</p>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {pdvs.map(pdv => {
+              const pdvRows = allStock.filter(r =>
+                r.pdv_id === pdv.id &&
+                (filterProduct === "all" || r.product_id === filterProduct)
+              );
+              const pdvAlert = pdvRows.some(r => r.has_alert);
+              return (
+                <Card key={pdv.id} className={cn(pdvAlert && "border-amber-500/30")}>
+                  <CardHeader className="pb-2 pt-3 px-4">
+                    <CardTitle className="text-sm flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span>{pdv.name}</span>
+                        <span className="text-xs font-normal text-muted-foreground">{pdv.city}, {pdv.state}</span>
+                      </div>
+                      {pdvAlert && (
+                        <Badge className="text-[10px] h-4 px-1.5 bg-amber-500/10 text-amber-600 border-0">ALERTA</Badge>
+                      )}
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="px-4 pb-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      {pdvRows.map(row => {
+                        const pct = row.qty_max_capacity > 0
+                          ? Math.min((row.qty_current / row.qty_max_capacity) * 100, 100)
+                          : 0;
+                        const critical = row.qty_current === 0;
+                        return (
+                          <div key={row.product_id} className="space-y-1">
+                            <div className="flex justify-between text-xs">
+                              <span className="font-medium truncate">{row.product_name}</span>
+                              <span className={cn(
+                                "font-mono font-semibold",
+                                critical ? "text-destructive" : row.has_alert ? "text-amber-500" : "text-foreground"
+                              )}>
+                                {row.qty_current.toFixed(0)} un
+                              </span>
+                            </div>
+                            <Progress
+                              value={pct}
+                              className={cn(
+                                "h-1.5",
+                                critical ? "[&>div]:bg-destructive" : row.has_alert ? "[&>div]:bg-amber-500" : "[&>div]:bg-green-500"
+                              )}
+                            />
+                            <p className="text-[10px] text-muted-foreground">Mín: {row.qty_min_threshold} un</p>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── ROOT EXPORT ──────────────────────────────────────────────────────────────
+export default function PDVEstoque() {
+  const { isAdmin, isCeo } = useAuth();
+  const isAdminView = isAdmin || isCeo;
+  if (isAdminView) return <PDVEstoqueAdmin />;
+  return <PDVEstoqueManager />;
 }

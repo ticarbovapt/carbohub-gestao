@@ -123,6 +123,59 @@ export function usePDVSellerRanking(
   });
 }
 
+export interface AdminSellerRankingEntry extends PDVSellerRankingEntry {
+  pdv_name: string;
+}
+
+/** Ranking de vendedores de TODA a rede (admin only — sem filtro de pdv_id) */
+export function useAdminAllSellerRanking(
+  period: "day" | "week" | "month" | "all" = "month"
+) {
+  return useQuery({
+    queryKey: ["admin-all-seller-ranking", period],
+    queryFn: async (): Promise<AdminSellerRankingEntry[]> => {
+      let fromDate: string | null = null;
+      const now = new Date();
+      if (period === "day") {
+        fromDate = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
+      } else if (period === "week") {
+        const d = new Date(now); d.setDate(d.getDate() - 7);
+        fromDate = d.toISOString();
+      } else if (period === "month") {
+        fromDate = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+      }
+
+      let query = (supabase as any)
+        .from("pdv_sales")
+        .select("seller_id, total, commission_amount, pdv_id, pdv_sellers(name), pdvs(name)")
+        .eq("is_voided", false);
+
+      if (fromDate) query = query.gte("created_at", fromDate);
+
+      const { data, error } = await query;
+      if (error) throw error;
+
+      const map: Record<string, AdminSellerRankingEntry> = {};
+      (data ?? []).forEach((row: any) => {
+        const sid = row.seller_id ?? "sem-vendedor";
+        const sname = row.pdv_sellers?.name ?? "Sem vendedor";
+        const pdvName = row.pdvs?.name ?? "PDV";
+        if (!map[sid]) {
+          map[sid] = { seller_id: sid, seller_name: sname, qty_sales: 0, revenue: 0, commission: 0, avg_ticket: 0, pdv_name: pdvName };
+        }
+        map[sid].qty_sales++;
+        map[sid].revenue += Number(row.total) || 0;
+        map[sid].commission += Number(row.commission_amount) || 0;
+      });
+
+      return Object.values(map)
+        .map(e => ({ ...e, avg_ticket: e.qty_sales > 0 ? e.revenue / e.qty_sales : 0 }))
+        .sort((a, b) => b.revenue - a.revenue);
+    },
+    refetchInterval: 120_000,
+  });
+}
+
 /** Cria um vendedor interno */
 export function useCreatePDVSeller() {
   const qc = useQueryClient();
