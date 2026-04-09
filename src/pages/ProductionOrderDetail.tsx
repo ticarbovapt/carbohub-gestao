@@ -61,12 +61,14 @@ const PRIORITY_COLORS: Record<number, string> = {
   5: "bg-slate-500/10 text-slate-400 border-slate-400/20",
 };
 
-const QUALITY_ICON = {
-  aprovada:   <CheckCircle2 className="h-4 w-4 text-green-500" />,
-  bloqueada:  <AlertTriangle className="h-4 w-4 text-amber-500" />,
-  reprovada:  <XCircle className="h-4 w-4 text-destructive" />,
-  pendente:   <Clock className="h-4 w-4 text-muted-foreground" />,
-};
+function getQualityIcon(result: string) {
+  switch (result) {
+    case "aprovada":  return <CheckCircle2  className="h-4 w-4 text-green-500" />;
+    case "bloqueada": return <AlertTriangle className="h-4 w-4 text-amber-500" />;
+    case "reprovada": return <XCircle       className="h-4 w-4 text-destructive" />;
+    default:          return <Clock         className="h-4 w-4 text-muted-foreground" />;
+  }
+}
 
 // ── Detail Field ─────────────────────────────────────────────────────────────
 function DetailField({ label, value, mono = false }: { label: string; value: React.ReactNode; mono?: boolean }) {
@@ -337,7 +339,7 @@ export default function ProductionOrderDetail() {
                 <Separator />
                 <DetailField label="Qualidade" value={
                   <div className="flex items-center gap-1.5">
-                    {QUALITY_ICON[order.quality_result]}
+                    {getQualityIcon(order.quality_result)}
                     <span className="capitalize">{order.quality_result}</span>
                   </div>
                 } />

@@ -26,27 +26,11 @@ interface MessageListProps {
   onScrollToBottom?: () => void;
 }
 
-const TAG_CONFIG: Record<MessageTag, { label: string; icon: React.ReactNode; className: string }> = {
-  pendency: {
-    label: "Pendência",
-    icon: <AlertCircle className="h-3 w-3" />,
-    className: "bg-destructive/10 text-destructive border-destructive/30",
-  },
-  resolved: {
-    label: "Resolvido",
-    icon: <CheckCircle2 className="h-3 w-3" />,
-    className: "bg-success/10 text-success border-success/30",
-  },
-  waiting: {
-    label: "Aguardando",
-    icon: <Clock className="h-3 w-3" />,
-    className: "bg-warning/10 text-warning border-warning/30",
-  },
-  suggestion: {
-    label: "Sugestão",
-    icon: <Lightbulb className="h-3 w-3" />,
-    className: "bg-primary/10 text-primary border-primary/30",
-  },
+const TAG_CONFIG: Record<MessageTag, { label: string; Icon: React.ElementType; className: string }> = {
+  pendency:   { label: "Pendência",  Icon: AlertCircle,  className: "bg-destructive/10 text-destructive border-destructive/30" },
+  resolved:   { label: "Resolvido",  Icon: CheckCircle2, className: "bg-success/10 text-success border-success/30" },
+  waiting:    { label: "Aguardando", Icon: Clock,        className: "bg-warning/10 text-warning border-warning/30" },
+  suggestion: { label: "Sugestão",   Icon: Lightbulb,    className: "bg-primary/10 text-primary border-primary/30" },
 };
 
 export function MessageList({ serviceOrderId }: MessageListProps) {
@@ -184,7 +168,7 @@ export function MessageList({ serviceOrderId }: MessageListProps) {
                 </span>
                 {tagConfig && (
                   <Badge variant="outline" className={cn("gap-1 text-xs", tagConfig.className)}>
-                    {tagConfig.icon}
+                    <tagConfig.Icon className="h-3 w-3" />
                     {tagConfig.label}
                   </Badge>
                 )}

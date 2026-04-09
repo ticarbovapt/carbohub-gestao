@@ -21,12 +21,14 @@ interface AIRecommendationsCardProps {
   licenseeId: string | undefined;
 }
 
-const RECOMMENDATION_ICONS: Record<AIRecommendation["type"], React.ReactNode> = {
-  vapt: <Zap className="h-5 w-5 text-amber-500" />,
-  ze: <Truck className="h-5 w-5 text-blue-500" />,
-  credits: <Coins className="h-5 w-5 text-green-500" />,
-  general: <Lightbulb className="h-5 w-5 text-purple-500" />,
-};
+function getRecommendationIcon(type: AIRecommendation["type"]) {
+  switch (type) {
+    case "vapt":    return <Zap      className="h-5 w-5 text-amber-500" />;
+    case "ze":      return <Truck    className="h-5 w-5 text-blue-500" />;
+    case "credits": return <Coins    className="h-5 w-5 text-green-500" />;
+    case "general": return <Lightbulb className="h-5 w-5 text-purple-500" />;
+  }
+}
 
 const PRIORITY_STYLES: Record<AIRecommendation["priority"], { bg: string; border: string; badge: string }> = {
   high: {
@@ -146,7 +148,7 @@ export function AIRecommendationsCard({ licenseeId }: AIRecommendationsCardProps
             >
               <div className="flex items-start gap-3">
                 <div className="h-10 w-10 rounded-lg bg-background flex items-center justify-center shrink-0">
-                  {RECOMMENDATION_ICONS[rec.type]}
+                  {getRecommendationIcon(rec.type)}
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1">

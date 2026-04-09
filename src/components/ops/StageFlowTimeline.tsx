@@ -26,15 +26,17 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
-const STAGE_ICONS: Record<OsWorkflowStage, React.ReactNode> = {
-  comercial: <ShoppingCart className="h-4 w-4" />,
-  operacoes: <Settings className="h-4 w-4" />,
-  logistica: <Truck className="h-4 w-4" />,
-  administrativo: <FileText className="h-4 w-4" />,
-  fiscal: <Receipt className="h-4 w-4" />,
-  financeiro: <DollarSign className="h-4 w-4" />,
-  pos_venda: <HeadphonesIcon className="h-4 w-4" />,
-};
+function getStageIcon(stage: OsWorkflowStage) {
+  switch (stage) {
+    case "comercial":      return <ShoppingCart    className="h-4 w-4" />;
+    case "operacoes":      return <Settings        className="h-4 w-4" />;
+    case "logistica":      return <Truck           className="h-4 w-4" />;
+    case "administrativo": return <FileText        className="h-4 w-4" />;
+    case "fiscal":         return <Receipt         className="h-4 w-4" />;
+    case "financeiro":     return <DollarSign      className="h-4 w-4" />;
+    case "pos_venda":      return <HeadphonesIcon  className="h-4 w-4" />;
+  }
+}
 
 const STAGE_COLORS: Record<OsWorkflowStage, { bg: string; text: string; border: string }> = {
   comercial: { bg: "bg-blue-500/10", text: "text-blue-600 dark:text-blue-400", border: "border-blue-500" },
@@ -145,7 +147,7 @@ export function StageFlowTimeline({
                     ) : status === "locked" ? (
                       <Lock className="h-3 w-3" />
                     ) : (
-                      STAGE_ICONS[config.stage]
+                      getStageIcon(config.stage)
                     )}
                   </div>
 

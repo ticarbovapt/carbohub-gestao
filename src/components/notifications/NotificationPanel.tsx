@@ -25,27 +25,11 @@ interface NotificationPanelProps {
   onClose: () => void;
 }
 
-const TYPE_CONFIG: Record<string, { icon: React.ReactNode; label: string; color: string }> = {
-  mention: {
-    icon: <AtSign className="h-4 w-4" />,
-    label: "Menção",
-    color: "text-primary",
-  },
-  action_assigned: {
-    icon: <ListTodo className="h-4 w-4" />,
-    label: "Ação atribuída",
-    color: "text-warning",
-  },
-  action_completed: {
-    icon: <Check className="h-4 w-4" />,
-    label: "Ação concluída",
-    color: "text-success",
-  },
-  message: {
-    icon: <MessageCircle className="h-4 w-4" />,
-    label: "Mensagem",
-    color: "text-muted-foreground",
-  },
+const TYPE_CONFIG: Record<string, { Icon: React.ElementType; label: string; color: string }> = {
+  mention:          { Icon: AtSign,         label: "Menção",        color: "text-primary" },
+  action_assigned:  { Icon: ListTodo,       label: "Ação atribuída",color: "text-warning" },
+  action_completed: { Icon: Check,          label: "Ação concluída",color: "text-success" },
+  message:          { Icon: MessageCircle,  label: "Mensagem",      color: "text-muted-foreground" },
 };
 
 export function NotificationPanel({ onClose }: NotificationPanelProps) {
@@ -86,7 +70,7 @@ export function NotificationPanel({ onClose }: NotificationPanelProps) {
         )}
       >
         <div className={cn("flex-shrink-0 mt-0.5", typeConfig.color)}>
-          {typeConfig.icon}
+          <typeConfig.Icon className="h-4 w-4" />
         </div>
 
         <div className="flex-1 min-w-0">

@@ -79,12 +79,14 @@ const MATRIX: FeatureRow[] = [
   { module: "Governança",     feature: "Log de auditoria / governança",ceo:"full", gestor_adm:"none",  gestor_fin:"none",  gestor_compras:"none",  operador_fiscal:"none", vendedor:"none", operador:"none" },
 ];
 
-const ACCESS_ICON: Record<Access, React.ReactNode> = {
-  full: <CheckCircle className="h-4 w-4 text-carbo-green mx-auto" />,
-  read: <Eye className="h-4 w-4 text-carbo-blue mx-auto" />,
-  own:  <Wrench className="h-4 w-4 text-warning mx-auto" />,
-  none: <XCircle className="h-4 w-4 text-muted-foreground/30 mx-auto" />,
-};
+function getAccessIcon(access: Access) {
+  switch (access) {
+    case "full": return <CheckCircle className="h-4 w-4 text-carbo-green mx-auto" />;
+    case "read": return <Eye         className="h-4 w-4 text-carbo-blue mx-auto" />;
+    case "own":  return <Wrench      className="h-4 w-4 text-warning mx-auto" />;
+    case "none": return <XCircle     className="h-4 w-4 text-muted-foreground/30 mx-auto" />;
+  }
+}
 
 const ACCESS_LABEL: Record<Access, string> = {
   full: "Acesso total",
@@ -110,7 +112,7 @@ export default function RoleMatrix() {
         <div className="flex flex-wrap gap-3">
           {Object.entries(ACCESS_LABEL).map(([key, label]) => (
             <div key={key} className="flex items-center gap-2 text-sm">
-              {ACCESS_ICON[key as Access]}
+              {getAccessIcon(key as Access)}
               <span className="text-muted-foreground">{label}</span>
             </div>
           ))}

@@ -23,33 +23,15 @@ type AreaKey = "ops" | "licensee" | "pdv";
 interface AreaConfig {
   key: AreaKey;
   label: string;
-  icon: React.ReactNode;
+  Icon: React.ElementType;
   path: string;
   gradient: string;
 }
 
 const AREAS: AreaConfig[] = [
-  {
-    key: "ops",
-    label: "Carbo Controle",
-    icon: <Briefcase className="h-4 w-4" />,
-    path: "/dashboard",
-    gradient: "from-blue-500 to-blue-700",
-  },
-  {
-    key: "licensee",
-    label: "Portal Licenciados",
-    icon: <Users className="h-4 w-4" />,
-    path: "/licensee/dashboard",
-    gradient: "from-carbo-green to-emerald-600",
-  },
-  {
-    key: "pdv",
-    label: "Lojas",
-    icon: <Store className="h-4 w-4" />,
-    path: "/pdv/dashboard",
-    gradient: "from-amber-500 to-orange-600",
-  },
+  { key: "ops",      label: "Carbo Controle",     Icon: Briefcase, path: "/dashboard",          gradient: "from-blue-500 to-blue-700" },
+  { key: "licensee", label: "Portal Licenciados",  Icon: Users,     path: "/licensee/dashboard", gradient: "from-carbo-green to-emerald-600" },
+  { key: "pdv",      label: "Lojas",               Icon: Store,     path: "/pdv/dashboard",      gradient: "from-amber-500 to-orange-600" },
 ];
 
 interface AreaSwitcherProps {
@@ -108,7 +90,7 @@ export function AreaSwitcher({ variant = "compact" }: AreaSwitcherProps) {
                 `bg-gradient-to-br ${currentAreaConfig?.gradient}`
               )}
             >
-              {currentAreaConfig?.icon}
+              {currentAreaConfig && <currentAreaConfig.Icon className="h-4 w-4" />}
             </div>
             <span className="text-sm font-medium text-foreground">
               {currentAreaConfig?.label}
@@ -133,7 +115,7 @@ export function AreaSwitcher({ variant = "compact" }: AreaSwitcherProps) {
                 `bg-gradient-to-br ${area.gradient}`
               )}
             >
-              {area.icon}
+              <area.Icon className="h-4 w-4" />
             </div>
             <span className="flex-1 font-medium text-sm">{area.label}</span>
             {currentArea === area.key && (

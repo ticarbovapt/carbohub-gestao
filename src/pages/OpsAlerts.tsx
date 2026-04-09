@@ -57,12 +57,14 @@ function TipoIcon({ tipo }: { tipo: string }) {
 }
 
 // ── Status icon ───────────────────────────────────────────────────────────────
-const STATUS_ICONS: Record<AlertStatus, React.ReactNode> = {
-  open:        <AlertTriangle className="h-4 w-4 text-destructive" />,
-  in_progress: <Clock         className="h-4 w-4 text-amber-500" />,
-  resolved:    <CheckCircle2  className="h-4 w-4 text-green-500" />,
-  dismissed:   <XCircle       className="h-4 w-4 text-muted-foreground" />,
-};
+function getStatusIcon(status: AlertStatus) {
+  switch (status) {
+    case "open":        return <AlertTriangle className="h-4 w-4 text-destructive" />;
+    case "in_progress": return <Clock         className="h-4 w-4 text-amber-500" />;
+    case "resolved":    return <CheckCircle2  className="h-4 w-4 text-green-500" />;
+    case "dismissed":   return <XCircle       className="h-4 w-4 text-muted-foreground" />;
+  }
+}
 
 // ── Alert row ─────────────────────────────────────────────────────────────────
 function AlertRow({ alert }: { alert: OpsAlert }) {
@@ -95,7 +97,7 @@ function AlertRow({ alert }: { alert: OpsAlert }) {
           <PrioridadeBadge p={alert.prioridade} />
           {alert.status !== "resolved" && alert.status !== "dismissed" && (
             <span className="text-[10px] text-muted-foreground">
-              {STATUS_ICONS[alert.status]}
+              {getStatusIcon(alert.status)}
             </span>
           )}
         </div>

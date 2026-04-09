@@ -14,14 +14,16 @@ import { supabase } from "@/integrations/supabase/client";
 import { CarboSkeleton } from "@/components/ui/CarboSkeleton";
 import type { Json } from "@/integrations/supabase/types";
 
-const STATUS_ICONS: Record<OrderStatus, React.ReactNode> = {
-  pending: <Clock className="h-4 w-4" />,
-  confirmed: <CheckCircle className="h-4 w-4" />,
-  invoiced: <FileText className="h-4 w-4" />,
-  shipped: <Truck className="h-4 w-4" />,
-  delivered: <Package className="h-4 w-4" />,
-  cancelled: <XCircle className="h-4 w-4" />,
-};
+function getStatusIcon(status: OrderStatus) {
+  switch (status) {
+    case "pending":   return <Clock      className="h-4 w-4" />;
+    case "confirmed": return <CheckCircle className="h-4 w-4" />;
+    case "invoiced":  return <FileText   className="h-4 w-4" />;
+    case "shipped":   return <Truck      className="h-4 w-4" />;
+    case "delivered": return <Package    className="h-4 w-4" />;
+    case "cancelled": return <XCircle    className="h-4 w-4" />;
+  }
+}
 
 const STATUS_COLORS: Record<OrderStatus, "default" | "success" | "warning" | "destructive"> = {
   pending: "warning",
@@ -110,7 +112,7 @@ export default function OrderDetails() {
               <div className="flex items-center gap-3">
                 <h1 className="text-2xl font-bold">{order.order_number}</h1>
                 <CarboBadge variant={STATUS_COLORS[order.status]}>
-                  {STATUS_ICONS[order.status]}
+                  {getStatusIcon(order.status)}
                   <span className="ml-1">{ORDER_STATUS_LABELS[order.status]}</span>
                 </CarboBadge>
                 <CarboBadge variant={order.order_type === "recorrente" ? "default" : "warning"}>
