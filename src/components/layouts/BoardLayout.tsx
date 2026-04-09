@@ -205,6 +205,22 @@ const ROUTE_LABELS: Record<string, string> = {
   "licensee-ranking": "Ranking Licenciados",
   "territory-intelligence": "Inteligência Territorial",
   "territory-expansion": "Expansão Territorial",
+  "sales-targets": "Metas de Vendas",
+  "org-chart": "Organograma",
+  "pdv-network": "Rede PDV",
+  "role-matrix": "Matriz de Acesso",
+  "responsibility-map": "Mapa de Responsabilidades",
+  "b2b": "B2B Leads",
+  "funnel": "Funil",
+  "vapt": "CarboVAPT",
+  "ze": "CarboZÉ",
+  "pedidos": "Meus Pedidos",
+  "creditos": "Créditos",
+  "comissoes": "Comissões",
+  "atendimentos": "Atendimentos",
+  "clientes": "Clientes",
+  "reagentes": "Reagentes",
+  "produtos": "Produtos",
 };
 
 function Breadcrumb({ area }: { area: string }) {

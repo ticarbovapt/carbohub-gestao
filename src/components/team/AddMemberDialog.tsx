@@ -22,6 +22,7 @@ import { toast } from "sonner";
 import { useCreateTeamMember } from "@/hooks/useCreateTeamMember";
 import { cn } from "@/lib/utils";
 import type { Database } from "@/integrations/supabase/types";
+import { SQUAD_DEPARTMENTS } from "@/constants/departments";
 
 type DepartmentType = Database["public"]["Enums"]["department_type"];
 type AppRole = Database["public"]["Enums"]["app_role"];
@@ -32,39 +33,38 @@ interface AreaOption {
   value: PlatformArea;
   label: string;
   description: string;
-  icon: React.ReactNode;
+  IconComponent: React.ElementType;
   gradient: string;
   bgColor: string;
 }
 
+// ── sem JSX no nível de módulo (evita "Z is not a constructor" no build SWC) ──
 const PLATFORM_AREAS: AreaOption[] = [
-  { 
-    value: "carbo_ops", 
-    label: "Carbo Controle", 
-    description: "Gestão operacional interna", 
-    icon: <Briefcase className="h-5 w-5" />,
+  {
+    value: "carbo_ops",
+    label: "Carbo Controle",
+    description: "Gestão operacional interna",
+    IconComponent: Briefcase,
     gradient: "from-blue-500 to-blue-700",
     bgColor: "bg-blue-500/10 border-blue-500/30 hover:bg-blue-500/20",
   },
-  { 
-    value: "portal_licenciado", 
-    label: "Portal Licenciado", 
-    description: "Acesso para licenciados parceiros", 
-    icon: <Users className="h-5 w-5" />,
+  {
+    value: "portal_licenciado",
+    label: "Portal Licenciado",
+    description: "Acesso para licenciados parceiros",
+    IconComponent: Users,
     gradient: "from-carbo-green to-emerald-600",
     bgColor: "bg-carbo-green/10 border-carbo-green/30 hover:bg-carbo-green/20",
   },
-  { 
-    value: "portal_pdv", 
-    label: "Portal PDV", 
-    description: "Acesso para pontos de venda", 
-    icon: <Store className="h-5 w-5" />,
+  {
+    value: "portal_pdv",
+    label: "Portal PDV",
+    description: "Acesso para pontos de venda",
+    IconComponent: Store,
     gradient: "from-amber-500 to-orange-600",
     bgColor: "bg-amber-500/10 border-amber-500/30 hover:bg-amber-500/20",
   },
 ];
-
-import { SQUAD_DEPARTMENTS } from "@/constants/departments";
 
 const DEPARTMENTS = SQUAD_DEPARTMENTS;
 
@@ -198,7 +198,7 @@ export function AddMemberDialog({ onMemberAdded, defaultArea = "carbo_ops", vari
                     "h-12 w-12 rounded-xl flex items-center justify-center text-white",
                     `bg-gradient-to-br ${area.gradient}`
                   )}>
-                    {area.icon}
+                    <area.IconComponent className="h-5 w-5" />
                   </div>
                   <div className="flex-1">
                     <p className="font-semibold text-foreground">{area.label}</p>
@@ -230,7 +230,7 @@ export function AddMemberDialog({ onMemberAdded, defaultArea = "carbo_ops", vari
                   "h-10 w-10 rounded-xl flex items-center justify-center text-white",
                   `bg-gradient-to-br ${selectedAreaConfig?.gradient}`
                 )}>
-                  {selectedAreaConfig?.icon}
+                  {selectedAreaConfig && <selectedAreaConfig.IconComponent className="h-5 w-5" />}
                 </div>
                 <div>
                   <span className="block">Nova Conta - {selectedAreaConfig?.label}</span>
@@ -391,7 +391,7 @@ export function AddMemberDialog({ onMemberAdded, defaultArea = "carbo_ops", vari
                     "h-6 w-6 rounded-lg flex items-center justify-center text-white text-xs",
                     `bg-gradient-to-br ${selectedAreaConfig?.gradient}`
                   )}>
-                    {selectedAreaConfig?.icon}
+                    {selectedAreaConfig && <selectedAreaConfig.IconComponent className="h-5 w-5" />}
                   </div>
                   <span className="font-medium">{selectedAreaConfig?.label}</span>
                 </div>

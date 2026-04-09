@@ -397,7 +397,7 @@ function LicenseeProductsAdmin() {
           {licensees.length === 0 ? (
             <div className="text-center py-16 text-muted-foreground">
               <Package className="h-10 w-10 mx-auto mb-3 opacity-40" />
-              <p>Nenhum licenciado Mood1 com estoque inicializado.</p>
+              <p>Nenhum licenciado com estoque inicializado.</p>
             </div>
           ) : (
             <div className="space-y-4">
@@ -487,7 +487,7 @@ export default function LicenseeProducts() {
         <div className="p-8 text-center text-muted-foreground">
           <Package className="h-12 w-12 mx-auto mb-4 opacity-40" />
           <p className="font-semibold">Acesso não disponível</p>
-          <p className="text-sm mt-1">Esta área é exclusiva para licenciados Mood1 (com produtos).</p>
+          <p className="text-sm mt-1">Esta área é exclusiva para licenciados com produtos cadastrados.</p>
         </div>
       </LicenseeLayout>
     );

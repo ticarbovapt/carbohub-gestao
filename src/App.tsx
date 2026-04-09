@@ -113,7 +113,7 @@ function AnimatedRoutes() {
 
   return (
     <Suspense fallback={<PageLoader />}>
-      <AnimatePresence mode="wait">
+      <AnimatePresence mode="sync">
         <motion.div
           key={location.pathname}
           initial={{ opacity: 0, y: 8 }}

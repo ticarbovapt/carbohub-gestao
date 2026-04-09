@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import {
   Store, TrendingUp, DollarSign, AlertTriangle, BarChart2, Package,
 } from "lucide-react";
+import { BoardLayout } from "@/components/layouts/BoardLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -33,17 +34,20 @@ export default function OpsNetwork() {
 
   if (isLoading) {
     return (
-      <div className="p-4 sm:p-6 space-y-4">
-        <CarboSkeleton className="h-10 w-56" />
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-          {[1, 2, 3].map(i => <CarboSkeleton key={i} className="h-24" />)}
+      <BoardLayout>
+        <div className="p-4 sm:p-6 space-y-4">
+          <CarboSkeleton className="h-10 w-56" />
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+            {[1, 2, 3].map(i => <CarboSkeleton key={i} className="h-24" />)}
+          </div>
+          <CarboSkeleton className="h-64" />
         </div>
-        <CarboSkeleton className="h-64" />
-      </div>
+      </BoardLayout>
     );
   }
 
   return (
+    <BoardLayout>
     <div className="p-4 sm:p-6 space-y-6">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -161,5 +165,6 @@ export default function OpsNetwork() {
         </CardContent>
       </Card>
     </div>
+    </BoardLayout>
   );
 }
