@@ -4,7 +4,6 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, useLocation, Navigate } from "react-router-dom";
-import { AnimatePresence, motion } from "framer-motion";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { RealtimeMachineAlertsProvider } from "@/hooks/useRealtimeMachineAlerts";
@@ -113,15 +112,7 @@ function AnimatedRoutes() {
 
   return (
     <Suspense fallback={<PageLoader />}>
-      <AnimatePresence mode="sync">
-        <motion.div
-          key={location.pathname}
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -8 }}
-          transition={{ duration: 0.25, ease: "easeOut" }}
-        >
-          <Routes location={location}>
+      <Routes location={location}>
             {/* Public routes */}
             <Route path="/" element={<AreaSelector />} />
             <Route path="/login/:area" element={<LoginArea />} />
@@ -246,8 +237,6 @@ function AnimatedRoutes() {
             {/* Catch-all */}
             <Route path="*" element={<NotFound />} />
           </Routes>
-        </motion.div>
-      </AnimatePresence>
     </Suspense>
   );
 }
