@@ -47,12 +47,18 @@ export default function BlingIntegration() {
 
   const checkStatus = async () => {
     try {
-      const response = await supabase.functions.invoke("bling-auth", {
-        body: { action: "status" },
-      });
+      const timeout = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error("timeout")), 8000)
+      );
+      const response = await Promise.race([
+        supabase.functions.invoke("bling-auth", { body: { action: "status" } }),
+        timeout,
+      ]);
       if (response.data?.success) {
         setIsConnected(response.data.data.connected);
         setIsExpired(response.data.data.expired);
+      } else {
+        setIsConnected(false);
       }
     } catch (error) {
       console.error("Bling status check failed:", error);

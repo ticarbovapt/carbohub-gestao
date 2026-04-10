@@ -182,7 +182,6 @@ const ROUTE_LABELS: Record<string, string> = {
   licensee: "Licenciado",
   machines: "Máquinas",
   team: "Equipe",
-  analytics: "Analytics",
   import: "Importar Dados",
   admin: "Sistema",
   approval: "Aprovações",
