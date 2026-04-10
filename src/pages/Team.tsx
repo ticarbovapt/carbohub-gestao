@@ -2,7 +2,7 @@ import { useState, useMemo } from "react";
 import { BoardLayout } from "@/components/layouts/BoardLayout";
 import {
   Users, Shield, Building2, Clock, Network, Mail, Loader2, CheckCheck,
-  GitBranch, UserCheck, Map, Link2, Lock, FileText, ChevronRight,
+  GitBranch, UserCheck, Map as MapIcon, Link2, Lock, FileText, ChevronRight,
 } from "lucide-react";
 import { STATIC_ORG_TREE, getDeptColor, getLevelLabel, useOrgChartFlat, type OrgNode } from "@/hooks/useOrgChart";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -340,7 +340,7 @@ const Team = () => {
                 { href: "/governance",         label: "Governança",         icon: GitBranch, color: "text-violet-500", bg: "bg-violet-500/10" },
                 { href: "/role-matrix",        label: "Matriz de Acesso",   icon: Lock,      color: "text-amber-500",  bg: "bg-amber-500/10"  },
                 { href: "/admin/approval",     label: "Aprovações",         icon: UserCheck, color: "text-green-500",  bg: "bg-green-500/10"  },
-                { href: "/responsibility-map", label: "Mapa de Responsab.", icon: Map,       color: "text-cyan-500",   bg: "bg-cyan-500/10"   },
+                { href: "/responsibility-map", label: "Mapa de Responsab.", icon: MapIcon,    color: "text-cyan-500",   bg: "bg-cyan-500/10"   },
                 { href: "/integrations/bling", label: "Integrações Bling",  icon: Link2,     color: "text-orange-500", bg: "bg-orange-500/10" },
               ].map((tool) => (
                 <button
