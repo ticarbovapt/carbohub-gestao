@@ -1,3 +1,4 @@
+// bling-sync v2 — writes to bling_orders (intermediate table), bridge is client-side
 import { createClient } from "npm:@supabase/supabase-js@2.39.3";
 
 const ALLOWED_ORIGINS = [
