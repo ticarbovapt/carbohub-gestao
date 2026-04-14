@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -34,6 +34,34 @@ interface SyncLog {
   error_message: string | null;
   started_at: string;
   finished_at: string | null;
+}
+
+// ── Bridge helpers (client-side, no edge function needed) ──────────────────
+const SKU_TO_LINHA: Record<string, string> = {
+  "SKU-CZ100": "carboze_100ml", "CZ100": "carboze_100ml",
+  "SKU-CZ1L": "carboze_1l",    "CZ1L": "carboze_1l",
+  "SKU-CZSC10": "carboze_sache_10ml", "CZSC10": "carboze_sache_10ml",
+  "SKU-CP100": "carbopro",     "CP100": "carbopro",
+  "SKU-VAPT70": "carbovapt",   "VAPT70": "carbovapt",
+};
+
+function detectLinha(name: string): string {
+  const n = (name || "").toLowerCase();
+  if (n.includes("sach") || (n.includes("10ml") && !n.includes("100ml"))) return "carboze_sache_10ml";
+  if (n.includes(" 1l") || n.includes("1 l") || n.includes("1l ")) return "carboze_1l";
+  if (n.includes("carbopro") || n.includes("pro ") || n.includes("pro-")) return "carbopro";
+  if (n.includes("vapt") || n.includes("servi")) return "carbovapt";
+  return "carboze_100ml";
+}
+
+function mapBlingStatus(situacaoId: number | null, situacaoValor: string | null): string {
+  const v = (situacaoValor || "").toLowerCase();
+  if (situacaoId === 9  || v.includes("atendido")) return "delivered";
+  if (situacaoId === 12 || v.includes("cancelado")) return "cancelled";
+  if (v.includes("enviado") || v.includes("expedido") || v.includes("transporte")) return "shipped";
+  if (situacaoId === 17 || v.includes("verificado") || v.includes("faturado")) return "invoiced";
+  if (situacaoId === 15 || v.includes("andamento") || v.includes("confirmado")) return "confirmed";
+  return "pending";
 }
 
 export default function BlingIntegration() {
@@ -148,6 +176,104 @@ export default function BlingIntegration() {
       toast.error("Erro ao atualizar token");
     }
   };
+
+  const handleBridge = useCallback(async () => {
+    setSyncing("bridge");
+    try {
+      // Log entry
+      const { data: logEntry } = await supabase
+        .from("bling_sync_log")
+        .insert({ entity_type: "bridge", status: "running" })
+        .select("id")
+        .single();
+      const logId = (logEntry as any)?.id || "";
+
+      // Load reference data
+      const [{ data: blingOrders }, { data: skus }, { data: licensees }] = await Promise.all([
+        (supabase as any).from("bling_orders").select("*").order("data", { ascending: false }),
+        (supabase as any).from("sku").select("id, code, name"),
+        (supabase as any).from("licensees").select("id, name, trade_name"),
+      ]);
+
+      if (!blingOrders?.length) {
+        toast.info("Nenhum pedido Bling para importar. Execute a sincronização primeiro.");
+        await (supabase as any).from("bling_sync_log").update({ status: "completed", records_synced: 0, finished_at: new Date().toISOString() }).eq("id", logId);
+        return;
+      }
+
+      const skuMap = new Map((skus || []).map((s: any) => [s.code, s]));
+      const normalize = (s: string) => (s || "").toLowerCase().trim();
+      let synced = 0, failed = 0;
+
+      for (const bo of blingOrders) {
+        try {
+          const externalRef = `bling-${bo.bling_id}`;
+          const items: any[] = Array.isArray(bo.items) ? bo.items : [];
+          let detectedLinha = "carboze_100ml";
+          let skuId: string | null = null;
+
+          const carboItems = items.map((item: any) => {
+            const codigo: string = item.codigo || item.produto?.codigo || "";
+            const nome: string = item.descricao || item.produto?.nome || "";
+            const linha = SKU_TO_LINHA[codigo] || detectLinha(nome);
+            if (!skuId) {
+              const matched = skuMap.get(codigo);
+              if (matched) { skuId = matched.id; detectedLinha = linha; }
+              else { detectedLinha = linha; }
+            }
+            const qty = Number(item.quantidade) || 1;
+            const price = Number(item.valor) || 0;
+            return { product_name: nome, sku_code: codigo, quantity: qty, unit_price: price, total: qty * price };
+          });
+
+          const contato = normalize(bo.contato_nome);
+          const licenseeId = (licensees || []).find(
+            (l: any) => normalize(l.name) === contato || normalize(l.trade_name) === contato
+          )?.id || null;
+
+          const status = mapBlingStatus(bo.situacao_id, bo.situacao_valor);
+
+          const { data: existing } = await (supabase as any).from("carboze_orders").select("id, status").eq("external_ref", externalRef).single();
+
+          if (existing) {
+            if (existing.status !== status) {
+              await (supabase as any).from("carboze_orders").update({ status, updated_at: new Date().toISOString() }).eq("id", existing.id);
+            }
+          } else {
+            const orderDate = bo.data ? new Date(bo.data).toISOString() : new Date().toISOString();
+            await (supabase as any).from("carboze_orders").insert({
+              customer_name: bo.contato_nome || "Cliente Bling",
+              items: carboItems,
+              subtotal: Number(bo.total_produtos) || 0,
+              shipping_cost: Number(bo.total_frete) || 0,
+              discount: Number(bo.total_desconto) || 0,
+              total: Number(bo.total) || 0,
+              status,
+              linha: detectedLinha,
+              sku_id: skuId,
+              licensee_id: licenseeId,
+              external_ref: externalRef,
+              notes: bo.observacoes || null,
+              source_file: "bling_sync",
+              rv_flow_type: "standard",
+              created_at: orderDate,
+            });
+          }
+          synced++;
+        } catch {
+          failed++;
+        }
+      }
+
+      await (supabase as any).from("bling_sync_log").update({ status: "completed", records_synced: synced, records_failed: failed, finished_at: new Date().toISOString() }).eq("id", logId);
+      toast.success(`Importação concluída! ${synced} pedidos importados para o CarboHub.`);
+      loadSyncLogs();
+    } catch (error: any) {
+      toast.error(error.message || "Erro na importação de pedidos");
+    } finally {
+      setSyncing(null);
+    }
+  }, []);
 
   const handleSync = async (entity: string) => {
     setSyncing(entity);
@@ -342,7 +468,7 @@ export default function BlingIntegration() {
               size="lg"
               variant="outline"
               disabled={!!syncing}
-              onClick={() => handleSync("bridge")}
+              onClick={handleBridge}
               className="border-orange-400 text-orange-600 hover:bg-orange-50 dark:hover:bg-orange-950/20"
             >
               {syncing === "bridge" ? (

@@ -44,6 +44,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { DatePickerInput } from "@/components/ui/date-picker-input";
 import { useOrders, useOrderStats, OrderStatus, ORDER_STATUS_LABELS, ORDER_TYPE_LABELS, CarbozeOrder, OrderItem } from "@/hooks/useCarbozeOrders";
+import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
 import { format } from "date-fns";
@@ -86,9 +87,15 @@ export default function Orders() {
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<CarbozeOrder | null>(null);
 
-  const { data: orders = [], isLoading, refetch } = useOrders(statusFilter);
+  const queryClient = useQueryClient();
+  const { data: orders = [], isLoading, isRefetching } = useOrders(statusFilter);
   const { data: allOrders = [] } = useOrders("all");
   const { data: stats, isLoading: statsLoading } = useOrderStats();
+
+  const handleRefreshAll = () => {
+    queryClient.invalidateQueries({ queryKey: ["carboze-orders"] });
+    queryClient.invalidateQueries({ queryKey: ["carboze-order-stats"] });
+  };
 
   // Unique vendedores and clients for dropdowns
   const vendedores = useMemo(() => {
@@ -195,9 +202,9 @@ export default function Orders() {
           icon={ShoppingBag}
           actions={
             <>
-              <CarboButton variant="outline" size="sm" onClick={() => refetch()}>
-                <RefreshCw className="h-4 w-4 mr-1" />
-                Atualizar
+              <CarboButton variant="outline" size="sm" onClick={handleRefreshAll} disabled={isRefetching}>
+                <RefreshCw className={`h-4 w-4 mr-1 ${isRefetching ? "animate-spin" : ""}`} />
+                {isRefetching ? "Atualizando..." : "Atualizar"}
               </CarboButton>
 
               {/* Export dropdown */}
