@@ -439,44 +439,39 @@ async function syncOrders(
 
     for (const order of orders) {
       try {
-        // Fetch full order details
-        let orderDetail = order;
-        try {
-          const detail = await blingFetch(token, `/pedidos/vendas/${order.id}`);
-          orderDetail = detail.data || order;
-          await new Promise((resolve) => setTimeout(resolve, 350));
-        } catch (detailErr) {
-          console.warn(`[bling-sync] Failed to fetch order detail ${order.id}:`, detailErr);
-        }
-
-        const contato = orderDetail.contato || {};
-        const totais = orderDetail.totais || orderDetail.total || {};
+        // Use list data only — skip per-order detail fetch to avoid timeout
+        // (109 orders × 350ms delay = ~38s just in delays; detail fetch pushes past edge fn limit)
+        const contato = order.contato || {};
+        const situacao = order.situacao || {};
 
         const { error: upsertErr } = await supabaseAdmin.from("bling_orders").upsert(
           {
             bling_id: order.id,
-            numero: orderDetail.numero?.toString() || null,
-            numero_loja: orderDetail.numeroLoja || null,
-            data: orderDetail.data || null,
-            data_saida: orderDetail.dataSaida || null,
-            data_prevista: orderDetail.dataPrevista || null,
-            total_produtos: totais.produtos || totais.totalProdutos || 0,
-            total_desconto: totais.desconto || totais.totalDesconto || 0,
-            total_frete: totais.frete || totais.totalFrete || 0,
-            total: totais.total || totais.totalGeral || 0,
-            situacao_id: orderDetail.situacao?.id || null,
-            situacao_valor: orderDetail.situacao?.valor || null,
+            numero: order.numero?.toString() || null,
+            numero_loja: order.numeroLoja || null,
+            data: order.data || null,
+            data_saida: order.dataSaida || null,
+            data_prevista: order.dataPrevista || null,
+            total_produtos: Number(order.totalProdutos) || 0,
+            total_desconto: Number(order.totalDesconto) || 0,
+            total_frete: Number(order.totalFrete) || 0,
+            total: Number(order.total) || 0,
+            situacao_id: situacao.id || null,
+            situacao_valor: situacao.valor || null,
             contato_id: contato.id || null,
             contato_nome: contato.nome || null,
-            observacoes: orderDetail.observacoes || null,
-            items: orderDetail.itens || null,
-            raw_data: orderDetail,
+            observacoes: null,
+            items: null,
+            raw_data: order,
             synced_at: new Date().toISOString(),
             updated_at: new Date().toISOString(),
           },
           { onConflict: "bling_id" }
         );
-        if (upsertErr) throw upsertErr;
+        if (upsertErr) {
+          console.error("[bling-sync] upsert error for order", order.id, ":", JSON.stringify(upsertErr));
+          throw upsertErr;
+        }
         totalSynced++;
       } catch (e) {
         console.error("Failed to upsert order:", e);
@@ -484,7 +479,6 @@ async function syncOrders(
       }
     }
 
-    await new Promise((resolve) => setTimeout(resolve, 350));
     page++;
 
     if (orders.length < 100) hasMore = false;
