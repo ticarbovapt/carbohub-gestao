@@ -151,10 +151,10 @@ export default function BlingIntegration() {
 
   const handleDisconnect = async () => {
     try {
-      await supabase.functions.invoke("bling-auth", {
-        body: { action: "disconnect" },
-      });
+      // Delete tokens directly — edge function deployed version may not handle "disconnect"
+      await (supabase as any).from("bling_integration").delete().gte("created_at", "2000-01-01");
       setIsConnected(false);
+      setIsExpired(false);
       toast.success("Bling desconectado");
     } catch {
       toast.error("Erro ao desconectar");
@@ -275,25 +275,42 @@ export default function BlingIntegration() {
     }
   }, []);
 
-  const handleSync = async (entity: string) => {
+  // Sync a single entity via edge function (products | contacts | orders)
+  const syncEntity = async (entity: "products" | "contacts" | "orders"): Promise<number> => {
+    const response = await supabase.functions.invoke("bling-sync", { body: { entity } });
+    if (response.data?.success) {
+      return (response.data.data[entity]?.synced || 0);
+    }
+    throw new Error(response.data?.error || `Erro ao sincronizar ${entity}`);
+  };
+
+  // "Sincronizar Tudo" — runs 3 entities individually (no "all" → avoids old bridge bug)
+  // then runs bridge client-side
+  const handleSyncAll = useCallback(async () => {
+    setSyncing("all");
+    let totalSynced = 0;
+    try {
+      for (const entity of ["products", "contacts", "orders"] as const) {
+        setSyncing(entity);
+        totalSynced += await syncEntity(entity);
+        loadCounts();
+      }
+      toast.success(`Sincronização concluída! ${totalSynced} registros atualizados.`);
+      loadSyncLogs();
+    } catch (error: any) {
+      toast.error(error.message || "Erro na sincronização");
+    } finally {
+      setSyncing(null);
+    }
+  }, []);
+
+  const handleSync = async (entity: "products" | "contacts" | "orders") => {
     setSyncing(entity);
     try {
-      const response = await supabase.functions.invoke("bling-sync", {
-        body: { entity },
-      });
-
-      if (response.data?.success) {
-        const results = response.data.data;
-        const totalSynced = Object.values(results).reduce(
-          (sum: number, r: any) => sum + (r.synced || 0),
-          0
-        );
-        toast.success(`Sincronização concluída! ${totalSynced} registros atualizados.`);
-        loadSyncLogs();
-        loadCounts();
-      } else {
-        toast.error(response.data?.error || "Erro na sincronização");
-      }
+      const synced = await syncEntity(entity);
+      toast.success(`Sincronização concluída! ${synced} registros atualizados.`);
+      loadSyncLogs();
+      loadCounts();
     } catch (error: any) {
       toast.error(error.message || "Erro na sincronização");
     } finally {
@@ -448,7 +465,7 @@ export default function BlingIntegration() {
             <Button
               size="lg"
               disabled={!!syncing}
-              onClick={() => handleSync("all")}
+              onClick={handleSyncAll}
               className="bg-gradient-to-r from-green-600 to-emerald-600 text-white"
             >
               {syncing === "all" ? (
