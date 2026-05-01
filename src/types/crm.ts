@@ -24,8 +24,12 @@ export interface CRMLead {
   contact_phone: string | null;
   contact_whatsapp: string | null;
   contact_email: string | null;
+  contact_cpf: string | null;
   source: string | null;
+  source_meta: Record<string, unknown> | null;
   cnpj: string | null;
+  cnpj_status: string | null;         // 'ativa'|'baixada'|'inapta'|'suspensa'
+  cnpj_data: Record<string, unknown> | null;
   legal_name: string | null;
   trade_name: string | null;
   ramo: string | null;
@@ -51,11 +55,19 @@ export interface CRMLead {
   poc_done: boolean;
   probability: number;
   next_steps: string | null;
+  next_action_desc: string | null;
   equipment_type: string | null;
+  products: string[] | null;
+  subcategoria: string | null;
   assigned_to: string | null;
   assigned_team: string | null;
   territory: string | null;
   lost_reason: string | null;
+  expected_close: string | null;
+  won_at: string | null;
+  lost_at: string | null;
+  external_ref: string | null;
+  external_hub: string | null;
   last_contact_at: string | null;
   next_follow_up_at: string | null;
   contact_attempts: number;
@@ -67,6 +79,59 @@ export interface CRMLead {
   created_by: string | null;
   created_at: string;
   updated_at: string;
+}
+
+// ===== ACTIVITY =====
+
+export type ActivityType = "note" | "call" | "whatsapp" | "email" | "meeting" | "stage_change" | "task" | "system";
+
+export interface CRMActivity {
+  id: string;
+  lead_id: string;
+  activity_type: ActivityType;
+  direction: "inbound" | "outbound" | null;
+  subject: string | null;
+  body: string | null;
+  status: "pending" | "done" | "cancelled";
+  due_at: string | null;
+  done_at: string | null;
+  stage_from: string | null;
+  stage_to: string | null;
+  created_by: string | null;
+  created_by_name: string | null;
+  meta: Record<string, unknown> | null;
+  created_at: string;
+}
+
+// ===== GOALS =====
+
+export interface CRMGoal {
+  id: string;
+  user_id: string;
+  period: string;          // 'YYYY-MM'
+  funnel_type: string | null;
+  target_leads: number;
+  target_won: number;
+  target_revenue: number;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+// ===== CNPJ LOOKUP =====
+
+export interface CnpjData {
+  cnpj: string;
+  razao_social: string;
+  nome_fantasia: string | null;
+  logradouro: string | null;
+  numero: string | null;
+  bairro: string | null;
+  municipio: string | null;
+  uf: string | null;
+  cep: string | null;
+  cnae_fiscal_descricao: string | null;
+  descricao_situacao_cadastral: string;  // 'ATIVA' | 'BAIXADA' | 'INAPTA' | 'SUSPENSA' | 'NULA'
 }
 
 export interface StageConfig {
@@ -237,12 +302,22 @@ export const SOURCE_OPTIONS = [
   "Prospecção ativa",
   "Indicação",
   "Evento",
-  "Tráfego pago",
-  "WhatsApp",
-  "Google Forms",
+  "Meta Ads",
+  "Google Ads",
+  "TikTok Ads",
+  "ML Ads",
+  "Shopee Ads",
+  "LinkedIn Ads",
+  "Landing Page",
+  "ChatWoot / WhatsApp",
+  "Formulário CarboVapt",
+  "Google Merchant",
+  "Orgânico",
   "Bling",
   "Outro",
 ] as const;
+
+export type SourceOption = (typeof SOURCE_OPTIONS)[number];
 
 // ===== HELPER FUNCTIONS =====
 

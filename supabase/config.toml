@@ -1,4 +1,4 @@
-project_id = "koocaybofmaqruocxudr"
+project_id = "wpkfirmapxevzpxjovjr"
 
 [functions.send-welcome-email]
 verify_jwt = false
@@ -46,4 +46,13 @@ verify_jwt = false
 verify_jwt = false
 
 [functions.ai-chat]
+verify_jwt = false
+
+[functions.crm-webhook-chatwoot]
+verify_jwt = false
+
+[functions.crm-webhook-meta]
+verify_jwt = false
+
+[functions.crm-bling-bridge]
 verify_jwt = false

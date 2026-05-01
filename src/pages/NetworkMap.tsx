@@ -3,7 +3,7 @@ import { BoardLayout } from "@/components/layouts/BoardLayout";
 import { LicenseeSubNav } from "@/components/licensees/LicenseeSubNav";
 import { MapContainer, TileLayer, CircleMarker, Popup } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
-import { MapPin, Loader2, Cpu, Users, Activity, Map } from "lucide-react";
+import { MapPin, Loader2, Cpu, Users, Activity, Map, Store, AlertTriangle, Layers } from "lucide-react";
 import {
   Select,
   SelectContent,
@@ -11,7 +11,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Button } from "@/components/ui/button";
 import { useNetworkMap, useNetworkStats } from "@/hooks/useNetworkIntelligence";
+import { useTerritorialData } from "@/hooks/useTerritorialData";
 
 const STATUS_COLORS: Record<string, string> = {
   ativa: "#22c55e",
@@ -36,10 +38,12 @@ const STATUS_LABELS: Record<string, string> = {
 export default function NetworkMap() {
   const { data: machines = [], isLoading: machinesLoading } = useNetworkMap();
   const { data: stats, isLoading: statsLoading } = useNetworkStats();
+  const { data: territorial } = useTerritorialData();
 
   const [stateFilter, setStateFilter] = useState<string>("all");
   const [licenseeFilter, setLicenseeFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [showPDVLayer, setShowPDVLayer] = useState(false);
 
   // Derive unique states and licensees from data
   const uniqueStates = useMemo(() => {
@@ -91,6 +95,26 @@ export default function NetworkMap() {
         </div>
 
         <LicenseeSubNav />
+
+        {/* PDV Layer Toggle */}
+        <div className="flex items-center gap-2">
+          <Button
+            variant={showPDVLayer ? "default" : "outline"}
+            size="sm"
+            onClick={() => setShowPDVLayer((v) => !v)}
+            className="h-9 gap-2"
+          >
+            <Store className="h-4 w-4" />
+            {showPDVLayer ? "Ocultar PDVs" : "Mostrar PDVs"}
+          </Button>
+          {showPDVLayer && territorial?.stats && (
+            <div className="flex items-center gap-3 text-xs text-muted-foreground">
+              <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-green-500 inline-block" />{territorial.stats.activePDVs} ativos</span>
+              <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-red-500 inline-block" />{territorial.stats.stockAlerts} alertas</span>
+              <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-amber-500 inline-block" />{(territorial.pdvs?.length ?? 0) - territorial.stats.activePDVs} inativos</span>
+            </div>
+          )}
+        </div>
 
         {/* Stats Bar */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -213,6 +237,33 @@ export default function NetworkMap() {
               attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
               url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
             />
+            {showPDVLayer && (territorial?.pdvs ?? []).map((pdv) => {
+              if (!pdv.lat || !pdv.lng) return null;
+              const pdvColor = pdv.hasStockAlert ? "#ef4444" : pdv.status === "active" ? "#22c55e" : "#f59e0b";
+              return (
+                <CircleMarker
+                  key={`pdv-${pdv.id}`}
+                  center={[pdv.lat, pdv.lng]}
+                  radius={8}
+                  pathOptions={{ color: pdvColor, fillColor: pdvColor, fillOpacity: 0.7, weight: 2 }}
+                >
+                  <Popup>
+                    <div className="text-sm space-y-1 min-w-[160px]">
+                      <p className="font-bold">{pdv.name}</p>
+                      <p className="text-muted-foreground text-xs">{pdv.pdvCode}</p>
+                      <p className="text-muted-foreground">{pdv.city}, {pdv.state}</p>
+                      {pdv.hasStockAlert && (
+                        <p className="text-red-500 font-medium text-xs">⚠ Alerta de estoque</p>
+                      )}
+                      <p className="text-muted-foreground text-xs">
+                        Estoque: {pdv.currentStock ?? "—"} / mín {pdv.minStockThreshold ?? "—"}
+                      </p>
+                    </div>
+                  </Popup>
+                </CircleMarker>
+              );
+            })}
+
             {filteredMachines.map((machine: any) => {
               if (!machine.latitude || !machine.longitude) return null;
               const color = STATUS_COLORS[machine.status] || "#6b7280";
@@ -269,13 +320,19 @@ export default function NetworkMap() {
             <div className="flex flex-col gap-1.5">
               {Object.entries(STATUS_LABELS).map(([key, label]) => (
                 <div key={key} className="flex items-center gap-2">
-                  <span
-                    className="inline-block h-3 w-3 rounded-full"
-                    style={{ backgroundColor: STATUS_COLORS[key] }}
-                  />
+                  <span className="inline-block h-3 w-3 rounded-full" style={{ backgroundColor: STATUS_COLORS[key] }} />
                   <span className="text-xs text-muted-foreground">{label}</span>
                 </div>
               ))}
+              {showPDVLayer && (
+                <>
+                  <div className="border-t border-border my-1" />
+                  <p className="text-xs font-semibold text-foreground mb-1">PDVs</p>
+                  <div className="flex items-center gap-2"><span className="inline-block h-3 w-3 rounded-full bg-green-500" /><span className="text-xs text-muted-foreground">PDV Ativo</span></div>
+                  <div className="flex items-center gap-2"><span className="inline-block h-3 w-3 rounded-full bg-amber-500" /><span className="text-xs text-muted-foreground">PDV Inativo</span></div>
+                  <div className="flex items-center gap-2"><span className="inline-block h-3 w-3 rounded-full bg-red-500" /><span className="text-xs text-muted-foreground">Alerta Estoque</span></div>
+                </>
+              )}
             </div>
           </div>
         </div>

@@ -167,7 +167,17 @@ export function useAdvanceLeadStage() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ id, newStage, funnelType }: { id: string; newStage: string; funnelType: FunnelType }) => {
+    mutationFn: async ({
+      id,
+      newStage,
+      funnelType,
+      currentStage,
+    }: {
+      id: string;
+      newStage: string;
+      funnelType: FunnelType;
+      currentStage?: string;
+    }) => {
       const updates: Record<string, unknown> = { stage: newStage };
 
       // Auto-set contact attempts on contact stages
@@ -182,6 +192,10 @@ export function useAdvanceLeadStage() {
       } else if (["qualificado", "apresentacao", "diagnostico", "poc", "visita_agendada"].includes(newStage)) {
         updates.temperature = "morno";
       }
+      // Win timestamp
+      if (["convertido", "parceiro", "fechamento", "ativo"].includes(newStage)) {
+        updates.won_at = new Date().toISOString();
+      }
 
       const { data, error } = await supabase
         .from("crm_leads")
@@ -191,13 +205,47 @@ export function useAdvanceLeadStage() {
         .single();
 
       if (error) throw error;
+
+      // Record stage-change activity
+      const { data: { user } } = await supabase.auth.getUser();
+      let creatorName: string | null = null;
+      if (user?.id) {
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("full_name, username")
+          .eq("id", user.id)
+          .single();
+        creatorName = profile?.full_name || profile?.username || null;
+      }
+      await supabase.from("crm_lead_activities").insert({
+        lead_id: id,
+        activity_type: "stage_change",
+        subject: `${currentStage || "?"} → ${newStage}`,
+        status: "done",
+        done_at: new Date().toISOString(),
+        stage_from: currentStage || null,
+        stage_to: newStage,
+        created_by: user?.id || null,
+        created_by_name: creatorName,
+      });
+
+      // Fire-and-forget Bling bridge — never blocks lead advance
+      const WON_STAGES = ["convertido", "parceiro", "fechamento", "ativo"];
+      if (WON_STAGES.includes(newStage)) {
+        supabase.functions
+          .invoke("crm-bling-bridge", { body: { lead_id: id } })
+          .catch((err: Error) => console.error("Bling bridge error:", err));
+      }
+
       return data;
     },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ["crm-leads", variables.funnelType] });
+      queryClient.invalidateQueries({ queryKey: ["crm-lead", variables.id] });
+      queryClient.invalidateQueries({ queryKey: ["crm-activities", variables.id] });
       queryClient.invalidateQueries({ queryKey: ["crm-stats"] });
       queryClient.invalidateQueries({ queryKey: ["crm-all-stats"] });
-      toast.success("Lead avançado!");
+      toast.success("Etapa avançada!");
     },
     onError: (error: Error) => {
       toast.error("Erro: " + error.message);
@@ -209,20 +257,54 @@ export function useMarkLeadLost() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ id, reason, funnelType }: { id: string; reason: string; funnelType: FunnelType }) => {
+    mutationFn: async ({
+      id,
+      reason,
+      funnelType,
+      currentStage,
+    }: {
+      id: string;
+      reason: string;
+      funnelType: FunnelType;
+      currentStage?: string;
+    }) => {
       const lostStage = funnelType === "f2" ? "descartado" : "sem_interesse";
       const { data, error } = await supabase
         .from("crm_leads")
-        .update({ stage: lostStage, lost_reason: reason })
+        .update({ stage: lostStage, lost_reason: reason, lost_at: new Date().toISOString() })
         .eq("id", id)
         .select()
         .single();
 
       if (error) throw error;
+
+      // Record activity
+      const { data: { user } } = await supabase.auth.getUser();
+      let creatorName: string | null = null;
+      if (user?.id) {
+        const { data: profile } = await supabase
+          .from("profiles").select("full_name, username").eq("id", user.id).single();
+        creatorName = profile?.full_name || profile?.username || null;
+      }
+      await supabase.from("crm_lead_activities").insert({
+        lead_id: id,
+        activity_type: "stage_change",
+        subject: `Perdido: ${reason}`,
+        status: "done",
+        done_at: new Date().toISOString(),
+        stage_from: currentStage || null,
+        stage_to: lostStage,
+        created_by: user?.id || null,
+        created_by_name: creatorName,
+        meta: { lost_reason: reason },
+      });
+
       return data;
     },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ["crm-leads", variables.funnelType] });
+      queryClient.invalidateQueries({ queryKey: ["crm-lead", variables.id] });
+      queryClient.invalidateQueries({ queryKey: ["crm-activities", variables.id] });
       queryClient.invalidateQueries({ queryKey: ["crm-stats"] });
       queryClient.invalidateQueries({ queryKey: ["crm-all-stats"] });
       toast.success("Lead marcado como perdido");

@@ -94,7 +94,7 @@ function useCockpitData() {
       const now = new Date();
       const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
 
-      const [licenseesRes, pdvsRes, osRes, machinesRes, profilesRes] =
+      const [licenseesRes, pdvsRes, osRes, machinesRes, profilesRes, crmRes] =
         await Promise.all([
           supabase.from("licensees").select("id, status, address_state"),
           supabase
@@ -112,6 +112,9 @@ function useCockpitData() {
             .from("profiles")
             .select("id, last_login_at, status")
             .eq("status", "approved"),
+          supabase
+            .from("crm_leads")
+            .select("id, stage, temperature, estimated_revenue, funnel_type, lost_at"),
         ]);
 
       const licensees = licenseesRes.data || [];
@@ -119,6 +122,17 @@ function useCockpitData() {
       const os = osRes.data || [];
       const machines = machinesRes.data || [];
       const profiles = profilesRes.data || [];
+      const crmLeads = crmRes.data || [];
+
+      const CRM_LOST = ["sem_interesse", "descartado", "perdido"];
+      const CRM_WON  = ["convertido", "parceiro", "fechamento", "ativo"];
+      const crmTotal   = crmLeads.length;
+      const crmActive  = crmLeads.filter((l) => !CRM_LOST.includes(l.stage)).length;
+      const crmHot     = crmLeads.filter((l) => l.temperature === "quente").length;
+      const crmWon     = crmLeads.filter((l) => CRM_WON.includes(l.stage)).length;
+      const crmPipelineRevenue = crmLeads
+        .filter((l) => !CRM_LOST.includes(l.stage))
+        .reduce((s, l) => s + Number(l.estimated_revenue || 0), 0);
 
       const activeLicensees = licensees.filter((l) => l.status === "active").length;
       const inactiveLicensees = licensees.filter((l) => l.status !== "active").length;
@@ -168,6 +182,11 @@ function useCockpitData() {
         statesList: Array.from(states).sort() as string[],
         machinesData: machines,
         totalProfiles: profiles.length,
+        crmTotal,
+        crmActive,
+        crmHot,
+        crmWon,
+        crmPipelineRevenue,
       };
     },
     refetchInterval: 60_000,
@@ -649,9 +668,15 @@ export default function CockpitEstrategico() {
               />
               <KPICard
                 icon={TrendingUp}
-                label="Receita Total"
-                value="—"
-                sub="em integração"
+                label="Receita Prevista"
+                value={
+                  kpis?.crmPipelineRevenue != null
+                    ? new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", notation: "compact", maximumFractionDigits: 1 }).format(kpis.crmPipelineRevenue)
+                    : "—"
+                }
+                sub={`${kpis?.crmActive ?? 0} leads ativos`}
+                trendLabel={`${kpis?.crmWon ?? 0} convertidos`}
+                trend="up"
                 accentClass="bg-success/10 text-success"
                 delay={0.08}
               />
@@ -848,6 +873,7 @@ export default function CockpitEstrategico() {
         <section>
           <SectionLabel icon={Zap} label="Ações Executivas" number={4} />
 
+
           <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
             <ActionBtn
               icon={Megaphone}
@@ -896,9 +922,26 @@ export default function CockpitEstrategico() {
           </div>
         </section>
 
-        {/* ── LINHA 5: INTELLIGENCE HUB ────────────────────────────────────── */}
+        {/* ── LINHA 5: PIPELINE CRM ────────────────────────────────────────── */}
         <section>
-          <SectionLabel icon={Brain} label="Radar Estratégico Inteligente" number={5} />
+          <SectionLabel icon={TrendingUp} label="Pipeline Comercial" number={5} />
+          {kpisLoading ? (
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+              {Array.from({ length: 4 }).map((_, i) => <Skel key={i} className="h-36" />)}
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+              <KPICard icon={Activity} label="Total Leads" value={kpis?.crmTotal ?? 0} sub="todos os funis" accentClass="bg-carbo-blue/10 text-carbo-blue" delay={0.04} />
+              <KPICard icon={Users} label="Leads Ativos" value={kpis?.crmActive ?? 0} sub="em negociação" accentClass="bg-carbo-green/10 text-carbo-green" delay={0.08} />
+              <KPICard icon={TrendingUp} label="Leads Quentes" value={kpis?.crmHot ?? 0} sub="temperatura quente" trendLabel="alta prioridade" trend="up" accentClass="bg-warning/10 text-warning-foreground" delay={0.12} />
+              <KPICard icon={BarChart3} label="Convertidos" value={kpis?.crmWon ?? 0} sub="won / parceiros / fechados" trendLabel="ganhos" trend="up" accentClass="bg-success/10 text-success" delay={0.16} />
+            </div>
+          )}
+        </section>
+
+        {/* ── LINHA 6: INTELLIGENCE HUB ────────────────────────────────────── */}
+        <section>
+          <SectionLabel icon={Brain} label="Radar Estratégico Inteligente" number={6} />
           <div className="rounded-2xl border border-border bg-card shadow-board p-6">
             <IntelligenceHub />
           </div>

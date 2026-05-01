@@ -36,6 +36,8 @@ const OrderDetails        = lazy(() => import("./pages/OrderDetails"));
 const DataImport          = lazy(() => import("./pages/DataImport"));
 const MapaTerritorial     = lazy(() => import("./pages/MapaTerritorial"));
 const CockpitEstrategico  = lazy(() => import("./pages/admin/CockpitEstrategico"));
+const PipelineConfig      = lazy(() => import("./pages/admin/PipelineConfig"));
+const WebhookConfig       = lazy(() => import("./pages/admin/WebhookConfig"));
 const Logistics           = lazy(() => import("./pages/Logistics"));
 const Purchasing          = lazy(() => import("./pages/Purchasing"));
 const Financeiro          = lazy(() => import("./pages/Financeiro"));
@@ -50,6 +52,7 @@ const B2BFunnel           = lazy(() => import("./pages/B2BFunnel"));
 const B2BLeads            = lazy(() => import("./pages/B2BLeads"));
 const CRMDashboard        = lazy(() => import("./pages/crm/CRMDashboard"));
 const CRMFunnel           = lazy(() => import("./pages/crm/CRMFunnel"));
+const MeuPainel           = lazy(() => import("./pages/MeuPainel"));
 const SalesTargets        = lazy(() => import("./pages/SalesTargets"));
 const RoleMatrix          = lazy(() => import("./pages/RoleMatrix"));
 const ResponsibilityMap   = lazy(() => import("./pages/ResponsibilityMap"));
@@ -145,6 +148,7 @@ function AnimatedRoutes() {
             <Route path="/b2b/funnel"      element={<ProtectedRoute><B2BFunnel /></ProtectedRoute>} />
             <Route path="/crm"             element={<ProtectedRoute><CRMDashboard /></ProtectedRoute>} />
             <Route path="/crm/:funnelType" element={<ProtectedRoute><CRMFunnel /></ProtectedRoute>} />
+            <Route path="/meu-painel"      element={<ProtectedRoute><MeuPainel /></ProtectedRoute>} />
             <Route path="/import"          element={<ProtectedRoute><DataImport /></ProtectedRoute>} />
             <Route path="/mapa-territorial" element={<ProtectedRoute><MapaTerritorial /></ProtectedRoute>} />
 
@@ -206,9 +210,11 @@ function AnimatedRoutes() {
             {/* Admin */}
             <Route path="/admin"        element={<ProtectedRoute requiredRole="admin"><Admin /></ProtectedRoute>} />
             <Route path="/admin/approval" element={<ProtectedRoute requiredRole="admin"><AdminApproval /></ProtectedRoute>} />
-            <Route path="/admin/cockpit" element={<ProtectedRoute requiredRole="admin" requiresCeo><CockpitEstrategico /></ProtectedRoute>} />
-            <Route path="/governance"   element={<ProtectedRoute requiresCeo><CarboGovernance /></ProtectedRoute>} />
-            <Route path="/admin/*"      element={<ProtectedRoute requiredRole="admin"><Admin /></ProtectedRoute>} />
+            <Route path="/admin/cockpit"  element={<ProtectedRoute requiredRole="admin" requiresCeo><CockpitEstrategico /></ProtectedRoute>} />
+            <Route path="/admin/pipeline" element={<ProtectedRoute requiredRole="admin"><PipelineConfig /></ProtectedRoute>} />
+            <Route path="/admin/webhooks" element={<ProtectedRoute requiredRole="admin"><WebhookConfig /></ProtectedRoute>} />
+            <Route path="/governance"     element={<ProtectedRoute requiresCeo><CarboGovernance /></ProtectedRoute>} />
+            <Route path="/admin/*"        element={<ProtectedRoute requiredRole="admin"><Admin /></ProtectedRoute>} />
 
             {/* PDV Routes */}
             <Route path="/pdv" element={<ProtectedRoute><PDVLayout /></ProtectedRoute>}>

@@ -8,14 +8,13 @@ import { CarboCard, CarboCardContent } from "@/components/ui/carbo-card";
 import { CarboSearchInput } from "@/components/ui/carbo-input";
 import { CarboSkeleton } from "@/components/ui/CarboSkeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Plus, Users, TrendingUp, AlertTriangle, Flame, LayoutGrid, List } from "lucide-react";
 import { useCRMLeads, useCRMStats, useAdvanceLeadStage, useMarkLeadLost } from "@/hooks/useCRMLeads";
 import { CRMKanbanBoard } from "@/components/crm/CRMKanbanBoard";
 import { CRMLeadForm } from "@/components/crm/CRMLeadForm";
+import { CRMLeadDrawer } from "@/components/crm/CRMLeadDrawer";
 import { FUNNEL_CONFIG, getStagesForFunnel, getNextStage, LOSS_REASONS } from "@/types/crm";
 import type { FunnelType, CRMLead } from "@/types/crm";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 
 export default function CRMFunnel() {
@@ -27,6 +26,7 @@ export default function CRMFunnel() {
   const [stageFilter, setStageFilter] = useState("all");
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [lostDialogLead, setLostDialogLead] = useState<CRMLead | null>(null);
+  const [drawerLead, setDrawerLead] = useState<CRMLead | null>(null);
   const [viewMode, setViewMode] = useState<"kanban" | "list">("kanban");
 
   const { data: leads = [], isLoading } = useCRMLeads(ft);
@@ -143,6 +143,7 @@ export default function CRMFunnel() {
             funnelType={ft}
             onAdvance={handleAdvance}
             onMarkLost={handleMarkLost}
+            onLeadClick={(lead) => setDrawerLead(lead)}
           />
         ) : (
           <CarboCard>
@@ -154,7 +155,7 @@ export default function CRMFunnel() {
                       <p className="font-medium text-sm truncate">{lead.trade_name || lead.legal_name || lead.contact_name}</p>
                       <p className="text-xs text-muted-foreground">{lead.city} · {lead.contact_phone}</p>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 cursor-pointer" onClick={() => setDrawerLead(lead)}>
                       <span className="text-xs px-2 py-0.5 rounded-full" style={{ backgroundColor: stages.find((s) => s.id === lead.stage)?.color + "20", color: stages.find((s) => s.id === lead.stage)?.color }}>
                         {stages.find((s) => s.id === lead.stage)?.label}
                       </span>
@@ -170,21 +171,13 @@ export default function CRMFunnel() {
       {/* New Lead Form */}
       <CRMLeadForm funnelType={ft} open={isFormOpen} onOpenChange={setIsFormOpen} />
 
-      {/* Loss Reason Dialog */}
-      <Dialog open={!!lostDialogLead} onOpenChange={() => setLostDialogLead(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Motivo da Perda</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-2">
-            {LOSS_REASONS.map((reason) => (
-              <Button key={reason} variant="outline" className="w-full justify-start" onClick={() => confirmLost(reason)}>
-                {reason}
-              </Button>
-            ))}
-          </div>
-        </DialogContent>
-      </Dialog>
+      {/* Lead Detail Drawer */}
+      <CRMLeadDrawer
+        lead={drawerLead}
+        funnelType={ft}
+        open={!!drawerLead}
+        onOpenChange={(open) => { if (!open) setDrawerLead(null); }}
+      />
     </BoardLayout>
   );
 }
