@@ -13,6 +13,7 @@ import { AIChatDrawer } from "./components/ai/AIChatDrawer";
 import { HomeHub } from "./components/home/HomeHub";
 
 // ── Lazy page imports ─────────────────────────────────────────────────────────
+const Index               = lazy(() => import("./pages/Index"));
 const AreaSelector        = lazy(() => import("./pages/AreaSelector"));
 const LoginArea           = lazy(() => import("./pages/LoginArea"));
 const Onboarding          = lazy(() => import("./pages/Onboarding"));
@@ -117,7 +118,8 @@ function AnimatedRoutes() {
     <Suspense fallback={<PageLoader />}>
       <Routes location={location}>
             {/* Public routes */}
-            <Route path="/" element={<AreaSelector />} />
+            <Route path="/" element={<Index />} />
+            <Route path="/hub" element={<AreaSelector />} />
             <Route path="/login/:area" element={<LoginArea />} />
             <Route path="/change-password" element={<ChangePassword />} />
             <Route path="/set-password" element={<SetPassword />} />
