@@ -1,5 +1,6 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 
 export interface OrgNode {
   id: string;
@@ -160,6 +161,38 @@ export function useOrgChart() {
       return buildTree(normalized);
     },
     staleTime: 5 * 60 * 1000, // 5 min
+  });
+}
+
+// ── Mutation — atualizar nó do organograma ────────────────────────────────
+export interface OrgNodeUpdate {
+  id: string;
+  full_name?: string;
+  job_title?: string | null;
+  department?: string | null;
+  hierarchy_level?: number;
+  email?: string | null;
+  phone?: string | null;
+  dual_role?: string | null;
+  assistant?: boolean;
+}
+
+export function useUpdateOrgChartNode() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, ...fields }: OrgNodeUpdate) => {
+      const { error } = await (supabase as any)
+        .from("org_chart_nodes")
+        .update(fields)
+        .eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["org-chart"] });
+      qc.invalidateQueries({ queryKey: ["org-chart-flat"] });
+      toast.success("Colaborador atualizado!");
+    },
+    onError: (e: Error) => toast.error("Erro ao salvar: " + e.message),
   });
 }
 

@@ -2,17 +2,22 @@ import { useState, useMemo } from "react";
 import { BoardLayout } from "@/components/layouts/BoardLayout";
 import {
   Users, Shield, Building2, Clock, Network, Mail, Loader2, CheckCheck,
-  GitBranch, UserCheck, Map as MapIcon, Link2, Lock, FileText, ChevronRight,
+  GitBranch, UserCheck, Map as MapIcon, Link2, Lock, ChevronRight,
+  Pencil, X, Save,
 } from "lucide-react";
-import { STATIC_ORG_TREE, getDeptColor, getLevelLabel, useOrgChartFlat, type OrgNode } from "@/hooks/useOrgChart";
+import { STATIC_ORG_TREE, getDeptColor, getLevelLabel, useOrgChartFlat, useUpdateOrgChartNode, type OrgNode } from "@/hooks/useOrgChart";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useTeamMembers, TeamMember } from "@/hooks/useTeamMembers";
 import { useNavigate } from "react-router-dom";
 import { AddMemberDialog } from "@/components/team/AddMemberDialog";
-import { EditMemberDialog } from "@/components/team/EditMemberDialog";
 import { DeleteMemberDialog } from "@/components/team/DeleteMemberDialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
 import {
   Dialog,
   DialogContent,
@@ -30,6 +35,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
 import { useResendWelcomeEmail } from "@/hooks/useCreateTeamMember";
+import { ALL_DEPARTMENTS } from "@/constants/departments";
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 function flattenTree(nodes: OrgNode[]): OrgNode[] {
@@ -61,7 +67,7 @@ function getInitialsOrg(name: string) {
     .toUpperCase();
 }
 
-// ── MemberInfoModal ────────────────────────────────────────────────────────────
+// ── MemberInfoModal ─────────────────────────────────────────────────────────
 interface MemberInfoModalProps {
   member: OrgNode | null;
   profiles: Array<{ id: string; full_name: string | null; email?: string | null; phone?: string | null }>;
@@ -71,145 +77,210 @@ interface MemberInfoModalProps {
   onUpdated: () => void;
 }
 
-function MemberInfoModal({
-  member,
-  profiles,
-  teamMembers,
-  onClose,
-  canEdit,
-  onUpdated,
-}: MemberInfoModalProps) {
+function MemberInfoModal({ member, profiles, teamMembers, onClose, canEdit, onUpdated }: MemberInfoModalProps) {
+  const updateNode = useUpdateOrgChartNode();
+  const [editing, setEditing] = useState(false);
+
+  // edit form state — reset when member changes
+  const [formName,       setFormName]       = useState("");
+  const [formTitle,      setFormTitle]       = useState("");
+  const [formDept,       setFormDept]        = useState("");
+  const [formLevel,      setFormLevel]       = useState(6);
+  const [formEmail,      setFormEmail]       = useState("");
+  const [formPhone,      setFormPhone]       = useState("");
+  const [formDualRole,   setFormDualRole]    = useState("");
+  const [formAssistant,  setFormAssistant]   = useState(false);
+
+  // Open edit mode — seed from current member
+  const openEdit = () => {
+    if (!member) return;
+    setFormName(member.full_name);
+    setFormTitle(member.job_title || "");
+    setFormDept(member.department || "");
+    setFormLevel(member.hierarchy_level);
+    const prof = profiles.find((p) => p.full_name?.toLowerCase().trim() === member.full_name.toLowerCase().trim());
+    setFormEmail((prof as any)?.email || "");
+    setFormPhone((prof as any)?.phone || "");
+    setFormDualRole(member.dual_role || "");
+    setFormAssistant(member.assistant || false);
+    setEditing(true);
+  };
+
+  const handleSave = async () => {
+    if (!member) return;
+    await updateNode.mutateAsync({
+      id: member.id,
+      full_name:       formName,
+      job_title:       formTitle || null,
+      department:      formDept || null,
+      hierarchy_level: formLevel,
+      email:           formEmail || null,
+      phone:           formPhone || null,
+      dual_role:       formDualRole || null,
+      assistant:       formAssistant,
+    });
+    onUpdated();
+    setEditing(false);
+    onClose();
+  };
+
   if (!member) return null;
 
   const deptColor = getDeptColor(member.department);
-  const parent = PARENT_MAP.get(member.id);
-
-  // Enrich from Supabase profiles (match by name)
-  const profile = profiles.find(
-    (p) =>
-      p.full_name?.toLowerCase().trim() === member.full_name.toLowerCase().trim()
-  );
-
-  // Try to find matching TeamMember
-  const teamMember = teamMembers.find(
-    (m) =>
-      m.full_name?.toLowerCase().trim() === member.full_name.toLowerCase().trim()
-  );
+  const parent    = PARENT_MAP.get(member.id);
+  const profile   = profiles.find((p) => p.full_name?.toLowerCase().trim() === member.full_name.toLowerCase().trim());
+  const teamMember = teamMembers.find((m) => m.full_name?.toLowerCase().trim() === member.full_name.toLowerCase().trim());
 
   return (
-    <Dialog open={!!member} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-md">
+    <Dialog open={!!member} onOpenChange={(open) => { if (!open) { setEditing(false); onClose(); } }}>
+      <DialogContent className="max-w-md w-full">
         <DialogHeader>
-          <DialogTitle>Colaborador</DialogTitle>
+          <div className="flex items-center justify-between">
+            <DialogTitle>{editing ? "Editar Colaborador" : "Colaborador"}</DialogTitle>
+            {canEdit && !editing && (
+              <Button variant="ghost" size="icon" className="h-8 w-8 mr-6" onClick={openEdit}>
+                <Pencil className="h-4 w-4 text-muted-foreground" />
+              </Button>
+            )}
+          </div>
         </DialogHeader>
 
-        <div className="flex flex-col items-center gap-4 pt-1 pb-2">
-          {/* Avatar */}
-          <div
-            className="flex h-20 w-20 items-center justify-center rounded-full text-white font-bold text-xl shadow-lg ring-4 ring-offset-2 ring-offset-background"
-            style={{
-              backgroundColor: deptColor,
-              ["--tw-ring-color" as string]: deptColor,
-            }}
-          >
-            {getInitialsOrg(member.full_name)}
-          </div>
+        {/* ── VIEW MODE ───────────────────────────────────────────────────── */}
+        {!editing && (
+          <div className="flex flex-col items-center gap-4 pt-1 pb-2">
+            <div
+              className="flex h-20 w-20 items-center justify-center rounded-full text-white font-bold text-xl shadow-lg ring-4 ring-offset-2 ring-offset-background"
+              style={{ backgroundColor: deptColor, ["--tw-ring-color" as string]: deptColor }}
+            >
+              {getInitialsOrg(member.full_name)}
+            </div>
 
-          {/* Name + title */}
-          <div className="text-center">
-            <p className="text-lg font-bold text-foreground leading-tight">
-              {member.full_name}
-            </p>
-            {member.job_title && (
-              <p className="text-sm text-muted-foreground mt-1">{member.job_title}</p>
-            )}
-          </div>
+            <div className="text-center">
+              <p className="text-lg font-bold text-foreground leading-tight">{member.full_name}</p>
+              {member.job_title && <p className="text-sm text-muted-foreground mt-1">{member.job_title}</p>}
+            </div>
 
-          {/* Badges */}
-          <div className="flex flex-wrap gap-2 justify-center">
-            <Badge className="text-white border-0" style={{ backgroundColor: deptColor }}>
-              {getLevelLabel(member.hierarchy_level)}
-            </Badge>
-            {member.department && (
-              <Badge variant="outline" style={{ borderColor: deptColor, color: deptColor }}>
-                {member.department}
+            <div className="flex flex-wrap gap-2 justify-center">
+              <Badge className="text-white border-0" style={{ backgroundColor: deptColor }}>
+                {getLevelLabel(member.hierarchy_level)}
               </Badge>
-            )}
-            {member.assistant && (
-              <Badge variant="outline" className="border-dashed text-muted-foreground">
-                Assistente
-              </Badge>
-            )}
-            {member.dual_role && (
-              <Badge className="bg-violet-600 text-white border-0 text-[10px]">
-                + Head B2B
-              </Badge>
-            )}
-          </div>
+              {member.department && (
+                <Badge variant="outline" style={{ borderColor: deptColor, color: deptColor }}>
+                  {member.department}
+                </Badge>
+              )}
+              {member.assistant && (
+                <Badge variant="outline" className="border-dashed text-muted-foreground">Assistente</Badge>
+              )}
+              {member.dual_role && (
+                <Badge className="bg-violet-600 text-white border-0 text-[10px]">+ Head B2B</Badge>
+              )}
+            </div>
 
-          {/* Separator */}
-          <div className="w-full h-px bg-border" />
+            <div className="w-full h-px bg-border" />
 
-          {/* Info grid */}
-          <div className="w-full grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
-            <div>
-              <p className="text-[11px] text-muted-foreground font-medium uppercase tracking-wide mb-0.5">
-                Email
-              </p>
-              <p className="font-medium truncate text-foreground">
-                {profile?.email || teamMember?.email || "—"}
-              </p>
+            <div className="w-full grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
+              {[
+                { label: "Email",        value: (profile as any)?.email || teamMember?.email || "—" },
+                { label: "Telefone",     value: (profile as any)?.phone || "—" },
+                { label: "Departamento", value: member.department || "—" },
+                { label: "Gestor Direto",value: parent?.full_name || "—" },
+              ].map(({ label, value }) => (
+                <div key={label}>
+                  <p className="text-[11px] text-muted-foreground font-medium uppercase tracking-wide mb-0.5">{label}</p>
+                  <p className="font-medium truncate text-foreground">{value}</p>
+                </div>
+              ))}
+              {member.dual_role && (
+                <div className="col-span-2">
+                  <p className="text-[11px] text-muted-foreground font-medium uppercase tracking-wide mb-0.5">Dupla Função</p>
+                  <p className="font-medium text-foreground">{member.dual_role}</p>
+                </div>
+              )}
             </div>
-            <div>
-              <p className="text-[11px] text-muted-foreground font-medium uppercase tracking-wide mb-0.5">
-                Telefone
-              </p>
-              <p className="font-medium text-foreground">
-                {(profile as any)?.phone || "—"}
-              </p>
-            </div>
-            <div>
-              <p className="text-[11px] text-muted-foreground font-medium uppercase tracking-wide mb-0.5">
-                Departamento
-              </p>
-              <p className="font-medium text-foreground">{member.department || "—"}</p>
-            </div>
-            <div>
-              <p className="text-[11px] text-muted-foreground font-medium uppercase tracking-wide mb-0.5">
-                Gestor Direto
-              </p>
-              <p className="font-medium text-foreground">{parent?.full_name || "—"}</p>
-            </div>
-            {member.dual_role && (
-              <div className="col-span-2">
-                <p className="text-[11px] text-muted-foreground font-medium uppercase tracking-wide mb-0.5">
-                  Dupla Função
-                </p>
-                <p className="font-medium text-foreground">{member.dual_role}</p>
+
+            {canEdit && teamMember && (
+              <div className="w-full flex justify-end pt-2 border-t border-border">
+                <DeleteMemberDialog member={teamMember} onDeleted={() => { onUpdated(); onClose(); }} />
               </div>
             )}
           </div>
+        )}
 
-          {/* Edit controls — admin/CEO/MasterAdmin only, and only if matched to a TeamMember */}
-          {canEdit && teamMember && (
-            <div className="w-full flex justify-end gap-2 pt-2 border-t border-border">
-              <EditMemberDialog
-                member={teamMember}
-                onUpdated={() => {
-                  onUpdated();
-                  onClose();
-                }}
-              />
-              <DeleteMemberDialog
-                member={teamMember}
-                onDeleted={() => {
-                  onUpdated();
-                  onClose();
-                }}
-              />
+        {/* ── EDIT MODE ───────────────────────────────────────────────────── */}
+        {editing && (
+          <div className="space-y-3 pt-1">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="col-span-2 space-y-1">
+                <Label>Nome Completo</Label>
+                <Input value={formName} onChange={(e) => setFormName(e.target.value)} />
+              </div>
+              <div className="col-span-2 space-y-1">
+                <Label>Cargo / Função</Label>
+                <Input value={formTitle} onChange={(e) => setFormTitle(e.target.value)} placeholder="ex: Coordenadora Administrativa" />
+              </div>
+              <div className="space-y-1">
+                <Label>Departamento</Label>
+                <Select value={formDept} onValueChange={setFormDept}>
+                  <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
+                  <SelectContent>
+                    {ALL_DEPARTMENTS.map((d) => (
+                      <SelectItem key={d.value} value={d.value}>{d.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <Label>Nível Hierárquico</Label>
+                <Select value={String(formLevel)} onValueChange={(v) => setFormLevel(Number(v))}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="1">1 — CEO</SelectItem>
+                    <SelectItem value="2">2 — Diretor(a)</SelectItem>
+                    <SelectItem value="3">3 — Gerente</SelectItem>
+                    <SelectItem value="4">4 — Coordenador(a)</SelectItem>
+                    <SelectItem value="5">5 — Supervisor(a)</SelectItem>
+                    <SelectItem value="6">6 — Staff</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <Label>E-mail</Label>
+                <Input type="email" value={formEmail} onChange={(e) => setFormEmail(e.target.value)} placeholder="email@empresa.com" />
+              </div>
+              <div className="space-y-1">
+                <Label>Telefone</Label>
+                <Input value={formPhone} onChange={(e) => setFormPhone(e.target.value)} placeholder="(11) 9 0000-0000" />
+              </div>
+              <div className="col-span-2 space-y-1">
+                <Label>Dupla Função (opcional)</Label>
+                <Input value={formDualRole} onChange={(e) => setFormDualRole(e.target.value)} placeholder="ex: Head — Desenvolvimento de Negócios" />
+              </div>
+              <div className="col-span-2 flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="assistant-check"
+                  checked={formAssistant}
+                  onChange={(e) => setFormAssistant(e.target.checked)}
+                  className="h-4 w-4 rounded border-border"
+                />
+                <Label htmlFor="assistant-check" className="cursor-pointer">Assistente executivo(a)</Label>
+              </div>
             </div>
-          )}
-        </div>
+
+            <div className="flex justify-end gap-2 pt-2 border-t border-border">
+              <Button variant="outline" size="sm" onClick={() => setEditing(false)}>
+                <X className="h-4 w-4 mr-1" /> Cancelar
+              </Button>
+              <Button size="sm" onClick={handleSave} disabled={updateNode.isPending}>
+                {updateNode.isPending
+                  ? <Loader2 className="h-4 w-4 animate-spin mr-1" />
+                  : <Save className="h-4 w-4 mr-1" />}
+                Salvar
+              </Button>
+            </div>
+          </div>
+        )}
       </DialogContent>
     </Dialog>
   );
