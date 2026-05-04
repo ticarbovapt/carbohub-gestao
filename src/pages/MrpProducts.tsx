@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { BoardLayout } from "@/components/layouts/BoardLayout";
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
 import { CarboButton } from "@/components/ui/carbo-button";
@@ -214,6 +215,7 @@ function StockRiskBadge({ product, hubStocks }: { product: MrpProduct; hubStocks
 
 export default function MrpProducts() {
   const { isAdmin, isCeo } = useAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { data: products = [], isLoading } = useMrpProducts();
   const { data: warehouseStockMap = {} } = useWarehouseStockByProduct();
   const [search, setSearch] = useState("");
@@ -222,6 +224,9 @@ export default function MrpProducts() {
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [bomProduct, setBomProduct] = useState<MrpProduct | null>(null);
   const [bomOpen, setBomOpen] = useState(false);
+
+  // Detecta ?bom=1 vindo do sidebar
+  const bomView = searchParams.get("bom") === "1";
 
   const canEdit = isAdmin || isCeo;
 
@@ -236,8 +241,8 @@ export default function MrpProducts() {
     <BoardLayout>
       <div className="space-y-6">
         <CarboPageHeader
-          title="Insumos (MRP)"
-          description="Cadastro mestre de insumos do ecossistema"
+          title="Catálogo MRP"
+          description="Insumos, SKUs, BOM Lists e controle de qualidade"
           icon={Package}
           actions={canEdit ? (
             <CarboButton onClick={() => { setEditProduct(undefined); setDialogOpen(true); }}>
@@ -246,7 +251,68 @@ export default function MrpProducts() {
           ) : undefined}
         />
 
-        <div className="flex flex-wrap items-center gap-3">
+        {/* ── View tabs: Produtos | BOM Lists ── */}
+        <div className="flex items-center gap-1 border-b border-border pb-2">
+          <button
+            onClick={() => setSearchParams({})}
+            className={cn(
+              "flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-t-lg transition-colors -mb-[9px] border-b-2",
+              !bomView
+                ? "border-primary text-primary bg-primary/5"
+                : "border-transparent text-muted-foreground hover:text-foreground"
+            )}
+          >
+            <Package className="h-4 w-4" /> Insumos / SKUs
+          </button>
+          <button
+            onClick={() => setSearchParams({ bom: "1" })}
+            className={cn(
+              "flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-t-lg transition-colors -mb-[9px] border-b-2",
+              bomView
+                ? "border-primary text-primary bg-primary/5"
+                : "border-transparent text-muted-foreground hover:text-foreground"
+            )}
+          >
+            <ClipboardList className="h-4 w-4" /> BOM Lists
+          </button>
+        </div>
+
+        {/* ── BOM view ───────────────────────────────────────────────── */}
+        {bomView && (
+          <CarboCard>
+            <div className="space-y-4">
+              <p className="text-sm text-muted-foreground">
+                Selecione um <strong>Produto Final</strong> para visualizar ou editar sua lista de insumos (BOM).
+              </p>
+              {isLoading ? (
+                <div className="space-y-2">{[1,2,3].map(i => <CarboSkeleton key={i} className="h-12 w-full" />)}</div>
+              ) : (
+                <div className="divide-y divide-border">
+                  {products.filter(p => p.category === "Produto Final").map(p => (
+                    <div key={p.id} className="flex items-center justify-between py-3 px-1">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <Package className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium text-foreground truncate">{p.name}</p>
+                          <p className="text-xs text-muted-foreground">{p.product_code}</p>
+                        </div>
+                      </div>
+                      <CarboButton variant="outline" onClick={() => { setBomProduct(p); setBomOpen(true); }} className="flex-shrink-0 gap-1.5">
+                        <ClipboardList className="h-3.5 w-3.5" /> Ver / Editar BOM
+                      </CarboButton>
+                    </div>
+                  ))}
+                  {products.filter(p => p.category === "Produto Final").length === 0 && (
+                    <p className="text-center text-muted-foreground text-sm py-8">Nenhum Produto Final cadastrado ainda.</p>
+                  )}
+                </div>
+              )}
+            </div>
+          </CarboCard>
+        )}
+
+        {/* ── Produtos view ───────────────────────────────────────────── */}
+        {!bomView && <div className="flex flex-wrap items-center gap-3">
           <div className="max-w-md flex-1 min-w-[200px]">
             <CarboSearchInput placeholder="Buscar por código ou nome..." value={search} onChange={e => setSearch(e.target.value)} />
           </div>
@@ -268,13 +334,13 @@ export default function MrpProducts() {
           </div>
         </div>
 
-        {isLoading ? (
+        {!bomView && isLoading ? (
           <CarboCard padding="none"><div className="p-6 space-y-4">{[1,2,3].map(i => <CarboSkeleton key={i} className="h-14 w-full" />)}</div></CarboCard>
-        ) : filtered.length === 0 ? (
+        ) : !bomView && filtered.length === 0 ? (
           <CarboCard>
             <CarboEmptyState icon={Package} title="Nenhum produto encontrado" description="Cadastre o primeiro produto do MRP" action={canEdit ? { label: "Novo Produto", onClick: () => { setEditProduct(undefined); setDialogOpen(true); } } : undefined} />
           </CarboCard>
-        ) : (
+        ) : !bomView ? (
           <CarboCard padding="none">
             <CarboTable>
               <CarboTableHeader>
@@ -351,6 +417,7 @@ export default function MrpProducts() {
             </CarboTable>
           </CarboCard>
         )}
+        ) : null}
       </div>
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>

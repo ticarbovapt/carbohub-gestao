@@ -145,12 +145,41 @@ interface NavGroup {
   children: NavItem[];
 }
 
-const controleItems: NavItem[] = [
-  { href: "/mrp/products", label: "Catálogo (Insumos/SKUs)", icon: Package },
-  { href: "/mrp/suppliers", label: "Fornecedores", icon: Factory },
-  { href: "/licensees", label: "Licenciados", icon: Building2 },
-  { href: "/team", label: "Equipe", icon: Users },
-  { href: "/import", label: "Importar Dados", icon: FileSpreadsheet },
+const controleGroups: NavGroup[] = [
+  {
+    id: "catalogo",
+    label: "Catálogo",
+    icon: Package,
+    children: [
+      { href: "/mrp/products",      label: "Insumos / SKUs",      icon: Package },
+      { href: "/mrp/products?bom=1",label: "BOM Lists",            icon: ClipboardList },
+      { href: "/skus",              label: "Produtos Finais",      icon: Layers },
+      { href: "/lots",              label: "Lotes / Qualidade",    icon: FileSpreadsheet },
+    ],
+  },
+  {
+    id: "fornecedores",
+    label: "Fornecedores",
+    icon: Factory,
+    directHref: "/mrp/suppliers",
+    children: [{ href: "/mrp/suppliers", label: "Fornecedores", icon: Factory }],
+  },
+  {
+    id: "licenciados",
+    label: "Licenciados",
+    icon: Building2,
+    directHref: "/licensees",
+    children: [{ href: "/licensees", label: "Licenciados", icon: Building2 }],
+  },
+  {
+    id: "equipe",
+    label: "Equipe & Dados",
+    icon: Users,
+    children: [
+      { href: "/team",   label: "Equipe",         icon: Users },
+      { href: "/import", label: "Importar Dados",  icon: FileSpreadsheet },
+    ],
+  },
 ];
 
 const dashboardsItems: NavItem[] = [
@@ -355,6 +384,25 @@ export function BoardLayout({ children }: BoardLayoutProps) {
     isDashboardRoute ? "dashboards" : isControleRoute ? "controle" : "operacoes"
   );
 
+  // ── Controle accordion open-state ─────────────────────────────────────────
+  const getInitialOpenControleGroups = () => {
+    const match = controleGroups.find((g) =>
+      g.children.some(
+        (c) => location.pathname === c.href.split("?")[0] || location.pathname.startsWith(c.href.split("?")[0] + "/")
+      )
+    );
+    return new Set<string>(match ? [match.id] : ["catalogo"]);
+  };
+  const [openControleGroups, setOpenControleGroups] = useState<Set<string>>(getInitialOpenControleGroups);
+  const toggleControleGroup = useCallback((id: string) => {
+    setOpenControleGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
   const getInitials = (name: string | null | undefined) => {
     if (!name) return "??";
     return name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2);
@@ -372,11 +420,14 @@ export function BoardLayout({ children }: BoardLayoutProps) {
     return location.pathname.startsWith(href);
   };
 
-  const currentItems = activeTab === "controle" ? controleItems : dashboardsItems;
+  const currentItems = dashboardsItems;
   const filteredItems = currentItems.filter((item) => {
     if (item.adminOnly && !isAdmin && !isCeo) return false;
     return true;
   });
+  const filteredControleGroups = controleGroups
+    .filter((g) => !g.adminOnly || isAdmin || isCeo)
+    .map((g) => ({ ...g, children: g.children.filter((c) => !c.adminOnly || isAdmin || isCeo) }));
   const filteredOpsGroups = operacoesGroups
     .filter((g) => !g.adminOnly || isAdmin || isCeo)
     .map((g) => ({ ...g, children: g.children.filter((c) => !c.adminOnly || isAdmin || isCeo) }));
@@ -546,32 +597,80 @@ export function BoardLayout({ children }: BoardLayoutProps) {
               </React.Fragment>
             );
           })
-        ) : (
-          /* ── Controle / Dashboards: lista plana ────────────────────── */
-          filteredItems.map((item) => {
-            const isActive = isItemActive(item.href);
-            return (
-              <React.Fragment key={item.href}>
-                {(item as NavItem).sectionLabel && (
-                  <p className="text-[9px] font-semibold text-muted-foreground/60 uppercase tracking-wider px-3 mt-3 mb-0.5">
-                    {(item as NavItem).sectionLabel}
-                  </p>
-                )}
-                <Link
-                  to={item.href}
-                  onClick={() => setSidebarOpen(false)}
+        ) : activeTab === "controle" ? (
+          /* ── Controle: grupos colapsáveis ──────────────────────────── */
+          filteredControleGroups.map((group) => {
+            if (group.directHref && group.children.length === 1) {
+              const item = group.children[0];
+              const isActive = isItemActive(item.href.split("?")[0]);
+              return (
+                <Link key={group.id} to={item.href} onClick={() => setSidebarOpen(false)}
                   className={cn(
                     "flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition-all duration-200",
-                    isActive
+                    isActive ? "bg-area-controle-soft text-area-controle font-medium"
+                             : "text-muted-foreground hover:bg-secondary hover:text-foreground"
+                  )}
+                >
+                  <group.icon className="h-4 w-4 flex-shrink-0" />
+                  <span className="truncate">{group.label}</span>
+                </Link>
+              );
+            }
+            const isOpen = openControleGroups.has(group.id);
+            const hasActiveChild = group.children.some((c) => isItemActive(c.href.split("?")[0]));
+            return (
+              <React.Fragment key={group.id}>
+                <button onClick={() => toggleControleGroup(group.id)}
+                  className={cn(
+                    "flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition-all duration-200",
+                    hasActiveChild && !isOpen
                       ? "bg-area-controle-soft text-area-controle font-medium"
                       : "text-muted-foreground hover:bg-secondary hover:text-foreground"
                   )}
                 >
-                  <item.icon className="h-4 w-4 flex-shrink-0" />
-                  <span className="truncate">{item.label}</span>
-                  {isActive && <ChevronRight className="h-3.5 w-3.5 ml-auto text-area-controle flex-shrink-0" />}
-                </Link>
+                  <group.icon className="h-4 w-4 flex-shrink-0" />
+                  <span className="truncate flex-1 text-left">{group.label}</span>
+                  <ChevronDown className={cn("h-3.5 w-3.5 flex-shrink-0 transition-transform duration-200", isOpen && "rotate-180")} />
+                </button>
+                {isOpen && (
+                  <div className="ml-3 pl-3 border-l border-border/50 flex flex-col gap-0.5 pb-1">
+                    {group.children.map((item) => {
+                      const isActive = isItemActive(item.href.split("?")[0]);
+                      return (
+                        <Link key={item.href} to={item.href} onClick={() => setSidebarOpen(false)}
+                          className={cn(
+                            "flex items-center gap-2.5 rounded-lg px-3 py-1.5 text-sm transition-all duration-200",
+                            isActive ? "bg-area-controle-soft text-area-controle font-medium"
+                                     : "text-muted-foreground hover:bg-secondary hover:text-foreground"
+                          )}
+                        >
+                          <item.icon className="h-3.5 w-3.5 flex-shrink-0" />
+                          <span className="truncate">{item.label}</span>
+                          {isActive && <ChevronRight className="h-3.5 w-3.5 ml-auto text-area-controle flex-shrink-0" />}
+                        </Link>
+                      );
+                    })}
+                  </div>
+                )}
               </React.Fragment>
+            );
+          })
+        ) : (
+          /* ── Dashboards: lista plana ───────────────────────────────── */
+          filteredItems.map((item) => {
+            const isActive = isItemActive(item.href);
+            return (
+              <Link key={item.href} to={item.href} onClick={() => setSidebarOpen(false)}
+                className={cn(
+                  "flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition-all duration-200",
+                  isActive ? "bg-area-controle-soft text-area-controle font-medium"
+                           : "text-muted-foreground hover:bg-secondary hover:text-foreground"
+                )}
+              >
+                <item.icon className="h-4 w-4 flex-shrink-0" />
+                <span className="truncate">{item.label}</span>
+                {isActive && <ChevronRight className="h-3.5 w-3.5 ml-auto text-area-controle flex-shrink-0" />}
+              </Link>
             );
           })
         )}
@@ -637,7 +736,15 @@ export function BoardLayout({ children }: BoardLayoutProps) {
             <div className="flex items-center gap-3 flex-shrink-0">
               {location.pathname !== "/" && location.pathname !== "/dashboard" && (
                 <button
-                  onClick={() => navigate(-1)}
+                  onClick={() => {
+                    if (window.history.state?.idx > 0) {
+                      navigate(-1);
+                    } else {
+                      // sem histórico útil — sobe um nível na URL
+                      const parent = location.pathname.split("/").slice(0, -1).join("/") || "/dashboard";
+                      navigate(parent);
+                    }
+                  }}
                   className="flex items-center justify-center h-8 w-8 rounded-lg hover:bg-muted transition-colors"
                   aria-label="Voltar"
                 >
