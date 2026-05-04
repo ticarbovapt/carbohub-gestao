@@ -145,6 +145,23 @@ const Index = () => {
         <ThemeToggle />
       </div>
 
+      {/* Back to Hub */}
+      <motion.div
+        initial={{ opacity: 0, x: -20 }}
+        animate={{ opacity: 1, x: 0 }}
+        className="absolute top-4 left-4 z-20"
+      >
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => { window.location.href = "https://carbohub.com.br"; }}
+          className="gap-2 text-muted-foreground hover:text-foreground"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          Hub
+        </Button>
+      </motion.div>
+
       {/* LEFT SIDE - Branding */}
       <motion.div
         initial={{ opacity: 0 }}
