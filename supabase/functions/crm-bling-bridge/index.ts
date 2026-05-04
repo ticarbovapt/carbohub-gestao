@@ -5,6 +5,7 @@ const BLING_TOKEN_URL = "https://www.bling.com.br/Api/v3/oauth/token";
 const REFRESH_BUFFER_MS = 5 * 60 * 1000;
 
 const ALLOWED_ORIGINS = [
+  "https://controle.carbohub.com.br",  // app principal de gestão
   "https://carbohub.com.br",
   "https://www.carbohub.com.br",
   "http://localhost:8080",

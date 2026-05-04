@@ -2,6 +2,7 @@
 import { createClient } from "npm:@supabase/supabase-js@2.39.3";
 
 const ALLOWED_ORIGINS = [
+  "https://controle.carbohub.com.br",  // app principal de gestão
   "https://carbohub.com.br",
   "https://www.carbohub.com.br",
   "http://localhost:8080",

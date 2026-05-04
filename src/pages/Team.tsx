@@ -85,14 +85,15 @@ function getInitialsOrg(name: string) {
 // ── MemberInfoModal ─────────────────────────────────────────────────────────
 interface MemberInfoModalProps {
   member: OrgNode | null;
-  profiles: Array<{ id: string; full_name: string | null; email?: string | null; phone?: string | null }>;
+  profiles: Array<{ id: string; full_name: string | null; email?: string | null; phone?: string | null; reports_to?: string | null; hierarchy_level?: number }>;
   teamMembers: TeamMember[];
   onClose: () => void;
   canEdit: boolean;
+  isMasterAdmin: boolean;
   onUpdated: () => void;
 }
 
-function MemberInfoModal({ member, profiles, teamMembers, onClose, canEdit, onUpdated }: MemberInfoModalProps) {
+function MemberInfoModal({ member, profiles, teamMembers, onClose, canEdit, isMasterAdmin, onUpdated }: MemberInfoModalProps) {
   const updateNode = useUpdateOrgChartNode();
   const updateInterfaces = useUpdateAllowedInterfaces();
   const createMember = useCreateTeamMember();
@@ -112,6 +113,8 @@ function MemberInfoModal({ member, profiles, teamMembers, onClose, canEdit, onUp
   // access section state
   const [hubInterfaces,      setHubInterfaces]      = useState<string[]>([]);
   const [createAccountEmail, setCreateAccountEmail] = useState("");
+  // gestor direto (master admin only)
+  const [formReportsTo, setFormReportsTo] = useState("");
 
   // Open edit mode — seed from current member
   const openEdit = () => {
@@ -130,6 +133,9 @@ function MemberInfoModal({ member, profiles, teamMembers, onClose, canEdit, onUp
     const linked = teamMembers.find((m) => m.email && email && m.email.toLowerCase() === email.toLowerCase());
     setHubInterfaces(linked?.allowed_interfaces || []);
     setCreateAccountEmail(email);
+    // seed gestor direto from flat profiles list
+    const flatNode = profiles.find((p) => p.id === member.id);
+    setFormReportsTo((flatNode as any)?.reports_to || "");
     setEditing(true);
   };
 
@@ -145,6 +151,7 @@ function MemberInfoModal({ member, profiles, teamMembers, onClose, canEdit, onUp
       phone:           formPhone || null,
       dual_role:       formDualRole || null,
       assistant:       formAssistant,
+      ...(isMasterAdmin ? { reports_to: formReportsTo || null } : {}),
     });
     onUpdated();
     setEditing(false);
@@ -332,6 +339,33 @@ function MemberInfoModal({ member, profiles, teamMembers, onClose, canEdit, onUp
                 />
                 <Label htmlFor="assistant-check" className="cursor-pointer">Assistente executivo(a)</Label>
               </div>
+
+              {/* Gestor Direto — somente master admin pode alterar */}
+              {isMasterAdmin && (
+                <div className="col-span-2 space-y-1">
+                  <Label className="flex items-center gap-1.5">
+                    Gestor Direto
+                    <span className="text-[10px] bg-amber-500/15 text-amber-600 px-1.5 py-0.5 rounded font-medium">master admin</span>
+                  </Label>
+                  <Select
+                    value={formReportsTo || "_none"}
+                    onValueChange={(v) => setFormReportsTo(v === "_none" ? "" : v)}
+                  >
+                    <SelectTrigger><SelectValue placeholder="Sem gestor direto" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="_none">— Sem gestor direto —</SelectItem>
+                      {(profiles as any[])
+                        .filter((p) => p.id !== member?.id)
+                        .sort((a, b) => (a.hierarchy_level || 6) - (b.hierarchy_level || 6))
+                        .map((p) => (
+                          <SelectItem key={p.id} value={p.id}>
+                            {p.full_name} ({getLevelLabel(p.hierarchy_level || 6)})
+                          </SelectItem>
+                        ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
             </div>
 
             <div className="flex justify-end gap-2 pt-2 border-t border-border">
@@ -757,6 +791,7 @@ const Team = () => {
         teamMembers={approvedMembers}
         onClose={() => setSelectedMember(null)}
         canEdit={canEdit}
+        isMasterAdmin={isMasterAdmin}
         onUpdated={() => refetch()}
       />
 

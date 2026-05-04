@@ -1,4 +1,5 @@
 import { useForm } from "react-hook-form";
+import { useEffect } from "react";
 import { DatePickerInput } from "@/components/ui/date-picker-input";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -109,6 +110,22 @@ export function CreateOPDialog({ open, onOpenChange }: CreateOPDialogProps) {
   });
 
   const isSubmitting = createOP.isPending;
+  const selectedProductId = watch("product_id");
+  const selectedProduct = products.find((p) => p.id === selectedProductId);
+
+  // Auto-fill title when product is selected (only if title is still empty)
+  useEffect(() => {
+    if (selectedProduct && !watch("title")) {
+      const date = new Date().toLocaleDateString("pt-BR", { month: "2-digit", year: "2-digit" }).replace("/", "-");
+      setValue("title", `${selectedProduct.product_code} — Lote ${date}`);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedProductId]);
+
+  // Preview do número de OP — gerado a partir do código do produto + data atual
+  const opPreview = selectedProduct
+    ? `OP-${selectedProduct.product_code}-${new Date().toISOString().slice(0, 10).replace(/-/g, "")}`
+    : null;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -117,16 +134,7 @@ export function CreateOPDialog({ open, onOpenChange }: CreateOPDialogProps) {
           <DialogTitle>Nova Ordem de Produção</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit((data) => createOP.mutate(data))} className="space-y-4">
-          {/* Título */}
-          <div className="space-y-2">
-            <Label>Título da OP *</Label>
-            <Input {...register("title")} placeholder="Ex: OP CarboZé — Lote 01" />
-            {errors.title && (
-              <p className="text-xs text-destructive">{errors.title.message}</p>
-            )}
-          </div>
-
-          {/* Produto */}
+          {/* Produto — primeiro campo para disparar auto-fill */}
           <div className="space-y-2">
             <Label>Produto *</Label>
             <Select
@@ -147,6 +155,25 @@ export function CreateOPDialog({ open, onOpenChange }: CreateOPDialogProps) {
             </Select>
             {errors.product_id && (
               <p className="text-xs text-destructive">{errors.product_id.message}</p>
+            )}
+          </div>
+
+          {/* Preview do número de OP — aparece após seleção do produto */}
+          {opPreview && (
+            <div className="space-y-1">
+              <Label className="text-muted-foreground text-xs uppercase tracking-wide">Número da OP (gerado)</Label>
+              <div className="rounded-md border border-border bg-muted/50 px-3 py-2 text-sm font-mono text-muted-foreground">
+                {opPreview}
+              </div>
+            </div>
+          )}
+
+          {/* Título */}
+          <div className="space-y-2">
+            <Label>Título da OP *</Label>
+            <Input {...register("title")} placeholder="Ex: OP CarboZé — Lote 01" />
+            {errors.title && (
+              <p className="text-xs text-destructive">{errors.title.message}</p>
             )}
           </div>
 

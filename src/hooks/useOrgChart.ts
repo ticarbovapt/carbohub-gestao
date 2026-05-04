@@ -175,6 +175,7 @@ export interface OrgNodeUpdate {
   phone?: string | null;
   dual_role?: string | null;
   assistant?: boolean;
+  reports_to?: string | null;
 }
 
 export function useUpdateOrgChartNode() {

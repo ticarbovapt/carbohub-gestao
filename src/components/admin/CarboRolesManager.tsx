@@ -68,6 +68,7 @@ export const CarboRolesManager = () => {
   // ── Add dialog state ───────────────────────────────────────────────────────
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [selectedUserId, setSelectedUserId] = useState<string>("");
+  const [selectedCollaboratorId, setSelectedCollaboratorId] = useState<string>("");
   const [selectedRole, setSelectedRole] = useState<CarboRole | "">("");
   const [selectedMacroFlows, setSelectedMacroFlows] = useState<MacroFlow[]>([]);
   const [selectedDepartments, setSelectedDepartments] = useState<DepartmentType[]>([]);
@@ -76,13 +77,27 @@ export const CarboRolesManager = () => {
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [editingRole, setEditingRole] = useState<EditingRole | null>(null);
 
+  // ── Org chart nodes (para seleção de colaborador) ─────────────────────────
+  const { data: orgNodes = [] } = useQuery({
+    queryKey: ["org-chart-flat-names"],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from("org_chart_nodes")
+        .select("id, full_name, email, hierarchy_level, department")
+        .order("hierarchy_level", { ascending: true });
+      if (error) return [];
+      return (data ?? []) as Array<{ id: string; full_name: string; email: string | null; hierarchy_level: number; department: string | null }>;
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+
   // ── Query ──────────────────────────────────────────────────────────────────
   const { data: usersWithRoles, isLoading } = useQuery({
     queryKey: ["users-with-carbo-roles"],
     queryFn: async () => {
       const { data: profiles, error: profilesError } = await supabase
         .from("profiles")
-        .select("id, full_name")
+        .select("id, full_name, email")
         .order("full_name");
 
       if (profilesError) throw profilesError;
@@ -98,7 +113,7 @@ export const CarboRolesManager = () => {
       profiles?.forEach((profile) => {
         usersMap.set(profile.id, {
           id: profile.id,
-          email: "",
+          email: (profile as any).email || "",
           full_name: profile.full_name,
           roles: [],
         });
@@ -202,6 +217,7 @@ export const CarboRolesManager = () => {
   // ── Helpers ────────────────────────────────────────────────────────────────
   const resetAddForm = () => {
     setSelectedUserId("");
+    setSelectedCollaboratorId("");
     setSelectedRole("");
     setSelectedMacroFlows([]);
     setSelectedDepartments([]);
@@ -321,14 +337,44 @@ export const CarboRolesManager = () => {
               </DialogHeader>
 
               <div className="space-y-4 py-4">
+                {/* Colaborador — seleção pelo nome do organograma, auto-preenche Usuário */}
                 <div className="space-y-2">
-                  <Label>Usuário</Label>
+                  <Label>Colaborador</Label>
+                  <Select
+                    value={selectedCollaboratorId}
+                    onValueChange={(nodeId) => {
+                      setSelectedCollaboratorId(nodeId);
+                      const node = orgNodes.find((n) => n.id === nodeId);
+                      if (node?.email) {
+                        const matched = usersWithRoles?.find(
+                          (u) => u.email && u.email.toLowerCase() === node.email!.toLowerCase()
+                        );
+                        if (matched) setSelectedUserId(matched.id);
+                      }
+                    }}
+                  >
+                    <SelectTrigger><SelectValue placeholder="Selecione pelo nome (opcional)" /></SelectTrigger>
+                    <SelectContent>
+                      {orgNodes.map((n) => (
+                        <SelectItem key={n.id} value={n.id}>
+                          {n.full_name}{n.department ? ` — ${n.department}` : ""}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">Selecionar o colaborador vincula automaticamente à conta de usuário pelo e-mail.</p>
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Usuário (conta)</Label>
                   <Select value={selectedUserId} onValueChange={setSelectedUserId}>
                     <SelectTrigger><SelectValue placeholder="Selecione um usuário" /></SelectTrigger>
                     <SelectContent>
                       {usersWithRoles?.map((user) => (
                         <SelectItem key={user.id} value={user.id}>
-                          {user.full_name || "Sem nome"}
+                          {user.full_name && user.full_name !== user.email
+                            ? `${user.full_name}${user.email ? ` — ${user.email}` : ""}`
+                            : (user.email || "Sem nome")}
                         </SelectItem>
                       ))}
                     </SelectContent>
