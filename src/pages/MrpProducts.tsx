@@ -332,7 +332,7 @@ export default function MrpProducts() {
               </button>
             ))}
           </div>
-        </div>
+        </div>}
 
         {!bomView && isLoading ? (
           <CarboCard padding="none"><div className="p-6 space-y-4">{[1,2,3].map(i => <CarboSkeleton key={i} className="h-14 w-full" />)}</div></CarboCard>
