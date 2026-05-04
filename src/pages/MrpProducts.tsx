@@ -416,7 +416,6 @@ export default function MrpProducts() {
               </CarboTableBody>
             </CarboTable>
           </CarboCard>
-        )}
         ) : null}
       </div>
 
