@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
 import { motion, useSpring, useTransform, AnimatePresence } from "framer-motion";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -38,7 +37,7 @@ const areas: AreaConfig[] = [
     gradient: "from-blue-500 to-blue-700",
     shadowColor: "shadow-blue-500/30",
     accentClass: "group-hover:shadow-blue-500/40",
-    route: "/login/ops",
+    route: "https://controle.carbohub.com.br",
   },
   {
     id: "licensee",
@@ -49,7 +48,7 @@ const areas: AreaConfig[] = [
     gradient: "from-carbo-green to-emerald-600",
     shadowColor: "shadow-carbo-green/30",
     accentClass: "group-hover:shadow-carbo-green/40",
-    route: "/login/licensee",
+    route: "https://licenciados.carbohub.com.br",
   },
   {
     id: "pdv",
@@ -60,7 +59,7 @@ const areas: AreaConfig[] = [
     gradient: "from-amber-500 to-orange-600",
     shadowColor: "shadow-amber-500/30",
     accentClass: "group-hover:shadow-amber-500/40",
-    route: "/login/pdv",
+    route: "https://produtos.carbohub.com.br",
   },
 ];
 
@@ -282,10 +281,8 @@ function StatTicker({
 
 // ── Main Component ─────────────────────────────────────────────────────────────
 const AreaSelector = () => {
-  const navigate = useNavigate();
-
   const handleAreaSelect = (area: AreaConfig) => {
-    navigate(area.route);
+    window.location.href = area.route;
   };
 
   return (
