@@ -1,4 +1,4 @@
-import React, { ReactNode, useState } from "react";
+import React, { ReactNode, useState, useCallback } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useOpsAlertsBadge } from "@/hooks/useOpsAlerts";
 import { useCRMStaleBadge } from "@/hooks/useCRMStaleBadge";
@@ -45,6 +45,7 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { ThemeToggle } from "@/components/ui/ThemeToggle";
 import { NotificationBell } from "@/components/notifications";
 import { PlatformOnboarding } from "@/components/onboarding/PlatformOnboarding";
+import { PasswordChangeModal } from "@/components/auth/PasswordChangeModal";
 import {
   Popover,
   PopoverContent,
@@ -134,6 +135,16 @@ interface NavItem {
   sectionLabel?: string;
 }
 
+interface NavGroup {
+  id: string;
+  label: string;
+  icon: React.ComponentType<{ className?: string }>;
+  adminOnly?: boolean;
+  /** Se preenchido e children.length === 1, o grupo vira link direto */
+  directHref?: string;
+  children: NavItem[];
+}
+
 const controleItems: NavItem[] = [
   { href: "/mrp/products", label: "Catálogo (Insumos/SKUs)", icon: Package },
   { href: "/mrp/suppliers", label: "Fornecedores", icon: Factory },
@@ -151,21 +162,63 @@ const dashboardsItems: NavItem[] = [
   { href: "/dashboards/estrategico", label: "Estratégico", icon: Star },
 ];
 
-const operacoesItems: NavItem[] = [
-  { href: "/production-orders", label: "Ordens de Produção (OP)", icon: Factory,       sectionLabel: "Produção" },
-  { href: "/os",                label: "Ordens de Serviço (OS)",  icon: ClipboardList, sectionLabel: "Descarbonização" },
-  { href: "/ops/alerts",        label: "Central de Alertas",      icon: Bell,          sectionLabel: "CarboOPS" },
-  { href: "/ops/pdv-network",   label: "Rede PDV",                icon: Store,         sectionLabel: undefined },
-  { href: "/crm",               label: "CRM — Funis de Venda",    icon: Target,        sectionLabel: "Comercial" },
-  { href: "/meu-painel",        label: "Meu Painel",              icon: BarChart3 },
-  { href: "/orders",            label: "Pedidos (RV)",            icon: ShoppingCart },
-  { href: "/sales-targets",     label: "Metas de Vendas",         icon: TrendingUp },
-  { href: "/financeiro",        label: "Financeiro",              icon: Wallet,        sectionLabel: "Financeiro & Supply" },
-  { href: "/suprimentos",       label: "Suprimentos",             icon: Package },
-  { href: "/integrations/bling", label: "Integrações Bling",     icon: Link2 },
-  { href: "/admin/webhooks",     label: "Webhooks CRM",            icon: Zap,   adminOnly: true, sectionLabel: "Admin" },
-  { href: "/admin/pipeline",     label: "Config. Pipeline CRM",   icon: Cog,   adminOnly: true },
-  { href: "/logistics",         label: "Logística",               icon: Truck },
+const operacoesGroups: NavGroup[] = [
+  {
+    id: "producao",
+    label: "Produção",
+    icon: Factory,
+    directHref: "/production-orders",
+    children: [{ href: "/production-orders", label: "Ordens de Produção (OP)", icon: Factory }],
+  },
+  {
+    id: "servicos",
+    label: "Descarbonização",
+    icon: ClipboardList,
+    directHref: "/os",
+    children: [{ href: "/os", label: "Ordens de Serviço (OS)", icon: ClipboardList }],
+  },
+  {
+    id: "carboops",
+    label: "CarboOPS",
+    icon: Bell,
+    children: [
+      { href: "/ops/alerts",      label: "Central de Alertas", icon: Bell },
+      { href: "/ops/pdv-network", label: "Rede PDV",           icon: Store },
+    ],
+  },
+  {
+    id: "comercial",
+    label: "Comercial",
+    icon: Target,
+    children: [
+      { href: "/crm",            label: "CRM — Funis de Venda", icon: Target },
+      { href: "/meu-painel",     label: "Meu Painel",           icon: BarChart3 },
+      { href: "/orders",         label: "Pedidos (RV)",         icon: ShoppingCart },
+      { href: "/sales-targets",  label: "Metas de Vendas",      icon: TrendingUp },
+    ],
+  },
+  {
+    id: "financeiro",
+    label: "Financeiro & Supply",
+    icon: Wallet,
+    children: [
+      { href: "/financeiro",          label: "Financeiro",         icon: Wallet },
+      { href: "/suprimentos",         label: "Suprimentos",        icon: Package },
+      { href: "/integrations/bling",  label: "Integrações Bling",  icon: Link2 },
+      { href: "/logistics",           label: "Logística",          icon: Truck },
+    ],
+  },
+  {
+    id: "admin",
+    label: "Admin",
+    icon: Shield,
+    adminOnly: true,
+    children: [
+      { href: "/admin/webhooks",  label: "Webhooks CRM",         icon: Zap },
+      { href: "/admin/pipeline",  label: "Config. Pipeline CRM", icon: Cog },
+      { href: "/admin/cockpit",   label: "Cockpit Estratégico",  icon: BarChart3 },
+    ],
+  },
 ];
 
 // Governance/admin tools moved to /team page — accessible via Controle > Equipe
@@ -270,6 +323,26 @@ export function BoardLayout({ children }: BoardLayoutProps) {
   const { isAdmin, profile, signOut, passwordMustChange, isCeo, isAnyGestor, carboRoles, isMasterAdmin, isGestorFin } = useAuth();
   const isMobile = useIsMobile();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  // ── Ops accordion open-state ──────────────────────────────────────────────
+  const getInitialOpenGroups = () => {
+    const match = operacoesGroups.find((g) =>
+      g.children.some(
+        (c) => location.pathname === c.href || location.pathname.startsWith(c.href + "/")
+      )
+    );
+    return new Set<string>(match ? [match.id] : ["comercial"]);
+  };
+  const [openGroups, setOpenGroups] = useState<Set<string>>(getInitialOpenGroups);
+  const toggleGroup = useCallback((id: string) => {
+    setOpenGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
   const { data: alertsBadge = 0 } = useOpsAlertsBadge();
   const { data: crmStaleBadge = 0 } = useCRMStaleBadge();
 
@@ -299,11 +372,14 @@ export function BoardLayout({ children }: BoardLayoutProps) {
     return location.pathname.startsWith(href);
   };
 
-  const currentItems = activeTab === "controle" ? controleItems : activeTab === "dashboards" ? dashboardsItems : operacoesItems;
-  const filteredItems = (currentItems as NavItem[]).filter((item) => {
+  const currentItems = activeTab === "controle" ? controleItems : dashboardsItems;
+  const filteredItems = currentItems.filter((item) => {
     if (item.adminOnly && !isAdmin && !isCeo) return false;
     return true;
   });
+  const filteredOpsGroups = operacoesGroups
+    .filter((g) => !g.adminOnly || isAdmin || isCeo)
+    .map((g) => ({ ...g, children: g.children.filter((c) => !c.adminOnly || isAdmin || isCeo) }));
   const filteredGlobalItems = globalItems.filter((item: any) => {
     if (item.financeOrMasterOnly && !isMasterAdmin && !isGestorFin) return false;
     if (item.adminOnly && !isAdmin && !isCeo) return false;
@@ -371,43 +447,134 @@ export function BoardLayout({ children }: BoardLayoutProps) {
         <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider px-3 mb-1">
           {activeTab === "controle" ? "Controle" : activeTab === "dashboards" ? "Dashboards" : "Operações"}
         </p>
-        {filteredItems.map((item) => {
-          const isActive = isItemActive(item.href);
-          return (
-            <React.Fragment key={item.href}>
-              {(item as NavItem).sectionLabel && (
-                <p className="text-[9px] font-semibold text-muted-foreground/60 uppercase tracking-wider px-3 mt-3 mb-0.5">
-                  {(item as NavItem).sectionLabel}
-                </p>
-              )}
-              <Link
-                to={item.href}
-                onClick={() => setSidebarOpen(false)}
-                className={cn(
-                  "flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition-all duration-200",
-                  isActive
-                    ? "bg-area-controle-soft text-area-controle font-medium"
-                    : "text-muted-foreground hover:bg-secondary hover:text-foreground"
+        {activeTab === "operacoes" ? (
+          /* ── Ops: grupos colapsáveis ───────────────────────────────── */
+          filteredOpsGroups.map((group) => {
+            // Grupo com 1 item → link direto
+            if (group.directHref && group.children.length === 1) {
+              const item = group.children[0];
+              const isActive = isItemActive(item.href);
+              return (
+                <Link
+                  key={group.id}
+                  to={item.href}
+                  onClick={() => setSidebarOpen(false)}
+                  className={cn(
+                    "flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition-all duration-200",
+                    isActive
+                      ? "bg-area-controle-soft text-area-controle font-medium"
+                      : "text-muted-foreground hover:bg-secondary hover:text-foreground"
+                  )}
+                >
+                  <group.icon className="h-4 w-4 flex-shrink-0" />
+                  <span className="truncate">{group.label}</span>
+                  {isActive && <ChevronRight className="h-3.5 w-3.5 ml-auto text-area-controle flex-shrink-0" />}
+                </Link>
+              );
+            }
+
+            // Grupo com 2+ itens → accordion
+            const isOpen = openGroups.has(group.id);
+            const hasActiveChild = group.children.some((c) => isItemActive(c.href));
+            const groupBadge =
+              group.id === "carboops" ? alertsBadge :
+              group.id === "comercial" ? crmStaleBadge : 0;
+
+            return (
+              <React.Fragment key={group.id}>
+                <button
+                  onClick={() => toggleGroup(group.id)}
+                  className={cn(
+                    "flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition-all duration-200",
+                    hasActiveChild && !isOpen
+                      ? "bg-area-controle-soft text-area-controle font-medium"
+                      : "text-muted-foreground hover:bg-secondary hover:text-foreground"
+                  )}
+                >
+                  <group.icon className="h-4 w-4 flex-shrink-0" />
+                  <span className="truncate flex-1 text-left">{group.label}</span>
+                  {groupBadge > 0 && !isOpen && (
+                    <span className={cn(
+                      "flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[9px] font-bold text-white flex-shrink-0",
+                      group.id === "carboops" ? "bg-destructive" : "bg-amber-500"
+                    )}>
+                      {groupBadge > 99 ? "99+" : groupBadge}
+                    </span>
+                  )}
+                  <ChevronDown className={cn(
+                    "h-3.5 w-3.5 flex-shrink-0 transition-transform duration-200",
+                    isOpen && "rotate-180"
+                  )} />
+                </button>
+
+                {isOpen && (
+                  <div className="ml-3 pl-3 border-l border-border/50 flex flex-col gap-0.5 pb-1">
+                    {group.children.map((item) => {
+                      const isActive = isItemActive(item.href);
+                      return (
+                        <Link
+                          key={item.href}
+                          to={item.href}
+                          onClick={() => setSidebarOpen(false)}
+                          className={cn(
+                            "flex items-center gap-2.5 rounded-lg px-3 py-1.5 text-sm transition-all duration-200",
+                            isActive
+                              ? "bg-area-controle-soft text-area-controle font-medium"
+                              : "text-muted-foreground hover:bg-secondary hover:text-foreground"
+                          )}
+                        >
+                          <item.icon className="h-3.5 w-3.5 flex-shrink-0" />
+                          <span className="truncate">{item.label}</span>
+                          {item.href === "/ops/alerts" && alertsBadge > 0 && (
+                            <span className="ml-auto flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[9px] font-bold text-white flex-shrink-0">
+                              {alertsBadge > 99 ? "99+" : alertsBadge}
+                            </span>
+                          )}
+                          {item.href === "/crm" && crmStaleBadge > 0 && (
+                            <span className="ml-auto flex h-4 min-w-4 items-center justify-center rounded-full bg-amber-500 px-1 text-[9px] font-bold text-white flex-shrink-0">
+                              {crmStaleBadge > 99 ? "99+" : crmStaleBadge}
+                            </span>
+                          )}
+                          {isActive && item.href !== "/ops/alerts" && item.href !== "/crm" && (
+                            <ChevronRight className="h-3.5 w-3.5 ml-auto text-area-controle flex-shrink-0" />
+                          )}
+                        </Link>
+                      );
+                    })}
+                  </div>
                 )}
-              >
-                <item.icon className="h-4 w-4 flex-shrink-0" />
-                <span className="truncate">{item.label}</span>
-                {item.href === "/ops/alerts" && alertsBadge > 0 && (
-                  <span className="ml-auto flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[9px] font-bold text-white flex-shrink-0">
-                    {alertsBadge > 99 ? "99+" : alertsBadge}
-                  </span>
+              </React.Fragment>
+            );
+          })
+        ) : (
+          /* ── Controle / Dashboards: lista plana ────────────────────── */
+          filteredItems.map((item) => {
+            const isActive = isItemActive(item.href);
+            return (
+              <React.Fragment key={item.href}>
+                {(item as NavItem).sectionLabel && (
+                  <p className="text-[9px] font-semibold text-muted-foreground/60 uppercase tracking-wider px-3 mt-3 mb-0.5">
+                    {(item as NavItem).sectionLabel}
+                  </p>
                 )}
-                {item.href === "/crm" && crmStaleBadge > 0 && (
-                  <span className="ml-auto flex h-4 min-w-4 items-center justify-center rounded-full bg-amber-500 px-1 text-[9px] font-bold text-white flex-shrink-0">
-                    {crmStaleBadge > 99 ? "99+" : crmStaleBadge}
-                  </span>
-                )}
-                {isActive && alertsBadge === 0 && crmStaleBadge === 0 && <ChevronRight className="h-3.5 w-3.5 ml-auto text-area-controle flex-shrink-0" />}
-                {isActive && (alertsBadge > 0 || crmStaleBadge > 0) && item.href !== "/ops/alerts" && item.href !== "/crm" && <ChevronRight className="h-3.5 w-3.5 ml-auto text-area-controle flex-shrink-0" />}
-              </Link>
-            </React.Fragment>
-          );
-        })}
+                <Link
+                  to={item.href}
+                  onClick={() => setSidebarOpen(false)}
+                  className={cn(
+                    "flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition-all duration-200",
+                    isActive
+                      ? "bg-area-controle-soft text-area-controle font-medium"
+                      : "text-muted-foreground hover:bg-secondary hover:text-foreground"
+                  )}
+                >
+                  <item.icon className="h-4 w-4 flex-shrink-0" />
+                  <span className="truncate">{item.label}</span>
+                  {isActive && <ChevronRight className="h-3.5 w-3.5 ml-auto text-area-controle flex-shrink-0" />}
+                </Link>
+              </React.Fragment>
+            );
+          })
+        )}
 
         {/* Global items separator */}
         {filteredGlobalItems.length > 0 && (
@@ -460,7 +627,8 @@ export function BoardLayout({ children }: BoardLayoutProps) {
   return (
     <>
       <PlatformOnboarding />
-      
+      <PasswordChangeModal />
+
       <div className="min-h-screen bg-background">
         {/* ══ TOPBAR ═══════════════════════════════════════════════════ */}
         <header className="sticky top-0 z-50 border-b border-border bg-card/95 backdrop-blur-md shadow-[0_1px_0_0_hsl(var(--border))] transition-all duration-200">
