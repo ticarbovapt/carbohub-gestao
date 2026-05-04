@@ -10,6 +10,7 @@ interface CreateMemberParams {
   fullName: string;
   department: DepartmentType;
   role: AppRole;
+  allowedInterfaces?: string[];
 }
 
 interface CreateMemberResult {

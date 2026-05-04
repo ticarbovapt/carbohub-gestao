@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 import type { Database } from "@/integrations/supabase/types";
 
 type AppRole = Database["public"]["Enums"]["app_role"];
@@ -19,6 +20,7 @@ export interface TeamMember {
   created_by_manager: string | null;
   last_access: string | null;
   temp_password_sent_at: string | null;
+  allowed_interfaces: string[];
 }
 
 export function useTeamMembers() {
@@ -61,6 +63,7 @@ export function useTeamMembers() {
         created_by_manager: p.created_by_manager || null,
         last_access: p.last_access || null,
         temp_password_sent_at: p.temp_password_sent_at || null,
+        allowed_interfaces: (p as any).allowed_interfaces || [],
       }));
 
       return members;
@@ -156,5 +159,29 @@ export function useUpdateUserDepartment() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["team-members"] });
     },
+  });
+}
+
+export function useUpdateAllowedInterfaces() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      userId,
+      allowed_interfaces,
+    }: {
+      userId: string;
+      allowed_interfaces: string[];
+    }) => {
+      const { error } = await supabase
+        .from("profiles")
+        .update({ allowed_interfaces } as any)
+        .eq("id", userId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["team-members"] });
+      toast.success("Interfaces de acesso atualizadas!");
+    },
+    onError: (e: Error) => toast.error("Erro ao salvar: " + e.message),
   });
 }

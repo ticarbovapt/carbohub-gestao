@@ -86,9 +86,11 @@ const ONBOARDING_STEPS: OnboardingStep[] = [
 
 interface PlatformOnboardingProps {
   forceShow?: boolean;
+  /** Called when onboarding is dismissed (complete, skip) or when it was already seen and doesn't need to show */
+  onDismissed?: () => void;
 }
 
-export function PlatformOnboarding({ forceShow = false }: PlatformOnboardingProps) {
+export function PlatformOnboarding({ forceShow = false, onDismissed }: PlatformOnboardingProps) {
   const { user, profile } = useAuth();
   const [open, setOpen] = useState(false);
   const [currentStep, setCurrentStep] = useState(0);
@@ -98,6 +100,7 @@ export function PlatformOnboarding({ forceShow = false }: PlatformOnboardingProp
   useEffect(() => {
     if (!user) {
       setIsLoading(false);
+      onDismissed?.();
       return;
     }
 
@@ -105,23 +108,29 @@ export function PlatformOnboarding({ forceShow = false }: PlatformOnboardingProp
       try {
         // Check localStorage for dismissed version
         const dismissedData = localStorage.getItem(STORAGE_KEY);
-        
+
         if (dismissedData) {
           const parsed = JSON.parse(dismissedData);
           const { version, userId, dontShowAgain: savedDontShow } = parsed;
-          
+
           // If same user and same version and user chose not to see, don't show
           if (userId === user.id && version === PLATFORM_VERSION && savedDontShow && !forceShow) {
             setIsLoading(false);
+            onDismissed?.();
             return;
           }
-          
+
           // If different version, show onboarding for updates
           if (version !== PLATFORM_VERSION) {
             setOpen(true);
             setIsLoading(false);
             return;
           }
+
+          // Same version but not permanently dismissed — also mark as done
+          setIsLoading(false);
+          onDismissed?.();
+          return;
         } else {
           // First time user, show onboarding
           setOpen(true);
@@ -163,6 +172,7 @@ export function PlatformOnboarding({ forceShow = false }: PlatformOnboardingProp
 
     setOpen(false);
     setCurrentStep(0);
+    onDismissed?.();
   };
 
   const handleSkip = () => {
@@ -173,9 +183,10 @@ export function PlatformOnboarding({ forceShow = false }: PlatformOnboardingProp
       dismissedAt: new Date().toISOString(),
       skipped: true,
     }));
-    
+
     setOpen(false);
     setCurrentStep(0);
+    onDismissed?.();
   };
 
   if (isLoading || !open) return null;

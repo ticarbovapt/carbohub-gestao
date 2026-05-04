@@ -3,7 +3,7 @@ import { BoardLayout } from "@/components/layouts/BoardLayout";
 import {
   Users, Shield, Building2, Clock, Network, Mail, Loader2, CheckCheck,
   GitBranch, UserCheck, Map as MapIcon, Link2, Lock, ChevronRight,
-  Pencil, X, Save,
+  Pencil, X, Save, UserPlus,
 } from "lucide-react";
 import { STATIC_ORG_TREE, getDeptColor, getLevelLabel, useOrgChartFlat, useUpdateOrgChartNode, type OrgNode } from "@/hooks/useOrgChart";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -34,8 +34,23 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
-import { useResendWelcomeEmail } from "@/hooks/useCreateTeamMember";
+import { useResendWelcomeEmail, useCreateTeamMember } from "@/hooks/useCreateTeamMember";
+import { useUpdateAllowedInterfaces } from "@/hooks/useTeamMembers";
 import { ALL_DEPARTMENTS } from "@/constants/departments";
+import { Checkbox } from "@/components/ui/checkbox";
+
+// ── Mapeamento dept org_chart → profiles ────────────────────────────────────
+const DEPT_TO_PROFILE_DEPT: Record<string, string> = {
+  Command: "command", OPS: "ops", Finance: "finance",
+  Growth: "growth", "Growth & B2B": "growth", B2B: "b2b", Expansão: "expansao",
+};
+
+// ── HUBs disponíveis ─────────────────────────────────────────────────────────
+const HUB_OPTIONS = [
+  { value: "carbo_ops",          label: "Carbo Controle" },
+  { value: "portal_licenciado",  label: "Portal Licenciados" },
+  { value: "portal_pdv",         label: "Portal Lojas (PDV)" },
+];
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 function flattenTree(nodes: OrgNode[]): OrgNode[] {
@@ -79,6 +94,9 @@ interface MemberInfoModalProps {
 
 function MemberInfoModal({ member, profiles, teamMembers, onClose, canEdit, onUpdated }: MemberInfoModalProps) {
   const updateNode = useUpdateOrgChartNode();
+  const updateInterfaces = useUpdateAllowedInterfaces();
+  const createMember = useCreateTeamMember();
+  const resendEmail = useResendWelcomeEmail();
   const [editing, setEditing] = useState(false);
 
   // edit form state — reset when member changes
@@ -91,6 +109,10 @@ function MemberInfoModal({ member, profiles, teamMembers, onClose, canEdit, onUp
   const [formDualRole,   setFormDualRole]    = useState("");
   const [formAssistant,  setFormAssistant]   = useState(false);
 
+  // access section state
+  const [hubInterfaces,      setHubInterfaces]      = useState<string[]>([]);
+  const [createAccountEmail, setCreateAccountEmail] = useState("");
+
   // Open edit mode — seed from current member
   const openEdit = () => {
     if (!member) return;
@@ -99,10 +121,15 @@ function MemberInfoModal({ member, profiles, teamMembers, onClose, canEdit, onUp
     setFormDept(member.department || "");
     setFormLevel(member.hierarchy_level);
     const prof = profiles.find((p) => p.full_name?.toLowerCase().trim() === member.full_name.toLowerCase().trim());
-    setFormEmail((prof as any)?.email || "");
+    const email = (prof as any)?.email || "";
+    setFormEmail(email);
     setFormPhone((prof as any)?.phone || "");
     setFormDualRole(member.dual_role || "");
     setFormAssistant(member.assistant || false);
+    // seed hub interfaces from linked team member (if any)
+    const linked = teamMembers.find((m) => m.email && email && m.email.toLowerCase() === email.toLowerCase());
+    setHubInterfaces(linked?.allowed_interfaces || []);
+    setCreateAccountEmail(email);
     setEditing(true);
   };
 
@@ -122,6 +149,45 @@ function MemberInfoModal({ member, profiles, teamMembers, onClose, canEdit, onUp
     onUpdated();
     setEditing(false);
     onClose();
+  };
+
+  const toggleHub = (value: string) => {
+    setHubInterfaces((prev) =>
+      prev.includes(value) ? prev.filter((v) => v !== value) : [...prev, value]
+    );
+  };
+
+  const handleSaveInterfaces = async (userId: string) => {
+    await updateInterfaces.mutateAsync({ userId, allowed_interfaces: hubInterfaces });
+  };
+
+  const handleCreateAccount = async () => {
+    if (!createAccountEmail || hubInterfaces.length === 0) {
+      toast.error("Informe o e-mail e selecione ao menos um HUB.");
+      return;
+    }
+    const profileDept = DEPT_TO_PROFILE_DEPT[formDept] || "ops";
+    await createMember.mutateAsync({
+      email: createAccountEmail,
+      fullName: formName,
+      department: profileDept as any,
+      role: "operator",
+      allowedInterfaces: hubInterfaces,
+    });
+    onUpdated();
+    toast.success("Conta criada! As credenciais foram enviadas por e-mail.");
+    setEditing(false);
+    onClose();
+  };
+
+  const handleResendToLinked = async (m: typeof teamMembers[0]) => {
+    if (!m.username) { toast.error("Usuário sem username."); return; }
+    await resendEmail.mutateAsync({
+      userId: m.id,
+      email: m.email,
+      fullName: m.full_name || "Colaborador",
+      username: m.username,
+    });
   };
 
   if (!member) return null;
@@ -279,6 +345,104 @@ function MemberInfoModal({ member, profiles, teamMembers, onClose, canEdit, onUp
                 Salvar
               </Button>
             </div>
+
+            {/* ── ACESSO AO SISTEMA ─────────────────────────────────────────── */}
+            {(() => {
+              const linkedAccount = teamMembers.find(
+                (m) => m.email && formEmail && m.email.toLowerCase() === formEmail.toLowerCase()
+              );
+              return (
+                <div className="border border-border rounded-lg p-3 space-y-3 bg-muted/30">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1.5">
+                    <Lock className="h-3.5 w-3.5" /> Acesso ao Sistema
+                  </p>
+
+                  {linkedAccount ? (
+                    /* Caso A — já tem conta */
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <Badge variant={linkedAccount.status === "approved" ? "default" : "outline"} className="text-xs">
+                          {linkedAccount.status === "approved" ? "Conta ativa" : linkedAccount.status}
+                        </Badge>
+                        <span className="text-xs text-muted-foreground truncate">{linkedAccount.email}</span>
+                      </div>
+                      <div className="space-y-1.5">
+                        {HUB_OPTIONS.map((hub) => (
+                          <div key={hub.value} className="flex items-center gap-2">
+                            <Checkbox
+                              id={`hub-${hub.value}`}
+                              checked={hubInterfaces.includes(hub.value)}
+                              onCheckedChange={() => toggleHub(hub.value)}
+                            />
+                            <Label htmlFor={`hub-${hub.value}`} className="text-sm cursor-pointer">{hub.label}</Label>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="flex gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="flex-1"
+                          onClick={() => handleSaveInterfaces(linkedAccount.id)}
+                          disabled={updateInterfaces.isPending}
+                        >
+                          {updateInterfaces.isPending
+                            ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />
+                            : <Save className="h-3.5 w-3.5 mr-1" />}
+                          Salvar Interfaces
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => handleResendToLinked(linkedAccount)}
+                          disabled={resendEmail.isPending}
+                          title="Reenviar credenciais"
+                        >
+                          <Mail className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
+                    /* Caso B — sem conta */
+                    <div className="space-y-3">
+                      <div className="space-y-1">
+                        <Label className="text-xs">E-mail de acesso</Label>
+                        <Input
+                          type="email"
+                          value={createAccountEmail}
+                          onChange={(e) => setCreateAccountEmail(e.target.value)}
+                          placeholder="email@empresa.com"
+                          className="h-8 text-sm"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        {HUB_OPTIONS.map((hub) => (
+                          <div key={hub.value} className="flex items-center gap-2">
+                            <Checkbox
+                              id={`hub-new-${hub.value}`}
+                              checked={hubInterfaces.includes(hub.value)}
+                              onCheckedChange={() => toggleHub(hub.value)}
+                            />
+                            <Label htmlFor={`hub-new-${hub.value}`} className="text-sm cursor-pointer">{hub.label}</Label>
+                          </div>
+                        ))}
+                      </div>
+                      <Button
+                        size="sm"
+                        className="w-full"
+                        onClick={handleCreateAccount}
+                        disabled={createMember.isPending || !createAccountEmail || hubInterfaces.length === 0}
+                      >
+                        {createMember.isPending
+                          ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />
+                          : <UserPlus className="h-3.5 w-3.5 mr-1" />}
+                        Criar Conta
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
           </div>
         )}
       </DialogContent>

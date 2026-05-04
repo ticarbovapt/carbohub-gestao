@@ -353,6 +353,11 @@ export function BoardLayout({ children }: BoardLayoutProps) {
   const isMobile = useIsMobile();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
+  // ── Onboarding → PasswordChange sequencing ─────────────────────────────────
+  // PasswordChangeModal only renders AFTER onboarding is dismissed/done,
+  // so the onboarding always shows first for new users.
+  const [onboardingDone, setOnboardingDone] = useState(false);
+
   // ── Ops accordion open-state ──────────────────────────────────────────────
   const getInitialOpenGroups = () => {
     const match = operacoesGroups.find((g) =>
@@ -725,8 +730,8 @@ export function BoardLayout({ children }: BoardLayoutProps) {
 
   return (
     <>
-      <PlatformOnboarding />
-      <PasswordChangeModal />
+      <PlatformOnboarding onDismissed={() => setOnboardingDone(true)} />
+      {onboardingDone && <PasswordChangeModal />}
 
       <div className="min-h-screen bg-background">
         {/* ══ TOPBAR ═══════════════════════════════════════════════════ */}
