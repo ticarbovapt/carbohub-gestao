@@ -160,7 +160,7 @@ export default function RoleMatrix() {
                       <td className="p-3 text-muted-foreground">{row.feature}</td>
                       {ROLES.map((r) => (
                         <td key={r.key} className="p-3 text-center" title={ACCESS_LABEL[row[r.key as keyof FeatureRow] as Access]}>
-                          {ACCESS_ICON[row[r.key as keyof FeatureRow] as Access]}
+                          {getAccessIcon(row[r.key as keyof FeatureRow] as Access)}
                         </td>
                       ))}
                     </tr>
