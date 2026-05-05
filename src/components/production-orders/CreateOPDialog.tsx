@@ -55,7 +55,9 @@ function generateOpNumber(): string {
 
 export function CreateOPDialog({ open, onOpenChange }: CreateOPDialogProps) {
   const qc = useQueryClient();
-  const { data: products = [], isLoading: productsLoading } = useMrpProducts();
+  const { data: allProducts = [], isLoading: productsLoading } = useMrpProducts();
+  // Apenas produtos finais podem gerar OP
+  const products = allProducts.filter((p) => p.category === "Produto Final");
 
   const {
     register,
