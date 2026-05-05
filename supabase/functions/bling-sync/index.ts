@@ -1,4 +1,4 @@
-// bling-sync v2 — writes to bling_orders (intermediate table), bridge is client-side
+// bling-sync v3 — Phase 2: stock + vendedores
 import { createClient } from "npm:@supabase/supabase-js@2.39.3";
 
 const ALLOWED_ORIGINS = [
@@ -317,6 +317,89 @@ function mapBlingStatus(situacaoId: number | null, situacaoValor: string | null)
   return "pending";
 }
 
+// ── syncStock: busca saldo de estoque por produto (lotes de 40) ────────────
+async function syncStock(
+  supabaseAdmin: ReturnType<typeof createClient>,
+  token: string,
+  logId: string
+): Promise<{ synced: number; failed: number }> {
+  const { data: products } = await supabaseAdmin.from("bling_products").select("bling_id");
+  if (!products?.length) {
+    console.log("[bling-sync] No products to sync stock for. Run products sync first.");
+    return { synced: 0, failed: 0 };
+  }
+  const blingIds = products.map((p: any) => p.bling_id);
+  const BATCH_SIZE = 40;
+  let totalSynced = 0, totalFailed = 0;
+
+  for (let i = 0; i < blingIds.length; i += BATCH_SIZE) {
+    const batch = blingIds.slice(i, i + BATCH_SIZE);
+    try {
+      const data = await blingFetch(token, `/estoques?idsProdutos=${batch.join(",")}`, 1, 100);
+      for (const est of (data.data || [])) {
+        const produtoId = est.produto?.id;
+        if (!produtoId) continue;
+        try {
+          await supabaseAdmin.from("bling_products").update({
+            estoque_atual: Number(est.saldoFisico) || 0,
+            estoque_reservado: Number(est.saldoVirtualReservado) || 0,
+            estoque_synced_at: new Date().toISOString(),
+          }).eq("bling_id", produtoId);
+          totalSynced++;
+        } catch (e) {
+          console.error("[bling-sync] stock update failed for product", produtoId, ":", e);
+          totalFailed++;
+        }
+      }
+    } catch (e) {
+      console.error("[bling-sync] stock batch fetch failed:", e);
+      totalFailed += batch.length;
+    }
+    await new Promise((r) => setTimeout(r, 350));
+  }
+  await supabaseAdmin.from("bling_sync_log")
+    .update({ records_synced: totalSynced, records_failed: totalFailed }).eq("id", logId);
+  return { synced: totalSynced, failed: totalFailed };
+}
+
+// ── syncVendedores: busca equipe de vendedores do Bling ────────────────────
+async function syncVendedores(
+  supabaseAdmin: ReturnType<typeof createClient>,
+  token: string,
+  logId: string
+): Promise<{ synced: number; failed: number }> {
+  let page = 1, totalSynced = 0, totalFailed = 0, hasMore = true;
+  while (hasMore) {
+    const data = await blingFetch(token, "/vendedores", page, 100);
+    const vendedores = data.data || [];
+    if (!vendedores.length) { hasMore = false; break; }
+    for (const v of vendedores) {
+      try {
+        await supabaseAdmin.from("bling_vendedores").upsert({
+          bling_id: v.id,
+          nome: v.nome || "",
+          email: v.email || null,
+          comissao_percentual: v.comissao != null ? Number(v.comissao) : null,
+          situacao: v.situacao || null,
+          raw_data: v,
+          synced_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        }, { onConflict: "bling_id" });
+        totalSynced++;
+      } catch (e) {
+        console.error("[bling-sync] vendedor upsert failed:", e);
+        totalFailed++;
+      }
+    }
+    await new Promise((r) => setTimeout(r, 350));
+    page++;
+    if (vendedores.length < 100) hasMore = false;
+  }
+  await supabaseAdmin.from("bling_sync_log")
+    .update({ records_synced: totalSynced, records_failed: totalFailed }).eq("id", logId);
+  return { synced: totalSynced, failed: totalFailed };
+}
+
 // ── Bridge: bling_orders → carboze_orders ──────────────────────────────────
 async function bridgeOrdersToCarbohub(
   supabaseAdmin: ReturnType<typeof createClient>,
@@ -553,7 +636,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
     const results: Record<string, any> = {};
 
     const entitiesToSync = entity === "all"
-      ? ["products", "contacts", "orders", "bridge"]
+      ? ["products", "stock", "contacts", "orders", "vendedores", "bridge"]
       : [entity];
 
     // Helper to run a sync function with automatic 401 retry
@@ -600,11 +683,17 @@ Deno.serve(async (req: Request): Promise<Response> => {
           case "products":
             result = await syncWithRetry(entityType, syncProducts, logId);
             break;
+          case "stock":
+            result = await syncWithRetry(entityType, syncStock, logId);
+            break;
           case "contacts":
             result = await syncWithRetry(entityType, syncContacts, logId);
             break;
           case "orders":
             result = await syncWithRetry(entityType, syncOrders, logId);
+            break;
+          case "vendedores":
+            result = await syncWithRetry(entityType, syncVendedores, logId);
             break;
           case "bridge":
             result = await bridgeOrdersToCarbohub(supabaseAdmin, logId);
