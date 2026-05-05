@@ -150,8 +150,7 @@ export function useOrders(statusFilter?: OrderStatus | "all") {
         .from("carboze_orders_secure")
         .select(`
           *,
-          licensee:licensees(id, name, code),
-          sku:sku(id, code, name)
+          licensee:licensees(id, name, code)
         `)
         .order("created_at", { ascending: false });
 
@@ -175,8 +174,7 @@ export function useOrder(id: string | undefined) {
         .from("carboze_orders_secure")
         .select(`
           *,
-          licensee:licensees(id, name, code),
-          sku:sku(id, code, name)
+          licensee:licensees(id, name, code)
         `)
         .eq("id", id)
         .single();

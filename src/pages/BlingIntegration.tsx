@@ -14,7 +14,11 @@ import {
   CheckCircle,
   XCircle,
   Clock,
+  Download,
+  FileSpreadsheet,
+  FileText,
 } from "lucide-react";
+import * as XLSX from "xlsx";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 import { BoardLayout } from "@/components/layouts/BoardLayout";
@@ -71,7 +75,8 @@ export default function BlingIntegration() {
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState<string | null>(null);
   const [syncLogs, setSyncLogs] = useState<SyncLog[]>([]);
-  const [counts, setCounts] = useState({ products: 0, contacts: 0, orders: 0 });
+  const [counts, setCounts] = useState({ products: 0, contacts: 0, orders: 0, nfe: 0 });
+  const [exporting, setExporting] = useState<string | null>(null);
 
   const checkStatus = async () => {
     try {
@@ -106,16 +111,104 @@ export default function BlingIntegration() {
   };
 
   const loadCounts = async () => {
-    const [products, contacts, orders] = await Promise.all([
+    const [products, contacts, orders, nfe] = await Promise.all([
       supabase.from("bling_products").select("id", { count: "exact", head: true }),
       supabase.from("bling_contacts").select("id", { count: "exact", head: true }),
       supabase.from("bling_orders").select("id", { count: "exact", head: true }),
+      (supabase as any).from("bling_nfe").select("id", { count: "exact", head: true }),
     ]);
     setCounts({
       products: products.count || 0,
       contacts: contacts.count || 0,
       orders: orders.count || 0,
+      nfe: nfe.count || 0,
     });
+  };
+
+  // ── Export helpers ─────────────────────────────────────────────────────────
+  const exportToXlsx = (rows: Record<string, any>[], filename: string, sheetName: string) => {
+    const ws = XLSX.utils.json_to_sheet(rows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, sheetName);
+    XLSX.writeFile(wb, filename);
+  };
+
+  const handleExportFornecedores = async () => {
+    setExporting("fornecedores");
+    try {
+      const { data } = await (supabase as any)
+        .from("bling_contacts")
+        .select("nome, fantasia, cpf_cnpj, ie, email, telefone, celular, tipo_pessoa, situacao")
+        .eq("is_supplier", true)
+        .order("nome");
+      if (!data?.length) { toast.info("Nenhum fornecedor encontrado."); return; }
+      const rows = data.map((c: any) => ({
+        Nome: c.nome,
+        "Nome Fantasia": c.fantasia || "",
+        "CPF/CNPJ": c.cpf_cnpj || "",
+        IE: c.ie || "",
+        Email: c.email || "",
+        Telefone: c.telefone || "",
+        Celular: c.celular || "",
+        Tipo: c.tipo_pessoa || "",
+        Situação: c.situacao || "",
+      }));
+      exportToXlsx(rows, `fornecedores_bling_${new Date().toISOString().slice(0,10)}.xlsx`, "Fornecedores");
+      toast.success(`${rows.length} fornecedores exportados!`);
+    } catch (e: any) {
+      toast.error("Erro ao exportar fornecedores: " + e.message);
+    } finally { setExporting(null); }
+  };
+
+  const handleExportPedidos = async () => {
+    setExporting("pedidos");
+    try {
+      const { data } = await (supabase as any)
+        .from("bling_orders")
+        .select("numero, data, contato_nome, total_produtos, total_frete, total_desconto, total, situacao_valor, observacoes")
+        .order("data", { ascending: false });
+      if (!data?.length) { toast.info("Nenhum pedido encontrado."); return; }
+      const rows = data.map((o: any) => ({
+        "Nº Pedido": o.numero,
+        Data: o.data || "",
+        Cliente: o.contato_nome || "",
+        "Total Produtos": Number(o.total_produtos) || 0,
+        Frete: Number(o.total_frete) || 0,
+        Desconto: Number(o.total_desconto) || 0,
+        "Total (R$)": Number(o.total) || 0,
+        Situação: o.situacao_valor || "",
+        Observações: o.observacoes || "",
+      }));
+      exportToXlsx(rows, `pedidos_bling_${new Date().toISOString().slice(0,10)}.xlsx`, "Pedidos");
+      toast.success(`${rows.length} pedidos exportados!`);
+    } catch (e: any) {
+      toast.error("Erro ao exportar pedidos: " + e.message);
+    } finally { setExporting(null); }
+  };
+
+  const handleExportNFe = async () => {
+    setExporting("nfe");
+    try {
+      const { data } = await (supabase as any)
+        .from("bling_nfe")
+        .select("numero, serie, chave_acesso, data_emissao, contato_nome, contato_cnpj, valor_total, situacao")
+        .order("data_emissao", { ascending: false });
+      if (!data?.length) { toast.info("Nenhuma NF encontrada. Execute 'Sincronizar Tudo' primeiro."); return; }
+      const rows = data.map((nf: any) => ({
+        "Nº NF": nf.numero || "",
+        Série: nf.serie || "",
+        "Chave de Acesso": nf.chave_acesso || "",
+        "Data Emissão": nf.data_emissao || "",
+        Destinatário: nf.contato_nome || "",
+        "CNPJ/CPF": nf.contato_cnpj || "",
+        "Valor Total (R$)": Number(nf.valor_total) || 0,
+        Situação: nf.situacao || "",
+      }));
+      exportToXlsx(rows, `nfe_bling_${new Date().toISOString().slice(0,10)}.xlsx`, "NF-e");
+      toast.success(`${rows.length} NFs exportadas!`);
+    } catch (e: any) {
+      toast.error("Erro ao exportar NFs: " + e.message);
+    } finally { setExporting(null); }
   };
 
   useEffect(() => {
@@ -459,6 +552,94 @@ export default function BlingIntegration() {
               </CardContent>
             </Card>
           </div>
+
+          {/* NF-e card */}
+          <Card>
+            <CardContent className="pt-6">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-3">
+                  <FileText className="h-8 w-8 text-rose-500" />
+                  <div>
+                    <p className="font-semibold">Notas Fiscais</p>
+                    <p className="text-2xl font-bold">{counts.nfe}</p>
+                  </div>
+                </div>
+              </div>
+              <Button
+                className="w-full"
+                variant="outline"
+                disabled={!!syncing}
+                onClick={() => handleSync("nfe" as any)}
+              >
+                {syncing === "nfe" ? (
+                  <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Sincronizando...</>
+                ) : (
+                  <><RefreshCw className="h-4 w-4 mr-2" /> Sincronizar NFs</>
+                )}
+              </Button>
+            </CardContent>
+          </Card>
+
+          {/* Export Section */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg flex items-center gap-2">
+                <Download className="h-5 w-5 text-blue-500" />
+                Exportar Dados
+              </CardTitle>
+              <CardDescription>
+                Baixe os dados sincronizados do Bling em formato Excel (.xlsx)
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <Button
+                  variant="outline"
+                  className="gap-2 h-auto py-4 flex flex-col"
+                  disabled={!!exporting}
+                  onClick={handleExportFornecedores}
+                >
+                  {exporting === "fornecedores" ? (
+                    <Loader2 className="h-5 w-5 animate-spin" />
+                  ) : (
+                    <FileSpreadsheet className="h-5 w-5 text-blue-500" />
+                  )}
+                  <span className="font-medium">Fornecedores</span>
+                  <span className="text-xs text-muted-foreground">Contatos is_supplier</span>
+                </Button>
+
+                <Button
+                  variant="outline"
+                  className="gap-2 h-auto py-4 flex flex-col"
+                  disabled={!!exporting}
+                  onClick={handleExportPedidos}
+                >
+                  {exporting === "pedidos" ? (
+                    <Loader2 className="h-5 w-5 animate-spin" />
+                  ) : (
+                    <FileSpreadsheet className="h-5 w-5 text-orange-500" />
+                  )}
+                  <span className="font-medium">Pedidos Bling</span>
+                  <span className="text-xs text-muted-foreground">{counts.orders} registros</span>
+                </Button>
+
+                <Button
+                  variant="outline"
+                  className="gap-2 h-auto py-4 flex flex-col"
+                  disabled={!!exporting}
+                  onClick={handleExportNFe}
+                >
+                  {exporting === "nfe" ? (
+                    <Loader2 className="h-5 w-5 animate-spin" />
+                  ) : (
+                    <FileSpreadsheet className="h-5 w-5 text-rose-500" />
+                  )}
+                  <span className="font-medium">Notas Fiscais</span>
+                  <span className="text-xs text-muted-foreground">{counts.nfe} registros</span>
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
 
           {/* Sync All + Bridge to CarboHub */}
           <div className="flex flex-col sm:flex-row gap-3 justify-center items-center">
