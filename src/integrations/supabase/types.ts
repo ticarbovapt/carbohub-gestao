@@ -1,4 +1,4 @@
-export type Json =
+﻿export type Json =
   | string
   | number
   | boolean
@@ -11,31 +11,6 @@ export type Database = {
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
     PostgrestVersion: "14.5"
-  }
-  graphql_public: {
-    Tables: {
-      [_ in never]: never
-    }
-    Views: {
-      [_ in never]: never
-    }
-    Functions: {
-      graphql: {
-        Args: {
-          extensions?: Json
-          operationName?: string
-          query?: string
-          variables?: Json
-        }
-        Returns: Json
-      }
-    }
-    Enums: {
-      [_ in never]: never
-    }
-    CompositeTypes: {
-      [_ in never]: never
-    }
   }
   public: {
     Tables: {
@@ -302,6 +277,9 @@ export type Database = {
           bling_id: number
           codigo: string | null
           created_at: string
+          estoque_atual: number | null
+          estoque_reservado: number | null
+          estoque_synced_at: string | null
           formato: string | null
           gtin: string | null
           gtin_embalagem: string | null
@@ -321,6 +299,9 @@ export type Database = {
           bling_id: number
           codigo?: string | null
           created_at?: string
+          estoque_atual?: number | null
+          estoque_reservado?: number | null
+          estoque_synced_at?: string | null
           formato?: string | null
           gtin?: string | null
           gtin_embalagem?: string | null
@@ -340,6 +321,9 @@ export type Database = {
           bling_id?: number
           codigo?: string | null
           created_at?: string
+          estoque_atual?: number | null
+          estoque_reservado?: number | null
+          estoque_synced_at?: string | null
           formato?: string | null
           gtin?: string | null
           gtin_embalagem?: string | null
@@ -390,6 +374,42 @@ export type Database = {
           started_at?: string
           status?: string
           triggered_by?: string | null
+        }
+        Relationships: []
+      }
+      bling_vendedores: {
+        Row: {
+          bling_id: number
+          comissao_percentual: number | null
+          email: string | null
+          id: number
+          nome: string
+          raw_data: Json | null
+          situacao: string | null
+          synced_at: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          bling_id: number
+          comissao_percentual?: number | null
+          email?: string | null
+          id?: number
+          nome: string
+          raw_data?: Json | null
+          situacao?: string | null
+          synced_at?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          bling_id?: number
+          comissao_percentual?: number | null
+          email?: string | null
+          id?: number
+          nome?: string
+          raw_data?: Json | null
+          situacao?: string | null
+          synced_at?: string | null
+          updated_at?: string | null
         }
         Relationships: []
       }
@@ -2843,6 +2863,60 @@ export type Database = {
           },
         ]
       }
+      mrp_bom: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          insumo_id: string
+          is_critical: boolean
+          notes: string | null
+          product_id: string
+          quantity_per_unit: number
+          unit: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          insumo_id: string
+          is_critical?: boolean
+          notes?: string | null
+          product_id: string
+          quantity_per_unit?: number
+          unit?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          insumo_id?: string
+          is_critical?: boolean
+          notes?: string | null
+          product_id?: string
+          quantity_per_unit?: number
+          unit?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mrp_bom_insumo_id_fkey"
+            columns: ["insumo_id"]
+            isOneToOne: false
+            referencedRelation: "mrp_products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "mrp_bom_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "mrp_products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       mrp_products: {
         Row: {
           category: string | null
@@ -3307,6 +3381,62 @@ export type Database = {
             columns: ["order_id"]
             isOneToOne: false
             referencedRelation: "carboze_orders_secure"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      org_chart_nodes: {
+        Row: {
+          assistant: boolean | null
+          avatar_url: string | null
+          created_at: string | null
+          department: string | null
+          dual_role: string | null
+          email: string | null
+          full_name: string
+          hierarchy_level: number | null
+          id: string
+          job_title: string | null
+          phone: string | null
+          reports_to: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          assistant?: boolean | null
+          avatar_url?: string | null
+          created_at?: string | null
+          department?: string | null
+          dual_role?: string | null
+          email?: string | null
+          full_name: string
+          hierarchy_level?: number | null
+          id: string
+          job_title?: string | null
+          phone?: string | null
+          reports_to?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          assistant?: boolean | null
+          avatar_url?: string | null
+          created_at?: string | null
+          department?: string | null
+          dual_role?: string | null
+          email?: string | null
+          full_name?: string
+          hierarchy_level?: number | null
+          id?: string
+          job_title?: string | null
+          phone?: string | null
+          reports_to?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "org_chart_nodes_reports_to_fkey"
+            columns: ["reports_to"]
+            isOneToOne: false
+            referencedRelation: "org_chart_nodes"
             referencedColumns: ["id"]
           },
         ]
@@ -6853,9 +6983,6 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
-  graphql_public: {
-    Enums: {},
-  },
   public: {
     Enums: {
       app_role: ["admin", "manager", "operator", "viewer"],
@@ -6982,4 +7109,3 @@ export const Constants = {
     },
   },
 } as const
-<claude-code-hint v="1" type="plugin" value="supabase@claude-plugins-official" />
