@@ -97,6 +97,7 @@ interface CreateOSPayload {
   scheduled_at?: string | null;
   description?: string;
   assigned_to?: string | null;
+  metadata?: Record<string, unknown>;
 }
 
 export function useCreateServiceOrder() {
@@ -118,7 +119,7 @@ export function useCreateServiceOrder() {
           os_stage: "nova",
           status: "active",
           current_department: "venda",
-          metadata: {},
+          metadata: payload.metadata ?? {},
         })
         .select()
         .single();

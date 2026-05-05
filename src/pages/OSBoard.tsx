@@ -284,7 +284,7 @@ export default function OSBoard() {
 
       {/* Create OS Dialog */}
       <CreateOSDialog
-        defaultOpen={isCreateOpen}
+        open={isCreateOpen}
         onOpenChange={setIsCreateOpen}
         onSuccess={() => refetch()}
       />

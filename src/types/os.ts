@@ -159,7 +159,7 @@ export type OsStage =
   | "concluida"
   | "cancelada";
 
-export type OsServiceType = "b2c" | "b2b" | "frota";
+export type OsServiceType = "b2c" | "b2b" | "frota" | "abertura_licenciado";
 
 export interface OsStageConfig {
   id: OsStage;
