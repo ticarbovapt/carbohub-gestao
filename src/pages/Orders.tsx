@@ -73,7 +73,7 @@ const STATUS_ICONS: Record<OrderStatus, React.ComponentType<{ className?: string
 
 export default function Orders() {
   const navigate = useNavigate();
-  const { isManager, isAdmin } = useAuth();
+  const { isManager, isAdmin, isCeo, isMasterAdmin, isAnyGestor } = useAuth();
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<OrderStatus | "all">("all");
   const [typeFilter, setTypeFilter] = useState<"all" | "spot" | "recorrente">("all");
@@ -231,10 +231,10 @@ export default function Orders() {
                 </DropdownMenuContent>
               </DropdownMenu>
 
-              {isManager && (
+              {(isManager || isAdmin || isCeo || isMasterAdmin || isAnyGestor) && (
                 <CarboButton onClick={() => navigate("/orders/new")}>
                   <Plus className="h-4 w-4 mr-1" />
-                  Novo Pedido
+                  Nova Venda
                 </CarboButton>
               )}
             </>
@@ -462,9 +462,9 @@ export default function Orders() {
               title="Nenhum pedido encontrado"
               description={searchQuery ? "Tente ajustar os filtros de busca" : "Comece criando seu primeiro pedido"}
               action={
-                isManager
+                (isManager || isAdmin || isCeo || isMasterAdmin || isAnyGestor)
                   ? {
-                      label: "Novo Pedido",
+                      label: "Nova Venda",
                       onClick: () => navigate("/orders/new"),
                     }
                   : undefined

@@ -219,11 +219,46 @@ export function useCreateOrder() {
         changed_by: user.user?.id,
       });
 
+      // ── Auto-generate Production Order(s) ────────────────────────────────
+      // For each line item that has a product_id (SKU), create one OP
+      type RawItem = { product_id?: string; name?: string; quantity?: number };
+      const lineItems = (Array.isArray(data.items) ? data.items : []) as RawItem[];
+      const opRows = lineItems
+        .filter((item) => item.product_id && item.quantity && item.quantity > 0)
+        .map((item) => ({
+          sku_id:           item.product_id!,
+          planned_quantity: item.quantity!,
+          demand_source:    "venda" as const,
+          op_status:        "planejada" as const,
+          linked_order_ids: [result.id],
+          title:            `OP-${result.order_number || "Venda"}: ${item.name || item.product_id} × ${item.quantity}`,
+          priority:         3,
+        }));
+
+      // Fallback: if no items have sku but top-level sku_id is set
+      if (opRows.length === 0 && data.sku_id) {
+        const totalQty = lineItems.reduce((s, i) => s + (i.quantity || 0), 0) || 1;
+        opRows.push({
+          sku_id:           data.sku_id,
+          planned_quantity: totalQty,
+          demand_source:    "venda" as const,
+          op_status:        "planejada" as const,
+          linked_order_ids: [result.id],
+          title:            `OP-${result.order_number || "Venda"}`,
+          priority:         3,
+        });
+      }
+
+      if (opRows.length > 0) {
+        await supabase.from("production_orders").insert(opRows);
+      }
+
       return result;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["carboze-orders"] });
-      toast.success("Pedido criado com sucesso!");
+      queryClient.invalidateQueries({ queryKey: ["production-orders"] });
+      toast.success("Pedido criado e OP gerada automaticamente!");
     },
     onError: (error: Error) => {
       toast.error("Erro ao criar pedido: " + error.message);
