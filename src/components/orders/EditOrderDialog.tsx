@@ -21,7 +21,9 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { CarboButton } from "@/components/ui/carbo-button";
 import { useUpdateOrder, type CarbozeOrder, type OrderStatus, ORDER_STATUS_LABELS, ORDER_TYPE_LABELS, type OrderType } from "@/hooks/useCarbozeOrders";
 import { useLicensees } from "@/hooks/useLicensees";
-import { Loader2, CalendarIcon, Repeat, Zap } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+import { Loader2, CalendarIcon, Repeat, Zap, UserCheck } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const formSchema = z.object({
@@ -36,6 +38,8 @@ const formSchema = z.object({
   status: z.enum(["pending", "confirmed", "invoiced", "shipped", "delivered", "cancelled"]),
   tracking_code: z.string().optional(),
   tracking_url: z.string().optional(),
+  vendedor_id: z.string().optional(),
+  vendedor_name: z.string().optional(),
   notes: z.string().optional(),
   internal_notes: z.string().optional(),
   // Recurrence fields
@@ -57,6 +61,20 @@ export function EditOrderDialog({ open, onOpenChange, order }: EditOrderDialogPr
   const updateOrder = useUpdateOrder();
   const { data: licensees = [] } = useLicensees("all");
 
+  // Load team members to populate vendedor select
+  const { data: vendedores = [] } = useQuery({
+    queryKey: ["profiles-vendedores"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("id, full_name, email")
+        .in("role", ["operator", "manager", "admin"])
+        .order("full_name");
+      if (error) throw error;
+      return (data || []) as { id: string; full_name: string | null; email: string | null }[];
+    },
+  });
+
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
     defaultValues: {
@@ -77,6 +95,8 @@ export function EditOrderDialog({ open, onOpenChange, order }: EditOrderDialogPr
       is_recurring: false,
       recurrence_interval_days: null,
       next_delivery_date: null,
+      vendedor_id: "none",
+      vendedor_name: "",
     },
   });
 
@@ -103,6 +123,8 @@ export function EditOrderDialog({ open, onOpenChange, order }: EditOrderDialogPr
         is_recurring: order.is_recurring || false,
         recurrence_interval_days: order.recurrence_interval_days || null,
         next_delivery_date: order.next_delivery_date ? new Date(order.next_delivery_date) : null,
+        vendedor_id: order.vendedor_id || "none",
+        vendedor_name: order.vendedor_name || "",
       });
     }
   }, [order, form]);
@@ -111,14 +133,19 @@ export function EditOrderDialog({ open, onOpenChange, order }: EditOrderDialogPr
     if (!order) return;
 
     try {
+      // Resolve vendedor name from selected id
+      const selectedVendedor = vendedores.find((v) => v.id === data.vendedor_id);
+
       await updateOrder.mutateAsync({
         id: order.id,
         ...data,
         customer_email: data.customer_email || undefined,
         licensee_id: data.licensee_id === "none" ? null : data.licensee_id || null,
+        vendedor_id: data.vendedor_id === "none" ? null : data.vendedor_id || null,
+        vendedor_name: data.vendedor_id === "none" ? null : (selectedVendedor?.full_name || data.vendedor_name || null),
         recurrence_interval_days: data.is_recurring ? data.recurrence_interval_days : null,
-        next_delivery_date: data.is_recurring && data.next_delivery_date 
-          ? format(data.next_delivery_date, "yyyy-MM-dd") 
+        next_delivery_date: data.is_recurring && data.next_delivery_date
+          ? format(data.next_delivery_date, "yyyy-MM-dd")
           : null,
       });
       onOpenChange(false);
@@ -227,6 +254,36 @@ export function EditOrderDialog({ open, onOpenChange, order }: EditOrderDialogPr
                       {licensees.map((lic) => (
                         <SelectItem key={lic.id} value={lic.id}>
                           {lic.code} - {lic.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            {/* Vendedor */}
+            <FormField
+              control={form.control}
+              name="vendedor_id"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel className="flex items-center gap-1.5">
+                    <UserCheck className="h-3.5 w-3.5 text-muted-foreground" />
+                    Vendedor
+                  </FormLabel>
+                  <Select onValueChange={field.onChange} value={field.value}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecione o vendedor" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="none">Sem vendedor</SelectItem>
+                      {vendedores.map((v) => (
+                        <SelectItem key={v.id} value={v.id}>
+                          {v.full_name || v.email}
                         </SelectItem>
                       ))}
                     </SelectContent>
