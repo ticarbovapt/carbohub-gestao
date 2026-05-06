@@ -2,6 +2,7 @@ import { createClient } from "npm:@supabase/supabase-js@2.39.3";
 
 // SECURITY FIX: Restrict CORS to known origins
 const ALLOWED_ORIGINS = [
+  "https://controle.carbohub.com.br",
   "https://carbohub.com.br",
   "https://www.carbohub.com.br",
   "http://localhost:8080",

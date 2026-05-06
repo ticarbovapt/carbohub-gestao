@@ -210,20 +210,16 @@ async function syncProducts(
 async function syncContacts(
   supabaseAdmin: ReturnType<typeof createClient>,
   token: string,
-  logId: string,
-  contactType?: string
+  logId: string
 ): Promise<{ synced: number; failed: number }> {
   let page = 1;
   let totalSynced = 0;
   let totalFailed = 0;
   let hasMore = true;
 
-  const endpoint = contactType
-    ? `/contatos?tipoContato=${contactType}`
-    : "/contatos";
-
+  // Step 1: Sync all contacts (general pass)
   while (hasMore) {
-    const data = await blingFetch(token, endpoint, page, 100);
+    const data = await blingFetch(token, "/contatos", page, 100);
     const contacts = data.data || [];
 
     if (contacts.length === 0) {
@@ -233,14 +229,6 @@ async function syncContacts(
 
     for (const contact of contacts) {
       try {
-        const tipos = contact.tiposContato || [];
-        const isSupplier = tipos.some((t: any) =>
-          t.descricao?.toLowerCase().includes("fornecedor")
-        );
-        const isClient = tipos.some((t: any) =>
-          t.descricao?.toLowerCase().includes("cliente")
-        );
-
         await supabaseAdmin.from("bling_contacts").upsert(
           {
             bling_id: contact.id,
@@ -252,10 +240,10 @@ async function syncContacts(
             email: contact.email || null,
             telefone: contact.telefone || null,
             celular: contact.celular || null,
-            tipo_contato: (tipos.map((t: any) => t.descricao) || []).join(", "),
+            tipo_contato: "",
             situacao: contact.situacao || null,
-            is_supplier: isSupplier,
-            is_client: isClient,
+            is_supplier: false,
+            is_client: false,
             raw_data: contact,
             synced_at: new Date().toISOString(),
             updated_at: new Date().toISOString(),
@@ -271,8 +259,63 @@ async function syncContacts(
 
     await new Promise((resolve) => setTimeout(resolve, 350));
     page++;
-
     if (contacts.length < 100) hasMore = false;
+  }
+
+  // Step 2: Mark suppliers — tipoContato=F (Fornecedor)
+  console.log("[bling-sync] Identifying suppliers via tipoContato=F...");
+  const supplierIds: number[] = [];
+  let sPage = 1, sHasMore = true;
+  while (sHasMore) {
+    try {
+      const data = await blingFetch(token, "/contatos?tipoContato=F", sPage, 100);
+      const contacts = data.data || [];
+      if (!contacts.length) { sHasMore = false; break; }
+      for (const c of contacts) supplierIds.push(Number(c.id));
+      sPage++;
+      if (contacts.length < 100) sHasMore = false;
+      await new Promise((r) => setTimeout(r, 300));
+    } catch (e) {
+      console.error("[bling-sync] Failed to fetch supplier contacts:", e);
+      sHasMore = false;
+    }
+  }
+  if (supplierIds.length > 0) {
+    for (let i = 0; i < supplierIds.length; i += 100) {
+      const batch = supplierIds.slice(i, i + 100);
+      await supabaseAdmin.from("bling_contacts")
+        .update({ is_supplier: true, tipo_contato: "Fornecedor", updated_at: new Date().toISOString() })
+        .in("bling_id", batch);
+    }
+    console.log(`[bling-sync] Marked ${supplierIds.length} contacts as suppliers.`);
+  }
+
+  // Step 3: Mark clients — tipoContato=C (Cliente)
+  console.log("[bling-sync] Identifying clients via tipoContato=C...");
+  const clientIds: number[] = [];
+  let cPage = 1, cHasMore = true;
+  while (cHasMore) {
+    try {
+      const data = await blingFetch(token, "/contatos?tipoContato=C", cPage, 100);
+      const contacts = data.data || [];
+      if (!contacts.length) { cHasMore = false; break; }
+      for (const c of contacts) clientIds.push(Number(c.id));
+      cPage++;
+      if (contacts.length < 100) cHasMore = false;
+      await new Promise((r) => setTimeout(r, 300));
+    } catch (e) {
+      console.error("[bling-sync] Failed to fetch client contacts:", e);
+      cHasMore = false;
+    }
+  }
+  if (clientIds.length > 0) {
+    for (let i = 0; i < clientIds.length; i += 100) {
+      const batch = clientIds.slice(i, i + 100);
+      await supabaseAdmin.from("bling_contacts")
+        .update({ is_client: true, updated_at: new Date().toISOString() })
+        .in("bling_id", batch);
+    }
+    console.log(`[bling-sync] Marked ${clientIds.length} contacts as clients.`);
   }
 
   await supabaseAdmin
@@ -445,6 +488,58 @@ async function syncVendedores(
   return { synced: totalSynced, failed: totalFailed };
 }
 
+// ── syncOrderDetails: busca itens por pedido via endpoint de detalhe ────────
+async function syncOrderDetails(
+  supabaseAdmin: ReturnType<typeof createClient>,
+  token: string,
+  logId: string
+): Promise<{ synced: number; failed: number }> {
+  // Only fetch details for orders that have no items yet
+  const { data: orders } = await supabaseAdmin
+    .from("bling_orders")
+    .select("bling_id")
+    .is("items", null);
+
+  if (!orders?.length) {
+    console.log("[bling-sync] No orders missing items.");
+    await supabaseAdmin.from("bling_sync_log")
+      .update({ records_synced: 0, records_failed: 0 }).eq("id", logId);
+    return { synced: 0, failed: 0 };
+  }
+
+  let totalSynced = 0, totalFailed = 0;
+  console.log(`[bling-sync] Fetching details for ${orders.length} orders...`);
+
+  for (const order of orders) {
+    try {
+      const detail = await blingFetch(token, `/pedidos/vendas/${order.bling_id}`, 1, 1);
+      const detailData = detail.data || {};
+      const itens = detailData.itens || [];
+
+      await supabaseAdmin.from("bling_orders")
+        .update({
+          items: itens,
+          observacoes: detailData.observacoes || null,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("bling_id", order.bling_id);
+
+      totalSynced++;
+    } catch (e) {
+      console.error(`[bling-sync] Detail fetch failed for order ${order.bling_id}:`, e);
+      totalFailed++;
+    }
+    // 350ms between requests to stay under 3 req/s Bling rate limit
+    await new Promise((r) => setTimeout(r, 350));
+  }
+
+  await supabaseAdmin.from("bling_sync_log")
+    .update({ records_synced: totalSynced, records_failed: totalFailed }).eq("id", logId);
+
+  console.log(`[bling-sync] Order details done. Synced: ${totalSynced}, Failed: ${totalFailed}`);
+  return { synced: totalSynced, failed: totalFailed };
+}
+
 // ── Bridge: bling_orders → carboze_orders ──────────────────────────────────
 async function bridgeOrdersToCarbohub(
   supabaseAdmin: ReturnType<typeof createClient>,
@@ -501,16 +596,22 @@ async function bridgeOrdersToCarbohub(
       // Check if exists by external_ref
       const { data: existing } = await supabaseAdmin
         .from("carboze_orders")
-        .select("id, status")
+        .select("id, status, items")
         .eq("external_ref", externalRef)
         .single();
 
       if (existing) {
-        // Only update status if changed
-        if (existing.status !== status) {
+        // Update status and items if changed/missing
+        const needsUpdate = existing.status !== status || (carboItems.length > 0 && (!existing.items || (existing.items as any[]).length === 0));
+        if (needsUpdate) {
+          const updatePayload: Record<string, any> = { updated_at: new Date().toISOString() };
+          if (existing.status !== status) updatePayload.status = status;
+          if (carboItems.length > 0 && (!existing.items || (existing.items as any[]).length === 0)) {
+            updatePayload.items = carboItems;
+          }
           await supabaseAdmin
             .from("carboze_orders")
-            .update({ status, updated_at: new Date().toISOString() })
+            .update(updatePayload)
             .eq("id", existing.id);
         }
       } else {
@@ -544,6 +645,102 @@ async function bridgeOrdersToCarbohub(
 
   console.log(`[bling-bridge] Done. Bridged: ${totalSynced}, Failed: ${totalFailed}`);
   return { synced: totalSynced, failed: totalFailed };
+}
+
+// ── runTreatment: valida dados sincronizados antes do bridge ────────────────
+async function runTreatment(
+  supabaseAdmin: ReturnType<typeof createClient>,
+  _token: string,
+  logId: string
+): Promise<{ synced: number; failed: number }> {
+  const runId = crypto.randomUUID();
+  let totalOk = 0, totalWarning = 0, totalError = 0, totalSkipped = 0;
+  const logs: any[] = [];
+
+  // Load reference data
+  const [{ data: blingOrders }, { data: existingOrders }, { data: licensees }, { data: contacts }] = await Promise.all([
+    supabaseAdmin.from("bling_orders").select("bling_id, contato_nome, total, items"),
+    supabaseAdmin.from("carboze_orders").select("external_ref"),
+    supabaseAdmin.from("licensees").select("id, name, trade_name"),
+    supabaseAdmin.from("bling_contacts").select("bling_id, is_supplier, is_client"),
+  ]);
+
+  const existingRefs = new Set((existingOrders || []).map((o: any) => o.external_ref));
+  const normalizeStr = (s: string) => (s || "").toLowerCase().trim();
+  const licenseeNames = new Set((licensees || []).flatMap((l: any) => [
+    normalizeStr(l.name), normalizeStr(l.trade_name)
+  ].filter(Boolean)));
+
+  // Validate orders
+  for (const bo of (blingOrders || [])) {
+    const externalRef = `bling-${bo.bling_id}`;
+
+    if (existingRefs.has(externalRef)) {
+      logs.push({ run_id: runId, entity_type: "order", bling_id: bo.bling_id, status: "skipped",
+        issue_type: "duplicate", issue_detail: "Pedido já importado em carboze_orders" });
+      totalSkipped++; continue;
+    }
+    if (Number(bo.total) === 0) {
+      logs.push({ run_id: runId, entity_type: "order", bling_id: bo.bling_id, status: "error",
+        issue_type: "zero_total", issue_detail: "Pedido com valor total zero" });
+      totalError++; continue;
+    }
+
+    const items: any[] = Array.isArray(bo.items) ? bo.items : [];
+    const hasLicensee = licenseeNames.has(normalizeStr(bo.contato_nome));
+    let hasUnknownSku = false;
+    if (items.length > 0) {
+      hasUnknownSku = items.some((item: any) => {
+        const code = item.codigo || item.produto?.codigo || "";
+        return !SKU_TO_LINHA[code];
+      });
+    }
+
+    if (items.length === 0) {
+      logs.push({ run_id: runId, entity_type: "order", bling_id: bo.bling_id, status: "warning",
+        issue_type: "missing_items", issue_detail: "Pedido sem itens (detalhes não sincronizados ainda)" });
+      totalWarning++;
+    } else if (!hasLicensee) {
+      logs.push({ run_id: runId, entity_type: "order", bling_id: bo.bling_id, status: "warning",
+        issue_type: "unknown_licensee", issue_detail: `Cliente "${bo.contato_nome}" não encontrado nos licenciados` });
+      totalWarning++;
+    } else if (hasUnknownSku) {
+      logs.push({ run_id: runId, entity_type: "order", bling_id: bo.bling_id, status: "warning",
+        issue_type: "unknown_sku", issue_detail: "Código de produto não mapeado para linha CarboHub" });
+      totalWarning++;
+    } else {
+      logs.push({ run_id: runId, entity_type: "order", bling_id: bo.bling_id, status: "ok",
+        issue_type: null, issue_detail: null });
+      totalOk++;
+    }
+  }
+
+  // Validate contacts
+  for (const c of (contacts || [])) {
+    if (!c.is_supplier && !c.is_client) {
+      logs.push({ run_id: runId, entity_type: "contact", bling_id: c.bling_id, status: "warning",
+        issue_type: "unclassified", issue_detail: "Contato sem classificação (não é cliente nem fornecedor)" });
+      totalWarning++;
+    } else {
+      logs.push({ run_id: runId, entity_type: "contact", bling_id: c.bling_id, status: "ok",
+        issue_type: null, issue_detail: null });
+      totalOk++;
+    }
+  }
+
+  // Insert all logs in batches of 200
+  for (let i = 0; i < logs.length; i += 200) {
+    await supabaseAdmin.from("bling_treatment_log").insert(logs.slice(i, i + 200));
+  }
+
+  const totalRecords = totalOk + totalWarning + totalError + totalSkipped;
+  console.log(`[bling-treatment] Done. OK: ${totalOk}, Warnings: ${totalWarning}, Errors: ${totalError}, Skipped: ${totalSkipped}`);
+
+  await supabaseAdmin.from("bling_sync_log")
+    .update({ records_synced: totalOk + totalWarning + totalSkipped, records_failed: totalError })
+    .eq("id", logId);
+
+  return { synced: totalOk + totalWarning + totalSkipped, failed: totalError };
 }
 
 async function syncOrders(
@@ -635,22 +832,33 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
     const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Verify caller
-    const authHeader = req.headers.get("authorization");
-    if (!authHeader) {
-      return new Response(
-        JSON.stringify({ success: false, error: "Missing authorization" }),
-        { status: 401, headers: { "Content-Type": "application/json", ...corsHeaders } }
-      );
-    }
+    // Allow cron bypass: if X-Cron-Secret matches, skip user JWT validation
+    const cronSecretHeader = req.headers.get("X-Cron-Secret");
+    const expectedCronSecret = Deno.env.get("CRON_SECRET");
+    const isCronCall = !!(cronSecretHeader && expectedCronSecret && cronSecretHeader === expectedCronSecret);
 
-    const userToken = authHeader.replace("Bearer ", "");
-    const { data: { user }, error: userError } = await supabaseAdmin.auth.getUser(userToken);
-    if (userError || !user) {
-      return new Response(
-        JSON.stringify({ success: false, error: "Unauthorized" }),
-        { status: 401, headers: { "Content-Type": "application/json", ...corsHeaders } }
-      );
+    let user: any = null;
+    if (!isCronCall) {
+      // Verify caller via JWT
+      const authHeader = req.headers.get("authorization");
+      if (!authHeader) {
+        return new Response(
+          JSON.stringify({ success: false, error: "Missing authorization" }),
+          { status: 401, headers: { "Content-Type": "application/json", ...corsHeaders } }
+        );
+      }
+
+      const userToken = authHeader.replace("Bearer ", "");
+      const { data: { user: u }, error: userError } = await supabaseAdmin.auth.getUser(userToken);
+      if (userError || !u) {
+        return new Response(
+          JSON.stringify({ success: false, error: "Unauthorized" }),
+          { status: 401, headers: { "Content-Type": "application/json", ...corsHeaders } }
+        );
+      }
+      user = u;
+    } else {
+      console.log("[bling-sync] Cron call authenticated via X-Cron-Secret");
     }
 
     const body = await req.json().catch(() => ({}));
@@ -680,7 +888,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
     const results: Record<string, any> = {};
 
     const entitiesToSync = entity === "all"
-      ? ["products", "stock", "contacts", "orders", "vendedores", "nfe", "bridge"]
+      ? ["products", "stock", "contacts", "orders", "order_details", "treatment", "vendedores", "nfe", "bridge"]
       : [entity];
 
     // Helper to run a sync function with automatic 401 retry
@@ -714,7 +922,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
         .insert({
           entity_type: entityType,
           status: "running",
-          triggered_by: user.id,
+          triggered_by: user?.id || null,
         })
         .select("id")
         .single();
@@ -735,6 +943,12 @@ Deno.serve(async (req: Request): Promise<Response> => {
             break;
           case "orders":
             result = await syncWithRetry(entityType, syncOrders, logId);
+            break;
+          case "order_details":
+            result = await syncWithRetry(entityType, syncOrderDetails, logId);
+            break;
+          case "treatment":
+            result = await syncWithRetry(entityType, runTreatment, logId);
             break;
           case "vendedores":
             result = await syncWithRetry(entityType, syncVendedores, logId);

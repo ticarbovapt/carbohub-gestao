@@ -12,11 +12,13 @@ import {
   ShoppingCart,
   Loader2,
   CheckCircle,
+  CheckCircle2,
   XCircle,
   Clock,
   Download,
   FileSpreadsheet,
   FileText,
+  Play,
 } from "lucide-react";
 import * as XLSX from "xlsx";
 import { toast } from "sonner";
@@ -77,6 +79,9 @@ export default function BlingIntegration() {
   const [syncLogs, setSyncLogs] = useState<SyncLog[]>([]);
   const [counts, setCounts] = useState({ products: 0, contacts: 0, orders: 0, nfe: 0 });
   const [exporting, setExporting] = useState<string | null>(null);
+  const [pipelineStep, setPipelineStep] = useState<"idle" | "syncing" | "done">("idle");
+  const [treatmentSummary, setTreatmentSummary] = useState<{ ok: number; warnings: number; errors: number; runId: string } | null>(null);
+  const [lastCronRun, setLastCronRun] = useState<string | null>(null);
 
   const checkStatus = async () => {
     try {
@@ -124,6 +129,71 @@ export default function BlingIntegration() {
       nfe: nfe.count || 0,
     });
   };
+
+  const loadTreatmentSummary = useCallback(async () => {
+    try {
+      const { data: latestLog } = await (supabase as any)
+        .from("bling_treatment_log")
+        .select("run_id, created_at")
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .single();
+      if (!latestLog) return;
+
+      const runId = latestLog.run_id;
+      const { data: rows } = await (supabase as any)
+        .from("bling_treatment_log")
+        .select("status")
+        .eq("run_id", runId);
+
+      if (!rows) return;
+      setTreatmentSummary({
+        ok: rows.filter((r: any) => r.status === "ok").length,
+        warnings: rows.filter((r: any) => r.status === "warning").length,
+        errors: rows.filter((r: any) => r.status === "error").length,
+        runId,
+      });
+    } catch {
+      // treatment log may not exist yet
+    }
+  }, []);
+
+  const loadLastCronRun = useCallback(async () => {
+    try {
+      const { data } = await (supabase as any)
+        .from("bling_sync_log")
+        .select("started_at")
+        .is("triggered_by", null)
+        .eq("entity_type", "bridge")
+        .order("started_at", { ascending: false })
+        .limit(1)
+        .single();
+      if (data) setLastCronRun(data.started_at);
+    } catch {
+      // no cron run yet
+    }
+  }, []);
+
+  const handleRunPipeline = useCallback(async () => {
+    setSyncing("pipeline");
+    setPipelineStep("syncing");
+    try {
+      const response = await supabase.functions.invoke("bling-sync", {
+        body: { entity: "all" },
+      });
+      if (!response.data?.success) {
+        throw new Error(response.data?.error || "Pipeline falhou");
+      }
+      setPipelineStep("done");
+      await Promise.all([loadCounts(), loadSyncLogs(), loadTreatmentSummary(), loadLastCronRun()]);
+      toast.success("Pipeline completo! Dados sincronizados, tratados e importados.");
+    } catch (error: any) {
+      toast.error(error.message || "Erro no pipeline");
+      setPipelineStep("idle");
+    } finally {
+      setSyncing(null);
+    }
+  }, [loadTreatmentSummary, loadLastCronRun]);
 
   // ── Export helpers ─────────────────────────────────────────────────────────
   const exportToXlsx = (rows: Record<string, any>[], filename: string, sheetName: string) => {
@@ -215,6 +285,8 @@ export default function BlingIntegration() {
     checkStatus();
     loadSyncLogs();
     loadCounts();
+    loadTreatmentSummary();
+    loadLastCronRun();
   }, []);
 
   const handleConnect = async () => {
@@ -641,54 +713,105 @@ export default function BlingIntegration() {
             </CardContent>
           </Card>
 
-          {/* Sync All + Bridge to CarboHub */}
-          <div className="flex flex-col sm:flex-row gap-3 justify-center items-center">
-            <Button
-              size="lg"
-              disabled={!!syncing}
-              onClick={handleSyncAll}
-              className="bg-gradient-to-r from-green-600 to-emerald-600 text-white"
-            >
-              {syncing === "all" ? (
-                <><Loader2 className="h-5 w-5 mr-2 animate-spin" /> Sincronizando tudo...</>
-              ) : (
-                <><RefreshCw className="h-5 w-5 mr-2" /> Sincronizar Tudo</>
-              )}
-            </Button>
+          {/* Pipeline de Sincronização */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg flex items-center gap-2">
+                <Play className="h-5 w-5 text-green-500" />
+                Pipeline de Sincronização
+              </CardTitle>
+              <CardDescription>
+                Sincroniza, valida e importa dados do Bling em uma única execução
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {/* 3-step visual */}
+              <div className="grid grid-cols-3 gap-3">
+                {/* Step 1 — Sync */}
+                <div className={`rounded-lg border p-3 text-center transition-colors ${
+                  syncing === "pipeline" && pipelineStep === "syncing"
+                    ? "border-blue-400 bg-blue-50 dark:bg-blue-950/20"
+                    : pipelineStep === "done"
+                    ? "border-green-400 bg-green-50 dark:bg-green-950/20"
+                    : "border-border bg-muted/30"
+                }`}>
+                  <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">1. Sincronizar</div>
+                  <div className="text-sm font-medium">Busca do Bling</div>
+                  <div className="text-xs text-muted-foreground mt-1">
+                    {counts.products}p · {counts.contacts}c · {counts.orders}o
+                  </div>
+                  {syncing === "pipeline" && pipelineStep === "syncing" && (
+                    <Loader2 className="h-4 w-4 mx-auto mt-2 animate-spin text-blue-500" />
+                  )}
+                  {pipelineStep === "done" && <CheckCircle2 className="h-4 w-4 mx-auto mt-2 text-green-500" />}
+                </div>
 
-            <div className="flex items-center gap-2">
-              <div className="h-px w-8 bg-border hidden sm:block" />
-              <span className="text-xs text-muted-foreground hidden sm:block">então</span>
-              <div className="h-px w-8 bg-border hidden sm:block" />
-            </div>
+                {/* Step 2 — Treatment */}
+                <div className={`rounded-lg border p-3 text-center transition-colors ${
+                  treatmentSummary
+                    ? treatmentSummary.errors > 0
+                      ? "border-red-300 bg-red-50 dark:bg-red-950/20"
+                      : treatmentSummary.warnings > 0
+                      ? "border-yellow-300 bg-yellow-50 dark:bg-yellow-950/20"
+                      : "border-green-400 bg-green-50 dark:bg-green-950/20"
+                    : "border-border bg-muted/30"
+                }`}>
+                  <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">2. Tratamento</div>
+                  <div className="text-sm font-medium">Validação</div>
+                  {treatmentSummary ? (
+                    <div className="text-xs mt-1 space-y-0.5">
+                      <div className="text-green-600">✅ {treatmentSummary.ok} OK</div>
+                      {treatmentSummary.warnings > 0 && (
+                        <div className="text-yellow-600">⚠ {treatmentSummary.warnings} avisos</div>
+                      )}
+                      {treatmentSummary.errors > 0 && (
+                        <div className="text-red-600">❌ {treatmentSummary.errors} erros</div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="text-xs text-muted-foreground mt-1">Aguardando sync</div>
+                  )}
+                </div>
 
-            <Button
-              size="lg"
-              variant="outline"
-              disabled={!!syncing}
-              onClick={handleBridge}
-              className="border-orange-400 text-orange-600 hover:bg-orange-50 dark:hover:bg-orange-950/20"
-            >
-              {syncing === "bridge" ? (
-                <><Loader2 className="h-5 w-5 mr-2 animate-spin" /> Transferindo para CarboHub...</>
-              ) : (
-                <><ShoppingCart className="h-5 w-5 mr-2" /> Importar Pedidos Bling → CarboHub</>
-              )}
-            </Button>
-          </div>
+                {/* Step 3 — Import */}
+                <div className={`rounded-lg border p-3 text-center transition-colors ${
+                  pipelineStep === "done"
+                    ? "border-green-400 bg-green-50 dark:bg-green-950/20"
+                    : "border-border bg-muted/30"
+                }`}>
+                  <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">3. Importar</div>
+                  <div className="text-sm font-medium">Bridge → CarboHub</div>
+                  <div className="text-xs text-muted-foreground mt-1">Pedidos convertidos</div>
+                  {pipelineStep === "done" && <CheckCircle2 className="h-4 w-4 mx-auto mt-2 text-green-500" />}
+                </div>
+              </div>
 
-          {/* Bridge info */}
-          <Card className="border-orange-200 dark:border-orange-900/40 bg-orange-50/50 dark:bg-orange-950/10">
-            <CardContent className="p-4">
-              <p className="text-sm font-medium text-orange-700 dark:text-orange-400">Como funciona a importação de pedidos</p>
-              <ul className="text-xs text-muted-foreground mt-2 space-y-1">
-                <li>1. Clique <strong>Sincronizar Tudo</strong> para copiar os dados do Bling para a base intermediária</li>
-                <li>2. Clique <strong>Importar Pedidos Bling → CarboHub</strong> para converter e popular a tela de Controle de Pedidos</li>
-                <li>• Produtos são mapeados automaticamente por código SKU (SKU-CZ100, SKU-CZ1L, etc.)</li>
-                <li>• Licenciados são vinculados por nome/razão social</li>
-                <li>• Status Bling (Em Aberto, Atendido, Cancelado…) são convertidos para o fluxo CarboHub</li>
-                <li>• Re-executar atualiza apenas pedidos que mudaram de status</li>
-              </ul>
+              {/* Cron schedule info */}
+              <div className="flex items-center gap-2 text-xs text-muted-foreground bg-muted/40 rounded-lg px-3 py-2">
+                <Clock className="h-3 w-3 flex-shrink-0" />
+                <span>
+                  Agendado automaticamente: <strong>7h e 13h</strong> (Fortaleza)
+                  {lastCronRun ? (
+                    <> · Último sync automático: {new Date(lastCronRun).toLocaleString("pt-BR")}</>
+                  ) : (
+                    <> · Nenhum sync automático ainda</>
+                  )}
+                </span>
+              </div>
+
+              {/* Run button */}
+              <Button
+                size="lg"
+                disabled={!!syncing}
+                onClick={handleRunPipeline}
+                className="w-full bg-gradient-to-r from-green-600 to-emerald-600 text-white"
+              >
+                {syncing === "pipeline" ? (
+                  <><Loader2 className="h-5 w-5 mr-2 animate-spin" /> Executando pipeline...</>
+                ) : (
+                  <><Play className="h-5 w-5 mr-2" /> Executar Pipeline Completo</>
+                )}
+              </Button>
             </CardContent>
           </Card>
 
