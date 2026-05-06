@@ -544,113 +544,35 @@ export default function BlingIntegration() {
 
       {isConnected && (
         <>
-          {/* Sync Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <Card>
-              <CardContent className="pt-6">
-                <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center gap-3">
-                    <Package className="h-8 w-8 text-blue-500" />
-                    <div>
-                      <p className="font-semibold">Produtos</p>
-                      <p className="text-2xl font-bold">{counts.products}</p>
-                    </div>
+          {/* Compact Stats Row — 4 entities em uma linha */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {([
+              { label: "Produtos",      count: counts.products, Icon: Package,      color: "text-blue-500",   entity: "products" },
+              { label: "Contatos",      count: counts.contacts, Icon: Users,        color: "text-purple-500", entity: "contacts" },
+              { label: "Pedidos",       count: counts.orders,   Icon: ShoppingCart, color: "text-orange-500", entity: "orders"   },
+              { label: "Notas Fiscais", count: counts.nfe,      Icon: FileText,     color: "text-rose-500",   entity: "nfe"      },
+            ] as const).map(({ label, count, Icon, color, entity }) => (
+              <Card key={entity} className="relative overflow-hidden">
+                <CardContent className="p-4">
+                  <div className="flex items-center gap-1.5 mb-0.5">
+                    <Icon className={`h-3.5 w-3.5 ${color}`} />
+                    <span className="text-xs text-muted-foreground font-medium">{label}</span>
                   </div>
-                </div>
-                <Button
-                  className="w-full"
-                  variant="outline"
-                  disabled={!!syncing}
-                  onClick={() => handleSync("products")}
-                >
-                  {syncing === "products" ? (
-                    <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Sincronizando...</>
-                  ) : (
-                    <><RefreshCw className="h-4 w-4 mr-2" /> Sincronizar</>
-                  )}
-                </Button>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardContent className="pt-6">
-                <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center gap-3">
-                    <Users className="h-8 w-8 text-purple-500" />
-                    <div>
-                      <p className="font-semibold">Contatos</p>
-                      <p className="text-2xl font-bold">{counts.contacts}</p>
-                    </div>
-                  </div>
-                </div>
-                <Button
-                  className="w-full"
-                  variant="outline"
-                  disabled={!!syncing}
-                  onClick={() => handleSync("contacts")}
-                >
-                  {syncing === "contacts" ? (
-                    <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Sincronizando...</>
-                  ) : (
-                    <><RefreshCw className="h-4 w-4 mr-2" /> Sincronizar</>
-                  )}
-                </Button>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardContent className="pt-6">
-                <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center gap-3">
-                    <ShoppingCart className="h-8 w-8 text-orange-500" />
-                    <div>
-                      <p className="font-semibold">Pedidos</p>
-                      <p className="text-2xl font-bold">{counts.orders}</p>
-                    </div>
-                  </div>
-                </div>
-                <Button
-                  className="w-full"
-                  variant="outline"
-                  disabled={!!syncing}
-                  onClick={() => handleSync("orders")}
-                >
-                  {syncing === "orders" ? (
-                    <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Sincronizando...</>
-                  ) : (
-                    <><RefreshCw className="h-4 w-4 mr-2" /> Sincronizar</>
-                  )}
-                </Button>
-              </CardContent>
-            </Card>
+                  <p className="text-2xl font-bold tracking-tight">{count}</p>
+                  <button
+                    disabled={!!syncing}
+                    onClick={() => handleSync(entity as any)}
+                    className="mt-2 flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors disabled:opacity-40"
+                  >
+                    {syncing === entity
+                      ? <><Loader2 className="h-3 w-3 animate-spin" /> Sincronizando...</>
+                      : <><RefreshCw className="h-3 w-3" /> Sincronizar</>
+                    }
+                  </button>
+                </CardContent>
+              </Card>
+            ))}
           </div>
-
-          {/* NF-e card */}
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-3">
-                  <FileText className="h-8 w-8 text-rose-500" />
-                  <div>
-                    <p className="font-semibold">Notas Fiscais</p>
-                    <p className="text-2xl font-bold">{counts.nfe}</p>
-                  </div>
-                </div>
-              </div>
-              <Button
-                className="w-full"
-                variant="outline"
-                disabled={!!syncing}
-                onClick={() => handleSync("nfe" as any)}
-              >
-                {syncing === "nfe" ? (
-                  <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Sincronizando...</>
-                ) : (
-                  <><RefreshCw className="h-4 w-4 mr-2" /> Sincronizar NFs</>
-                )}
-              </Button>
-            </CardContent>
-          </Card>
 
           {/* Export Section */}
           <Card>

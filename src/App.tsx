@@ -66,6 +66,7 @@ const DashboardEstrategico = lazy(() => import("./pages/dashboards/DashboardEstr
 const NotFound            = lazy(() => import("./pages/NotFound"));
 const AIAssistantPage     = lazy(() => import("./pages/AIAssistantPage"));
 const BlingIntegration    = lazy(() => import("./pages/BlingIntegration"));
+const ViagensPage         = lazy(() => import("./pages/ViagensPage"));
 const BlingCallback       = lazy(() => import("./pages/BlingCallback"));
 const SetPassword         = lazy(() => import("./pages/SetPassword"));
 const ResetPassword       = lazy(() => import("./pages/ResetPassword"));
@@ -235,6 +236,9 @@ function AnimatedRoutes() {
             {/* Bling Integration */}
             <Route path="/integrations/bling/callback" element={<BlingCallback />} />
             <Route path="/integrations/bling" element={<ProtectedRoute><BlingIntegration /></ProtectedRoute>} />
+
+            {/* Viagens & PC */}
+            <Route path="/viagens" element={<ProtectedRoute><ViagensPage /></ProtectedRoute>} />
 
             {/* CarboOPS */}
             <Route path="/ops/alerts" element={<ProtectedRoute><OpsAlerts /></ProtectedRoute>} />

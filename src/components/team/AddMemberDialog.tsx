@@ -95,6 +95,8 @@ export function AddMemberDialog({ onMemberAdded, defaultArea = "carbo_ops", vari
     const fullName = formData.get("fullName") as string;
     const department = formData.get("department") as DepartmentType;
     const role = formData.get("role") as AppRole;
+    const funcao = (formData.get("funcao") as string) || undefined;
+    const escopo = (formData.get("escopo") as string) || undefined;
 
     // Validate email format
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -109,6 +111,8 @@ export function AddMemberDialog({ onMemberAdded, defaultArea = "carbo_ops", vari
         fullName,
         department,
         role,
+        funcao,
+        escopo,
       });
 
       setCreatedMember({
@@ -318,6 +322,26 @@ export function AddMemberDialog({ onMemberAdded, defaultArea = "carbo_ops", vari
                           ))}
                         </SelectContent>
                       </Select>
+                    </div>
+
+                    <div className="col-span-2 space-y-2">
+                      <Label htmlFor="funcao">Função Principal</Label>
+                      <Input
+                        id="funcao"
+                        name="funcao"
+                        placeholder="ex: Diretor de Expansão, Analista Financeiro..."
+                        className="h-11"
+                      />
+                    </div>
+
+                    <div className="col-span-2 space-y-2">
+                      <Label htmlFor="escopo">Escopo / Responsabilidades</Label>
+                      <Input
+                        id="escopo"
+                        name="escopo"
+                        placeholder="Principais atividades e responsabilidades..."
+                        className="h-11"
+                      />
                     </div>
                   </>
                 )}

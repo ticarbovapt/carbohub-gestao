@@ -37,6 +37,7 @@ import {
   Bell,
   Store,
   Zap,
+  Plane,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -233,6 +234,7 @@ const operacoesGroups: NavGroup[] = [
     children: [
       { href: "/financeiro",          label: "Financeiro",         icon: Wallet },
       { href: "/suprimentos",         label: "Suprimentos",        icon: Package },
+      { href: "/viagens",             label: "Viagens & PC",       icon: Plane },
       { href: "/integrations/bling",  label: "Integrações Bling",  icon: Link2 },
       { href: "/logistics",           label: "Logística",          icon: Truck },
     ],
@@ -295,6 +297,7 @@ const ROUTE_LABELS: Record<string, string> = {
   "org-chart": "Organograma",
   "pdv-network": "Rede PDV",
   "role-matrix": "Matriz de Acesso",
+  "viagens": "Viagens & PC",
   "responsibility-map": "Mapa de Responsabilidades",
   "b2b": "B2B Leads",
   "funnel": "Funil",
