@@ -28,6 +28,7 @@ import {
 import { Car, Users, Truck, Building2, Loader2, ClipboardCheck, ChevronDown, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useCreateServiceOrder } from "@/hooks/useServiceOrders";
+import { DateTimePicker } from "@/components/ui/date-time-picker";
 import type { OsServiceType } from "@/types/os";
 
 // ─── Checklist data from Checklist Operacional - Abertura de Licenciado CarboVAPT ───
@@ -407,6 +408,8 @@ export function CreateOSDialog({ open, onOpenChange, onSuccess }: CreateOSDialog
   const [checklistState, setChecklistState] = useState<ChecklistState>({});
 
   const createMutation = useCreateServiceOrder();
+  const [scheduledAt, setScheduledAt] = useState<string>("");
+  const [checklistDate, setChecklistDate] = useState<string>("");
 
   const handleOpenChange = (isOpen: boolean) => {
     onOpenChange(isOpen);
@@ -415,6 +418,8 @@ export function CreateOSDialog({ open, onOpenChange, onSuccess }: CreateOSDialog
         setStep("type");
         setSelectedType(null);
         setChecklistState({});
+        setScheduledAt("");
+        setChecklistDate("");
       }, 200);
     }
   };
@@ -433,14 +438,14 @@ export function CreateOSDialog({ open, onOpenChange, onSuccess }: CreateOSDialog
     if (!user || !selectedType) return;
     const fd = new FormData(e.currentTarget);
     await createMutation.mutateAsync({
-      title: (fd.get("title") as string) || `OS ${selectedType.toUpperCase()} — ${fd.get("customer_name")}`,
-      service_type: selectedType,
+      title:         (fd.get("title") as string) || "",
+      service_type:  selectedType,
       customer_name: (fd.get("customer_name") as string) || undefined,
       vehicle_plate: (fd.get("vehicle_plate") as string) || undefined,
       vehicle_model: (fd.get("vehicle_model") as string) || undefined,
-      priority: parseInt(fd.get("priority") as string) || 3,
-      scheduled_at: (fd.get("scheduled_at") as string) || undefined,
-      description: (fd.get("description") as string) || undefined,
+      priority:      parseInt(fd.get("priority") as string) || 3,
+      scheduled_at:  scheduledAt || undefined,
+      description:   (fd.get("description") as string) || undefined,
     });
     handleOpenChange(false);
     onSuccess?.();
@@ -464,7 +469,7 @@ export function CreateOSDialog({ open, onOpenChange, onSuccess }: CreateOSDialog
       service_type: "abertura_licenciado",
       customer_name: licenciado || undefined,
       priority: 2,
-      scheduled_at: (fd.get("data_prevista") as string) || undefined,
+      scheduled_at: checklistDate || undefined,
       description: `Local: ${local} | Técnico: ${tecnico}`,
       metadata: {
         checklist: checklistState,
@@ -532,19 +537,29 @@ export function CreateOSDialog({ open, onOpenChange, onSuccess }: CreateOSDialog
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
-                  <Label htmlFor="vehicle_plate">Placa do Veículo</Label>
+                  <Label htmlFor="vehicle_plate" className="flex items-center gap-1">
+                    Placa
+                    <span className="text-[10px] text-muted-foreground font-normal">(preencher depois)</span>
+                  </Label>
                   <Input id="vehicle_plate" name="vehicle_plate" placeholder="ABC-1234" className="uppercase" />
                 </div>
                 <div className="space-y-1.5">
-                  <Label htmlFor="vehicle_model">Modelo</Label>
-                  <Input id="vehicle_model" name="vehicle_model" placeholder="Ex: Fiat Uno 1.0" />
+                  <Label htmlFor="vehicle_model" className="flex items-center gap-1">
+                    Modelo
+                    <span className="text-[10px] text-muted-foreground font-normal">(preencher depois)</span>
+                  </Label>
+                  <Input id="vehicle_model" name="vehicle_model" placeholder="Ex: Caminhão, Fiat Uno" />
                 </div>
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="scheduled_at">
-                  {selectedType === "frota" ? "Data do Agendamento" : "Data Prevista (opcional)"}
+                <Label>
+                  {selectedType === "frota" ? "Data do Agendamento *" : "Data Prevista (opcional)"}
                 </Label>
-                <Input id="scheduled_at" name="scheduled_at" type="datetime-local" required={selectedType === "frota"} />
+                <DateTimePicker
+                  value={scheduledAt}
+                  onChange={setScheduledAt}
+                  placeholder={selectedType === "frota" ? "Selecione data e hora" : "Opcional — selecione se houver"}
+                />
               </div>
               <div className="space-y-1.5">
                 <Label>Prioridade</Label>
@@ -559,8 +574,20 @@ export function CreateOSDialog({ open, onOpenChange, onSuccess }: CreateOSDialog
                 </Select>
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="title">Título da OS</Label>
-                <Input id="title" name="title" placeholder="Ex: Descarbonização motor Honda Fit" />
+                <Label htmlFor="title" className="flex items-center gap-1">
+                  Título da OS
+                  <span className="text-[10px] text-muted-foreground font-normal">(gerado automaticamente se vazio)</span>
+                </Label>
+                <Input
+                  id="title"
+                  name="title"
+                  placeholder={
+                    selectedType === "b2b" ? "Ex: DESC_B2B_00012 — Café Santa Clara" :
+                    selectedType === "b2c" ? "Ex: DESC_B2C_00015 — João Silva" :
+                    selectedType === "frota" ? "Ex: DESC_FRT_00008 — Transportadora XYZ" :
+                    "Deixe vazio para gerar automaticamente"
+                  }
+                />
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="description">Observações</Label>
@@ -608,8 +635,12 @@ export function CreateOSDialog({ open, onOpenChange, onSuccess }: CreateOSDialog
                 <Input id="resp_comercial" name="resp_comercial" placeholder="Nome" />
               </div>
               <div className="col-span-2 space-y-1.5">
-                <Label htmlFor="data_prevista">Data Prevista para Abertura</Label>
-                <Input id="data_prevista" name="data_prevista" type="date" />
+                <Label>Data Prevista para Abertura</Label>
+                <DateTimePicker
+                  value={checklistDate}
+                  onChange={setChecklistDate}
+                  placeholder="Selecione a data e hora da abertura"
+                />
               </div>
             </div>
 

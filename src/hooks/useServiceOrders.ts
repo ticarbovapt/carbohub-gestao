@@ -104,10 +104,26 @@ export function useCreateServiceOrder() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (payload: CreateOSPayload) => {
+      // 1. Require authenticated user — this was the cause of the NOT NULL error
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Usuário não autenticado. Faça login novamente.");
+
+      // 2. Generate sequential OS number via DB function
+      const { data: osNumber } = await supabase.rpc("generate_os_number", {
+        p_service_type: payload.service_type,
+      });
+      const finalOsNumber = (osNumber as string) || `OS-${Date.now()}`;
+
+      // 3. Use provided title or fall back to the generated OS number
+      const finalTitle = (payload.title && payload.title.trim())
+        ? payload.title.trim()
+        : finalOsNumber;
+
       const { data, error } = await supabase
         .from("service_orders")
         .insert({
-          title: payload.title,
+          title: finalTitle,
+          os_number: finalOsNumber,
           service_type: payload.service_type,
           customer_name: payload.customer_name ?? null,
           vehicle_plate: payload.vehicle_plate ?? null,
@@ -120,6 +136,7 @@ export function useCreateServiceOrder() {
           status: "active",
           current_department: "venda",
           metadata: payload.metadata ?? {},
+          created_by: user.id,
         })
         .select()
         .single();
