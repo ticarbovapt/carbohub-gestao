@@ -42,6 +42,7 @@ import {
   User,
   FileText,
   Users,
+  Receipt,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -58,6 +59,7 @@ import {
 import { useAuth } from "@/contexts/AuthContext";
 import { cn } from "@/lib/utils";
 import { PrestacaoContasDialog } from "@/components/viagens/PrestacaoContasDialog";
+import { ReembolsoDialog } from "@/components/viagens/ReembolsoDialog";
 
 // ─── Status badge ──────────────────────────────────────────────────────────
 
@@ -421,6 +423,7 @@ const PENDING_STATUSES: ViagemStatus[] = [
 export default function ViagensPage() {
   const { user } = useAuth();
   const [createOpen, setCreateOpen] = useState(false);
+  const [reembolsoOpen, setReembolsoOpen] = useState(false);
   const [pcViagem, setPcViagem] = useState<ViagemSolicitacao | null>(null);
 
   // "Minhas Viagens" — filtrado por solicitante_id do usuário atual
@@ -455,13 +458,23 @@ export default function ViagensPage() {
             description="Solicite, aprove e preste contas de viagens corporativas"
             icon={Plane}
           />
-          <Button
-            onClick={() => setCreateOpen(true)}
-            className="carbo-gradient text-white shrink-0 sm:mt-1 self-start"
-          >
-            <Plus className="h-4 w-4 mr-2" />
-            Nova Solicitação
-          </Button>
+          <div className="flex items-center gap-2 shrink-0 sm:mt-1 self-start flex-wrap">
+            <Button
+              onClick={() => setCreateOpen(true)}
+              className="carbo-gradient text-white gap-2"
+            >
+              <Plane className="h-4 w-4" />
+              Solicitar Adiantamento
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => setReembolsoOpen(true)}
+              className="gap-2"
+            >
+              <Receipt className="h-4 w-4" />
+              Prestação de Contas / Reembolso
+            </Button>
+          </div>
         </div>
 
         {/* KPI cards */}
@@ -597,6 +610,8 @@ export default function ViagensPage() {
       </div>
 
       <CreateViagemDialog open={createOpen} onOpenChange={setCreateOpen} />
+
+      <ReembolsoDialog open={reembolsoOpen} onOpenChange={setReembolsoOpen} />
 
       <PrestacaoContasDialog
         viagem={pcViagem}
