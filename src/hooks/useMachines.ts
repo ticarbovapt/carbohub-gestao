@@ -43,6 +43,7 @@ export interface Machine {
 }
 
 export interface MachineInsert {
+  machine_id?: string;
   model: string;
   serial_number?: string;
   licensee_id?: string;
@@ -116,7 +117,7 @@ export function useCreateMachine() {
         .from("machines")
         .insert({
           ...data,
-          machine_id: `CARBO-${Date.now().toString(36).toUpperCase().slice(-6)}`,
+          machine_id: data.machine_id || "", // trigger gera YY-NNN se vazio
           created_by: user.user?.id,
         })
         .select()

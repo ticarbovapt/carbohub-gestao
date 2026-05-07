@@ -29,6 +29,7 @@ interface ImportMachinesDialogProps {
 }
 
 interface CsvRow {
+  machine_id?: string;
   model: string;
   serial_number?: string;
   location_address?: string;
@@ -41,19 +42,18 @@ interface CsvRow {
 }
 
 const EXPECTED_HEADERS = [
+  "machine_id",
   "model",
-  "serial_number",
   "location_city",
   "location_state",
-  "capacity",
   "notes",
 ];
 
 const SAMPLE_CSV = [
-  "model,serial_number,location_city,location_state,capacity,notes",
-  "CarboZé Pro,SN-001,São Paulo,SP,100,Unidade Centro",
-  "CarboZé Lite,SN-002,Rio de Janeiro,RJ,60,Shopping ABC",
-  "CarboZé Max,SN-003,Belo Horizonte,MG,150,Aeroporto",
+  "machine_id,model,location_city,location_state,capacity,notes",
+  "26-001,CarboVapt,São Paulo,SP,100,CONFIAUTO",
+  "26-002,CarboVapt,Fortaleza,CE,100,NORDESTE DIESEL",
+  "26-003,CarboVapt,Recife,PE,100,POWERCHIPS",
 ].join("\n");
 
 function parseCsv(text: string): { headers: string[]; rows: CsvRow[]; errors: string[] } {
@@ -83,6 +83,9 @@ function parseCsv(text: string): { headers: string[]; rows: CsvRow[]; errors: st
     headers.forEach((header, idx) => {
       const value = values[idx] ?? "";
       switch (header) {
+        case "machine_id":
+          row.machine_id = value || undefined;
+          break;
         case "model":
           row.model = value;
           break;
@@ -215,7 +218,8 @@ export function ImportMachinesDialog({ open, onOpenChange }: ImportMachinesDialo
       const row = validRows[i];
       try {
         await createMachine.mutateAsync({
-          model: row.model,
+          machine_id: row.machine_id,
+          model: row.model || "CarboVapt",
           serial_number: row.serial_number,
           location_city: row.location_city,
           location_state: row.location_state,
