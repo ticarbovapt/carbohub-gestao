@@ -25,11 +25,68 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
-import { Car, Users, Truck, Building2, Loader2, ClipboardCheck, ChevronDown, ChevronRight } from "lucide-react";
+import { Car, Users, Truck, Building2, Loader2, ClipboardCheck, ChevronDown, ChevronRight, Search, CheckCircle2, AlertCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useCreateServiceOrder } from "@/hooks/useServiceOrders";
 import { DateTimePicker } from "@/components/ui/date-time-picker";
 import type { OsServiceType } from "@/types/os";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
+
+// ── CNPJ helpers ──────────────────────────────────────────────────────────────
+function formatCnpj(v: string) {
+  const d = v.replace(/\D/g, "").slice(0, 14);
+  return d
+    .replace(/^(\d{2})(\d)/, "$1.$2")
+    .replace(/^(\d{2})\.(\d{3})(\d)/, "$1.$2.$3")
+    .replace(/\.(\d{3})(\d)/, ".$1/$2")
+    .replace(/(\d{4})(\d)/, "$1-$2");
+}
+function rawCnpj(v: string) { return v.replace(/\D/g, ""); }
+
+interface ClientData {
+  nome: string;
+  email?: string;
+  telefone?: string;
+  source: "bling" | "brasilapi";
+}
+
+async function lookupCnpjFn(cnpj: string): Promise<ClientData | null> {
+  const raw = rawCnpj(cnpj);
+  if (raw.length !== 14) return null;
+
+  // 1. Buscar na base local (bling_contacts)
+  const { data: local } = await supabase
+    .from("bling_contacts")
+    .select("nome, fantasia, email, telefone, celular")
+    .eq("cpf_cnpj", raw)
+    .maybeSingle();
+
+  if (local) {
+    return {
+      nome: (local as any).fantasia || (local as any).nome,
+      email: (local as any).email || undefined,
+      telefone: (local as any).telefone || (local as any).celular || undefined,
+      source: "bling",
+    };
+  }
+
+  // 2. Fallback: BrasilAPI pública
+  try {
+    const res = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${raw}`);
+    if (!res.ok) return null;
+    const d = await res.json();
+    if (!d || d.message) return null;
+    return {
+      nome: d.nome_fantasia || d.razao_social,
+      email: d.email || undefined,
+      telefone: d.ddd_telefone_1 ? `(${d.ddd_telefone_1}) ${d.telefone_1}` : undefined,
+      source: "brasilapi",
+    };
+  } catch {
+    return null;
+  }
+}
 
 // ─── Checklist data from Checklist Operacional - Abertura de Licenciado CarboVAPT ───
 const CHECKLIST_SECTIONS = [
@@ -411,6 +468,13 @@ export function CreateOSDialog({ open, onOpenChange, onSuccess }: CreateOSDialog
   const [scheduledAt, setScheduledAt] = useState<string>("");
   const [checklistDate, setChecklistDate] = useState<string>("");
 
+  // CNPJ lookup state
+  const [cnpj,          setCnpj]          = useState("");
+  const [cnpjLoading,   setCnpjLoading]   = useState(false);
+  const [clientFound,   setClientFound]   = useState<ClientData | null>(null);
+  const [clientNotFound,setClientNotFound] = useState(false);
+  const [customerName,  setCustomerName]  = useState("");
+
   const handleOpenChange = (isOpen: boolean) => {
     onOpenChange(isOpen);
     if (!isOpen) {
@@ -420,7 +484,29 @@ export function CreateOSDialog({ open, onOpenChange, onSuccess }: CreateOSDialog
         setChecklistState({});
         setScheduledAt("");
         setChecklistDate("");
+        setCnpj("");
+        setClientFound(null);
+        setClientNotFound(false);
+        setCustomerName("");
       }, 200);
+    }
+  };
+
+  const handleCnpjSearch = async () => {
+    if (rawCnpj(cnpj).length !== 14) {
+      toast.error("CNPJ inválido — informe os 14 dígitos.");
+      return;
+    }
+    setCnpjLoading(true);
+    setClientFound(null);
+    setClientNotFound(false);
+    const result = await lookupCnpjFn(cnpj);
+    setCnpjLoading(false);
+    if (result) {
+      setClientFound(result);
+      setCustomerName(result.nome);
+    } else {
+      setClientNotFound(true);
     }
   };
 
@@ -440,7 +526,7 @@ export function CreateOSDialog({ open, onOpenChange, onSuccess }: CreateOSDialog
     await createMutation.mutateAsync({
       title:         (fd.get("title") as string) || "",
       service_type:  selectedType,
-      customer_name: (fd.get("customer_name") as string) || undefined,
+      customer_name: customerName || (fd.get("customer_name") as string) || undefined,
       vehicle_plate: (fd.get("vehicle_plate") as string) || undefined,
       vehicle_model: (fd.get("vehicle_model") as string) || undefined,
       priority:      parseInt(fd.get("priority") as string) || 3,
@@ -525,13 +611,61 @@ export function CreateOSDialog({ open, onOpenChange, onSuccess }: CreateOSDialog
               <DialogDescription>Preencha as informações da Ordem de Serviço</DialogDescription>
             </DialogHeader>
             <div className="space-y-4 py-4">
+
+              {/* ── CNPJ lookup (B2B e Frota) ── */}
+              {(selectedType === "b2b" || selectedType === "frota") && (
+                <div className="space-y-1.5">
+                  <Label>CNPJ</Label>
+                  <div className="flex gap-2">
+                    <Input
+                      value={cnpj}
+                      onChange={(e) => {
+                        setCnpj(formatCnpj(e.target.value));
+                        setClientFound(null);
+                        setClientNotFound(false);
+                      }}
+                      onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleCnpjSearch(); } }}
+                      placeholder="00.000.000/0000-00"
+                      maxLength={18}
+                      className="font-mono"
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={handleCnpjSearch}
+                      disabled={cnpjLoading || rawCnpj(cnpj).length !== 14}
+                      className="shrink-0 px-3"
+                    >
+                      {cnpjLoading
+                        ? <Loader2 className="h-4 w-4 animate-spin" />
+                        : <Search className="h-4 w-4" />}
+                    </Button>
+                  </div>
+                  {clientFound && (
+                    <p className="flex items-center gap-1.5 text-xs text-green-600 font-medium">
+                      <CheckCircle2 className="h-3.5 w-3.5" />
+                      {clientFound.source === "bling" ? "Encontrado na base Bling" : "Encontrado via BrasilAPI"}
+                      {clientFound.email && <span className="text-muted-foreground font-normal ml-1">· {clientFound.email}</span>}
+                    </p>
+                  )}
+                  {clientNotFound && (
+                    <p className="flex items-center gap-1.5 text-xs text-amber-600">
+                      <AlertCircle className="h-3.5 w-3.5" />
+                      CNPJ não encontrado — preencha o nome manualmente.
+                    </p>
+                  )}
+                </div>
+              )}
+
               <div className="space-y-1.5">
                 <Label htmlFor="customer_name">
                   {selectedType === "frota" ? "Empresa / Frota" : "Nome do Cliente"}
                 </Label>
                 <Input
                   id="customer_name"
-                  name="customer_name"
+                  value={customerName}
+                  onChange={(e) => setCustomerName(e.target.value)}
                   placeholder={selectedType === "frota" ? "Ex: Transportadora XYZ" : "Nome do cliente"}
                 />
               </div>
