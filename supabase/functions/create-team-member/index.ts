@@ -108,6 +108,33 @@ Deno.serve(async (req: Request): Promise<Response> => {
       );
     }
 
+    const body = await req.json();
+
+    // ── Reset-password action ─────────────────────────────────────────────────
+    if (body.action === "reset_password") {
+      const { userId } = body;
+      if (!userId) {
+        return new Response(
+          JSON.stringify({ success: false, error: "Missing userId" }),
+          { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } }
+        );
+      }
+      const { error: resetError } = await supabaseAdmin.auth.admin.updateUserById(userId, {
+        password: "Carbo@2026",
+      });
+      if (resetError) {
+        return new Response(
+          JSON.stringify({ success: false, error: resetError.message }),
+          { status: 500, headers: { "Content-Type": "application/json", ...corsHeaders } }
+        );
+      }
+      return new Response(
+        JSON.stringify({ success: true, message: "Senha redefinida para Carbo@2026" }),
+        { status: 200, headers: { "Content-Type": "application/json", ...corsHeaders } }
+      );
+    }
+    // ─────────────────────────────────────────────────────────────────────────
+
     const {
       email,
       fullName,
@@ -119,7 +146,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
       escopo,
       allowedInterfaces,
       platformUrl,
-    }: CreateMemberRequest = await req.json();
+    } = body as CreateMemberRequest;
 
     if (!email || !fullName || !department || !role || !platformUrl) {
       return new Response(
@@ -148,8 +175,8 @@ Deno.serve(async (req: Request): Promise<Response> => {
       );
     }
 
-    // Generate a random internal password (user never sees this)
-    const internalPassword = crypto.randomUUID() + "!Aa1";
+    // Senha padrão de primeiro acesso — o usuário deve alterar após o primeiro login
+    const internalPassword = "Carbo@2026";
 
     // Generate invite token for passwordless first-access link
     const { data: inviteToken, error: tokenError } = await supabaseAdmin.rpc("generate_invite_token");
