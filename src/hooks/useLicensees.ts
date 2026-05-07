@@ -17,20 +17,30 @@ export interface Licensee {
   address_city: string | null;
   address_state: string | null;
   address_zip: string | null;
-  coverage_cities: string[];
-  coverage_states: string[];
-  business_hours: Json;
+  coverage_cities: string[] | null;
+  coverage_states: string[] | null;
+  business_hours: Json | null;
   status: LicenseeStatus;
-  performance_score: number;
-  total_machines: number;
-  total_revenue: number;
+  performance_score: number | null;
+  total_machines: number | null;
+  total_revenue: number | null;
   contract_start_date: string | null;
   contract_end_date: string | null;
   notes: string | null;
-  metadata: Json;
+  metadata: Json | null;
   created_by: string | null;
   created_at: string;
   updated_at: string;
+  // Extended fields added via migration
+  responsavel: string | null;
+  instagram: string | null;
+  machines_1l: number | null;
+  machines_100ml: number | null;
+  tier: string | null;
+  acao: string | null;
+  observacoes: string | null;
+  current_level: string | null;
+  current_score: number | null;
 }
 
 export interface LicenseeInsert {
