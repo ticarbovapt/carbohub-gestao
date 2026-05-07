@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import { supabase } from "@/integrations/supabase/client";
 import { BoardLayout } from "@/components/layouts/BoardLayout";
 import {
   Users, Shield, Building2, Clock, Network, Mail, Loader2, CheckCheck,
@@ -36,7 +37,7 @@ import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
 import { useResendWelcomeEmail, useCreateTeamMember } from "@/hooks/useCreateTeamMember";
 import { useUpdateAllowedInterfaces } from "@/hooks/useTeamMembers";
-import { ALL_DEPARTMENTS } from "@/constants/departments";
+import { ALL_DEPARTMENTS, DEPARTMENT_LABELS } from "@/constants/departments";
 import { Checkbox } from "@/components/ui/checkbox";
 
 // ── Carbo role labels ────────────────────────────────────────────────────────
@@ -132,7 +133,11 @@ function MemberInfoModal({ member, profiles, teamMembers, onClose, canEdit, isMa
     if (!member) return;
     setFormName(member.full_name);
     setFormTitle(member.job_title || "");
-    setFormDept(member.department || "");
+    // OrgNode.department stores display values ("OPS", "Command"…) but the Select
+    // uses lowercase profile enum values ("ops", "command"…) — normalise here.
+    const rawDept = member.department || "";
+    const normalizedDept = DEPT_TO_PROFILE_DEPT[rawDept] ?? rawDept.toLowerCase();
+    setFormDept(normalizedDept);
     setFormLevel(member.hierarchy_level);
     const prof = profiles.find((p) => p.full_name?.toLowerCase().trim() === member.full_name.toLowerCase().trim());
     const email = (prof as any)?.email || "";
@@ -152,11 +157,16 @@ function MemberInfoModal({ member, profiles, teamMembers, onClose, canEdit, isMa
 
   const handleSave = async () => {
     if (!member) return;
+
+    // formDept is the profile enum value (lowercase, e.g. "ops").
+    // org_chart_nodes expects display values (e.g. "OPS"), so reverse-map here.
+    const orgDept = DEPARTMENT_LABELS[formDept] || formDept || null;
+
     await updateNode.mutateAsync({
       id: member.id,
       full_name:       formName,
       job_title:       formTitle || null,
-      department:      formDept || null,
+      department:      orgDept,
       hierarchy_level: formLevel,
       email:           formEmail || null,
       phone:           formPhone || null,
@@ -164,6 +174,24 @@ function MemberInfoModal({ member, profiles, teamMembers, onClose, canEdit, isMa
       assistant:       formAssistant,
       ...(isMasterAdmin ? { reports_to: formReportsTo || null } : {}),
     });
+
+    // Also persist relevant fields to the linked auth profile (profiles table)
+    const linked = teamMembers.find(
+      (m) => m.email && formEmail && m.email.toLowerCase() === formEmail.toLowerCase()
+    );
+    if (linked) {
+      const { error: profileUpdateError } = await supabase
+        .from("profiles")
+        .update({
+          full_name:  formName,
+          department: formDept as any,   // profile enum value (lowercase)
+        })
+        .eq("id", linked.id);
+      if (profileUpdateError) {
+        toast.error("Dados salvos no organograma, mas houve um erro ao atualizar o perfil: " + profileUpdateError.message);
+      }
+    }
+
     onUpdated();
     setEditing(false);
     onClose();
