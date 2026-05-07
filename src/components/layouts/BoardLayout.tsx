@@ -91,7 +91,14 @@ function QuickActionsMenu({ isAdmin, isCeo }: { isAdmin: boolean; isCeo: boolean
             className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm font-semibold text-foreground border border-border hover:border-primary/40 hover:bg-primary/5 transition-all"
           >
             <ClipboardList className="h-4 w-4 flex-shrink-0 text-primary" />
-            + Nova OP
+            + Nova Descarbonização
+          </button>
+          <button
+            onClick={() => { navigate("/orders/new"); setOpen(false); }}
+            className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+          >
+            <ShoppingCart className="h-4 w-4 flex-shrink-0" />
+            + Nova Venda
           </button>
           <button
             onClick={() => { navigate("/licensee/new"); setOpen(false); }}

@@ -232,7 +232,7 @@ export default function Orders() {
               </DropdownMenu>
 
               {(isManager || isAdmin || isCeo || isMasterAdmin || isAnyGestor) && (
-                <CarboButton onClick={() => navigate("/orders/new")}>
+                <CarboButton onClick={() => navigate("/meu-painel")}>
                   <Plus className="h-4 w-4 mr-1" />
                   Nova Venda
                 </CarboButton>
@@ -465,7 +465,7 @@ export default function Orders() {
                 (isManager || isAdmin || isCeo || isMasterAdmin || isAnyGestor)
                   ? {
                       label: "Nova Venda",
-                      onClick: () => navigate("/orders/new"),
+                      onClick: () => navigate("/meu-painel"),
                     }
                   : undefined
               }

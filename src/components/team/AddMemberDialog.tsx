@@ -10,6 +10,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Select,
   SelectContent,
@@ -19,6 +20,7 @@ import {
 } from "@/components/ui/select";
 import { UserPlus, Loader2, CheckCircle, Mail, User, Shield, Briefcase, Users, Store, Copy, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
 import { useCreateTeamMember } from "@/hooks/useCreateTeamMember";
 import { cn } from "@/lib/utils";
 import type { Database } from "@/integrations/supabase/types";
@@ -73,6 +75,14 @@ const ROLES: { value: AppRole; label: string; description: string }[] = [
   { value: "manager", label: "Gestor", description: "Gerenciamento de equipe e processos" },
 ];
 
+const CARBO_ROLE_OPTIONS = [
+  { value: "gestor_adm",      label: "Gestor ADM",            hint: "Equipe, Admin, Configurações" },
+  { value: "gestor_fin",      label: "Gestor Financeiro",     hint: "Financeiro, Relatórios" },
+  { value: "gestor_compras",  label: "Gestor Compras & Log.", hint: "Suprimentos, Logística" },
+  { value: "operador_fiscal", label: "Operador Fiscal",       hint: "NF-e, Faturamento" },
+  { value: "operador",        label: "Operador",              hint: "Produção, OS" },
+];
+
 interface AddMemberDialogProps {
   onMemberAdded?: () => void;
   defaultArea?: PlatformArea;
@@ -84,7 +94,8 @@ export function AddMemberDialog({ onMemberAdded, defaultArea = "carbo_ops", vari
   const [step, setStep] = useState<"area" | "form" | "success">("area");
   const [createdMember, setCreatedMember] = useState<{ username: string; email: string; setPasswordUrl?: string; emailSent?: boolean } | null>(null);
   const [selectedArea, setSelectedArea] = useState<PlatformArea>(defaultArea);
-  
+  const [selectedCarboRoles, setSelectedCarboRoles] = useState<string[]>([]);
+
   const createMember = useCreateTeamMember();
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -121,6 +132,21 @@ export function AddMemberDialog({ onMemberAdded, defaultArea = "carbo_ops", vari
         setPasswordUrl: result.setPasswordUrl,
         emailSent: result.emailSent,
       });
+
+      // Assign carbo_user_roles if selected
+      if (selectedArea === "carbo_ops" && selectedCarboRoles.length > 0) {
+        const rows = selectedCarboRoles.map((role) => ({
+          user_id: result.userId,
+          role: role as any,
+        }));
+        const { error: carboRolesError } = await supabase
+          .from("carbo_user_roles")
+          .insert(rows);
+        if (carboRolesError) {
+          toast.warning("Conta criada, mas erro ao atribuir funções: " + carboRolesError.message);
+        }
+      }
+
       setStep("success");
 
       if (result.emailSent) {
@@ -142,6 +168,7 @@ export function AddMemberDialog({ onMemberAdded, defaultArea = "carbo_ops", vari
       setStep("area");
       setCreatedMember(null);
       setSelectedArea(defaultArea);
+      setSelectedCarboRoles([]);
     }, 200);
   };
 
@@ -343,6 +370,40 @@ export function AddMemberDialog({ onMemberAdded, defaultArea = "carbo_ops", vari
                         className="h-11"
                       />
                     </div>
+
+                    <div className="col-span-2 space-y-2">
+                      <Label className="flex items-center gap-2">
+                        <Shield className="h-4 w-4 text-muted-foreground" />
+                        Funções de Acesso (módulos do Carbo Controle)
+                      </Label>
+                      <div className="grid grid-cols-1 gap-1.5 border border-border rounded-xl p-3 bg-muted/30">
+                        {CARBO_ROLE_OPTIONS.map((opt) => (
+                          <div key={opt.value} className="flex items-center gap-2.5">
+                            <Checkbox
+                              id={`cr-${opt.value}`}
+                              checked={selectedCarboRoles.includes(opt.value)}
+                              onCheckedChange={(checked) =>
+                                setSelectedCarboRoles((prev) =>
+                                  checked
+                                    ? [...prev, opt.value]
+                                    : prev.filter((r) => r !== opt.value)
+                                )
+                              }
+                            />
+                            <Label
+                              htmlFor={`cr-${opt.value}`}
+                              className="font-normal cursor-pointer text-sm leading-none"
+                            >
+                              <span className="font-medium">{opt.label}</span>
+                              <span className="text-muted-foreground ml-1.5 text-xs">— {opt.hint}</span>
+                            </Label>
+                          </div>
+                        ))}
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        Selecione as funções que este colaborador poderá exercer no sistema.
+                      </p>
+                    </div>
                   </>
                 )}
 
@@ -443,30 +504,66 @@ export function AddMemberDialog({ onMemberAdded, defaultArea = "carbo_ops", vari
                 <span className="text-sm font-medium">{createdMember?.email}</span>
               </div>
 
-              {/* Show invite link when email was NOT sent */}
-              {createdMember?.setPasswordUrl && !createdMember?.emailSent && (
+              {/* Always show invite link when available */}
+              {createdMember?.setPasswordUrl && (
                 <div className="border-t pt-4 mt-2">
                   <div className="flex items-center gap-2 mb-2">
-                    <AlertTriangle className="h-4 w-4 text-amber-500" />
-                    <span className="text-sm font-semibold text-amber-600">Link de Cadastro de Senha</span>
+                    {createdMember.emailSent ? (
+                      <CheckCircle className="h-4 w-4 text-emerald-500" />
+                    ) : (
+                      <AlertTriangle className="h-4 w-4 text-amber-500" />
+                    )}
+                    <span className={cn(
+                      "text-sm font-semibold",
+                      createdMember.emailSent ? "text-emerald-600" : "text-amber-600"
+                    )}>
+                      {createdMember.emailSent
+                        ? "Link de Acesso (e-mail enviado)"
+                        : "Link de Acesso (compartilhe manualmente)"}
+                    </span>
                   </div>
-                  <div className="flex items-center gap-2 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-lg p-3">
-                    <code className="font-mono text-xs text-amber-700 dark:text-amber-400 break-all flex-1">
+                  <div className={cn(
+                    "flex items-center gap-2 rounded-lg p-3 border",
+                    createdMember.emailSent
+                      ? "bg-emerald-50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-800"
+                      : "bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800"
+                  )}>
+                    <code className={cn(
+                      "font-mono text-xs break-all flex-1",
+                      createdMember.emailSent
+                        ? "text-emerald-700 dark:text-emerald-400"
+                        : "text-amber-700 dark:text-amber-400"
+                    )}>
                       {createdMember.setPasswordUrl}
                     </code>
                     <button
                       type="button"
-                      className="p-1.5 rounded-md hover:bg-amber-200/50 dark:hover:bg-amber-800/30 transition-colors flex-shrink-0"
+                      className={cn(
+                        "p-1.5 rounded-md transition-colors flex-shrink-0",
+                        createdMember.emailSent
+                          ? "hover:bg-emerald-200/50 dark:hover:bg-emerald-800/30"
+                          : "hover:bg-amber-200/50 dark:hover:bg-amber-800/30"
+                      )}
                       onClick={() => {
                         navigator.clipboard.writeText(createdMember.setPasswordUrl || "");
                         toast.success("Link copiado!");
                       }}
                     >
-                      <Copy className="h-4 w-4 text-amber-600" />
+                      <Copy className={cn(
+                        "h-4 w-4",
+                        createdMember.emailSent ? "text-emerald-600" : "text-amber-600"
+                      )} />
                     </button>
                   </div>
-                  <p className="text-xs text-amber-600 dark:text-amber-500 mt-2">
-                    Envie este link ao colaborador. Ele expira em 72 horas.
+                  <p className={cn(
+                    "text-xs mt-2",
+                    createdMember.emailSent
+                      ? "text-emerald-600 dark:text-emerald-500"
+                      : "text-amber-600 dark:text-amber-500"
+                  )}>
+                    {createdMember.emailSent
+                      ? "O e-mail foi enviado. Guarde este link como backup — expira em 72 horas."
+                      : "Envie este link ao colaborador. Ele expira em 72 horas."}
                   </p>
                 </div>
               )}

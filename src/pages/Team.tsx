@@ -39,6 +39,17 @@ import { useUpdateAllowedInterfaces } from "@/hooks/useTeamMembers";
 import { ALL_DEPARTMENTS } from "@/constants/departments";
 import { Checkbox } from "@/components/ui/checkbox";
 
+// ── Carbo role labels ────────────────────────────────────────────────────────
+const CARBO_ROLE_BADGE: Record<string, string> = {
+  ceo:             "CEO",
+  gestor_adm:      "Gestor ADM",
+  gestor_fin:      "Gestor Fin.",
+  gestor_compras:  "Gestor Compras",
+  operador_fiscal: "Op. Fiscal",
+  operador:        "Operador",
+  licensed_user:   "Licenciado",
+};
+
 // ── Mapeamento dept org_chart → profiles ────────────────────────────────────
 const DEPT_TO_PROFILE_DEPT: Record<string, string> = {
   Command: "command", OPS: "ops", Finance: "finance",
@@ -630,18 +641,137 @@ const Team = () => {
           </div>
         )}
 
-        {/* Tab row + Organograma button */}
-        <Tabs defaultValue="equipe" className="w-full">
+        {/* Tab row */}
+        <Tabs defaultValue="acesso" className="w-full">
           <div className="flex items-center gap-3">
             <TabsList>
-              <TabsTrigger value="equipe" className="gap-2">
-                <Users className="h-4 w-4" />
-                Equipe
+              <TabsTrigger value="acesso" className="gap-2">
+                <UserCheck className="h-4 w-4" />
+                Usuários com Acesso
+              </TabsTrigger>
+              <TabsTrigger value="organograma" className="gap-2">
+                <Network className="h-4 w-4" />
+                Organograma
               </TabsTrigger>
             </TabsList>
           </div>
 
-          <TabsContent value="equipe" className="space-y-6 mt-6">
+          {/* ── ABA: Usuários com Acesso ── */}
+          <TabsContent value="acesso" className="mt-6">
+            {membersLoading ? (
+              <div className="space-y-2">
+                {[...Array(5)].map((_, i) => (
+                  <Skeleton key={i} className="h-14 w-full rounded-lg" />
+                ))}
+              </div>
+            ) : approvedMembers.length === 0 ? (
+              <div className="py-12 text-center text-muted-foreground text-sm">
+                <UserCheck className="h-8 w-8 mx-auto mb-3 opacity-30" />
+                Nenhum usuário com acesso ativo.
+              </div>
+            ) : (
+              <div className="rounded-xl border overflow-hidden">
+                {/* Header */}
+                <div className="grid grid-cols-[1fr_auto_auto_auto] gap-4 items-center px-4 py-2.5 bg-muted/50 border-b text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                  <span>Colaborador</span>
+                  <span className="text-right w-24">Acesso</span>
+                  <span className="text-right w-40">Funções</span>
+                  <span className="w-16"></span>
+                </div>
+                {/* Rows */}
+                {approvedMembers.map((member) => (
+                  <div
+                    key={member.id}
+                    className="grid grid-cols-[1fr_auto_auto_auto] gap-4 items-center px-4 py-3 border-b last:border-b-0 hover:bg-muted/20 transition-colors"
+                  >
+                    {/* Name + dept */}
+                    <div className="min-w-0">
+                      <p className="font-medium text-sm truncate">{member.full_name || "—"}</p>
+                      <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                        {member.email && (
+                          <span className="text-xs text-muted-foreground truncate">{member.email}</span>
+                        )}
+                        {member.department && (
+                          <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4">
+                            {member.department}
+                          </Badge>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* app roles */}
+                    <div className="flex gap-1 w-24 justify-end flex-wrap">
+                      {member.roles.length > 0 ? (
+                        member.roles.map((r) => (
+                          <Badge key={r} variant="secondary" className="text-[10px] px-1.5 py-0 h-4 capitalize">
+                            {r}
+                          </Badge>
+                        ))
+                      ) : (
+                        <span className="text-xs text-muted-foreground">—</span>
+                      )}
+                    </div>
+
+                    {/* carbo_roles */}
+                    <div className="flex gap-1 w-40 justify-end flex-wrap">
+                      {member.carbo_roles.length > 0 ? (
+                        member.carbo_roles.map((r) => (
+                          <Badge
+                            key={r}
+                            className="text-[10px] px-1.5 py-0 h-4 bg-primary/10 text-primary border-primary/20 hover:bg-primary/15"
+                            variant="outline"
+                          >
+                            {CARBO_ROLE_BADGE[r] ?? r}
+                          </Badge>
+                        ))
+                      ) : (
+                        <span className="text-xs text-muted-foreground">—</span>
+                      )}
+                    </div>
+
+                    {/* Actions */}
+                    <div className="w-16 flex justify-end">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 px-2 text-xs"
+                        onClick={() => {
+                          // Match org node by email to open MemberInfoModal
+                          const node = profiles.find(
+                            (n) => n.email === member.email
+                          );
+                          if (node) {
+                            setSelectedMember(node);
+                          } else {
+                            // Fallback: construct minimal OrgNode from TeamMember
+                            setSelectedMember({
+                              id: member.id,
+                              full_name: member.full_name || "—",
+                              avatar_url: member.avatar_url,
+                              hierarchy_level: 5,
+                              reports_to: null,
+                              department: member.department as string | null,
+                              job_title: null,
+                              job_category: null,
+                              carbo_role: null,
+                              email: member.email ?? null,
+                              children: [],
+                            });
+                          }
+                        }}
+                      >
+                        <Pencil className="h-3 w-3 mr-1" />
+                        Editar
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </TabsContent>
+
+          {/* ── ABA: Organograma ── */}
+          <TabsContent value="organograma" className="space-y-6 mt-6">
 
             {/* Stats row */}
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -781,6 +911,7 @@ const Team = () => {
             </div>
 
           </TabsContent>
+
         </Tabs>
       </div>
 

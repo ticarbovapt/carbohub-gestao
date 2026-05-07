@@ -14,6 +14,7 @@ export interface TeamMember {
   status: string;
   requested_role: string | null;
   roles: AppRole[];
+  carbo_roles: string[];
   email?: string;
   username: string | null;
   password_must_change: boolean;
@@ -42,12 +43,23 @@ export function useTeamMembers() {
 
       if (rolesError) throw rolesError;
 
+      // Fetch carbo_user_roles
+      const { data: carboRolesData } = await supabase
+        .from("carbo_user_roles")
+        .select("user_id, role");
+
       // Map roles to users
       const rolesByUser = roles?.reduce((acc, r) => {
         if (!acc[r.user_id]) acc[r.user_id] = [];
         acc[r.user_id].push(r.role);
         return acc;
       }, {} as Record<string, AppRole[]>) || {};
+
+      const carboRolesByUser = (carboRolesData || []).reduce((acc, r) => {
+        if (!acc[r.user_id]) acc[r.user_id] = [];
+        acc[r.user_id].push(r.role as string);
+        return acc;
+      }, {} as Record<string, string[]>);
 
       const members: TeamMember[] = (profiles || []).map((p) => ({
         id: p.id,
@@ -57,6 +69,7 @@ export function useTeamMembers() {
         status: p.status || "pending",
         requested_role: p.requested_role,
         roles: rolesByUser[p.id] || [],
+        carbo_roles: carboRolesByUser[p.id] || [],
         email: (p as any).email || undefined,
         username: p.username || null,
         password_must_change: p.password_must_change || false,
