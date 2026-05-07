@@ -16,6 +16,8 @@ export type ViagemStatus =
   | "concluido"
   | "cancelado";
 
+export type PCStatus = "aberta" | "enviada" | "aprovada" | "reprovada" | "encerrada";
+
 export type MeioTransporte = "aviao" | "onibus" | "carro_proprio" | "carro_empresa" | "outro";
 
 export type DespesaCategoria =
@@ -63,7 +65,27 @@ export interface ViagemDespesa {
   comprovante_url: string | null;
   cliente_identificado: string | null;
   lancado_por: string;
+  is_devolucao: boolean;
   created_at: string;
+}
+
+export interface ViagemPC {
+  id: string;
+  solicitacao_id: string;
+  total_despesas: number;
+  adiantamento_recebido: number;
+  saldo: number;
+  status: PCStatus;
+  aprovado_por: string | null;
+  aprovado_em: string | null;
+  observacoes: string | null;
+  motivo_reprova_categoria: string | null;
+  motivo_reprova_detalhe: string | null;
+  submetido_em: string | null;
+  reprovado_por: string | null;
+  reprovado_em: string | null;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface CreateViagemInput {
@@ -86,9 +108,10 @@ export interface LancarDespesaInput {
   data_despesa: string;
   comprovante_url?: string;
   cliente_identificado?: string;
+  is_devolucao?: boolean;
 }
 
-// ─── Hooks ─────────────────────────────────────────────────────────────────
+// ─── Hooks — Solicitações ───────────────────────────────────────────────────
 
 /** Lista solicitações — o usuário vê as próprias; gestores/admin veem todas */
 export function useViagens(filter?: { status?: ViagemStatus }) {
@@ -189,7 +212,7 @@ export function useViagemAprovacoes(solicitacaoId: string | null) {
   });
 }
 
-/** Aprovar ou reprovar uma solicitação */
+/** Aprovar ou reprovar uma solicitação de viagem */
 export function useAprovarViagem() {
   const queryClient = useQueryClient();
   const { user } = useAuth();
@@ -208,7 +231,6 @@ export function useAprovarViagem() {
       comentario?: string;
       proximoStatus: ViagemStatus;
     }) => {
-      // Upsert aprovação
       const { error: approvalError } = await (supabase as any)
         .from("viagem_aprovacoes")
         .upsert({
@@ -220,7 +242,6 @@ export function useAprovarViagem() {
         }, { onConflict: "solicitacao_id,etapa" });
       if (approvalError) throw approvalError;
 
-      // Atualizar status da solicitação
       const { error: statusError } = await (supabase as any)
         .from("viagem_solicitacoes")
         .update({ status: proximoStatus })
@@ -236,6 +257,8 @@ export function useAprovarViagem() {
     onError: (e: any) => toast.error(e.message || "Erro ao registrar decisão"),
   });
 }
+
+// ─── Hooks — Despesas ───────────────────────────────────────────────────────
 
 /** Lista despesas de uma viagem */
 export function useViagemDespesas(solicitacaoId: string | null) {
@@ -254,23 +277,189 @@ export function useViagemDespesas(solicitacaoId: string | null) {
   });
 }
 
-/** Lançar despesa */
+/** Lançar despesa — retorna o registro criado para permitir upload de comprovante */
 export function useLancarDespesa() {
   const queryClient = useQueryClient();
   const { user } = useAuth();
 
   return useMutation({
     mutationFn: async (input: LancarDespesaInput) => {
-      const { error } = await (supabase as any)
+      const { data, error } = await (supabase as any)
         .from("viagem_despesas")
-        .insert({ ...input, lancado_por: user!.id });
+        .insert({ ...input, lancado_por: user!.id })
+        .select()
+        .single();
       if (error) throw error;
+      return data as ViagemDespesa;
     },
     onSuccess: (_, { solicitacao_id }) => {
       queryClient.invalidateQueries({ queryKey: ["viagem-despesas", solicitacao_id] });
       toast.success("Despesa lançada!");
     },
     onError: (e: any) => toast.error(e.message || "Erro ao lançar despesa"),
+  });
+}
+
+/** Remover despesa */
+export function useDeleteDespesa() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ id, solicitacaoId }: { id: string; solicitacaoId: string }) => {
+      const { error } = await (supabase as any)
+        .from("viagem_despesas")
+        .delete()
+        .eq("id", id);
+      if (error) throw error;
+      return solicitacaoId;
+    },
+    onSuccess: (solicitacaoId) => {
+      queryClient.invalidateQueries({ queryKey: ["viagem-despesas", solicitacaoId] });
+      toast.success("Despesa removida.");
+    },
+    onError: (e: any) => toast.error(e.message || "Erro ao remover despesa"),
+  });
+}
+
+// ─── Hooks — Prestação de Contas ────────────────────────────────────────────
+
+/** Busca ou cria automaticamente a PC de uma viagem */
+export function usePrestacaoContas(solicitacaoId: string | null) {
+  return useQuery({
+    queryKey: ["viagem-pc", solicitacaoId],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from("viagem_prestacao_contas")
+        .select("*")
+        .eq("solicitacao_id", solicitacaoId)
+        .maybeSingle();
+      if (error) throw error;
+      return data as ViagemPC | null;
+    },
+    enabled: !!solicitacaoId,
+  });
+}
+
+/** Cria registro de prestação de contas */
+export function useCreatePC() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ solicitacaoId, adiantamento }: { solicitacaoId: string; adiantamento: number }) => {
+      const { data, error } = await (supabase as any)
+        .from("viagem_prestacao_contas")
+        .insert({ solicitacao_id: solicitacaoId, adiantamento_recebido: adiantamento, status: "aberta" })
+        .select()
+        .single();
+      if (error) throw error;
+      return data as ViagemPC;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["viagem-pc", data.solicitacao_id] });
+    },
+    onError: (e: any) => toast.error(e.message || "Erro ao criar prestação de contas"),
+  });
+}
+
+/** Envia PC para aprovação */
+export function useSubmitPC() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ pcId, totalDespesas }: { pcId: string; totalDespesas: number }) => {
+      const { error } = await (supabase as any)
+        .from("viagem_prestacao_contas")
+        .update({ status: "enviada", submetido_em: new Date().toISOString(), total_despesas: totalDespesas })
+        .eq("id", pcId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["viagem-pc"] });
+      toast.success("Prestação de contas enviada para aprovação!");
+    },
+    onError: (e: any) => toast.error(e.message || "Erro ao enviar PC"),
+  });
+}
+
+/** Aprovar PC */
+export function useAprovarPC() {
+  const queryClient = useQueryClient();
+  const { user } = useAuth();
+
+  return useMutation({
+    mutationFn: async (pcId: string) => {
+      const { error } = await (supabase as any)
+        .from("viagem_prestacao_contas")
+        .update({ status: "aprovada", aprovado_por: user!.id, aprovado_em: new Date().toISOString() })
+        .eq("id", pcId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["viagem-pc"] });
+      toast.success("Prestação de contas aprovada!");
+    },
+    onError: (e: any) => toast.error(e.message || "Erro ao aprovar PC"),
+  });
+}
+
+/** Reprovar PC com motivo */
+export function useReprovarPC() {
+  const queryClient = useQueryClient();
+  const { user } = useAuth();
+
+  return useMutation({
+    mutationFn: async ({
+      pcId,
+      categoria,
+      detalhe,
+    }: {
+      pcId: string;
+      categoria: string;
+      detalhe: string;
+    }) => {
+      const { error } = await (supabase as any)
+        .from("viagem_prestacao_contas")
+        .update({
+          status: "reprovada",
+          motivo_reprova_categoria: categoria,
+          motivo_reprova_detalhe: detalhe,
+          reprovado_por: user!.id,
+          reprovado_em: new Date().toISOString(),
+        })
+        .eq("id", pcId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["viagem-pc"] });
+      toast.success("Prestação de contas reprovada. O colaborador será notificado.");
+    },
+    onError: (e: any) => toast.error(e.message || "Erro ao reprovar PC"),
+  });
+}
+
+/** Reabrir PC reprovada para correção */
+export function useReopenPC() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (pcId: string) => {
+      const { error } = await (supabase as any)
+        .from("viagem_prestacao_contas")
+        .update({
+          status: "aberta",
+          motivo_reprova_categoria: null,
+          motivo_reprova_detalhe: null,
+          reprovado_por: null,
+          reprovado_em: null,
+        })
+        .eq("id", pcId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["viagem-pc"] });
+      toast.success("Prestação de contas reaberta para correção.");
+    },
+    onError: (e: any) => toast.error(e.message || "Erro ao reabrir PC"),
   });
 }
 
@@ -298,6 +487,40 @@ export const STATUS_COLOR: Record<ViagemStatus, string> = {
   em_andamento:         "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300",
   concluido:            "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300",
   cancelado:            "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-400",
+};
+
+export const PC_STATUS_LABEL: Record<PCStatus, string> = {
+  aberta:   "Em Preenchimento",
+  enviada:  "Aguardando Aprovação",
+  aprovada: "Aprovada",
+  reprovada:"Reprovada",
+  encerrada:"Encerrada",
+};
+
+export const PC_STATUS_COLOR: Record<PCStatus, string> = {
+  aberta:   "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300",
+  enviada:  "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300",
+  aprovada: "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300",
+  reprovada:"bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300",
+  encerrada:"bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-400",
+};
+
+export const MOTIVO_REPROVA_OPTIONS = [
+  { value: "falta_comprovante",       label: "Falta de comprovante" },
+  { value: "valor_acima_limite",      label: "Valor acima do limite da política" },
+  { value: "categoria_incorreta",     label: "Categoria incorreta" },
+  { value: "despesa_nao_autorizada",  label: "Despesa não autorizada" },
+  { value: "descricao_insuficiente",  label: "Descrição insuficiente" },
+  { value: "outros",                  label: "Outros" },
+];
+
+export const POLITICA_TIPS: Partial<Record<DespesaCategoria, string>> = {
+  hospedagem:               "Limite: R$ 200/noite. Acima disso requer aprovação adicional.",
+  alimentacao:              "Limite: R$ 100/dia para refeições pessoais.",
+  representacao:            "Requer identificação do cliente/parceiro. Limite: R$ 500 por evento.",
+  alimentacao_representacao:"Limite: R$ 150/dia. Obrigatório informar o cliente ou parceiro.",
+  combustivel:              "Somente abastecimentos com nota fiscal. Limite: R$ 500 por viagem.",
+  passagem:                 "Escolha sempre a opção mais econômica. Compra em cima da hora requer justificativa.",
 };
 
 export const TRANSPORTE_LABEL: Record<MeioTransporte, string> = {

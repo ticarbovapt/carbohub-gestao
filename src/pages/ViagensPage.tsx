@@ -30,7 +30,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Plane, Plus, Calendar, MapPin, Loader2, Clock, CheckCircle, AlertTriangle, Users } from "lucide-react";
+import { Plane, Plus, Calendar, MapPin, Loader2, Clock, CheckCircle, AlertTriangle, Users, FileText } from "lucide-react";
 import { toast } from "sonner";
 import {
   useViagens,
@@ -41,9 +41,11 @@ import {
   type CreateViagemInput,
   type MeioTransporte,
   type ViagemStatus,
+  type ViagemSolicitacao,
 } from "@/hooks/useViagens";
 import { useAuth } from "@/contexts/AuthContext";
 import { cn } from "@/lib/utils";
+import { PrestacaoContasDialog } from "@/components/viagens/PrestacaoContasDialog";
 
 // ─── Status badge ──────────────────────────────────────────────────────────
 
@@ -222,7 +224,17 @@ function CreateViagemDialog({ open, onOpenChange }: { open: boolean; onOpenChang
 
 // ─── Viagens Table ─────────────────────────────────────────────────────────
 
-function ViagensTable({ data, loading }: { data: ReturnType<typeof useViagens>["data"]; loading: boolean }) {
+const PC_ELIGIBLE_STATUSES: ViagemStatus[] = ["aprovado", "em_andamento", "concluido"];
+
+function ViagensTable({
+  data,
+  loading,
+  onOpenPC,
+}: {
+  data: ReturnType<typeof useViagens>["data"];
+  loading: boolean;
+  onOpenPC: (v: ViagemSolicitacao) => void;
+}) {
   if (loading) {
     return (
       <div className="py-12 text-center text-muted-foreground text-sm flex flex-col items-center gap-2">
@@ -251,11 +263,12 @@ function ViagensTable({ data, loading }: { data: ReturnType<typeof useViagens>["
           <TableHead>Duração</TableHead>
           <TableHead>Estimativa</TableHead>
           <TableHead>Status</TableHead>
+          <TableHead className="w-[80px]"></TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
         {data.map((v) => (
-          <TableRow key={v.id} className="hover:bg-muted/20 cursor-pointer">
+          <TableRow key={v.id} className="hover:bg-muted/20">
             <TableCell>
               <div className="flex items-center gap-1.5">
                 <MapPin className="h-3.5 w-3.5 text-muted-foreground" />
@@ -285,6 +298,19 @@ function ViagensTable({ data, loading }: { data: ReturnType<typeof useViagens>["
             <TableCell>
               <StatusBadge status={v.status} />
             </TableCell>
+            <TableCell>
+              {PC_ELIGIBLE_STATUSES.includes(v.status) && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-7 px-2 text-xs gap-1"
+                  onClick={() => onOpenPC(v)}
+                >
+                  <FileText className="h-3 w-3" />
+                  PC
+                </Button>
+              )}
+            </TableCell>
           </TableRow>
         ))}
       </TableBody>
@@ -296,6 +322,7 @@ function ViagensTable({ data, loading }: { data: ReturnType<typeof useViagens>["
 
 export default function ViagensPage() {
   const [createOpen, setCreateOpen] = useState(false);
+  const [pcViagem, setPcViagem] = useState<ViagemSolicitacao | null>(null);
 
   const { data: todas,      isLoading: loadingTodas }      = useViagens();
   const { data: pendentes,  isLoading: loadingPendentes }  = useViagens({ status: "pendente_gestor" });
@@ -402,19 +429,25 @@ export default function ViagensPage() {
             </div>
 
             <TabsContent value="todas" className="m-0">
-              <ViagensTable data={todas} loading={loadingTodas} />
+              <ViagensTable data={todas} loading={loadingTodas} onOpenPC={setPcViagem} />
             </TabsContent>
             <TabsContent value="pendentes" className="m-0">
-              <ViagensTable data={aguardando} loading={loadingPendentes} />
+              <ViagensTable data={aguardando} loading={loadingPendentes} onOpenPC={setPcViagem} />
             </TabsContent>
             <TabsContent value="andamento" className="m-0">
-              <ViagensTable data={emAndamento} loading={loadingAndamento} />
+              <ViagensTable data={emAndamento} loading={loadingAndamento} onOpenPC={setPcViagem} />
             </TabsContent>
           </Tabs>
         </CarboCard>
       </div>
 
       <CreateViagemDialog open={createOpen} onOpenChange={setCreateOpen} />
+
+      <PrestacaoContasDialog
+        viagem={pcViagem}
+        open={!!pcViagem}
+        onOpenChange={(v) => { if (!v) setPcViagem(null); }}
+      />
     </BoardLayout>
   );
 }
