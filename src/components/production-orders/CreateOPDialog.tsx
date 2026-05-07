@@ -45,12 +45,12 @@ interface CreateOPDialogProps {
   onOpenChange: (open: boolean) => void;
 }
 
-/** Gera número de OP no formato OP-YYYYMMDD-XXXX */
-function generateOpNumber(): string {
+/** Retorna o período AAAÁMM atual */
+function currentPeriod(): string {
   const now = new Date();
-  const date = now.toISOString().slice(0, 10).replace(/-/g, "");
-  const rand = Math.floor(1000 + Math.random() * 9000);
-  return `OP-${date}-${rand}`;
+  const yyyy = now.getFullYear();
+  const mm = String(now.getMonth() + 1).padStart(2, "0");
+  return `${yyyy}${mm}`;
 }
 
 export function CreateOPDialog({ open, onOpenChange }: CreateOPDialogProps) {
@@ -84,7 +84,7 @@ export function CreateOPDialog({ open, onOpenChange }: CreateOPDialogProps) {
         // Required fields — existing schema
         product_id: data.product_id,
         product_code: product.product_code,
-        op_number: generateOpNumber(),
+        op_number: "", // Sobrescrito pelo trigger BEFORE INSERT (generate_op_number)
         quantity: data.planned_quantity,
         status: "rascunho",
         type: data.demand_source || "pcp_manual",
@@ -124,9 +124,9 @@ export function CreateOPDialog({ open, onOpenChange }: CreateOPDialogProps) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedProductId]);
 
-  // Preview do número de OP — gerado a partir do código do produto + data atual
+  // Preview do número de OP — formato real gerado pelo trigger do banco
   const opPreview = selectedProduct
-    ? `OP-${selectedProduct.product_code}-${new Date().toISOString().slice(0, 10).replace(/-/g, "")}`
+    ? `OP-${selectedProduct.product_code}-${currentPeriod()}-XXXX`
     : null;
 
   return (
