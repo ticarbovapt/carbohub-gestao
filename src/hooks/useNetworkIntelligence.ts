@@ -78,6 +78,11 @@ export const BRAZIL_CITIES_COORDS: Record<string, [number, number]> = {
   "Osasco|SP":             [-23.5329, -46.7919],
   "São Bernardo do Campo|SP": [-23.6944, -46.5650],
   "Santo André|SP":        [-23.6639, -46.5383],
+  "Diadema|SP":            [-23.6861, -46.6228],
+  "Pirituba|SP":           [-23.4989, -46.7219],
+  "Mooca|SP":              [-23.5599, -46.5889],
+  "Tupã|SP":               [-21.9336, -50.5115],
+  "São José dos Campos|SP": [-23.1794, -45.8869],
   // RN
   "Natal|RN":              [-5.7945, -35.2110],
   "Parnamirim|RN":         [-5.9144, -35.2640],
@@ -93,28 +98,36 @@ export const BRAZIL_CITIES_COORDS: Record<string, [number, number]> = {
   "Caruaru|PE":            [-8.2760, -35.9763],
   "Petrolina|PE":          [-9.3989, -40.5001],
   "Olinda|PE":             [-8.0089, -34.8536],
+  "Garanhuns|PE":          [-8.8907,  -36.4966],
+  "Fernando de Noronha|PE": [-3.8567, -32.4241],
   // MG
   "Belo Horizonte|MG":     [-19.9167, -43.9345],
   "Uberlândia|MG":         [-18.9186, -48.2772],
   "Contagem|MG":           [-19.9317, -44.0536],
   "Montes Claros|MG":      [-16.7286, -43.8611],
+  "Muriaé|MG":             [-21.1294, -42.3700],
+  "Governador Valadares|MG": [-18.8514, -41.9494],
+  "Araguari|MG":           [-18.6484, -48.1859],
   // PR
   "Curitiba|PR":           [-25.4284, -49.2733],
   "Maringá|PR":            [-23.4205, -51.9333],
   "Londrina|PR":           [-23.3045, -51.1696],
   "Cascavel|PR":           [-24.9578, -53.4596],
+  "Araucária|PR":          [-25.5845, -49.4114],
   // PI
   "Teresina|PI":           [-5.0920, -42.8038],
   "Parnaíba|PI":           [-2.9058, -41.7769],
   // CE
   "Fortaleza|CE":          [-3.7319, -38.5267],
   "Juazeiro do Norte|CE":  [-7.2133, -39.3153],
+  "Itaitinga|CE":          [-4.0058,  -38.5275],
   // MA
   "São Luís|MA":           [-2.5297, -44.3028],
   // SC
   "Florianópolis|SC":      [-27.5954, -48.5480],
   "Joinville|SC":          [-26.3045, -48.8457],
   "Blumenau|SC":           [-26.9195, -49.0661],
+  "Tubarão|SC":            [-28.4679, -49.0053],
   // RS
   "Porto Alegre|RS":       [-30.0346, -51.2177],
   "Caxias do Sul|RS":      [-29.1678, -51.1794],
