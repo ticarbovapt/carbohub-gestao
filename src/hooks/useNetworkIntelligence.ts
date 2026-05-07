@@ -225,7 +225,7 @@ export function useNetworkMap() {
       // Fetch ALL machines — lat/long may be null in DB, we apply city fallback below
       const { data: machines, error } = await (supabase as any)
         .from("machines")
-        .select("id, machine_id, model, machine_type, latitude, longitude, location_city, location_state, status, installation_date, licensee_id");
+        .select("id, machine_id, model, latitude, longitude, location_city, location_state, status, installation_date, licensee_id");
 
       if (error) throw error;
       if (!machines || machines.length === 0) return [];
@@ -268,7 +268,7 @@ export function useNetworkMap() {
           id: m.id,
           machine_id: m.machine_id,
           model: m.model,
-          machine_type: m.machine_type,
+          machine_type: null,
           latitude: lat,
           longitude: lng,
           location_city: m.location_city,
@@ -466,7 +466,7 @@ export function useNetworkStats() {
       // Parallel queries
       const [licenseeRes, machineRes, territoryRes] = await Promise.all([
         (supabase as any).from("licensees").select("id, current_score, status"),
-        (supabase as any).from("machines").select("id, status, location_state, machine_type"),
+        (supabase as any).from("machines").select("id, status, location_state"),
         (supabase as any).from("territories").select("id"),
       ]);
 
