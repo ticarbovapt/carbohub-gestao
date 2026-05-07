@@ -180,15 +180,30 @@ function MemberInfoModal({ member, profiles, teamMembers, onClose, canEdit, isMa
       (m) => m.email && formEmail && m.email.toLowerCase() === formEmail.toLowerCase()
     );
     if (linked) {
+      // Resolve manager_user_id: find the profile whose org_chart_node matches formReportsTo
+      let managerProfileId: string | null = null;
+      if (isMasterAdmin && formReportsTo) {
+        const managerNode = (profiles as any[]).find((p: any) => p.id === formReportsTo);
+        const managerLinked = managerNode?.email
+          ? teamMembers.find((m) => m.email?.toLowerCase() === managerNode.email.toLowerCase())
+          : null;
+        managerProfileId = managerLinked?.id || null;
+      }
+
       const { error: profileUpdateError } = await supabase
         .from("profiles")
         .update({
           full_name:  formName,
           department: formDept as any,   // profile enum value (lowercase)
-        })
+          phone:      formPhone || null,
+          funcao:     formTitle || null,
+          ...(isMasterAdmin ? { manager_user_id: managerProfileId } : {}),
+        } as any)
         .eq("id", linked.id);
       if (profileUpdateError) {
         toast.error("Dados salvos no organograma, mas houve um erro ao atualizar o perfil: " + profileUpdateError.message);
+      } else {
+        toast.success("Colaborador atualizado!");
       }
     }
 
