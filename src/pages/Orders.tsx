@@ -31,6 +31,9 @@ import {
   FileSpreadsheet,
   FileText,
   Printer,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
 } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -87,6 +90,27 @@ export default function Orders() {
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<CarbozeOrder | null>(null);
 
+  // Sorting
+  type SortCol = "order_number" | "created_at" | "customer_name" | "vendedor_name" | "total" | "status";
+  const [sortCol, setSortCol] = useState<SortCol>("created_at");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+
+  const handleSort = (col: SortCol) => {
+    if (sortCol === col) {
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setSortCol(col);
+      setSortDir("asc");
+    }
+  };
+
+  const SortIcon = ({ col }: { col: SortCol }) => {
+    if (sortCol !== col) return <ArrowUpDown className="h-3.5 w-3.5 ml-1 text-muted-foreground/50" />;
+    return sortDir === "asc"
+      ? <ArrowUp className="h-3.5 w-3.5 ml-1 text-primary" />
+      : <ArrowDown className="h-3.5 w-3.5 ml-1 text-primary" />;
+  };
+
   const queryClient = useQueryClient();
   const { data: orders = [], isLoading, isRefetching } = useOrders(statusFilter);
   const { data: allOrders = [] } = useOrders("all");
@@ -141,6 +165,25 @@ export default function Orders() {
       );
     });
   }, [orders, searchQuery, statusFilter, typeFilter, productFilter, vendedorFilter, clienteFilter, dateFrom, dateTo]);
+
+  // ── Sorted orders ────────────────────────────────────────────────────────
+  const sortedOrders = useMemo(() => {
+    return [...filteredOrders].sort((a, b) => {
+      let va: string | number = "";
+      let vb: string | number = "";
+      switch (sortCol) {
+        case "order_number":  va = a.order_number;      vb = b.order_number;      break;
+        case "created_at":    va = a.created_at;        vb = b.created_at;        break;
+        case "customer_name": va = a.customer_name;     vb = b.customer_name;     break;
+        case "vendedor_name": va = a.vendedor_name ?? ""; vb = b.vendedor_name ?? ""; break;
+        case "total":         va = Number(a.total);     vb = Number(b.total);     break;
+        case "status":        va = a.status;            vb = b.status;            break;
+      }
+      if (va < vb) return sortDir === "asc" ? -1 : 1;
+      if (va > vb) return sortDir === "asc" ? 1 : -1;
+      return 0;
+    });
+  }, [filteredOrders, sortCol, sortDir]);
 
   // ── Export helpers ────────────────────────────────────────────────────────
   const buildExportRows = () =>
@@ -475,22 +518,46 @@ export default function Orders() {
           <CarboTable>
             <CarboTableHeader>
               <CarboTableRow>
-                <CarboTableHead>Pedido</CarboTableHead>
+                <CarboTableHead>
+                  <button onClick={() => handleSort("order_number")} className="flex items-center hover:text-foreground transition-colors">
+                    Pedido <SortIcon col="order_number" />
+                  </button>
+                </CarboTableHead>
                 <CarboTableHead>NF</CarboTableHead>
                 <CarboTableHead>Produto</CarboTableHead>
                 <CarboTableHead>Tipo</CarboTableHead>
-                <CarboTableHead>Vendedor</CarboTableHead>
-                <CarboTableHead>Cliente</CarboTableHead>
-                <CarboTableHead>Data</CarboTableHead>
+                <CarboTableHead>
+                  <button onClick={() => handleSort("vendedor_name")} className="flex items-center hover:text-foreground transition-colors">
+                    Vendedor <SortIcon col="vendedor_name" />
+                  </button>
+                </CarboTableHead>
+                <CarboTableHead>
+                  <button onClick={() => handleSort("customer_name")} className="flex items-center hover:text-foreground transition-colors">
+                    Cliente <SortIcon col="customer_name" />
+                  </button>
+                </CarboTableHead>
+                <CarboTableHead>
+                  <button onClick={() => handleSort("created_at")} className="flex items-center hover:text-foreground transition-colors">
+                    Data <SortIcon col="created_at" />
+                  </button>
+                </CarboTableHead>
                 <CarboTableHead className="text-center">Qtd</CarboTableHead>
-                <CarboTableHead>Total</CarboTableHead>
-                <CarboTableHead>Status</CarboTableHead>
+                <CarboTableHead>
+                  <button onClick={() => handleSort("total")} className="flex items-center hover:text-foreground transition-colors">
+                    Total <SortIcon col="total" />
+                  </button>
+                </CarboTableHead>
+                <CarboTableHead>
+                  <button onClick={() => handleSort("status")} className="flex items-center hover:text-foreground transition-colors">
+                    Status <SortIcon col="status" />
+                  </button>
+                </CarboTableHead>
                 {isAdmin && <CarboTableHead className="w-10">Editar</CarboTableHead>}
                 <CarboTableHead className="w-10"></CarboTableHead>
               </CarboTableRow>
             </CarboTableHeader>
             <CarboTableBody>
-              {filteredOrders.map((order) => {
+              {sortedOrders.map((order) => {
                 const items = Array.isArray(order.items) ? (order.items as unknown as OrderItem[]) : [];
                 const totalQuantity = items.reduce((sum, item) => sum + (item.quantity || 0), 0);
                 const orderType = order.order_type || 'spot';
