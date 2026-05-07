@@ -214,7 +214,7 @@ function StockRiskBadge({ product, hubStocks }: { product: MrpProduct; hubStocks
 }
 
 export default function MrpProducts() {
-  const { isAdmin, isCeo } = useAuth();
+  const { isAdmin, isCeo, isAnyGestor } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const { data: products = [], isLoading } = useMrpProducts();
   const { data: warehouseStockMap = {} } = useWarehouseStockByProduct();
@@ -228,7 +228,7 @@ export default function MrpProducts() {
   // Detecta ?bom=1 vindo do sidebar
   const bomView = searchParams.get("bom") === "1";
 
-  const canEdit = isAdmin || isCeo;
+  const canEdit = isAdmin || isCeo || isAnyGestor;
 
   const filtered = products.filter(p => {
     if (categoryFilter !== "all" && p.category !== categoryFilter) return false;
