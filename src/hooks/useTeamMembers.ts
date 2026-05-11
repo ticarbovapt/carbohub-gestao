@@ -147,7 +147,37 @@ export function useUpdateUserRole() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["team-members"] });
+      toast.success("Nível de acesso atualizado!");
     },
+    onError: (e: Error) => toast.error("Erro ao atualizar acesso: " + e.message),
+  });
+}
+
+/** Substitui TODOS os carbo_roles do usuário (delete + insert atomicamente) */
+export function useReplaceCarboRoles() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ userId, roles }: { userId: string; roles: string[] }) => {
+      // Remove todos os roles atuais do usuário
+      const { error: delError } = await supabase
+        .from("carbo_user_roles")
+        .delete()
+        .eq("user_id", userId);
+      if (delError) throw delError;
+      // Insere os novos roles (pode ser array vazio — resultado: sem roles)
+      if (roles.length > 0) {
+        const rows = roles.map((role) => ({ user_id: userId, role }));
+        const { error: insError } = await (supabase as any)
+          .from("carbo_user_roles")
+          .insert(rows);
+        if (insError) throw insError;
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["team-members"] });
+      toast.success("Funções de acesso atualizadas!");
+    },
+    onError: (e: Error) => toast.error("Erro ao atualizar funções: " + e.message),
   });
 }
 

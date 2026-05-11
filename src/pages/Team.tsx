@@ -12,6 +12,7 @@ import { useTeamMembers, TeamMember } from "@/hooks/useTeamMembers";
 import { useNavigate } from "react-router-dom";
 import { AddMemberDialog } from "@/components/team/AddMemberDialog";
 import { DeleteMemberDialog } from "@/components/team/DeleteMemberDialog";
+import { AccessConfigDialog } from "@/components/team/AccessConfigDialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -547,6 +548,7 @@ const Team = () => {
   const navigate = useNavigate();
 
   const [selectedMember, setSelectedMember] = useState<OrgNode | null>(null);
+  const [accessMember, setAccessMember] = useState<TeamMember | null>(null);
   const [confirmEmailMember, setConfirmEmailMember] = useState<TeamMember | null>(null);
   const [emailSentMember, setEmailSentMember] = useState<TeamMember | null>(null);
   const [isBulkSending, setIsBulkSending] = useState(false);
@@ -719,7 +721,7 @@ const Team = () => {
                   <span>Colaborador</span>
                   <span className="text-right w-24">Acesso</span>
                   <span className="text-right w-40">Funções</span>
-                  <span className="w-16"></span>
+                  <span className="w-24"></span>
                 </div>
                 {/* Rows */}
                 {approvedMembers.map((member) => (
@@ -773,11 +775,12 @@ const Team = () => {
                     </div>
 
                     {/* Actions */}
-                    <div className="w-16 flex justify-end">
+                    <div className="flex items-center gap-1 justify-end">
                       <Button
                         variant="ghost"
                         size="sm"
-                        className="h-7 px-2 text-xs"
+                        className="h-7 w-7 p-0"
+                        title="Editar dados do colaborador"
                         onClick={() => {
                           // Match org node by email to open MemberInfoModal
                           const node = profiles.find(
@@ -803,8 +806,17 @@ const Team = () => {
                           }
                         }}
                       >
-                        <Pencil className="h-3 w-3 mr-1" />
-                        Editar
+                        <Pencil className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 px-2 text-xs text-primary hover:text-primary hover:bg-primary/10"
+                        title="Configurar acesso e funções"
+                        onClick={() => setAccessMember(member)}
+                      >
+                        <Shield className="h-3 w-3 mr-1" />
+                        Acesso
                       </Button>
                     </div>
                   </div>
@@ -957,6 +969,13 @@ const Team = () => {
 
         </Tabs>
       </div>
+
+      {/* Access config modal */}
+      <AccessConfigDialog
+        member={accessMember}
+        open={!!accessMember}
+        onOpenChange={(v) => { if (!v) setAccessMember(null); }}
+      />
 
       {/* Member info modal */}
       <MemberInfoModal
