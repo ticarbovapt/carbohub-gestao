@@ -19,6 +19,7 @@ import {
   Loader2,
 } from "lucide-react";
 import { useServiceOrders, useOSStats, useAdvanceOSStage, useMarkOSCancelled } from "@/hooks/useServiceOrders";
+import { LoadingTip } from "@/components/ui/LoadingTip";
 import type { ServiceOrderCarboVAPT } from "@/types/os";
 import { OS_STAGES } from "@/types/os";
 import { format } from "date-fns";
@@ -179,8 +180,9 @@ export default function OSBoard() {
 
         {/* Content */}
         {isLoading ? (
-          <div className="flex items-center justify-center h-64">
+          <div className="flex flex-col items-center justify-center h-64">
             <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+            <LoadingTip />
           </div>
         ) : viewMode === "kanban" ? (
           <OSKanbanBoard

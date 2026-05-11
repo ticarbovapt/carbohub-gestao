@@ -2,6 +2,7 @@ import React from "react";
 import { Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { Loader2 } from "lucide-react";
+import { LoadingTip } from "@/components/ui/LoadingTip";
 import type { CarboRole } from "@/types/carboRoles";
 
 interface ProtectedRouteProps {
@@ -36,6 +37,7 @@ export function ProtectedRoute({
         <div className="text-center">
           <Loader2 className="h-8 w-8 animate-spin text-board-navy mx-auto mb-4" />
           <p className="text-board-muted">Carregando...</p>
+          <LoadingTip />
         </div>
       </div>
     );
