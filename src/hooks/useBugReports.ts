@@ -60,6 +60,25 @@ export function useSubmitBugReport() {
   });
 }
 
+export function useDeleteBugReport() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from("bug_reports").delete().eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["bug_reports"] });
+      toast({ title: "Bug apagado." });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Erro ao apagar bug", description: err.message, variant: "destructive" });
+    },
+  });
+}
+
 export function useResolveBugReport() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
