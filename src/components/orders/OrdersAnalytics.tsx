@@ -239,6 +239,7 @@ export function OrdersAnalytics({ orders, isLoading }: OrdersAnalyticsProps) {
       if (items.length === 0) {
         // Sem items: usar order total com linha do pedido
         for (const linha of getLinhasFromOrder(order)) {
+          if (linha === "outros") continue; // ignorar itens não classificados
           const entry = map.get(linha) ?? { key: linha, units: 0, revenue: 0, descontos: 0, pedidoIds: new Set() };
           entry.revenue    += Number(order.total || 0);
           entry.descontos  += totalDisc;
@@ -249,6 +250,7 @@ export function OrdersAnalytics({ orders, isLoading }: OrdersAnalyticsProps) {
         const totalItemRevenue = items.reduce((s, i) => s + (i.total || i.unit_price * (i.quantity || 0) || 0), 0);
         for (const item of items) {
           const linha     = classifyItemName(item.name);
+          if (linha === "outros") continue; // ignorar itens não classificados (embalagens, internos, etc.)
           const itemRev   = item.total || item.unit_price * (item.quantity || 0) || 0;
           const itemDisc  = totalItemRevenue > 0 ? (itemRev / totalItemRevenue) * totalDisc : 0;
           const entry = map.get(linha) ?? { key: linha, units: 0, revenue: 0, descontos: 0, pedidoIds: new Set() };
