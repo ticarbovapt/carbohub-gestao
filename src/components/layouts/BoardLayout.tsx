@@ -38,6 +38,7 @@ import {
   Store,
   Zap,
   Plane,
+  Bug,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -845,6 +846,10 @@ export function BoardLayout({ children }: BoardLayoutProps) {
                   <DropdownMenuItem onClick={() => navigate("/team")}>
                     <Users className="mr-2 h-4 w-4" />
                     Minha Equipe
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => navigate("/bugs")}>
+                    <Bug className="mr-2 h-4 w-4" />
+                    Bugs encontrados
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem onClick={handleSignOut} className="text-destructive focus:text-destructive">
