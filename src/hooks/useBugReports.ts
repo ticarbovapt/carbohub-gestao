@@ -78,6 +78,8 @@ export function useDeleteBugReport() {
     },
   });
 }
+
+export function useResolveBugReport() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
