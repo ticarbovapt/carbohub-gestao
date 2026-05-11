@@ -270,18 +270,41 @@ export default function OrderDetails() {
                   <Package className="h-4 w-4" />
                   Itens do Pedido ({totalQuantity} unidades)
                 </h3>
-                <div className="space-y-3">
-                  {items.map((item, index) => (
-                    <div key={index} className="flex items-center justify-between py-2 border-b last:border-0">
-                      <div>
-                        <p className="font-medium">{item.name}</p>
-                        <p className="text-sm text-muted-foreground">
-                          {item.quantity}x R$ {item.unit_price.toFixed(2)}
-                        </p>
-                      </div>
-                      <p className="font-medium">R$ {item.total.toFixed(2)}</p>
-                    </div>
-                  ))}
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                        <th className="pb-2 pr-3">Produto</th>
+                        <th className="pb-2 px-3 text-center w-16">Qtd</th>
+                        <th className="pb-2 px-3 text-right w-32">Preço Unit.</th>
+                        <th className="pb-2 pl-3 text-right w-28">Total</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {items.map((item, index) => {
+                        // suporte a ambos os formatos: name (novo) e product_name (legado)
+                        const displayName = item.name || (item as any).product_name || "—";
+                        const productCode = (item as any).product_code || (item as any).sku_code;
+                        return (
+                          <tr key={index} className="border-b last:border-0 hover:bg-muted/20 transition-colors">
+                            <td className="py-2.5 pr-3">
+                              <p className="font-medium">{displayName}</p>
+                              {productCode && (
+                                <p className="text-xs text-muted-foreground font-mono">{productCode}</p>
+                              )}
+                            </td>
+                            <td className="py-2.5 px-3 text-center tabular-nums font-medium">{item.quantity}</td>
+                            <td className="py-2.5 px-3 text-right tabular-nums text-muted-foreground">
+                              R$ {Number(item.unit_price).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                            </td>
+                            <td className="py-2.5 pl-3 text-right tabular-nums font-semibold">
+                              R$ {Number(item.total).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
                 </div>
                 <Separator className="my-4" />
                 <div className="space-y-2">

@@ -47,9 +47,23 @@ function CategoryBadge({ category }: { category: string | null }) {
   );
 }
 
+/** Gera SKU normalizado a partir do nome: "CarboZé 10ml" → "CARBOZE_10ML" */
+function generateSkuFromName(name: string): string {
+  return name
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")   // remove acentos
+    .toUpperCase()
+    .replace(/[^A-Z0-9\s]/g, "")       // remove chars especiais (exceto espaço)
+    .trim()
+    .replace(/\s+/g, "_")              // espaços → underscore
+    .substring(0, 40);                  // limita comprimento
+}
+
 function ProductForm({ product, onClose }: { product?: MrpProduct; onClose: () => void }) {
   const createMut = useCreateMrpProduct();
   const updateMut = useUpdateMrpProduct();
+  // Flag para saber se o usuário já editou o código manualmente
+  const [codeManuallyEdited, setCodeManuallyEdited] = useState(false);
   const [form, setForm] = useState({
     product_code: product?.product_code || "",
     name: product?.name || "",
@@ -96,12 +110,42 @@ function ProductForm({ product, onClose }: { product?: MrpProduct; onClose: () =
     <form onSubmit={handleSubmit} className="space-y-4">
       <div className="grid grid-cols-2 gap-4">
         <div>
-          <Label>Código do Produto *</Label>
-          <Input value={form.product_code} onChange={e => setForm(f => ({ ...f, product_code: e.target.value.toUpperCase() }))} required disabled={!!product} placeholder="CARBOZE_10ML" />
+          <Label>Nome *</Label>
+          <Input
+            value={form.name}
+            onChange={e => {
+              const newName = e.target.value;
+              setForm(f => ({
+                ...f,
+                name: newName,
+                // Atualiza o código automaticamente enquanto não foi editado manualmente
+                ...(!product && !codeManuallyEdited
+                  ? { product_code: generateSkuFromName(newName) }
+                  : {}),
+              }));
+            }}
+            required
+            placeholder="CarboZé 10ml"
+          />
         </div>
         <div>
-          <Label>Nome *</Label>
-          <Input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} required placeholder="CarboZé 10ml" />
+          <Label className="flex items-center gap-1.5">
+            Código do Produto *
+            {!product && !codeManuallyEdited && (
+              <span className="text-[10px] text-muted-foreground font-normal">(auto)</span>
+            )}
+          </Label>
+          <Input
+            value={form.product_code}
+            onChange={e => {
+              setCodeManuallyEdited(true);
+              setForm(f => ({ ...f, product_code: e.target.value.toUpperCase() }));
+            }}
+            required
+            disabled={!!product}
+            placeholder="CARBOZE_10ML"
+            className={!product && !codeManuallyEdited && form.product_code ? "text-muted-foreground" : ""}
+          />
         </div>
       </div>
       <div className="grid grid-cols-2 gap-4">

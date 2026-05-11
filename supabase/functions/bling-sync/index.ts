@@ -207,6 +207,67 @@ async function syncProducts(
   return { synced: totalSynced, failed: totalFailed };
 }
 
+async function syncVariacoes(
+  supabaseAdmin: ReturnType<typeof createClient>,
+  token: string,
+  logId: string
+): Promise<{ synced: number; failed: number }> {
+  // Buscar apenas produtos com formato "V" (com variações) na tabela bling_products
+  const { data: varProducts, error: varErr } = await supabaseAdmin
+    .from("bling_products")
+    .select("bling_id, nome")
+    .eq("formato", "V");
+
+  if (varErr || !varProducts?.length) {
+    console.log("[bling-sync:variacoes] No variable products found or error:", varErr?.message);
+    await supabaseAdmin.from("bling_sync_log")
+      .update({ records_synced: 0, records_failed: 0 }).eq("id", logId);
+    return { synced: 0, failed: 0 };
+  }
+
+  console.log(`[bling-sync:variacoes] Syncing variations for ${varProducts.length} variable products`);
+  let totalSynced = 0, totalFailed = 0;
+
+  for (const prod of varProducts) {
+    try {
+      // GET /produtos/{id}/variacoes — returns all variations for this product
+      const data = await blingFetch(token, `/produtos/${prod.bling_id}/variacoes`, 1, 100);
+      const variacoes: any[] = data.data || [];
+
+      for (const v of variacoes) {
+        await supabaseAdmin.from("bling_product_variations").upsert(
+          {
+            bling_product_id: prod.bling_id,
+            bling_variacao_id: v.id,
+            nome: v.nome || null,
+            codigo: v.codigo || null,
+            preco: v.preco != null ? Number(v.preco) : null,
+            estoque_atual: v.estoque?.saldoVirtualTotal != null
+              ? Number(v.estoque.saldoVirtualTotal) : 0,
+            raw_data: v,
+            synced_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: "bling_product_id,bling_variacao_id" }
+        );
+        totalSynced++;
+      }
+
+      // Rate limit: 3 req/s
+      await new Promise((resolve) => setTimeout(resolve, 350));
+    } catch (e) {
+      console.error(`[bling-sync:variacoes] Failed for product ${prod.bling_id}:`, e);
+      totalFailed++;
+    }
+  }
+
+  await supabaseAdmin.from("bling_sync_log")
+    .update({ records_synced: totalSynced, records_failed: totalFailed }).eq("id", logId);
+
+  console.log(`[bling-sync:variacoes] Done. Synced: ${totalSynced}, Failed: ${totalFailed}`);
+  return { synced: totalSynced, failed: totalFailed };
+}
+
 async function syncContacts(
   supabaseAdmin: ReturnType<typeof createClient>,
   token: string,
@@ -581,7 +642,13 @@ async function bridgeOrdersToCarbohub(
         }
         const qty = Number(item.quantidade) || 1;
         const price = Number(item.valor) || 0;
-        return { product_name: nome, sku_code: codigo, quantity: qty, unit_price: price, total: qty * price };
+        return {
+          name: nome || codigo || "Produto",  // campo correto para OrderItem
+          product_code: codigo,               // SKU para referência
+          quantity: qty,
+          unit_price: price,
+          total: qty * price,
+        };
       });
 
       // Fuzzy match licensee by name
@@ -888,7 +955,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
     const results: Record<string, any> = {};
 
     const entitiesToSync = entity === "all"
-      ? ["products", "stock", "contacts", "orders", "order_details", "treatment", "vendedores", "nfe", "bridge"]
+      ? ["products", "variacoes", "stock", "contacts", "orders", "order_details", "treatment", "vendedores", "nfe", "bridge"]
       : [entity];
 
     // Helper to run a sync function with automatic 401 retry
@@ -934,6 +1001,9 @@ Deno.serve(async (req: Request): Promise<Response> => {
         switch (entityType) {
           case "products":
             result = await syncWithRetry(entityType, syncProducts, logId);
+            break;
+          case "variacoes":
+            result = await syncWithRetry(entityType, syncVariacoes, logId);
             break;
           case "stock":
             result = await syncWithRetry(entityType, syncStock, logId);
