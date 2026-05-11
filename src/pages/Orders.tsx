@@ -149,7 +149,9 @@ export default function Orders() {
   }
 
   function getOrderLinhas(order: CarbozeOrder): string[] {
-    const items = Array.isArray(order.items) ? (order.items as unknown as OrderItem[]) : [];
+    const items = Array.isArray(order.items)
+      ? (order.items as any[]).map((i) => ({ ...i, name: i.name || i.product_name || "" }))
+      : [];
     if (items.length > 0) return [...new Set(items.map((i) => classifyItemName(i.name)))];
     if (order.linha) return [order.linha];
     return ["carboze_100ml"];

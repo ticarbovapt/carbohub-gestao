@@ -78,7 +78,12 @@ const CHART_PALETTE = [
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
 function parseItems(order: CarbozeOrder): OrderItem[] {
-  return Array.isArray(order.items) ? (order.items as unknown as OrderItem[]) : [];
+  if (!Array.isArray(order.items)) return [];
+  // Normaliza campo: DB Bling usa "product_name", interface usa "name"
+  return (order.items as any[]).map((i) => ({
+    ...i,
+    name: i.name || i.product_name || "",
+  })) as OrderItem[];
 }
 
 /**
