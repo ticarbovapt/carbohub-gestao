@@ -311,6 +311,7 @@ export default function RoleMatrix() {
   const handleStartEdit = () => {
     setDraftOverrides({ ...overrides });
     setEditMode(true);
+    setTab("cargos"); // Garante que a aba correta está visível ao editar
   };
 
   const handleCancelEdit = () => {
@@ -427,32 +428,55 @@ export default function RoleMatrix() {
           icon={Shield}
         />
 
-        {/* Tab toggle */}
-        <div className="flex items-center gap-1 bg-muted/50 rounded-lg p-1 w-fit">
-          <button
-            onClick={() => setTab("cargos")}
-            className={cn(
-              "flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all",
-              tab === "cargos"
-                ? "bg-background shadow text-foreground"
-                : "text-muted-foreground hover:text-foreground"
-            )}
-          >
-            <LayoutGrid className="h-4 w-4" />
-            Por Cargo
-          </button>
-          <button
-            onClick={() => setTab("colaboradores")}
-            className={cn(
-              "flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all",
-              tab === "colaboradores"
-                ? "bg-background shadow text-foreground"
-                : "text-muted-foreground hover:text-foreground"
-            )}
-          >
-            <Users className="h-4 w-4" />
-            Por Colaborador
-          </button>
+        {/* Tab toggle + Editar Matriz (global) */}
+        <div className="flex items-center justify-between gap-4">
+          <div className="flex items-center gap-1 bg-muted/50 rounded-lg p-1 w-fit">
+            <button
+              onClick={() => setTab("cargos")}
+              className={cn(
+                "flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all",
+                tab === "cargos"
+                  ? "bg-background shadow text-foreground"
+                  : "text-muted-foreground hover:text-foreground"
+              )}
+            >
+              <LayoutGrid className="h-4 w-4" />
+              Por Cargo
+            </button>
+            <button
+              onClick={() => setTab("colaboradores")}
+              className={cn(
+                "flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all",
+                tab === "colaboradores"
+                  ? "bg-background shadow text-foreground"
+                  : "text-muted-foreground hover:text-foreground"
+              )}
+            >
+              <Users className="h-4 w-4" />
+              Por Colaborador
+            </button>
+          </div>
+
+          {/* Editar Matriz — visível em ambas as abas para master admin */}
+          {isMasterAdmin && (
+            <div className="flex items-center gap-2">
+              {editMode ? (
+                <>
+                  <Button size="sm" variant="outline" onClick={handleCancelEdit} disabled={saving}>
+                    <X className="h-3.5 w-3.5 mr-1" /> Cancelar
+                  </Button>
+                  <Button size="sm" onClick={handleSave} disabled={saving}>
+                    {saving ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> : <Save className="h-3.5 w-3.5 mr-1" />}
+                    Salvar Alterações
+                  </Button>
+                </>
+              ) : (
+                <Button size="sm" variant="outline" onClick={handleStartEdit}>
+                  <Pencil className="h-3.5 w-3.5 mr-1" /> Editar Matriz
+                </Button>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Legend */}
@@ -483,31 +507,15 @@ export default function RoleMatrix() {
 
             {/* Matrix Table */}
             <CarboCard padding="none">
-              {/* Toolbar de edição */}
-              <div className="flex items-center justify-between px-4 py-2.5 border-b bg-muted/20">
-                <p className="text-xs text-muted-foreground">
-                  {editMode
-                    ? "Modo edição — clique em qualquer célula para alterar o nível de acesso"
-                    : "Clique em Editar para personalizar as permissões por cargo"}
-                </p>
-                <div className="flex items-center gap-2">
-                  {editMode ? (
-                    <>
-                      <Button size="sm" variant="outline" onClick={handleCancelEdit} disabled={saving}>
-                        <X className="h-3.5 w-3.5 mr-1" /> Cancelar
-                      </Button>
-                      <Button size="sm" onClick={handleSave} disabled={saving}>
-                        {saving ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> : <Save className="h-3.5 w-3.5 mr-1" />}
-                        Salvar Alterações
-                      </Button>
-                    </>
-                  ) : isMasterAdmin ? (
-                    <Button size="sm" variant="outline" onClick={handleStartEdit}>
-                      <Pencil className="h-3.5 w-3.5 mr-1" /> Editar Matriz
-                    </Button>
-                  ) : null}
+              {/* Status bar de edição */}
+              {editMode && (
+                <div className="flex items-center gap-2 px-4 py-2 border-b bg-amber-500/5 border-amber-500/20">
+                  <Pencil className="h-3.5 w-3.5 text-amber-600 shrink-0" />
+                  <p className="text-xs text-amber-700 dark:text-amber-400">
+                    Modo edição — clique em qualquer célula para alterar o nível de acesso
+                  </p>
                 </div>
-              </div>
+              )}
 
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
@@ -565,7 +573,7 @@ export default function RoleMatrix() {
               <div>
                 <CarboCardTitle className="text-base">Acesso efetivo por colaborador</CarboCardTitle>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  Calculado a partir dos roles atribuídos. Clique na linha para ver detalhes ou em "Acesso" para configurar.
+                  Clique em <span className="font-semibold text-primary">Acesso</span> em cada linha para configurar roles e interfaces. Use <span className="font-semibold">Editar Matriz</span> para alterar permissões por cargo.
                 </p>
               </div>
             </div>
