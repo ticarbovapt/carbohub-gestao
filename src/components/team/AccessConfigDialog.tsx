@@ -89,6 +89,7 @@ export function AccessConfigDialog({ member, open, onOpenChange }: AccessConfigD
   const [selectedCarboRoles,  setSelectedCarboRoles]  = useState<string[]>([]);
   const [selectedInterfaces,  setSelectedInterfaces]  = useState<string[]>([]);
   const [submitting,          setSubmitting]          = useState(false);
+  const [saveError,           setSaveError]           = useState<string | null>(null);
 
   // Seed state whenever member changes
   useEffect(() => {
@@ -118,15 +119,17 @@ export function AccessConfigDialog({ member, open, onOpenChange }: AccessConfigD
   const handleSave = async () => {
     if (!member) return;
     setSubmitting(true);
+    setSaveError(null);
     try {
-      await Promise.all([
-        updateRole.mutateAsync({ userId: member.id, role: selectedRole }),
-        replaceCarboRoles.mutateAsync({ userId: member.id, roles: selectedCarboRoles }),
-        updateInterfaces.mutateAsync({ userId: member.id, allowed_interfaces: selectedInterfaces }),
-      ]);
+      // Executa em sequência para identificar qual etapa falha
+      await updateRole.mutateAsync({ userId: member.id, role: selectedRole });
+      await replaceCarboRoles.mutateAsync({ userId: member.id, roles: selectedCarboRoles });
+      await updateInterfaces.mutateAsync({ userId: member.id, allowed_interfaces: selectedInterfaces });
       onOpenChange(false);
-    } catch {
-      // Erros já tratados individualmente por cada mutation (toast.error)
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      setSaveError(msg);
+      console.error("[AccessConfigDialog] save error:", e);
     } finally {
       setSubmitting(false);
     }
@@ -243,6 +246,13 @@ export function AccessConfigDialog({ member, open, onOpenChange }: AccessConfigD
             </div>
           </div>
         </div>
+
+        {saveError && (
+          <div className="px-1 py-2 rounded-lg bg-destructive/10 border border-destructive/20 text-xs text-destructive flex items-start gap-2">
+            <span className="font-bold shrink-0">Erro:</span>
+            <span className="break-all">{saveError}</span>
+          </div>
+        )}
 
         <DialogFooter className="pt-2">
           <Button variant="outline" onClick={handleClose} disabled={submitting}>
