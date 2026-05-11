@@ -47,16 +47,27 @@ function CategoryBadge({ category }: { category: string | null }) {
   );
 }
 
-/** Gera SKU normalizado a partir do nome: "CarboZé 10ml" → "CARBOZE_10ML" */
+/**
+ * Gera código de produto normalizado a partir do nome.
+ * Abrevia cada palavra a 4 chars, mantém tamanhos (100ML, 1L, 500G) intactos.
+ * Ex: "Estabilizado 100ml" → "ESTA-100ML"  |  "Garrafa PET" → "GARR-PET"
+ */
 function generateSkuFromName(name: string): string {
-  return name
+  const clean = name
     .normalize("NFD")
     .replace(/[̀-ͯ]/g, "")   // remove acentos
     .toUpperCase()
-    .replace(/[^A-Z0-9\s]/g, "")       // remove chars especiais (exceto espaço)
-    .trim()
-    .replace(/\s+/g, "_")              // espaços → underscore
-    .substring(0, 40);                  // limita comprimento
+    .replace(/[^A-Z0-9\s]/g, " ")      // special chars → espaço
+    .trim();
+
+  const parts = clean.split(/\s+/).filter(Boolean).map(token => {
+    // Mantém tokens de tamanho/volume (100ML, 1L, 500G, 70ML, etc.) intactos
+    if (/^\d+(ML|L|G|KG|UN|MG)$/.test(token)) return token;
+    // Abrevia palavras a 4 chars
+    return token.substring(0, 4);
+  });
+
+  return parts.join("-").replace(/-{2,}/g, "-").substring(0, 20);
 }
 
 function ProductForm({ product, onClose }: { product?: MrpProduct; onClose: () => void }) {

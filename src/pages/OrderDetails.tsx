@@ -283,12 +283,18 @@ export default function OrderDetails() {
                     <tbody>
                       {items.map((item, index) => {
                         // suporte a ambos os formatos: name (novo) e product_name (legado)
-                        const displayName = item.name || (item as any).product_name || "—";
+                        const rawName = item.name || (item as any).product_name || "—";
+                        // Trunca nomes longos do Bling: remove sufixo " - PRODUTO NAO ENQUADRADO..." etc.
+                        const displayName = rawName.includes(" - ")
+                          ? rawName.split(" - ")[0].trim()
+                          : rawName.length > 60
+                          ? rawName.substring(0, 60) + "…"
+                          : rawName;
                         const productCode = (item as any).product_code || (item as any).sku_code;
                         return (
                           <tr key={index} className="border-b last:border-0 hover:bg-muted/20 transition-colors">
                             <td className="py-2.5 pr-3">
-                              <p className="font-medium">{displayName}</p>
+                              <p className="font-medium" title={rawName}>{displayName}</p>
                               {productCode && (
                                 <p className="text-xs text-muted-foreground font-mono">{productCode}</p>
                               )}
