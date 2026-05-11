@@ -34,6 +34,7 @@ const Machines            = lazy(() => import("./pages/Machines"));
 const Orders              = lazy(() => import("./pages/Orders"));
 const CreateOrder         = lazy(() => import("./pages/CreateOrder"));
 const OrderDetails        = lazy(() => import("./pages/OrderDetails"));
+const OrderPrintPage      = lazy(() => import("./pages/OrderPrintPage"));
 const DataImport          = lazy(() => import("./pages/DataImport"));
 const MapaTerritorial     = lazy(() => import("./pages/MapaTerritorial"));
 const CockpitEstrategico  = lazy(() => import("./pages/admin/CockpitEstrategico"));
@@ -145,6 +146,7 @@ function AnimatedRoutes() {
             <Route path="/orders"          element={<ProtectedRoute><Orders /></ProtectedRoute>} />
             <Route path="/orders/new"      element={<ProtectedRoute><CreateOrder /></ProtectedRoute>} />
             <Route path="/orders/:id"      element={<ProtectedRoute><OrderDetails /></ProtectedRoute>} />
+            <Route path="/orders/:id/print" element={<ProtectedRoute><OrderPrintPage /></ProtectedRoute>} />
             <Route path="/role-matrix"     element={<ProtectedRoute><RoleMatrix /></ProtectedRoute>} />
             <Route path="/responsibility-map" element={<ProtectedRoute><ResponsibilityMap /></ProtectedRoute>} />
             <Route path="/sales-targets"   element={<ProtectedRoute><SalesTargets /></ProtectedRoute>} />
