@@ -6,14 +6,15 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { 
-  AtSign, 
-  Bell, 
-  Check, 
-  CheckCheck, 
-  Clock, 
-  ListTodo, 
-  MessageCircle, 
+import {
+  AtSign,
+  Bell,
+  Bug,
+  Check,
+  CheckCheck,
+  Clock,
+  ListTodo,
+  MessageCircle,
   Trash2,
   X
 } from "lucide-react";
@@ -30,6 +31,7 @@ const TYPE_CONFIG: Record<string, { Icon: React.ElementType; label: string; colo
   action_assigned:  { Icon: ListTodo,       label: "Ação atribuída",color: "text-amber-600",        bg: "bg-amber-500/10" },
   action_completed: { Icon: Check,          label: "Ação concluída",color: "text-emerald-600",      bg: "bg-emerald-500/10" },
   message:          { Icon: MessageCircle,  label: "Mensagem",      color: "text-blue-500",         bg: "bg-blue-500/10" },
+  bug_report:       { Icon: Bug,            label: "Bug reportado", color: "text-destructive",      bg: "bg-destructive/10" },
 };
 
 export function NotificationPanel({ onClose }: NotificationPanelProps) {
@@ -51,9 +53,10 @@ export function NotificationPanel({ onClose }: NotificationPanelProps) {
     }
 
     // Navigate based on reference type
-    if (notification.reference_type === "os_message" || notification.reference_type === "os_action") {
-      // Extract OS ID from reference and navigate
-      // For now, close the panel
+    if (notification.reference_type === "bug_report") {
+      navigate("/bugs");
+      onClose();
+    } else if (notification.reference_type === "os_message" || notification.reference_type === "os_action") {
       onClose();
     }
   };
