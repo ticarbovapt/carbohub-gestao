@@ -311,7 +311,6 @@ export default function RoleMatrix() {
   const handleStartEdit = () => {
     setDraftOverrides({ ...overrides });
     setEditMode(true);
-    setTab("cargos"); // Garante que a aba correta está visível ao editar
   };
 
   const handleCancelEdit = () => {
@@ -457,8 +456,8 @@ export default function RoleMatrix() {
             </button>
           </div>
 
-          {/* Editar Matriz — visível em ambas as abas para master admin */}
-          {isMasterAdmin && (
+          {/* Editar Matriz — visível apenas na aba Por Cargo (Por Colaborador tem "Acesso" por linha) */}
+          {isMasterAdmin && tab === "cargos" && (
             <div className="flex items-center gap-2">
               {editMode ? (
                 <>
