@@ -47,7 +47,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { DatePickerInput } from "@/components/ui/date-picker-input";
 import { useOrders, useOrderStats, OrderStatus, ORDER_STATUS_LABELS, ORDER_TYPE_LABELS, CarbozeOrder, OrderItem } from "@/hooks/useCarbozeOrders";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQueryClient, useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
 import { format } from "date-fns";
@@ -121,12 +122,18 @@ export default function Orders() {
     queryClient.invalidateQueries({ queryKey: ["carboze-order-stats"] });
   };
 
-  // Unique vendedores and clients for dropdowns
-  const vendedores = useMemo(() => {
-    const names = new Set<string>();
-    orders.forEach((o) => { if (o.vendedor_name) names.add(o.vendedor_name); });
-    return Array.from(names).sort();
-  }, [orders]);
+  // Todos os colaboradores aprovados para o dropdown de vendedor
+  const { data: allCollaborators = [] } = useQuery({
+    queryKey: ["all-collaborators-for-filter"],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("profiles")
+        .select("id, full_name")
+        .eq("status", "approved")
+        .order("full_name");
+      return (data || []).filter((p) => p.full_name) as { id: string; full_name: string }[];
+    },
+  });
 
   const clientes = useMemo(() => {
     const names = new Set<string>();
@@ -498,7 +505,9 @@ export default function Orders() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Todos Vendedores</SelectItem>
-                {vendedores.map((v) => (<SelectItem key={v} value={v}>{v}</SelectItem>))}
+                {allCollaborators.map((c) => (
+                  <SelectItem key={c.id} value={c.full_name}>{c.full_name}</SelectItem>
+                ))}
               </SelectContent>
             </Select>
 
