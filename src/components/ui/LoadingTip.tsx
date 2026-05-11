@@ -16,7 +16,7 @@ export function LoadingTip() {
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
-      transition={{ delay: 0.5, duration: 0.4 }}
+      transition={{ duration: 0.3 }}
       className="max-w-xs text-center mx-auto mt-5 px-2"
     >
       <div className="flex items-center justify-center gap-1.5 mb-1.5">
