@@ -61,17 +61,17 @@ export function EditOrderDialog({ open, onOpenChange, order }: EditOrderDialogPr
   const updateOrder = useUpdateOrder();
   const { data: licensees = [] } = useLicensees("all");
 
-  // Load team members to populate vendedor select
+  // Load all approved collaborators to populate vendedor select
   const { data: vendedores = [] } = useQuery({
     queryKey: ["profiles-vendedores"],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("profiles")
         .select("id, full_name, email")
-        .in("role", ["operator", "manager", "admin"])
+        .eq("status", "approved")
         .order("full_name");
       if (error) throw error;
-      return (data || []) as { id: string; full_name: string | null; email: string | null }[];
+      return (data || []).filter((p) => p.full_name) as { id: string; full_name: string; email: string | null }[];
     },
   });
 
