@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Bug, CheckCircle2, Clock, ExternalLink } from "lucide-react";
+import { Bug, CheckCircle2, Clock, ExternalLink, Trash2 } from "lucide-react";
 import { BoardLayout } from "@/components/layouts/BoardLayout";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -22,7 +22,7 @@ import {
 } from "@/components/ui/table";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from "@/contexts/AuthContext";
-import { useBugReports, useResolveBugReport, BugReport } from "@/hooks/useBugReports";
+import { useBugReports, useResolveBugReport, useDeleteBugReport, BugReport } from "@/hooks/useBugReports";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
@@ -32,6 +32,7 @@ export default function BugReportsPage() {
   const { isAdmin } = useAuth();
   const { data: reports = [], isLoading } = useBugReports();
   const resolveMutation = useResolveBugReport();
+  const deleteMutation = useDeleteBugReport();
 
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [detailBug, setDetailBug] = useState<BugReport | null>(null);
@@ -161,9 +162,22 @@ export default function BugReportsPage() {
                     )}
                   </TableCell>
                   <TableCell>
-                    <Button variant="ghost" size="sm" className="text-xs" onClick={() => openDetail(bug)}>
-                      Ver
-                    </Button>
+                    <div className="flex items-center gap-1">
+                      <Button variant="ghost" size="sm" className="text-xs" onClick={() => openDetail(bug)}>
+                        Ver
+                      </Button>
+                      {isAdmin && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                          onClick={(e) => { e.stopPropagation(); deleteMutation.mutate(bug.id); }}
+                          disabled={deleteMutation.isPending}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      )}
+                    </div>
                   </TableCell>
                 </TableRow>
               ))}
@@ -252,20 +266,36 @@ export default function BugReportsPage() {
               )}
             </div>
           )}
-          <DialogFooter>
-            <Button variant="outline" onClick={() => { setDetailBug(null); setAdminNotes(""); }}>
-              Fechar
-            </Button>
-            {isAdmin && detailBug?.status === "open" && (
-              <Button
-                onClick={() => detailBug && handleResolve(detailBug)}
-                disabled={resolveMutation.isPending}
-                className="gap-2 bg-emerald-600 hover:bg-emerald-700 text-white"
-              >
-                <CheckCircle2 className="h-4 w-4" />
-                {resolveMutation.isPending ? "Salvando..." : "Marcar como corrigido"}
+          <DialogFooter className="gap-2 sm:justify-between">
+            <div>
+              {isAdmin && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-destructive hover:bg-destructive/10 hover:text-destructive gap-1.5"
+                  onClick={() => { if (detailBug) { deleteMutation.mutate(detailBug.id); setDetailBug(null); setAdminNotes(""); } }}
+                  disabled={deleteMutation.isPending}
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                  Apagar
+                </Button>
+              )}
+            </div>
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={() => { setDetailBug(null); setAdminNotes(""); }}>
+                Fechar
               </Button>
-            )}
+              {isAdmin && detailBug?.status === "open" && (
+                <Button
+                  onClick={() => detailBug && handleResolve(detailBug)}
+                  disabled={resolveMutation.isPending}
+                  className="gap-2 bg-emerald-600 hover:bg-emerald-700 text-white"
+                >
+                  <CheckCircle2 className="h-4 w-4" />
+                  {resolveMutation.isPending ? "Salvando..." : "Marcar como corrigido"}
+                </Button>
+              )}
+            </div>
           </DialogFooter>
         </DialogContent>
       </Dialog>
