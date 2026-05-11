@@ -93,8 +93,15 @@ export function useUpdateMrpProduct() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ id, ...data }: Partial<MrpProduct> & { id: string }) => {
-      const { error } = await supabase.from("mrp_products").update(data).eq("id", id);
+      const { data: updated, error } = await supabase
+        .from("mrp_products")
+        .update(data)
+        .eq("id", id)
+        .select()
+        .single();
       if (error) throw error;
+      if (!updated) throw new Error("Produto não encontrado ou sem permissão para editar.");
+      return updated;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["mrp-products"] });

@@ -106,11 +106,15 @@ function ProductForm({ product, onClose }: { product?: MrpProduct; onClose: () =
       notes: form.notes || null,
       is_active: form.is_active,
       current_stock_qty: form.current_stock_qty ? Number(form.current_stock_qty) : 0,
-      stock_updated_at: product?.stock_updated_at ?? null,
+      stock_updated_at: (
+        form.current_stock_qty !== product?.current_stock_qty?.toString() ||
+        form.safety_stock_qty !== product?.safety_stock_qty?.toString()
+      ) ? new Date().toISOString() : (product?.stock_updated_at ?? null),
       stock_unit: product?.stock_unit ?? 'un',
     };
     if (product) {
-      await updateMut.mutateAsync({ id: product.id, ...payload });
+      const { product_code, ...updatePayload } = payload;
+      await updateMut.mutateAsync({ id: product.id, ...updatePayload });
     } else {
       await createMut.mutateAsync(payload);
     }
