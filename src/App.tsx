@@ -98,6 +98,7 @@ const PDVEstoque    = lazy(() => import("./pages/pdv/PDVEstoque"));
 const PDVVendedores = lazy(() => import("./pages/pdv/PDVVendedores"));
 const PDVRanking    = lazy(() => import("./pages/pdv/PDVRanking"));
 const OpsNetwork    = lazy(() => import("./pages/OpsNetwork"));
+const BugReportsPage = lazy(() => import("./pages/BugReportsPage"));
 
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -242,6 +243,9 @@ function AnimatedRoutes() {
 
             {/* CarboOPS */}
             <Route path="/ops/alerts" element={<ProtectedRoute><OpsAlerts /></ProtectedRoute>} />
+
+            {/* Bug Reports */}
+            <Route path="/bugs" element={<ProtectedRoute><BugReportsPage /></ProtectedRoute>} />
 
             {/* AI Assistant */}
             <Route path="/ai-assistant" element={<ProtectedRoute><AIAssistantPage /></ProtectedRoute>} />
