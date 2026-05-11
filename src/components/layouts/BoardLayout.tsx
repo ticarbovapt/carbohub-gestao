@@ -46,6 +46,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { ThemeToggle } from "@/components/ui/ThemeToggle";
 import { NotificationBell } from "@/components/notifications";
+import { BugReportButton } from "@/components/BugReportFAB";
 import { PlatformOnboarding } from "@/components/onboarding/PlatformOnboarding";
 import { PasswordChangeModal } from "@/components/auth/PasswordChangeModal";
 import {
@@ -812,6 +813,7 @@ export function BoardLayout({ children }: BoardLayoutProps) {
               )}
               <QuickActionsMenu isAdmin={isAdmin} isCeo={isCeo} />
               <NotificationBell />
+              <BugReportButton />
               <ThemeToggle />
               <Separator orientation="vertical" className="h-5" />
               <DropdownMenu>

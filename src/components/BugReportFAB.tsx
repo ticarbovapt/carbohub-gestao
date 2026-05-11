@@ -20,7 +20,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 
-export function BugReportFAB() {
+export function BugReportButton() {
   const { user, profile } = useAuth();
   const location = useLocation();
   const submitMutation = useSubmitBugReport();
@@ -30,7 +30,6 @@ export function BugReportFAB() {
   const [description, setDescription] = useState("");
   const [capturedUrl, setCapturedUrl] = useState("");
 
-  // Não aparece na página de bugs nem em rotas públicas
   if (!user || location.pathname === "/bugs") return null;
 
   function handleOpen() {
@@ -64,17 +63,17 @@ export function BugReportFAB() {
     <>
       <Tooltip>
         <TooltipTrigger asChild>
-          <button
+          <Button
+            variant="ghost"
+            size="icon"
             onClick={handleOpen}
-            className="fixed bottom-6 left-6 z-50 h-10 w-10 rounded-full bg-background border shadow-md flex items-center justify-center text-muted-foreground hover:text-foreground hover:shadow-lg transition-all duration-200 hover:scale-105 active:scale-95"
+            className="h-9 w-9 lg:h-10 lg:w-10"
             aria-label="Reportar problema"
           >
-            <Bug className="h-4 w-4" />
-          </button>
+            <Bug className="h-4 w-4 lg:h-5 lg:w-5" />
+          </Button>
         </TooltipTrigger>
-        <TooltipContent side="right">
-          <p>Reportar problema</p>
-        </TooltipContent>
+        <TooltipContent>Reportar problema</TooltipContent>
       </Tooltip>
 
       <Dialog open={open} onOpenChange={setOpen}>
@@ -87,18 +86,18 @@ export function BugReportFAB() {
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div className="space-y-1.5">
-              <Label htmlFor="fab-title">Título <span className="text-destructive">*</span></Label>
+              <Label htmlFor="bug-title">Título <span className="text-destructive">*</span></Label>
               <Input
-                id="fab-title"
+                id="bug-title"
                 placeholder="Ex: Botão de voltar desconecta do sistema"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
               />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="fab-desc">Descrição <span className="text-destructive">*</span></Label>
+              <Label htmlFor="bug-desc">Descrição <span className="text-destructive">*</span></Label>
               <Textarea
-                id="fab-desc"
+                id="bug-desc"
                 placeholder="Descreva o que aconteceu, o que esperava que acontecesse e qualquer mensagem de erro."
                 rows={4}
                 value={description}

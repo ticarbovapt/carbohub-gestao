@@ -99,7 +99,6 @@ const PDVVendedores = lazy(() => import("./pages/pdv/PDVVendedores"));
 const PDVRanking    = lazy(() => import("./pages/pdv/PDVRanking"));
 const OpsNetwork    = lazy(() => import("./pages/OpsNetwork"));
 const BugReportsPage = lazy(() => import("./pages/BugReportsPage"));
-import { BugReportFAB } from "./components/BugReportFAB";
 
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -269,7 +268,6 @@ const App = () => (
             <PageProgressBar />
             <AnimatedRoutes />
             <AIChatDrawer />
-            <BugReportFAB />
           </BrowserRouter>
         </TooltipProvider>
       </RealtimeMachineAlertsProvider>
