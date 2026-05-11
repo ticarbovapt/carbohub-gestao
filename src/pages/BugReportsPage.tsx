@@ -162,22 +162,9 @@ export default function BugReportsPage() {
                     )}
                   </TableCell>
                   <TableCell>
-                    <div className="flex items-center gap-1">
-                      <Button variant="ghost" size="sm" className="text-xs" onClick={() => openDetail(bug)}>
-                        Ver
-                      </Button>
-                      {isAdmin && (
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-                          onClick={(e) => { e.stopPropagation(); deleteMutation.mutate(bug.id); }}
-                          disabled={deleteMutation.isPending}
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
-                      )}
-                    </div>
+                    <Button variant="ghost" size="sm" className="text-xs" onClick={() => openDetail(bug)}>
+                      Ver
+                    </Button>
                   </TableCell>
                 </TableRow>
               ))}
