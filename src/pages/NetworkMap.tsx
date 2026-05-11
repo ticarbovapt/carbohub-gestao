@@ -289,9 +289,6 @@ export default function NetworkMap() {
                         <span className="font-medium">Modelo:</span> {machine.model}
                       </p>
                       <p className="text-muted-foreground">
-                        <span className="font-medium">Tipo:</span> {machine.machine_type}
-                      </p>
-                      <p className="text-muted-foreground">
                         <span className="font-medium">Licenciado:</span>{" "}
                         {machine.licensee_name}
                       </p>

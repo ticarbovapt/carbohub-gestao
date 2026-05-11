@@ -61,9 +61,9 @@ export function NotificationBell() {
           </PopoverTrigger>
         </TooltipTrigger>
         <PopoverContent
-          className="w-80 sm:w-96 p-0 bg-popover shadow-xl rounded-xl border border-border"
+          className="w-[380px] p-0 bg-popover shadow-2xl rounded-xl border border-border/80"
           align="end"
-          sideOffset={8}
+          sideOffset={10}
         >
           <NotificationPanel onClose={() => setOpen(false)} />
         </PopoverContent>

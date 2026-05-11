@@ -1,14 +1,18 @@
-import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useState, useEffect } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { BoardLayout } from "@/components/layouts/BoardLayout";
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
 import { CarboCard, CarboCardContent, CarboCardHeader, CarboCardTitle } from "@/components/ui/carbo-card";
 import { CarboBadge } from "@/components/ui/carbo-badge";
-import { Shield, Eye, Wrench, CheckCircle, XCircle, ChevronDown, ChevronRight, Users, LayoutGrid } from "lucide-react";
+import { Shield, Eye, Wrench, CheckCircle, XCircle, ChevronDown, ChevronRight, Users, LayoutGrid, Pencil, Save, X, Loader2, Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
-import { useNavigate } from "react-router-dom";
+import { toast } from "sonner";
+import { useAuth } from "@/contexts/AuthContext";
+import { AccessConfigDialog } from "@/components/team/AccessConfigDialog";
+import type { TeamMember } from "@/hooks/useTeamMembers";
 
 // ─── Role definitions ──────────────────────────────────────────────────────
 
@@ -120,13 +124,25 @@ function getEffectiveAccess(roleKeys: RoleKey[], feature: FeatureRow): Access {
   return best;
 }
 
+// ─── Collaborator data type ────────────────────────────────────────────────
+
+interface CollabUser {
+  id: string;
+  full_name: string | null;
+  email: string | null;
+  department: string | null;
+  app_roles: string[];     // user_roles (operator/manager/admin)
+  carbo_roles: string[];   // carbo_user_roles (gestor_adm etc.)
+  allowed_interfaces: string[];
+}
+
 // ─── Collaborator row ──────────────────────────────────────────────────────
 
-function CollaboratorRow({ user }: { user: { id: string; full_name: string | null; email: string | null; roles: string[] } }) {
+function CollaboratorRow({ user, onEdit }: { user: CollabUser; onEdit: (u: CollabUser) => void }) {
   const [expanded, setExpanded] = useState(false);
-  const navigate = useNavigate();
 
-  const roleKeys: RoleKey[] = user.roles
+  // Effective access is calculated from carbo_roles (functional roles)
+  const roleKeys: RoleKey[] = user.carbo_roles
     .map((r) => ROLE_KEY_MAP[r])
     .filter(Boolean) as RoleKey[];
 
@@ -175,10 +191,11 @@ function CollaboratorRow({ user }: { user: { id: string; full_name: string | nul
           <Button
             size="sm"
             variant="ghost"
-            className="h-6 px-2 text-xs"
-            onClick={(e) => { e.stopPropagation(); navigate("/governance"); }}
+            className="h-6 px-2 text-xs gap-1 text-primary"
+            onClick={(e) => { e.stopPropagation(); onEdit(user); }}
           >
-            Editar
+            <Settings className="h-3 w-3" />
+            Acesso
           </Button>
         </td>
       </tr>
@@ -187,13 +204,23 @@ function CollaboratorRow({ user }: { user: { id: string; full_name: string | nul
       {expanded && (
         <tr className="bg-muted/10 border-b">
           <td className="p-3 pl-10" colSpan={MODULES.length + 2}>
+            {/* App role badge */}
+            <div className="flex items-center gap-2 flex-wrap mb-2">
+              <span className="text-xs text-muted-foreground font-medium">Nível:</span>
+              {user.app_roles.length > 0
+                ? user.app_roles.map((r) => (
+                    <span key={r} className="text-[10px] font-semibold bg-blue-500/10 text-blue-600 px-2 py-0.5 rounded-full capitalize">{r}</span>
+                  ))
+                : <span className="text-xs text-muted-foreground italic">Sem nível de acesso</span>
+              }
+            </div>
             <div className="flex items-center gap-2 flex-wrap mb-3">
-              <span className="text-xs text-muted-foreground font-medium">Roles:</span>
-              {user.roles.length > 0
-                ? user.roles.map((r) => (
+              <span className="text-xs text-muted-foreground font-medium">Funções:</span>
+              {user.carbo_roles.length > 0
+                ? user.carbo_roles.map((r) => (
                     <span key={r} className="text-[10px] font-semibold bg-primary/10 text-primary px-2 py-0.5 rounded-full">{r}</span>
                   ))
-                : <span className="text-xs text-muted-foreground italic">Sem roles atribuídos</span>
+                : <span className="text-xs text-muted-foreground italic">Sem funções atribuídas — sem acesso ao Carbo Controle</span>
               }
             </div>
             {/* Feature breakdown */}
@@ -216,37 +243,180 @@ function CollaboratorRow({ user }: { user: { id: string; full_name: string | nul
   );
 }
 
+// ─── Access cell with optional dropdown ────────────────────────────────────
+
+function AccessCell({
+  access, editMode, onChange,
+}: { access: Access; editMode: boolean; onChange?: (v: Access) => void }) {
+  if (!editMode) return <>{getAccessIcon(access)}</>;
+  return (
+    <Select value={access} onValueChange={(v) => onChange?.(v as Access)}>
+      <SelectTrigger className="h-7 w-32 text-xs border-dashed">
+        <div className="flex items-center gap-1.5">
+          {getAccessIcon(access, "h-3 w-3")}
+          <span>{ACCESS_LABEL[access]}</span>
+        </div>
+      </SelectTrigger>
+      <SelectContent>
+        {(Object.entries(ACCESS_LABEL) as [Access, string][]).map(([k, label]) => (
+          <SelectItem key={k} value={k}>
+            <div className="flex items-center gap-2">
+              {getAccessIcon(k, "h-3.5 w-3.5")}
+              <span>{label}</span>
+            </div>
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+}
+
 // ─── Main Page ─────────────────────────────────────────────────────────────
 
 export default function RoleMatrix() {
+  const { isMasterAdmin, user } = useAuth();
+  const queryClient = useQueryClient();
   const [tab, setTab] = useState<"cargos" | "colaboradores">("cargos");
 
-  // Query: carbo_user_roles JOIN profiles
-  const { data: userRolesData, isLoading: loadingCollabs } = useQuery({
-    queryKey: ["carbo-user-roles-matrix"],
+  // ── Matrix config (overrides persistidos) ────────────────────────────────
+  const { data: configData } = useQuery({
+    queryKey: ["role-matrix-config"],
     queryFn: async () => {
-      const { data, error } = await (supabase as any)
-        .from("carbo_user_roles")
-        .select("user_id, role, profiles(id, full_name, email)")
-        .order("user_id");
-      if (error) throw error;
-      return data as Array<{ user_id: string; role: string; profiles: { id: string; full_name: string | null; email: string | null } | null }>;
+      const { data } = await supabase
+        .from("role_matrix_config" as any)
+        .select("id, overrides")
+        .order("updated_at" as any, { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      return data as { id: string; overrides: Record<string, Access> } | null;
+    },
+  });
+
+  const [overrides,      setOverrides]      = useState<Record<string, Access>>({});
+  const [editMode,       setEditMode]       = useState(false);
+  const [draftOverrides, setDraftOverrides] = useState<Record<string, Access>>({});
+  const [saving,         setSaving]         = useState(false);
+
+  useEffect(() => {
+    if (configData?.overrides) setOverrides(configData.overrides as Record<string, Access>);
+  }, [configData]);
+
+  // Retorna o acesso efetivo (override > padrão)
+  const getAccess = (row: FeatureRow, role: RoleKey): Access => {
+    const key = `${row.module}|${row.feature}|${role}`;
+    const src = editMode ? draftOverrides : overrides;
+    return src[key] ?? row[role];
+  };
+
+  const handleStartEdit = () => {
+    setDraftOverrides({ ...overrides });
+    setEditMode(true);
+  };
+
+  const handleCancelEdit = () => {
+    setEditMode(false);
+    setDraftOverrides({});
+  };
+
+  const handleCellChange = (row: FeatureRow, role: RoleKey, value: Access) => {
+    const key = `${row.module}|${row.feature}|${role}`;
+    setDraftOverrides((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      // Mescla overrides anteriores com rascunho, removendo entradas iguais ao padrão
+      const merged: Record<string, Access> = { ...overrides, ...draftOverrides };
+      for (const key of Object.keys(merged)) {
+        const [mod, feat, role] = key.split("|");
+        const row = MATRIX.find((r) => r.module === mod && r.feature === feat);
+        if (row && row[role as RoleKey] === merged[key]) delete merged[key];
+      }
+      if (configData?.id) {
+        await (supabase as any).from("role_matrix_config").update({
+          overrides: merged, updated_by: user?.id, updated_at: new Date().toISOString(),
+        }).eq("id", configData.id);
+      } else {
+        await (supabase as any).from("role_matrix_config").insert({
+          overrides: merged, updated_by: user?.id,
+        });
+      }
+      setOverrides(merged);
+      queryClient.invalidateQueries({ queryKey: ["role-matrix-config"] });
+      toast.success("Matriz de acesso salva!");
+      setEditMode(false);
+      setDraftOverrides({});
+    } catch (e: any) {
+      toast.error("Erro ao salvar: " + e.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // ── Colaboradores: profiles (base) + user_roles + carbo_user_roles ────────
+  const [accessMember, setAccessMember] = useState<TeamMember | null>(null);
+
+  const { data: collabData, isLoading: loadingCollabs } = useQuery({
+    queryKey: ["collab-matrix-data"],
+    queryFn: async () => {
+      const [
+        { data: profiles },
+        { data: appRolesData },
+        { data: carboRolesData },
+      ] = await Promise.all([
+        supabase.from("profiles").select("id, full_name, email, department, allowed_interfaces").eq("status", "approved"),
+        supabase.from("user_roles" as any).select("user_id, role"),
+        supabase.from("carbo_user_roles" as any).select("user_id, role"),
+      ]);
+
+      // Build maps
+      const appRolesByUser = new Map<string, string[]>();
+      for (const r of (appRolesData || []) as any[]) {
+        if (!appRolesByUser.has(r.user_id)) appRolesByUser.set(r.user_id, []);
+        appRolesByUser.get(r.user_id)!.push(r.role);
+      }
+      const carboRolesByUser = new Map<string, string[]>();
+      for (const r of (carboRolesData || []) as any[]) {
+        if (!carboRolesByUser.has(r.user_id)) carboRolesByUser.set(r.user_id, []);
+        carboRolesByUser.get(r.user_id)!.push(r.role);
+      }
+
+      return (profiles || []).map((p: any): CollabUser => ({
+        id: p.id,
+        full_name: p.full_name,
+        email: p.email,
+        department: p.department,
+        app_roles: appRolesByUser.get(p.id) || [],
+        carbo_roles: carboRolesByUser.get(p.id) || [],
+        allowed_interfaces: p.allowed_interfaces || [],
+      }));
     },
     enabled: tab === "colaboradores",
   });
 
-  // Group roles by user
-  const collaborators = (() => {
-    if (!userRolesData) return [];
-    const map = new Map<string, { id: string; full_name: string | null; email: string | null; roles: string[] }>();
-    for (const row of userRolesData) {
-      const p = row.profiles;
-      if (!p) continue;
-      if (!map.has(p.id)) map.set(p.id, { id: p.id, full_name: p.full_name, email: p.email, roles: [] });
-      map.get(p.id)!.roles.push(row.role);
-    }
-    return [...map.values()].sort((a, b) => (a.full_name || "").localeCompare(b.full_name || ""));
-  })();
+  const collaborators = (collabData || []).slice().sort((a, b) =>
+    (a.full_name || "").localeCompare(b.full_name || "")
+  );
+
+  // Converte CollabUser → TeamMember para o AccessConfigDialog
+  const toTeamMember = (u: CollabUser): TeamMember => ({
+    id: u.id,
+    full_name: u.full_name,
+    email: u.email,
+    avatar_url: null,
+    department: u.department as any,
+    status: "approved",
+    requested_role: null,
+    roles: u.app_roles as any[],
+    carbo_roles: u.carbo_roles,
+    username: null,
+    password_must_change: false,
+    created_by_manager: null,
+    last_access: null,
+    temp_password_sent_at: null,
+    allowed_interfaces: u.allowed_interfaces,
+  });
 
   return (
     <BoardLayout>
@@ -313,6 +483,32 @@ export default function RoleMatrix() {
 
             {/* Matrix Table */}
             <CarboCard padding="none">
+              {/* Toolbar de edição */}
+              <div className="flex items-center justify-between px-4 py-2.5 border-b bg-muted/20">
+                <p className="text-xs text-muted-foreground">
+                  {editMode
+                    ? "Modo edição — clique em qualquer célula para alterar o nível de acesso"
+                    : "Clique em Editar para personalizar as permissões por cargo"}
+                </p>
+                <div className="flex items-center gap-2">
+                  {editMode ? (
+                    <>
+                      <Button size="sm" variant="outline" onClick={handleCancelEdit} disabled={saving}>
+                        <X className="h-3.5 w-3.5 mr-1" /> Cancelar
+                      </Button>
+                      <Button size="sm" onClick={handleSave} disabled={saving}>
+                        {saving ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> : <Save className="h-3.5 w-3.5 mr-1" />}
+                        Salvar Alterações
+                      </Button>
+                    </>
+                  ) : isMasterAdmin ? (
+                    <Button size="sm" variant="outline" onClick={handleStartEdit}>
+                      <Pencil className="h-3.5 w-3.5 mr-1" /> Editar Matriz
+                    </Button>
+                  ) : null}
+                </div>
+              </div>
+
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
@@ -320,7 +516,7 @@ export default function RoleMatrix() {
                       <th className="text-left p-3 font-medium w-28">Módulo</th>
                       <th className="text-left p-3 font-medium">Funcionalidade</th>
                       {ROLES.map((r) => (
-                        <th key={r.key} className="p-3 font-medium text-center whitespace-nowrap w-28">
+                        <th key={r.key} className={cn("p-3 font-medium text-center whitespace-nowrap", editMode ? "w-36" : "w-28")}>
                           <div className={`inline-block w-2 h-2 rounded-full ${r.color} mr-1`} />
                           {r.label}
                         </th>
@@ -331,18 +527,27 @@ export default function RoleMatrix() {
                     {MODULES.map((mod) => {
                       const rows = MATRIX.filter((r) => r.module === mod);
                       return rows.map((row, i) => (
-                        <tr key={`${mod}-${i}`} className="border-b hover:bg-muted/20 transition-colors">
+                        <tr key={`${mod}-${i}`} className={cn("border-b transition-colors", editMode ? "hover:bg-amber-50/10" : "hover:bg-muted/20")}>
                           {i === 0 && (
                             <td className="p-3 align-top" rowSpan={rows.length}>
                               <CarboBadge variant="secondary" className="text-[10px] whitespace-nowrap">{mod}</CarboBadge>
                             </td>
                           )}
                           <td className="p-3 text-muted-foreground">{row.feature}</td>
-                          {ROLES.map((r) => (
-                            <td key={r.key} className="p-3 text-center" title={ACCESS_LABEL[row[r.key as keyof FeatureRow] as Access]}>
-                              {getAccessIcon(row[r.key as keyof FeatureRow] as Access)}
-                            </td>
-                          ))}
+                          {ROLES.map((r) => {
+                            const access = getAccess(row, r.key);
+                            const isChanged = editMode && (draftOverrides[`${row.module}|${row.feature}|${r.key}`] !== undefined);
+                            return (
+                              <td key={r.key} className={cn("p-2 text-center", isChanged && "bg-amber-500/10")}
+                                  title={!editMode ? ACCESS_LABEL[access] : undefined}>
+                                <AccessCell
+                                  access={access}
+                                  editMode={editMode}
+                                  onChange={(v) => handleCellChange(row, r.key, v)}
+                                />
+                              </td>
+                            );
+                          })}
                         </tr>
                       ));
                     })}
@@ -360,26 +565,22 @@ export default function RoleMatrix() {
               <div>
                 <CarboCardTitle className="text-base">Acesso efetivo por colaborador</CarboCardTitle>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  Calculado a partir dos roles atribuídos. Clique na linha para ver detalhes.
+                  Calculado a partir dos roles atribuídos. Clique na linha para ver detalhes ou em "Acesso" para configurar.
                 </p>
               </div>
-              <Button size="sm" variant="outline" onClick={() => window.location.href = "/governance"}>
-                Gerenciar Roles
-              </Button>
             </div>
             {loadingCollabs ? (
               <div className="p-8 text-center text-muted-foreground text-sm">Carregando colaboradores...</div>
             ) : collaborators.length === 0 ? (
               <div className="p-8 text-center text-muted-foreground text-sm">
-                Nenhum colaborador com roles atribuídos. <br />
-                <a href="/governance" className="text-primary underline text-xs">Atribuir roles →</a>
+                Nenhum colaborador ativo encontrado.
               </div>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b bg-muted/40">
-                      <th className="text-left p-2 pl-3 font-medium min-w-[180px] sticky left-0 bg-muted/40 z-10 border-r">
+                      <th className="text-left p-2 pl-3 font-medium min-w-[200px] sticky left-0 bg-muted/40 z-10 border-r">
                         Colaborador
                       </th>
                       {MODULES.map((mod) => (
@@ -387,12 +588,16 @@ export default function RoleMatrix() {
                           <span className="text-[10px] leading-tight block">{mod}</span>
                         </th>
                       ))}
-                      <th className="p-2 font-medium text-center w-16">Ações</th>
+                      <th className="p-2 font-medium text-center w-20">Acesso</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {collaborators.map((user) => (
-                      <CollaboratorRow key={user.id} user={user} />
+                    {collaborators.map((u) => (
+                      <CollaboratorRow
+                        key={u.id}
+                        user={u}
+                        onEdit={(collab) => setAccessMember(toTeamMember(collab))}
+                      />
                     ))}
                   </tbody>
                 </table>
@@ -400,6 +605,18 @@ export default function RoleMatrix() {
             )}
           </CarboCard>
         )}
+
+        {/* AccessConfigDialog — configurar acesso diretamente pela matrix */}
+        <AccessConfigDialog
+          member={accessMember}
+          open={!!accessMember}
+          onOpenChange={(v) => {
+            if (!v) {
+              setAccessMember(null);
+              queryClient.invalidateQueries({ queryKey: ["collab-matrix-data"] });
+            }
+          }}
+        />
 
         {/* Notes */}
         <CarboCard>

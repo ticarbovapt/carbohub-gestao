@@ -10,12 +10,12 @@ import { CarboSearchInput } from "@/components/ui/carbo-input";
 import { CarboTable, CarboTableHeader, CarboTableBody, CarboTableRow, CarboTableHead, CarboTableCell } from "@/components/ui/carbo-table";
 import { CarboEmptyState } from "@/components/ui/carbo-empty-state";
 import { CarboSkeleton } from "@/components/ui/CarboSkeleton";
-import { 
-  Cog, 
-  Plus, 
-  RefreshCw, 
-  Filter, 
-  MapPin, 
+import {
+  Cog,
+  Plus,
+  RefreshCw,
+  Filter,
+  MapPin,
   AlertTriangle,
   ChevronRight,
   Wrench,
@@ -23,6 +23,7 @@ import {
   Package,
   Download,
   FileSpreadsheet,
+  Upload,
 } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -32,6 +33,7 @@ import { useAuth } from "@/contexts/AuthContext";
 // navigate removed — no machine detail page
 import { CreateMachineDialog } from "@/components/machines/CreateMachineDialog";
 import { EditMachineDialog } from "@/components/machines/EditMachineDialog";
+import { ImportMachinesDialog } from "@/components/machines/ImportMachinesDialog";
 import { MachinesTable } from "@/components/machines/MachinesTable";
 import { exportToExcel, exportToCSV, MACHINE_EXPORT_COLUMNS } from "@/lib/exportUtils";
 import { toast } from "sonner";
@@ -57,6 +59,7 @@ export default function Machines() {
   const [licenseeFilter, setLicenseeFilter] = useState<string>("all");
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
   const [selectedMachine, setSelectedMachine] = useState<Machine | null>(null);
 
   const { data: machines = [], isLoading, refetch } = useMachines(statusFilter, licenseeFilter === "all" ? undefined : licenseeFilter);
@@ -125,10 +128,20 @@ export default function Machines() {
                 Atualizar
               </CarboButton>
               {isManager && (
-                <CarboButton onClick={() => setIsCreateDialogOpen(true)}>
-                  <Plus className="h-4 w-4 mr-1" />
-                  Nova Máquina
-                </CarboButton>
+                <>
+                  <CarboButton
+                    variant="outline"
+                    onClick={() => setIsImportDialogOpen(true)}
+                    aria-label="Importar máquinas via CSV"
+                  >
+                    <Upload className="h-4 w-4 mr-1" />
+                    Importar CSV
+                  </CarboButton>
+                  <CarboButton onClick={() => setIsCreateDialogOpen(true)}>
+                    <Plus className="h-4 w-4 mr-1" />
+                    Nova Máquina
+                  </CarboButton>
+                </>
               )}
             </>
           }
@@ -265,7 +278,19 @@ export default function Machines() {
                     }
                   : undefined
               }
-            />
+            >
+              {isManager && !searchQuery && (
+                <CarboButton
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setIsImportDialogOpen(true)}
+                  aria-label="Importar máquinas em massa via CSV"
+                >
+                  <Upload className="h-4 w-4 mr-1" />
+                  Importar CSV
+                </CarboButton>
+              )}
+            </CarboEmptyState>
           </CarboCard>
         ) : (
           <MachinesTable
@@ -288,6 +313,11 @@ export default function Machines() {
         open={isEditDialogOpen}
         onOpenChange={setIsEditDialogOpen}
         machine={selectedMachine}
+      />
+
+      <ImportMachinesDialog
+        open={isImportDialogOpen}
+        onOpenChange={setIsImportDialogOpen}
       />
     </BoardLayout>
   );

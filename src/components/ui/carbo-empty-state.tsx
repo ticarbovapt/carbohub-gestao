@@ -12,10 +12,11 @@ interface CarboEmptyStateProps {
     onClick: () => void;
   };
   className?: string;
+  children?: React.ReactNode;
 }
 
 const CarboEmptyState = React.forwardRef<HTMLDivElement, CarboEmptyStateProps>(
-  ({ icon: Icon = Inbox, title, description, action, className }, ref) => {
+  ({ icon: Icon = Inbox, title, description, action, className, children }, ref) => {
     return (
       <div
         ref={ref}
@@ -33,10 +34,15 @@ const CarboEmptyState = React.forwardRef<HTMLDivElement, CarboEmptyStateProps>(
             {description}
           </p>
         )}
-        {action && (
-          <CarboButton onClick={action.onClick} size="sm">
-            {action.label}
-          </CarboButton>
+        {(action || children) && (
+          <div className="flex flex-wrap items-center justify-center gap-2 mt-1">
+            {action && (
+              <CarboButton onClick={action.onClick} size="sm">
+                {action.label}
+              </CarboButton>
+            )}
+            {children}
+          </div>
         )}
       </div>
     );

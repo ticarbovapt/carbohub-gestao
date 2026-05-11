@@ -124,11 +124,12 @@ export function LicenseesTable({ licensees, navigate, onEdit }: LicenseesTablePr
                 })()}
               </CarboTableCell>
               {onEdit && (
-                <CarboTableCell>
+                <CarboTableCell onClick={(e) => e.stopPropagation()}>
                   <CarboButton
                     variant="ghost"
                     size="icon"
                     onClick={(e) => {
+                      e.preventDefault();
                       e.stopPropagation();
                       onEdit(licensee);
                     }}

@@ -114,7 +114,7 @@ export interface LancarDespesaInput {
 // ─── Hooks — Solicitações ───────────────────────────────────────────────────
 
 /** Lista solicitações — o usuário vê as próprias; gestores/admin veem todas */
-export function useViagens(filter?: { status?: ViagemStatus }) {
+export function useViagens(filter?: { status?: ViagemStatus; solicitanteId?: string }) {
   const { user } = useAuth();
 
   return useQuery({
@@ -126,6 +126,7 @@ export function useViagens(filter?: { status?: ViagemStatus }) {
         .order("created_at", { ascending: false });
 
       if (filter?.status) q = q.eq("status", filter.status);
+      if (filter?.solicitanteId) q = q.eq("solicitante_id", filter.solicitanteId);
 
       const { data, error } = await q;
       if (error) throw error;
@@ -467,9 +468,9 @@ export function useReopenPC() {
 
 export const STATUS_LABEL: Record<ViagemStatus, string> = {
   rascunho:             "Rascunho",
-  pendente_gestor:      "Pend. Gestor",
-  pendente_financeiro:  "Pend. Financeiro",
-  pendente_ceo:         "Pend. CEO",
+  pendente_gestor:      "Ag. Gestor",
+  pendente_financeiro:  "Ag. Financeiro",
+  pendente_ceo:         "Ag. CEO",
   aprovado:             "Aprovado",
   reprovado:            "Reprovado",
   em_andamento:         "Em Andamento",

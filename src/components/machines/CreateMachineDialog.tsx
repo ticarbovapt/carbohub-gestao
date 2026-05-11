@@ -23,6 +23,7 @@ import { toast } from "sonner";
 import { MapPreview } from "@/components/maps/MapPreview";
 
 const formSchema = z.object({
+  machine_id: z.string().optional(),
   model: z.string().min(1, "Modelo é obrigatório"),
   serial_number: z.string().optional(),
   licensee_id: z.string().optional(),
@@ -60,7 +61,8 @@ export function CreateMachineDialog({ open, onOpenChange, licensees }: CreateMac
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      model: "",
+      machine_id: "",
+      model: "CarboVapt",
       serial_number: "",
       licensee_id: "",
       location_address: "",
@@ -101,6 +103,7 @@ export function CreateMachineDialog({ open, onOpenChange, licensees }: CreateMac
 
   const onSubmit = async (values: FormValues) => {
     await createMachine.mutateAsync({
+      machine_id: values.machine_id || undefined,
       model: values.model,
       serial_number: values.serial_number,
       licensee_id: values.licensee_id || undefined,
@@ -138,6 +141,20 @@ export function CreateMachineDialog({ open, onOpenChange, licensees }: CreateMac
                 Informações Básicas
               </h3>
               <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={form.control}
+                  name="machine_id"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>ID da Máquina</FormLabel>
+                      <FormControl>
+                        <Input placeholder="Ex: 26-041 (auto se vazio)" {...field} />
+                      </FormControl>
+                      <p className="text-xs text-muted-foreground">Formato YY-NNN. Gerado automaticamente se vazio.</p>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
                 <FormField
                   control={form.control}
                   name="model"

@@ -12,6 +12,7 @@ import { useTeamMembers, TeamMember } from "@/hooks/useTeamMembers";
 import { useNavigate } from "react-router-dom";
 import { AddMemberDialog } from "@/components/team/AddMemberDialog";
 import { DeleteMemberDialog } from "@/components/team/DeleteMemberDialog";
+import { AccessConfigDialog } from "@/components/team/AccessConfigDialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -180,15 +181,30 @@ function MemberInfoModal({ member, profiles, teamMembers, onClose, canEdit, isMa
       (m) => m.email && formEmail && m.email.toLowerCase() === formEmail.toLowerCase()
     );
     if (linked) {
+      // Resolve manager_user_id: find the profile whose org_chart_node matches formReportsTo
+      let managerProfileId: string | null = null;
+      if (isMasterAdmin && formReportsTo) {
+        const managerNode = (profiles as any[]).find((p: any) => p.id === formReportsTo);
+        const managerLinked = managerNode?.email
+          ? teamMembers.find((m) => m.email?.toLowerCase() === managerNode.email.toLowerCase())
+          : null;
+        managerProfileId = managerLinked?.id || null;
+      }
+
       const { error: profileUpdateError } = await supabase
         .from("profiles")
         .update({
           full_name:  formName,
           department: formDept as any,   // profile enum value (lowercase)
-        })
+          phone:      formPhone || null,
+          funcao:     formTitle || null,
+          ...(isMasterAdmin ? { manager_user_id: managerProfileId } : {}),
+        } as any)
         .eq("id", linked.id);
       if (profileUpdateError) {
         toast.error("Dados salvos no organograma, mas houve um erro ao atualizar o perfil: " + profileUpdateError.message);
+      } else {
+        toast.success("Colaborador atualizado!");
       }
     }
 
@@ -532,6 +548,7 @@ const Team = () => {
   const navigate = useNavigate();
 
   const [selectedMember, setSelectedMember] = useState<OrgNode | null>(null);
+  const [accessMember, setAccessMember] = useState<TeamMember | null>(null);
   const [confirmEmailMember, setConfirmEmailMember] = useState<TeamMember | null>(null);
   const [emailSentMember, setEmailSentMember] = useState<TeamMember | null>(null);
   const [isBulkSending, setIsBulkSending] = useState(false);
@@ -704,7 +721,7 @@ const Team = () => {
                   <span>Colaborador</span>
                   <span className="text-right w-24">Acesso</span>
                   <span className="text-right w-40">Funções</span>
-                  <span className="w-16"></span>
+                  <span className="w-24"></span>
                 </div>
                 {/* Rows */}
                 {approvedMembers.map((member) => (
@@ -758,11 +775,12 @@ const Team = () => {
                     </div>
 
                     {/* Actions */}
-                    <div className="w-16 flex justify-end">
+                    <div className="flex items-center gap-1 justify-end">
                       <Button
                         variant="ghost"
                         size="sm"
-                        className="h-7 px-2 text-xs"
+                        className="h-7 w-7 p-0"
+                        title="Editar dados do colaborador"
                         onClick={() => {
                           // Match org node by email to open MemberInfoModal
                           const node = profiles.find(
@@ -788,8 +806,17 @@ const Team = () => {
                           }
                         }}
                       >
-                        <Pencil className="h-3 w-3 mr-1" />
-                        Editar
+                        <Pencil className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 px-2 text-xs text-primary hover:text-primary hover:bg-primary/10"
+                        title="Configurar acesso e funções"
+                        onClick={() => setAccessMember(member)}
+                      >
+                        <Shield className="h-3 w-3 mr-1" />
+                        Acesso
                       </Button>
                     </div>
                   </div>
@@ -942,6 +969,13 @@ const Team = () => {
 
         </Tabs>
       </div>
+
+      {/* Access config modal */}
+      <AccessConfigDialog
+        member={accessMember}
+        open={!!accessMember}
+        onOpenChange={(v) => { if (!v) setAccessMember(null); }}
+      />
 
       {/* Member info modal */}
       <MemberInfoModal
