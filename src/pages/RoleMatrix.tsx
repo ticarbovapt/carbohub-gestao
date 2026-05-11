@@ -190,8 +190,8 @@ function CollaboratorRow({ user, onEdit }: { user: CollabUser; onEdit: (u: Colla
         <td className="p-2 text-center">
           <Button
             size="sm"
-            variant="ghost"
-            className="h-6 px-2 text-xs gap-1 text-primary"
+            variant="outline"
+            className="h-7 px-3 text-xs font-medium gap-1 border-primary/40 text-primary hover:bg-primary/10 hover:border-primary"
             onClick={(e) => { e.stopPropagation(); onEdit(user); }}
           >
             <Settings className="h-3 w-3" />

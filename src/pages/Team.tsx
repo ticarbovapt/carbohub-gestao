@@ -703,6 +703,11 @@ const Team = () => {
 
           {/* ── ABA: Usuários com Acesso ── */}
           <TabsContent value="acesso" className="mt-6">
+            {/* Hint bar */}
+            <div className="flex items-center gap-2 mb-4 px-3 py-2 rounded-lg bg-primary/5 border border-primary/15 text-xs text-muted-foreground">
+              <Shield className="h-3.5 w-3.5 text-primary flex-shrink-0" />
+              <span>Use o botão <span className="font-semibold text-primary">Acesso</span> em cada linha para configurar nível, funções e interfaces de cada colaborador.</span>
+            </div>
             {membersLoading ? (
               <div className="space-y-2">
                 {[...Array(5)].map((_, i) => (
@@ -719,9 +724,9 @@ const Team = () => {
                 {/* Header */}
                 <div className="grid grid-cols-[1fr_auto_auto_auto] gap-4 items-center px-4 py-2.5 bg-muted/50 border-b text-xs font-semibold text-muted-foreground uppercase tracking-wide">
                   <span>Colaborador</span>
-                  <span className="text-right w-24">Acesso</span>
+                  <span className="text-right w-24">Nível</span>
                   <span className="text-right w-40">Funções</span>
-                  <span className="w-24"></span>
+                  <span className="w-32 text-right">Configurar</span>
                 </div>
                 {/* Rows */}
                 {approvedMembers.map((member) => (
@@ -775,11 +780,11 @@ const Team = () => {
                     </div>
 
                     {/* Actions */}
-                    <div className="flex items-center gap-1 justify-end">
+                    <div className="flex items-center gap-1.5 justify-end w-32">
                       <Button
                         variant="ghost"
                         size="sm"
-                        className="h-7 w-7 p-0"
+                        className="h-7 w-7 p-0 text-muted-foreground"
                         title="Editar dados do colaborador"
                         onClick={() => {
                           // Match org node by email to open MemberInfoModal
@@ -809,13 +814,13 @@ const Team = () => {
                         <Pencil className="h-3.5 w-3.5" />
                       </Button>
                       <Button
-                        variant="ghost"
+                        variant="outline"
                         size="sm"
-                        className="h-7 px-2 text-xs text-primary hover:text-primary hover:bg-primary/10"
+                        className="h-7 px-2.5 text-xs font-medium border-primary/40 text-primary hover:bg-primary/10 hover:border-primary gap-1"
                         title="Configurar acesso e funções"
                         onClick={() => setAccessMember(member)}
                       >
-                        <Shield className="h-3 w-3 mr-1" />
+                        <Shield className="h-3 w-3" />
                         Acesso
                       </Button>
                     </div>
