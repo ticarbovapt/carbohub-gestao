@@ -1,9 +1,8 @@
 import React, { useState } from "react";
-import { Bug, Plus, CheckCircle2, Clock, ExternalLink } from "lucide-react";
+import { Bug, CheckCircle2, Clock, ExternalLink } from "lucide-react";
 import { BoardLayout } from "@/components/layouts/BoardLayout";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import {
@@ -23,21 +22,17 @@ import {
 } from "@/components/ui/table";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from "@/contexts/AuthContext";
-import { useBugReports, useSubmitBugReport, useResolveBugReport, BugReport } from "@/hooks/useBugReports";
+import { useBugReports, useResolveBugReport, BugReport } from "@/hooks/useBugReports";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
 type StatusFilter = "all" | "open" | "resolved";
 
 export default function BugReportsPage() {
-  const { user, profile, isAdmin } = useAuth();
+  const { isAdmin } = useAuth();
   const { data: reports = [], isLoading } = useBugReports();
-  const submitMutation = useSubmitBugReport();
   const resolveMutation = useResolveBugReport();
 
-  const [reportOpen, setReportOpen] = useState(false);
-  const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [detailBug, setDetailBug] = useState<BugReport | null>(null);
   const [adminNotes, setAdminNotes] = useState("");
@@ -46,28 +41,6 @@ export default function BugReportsPage() {
     if (statusFilter === "all") return true;
     return r.status === statusFilter;
   });
-
-  function handleSubmitReport() {
-    if (!title.trim() || !description.trim() || !user) return;
-    submitMutation.mutate(
-      {
-        title: title.trim(),
-        description: description.trim(),
-        url: window.location.href,
-        reporter_id: user.id,
-        reporter_name: profile?.full_name ?? null,
-        reporter_email: user.email ?? null,
-        department: profile?.department ?? null,
-      },
-      {
-        onSuccess: () => {
-          setTitle("");
-          setDescription("");
-          setReportOpen(false);
-        },
-      }
-    );
-  }
 
   function handleResolve(bug: BugReport) {
     resolveMutation.mutate(
@@ -96,20 +69,14 @@ export default function BugReportsPage() {
     <BoardLayout>
       <div className="space-y-6">
         {/* Header */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-xl bg-destructive/10 flex items-center justify-center">
-              <Bug className="h-5 w-5 text-destructive" />
-            </div>
-            <div>
-              <h1 className="text-xl font-bold text-foreground">Bugs Encontrados</h1>
-              <p className="text-sm text-muted-foreground">Reporte e acompanhe problemas do sistema</p>
-            </div>
+        <div className="flex items-center gap-3">
+          <div className="h-10 w-10 rounded-xl bg-destructive/10 flex items-center justify-center">
+            <Bug className="h-5 w-5 text-destructive" />
           </div>
-          <Button onClick={() => setReportOpen(true)} className="gap-2">
-            <Plus className="h-4 w-4" />
-            Reportar Bug
-          </Button>
+          <div>
+            <h1 className="text-xl font-bold text-foreground">Bugs Encontrados</h1>
+            <p className="text-sm text-muted-foreground">Problemas reportados pela equipe</p>
+          </div>
         </div>
 
         {/* Filtros */}
@@ -204,53 +171,6 @@ export default function BugReportsPage() {
           </Table>
         </div>
       </div>
-
-      {/* Modal: Reportar Bug */}
-      <Dialog open={reportOpen} onOpenChange={setReportOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Bug className="h-4 w-4 text-destructive" />
-              Reportar um problema
-            </DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 py-2">
-            <div className="space-y-1.5">
-              <Label htmlFor="bug-title">Título <span className="text-destructive">*</span></Label>
-              <Input
-                id="bug-title"
-                placeholder="Ex: Botão de voltar desconecta do sistema"
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="bug-desc">Descrição <span className="text-destructive">*</span></Label>
-              <Textarea
-                id="bug-desc"
-                placeholder="Descreva o que aconteceu, o que você esperava que acontecesse, e qualquer mensagem de erro que apareceu."
-                rows={4}
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-              />
-            </div>
-            <p className="text-xs text-muted-foreground">
-              A tela atual e suas informações serão enviadas automaticamente.
-            </p>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setReportOpen(false)}>
-              Cancelar
-            </Button>
-            <Button
-              onClick={handleSubmitReport}
-              disabled={!title.trim() || !description.trim() || submitMutation.isPending}
-            >
-              {submitMutation.isPending ? "Enviando..." : "Enviar Reporte"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       {/* Modal: Detalhes */}
       <Dialog open={!!detailBug} onOpenChange={(open) => { if (!open) { setDetailBug(null); setAdminNotes(""); } }}>
