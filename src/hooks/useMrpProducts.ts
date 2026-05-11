@@ -97,11 +97,10 @@ export function useUpdateMrpProduct() {
         .from("mrp_products")
         .update(data)
         .eq("id", id)
-        .select()
-        .single();
+        .select();
       if (error) throw error;
-      if (!updated) throw new Error("Produto não encontrado ou sem permissão para editar.");
-      return updated;
+      if (!updated || updated.length === 0) throw new Error("Produto não encontrado ou sem permissão para editar.");
+      return updated[0];
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["mrp-products"] });
