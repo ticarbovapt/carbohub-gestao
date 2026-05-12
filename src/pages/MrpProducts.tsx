@@ -13,6 +13,7 @@ import { Package, Plus, Pencil, Warehouse, AlertTriangle, CheckCircle, AlertCirc
 import { useMrpProducts, useCreateMrpProduct, useUpdateMrpProduct, useDeleteMrpProduct, useWarehouseStockByProduct, MrpProduct } from "@/hooks/useMrpProducts";
 import { useAuth } from "@/contexts/AuthContext";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -74,6 +75,7 @@ function ProductForm({ product, onClose }: { product?: MrpProduct; onClose: () =
   const createMut = useCreateMrpProduct();
   const updateMut = useUpdateMrpProduct();
   const deleteMut = useDeleteMrpProduct();
+  const [confirmDelete, setConfirmDelete] = useState(false);
   // Flag para saber se o usuário já editou o código manualmente
   const [codeManuallyEdited, setCodeManuallyEdited] = useState(false);
   const [form, setForm] = useState({
@@ -217,19 +219,39 @@ function ProductForm({ product, onClose }: { product?: MrpProduct; onClose: () =
       </div>
       <div className="flex items-center justify-between pt-2">
         {product ? (
-          <CarboButton
-            variant="outline"
-            type="button"
-            loading={deleteMut.isPending}
-            onClick={async () => {
-              if (!window.confirm(`Excluir "${product.name}" permanentemente? Esta ação não pode ser desfeita.`)) return;
-              await deleteMut.mutateAsync(product.id);
-              onClose();
-            }}
-            className="text-destructive border-destructive/40 hover:bg-destructive/10 hover:border-destructive gap-1.5"
-          >
-            <Trash2 className="h-3.5 w-3.5" /> Excluir
-          </CarboButton>
+          <>
+            <CarboButton
+              variant="outline"
+              type="button"
+              onClick={() => setConfirmDelete(true)}
+              className="text-destructive border-destructive/40 hover:bg-destructive/10 hover:border-destructive gap-1.5"
+            >
+              <Trash2 className="h-3.5 w-3.5" /> Excluir
+            </CarboButton>
+
+            <AlertDialog open={confirmDelete} onOpenChange={setConfirmDelete}>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Excluir produto?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    <strong>{product.name}</strong> ({product.product_code}) será removido permanentemente. Esta ação não pode ser desfeita.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                  <AlertDialogAction
+                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                    onClick={async () => {
+                      await deleteMut.mutateAsync(product.id);
+                      onClose();
+                    }}
+                  >
+                    {deleteMut.isPending ? "Excluindo..." : "Excluir"}
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          </>
         ) : <span />}
         <div className="flex gap-2">
           <CarboButton variant="outline" type="button" onClick={onClose}>Cancelar</CarboButton>
