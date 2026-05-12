@@ -153,7 +153,7 @@ export default function MrpSuppliers() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editSupplier, setEditSupplier] = useState<MrpSupplier | undefined>();
 
-  const canEdit = isAdmin || isCeo;
+  const canEdit = true;
 
   const filtered = suppliers.filter(s => {
     if (!search) return true;

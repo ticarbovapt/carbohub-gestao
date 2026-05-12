@@ -287,7 +287,7 @@ export default function MrpProducts() {
   // Detecta ?bom=1 vindo do sidebar
   const bomView = searchParams.get("bom") === "1";
 
-  const canEdit = isAdmin || isCeo || isAnyGestor;
+  const canEdit = true;
 
   const filtered = products.filter(p => {
     if (categoryFilter !== "all" && p.category !== categoryFilter) return false;

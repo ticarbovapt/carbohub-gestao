@@ -109,15 +109,13 @@ function QuickActionsMenu({ isAdmin, isCeo }: { isAdmin: boolean; isCeo: boolean
             <UserPlus className="h-4 w-4 flex-shrink-0" />
             + Novo Licenciado
           </button>
-          {(isAdmin || isCeo) && (
-            <button
-              onClick={() => { navigate("/team?action=add"); setOpen(false); }}
-              className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
-            >
-              <Users className="h-4 w-4 flex-shrink-0" />
-              + Nova Conta
-            </button>
-          )}
+          <button
+            onClick={() => { navigate("/team?action=add"); setOpen(false); }}
+            className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+          >
+            <Users className="h-4 w-4 flex-shrink-0" />
+            + Nova Conta
+          </button>
           <button
             onClick={() => { navigate("/financeiro"); setOpen(false); }}
             className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
@@ -252,11 +250,10 @@ const operacoesGroups: NavGroup[] = [
     id: "admin",
     label: "Admin",
     icon: Shield,
-    adminOnly: true,
     children: [
       { href: "/admin/webhooks",  label: "Webhooks CRM",         icon: Zap },
       { href: "/admin/pipeline",  label: "Config. Pipeline CRM", icon: Cog },
-      { href: "/admin/cockpit",   label: "Cockpit Estratégico",  icon: BarChart3 },
+      { href: "/admin/cockpit",   label: "Cockpit Estratégico",  icon: BarChart3, adminOnly: true },
     ],
   },
 ];
@@ -439,15 +436,15 @@ export function BoardLayout({ children }: BoardLayoutProps) {
 
   const currentItems = dashboardsItems;
   const filteredItems = currentItems.filter((item) => {
-    if (item.adminOnly && !isAdmin && !isCeo && !isSuporte) return false;
+    if (item.adminOnly && !isMasterAdmin && !isSuporte) return false;
     return true;
   });
   const filteredControleGroups = controleGroups
-    .filter((g) => !g.adminOnly || isAdmin || isCeo || isSuporte)
-    .map((g) => ({ ...g, children: g.children.filter((c) => !c.adminOnly || isAdmin || isCeo) }));
+    .filter((g) => !g.adminOnly || isMasterAdmin || isSuporte)
+    .map((g) => ({ ...g, children: g.children.filter((c) => !c.adminOnly || isMasterAdmin || isSuporte) }));
   const filteredOpsGroups = operacoesGroups
-    .filter((g) => !g.adminOnly || isAdmin || isCeo || isSuporte)
-    .map((g) => ({ ...g, children: g.children.filter((c) => !c.adminOnly || isAdmin || isCeo) }));
+    .filter((g) => !g.adminOnly || isMasterAdmin || isSuporte)
+    .map((g) => ({ ...g, children: g.children.filter((c) => !c.adminOnly || isMasterAdmin || isSuporte) }));
   const filteredGlobalItems = globalItems.filter((item: any) => {
     if (item.financeOrMasterOnly && !isMasterAdmin && !isGestorFin) return false;
     if (item.adminOnly && !isAdmin && !isCeo && !isSuporte) return false;
