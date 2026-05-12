@@ -56,6 +56,10 @@ export default function CRMFunnel() {
     }
   };
 
+  const handleDragMove = (lead: CRMLead, toStage: string) => {
+    advanceLead.mutate({ id: lead.id, newStage: toStage, funnelType: ft, currentStage: lead.stage });
+  };
+
   const handleMarkLost = (lead: CRMLead) => {
     setLostDialogLead(lead);
   };
@@ -144,6 +148,7 @@ export default function CRMFunnel() {
             onAdvance={handleAdvance}
             onMarkLost={handleMarkLost}
             onLeadClick={(lead) => setDrawerLead(lead)}
+            onDragMove={handleDragMove}
           />
         ) : (
           <CarboCard>

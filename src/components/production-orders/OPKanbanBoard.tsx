@@ -1,8 +1,11 @@
-import React from "react";
+import { useState } from "react";
+import { DndContext, DragEndEvent, DragStartEvent, MouseSensor, TouchSensor, useSensor, useSensors } from "@dnd-kit/core";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { OPKanbanCard } from "./OPKanbanCard";
 import type { ProductionOrder, OpStatus } from "@/hooks/useProductionOrders";
+import { useUpdateProductionOrderOP } from "@/hooks/useProductionOrders";
+import { DraggableCard, DroppableColumn, KanbanDragOverlay } from "@/components/kanban/KanbanDnd";
 
 // ──────────────────────────────────────────────────────────────
 // Stage grouping: map each op_status to a Kanban column
@@ -12,67 +15,19 @@ interface OPKanbanColumn {
   id: string;
   label: string;
   emoji: string;
-  color: string; // hex for border-top
+  color: string;
   statuses: OpStatus[];
 }
 
 export const OP_KANBAN_COLUMNS: OPKanbanColumn[] = [
-  {
-    id: "backlog",
-    label: "Backlog",
-    emoji: "📋",
-    color: "#64748b",
-    statuses: ["rascunho"],
-  },
-  {
-    id: "planejada",
-    label: "Planejada",
-    emoji: "📅",
-    color: "#3b82f6",
-    statuses: ["planejada"],
-  },
-  {
-    id: "materiais",
-    label: "Materiais",
-    emoji: "🔧",
-    color: "#f59e0b",
-    statuses: ["aguardando_separacao", "separada"],
-  },
-  {
-    id: "liberada",
-    label: "Liberada",
-    emoji: "✅",
-    color: "#6366f1",
-    statuses: ["aguardando_liberacao", "liberada_producao"],
-  },
-  {
-    id: "em_producao",
-    label: "Em Produção",
-    emoji: "⚙️",
-    color: "#8b5cf6",
-    statuses: ["em_producao"],
-  },
-  {
-    id: "qualidade",
-    label: "Qualidade",
-    emoji: "🔍",
-    color: "#f97316",
-    statuses: ["aguardando_confirmacao", "confirmada", "aguardando_qualidade"],
-  },
-  {
-    id: "concluida",
-    label: "Concluída",
-    emoji: "📦",
-    color: "#22c55e",
-    statuses: ["liberada", "concluida"],
-  },
-  {
-    id: "bloqueada",
-    label: "Bloqueada",
-    emoji: "🚫",
-    color: "#ef4444",
-    statuses: ["bloqueada", "cancelada"],
-  },
+  { id: "backlog",     label: "Backlog",      emoji: "📋", color: "#64748b", statuses: ["rascunho"] },
+  { id: "planejada",   label: "Planejada",    emoji: "📅", color: "#3b82f6", statuses: ["planejada"] },
+  { id: "materiais",   label: "Materiais",    emoji: "🔧", color: "#f59e0b", statuses: ["aguardando_separacao", "separada"] },
+  { id: "liberada",    label: "Liberada",     emoji: "✅", color: "#6366f1", statuses: ["aguardando_liberacao", "liberada_producao"] },
+  { id: "em_producao", label: "Em Produção",  emoji: "⚙️", color: "#8b5cf6", statuses: ["em_producao"] },
+  { id: "qualidade",   label: "Qualidade",    emoji: "🔍", color: "#f97316", statuses: ["aguardando_confirmacao", "confirmada", "aguardando_qualidade"] },
+  { id: "concluida",   label: "Concluída",    emoji: "📦", color: "#22c55e", statuses: ["liberada", "concluida"] },
+  { id: "bloqueada",   label: "Bloqueada",    emoji: "🚫", color: "#ef4444", statuses: ["bloqueada", "cancelada"] },
 ];
 
 // ──────────────────────────────────────────────────────────────
@@ -84,24 +39,64 @@ interface OPKanbanBoardProps {
 }
 
 export function OPKanbanBoard({ orders, onAdvance, onCardClick }: OPKanbanBoardProps) {
-  // Group orders by column
+  const updateOP = useUpdateProductionOrderOP();
+  const [activeId, setActiveId] = useState<string | null>(null);
+
+  const sensors = useSensors(
+    useSensor(MouseSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 5 } })
+  );
+
   const ordersByColumn = OP_KANBAN_COLUMNS.reduce((acc, col) => {
     acc[col.id] = orders.filter((o) => col.statuses.includes(o.op_status));
     return acc;
   }, {} as Record<string, ProductionOrder[]>);
 
+  const activeOrder = activeId ? orders.find((o) => o.id === activeId) : null;
+
+  function handleDragStart(event: DragStartEvent) {
+    setActiveId(event.active.id as string);
+  }
+
+  function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event;
+    setActiveId(null);
+    if (!over) return;
+    const order = active.data.current?.entity as ProductionOrder;
+    const targetCol = OP_KANBAN_COLUMNS.find((c) => c.id === over.id);
+    if (!order || !targetCol) return;
+    // Use first status in column as canonical entry point for drag drops
+    const targetStatus = targetCol.statuses[0];
+    const currentCol = OP_KANBAN_COLUMNS.find((c) => c.statuses.includes(order.op_status));
+    if (currentCol?.id === targetCol.id) return; // same column, no-op
+    updateOP.mutate({ id: order.id, op_status: targetStatus });
+  }
+
   return (
-    <div className="flex gap-3 overflow-x-auto pb-4 min-h-[500px]">
-      {OP_KANBAN_COLUMNS.map((col) => (
-        <OPColumn
-          key={col.id}
-          column={col}
-          orders={ordersByColumn[col.id] ?? []}
-          onAdvance={onAdvance}
-          onCardClick={onCardClick}
-        />
-      ))}
-    </div>
+    <DndContext
+      sensors={sensors}
+      onDragStart={handleDragStart}
+      onDragEnd={handleDragEnd}
+      onDragCancel={() => setActiveId(null)}
+    >
+      <div className="flex gap-3 overflow-x-auto pb-4 min-h-[500px]">
+        {OP_KANBAN_COLUMNS.map((col) => (
+          <OPColumn
+            key={col.id}
+            column={col}
+            orders={ordersByColumn[col.id] ?? []}
+            onAdvance={onAdvance}
+            onCardClick={onCardClick}
+          />
+        ))}
+      </div>
+
+      <KanbanDragOverlay>
+        {activeOrder ? (
+          <OPKanbanCard order={activeOrder} />
+        ) : null}
+      </KanbanDragOverlay>
+    </DndContext>
   );
 }
 
@@ -136,26 +131,33 @@ function OPColumn({
 
       {/* Cards */}
       <ScrollArea className="h-[calc(100vh-320px)]">
-        <div className="p-2 space-y-2">
-          {orders.length === 0 ? (
-            <p className="text-xs text-muted-foreground text-center py-8 italic">
-              Nenhuma OP aqui
-            </p>
-          ) : (
-            orders.map((order) => (
-              <OPKanbanCard
-                key={order.id}
-                order={order}
-                onAdvance={
-                  column.id !== "concluida" && column.id !== "bloqueada"
-                    ? onAdvance
-                    : undefined
-                }
-                onClick={onCardClick}
-              />
-            ))
-          )}
-        </div>
+        <DroppableColumn id={column.id}>
+          <div className="p-2 space-y-2">
+            {orders.length === 0 ? (
+              <p className="text-xs text-muted-foreground text-center py-8 italic">
+                Nenhuma OP aqui
+              </p>
+            ) : (
+              orders.map((order) => (
+                <DraggableCard
+                  key={order.id}
+                  id={order.id}
+                  data={{ entity: order }}
+                >
+                  <OPKanbanCard
+                    order={order}
+                    onAdvance={
+                      column.id !== "concluida" && column.id !== "bloqueada"
+                        ? onAdvance
+                        : undefined
+                    }
+                    onClick={onCardClick}
+                  />
+                </DraggableCard>
+              ))
+            )}
+          </div>
+        </DroppableColumn>
       </ScrollArea>
     </div>
   );
