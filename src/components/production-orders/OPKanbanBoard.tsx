@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { DndContext, DragEndEvent, DragStartEvent, MouseSensor, TouchSensor, useSensor, useSensors } from "@dnd-kit/core";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
@@ -56,6 +56,21 @@ export function OPKanbanBoard({ orders, onAdvance, onCardClick }: OPKanbanBoardP
     return acc;
   }, {} as Record<string, ProductionOrder[]>);
 
+  // Clear optimistic state only when server data confirms the move
+  useEffect(() => {
+    if (Object.keys(optimisticMoves).length === 0) return;
+    setOptimisticMoves((prev) => {
+      const next = { ...prev };
+      let changed = false;
+      for (const [id, colId] of Object.entries(prev)) {
+        const order = orders.find((o) => o.id === id);
+        const col = OP_KANBAN_COLUMNS.find((c) => c.id === colId);
+        if (order && col && col.statuses.includes(order.op_status)) { delete next[id]; changed = true; }
+      }
+      return changed ? next : prev;
+    });
+  }, [orders]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const activeOrder = activeId ? orders.find((o) => o.id === activeId) : null;
 
   function handleDragStart(event: DragStartEvent) {
@@ -74,7 +89,7 @@ export function OPKanbanBoard({ orders, onAdvance, onCardClick }: OPKanbanBoardP
     if (currentCol?.id === targetCol.id) return;
     setOptimisticMoves((prev) => ({ ...prev, [order.id]: targetCol.id }));
     updateOP.mutate({ id: order.id, op_status: targetStatus }, {
-      onSettled: () => setOptimisticMoves((prev) => { const n = { ...prev }; delete n[order.id]; return n; }),
+      onError: () => setOptimisticMoves((prev) => { const n = { ...prev }; delete n[order.id]; return n; }),
     });
   }
 

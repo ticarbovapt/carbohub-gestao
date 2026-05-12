@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { DndContext, DragEndEvent, DragStartEvent, MouseSensor, TouchSensor, useSensor, useSensors } from "@dnd-kit/core";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
@@ -34,6 +34,20 @@ export function CRMKanbanBoard({ leads, funnelType, onAdvance, onMarkLost, onLea
     return acc;
   }, {} as Record<string, CRMLead[]>);
 
+  // Clear optimistic state only when server data confirms the move
+  useEffect(() => {
+    if (Object.keys(optimisticMoves).length === 0) return;
+    setOptimisticMoves((prev) => {
+      const next = { ...prev };
+      let changed = false;
+      for (const [id, stage] of Object.entries(prev)) {
+        const lead = leads.find((l) => l.id === id);
+        if (lead && lead.stage === stage) { delete next[id]; changed = true; }
+      }
+      return changed ? next : prev;
+    });
+  }, [leads]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const activeLead = activeId ? leads.find((l) => l.id === activeId) : null;
 
   function handleDragStart(event: DragStartEvent) {
@@ -48,11 +62,7 @@ export function CRMKanbanBoard({ leads, funnelType, onAdvance, onMarkLost, onLea
     const toStage = over.id as string;
     if (!lead || lead.stage === toStage) return;
     setOptimisticMoves((prev) => ({ ...prev, [lead.id]: toStage }));
-    // onDragMove fires the mutation; clear optimistic state when it settles
-    // The parent mutation doesn't expose onSettled here, so clear after a safe delay
-    // that covers the query invalidation (~1s)
     onDragMove?.(lead, toStage);
-    setTimeout(() => setOptimisticMoves((prev) => { const n = { ...prev }; delete n[lead.id]; return n; }), 1500);
   }
 
   return (

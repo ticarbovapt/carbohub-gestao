@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { DndContext, DragEndEvent, DragStartEvent, MouseSensor, TouchSensor, useSensor, useSensors } from "@dnd-kit/core";
 import { Shipment, ShipmentStatus, SHIPMENT_STATUS_CONFIG } from "@/types/shipment";
 import { ShipmentCard } from "./ShipmentCard";
@@ -34,6 +34,20 @@ export function LogisticsKanban({
     useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 5 } })
   );
 
+  // Clear optimistic state only when server data confirms the move
+  useEffect(() => {
+    if (Object.keys(optimisticMoves).length === 0) return;
+    setOptimisticMoves((prev) => {
+      const next = { ...prev };
+      let changed = false;
+      for (const [id, status] of Object.entries(prev)) {
+        const s = shipments.find((sh) => sh.id === id);
+        if (s && s.status === status) { delete next[id]; changed = true; }
+      }
+      return changed ? next : prev;
+    });
+  }, [shipments]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const activeShipment = activeId ? shipments.find((s) => s.id === activeId) : null;
 
   function handleDragStart(event: DragStartEvent) {
@@ -49,7 +63,6 @@ export function LogisticsKanban({
     if (!shipment || shipment.status === toStatus) return;
     setOptimisticMoves((prev) => ({ ...prev, [shipment.id]: toStatus }));
     onDragMove?.(shipment.id, toStatus);
-    setTimeout(() => setOptimisticMoves((prev) => { const n = { ...prev }; delete n[shipment.id]; return n; }), 2000);
   }
 
   return (
