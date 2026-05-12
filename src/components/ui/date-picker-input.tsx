@@ -18,6 +18,8 @@ interface DatePickerInputProps {
   placeholder?: string;
   className?: string;
   clearable?: boolean;
+  disablePast?: boolean;   // bloqueia datas anteriores a hoje
+  disableFuture?: boolean; // bloqueia datas posteriores a hoje
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -27,6 +29,8 @@ export function DatePickerInput({
   placeholder = "dd/mm/aaaa",
   className,
   clearable = true,
+  disablePast = false,
+  disableFuture = false,
 }: DatePickerInputProps) {
   const [open, setOpen] = useState(false);
 
@@ -86,7 +90,13 @@ export function DatePickerInput({
           onSelect={handleSelect}
           initialFocus
           locale={ptBR}
-          disabled={(date) => date > new Date()}
+          disabled={(date) => {
+              const today = new Date();
+              today.setHours(0, 0, 0, 0);
+              if (disablePast && date < today) return true;
+              if (disableFuture && date > today) return true;
+              return false;
+            }}
         />
       </PopoverContent>
     </Popover>
