@@ -29,7 +29,8 @@ import { ptBR } from "date-fns/locale";
 type StatusFilter = "all" | "open" | "resolved";
 
 export default function BugReportsPage() {
-  const { isAdmin } = useAuth();
+  const { isAdmin, isSuporte } = useAuth();
+  const canManageBugs = isAdmin || isSuporte;
   const { data: reports = [], isLoading } = useBugReports();
   const resolveMutation = useResolveBugReport();
   const deleteMutation = useDeleteBugReport();
@@ -231,7 +232,7 @@ export default function BugReportsPage() {
                   </Badge>
                 )}
               </div>
-              {isAdmin && detailBug.status === "open" && (
+              {canManageBugs && detailBug.status === "open" && (
                 <div className="space-y-1.5 pt-2 border-t">
                   <Label htmlFor="admin-notes">Notas do admin (opcional)</Label>
                   <Textarea
@@ -255,7 +256,7 @@ export default function BugReportsPage() {
           )}
           <DialogFooter className="gap-2 sm:justify-between">
             <div>
-              {isAdmin && (
+              {canManageBugs && (
                 <Button
                   variant="ghost"
                   size="sm"
@@ -272,7 +273,7 @@ export default function BugReportsPage() {
               <Button variant="outline" onClick={() => { setDetailBug(null); setAdminNotes(""); }}>
                 Fechar
               </Button>
-              {isAdmin && detailBug?.status === "open" && (
+              {canManageBugs && detailBug?.status === "open" && (
                 <Button
                   onClick={() => detailBug && handleResolve(detailBug)}
                   disabled={resolveMutation.isPending}
