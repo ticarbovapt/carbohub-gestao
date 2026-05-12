@@ -32,6 +32,7 @@ const TYPE_CONFIG: Record<string, { Icon: React.ElementType; label: string; colo
   action_completed: { Icon: Check,          label: "Ação concluída",color: "text-emerald-600",      bg: "bg-emerald-500/10" },
   message:          { Icon: MessageCircle,  label: "Mensagem",      color: "text-blue-500",         bg: "bg-blue-500/10" },
   bug_report:       { Icon: Bug,            label: "Bug reportado", color: "text-destructive",      bg: "bg-destructive/10" },
+  bug_resolved:     { Icon: CheckCheck,     label: "Bug corrigido", color: "text-emerald-600",      bg: "bg-emerald-500/10" },
 };
 
 export function NotificationPanel({ onClose }: NotificationPanelProps) {
