@@ -96,6 +96,7 @@ export function CreateOPDialog({ open, onOpenChange }: CreateOPDialogProps) {
         deviation_notes: data.deviation_notes || null,
         op_number: "",
         // campos legados obrigatórios pelo schema original
+        product_code: sku.code,
         quantity: data.planned_quantity,
         status: "pending",
       };
