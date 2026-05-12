@@ -22,8 +22,12 @@ export function DraggableCard({ id, data, children, disabled }: DraggableCardPro
   return (
     <div
       ref={setNodeRef}
-      style={{ transform: CSS.Translate.toString(transform) }}
-      className={cn("touch-none", isDragging && "opacity-40")}
+      style={{
+        transform: CSS.Translate.toString(transform),
+        opacity: isDragging ? 0 : undefined,
+        pointerEvents: isDragging ? "none" : undefined,
+      }}
+      className="touch-none"
       {...listeners}
       {...attributes}
     >
@@ -63,12 +67,7 @@ interface KanbanDragOverlayProps {
 
 export function KanbanDragOverlay({ children }: KanbanDragOverlayProps) {
   return (
-    <DragOverlay
-      dropAnimation={{
-        duration: 180,
-        easing: "cubic-bezier(0.18, 0.67, 0.6, 1.22)",
-      }}
-    >
+    <DragOverlay dropAnimation={null}>
       {children ? (
         <div className="rotate-2 opacity-90 shadow-xl scale-105 cursor-grabbing pointer-events-none">
           {children}
