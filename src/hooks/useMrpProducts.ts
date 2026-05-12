@@ -89,6 +89,24 @@ export function useCreateMrpProduct() {
   });
 }
 
+export function useDeleteMrpProduct() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase
+        .from("mrp_products")
+        .delete()
+        .eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["mrp-products"] });
+      toast.success("Produto excluído.");
+    },
+    onError: (e: Error) => toast.error("Erro ao excluir: " + e.message),
+  });
+}
+
 export function useUpdateMrpProduct() {
   const qc = useQueryClient();
   return useMutation({
