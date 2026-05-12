@@ -136,7 +136,8 @@ export function useUpdateUserRole() {
   return useMutation({
     mutationFn: async ({ userId, role }: { userId: string; role: AppRole }) => {
       // Delete existing roles
-      await supabase.from("user_roles").delete().eq("user_id", userId);
+      const { error: delError } = await supabase.from("user_roles").delete().eq("user_id", userId);
+      if (delError) throw delError;
 
       // Add new role
       const { error } = await supabase
@@ -147,6 +148,7 @@ export function useUpdateUserRole() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["team-members"] });
+      queryClient.invalidateQueries({ queryKey: ["collab-matrix-data"] });
       toast.success("Nível de acesso atualizado!");
     },
     onError: (e: Error) => toast.error("Erro ao atualizar acesso: " + e.message),
@@ -167,14 +169,15 @@ export function useReplaceCarboRoles() {
       // Insere os novos roles (pode ser array vazio — resultado: sem roles)
       if (roles.length > 0) {
         const rows = roles.map((role) => ({ user_id: userId, role }));
-        const { error: insError } = await (supabase as any)
+        const { error: insError } = await supabase
           .from("carbo_user_roles")
-          .insert(rows);
+          .insert(rows as any);
         if (insError) throw insError;
       }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["team-members"] });
+      queryClient.invalidateQueries({ queryKey: ["collab-matrix-data"] });
       toast.success("Funções de acesso atualizadas!");
     },
     onError: (e: Error) => toast.error("Erro ao atualizar funções: " + e.message),
@@ -223,8 +226,67 @@ export function useUpdateAllowedInterfaces() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["team-members"] });
+      queryClient.invalidateQueries({ queryKey: ["collab-matrix-data"] });
       toast.success("Interfaces de acesso atualizadas!");
     },
     onError: (e: Error) => toast.error("Erro ao salvar: " + e.message),
+  });
+}
+
+/** Lê todos os module overrides de um usuário específico */
+export function useUserModuleOverrides(userId: string | null) {
+  return useQuery({
+    queryKey: ["user-module-overrides", userId],
+    queryFn: async () => {
+      if (!userId) return [];
+      const { data, error } = await (supabase as any)
+        .from("user_module_overrides")
+        .select("module_key, access")
+        .eq("user_id", userId);
+      if (error) throw error;
+      return data as { module_key: string; access: string }[];
+    },
+    enabled: !!userId,
+  });
+}
+
+/** Upsert (access != null) ou delete (access === null) um override de módulo */
+export function useUpsertModuleOverride() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      userId,
+      moduleKey,
+      access,
+      updatedBy,
+    }: {
+      userId: string;
+      moduleKey: string;
+      access: string | null;
+      updatedBy: string;
+    }) => {
+      if (access === null) {
+        const { error } = await (supabase as any)
+          .from("user_module_overrides")
+          .delete()
+          .eq("user_id", userId)
+          .eq("module_key", moduleKey);
+        if (error) throw error;
+      } else {
+        const { error } = await (supabase as any)
+          .from("user_module_overrides")
+          .upsert(
+            { user_id: userId, module_key: moduleKey, access, updated_by: updatedBy, updated_at: new Date().toISOString() },
+            { onConflict: "user_id,module_key" }
+          );
+        if (error) throw error;
+      }
+    },
+    onSuccess: (_, vars) => {
+      queryClient.invalidateQueries({ queryKey: ["user-module-overrides", vars.userId] });
+      queryClient.invalidateQueries({ queryKey: ["all-user-module-overrides"] });
+      queryClient.invalidateQueries({ queryKey: ["collab-matrix-data"] });
+    },
+    onError: (e: Error) => toast.error("Erro ao salvar permissão: " + e.message),
   });
 }

@@ -47,7 +47,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { DatePickerInput } from "@/components/ui/date-picker-input";
 import { useOrders, useOrderStats, OrderStatus, ORDER_STATUS_LABELS, ORDER_TYPE_LABELS, CarbozeOrder, OrderItem } from "@/hooks/useCarbozeOrders";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQueryClient, useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
 import { format } from "date-fns";
@@ -121,17 +122,59 @@ export default function Orders() {
     queryClient.invalidateQueries({ queryKey: ["carboze-order-stats"] });
   };
 
-  // Unique vendedores and clients for dropdowns
-  const vendedores = useMemo(() => {
-    const names = new Set<string>();
-    orders.forEach((o) => { if (o.vendedor_name) names.add(o.vendedor_name); });
-    return Array.from(names).sort();
-  }, [orders]);
+  // Todos os colaboradores aprovados para o dropdown de vendedor
+  const { data: allCollaborators = [] } = useQuery({
+    queryKey: ["all-collaborators-for-filter"],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("profiles")
+        .select("id, full_name")
+        .eq("status", "approved")
+        .order("full_name");
+      return (data || []).filter((p) => p.full_name) as { id: string; full_name: string }[];
+    },
+  });
 
   const clientes = useMemo(() => {
     const names = new Set<string>();
     orders.forEach((o) => { if (o.customer_name) names.add(o.customer_name); });
     return Array.from(names).sort();
+  }, [orders]);
+
+  // ── Helpers de classificação de produto por item ────────────────────────
+  function classifyItemName(name: string): string {
+    if (!name) return "outros";
+    const n = name.toUpperCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+    if (n.includes("CARBOPRO") || n.includes("CARBO PRO")) return "carbopro";
+    if (n.includes("CARBOVAPT") || n.includes("CARBO VAPT") || n.includes("VAPT")) return "carbovapt";
+    if (n.includes("CARBONZ") || n.includes("CARBON Z")) return "carbonz";
+    if (n.includes("SACHE") || (n.includes("10ML") && !n.includes("100ML"))) return "carboze_sache";
+    if (/\b1\s*L\b/.test(n) || n.includes("1000ML") || n.includes("1 LITRO")) return "carboze_1l";
+    if (n.includes("100ML") || n.includes("100 ML")) return "carboze_100ml";
+    if (n.includes("CARBOZE") || n.includes("CARBO ZE") || n.includes("ESTABILIZADOR")) return "carboze_100ml";
+    return "outros";
+  }
+
+  function getOrderLinhas(order: CarbozeOrder): string[] {
+    const items = Array.isArray(order.items)
+      ? (order.items as any[]).map((i) => ({ ...i, name: i.name || i.product_name || "" }))
+      : [];
+    if (items.length > 0) return [...new Set(items.map((i) => classifyItemName(i.name)))];
+    if (order.linha) return [order.linha];
+    return ["carboze_100ml"];
+  }
+
+  const LINHA_LABELS: Record<string, string> = {
+    carboze_100ml: "CarboZé 100ml", carboze_1l: "CarboZé 1L", carboze_sache: "CarboZé Sachê",
+    carbopro: "CarboPRO", carbovapt: "CarboVapt", carbonz: "CarbonZ", outros: "Outros",
+  };
+
+  // Produtos disponíveis dinamicamente a partir dos pedidos carregados
+  const availableLinhas = useMemo(() => {
+    const set = new Set<string>();
+    for (const o of orders) for (const l of getOrderLinhas(o)) if (l !== "outros") set.add(l);
+    const known = ["carboze_100ml", "carboze_1l", "carboze_sache", "carbopro", "carbovapt", "carbonz"];
+    return [...known.filter((k) => set.has(k)), ...Array.from(set).filter((k) => !known.includes(k))];
   }, [orders]);
 
   // Filter by all criteria
@@ -148,8 +191,8 @@ export default function Orders() {
       }
       // Type filter
       if (typeFilter !== "all" && order.order_type !== typeFilter) return false;
-      // Product filter (by linha)
-      if (productFilter !== "all" && order.linha !== productFilter) return false;
+      // Product filter — item-level classification
+      if (productFilter !== "all" && !getOrderLinhas(order).includes(productFilter)) return false;
       // Vendedor filter
       if (vendedorFilter !== "all" && order.vendedor_name !== vendedorFilter) return false;
       // Cliente filter
@@ -448,10 +491,9 @@ export default function Orders() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Todos Produtos</SelectItem>
-                <SelectItem value="carboze_100ml">CarboZé 100ml</SelectItem>
-                <SelectItem value="carboze_1l">CarboZé 1L</SelectItem>
-                <SelectItem value="carbopro">CarboPRO</SelectItem>
-                <SelectItem value="carbovapt">CarboVapt</SelectItem>
+                {availableLinhas.map((k) => (
+                  <SelectItem key={k} value={k}>{LINHA_LABELS[k] ?? k}</SelectItem>
+                ))}
               </SelectContent>
             </Select>
 
@@ -463,7 +505,9 @@ export default function Orders() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Todos Vendedores</SelectItem>
-                {vendedores.map((v) => (<SelectItem key={v} value={v}>{v}</SelectItem>))}
+                {allCollaborators.map((c) => (
+                  <SelectItem key={c.id} value={c.full_name}>{c.full_name}</SelectItem>
+                ))}
               </SelectContent>
             </Select>
 

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { BoardLayout } from "@/components/layouts/BoardLayout";
@@ -13,93 +13,11 @@ import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
 import { AccessConfigDialog } from "@/components/team/AccessConfigDialog";
 import type { TeamMember } from "@/hooks/useTeamMembers";
+import {
+  ROLES, MATRIX, MODULES, ROLE_KEY_MAP, PRIORITY, ACCESS_LABEL, getEffectiveAccess,
+  type RoleKey, type Access, type FeatureRow,
+} from "@/lib/role-matrix-constants";
 
-// ─── Role definitions ──────────────────────────────────────────────────────
-
-const ROLES = [
-  { key: "ceo",            label: "CEO",               color: "bg-purple-500",   desc: "Acesso total ao sistema" },
-  { key: "gestor_adm",     label: "Gestor ADM",        color: "bg-blue-500",     desc: "Gestão administrativa e comercial" },
-  { key: "gestor_fin",     label: "Gestor Financeiro", color: "bg-emerald-500",  desc: "Financeiro, comissões, faturamento" },
-  { key: "gestor_compras", label: "Gestor Compras/Ops",color: "bg-amber-500",    desc: "Suprimentos, produção, logística" },
-  { key: "operador_fiscal",label: "Operador Fiscal",   color: "bg-cyan-500",     desc: "Emissão NF, expedição, rastreio" },
-  { key: "vendedor",       label: "Vendedor",          color: "bg-carbo-green",  desc: "Criar pedidos, ver leads B2B" },
-  { key: "operador",       label: "Operador",          color: "bg-gray-500",     desc: "Executar etapas operacionais" },
-  { key: "suporte",        label: "Suporte & TI",      color: "bg-cyan-500",     desc: "Acesso completo para bugs e melhorias" },
-] as const;
-
-type RoleKey = typeof ROLES[number]["key"];
-
-// Mapeia CarboRole (DB) → RoleKey da MATRIX estática
-const ROLE_KEY_MAP: Record<string, RoleKey> = {
-  "ceo":              "ceo",
-  "gestor_adm":       "gestor_adm",
-  "gestor_fin":       "gestor_fin",
-  "gestor_compras":   "gestor_compras",
-  "operador_fiscal":  "operador_fiscal",
-  "vendedor":         "vendedor",
-  "operador":         "operador",
-  "suporte":          "suporte",
-  // Aliases exibidos no CarboRolesManager
-  "Admin Estratégico (CEO)":    "ceo",
-  "Gestor Administrativo":      "gestor_adm",
-  "Gestor Financeiro":          "gestor_fin",
-  "Gestor Compras & Logística": "gestor_compras",
-  "Operador Fiscal":            "operador_fiscal",
-  "Operador":                   "operador",
-  "Suporte & TI":               "suporte",
-};
-
-// ─── Feature/Page access matrix ────────────────────────────────────────────
-
-type Access = "full" | "read" | "none" | "own";
-
-interface FeatureRow {
-  module: string;
-  feature: string;
-  ceo: Access;
-  gestor_adm: Access;
-  gestor_fin: Access;
-  gestor_compras: Access;
-  operador_fiscal: Access;
-  vendedor: Access;
-  operador: Access;
-  suporte: Access;
-}
-
-const MATRIX: FeatureRow[] = [
-  { module: "Dashboard",      feature: "Home / KPIs gerais",           ceo:"full", gestor_adm:"full",  gestor_fin:"read",  gestor_compras:"read",  operador_fiscal:"read", vendedor:"read", operador:"read", suporte:"full" },
-  { module: "Dashboard",      feature: "Cockpit Estratégico",          ceo:"full", gestor_adm:"none",  gestor_fin:"none",  gestor_compras:"none",  operador_fiscal:"none", vendedor:"none", operador:"none", suporte:"full" },
-  { module: "Pedidos",        feature: "Ver lista de pedidos",         ceo:"full", gestor_adm:"full",  gestor_fin:"full",  gestor_compras:"read",  operador_fiscal:"read", vendedor:"own",  operador:"none", suporte:"full" },
-  { module: "Pedidos",        feature: "Criar pedido (RV)",            ceo:"full", gestor_adm:"full",  gestor_fin:"none",  gestor_compras:"none",  operador_fiscal:"none", vendedor:"full", operador:"none", suporte:"full" },
-  { module: "Pedidos",        feature: "Editar / alterar status",      ceo:"full", gestor_adm:"full",  gestor_fin:"none",  gestor_compras:"read",  operador_fiscal:"full", vendedor:"none", operador:"none", suporte:"full" },
-  { module: "Pedidos",        feature: "Ver comissão e dados fiscais", ceo:"full", gestor_adm:"full",  gestor_fin:"full",  gestor_compras:"none",  operador_fiscal:"full", vendedor:"own",  operador:"none", suporte:"full" },
-  { module: "Funil B2B",      feature: "Ver leads",                    ceo:"full", gestor_adm:"full",  gestor_fin:"none",  gestor_compras:"none",  operador_fiscal:"none", vendedor:"full", operador:"none", suporte:"full" },
-  { module: "Funil B2B",      feature: "Criar / avançar lead",         ceo:"full", gestor_adm:"full",  gestor_fin:"none",  gestor_compras:"none",  operador_fiscal:"none", vendedor:"full", operador:"none", suporte:"full" },
-  { module: "Funil B2B",      feature: "Converter lead em pedido",     ceo:"full", gestor_adm:"full",  gestor_fin:"none",  gestor_compras:"none",  operador_fiscal:"none", vendedor:"full", operador:"none", suporte:"full" },
-  { module: "Metas",          feature: "Ver metas de vendas",          ceo:"full", gestor_adm:"full",  gestor_fin:"read",  gestor_compras:"none",  operador_fiscal:"none", vendedor:"own",  operador:"none", suporte:"full" },
-  { module: "Metas",          feature: "Criar / editar metas",         ceo:"full", gestor_adm:"full",  gestor_fin:"none",  gestor_compras:"none",  operador_fiscal:"none", vendedor:"none", operador:"none", suporte:"full" },
-  { module: "Produção (OP)",  feature: "Ver Ordens de Produção",       ceo:"full", gestor_adm:"read",  gestor_fin:"none",  gestor_compras:"full",  operador_fiscal:"none", vendedor:"none", operador:"full", suporte:"full" },
-  { module: "Produção (OP)",  feature: "Criar / confirmar OP",         ceo:"full", gestor_adm:"none",  gestor_fin:"none",  gestor_compras:"full",  operador_fiscal:"none", vendedor:"none", operador:"full", suporte:"full" },
-  { module: "Serviços (OS)",  feature: "Ver Ordens de Serviço",        ceo:"full", gestor_adm:"full",  gestor_fin:"none",  gestor_compras:"full",  operador_fiscal:"none", vendedor:"none", operador:"full", suporte:"full" },
-  { module: "Serviços (OS)",  feature: "Criar / executar OS",          ceo:"full", gestor_adm:"none",  gestor_fin:"none",  gestor_compras:"full",  operador_fiscal:"none", vendedor:"none", operador:"full", suporte:"full" },
-  { module: "Suprimentos",    feature: "Ver estoque",                  ceo:"full", gestor_adm:"read",  gestor_fin:"none",  gestor_compras:"full",  operador_fiscal:"none", vendedor:"none", operador:"read", suporte:"full" },
-  { module: "Suprimentos",    feature: "Movimentar estoque",           ceo:"full", gestor_adm:"none",  gestor_fin:"none",  gestor_compras:"full",  operador_fiscal:"none", vendedor:"none", operador:"full", suporte:"full" },
-  { module: "Suprimentos",    feature: "Política de estoque mínimo",   ceo:"full", gestor_adm:"full",  gestor_fin:"none",  gestor_compras:"full",  operador_fiscal:"none", vendedor:"none", operador:"none", suporte:"full" },
-  { module: "Compras",        feature: "Requisições de compra",        ceo:"full", gestor_adm:"full",  gestor_fin:"read",  gestor_compras:"full",  operador_fiscal:"read", vendedor:"none", operador:"none", suporte:"full" },
-  { module: "Compras",        feature: "Aprovar RC / emitir PO",       ceo:"full", gestor_adm:"full",  gestor_fin:"none",  gestor_compras:"full",  operador_fiscal:"none", vendedor:"none", operador:"none", suporte:"full" },
-  { module: "Compras",        feature: "Receber e dar entrada NF",     ceo:"full", gestor_adm:"none",  gestor_fin:"none",  gestor_compras:"full",  operador_fiscal:"full", vendedor:"none", operador:"full", suporte:"full" },
-  { module: "Financeiro",     feature: "Ver relatórios financeiros",   ceo:"full", gestor_adm:"read",  gestor_fin:"full",  gestor_compras:"none",  operador_fiscal:"read", vendedor:"none", operador:"none", suporte:"full" },
-  { module: "Financeiro",     feature: "Lançar / aprovar pagamentos",  ceo:"full", gestor_adm:"none",  gestor_fin:"full",  gestor_compras:"none",  operador_fiscal:"none", vendedor:"none", operador:"none", suporte:"full" },
-  { module: "Licenciados",    feature: "Ver rede de licenciados",      ceo:"full", gestor_adm:"full",  gestor_fin:"read",  gestor_compras:"none",  operador_fiscal:"none", vendedor:"full", operador:"none", suporte:"full" },
-  { module: "Licenciados",    feature: "Criar / editar licenciados",   ceo:"full", gestor_adm:"full",  gestor_fin:"none",  gestor_compras:"none",  operador_fiscal:"none", vendedor:"none", operador:"none", suporte:"full" },
-  { module: "Time & Admin",   feature: "Gerenciar membros",            ceo:"full", gestor_adm:"full",  gestor_fin:"none",  gestor_compras:"none",  operador_fiscal:"none", vendedor:"none", operador:"none", suporte:"full" },
-  { module: "Time & Admin",   feature: "Importar time em massa",       ceo:"full", gestor_adm:"full",  gestor_fin:"none",  gestor_compras:"none",  operador_fiscal:"none", vendedor:"none", operador:"none", suporte:"full" },
-  { module: "Time & Admin",   feature: "Matriz de permissões",         ceo:"full", gestor_adm:"read",  gestor_fin:"none",  gestor_compras:"none",  operador_fiscal:"none", vendedor:"none", operador:"none", suporte:"full" },
-  { module: "Integrações",    feature: "Bling ERP",                    ceo:"full", gestor_adm:"full",  gestor_fin:"full",  gestor_compras:"none",  operador_fiscal:"none", vendedor:"none", operador:"none", suporte:"full" },
-  { module: "Governança",     feature: "Log de auditoria / governança",ceo:"full", gestor_adm:"none",  gestor_fin:"none",  gestor_compras:"none",  operador_fiscal:"none", vendedor:"none", operador:"none", suporte:"full" },
-];
-
-const MODULES = [...new Set(MATRIX.map((r) => r.module))];
 
 function getAccessIcon(access: Access, size = "h-4 w-4") {
   switch (access) {
@@ -108,24 +26,6 @@ function getAccessIcon(access: Access, size = "h-4 w-4") {
     case "own":  return <Wrench      className={`${size} text-warning mx-auto`} />;
     case "none": return <XCircle     className={`${size} text-muted-foreground/30 mx-auto`} />;
   }
-}
-
-const ACCESS_LABEL: Record<Access, string> = {
-  full: "Acesso total",
-  read: "Somente leitura",
-  own:  "Apenas próprios",
-  none: "Sem acesso",
-};
-
-const PRIORITY: Record<Access, number> = { full: 3, own: 2, read: 1, none: 0 };
-
-function getEffectiveAccess(roleKeys: RoleKey[], feature: FeatureRow): Access {
-  let best: Access = "none";
-  for (const rk of roleKeys) {
-    const a = feature[rk] as Access;
-    if (PRIORITY[a] > PRIORITY[best]) best = a;
-  }
-  return best;
 }
 
 // ─── Collaborator data type ────────────────────────────────────────────────
@@ -142,7 +42,15 @@ interface CollabUser {
 
 // ─── Collaborator row ──────────────────────────────────────────────────────
 
-function CollaboratorRow({ user, onEdit }: { user: CollabUser; onEdit: (u: CollabUser) => void }) {
+function CollaboratorRow({
+  user,
+  moduleOverrides,
+  onEdit,
+}: {
+  user: CollabUser;
+  moduleOverrides: Record<string, string>;
+  onEdit: (u: CollabUser) => void;
+}) {
   const [expanded, setExpanded] = useState(false);
 
   // Effective access is calculated from carbo_roles (functional roles)
@@ -175,18 +83,25 @@ function CollaboratorRow({ user, onEdit }: { user: CollabUser; onEdit: (u: Colla
             }
           </div>
         </td>
-        {/* Module effective access */}
+        {/* Module effective access (override wins over role-based) */}
         {MODULES.map((mod) => {
-          const rows = MATRIX.filter((r) => r.module === mod);
-          // best access across all features in the module
-          let best: Access = "none";
-          for (const row of rows) {
-            const a = getEffectiveAccess(roleKeys, row);
-            if (PRIORITY[a] > PRIORITY[best]) best = a;
+          const override = moduleOverrides[mod];
+          let best: Access;
+          if (override) {
+            best = override as Access;
+          } else {
+            const rows = MATRIX.filter((r) => r.module === mod);
+            best = "none";
+            for (const row of rows) {
+              const a = getEffectiveAccess(roleKeys, row);
+              if (PRIORITY[a] > PRIORITY[best]) best = a;
+            }
           }
           return (
-            <td key={mod} className="p-2 text-center w-16">
+            <td key={mod} className={`p-2 text-center w-16 ${override ? "bg-primary/5" : ""}`}
+                title={override ? `Override: ${ACCESS_LABEL[best]}` : ACCESS_LABEL[best]}>
               {getAccessIcon(best, "h-3.5 w-3.5")}
+              {override && <div className="w-1 h-1 rounded-full bg-primary mx-auto mt-0.5" title="Override ativo" />}
             </td>
           );
         })}
@@ -194,8 +109,8 @@ function CollaboratorRow({ user, onEdit }: { user: CollabUser; onEdit: (u: Colla
         <td className="p-2 text-center">
           <Button
             size="sm"
-            variant="ghost"
-            className="h-6 px-2 text-xs gap-1 text-primary"
+            variant="outline"
+            className="h-7 px-3 text-xs font-medium gap-1 border-primary/40 text-primary hover:bg-primary/10 hover:border-primary"
             onClick={(e) => { e.stopPropagation(); onEdit(user); }}
           >
             <Settings className="h-3 w-3" />
@@ -403,6 +318,27 @@ export default function RoleMatrix() {
     (a.full_name || "").localeCompare(b.full_name || "")
   );
 
+  // ── Per-user module overrides ─────────────────────────────────────────────
+  const { data: allOverridesData } = useQuery({
+    queryKey: ["all-user-module-overrides"],
+    queryFn: async () => {
+      const { data } = await (supabase as any)
+        .from("user_module_overrides")
+        .select("user_id, module_key, access");
+      return data as { user_id: string; module_key: string; access: string }[] | null;
+    },
+    enabled: tab === "colaboradores",
+  });
+
+  const overridesByUser = useMemo(() => {
+    const map = new Map<string, Record<string, string>>();
+    for (const o of (allOverridesData || [])) {
+      if (!map.has(o.user_id)) map.set(o.user_id, {});
+      map.get(o.user_id)![o.module_key] = o.access;
+    }
+    return map;
+  }, [allOverridesData]);
+
   // Converte CollabUser → TeamMember para o AccessConfigDialog
   const toTeamMember = (u: CollabUser): TeamMember => ({
     id: u.id,
@@ -431,32 +367,55 @@ export default function RoleMatrix() {
           icon={Shield}
         />
 
-        {/* Tab toggle */}
-        <div className="flex items-center gap-1 bg-muted/50 rounded-lg p-1 w-fit">
-          <button
-            onClick={() => setTab("cargos")}
-            className={cn(
-              "flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all",
-              tab === "cargos"
-                ? "bg-background shadow text-foreground"
-                : "text-muted-foreground hover:text-foreground"
-            )}
-          >
-            <LayoutGrid className="h-4 w-4" />
-            Por Cargo
-          </button>
-          <button
-            onClick={() => setTab("colaboradores")}
-            className={cn(
-              "flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all",
-              tab === "colaboradores"
-                ? "bg-background shadow text-foreground"
-                : "text-muted-foreground hover:text-foreground"
-            )}
-          >
-            <Users className="h-4 w-4" />
-            Por Colaborador
-          </button>
+        {/* Tab toggle + Editar Matriz (global) */}
+        <div className="flex items-center justify-between gap-4">
+          <div className="flex items-center gap-1 bg-muted/50 rounded-lg p-1 w-fit">
+            <button
+              onClick={() => setTab("cargos")}
+              className={cn(
+                "flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all",
+                tab === "cargos"
+                  ? "bg-background shadow text-foreground"
+                  : "text-muted-foreground hover:text-foreground"
+              )}
+            >
+              <LayoutGrid className="h-4 w-4" />
+              Por Cargo
+            </button>
+            <button
+              onClick={() => setTab("colaboradores")}
+              className={cn(
+                "flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all",
+                tab === "colaboradores"
+                  ? "bg-background shadow text-foreground"
+                  : "text-muted-foreground hover:text-foreground"
+              )}
+            >
+              <Users className="h-4 w-4" />
+              Por Colaborador
+            </button>
+          </div>
+
+          {/* Editar Matriz — visível apenas na aba Por Cargo (Por Colaborador tem "Acesso" por linha) */}
+          {isMasterAdmin && tab === "cargos" && (
+            <div className="flex items-center gap-2">
+              {editMode ? (
+                <>
+                  <Button size="sm" variant="outline" onClick={handleCancelEdit} disabled={saving}>
+                    <X className="h-3.5 w-3.5 mr-1" /> Cancelar
+                  </Button>
+                  <Button size="sm" onClick={handleSave} disabled={saving}>
+                    {saving ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> : <Save className="h-3.5 w-3.5 mr-1" />}
+                    Salvar Alterações
+                  </Button>
+                </>
+              ) : (
+                <Button size="sm" variant="outline" onClick={handleStartEdit}>
+                  <Pencil className="h-3.5 w-3.5 mr-1" /> Editar Matriz
+                </Button>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Legend */}
@@ -487,31 +446,15 @@ export default function RoleMatrix() {
 
             {/* Matrix Table */}
             <CarboCard padding="none">
-              {/* Toolbar de edição */}
-              <div className="flex items-center justify-between px-4 py-2.5 border-b bg-muted/20">
-                <p className="text-xs text-muted-foreground">
-                  {editMode
-                    ? "Modo edição — clique em qualquer célula para alterar o nível de acesso"
-                    : "Clique em Editar para personalizar as permissões por cargo"}
-                </p>
-                <div className="flex items-center gap-2">
-                  {editMode ? (
-                    <>
-                      <Button size="sm" variant="outline" onClick={handleCancelEdit} disabled={saving}>
-                        <X className="h-3.5 w-3.5 mr-1" /> Cancelar
-                      </Button>
-                      <Button size="sm" onClick={handleSave} disabled={saving}>
-                        {saving ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> : <Save className="h-3.5 w-3.5 mr-1" />}
-                        Salvar Alterações
-                      </Button>
-                    </>
-                  ) : isMasterAdmin ? (
-                    <Button size="sm" variant="outline" onClick={handleStartEdit}>
-                      <Pencil className="h-3.5 w-3.5 mr-1" /> Editar Matriz
-                    </Button>
-                  ) : null}
+              {/* Status bar de edição */}
+              {editMode && (
+                <div className="flex items-center gap-2 px-4 py-2 border-b bg-amber-500/5 border-amber-500/20">
+                  <Pencil className="h-3.5 w-3.5 text-amber-600 shrink-0" />
+                  <p className="text-xs text-amber-700 dark:text-amber-400">
+                    Modo edição — clique em qualquer célula para alterar o nível de acesso
+                  </p>
                 </div>
-              </div>
+              )}
 
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
@@ -569,7 +512,7 @@ export default function RoleMatrix() {
               <div>
                 <CarboCardTitle className="text-base">Acesso efetivo por colaborador</CarboCardTitle>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  Calculado a partir dos roles atribuídos. Clique na linha para ver detalhes ou em "Acesso" para configurar.
+                  Clique em <span className="font-semibold text-primary">Acesso</span> em cada linha para configurar roles, interfaces e <span className="font-semibold">permissões por módulo</span> individualmente. Um ponto azul indica override ativo.
                 </p>
               </div>
             </div>
@@ -600,6 +543,7 @@ export default function RoleMatrix() {
                       <CollaboratorRow
                         key={u.id}
                         user={u}
+                        moduleOverrides={overridesByUser.get(u.id) ?? {}}
                         onEdit={(collab) => setAccessMember(toTeamMember(collab))}
                       />
                     ))}
