@@ -1,5 +1,4 @@
 import { useForm } from "react-hook-form";
-import { useEffect } from "react";
 import { DatePickerInput } from "@/components/ui/date-picker-input";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -28,7 +27,6 @@ import { toast } from "sonner";
 import { DEMAND_SOURCE_LABELS, PRIORITY_LABELS } from "@/hooks/useProductionOrders";
 
 const schema = z.object({
-  title: z.string().min(3, "Título deve ter ao menos 3 caracteres"),
   sku_id: z.string().min(1, "Selecione um produto"),
   planned_quantity: z.coerce.number().int().positive("Quantidade deve ser positiva"),
   demand_source: z.enum(["venda", "recorrencia", "safety_stock", "pcp_manual"]).optional(),
@@ -90,7 +88,6 @@ export function CreateOPDialog({ open, onOpenChange }: CreateOPDialogProps) {
 
       const payload = {
         sku_id: data.sku_id,
-        title: data.title,
         planned_quantity: data.planned_quantity,
         op_status: "planejada",
         demand_source: data.demand_source || "pcp_manual",
@@ -98,6 +95,9 @@ export function CreateOPDialog({ open, onOpenChange }: CreateOPDialogProps) {
         priority: data.priority || 3,
         deviation_notes: data.deviation_notes || null,
         op_number: "",
+        // campos legados obrigatórios pelo schema original
+        quantity: data.planned_quantity,
+        status: "pending",
       };
 
       const { data: result, error } = await (supabase as any)
@@ -122,15 +122,6 @@ export function CreateOPDialog({ open, onOpenChange }: CreateOPDialogProps) {
   const isSubmitting = createOP.isPending;
   const selectedSkuId = watch("sku_id");
   const selectedSku = skus.find((s) => s.id === selectedSkuId);
-
-  // Auto-fill title when SKU is selected (only if title is still empty)
-  useEffect(() => {
-    if (selectedSku && !watch("title")) {
-      const date = new Date().toLocaleDateString("pt-BR", { month: "2-digit", year: "2-digit" }).replace("/", "-");
-      setValue("title", `${selectedSku.code} — Lote ${date}`);
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedSkuId]);
 
   // Preview do número de OP — formato real gerado pelo trigger do banco
   const opPreview = selectedSku
@@ -177,15 +168,6 @@ export function CreateOPDialog({ open, onOpenChange }: CreateOPDialogProps) {
               </div>
             </div>
           )}
-
-          {/* Título */}
-          <div className="space-y-2">
-            <Label>Título da OP *</Label>
-            <Input {...register("title")} placeholder="Ex: OP CarboZé — Lote 01" />
-            {errors.title && (
-              <p className="text-xs text-destructive">{errors.title.message}</p>
-            )}
-          </div>
 
           {/* Quantidade Planejada */}
           <div className="space-y-2">
