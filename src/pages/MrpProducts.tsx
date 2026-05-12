@@ -9,8 +9,8 @@ import { CarboCard } from "@/components/ui/carbo-card";
 import { CarboEmptyState } from "@/components/ui/carbo-empty-state";
 import { CarboSkeleton } from "@/components/ui/CarboSkeleton";
 import { CarboBadge } from "@/components/ui/carbo-badge";
-import { Package, Plus, Pencil, Warehouse, AlertTriangle, CheckCircle, AlertCircle, ClipboardList } from "lucide-react";
-import { useMrpProducts, useCreateMrpProduct, useUpdateMrpProduct, useWarehouseStockByProduct, MrpProduct } from "@/hooks/useMrpProducts";
+import { Package, Plus, Pencil, Warehouse, AlertTriangle, CheckCircle, AlertCircle, ClipboardList, Trash2 } from "lucide-react";
+import { useMrpProducts, useCreateMrpProduct, useUpdateMrpProduct, useDeleteMrpProduct, useWarehouseStockByProduct, MrpProduct } from "@/hooks/useMrpProducts";
 import { useAuth } from "@/contexts/AuthContext";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -73,6 +73,7 @@ function generateSkuFromName(name: string): string {
 function ProductForm({ product, onClose }: { product?: MrpProduct; onClose: () => void }) {
   const createMut = useCreateMrpProduct();
   const updateMut = useUpdateMrpProduct();
+  const deleteMut = useDeleteMrpProduct();
   // Flag para saber se o usuário já editou o código manualmente
   const [codeManuallyEdited, setCodeManuallyEdited] = useState(false);
   const [form, setForm] = useState({
@@ -214,11 +215,28 @@ function ProductForm({ product, onClose }: { product?: MrpProduct; onClose: () =
         <Label>Observações</Label>
         <Textarea value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} />
       </div>
-      <div className="flex justify-end gap-2 pt-2">
-        <CarboButton variant="outline" type="button" onClick={onClose}>Cancelar</CarboButton>
-        <CarboButton type="submit" loading={createMut.isPending || updateMut.isPending}>
-          {product ? "Salvar" : "Criar Produto"}
-        </CarboButton>
+      <div className="flex items-center justify-between pt-2">
+        {product ? (
+          <CarboButton
+            variant="outline"
+            type="button"
+            loading={deleteMut.isPending}
+            onClick={async () => {
+              if (!window.confirm(`Excluir "${product.name}" permanentemente? Esta ação não pode ser desfeita.`)) return;
+              await deleteMut.mutateAsync(product.id);
+              onClose();
+            }}
+            className="text-destructive border-destructive/40 hover:bg-destructive/10 hover:border-destructive gap-1.5"
+          >
+            <Trash2 className="h-3.5 w-3.5" /> Excluir
+          </CarboButton>
+        ) : <span />}
+        <div className="flex gap-2">
+          <CarboButton variant="outline" type="button" onClick={onClose}>Cancelar</CarboButton>
+          <CarboButton type="submit" loading={createMut.isPending || updateMut.isPending}>
+            {product ? "Salvar" : "Criar Produto"}
+          </CarboButton>
+        </div>
       </div>
     </form>
   );
