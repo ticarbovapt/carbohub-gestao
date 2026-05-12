@@ -432,9 +432,9 @@ export default function RoleMatrix() {
         {tab === "cargos" && (
           <>
             {/* Role Cards */}
-            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
+            <div className="flex gap-3 overflow-x-auto pb-1">
               {ROLES.map((r) => (
-                <CarboCard key={r.key}>
+                <CarboCard key={r.key} className="flex-shrink-0 w-40">
                   <CarboCardContent className="p-3">
                     <div className={`w-2 h-2 rounded-full ${r.color} mb-2`} />
                     <p className="font-semibold text-sm">{r.label}</p>
