@@ -27,6 +27,7 @@ export function LogisticsKanban({
   onDragMove,
 }: LogisticsKanbanProps) {
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [optimisticMoves, setOptimisticMoves] = useState<Record<string, ShipmentStatus>>({});
 
   const sensors = useSensors(
     useSensor(MouseSensor, { activationConstraint: { distance: 8 } }),
@@ -46,7 +47,9 @@ export function LogisticsKanban({
     const shipment = active.data.current?.entity as Shipment;
     const toStatus = over.id as ShipmentStatus;
     if (!shipment || shipment.status === toStatus) return;
+    setOptimisticMoves((prev) => ({ ...prev, [shipment.id]: toStatus }));
     onDragMove?.(shipment.id, toStatus);
+    setTimeout(() => setOptimisticMoves((prev) => { const n = { ...prev }; delete n[shipment.id]; return n; }), 2000);
   }
 
   return (
@@ -60,7 +63,7 @@ export function LogisticsKanban({
         <div className="flex gap-4 pb-4 min-w-[900px]">
           {KANBAN_COLUMNS.map((status) => {
             const config = SHIPMENT_STATUS_CONFIG[status];
-            const items = shipments.filter((s) => s.status === status);
+            const items = shipments.filter((s) => (optimisticMoves[s.id] ?? s.status) === status);
 
             return (
               <div

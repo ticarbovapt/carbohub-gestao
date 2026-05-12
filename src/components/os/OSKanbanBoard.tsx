@@ -24,6 +24,7 @@ export function OSKanbanBoard({
 }: OSKanbanBoardProps) {
   const setOSStage = useSetOSStage();
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [optimisticMoves, setOptimisticMoves] = useState<Record<string, OsStage>>({});
 
   const sensors = useSensors(
     useSensor(MouseSensor, { activationConstraint: { distance: 8 } }),
@@ -31,7 +32,10 @@ export function OSKanbanBoard({
   );
 
   const ordersByStage = OS_KANBAN_STAGES.reduce((acc, stage) => {
-    acc[stage.id] = orders.filter((o) => o.os_stage === stage.id);
+    acc[stage.id] = orders.filter((o) => {
+      const pendingStage = optimisticMoves[o.id];
+      return pendingStage ? pendingStage === stage.id : o.os_stage === stage.id;
+    });
     return acc;
   }, {} as Record<string, ServiceOrderCarboVAPT[]>);
 
@@ -48,7 +52,10 @@ export function OSKanbanBoard({
     const order = active.data.current?.entity as ServiceOrderCarboVAPT;
     const toStage = over.id as OsStage;
     if (!order || order.os_stage === toStage) return;
-    setOSStage.mutate({ id: order.id, stage: toStage });
+    setOptimisticMoves((prev) => ({ ...prev, [order.id]: toStage }));
+    setOSStage.mutate({ id: order.id, stage: toStage }, {
+      onSettled: () => setOptimisticMoves((prev) => { const n = { ...prev }; delete n[order.id]; return n; }),
+    });
   }
 
   return (

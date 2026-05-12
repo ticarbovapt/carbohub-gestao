@@ -41,6 +41,7 @@ interface OPKanbanBoardProps {
 export function OPKanbanBoard({ orders, onAdvance, onCardClick }: OPKanbanBoardProps) {
   const updateOP = useUpdateProductionOrderOP();
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [optimisticMoves, setOptimisticMoves] = useState<Record<string, string>>({});
 
   const sensors = useSensors(
     useSensor(MouseSensor, { activationConstraint: { distance: 8 } }),
@@ -48,7 +49,10 @@ export function OPKanbanBoard({ orders, onAdvance, onCardClick }: OPKanbanBoardP
   );
 
   const ordersByColumn = OP_KANBAN_COLUMNS.reduce((acc, col) => {
-    acc[col.id] = orders.filter((o) => col.statuses.includes(o.op_status));
+    acc[col.id] = orders.filter((o) => {
+      const pendingColId = optimisticMoves[o.id];
+      return pendingColId ? pendingColId === col.id : col.statuses.includes(o.op_status);
+    });
     return acc;
   }, {} as Record<string, ProductionOrder[]>);
 
@@ -65,11 +69,13 @@ export function OPKanbanBoard({ orders, onAdvance, onCardClick }: OPKanbanBoardP
     const order = active.data.current?.entity as ProductionOrder;
     const targetCol = OP_KANBAN_COLUMNS.find((c) => c.id === over.id);
     if (!order || !targetCol) return;
-    // Use first status in column as canonical entry point for drag drops
     const targetStatus = targetCol.statuses[0];
     const currentCol = OP_KANBAN_COLUMNS.find((c) => c.statuses.includes(order.op_status));
-    if (currentCol?.id === targetCol.id) return; // same column, no-op
-    updateOP.mutate({ id: order.id, op_status: targetStatus });
+    if (currentCol?.id === targetCol.id) return;
+    setOptimisticMoves((prev) => ({ ...prev, [order.id]: targetCol.id }));
+    updateOP.mutate({ id: order.id, op_status: targetStatus }, {
+      onSettled: () => setOptimisticMoves((prev) => { const n = { ...prev }; delete n[order.id]; return n; }),
+    });
   }
 
   return (
