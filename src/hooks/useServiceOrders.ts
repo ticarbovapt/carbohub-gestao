@@ -222,6 +222,37 @@ export function useAdvanceOSStage() {
   });
 }
 
+export function useSetOSStage() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, stage }: { id: string; stage: OsStage }) => {
+      const updates: Record<string, unknown> = {
+        os_stage: stage,
+        updated_at: new Date().toISOString(),
+      };
+      if (stage === "em_execucao") {
+        updates.executed_at = new Date().toISOString();
+        updates.status = "active";
+      }
+      if (stage === "concluida") {
+        updates.completed_at = new Date().toISOString();
+        updates.status = "completed";
+      }
+      const { error } = await supabase
+        .from("service_orders")
+        .update(updates)
+        .eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["service-orders-carbovapt"] });
+      qc.invalidateQueries({ queryKey: ["os-stats-carbovapt"] });
+      toast.success("Etapa atualizada!");
+    },
+    onError: (err: Error) => toast.error(`Erro: ${err.message}`),
+  });
+}
+
 export function useMarkOSCancelled() {
   const qc = useQueryClient();
   return useMutation({

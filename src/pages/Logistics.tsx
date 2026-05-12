@@ -120,6 +120,7 @@ export default function Logistics() {
               shipments={shipments}
               onAdvance={handleAdvance}
               onViewDetails={setSelectedShipment}
+              onDragMove={(id, toStatus) => updateStatus.mutate({ id, status: toStatus })}
             />
           </TabsContent>
 

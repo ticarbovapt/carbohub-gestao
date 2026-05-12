@@ -1,9 +1,11 @@
-import React from "react";
+import { useState } from "react";
+import { DndContext, DragEndEvent, DragStartEvent, MouseSensor, TouchSensor, useSensor, useSensors } from "@dnd-kit/core";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { CRMLeadCard } from "./CRMLeadCard";
 import type { CRMLead, FunnelType, StageConfig } from "@/types/crm";
 import { getStagesForFunnel } from "@/types/crm";
+import { DraggableCard, DroppableColumn, KanbanDragOverlay } from "@/components/kanban/KanbanDnd";
 
 interface CRMKanbanBoardProps {
   leads: CRMLead[];
@@ -11,35 +13,73 @@ interface CRMKanbanBoardProps {
   onAdvance?: (lead: CRMLead) => void;
   onMarkLost?: (lead: CRMLead) => void;
   onLeadClick?: (lead: CRMLead) => void;
+  onDragMove?: (lead: CRMLead, toStage: string) => void;
 }
 
-export function CRMKanbanBoard({ leads, funnelType, onAdvance, onMarkLost, onLeadClick }: CRMKanbanBoardProps) {
+export function CRMKanbanBoard({ leads, funnelType, onAdvance, onMarkLost, onLeadClick, onDragMove }: CRMKanbanBoardProps) {
   const stages = getStagesForFunnel(funnelType);
+  const [activeId, setActiveId] = useState<string | null>(null);
 
-  // Group leads by stage
+  const sensors = useSensors(
+    useSensor(MouseSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 5 } })
+  );
+
   const leadsByStage = stages.reduce((acc, stage) => {
     acc[stage.id] = leads.filter((l) => l.stage === stage.id);
     return acc;
   }, {} as Record<string, CRMLead[]>);
 
-  return (
-    <div className="flex gap-3 overflow-x-auto pb-4">
-      {stages.map((stage) => {
-        const stageLeads = leadsByStage[stage.id] || [];
+  const activeLead = activeId ? leads.find((l) => l.id === activeId) : null;
 
-        return (
-          <KanbanColumn
-            key={stage.id}
-            stage={stage}
-            leads={stageLeads}
+  function handleDragStart(event: DragStartEvent) {
+    setActiveId(event.active.id as string);
+  }
+
+  function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event;
+    setActiveId(null);
+    if (!over) return;
+    const lead = active.data.current?.entity as CRMLead;
+    const toStage = over.id as string;
+    if (!lead || lead.stage === toStage) return;
+    onDragMove?.(lead, toStage);
+  }
+
+  return (
+    <DndContext
+      sensors={sensors}
+      onDragStart={handleDragStart}
+      onDragEnd={handleDragEnd}
+      onDragCancel={() => setActiveId(null)}
+    >
+      <div className="flex gap-3 overflow-x-auto pb-4">
+        {stages.map((stage) => {
+          const stageLeads = leadsByStage[stage.id] || [];
+
+          return (
+            <KanbanColumn
+              key={stage.id}
+              stage={stage}
+              leads={stageLeads}
+              funnelType={funnelType}
+              onAdvance={onAdvance}
+              onMarkLost={onMarkLost}
+              onLeadClick={onLeadClick}
+            />
+          );
+        })}
+      </div>
+
+      <KanbanDragOverlay>
+        {activeLead ? (
+          <CRMLeadCard
+            lead={activeLead}
             funnelType={funnelType}
-            onAdvance={onAdvance}
-            onMarkLost={onMarkLost}
-            onLeadClick={onLeadClick}
           />
-        );
-      })}
-    </div>
+        ) : null}
+      </KanbanDragOverlay>
+    </DndContext>
   );
 }
 
@@ -78,22 +118,29 @@ function KanbanColumn({
 
       {/* Cards */}
       <ScrollArea className="h-[calc(100vh-320px)]">
-        <div className="p-2 space-y-2">
-          {leads.length === 0 ? (
-            <p className="text-xs text-muted-foreground text-center py-8">Nenhum lead</p>
-          ) : (
-            leads.map((lead) => (
-              <CRMLeadCard
-                key={lead.id}
-                lead={lead}
-                funnelType={funnelType}
-                onAdvance={onAdvance}
-                onMarkLost={onMarkLost}
-                onClick={onLeadClick}
-              />
-            ))
-          )}
-        </div>
+        <DroppableColumn id={stage.id}>
+          <div className="p-2 space-y-2">
+            {leads.length === 0 ? (
+              <p className="text-xs text-muted-foreground text-center py-8">Nenhum lead</p>
+            ) : (
+              leads.map((lead) => (
+                <DraggableCard
+                  key={lead.id}
+                  id={lead.id}
+                  data={{ entity: lead }}
+                >
+                  <CRMLeadCard
+                    lead={lead}
+                    funnelType={funnelType}
+                    onAdvance={onAdvance}
+                    onMarkLost={onMarkLost}
+                    onClick={onLeadClick}
+                  />
+                </DraggableCard>
+              ))
+            )}
+          </div>
+        </DroppableColumn>
       </ScrollArea>
     </div>
   );
