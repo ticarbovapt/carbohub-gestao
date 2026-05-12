@@ -22,15 +22,14 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Loader2 } from "lucide-react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { useMrpProducts } from "@/hooks/useMrpProducts";
 import { DEMAND_SOURCE_LABELS, PRIORITY_LABELS } from "@/hooks/useProductionOrders";
 
 const schema = z.object({
   title: z.string().min(3, "Título deve ter ao menos 3 caracteres"),
-  product_id: z.string().min(1, "Selecione um produto"),
+  sku_id: z.string().min(1, "Selecione um produto"),
   planned_quantity: z.coerce.number().int().positive("Quantidade deve ser positiva"),
   demand_source: z.enum(["venda", "recorrencia", "safety_stock", "pcp_manual"]).optional(),
   need_date: z.string().optional(),
@@ -55,9 +54,19 @@ function currentPeriod(): string {
 
 export function CreateOPDialog({ open, onOpenChange }: CreateOPDialogProps) {
   const qc = useQueryClient();
-  const { data: allProducts = [], isLoading: productsLoading } = useMrpProducts();
-  // Apenas produtos finais podem gerar OP
-  const products = allProducts.filter((p) => p.category === "Produto Final");
+
+  const { data: skus = [], isLoading: skusLoading } = useQuery({
+    queryKey: ["skus_active"],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from("sku")
+        .select("id, code, name")
+        .eq("is_active", true)
+        .order("code");
+      if (error) throw error;
+      return data as { id: string; code: string; name: string }[];
+    },
+  });
 
   const {
     register,
@@ -76,20 +85,19 @@ export function CreateOPDialog({ open, onOpenChange }: CreateOPDialogProps) {
 
   const createOP = useMutation({
     mutationFn: async (data: FormData) => {
-      // Resolve product info
-      const product = products.find((p) => p.id === data.product_id);
-      if (!product) throw new Error("Produto não encontrado.");
+      const sku = skus.find((s) => s.id === data.sku_id);
+      if (!sku) throw new Error("Produto não encontrado.");
 
       const payload = {
-        // Required fields — existing schema
-        product_id: data.product_id,
-        product_code: product.product_code,
-        op_number: "", // Sobrescrito pelo trigger BEFORE INSERT (generate_op_number)
-        quantity: data.planned_quantity,
-        status: "rascunho",
-        type: data.demand_source || "pcp_manual",
-        source: data.demand_source || "pcp_manual",
-        notes: data.deviation_notes || null,
+        sku_id: data.sku_id,
+        title: data.title,
+        planned_quantity: data.planned_quantity,
+        op_status: "planejada",
+        demand_source: data.demand_source || "pcp_manual",
+        need_date: data.need_date || null,
+        priority: data.priority || 3,
+        deviation_notes: data.deviation_notes || null,
+        op_number: "",
       };
 
       const { data: result, error } = await (supabase as any)
@@ -112,21 +120,21 @@ export function CreateOPDialog({ open, onOpenChange }: CreateOPDialogProps) {
   });
 
   const isSubmitting = createOP.isPending;
-  const selectedProductId = watch("product_id");
-  const selectedProduct = products.find((p) => p.id === selectedProductId);
+  const selectedSkuId = watch("sku_id");
+  const selectedSku = skus.find((s) => s.id === selectedSkuId);
 
-  // Auto-fill title when product is selected (only if title is still empty)
+  // Auto-fill title when SKU is selected (only if title is still empty)
   useEffect(() => {
-    if (selectedProduct && !watch("title")) {
+    if (selectedSku && !watch("title")) {
       const date = new Date().toLocaleDateString("pt-BR", { month: "2-digit", year: "2-digit" }).replace("/", "-");
-      setValue("title", `${selectedProduct.product_code} — Lote ${date}`);
+      setValue("title", `${selectedSku.code} — Lote ${date}`);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedProductId]);
+  }, [selectedSkuId]);
 
   // Preview do número de OP — formato real gerado pelo trigger do banco
-  const opPreview = selectedProduct
-    ? `OP-${selectedProduct.product_code}-${currentPeriod()}-XXXX`
+  const opPreview = selectedSku
+    ? `OP-${selectedSku.code}-${currentPeriod()}-XXXX`
     : null;
 
   return (
@@ -140,23 +148,23 @@ export function CreateOPDialog({ open, onOpenChange }: CreateOPDialogProps) {
           <div className="space-y-2">
             <Label>Produto *</Label>
             <Select
-              onValueChange={(v) => setValue("product_id", v)}
-              value={watch("product_id")}
-              disabled={productsLoading}
+              onValueChange={(v) => setValue("sku_id", v)}
+              value={watch("sku_id")}
+              disabled={skusLoading}
             >
               <SelectTrigger>
-                <SelectValue placeholder={productsLoading ? "Carregando..." : "Selecione o produto"} />
+                <SelectValue placeholder={skusLoading ? "Carregando..." : "Selecione o produto"} />
               </SelectTrigger>
               <SelectContent>
-                {products.map((p) => (
-                  <SelectItem key={p.id} value={p.id}>
-                    {p.product_code} — {p.name}
+                {skus.map((s) => (
+                  <SelectItem key={s.id} value={s.id}>
+                    {s.code} — {s.name}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
-            {errors.product_id && (
-              <p className="text-xs text-destructive">{errors.product_id.message}</p>
+            {errors.sku_id && (
+              <p className="text-xs text-destructive">{errors.sku_id.message}</p>
             )}
           </div>
 
