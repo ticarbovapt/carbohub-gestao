@@ -5,14 +5,15 @@
 /**
  * Os 6 papéis do Grupo Carbo baseados na realidade da empresa
  */
-export type CarboRole = 
+export type CarboRole =
   | 'ceo'              // Admin Estratégico (CEO)
   | 'gestor_adm'       // Gestor Administrativo
   | 'gestor_fin'       // Gestor Financeiro
   | 'gestor_compras'   // Gestor Compras & Logística
   | 'operador_fiscal'  // Operador Fiscal
   | 'operador'         // Operadores Operacionais
-  | 'licensed_user';   // Usuário Licenciado (Portal)
+  | 'licensed_user'    // Usuário Licenciado (Portal)
+  | 'suporte';         // Suporte & TI
 
 /**
  * Os 3 macrofluxos da OS
@@ -161,6 +162,14 @@ export const CARBO_ROLE_INFO: Record<CarboRole, {
     color: '#8B5CF6',
     level: 'operational',
   },
+  suporte: {
+    name: 'Suporte & TI',
+    shortName: 'Suporte',
+    description: 'Acesso completo para resolução de bugs e melhorias do sistema',
+    icon: '🔧',
+    color: '#06B6D4',
+    level: 'operational',
+  },
 };
 
 /**
@@ -301,6 +310,7 @@ export const CARBO_ROLES: Array<{
   { id: 'operador_fiscal', name: 'Operador Fiscal', description: 'Documentação fiscal', icon: '📄' },
   { id: 'operador', name: 'Operador', description: 'Execução operacional', icon: '⚙️' },
   { id: 'licensed_user', name: 'Licenciado', description: 'Portal do licenciado', icon: '🏢' },
+  { id: 'suporte', name: 'Suporte & TI', description: 'Acesso completo para resolução de bugs e melhorias', icon: '🔧' },
 ];
 
 /**

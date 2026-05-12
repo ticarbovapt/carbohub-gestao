@@ -6757,6 +6757,7 @@ export type Database = {
         | "operador_fiscal"
         | "operador"
         | "licensed_user"
+        | "suporte"
       commission_status: "pending" | "approved" | "paid" | "cancelled"
       demand_source: "venda" | "recorrencia" | "safety_stock" | "pcp_manual"
       department_type:
@@ -6994,6 +6995,7 @@ export const Constants = {
         "operador_fiscal",
         "operador",
         "licensed_user",
+        "suporte",
       ],
       commission_status: ["pending", "approved", "paid", "cancelled"],
       demand_source: ["venda", "recorrencia", "safety_stock", "pcp_manual"],

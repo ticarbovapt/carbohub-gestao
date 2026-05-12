@@ -361,7 +361,7 @@ function Breadcrumb({ area }: { area: string }) {
 export function BoardLayout({ children }: BoardLayoutProps) {
   const location = useLocation();
   const navigate = useNavigate();
-  const { isAdmin, profile, signOut, passwordMustChange, isCeo, isAnyGestor, carboRoles, isMasterAdmin, isGestorFin } = useAuth();
+  const { isAdmin, profile, signOut, passwordMustChange, isCeo, isAnyGestor, carboRoles, isMasterAdmin, isGestorFin, isSuporte } = useAuth();
   const isMobile = useIsMobile();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
@@ -439,22 +439,22 @@ export function BoardLayout({ children }: BoardLayoutProps) {
 
   const currentItems = dashboardsItems;
   const filteredItems = currentItems.filter((item) => {
-    if (item.adminOnly && !isAdmin && !isCeo) return false;
+    if (item.adminOnly && !isAdmin && !isCeo && !isSuporte) return false;
     return true;
   });
   const filteredControleGroups = controleGroups
-    .filter((g) => !g.adminOnly || isAdmin || isCeo)
+    .filter((g) => !g.adminOnly || isAdmin || isCeo || isSuporte)
     .map((g) => ({ ...g, children: g.children.filter((c) => !c.adminOnly || isAdmin || isCeo) }));
   const filteredOpsGroups = operacoesGroups
-    .filter((g) => !g.adminOnly || isAdmin || isCeo)
+    .filter((g) => !g.adminOnly || isAdmin || isCeo || isSuporte)
     .map((g) => ({ ...g, children: g.children.filter((c) => !c.adminOnly || isAdmin || isCeo) }));
   const filteredGlobalItems = globalItems.filter((item: any) => {
     if (item.financeOrMasterOnly && !isMasterAdmin && !isGestorFin) return false;
-    if (item.adminOnly && !isAdmin && !isCeo) return false;
+    if (item.adminOnly && !isAdmin && !isCeo && !isSuporte) return false;
     return true;
   });
 
-  const roleLabel = isMasterAdmin ? "Master Admin" : isCeo ? "CEO" : isAnyGestor ? "Gestor" : isAdmin ? "Admin" : "Operador";
+  const roleLabel = isMasterAdmin ? "Master Admin" : isCeo ? "CEO" : isSuporte ? "Suporte & TI" : isAnyGestor ? "Gestor" : isAdmin ? "Admin" : "Operador";
   const areaLabel = activeTab === "controle" ? "Controle" : activeTab === "dashboards" ? "Dashboards" : "Operações";
 
   const SidebarContent = () => (

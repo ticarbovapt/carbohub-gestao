@@ -51,6 +51,7 @@ interface AuthContextType {
   isGestorCompras: boolean;
   isOperadorFiscal: boolean;
   isOperador: boolean;
+  isSuporte: boolean;
   isAnyGestor: boolean;
   isAnyOperador: boolean;
   // MasterAdmin: Admin + CEO combinados (acesso irrestrito)
@@ -243,6 +244,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const isGestorCompras = carboRolesList.includes("gestor_compras") || isCeo;
   const isOperadorFiscal = carboRolesList.includes("operador_fiscal");
   const isOperador = carboRolesList.includes("operador");
+  const isSuporte = carboRolesList.includes("suporte");
   const isAnyGestor = isCeo || isGestorAdm || isGestorFin || isGestorCompras;
   const isAnyOperador = isOperadorFiscal || isOperador;
 
@@ -288,6 +290,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isGestorCompras,
         isOperadorFiscal,
         isOperador,
+        isSuporte,
         isAnyGestor,
         isAnyOperador,
         // MasterAdmin
