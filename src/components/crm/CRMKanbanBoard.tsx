@@ -19,6 +19,7 @@ interface CRMKanbanBoardProps {
 export function CRMKanbanBoard({ leads, funnelType, onAdvance, onMarkLost, onLeadClick, onDragMove }: CRMKanbanBoardProps) {
   const stages = getStagesForFunnel(funnelType);
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [optimisticMoves, setOptimisticMoves] = useState<Record<string, string>>({});
 
   const sensors = useSensors(
     useSensor(MouseSensor, { activationConstraint: { distance: 8 } }),
@@ -26,7 +27,10 @@ export function CRMKanbanBoard({ leads, funnelType, onAdvance, onMarkLost, onLea
   );
 
   const leadsByStage = stages.reduce((acc, stage) => {
-    acc[stage.id] = leads.filter((l) => l.stage === stage.id);
+    acc[stage.id] = leads.filter((l) => {
+      const pendingStage = optimisticMoves[l.id];
+      return pendingStage ? pendingStage === stage.id : l.stage === stage.id;
+    });
     return acc;
   }, {} as Record<string, CRMLead[]>);
 
@@ -43,7 +47,12 @@ export function CRMKanbanBoard({ leads, funnelType, onAdvance, onMarkLost, onLea
     const lead = active.data.current?.entity as CRMLead;
     const toStage = over.id as string;
     if (!lead || lead.stage === toStage) return;
+    setOptimisticMoves((prev) => ({ ...prev, [lead.id]: toStage }));
+    // onDragMove fires the mutation; clear optimistic state when it settles
+    // The parent mutation doesn't expose onSettled here, so clear after a safe delay
+    // that covers the query invalidation (~1s)
     onDragMove?.(lead, toStage);
+    setTimeout(() => setOptimisticMoves((prev) => { const n = { ...prev }; delete n[lead.id]; return n; }), 1500);
   }
 
   return (
