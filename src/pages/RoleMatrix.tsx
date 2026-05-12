@@ -18,6 +18,7 @@ import {
   type RoleKey, type Access, type FeatureRow,
 } from "@/lib/role-matrix-constants";
 
+
 function getAccessIcon(access: Access, size = "h-4 w-4") {
   switch (access) {
     case "full": return <CheckCircle className={`${size} text-carbo-green mx-auto`} />;
