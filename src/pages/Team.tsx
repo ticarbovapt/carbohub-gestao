@@ -142,11 +142,11 @@ function MemberInfoModal({ member, profiles, teamMembers, onClose, canEdit, isMa
     setFormLevel(member.hierarchy_level);
     const normName = (s?: string | null) =>
       (s ?? "").toLowerCase().trim().normalize("NFD").replace(/\p{Diacritic}/gu, "");
-    const prof = profiles.find((p) => normName(p.full_name) === normName(member.full_name))
-      ?? (teamMembers.find((m) => normName(m.full_name) === normName(member.full_name)) as any);
-    const email = (prof as any)?.email || "";
+    const orgNode    = profiles.find((p) => normName(p.full_name) === normName(member.full_name));
+    const authMember = teamMembers.find((m) => normName(m.full_name) === normName(member.full_name));
+    const email = (orgNode as any)?.email || authMember?.email || "";
     setFormEmail(email);
-    setFormPhone((prof as any)?.phone || "");
+    setFormPhone((orgNode as any)?.phone || "");
     setFormDualRole(member.dual_role || "");
     setFormAssistant(member.assistant || false);
     // seed hub interfaces from linked team member (if any)
