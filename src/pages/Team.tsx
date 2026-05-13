@@ -142,8 +142,11 @@ function MemberInfoModal({ member, profiles, teamMembers, onClose, canEdit, isMa
     setFormLevel(member.hierarchy_level);
     const normName = (s?: string | null) =>
       (s ?? "").toLowerCase().trim().normalize("NFD").replace(/\p{Diacritic}/gu, "");
-    const orgNode    = profiles.find((p) => normName(p.full_name) === normName(member.full_name));
-    const authMember = teamMembers.find((m) => normName(m.full_name) === normName(member.full_name));
+    const partialMatch = (a: string, b: string) => (a && b) && (b.startsWith(a + " ") || a.startsWith(b + " "));
+    const orgNode    = profiles.find((p) => normName(p.full_name) === normName(member.full_name))
+      ?? profiles.find((p) => partialMatch(normName(p.full_name), normName(member.full_name)));
+    const authMember = teamMembers.find((m) => normName(m.full_name) === normName(member.full_name))
+      ?? teamMembers.find((m) => partialMatch(normName(m.full_name), normName(member.full_name)));
     const email = (orgNode as any)?.email || authMember?.email || "";
     setFormEmail(email);
     setFormPhone((orgNode as any)?.phone || "");
@@ -182,10 +185,13 @@ function MemberInfoModal({ member, profiles, teamMembers, onClose, canEdit, isMa
     // Also persist relevant fields to the linked auth profile (profiles table)
     const normStr = (s?: string | null) =>
       (s ?? "").toLowerCase().trim().normalize("NFD").replace(/\p{Diacritic}/gu, "");
+    const partialStr = (a: string, b: string) => (a && b) && (b.startsWith(a + " ") || a.startsWith(b + " "));
     const linked = teamMembers.find(
       (m) => m.email && formEmail && m.email.toLowerCase() === formEmail.toLowerCase()
     ) ?? teamMembers.find(
       (m) => normStr(m.full_name) === normStr(formName)
+    ) ?? teamMembers.find(
+      (m) => partialStr(normStr(m.full_name), normStr(formName))
     );
     if (linked) {
       // Resolve manager_user_id: find the profile whose org_chart_node matches formReportsTo
@@ -269,8 +275,11 @@ function MemberInfoModal({ member, profiles, teamMembers, onClose, canEdit, isMa
   const norm = (s?: string | null) =>
     (s ?? "").toLowerCase().trim().normalize("NFD").replace(/\p{Diacritic}/gu, "");
   const memberNorm = norm(member.full_name);
-  const profile   = profiles.find((p) => norm(p.full_name) === memberNorm);
-  const teamMember = teamMembers.find((m) => norm(m.full_name) === memberNorm);
+  const partial = (a: string, b: string) => (a && b) && (b.startsWith(a + " ") || a.startsWith(b + " "));
+  const profile   = profiles.find((p) => norm(p.full_name) === memberNorm)
+    ?? profiles.find((p) => partial(norm(p.full_name), memberNorm));
+  const teamMember = teamMembers.find((m) => norm(m.full_name) === memberNorm)
+    ?? teamMembers.find((m) => partial(norm(m.full_name), memberNorm));
 
   return (
     <Dialog open={!!member} onOpenChange={(open) => { if (!open) { setEditing(false); onClose(); } }}>
@@ -802,9 +811,14 @@ const Team = () => {
                         onClick={() => {
                           const normStr = (s?: string | null) =>
                             (s ?? "").toLowerCase().trim().normalize("NFD").replace(/\p{Diacritic}/gu, "");
-                          // Match org node by email first, then by name
+                          // Match org node: email → exact name → partial name (handles "David" vs "David Franklin")
                           const node = profiles.find((n) => n.email && member.email && n.email === member.email)
-                            ?? profiles.find((n) => normStr(n.full_name) === normStr(member.full_name));
+                            ?? profiles.find((n) => normStr(n.full_name) === normStr(member.full_name))
+                            ?? profiles.find((n) => {
+                              const a = normStr(n.full_name);
+                              const b = normStr(member.full_name);
+                              return a && b && (b.startsWith(a + " ") || a.startsWith(b + " "));
+                            });
                           if (node) {
                             setSelectedMember(node);
                           } else {
