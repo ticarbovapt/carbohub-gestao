@@ -140,7 +140,10 @@ function MemberInfoModal({ member, profiles, teamMembers, onClose, canEdit, isMa
     const normalizedDept = DEPT_TO_PROFILE_DEPT[rawDept] ?? rawDept.toLowerCase();
     setFormDept(normalizedDept);
     setFormLevel(member.hierarchy_level);
-    const prof = profiles.find((p) => p.full_name?.toLowerCase().trim() === member.full_name.toLowerCase().trim());
+    const normName = (s?: string | null) =>
+      (s ?? "").toLowerCase().trim().normalize("NFD").replace(/\p{Diacritic}/gu, "");
+    const prof = profiles.find((p) => normName(p.full_name) === normName(member.full_name))
+      ?? (teamMembers.find((m) => normName(m.full_name) === normName(member.full_name)) as any);
     const email = (prof as any)?.email || "";
     setFormEmail(email);
     setFormPhone((prof as any)?.phone || "");
@@ -256,8 +259,11 @@ function MemberInfoModal({ member, profiles, teamMembers, onClose, canEdit, isMa
 
   const deptColor = getDeptColor(member.department);
   const parent    = PARENT_MAP.get(member.id);
-  const profile   = profiles.find((p) => p.full_name?.toLowerCase().trim() === member.full_name.toLowerCase().trim());
-  const teamMember = teamMembers.find((m) => m.full_name?.toLowerCase().trim() === member.full_name.toLowerCase().trim());
+  const norm = (s?: string | null) =>
+    (s ?? "").toLowerCase().trim().normalize("NFD").replace(/\p{Diacritic}/gu, "");
+  const memberNorm = norm(member.full_name);
+  const profile   = profiles.find((p) => norm(p.full_name) === memberNorm);
+  const teamMember = teamMembers.find((m) => norm(m.full_name) === memberNorm);
 
   return (
     <Dialog open={!!member} onOpenChange={(open) => { if (!open) { setEditing(false); onClose(); } }}>
