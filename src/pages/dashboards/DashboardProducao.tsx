@@ -96,7 +96,7 @@ export default function DashboardProducao() {
                 <SelectItem value="pos_venda">Pós-Venda</SelectItem>
               </SelectContent>
             </Select>
-            <Button variant="board">
+            <Button variant="board" className="dark:bg-slate-700 dark:text-white dark:hover:bg-slate-600">
               <Download className="h-4 w-4" />
               Exportar
             </Button>
