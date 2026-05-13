@@ -4,18 +4,16 @@ import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Separator } from "@/components/ui/separator";
 import { 
-  User, 
-  Building2, 
-  MapPin, 
-  Phone, 
-  Mail, 
-  ExternalLink,
+  User,
+  Building2,
+  MapPin,
+  Phone,
+  Mail,
   CheckCircle2,
   Clock,
   AlertCircle
 } from "lucide-react";
 import { ServiceOrder, DEPARTMENT_ORDER, DEPARTMENT_INFO, getDepartmentIndex, DepartmentType } from "@/types/os";
-import { Link } from "react-router-dom";
 
 interface LicenseeInfoCardProps {
   order: ServiceOrder;
@@ -62,12 +60,10 @@ export function LicenseeInfoCard({ order, stageHistory }: LicenseeInfoCardProps)
             Dados do Licenciado
           </CardTitle>
           {customer && (
-            <Button variant="ghost" size="sm" asChild className="gap-1.5 text-xs">
-              <Link to={`/customers/${customer.id}`}>
-                Ver Perfil
-                <ExternalLink className="h-3 w-3" />
-              </Link>
-            </Button>
+            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <User className="h-3 w-3" />
+              {customer.name}
+            </div>
           )}
         </div>
       </CardHeader>

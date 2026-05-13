@@ -215,7 +215,7 @@ export default function OrderDetails() {
                     {order.created_op_id && (
                       <div
                         className="flex items-center justify-between p-3 rounded-lg border bg-muted/30 cursor-pointer hover:bg-muted/50 transition-colors"
-                        onClick={() => navigate(`/production/${order.created_op_id}`)}
+                        onClick={() => navigate(`/production-orders/${order.created_op_id}`)}
                       >
                         <div className="flex items-center gap-3">
                           <Factory className="h-4 w-4 text-blue-500" />
@@ -230,7 +230,7 @@ export default function OrderDetails() {
                     {order.created_os_id && (
                       <div
                         className="flex items-center justify-between p-3 rounded-lg border bg-muted/30 cursor-pointer hover:bg-muted/50 transition-colors"
-                        onClick={() => navigate(`/service-orders/${order.created_os_id}`)}
+                        onClick={() => navigate(`/os/${order.created_os_id}`)}
                       >
                         <div className="flex items-center gap-3">
                           <Wrench className="h-4 w-4 text-amber-500" />

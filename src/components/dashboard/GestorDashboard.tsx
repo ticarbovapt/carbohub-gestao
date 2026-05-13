@@ -148,8 +148,8 @@ export function GestorDashboard({ role }: GestorDashboardProps) {
           <CardContent>
             <div className="space-y-2">
               {data.alerts.map((alert, i) => (
-                <div key={i} className="p-3 rounded bg-amber-50 border-l-4 border-l-amber-500">
-                  <p className="text-sm">{alert}</p>
+                <div key={i} className="p-3 rounded bg-amber-50 dark:bg-amber-900/30 border-l-4 border-l-amber-500">
+                  <p className="text-sm text-amber-900 dark:text-amber-200">{alert}</p>
                 </div>
               ))}
             </div>
