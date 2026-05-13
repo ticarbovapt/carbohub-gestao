@@ -230,6 +230,13 @@ Deno.serve(async (req: Request): Promise<Response> => {
       console.error("Profile update error:", profileError);
     }
 
+    // Link org_chart_node to this auth user by user_id (exact name match)
+    await supabaseAdmin
+      .from("org_chart_nodes")
+      .update({ user_id: newUserId, email })
+      .eq("full_name", fullName)
+      .is("user_id", null);
+
     const { error: roleError } = await supabaseAdmin
       .from("user_roles")
       .update({ role })

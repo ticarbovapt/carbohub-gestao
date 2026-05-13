@@ -140,10 +140,12 @@ function MemberInfoModal({ member, profiles, teamMembers, onClose, canEdit, isMa
     const normalizedDept = DEPT_TO_PROFILE_DEPT[rawDept] ?? rawDept.toLowerCase();
     setFormDept(normalizedDept);
     setFormLevel(member.hierarchy_level);
-    const normName = (s?: string | null) =>
-      (s ?? "").toLowerCase().trim().normalize("NFD").replace(/\p{Diacritic}/gu, "");
-    const orgNode    = profiles.find((p) => normName(p.full_name) === normName(member.full_name));
-    const authMember = teamMembers.find((m) => normName(m.full_name) === normName(member.full_name));
+    // Primary: link by user_id (set on org_chart_nodes). Fallback: email then name.
+    const orgNode = profiles.find((p) => (p as any).user_id && (p as any).user_id === member.user_id)
+      ?? profiles.find((p) => p.id === member.id);
+    const authMember = member.user_id
+      ? teamMembers.find((m) => m.id === member.user_id)
+      : teamMembers.find((m) => m.email && (orgNode as any)?.email && m.email === (orgNode as any).email);
     const email = (orgNode as any)?.email || authMember?.email || "";
     setFormEmail(email);
     setFormPhone((orgNode as any)?.phone || "");
@@ -179,14 +181,9 @@ function MemberInfoModal({ member, profiles, teamMembers, onClose, canEdit, isMa
       ...(isMasterAdmin ? { reports_to: formReportsTo || null } : {}),
     });
 
-    // Also persist relevant fields to the linked auth profile (profiles table)
-    const normStr = (s?: string | null) =>
-      (s ?? "").toLowerCase().trim().normalize("NFD").replace(/\p{Diacritic}/gu, "");
-    const linked = teamMembers.find(
-      (m) => m.email && formEmail && m.email.toLowerCase() === formEmail.toLowerCase()
-    ) ?? teamMembers.find(
-      (m) => normStr(m.full_name) === normStr(formName)
-    );
+    // Find linked auth profile: by user_id (primary) then email (fallback)
+    const linked = (member.user_id ? teamMembers.find((m) => m.id === member.user_id) : null)
+      ?? teamMembers.find((m) => m.email && formEmail && m.email.toLowerCase() === formEmail.toLowerCase());
     if (linked) {
       // Resolve manager_user_id: find the profile whose org_chart_node matches formReportsTo
       let managerProfileId: string | null = null;
@@ -269,8 +266,10 @@ function MemberInfoModal({ member, profiles, teamMembers, onClose, canEdit, isMa
   const norm = (s?: string | null) =>
     (s ?? "").toLowerCase().trim().normalize("NFD").replace(/\p{Diacritic}/gu, "");
   const memberNorm = norm(member.full_name);
-  const profile   = profiles.find((p) => norm(p.full_name) === memberNorm);
-  const teamMember = teamMembers.find((m) => norm(m.full_name) === memberNorm);
+  const profile   = profiles.find((p) => p.id === member.id);
+  const teamMember = member.user_id
+    ? teamMembers.find((m) => m.id === member.user_id)
+    : teamMembers.find((m) => norm(m.full_name) === memberNorm);
 
   return (
     <Dialog open={!!member} onOpenChange={(open) => { if (!open) { setEditing(false); onClose(); } }}>
@@ -800,11 +799,9 @@ const Team = () => {
                         className="h-7 w-7 p-0 text-muted-foreground"
                         title="Editar dados do colaborador"
                         onClick={() => {
-                          const normStr = (s?: string | null) =>
-                            (s ?? "").toLowerCase().trim().normalize("NFD").replace(/\p{Diacritic}/gu, "");
-                          // Match org node by email first, then by name
-                          const node = profiles.find((n) => n.email && member.email && n.email === member.email)
-                            ?? profiles.find((n) => normStr(n.full_name) === normStr(member.full_name));
+                          // Primary: find org node by user_id. Fallback: email match.
+                          const node = profiles.find((n) => (n as any).user_id === member.id)
+                            ?? profiles.find((n) => n.email && member.email && n.email === member.email);
                           if (node) {
                             setSelectedMember(node);
                           } else {
