@@ -800,10 +800,11 @@ const Team = () => {
                         className="h-7 w-7 p-0 text-muted-foreground"
                         title="Editar dados do colaborador"
                         onClick={() => {
-                          // Match org node by email to open MemberInfoModal
-                          const node = profiles.find(
-                            (n) => n.email === member.email
-                          );
+                          const normStr = (s?: string | null) =>
+                            (s ?? "").toLowerCase().trim().normalize("NFD").replace(/\p{Diacritic}/gu, "");
+                          // Match org node by email first, then by name
+                          const node = profiles.find((n) => n.email && member.email && n.email === member.email)
+                            ?? profiles.find((n) => normStr(n.full_name) === normStr(member.full_name));
                           if (node) {
                             setSelectedMember(node);
                           } else {
