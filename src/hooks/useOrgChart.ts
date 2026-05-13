@@ -16,6 +16,7 @@ export interface OrgNode {
   phone?: string | null;
   dual_role?: string;
   assistant?: boolean;
+  user_id?: string | null;
   children: OrgNode[];
 }
 
@@ -204,7 +205,7 @@ export function useOrgChartFlat() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("org_chart_nodes" as any)
-        .select("id, full_name, avatar_url, hierarchy_level, reports_to, department, job_title, dual_role, assistant, email, phone")
+        .select("id, full_name, avatar_url, hierarchy_level, reports_to, department, job_title, dual_role, assistant, email, phone, user_id")
         .order("hierarchy_level", { ascending: true });
 
       if (error) throw error;
