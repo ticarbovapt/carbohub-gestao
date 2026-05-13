@@ -211,6 +211,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
     const { error: profileError } = await supabaseAdmin
       .from("profiles")
       .update({
+        email,
         username,
         department,
         password_must_change: true,
