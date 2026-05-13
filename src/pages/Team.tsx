@@ -142,11 +142,11 @@ function MemberInfoModal({ member, profiles, teamMembers, onClose, canEdit, isMa
     setFormLevel(member.hierarchy_level);
     const normName = (s?: string | null) =>
       (s ?? "").toLowerCase().trim().normalize("NFD").replace(/\p{Diacritic}/gu, "");
-    const prof = profiles.find((p) => normName(p.full_name) === normName(member.full_name))
-      ?? (teamMembers.find((m) => normName(m.full_name) === normName(member.full_name)) as any);
-    const email = (prof as any)?.email || "";
+    const orgNode    = profiles.find((p) => normName(p.full_name) === normName(member.full_name));
+    const authMember = teamMembers.find((m) => normName(m.full_name) === normName(member.full_name));
+    const email = (orgNode as any)?.email || authMember?.email || "";
     setFormEmail(email);
-    setFormPhone((prof as any)?.phone || "");
+    setFormPhone((orgNode as any)?.phone || "");
     setFormDualRole(member.dual_role || "");
     setFormAssistant(member.assistant || false);
     // seed hub interfaces from linked team member (if any)
@@ -800,10 +800,11 @@ const Team = () => {
                         className="h-7 w-7 p-0 text-muted-foreground"
                         title="Editar dados do colaborador"
                         onClick={() => {
-                          // Match org node by email to open MemberInfoModal
-                          const node = profiles.find(
-                            (n) => n.email === member.email
-                          );
+                          const normStr = (s?: string | null) =>
+                            (s ?? "").toLowerCase().trim().normalize("NFD").replace(/\p{Diacritic}/gu, "");
+                          // Match org node by email first, then by name
+                          const node = profiles.find((n) => n.email && member.email && n.email === member.email)
+                            ?? profiles.find((n) => normStr(n.full_name) === normStr(member.full_name));
                           if (node) {
                             setSelectedMember(node);
                           } else {
