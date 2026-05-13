@@ -180,8 +180,12 @@ function MemberInfoModal({ member, profiles, teamMembers, onClose, canEdit, isMa
     });
 
     // Also persist relevant fields to the linked auth profile (profiles table)
+    const normStr = (s?: string | null) =>
+      (s ?? "").toLowerCase().trim().normalize("NFD").replace(/\p{Diacritic}/gu, "");
     const linked = teamMembers.find(
       (m) => m.email && formEmail && m.email.toLowerCase() === formEmail.toLowerCase()
+    ) ?? teamMembers.find(
+      (m) => normStr(m.full_name) === normStr(formName)
     );
     if (linked) {
       // Resolve manager_user_id: find the profile whose org_chart_node matches formReportsTo
@@ -258,7 +262,10 @@ function MemberInfoModal({ member, profiles, teamMembers, onClose, canEdit, isMa
   if (!member) return null;
 
   const deptColor = getDeptColor(member.department);
-  const parent    = PARENT_MAP.get(member.id);
+  const memberNode = profiles.find((p) => p.id === member.id);
+  const parent = memberNode?.reports_to
+    ? (profiles.find((p) => p.id === memberNode.reports_to) ?? PARENT_MAP.get(member.id))
+    : PARENT_MAP.get(member.id);
   const norm = (s?: string | null) =>
     (s ?? "").toLowerCase().trim().normalize("NFD").replace(/\p{Diacritic}/gu, "");
   const memberNorm = norm(member.full_name);
