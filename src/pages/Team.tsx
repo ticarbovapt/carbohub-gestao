@@ -273,7 +273,7 @@ function MemberInfoModal({ member, profiles, teamMembers, onClose, canEdit, isMa
 
   return (
     <Dialog open={!!member} onOpenChange={(open) => { if (!open) { setEditing(false); onClose(); } }}>
-      <DialogContent className="max-w-md w-full">
+      <DialogContent className="max-w-md w-full max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <div className="flex items-center justify-between">
             <DialogTitle>{editing ? "Editar Colaborador" : "Colaborador"}</DialogTitle>
