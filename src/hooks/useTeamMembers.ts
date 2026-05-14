@@ -22,6 +22,8 @@ export interface TeamMember {
   last_access: string | null;
   temp_password_sent_at: string | null;
   allowed_interfaces: string[];
+  escopo: string | null;
+  funcao: string | null;
 }
 
 export function useTeamMembers() {
@@ -77,6 +79,8 @@ export function useTeamMembers() {
         last_access: p.last_access || null,
         temp_password_sent_at: p.temp_password_sent_at || null,
         allowed_interfaces: (p as any).allowed_interfaces || [],
+        escopo: (p as any).escopo || null,
+        funcao: (p as any).funcao || null,
       }));
 
       return members;

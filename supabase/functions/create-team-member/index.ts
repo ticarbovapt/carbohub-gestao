@@ -24,38 +24,37 @@ function getCorsHeaders(req: Request) {
 }
 
 const DEPARTMENT_PREFIXES: Record<string, string> = {
-  // Novos departamentos organizacionais
-  b2b: "B2B",
-  command: "COM",
-  expansao: "EXP",
-  finance: "FIN",
-  growth: "GRO",
-  ops: "OPS",
+  b2b:        "B2B",
+  command:    "COM",
+  expansao:   "EXP",
+  finance:    "FIN",
+  growth:     "GRO",
+  ops:        "OPS",
   // Legados (mantidos para compatibilidade)
-  venda: "VEN",
+  venda:      "VEN",
   preparacao: "PRE",
-  expedicao: "EXP",
-  operacao: "OPS",
-  pos_venda: "POS",
+  expedicao:  "EXP",
+  operacao:   "OPS",
+  pos_venda:  "POS",
 };
 
 interface CreateMemberRequest {
-  email: string;
   fullName: string;
   department: string;
   role: string;
-  managerName?: string;
-  managerUserId?: string;
   funcao?: string;
   escopo?: string;
+  hierarchyLevel?: number;
+  managerUserId?: string;
   allowedInterfaces?: string[];
   platformUrl: string;
 }
 
+const DEFAULT_PASSWORD = "Carbo@2026";
+
 Deno.serve(async (req: Request): Promise<Response> => {
   const corsHeaders = getCorsHeaders(req);
 
-  // Handle CORS preflight
   if (req.method === "OPTIONS") {
     return new Response(null, { status: 204, headers: corsHeaders });
   }
@@ -63,19 +62,12 @@ Deno.serve(async (req: Request): Promise<Response> => {
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-    const resendApiKey = Deno.env.get("RESEND_API_KEY");
 
     if (!supabaseUrl || !supabaseServiceKey) {
       return new Response(
         JSON.stringify({ success: false, error: "Missing Supabase configuration" }),
         { status: 500, headers: { "Content-Type": "application/json", ...corsHeaders } }
       );
-    }
-
-    // RESEND_API_KEY is optional - user will be created even without email
-    const hasEmailCapability = !!resendApiKey;
-    if (!hasEmailCapability) {
-      console.warn("RESEND_API_KEY not configured - welcome emails will not be sent");
     }
 
     const authHeader = req.headers.get("authorization");
@@ -97,13 +89,14 @@ Deno.serve(async (req: Request): Promise<Response> => {
       );
     }
 
-    const { data: roleCheck } = await supabaseAdmin.rpc("is_manager_or_admin", {
+    // Only admins can create team members
+    const { data: isAdmin } = await supabaseAdmin.rpc("is_admin", {
       _user_id: callingUser.id,
     });
 
-    if (!roleCheck) {
+    if (!isAdmin) {
       return new Response(
-        JSON.stringify({ success: false, error: "Unauthorized: Only managers and admins can create team members" }),
+        JSON.stringify({ success: false, error: "Unauthorized: Only admins can create team members" }),
         { status: 403, headers: { "Content-Type": "application/json", ...corsHeaders } }
       );
     }
@@ -120,7 +113,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
         );
       }
       const { error: resetError } = await supabaseAdmin.auth.admin.updateUserById(userId, {
-        password: "Carbo@2026",
+        password: DEFAULT_PASSWORD,
       });
       if (resetError) {
         return new Response(
@@ -129,28 +122,26 @@ Deno.serve(async (req: Request): Promise<Response> => {
         );
       }
       return new Response(
-        JSON.stringify({ success: true, message: "Senha redefinida para Carbo@2026" }),
+        JSON.stringify({ success: true, message: `Senha redefinida para ${DEFAULT_PASSWORD}` }),
         { status: 200, headers: { "Content-Type": "application/json", ...corsHeaders } }
       );
     }
     // ─────────────────────────────────────────────────────────────────────────
 
     const {
-      email,
       fullName,
       department,
       role,
-      managerName,
-      managerUserId,
       funcao,
       escopo,
+      hierarchyLevel,
+      managerUserId,
       allowedInterfaces,
-      platformUrl,
     } = body as CreateMemberRequest;
 
-    if (!email || !fullName || !department || !role || !platformUrl) {
+    if (!fullName || !department || !role) {
       return new Response(
-        JSON.stringify({ success: false, error: "Missing required fields: email, fullName, department, role, platformUrl" }),
+        JSON.stringify({ success: false, error: "Missing required fields: fullName, department, role" }),
         { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } }
       );
     }
@@ -163,6 +154,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
       );
     }
 
+    // Generate username (e.g. OPS0001)
     const { data: username, error: usernameError } = await supabaseAdmin.rpc("generate_username", {
       dept_prefix: deptPrefix,
     });
@@ -175,23 +167,12 @@ Deno.serve(async (req: Request): Promise<Response> => {
       );
     }
 
-    // Senha padrão de primeiro acesso — o usuário deve alterar após o primeiro login
-    const internalPassword = "Carbo@2026";
-
-    // Generate invite token for passwordless first-access link
-    const { data: inviteToken, error: tokenError } = await supabaseAdmin.rpc("generate_invite_token");
-
-    if (tokenError || !inviteToken) {
-      console.error("Invite token generation error:", tokenError);
-      return new Response(
-        JSON.stringify({ success: false, error: "Failed to generate invite token" }),
-        { status: 500, headers: { "Content-Type": "application/json", ...corsHeaders } }
-      );
-    }
+    // Use internal placeholder email — user sets real email on first login
+    const placeholderEmail = `${(username as string).toLowerCase()}@carbo.internal`;
 
     const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
-      email,
-      password: internalPassword,
+      email: placeholderEmail,
+      password: DEFAULT_PASSWORD,
       email_confirm: true,
       user_metadata: { full_name: fullName },
     });
@@ -205,24 +186,20 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
     const newUserId = authData.user.id;
 
-    const inviteTokenExpiresAt = new Date();
-    inviteTokenExpiresAt.setHours(inviteTokenExpiresAt.getHours() + 72); // 72h to set password
-
     const { error: profileError } = await supabaseAdmin
       .from("profiles")
       .update({
-        email,
-        username,
-        department,
+        email:             placeholderEmail,
+        username:          username,
+        department:        department,
         password_must_change: true,
         created_by_manager: callingUser.id,
-        status: "approved",
-        invite_token: inviteToken,
-        invite_token_expires_at: inviteTokenExpiresAt.toISOString(),
-        manager_user_id: managerUserId || callingUser.id,
-        funcao: funcao || null,
-        escopo: escopo || null,
-        allowed_interfaces: allowedInterfaces || [],
+        status:            "approved",
+        manager_user_id:   managerUserId || callingUser.id,
+        funcao:            funcao || null,
+        escopo:            escopo || null,
+        hierarchy_level:   hierarchyLevel ?? 6,
+        allowed_interfaces: allowedInterfaces || ["carbo_ops"],
       })
       .eq("id", newUserId);
 
@@ -230,13 +207,14 @@ Deno.serve(async (req: Request): Promise<Response> => {
       console.error("Profile update error:", profileError);
     }
 
-    // Link org_chart_node to this auth user by user_id (exact name match)
+    // Link org_chart_node to this auth user by exact name match
     await supabaseAdmin
       .from("org_chart_nodes")
-      .update({ user_id: newUserId, email })
+      .update({ user_id: newUserId, email: placeholderEmail })
       .eq("full_name", fullName)
       .is("user_id", null);
 
+    // Set user role
     const { error: roleError } = await supabaseAdmin
       .from("user_roles")
       .update({ role })
@@ -246,53 +224,8 @@ Deno.serve(async (req: Request): Promise<Response> => {
       console.error("Role update error:", roleError);
     }
 
-    // Build the invite link
-    const setPasswordUrl = `${platformUrl}/set-password?token=${inviteToken}`;
-
-    // Send welcome email (only if RESEND_API_KEY is configured)
-    let emailSent = false;
-    if (hasEmailCapability) {
-      try {
-        const emailResponse = await fetch(`${supabaseUrl}/functions/v1/send-welcome-email`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${supabaseServiceKey}`,
-          },
-          body: JSON.stringify({
-            email,
-            fullName,
-            username,
-            setPasswordUrl,
-            platformUrl,
-            managerName,
-          }),
-        });
-        const emailResult = await emailResponse.json();
-        emailSent = emailResponse.ok;
-        if (!emailSent) {
-          console.error("Welcome email failed:", emailResult);
-        }
-      } catch (emailError) {
-        console.error("Failed to send welcome email:", emailError);
-      }
-    }
-
-    const responseData: Record<string, unknown> = {
-      userId: newUserId,
-      username,
-      email,
-      emailSent,
-      setPasswordUrl,
-    };
-
-    // If email was NOT sent, include the invite link so manager can share manually
-    if (!emailSent) {
-      responseData.emailWarning = "E-mail não enviado. Compartilhe o link de acesso manualmente.";
-    }
-
     return new Response(
-      JSON.stringify({ success: true, data: responseData }),
+      JSON.stringify({ success: true, data: { userId: newUserId, username } }),
       { status: 200, headers: { "Content-Type": "application/json", ...corsHeaders } }
     );
   } catch (error: unknown) {

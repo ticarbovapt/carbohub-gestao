@@ -4,7 +4,7 @@ import { BoardLayout } from "@/components/layouts/BoardLayout";
 import {
   Users, Shield, Building2, Clock, Network, Mail, Loader2, CheckCheck,
   GitBranch, UserCheck, Map as MapIcon, Link2, Lock, ChevronRight,
-  Pencil, X, Save, UserPlus,
+  Pencil, X, Save, UserPlus, KeyRound,
 } from "lucide-react";
 import { STATIC_ORG_TREE, getDeptColor, getLevelLabel, useOrgChartFlat, useUpdateOrgChartNode, type OrgNode } from "@/hooks/useOrgChart";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -36,11 +36,8 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
-import { useResendWelcomeEmail, useCreateTeamMember } from "@/hooks/useCreateTeamMember";
-import { useUpdateAllowedInterfaces } from "@/hooks/useTeamMembers";
+import { useResendWelcomeEmail } from "@/hooks/useCreateTeamMember";
 import { ALL_DEPARTMENTS, DEPARTMENT_LABELS } from "@/constants/departments";
-import { Checkbox } from "@/components/ui/checkbox";
-
 // ── Carbo role labels ────────────────────────────────────────────────────────
 const CARBO_ROLE_BADGE: Record<string, string> = {
   ceo:             "CEO",
@@ -57,13 +54,6 @@ const DEPT_TO_PROFILE_DEPT: Record<string, string> = {
   Command: "command", OPS: "ops", Finance: "finance",
   Growth: "growth", "Growth & B2B": "growth", B2B: "b2b", Expansão: "expansao",
 };
-
-// ── HUBs disponíveis ─────────────────────────────────────────────────────────
-const HUB_OPTIONS = [
-  { value: "carbo_ops",          label: "Carbo Controle" },
-  { value: "portal_licenciado",  label: "Portal Licenciados" },
-  { value: "portal_pdv",         label: "Portal Lojas (PDV)" },
-];
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 function flattenTree(nodes: OrgNode[]): OrgNode[] {
@@ -107,9 +97,7 @@ interface MemberInfoModalProps {
 }
 
 function MemberInfoModal({ member, profiles, teamMembers, onClose, canEdit, isMasterAdmin, onUpdated }: MemberInfoModalProps) {
-  const updateNode = useUpdateOrgChartNode();
-  const updateInterfaces = useUpdateAllowedInterfaces();
-  const createMember = useCreateTeamMember();
+  const updateNode  = useUpdateOrgChartNode();
   const resendEmail = useResendWelcomeEmail();
   const [editing, setEditing] = useState(false);
 
@@ -122,10 +110,8 @@ function MemberInfoModal({ member, profiles, teamMembers, onClose, canEdit, isMa
   const [formPhone,      setFormPhone]       = useState("");
   const [formDualRole,   setFormDualRole]    = useState("");
   const [formAssistant,  setFormAssistant]   = useState(false);
-
-  // access section state
-  const [hubInterfaces,      setHubInterfaces]      = useState<string[]>([]);
-  const [createAccountEmail, setCreateAccountEmail] = useState("");
+  const [formUsername,   setFormUsername]    = useState("");
+  const [formEscopo,     setFormEscopo]      = useState("");
   // gestor direto (master admin only)
   const [formReportsTo, setFormReportsTo] = useState("");
 
@@ -151,10 +137,10 @@ function MemberInfoModal({ member, profiles, teamMembers, onClose, canEdit, isMa
     setFormPhone((orgNode as any)?.phone || "");
     setFormDualRole(member.dual_role || "");
     setFormAssistant(member.assistant || false);
-    // seed hub interfaces from linked team member (if any)
+    // seed username + escopo from linked team member (if any)
     const linked = teamMembers.find((m) => m.email && email && m.email.toLowerCase() === email.toLowerCase());
-    setHubInterfaces(linked?.allowed_interfaces || []);
-    setCreateAccountEmail(email);
+    setFormUsername(linked?.username || "");
+    setFormEscopo(linked?.escopo || "");
     // seed gestor direto from flat profiles list
     const flatNode = profiles.find((p) => p.id === member.id);
     setFormReportsTo((flatNode as any)?.reports_to || "");
@@ -195,13 +181,30 @@ function MemberInfoModal({ member, profiles, teamMembers, onClose, canEdit, isMa
         managerProfileId = managerLinked?.id || null;
       }
 
+      // validate username uniqueness if changed
+      const usernameChanged = formUsername && formUsername !== linked.username;
+      if (usernameChanged) {
+        const { data: existing } = await supabase
+          .from("profiles")
+          .select("id")
+          .eq("username", formUsername)
+          .neq("id", linked.id)
+          .maybeSingle();
+        if (existing) {
+          toast.error("Username já está em uso por outro colaborador.");
+          return;
+        }
+      }
+
       const { error: profileUpdateError } = await supabase
         .from("profiles")
         .update({
           full_name:  formName,
-          department: formDept as any,   // profile enum value (lowercase)
+          department: formDept as any,
           phone:      formPhone || null,
           funcao:     formTitle || null,
+          escopo:     formEscopo || null,
+          ...(usernameChanged ? { username: formUsername } : {}),
           ...(isMasterAdmin ? { manager_user_id: managerProfileId } : {}),
         } as any)
         .eq("id", linked.id);
@@ -213,35 +216,6 @@ function MemberInfoModal({ member, profiles, teamMembers, onClose, canEdit, isMa
     }
 
     onUpdated();
-    setEditing(false);
-    onClose();
-  };
-
-  const toggleHub = (value: string) => {
-    setHubInterfaces((prev) =>
-      prev.includes(value) ? prev.filter((v) => v !== value) : [...prev, value]
-    );
-  };
-
-  const handleSaveInterfaces = async (userId: string) => {
-    await updateInterfaces.mutateAsync({ userId, allowed_interfaces: hubInterfaces });
-  };
-
-  const handleCreateAccount = async () => {
-    if (!createAccountEmail || hubInterfaces.length === 0) {
-      toast.error("Informe o e-mail e selecione ao menos um HUB.");
-      return;
-    }
-    const profileDept = DEPT_TO_PROFILE_DEPT[formDept] || "ops";
-    await createMember.mutateAsync({
-      email: createAccountEmail,
-      fullName: formName,
-      department: profileDept as any,
-      role: "operator",
-      allowedInterfaces: hubInterfaces,
-    });
-    onUpdated();
-    toast.success("Conta criada! As credenciais foram enviadas por e-mail.");
     setEditing(false);
     onClose();
   };
@@ -407,6 +381,31 @@ function MemberInfoModal({ member, profiles, teamMembers, onClose, canEdit, isMa
                 <Label htmlFor="assistant-check" className="cursor-pointer">Assistente executivo(a)</Label>
               </div>
 
+              {/* Username — editável por admin para definir o login do colaborador */}
+              {(() => {
+                const linkedAcc = member.user_id
+                  ? teamMembers.find((m) => m.id === member.user_id)
+                  : teamMembers.find((m) => m.email && formEmail && m.email.toLowerCase() === formEmail.toLowerCase());
+                return linkedAcc ? (
+                  <div className="col-span-2 space-y-1">
+                    <Label className="flex items-center gap-1.5">
+                      <KeyRound className="h-3.5 w-3.5 text-muted-foreground" />
+                      Username (login)
+                    </Label>
+                    <Input
+                      value={formUsername}
+                      onChange={(e) => setFormUsername(e.target.value.toLowerCase().replace(/\s/g, ""))}
+                      placeholder="ex: ops0001"
+                    />
+                  </div>
+                ) : null;
+              })()}
+
+              <div className="col-span-2 space-y-1">
+                <Label>Escopo / Responsabilidades</Label>
+                <Input value={formEscopo} onChange={(e) => setFormEscopo(e.target.value)} placeholder="Principais atividades e áreas de atuação" />
+              </div>
+
               {/* Gestor Direto — somente master admin pode alterar */}
               {isMasterAdmin && (
                 <div className="col-span-2 space-y-1">
@@ -449,97 +448,31 @@ function MemberInfoModal({ member, profiles, teamMembers, onClose, canEdit, isMa
 
             {/* ── ACESSO AO SISTEMA ─────────────────────────────────────────── */}
             {(() => {
-              const linkedAccount = teamMembers.find(
-                (m) => m.email && formEmail && m.email.toLowerCase() === formEmail.toLowerCase()
-              );
+              const linkedAccount = member.user_id
+                ? teamMembers.find((m) => m.id === member.user_id)
+                : teamMembers.find((m) => m.email && formEmail && m.email.toLowerCase() === formEmail.toLowerCase());
               return (
-                <div className="border border-border rounded-lg p-3 space-y-3 bg-muted/30">
+                <div className="border border-border rounded-lg p-3 space-y-2 bg-muted/30">
                   <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1.5">
                     <Lock className="h-3.5 w-3.5" /> Acesso ao Sistema
                   </p>
-
                   {linkedAccount ? (
-                    /* Caso A — já tem conta */
-                    <div className="space-y-3">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <Badge variant={linkedAccount.status === "approved" ? "default" : "outline"} className="text-xs">
-                          {linkedAccount.status === "approved" ? "Conta ativa" : linkedAccount.status}
-                        </Badge>
-                        <span className="text-xs text-muted-foreground truncate">{linkedAccount.email}</span>
-                      </div>
-                      <div className="space-y-1.5">
-                        {HUB_OPTIONS.map((hub) => (
-                          <div key={hub.value} className="flex items-center gap-2">
-                            <Checkbox
-                              id={`hub-${hub.value}`}
-                              checked={hubInterfaces.includes(hub.value)}
-                              onCheckedChange={() => toggleHub(hub.value)}
-                            />
-                            <Label htmlFor={`hub-${hub.value}`} className="text-sm cursor-pointer">{hub.label}</Label>
-                          </div>
-                        ))}
-                      </div>
-                      <div className="flex gap-2">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="flex-1"
-                          onClick={() => handleSaveInterfaces(linkedAccount.id)}
-                          disabled={updateInterfaces.isPending}
-                        >
-                          {updateInterfaces.isPending
-                            ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />
-                            : <Save className="h-3.5 w-3.5 mr-1" />}
-                          Salvar Interfaces
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => handleResendToLinked(linkedAccount)}
-                          disabled={resendEmail.isPending}
-                          title="Reenviar credenciais"
-                        >
-                          <Mail className="h-3.5 w-3.5" />
-                        </Button>
-                      </div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <Badge variant="default" className="text-xs">Conta ativa</Badge>
+                      {linkedAccount.username && (
+                        <code className="text-xs bg-muted px-1.5 py-0.5 rounded font-mono">{linkedAccount.username}</code>
+                      )}
+                      <span className="text-xs text-muted-foreground truncate">{linkedAccount.email}</span>
                     </div>
                   ) : (
-                    /* Caso B — sem conta */
-                    <div className="space-y-3">
-                      <div className="space-y-1">
-                        <Label className="text-xs">E-mail de acesso</Label>
-                        <Input
-                          type="email"
-                          value={createAccountEmail}
-                          onChange={(e) => setCreateAccountEmail(e.target.value)}
-                          placeholder="email@empresa.com"
-                          className="h-8 text-sm"
-                        />
-                      </div>
-                      <div className="space-y-1.5">
-                        {HUB_OPTIONS.map((hub) => (
-                          <div key={hub.value} className="flex items-center gap-2">
-                            <Checkbox
-                              id={`hub-new-${hub.value}`}
-                              checked={hubInterfaces.includes(hub.value)}
-                              onCheckedChange={() => toggleHub(hub.value)}
-                            />
-                            <Label htmlFor={`hub-new-${hub.value}`} className="text-sm cursor-pointer">{hub.label}</Label>
-                          </div>
-                        ))}
-                      </div>
-                      <Button
-                        size="sm"
-                        className="w-full"
-                        onClick={handleCreateAccount}
-                        disabled={createMember.isPending || !createAccountEmail || hubInterfaces.length === 0}
-                      >
-                        {createMember.isPending
-                          ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />
-                          : <UserPlus className="h-3.5 w-3.5 mr-1" />}
-                        Criar Conta
-                      </Button>
-                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Sem conta de acesso. Use <strong>Criar Nova Conta</strong> para adicionar ao sistema.
+                    </p>
+                  )}
+                  {linkedAccount && (
+                    <p className="text-xs text-muted-foreground">
+                      Configure interfaces e permissões via botão <strong>Acesso</strong> na lista de usuários.
+                    </p>
                   )}
                 </div>
               );
@@ -573,7 +506,7 @@ const Team = () => {
   const pendingAccessCount = approvedMembers.filter((m) => m.password_must_change).length;
 
   const canEdit = isAdmin || isCeo || isMasterAdmin;
-  const canAddMember = isAdmin || isManager || isCeo || isAnyGestor;
+  const canAddMember = isAdmin;
 
   const handleBulkResendAll = async () => {
     const pending = approvedMembers.filter((m) => m.password_must_change && m.username);

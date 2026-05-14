@@ -342,7 +342,7 @@ const LoginArea = () => {
 
                         {/* Login field */}
                         <div className="space-y-1.5">
-                          <Label htmlFor="login" className="text-sm font-semibold text-foreground">Login</Label>
+                          <Label htmlFor="login" className="text-sm font-semibold text-foreground">Usuário ou E-mail</Label>
                           <div className="relative">
                             <UserCircle className={`absolute left-3.5 top-1/2 -translate-y-1/2 h-5 w-5 transition-colors ${
                               loginFieldError ? "text-destructive" : login.length > 0 ? "text-primary" : "text-muted-foreground"

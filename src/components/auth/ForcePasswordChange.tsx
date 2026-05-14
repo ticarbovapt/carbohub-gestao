@@ -7,9 +7,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Progress } from "@/components/ui/progress";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { Loader2, ShieldCheck, Eye, EyeOff, Check, X, AlertTriangle, ArrowLeft } from "lucide-react";
+import { Loader2, ShieldCheck, Eye, EyeOff, Check, X, AlertTriangle, ArrowLeft, Mail } from "lucide-react";
 import logoCarbo from "@/assets/logo-carbo.png";
 import { cn } from "@/lib/utils";
+
+const INTERNAL_EMAIL_SUFFIX = "@carbo.internal";
 
 interface PasswordRequirement {
   label: string;
@@ -34,6 +36,7 @@ interface ForcePasswordChangeProps {
 export function ForcePasswordChange({ userName, onPasswordChanged, onBack }: ForcePasswordChangeProps) {
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [email, setEmail] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -100,7 +103,12 @@ export function ForcePasswordChange({ userName, onPasswordChanged, onBack }: For
   const isPasswordValid = PASSWORD_REQUIREMENTS.every((req) => req.test(newPassword));
   const passwordsMatch = newPassword === confirmPassword && confirmPassword.length > 0;
   const isPasswordPwned = hibpResult?.isPwned === true;
-  const canSubmit = isPasswordValid && passwordsMatch && !isLoading && !isPasswordPwned && !isCheckingHIBP;
+  const emailTrimmed = email.trim().toLowerCase();
+  const isEmailValid =
+    emailTrimmed.length > 0 &&
+    /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailTrimmed) &&
+    !emailTrimmed.endsWith(INTERNAL_EMAIL_SUFFIX);
+  const canSubmit = isPasswordValid && passwordsMatch && isEmailValid && !isLoading && !isPasswordPwned && !isCheckingHIBP;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -110,24 +118,25 @@ export function ForcePasswordChange({ userName, onPasswordChanged, onBack }: For
     setIsLoading(true);
 
     try {
-      // Update password
-      const { error: passwordError } = await supabase.auth.updateUser({
+      // Update password and real email simultaneously
+      const { error: updateError } = await supabase.auth.updateUser({
         password: newPassword,
+        email: emailTrimmed,
       });
 
-      if (passwordError) throw passwordError;
+      if (updateError) throw updateError;
 
       // Get current user
       const { data: { user } } = await supabase.auth.getUser();
-      
+
       if (user) {
-        // Update profile to mark password as changed
         const { error: profileError } = await supabase
           .from("profiles")
-          .update({ 
+          .update({
             password_must_change: false,
             last_access: new Date().toISOString(),
-          })
+            email: emailTrimmed,
+          } as any)
           .eq("id", user.id);
 
         if (profileError) {
@@ -135,7 +144,7 @@ export function ForcePasswordChange({ userName, onPasswordChanged, onBack }: For
         }
       }
 
-      toast.success("Senha atualizada com sucesso! Bem-vindo ao Carbo Controle.");
+      toast.success("Senha e e-mail definidos! Bem-vindo ao Carbo Controle.");
       onPasswordChanged();
       navigate("/onboarding");
     } catch (error: any) {
@@ -168,12 +177,39 @@ export function ForcePasswordChange({ userName, onPasswordChanged, onBack }: For
             Olá, {userName}! 👋
           </CardTitle>
           <CardDescription className="text-base">
-            Antes de continuar, crie sua nova senha.
+            Antes de continuar, informe seu e-mail real e defina sua senha.
           </CardDescription>
         </CardHeader>
 
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-6">
+
+            {/* E-mail real */}
+            <div className="space-y-2">
+              <Label htmlFor="email" className="flex items-center gap-2">
+                <Mail className="h-4 w-4 text-muted-foreground" />
+                Seu E-mail
+              </Label>
+              <Input
+                id="email"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="voce@exemplo.com"
+                autoComplete="email"
+                className={cn(
+                  email && !isEmailValid && "border-destructive"
+                )}
+              />
+              {email && !isEmailValid && (
+                <p className="text-xs text-destructive">
+                  {emailTrimmed.endsWith(INTERNAL_EMAIL_SUFFIX)
+                    ? "Use seu e-mail pessoal ou corporativo real."
+                    : "Informe um e-mail válido."}
+                </p>
+              )}
+            </div>
+
             <div className="space-y-2">
               <Label htmlFor="newPassword">Nova Senha</Label>
               <div className="relative">
@@ -314,7 +350,7 @@ export function ForcePasswordChange({ userName, onPasswordChanged, onBack }: For
               ) : (
                 <>
                   <ShieldCheck className="mr-2 h-4 w-4" />
-                  Definir Nova Senha
+                  Salvar e Continuar
                 </>
               )}
             </Button>
