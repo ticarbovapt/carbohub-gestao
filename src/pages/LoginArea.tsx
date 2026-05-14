@@ -350,11 +350,10 @@ const LoginArea = () => {
                             <Input
                               id="login"
                               type="text"
-                              placeholder="seu.login"
+                              placeholder="OPS0001 ou email@empresa.com"
                               value={login}
-                              onChange={(e) => setLogin(e.target.value.toLowerCase())}
+                              onChange={(e) => setLogin(e.target.value)}
                               onBlur={() => setLoginTouched(true)}
-                              style={{ textTransform: "lowercase" }}
                               className={`h-12 pl-11 pr-10 text-base rounded-xl bg-muted/40 border-2 transition-colors ${
                                 loginFieldError
                                   ? "border-destructive focus-visible:ring-destructive/20"
