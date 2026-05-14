@@ -169,7 +169,7 @@ function MemberInfoModal({ member, profiles, teamMembers, onClose, canEdit, isMa
       phone:           formPhone || null,
       dual_role:       formDualRole || null,
       assistant:       formAssistant,
-      ...(isMasterAdmin ? { reports_to: formReportsTo || null } : {}),
+      ...(canEdit ? { reports_to: formReportsTo || null } : {}),
     });
 
     // Find linked auth profile: by user_id (primary) then email (fallback)
@@ -178,7 +178,7 @@ function MemberInfoModal({ member, profiles, teamMembers, onClose, canEdit, isMa
     if (linked) {
       // Resolve manager_user_id: find the profile whose org_chart_node matches formReportsTo
       let managerProfileId: string | null = null;
-      if (isMasterAdmin && formReportsTo) {
+      if (canEdit && formReportsTo) {
         const managerNode = (profiles as any[]).find((p: any) => p.id === formReportsTo);
         const managerLinked = managerNode?.email
           ? teamMembers.find((m) => m.email?.toLowerCase() === managerNode.email.toLowerCase())
@@ -210,7 +210,7 @@ function MemberInfoModal({ member, profiles, teamMembers, onClose, canEdit, isMa
           funcao:     formTitle || null,
           escopo:     formEscopo || null,
           ...(usernameChanged ? { username: formUsername } : {}),
-          ...(isMasterAdmin ? { manager_user_id: managerProfileId } : {}),
+          ...(canEdit ? { manager_user_id: managerProfileId } : {}),
         } as any)
         .eq("id", linked.id);
       if (profileUpdateError) {
@@ -422,12 +422,9 @@ function MemberInfoModal({ member, profiles, teamMembers, onClose, canEdit, isMa
               </div>
 
               {/* Gestor Direto — somente master admin pode alterar */}
-              {isMasterAdmin && (
+              {canEdit && (
                 <div className="col-span-2 space-y-1">
-                  <Label className="flex items-center gap-1.5">
-                    Gestor Direto
-                    <span className="text-[10px] bg-amber-500/15 text-amber-600 px-1.5 py-0.5 rounded font-medium">master admin</span>
-                  </Label>
+                  <Label>Superior Direto</Label>
                   <Select
                     value={formReportsTo || "_none"}
                     onValueChange={(v) => setFormReportsTo(v === "_none" ? "" : v)}
