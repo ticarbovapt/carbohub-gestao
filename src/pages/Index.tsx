@@ -44,31 +44,45 @@ const Index = () => {
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   // Real-time validation states
-  const [email, setEmail] = useState("");
+  const [login, setLogin] = useState("");
   const [password, setPassword] = useState("");
-  const [emailTouched, setEmailTouched] = useState(false);
+  const [loginTouched, setLoginTouched] = useState(false);
   const [passwordTouched, setPasswordTouched] = useState(false);
 
   // Validation helpers
-  const isValidEmail = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-  const emailError = emailTouched && email.length > 0 && !isValidEmail(email) ? "Digite um email válido" : null;
+  const loginFieldError = loginTouched && login.length === 0 ? "Digite seu usuário ou e-mail" : null;
   const passwordError = passwordTouched && password.length > 0 && password.length < 6 ? "Mínimo de 6 caracteres" : null;
-  const isFormValid = isValidEmail(email) && password.length >= 6;
+  const isFormValid = login.length > 0 && password.length >= 6;
 
   const handleLogin = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setLoginError(null);
-    setEmailTouched(true);
+    setLoginTouched(true);
     setPasswordTouched(true);
 
     if (!isFormValid) return;
 
     setIsSubmitting(true);
 
-    const { error } = await signIn(email, password);
+    // Resolve username or email to email
+    let emailToUse = login;
+    if (!login.includes("@")) {
+      const { data: userEmail, error: rpcError } = await supabase.rpc(
+        "get_user_email_by_username" as any,
+        { p_username: login.toLowerCase() }
+      );
+      if (rpcError || !userEmail) {
+        setLoginError("Usuário não encontrado");
+        setIsSubmitting(false);
+        return;
+      }
+      emailToUse = userEmail as string;
+    }
+
+    const { error } = await signIn(emailToUse, password);
 
     if (error) {
-      setLoginError(error.message === "Invalid login credentials" ? "Email ou senha inválidos" : error.message);
+      setLoginError(error.message === "Invalid login credentials" ? "Usuário ou senha inválidos" : error.message);
       setIsSubmitting(false);
     } else {
       setShowLoadingScreen(true);
@@ -344,43 +358,43 @@ const Index = () => {
                         )}
 
                         <div className="space-y-2">
-                          <Label htmlFor="email" className="text-sm font-semibold text-foreground">
-                            E-mail
+                          <Label htmlFor="login" className="text-sm font-semibold text-foreground">
+                            Usuário ou E-mail
                           </Label>
                           <div className="relative">
                             <UserCircle
                               className={`absolute left-3.5 top-1/2 -translate-y-1/2 h-5 w-5 transition-colors ${
-                                emailError
+                                loginFieldError
                                   ? "text-destructive"
-                                  : email && isValidEmail(email)
+                                  : login.length > 0
                                     ? "text-carbo-green"
                                     : "text-muted-foreground"
                               }`}
                             />
                             <Input
-                              id="email"
-                              name="email"
-                              type="email"
-                              placeholder="seu@email.com"
-                              value={email}
-                              onChange={(e) => setEmail(e.target.value)}
-                              onBlur={() => setEmailTouched(true)}
+                              id="login"
+                              name="login"
+                              type="text"
+                              placeholder="OPS0001 ou seu@email.com"
+                              value={login}
+                              onChange={(e) => setLogin(e.target.value)}
+                              onBlur={() => setLoginTouched(true)}
                               className={`h-12 pl-12 text-base rounded-xl transition-all bg-muted/30 border-2 ${
-                                emailError
+                                loginFieldError
                                   ? "border-destructive focus:ring-destructive/20"
-                                  : email && isValidEmail(email)
+                                  : login.length > 0
                                     ? "border-carbo-green/50 focus:border-carbo-green focus:ring-carbo-green/20"
                                     : "border-border/50 focus:border-carbo-green focus:ring-carbo-green/20"
                               }`}
                             />
-                            {email && isValidEmail(email) && (
+                            {login.length > 0 && !loginFieldError && (
                               <CheckCircle className="absolute right-3.5 top-1/2 -translate-y-1/2 h-5 w-5 text-carbo-green" />
                             )}
                           </div>
-                          {emailError && (
+                          {loginFieldError && (
                             <p className="text-xs text-destructive flex items-center gap-1 mt-1">
                               <AlertCircle className="h-3 w-3" />
-                              {emailError}
+                              {loginFieldError}
                             </p>
                           )}
                         </div>
