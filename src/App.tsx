@@ -67,6 +67,7 @@ const DashboardEstrategico = lazy(() => import("./pages/dashboards/DashboardEstr
 const NotFound            = lazy(() => import("./pages/NotFound"));
 const AIAssistantPage     = lazy(() => import("./pages/AIAssistantPage"));
 const BlingIntegration    = lazy(() => import("./pages/BlingIntegration"));
+const NFSeImportPage      = lazy(() => import("./pages/admin/NFSeImportPage"));
 const ViagensPage         = lazy(() => import("./pages/ViagensPage"));
 const BlingCallback       = lazy(() => import("./pages/BlingCallback"));
 const SetPassword         = lazy(() => import("./pages/SetPassword"));
@@ -219,6 +220,7 @@ function AnimatedRoutes() {
             <Route path="/admin/cockpit"  element={<ProtectedRoute requiredRole="admin" requiresCeo><CockpitEstrategico /></ProtectedRoute>} />
             <Route path="/admin/pipeline" element={<ProtectedRoute requiredRole="admin"><PipelineConfig /></ProtectedRoute>} />
             <Route path="/admin/webhooks" element={<ProtectedRoute requiredRole="admin"><WebhookConfig /></ProtectedRoute>} />
+            <Route path="/admin/nfse"     element={<ProtectedRoute requiredRole="admin"><NFSeImportPage /></ProtectedRoute>} />
             <Route path="/governance"     element={<ProtectedRoute requiresCeo><CarboGovernance /></ProtectedRoute>} />
             <Route path="/admin/*"        element={<ProtectedRoute requiredRole="admin"><Admin /></ProtectedRoute>} />
 
