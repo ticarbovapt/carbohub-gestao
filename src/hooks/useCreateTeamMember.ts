@@ -6,21 +6,19 @@ type DepartmentType = Database["public"]["Enums"]["department_type"];
 type AppRole = Database["public"]["Enums"]["app_role"];
 
 interface CreateMemberParams {
-  email: string;
   fullName: string;
   department: DepartmentType;
   role: AppRole;
+  funcao?: string;
+  escopo?: string;
+  hierarchyLevel?: number;
+  managerUserId?: string;
   allowedInterfaces?: string[];
 }
 
 interface CreateMemberResult {
   userId: string;
   username: string;
-  email: string;
-  emailSent: boolean;
-  tempPassword?: string;
-  setPasswordUrl?: string;
-  emailWarning?: string;
 }
 
 export function useCreateTeamMember() {
@@ -44,7 +42,6 @@ export function useCreateTeamMember() {
       const response = await supabase.functions.invoke("create-team-member", {
         body: {
           ...params,
-          managerName: profile?.full_name || "Gestor",
           platformUrl: window.location.origin,
         },
       });
@@ -57,7 +54,7 @@ export function useCreateTeamMember() {
         throw new Error(response.data?.error || "Erro ao criar membro");
       }
 
-      return response.data.data;
+      return response.data.data as CreateMemberResult;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["team-members"] });
