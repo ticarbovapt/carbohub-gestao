@@ -408,8 +408,8 @@ function MemberInfoModal({ member, profiles, teamMembers, onClose, canEdit, isMa
                       }}
                       placeholder={
                         formDept && DEPT_USERNAME_PREFIX[formDept]
-                          ? `${DEPT_USERNAME_PREFIX[formDept]}0001`
-                          : "OPS0001"
+                          ? `${DEPT_USERNAME_PREFIX[formDept]}001`
+                          : "OPS001"
                       }
                     />
                   </div>

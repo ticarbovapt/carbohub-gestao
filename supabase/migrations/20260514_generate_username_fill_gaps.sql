@@ -25,19 +25,31 @@ BEGIN
   WHERE LOWER(username) LIKE LOWER(prefix_upper) || '%'
     AND username ~ ('(?i)^' || prefix_upper || '\d{4}$');
 
+  -- Maior número já usado (aceita 3 ou 4 dígitos para compatibilidade com legado)
+  SELECT COALESCE(MAX(
+    CAST(SUBSTRING(username FROM '\d+$') AS INTEGER)
+  ), 0)
+  INTO max_seq
+  FROM public.profiles
+  WHERE LOWER(username) LIKE LOWER(prefix_upper) || '%'
+    AND username ~ ('(?i)^' || prefix_upper || '\d{3,4}$');
+
   -- Encontra o menor número disponível na faixa 1..(max+1)
+  -- Verifica tanto formato 3 quanto 4 dígitos para evitar colisão com legado
   SELECT MIN(s.n) INTO next_seq
   FROM generate_series(1, max_seq + 1) AS s(n)
   WHERE NOT EXISTS (
     SELECT 1 FROM public.profiles
-    WHERE LOWER(username) = LOWER(prefix_upper) || LPAD(s.n::TEXT, 4, '0')
+    WHERE LOWER(username) = LOWER(prefix_upper) || LPAD(s.n::TEXT, 3, '0')
+       OR LOWER(username) = LOWER(prefix_upper) || LPAD(s.n::TEXT, 4, '0')
   );
 
   IF next_seq IS NULL THEN
     next_seq := 1;
   END IF;
 
-  new_username := prefix_upper || LPAD(next_seq::TEXT, 4, '0');
+  -- Gera com 3 dígitos: OPS001, FIN003...
+  new_username := prefix_upper || LPAD(next_seq::TEXT, 3, '0');
 
   -- Mantém a tabela de sequências atualizada (para referência/monitoramento)
   INSERT INTO public.department_username_sequences (department_prefix, last_sequence)
