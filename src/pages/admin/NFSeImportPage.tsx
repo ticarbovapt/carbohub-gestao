@@ -5,6 +5,7 @@
 
 import React, { useCallback, useState, useMemo, useRef } from "react";
 import JSZip from "jszip";
+import { BoardLayout } from "@/components/layouts/BoardLayout";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { useQueryClient } from "@tanstack/react-query";
@@ -297,6 +298,7 @@ export default function NFSeImportPage() {
   const previewTotal = parsedRecords.reduce((s, r) => s + r.valor_servicos, 0);
 
   return (
+    <BoardLayout>
     <div className="space-y-6 p-6 max-w-6xl mx-auto">
 
       {/* ── Page header ─────────────────────────────────────────────────── */}
@@ -674,6 +676,7 @@ export default function NFSeImportPage() {
                         <th className="text-left px-3 py-2.5 font-medium text-muted-foreground">Data</th>
                         <th className="text-left px-3 py-2.5 font-medium text-muted-foreground">Cliente</th>
                         <th className="text-left px-3 py-2.5 font-medium text-muted-foreground">UF</th>
+                        <th className="text-left px-3 py-2.5 font-medium text-muted-foreground">Descrição do Serviço</th>
                         <th className="text-right px-3 py-2.5 font-medium text-muted-foreground">R$ Valor</th>
                         <th className="text-left px-3 py-2.5 font-medium text-muted-foreground">Pedido(s)</th>
                         <th className="text-left px-3 py-2.5 font-medium text-muted-foreground">Veículo</th>
@@ -702,6 +705,13 @@ export default function NFSeImportPage() {
                                 ? <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4">{r.tomador_uf}</Badge>
                                 : "—"}
                             </td>
+                            <td className="px-3 py-2.5 max-w-[200px]">
+                              <span className="truncate block" title={r.discriminacao?.split("|")[0] ?? ""}>
+                                {r.discriminacao
+                                  ? r.discriminacao.split("|")[0].replace(/[#\n]/g, "").trim().slice(0, 60) || "—"
+                                  : "—"}
+                              </span>
+                            </td>
                             <td className="px-3 py-2.5 text-right font-semibold tabular-nums text-green-700 dark:text-green-400">
                               {fmtBRL(r.valor_servicos ?? 0)}
                             </td>
@@ -712,7 +722,7 @@ export default function NFSeImportPage() {
                           </tr>
                           {expandedRow === r.id && (
                             <tr className={i % 2 !== 0 ? "bg-muted/10" : "bg-background"}>
-                              <td colSpan={8} className="px-5 pb-4 pt-2">
+                              <td colSpan={9} className="px-5 pb-4 pt-2">
                                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
                                   <div>
                                     <p className="text-muted-foreground mb-0.5">CPF/CNPJ Tomador</p>
@@ -765,5 +775,6 @@ export default function NFSeImportPage() {
         </TabsContent>
       </Tabs>
     </div>
+    </BoardLayout>
   );
 }
