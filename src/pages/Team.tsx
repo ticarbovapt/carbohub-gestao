@@ -55,6 +55,11 @@ const DEPT_TO_PROFILE_DEPT: Record<string, string> = {
   Growth: "growth", "Growth & B2B": "growth", B2B: "b2b", Expansão: "expansao",
 };
 
+// Prefixo do username por departamento (maiúsculo, 3 chars)
+const DEPT_USERNAME_PREFIX: Record<string, string> = {
+  ops: "OPS", finance: "FIN", growth: "GRO", b2b: "B2B", command: "COM", expansao: "EXP",
+};
+
 // ── helpers ───────────────────────────────────────────────────────────────────
 function flattenTree(nodes: OrgNode[]): OrgNode[] {
   return nodes.flatMap((n) => [n, ...flattenTree(n.children)]);
@@ -139,7 +144,7 @@ function MemberInfoModal({ member, profiles, teamMembers, onClose, canEdit, isMa
     setFormAssistant(member.assistant || false);
     // seed username + escopo from linked team member (if any)
     const linked = teamMembers.find((m) => m.email && email && m.email.toLowerCase() === email.toLowerCase());
-    setFormUsername(linked?.username || "");
+    setFormUsername((linked?.username || "").toUpperCase());
     setFormEscopo(linked?.escopo || "");
     // seed gestor direto from flat profiles list
     const flatNode = profiles.find((p) => p.id === member.id);
@@ -395,7 +400,17 @@ function MemberInfoModal({ member, profiles, teamMembers, onClose, canEdit, isMa
                     <Input
                       value={formUsername}
                       onChange={(e) => setFormUsername(e.target.value.replace(/\s/g, "").toUpperCase())}
-                      placeholder="ex: ops0001"
+                      onFocus={() => {
+                        if (!formUsername && formDept) {
+                          const prefix = DEPT_USERNAME_PREFIX[formDept];
+                          if (prefix) setFormUsername(prefix);
+                        }
+                      }}
+                      placeholder={
+                        formDept && DEPT_USERNAME_PREFIX[formDept]
+                          ? `${DEPT_USERNAME_PREFIX[formDept]}0001`
+                          : "OPS0001"
+                      }
                     />
                   </div>
                 ) : null;
