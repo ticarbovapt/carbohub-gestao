@@ -186,9 +186,13 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
     const newUserId = authData.user.id;
 
+    // Use upsert to handle race condition: Supabase trigger may create the profile
+    // row before or after this call — upsert covers both cases.
     const { error: profileError } = await supabaseAdmin
       .from("profiles")
-      .update({
+      .upsert({
+        id:                newUserId,
+        full_name:         fullName,
         email:             placeholderEmail,
         username:          username,
         department:        department,
@@ -200,8 +204,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
         escopo:            escopo || null,
         hierarchy_level:   hierarchyLevel ?? 6,
         allowed_interfaces: allowedInterfaces || ["carbo_ops"],
-      })
-      .eq("id", newUserId);
+      }, { onConflict: "id" });
 
     if (profileError) {
       console.error("Profile update error:", profileError);
