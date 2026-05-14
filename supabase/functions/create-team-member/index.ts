@@ -214,14 +214,13 @@ Deno.serve(async (req: Request): Promise<Response> => {
       .eq("full_name", fullName)
       .is("user_id", null);
 
-    // Set user role
+    // Set user role (insert — new user has no role row yet)
     const { error: roleError } = await supabaseAdmin
       .from("user_roles")
-      .update({ role })
-      .eq("user_id", newUserId);
+      .insert({ user_id: newUserId, role });
 
     if (roleError) {
-      console.error("Role update error:", roleError);
+      console.error("Role insert error:", roleError);
     }
 
     return new Response(
