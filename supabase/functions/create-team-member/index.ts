@@ -202,7 +202,6 @@ Deno.serve(async (req: Request): Promise<Response> => {
         manager_user_id:   managerUserId || callingUser.id,
         funcao:            funcao || null,
         escopo:            escopo || null,
-        hierarchy_level:   hierarchyLevel ?? 6,
         allowed_interfaces: allowedInterfaces || ["carbo_ops"],
       }, { onConflict: "id" });
 
