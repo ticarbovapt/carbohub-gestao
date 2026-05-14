@@ -394,7 +394,7 @@ function MemberInfoModal({ member, profiles, teamMembers, onClose, canEdit, isMa
                     </Label>
                     <Input
                       value={formUsername}
-                      onChange={(e) => setFormUsername(e.target.value.toLowerCase().replace(/\s/g, ""))}
+                      onChange={(e) => setFormUsername(e.target.value.replace(/\s/g, "").toUpperCase())}
                       placeholder="ex: ops0001"
                     />
                   </div>
