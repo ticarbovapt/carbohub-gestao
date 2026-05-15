@@ -34,6 +34,7 @@ const Machines            = lazy(() => import("./pages/Machines"));
 const Orders              = lazy(() => import("./pages/Orders"));
 const CreateOrder         = lazy(() => import("./pages/CreateOrder"));
 const OrderDetails        = lazy(() => import("./pages/OrderDetails"));
+const OrderPrintPage      = lazy(() => import("./pages/OrderPrintPage"));
 const DataImport          = lazy(() => import("./pages/DataImport"));
 const MapaTerritorial     = lazy(() => import("./pages/MapaTerritorial"));
 const CockpitEstrategico  = lazy(() => import("./pages/admin/CockpitEstrategico"));
@@ -66,6 +67,7 @@ const DashboardEstrategico = lazy(() => import("./pages/dashboards/DashboardEstr
 const NotFound            = lazy(() => import("./pages/NotFound"));
 const AIAssistantPage     = lazy(() => import("./pages/AIAssistantPage"));
 const BlingIntegration    = lazy(() => import("./pages/BlingIntegration"));
+const NFSeImportPage      = lazy(() => import("./pages/admin/NFSeImportPage"));
 const ViagensPage         = lazy(() => import("./pages/ViagensPage"));
 const BlingCallback       = lazy(() => import("./pages/BlingCallback"));
 const SetPassword         = lazy(() => import("./pages/SetPassword"));
@@ -145,6 +147,7 @@ function AnimatedRoutes() {
             <Route path="/orders"          element={<ProtectedRoute><Orders /></ProtectedRoute>} />
             <Route path="/orders/new"      element={<ProtectedRoute><CreateOrder /></ProtectedRoute>} />
             <Route path="/orders/:id"      element={<ProtectedRoute><OrderDetails /></ProtectedRoute>} />
+            <Route path="/orders/:id/print" element={<ProtectedRoute><OrderPrintPage /></ProtectedRoute>} />
             <Route path="/role-matrix"     element={<ProtectedRoute><RoleMatrix /></ProtectedRoute>} />
             <Route path="/responsibility-map" element={<ProtectedRoute><ResponsibilityMap /></ProtectedRoute>} />
             <Route path="/sales-targets"   element={<ProtectedRoute><SalesTargets /></ProtectedRoute>} />
@@ -217,6 +220,7 @@ function AnimatedRoutes() {
             <Route path="/admin/cockpit"  element={<ProtectedRoute requiredRole="admin" requiresCeo><CockpitEstrategico /></ProtectedRoute>} />
             <Route path="/admin/pipeline" element={<ProtectedRoute requiredRole="admin"><PipelineConfig /></ProtectedRoute>} />
             <Route path="/admin/webhooks" element={<ProtectedRoute requiredRole="admin"><WebhookConfig /></ProtectedRoute>} />
+            <Route path="/admin/nfse"     element={<ProtectedRoute requiredRole="admin"><NFSeImportPage /></ProtectedRoute>} />
             <Route path="/governance"     element={<ProtectedRoute requiresCeo><CarboGovernance /></ProtectedRoute>} />
             <Route path="/admin/*"        element={<ProtectedRoute requiredRole="admin"><Admin /></ProtectedRoute>} />
 

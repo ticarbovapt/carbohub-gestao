@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { ArrowLeft, Package, Clock, Truck, CheckCircle, XCircle, RefreshCw, Calendar, User, MapPin, FileText, DollarSign, Repeat, Briefcase, Factory, Wrench, ExternalLink, Pencil } from "lucide-react";
+import { ArrowLeft, Package, Clock, Truck, CheckCircle, XCircle, RefreshCw, Calendar, User, MapPin, FileText, DollarSign, Repeat, Briefcase, Factory, Wrench, ExternalLink, Pencil, Printer } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { EditOrderDialog } from "@/components/orders/EditOrderDialog";
 import { BoardLayout } from "@/components/layouts/BoardLayout";
@@ -112,6 +112,15 @@ export default function OrderDetails() {
           <div className="flex items-center gap-4">
             <CarboButton variant="ghost" size="sm" onClick={() => navigate("/orders")}>
               <ArrowLeft className="h-4 w-4" />
+            </CarboButton>
+            <CarboButton
+              variant="outline"
+              size="sm"
+              onClick={() => window.open(`/orders/${order.id}/print`, "_blank")}
+              title="Visualizar Pedido de Compra (padrão SAP)"
+            >
+              <Printer className="h-4 w-4 mr-1.5" />
+              Imprimir PO
             </CarboButton>
             <div>
               <div className="flex items-center gap-3">

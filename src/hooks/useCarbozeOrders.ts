@@ -12,6 +12,19 @@ export interface OrderItem {
   quantity: number;
   unit_price: number;
   total: number;
+  // Campos SAP / PO (opcionais — retrocompatíveis)
+  unit_code?: string;         // ex: CDA, PEÇ, UN, KG, L
+  client_code?: string;       // código do produto no sistema do cliente
+  ncm?: string;               // ex: "2905.31.00" — Nomenclatura Comum do Mercosul
+  delivery_date?: string;     // ISO date — data de entrega por item
+  cost_center?: string;       // ex: "K - Centro de custo"
+  freight_value?: number;     // valor do frete por item
+  ipi_pct?: number;           // alíquota IPI em %
+  icms_pct?: number;          // alíquota ICMS em %
+  icms_desone_pct?: number;   // desoneração de ICMS em %
+  st_pct?: number;            // alíquota ST em %
+  st_base_ret_pct?: number;   // base de ST retido em %
+  gross_value?: number;       // valor bruto antes do desconto
 }
 
 export interface CarbozeOrder {
@@ -70,6 +83,20 @@ export interface CarbozeOrder {
   is_test: boolean;
   source_file: string | null;
   external_ref: string | null;
+  // Campos PO padrão SAP
+  po_number: string | null;             // Número do PO do cliente (ex: 4500787362)
+  po_date: string | null;               // Data do PO
+  ie: string | null;                    // Inscrição Estadual do cliente
+  billing_address: string | null;
+  billing_city: string | null;
+  billing_state: string | null;
+  billing_zip: string | null;
+  billing_contact_name: string | null;  // Responsável pelo comprador
+  billing_contact_email: string | null;
+  payment_terms: string | null;         // ex: "30/60/90/120/150 DIAS - BOLETO"
+  freight_type: "CIF" | "FOB" | null;
+  buyer_notes: string | null;           // Observações do comprador
+  general_notes: string | null;         // Observações gerais
   // Joined data
   licensee?: {
     id: string;
