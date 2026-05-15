@@ -250,12 +250,13 @@ export default function CreateOrder() {
         }
       );
 
+      const payload = await response.json();
+
       if (!response.ok) {
-        const err = await response.json();
-        throw new Error(err.error || "Erro ao buscar CNPJ");
+        throw new Error(payload.error || "Erro ao buscar CNPJ");
       }
 
-      const result: CnpjData = await response.json();
+      const result: CnpjData = payload;
 
       form.setValue("cnpj", result.cnpj);
       form.setValue("legal_name", result.legal_name || "");
@@ -597,9 +598,14 @@ export default function CreateOrder() {
                     </CarboButton>
                   </div>
                   {cnpjError && (
-                    <div className="flex items-center gap-2 text-sm text-destructive">
-                      <AlertCircle className="h-4 w-4" />
-                      {cnpjError}
+                    <div className="rounded-lg border border-destructive/30 bg-destructive/10 p-3 space-y-1">
+                      <div className="flex items-center gap-2 text-sm font-medium text-destructive">
+                        <AlertCircle className="h-4 w-4 shrink-0" />
+                        {cnpjError}
+                      </div>
+                      <p className="text-xs text-muted-foreground pl-6">
+                        Preencha os dados do cliente manualmente nos campos abaixo.
+                      </p>
                     </div>
                   )}
 
