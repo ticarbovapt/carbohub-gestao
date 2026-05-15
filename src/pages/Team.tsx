@@ -203,12 +203,11 @@ function MemberInfoModal({ member, profiles, teamMembers, onClose, canEdit, isMa
       const { error: profileUpdateError } = await supabase
         .from("profiles")
         .update({
-          full_name:       formName,
-          department:      formDept as any,
-          phone:           formPhone || null,
-          funcao:          formFuncao || null,
-          escopo:          formEscopo || null,
-          hierarchy_level: hierarchyLevel,
+          full_name:  formName,
+          department: formDept as any,
+          phone:      formPhone || null,
+          funcao:     formFuncao || null,
+          escopo:     formEscopo || null,
           ...(usernameChanged ? { username: formUsername } : {}),
           ...(canEdit ? { manager_user_id: managerProfileId } : {}),
         } as any)
