@@ -17,6 +17,7 @@ import {
   ROLES, MATRIX, MODULES, ROLE_KEY_MAP, PRIORITY, ACCESS_LABEL, getEffectiveAccess,
   type RoleKey, type Access, type FeatureRow,
 } from "@/lib/role-matrix-constants";
+import { FunctionAccessTab } from "@/components/role-matrix/FunctionAccessTab";
 
 
 function getAccessIcon(access: Access, size = "h-4 w-4") {
@@ -195,7 +196,7 @@ function AccessCell({
 export default function RoleMatrix() {
   const { isMasterAdmin, user } = useAuth();
   const queryClient = useQueryClient();
-  const [tab, setTab] = useState<"cargos" | "colaboradores">("cargos");
+  const [tab, setTab] = useState<"cargos" | "colaboradores" | "funcao">("cargos");
 
   // ── Matrix config (overrides persistidos) ────────────────────────────────
   const { data: configData } = useQuery({
@@ -394,6 +395,18 @@ export default function RoleMatrix() {
               <Users className="h-4 w-4" />
               Por Colaborador
             </button>
+            <button
+              onClick={() => setTab("funcao")}
+              className={cn(
+                "flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all",
+                tab === "funcao"
+                  ? "bg-background shadow text-foreground"
+                  : "text-muted-foreground hover:text-foreground"
+              )}
+            >
+              <Shield className="h-4 w-4" />
+              Por Função
+            </button>
           </div>
 
           {/* Editar Matriz — visível apenas na aba Por Cargo (Por Colaborador tem "Acesso" por linha) */}
@@ -553,6 +566,8 @@ export default function RoleMatrix() {
             )}
           </CarboCard>
         )}
+
+        {tab === "funcao" && <FunctionAccessTab />}
 
         {/* AccessConfigDialog — configurar acesso diretamente pela matrix */}
         <AccessConfigDialog
