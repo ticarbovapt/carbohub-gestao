@@ -226,7 +226,7 @@ export default function CreateOrder() {
     return `${digits.slice(0, 2)}.${digits.slice(2, 5)}.${digits.slice(5, 8)}/${digits.slice(8, 12)}-${digits.slice(12)}`;
   };
 
-  // CNPJ lookup
+  // CNPJ lookup — chama BrasilAPI diretamente (suporta CORS), sem depender do Edge Function
   const handleCnpjLookup = useCallback(async () => {
     const digits = cnpjInput.replace(/\D/g, "");
     if (digits.length !== 14) {
@@ -239,63 +239,56 @@ export default function CreateOrder() {
     setCnpjFound(false);
 
     try {
-      const session = await supabase.auth.getSession();
-      const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/cnpj-lookup?cnpj=${digits}`,
-        {
-          headers: {
-            "Authorization": `Bearer ${session.data.session?.access_token}`,
-            "apikey": import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
-          },
-        }
-      );
+      const res = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${digits}`, {
+        signal: AbortSignal.timeout(10000),
+      });
 
-      const payload = await response.json();
-
-      if (!response.ok) {
-        throw new Error(payload.error || "Erro ao buscar CNPJ");
+      if (res.status === 404) {
+        setCnpjError("CNPJ não encontrado na Receita Federal. Verifique o número ou preencha os dados manualmente.");
+        return;
       }
 
-      const result: CnpjData = payload;
-
-      form.setValue("cnpj", result.cnpj);
-      form.setValue("legal_name", result.legal_name || "");
-      form.setValue("trade_name", result.trade_name || "");
-      form.setValue("customer_name", result.trade_name || result.legal_name || "");
-      form.setValue("situacao_cadastral", result.status || "");
-
-      if (result.raw?.cnae_fiscal_descricao) {
-        form.setValue("cnae", `${result.raw.cnae_fiscal || ""} - ${result.raw.cnae_fiscal_descricao}`);
+      if (!res.ok) {
+        throw new Error(`Erro ${res.status}`);
       }
 
-      const addr = result.address;
-      const fullAddress = [addr.street, addr.number, addr.complement, addr.neighborhood]
+      const raw = await res.json();
+
+      form.setValue("cnpj", digits);
+      form.setValue("legal_name", raw.razao_social || "");
+      form.setValue("trade_name", raw.nome_fantasia || "");
+      form.setValue("customer_name", raw.nome_fantasia || raw.razao_social || "");
+      form.setValue("situacao_cadastral", raw.descricao_situacao_cadastral || "");
+
+      if (raw.cnae_fiscal_descricao) {
+        form.setValue("cnae", `${raw.cnae_fiscal || ""} - ${raw.cnae_fiscal_descricao}`);
+      }
+
+      const fullAddress = [raw.logradouro, raw.numero, raw.complemento, raw.bairro]
         .filter(Boolean)
         .join(", ");
       form.setValue("delivery_address", fullAddress);
-      form.setValue("delivery_city", addr.city);
-      form.setValue("delivery_state", addr.state);
-      form.setValue("delivery_zip", addr.zip);
+      form.setValue("delivery_city", raw.municipio || "");
+      form.setValue("delivery_state", raw.uf || "");
+      form.setValue("delivery_zip", (raw.cep || "").replace(/\D/g, ""));
 
-      if (result.phones.length > 0) {
-        form.setValue("customer_phone", result.phones[0]);
-      }
-      if (result.emails.length > 0) {
-        form.setValue("customer_email", result.emails[0]);
-      }
+      const phones = [raw.ddd_telefone_1, raw.ddd_telefone_2].filter(Boolean);
+      if (phones.length > 0) form.setValue("customer_phone", phones[0]);
+      if (raw.email) form.setValue("customer_email", raw.email);
 
       setCnpjFound(true);
       toast.success("Dados do CNPJ carregados com sucesso!");
 
-      if (addr.city && addr.state) {
-        const geo = await geocodeAddress(fullAddress, addr.city, addr.state);
-        if (geo) {
-          setCoords({ lat: geo.lat, lng: geo.lng });
-        }
+      if (raw.municipio && raw.uf) {
+        const geo = await geocodeAddress(fullAddress, raw.municipio, raw.uf);
+        if (geo) setCoords({ lat: geo.lat, lng: geo.lng });
       }
     } catch (err: any) {
-      setCnpjError(err.message || "Erro ao consultar CNPJ");
-      toast.error(err.message || "Erro ao consultar CNPJ");
+      if (err.name === "TimeoutError" || err.name === "AbortError") {
+        setCnpjError("Tempo esgotado na consulta. Verifique sua conexão ou preencha manualmente.");
+      } else {
+        setCnpjError("Serviço de consulta indisponível no momento. Preencha os dados manualmente.");
+      }
     } finally {
       setCnpjLoading(false);
     }
