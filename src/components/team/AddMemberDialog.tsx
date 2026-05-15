@@ -23,6 +23,7 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useCreateTeamMember } from "@/hooks/useCreateTeamMember";
 import { useTeamMembers } from "@/hooks/useTeamMembers";
+import { useDepartmentFunctions } from "@/hooks/useDepartmentFunctions";
 import { cn } from "@/lib/utils";
 import type { Database } from "@/integrations/supabase/types";
 import { SQUAD_DEPARTMENTS } from "@/constants/departments";
@@ -100,6 +101,7 @@ export function AddMemberDialog({ onMemberAdded, variant = "default" }: AddMembe
 
   const createMember = useCreateTeamMember();
   const { data: teamMembers = [] } = useTeamMembers();
+  const { data: deptFunctions } = useDepartmentFunctions(form.department || undefined);
 
   const approvedMembers = teamMembers.filter((m) => m.status === "approved");
 
@@ -219,7 +221,11 @@ export function AddMemberDialog({ onMemberAdded, variant = "default" }: AddMembe
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-2">
                     <Label>Departamento *</Label>
-                    <Select value={form.department} onValueChange={(v) => setField("department", v as DepartmentType)}>
+                    <Select value={form.department} onValueChange={(v) => {
+                      setField("department", v as DepartmentType);
+                      setField("hierarchyLevel", 99);
+                      setField("funcao", "");
+                    }}>
                       <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
                       <SelectContent className="z-[10000]">
                         {DEPARTMENTS.map((d) => (
@@ -236,13 +242,20 @@ export function AddMemberDialog({ onMemberAdded, variant = "default" }: AddMembe
                   <div className="space-y-2">
                     <Label>Nível Hierárquico</Label>
                     <Select
-                      value={String(form.hierarchyLevel)}
-                      onValueChange={(v) => setField("hierarchyLevel", Number(v))}
+                      value={form.funcao || ""}
+                      onValueChange={(v) => {
+                        const fn = (deptFunctions || []).find(f => f.function_key === v);
+                        setField("funcao", v);
+                        setField("hierarchyLevel", fn?.hierarchy_order ?? 99);
+                      }}
+                      disabled={!form.department}
                     >
-                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectTrigger><SelectValue placeholder={form.department ? "Selecione a função" : "Selecione o dept. primeiro"} /></SelectTrigger>
                       <SelectContent className="z-[10000]">
-                        {HIERARCHY_OPTIONS.map((h) => (
-                          <SelectItem key={h.value} value={String(h.value)}>{h.label}</SelectItem>
+                        {(deptFunctions || []).map((fn) => (
+                          <SelectItem key={fn.function_key} value={fn.function_key}>
+                            {fn.label}
+                          </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
