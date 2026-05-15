@@ -105,6 +105,7 @@ function MemberInfoModal({ member, profiles, teamMembers, onClose, canEdit, isMa
   const updateNode  = useUpdateOrgChartNode();
   const resendEmail = useResendWelcomeEmail();
   const [editing, setEditing] = useState(false);
+  const [isResettingPassword, setIsResettingPassword] = useState(false);
 
   // edit form state — reset when member changes
   const [formName,       setFormName]       = useState("");
@@ -469,21 +470,44 @@ function MemberInfoModal({ member, profiles, teamMembers, onClose, canEdit, isMa
                     <Lock className="h-3.5 w-3.5" /> Acesso ao Sistema
                   </p>
                   {linkedAccount ? (
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <Badge variant="default" className="text-xs">Conta ativa</Badge>
-                      {linkedAccount.username && (
-                        <code className="text-xs bg-muted px-1.5 py-0.5 rounded font-mono">{linkedAccount.username}</code>
+                    <>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <Badge variant="default" className="text-xs">Conta ativa</Badge>
+                        {linkedAccount.username && (
+                          <code className="text-xs bg-muted px-1.5 py-0.5 rounded font-mono">{linkedAccount.username}</code>
+                        )}
+                        <span className="text-xs text-muted-foreground truncate">{linkedAccount.email}</span>
+                      </div>
+                      {canEdit && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-7 text-xs gap-1.5 text-amber-600 border-amber-400/40 hover:bg-amber-500/10"
+                          disabled={isResettingPassword}
+                          onClick={async () => {
+                            setIsResettingPassword(true);
+                            try {
+                              const { data, error } = await supabase.functions.invoke("create-team-member", {
+                                body: { action: "reset_password", userId: linkedAccount.id },
+                              });
+                              if (error || !data?.success) throw new Error(data?.error || "Erro ao redefinir senha");
+                              await supabase.from("profiles").update({ password_must_change: true } as any).eq("id", linkedAccount.id);
+                              toast.success(`Senha redefinida para Carbo@2026. O colaborador será solicitado a trocar no próximo login.`);
+                            } catch (e: any) {
+                              toast.error(e.message || "Erro ao redefinir senha");
+                            } finally {
+                              setIsResettingPassword(false);
+                            }
+                          }}
+                        >
+                          {isResettingPassword ? <Loader2 className="h-3 w-3 animate-spin" /> : <KeyRound className="h-3 w-3" />}
+                          Redefinir Senha
+                        </Button>
                       )}
-                      <span className="text-xs text-muted-foreground truncate">{linkedAccount.email}</span>
-                    </div>
+                    </>
                   ) : (
                     <p className="text-xs text-muted-foreground">
                       Sem conta de acesso. Use <strong>Criar Nova Conta</strong> para adicionar ao sistema.
-                    </p>
-                  )}
-                  {linkedAccount && (
-                    <p className="text-xs text-muted-foreground">
-                      Configure interfaces e permissões via botão <strong>Acesso</strong> na lista de usuários.
                     </p>
                   )}
                 </div>
