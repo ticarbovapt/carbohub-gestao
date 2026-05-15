@@ -52,8 +52,13 @@ const CARBO_ROLE_BADGE: Record<string, string> = {
 
 // ── Mapeamento dept org_chart → profiles ────────────────────────────────────
 const DEPT_TO_PROFILE_DEPT: Record<string, string> = {
-  Command: "command", OPS: "ops", Finance: "finance",
-  Growth: "growth", "Growth & B2B": "growth", B2B: "b2b", Expansão: "expansao",
+  Command: "command", command: "command",
+  OPS: "ops", Ops: "ops", Operações: "ops", operações: "ops", ops: "ops",
+  Finance: "finance", finance: "finance",
+  Growth: "growth", growth: "growth", "Growth & B2B": "growth",
+  B2B: "b2b", b2b: "b2b", Vendas: "b2b", vendas: "b2b",
+  Expansão: "expansao", expansao: "expansao",
+  "TI / Suporte": "ti_suporte", ti_suporte: "ti_suporte",
 };
 
 // Prefixo do username por departamento (maiúsculo, 3 chars)
@@ -127,24 +132,31 @@ function MemberInfoModal({ member, profiles, teamMembers, onClose, canEdit, isMa
   const openEdit = () => {
     if (!member) return;
     setFormName(member.full_name);
-    const rawDept = member.department || "";
-    const normalizedDept = DEPT_TO_PROFILE_DEPT[rawDept] ?? rawDept.toLowerCase();
-    setFormDept(normalizedDept);
     setFormLevel(member.hierarchy_level);
+
+    // Resolve the linked auth profile first — it has the authoritative enum values
     const orgNode = profiles.find((p) => (p as any).user_id && (p as any).user_id === member.user_id)
       ?? profiles.find((p) => p.id === member.id);
     const authMember = member.user_id
       ? teamMembers.find((m) => m.id === member.user_id)
       : teamMembers.find((m) => m.email && (orgNode as any)?.email && m.email === (orgNode as any).email);
     const email = (orgNode as any)?.email || authMember?.email || "";
+    const linked = email
+      ? teamMembers.find((m) => m.email && m.email.toLowerCase() === email.toLowerCase())
+      : authMember ?? null;
+
+    // Department: prefer profile enum value (e.g. "ops") over org chart display value
+    const rawDept = member.department || "";
+    const normalizedDept = DEPT_TO_PROFILE_DEPT[rawDept] ?? rawDept.toLowerCase();
+    setFormDept((linked?.department as string) || normalizedDept);
+
     setFormEmail(email);
     setFormPhone((orgNode as any)?.phone || "");
     setFormDualRole(member.dual_role || "");
     setFormAssistant(member.assistant || false);
-    const linked = teamMembers.find((m) => m.email && email && m.email.toLowerCase() === email.toLowerCase());
     setFormUsername((linked?.username || "").toUpperCase());
     setFormEscopo(linked?.escopo || "");
-    setFormFuncao((linked as any)?.funcao || "");
+    setFormFuncao(linked?.funcao || "");
     const flatNode = profiles.find((p) => p.id === member.id);
     setFormReportsTo((flatNode as any)?.reports_to || "");
     setEditing(true);
