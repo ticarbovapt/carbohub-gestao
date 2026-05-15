@@ -3,10 +3,15 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { DEPARTMENTS, SCREEN_GROUPS } from "@/constants/functionAccessConfig";
+import { useDepartmentFunctions, useCreateDepartmentFunction } from "@/hooks/useDepartmentFunctions";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
-import { ChevronDown, ChevronRight, Save, Loader2, Shield, AlertTriangle } from "lucide-react";
+import { ChevronDown, ChevronRight, Save, Loader2, Shield, AlertTriangle, Plus } from "lucide-react";
 import { toast } from "sonner";
 
 type AccessMap = Record<string, Set<string>>; // key = "dept|funcKey", value = Set<screenId>
@@ -25,9 +30,34 @@ export function FunctionAccessTab() {
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  const currentDeptFunctions = (DEPARTMENTS.find(d => d.key === selectedDept)?.functions) ?? [];
+  const canManageFunctions = isAdmin || isMasterAdmin || isAnyGestor;
+  const createFn = useCreateDepartmentFunction();
+  const [addFnOpen, setAddFnOpen] = useState(false);
+  const [newFn, setNewFn] = useState({ label: "", reports_to_key: "" });
 
-  const{ data: dbData, isLoading } = useQuery({
+  const { data: deptFunctions = [], isLoading: loadingFns } = useDepartmentFunctions(selectedDept);
+
+  const handleCreateFunction = async () => {
+    if (!newFn.label.trim()) return;
+    const function_key = newFn.label
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[̀-ͯ]/g, "")
+      .replace(/[^a-z0-9]+/g, "_")
+      .replace(/^_|_$/g, "");
+    const maxOrder = deptFunctions.reduce((m, f) => Math.max(m, f.hierarchy_order), 0);
+    await createFn.mutateAsync({
+      department: selectedDept,
+      function_key,
+      label: newFn.label.trim(),
+      hierarchy_order: maxOrder + 1,
+      reports_to_key: newFn.reports_to_key || null,
+    });
+    setAddFnOpen(false);
+    setNewFn({ label: "", reports_to_key: "" });
+  };
+
+  const { data: dbData } = useQuery({
     queryKey: ["function-screen-access"],
     queryFn: async () => {
       const { data, error } = await (supabase as any)
@@ -66,11 +96,8 @@ export function FunctionAccessTab() {
     const allEnabled = groupScreenIds.every(id => currentScreens.has(id));
     updateScreens(prev => {
       const next = new Set(prev);
-      if (allEnabled) {
-        groupScreenIds.forEach(id => next.delete(id));
-      } else {
-        groupScreenIds.forEach(id => next.add(id));
-      }
+      if (allEnabled) groupScreenIds.forEach(id => next.delete(id));
+      else groupScreenIds.forEach(id => next.add(id));
       return next;
     });
   };
@@ -97,13 +124,12 @@ export function FunctionAccessTab() {
     if (!currentKey || !selectedFunc) return;
     setSaving(true);
     try {
-      const screenIds = Array.from(currentScreens);
       await (supabase as any)
         .from("function_screen_access")
         .upsert({
           department: selectedDept,
           function_key: selectedFunc,
-          screen_ids: screenIds,
+          screen_ids: Array.from(currentScreens),
           updated_at: new Date().toISOString(),
           updated_by: user?.id,
         }, { onConflict: "department,function_key" });
@@ -125,12 +151,13 @@ export function FunctionAccessTab() {
       <div className="flex items-start gap-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3">
         <AlertTriangle className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
         <p className="text-sm text-amber-700 dark:text-amber-400">
-          <strong>Modo configuração:</strong> as alterações aqui são salvas para organização futura e <strong>não afetam os acessos reais</strong> até ativação oficial.
+          <strong>Modo configuração:</strong> as alterações aqui são salvas para organização futura e{" "}
+          <strong>não afetam os acessos reais</strong> até ativação oficial.
         </p>
       </div>
 
       {/* 3-panel layout */}
-      <div className="grid grid-cols-[160px_180px_1fr] border rounded-lg overflow-hidden min-h-[520px]">
+      <div className="grid grid-cols-[160px_200px_1fr] border rounded-lg overflow-hidden min-h-[520px]">
         {/* Panel 1 — Departments */}
         <div className="border-r bg-muted/20 flex flex-col">
           <div className="px-3 py-2.5 border-b bg-muted/40">
@@ -164,32 +191,50 @@ export function FunctionAccessTab() {
               <p className="text-xs font-semibold text-carbo-green">Acesso Total</p>
               <p className="text-[11px] text-muted-foreground">TI/Suporte vê todas as telas por padrão do sistema.</p>
             </div>
-          ) : (
-            <div className="flex-1 overflow-y-auto">
-              {currentDeptFunctions.map(fn => {
-                const key = buildKey(selectedDept, fn.key);
-                const count = (localAccess[key] || new Set()).size;
-                return (
-                  <button
-                    key={fn.key}
-                    onClick={() => { setSelectedFunc(fn.key); setDirty(false); }}
-                    className={cn(
-                      "w-full text-left px-3 py-2.5 text-sm transition-colors border-b border-border/40",
-                      selectedFunc === fn.key
-                        ? "bg-primary/10 text-primary font-medium"
-                        : "text-muted-foreground hover:text-foreground hover:bg-muted/40"
-                    )}
-                  >
-                    <span className="block">{fn.label}</span>
-                    {count > 0 && (
-                      <span className="text-[10px] text-muted-foreground">
-                        {count} tela{count !== 1 ? "s" : ""}
-                      </span>
-                    )}
-                  </button>
-                );
-              })}
+          ) : loadingFns ? (
+            <div className="flex-1 flex items-center justify-center">
+              <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
             </div>
+          ) : (
+            <>
+              <div className="flex-1 overflow-y-auto">
+                {deptFunctions.map(fn => {
+                  const key = buildKey(selectedDept, fn.function_key);
+                  const count = (localAccess[key] || new Set()).size;
+                  const reportsTo = deptFunctions.find(f => f.function_key === fn.reports_to_key);
+                  return (
+                    <button
+                      key={fn.function_key}
+                      onClick={() => { setSelectedFunc(fn.function_key); setDirty(false); }}
+                      className={cn(
+                        "w-full text-left px-3 py-2.5 text-sm transition-colors border-b border-border/40",
+                        selectedFunc === fn.function_key
+                          ? "bg-primary/10 text-primary font-medium"
+                          : "text-muted-foreground hover:text-foreground hover:bg-muted/40"
+                      )}
+                    >
+                      <span className="block">{fn.label}</span>
+                      <span className="text-[10px] text-muted-foreground">
+                        {reportsTo ? `↳ ${reportsTo.label}` : "Nível superior"}
+                        {count > 0 && ` · ${count} tela${count !== 1 ? "s" : ""}`}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+              {canManageFunctions && (
+                <div className="p-2 border-t">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="w-full h-7 text-xs gap-1"
+                    onClick={() => setAddFnOpen(true)}
+                  >
+                    <Plus className="h-3 w-3" /> Nova função
+                  </Button>
+                </div>
+              )}
+            </>
           )}
         </div>
 
@@ -200,7 +245,7 @@ export function FunctionAccessTab() {
               Telas de acesso
               {selectedFunc && currentDept && (
                 <span className="ml-2 normal-case font-normal text-foreground">
-                  — {currentDept.label} / {currentDeptFunctions.find(f => f.key === selectedFunc)?.label}
+                  — {currentDept.label} / {deptFunctions.find(f => f.function_key === selectedFunc)?.label}
                 </span>
               )}
             </p>
@@ -227,7 +272,6 @@ export function FunctionAccessTab() {
 
                 return (
                   <div key={group.id} className="border border-border rounded-lg overflow-hidden">
-                    {/* Group header */}
                     <div className="flex items-center gap-2 px-3 py-2 bg-muted/30">
                       <button
                         onClick={() => toggleGroupExpand(group.id)}
@@ -235,8 +279,7 @@ export function FunctionAccessTab() {
                       >
                         {expanded
                           ? <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
-                          : <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
-                        }
+                          : <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />}
                         <span className="text-sm font-medium">{group.label}</span>
                         <span className={cn(
                           "text-[11px] ml-1",
@@ -245,15 +288,12 @@ export function FunctionAccessTab() {
                           {enabledCount}/{groupScreenIds.length}
                         </span>
                       </button>
-                      {/* Group toggle */}
                       <Switch
                         checked={allEnabled}
                         onCheckedChange={() => toggleGroup(group.id)}
                         className="scale-75"
                       />
                     </div>
-
-                    {/* Individual screens */}
                     {expanded && (
                       <div className="divide-y divide-border/40">
                         {group.screens.map(screen => (
@@ -281,6 +321,53 @@ export function FunctionAccessTab() {
           )}
         </div>
       </div>
+
+      {/* Dialog: Nova função */}
+      <Dialog open={addFnOpen} onOpenChange={setAddFnOpen}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Nova Função — {currentDept?.label}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div>
+              <Label>Nome da função *</Label>
+              <Input
+                placeholder="Ex: Analista de Produção"
+                value={newFn.label}
+                onChange={e => setNewFn(p => ({ ...p, label: e.target.value }))}
+                autoFocus
+              />
+            </div>
+            <div>
+              <Label>Responde a (superior direto)</Label>
+              <Select
+                value={newFn.reports_to_key || "_none"}
+                onValueChange={v => setNewFn(p => ({ ...p, reports_to_key: v === "_none" ? "" : v }))}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Nenhum (nível superior)" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="_none">— Nível superior —</SelectItem>
+                  {deptFunctions.map(f => (
+                    <SelectItem key={f.function_key} value={f.function_key}>{f.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAddFnOpen(false)}>Cancelar</Button>
+            <Button
+              onClick={handleCreateFunction}
+              disabled={!newFn.label.trim() || createFn.isPending}
+            >
+              {createFn.isPending && <Loader2 className="h-3 w-3 mr-1 animate-spin" />}
+              Criar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
