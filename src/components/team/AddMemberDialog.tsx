@@ -23,6 +23,7 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useCreateTeamMember } from "@/hooks/useCreateTeamMember";
 import { useTeamMembers } from "@/hooks/useTeamMembers";
+import { useDepartmentFunctions } from "@/hooks/useDepartmentFunctions";
 import { cn } from "@/lib/utils";
 import type { Database } from "@/integrations/supabase/types";
 import { SQUAD_DEPARTMENTS } from "@/constants/departments";
@@ -52,14 +53,6 @@ const HUB_OPTIONS = [
   { value: "portal_pdv",        label: "Portal Lojas (PDV)" },
 ];
 
-const HIERARCHY_OPTIONS = [
-  { value: 1, label: "1 — CEO" },
-  { value: 2, label: "2 — Diretor(a)" },
-  { value: 3, label: "3 — Gerente" },
-  { value: 4, label: "4 — Coordenador(a)" },
-  { value: 5, label: "5 — Supervisor(a)" },
-  { value: 6, label: "6 — Colaborador" },
-];
 
 const DEFAULT_PASSWORD = "Carbo@2026";
 
@@ -100,6 +93,7 @@ export function AddMemberDialog({ onMemberAdded, variant = "default" }: AddMembe
 
   const createMember = useCreateTeamMember();
   const { data: teamMembers = [] } = useTeamMembers();
+  const { data: deptFunctions } = useDepartmentFunctions(form.department || undefined);
 
   const approvedMembers = teamMembers.filter((m) => m.status === "approved");
 
@@ -172,7 +166,7 @@ export function AddMemberDialog({ onMemberAdded, variant = "default" }: AddMembe
   const deptLabel = DEPARTMENTS.find((d) => d.value === form.department)?.label ?? form.department;
   const roleLabel = ROLES.find((r) => r.value === form.role)?.label ?? form.role;
   const managerLabel = approvedMembers.find((m) => m.id === form.managerUserId)?.full_name ?? "—";
-  const levelLabel = HIERARCHY_OPTIONS.find((h) => h.value === form.hierarchyLevel)?.label ?? String(form.hierarchyLevel);
+  const levelLabel = (deptFunctions || []).find((f) => f.function_key === form.funcao)?.label ?? "—";
 
   return (
     <Dialog open={open} onOpenChange={(isOpen) => { if (!isOpen) handleClose(); else setOpen(true); }}>
@@ -219,7 +213,11 @@ export function AddMemberDialog({ onMemberAdded, variant = "default" }: AddMembe
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-2">
                     <Label>Departamento *</Label>
-                    <Select value={form.department} onValueChange={(v) => setField("department", v as DepartmentType)}>
+                    <Select value={form.department} onValueChange={(v) => {
+                      setField("department", v as DepartmentType);
+                      setField("hierarchyLevel", 99);
+                      setField("funcao", "");
+                    }}>
                       <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
                       <SelectContent className="z-[10000]">
                         {DEPARTMENTS.map((d) => (
@@ -234,27 +232,26 @@ export function AddMemberDialog({ onMemberAdded, variant = "default" }: AddMembe
                     </Select>
                   </div>
                   <div className="space-y-2">
-                    <Label>Nível Hierárquico</Label>
+                    <Label>Função</Label>
                     <Select
-                      value={String(form.hierarchyLevel)}
-                      onValueChange={(v) => setField("hierarchyLevel", Number(v))}
+                      value={form.funcao || ""}
+                      onValueChange={(v) => {
+                        const fn = (deptFunctions || []).find(f => f.function_key === v);
+                        setField("funcao", v);
+                        setField("hierarchyLevel", fn?.hierarchy_order ?? 99);
+                      }}
+                      disabled={!form.department}
                     >
-                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectTrigger><SelectValue placeholder={form.department ? "Selecione a função" : "Selecione o dept. primeiro"} /></SelectTrigger>
                       <SelectContent className="z-[10000]">
-                        {HIERARCHY_OPTIONS.map((h) => (
-                          <SelectItem key={h.value} value={String(h.value)}>{h.label}</SelectItem>
+                        {(deptFunctions || []).map((fn) => (
+                          <SelectItem key={fn.function_key} value={fn.function_key}>
+                            {fn.label}
+                          </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
                   </div>
-                </div>
-                <div className="space-y-2">
-                  <Label>Cargo / Função</Label>
-                  <Input
-                    value={form.funcao}
-                    onChange={(e) => setField("funcao", e.target.value)}
-                    placeholder="Ex: Analista Financeiro, Coordenadora de Expansão..."
-                  />
                 </div>
                 <div className="space-y-2">
                   <Label>Escopo / Responsabilidades</Label>

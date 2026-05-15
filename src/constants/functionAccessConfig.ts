@@ -26,56 +26,38 @@ export const DEPARTMENTS: Department[] = [
   {
     key: "command",
     label: "Command",
-    functions: [
-      { key: "ceo", label: "CEO" },
-      { key: "assistente_executiva", label: "Assistente Executiva" },
-    ],
+    functions: [],
   },
   {
-    key: "operacoes",
+    key: "ops",
     label: "Operações",
-    functions: [
-      { key: "head", label: "Head" },
-      { key: "gerente", label: "Gerente" },
-      { key: "coordenador", label: "Coordenador(a)" },
-      { key: "supervisor", label: "Supervisor(a)" },
-      { key: "staff", label: "Staff" },
-    ],
+    functions: [],
   },
   {
-    key: "vendas",
+    key: "b2b",
     label: "Vendas",
-    functions: [
-      { key: "head", label: "Head" },
-      { key: "supervisor", label: "Supervisor(a)" },
-      { key: "vendedor_b2b", label: "Vendedor B2B" },
-      { key: "vendedor_b2c", label: "Vendedor B2C" },
-    ],
+    functions: [],
   },
   {
     key: "finance",
     label: "Finance",
-    functions: [
-      { key: "head", label: "Head" },
-      { key: "gerente", label: "Gerente" },
-      { key: "coordenador", label: "Coordenador(a)" },
-      { key: "analista", label: "Analista" },
-    ],
+    functions: [],
+  },
+  {
+    key: "growth",
+    label: "Growth",
+    functions: [],
+  },
+  {
+    key: "expansao",
+    label: "Expansão",
+    functions: [],
   },
   {
     key: "ti_suporte",
     label: "TI / Suporte",
     fullAccess: true,
     functions: [],
-  },
-  {
-    key: "administrativo",
-    label: "Administrativo",
-    functions: [
-      { key: "head", label: "Head" },
-      { key: "gerente", label: "Gerente" },
-      { key: "assistente", label: "Assistente" },
-    ],
   },
 ];
 
