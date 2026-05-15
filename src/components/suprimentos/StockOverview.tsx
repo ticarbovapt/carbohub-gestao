@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { Package, Search, Pencil, Save, X, Warehouse, TrendingUp, TrendingDown, Calendar, BarChart3, Shield, Activity, Download } from "lucide-react";
+import { Package, Search, Pencil, Save, X, Warehouse, TrendingUp, TrendingDown, Calendar, BarChart3, Shield, Activity, Download, ArrowDownToLine } from "lucide-react";
 import * as XLSX from "xlsx";
 import { Input } from "@/components/ui/input";
 import { CarboCard, CarboCardContent } from "@/components/ui/carbo-card";
@@ -53,9 +53,16 @@ export function StockOverview() {
   const [newQty, setNewQty] = useState("");
   const [newSafetyQty, setNewSafetyQty] = useState("");
   const [reason, setReason] = useState("");
+  const [entradaOpen, setEntradaOpen] = useState(false);
+  const [entradaProductId, setEntradaProductId] = useState("");
+  const [entradaHubId, setEntradaHubId] = useState("");
+  const [entradaQty, setEntradaQty] = useState("");
+  const [entradaReason, setEntradaReason] = useState("");
+  const [entradaSaving, setEntradaSaving] = useState(false);
   const createMovement = useCreateStockMovement();
   const qc = useQueryClient();
-  const { user, isMasterAdmin } = useAuth();
+  const { user, isMasterAdmin, isAdmin, isGestorCompras } = useAuth();
+  const canEdit = isMasterAdmin || isAdmin || isGestorCompras;
 
   const { data: warehouses } = useQuery({
     queryKey: ["warehouses"],
@@ -238,6 +245,66 @@ export function StockOverview() {
     }
   };
 
+  const openEntrada = () => {
+    setEntradaProductId(products?.[0]?.id || "");
+    setEntradaHubId(warehouses?.[0]?.id || "");
+    setEntradaQty("");
+    setEntradaReason("");
+    setEntradaOpen(true);
+  };
+
+  const handleEntrada = async () => {
+    const qty = Number(entradaQty);
+    if (!entradaProductId) { toast.error("Selecione o produto"); return; }
+    if (!entradaHubId) { toast.error("Selecione o HUB"); return; }
+    if (isNaN(qty) || qty <= 0) { toast.error("Quantidade inválida"); return; }
+    if (!entradaReason.trim()) { toast.error("Motivo é obrigatório"); return; }
+
+    setEntradaSaving(true);
+    try {
+      const ws = warehouseStock?.find(s => s.product_id === entradaProductId && s.warehouse_id === entradaHubId);
+      const currentQty = ws?.quantity || 0;
+      const newQty = currentQty + qty;
+
+      if (ws) {
+        const { error } = await supabase.from("warehouse_stock")
+          .update({ quantity: newQty, updated_at: new Date().toISOString() })
+          .eq("id", ws.id);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.from("warehouse_stock")
+          .insert({ product_id: entradaProductId, warehouse_id: entradaHubId, quantity: newQty });
+        if (error) throw error;
+      }
+
+      await createMovement.mutateAsync({
+        product_id: entradaProductId,
+        tipo: "entrada",
+        quantidade: qty,
+        origem: "ajuste",
+        observacoes: `[Hub: ${warehouses?.find(w => w.id === entradaHubId)?.name}] ${entradaReason}`,
+      });
+
+      await supabase.from("flow_audit_logs").insert({
+        user_id: user?.id,
+        action_type: "stock_entry",
+        resource_type: "warehouse_stock",
+        resource_id: ws?.id || entradaProductId,
+        reason: entradaReason,
+        details: { product_id: entradaProductId, hub_id: entradaHubId, qty_entrada: qty },
+      });
+
+      qc.invalidateQueries({ queryKey: ["mrp-products-stock"] });
+      qc.invalidateQueries({ queryKey: ["warehouse-stock"] });
+      toast.success("Entrada registrada com sucesso");
+      setEntradaOpen(false);
+    } catch {
+      toast.error("Erro ao registrar entrada");
+    } finally {
+      setEntradaSaving(false);
+    }
+  };
+
   return (
     <div className="space-y-4">
       {/* Filters */}
@@ -260,10 +327,18 @@ export function StockOverview() {
             ))}
           </SelectContent>
         </Select>
-        <Button variant="outline" size="sm" className="gap-1.5 ml-auto" onClick={handleExport}>
-          <Download className="h-4 w-4" />
-          Exportar Excel
-        </Button>
+        <div className="flex items-center gap-2 ml-auto">
+          {canEdit && (
+            <Button size="sm" className="gap-1.5 bg-carbo-green hover:bg-carbo-green/90 text-white" onClick={openEntrada}>
+              <ArrowDownToLine className="h-4 w-4" />
+              Nova Entrada
+            </Button>
+          )}
+          <Button variant="outline" size="sm" className="gap-1.5" onClick={handleExport}>
+            <Download className="h-4 w-4" />
+            Exportar Excel
+          </Button>
+        </div>
       </div>
 
       {/* Cards */}
@@ -325,7 +400,7 @@ export function StockOverview() {
                         {p.category && <span className="ml-2 font-sans">· {p.category}</span>}
                       </p>
                     </div>
-                    {isMasterAdmin && (
+                    {canEdit && (
                       <Button
                         variant="ghost"
                         size="icon"
@@ -428,6 +503,85 @@ export function StockOverview() {
           })}
         </div>
       )}
+
+      {/* Nova Entrada Dialog */}
+      <Dialog open={entradaOpen} onOpenChange={setEntradaOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <ArrowDownToLine className="h-5 w-5 text-carbo-green" />
+              Registrar Entrada de Material
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label>Produto</Label>
+              <Select value={entradaProductId} onValueChange={setEntradaProductId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione o produto" />
+                </SelectTrigger>
+                <SelectContent>
+                  {(products || []).filter(p => p.category !== "Produto Final").map(p => (
+                    <SelectItem key={p.id} value={p.id}>
+                      {p.name} <span className="text-muted-foreground text-xs ml-1">({p.product_code})</span>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>HUB de Destino</Label>
+              <Select value={entradaHubId} onValueChange={setEntradaHubId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione o HUB" />
+                </SelectTrigger>
+                <SelectContent>
+                  {(warehouses || []).map(w => (
+                    <SelectItem key={w.id} value={w.id}>
+                      {w.name} — {w.city}/{w.state}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label htmlFor="entrada-qty">Quantidade Recebida</Label>
+              <Input
+                id="entrada-qty"
+                type="number"
+                min={1}
+                placeholder="0"
+                value={entradaQty}
+                onChange={e => setEntradaQty(e.target.value)}
+                autoFocus
+              />
+            </div>
+            <div>
+              <Label htmlFor="entrada-reason">Motivo / Origem <span className="text-destructive">*</span></Label>
+              <Textarea
+                id="entrada-reason"
+                placeholder="Ex: Recebimento NF 001234, Transferência de estoque..."
+                value={entradaReason}
+                onChange={e => setEntradaReason(e.target.value)}
+                rows={2}
+              />
+            </div>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setEntradaOpen(false)}>
+              <X className="h-4 w-4 mr-1" /> Cancelar
+            </Button>
+            <Button
+              className="bg-carbo-green hover:bg-carbo-green/90 text-white"
+              onClick={handleEntrada}
+              disabled={entradaSaving || !entradaReason.trim() || !entradaProductId || !entradaHubId}
+            >
+              <ArrowDownToLine className="h-4 w-4 mr-1" />
+              {entradaSaving ? "Salvando..." : "Registrar Entrada"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Edit Dialog */}
       <Dialog open={!!editing} onOpenChange={open => !open && setEditing(null)}>
