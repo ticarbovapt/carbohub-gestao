@@ -67,7 +67,7 @@ export function MapPinSelector({
           Math.cos((lat * Math.PI) / 180) *
           Math.sin(dLng / 2) ** 2;
       const dist = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-      setTooFar(dist > 500);
+      setTooFar(dist > 50);
     }
     onPositionChange(lat, lng);
   };
@@ -102,7 +102,7 @@ export function MapPinSelector({
         <div className="flex items-start gap-2 rounded-lg border border-warning/30 bg-warning/10 px-3 py-2 text-xs text-warning">
           <AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
           <span>
-            O pin está a mais de 500 m do endereço geocodificado. Verifique se está marcando o local correto.
+            O pin está a mais de 50 m do endereço geocodificado. Verifique se está marcando o local correto.
           </span>
         </div>
       )}
