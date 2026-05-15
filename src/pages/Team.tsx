@@ -38,6 +38,7 @@ import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
 import { useResendWelcomeEmail } from "@/hooks/useCreateTeamMember";
 import { ALL_DEPARTMENTS, DEPARTMENT_LABELS } from "@/constants/departments";
+import { useDepartmentFunctions } from "@/hooks/useDepartmentFunctions";
 // ── Carbo role labels ────────────────────────────────────────────────────────
 const CARBO_ROLE_BADGE: Record<string, string> = {
   ceo:             "CEO",
@@ -109,7 +110,7 @@ function MemberInfoModal({ member, profiles, teamMembers, onClose, canEdit, isMa
 
   // edit form state — reset when member changes
   const [formName,       setFormName]       = useState("");
-  const [formTitle,      setFormTitle]       = useState("");
+  const [formFuncao,     setFormFuncao]      = useState("");  // function_key
   const [formDept,       setFormDept]        = useState("");
   const [formLevel,      setFormLevel]       = useState(6);
   const [formEmail,      setFormEmail]       = useState("");
@@ -118,21 +119,18 @@ function MemberInfoModal({ member, profiles, teamMembers, onClose, canEdit, isMa
   const [formAssistant,  setFormAssistant]   = useState(false);
   const [formUsername,   setFormUsername]    = useState("");
   const [formEscopo,     setFormEscopo]      = useState("");
-  // gestor direto (master admin only)
-  const [formReportsTo, setFormReportsTo] = useState("");
+  const [formReportsTo,  setFormReportsTo]   = useState("");
+
+  const { data: deptFunctions = [] } = useDepartmentFunctions(formDept || undefined);
 
   // Open edit mode — seed from current member
   const openEdit = () => {
     if (!member) return;
     setFormName(member.full_name);
-    setFormTitle(member.job_title || "");
-    // OrgNode.department stores display values ("OPS", "Command"…) but the Select
-    // uses lowercase profile enum values ("ops", "command"…) — normalise here.
     const rawDept = member.department || "";
     const normalizedDept = DEPT_TO_PROFILE_DEPT[rawDept] ?? rawDept.toLowerCase();
     setFormDept(normalizedDept);
     setFormLevel(member.hierarchy_level);
-    // Primary: link by user_id (set on org_chart_nodes). Fallback: email then name.
     const orgNode = profiles.find((p) => (p as any).user_id && (p as any).user_id === member.user_id)
       ?? profiles.find((p) => p.id === member.id);
     const authMember = member.user_id
@@ -143,11 +141,10 @@ function MemberInfoModal({ member, profiles, teamMembers, onClose, canEdit, isMa
     setFormPhone((orgNode as any)?.phone || "");
     setFormDualRole(member.dual_role || "");
     setFormAssistant(member.assistant || false);
-    // seed username + escopo from linked team member (if any)
     const linked = teamMembers.find((m) => m.email && email && m.email.toLowerCase() === email.toLowerCase());
     setFormUsername((linked?.username || "").toUpperCase());
     setFormEscopo(linked?.escopo || "");
-    // seed gestor direto from flat profiles list
+    setFormFuncao((linked as any)?.funcao || "");
     const flatNode = profiles.find((p) => p.id === member.id);
     setFormReportsTo((flatNode as any)?.reports_to || "");
     setEditing(true);
@@ -156,16 +153,17 @@ function MemberInfoModal({ member, profiles, teamMembers, onClose, canEdit, isMa
   const handleSave = async () => {
     if (!member) return;
 
-    // formDept is the profile enum value (lowercase, e.g. "ops").
-    // org_chart_nodes expects display values (e.g. "OPS"), so reverse-map here.
     const orgDept = DEPARTMENT_LABELS[formDept] || formDept || null;
+    const selectedFn = deptFunctions.find(f => f.function_key === formFuncao);
+    const jobTitle = selectedFn?.label || formFuncao || null;
+    const hierarchyLevel = selectedFn?.hierarchy_order ?? formLevel;
 
     await updateNode.mutateAsync({
       id: member.id,
       full_name:       formName,
-      job_title:       formTitle || null,
+      job_title:       jobTitle,
       department:      orgDept,
-      hierarchy_level: formLevel,
+      hierarchy_level: hierarchyLevel,
       email:           formEmail || null,
       phone:           formPhone || null,
       dual_role:       formDualRole || null,
@@ -205,11 +203,12 @@ function MemberInfoModal({ member, profiles, teamMembers, onClose, canEdit, isMa
       const { error: profileUpdateError } = await supabase
         .from("profiles")
         .update({
-          full_name:  formName,
-          department: formDept as any,
-          phone:      formPhone || null,
-          funcao:     formTitle || null,
-          escopo:     formEscopo || null,
+          full_name:       formName,
+          department:      formDept as any,
+          phone:           formPhone || null,
+          funcao:          formFuncao || null,
+          escopo:          formEscopo || null,
+          hierarchy_level: hierarchyLevel,
           ...(usernameChanged ? { username: formUsername } : {}),
           ...(canEdit ? { manager_user_id: managerProfileId } : {}),
         } as any)
@@ -335,13 +334,9 @@ function MemberInfoModal({ member, profiles, teamMembers, onClose, canEdit, isMa
                 <Label>Nome Completo</Label>
                 <Input value={formName} onChange={(e) => setFormName(e.target.value)} />
               </div>
-              <div className="col-span-2 space-y-1">
-                <Label>Cargo / Função</Label>
-                <Input value={formTitle} onChange={(e) => setFormTitle(e.target.value)} placeholder="ex: Coordenadora Administrativa" />
-              </div>
               <div className="space-y-1">
                 <Label>Departamento</Label>
-                <Select value={formDept} onValueChange={setFormDept}>
+                <Select value={formDept} onValueChange={(v) => { setFormDept(v); setFormFuncao(""); }}>
                   <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
                   <SelectContent>
                     {ALL_DEPARTMENTS.map((d) => (
@@ -351,16 +346,21 @@ function MemberInfoModal({ member, profiles, teamMembers, onClose, canEdit, isMa
                 </Select>
               </div>
               <div className="space-y-1">
-                <Label>Nível Hierárquico</Label>
-                <Select value={String(formLevel)} onValueChange={(v) => setFormLevel(Number(v))}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                <Label>Função</Label>
+                <Select
+                  value={formFuncao || ""}
+                  onValueChange={(v) => {
+                    const fn = deptFunctions.find(f => f.function_key === v);
+                    setFormFuncao(v);
+                    if (fn) setFormLevel(fn.hierarchy_order);
+                  }}
+                  disabled={!formDept}
+                >
+                  <SelectTrigger><SelectValue placeholder={formDept ? "Selecione a função" : "Selecione o dept. primeiro"} /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="1">1 — CEO</SelectItem>
-                    <SelectItem value="2">2 — Diretor(a)</SelectItem>
-                    <SelectItem value="3">3 — Gerente</SelectItem>
-                    <SelectItem value="4">4 — Coordenador(a)</SelectItem>
-                    <SelectItem value="5">5 — Supervisor(a)</SelectItem>
-                    <SelectItem value="6">6 — Staff</SelectItem>
+                    {deptFunctions.map(fn => (
+                      <SelectItem key={fn.function_key} value={fn.function_key}>{fn.label}</SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
