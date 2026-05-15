@@ -3,16 +3,17 @@ import { BoardLayout } from "@/components/layouts/BoardLayout";
 import { KPICard } from "@/components/board/KPICard";
 import { StatusBadge } from "@/components/board/StatusBadge";
 import { Button } from "@/components/ui/button";
-import { 
-  ClipboardCheck, 
-  AlertTriangle, 
-  TrendingUp, 
+import {
+  ClipboardCheck,
+  AlertTriangle,
+  TrendingUp,
   Clock,
   Building2,
   Calendar,
   Download,
   Filter,
   MoreHorizontal,
+  Loader2,
 } from "lucide-react";
 import {
   Select,
@@ -41,7 +42,18 @@ const Dashboard = () => {
     isAdmin, isManager,
     isCeo, isGestorAdm, isGestorFin, isGestorCompras,
     isOperadorFiscal, isOperador, isAnyGestor, isAnyOperador,
+    isLoading,
   } = useAuth();
+
+  if (isLoading) {
+    return (
+      <BoardLayout>
+        <div className="flex items-center justify-center h-64">
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        </div>
+      </BoardLayout>
+    );
+  }
   
   // Dashboard por role Carbo — sem fallback legacy
   if (isCeo || isAdmin) {
