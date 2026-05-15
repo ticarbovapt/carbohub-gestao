@@ -24,7 +24,7 @@ import { useLicensees } from "@/hooks/useLicensees";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useGeocode } from "@/hooks/useGeocode";
-import { MapPreview } from "@/components/maps/MapPreview";
+import { MapPinSelector } from "@/components/maps/MapPinSelector";
 import { toast } from "sonner";
 import { useTeamMembers } from "@/hooks/useTeamMembers";
 import { useSkus } from "@/hooks/useSkus";
@@ -942,11 +942,16 @@ export default function CreateOrder() {
                   />
                 </div>
 
-                <MapPreview
+                <MapPinSelector
                   latitude={coords?.lat ?? null}
                   longitude={coords?.lng ?? null}
                   isLoading={isGeoLoading}
-                  label={form.getValues("customer_name") || "Localização"}
+                  address={[
+                    form.watch("delivery_address"),
+                    form.watch("delivery_city"),
+                    form.watch("delivery_state"),
+                  ].filter(Boolean).join(", ")}
+                  onPositionChange={(lat, lng) => setCoords({ lat, lng })}
                 />
               </div>
             </CarboCard>
