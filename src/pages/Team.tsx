@@ -156,14 +156,13 @@ function MemberInfoModal({ member, profiles, teamMembers, onClose, canEdit, isMa
     const orgDept = DEPARTMENT_LABELS[formDept] || formDept || null;
     const selectedFn = deptFunctions.find(f => f.function_key === formFuncao);
     const jobTitle = selectedFn?.label || formFuncao || null;
-    const hierarchyLevel = selectedFn?.hierarchy_order ?? formLevel;
 
     await updateNode.mutateAsync({
       id: member.id,
       full_name:       formName,
       job_title:       jobTitle,
       department:      orgDept,
-      hierarchy_level: hierarchyLevel,
+      hierarchy_level: formLevel,
       email:           formEmail || null,
       phone:           formPhone || null,
       dual_role:       formDualRole || null,
@@ -348,11 +347,7 @@ function MemberInfoModal({ member, profiles, teamMembers, onClose, canEdit, isMa
                 <Label>Função</Label>
                 <Select
                   value={formFuncao || ""}
-                  onValueChange={(v) => {
-                    const fn = deptFunctions.find(f => f.function_key === v);
-                    setFormFuncao(v);
-                    if (fn) setFormLevel(fn.hierarchy_order);
-                  }}
+                  onValueChange={(v) => setFormFuncao(v)}
                   disabled={!formDept}
                 >
                   <SelectTrigger><SelectValue placeholder={formDept ? "Selecione a função" : "Selecione o dept. primeiro"} /></SelectTrigger>
