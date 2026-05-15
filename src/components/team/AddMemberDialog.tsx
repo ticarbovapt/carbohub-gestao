@@ -53,14 +53,6 @@ const HUB_OPTIONS = [
   { value: "portal_pdv",        label: "Portal Lojas (PDV)" },
 ];
 
-const HIERARCHY_OPTIONS = [
-  { value: 1, label: "1 — CEO" },
-  { value: 2, label: "2 — Diretor(a)" },
-  { value: 3, label: "3 — Gerente" },
-  { value: 4, label: "4 — Coordenador(a)" },
-  { value: 5, label: "5 — Supervisor(a)" },
-  { value: 6, label: "6 — Colaborador" },
-];
 
 const DEFAULT_PASSWORD = "Carbo@2026";
 
@@ -174,7 +166,7 @@ export function AddMemberDialog({ onMemberAdded, variant = "default" }: AddMembe
   const deptLabel = DEPARTMENTS.find((d) => d.value === form.department)?.label ?? form.department;
   const roleLabel = ROLES.find((r) => r.value === form.role)?.label ?? form.role;
   const managerLabel = approvedMembers.find((m) => m.id === form.managerUserId)?.full_name ?? "—";
-  const levelLabel = HIERARCHY_OPTIONS.find((h) => h.value === form.hierarchyLevel)?.label ?? String(form.hierarchyLevel);
+  const levelLabel = (deptFunctions || []).find((f) => f.function_key === form.funcao)?.label ?? "—";
 
   return (
     <Dialog open={open} onOpenChange={(isOpen) => { if (!isOpen) handleClose(); else setOpen(true); }}>
@@ -240,7 +232,7 @@ export function AddMemberDialog({ onMemberAdded, variant = "default" }: AddMembe
                     </Select>
                   </div>
                   <div className="space-y-2">
-                    <Label>Nível Hierárquico</Label>
+                    <Label>Função</Label>
                     <Select
                       value={form.funcao || ""}
                       onValueChange={(v) => {
@@ -260,14 +252,6 @@ export function AddMemberDialog({ onMemberAdded, variant = "default" }: AddMembe
                       </SelectContent>
                     </Select>
                   </div>
-                </div>
-                <div className="space-y-2">
-                  <Label>Cargo / Função</Label>
-                  <Input
-                    value={form.funcao}
-                    onChange={(e) => setField("funcao", e.target.value)}
-                    placeholder="Ex: Analista Financeiro, Coordenadora de Expansão..."
-                  />
                 </div>
                 <div className="space-y-2">
                   <Label>Escopo / Responsabilidades</Label>
