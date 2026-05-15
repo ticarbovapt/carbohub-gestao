@@ -88,7 +88,7 @@ export function FunctionAccessTab() {
     setNewFn({ label: "", reports_to_key: "", scope: "proprio" });
   };
 
-  const { data: dbData } = useQuery({
+  const { data: dbData, isError: loadError } = useQuery({
     queryKey: ["function-screen-access"],
     queryFn: async () => {
       const { data, error } = await (supabase as any)
@@ -97,6 +97,7 @@ export function FunctionAccessTab() {
       if (error) throw error;
       return (data || []) as { department: string; function_key: string; screen_ids: string[] }[];
     },
+    retry: 1,
   });
 
   useEffect(() => {
@@ -162,8 +163,8 @@ export function FunctionAccessTab() {
     if (!currentKey || !selectedFunc) return;
     setSaving(true);
     try {
-      // Save screen access
-      await (supabase as any)
+      // Save screen access — must check error explicitly (supabase doesn't throw)
+      const { error: upsertError } = await (supabase as any)
         .from("function_screen_access")
         .upsert({
           department: selectedDept,
@@ -172,6 +173,8 @@ export function FunctionAccessTab() {
           updated_at: new Date().toISOString(),
           updated_by: user?.id,
         }, { onConflict: "department,function_key" });
+
+      if (upsertError) throw upsertError;
 
       // Save scope (best-effort — silently skips if column doesn't exist yet)
       try {
@@ -182,11 +185,11 @@ export function FunctionAccessTab() {
         });
       } catch { /* migration pending — scope will persist after it runs */ }
 
-      qc.invalidateQueries({ queryKey: ["function-screen-access"] });
+      await qc.invalidateQueries({ queryKey: ["function-screen-access"] });
       toast.success("Configuração salva!");
       setDirty(false);
     } catch (e: any) {
-      toast.error("Erro ao salvar: " + e.message);
+      toast.error("Erro ao salvar: " + (e.message || e.details || JSON.stringify(e)));
     } finally {
       setSaving(false);
     }
@@ -205,6 +208,16 @@ export function FunctionAccessTab() {
           <strong>não afetam os acessos reais</strong> até ativação oficial.
         </p>
       </div>
+
+      {loadError && (
+        <div className="flex items-start gap-3 rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-3">
+          <AlertTriangle className="h-4 w-4 text-destructive mt-0.5 shrink-0" />
+          <p className="text-sm text-destructive">
+            <strong>Tabela não encontrada.</strong> Execute as migrations do Supabase para habilitar o salvamento das configurações.{" "}
+            <code className="text-xs bg-destructive/10 px-1 rounded">20260515000000_function_screen_access.sql</code>
+          </p>
+        </div>
+      )}
 
       {/* 3-panel layout */}
       <div className="grid grid-cols-[160px_200px_1fr] border rounded-lg overflow-hidden min-h-[520px]">
