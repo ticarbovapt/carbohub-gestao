@@ -108,9 +108,8 @@ function ProductForm({ product, onClose }: { product?: MrpProduct; onClose: () =
       dimensions_cm: null,
       notes: form.notes || null,
       is_active: form.is_active,
-      current_stock_qty: form.current_stock_qty ? Number(form.current_stock_qty) : 0,
+      current_stock_qty: product ? (product.current_stock_qty ?? 0) : (form.current_stock_qty ? Number(form.current_stock_qty) : 0),
       stock_updated_at: (
-        form.current_stock_qty !== product?.current_stock_qty?.toString() ||
         form.safety_stock_qty !== product?.safety_stock_qty?.toString()
       ) ? new Date().toISOString() : (product?.stock_updated_at ?? null),
       stock_unit: product?.stock_unit ?? 'un',
@@ -205,7 +204,7 @@ function ProductForm({ product, onClose }: { product?: MrpProduct; onClose: () =
         <div className="grid grid-cols-2 gap-4 p-3 bg-muted/50 rounded-lg border border-border">
           <div>
             <Label className="text-xs font-semibold uppercase text-carbo-green">Estoque Atual</Label>
-            <Input type="number" value={form.current_stock_qty} onChange={e => setForm(f => ({ ...f, current_stock_qty: e.target.value }))} />
+            <Input type="number" value={form.current_stock_qty} readOnly className="opacity-60 cursor-not-allowed" />
           </div>
           <div>
             <Label className="text-xs font-semibold uppercase text-carbo-green">Estoque Segurança</Label>
@@ -519,9 +518,11 @@ export default function MrpProducts() {
       </div>
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-lg max-h-[90vh] flex flex-col">
           <DialogHeader><DialogTitle>{editProduct ? "Editar Produto" : "Novo Produto"}</DialogTitle></DialogHeader>
-          <ProductForm product={editProduct} onClose={() => setDialogOpen(false)} />
+          <div className="overflow-y-auto flex-1 pr-1">
+            <ProductForm product={editProduct} onClose={() => setDialogOpen(false)} />
+          </div>
         </DialogContent>
       </Dialog>
 
