@@ -23,10 +23,10 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useCreateTeamMember } from "@/hooks/useCreateTeamMember";
 import { useTeamMembers } from "@/hooks/useTeamMembers";
-import { useDepartmentFunctions } from "@/hooks/useDepartmentFunctions";
 import { cn } from "@/lib/utils";
 import type { Database } from "@/integrations/supabase/types";
 import { SQUAD_DEPARTMENTS } from "@/constants/departments";
+import { DEPARTMENTS as DEPT_FUNCTIONS_CONFIG } from "@/constants/functionAccessConfig";
 
 type DepartmentType = Database["public"]["Enums"]["department_type"];
 type AppRole = Database["public"]["Enums"]["app_role"];
@@ -93,7 +93,7 @@ export function AddMemberDialog({ onMemberAdded, variant = "default" }: AddMembe
 
   const createMember = useCreateTeamMember();
   const { data: teamMembers = [] } = useTeamMembers();
-  const { data: deptFunctions } = useDepartmentFunctions(form.department || undefined);
+  const deptFunctions = DEPT_FUNCTIONS_CONFIG.find(d => d.key === form.department)?.functions ?? [];
 
   const approvedMembers = teamMembers.filter((m) => m.status === "approved");
 
@@ -166,7 +166,7 @@ export function AddMemberDialog({ onMemberAdded, variant = "default" }: AddMembe
   const deptLabel = DEPARTMENTS.find((d) => d.value === form.department)?.label ?? form.department;
   const roleLabel = ROLES.find((r) => r.value === form.role)?.label ?? form.role;
   const managerLabel = approvedMembers.find((m) => m.id === form.managerUserId)?.full_name ?? "—";
-  const levelLabel = (deptFunctions || []).find((f) => f.function_key === form.funcao)?.label ?? "—";
+  const levelLabel = deptFunctions.find((f) => f.key === form.funcao)?.label ?? "—";
 
   return (
     <Dialog open={open} onOpenChange={(isOpen) => { if (!isOpen) handleClose(); else setOpen(true); }}>
@@ -236,16 +236,16 @@ export function AddMemberDialog({ onMemberAdded, variant = "default" }: AddMembe
                     <Select
                       value={form.funcao || ""}
                       onValueChange={(v) => {
-                        const fn = (deptFunctions || []).find(f => f.function_key === v);
+                        const fn = deptFunctions.find(f => f.key === v);
                         setField("funcao", v);
-                        setField("hierarchyLevel", fn?.hierarchy_order ?? 99);
+                        setField("hierarchyLevel", fn ? deptFunctions.indexOf(fn) + 1 : 99);
                       }}
                       disabled={!form.department}
                     >
                       <SelectTrigger><SelectValue placeholder={form.department ? "Selecione a função" : "Selecione o dept. primeiro"} /></SelectTrigger>
                       <SelectContent className="z-[10000]">
-                        {(deptFunctions || []).map((fn) => (
-                          <SelectItem key={fn.function_key} value={fn.function_key}>
+                        {deptFunctions.map((fn) => (
+                          <SelectItem key={fn.key} value={fn.key}>
                             {fn.label}
                           </SelectItem>
                         ))}
