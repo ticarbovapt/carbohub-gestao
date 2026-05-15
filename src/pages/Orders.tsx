@@ -596,7 +596,7 @@ export default function Orders() {
                     Status <SortIcon col="status" />
                   </button>
                 </CarboTableHead>
-                {isAdmin && <CarboTableHead className="w-10">Editar</CarboTableHead>}
+                {(isAdmin || isCeo || isManager || isAnyGestor) && <CarboTableHead className="w-10">Editar</CarboTableHead>}
                 <CarboTableHead className="w-10"></CarboTableHead>
               </CarboTableRow>
             </CarboTableHeader>
@@ -680,7 +680,7 @@ export default function Orders() {
                         {ORDER_STATUS_LABELS[order.status]}
                       </CarboBadge>
                     </CarboTableCell>
-                    {isAdmin && (
+                    {(isAdmin || isCeo || isManager || isAnyGestor) && (
                       <CarboTableCell>
                         <button
                           onClick={(e) => {

@@ -1,8 +1,10 @@
-import React from "react";
+import React, { useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { ArrowLeft, Package, Clock, Truck, CheckCircle, XCircle, RefreshCw, Calendar, User, MapPin, FileText, DollarSign, Repeat, Briefcase, Factory, Wrench, ExternalLink, Printer } from "lucide-react";
+import { ArrowLeft, Package, Clock, Truck, CheckCircle, XCircle, RefreshCw, Calendar, User, MapPin, FileText, DollarSign, Repeat, Briefcase, Factory, Wrench, ExternalLink, Pencil, Printer } from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
+import { EditOrderDialog } from "@/components/orders/EditOrderDialog";
 import { BoardLayout } from "@/components/layouts/BoardLayout";
 import { CarboButton } from "@/components/ui/carbo-button";
 import { CarboCard } from "@/components/ui/carbo-card";
@@ -44,6 +46,9 @@ function parseItems(items: Json): OrderItem[] {
 export default function OrderDetails() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { isAdmin, isCeo, isManager, isAnyGestor } = useAuth();
+  const canEdit = isAdmin || isCeo || isManager || isAnyGestor;
+  const [isEditOpen, setIsEditOpen] = useState(false);
   const { data: order, isLoading: orderLoading } = useOrder(id);
   const { data: history, isLoading: historyLoading } = useOrderHistory(id);
 
@@ -134,7 +139,21 @@ export default function OrderDetails() {
               </p>
             </div>
           </div>
+          {canEdit && (
+            <CarboButton variant="outline" size="sm" onClick={() => setIsEditOpen(true)}>
+              <Pencil className="h-4 w-4 mr-2" />
+              Editar Pedido
+            </CarboButton>
+          )}
         </div>
+
+        {canEdit && order && (
+          <EditOrderDialog
+            order={order as any}
+            open={isEditOpen}
+            onOpenChange={setIsEditOpen}
+          />
+        )}
 
         <div className="grid gap-6 md:grid-cols-3">
           {/* Left column - Order details */}
