@@ -2,7 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
-import { DEPARTMENTS as DEPT_CONFIG } from "@/constants/functionAccessConfig";
+import { DEPARTMENTS as DEPT_CONFIG, type DataScope } from "@/constants/functionAccessConfig";
 
 export interface DepartmentFunction {
   id: string;
@@ -11,6 +11,7 @@ export interface DepartmentFunction {
   label: string;
   hierarchy_order: number;
   reports_to_key: string | null;
+  data_scope: DataScope;
   is_active: boolean;
 }
 
@@ -23,6 +24,7 @@ function configFallback(department: string): DepartmentFunction[] {
     label: f.label,
     hierarchy_order: i + 1,
     reports_to_key: null,
+    data_scope: f.scope,
     is_active: true,
   }));
 }
@@ -81,5 +83,28 @@ export function useCreateDepartmentFunction() {
       toast.success("Função criada com sucesso!");
     },
     onError: (e: any) => toast.error("Erro ao criar função: " + e.message),
+  });
+}
+
+export function useUpdateFunctionScope() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (values: {
+      department: string;
+      function_key: string;
+      data_scope: DataScope;
+    }) => {
+      const { error } = await (supabase as any)
+        .from("department_functions")
+        .update({ data_scope: values.data_scope })
+        .eq("department", values.department)
+        .eq("function_key", values.function_key);
+      if (error) throw error;
+    },
+    onSuccess: (_, v) => {
+      qc.invalidateQueries({ queryKey: ["department-functions"] });
+      qc.invalidateQueries({ queryKey: ["department-functions", v.department] });
+    },
+    onError: (e: any) => toast.error("Erro ao salvar escopo: " + e.message),
   });
 }

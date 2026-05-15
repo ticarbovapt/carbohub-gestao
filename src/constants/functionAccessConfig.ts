@@ -1,3 +1,5 @@
+export type DataScope = "proprio" | "equipe" | "departamento" | "global";
+
 export interface AppScreen {
   id: string;
   label: string;
@@ -13,6 +15,7 @@ export interface ScreenGroup {
 export interface DeptFunction {
   key: string;
   label: string;
+  scope: DataScope;
 }
 
 export interface Department {
@@ -22,60 +25,67 @@ export interface Department {
   functions: DeptFunction[];
 }
 
+export const DATA_SCOPES: { value: DataScope; label: string; description: string; color: string }[] = [
+  { value: "proprio",      label: "Próprio",      description: "Vê apenas seus próprios registros",          color: "text-muted-foreground" },
+  { value: "equipe",       label: "Equipe",        description: "Vê registros dos seus subordinados diretos", color: "text-blue-500" },
+  { value: "departamento", label: "Departamento",  description: "Vê todos os registros do departamento",      color: "text-violet-500" },
+  { value: "global",       label: "Global",        description: "Vê tudo (como admin)",                       color: "text-carbo-green" },
+];
+
 export const DEPARTMENTS: Department[] = [
   {
     key: "command",
     label: "Command",
     functions: [
-      { key: "ceo", label: "CEO" },
-      { key: "assistente_executiva", label: "Assistente Executiva" },
+      { key: "ceo",                  label: "CEO",                  scope: "global" },
+      { key: "assistente_executiva", label: "Assistente Executiva", scope: "departamento" },
     ],
   },
   {
     key: "ops",
     label: "Operações",
     functions: [
-      { key: "head", label: "Head" },
-      { key: "gerente", label: "Gerente" },
-      { key: "coordenador", label: "Coordenador(a)" },
-      { key: "supervisor", label: "Supervisor(a)" },
-      { key: "staff", label: "Colaborador" },
+      { key: "head",        label: "Head",           scope: "global" },
+      { key: "gerente",     label: "Gerente",        scope: "departamento" },
+      { key: "coordenador", label: "Coordenador(a)", scope: "departamento" },
+      { key: "supervisor",  label: "Supervisor(a)",  scope: "equipe" },
+      { key: "staff",       label: "Colaborador",    scope: "proprio" },
     ],
   },
   {
     key: "b2b",
     label: "Vendas",
     functions: [
-      { key: "head", label: "Head" },
-      { key: "supervisor", label: "Supervisor(a)" },
-      { key: "vendedor_b2b", label: "Vendedor B2B" },
-      { key: "vendedor_b2c", label: "Vendedor B2C" },
+      { key: "head",          label: "Head",           scope: "global" },
+      { key: "supervisor",    label: "Supervisor(a)",  scope: "equipe" },
+      { key: "vendedor_b2b",  label: "Vendedor B2B",   scope: "proprio" },
+      { key: "vendedor_b2c",  label: "Vendedor B2C",   scope: "proprio" },
     ],
   },
   {
     key: "finance",
     label: "Finance",
     functions: [
-      { key: "head", label: "Head" },
-      { key: "gerente", label: "Gerente" },
-      { key: "coordenador", label: "Coordenador(a)" },
-      { key: "analista", label: "Analista" },
+      { key: "head",        label: "Head",           scope: "global" },
+      { key: "gerente",     label: "Gerente",        scope: "departamento" },
+      { key: "coordenador", label: "Coordenador(a)", scope: "departamento" },
+      { key: "analista",    label: "Analista",       scope: "proprio" },
     ],
   },
   {
     key: "growth",
     label: "Growth",
     functions: [
-      { key: "head", label: "Head" },
-      { key: "staff", label: "Colaborador" },
+      { key: "head",  label: "Head",        scope: "global" },
+      { key: "staff", label: "Colaborador", scope: "proprio" },
     ],
   },
   {
     key: "expansao",
     label: "Expansão",
     functions: [
-      { key: "head", label: "Head" },
-      { key: "staff", label: "Colaborador" },
+      { key: "head",  label: "Head",        scope: "global" },
+      { key: "staff", label: "Colaborador", scope: "proprio" },
     ],
   },
   {
@@ -83,8 +93,8 @@ export const DEPARTMENTS: Department[] = [
     label: "TI / Suporte",
     fullAccess: true,
     functions: [
-      { key: "head", label: "Head" },
-      { key: "staff", label: "Colaborador" },
+      { key: "head",  label: "Head",        scope: "global" },
+      { key: "staff", label: "Colaborador", scope: "departamento" },
     ],
   },
 ];
