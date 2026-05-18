@@ -95,8 +95,31 @@ export function useCanSeeScreen(screenId: string): boolean {
   const { allowedScreenIds, isConfigured } = useFunctionAccess();
   const { isMasterAdmin, isSuporte }       = useAuth();
 
-  if (!ENFORCEMENT_ACTIVE)       return true;
+  if (!ENFORCEMENT_ACTIVE)        return true;
   if (isMasterAdmin || isSuporte) return true;
-  if (!isConfigured)             return true; // not yet configured → don't block
+  if (!isConfigured)              return true; // not yet configured → don't block
   return allowedScreenIds.includes(screenId);
+}
+
+/**
+ * Returns true if the current user can configure the access matrix
+ * (rename departments/functions, toggle screens, manage function definitions).
+ *
+ * Transition logic:
+ *   ENFORCEMENT_ACTIVE = false → falls back to legacy role check
+ *                                (isAdmin || isMasterAdmin || isAnyGestor)
+ *   ENFORCEMENT_ACTIVE = true  → delegates to useCanSeeScreen("role-matrix"),
+ *                                which reads function_screen_access for the user's
+ *                                dept+funcao — no hardcoded role check needed.
+ *
+ * To activate: flip ENFORCEMENT_ACTIVE = true above. No other change required here.
+ */
+export function useCanManageMatrix(): boolean {
+  const canSeeMatrix = useCanSeeScreen("role-matrix");
+  const { isAdmin, isMasterAdmin, isAnyGestor } = useAuth();
+
+  if (ENFORCEMENT_ACTIVE) return canSeeMatrix;
+
+  // Legacy fallback: role-based until enforcement is on
+  return isAdmin || isMasterAdmin || isAnyGestor;
 }

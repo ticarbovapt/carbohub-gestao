@@ -20,6 +20,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { cn } from "@/lib/utils";
 import { ChevronDown, ChevronRight, Save, Loader2, Shield, AlertTriangle, Plus, Eye, Pencil, Check, X } from "lucide-react";
 import { toast } from "sonner";
+import { useCanManageMatrix } from "@/hooks/useFunctionAccess";
 
 type AccessMap = Record<string, Set<string>>;
 
@@ -43,7 +44,7 @@ function ScopeBadge({ scope }: { scope: DataScope }) {
 }
 
 export function FunctionAccessTab() {
-  const { user, isAdmin, isMasterAdmin, isAnyGestor } = useAuth();
+  const { user } = useAuth();
   const qc = useQueryClient();
   const [selectedDept, setSelectedDept] = useState(DEPARTMENTS[0].key);
   const [selectedFunc, setSelectedFunc] = useState<string | null>(null);
@@ -53,7 +54,7 @@ export function FunctionAccessTab() {
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  const canManage = isAdmin || isMasterAdmin || isAnyGestor;
+  const canManage = useCanManageMatrix();
   const createFn = useCreateDepartmentFunction();
   const updateScope = useUpdateFunctionScope();
   const updateFnLabel = useUpdateFunctionLabel();
