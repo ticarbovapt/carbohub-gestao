@@ -12,6 +12,7 @@ import {
   Package,
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
+import { useCanAccessOps } from "@/hooks/useActionPermissions";
 import { useLicenseeStatus } from "@/hooks/useLicenseePortal";
 import { usePDVStatus } from "@/hooks/usePDV";
 import { ThemeToggle } from "@/components/ui/ThemeToggle";
@@ -92,7 +93,7 @@ function AreaCard({
 
 export function HomeHub() {
   const navigate = useNavigate();
-  const { isAdmin, isManager, isAnyGestor, isCeo, isAnyOperador, isLoading: authLoading } = useAuth();
+  const { isLoading: authLoading } = useAuth();
   const { data: licenseeStatus, isLoading: licenseeLoading } = useLicenseeStatus();
   const { data: pdvStatus, isLoading: pdvLoading } = usePDVStatus();
 
@@ -100,7 +101,7 @@ export function HomeHub() {
   const isLoading = authLoading || licenseeLoading || pdvLoading;
 
   // Determinar quais áreas o usuário pode acessar
-  const canAccessOps = isAdmin || isManager || isAnyGestor || isCeo || isAnyOperador;
+  const canAccessOps = useCanAccessOps();
   const canAccessLicensee = !!licenseeStatus?.licensee;
   const canAccessPDV = !!pdvStatus?.pdv;
 

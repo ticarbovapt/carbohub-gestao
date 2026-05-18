@@ -8,10 +8,10 @@ import { CarboBadge } from "@/components/ui/carbo-badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { useSuppliers, useCreateSupplier, useUpdateSupplier, useDeleteSupplier, type Supplier } from "@/hooks/useSuppliers";
-import { useAuth } from "@/contexts/AuthContext";
+import { useCanManageSuppliers } from "@/hooks/useActionPermissions";
 
 export function SuppliersList() {
-  const { isAdmin, isCeo, isAnyGestor } = useAuth();
+  const canManage = useCanManageSuppliers();
   const [search, setSearch] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [editSupplier, setEditSupplier] = useState<Supplier | null>(null);
@@ -21,8 +21,6 @@ export function SuppliersList() {
   const createSupplier = useCreateSupplier();
   const updateSupplier = useUpdateSupplier();
   const deleteSupplier = useDeleteSupplier();
-
-  const canManage = isAdmin || isCeo || isAnyGestor;
 
   const filtered = suppliers.filter((s) =>
     s.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -143,7 +141,7 @@ export function SuppliersList() {
                           <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(s)}>
                             <Edit2 className="h-3.5 w-3.5" />
                           </Button>
-                          {isAdmin && (
+                          {canManage && (
                             <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => setDeleteId(s.id)}>
                               <Trash2 className="h-3.5 w-3.5" />
                             </Button>

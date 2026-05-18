@@ -44,6 +44,7 @@ import {
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
+import { useCanSeeAdminMenu, useCanSeeFinanceMenu } from "@/hooks/useActionPermissions";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { ThemeToggle } from "@/components/ui/ThemeToggle";
 import { NotificationBell } from "@/components/notifications";
@@ -360,7 +361,9 @@ function Breadcrumb({ area }: { area: string }) {
 export function BoardLayout({ children }: BoardLayoutProps) {
   const location = useLocation();
   const navigate = useNavigate();
-  const { isAdmin, profile, signOut, passwordMustChange, isCeo, isAnyGestor, carboRoles, isMasterAdmin, isGestorFin, isSuporte } = useAuth();
+  const { isAdmin, profile, signOut, passwordMustChange, isCeo, isAnyGestor, carboRoles, isMasterAdmin, isSuporte } = useAuth();
+  const canSeeAdminMenu = useCanSeeAdminMenu();
+  const canSeeFinanceMenu = useCanSeeFinanceMenu();
   const isMobile = useIsMobile();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
@@ -438,18 +441,18 @@ export function BoardLayout({ children }: BoardLayoutProps) {
 
   const currentItems = dashboardsItems;
   const filteredItems = currentItems.filter((item) => {
-    if (item.adminOnly && !isMasterAdmin && !isSuporte) return false;
+    if (item.adminOnly && !canSeeAdminMenu) return false;
     return true;
   });
   const filteredControleGroups = controleGroups
-    .filter((g) => !g.adminOnly || isMasterAdmin || isSuporte)
-    .map((g) => ({ ...g, children: g.children.filter((c) => !c.adminOnly || isMasterAdmin || isSuporte) }));
+    .filter((g) => !g.adminOnly || canSeeAdminMenu)
+    .map((g) => ({ ...g, children: g.children.filter((c) => !c.adminOnly || canSeeAdminMenu) }));
   const filteredOpsGroups = operacoesGroups
-    .filter((g) => !g.adminOnly || isMasterAdmin || isSuporte)
-    .map((g) => ({ ...g, children: g.children.filter((c) => !c.adminOnly || isMasterAdmin || isSuporte) }));
+    .filter((g) => !g.adminOnly || canSeeAdminMenu)
+    .map((g) => ({ ...g, children: g.children.filter((c) => !c.adminOnly || canSeeAdminMenu) }));
   const filteredGlobalItems = globalItems.filter((item: any) => {
-    if (item.financeOrMasterOnly && !isMasterAdmin && !isGestorFin) return false;
-    if (item.adminOnly && !isAdmin && !isCeo && !isSuporte) return false;
+    if (item.financeOrMasterOnly && !canSeeFinanceMenu) return false;
+    if (item.adminOnly && !canSeeAdminMenu) return false;
     return true;
   });
 

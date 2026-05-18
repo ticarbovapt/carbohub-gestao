@@ -6,7 +6,7 @@ import { CarboCard, CarboCardContent } from "@/components/ui/carbo-card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { useAuth } from "@/contexts/AuthContext";
+import { useCanManageStock } from "@/hooks/useActionPermissions";
 import { useSuprimentosKPIs } from "@/hooks/useStockMovements";
 import { StockOverview } from "@/components/suprimentos/StockOverview";
 import { StockMovementsList } from "@/components/suprimentos/StockMovementsList";
@@ -20,9 +20,7 @@ export default function Suprimentos() {
   const [activeTab, setActiveTab] = useState("estoque");
   const [planningMode, setPlanningMode] = useState(false);
   const { data: kpis } = useSuprimentosKPIs();
-  const { isMasterAdmin, isAdmin, isGestorCompras } = useAuth();
-
-  const canApprove = isMasterAdmin || isAdmin || isGestorCompras;
+  const canApprove = useCanManageStock();
 
   return (
     <BoardLayout>

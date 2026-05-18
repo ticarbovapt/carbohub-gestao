@@ -11,7 +11,6 @@ import { CarboSkeleton } from "@/components/ui/CarboSkeleton";
 import { CarboBadge } from "@/components/ui/carbo-badge";
 import { Package, Plus, Pencil, Warehouse, AlertTriangle, CheckCircle, AlertCircle, ClipboardList, Trash2 } from "lucide-react";
 import { useMrpProducts, useCreateMrpProduct, useUpdateMrpProduct, useDeleteMrpProduct, useWarehouseStockByProduct, MrpProduct } from "@/hooks/useMrpProducts";
-import { useAuth } from "@/contexts/AuthContext";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
@@ -312,7 +311,6 @@ function StockRiskBadge({ product, hubStocks }: { product: MrpProduct; hubStocks
 }
 
 export default function MrpProducts() {
-  const { isAdmin, isCeo, isAnyGestor } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const { data: products = [], isLoading } = useMrpProducts();
   const { data: warehouseStockMap = {} } = useWarehouseStockByProduct();

@@ -28,7 +28,7 @@ import {
   useDeleteEvent,
   EventStatus 
 } from "@/hooks/useScheduledEvents";
-import { useAuth } from "@/contexts/AuthContext";
+import { useCanManageScheduling } from "@/hooks/useActionPermissions";
 import { useNavigate } from "react-router-dom";
 
 interface EventDetailsDialogProps {
@@ -57,7 +57,7 @@ export function EventDetailsDialog({
   open,
   onOpenChange,
 }: EventDetailsDialogProps) {
-  const { isManager } = useAuth();
+  const canManage = useCanManageScheduling();
   const navigate = useNavigate();
   const { mutate: updateEvent, isPending: isUpdating } = useUpdateEvent();
   const { mutate: deleteEvent, isPending: isDeleting } = useDeleteEvent();
@@ -162,7 +162,7 @@ export function EventDetailsDialog({
             )}
           </div>
 
-          {isManager && event.status !== "completed" && event.status !== "cancelled" && (
+          {canManage && event.status !== "completed" && event.status !== "cancelled" && (
             <>
               <Separator />
               <div className="space-y-2">
@@ -207,7 +207,7 @@ export function EventDetailsDialog({
         </div>
 
         <DialogFooter className="flex-row justify-between sm:justify-between">
-          {isManager && (
+          {canManage && (
             <Button
               variant="destructive"
               size="sm"

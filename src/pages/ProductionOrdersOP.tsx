@@ -2,7 +2,7 @@ import { useState, useMemo } from "react";
 import { BoardLayout } from "@/components/layouts/BoardLayout";
 import { Button } from "@/components/ui/button";
 import { Loader2, Factory, Plus, LayoutGrid, List } from "lucide-react";
-import { useAuth } from "@/contexts/AuthContext";
+import { useCanManageProduction } from "@/hooks/useActionPermissions";
 import {
   useProductionOrdersOP,
   type ProductionOrder,
@@ -17,8 +17,7 @@ import { ConfirmOPDialog } from "@/components/production-orders/ConfirmOPDialog"
 import { OPKpiCards } from "@/components/production-orders/OPKpiCards";
 
 export default function ProductionOrdersOP() {
-  const { isManager, isAdmin } = useAuth();
-  const canManage = isManager || isAdmin;
+  const canManage = useCanManageProduction();
   const [viewMode, setViewMode] = useState<"list" | "kanban">("list");
 
   const { data: orders = [], isLoading } = useProductionOrdersOP();

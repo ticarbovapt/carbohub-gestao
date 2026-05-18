@@ -11,6 +11,7 @@ import { useRCRequests, useRCQuotations, useRCAnalysis, useRCApprovalLogs, useCr
 import { RC_STATUS_LABELS, RC_FLOW_STEPS, type RCStatus } from "@/types/rcPurchasing";
 import { RCFlowStepper } from "./RCFlowStepper";
 import { useAuth } from "@/contexts/AuthContext";
+import { useCanApproveExpenses } from "@/hooks/useActionPermissions";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
@@ -20,7 +21,8 @@ interface Props {
 }
 
 export function RCDetailsPanel({ rcId, onBack }: Props) {
-  const { isCeo, isAnyGestor, isMasterAdmin, user } = useAuth();
+  const { isMasterAdmin, user } = useAuth();
+  const isApprover = useCanApproveExpenses();
   const { data: rcs } = useRCRequests();
   const rc = rcs?.find(r => r.id === rcId);
   const { data: quotations } = useRCQuotations(rcId);
@@ -45,7 +47,7 @@ export function RCDetailsPanel({ rcId, onBack }: Props) {
   const status = rc.status as RCStatus;
   const quotationsCount = quotations?.length || 0;
   const hasMinQuotations = quotationsCount >= 3;
-  const canApprove = (isCeo || isAnyGestor) && status === 'aguardando_aprovacao';
+  const canApprove = isApprover && status === 'aguardando_aprovacao';
   const needsSecondApproval = rc.valor_estimado > 10000;
   const needsMasterAdmin = rc.valor_estimado > 50000;
 
@@ -148,7 +150,7 @@ export function RCDetailsPanel({ rcId, onBack }: Props) {
             {!hasMinQuotations && <span className="text-destructive ml-2 text-xs">• Mínimo 3 obrigatórias</span>}
             {hasMinQuotations && <span className="text-carbo-green ml-2 text-xs">✓ Mínimo atingido</span>}
           </CarboCardTitle>
-          {(status === 'rascunho' || status === 'em_cotacao') && (isCeo || isAnyGestor) && (
+          {(status === 'rascunho' || status === 'em_cotacao') && isApprover && (
             <Button size="sm" variant="outline" onClick={() => setShowAddQuote(true)} className="gap-1.5">
               <Plus className="h-3.5 w-3.5" />
               Cotação
@@ -276,7 +278,7 @@ export function RCDetailsPanel({ rcId, onBack }: Props) {
             </Button>
           </>
         )}
-        {status === 'aprovada' && (isCeo || isAnyGestor) && (
+        {status === 'aprovada' && isApprover && (
           <Button onClick={handleConvertPC} disabled={convertPC.isPending} className="carbo-gradient text-white gap-2">
             {convertPC.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
             Gerar Pedido de Compra (PC)

@@ -19,7 +19,7 @@ import {
 } from "lucide-react";
 import { useSalesTargetsWithProgress, useUpsertSalesTarget, useDeleteSalesTarget } from "@/hooks/useSalesTargets";
 import { useTeamMembers } from "@/hooks/useTeamMembers";
-import { useAuth } from "@/contexts/AuthContext";
+import { useCanManageSalesTargets } from "@/hooks/useActionPermissions";
 
 const LINHAS_OPTIONS = [
   { value: "", label: "Todas as linhas (geral)" },
@@ -48,8 +48,7 @@ const formatCurrency = (v: number) =>
   new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", notation: "compact" }).format(v);
 
 export default function SalesTargets() {
-  const { isMasterAdmin, isAdmin } = useAuth();
-  const canEdit = isMasterAdmin || isAdmin;
+  const canEdit = useCanManageSalesTargets();
 
   const [currentMonth, setCurrentMonth] = useState(() => startOfMonth(new Date()));
   const monthStr = format(currentMonth, "yyyy-MM-dd");

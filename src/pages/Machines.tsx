@@ -29,7 +29,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useMachines, useMachineStats, useMachineAlerts, MachineStatus, Machine } from "@/hooks/useMachines";
 import { useLicensees } from "@/hooks/useLicensees";
-import { useAuth } from "@/contexts/AuthContext";
+import { useCanManageMachines } from "@/hooks/useActionPermissions";
 // navigate removed — no machine detail page
 import { CreateMachineDialog } from "@/components/machines/CreateMachineDialog";
 import { EditMachineDialog } from "@/components/machines/EditMachineDialog";
@@ -53,7 +53,7 @@ const STATUS_VARIANTS: Record<MachineStatus, "success" | "warning" | "destructiv
 };
 
 export default function Machines() {
-  const { isManager, isAdmin } = useAuth();
+  const canManage = useCanManageMachines();
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<MachineStatus | "all">("all");
   const [licenseeFilter, setLicenseeFilter] = useState<string>("all");
@@ -127,7 +127,7 @@ export default function Machines() {
                 <RefreshCw className="h-4 w-4 mr-1" />
                 Atualizar
               </CarboButton>
-              {isManager && (
+              {canManage && (
                 <>
                   <CarboButton
                     variant="outline"
@@ -271,7 +271,7 @@ export default function Machines() {
               title="Nenhuma máquina encontrada"
               description={searchQuery ? "Tente ajustar os filtros de busca" : "Comece cadastrando sua primeira máquina"}
               action={
-                isManager
+                canManage
                   ? {
                       label: "Nova Máquina",
                       onClick: () => setIsCreateDialogOpen(true),
@@ -279,7 +279,7 @@ export default function Machines() {
                   : undefined
               }
             >
-              {isManager && !searchQuery && (
+              {canManage && !searchQuery && (
                 <CarboButton
                   variant="outline"
                   size="sm"
@@ -295,7 +295,7 @@ export default function Machines() {
         ) : (
           <MachinesTable
             machines={filteredMachines}
-            onEdit={(isAdmin || isManager) ? (machine: Machine) => {
+            onEdit={canManage ? (machine: Machine) => {
               setSelectedMachine(machine);
               setIsEditDialogOpen(true);
             } : undefined}

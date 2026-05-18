@@ -49,7 +49,7 @@ import { DatePickerInput } from "@/components/ui/date-picker-input";
 import { useOrders, useOrderStats, OrderStatus, ORDER_STATUS_LABELS, ORDER_TYPE_LABELS, CarbozeOrder, OrderItem } from "@/hooks/useCarbozeOrders";
 import { useQueryClient, useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { useAuth } from "@/contexts/AuthContext";
+import { useCanManageOrders } from "@/hooks/useActionPermissions";
 import { useNavigate } from "react-router-dom";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -77,7 +77,7 @@ const STATUS_ICONS: Record<OrderStatus, React.ComponentType<{ className?: string
 
 export default function Orders() {
   const navigate = useNavigate();
-  const { isManager, isAdmin, isCeo, isMasterAdmin, isAnyGestor } = useAuth();
+  const canManageOrders = useCanManageOrders();
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<OrderStatus | "all">("all");
   const [typeFilter, setTypeFilter] = useState<"all" | "spot" | "recorrente">("all");
@@ -317,7 +317,7 @@ export default function Orders() {
                 </DropdownMenuContent>
               </DropdownMenu>
 
-              {(isManager || isAdmin || isCeo || isMasterAdmin || isAnyGestor) && (
+              {canManageOrders && (
                 <CarboButton onClick={() => navigate("/meu-painel")}>
                   <Plus className="h-4 w-4 mr-1" />
                   Nova Venda
@@ -549,7 +549,7 @@ export default function Orders() {
               title="Nenhum pedido encontrado"
               description={searchQuery ? "Tente ajustar os filtros de busca" : "Comece criando seu primeiro pedido"}
               action={
-                (isManager || isAdmin || isCeo || isMasterAdmin || isAnyGestor)
+                canManageOrders
                   ? {
                       label: "Nova Venda",
                       onClick: () => navigate("/meu-painel"),
@@ -596,7 +596,7 @@ export default function Orders() {
                     Status <SortIcon col="status" />
                   </button>
                 </CarboTableHead>
-                {(isAdmin || isCeo || isManager || isAnyGestor) && <CarboTableHead className="w-10">Editar</CarboTableHead>}
+                {canManageOrders && <CarboTableHead className="w-10">Editar</CarboTableHead>}
                 <CarboTableHead className="w-10"></CarboTableHead>
               </CarboTableRow>
             </CarboTableHeader>
@@ -680,7 +680,7 @@ export default function Orders() {
                         {ORDER_STATUS_LABELS[order.status]}
                       </CarboBadge>
                     </CarboTableCell>
-                    {(isAdmin || isCeo || isManager || isAnyGestor) && (
+                    {canManageOrders && (
                       <CarboTableCell>
                         <button
                           onClick={(e) => {

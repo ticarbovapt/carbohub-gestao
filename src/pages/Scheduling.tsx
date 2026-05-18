@@ -6,12 +6,12 @@ import { EventsSidebar } from "@/components/scheduling/EventsSidebar";
 import { CreateEventDialog } from "@/components/scheduling/CreateEventDialog";
 import { EventDetailsDialog } from "@/components/scheduling/EventDetailsDialog";
 import { useScheduledEvents, ScheduledEvent } from "@/hooks/useScheduledEvents";
-import { useAuth } from "@/contexts/AuthContext";
+import { useCanManageScheduling } from "@/hooks/useActionPermissions";
 import { CarboSkeleton } from "@/components/ui/CarboSkeleton";
 import { ArrowLeft, Home } from "lucide-react";
 
 export default function Scheduling() {
-  const { isManager } = useAuth();
+  const canManage = useCanManageScheduling();
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [selectedEvent, setSelectedEvent] = useState<ScheduledEvent | null>(null);
@@ -75,7 +75,7 @@ export default function Scheduling() {
               currentMonth={currentMonth}
               onMonthChange={setCurrentMonth}
               onCreateEvent={handleCreateEvent}
-              isManager={isManager}
+              canManage={canManage}
             />
           </div>
 

@@ -7,7 +7,7 @@ import { CarboEmptyState } from "@/components/ui/carbo-empty-state";
 import { CarboSkeleton } from "@/components/ui/CarboSkeleton";
 import { FlaskConical, Plus, RefreshCw, ShieldCheck, ShieldAlert, ShieldX } from "lucide-react";
 import { useLots, InventoryLot } from "@/hooks/useLots";
-import { useAuth } from "@/contexts/AuthContext";
+import { useCanManageLots } from "@/hooks/useActionPermissions";
 import { LotsFilters } from "@/components/lots/LotsFilters";
 import { LotsTable } from "@/components/lots/LotsTable";
 import { CreateLotDialog } from "@/components/lots/CreateLotDialog";
@@ -15,8 +15,7 @@ import { EditLotDialog } from "@/components/lots/EditLotDialog";
 import { DeleteLotDialog } from "@/components/lots/DeleteLotDialog";
 
 export default function Lots() {
-  const { isManager, isAdmin } = useAuth();
-  const canManage = isManager || isAdmin;
+  const canManage = useCanManageLots();
 
   const { data: lots = [], isLoading, refetch } = useLots();
 

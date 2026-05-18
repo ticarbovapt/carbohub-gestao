@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -7,6 +7,9 @@ import {
   useDepartmentFunctions,
   useCreateDepartmentFunction,
   useUpdateFunctionScope,
+  useUpdateFunctionLabel,
+  useDepartmentLabels,
+  useUpdateDepartmentLabel,
 } from "@/hooks/useDepartmentFunctions";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
@@ -15,8 +18,9 @@ import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
-import { ChevronDown, ChevronRight, Save, Loader2, Shield, AlertTriangle, Plus, Eye } from "lucide-react";
+import { ChevronDown, ChevronRight, Save, Loader2, Shield, AlertTriangle, Plus, Eye, Pencil, Check, X } from "lucide-react";
 import { toast } from "sonner";
+import { useCanManageMatrix } from "@/hooks/useFunctionAccess";
 
 type AccessMap = Record<string, Set<string>>;
 
@@ -40,7 +44,7 @@ function ScopeBadge({ scope }: { scope: DataScope }) {
 }
 
 export function FunctionAccessTab() {
-  const { user, isAdmin, isMasterAdmin, isAnyGestor } = useAuth();
+  const { user } = useAuth();
   const qc = useQueryClient();
   const [selectedDept, setSelectedDept] = useState(DEPARTMENTS[0].key);
   const [selectedFunc, setSelectedFunc] = useState<string | null>(null);
@@ -50,11 +54,61 @@ export function FunctionAccessTab() {
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  const canManage = isAdmin || isMasterAdmin || isAnyGestor;
+  const canManage = useCanManageMatrix();
   const createFn = useCreateDepartmentFunction();
   const updateScope = useUpdateFunctionScope();
+  const updateFnLabel = useUpdateFunctionLabel();
+  const updateDeptLabel = useUpdateDepartmentLabel();
+  const { data: deptLabelOverrides = {} } = useDepartmentLabels();
   const [addFnOpen, setAddFnOpen] = useState(false);
   const [newFn, setNewFn] = useState({ label: "", reports_to_key: "", scope: "proprio" as DataScope });
+
+  // Inline edit state
+  const [editingDeptKey, setEditingDeptKey] = useState<string | null>(null);
+  const [editingDeptValue, setEditingDeptValue] = useState("");
+  const [editingFuncKey, setEditingFuncKey] = useState<string | null>(null);
+  const [editingFuncValue, setEditingFuncValue] = useState("");
+  const deptInputRef = useRef<HTMLInputElement>(null);
+  const funcInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => { if (editingDeptKey) deptInputRef.current?.focus(); }, [editingDeptKey]);
+  useEffect(() => { if (editingFuncKey) funcInputRef.current?.focus(); }, [editingFuncKey]);
+
+  function startEditDept(key: string, currentLabel: string, e: React.MouseEvent) {
+    e.stopPropagation();
+    setEditingDeptKey(key);
+    setEditingDeptValue(currentLabel);
+  }
+
+  async function saveDeptLabel(e?: React.MouseEvent) {
+    e?.stopPropagation();
+    if (!editingDeptKey || !editingDeptValue.trim()) { setEditingDeptKey(null); return; }
+    await updateDeptLabel.mutateAsync({ dept_key: editingDeptKey, label: editingDeptValue.trim() });
+    setEditingDeptKey(null);
+  }
+
+  function cancelEditDept(e?: React.MouseEvent) {
+    e?.stopPropagation();
+    setEditingDeptKey(null);
+  }
+
+  function startEditFunc(funcKey: string, currentLabel: string, e: React.MouseEvent) {
+    e.stopPropagation();
+    setEditingFuncKey(funcKey);
+    setEditingFuncValue(currentLabel);
+  }
+
+  async function saveFuncLabel(e?: React.MouseEvent) {
+    e?.stopPropagation();
+    if (!editingFuncKey || !editingFuncValue.trim()) { setEditingFuncKey(null); return; }
+    await updateFnLabel.mutateAsync({ department: selectedDept, function_key: editingFuncKey, label: editingFuncValue.trim() });
+    setEditingFuncKey(null);
+  }
+
+  function cancelEditFunc(e?: React.MouseEvent) {
+    e?.stopPropagation();
+    setEditingFuncKey(null);
+  }
 
   const { data: deptFunctions = [], isLoading: loadingFns } = useDepartmentFunctions(selectedDept);
 
@@ -196,6 +250,7 @@ export function FunctionAccessTab() {
   };
 
   const currentDept = DEPARTMENTS.find(d => d.key === selectedDept);
+  const currentDeptLabel = deptLabelOverrides[selectedDept] ?? currentDept?.label ?? selectedDept;
   const selectedFnData = deptFunctions.find(f => f.function_key === selectedFunc);
 
   return (
@@ -227,21 +282,58 @@ export function FunctionAccessTab() {
           <div className="px-3 py-2.5 border-b bg-muted/40">
             <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Departamento</p>
           </div>
-          {DEPARTMENTS.map(dept => (
-            <button
-              key={dept.key}
-              onClick={() => { setSelectedDept(dept.key); setSelectedFunc(null); setDirty(false); }}
-              className={cn(
-                "w-full text-left px-3 py-2.5 text-sm transition-colors border-b border-border/40 flex items-center justify-between gap-1",
-                selectedDept === dept.key
-                  ? "bg-primary/10 text-primary font-medium"
-                  : "text-muted-foreground hover:text-foreground hover:bg-muted/40"
-              )}
-            >
-              <span>{dept.label}</span>
-              {dept.fullAccess && <Shield className="h-3 w-3 text-carbo-green shrink-0" />}
-            </button>
-          ))}
+          {DEPARTMENTS.map(dept => {
+            const resolvedLabel = deptLabelOverrides[dept.key] ?? dept.label;
+            const isEditingThis = editingDeptKey === dept.key;
+            return (
+              <div
+                key={dept.key}
+                className={cn(
+                  "group relative border-b border-border/40 flex items-center transition-colors",
+                  selectedDept === dept.key
+                    ? "bg-primary/10 text-primary font-medium"
+                    : "text-muted-foreground hover:text-foreground hover:bg-muted/40"
+                )}
+              >
+                {isEditingThis ? (
+                  <div className="flex items-center gap-1 px-2 py-1.5 w-full" onClick={e => e.stopPropagation()}>
+                    <Input
+                      ref={deptInputRef}
+                      value={editingDeptValue}
+                      onChange={e => setEditingDeptValue(e.target.value)}
+                      onKeyDown={e => { if (e.key === "Enter") saveDeptLabel(); if (e.key === "Escape") cancelEditDept(); }}
+                      className="h-6 text-xs px-1.5 py-0"
+                    />
+                    <button onClick={saveDeptLabel} className="text-carbo-green hover:opacity-80 shrink-0">
+                      <Check className="h-3.5 w-3.5" />
+                    </button>
+                    <button onClick={cancelEditDept} className="text-muted-foreground hover:text-foreground shrink-0">
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    <button
+                      className="flex-1 text-left px-3 py-2.5 text-sm flex items-center justify-between gap-1"
+                      onClick={() => { setSelectedDept(dept.key); setSelectedFunc(null); setDirty(false); setEditingFuncKey(null); }}
+                    >
+                      <span>{resolvedLabel}</span>
+                      {dept.fullAccess && <Shield className="h-3 w-3 text-carbo-green shrink-0" />}
+                    </button>
+                    {canManage && (
+                      <button
+                        onClick={(e) => startEditDept(dept.key, resolvedLabel, e)}
+                        className="mr-2 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-foreground shrink-0"
+                        title="Renomear departamento"
+                      >
+                        <Pencil className="h-3 w-3" />
+                      </button>
+                    )}
+                  </>
+                )}
+              </div>
+            );
+          })}
         </div>
 
         {/* Panel 2 — Functions */}
@@ -267,26 +359,60 @@ export function FunctionAccessTab() {
                   const count = (localAccess[key] || new Set()).size;
                   const scope = localScopes[key] || fn.data_scope;
                   const reportsTo = deptFunctions.find(f => f.function_key === fn.reports_to_key);
+                  const isEditingThis = editingFuncKey === fn.function_key;
                   return (
-                    <button
+                    <div
                       key={fn.function_key}
-                      onClick={() => { setSelectedFunc(fn.function_key); setDirty(false); }}
                       className={cn(
-                        "w-full text-left px-3 py-2.5 text-sm transition-colors border-b border-border/40",
+                        "group relative border-b border-border/40 transition-colors",
                         selectedFunc === fn.function_key
                           ? "bg-primary/10 text-primary font-medium"
                           : "text-muted-foreground hover:text-foreground hover:bg-muted/40"
                       )}
                     >
-                      <div className="flex items-center justify-between gap-1 mb-0.5">
-                        <span>{fn.label}</span>
-                        <ScopeBadge scope={scope} />
-                      </div>
-                      <span className="text-[10px] text-muted-foreground block">
-                        {reportsTo ? `↳ ${reportsTo.label}` : "Nível superior"}
-                        {count > 0 && ` · ${count} tela${count !== 1 ? "s" : ""}`}
-                      </span>
-                    </button>
+                      {isEditingThis ? (
+                        <div className="flex items-center gap-1 px-2 py-2" onClick={e => e.stopPropagation()}>
+                          <Input
+                            ref={funcInputRef}
+                            value={editingFuncValue}
+                            onChange={e => setEditingFuncValue(e.target.value)}
+                            onKeyDown={e => { if (e.key === "Enter") saveFuncLabel(); if (e.key === "Escape") cancelEditFunc(); }}
+                            className="h-6 text-xs px-1.5 py-0 flex-1"
+                          />
+                          <button onClick={saveFuncLabel} className="text-carbo-green hover:opacity-80 shrink-0">
+                            <Check className="h-3.5 w-3.5" />
+                          </button>
+                          <button onClick={cancelEditFunc} className="text-muted-foreground hover:text-foreground shrink-0">
+                            <X className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="flex items-start">
+                          <button
+                            className="flex-1 text-left px-3 py-2.5 text-sm"
+                            onClick={() => { setSelectedFunc(fn.function_key); setDirty(false); }}
+                          >
+                            <div className="flex items-center justify-between gap-1 mb-0.5">
+                              <span>{fn.label}</span>
+                              <ScopeBadge scope={scope} />
+                            </div>
+                            <span className="text-[10px] text-muted-foreground block">
+                              {reportsTo ? `↳ ${reportsTo.label}` : "Nível superior"}
+                              {count > 0 && ` · ${count} tela${count !== 1 ? "s" : ""}`}
+                            </span>
+                          </button>
+                          {canManage && (
+                            <button
+                              onClick={(e) => startEditFunc(fn.function_key, fn.label, e)}
+                              className="mt-2.5 mr-2 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-foreground shrink-0"
+                              title="Renomear função"
+                            >
+                              <Pencil className="h-3 w-3" />
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </div>
                   );
                 })}
               </div>
@@ -313,7 +439,7 @@ export function FunctionAccessTab() {
               Telas de acesso
               {selectedFnData && currentDept && (
                 <span className="ml-2 normal-case font-normal text-foreground">
-                  — {currentDept.label} / {selectedFnData.label}
+                  — {currentDeptLabel} / {selectedFnData.label}
                 </span>
               )}
             </p>
@@ -428,7 +554,7 @@ export function FunctionAccessTab() {
       <Dialog open={addFnOpen} onOpenChange={setAddFnOpen}>
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
-            <DialogTitle>Nova Função — {currentDept?.label}</DialogTitle>
+            <DialogTitle>Nova Função — {currentDeptLabel}</DialogTitle>
           </DialogHeader>
           <div className="space-y-3">
             <div>

@@ -26,7 +26,7 @@ interface SchedulingCalendarProps {
   currentMonth: Date;
   onMonthChange: (date: Date) => void;
   onCreateEvent: () => void;
-  isManager: boolean;
+  canManage: boolean;
 }
 
 const EVENT_TYPE_COLORS: Record<string, string> = {
@@ -45,7 +45,7 @@ export function SchedulingCalendar({
   currentMonth,
   onMonthChange,
   onCreateEvent,
-  isManager,
+  canManage,
 }: SchedulingCalendarProps) {
   const monthStart = startOfMonth(currentMonth);
   const monthEnd = endOfMonth(currentMonth);
@@ -86,7 +86,7 @@ export function SchedulingCalendar({
           </Button>
         </div>
 
-        {isManager && (
+        {canManage && (
           <Button onClick={onCreateEvent} size="sm" className="gap-2">
             <Plus className="h-4 w-4" />
             Novo Evento

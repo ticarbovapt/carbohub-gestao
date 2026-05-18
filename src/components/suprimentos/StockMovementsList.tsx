@@ -9,14 +9,14 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useStockMovements, useCreateStockMovement } from "@/hooks/useStockMovements";
-import { useAuth } from "@/contexts/AuthContext";
+import { useCanManageStockMovements } from "@/hooks/useActionPermissions";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
 export function StockMovementsList() {
-  const { isCeo, isAnyGestor } = useAuth();
+  const canManage = useCanManageStockMovements();
   const [tipoFilter, setTipoFilter] = useState("all");
   const [showCreate, setShowCreate] = useState(false);
   const [productId, setProductId] = useState("");
@@ -67,7 +67,7 @@ export function StockMovementsList() {
             <SelectItem value="saida">Saídas</SelectItem>
           </SelectContent>
         </Select>
-        {(isCeo || isAnyGestor) && (
+        {canManage && (
           <Button size="sm" onClick={() => setShowCreate(true)} className="gap-1.5 carbo-gradient text-white">
             <Plus className="h-3.5 w-3.5" />
             Movimento Manual

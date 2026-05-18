@@ -15,7 +15,7 @@ import {
   type PurchaseRequest,
   type PurchaseRequestStatus,
 } from "@/types/purchasing";
-import { useAuth } from "@/contexts/AuthContext";
+import { useCanApprovePurchases } from "@/hooks/useActionPermissions";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import {
@@ -46,14 +46,12 @@ export function PurchaseRequestsList({ showNewForm, onCloseForm }: PurchaseReque
     statusFilter !== "all" ? { status: statusFilter } : undefined
   );
   const approveRC = useApprovePurchaseRequest();
-  const { isCeo, isAnyGestor } = useAuth();
+  const canApprove = useCanApprovePurchases();
 
   const [selectedRC, setSelectedRC] = useState<PurchaseRequest | null>(null);
   const [rejectReason, setRejectReason] = useState("");
   const [showRejectDialog, setShowRejectDialog] = useState(false);
   const [rejectingId, setRejectingId] = useState<string | null>(null);
-
-  const canApprove = isCeo || isAnyGestor;
 
   const formatCurrency = (val: number) =>
     new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(val);

@@ -25,7 +25,7 @@ import {
 } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useLicensees, useLicenseeStats, LicenseeStatus, Licensee } from "@/hooks/useLicensees";
-import { useAuth } from "@/contexts/AuthContext";
+import { useCanManageLicensees, useCanCreateLicensee } from "@/hooks/useActionPermissions";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { LicenseeSubNav } from "@/components/licensees/LicenseeSubNav";
 import { CreateLicenseeDialog } from "@/components/licensees/CreateLicenseeDialog";
@@ -55,7 +55,8 @@ export default function Licensees() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const queryClient = useQueryClient();
-  const { isManager, isAdmin } = useAuth();
+  const canEdit = useCanManageLicensees();
+  const canCreate = useCanCreateLicensee();
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<LicenseeStatus | "all">("all");
   const [stateFilter, setStateFilter] = useState<string>(searchParams.get("state") || "all");
@@ -213,7 +214,7 @@ export default function Licensees() {
                 <RefreshCw className="h-4 w-4 mr-1" />
                 Atualizar
               </CarboButton>
-              {isManager && (
+              {canCreate && (
                 <CarboButton onClick={() => setIsCreateDialogOpen(true)}>
                   <Plus className="h-4 w-4 mr-1" />
                   Novo Licenciado
@@ -301,7 +302,7 @@ export default function Licensees() {
               title="Nenhum licenciado encontrado"
               description={searchQuery ? "Tente ajustar os filtros de busca" : "Comece cadastrando seu primeiro licenciado"}
               action={
-                isManager
+                canCreate
                   ? {
                       label: "Novo Licenciado",
                       onClick: () => setIsCreateDialogOpen(true),
@@ -314,7 +315,7 @@ export default function Licensees() {
           <LicenseesTable 
             licensees={filteredLicensees} 
             navigate={navigate}
-            onEdit={isAdmin ? (licensee: Licensee) => {
+            onEdit={canEdit ? (licensee: Licensee) => {
               setSelectedLicensee(licensee);
               setIsEditDialogOpen(true);
             } : undefined}
