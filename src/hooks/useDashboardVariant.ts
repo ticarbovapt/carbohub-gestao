@@ -32,8 +32,8 @@ export function useDashboardVariant(): DashboardVariant {
 
   if (ENFORCEMENT_ACTIVE) {
     if (isMasterAdmin) return "ceo";
-    const dept   = (profile as any)?.department as string | null;
-    const funcao = (profile as any)?.funcao   as string | null;
+    const dept   = profile?.department ?? null;
+    const funcao = profile?.funcao     ?? null;
 
     if (funcao === "ceo" || funcao === "head" || funcao === "assistente_executiva") return "ceo";
     if (funcao === "gerente" || funcao === "coordenador") {

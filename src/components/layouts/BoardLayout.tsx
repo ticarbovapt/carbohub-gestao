@@ -68,7 +68,7 @@ import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Separator } from "@/components/ui/separator";
 import logoCarbo from "@/assets/logo-carbo.png";
 
-function QuickActionsMenu({ isAdmin, isCeo }: { isAdmin: boolean; isCeo: boolean }) {
+function QuickActionsMenu() {
   const [open, setOpen] = useState(false);
   const navigate = useNavigate();
 
@@ -361,7 +361,7 @@ function Breadcrumb({ area }: { area: string }) {
 export function BoardLayout({ children }: BoardLayoutProps) {
   const location = useLocation();
   const navigate = useNavigate();
-  const { isAdmin, profile, signOut, passwordMustChange, isCeo, isAnyGestor, carboRoles, isMasterAdmin, isSuporte } = useAuth();
+  const { profile, signOut, passwordMustChange, isAnyGestor, carboRoles, isMasterAdmin, isSuporte } = useAuth();
   const canSeeAdminMenu = useCanSeeAdminMenu();
   const canSeeFinanceMenu = useCanSeeFinanceMenu();
   const roleLabel = useRoleDisplayLabel();
@@ -813,7 +813,7 @@ export function BoardLayout({ children }: BoardLayoutProps) {
                   <span className="hidden sm:inline text-xs font-medium">Perfil incompleto</span>
                 </Button>
               )}
-              <QuickActionsMenu isAdmin={isAdmin} isCeo={isCeo} />
+              <QuickActionsMenu />
               <NotificationBell />
               <BugReportButton />
               <ThemeToggle />

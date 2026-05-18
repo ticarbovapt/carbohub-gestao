@@ -30,8 +30,7 @@ export function ProtectedRoute({
 }: ProtectedRouteProps) {
   const {
     user, isLoading, roles, isAdmin, isManager, passwordMustChange,
-    isCeo, isGestorAdm, isGestorFin, isGestorCompras,
-    isOperadorFiscal, isOperador, isAnyGestor, carboRoles
+    isCeo, isAnyGestor, carboRoles,
   } = useAuth();
   // screenId guard: when ENFORCEMENT_ACTIVE = true and screenId is set, this controls access
   const canSeeByFunction = useCanSeeScreen(screenId ?? "");

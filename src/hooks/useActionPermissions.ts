@@ -320,7 +320,7 @@ export function useRoleDisplayLabel(): string {
   if (ENFORCEMENT_ACTIVE) {
     if (isMasterAdmin) return "Master Admin";
     if (isSuporte)     return "Suporte & TI";
-    const funcao = (profile as any)?.funcao as string | null;
+    const funcao = profile?.funcao ?? null;
     switch (funcao) {
       case "ceo":                  return "CEO";
       case "head":                 return "Head";

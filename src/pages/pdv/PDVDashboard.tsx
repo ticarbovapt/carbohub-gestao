@@ -314,6 +314,7 @@ function PDVDashboardManager() {
   const navigate = useNavigate();
   const { data: pdvStatus, isLoading: statusLoading } = usePDVStatus();
   const isMasterAdmin = useCanManagePDVAdmin();
+  const requestReplenishment = useRequestReplenishment();
   const [linkDialogOpen, setLinkDialogOpen] = useState(false);
 
   const pdvId = pdvStatus?.pdv?.id;
@@ -342,7 +343,7 @@ function PDVDashboardManager() {
           <Package className="h-16 w-16 mx-auto text-muted-foreground/40 mb-4" />
           <h2 className="text-xl font-semibold mb-2">PDV não encontrado</h2>
           <p className="text-muted-foreground mb-6">Seu usuário não está vinculado a nenhum PDV.</p>
-          {(isAdmin || isMasterAdmin) && (
+          {isMasterAdmin && (
             <>
               <Button onClick={() => setLinkDialogOpen(true)}>
                 <LinkIcon className="h-4 w-4 mr-2" /> Vincular PDV
