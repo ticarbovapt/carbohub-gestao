@@ -106,7 +106,6 @@ export function StockOverview() {
   const { data: movements30d } = useProductMovements30d(productIds);
 
   const filtered = (products || []).filter(p => {
-    if (p.category === "Produto Final") return false;
     if (!search) return true;
     const s = search.toLowerCase();
     return p.name.toLowerCase().includes(s) || p.product_code.toLowerCase().includes(s);
@@ -538,7 +537,7 @@ export function StockOverview() {
                   <SelectValue placeholder="Selecione o produto" />
                 </SelectTrigger>
                 <SelectContent>
-                  {(products || []).filter(p => p.category !== "Produto Final").map(p => (
+                  {(products || []).map(p => (
                     <SelectItem key={p.id} value={p.id}>
                       {p.name} <span className="text-muted-foreground text-xs ml-1">({p.product_code})</span>
                     </SelectItem>
