@@ -36,6 +36,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
+import { useCanEditTeamMembers, useCanAddTeamMember } from "@/hooks/useActionPermissions";
 import { useResendWelcomeEmail } from "@/hooks/useCreateTeamMember";
 import { ALL_DEPARTMENTS, DEPARTMENT_LABELS } from "@/constants/departments";
 import { useDepartmentFunctions } from "@/hooks/useDepartmentFunctions";
@@ -539,7 +540,7 @@ const Team = () => {
   const { data: members, isLoading: membersLoading, refetch } = useTeamMembers();
   const { data: profiles = [] } = useOrgChartFlat();
   const resendEmail = useResendWelcomeEmail();
-  const { isAdmin, isManager, isMasterAdmin, isCeo, isAnyGestor, user } = useAuth();
+  const { user } = useAuth();
   const navigate = useNavigate();
 
   const [selectedMember, setSelectedMember] = useState<OrgNode | null>(null);
@@ -555,8 +556,8 @@ const Team = () => {
   ).size;
   const pendingAccessCount = approvedMembers.filter((m) => m.password_must_change).length;
 
-  const canEdit = isAdmin || isCeo || isMasterAdmin;
-  const canAddMember = isAdmin;
+  const canEdit = useCanEditTeamMembers();
+  const canAddMember = useCanAddTeamMember();
 
   const handleBulkResendAll = async () => {
     const pending = approvedMembers.filter((m) => m.password_must_change && m.username);

@@ -3,7 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { ArrowLeft, Package, Clock, Truck, CheckCircle, XCircle, RefreshCw, Calendar, User, MapPin, FileText, DollarSign, Repeat, Briefcase, Factory, Wrench, ExternalLink, Pencil, Printer } from "lucide-react";
-import { useAuth } from "@/contexts/AuthContext";
+import { useCanManageOrders } from "@/hooks/useActionPermissions";
 import { EditOrderDialog } from "@/components/orders/EditOrderDialog";
 import { BoardLayout } from "@/components/layouts/BoardLayout";
 import { CarboButton } from "@/components/ui/carbo-button";
@@ -46,8 +46,7 @@ function parseItems(items: Json): OrderItem[] {
 export default function OrderDetails() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { isAdmin, isCeo, isManager, isAnyGestor } = useAuth();
-  const canEdit = isAdmin || isCeo || isManager || isAnyGestor;
+  const canEdit = useCanManageOrders();
   const [isEditOpen, setIsEditOpen] = useState(false);
   const { data: order, isLoading: orderLoading } = useOrder(id);
   const { data: history, isLoading: historyLoading } = useOrderHistory(id);

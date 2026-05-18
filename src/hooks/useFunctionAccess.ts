@@ -36,7 +36,8 @@ export interface FunctionAccess {
 }
 
 // Flip to true when enforcement is ready to activate.
-const ENFORCEMENT_ACTIVE = false; // eslint-disable-line @typescript-eslint/no-unused-vars
+// Exported so all permission hooks share a single source of truth.
+export const ENFORCEMENT_ACTIVE = false;
 
 export function useFunctionAccess(): FunctionAccess {
   const { profile, isMasterAdmin, isSuporte } = useAuth();
