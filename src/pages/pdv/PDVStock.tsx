@@ -16,7 +16,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { usePDVStatus, usePDVData, useRequestReplenishment } from "@/hooks/usePDV";
-import { useAuth } from "@/contexts/AuthContext";
+import { useCanManagePDVAdmin } from "@/hooks/useActionPermissions";
 import { LinkPDVDialog } from "@/components/pdv/LinkPDVDialog";
 import { CarboSkeleton } from "@/components/ui/CarboSkeleton";
 import { toast } from "sonner";
@@ -25,7 +25,7 @@ import { ptBR } from "date-fns/locale";
 
 export default function PDVStock() {
   const { data: pdvStatus, isLoading: statusLoading } = usePDVStatus();
-  const { isAdmin, isCeo } = useAuth();
+  const isAdmin = useCanManagePDVAdmin();
   const [linkDialogOpen, setLinkDialogOpen] = useState(false);
   const pdvId = pdvStatus?.pdv?.id;
   const { data: pdv, isLoading: pdvLoading } = usePDVData(pdvId);
@@ -54,7 +54,7 @@ export default function PDVStock() {
           <p className="text-muted-foreground mb-6">
             Seu usuário não está vinculado a nenhum PDV.
           </p>
-          {(isAdmin || isCeo) && (
+          {isAdmin && (
             <>
               <Button onClick={() => setLinkDialogOpen(true)} variant="default">
                 <LinkIcon className="h-4 w-4 mr-2" />

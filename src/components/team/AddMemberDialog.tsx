@@ -27,6 +27,7 @@ import { useDepartmentFunctions } from "@/hooks/useDepartmentFunctions";
 import { cn } from "@/lib/utils";
 import type { Database } from "@/integrations/supabase/types";
 import { SQUAD_DEPARTMENTS } from "@/constants/departments";
+import { LEGACY_ACCESS_ACTIVE } from "@/hooks/useFunctionAccess";
 
 type DepartmentType = Database["public"]["Enums"]["department_type"];
 type AppRole = Database["public"]["Enums"]["app_role"];
@@ -128,7 +129,7 @@ export function AddMemberDialog({ onMemberAdded, variant = "default" }: AddMembe
   const canProceed =
     form.fullName.trim().length > 0 &&
     form.department !== "" &&
-    form.allowedInterfaces.length > 0;
+    (LEGACY_ACCESS_ACTIVE ? form.allowedInterfaces.length > 0 : true);
 
   const handleConfirm = async () => {
     try {
@@ -291,52 +292,63 @@ export function AddMemberDialog({ onMemberAdded, variant = "default" }: AddMembe
                 <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1.5">
                   <Shield className="h-3.5 w-3.5" /> Acesso
                 </p>
-                <div className="space-y-2">
-                  <Label>Nível de Acesso</Label>
-                  <Select value={form.role} onValueChange={(v) => setField("role", v as AppRole)}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent className="z-[10000]">
-                      {ROLES.map((r) => (
-                        <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
 
-                <div className="space-y-1.5">
-                  <Label className="text-sm">Funções no Carbo Controle</Label>
-                  <div className="grid grid-cols-1 gap-1.5 border rounded-xl p-3 bg-muted/30">
-                    {CARBO_ROLE_OPTIONS.map((opt) => (
-                      <div key={opt.value} className="flex items-center gap-2.5">
-                        <Checkbox
-                          id={`cr-${opt.value}`}
-                          checked={form.carboRoles.includes(opt.value)}
-                          onCheckedChange={() => toggleCarboRole(opt.value)}
-                        />
-                        <Label htmlFor={`cr-${opt.value}`} className="font-normal cursor-pointer text-sm leading-none">
-                          <span className="font-medium">{opt.label}</span>
-                          <span className="text-muted-foreground ml-1.5 text-xs">— {opt.hint}</span>
-                        </Label>
-                      </div>
-                    ))}
-                  </div>
-                </div>
+                {LEGACY_ACCESS_ACTIVE ? (
+                  <>
+                    <div className="space-y-2">
+                      <Label>Nível de Acesso</Label>
+                      <Select value={form.role} onValueChange={(v) => setField("role", v as AppRole)}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent className="z-[10000]">
+                          {ROLES.map((r) => (
+                            <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
 
-                <div className="space-y-1.5">
-                  <Label className="text-sm">Interfaces Liberadas *</Label>
-                  <div className="grid grid-cols-1 gap-1.5 border rounded-xl p-3 bg-muted/30">
-                    {HUB_OPTIONS.map((hub) => (
-                      <div key={hub.value} className="flex items-center gap-2.5">
-                        <Checkbox
-                          id={`hub-${hub.value}`}
-                          checked={form.allowedInterfaces.includes(hub.value)}
-                          onCheckedChange={() => toggleInterface(hub.value)}
-                        />
-                        <Label htmlFor={`hub-${hub.value}`} className="font-normal cursor-pointer text-sm">{hub.label}</Label>
+                    <div className="space-y-1.5">
+                      <Label className="text-sm">Funções no Carbo Controle</Label>
+                      <div className="grid grid-cols-1 gap-1.5 border rounded-xl p-3 bg-muted/30">
+                        {CARBO_ROLE_OPTIONS.map((opt) => (
+                          <div key={opt.value} className="flex items-center gap-2.5">
+                            <Checkbox
+                              id={`cr-${opt.value}`}
+                              checked={form.carboRoles.includes(opt.value)}
+                              onCheckedChange={() => toggleCarboRole(opt.value)}
+                            />
+                            <Label htmlFor={`cr-${opt.value}`} className="font-normal cursor-pointer text-sm leading-none">
+                              <span className="font-medium">{opt.label}</span>
+                              <span className="text-muted-foreground ml-1.5 text-xs">— {opt.hint}</span>
+                            </Label>
+                          </div>
+                        ))}
                       </div>
-                    ))}
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <Label className="text-sm">Interfaces Liberadas *</Label>
+                      <div className="grid grid-cols-1 gap-1.5 border rounded-xl p-3 bg-muted/30">
+                        {HUB_OPTIONS.map((hub) => (
+                          <div key={hub.value} className="flex items-center gap-2.5">
+                            <Checkbox
+                              id={`hub-${hub.value}`}
+                              checked={form.allowedInterfaces.includes(hub.value)}
+                              onCheckedChange={() => toggleInterface(hub.value)}
+                            />
+                            <Label htmlFor={`hub-${hub.value}`} className="font-normal cursor-pointer text-sm">{hub.label}</Label>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <div className="rounded-lg border border-border/60 bg-muted/20 px-3 py-3 text-xs text-muted-foreground">
+                    <p className="font-medium text-foreground mb-1">Acesso configurado automaticamente</p>
+                    <p>Após ativação da nova matriz de acesso, as telas e permissões são definidas pela <strong>Função + Departamento</strong> — sem necessidade de configurar manualmente nível, carbo_roles ou interfaces.</p>
+                    <p className="mt-1.5">Ajustes individuais podem ser feitos em <strong>Configurar Acesso</strong> após a criação.</p>
                   </div>
-                </div>
+                )}
               </div>
 
               <div className="flex justify-end gap-2 pt-2 border-t">

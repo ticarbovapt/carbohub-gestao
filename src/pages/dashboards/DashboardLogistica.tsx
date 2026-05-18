@@ -10,10 +10,10 @@ import { useShipments, useUpdateShipmentStatus } from "@/hooks/useShipments";
 import { Shipment, ShipmentStatus } from "@/types/shipment";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Loader2 } from "lucide-react";
-import { useAuth } from "@/contexts/AuthContext";
+import { useCanViewLogisticsDashboard } from "@/hooks/useActionPermissions";
 
 export default function DashboardLogistica() {
-  const { isCeo, isAnyGestor } = useAuth();
+  const canViewStrategic = useCanViewLogisticsDashboard();
   const { data: shipments = [], isLoading } = useShipments();
   const updateStatus = useUpdateShipmentStatus();
   const [selectedShipment, setSelectedShipment] = useState<Shipment | null>(null);
@@ -40,7 +40,7 @@ export default function DashboardLogistica() {
             <TabsList>
               <TabsTrigger value="kpis">KPIs</TabsTrigger>
               <TabsTrigger value="operacional">Operacional</TabsTrigger>
-              {(isCeo || isAnyGestor) && (
+              {(canViewStrategic) && (
                 <TabsTrigger value="estrategico">Estratégico</TabsTrigger>
               )}
             </TabsList>
@@ -57,7 +57,7 @@ export default function DashboardLogistica() {
               />
             </TabsContent>
 
-            {(isCeo || isAnyGestor) && (
+            {(canViewStrategic) && (
               <TabsContent value="estrategico" className="space-y-4 mt-4">
                 <LogisticsStrategic shipments={shipments} />
               </TabsContent>

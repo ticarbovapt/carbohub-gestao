@@ -36,12 +36,14 @@ import { toast } from "sonner";
 import { formatDistanceToNow, format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { useOsFlowValidation, useValidateStage, useLogFlowBlock, FlowValidationResult } from "@/hooks/useOsFlowValidation";
+import { useCanManageOSActions } from "@/hooks/useActionPermissions";
 
 export default function OSDetails() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const { user, isManager, profile } = useAuth();
+  const { user, profile } = useAuth();
+  const isManager = useCanManageOSActions();
 
   const [isAdvanceDialogOpen, setIsAdvanceDialogOpen] = useState(false);
   const [advanceNotes, setAdvanceNotes] = useState("");

@@ -4,6 +4,7 @@ import { CarboRolesManager } from "@/components/admin/CarboRolesManager";
 import { StageAccessManager } from "@/components/admin/StageAccessManager";
 import { Shield, Lock, Users, Settings, KeyRound, UserPlus, Building2, Store, ClipboardCheck } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
+import { useCanAccessGovernance } from "@/hooks/useActionPermissions";
 import { Navigate, useNavigate } from "react-router-dom";
 import { CarboButton } from "@/components/ui/carbo-button";
 import { CarboCard } from "@/components/ui/carbo-card";
@@ -60,12 +61,10 @@ function GovernanceActionButton({
 }
 
 const CarboGovernance = () => {
-  const { isCeo, isMasterAdmin, canAccessGovernance } = useAuth();
+  const { isMasterAdmin } = useAuth();
+  const canAccess = useCanAccessGovernance();
 
-  // MasterAdmin gets full access, CEO gets read-only governance
-  if (!isCeo && !canAccessGovernance) {
-    return <Navigate to="/dashboard" replace />;
-  }
+  if (!canAccess) return <Navigate to="/dashboard" replace />;
 
   return (
     <BoardLayout>

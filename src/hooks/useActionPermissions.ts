@@ -221,3 +221,124 @@ export function useCanSeeFinanceMenu(): boolean {
   if (ENFORCEMENT_ACTIVE) return can;
   return isMasterAdmin || isGestorFin;
 }
+
+// ── Financeiro ────────────────────────────────────────────────────────────────
+
+/** View financial dashboard KPIs and charts. */
+export function useCanViewFinanceiroDashboard(): boolean {
+  const can = useCanSeeScreen("financeiro");
+  const { isCeo, isAnyGestor } = useAuth();
+  if (ENFORCEMENT_ACTIVE) return can;
+  return isCeo || isAnyGestor;
+}
+
+// ── Logistics ─────────────────────────────────────────────────────────────────
+
+/** Manage logistics, carriers, and delivery actions. */
+export function useCanManageLogistics(): boolean {
+  const can = useCanSeeScreen("logistics");
+  const { isCeo, isAnyGestor } = useAuth();
+  if (ENFORCEMENT_ACTIVE) return can;
+  return isCeo || isAnyGestor;
+}
+
+/** View logistics KPI dashboard. */
+export function useCanViewLogisticsDashboard(): boolean {
+  const can = useCanSeeScreen("dashboard-logistica");
+  const { isCeo, isAnyGestor } = useAuth();
+  if (ENFORCEMENT_ACTIVE) return can;
+  return isCeo || isAnyGestor;
+}
+
+// ── Dashboards ────────────────────────────────────────────────────────────────
+
+/** View strategic dashboard (CEO / gestor view). */
+export function useCanViewStrategicDashboard(): boolean {
+  const can = useCanSeeScreen("dashboard-estrategico");
+  const { isCeo, isAnyGestor, isAdmin } = useAuth();
+  if (ENFORCEMENT_ACTIVE) return can;
+  return isCeo || isAnyGestor || isAdmin;
+}
+
+// ── Licensee portal (internal staff access) ───────────────────────────────────
+
+/** Access the licensee portal management view as internal staff. */
+export function useCanViewLicenseeArea(): boolean {
+  const can = useCanSeeScreen("licensees");
+  const { isAdmin, isCeo, isMasterAdmin } = useAuth();
+  if (ENFORCEMENT_ACTIVE) return can;
+  return isAdmin || isCeo || isMasterAdmin;
+}
+
+// ── PDV admin ─────────────────────────────────────────────────────────────────
+
+/** Access PDV management as internal admin. */
+export function useCanManagePDVAdmin(): boolean {
+  const can = useCanSeeScreen("pdv-dashboard");
+  const { isAdmin, isCeo, isMasterAdmin } = useAuth();
+  if (ENFORCEMENT_ACTIVE) return can;
+  return isAdmin || isCeo || isMasterAdmin;
+}
+
+// ── OS management ─────────────────────────────────────────────────────────────
+
+/** Perform management actions on OS (advance stage, assign, etc.). */
+export function useCanManageOSActions(): boolean {
+  const can = useCanSeeScreen("os");
+  const { isManager, isAdmin } = useAuth();
+  if (ENFORCEMENT_ACTIVE) return can;
+  return isManager || isAdmin;
+}
+
+// ── Governance ────────────────────────────────────────────────────────────────
+
+/** Access the governance page. */
+export function useCanAccessGovernance(): boolean {
+  const can = useCanSeeScreen("governance");
+  const { isCeo, isMasterAdmin, isAdmin } = useAuth();
+  if (ENFORCEMENT_ACTIVE) return can;
+  return isCeo || isMasterAdmin || isAdmin;
+}
+
+// ── Portals / Area Switcher ───────────────────────────────────────────────────
+
+/** Access all portals (licensee + PDV) as internal staff override.
+ *  When enforcement is active, portal access is managed via function_screen_access. */
+export function useCanAccessAllPortals(): boolean {
+  const { isAdmin, isCeo, isMasterAdmin } = useAuth();
+  if (ENFORCEMENT_ACTIVE) return isMasterAdmin;
+  return isAdmin || isCeo || isMasterAdmin;
+}
+
+// ── Role display label ────────────────────────────────────────────────────────
+
+/** Human-readable label for the current user's role/function, shown in the sidebar.
+ *  When enforcement is active, derived from funcao + department. */
+export function useRoleDisplayLabel(): string {
+  const { isMasterAdmin, isCeo, isSuporte, isAnyGestor, isAdmin, profile } = useAuth();
+
+  if (ENFORCEMENT_ACTIVE) {
+    if (isMasterAdmin) return "Master Admin";
+    if (isSuporte)     return "Suporte & TI";
+    const funcao = (profile as any)?.funcao as string | null;
+    switch (funcao) {
+      case "ceo":                  return "CEO";
+      case "head":                 return "Head";
+      case "gerente":              return "Gerente";
+      case "coordenador":          return "Coordenador(a)";
+      case "supervisor":           return "Supervisor(a)";
+      case "analista":             return "Analista";
+      case "assistente_executiva": return "Assistente Executiva";
+      case "vendedor_b2b":         return "Vendedor B2B";
+      case "vendedor_b2c":         return "Vendedor B2C";
+      default:                     return funcao || "Membro da Equipe";
+    }
+  }
+
+  if (isMasterAdmin) return "Master Admin";
+  if (isCeo)         return "CEO";
+  if (isSuporte)     return "Suporte & TI";
+  if (isAnyGestor)   return "Gestor";
+  if (isAdmin)       return "Admin";
+  return "Operador";
+}

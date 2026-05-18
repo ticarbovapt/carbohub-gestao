@@ -44,7 +44,7 @@ import {
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
-import { useCanSeeAdminMenu, useCanSeeFinanceMenu } from "@/hooks/useActionPermissions";
+import { useCanSeeAdminMenu, useCanSeeFinanceMenu, useRoleDisplayLabel } from "@/hooks/useActionPermissions";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { ThemeToggle } from "@/components/ui/ThemeToggle";
 import { NotificationBell } from "@/components/notifications";
@@ -364,6 +364,7 @@ export function BoardLayout({ children }: BoardLayoutProps) {
   const { isAdmin, profile, signOut, passwordMustChange, isCeo, isAnyGestor, carboRoles, isMasterAdmin, isSuporte } = useAuth();
   const canSeeAdminMenu = useCanSeeAdminMenu();
   const canSeeFinanceMenu = useCanSeeFinanceMenu();
+  const roleLabel = useRoleDisplayLabel();
   const isMobile = useIsMobile();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
@@ -456,7 +457,6 @@ export function BoardLayout({ children }: BoardLayoutProps) {
     return true;
   });
 
-  const roleLabel = isMasterAdmin ? "Master Admin" : isCeo ? "CEO" : isSuporte ? "Suporte & TI" : isAnyGestor ? "Gestor" : isAdmin ? "Admin" : "Operador";
   const areaLabel = activeTab === "controle" ? "Controle" : activeTab === "dashboards" ? "Dashboards" : "Operações";
 
   const SidebarContent = () => (
@@ -838,7 +838,7 @@ export function BoardLayout({ children }: BoardLayoutProps) {
                     <div>
                       <p className="font-medium truncate">{profile?.full_name || "Usuário"}</p>
                       <p className="text-xs text-muted-foreground font-normal">
-                        {isMasterAdmin ? "Master Admin" : isCeo ? "Admin Estratégico (CEO)" : isAnyGestor ? "Gestor" : isAdmin ? "Administrador" : "Membro da Equipe"}
+                        {roleLabel}
                       </p>
                     </div>
                   </DropdownMenuLabel>

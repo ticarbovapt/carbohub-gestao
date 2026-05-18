@@ -1,34 +1,40 @@
 import React from "react";
 import { Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
+import { useCanSeeScreen, ENFORCEMENT_ACTIVE } from "@/hooks/useFunctionAccess";
 import { Loader2 } from "lucide-react";
 import { LoadingTip } from "@/components/ui/LoadingTip";
 import type { CarboRole } from "@/types/carboRoles";
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
-  // Roles legados (mantidos para compatibilidade)
+  // Roles legados (mantidos para compatibilidade com ENFORCEMENT_ACTIVE = false)
   requiredRole?: "admin" | "manager" | "operator" | "viewer";
-  // Novos roles Carbo
+  // Novos roles Carbo (legado)
   requiredCarboRole?: CarboRole | CarboRole[];
-  // Requer qualquer gestor
+  // Requer qualquer gestor (legado)
   requiresGestor?: boolean;
-  // Requer CEO
+  // Requer CEO (legado)
   requiresCeo?: boolean;
+  // Novo: screen ID para check via function_screen_access (enforcement path)
+  screenId?: string;
 }
 
-export function ProtectedRoute({ 
-  children, 
+export function ProtectedRoute({
+  children,
   requiredRole,
   requiredCarboRole,
   requiresGestor,
-  requiresCeo
+  requiresCeo,
+  screenId,
 }: ProtectedRouteProps) {
-  const { 
+  const {
     user, isLoading, roles, isAdmin, isManager, passwordMustChange,
-    isCeo, isGestorAdm, isGestorFin, isGestorCompras, 
+    isCeo, isGestorAdm, isGestorFin, isGestorCompras,
     isOperadorFiscal, isOperador, isAnyGestor, carboRoles
   } = useAuth();
+  // screenId guard: when ENFORCEMENT_ACTIVE = true and screenId is set, this controls access
+  const canSeeByFunction = useCanSeeScreen(screenId ?? "");
   const location = useLocation();
 
   if (isLoading) {
@@ -53,7 +59,12 @@ export function ProtectedRoute({
     return <Navigate to="/change-password" replace />;
   }
 
-  // Verificar roles Carbo primeiro (se configurados)
+  // Function-based check (enforcement path): when active + screenId provided, this is authoritative
+  if (ENFORCEMENT_ACTIVE && screenId && !canSeeByFunction) {
+    return <Navigate to="/dashboard" replace />;
+  }
+
+  // Legacy role checks (active when ENFORCEMENT_ACTIVE = false)
   if (requiresCeo && !isCeo) {
     return <Navigate to="/dashboard" replace />;
   }

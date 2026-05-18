@@ -14,6 +14,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CarboSkeleton } from "@/components/ui/CarboSkeleton";
 import { usePDVStatus } from "@/hooks/usePDV";
 import { useAuth } from "@/contexts/AuthContext";
+import { useCanManagePDVAdmin } from "@/hooks/useActionPermissions";
 import { toast } from "sonner";
 import {
   usePDVProductStock,
@@ -321,7 +322,7 @@ function PDVEstoqueManager() {
 // ── ADMIN VIEW ───────────────────────────────────────────────────────────────
 function PDVEstoqueAdmin() {
   const navigate = useNavigate();
-  const { isAdmin, isCeo, carboRoles } = useAuth();
+  const { carboRoles } = useAuth();
   const { data: pdvStatus } = usePDVStatus();
   const { data: allStock = [], isLoading } = useAdminAllProductStock();
   const adjustStock = useAdjustPDVStock();
@@ -338,7 +339,7 @@ function PDVEstoqueAdmin() {
   });
 
   // Permission: who can edit stock
-  const isMasterAdmin = isAdmin && isCeo;
+  const isMasterAdmin = useCanManagePDVAdmin();
   const isExpansion = carboRoles.some(r => r.role === "expansion");
   const myPDVId = pdvStatus?.pdv?.id;
   function canEdit(pdvId: string): boolean {
@@ -581,8 +582,7 @@ function PDVEstoqueAdmin() {
 
 // ── ROOT EXPORT ──────────────────────────────────────────────────────────────
 export default function PDVEstoque() {
-  const { isAdmin, isCeo } = useAuth();
-  const isAdminView = isAdmin || isCeo;
+  const isAdminView = useCanManagePDVAdmin();
   if (isAdminView) return <PDVEstoqueAdmin />;
   return <PDVEstoqueManager />;
 }

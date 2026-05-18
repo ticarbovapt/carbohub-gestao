@@ -43,6 +43,10 @@ export interface FunctionAccess {
 // Exported so all permission hooks share a single source of truth.
 export const ENFORCEMENT_ACTIVE = false;
 
+// Convenience inverse: true while the OLD role-based system is still authoritative.
+// Wrap legacy UI sections in {LEGACY_ACCESS_ACTIVE && ...} — they disappear on migration flip.
+export const LEGACY_ACCESS_ACTIVE = !ENFORCEMENT_ACTIVE;
+
 export function useFunctionAccess(): FunctionAccess {
   const { profile, isMasterAdmin, isSuporte } = useAuth();
 

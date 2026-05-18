@@ -18,6 +18,7 @@ import {
   type RoleKey, type Access, type FeatureRow,
 } from "@/lib/role-matrix-constants";
 import { FunctionAccessTab } from "@/components/role-matrix/FunctionAccessTab";
+import { LEGACY_ACCESS_ACTIVE } from "@/hooks/useFunctionAccess";
 
 
 function getAccessIcon(access: Access, size = "h-4 w-4") {
@@ -196,7 +197,7 @@ function AccessCell({
 export default function RoleMatrix() {
   const { isMasterAdmin, user } = useAuth();
   const queryClient = useQueryClient();
-  const [tab, setTab] = useState<"cargos" | "colaboradores" | "funcao">("cargos");
+  const [tab, setTab] = useState<"cargos" | "colaboradores" | "funcao">(LEGACY_ACCESS_ACTIVE ? "cargos" : "funcao");
 
   // ── Matrix config (overrides persistidos) ────────────────────────────────
   const { data: configData } = useQuery({
@@ -371,30 +372,34 @@ export default function RoleMatrix() {
         {/* Tab toggle + Editar Matriz (global) */}
         <div className="flex items-center justify-between gap-4">
           <div className="flex items-center gap-1 bg-muted/50 rounded-lg p-1 w-fit">
-            <button
-              onClick={() => setTab("cargos")}
-              className={cn(
-                "flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all",
-                tab === "cargos"
-                  ? "bg-background shadow text-foreground"
-                  : "text-muted-foreground hover:text-foreground"
-              )}
-            >
-              <LayoutGrid className="h-4 w-4" />
-              Por Cargo
-            </button>
-            <button
-              onClick={() => setTab("colaboradores")}
-              className={cn(
-                "flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all",
-                tab === "colaboradores"
-                  ? "bg-background shadow text-foreground"
-                  : "text-muted-foreground hover:text-foreground"
-              )}
-            >
-              <Users className="h-4 w-4" />
-              Por Colaborador
-            </button>
+            {LEGACY_ACCESS_ACTIVE && (
+              <>
+                <button
+                  onClick={() => setTab("cargos")}
+                  className={cn(
+                    "flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all",
+                    tab === "cargos"
+                      ? "bg-background shadow text-foreground"
+                      : "text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  <LayoutGrid className="h-4 w-4" />
+                  Por Cargo
+                </button>
+                <button
+                  onClick={() => setTab("colaboradores")}
+                  className={cn(
+                    "flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all",
+                    tab === "colaboradores"
+                      ? "bg-background shadow text-foreground"
+                      : "text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  <Users className="h-4 w-4" />
+                  Por Colaborador
+                </button>
+              </>
+            )}
             <button
               onClick={() => setTab("funcao")}
               className={cn(
@@ -441,8 +446,8 @@ export default function RoleMatrix() {
           ))}
         </div>
 
-        {/* ── ABA: POR CARGO ─────────────────────────────────── */}
-        {tab === "cargos" && (
+        {/* ── ABA: POR CARGO (legacy — oculta quando LEGACY_ACCESS_ACTIVE = false) ── */}
+        {LEGACY_ACCESS_ACTIVE && tab === "cargos" && (
           <>
             {/* Role Cards */}
             <div className="flex gap-3 overflow-x-auto pb-1">
@@ -518,8 +523,8 @@ export default function RoleMatrix() {
           </>
         )}
 
-        {/* ── ABA: POR COLABORADOR ───────────────────────────── */}
-        {tab === "colaboradores" && (
+        {/* ── ABA: POR COLABORADOR (legacy — oculta quando LEGACY_ACCESS_ACTIVE = false) ── */}
+        {LEGACY_ACCESS_ACTIVE && tab === "colaboradores" && (
           <CarboCard padding="none">
             <div className="p-4 border-b flex items-center justify-between">
               <div>

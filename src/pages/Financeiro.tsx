@@ -5,8 +5,8 @@ import { CarboPageHeader } from "@/components/ui/carbo-page-header";
 import { CarboCard, CarboCardContent } from "@/components/ui/carbo-card";
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { useAuth } from "@/contexts/AuthContext";
 import { useFinanceiroKPIs } from "@/hooks/useRCPurchasing";
+import { useCanViewFinanceiroDashboard } from "@/hooks/useActionPermissions";
 import { RCRequestsList } from "@/components/financeiro/RCRequestsList";
 import { RCDetailsPanel } from "@/components/financeiro/RCDetailsPanel";
 import { PayablesList } from "@/components/purchasing/PayablesList";
@@ -14,12 +14,10 @@ import { PurchaseOrdersList } from "@/components/purchasing/PurchaseOrdersList";
 import { PurchasingDashboard } from "@/components/purchasing/PurchasingDashboard";
 
 export default function Financeiro() {
-  const { isCeo, isAnyGestor } = useAuth();
+  const canSeeDashboard = useCanViewFinanceiroDashboard();
   const [activeTab, setActiveTab] = useState("requisicoes");
   const [selectedRCId, setSelectedRCId] = useState<string | null>(null);
   const { data: kpis } = useFinanceiroKPIs();
-
-  const canSeeDashboard = isCeo || isAnyGestor;
 
   const formatCurrency = (val: number) =>
     new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(val);
