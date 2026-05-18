@@ -11,7 +11,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { useAuth } from "@/contexts/AuthContext";
+import { useCanManageMrpProducts } from "@/hooks/useActionPermissions";
 import { useMrpProducts, type MrpProduct } from "@/hooks/useMrpProducts";
 import {
   useProductBom,
@@ -205,8 +205,7 @@ function BomRow({
 
 // ── Main modal ─────────────────────────────────────────────────────────────────
 export function ProductBomModal({ product, open, onOpenChange }: ProductBomModalProps) {
-  const { isAdmin, isCeo, isMasterAdmin } = useAuth();
-  const canEdit = isAdmin || isCeo || isMasterAdmin;
+  const canEdit = useCanManageMrpProducts();
 
   const { data: bomItems = [], isLoading } = useProductBom(product?.id);
   const deleteBom = useDeleteBomItem();

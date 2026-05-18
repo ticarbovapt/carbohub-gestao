@@ -3,6 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
+import { useCanReceiveAlerts } from "@/hooks/useActionPermissions";
 
 interface MachineAlert {
   id: string;
@@ -17,7 +18,8 @@ interface MachineAlert {
 
 export function useRealtimeMachineAlerts() {
   const queryClient = useQueryClient();
-  const { user, isManager } = useAuth();
+  const { user } = useAuth();
+  const canReceiveAlerts = useCanReceiveAlerts();
 
   const checkStockLevel = useCallback((machine: MachineAlert) => {
     const currentStock = machine.capacity - machine.units_since_last_refill;
@@ -59,7 +61,7 @@ export function useRealtimeMachineAlerts() {
   }, [user?.id]);
 
   useEffect(() => {
-    if (!isManager || !user?.id) return;
+    if (!canReceiveAlerts || !user?.id) return;
 
     // Subscribe to machine changes
     const channel = supabase
@@ -105,7 +107,7 @@ export function useRealtimeMachineAlerts() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [isManager, user?.id, queryClient, checkStockLevel, createNotification]);
+  }, [canReceiveAlerts, user?.id, queryClient, checkStockLevel, createNotification]);
 
   return null;
 }

@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { useCanManageStock } from "@/hooks/useActionPermissions";
 import { useCreateStockMovement } from "@/hooks/useStockMovements";
 import { useProductMovements30d } from "@/hooks/useProductMovements30d";
 import { toast } from "sonner";
@@ -61,8 +62,8 @@ export function StockOverview() {
   const [entradaSaving, setEntradaSaving] = useState(false);
   const createMovement = useCreateStockMovement();
   const qc = useQueryClient();
-  const { user, isMasterAdmin, isAdmin, isGestorCompras } = useAuth();
-  const canEdit = isMasterAdmin || isAdmin || isGestorCompras;
+  const { user } = useAuth();
+  const canEdit = useCanManageStock();
 
   const { data: warehouses } = useQuery({
     queryKey: ["warehouses"],

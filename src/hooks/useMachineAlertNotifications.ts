@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useMachines, useMachineAlerts } from "./useMachines";
 import { useAuth } from "@/contexts/AuthContext";
+import { useCanReceiveAlerts } from "@/hooks/useActionPermissions";
 
 interface LowStockMachine {
   id: string;
@@ -21,7 +22,8 @@ interface LowStockMachine {
 
 export function useMachineAlertNotifications() {
   const queryClient = useQueryClient();
-  const { user, isManager } = useAuth();
+  const { user } = useAuth();
+  const canReceiveAlerts = useCanReceiveAlerts();
   const { data: machines = [] } = useMachines("all");
   const { data: alertData } = useMachineAlerts();
 
@@ -76,7 +78,7 @@ export function useMachineAlertNotifications() {
 
   // Check for low stock machines and create notifications
   const checkAndNotify = useCallback(() => {
-    if (!isManager || !user?.id) return;
+    if (!canReceiveAlerts || !user?.id) return;
 
     const lowStockMachines = machines.filter((machine) => {
       const currentStock = machine.capacity - machine.units_since_last_refill;
@@ -86,18 +88,18 @@ export function useMachineAlertNotifications() {
     lowStockMachines.forEach((machine) => {
       createLowStockNotification.mutate(machine as unknown as LowStockMachine);
     });
-  }, [machines, isManager, user?.id, createLowStockNotification]);
+  }, [machines, canReceiveAlerts, user?.id, createLowStockNotification]);
 
   // Check for alerts on mount and when machines change
   useEffect(() => {
-    if (machines.length > 0 && isManager) {
+    if (machines.length > 0 && canReceiveAlerts) {
       checkAndNotify();
     }
-  }, [machines, isManager, checkAndNotify]);
+  }, [machines, canReceiveAlerts, checkAndNotify]);
 
   // Show toast for critical alerts
   useEffect(() => {
-    if (alertData && alertData.lowStock.length > 0 && isManager) {
+    if (alertData && alertData.lowStock.length > 0 && canReceiveAlerts) {
       const criticalMachines = alertData.lowStock.filter((m) => {
         const capacity = (m as unknown as { capacity: number }).capacity || 100;
         const stockPercentage = ((capacity - m.units_since_last_refill) / capacity) * 100;
@@ -114,7 +116,7 @@ export function useMachineAlertNotifications() {
         );
       }
     }
-  }, [alertData, isManager]);
+  }, [alertData, canReceiveAlerts]);
 
   return {
     lowStockCount: alertData?.lowStock.length || 0,

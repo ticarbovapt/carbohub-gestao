@@ -29,7 +29,7 @@ interface Props {
   licenseeEmail?: string | null;
   licenseeName: string;
   licenseeCode?: string;
-  isAdmin?: boolean;
+  canManage?: boolean;
 }
 
 const STATUS_CONFIG: Record<LicenseeAccessStatus, { label: string; color: string; icon: typeof ShieldCheck }> = {
@@ -38,7 +38,7 @@ const STATUS_CONFIG: Record<LicenseeAccessStatus, { label: string; color: string
   active:    { label: "Ativo",               color: "bg-green-500/15 text-green-500",   icon: ShieldCheck },
 };
 
-export function LicenseeAccessCard({ licenseeId, licenseeEmail, licenseeName, licenseeCode, isAdmin }: Props) {
+export function LicenseeAccessCard({ licenseeId, licenseeEmail, licenseeName, licenseeCode, canManage }: Props) {
   const { data: access, isLoading } = useLicenseeAccessInfo(licenseeId);
   const createAccess   = useCreateLicenseeAccess();
   const resendWelcome  = useResendLicenseeWelcome();
@@ -115,7 +115,7 @@ export function LicenseeAccessCard({ licenseeId, licenseeEmail, licenseeName, li
                 Este licenciado ainda não possui acesso ao portal{" "}
                 <strong className="text-foreground">/licensee/dashboard</strong>.
               </p>
-              {isAdmin && (
+              {canManage && (
                 <Button
                   size="sm"
                   className="w-full gap-2"
@@ -180,7 +180,7 @@ export function LicenseeAccessCard({ licenseeId, licenseeEmail, licenseeName, li
               )}
 
               {/* Action buttons */}
-              {isAdmin && (
+              {canManage && (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   <Button
                     variant="outline"

@@ -34,7 +34,7 @@ import {
   PRIORITY_LABELS,
   type OpStatus,
 } from "@/hooks/useProductionOrders";
-import { useAuth } from "@/contexts/AuthContext";
+import { useCanManageProduction } from "@/hooks/useActionPermissions";
 import { format, formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { cn } from "@/lib/utils";
@@ -109,8 +109,7 @@ function TimelineStep({ label, done, active }: { label: string; done: boolean; a
 export default function ProductionOrderDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { isAdmin, isManager } = useAuth();
-  const canManage = isAdmin || isManager;
+  const canManage = useCanManageProduction();
 
   const { data: order, isLoading } = useProductionOrderOP(id);
   const updateOP = useUpdateProductionOrderOP();

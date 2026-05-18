@@ -10,7 +10,6 @@ import { CarboSkeleton } from "@/components/ui/CarboSkeleton";
 import { CarboBadge } from "@/components/ui/carbo-badge";
 import { Factory, Plus, Search, Loader2, Pencil, RefreshCw } from "lucide-react";
 import { useMrpSuppliers, useCnpjLookup, useCreateMrpSupplier, useUpdateMrpSupplier, useImportSuppliersFromBling, MrpSupplier } from "@/hooks/useMrpSuppliers";
-import { useAuth } from "@/contexts/AuthContext";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -146,7 +145,6 @@ function SupplierForm({ supplier, onClose }: { supplier?: MrpSupplier; onClose: 
 }
 
 export default function MrpSuppliers() {
-  const { isAdmin, isCeo } = useAuth();
   const { data: suppliers = [], isLoading } = useMrpSuppliers();
   const importMut = useImportSuppliersFromBling();
   const [search, setSearch] = useState("");

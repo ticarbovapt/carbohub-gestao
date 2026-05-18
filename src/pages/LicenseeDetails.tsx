@@ -35,7 +35,7 @@ import {
 import { useLicensee, LicenseeStatus } from "@/hooks/useLicensees";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { useAuth } from "@/contexts/AuthContext";
+import { useCanManageLicensees } from "@/hooks/useActionPermissions";
 import { EditLicenseeDialog } from "@/components/licensees/EditLicenseeDialog";
 import { InactivateLicenseeDialog } from "@/components/licensees/InactivateLicenseeDialog";
 import { ReactivateLicenseeDialog } from "@/components/licensees/ReactivateLicenseeDialog";
@@ -90,7 +90,7 @@ const ORDER_STATUS_VARIANTS: Record<string, "success" | "secondary" | "warning" 
 export default function LicenseeDetails() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { isAdmin } = useAuth();
+  const canManage = useCanManageLicensees();
   const [isEditDialogOpen, setIsEditDialogOpen] = React.useState(false);
   const [isInactivateDialogOpen, setIsInactivateDialogOpen] = React.useState(false);
   const [isReactivateDialogOpen, setIsReactivateDialogOpen] = React.useState(false);
@@ -248,19 +248,19 @@ export default function LicenseeDetails() {
                 <ArrowLeft className="h-4 w-4 mr-1" />
                 Licenciados
               </CarboButton>
-              {isAdmin && licensee.status === "active" && (
+              {canManage && licensee.status === "active" && (
                 <CarboButton variant="outline" onClick={() => setIsInactivateDialogOpen(true)}>
                   <Ban className="h-4 w-4 mr-1" />
                   Inativar
                 </CarboButton>
               )}
-              {isAdmin && licensee.status === "inactive" && (
+              {canManage && licensee.status === "inactive" && (
                 <CarboButton variant="outline" className="border-success text-success hover:bg-success/10" onClick={() => setIsReactivateDialogOpen(true)}>
                   <CheckCircle2 className="h-4 w-4 mr-1" />
                   Reativar
                 </CarboButton>
               )}
-              {isAdmin && (
+              {canManage && (
                 <CarboButton onClick={() => setIsEditDialogOpen(true)}>
                   <Pencil className="h-4 w-4 mr-1" />
                   Editar
@@ -507,7 +507,7 @@ export default function LicenseeDetails() {
             licenseeEmail={licensee.email}
             licenseeName={licensee.name}
             licenseeCode={licensee.code}
-            isAdmin={isAdmin}
+            canManage={canManage}
           />
 
           {/* Contact Info */}

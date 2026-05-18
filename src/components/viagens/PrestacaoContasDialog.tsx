@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { useCanApproveExpenses } from "@/hooks/useActionPermissions";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -459,7 +460,8 @@ export function PrestacaoContasDialog({
   open,
   onOpenChange,
 }: PrestacaoContasDialogProps) {
-  const { user, isAnyGestor, isAdmin, isCeo, isMasterAdmin } = useAuth();
+  const { user } = useAuth();
+  const isApprover = useCanApproveExpenses();
   const [showAddForm, setShowAddForm] = useState(false);
   const [reprovarMode, setReprovarMode] = useState(false);
   const [reprovarCategoria, setReprovarCategoria] = useState("");
@@ -474,7 +476,6 @@ export function PrestacaoContasDialog({
   const reprovarPC = useReprovarPC();
   const reopenPC = useReopenPC();
 
-  const isApprover = isAnyGestor || isAdmin || isCeo || isMasterAdmin;
   const isOwner = viagem?.solicitante_id === user?.id;
   const canEdit =
     !!(pc && (pc.status === "aberta" || pc.status === "reprovada")) &&
