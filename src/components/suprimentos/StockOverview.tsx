@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { Package, Search, Pencil, Save, X, Warehouse, TrendingUp, TrendingDown, Calendar, BarChart3, Shield, Activity, Download, ArrowDownToLine } from "lucide-react";
+import { Package, Search, Pencil, Save, X, Warehouse, TrendingUp, TrendingDown, Calendar, BarChart3, Shield, Activity, Download, ArrowDownToLine, Tag } from "lucide-react";
 import * as XLSX from "xlsx";
 import { Input } from "@/components/ui/input";
 import { CarboCard, CarboCardContent } from "@/components/ui/carbo-card";
@@ -49,6 +49,7 @@ function getCoverageStatus(days: number | null): CoverageStatus {
 export function StockOverview() {
   const [search, setSearch] = useState("");
   const [selectedWarehouse, setSelectedWarehouse] = useState<string>("all");
+  const [selectedCategory, setSelectedCategory] = useState<string>("all");
   const [editing, setEditing] = useState<EditingProduct | null>(null);
   const [editHubId, setEditHubId] = useState<string>("");
   const [newQty, setNewQty] = useState("");
@@ -106,14 +107,18 @@ export function StockOverview() {
   const { data: movements30d } = useProductMovements30d(productIds);
 
   const filtered = (products || []).filter(p => {
+    if (selectedCategory !== "all" && p.category !== selectedCategory) return false;
     if (!search) return true;
     const s = search.toLowerCase();
     return p.name.toLowerCase().includes(s) || p.product_code.toLowerCase().includes(s);
   });
 
   const handleExport = () => {
+    const exportWarehouses = selectedWarehouse === "all"
+      ? (warehouses || [])
+      : (warehouses || []).filter(w => w.id === selectedWarehouse);
     const rows = filtered.map(p => {
-      const hubStocks = (warehouses || []).map(w => {
+      const hubStocks = exportWarehouses.map(w => {
         const ws = warehouseStock?.find(s => s.product_id === p.id && s.warehouse_id === w.id);
         return { name: w.name, qty: ws?.quantity || 0 };
       });
@@ -340,6 +345,20 @@ export function StockOverview() {
             ))}
           </SelectContent>
         </Select>
+        <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+          <SelectTrigger className="w-[170px]">
+            <Tag className="h-4 w-4 mr-2 text-muted-foreground" />
+            <SelectValue placeholder="Categoria" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todas as categorias</SelectItem>
+            <SelectItem value="Produto Final">Produto Final</SelectItem>
+            <SelectItem value="Insumo">Insumo</SelectItem>
+            <SelectItem value="Embalagem">Embalagem</SelectItem>
+            <SelectItem value="Carbonatação">Carbonatação</SelectItem>
+            <SelectItem value="Outro">Outro</SelectItem>
+          </SelectContent>
+        </Select>
         <div className="flex items-center gap-2 ml-auto">
           {canEdit && (
             <Button size="sm" className="gap-1.5 bg-carbo-green hover:bg-carbo-green/90 text-white" onClick={openEntrada}>
@@ -369,7 +388,12 @@ export function StockOverview() {
           {filtered.map(p => {
             const safetyQty = p.safety_stock_qty || p.min_order_qty || 1;
 
-            const hubStocks = (warehouses || []).map(w => {
+            // All hubs or just the selected one
+            const visibleWarehouses = selectedWarehouse === "all"
+              ? (warehouses || [])
+              : (warehouses || []).filter(w => w.id === selectedWarehouse);
+
+            const hubStocks = visibleWarehouses.map(w => {
               const ws = warehouseStock?.find(
                 s => s.product_id === p.id && s.warehouse_id === w.id
               );
@@ -386,7 +410,7 @@ export function StockOverview() {
               ? hubStocks.reduce((sum, h) => sum + h.qty, 0)
               : p.current_stock_qty;
 
-            const hubTarget = hubStocks.length > 0 ? Math.ceil(safetyQty / hubStocks.length) : safetyQty;
+            const hubTarget = hubStocks.length > 0 ? Math.ceil(safetyQty / Math.max(hubStocks.length, 1)) : safetyQty;
 
             // BI calculations
             const stats = movements30d?.[p.id];
