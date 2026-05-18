@@ -21,7 +21,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { useAuth } from "@/contexts/AuthContext";
+import { useCanManageBugs } from "@/hooks/useActionPermissions";
 import { useBugReports, useResolveBugReport, useDeleteBugReport, BugReport } from "@/hooks/useBugReports";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -29,8 +29,7 @@ import { ptBR } from "date-fns/locale";
 type StatusFilter = "all" | "open" | "resolved";
 
 export default function BugReportsPage() {
-  const { isAdmin, isSuporte } = useAuth();
-  const canManageBugs = isAdmin || isSuporte;
+  const canManageBugs = useCanManageBugs();
   const { data: reports = [], isLoading } = useBugReports();
   const resolveMutation = useResolveBugReport();
   const deleteMutation = useDeleteBugReport();

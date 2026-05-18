@@ -977,7 +977,7 @@ const Team = () => {
         teamMembers={approvedMembers}
         onClose={() => setSelectedMember(null)}
         canEdit={canEdit}
-        isMasterAdmin={isMasterAdmin}
+        isMasterAdmin={canEdit}
         onUpdated={() => refetch()}
       />
 

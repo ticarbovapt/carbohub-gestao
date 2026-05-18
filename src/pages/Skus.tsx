@@ -7,7 +7,7 @@ import { CarboEmptyState } from "@/components/ui/carbo-empty-state";
 import { CarboSkeleton } from "@/components/ui/CarboSkeleton";
 import { Package, Plus, RefreshCw, PackageCheck, PackageX } from "lucide-react";
 import { useSkus, useActiveSkuBoms, Sku } from "@/hooks/useSkus";
-import { useAuth } from "@/contexts/AuthContext";
+import { useCanManageSkus } from "@/hooks/useActionPermissions";
 import { SkusFilters } from "@/components/skus/SkusFilters";
 import { SkusTable } from "@/components/skus/SkusTable";
 import { CreateSkuDialog } from "@/components/skus/CreateSkuDialog";
@@ -15,8 +15,7 @@ import { EditSkuDialog } from "@/components/skus/EditSkuDialog";
 import { DeleteSkuDialog } from "@/components/skus/DeleteSkuDialog";
 
 export default function Skus() {
-  const { isManager, isAdmin } = useAuth();
-  const canManage = isManager || isAdmin;
+  const canManage = useCanManageSkus();
 
   const { data: skus = [], isLoading, refetch } = useSkus();
   const { data: activeBomVersions = {} } = useActiveSkuBoms();
