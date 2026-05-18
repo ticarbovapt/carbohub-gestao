@@ -39,6 +39,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useResendWelcomeEmail } from "@/hooks/useCreateTeamMember";
 import { ALL_DEPARTMENTS, DEPARTMENT_LABELS } from "@/constants/departments";
 import { useDepartmentFunctions } from "@/hooks/useDepartmentFunctions";
+import { DEPARTMENTS as DEPT_FUNCTIONS_CONFIG } from "@/constants/functionAccessConfig";
 // ── Carbo role labels ────────────────────────────────────────────────────────
 const CARBO_ROLE_BADGE: Record<string, string> = {
   ceo:             "CEO",
@@ -60,6 +61,13 @@ const DEPT_TO_PROFILE_DEPT: Record<string, string> = {
   Expansão: "expansao", expansao: "expansao",
   "TI / Suporte": "ti_suporte", ti_suporte: "ti_suporte",
 };
+
+// Resolve function label from dept+funcao keys
+function resolveFuncaoLabel(department: string | null, funcao: string | null): string | null {
+  if (!department || !funcao) return null;
+  const dept = DEPT_FUNCTIONS_CONFIG.find(d => d.key === department);
+  return dept?.functions.find(f => f.key === funcao)?.label ?? funcao;
+}
 
 // Prefixo do username por departamento (maiúsculo, 3 chars)
 const DEPT_USERNAME_PREFIX: Record<string, string> = {
@@ -711,8 +719,8 @@ const Team = () => {
                 {/* Header */}
                 <div className="grid grid-cols-[1fr_auto_auto_auto] gap-4 items-center px-4 py-2.5 bg-muted/50 border-b text-xs font-semibold text-muted-foreground uppercase tracking-wide">
                   <span>Colaborador</span>
-                  <span className="text-right w-24">Nível</span>
-                  <span className="text-right w-40">Funções</span>
+                  <span className="text-right w-24">Departamento</span>
+                  <span className="text-right w-40">Função</span>
                   <span className="w-32 text-right">Configurar</span>
                 </div>
                 {/* Rows */}
@@ -728,42 +736,35 @@ const Team = () => {
                         {member.email && (
                           <span className="text-xs text-muted-foreground truncate">{member.email}</span>
                         )}
-                        {member.department && (
-                          <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4">
-                            {member.department}
-                          </Badge>
-                        )}
                       </div>
                     </div>
 
-                    {/* app roles */}
-                    <div className="flex gap-1 w-24 justify-end flex-wrap">
-                      {member.roles.length > 0 ? (
-                        member.roles.map((r) => (
-                          <Badge key={r} variant="secondary" className="text-[10px] px-1.5 py-0 h-4 capitalize">
-                            {r}
-                          </Badge>
-                        ))
+                    {/* department */}
+                    <div className="flex gap-1 w-24 justify-end">
+                      {member.department ? (
+                        <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4 capitalize">
+                          {DEPARTMENT_LABELS[member.department] ?? member.department}
+                        </Badge>
                       ) : (
                         <span className="text-xs text-muted-foreground">—</span>
                       )}
                     </div>
 
-                    {/* carbo_roles */}
-                    <div className="flex gap-1 w-40 justify-end flex-wrap">
-                      {member.carbo_roles.length > 0 ? (
-                        member.carbo_roles.map((r) => (
+                    {/* funcao */}
+                    <div className="flex gap-1 w-40 justify-end">
+                      {(() => {
+                        const label = resolveFuncaoLabel(member.department as string | null, member.funcao);
+                        return label ? (
                           <Badge
-                            key={r}
                             className="text-[10px] px-1.5 py-0 h-4 bg-primary/10 text-primary border-primary/20 hover:bg-primary/15"
                             variant="outline"
                           >
-                            {CARBO_ROLE_BADGE[r] ?? r}
+                            {label}
                           </Badge>
-                        ))
-                      ) : (
-                        <span className="text-xs text-muted-foreground">—</span>
-                      )}
+                        ) : (
+                          <span className="text-xs text-muted-foreground">—</span>
+                        );
+                      })()}
                     </div>
 
                     {/* Actions */}
