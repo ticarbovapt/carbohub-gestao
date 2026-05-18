@@ -34,16 +34,13 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { useAuth } from "@/contexts/AuthContext";
+import { useDashboardVariant } from "@/hooks/useDashboardVariant";
 
 import { DEPARTMENT_LABELS } from "@/constants/departments";
 
 const Dashboard = () => {
-  const {
-    isAdmin, isManager,
-    isCeo, isGestorAdm, isGestorFin, isGestorCompras,
-    isOperadorFiscal, isOperador, isAnyGestor, isAnyOperador,
-    isLoading,
-  } = useAuth();
+  const { isLoading } = useAuth();
+  const variant = useDashboardVariant();
 
   if (isLoading) {
     return (
@@ -54,63 +51,13 @@ const Dashboard = () => {
       </BoardLayout>
     );
   }
-  
-  // Dashboard por role Carbo — sem fallback legacy
-  if (isCeo || isAdmin) {
-    return (
-      <BoardLayout>
-        <CeoDashboard />
-      </BoardLayout>
-    );
-  }
 
-  if (isGestorAdm) {
-    return (
-      <BoardLayout>
-        <GestorDashboard role="gestor_adm" />
-      </BoardLayout>
-    );
-  }
-
-  if (isGestorFin) {
-    return (
-      <BoardLayout>
-        <GestorDashboard role="gestor_fin" />
-      </BoardLayout>
-    );
-  }
-
-  if (isGestorCompras) {
-    return (
-      <BoardLayout>
-        <GestorDashboard role="gestor_compras" />
-      </BoardLayout>
-    );
-  }
-
-  if (isAnyGestor || isManager) {
-    return (
-      <BoardLayout>
-        <GestorDashboard role="gestor_adm" />
-      </BoardLayout>
-    );
-  }
-
-  if (isOperadorFiscal) {
-    return (
-      <BoardLayout>
-        <OperadorDashboard role="operador_fiscal" />
-      </BoardLayout>
-    );
-  }
-
-  if (isAnyOperador || isOperador) {
-    return (
-      <BoardLayout>
-        <OperadorDashboard role="operador" />
-      </BoardLayout>
-    );
-  }
+  if (variant === "ceo") return <BoardLayout><CeoDashboard /></BoardLayout>;
+  if (variant === "gestor_adm") return <BoardLayout><GestorDashboard role="gestor_adm" /></BoardLayout>;
+  if (variant === "gestor_fin") return <BoardLayout><GestorDashboard role="gestor_fin" /></BoardLayout>;
+  if (variant === "gestor_compras") return <BoardLayout><GestorDashboard role="gestor_compras" /></BoardLayout>;
+  if (variant === "operador_fiscal") return <BoardLayout><OperadorDashboard role="operador_fiscal" /></BoardLayout>;
+  if (variant === "operador") return <BoardLayout><OperadorDashboard role="operador" /></BoardLayout>;
 
   // Default: dashboard geral para qualquer usuário
   return <DefaultDashboard />;

@@ -14,6 +14,7 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { usePDVStatus, usePDVData, useRequestReplenishment } from "@/hooks/usePDV";
 import { useAuth } from "@/contexts/AuthContext";
+import { useCanManagePDVAdmin } from "@/hooks/useActionPermissions";
 import { LinkPDVDialog } from "@/components/pdv/LinkPDVDialog";
 import { CarboSkeleton } from "@/components/ui/CarboSkeleton";
 import { usePDVProductStock } from "@/hooks/usePDVProducts";
@@ -312,7 +313,7 @@ function PDVDashboardAdmin() {
 function PDVDashboardManager() {
   const navigate = useNavigate();
   const { data: pdvStatus, isLoading: statusLoading } = usePDVStatus();
-  const { isAdmin, isCeo } = useAuth();
+  const isMasterAdmin = useCanManagePDVAdmin();
   const [linkDialogOpen, setLinkDialogOpen] = useState(false);
 
   const pdvId = pdvStatus?.pdv?.id;
@@ -320,9 +321,6 @@ function PDVDashboardManager() {
   const { data: productStock = [] } = usePDVProductStock(pdvId);
   const { data: sales = [] } = usePDVSales(pdvId, 10);
   const { data: stats } = usePDVSalesStats(pdvId);
-  const requestReplenishment = useRequestReplenishment();
-
-  const isMasterAdmin = isAdmin && isCeo;
   const isLoading = statusLoading || pdvLoading;
 
   if (isLoading) {
@@ -491,8 +489,7 @@ function PDVDashboardManager() {
 
 // ── ROOT EXPORT ──────────────────────────────────────────────────────────────
 export default function PDVDashboard() {
-  const { isAdmin, isCeo } = useAuth();
-  const isAdminView = isAdmin || isCeo;
+  const isAdminView = useCanManagePDVAdmin();
   if (isAdminView) return <PDVDashboardAdmin />;
   return <PDVDashboardManager />;
 }

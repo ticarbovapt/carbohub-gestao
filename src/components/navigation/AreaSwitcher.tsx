@@ -14,8 +14,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
-import { useAuth } from "@/contexts/AuthContext";
-import { useCanAccessOps } from "@/hooks/useActionPermissions";
+import { useCanAccessOps, useCanAccessAllPortals } from "@/hooks/useActionPermissions";
 import { useLicenseeStatus } from "@/hooks/useLicenseePortal";
 import { usePDVStatus } from "@/hooks/usePDV";
 
@@ -42,8 +41,8 @@ interface AreaSwitcherProps {
 export function AreaSwitcher({ variant = "compact" }: AreaSwitcherProps) {
   const navigate = useNavigate();
   const location = useLocation();
-  const { isCeo, isAdmin } = useAuth();
-  const canAccessOps = useCanAccessOps();
+  const canAccessOps      = useCanAccessOps();
+  const hasFullAccess     = useCanAccessAllPortals();
   const { data: licenseeStatus } = useLicenseeStatus();
   const { data: pdvStatus } = usePDVStatus();
 
@@ -56,8 +55,6 @@ export function AreaSwitcher({ variant = "compact" }: AreaSwitcherProps) {
 
   const currentArea = getCurrentArea();
 
-  // Check access permissions
-  const hasFullAccess = isCeo || isAdmin;
   const canAccessLicensee = hasFullAccess || !!licenseeStatus?.licensee;
   const canAccessPDV = hasFullAccess || !!pdvStatus?.pdv;
 

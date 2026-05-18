@@ -6,7 +6,7 @@ import { CarboCard, CarboCardContent, CarboCardHeader, CarboCardTitle } from "@/
 import { CarboBadge } from "@/components/ui/carbo-badge";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { useAuth } from "@/contexts/AuthContext";
+import { useCanApprovePurchases } from "@/hooks/useActionPermissions";
 import {
   usePurchaseRequests,
   usePurchaseOrders,
@@ -25,13 +25,11 @@ import { PurchasingDashboard } from "@/components/purchasing/PurchasingDashboard
 import { SuppliersList } from "@/components/purchasing/SuppliersList";
 
 export default function Purchasing() {
-  const { isCeo, isAnyGestor } = useAuth();
+  const canSeeDashboard = useCanApprovePurchases();
   const [showNewRC, setShowNewRC] = useState(false);
   const [activeTab, setActiveTab] = useState("requisicoes");
 
   const { data: kpis } = usePurchasingKPIs();
-
-  const canSeeDashboard = isCeo || isAnyGestor;
 
   const formatCurrency = (val: number) =>
     new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(val);

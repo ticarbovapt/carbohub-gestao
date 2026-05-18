@@ -50,6 +50,7 @@ import {
 import { useDepartmentFunctions } from "@/hooks/useDepartmentFunctions";
 import { SCREEN_GROUPS, DATA_SCOPES, type DataScope } from "@/constants/functionAccessConfig";
 import { cn } from "@/lib/utils";
+import { LEGACY_ACCESS_ACTIVE } from "@/hooks/useFunctionAccess";
 import type { Database } from "@/integrations/supabase/types";
 
 type AppRole = Database["public"]["Enums"]["app_role"];
@@ -234,7 +235,15 @@ export function AccessConfigDialog({ member, open, onOpenChange }: AccessConfigD
         </div>
 
         <div className="space-y-5">
+          {/* ── Seções 1-4: Legacy access config (visível quando LEGACY_ACCESS_ACTIVE) */}
+          {!LEGACY_ACCESS_ACTIVE && (
+            <div className="rounded-lg border border-border/60 bg-muted/20 px-3 py-3 text-xs text-muted-foreground">
+              <p className="font-medium text-foreground mb-1">Acesso gerenciado por Função + Departamento</p>
+              <p>Com a nova matriz de acesso ativa, Nível de Acesso, Funções no Carbo e Interfaces são controlados automaticamente. Use a seção abaixo para overrides individuais.</p>
+            </div>
+          )}
           {/* ── Seção 1: Nível de Acesso ───────────────────────────────────── */}
+          {LEGACY_ACCESS_ACTIVE && <>
           <div className="space-y-2">
             <Label className="text-sm font-semibold flex items-center gap-1.5">
               Nível de Acesso
@@ -376,6 +385,7 @@ export function AccessConfigDialog({ member, open, onOpenChange }: AccessConfigD
               })}
             </div>
           </div>
+          </>}
           {/* ── Seção 5: Escopo de Acesso Individual ─────────────────────── */}
           {canGrantOverride && (
             <div className="space-y-3">

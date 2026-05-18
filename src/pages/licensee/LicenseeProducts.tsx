@@ -22,6 +22,7 @@ import { Separator } from "@/components/ui/separator";
 import { LicenseeLayout } from "@/components/layouts/LicenseeLayout";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLicenseeStatus } from "@/hooks/useLicenseePortal";
+import { useCanViewLicenseeArea } from "@/hooks/useActionPermissions";
 import {
   useLicenseeProductStock,
   useLicenseeStockMovements,
@@ -464,10 +465,10 @@ function LicenseeProductsAdmin() {
 
 // ── ROOT EXPORT ───────────────────────────────────────────────────────────────
 export default function LicenseeProducts() {
-  const { isAdmin, isCeo } = useAuth();
+  const canViewAdmin = useCanViewLicenseeArea();
   const { data: licenseeStatus, isLoading } = useLicenseeStatus();
 
-  if (isAdmin || isCeo) return <LicenseeProductsAdmin />;
+  if (canViewAdmin) return <LicenseeProductsAdmin />;
 
   if (isLoading) {
     return (

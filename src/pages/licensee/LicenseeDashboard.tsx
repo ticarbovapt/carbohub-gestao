@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Link } from "react-router-dom";
+import { useCanViewLicenseeArea } from "@/hooks/useActionPermissions";
 import {
   Wallet,
   Zap,
@@ -499,7 +500,7 @@ function LicenseeDashboardManager() {
 
 // ── ROOT EXPORT ───────────────────────────────────────────────────────────────
 export default function LicenseeDashboard() {
-  const { isAdmin, isCeo } = useAuth();
-  if (isAdmin || isCeo) return <LicenseeDashboardAdmin />;
+  const canViewAdmin = useCanViewLicenseeArea();
+  if (canViewAdmin) return <LicenseeDashboardAdmin />;
   return <LicenseeDashboardManager />;
 }

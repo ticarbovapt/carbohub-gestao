@@ -1,20 +1,21 @@
 import { BoardLayout } from "@/components/layouts/BoardLayout";
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
 import { Star } from "lucide-react";
-import { useAuth } from "@/contexts/AuthContext";
 import { CeoDashboard } from "@/components/dashboard/CeoDashboard";
 import { GestorDashboard } from "@/components/dashboard/GestorDashboard";
+import { useDashboardVariant } from "@/hooks/useDashboardVariant";
+import { useCanViewStrategicDashboard } from "@/hooks/useActionPermissions";
 
 export default function DashboardEstrategico() {
-  const { isCeo, isGestorAdm, isGestorFin, isGestorCompras, isAnyGestor } = useAuth();
+  const variant = useDashboardVariant();
+  const canView = useCanViewStrategicDashboard();
 
   const renderContent = () => {
-    if (isCeo) return <CeoDashboard />;
-    if (isGestorAdm) return <GestorDashboard role="gestor_adm" />;
-    if (isGestorFin) return <GestorDashboard role="gestor_fin" />;
-    if (isGestorCompras) return <GestorDashboard role="gestor_compras" />;
+    if (variant === "ceo")             return <CeoDashboard />;
+    if (variant === "gestor_adm")      return <GestorDashboard role="gestor_adm" />;
+    if (variant === "gestor_fin")      return <GestorDashboard role="gestor_fin" />;
+    if (variant === "gestor_compras")  return <GestorDashboard role="gestor_compras" />;
 
-    // Operadores veem uma mensagem de acesso restrito
     return (
       <div className="flex flex-col items-center justify-center h-64 text-center gap-4">
         <Star className="h-12 w-12 text-muted-foreground opacity-40" />
@@ -31,8 +32,7 @@ export default function DashboardEstrategico() {
   return (
     <BoardLayout>
       <div className="space-y-6">
-        {!isCeo && !isAnyGestor && null}
-        {(isCeo || isAnyGestor) && (
+        {canView && (
           <CarboPageHeader
             title="Dashboard — Estratégico"
             description="Visão executiva: KPIs consolidados, metas e performance geral"

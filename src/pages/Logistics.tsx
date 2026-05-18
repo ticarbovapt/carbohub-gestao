@@ -15,14 +15,14 @@ import {
   type FreightQuoteResult,
   type FreightCarrier,
 } from "@/hooks/useFreightQuote";
-import { useAuth } from "@/contexts/AuthContext";
 import { Shipment, ShipmentStatus } from "@/types/shipment";
+import { useCanManageLogistics } from "@/hooks/useActionPermissions";
 import { Loader2, Truck } from "lucide-react";
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
 import { toast } from "sonner";
 
 export default function Logistics() {
-  const { isCeo, isAnyGestor } = useAuth();
+  const canManageLogistics = useCanManageLogistics();
   const { data: shipments = [], isLoading } = useShipments();
   const updateStatus  = useUpdateShipmentStatus();
   const [selectedShipment, setSelectedShipment] = useState<Shipment | null>(null);
@@ -110,7 +110,7 @@ export default function Logistics() {
               <Truck className="h-3.5 w-3.5" />
               Frete
             </TabsTrigger>
-            {(isCeo || isAnyGestor) && (
+            {(canManageLogistics) && (
               <TabsTrigger value="estrategico">Estratégico</TabsTrigger>
             )}
           </TabsList>
@@ -145,7 +145,7 @@ export default function Logistics() {
             <FreightReports />
           </TabsContent>
 
-          {(isCeo || isAnyGestor) && (
+          {(canManageLogistics) && (
             <TabsContent value="estrategico" className="space-y-4">
               <LogisticsStrategic shipments={shipments} />
             </TabsContent>
