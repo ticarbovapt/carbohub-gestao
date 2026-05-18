@@ -27,7 +27,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Shield } from "lucide-react";
+import { Loader2, Shield, Eye, FilePen, LayoutGrid, Trash2 } from "lucide-react";
 import {
   useUpdateUserRole,
   useReplaceCarboRoles,
@@ -41,6 +41,15 @@ import {
   MODULES, MATRIX, ROLE_KEY_MAP, PRIORITY, ACCESS_LABEL, getEffectiveAccess,
   type Access, type RoleKey,
 } from "@/lib/role-matrix-constants";
+import {
+  useUserAccessOverride,
+  useUpsertUserAccessOverride,
+  useClearUserAccessOverride,
+  useCanGrantOverride,
+} from "@/hooks/useUserAccessOverride";
+import { useDepartmentFunctions } from "@/hooks/useDepartmentFunctions";
+import { SCREEN_GROUPS, DATA_SCOPES, type DataScope } from "@/constants/functionAccessConfig";
+import { cn } from "@/lib/utils";
 import type { Database } from "@/integrations/supabase/types";
 
 type AppRole = Database["public"]["Enums"]["app_role"];
@@ -93,14 +102,23 @@ export function AccessConfigDialog({ member, open, onOpenChange }: AccessConfigD
   const replaceCarboRoles = useReplaceCarboRoles();
   const updateInterfaces  = useUpdateAllowedInterfaces();
   const upsertOverride    = useUpsertModuleOverride();
+  const upsertAccessOverride = useUpsertUserAccessOverride();
+  const clearAccessOverride  = useClearUserAccessOverride();
 
-  const { data: existingOverrides } = useUserModuleOverrides(member?.id ?? null);
+  const { data: existingOverrides }    = useUserModuleOverrides(member?.id ?? null);
+  const { data: accessOverride }       = useUserAccessOverride(member?.id ?? null);
+  const { data: deptFunctions = [] }   = useDepartmentFunctions((member?.department as string) ?? undefined);
+  const canGrantOverride               = useCanGrantOverride((member?.department as string) ?? null);
 
   const [selectedRole,        setSelectedRole]        = useState<AppRole>("operator");
   const [selectedCarboRoles,  setSelectedCarboRoles]  = useState<string[]>([]);
   const [selectedInterfaces,  setSelectedInterfaces]  = useState<string[]>([]);
   // moduleOverrides: module_key → "full"|"read"|"own"|"none"|"inherit"
   const [moduleOverrides,     setModuleOverrides]     = useState<Record<string, string>>({});
+  // access scope overrides (null = use function default)
+  const [ovViewScope,  setOvViewScope]  = useState<DataScope | null>(null);
+  const [ovEditScope,  setOvEditScope]  = useState<DataScope | null>(null);
+  const [extraScreens, setExtraScreens] = useState<string[]>([]);
   const [submitting,          setSubmitting]          = useState(false);
   const [saveError,           setSaveError]           = useState<string | null>(null);
 
@@ -119,6 +137,13 @@ export function AccessConfigDialog({ member, open, onOpenChange }: AccessConfigD
     for (const o of existingOverrides) map[o.module_key] = o.access;
     setModuleOverrides(map);
   }, [existingOverrides]);
+
+  // Seed access override when loaded
+  useEffect(() => {
+    setOvViewScope(accessOverride?.view_scope ?? null);
+    setOvEditScope(accessOverride?.edit_scope ?? null);
+    setExtraScreens(accessOverride?.extra_screen_ids ?? []);
+  }, [accessOverride]);
 
   const handleClose = () => {
     if (submitting) return;
@@ -157,6 +182,16 @@ export function AccessConfigDialog({ member, open, onOpenChange }: AccessConfigD
           moduleKey: mod,
           access: newVal === "inherit" ? null : newVal,
           updatedBy: authUser?.id ?? "",
+        });
+      }
+
+      // 3. Access scope override (view/edit scope + extra screens)
+      if (canGrantOverride) {
+        await upsertAccessOverride.mutateAsync({
+          userId: member.id,
+          viewScope: ovViewScope,
+          editScope: ovEditScope,
+          extraScreenIds: extraScreens,
         });
       }
 
@@ -341,6 +376,149 @@ export function AccessConfigDialog({ member, open, onOpenChange }: AccessConfigD
               })}
             </div>
           </div>
+          {/* ── Seção 5: Escopo de Acesso Individual ─────────────────────── */}
+          {canGrantOverride && (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <Label className="text-sm font-semibold flex items-center gap-1.5">
+                  Escopo de Acesso Individual
+                  <span className="text-xs text-muted-foreground font-normal">(override por pessoa)</span>
+                </Label>
+                {(ovViewScope || ovEditScope || extraScreens.length > 0) && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-6 text-xs text-destructive hover:text-destructive gap-1"
+                    onClick={() => { setOvViewScope(null); setOvEditScope(null); setExtraScreens([]); }}
+                  >
+                    <Trash2 className="h-3 w-3" /> Limpar override
+                  </Button>
+                )}
+              </div>
+
+              {/* Function defaults (read-only) */}
+              {(() => {
+                const fnData = deptFunctions.find(f => f.function_key === (member as any)?.funcao);
+                if (!fnData) return null;
+                return (
+                  <div className="rounded-lg border border-border/60 bg-muted/20 px-3 py-2 text-xs text-muted-foreground space-y-1">
+                    <p className="font-medium text-foreground text-[11px] uppercase tracking-wider mb-1">Padrão da função</p>
+                    <p>Visibilidade: <span className="font-medium text-foreground">{DATA_SCOPES.find(s => s.value === fnData.data_scope)?.label ?? fnData.data_scope}</span></p>
+                    <p>Edição: <span className="font-medium text-foreground">{DATA_SCOPES.find(s => s.value === fnData.edit_scope)?.label ?? fnData.edit_scope}</span></p>
+                  </div>
+                );
+              })()}
+
+              {/* View scope override */}
+              <div className="space-y-1.5">
+                <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                  <Eye className="h-3.5 w-3.5" /> Visibilidade (override)
+                </div>
+                <div className="grid grid-cols-5 gap-1">
+                  <button
+                    onClick={() => setOvViewScope(null)}
+                    className={cn(
+                      "rounded-lg border px-2 py-1.5 text-center text-[10px] font-medium transition-all",
+                      ovViewScope === null
+                        ? "border-muted-foreground/60 bg-muted text-foreground"
+                        : "border-border/40 text-muted-foreground hover:border-border"
+                    )}
+                  >
+                    Padrão
+                  </button>
+                  {DATA_SCOPES.map(s => (
+                    <button
+                      key={s.value}
+                      onClick={() => setOvViewScope(s.value)}
+                      title={s.description}
+                      className={cn(
+                        "rounded-lg border px-2 py-1.5 text-center text-[10px] font-medium transition-all",
+                        ovViewScope === s.value ? {
+                          "proprio":      "border-border bg-muted text-foreground",
+                          "equipe":       "border-blue-500/60 bg-blue-500/10 text-blue-500",
+                          "departamento": "border-violet-500/60 bg-violet-500/10 text-violet-500",
+                          "global":       "border-green-500/60 bg-green-500/10 text-green-600",
+                        }[s.value] : "border-border/40 text-muted-foreground hover:border-border"
+                      )}
+                    >
+                      {s.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Edit scope override */}
+              <div className="space-y-1.5">
+                <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                  <FilePen className="h-3.5 w-3.5" /> Edição (override)
+                </div>
+                <div className="grid grid-cols-5 gap-1">
+                  <button
+                    onClick={() => setOvEditScope(null)}
+                    className={cn(
+                      "rounded-lg border px-2 py-1.5 text-center text-[10px] font-medium transition-all",
+                      ovEditScope === null
+                        ? "border-muted-foreground/60 bg-muted text-foreground"
+                        : "border-border/40 text-muted-foreground hover:border-border"
+                    )}
+                  >
+                    Padrão
+                  </button>
+                  {DATA_SCOPES.map(s => (
+                    <button
+                      key={s.value}
+                      onClick={() => setOvEditScope(s.value)}
+                      title={s.description}
+                      className={cn(
+                        "rounded-lg border px-2 py-1.5 text-center text-[10px] font-medium transition-all",
+                        ovEditScope === s.value ? {
+                          "proprio":      "border-border bg-muted text-foreground",
+                          "equipe":       "border-blue-500/60 bg-blue-500/10 text-blue-500",
+                          "departamento": "border-violet-500/60 bg-violet-500/10 text-violet-500",
+                          "global":       "border-green-500/60 bg-green-500/10 text-green-600",
+                        }[s.value] : "border-border/40 text-muted-foreground hover:border-border"
+                      )}
+                    >
+                      {s.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Extra screen IDs */}
+              <div className="space-y-1.5">
+                <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                  <LayoutGrid className="h-3.5 w-3.5" /> Telas extras (além do padrão da função)
+                </div>
+                <div className="border rounded-lg divide-y divide-border/40 max-h-48 overflow-y-auto bg-muted/10">
+                  {SCREEN_GROUPS.map(group => (
+                    <div key={group.id}>
+                      <p className="px-3 py-1.5 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider bg-muted/30">{group.label}</p>
+                      {group.screens.map(screen => (
+                        <label
+                          key={screen.id}
+                          className="flex items-center gap-2.5 px-3 py-1.5 cursor-pointer hover:bg-muted/20 transition-colors"
+                        >
+                          <Checkbox
+                            checked={extraScreens.includes(screen.id)}
+                            onCheckedChange={() => {
+                              setExtraScreens(prev =>
+                                prev.includes(screen.id)
+                                  ? prev.filter(id => id !== screen.id)
+                                  : [...prev, screen.id]
+                              );
+                            }}
+                          />
+                          <span className="text-xs">{screen.label}</span>
+                        </label>
+                      ))}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
         {saveError && (
