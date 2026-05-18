@@ -118,7 +118,8 @@ export function StockOverview() {
         const ws = warehouseStock?.find(s => s.product_id === p.id && s.warehouse_id === w.id);
         return { name: w.name, qty: ws?.quantity || 0 };
       });
-      const totalQty = hubStocks.length > 0 ? hubStocks.reduce((s, h) => s + h.qty, 0) : p.current_stock_qty;
+      const hasAnyHubData = (warehouseStock || []).some(s => s.product_id === p.id);
+      const totalQty = hasAnyHubData ? hubStocks.reduce((s, h) => s + h.qty, 0) : p.current_stock_qty;
       const row: Record<string, unknown> = {
         Código: p.product_code,
         Nome: p.name,
@@ -142,7 +143,9 @@ export function StockOverview() {
     const ws = defaultHub
       ? warehouseStock?.find(s => s.product_id === p.id && s.warehouse_id === defaultHub)
       : undefined;
-    const qty = ws?.quantity || 0;
+    // When this product has no warehouse_stock rows at all, seed qty from current_stock_qty
+    const anyHubData = warehouseStock?.some(s => s.product_id === p.id) ?? false;
+    const qty = ws?.quantity ?? (anyHubData ? 0 : p.current_stock_qty);
 
     setEditing({
       id: p.id,
@@ -209,6 +212,12 @@ export function StockOverview() {
             .update({ quantity: qty, updated_at: new Date().toISOString() })
             .eq("id", editing.warehouse_stock_id);
           if (error) throw error;
+        } else {
+          // First stock entry for this product+hub — create the row
+          const { error } = await supabase
+            .from("warehouse_stock")
+            .insert({ product_id: editing.id, warehouse_id: editHubId, quantity: qty });
+          if (error) throw error;
         }
 
         await createMovement.mutateAsync({
@@ -239,6 +248,8 @@ export function StockOverview() {
 
       qc.invalidateQueries({ queryKey: ["mrp-products-stock"] });
       qc.invalidateQueries({ queryKey: ["warehouse-stock"] });
+      qc.invalidateQueries({ queryKey: ["warehouse-stock-all"] });
+      qc.invalidateQueries({ queryKey: ["suprimentos-kpis"] });
       toast.success("Ajuste salvo com sucesso");
       setEditing(null);
     } catch {
@@ -297,6 +308,8 @@ export function StockOverview() {
 
       qc.invalidateQueries({ queryKey: ["mrp-products-stock"] });
       qc.invalidateQueries({ queryKey: ["warehouse-stock"] });
+      qc.invalidateQueries({ queryKey: ["warehouse-stock-all"] });
+      qc.invalidateQueries({ queryKey: ["suprimentos-kpis"] });
       toast.success("Entrada registrada com sucesso");
       setEntradaOpen(false);
     } catch {
@@ -368,7 +381,9 @@ export function StockOverview() {
               };
             });
 
-            const totalQty = hubStocks.length > 0
+            // Fall back to current_stock_qty when the product has no warehouse_stock rows yet
+            const hasAnyHubData = (warehouseStock || []).some(s => s.product_id === p.id);
+            const totalQty = hasAnyHubData
               ? hubStocks.reduce((sum, h) => sum + h.qty, 0)
               : p.current_stock_qty;
 
@@ -456,7 +471,7 @@ export function StockOverview() {
 
                   {/* Hub progress bars */}
                   <div className="border-t border-border px-5 py-4 space-y-3">
-                    {hubStocks.length > 0 ? (
+                    {hasAnyHubData ? (
                       hubStocks.map(h => (
                         <StockProgressBar
                           key={h.id}
@@ -473,6 +488,7 @@ export function StockOverview() {
                         safety={safetyQty}
                         hubName="Estoque geral"
                         unit={p.stock_unit}
+                        onClick={() => openEdit(p)}
                       />
                     )}
                   </div>

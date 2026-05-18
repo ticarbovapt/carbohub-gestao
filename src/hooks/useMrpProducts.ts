@@ -84,7 +84,12 @@ export function useCreateMrpProduct() {
       if (error) throw error;
       return data;
     },
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["mrp-products"] }); toast.success("Produto criado!"); },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["mrp-products"] });
+      qc.invalidateQueries({ queryKey: ["mrp-products-stock"] });
+      qc.invalidateQueries({ queryKey: ["suprimentos-kpis"] });
+      toast.success("Produto criado!");
+    },
     onError: (e: Error) => toast.error("Erro: " + e.message),
   });
 }
@@ -101,6 +106,8 @@ export function useDeleteMrpProduct() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["mrp-products"] });
+      qc.invalidateQueries({ queryKey: ["mrp-products-stock"] });
+      qc.invalidateQueries({ queryKey: ["suprimentos-kpis"] });
       toast.success("Produto excluído.");
     },
     onError: (e: Error) => toast.error("Erro ao excluir: " + e.message),
@@ -122,7 +129,9 @@ export function useUpdateMrpProduct() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["mrp-products"] });
+      qc.invalidateQueries({ queryKey: ["mrp-products-stock"] });
       qc.invalidateQueries({ queryKey: ["warehouse-stock-all"] });
+      qc.invalidateQueries({ queryKey: ["suprimentos-kpis"] });
       toast.success("Produto atualizado. Sistema verificará necessidade de OP automática.");
     },
     onError: (e: Error) => toast.error("Erro: " + e.message),
