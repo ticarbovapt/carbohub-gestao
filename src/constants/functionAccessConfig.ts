@@ -215,6 +215,21 @@ export const SCREEN_GROUPS: ScreenGroup[] = [
     ],
   },
   {
+    id: "portal_licenciado",
+    label: "Portal Licenciados",
+    screens: [
+      { id: "portal-licenciado",          label: "Portal Licenciado (acesso)",   path: "/licensee/dashboard" },
+      { id: "portal-licenciado-pedidos",   label: "Pedidos do Licenciado",        path: "/licensee/pedidos" },
+      { id: "portal-licenciado-creditos",  label: "Créditos do Licenciado",       path: "/licensee/creditos" },
+      { id: "portal-licenciado-comissoes", label: "Comissões do Licenciado",      path: "/licensee/comissoes" },
+      { id: "portal-licenciado-produtos",  label: "Produtos do Licenciado",       path: "/licensee/produtos" },
+      { id: "portal-licenciado-clientes",  label: "Clientes do Licenciado",       path: "/licensee/clientes" },
+      { id: "portal-licenciado-reagentes", label: "Reagentes do Licenciado",      path: "/licensee/reagentes" },
+      { id: "portal-licenciado-vapt",      label: "CarboVAPT (Licenciado)",       path: "/licensee/vapt" },
+      { id: "portal-licenciado-atendimento", label: "Atendimento (Licenciado)",   path: "/licensee/atendimentos" },
+    ],
+  },
+  {
     id: "outros",
     label: "Outros",
     screens: [

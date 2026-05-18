@@ -59,12 +59,15 @@ export function ProtectedRoute({
     return <Navigate to="/change-password" replace />;
   }
 
-  // Function-based check (enforcement path): when active + screenId provided, this is authoritative
-  if (ENFORCEMENT_ACTIVE && screenId && !canSeeByFunction) {
-    return <Navigate to="/dashboard" replace />;
+  // Function-based check (enforcement path): when active + screenId provided, this is authoritative.
+  // When it passes, skip all legacy checks to avoid false-positive denials from role mismatches.
+  if (ENFORCEMENT_ACTIVE && screenId) {
+    if (!canSeeByFunction) return <Navigate to="/dashboard" replace />;
+    return <>{children}</>;
   }
 
-  // Legacy role checks (active when ENFORCEMENT_ACTIVE = false)
+  // Legacy role checks — only run when enforcement is inactive OR no screenId was provided.
+  // This keeps backward compat during the partial-migration window.
   if (requiresCeo && !isCeo) {
     return <Navigate to="/dashboard" replace />;
   }

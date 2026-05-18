@@ -131,75 +131,81 @@ function AnimatedRoutes() {
             <Route path="/onboarding" element={<Onboarding />} />
 
             {/* Home Hub */}
-            <Route path="/home" element={<ProtectedRoute><HomeHub /></ProtectedRoute>} />
+            <Route path="/home" element={<ProtectedRoute screenId="home"><HomeHub /></ProtectedRoute>} />
 
             {/* Protected routes */}
-            <Route path="/dashboard"        element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
-            <Route path="/team"             element={<ProtectedRoute><Team /></ProtectedRoute>} />
-            <Route path="/org-chart"        element={<ProtectedRoute><OrgChartPage /></ProtectedRoute>} />
-            <Route path="/os"              element={<ProtectedRoute><OSBoard /></ProtectedRoute>} />
-            <Route path="/os/:id"          element={<ProtectedRoute><OSDetails /></ProtectedRoute>} />
-            <Route path="/checklist"       element={<ProtectedRoute><Checklist /></ProtectedRoute>} />
-            <Route path="/scheduling"      element={<ProtectedRoute><Scheduling /></ProtectedRoute>} />
-            <Route path="/licensees"       element={<ProtectedRoute><Licensees /></ProtectedRoute>} />
-            <Route path="/licensees/:id"   element={<ProtectedRoute><LicenseeDetails /></ProtectedRoute>} />
-            <Route path="/machines"        element={<ProtectedRoute><Machines /></ProtectedRoute>} />
-            <Route path="/orders"          element={<ProtectedRoute><Orders /></ProtectedRoute>} />
-            <Route path="/orders/new"      element={<ProtectedRoute><CreateOrder /></ProtectedRoute>} />
-            <Route path="/orders/:id"      element={<ProtectedRoute><OrderDetails /></ProtectedRoute>} />
-            <Route path="/orders/:id/print" element={<ProtectedRoute><OrderPrintPage /></ProtectedRoute>} />
-            <Route path="/role-matrix"     element={<ProtectedRoute><RoleMatrix /></ProtectedRoute>} />
-            <Route path="/responsibility-map" element={<ProtectedRoute><ResponsibilityMap /></ProtectedRoute>} />
-            <Route path="/sales-targets"   element={<ProtectedRoute><SalesTargets /></ProtectedRoute>} />
-            <Route path="/b2b"             element={<ProtectedRoute><B2BLeads /></ProtectedRoute>} />
-            <Route path="/b2b/funnel"      element={<ProtectedRoute><B2BFunnel /></ProtectedRoute>} />
-            <Route path="/crm"             element={<ProtectedRoute><CRMDashboard /></ProtectedRoute>} />
-            <Route path="/crm/:funnelType" element={<ProtectedRoute><CRMFunnel /></ProtectedRoute>} />
-            <Route path="/meu-painel"      element={<ProtectedRoute><MeuPainel /></ProtectedRoute>} />
-            <Route path="/import"          element={<ProtectedRoute><DataImport /></ProtectedRoute>} />
-            <Route path="/mapa-territorial" element={<ProtectedRoute><MapaTerritorial /></ProtectedRoute>} />
+            <Route path="/dashboard"        element={<ProtectedRoute screenId="dashboard"><Dashboard /></ProtectedRoute>} />
+            <Route path="/team"             element={<ProtectedRoute screenId="team"><Team /></ProtectedRoute>} />
+            <Route path="/org-chart"        element={<ProtectedRoute screenId="org-chart"><OrgChartPage /></ProtectedRoute>} />
+            <Route path="/os"               element={<ProtectedRoute screenId="os"><OSBoard /></ProtectedRoute>} />
+            <Route path="/os/:id"           element={<ProtectedRoute screenId="os"><OSDetails /></ProtectedRoute>} />
+            <Route path="/checklist"        element={<ProtectedRoute screenId="checklist"><Checklist /></ProtectedRoute>} />
+            <Route path="/scheduling"       element={<ProtectedRoute screenId="scheduling"><Scheduling /></ProtectedRoute>} />
+            <Route path="/licensees"        element={<ProtectedRoute screenId="licensees"><Licensees /></ProtectedRoute>} />
+            <Route path="/licensees/:id"    element={<ProtectedRoute screenId="licensees"><LicenseeDetails /></ProtectedRoute>} />
+            <Route path="/machines"         element={<ProtectedRoute screenId="machines"><Machines /></ProtectedRoute>} />
+            <Route path="/orders"           element={<ProtectedRoute screenId="orders"><Orders /></ProtectedRoute>} />
+            <Route path="/orders/new"       element={<ProtectedRoute screenId="orders-new"><CreateOrder /></ProtectedRoute>} />
+            <Route path="/orders/:id"       element={<ProtectedRoute screenId="orders"><OrderDetails /></ProtectedRoute>} />
+            <Route path="/orders/:id/print" element={<ProtectedRoute screenId="orders"><OrderPrintPage /></ProtectedRoute>} />
+            <Route path="/role-matrix"      element={<ProtectedRoute screenId="role-matrix"><RoleMatrix /></ProtectedRoute>} />
+            <Route path="/responsibility-map" element={<ProtectedRoute screenId="responsibility-map"><ResponsibilityMap /></ProtectedRoute>} />
+            <Route path="/sales-targets"    element={<ProtectedRoute screenId="sales-targets"><SalesTargets /></ProtectedRoute>} />
+            <Route path="/b2b"              element={<ProtectedRoute screenId="b2b"><B2BLeads /></ProtectedRoute>} />
+            <Route path="/b2b/funnel"       element={<ProtectedRoute screenId="b2b-funnel"><B2BFunnel /></ProtectedRoute>} />
+            <Route path="/crm"              element={<ProtectedRoute screenId="crm"><CRMDashboard /></ProtectedRoute>} />
+            <Route path="/crm/:funnelType"  element={<ProtectedRoute screenId="crm"><CRMFunnel /></ProtectedRoute>} />
+            <Route path="/meu-painel"       element={<ProtectedRoute screenId="meu-painel"><MeuPainel /></ProtectedRoute>} />
+            <Route path="/import"           element={<ProtectedRoute screenId="import"><DataImport /></ProtectedRoute>} />
+            <Route path="/mapa-territorial" element={<ProtectedRoute screenId="mapa-territorial"><MapaTerritorial /></ProtectedRoute>} />
 
             {/* Network Intelligence */}
-            <Route path="/ops/network-map"             element={<ProtectedRoute><NetworkMap /></ProtectedRoute>} />
-            <Route path="/ops/licensee-ranking"        element={<ProtectedRoute><LicenseeRanking /></ProtectedRoute>} />
-            <Route path="/ops/territory-intelligence"  element={<ProtectedRoute><TerritoryIntelligence /></ProtectedRoute>} />
-            <Route path="/ops/territory-expansion"     element={<ProtectedRoute><TerritoryExpansion /></ProtectedRoute>} />
+            <Route path="/ops/network-map"            element={<ProtectedRoute screenId="network-map"><NetworkMap /></ProtectedRoute>} />
+            <Route path="/ops/licensee-ranking"       element={<ProtectedRoute screenId="licensee-ranking"><LicenseeRanking /></ProtectedRoute>} />
+            <Route path="/ops/territory-intelligence" element={<ProtectedRoute screenId="territory-intelligence"><TerritoryIntelligence /></ProtectedRoute>} />
+            <Route path="/ops/territory-expansion"    element={<ProtectedRoute screenId="territory-expansion"><TerritoryExpansion /></ProtectedRoute>} />
 
-            <Route path="/logistics"   element={<ProtectedRoute><Logistics /></ProtectedRoute>} />
-            <Route path="/purchasing"  element={<ProtectedRoute><Purchasing /></ProtectedRoute>} />
-            <Route path="/financeiro"  element={<ProtectedRoute><Financeiro /></ProtectedRoute>} />
-            <Route path="/suprimentos" element={<ProtectedRoute><Suprimentos /></ProtectedRoute>} />
+            <Route path="/logistics"   element={<ProtectedRoute screenId="logistics"><Logistics /></ProtectedRoute>} />
+            <Route path="/purchasing"  element={<ProtectedRoute screenId="purchasing"><Purchasing /></ProtectedRoute>} />
+            <Route path="/financeiro"  element={<ProtectedRoute screenId="financeiro"><Financeiro /></ProtectedRoute>} />
+            <Route path="/suprimentos" element={<ProtectedRoute screenId="suprimentos"><Suprimentos /></ProtectedRoute>} />
 
             {/* Dashboards */}
             <Route path="/dashboards" element={<Navigate to="/dashboards/producao" replace />} />
-            <Route path="/dashboards/producao"  element={<ProtectedRoute><DashboardProducao /></ProtectedRoute>} />
-            <Route path="/dashboards/financeiro" element={<ProtectedRoute><DashboardFinanceiro /></ProtectedRoute>} />
-            <Route path="/dashboards/logistica"  element={<ProtectedRoute><DashboardLogistica /></ProtectedRoute>} />
-            <Route path="/dashboards/comercial"  element={<ProtectedRoute><DashboardComercial /></ProtectedRoute>} />
-            <Route path="/dashboards/estrategico" element={<ProtectedRoute><DashboardEstrategico /></ProtectedRoute>} />
+            <Route path="/dashboards/producao"   element={<ProtectedRoute screenId="dashboard-producao"><DashboardProducao /></ProtectedRoute>} />
+            <Route path="/dashboards/financeiro" element={<ProtectedRoute screenId="dashboard-financeiro"><DashboardFinanceiro /></ProtectedRoute>} />
+            <Route path="/dashboards/logistica"  element={<ProtectedRoute screenId="dashboard-logistica"><DashboardLogistica /></ProtectedRoute>} />
+            <Route path="/dashboards/comercial"  element={<ProtectedRoute screenId="dashboard-comercial"><DashboardComercial /></ProtectedRoute>} />
+            <Route path="/dashboards/estrategico" element={<ProtectedRoute screenId="dashboard-estrategico"><DashboardEstrategico /></ProtectedRoute>} />
 
             {/* MRP */}
             <Route path="/mrp"           element={<Navigate to="/dashboards/producao" replace />} />
             <Route path="/mrp/dashboard" element={<Navigate to="/dashboards/producao" replace />} />
-            <Route path="/mrp/products"  element={<ProtectedRoute><MrpProducts /></ProtectedRoute>} />
-            <Route path="/mrp/suppliers" element={<ProtectedRoute><MrpSuppliers /></ProtectedRoute>} />
-            <Route path="/skus"          element={<ProtectedRoute><Skus /></ProtectedRoute>} />
-            <Route path="/lots"          element={<ProtectedRoute><Lots /></ProtectedRoute>} />
-            <Route path="/production-orders"     element={<ProtectedRoute><ProductionOrdersOP /></ProtectedRoute>} />
-            <Route path="/production-orders/:id" element={<ProtectedRoute><ProductionOrderDetail /></ProtectedRoute>} />
+            <Route path="/mrp/products"  element={<ProtectedRoute screenId="mrp-products"><MrpProducts /></ProtectedRoute>} />
+            <Route path="/mrp/suppliers" element={<ProtectedRoute screenId="mrp-suppliers"><MrpSuppliers /></ProtectedRoute>} />
+            <Route path="/skus"          element={<ProtectedRoute screenId="skus"><Skus /></ProtectedRoute>} />
+            <Route path="/lots"          element={<ProtectedRoute screenId="lots"><Lots /></ProtectedRoute>} />
+            <Route path="/production-orders"     element={<ProtectedRoute screenId="production-orders"><ProductionOrdersOP /></ProtectedRoute>} />
+            <Route path="/production-orders/:id" element={<ProtectedRoute screenId="production-orders"><ProductionOrderDetail /></ProtectedRoute>} />
 
-            {/* Licensee area */}
-            <Route path="/licensee/new"      element={<ProtectedRoute><NewLicensee /></ProtectedRoute>} />
-            <Route path="/licensee/dashboard" element={<ProtectedRoute><LicenseeDashboard /></ProtectedRoute>} />
-            <Route path="/licensee/vapt"      element={<ProtectedRoute><LicenseeVapt /></ProtectedRoute>} />
-            <Route path="/licensee/ze"        element={<Navigate to="/licensee/produtos" replace />} />
-            <Route path="/licensee/produtos"  element={<ProtectedRoute><LicenseeProducts /></ProtectedRoute>} />
-            <Route path="/licensee/pedidos"   element={<ProtectedRoute><LicenseeRequests /></ProtectedRoute>} />
-            <Route path="/licensee/creditos"  element={<ProtectedRoute><LicenseeCredits /></ProtectedRoute>} />
-            <Route path="/licensee/comissoes" element={<ProtectedRoute><LicenseeCommissions /></ProtectedRoute>} />
+            {/* Licensee portal
+                Nota: screenId não é aplicado nestas rotas intencionalmente.
+                O acesso é bifurcado internamente na página (admin view vs manager view)
+                via useCanViewLicenseeArea() + useLicenseeStatus(). Aplicar screenId aqui
+                bloquearia usuários-licenciados legítimos que não têm a tela configurada
+                em function_screen_access. A criação de licenciados (/licensee/new) usa
+                "licensees" pois é uma ação exclusiva de staff interno. */}
+            <Route path="/licensee/new"          element={<ProtectedRoute screenId="licensees"><NewLicensee /></ProtectedRoute>} />
+            <Route path="/licensee/dashboard"    element={<ProtectedRoute><LicenseeDashboard /></ProtectedRoute>} />
+            <Route path="/licensee/vapt"         element={<ProtectedRoute><LicenseeVapt /></ProtectedRoute>} />
+            <Route path="/licensee/ze"           element={<Navigate to="/licensee/produtos" replace />} />
+            <Route path="/licensee/produtos"     element={<ProtectedRoute><LicenseeProducts /></ProtectedRoute>} />
+            <Route path="/licensee/pedidos"      element={<ProtectedRoute><LicenseeRequests /></ProtectedRoute>} />
+            <Route path="/licensee/creditos"     element={<ProtectedRoute><LicenseeCredits /></ProtectedRoute>} />
+            <Route path="/licensee/comissoes"    element={<ProtectedRoute><LicenseeCommissions /></ProtectedRoute>} />
             <Route path="/licensee/atendimentos" element={<ProtectedRoute><LicenseeAtendimento /></ProtectedRoute>} />
-            <Route path="/licensee/clientes"  element={<ProtectedRoute><LicenseeClientes /></ProtectedRoute>} />
-            <Route path="/licensee/reagentes" element={<ProtectedRoute><LicenseeReagentes /></ProtectedRoute>} />
+            <Route path="/licensee/clientes"     element={<ProtectedRoute><LicenseeClientes /></ProtectedRoute>} />
+            <Route path="/licensee/reagentes"    element={<ProtectedRoute><LicenseeReagentes /></ProtectedRoute>} />
 
             {/* CarboVAPT flow */}
             <Route path="/licenciado/carboVAPT/servicos"    element={<ProtectedRoute><CarboVAPTServices /></ProtectedRoute>} />
@@ -207,25 +213,25 @@ function AnimatedRoutes() {
             <Route path="/licenciado/carboVAPT/pagamento"   element={<ProtectedRoute><CarboVAPTPayment /></ProtectedRoute>} />
             <Route path="/licenciado/carboVAPT/confirmacao" element={<ProtectedRoute><CarboVAPTConfirmation /></ProtectedRoute>} />
 
-            {/* Legacy portal redirects */}
-            <Route path="/portal"         element={<ProtectedRoute><LicenseeDashboard /></ProtectedRoute>} />
-            <Route path="/portal/vapt"    element={<ProtectedRoute><ServiceCatalog operationType="carbo_vapt" /></ProtectedRoute>} />
-            <Route path="/portal/ze"      element={<ProtectedRoute><ServiceCatalog operationType="carbo_ze" /></ProtectedRoute>} />
-            <Route path="/portal/pedidos" element={<ProtectedRoute><LicenseeRequests /></ProtectedRoute>} />
+            {/* Legacy portal redirects (sem screenId — mesma razão do portal acima) */}
+            <Route path="/portal"          element={<ProtectedRoute><LicenseeDashboard /></ProtectedRoute>} />
+            <Route path="/portal/vapt"     element={<ProtectedRoute><ServiceCatalog operationType="carbo_vapt" /></ProtectedRoute>} />
+            <Route path="/portal/ze"       element={<ProtectedRoute><ServiceCatalog operationType="carbo_ze" /></ProtectedRoute>} />
+            <Route path="/portal/pedidos"  element={<ProtectedRoute><LicenseeRequests /></ProtectedRoute>} />
             <Route path="/portal/creditos" element={<ProtectedRoute><LicenseeCredits /></ProtectedRoute>} />
 
-            {/* Admin */}
-            <Route path="/admin"        element={<ProtectedRoute requiredRole="admin"><Admin /></ProtectedRoute>} />
-            <Route path="/admin/approval" element={<ProtectedRoute requiredRole="admin"><AdminApproval /></ProtectedRoute>} />
-            <Route path="/admin/cockpit"  element={<ProtectedRoute requiredRole="admin" requiresCeo><CockpitEstrategico /></ProtectedRoute>} />
-            <Route path="/admin/pipeline" element={<ProtectedRoute requiredRole="admin"><PipelineConfig /></ProtectedRoute>} />
-            <Route path="/admin/webhooks" element={<ProtectedRoute requiredRole="admin"><WebhookConfig /></ProtectedRoute>} />
-            <Route path="/admin/nfse"     element={<ProtectedRoute requiredRole="admin"><NFSeImportPage /></ProtectedRoute>} />
-            <Route path="/governance"     element={<ProtectedRoute requiresCeo><CarboGovernance /></ProtectedRoute>} />
-            <Route path="/admin/*"        element={<ProtectedRoute requiredRole="admin"><Admin /></ProtectedRoute>} />
+            {/* Admin — mantém requiredRole como guard legacy + screenId para enforcement */}
+            <Route path="/admin"          element={<ProtectedRoute requiredRole="admin" screenId="admin"><Admin /></ProtectedRoute>} />
+            <Route path="/admin/approval" element={<ProtectedRoute requiredRole="admin" screenId="admin-approval"><AdminApproval /></ProtectedRoute>} />
+            <Route path="/admin/cockpit"  element={<ProtectedRoute requiredRole="admin" requiresCeo screenId="cockpit"><CockpitEstrategico /></ProtectedRoute>} />
+            <Route path="/admin/pipeline" element={<ProtectedRoute requiredRole="admin" screenId="admin-pipeline"><PipelineConfig /></ProtectedRoute>} />
+            <Route path="/admin/webhooks" element={<ProtectedRoute requiredRole="admin" screenId="admin-webhooks"><WebhookConfig /></ProtectedRoute>} />
+            <Route path="/admin/nfse"     element={<ProtectedRoute requiredRole="admin" screenId="nfse"><NFSeImportPage /></ProtectedRoute>} />
+            <Route path="/governance"     element={<ProtectedRoute requiresCeo screenId="governance"><CarboGovernance /></ProtectedRoute>} />
+            <Route path="/admin/*"        element={<ProtectedRoute requiredRole="admin" screenId="admin"><Admin /></ProtectedRoute>} />
 
-            {/* PDV Routes */}
-            <Route path="/pdv" element={<ProtectedRoute><PDVLayout /></ProtectedRoute>}>
+            {/* PDV Routes — screenId no ProtectedRoute pai cobre toda a área /pdv/* */}
+            <Route path="/pdv" element={<ProtectedRoute screenId="pdv-dashboard"><PDVLayout /></ProtectedRoute>}>
               <Route path="dashboard"  element={<PDVDashboard />} />
               <Route path="pos"        element={<PDVPos />} />
               <Route path="estoque"    element={<PDVEstoque />} />
@@ -236,23 +242,23 @@ function AnimatedRoutes() {
             </Route>
 
             {/* Rede PDV */}
-            <Route path="/ops/pdv-network" element={<ProtectedRoute><OpsNetwork /></ProtectedRoute>} />
+            <Route path="/ops/pdv-network" element={<ProtectedRoute screenId="pdv-network"><OpsNetwork /></ProtectedRoute>} />
 
             {/* Bling Integration */}
             <Route path="/integrations/bling/callback" element={<BlingCallback />} />
-            <Route path="/integrations/bling" element={<ProtectedRoute><BlingIntegration /></ProtectedRoute>} />
+            <Route path="/integrations/bling" element={<ProtectedRoute screenId="bling"><BlingIntegration /></ProtectedRoute>} />
 
             {/* Viagens & PC */}
-            <Route path="/viagens" element={<ProtectedRoute><ViagensPage /></ProtectedRoute>} />
+            <Route path="/viagens" element={<ProtectedRoute screenId="viagens"><ViagensPage /></ProtectedRoute>} />
 
             {/* CarboOPS */}
-            <Route path="/ops/alerts" element={<ProtectedRoute><OpsAlerts /></ProtectedRoute>} />
+            <Route path="/ops/alerts" element={<ProtectedRoute screenId="ops-alerts"><OpsAlerts /></ProtectedRoute>} />
 
             {/* Bug Reports */}
-            <Route path="/bugs" element={<ProtectedRoute><BugReportsPage /></ProtectedRoute>} />
+            <Route path="/bugs" element={<ProtectedRoute screenId="bugs"><BugReportsPage /></ProtectedRoute>} />
 
             {/* AI Assistant */}
-            <Route path="/ai-assistant" element={<ProtectedRoute><AIAssistantPage /></ProtectedRoute>} />
+            <Route path="/ai-assistant" element={<ProtectedRoute screenId="ai-assistant"><AIAssistantPage /></ProtectedRoute>} />
 
             {/* Catch-all */}
             <Route path="*" element={<NotFound />} />
