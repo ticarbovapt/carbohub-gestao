@@ -73,6 +73,9 @@ export function useCreateStockMovement() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["stock-movements"] });
       qc.invalidateQueries({ queryKey: ["mrp-products"] });
+      qc.invalidateQueries({ queryKey: ["mrp-products-stock"] });
+      qc.invalidateQueries({ queryKey: ["warehouse-stock-all"] });
+      qc.invalidateQueries({ queryKey: ["suprimentos-kpis"] });
       toast.success("Movimento de estoque registrado");
     },
     onError: (e: any) => toast.error("Erro no movimento", { description: e.message }),
