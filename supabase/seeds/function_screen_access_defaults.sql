@@ -32,15 +32,20 @@ VALUES
   'bugs','ai-assistant','bling'
 ]),
 
--- Assistente Executiva: suporte à gestão, sem configurações técnicas/produção baixo nível
+-- Assistente Executiva: mesmo acesso dos heads (tudo exceto Cockpit CEO)
 ('command', 'assistente_executiva', ARRAY[
   'dashboard','home','meu-painel',
-  'orders','viagens',
-  'financeiro',
-  'dashboard-financeiro','dashboard-estrategico','dashboard-comercial',
-  'team','org-chart','responsibility-map',
-  'governance',
-  'ai-assistant'
+  'os','checklist','scheduling','machines','ops-alerts',
+  'orders','orders-new','b2b','b2b-funnel','crm','sales-targets','licensees',
+  'financeiro','viagens','nfse',
+  'mrp-products','mrp-suppliers','skus','lots','production-orders','suprimentos','purchasing',
+  'logistics',
+  'dashboard-producao','dashboard-financeiro','dashboard-logistica','dashboard-comercial','dashboard-estrategico',
+  'mapa-territorial','network-map','licensee-ranking','territory-intelligence','territory-expansion','pdv-network',
+  'pdv-dashboard','pdv-pos','pdv-estoque','pdv-vendedores','pdv-ranking',
+  'team','org-chart','role-matrix','responsibility-map',
+  'admin','admin-approval','admin-pipeline','admin-webhooks','import','governance',
+  'bugs','ai-assistant','bling'
 ]),
 
 -- ===========================================================================
