@@ -191,18 +191,19 @@ Deno.serve(async (req: Request): Promise<Response> => {
     const { error: profileError } = await supabaseAdmin
       .from("profiles")
       .upsert({
-        id:                newUserId,
-        full_name:         fullName,
-        email:             placeholderEmail,
-        username:          username,
-        department:        department,
+        id:                   newUserId,
+        full_name:            fullName,
+        email:                placeholderEmail,
+        username:             username,
+        department:           department,
         password_must_change: true,
-        created_by_manager: callingUser.id,
-        status:            "approved",
-        manager_user_id:   managerUserId || callingUser.id,
-        funcao:            funcao || null,
-        escopo:            escopo || null,
-        allowed_interfaces: allowedInterfaces || ["carbo_ops"],
+        temp_password_expires_at: null,
+        created_by_manager:   callingUser.id,
+        status:               "approved",
+        manager_user_id:      managerUserId || callingUser.id,
+        funcao:               funcao || null,
+        escopo:               escopo || null,
+        allowed_interfaces:   allowedInterfaces || ["carbo_ops"],
       }, { onConflict: "id" });
 
     if (profileError) {
