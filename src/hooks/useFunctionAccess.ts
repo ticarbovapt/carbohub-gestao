@@ -50,8 +50,8 @@ export const LEGACY_ACCESS_ACTIVE = !ENFORCEMENT_ACTIVE;
 export function useFunctionAccess(): FunctionAccess {
   const { profile, isMasterAdmin, isSuporte } = useAuth();
 
-  const dept   = (profile as any)?.department as string | null;
-  const funcao = profile?.funcao as string | null;
+  const dept   = profile?.department ?? null;
+  const funcao = profile?.funcao     ?? null;
   const userId = profile?.id as string | undefined;
 
   const { data, isLoading } = useQuery({

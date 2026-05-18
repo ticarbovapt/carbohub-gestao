@@ -114,7 +114,7 @@ export function useClearUserAccessOverride() {
 export function useCanGrantOverride(targetDepartment: string | null): boolean {
   const { isAdmin, profile } = useAuth();
   if (isAdmin) return true;
-  const funcao = (profile as any)?.funcao as string | null;
-  const dept   = (profile as any)?.department as string | null;
+  const funcao = profile?.funcao     ?? null;
+  const dept   = profile?.department ?? null;
   return funcao === "head" && !!targetDepartment && dept === targetDepartment;
 }

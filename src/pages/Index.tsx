@@ -33,7 +33,7 @@ type ViewMode = "login" | "forgot-password" | "request-access";
 
 const Index = () => {
   const navigate = useNavigate();
-  const { user, profile, isLoading, signOut, isAdmin, isManager, signIn, passwordMustChange, tempPasswordExpired } =
+  const { user, profile, isLoading, signOut, signIn, passwordMustChange, tempPasswordExpired } =
     useAuth();
 
   const [viewMode, setViewMode] = useState<ViewMode>("login");
