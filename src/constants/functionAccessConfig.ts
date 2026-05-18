@@ -15,7 +15,8 @@ export interface ScreenGroup {
 export interface DeptFunction {
   key: string;
   label: string;
-  scope: DataScope;
+  scope: DataScope;      // view scope (o que vê)
+  editScope: DataScope;  // edit scope (o que pode editar)
 }
 
 export interface Department {
@@ -37,55 +38,55 @@ export const DEPARTMENTS: Department[] = [
     key: "command",
     label: "Command",
     functions: [
-      { key: "ceo",                  label: "CEO",                  scope: "global" },
-      { key: "assistente_executiva", label: "Assistente Executiva", scope: "departamento" },
+      { key: "ceo",                  label: "CEO",                  scope: "global",       editScope: "global" },
+      { key: "assistente_executiva", label: "Assistente Executiva", scope: "departamento", editScope: "departamento" },
     ],
   },
   {
     key: "ops",
     label: "Operações",
     functions: [
-      { key: "head",        label: "Head",           scope: "global" },
-      { key: "gerente",     label: "Gerente",        scope: "departamento" },
-      { key: "coordenador", label: "Coordenador(a)", scope: "departamento" },
-      { key: "supervisor",  label: "Supervisor(a)",  scope: "equipe" },
-      { key: "staff",       label: "Colaborador",    scope: "proprio" },
+      { key: "head",        label: "Head",           scope: "global",       editScope: "global" },
+      { key: "gerente",     label: "Gerente",        scope: "departamento", editScope: "departamento" },
+      { key: "coordenador", label: "Coordenador(a)", scope: "departamento", editScope: "departamento" },
+      { key: "supervisor",  label: "Supervisor(a)",  scope: "equipe",       editScope: "equipe" },
+      { key: "staff",       label: "Colaborador",    scope: "proprio",      editScope: "proprio" },
     ],
   },
   {
     key: "b2b",
     label: "Vendas",
     functions: [
-      { key: "head",          label: "Head",           scope: "global" },
-      { key: "supervisor",    label: "Supervisor(a)",  scope: "equipe" },
-      { key: "vendedor_b2b",  label: "Vendedor B2B",   scope: "proprio" },
-      { key: "vendedor_b2c",  label: "Vendedor B2C",   scope: "proprio" },
+      { key: "head",         label: "Head",          scope: "global",  editScope: "global" },
+      { key: "supervisor",   label: "Supervisor(a)", scope: "equipe",  editScope: "equipe" },
+      { key: "vendedor_b2b", label: "Vendedor B2B",  scope: "proprio", editScope: "proprio" },
+      { key: "vendedor_b2c", label: "Vendedor B2C",  scope: "proprio", editScope: "proprio" },
     ],
   },
   {
     key: "finance",
     label: "Finance",
     functions: [
-      { key: "head",        label: "Head",           scope: "global" },
-      { key: "gerente",     label: "Gerente",        scope: "departamento" },
-      { key: "coordenador", label: "Coordenador(a)", scope: "departamento" },
-      { key: "analista",    label: "Analista",       scope: "proprio" },
+      { key: "head",        label: "Head",           scope: "global",       editScope: "global" },
+      { key: "gerente",     label: "Gerente",        scope: "departamento", editScope: "departamento" },
+      { key: "coordenador", label: "Coordenador(a)", scope: "departamento", editScope: "departamento" },
+      { key: "analista",    label: "Analista",       scope: "proprio",      editScope: "proprio" },
     ],
   },
   {
     key: "growth",
     label: "Growth",
     functions: [
-      { key: "head",  label: "Head",        scope: "global" },
-      { key: "staff", label: "Colaborador", scope: "proprio" },
+      { key: "head",  label: "Head",        scope: "global",  editScope: "global" },
+      { key: "staff", label: "Colaborador", scope: "proprio", editScope: "proprio" },
     ],
   },
   {
     key: "expansao",
     label: "Expansão",
     functions: [
-      { key: "head",  label: "Head",        scope: "global" },
-      { key: "staff", label: "Colaborador", scope: "proprio" },
+      { key: "head",  label: "Head",        scope: "global",  editScope: "global" },
+      { key: "staff", label: "Colaborador", scope: "proprio", editScope: "proprio" },
     ],
   },
   {
@@ -93,8 +94,8 @@ export const DEPARTMENTS: Department[] = [
     label: "TI / Suporte",
     fullAccess: true,
     functions: [
-      { key: "head",  label: "Head",        scope: "global" },
-      { key: "staff", label: "Colaborador", scope: "departamento" },
+      { key: "head",  label: "Head",        scope: "global",       editScope: "global" },
+      { key: "staff", label: "Colaborador", scope: "departamento", editScope: "departamento" },
     ],
   },
 ];

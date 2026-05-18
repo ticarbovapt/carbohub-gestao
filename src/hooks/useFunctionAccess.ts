@@ -25,12 +25,16 @@ import { useAuth } from "@/contexts/AuthContext";
 import type { DataScope } from "@/constants/functionAccessConfig";
 
 export interface FunctionAccess {
-  /** Screen IDs this function is allowed to see (from function_screen_access). */
+  /** Screen IDs this function is allowed to see (function_screen_access + extra_screen_ids override). */
   allowedScreenIds: string[];
-  /** Data visibility scope within allowed screens. */
+  /** Data visibility scope — merged: override ?? function default. */
   dataScope: DataScope;
+  /** Edit scope — merged: override ?? function default. */
+  editScope: DataScope;
   /** True when function_screen_access has an entry for this dept+funcao. */
   isConfigured: boolean;
+  /** True when the user has an individual access override active. */
+  hasOverride: boolean;
   /** True while loading from DB. */
   isLoading: boolean;
 }
@@ -44,44 +48,65 @@ export function useFunctionAccess(): FunctionAccess {
 
   const dept   = (profile as any)?.department as string | null;
   const funcao = profile?.funcao as string | null;
+  const userId = profile?.id as string | undefined;
 
   const { data, isLoading } = useQuery({
-    queryKey: ["function-access", dept, funcao],
-    enabled: !!dept && !!funcao,
+    queryKey: ["function-access", dept, funcao, userId],
+    enabled: !!dept && !!funcao && !!userId,
     queryFn: async () => {
-      // Screen access entry
-      const { data: screenRow } = await (supabase as any)
-        .from("function_screen_access")
-        .select("screen_ids")
-        .eq("department", dept)
-        .eq("function_key", funcao)
-        .maybeSingle();
+      const [screenRes, fnRes, overrideRes] = await Promise.all([
+        // Screen access from function_screen_access
+        (supabase as any)
+          .from("function_screen_access")
+          .select("screen_ids")
+          .eq("department", dept)
+          .eq("function_key", funcao)
+          .maybeSingle(),
+        // View + edit scope from department_functions
+        (supabase as any)
+          .from("department_functions")
+          .select("data_scope, edit_scope")
+          .eq("department", dept)
+          .eq("function_key", funcao)
+          .maybeSingle(),
+        // Individual override
+        (supabase as any)
+          .from("user_access_overrides")
+          .select("view_scope, edit_scope, extra_screen_ids")
+          .eq("user_id", userId)
+          .maybeSingle(),
+      ]);
 
-      // Data scope from department_functions
-      const { data: fnRow } = await (supabase as any)
-        .from("department_functions")
-        .select("data_scope")
-        .eq("department", dept)
-        .eq("function_key", funcao)
-        .maybeSingle();
+      const functionScreenIds = (screenRes.data?.screen_ids ?? []) as string[];
+      const extraScreenIds    = (overrideRes.data?.extra_screen_ids ?? []) as string[];
+      const allScreenIds      = [...new Set([...functionScreenIds, ...extraScreenIds])];
+
+      const fnViewScope  = (fnRes.data?.data_scope ?? "proprio") as DataScope;
+      const fnEditScope  = (fnRes.data?.edit_scope ?? "proprio") as DataScope;
+      const ovViewScope  = overrideRes.data?.view_scope as DataScope | null ?? null;
+      const ovEditScope  = overrideRes.data?.edit_scope as DataScope | null ?? null;
 
       return {
-        screenIds:  (screenRow?.screen_ids ?? []) as string[],
-        dataScope:  (fnRow?.data_scope ?? "proprio") as DataScope,
-        configured: !!screenRow,
+        screenIds:   allScreenIds,
+        dataScope:   ovViewScope ?? fnViewScope,
+        editScope:   ovEditScope ?? fnEditScope,
+        configured:  !!screenRes.data,
+        hasOverride: !!overrideRes.data,
       };
     },
   });
 
   // MasterAdmin and TI/Suporte always bypass — full access.
   if (isMasterAdmin || isSuporte) {
-    return { allowedScreenIds: [], dataScope: "global", isConfigured: true, isLoading: false };
+    return { allowedScreenIds: [], dataScope: "global", editScope: "global", isConfigured: true, hasOverride: false, isLoading: false };
   }
 
   return {
-    allowedScreenIds: data?.screenIds ?? [],
-    dataScope:        data?.dataScope ?? "proprio",
-    isConfigured:     data?.configured ?? false,
+    allowedScreenIds: data?.screenIds   ?? [],
+    dataScope:        data?.dataScope   ?? "proprio",
+    editScope:        data?.editScope   ?? "proprio",
+    isConfigured:     data?.configured  ?? false,
+    hasOverride:      data?.hasOverride ?? false,
     isLoading,
   };
 }

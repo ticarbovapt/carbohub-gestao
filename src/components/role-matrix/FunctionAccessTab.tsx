@@ -7,6 +7,7 @@ import {
   useDepartmentFunctions,
   useCreateDepartmentFunction,
   useUpdateFunctionScope,
+  useUpdateFunctionEditScope,
   useUpdateFunctionLabel,
   useDepartmentLabels,
   useUpdateDepartmentLabel,
@@ -18,7 +19,7 @@ import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
-import { ChevronDown, ChevronRight, Save, Loader2, Shield, AlertTriangle, Plus, Eye, Pencil, Check, X } from "lucide-react";
+import { ChevronDown, ChevronRight, Save, Loader2, Shield, AlertTriangle, Plus, Eye, Pencil, Check, X, FilePen } from "lucide-react";
 import { toast } from "sonner";
 import { useCanManageMatrix } from "@/hooks/useFunctionAccess";
 
@@ -51,12 +52,14 @@ export function FunctionAccessTab() {
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set(SCREEN_GROUPS.map(g => g.id)));
   const [localAccess, setLocalAccess] = useState<AccessMap>({});
   const [localScopes, setLocalScopes] = useState<Record<string, DataScope>>({});
+  const [localEditScopes, setLocalEditScopes] = useState<Record<string, DataScope>>({});
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
 
   const canManage = useCanManageMatrix();
   const createFn = useCreateDepartmentFunction();
   const updateScope = useUpdateFunctionScope();
+  const updateEditScope = useUpdateFunctionEditScope();
   const updateFnLabel = useUpdateFunctionLabel();
   const updateDeptLabel = useUpdateDepartmentLabel();
   const { data: deptLabelOverrides = {} } = useDepartmentLabels();
@@ -112,13 +115,17 @@ export function FunctionAccessTab() {
 
   const { data: deptFunctions = [], isLoading: loadingFns } = useDepartmentFunctions(selectedDept);
 
-  // Seed localScopes from DB data
+  // Seed localScopes + localEditScopes from DB data
   useEffect(() => {
-    const map: Record<string, DataScope> = {};
+    const viewMap: Record<string, DataScope> = {};
+    const editMap: Record<string, DataScope> = {};
     deptFunctions.forEach(fn => {
-      map[buildKey(fn.department, fn.function_key)] = fn.data_scope;
+      const k = buildKey(fn.department, fn.function_key);
+      viewMap[k] = fn.data_scope;
+      editMap[k] = fn.edit_scope;
     });
-    setLocalScopes(prev => ({ ...prev, ...map }));
+    setLocalScopes(prev => ({ ...prev, ...viewMap }));
+    setLocalEditScopes(prev => ({ ...prev, ...editMap }));
   }, [deptFunctions]);
 
   const handleCreateFunction = async () => {
@@ -165,11 +172,18 @@ export function FunctionAccessTab() {
 
   const currentKey = selectedFunc ? buildKey(selectedDept, selectedFunc) : null;
   const currentScreens: Set<string> = currentKey ? (localAccess[currentKey] || new Set()) : new Set();
-  const currentScope: DataScope = currentKey ? (localScopes[currentKey] || "proprio") : "proprio";
+  const currentScope: DataScope     = currentKey ? (localScopes[currentKey]     || "proprio") : "proprio";
+  const currentEditScope: DataScope = currentKey ? (localEditScopes[currentKey] || "proprio") : "proprio";
 
   const setScope = (scope: DataScope) => {
     if (!currentKey) return;
     setLocalScopes(prev => ({ ...prev, [currentKey]: scope }));
+    setDirty(true);
+  };
+
+  const setEditScope = (scope: DataScope) => {
+    if (!currentKey) return;
+    setLocalEditScopes(prev => ({ ...prev, [currentKey]: scope }));
     setDirty(true);
   };
 
@@ -230,14 +244,19 @@ export function FunctionAccessTab() {
 
       if (upsertError) throw upsertError;
 
-      // Save scope (best-effort — silently skips if column doesn't exist yet)
+      // Save view scope + edit scope (best-effort — silently skips if column doesn't exist yet)
       try {
         await updateScope.mutateAsync({
           department: selectedDept,
           function_key: selectedFunc,
           data_scope: currentScope,
         });
-      } catch { /* migration pending — scope will persist after it runs */ }
+        await updateEditScope.mutateAsync({
+          department: selectedDept,
+          function_key: selectedFunc,
+          edit_scope: currentEditScope,
+        });
+      } catch { /* migration pending — scopes will persist after it runs */ }
 
       await qc.invalidateQueries({ queryKey: ["function-screen-access"] });
       toast.success("Configuração salva!");
@@ -472,6 +491,37 @@ export function FunctionAccessTab() {
                       className={cn(
                         "rounded-lg border px-2 py-2 text-center text-[11px] font-medium transition-all",
                         currentScope === s.value ? {
+                          "proprio":      "border-border bg-muted text-foreground",
+                          "equipe":       "border-blue-500/60 bg-blue-500/10 text-blue-500",
+                          "departamento": "border-violet-500/60 bg-violet-500/10 text-violet-500",
+                          "global":       "border-green-500/60 bg-green-500/10 text-green-600",
+                        }[s.value] : "border-border/40 text-muted-foreground hover:border-border hover:text-foreground"
+                      )}
+                    >
+                      {s.label}
+                      <span className="block text-[9px] font-normal opacity-70 leading-tight mt-0.5">
+                        {s.description.split(" ").slice(0, 3).join(" ")}…
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Edit scope selector */}
+              <div className="px-4 py-3 border-b border-border/60 bg-muted/10 space-y-2">
+                <div className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                  <FilePen className="h-3.5 w-3.5" />
+                  Permissão de Edição
+                </div>
+                <div className="grid grid-cols-4 gap-1.5">
+                  {DATA_SCOPES.map(s => (
+                    <button
+                      key={s.value}
+                      onClick={() => setEditScope(s.value)}
+                      title={s.description}
+                      className={cn(
+                        "rounded-lg border px-2 py-2 text-center text-[11px] font-medium transition-all",
+                        currentEditScope === s.value ? {
                           "proprio":      "border-border bg-muted text-foreground",
                           "equipe":       "border-blue-500/60 bg-blue-500/10 text-blue-500",
                           "departamento": "border-violet-500/60 bg-violet-500/10 text-violet-500",

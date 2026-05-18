@@ -11,7 +11,8 @@ export interface DepartmentFunction {
   label: string;
   hierarchy_order: number;
   reports_to_key: string | null;
-  data_scope: DataScope;
+  data_scope: DataScope;   // view scope
+  edit_scope: DataScope;   // edit scope
   is_active: boolean;
 }
 
@@ -25,6 +26,7 @@ function configFallback(department: string): DepartmentFunction[] {
     hierarchy_order: i + 1,
     reports_to_key: null,
     data_scope: f.scope,
+    edit_scope: f.editScope,
     is_active: true,
   }));
 }
@@ -83,6 +85,25 @@ export function useCreateDepartmentFunction() {
       toast.success("Função criada com sucesso!");
     },
     onError: (e: any) => toast.error("Erro ao criar função: " + e.message),
+  });
+}
+
+export function useUpdateFunctionEditScope() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (values: { department: string; function_key: string; edit_scope: DataScope }) => {
+      const { error } = await (supabase as any)
+        .from("department_functions")
+        .update({ edit_scope: values.edit_scope })
+        .eq("department", values.department)
+        .eq("function_key", values.function_key);
+      if (error) throw error;
+    },
+    onSuccess: (_, v) => {
+      qc.invalidateQueries({ queryKey: ["department-functions"] });
+      qc.invalidateQueries({ queryKey: ["department-functions", v.department] });
+    },
+    onError: (e: any) => toast.error("Erro ao salvar escopo de edição: " + e.message),
   });
 }
 
