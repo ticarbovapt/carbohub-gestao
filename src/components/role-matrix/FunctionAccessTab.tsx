@@ -11,7 +11,9 @@ import {
   useUpdateFunctionLabel,
   useDepartmentLabels,
   useUpdateDepartmentLabel,
+  useUpdateDepartmentSigla,
 } from "@/hooks/useDepartmentFunctions";
+import { DEPARTMENT_USERNAME_PREFIX } from "@/constants/departments";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Input } from "@/components/ui/input";
@@ -62,20 +64,46 @@ export function FunctionAccessTab() {
   const updateEditScope = useUpdateFunctionEditScope();
   const updateFnLabel = useUpdateFunctionLabel();
   const updateDeptLabel = useUpdateDepartmentLabel();
-  const { data: deptLabelOverrides = {} } = useDepartmentLabels();
+  const updateDeptSigla = useUpdateDepartmentSigla();
+  const { data: deptOverrides = { labels: {}, siglas: {} } } = useDepartmentLabels();
+  const deptLabelOverrides = deptOverrides.labels;
+  const deptSiglaOverrides = deptOverrides.siglas;
   const [addFnOpen, setAddFnOpen] = useState(false);
   const [newFn, setNewFn] = useState({ label: "", reports_to_key: "", scope: "proprio" as DataScope });
 
-  // Inline edit state
+  // Inline edit state — label
   const [editingDeptKey, setEditingDeptKey] = useState<string | null>(null);
   const [editingDeptValue, setEditingDeptValue] = useState("");
+  // Inline edit state — sigla
+  const [editingSiglaKey, setEditingSiglaKey] = useState<string | null>(null);
+  const [editingSiglaValue, setEditingSiglaValue] = useState("");
   const [editingFuncKey, setEditingFuncKey] = useState<string | null>(null);
   const [editingFuncValue, setEditingFuncValue] = useState("");
   const deptInputRef = useRef<HTMLInputElement>(null);
+  const siglaInputRef = useRef<HTMLInputElement>(null);
   const funcInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => { if (editingDeptKey) deptInputRef.current?.focus(); }, [editingDeptKey]);
+  useEffect(() => { if (editingSiglaKey) siglaInputRef.current?.focus(); }, [editingSiglaKey]);
   useEffect(() => { if (editingFuncKey) funcInputRef.current?.focus(); }, [editingFuncKey]);
+
+  function startEditSigla(key: string, e: React.MouseEvent) {
+    e.stopPropagation();
+    setEditingSiglaKey(key);
+    setEditingSiglaValue(deptSiglaOverrides[key] ?? DEPARTMENT_USERNAME_PREFIX[key] ?? "");
+  }
+
+  async function saveSigla(e?: React.MouseEvent) {
+    e?.stopPropagation();
+    if (!editingSiglaKey || !editingSiglaValue.trim()) { setEditingSiglaKey(null); return; }
+    await updateDeptSigla.mutateAsync({ dept_key: editingSiglaKey, sigla: editingSiglaValue.trim() });
+    setEditingSiglaKey(null);
+  }
+
+  function cancelEditSigla(e?: React.MouseEvent) {
+    e?.stopPropagation();
+    setEditingSiglaKey(null);
+  }
 
   function startEditDept(key: string, currentLabel: string, e: React.MouseEvent) {
     e.stopPropagation();
@@ -303,53 +331,85 @@ export function FunctionAccessTab() {
           </div>
           {DEPARTMENTS.map(dept => {
             const resolvedLabel = deptLabelOverrides[dept.key] ?? dept.label;
-            const isEditingThis = editingDeptKey === dept.key;
+            const resolvedSigla = deptSiglaOverrides[dept.key] ?? DEPARTMENT_USERNAME_PREFIX[dept.key] ?? dept.key.toUpperCase().slice(0, 3);
+            const isEditingLabel = editingDeptKey === dept.key;
+            const isEditingSigla = editingSiglaKey === dept.key;
             return (
               <div
                 key={dept.key}
                 className={cn(
-                  "group relative border-b border-border/40 flex items-center transition-colors",
+                  "group relative border-b border-border/40 flex flex-col transition-colors",
                   selectedDept === dept.key
                     ? "bg-primary/10 text-primary font-medium"
                     : "text-muted-foreground hover:text-foreground hover:bg-muted/40"
                 )}
               >
-                {isEditingThis ? (
-                  <div className="flex items-center gap-1 px-2 py-1.5 w-full" onClick={e => e.stopPropagation()}>
-                    <Input
-                      ref={deptInputRef}
-                      value={editingDeptValue}
-                      onChange={e => setEditingDeptValue(e.target.value)}
-                      onKeyDown={e => { if (e.key === "Enter") saveDeptLabel(); if (e.key === "Escape") cancelEditDept(); }}
-                      className="h-6 text-xs px-1.5 py-0"
-                    />
-                    <button onClick={saveDeptLabel} className="text-carbo-green hover:opacity-80 shrink-0">
-                      <Check className="h-3.5 w-3.5" />
-                    </button>
-                    <button onClick={cancelEditDept} className="text-muted-foreground hover:text-foreground shrink-0">
-                      <X className="h-3.5 w-3.5" />
-                    </button>
-                  </div>
-                ) : (
-                  <>
-                    <button
-                      className="flex-1 text-left px-3 py-2.5 text-sm flex items-center justify-between gap-1"
-                      onClick={() => { setSelectedDept(dept.key); setSelectedFunc(null); setDirty(false); setEditingFuncKey(null); }}
-                    >
-                      <span>{resolvedLabel}</span>
-                      {dept.fullAccess && <Shield className="h-3 w-3 text-carbo-green shrink-0" />}
-                    </button>
-                    {canManage && (
+                {/* Row 1 — label */}
+                <div className="flex items-center">
+                  {isEditingLabel ? (
+                    <div className="flex items-center gap-1 px-2 py-1.5 w-full" onClick={e => e.stopPropagation()}>
+                      <Input
+                        ref={deptInputRef}
+                        value={editingDeptValue}
+                        onChange={e => setEditingDeptValue(e.target.value)}
+                        onKeyDown={e => { if (e.key === "Enter") saveDeptLabel(); if (e.key === "Escape") cancelEditDept(); }}
+                        className="h-6 text-xs px-1.5 py-0"
+                      />
+                      <button onClick={saveDeptLabel} className="text-carbo-green hover:opacity-80 shrink-0"><Check className="h-3.5 w-3.5" /></button>
+                      <button onClick={cancelEditDept} className="text-muted-foreground hover:text-foreground shrink-0"><X className="h-3.5 w-3.5" /></button>
+                    </div>
+                  ) : (
+                    <>
                       <button
-                        onClick={(e) => startEditDept(dept.key, resolvedLabel, e)}
-                        className="mr-2 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-foreground shrink-0"
-                        title="Renomear departamento"
+                        className="flex-1 text-left px-3 pt-2.5 pb-0.5 text-sm flex items-center justify-between gap-1"
+                        onClick={() => { setSelectedDept(dept.key); setSelectedFunc(null); setDirty(false); setEditingFuncKey(null); setEditingSiglaKey(null); }}
                       >
-                        <Pencil className="h-3 w-3" />
+                        <span>{resolvedLabel}</span>
+                        {dept.fullAccess && <Shield className="h-3 w-3 text-carbo-green shrink-0" />}
                       </button>
-                    )}
-                  </>
-                )}
+                      {canManage && (
+                        <button
+                          onClick={(e) => startEditDept(dept.key, resolvedLabel, e)}
+                          className="mr-2 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-foreground shrink-0"
+                          title="Renomear departamento"
+                        >
+                          <Pencil className="h-3 w-3" />
+                        </button>
+                      )}
+                    </>
+                  )}
+                </div>
+
+                {/* Row 2 — sigla */}
+                <div className="flex items-center pb-1.5 px-3" onClick={e => e.stopPropagation()}>
+                  {isEditingSigla ? (
+                    <div className="flex items-center gap-1 w-full">
+                      <Input
+                        ref={siglaInputRef}
+                        value={editingSiglaValue}
+                        onChange={e => setEditingSiglaValue(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 6))}
+                        onKeyDown={e => { if (e.key === "Enter") saveSigla(); if (e.key === "Escape") cancelEditSigla(); }}
+                        className="h-5 text-[10px] px-1.5 py-0 font-mono w-16"
+                        maxLength={6}
+                        placeholder="EX: OPS"
+                      />
+                      <button onClick={saveSigla} className="text-carbo-green hover:opacity-80 shrink-0"><Check className="h-3 w-3" /></button>
+                      <button onClick={cancelEditSigla} className="text-muted-foreground hover:text-foreground shrink-0"><X className="h-3 w-3" /></button>
+                    </div>
+                  ) : (
+                    <button
+                      className={cn(
+                        "text-[10px] font-mono px-1.5 py-0.5 rounded border border-dashed transition-colors",
+                        canManage ? "hover:border-primary/50 hover:text-primary cursor-pointer" : "cursor-default",
+                        selectedDept === dept.key ? "border-primary/30 text-primary/70" : "border-border/50 text-muted-foreground/60"
+                      )}
+                      onClick={canManage ? (e) => startEditSigla(dept.key, e) : undefined}
+                      title={canManage ? "Editar sigla (usada no username)" : undefined}
+                    >
+                      {resolvedSigla}
+                    </button>
+                  )}
+                </div>
               </div>
             );
           })}
