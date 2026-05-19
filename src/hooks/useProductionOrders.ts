@@ -367,15 +367,104 @@ export function useDeleteProductionOrderOP() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (id: string) => {
+      // 1. Fetch the OP to check if it was completed (stock was credited/debited)
+      const { data: op } = await (supabase as any)
+        .from("production_orders")
+        .select("op_status, good_quantity")
+        .eq("id", id)
+        .single();
+
+      const wasCompleted = op && ["confirmada", "concluida"].includes(op.op_status);
+
+      if (wasCompleted) {
+        // 2. Fetch all stock movements created by this OP
+        const { data: movements } = await supabase
+          .from("stock_movements")
+          .select("id, product_id, tipo, quantidade, warehouse_id")
+          .eq("origem", "OP")
+          .eq("origem_id", id);
+
+        const { data: userData } = await supabase.auth.getUser();
+        const userId = userData.user?.id;
+
+        // 3. Reverse each movement: entrada→saida and vice-versa
+        for (const mov of (movements || []) as any[]) {
+          const reverseTipo = mov.tipo === "entrada" ? "saida" : "entrada";
+
+          // Create reversal movement
+          await supabase.from("stock_movements").insert({
+            product_id:  mov.product_id,
+            tipo:        reverseTipo,
+            quantidade:  mov.quantidade,
+            origem:      "ajuste",
+            observacoes: `Estorno automático — OP excluída (${id.slice(0, 8)})`,
+            created_by:  userId ?? null,
+            warehouse_id: mov.warehouse_id ?? null,
+          } as any);
+
+          // Update mrp_products.current_stock_qty
+          const { data: product } = await supabase
+            .from("mrp_products")
+            .select("current_stock_qty")
+            .eq("id", mov.product_id)
+            .single();
+
+          if (product) {
+            const current = (product as any).current_stock_qty || 0;
+            const newQty = reverseTipo === "entrada"
+              ? current + mov.quantidade
+              : Math.max(0, current - mov.quantidade);
+
+            await supabase
+              .from("mrp_products")
+              .update({ current_stock_qty: newQty, stock_updated_at: new Date().toISOString().split("T")[0] })
+              .eq("id", mov.product_id);
+          }
+
+          // Update warehouse_stock if movement had a warehouse
+          if (mov.warehouse_id) {
+            const { data: ws } = await (supabase as any)
+              .from("warehouse_stock")
+              .select("id, quantity")
+              .eq("product_id", mov.product_id)
+              .eq("warehouse_id", mov.warehouse_id)
+              .maybeSingle();
+
+            if (ws) {
+              const newWsQty = reverseTipo === "entrada"
+                ? ws.quantity + mov.quantidade
+                : Math.max(0, ws.quantity - mov.quantidade);
+              await (supabase as any)
+                .from("warehouse_stock")
+                .update({ quantity: newWsQty, updated_at: new Date().toISOString() })
+                .eq("id", ws.id);
+            }
+          }
+        }
+      }
+
+      // 4. Delete the OP record
       const { error } = await (supabase as any)
         .from("production_orders")
         .delete()
         .eq("id", id);
       if (error) throw error;
+
+      return { wasCompleted };
     },
-    onSuccess: () => {
+    onSuccess: (result) => {
       qc.invalidateQueries({ queryKey: ["production_orders_op"] });
-      toast.success("Ordem de Produção removida!");
+      qc.invalidateQueries({ queryKey: ["mrp-products"] });
+      qc.invalidateQueries({ queryKey: ["mrp-products-stock"] });
+      qc.invalidateQueries({ queryKey: ["warehouse-stock"] });
+      qc.invalidateQueries({ queryKey: ["warehouse-stock-all"] });
+      qc.invalidateQueries({ queryKey: ["suprimentos-kpis"] });
+      qc.invalidateQueries({ queryKey: ["stock-movements"] });
+      if (result?.wasCompleted) {
+        toast.success("OP excluída e estoque revertido automaticamente.");
+      } else {
+        toast.success("Ordem de Produção removida!");
+      }
     },
     onError: (e: Error) => toast.error("Erro ao remover OP: " + e.message),
   });
