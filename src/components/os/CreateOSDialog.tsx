@@ -27,7 +27,7 @@ import {
 } from "@/components/ui/collapsible";
 import { Car, Users, Truck, Building2, Loader2, ClipboardCheck, ChevronDown, ChevronRight, Search, CheckCircle2, AlertCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useCreateServiceOrder } from "@/hooks/useServiceOrders";
+import { useCreateServiceOrder, checkVaptStockNatal } from "@/hooks/useServiceOrders";
 import { DateTimePicker } from "@/components/ui/date-time-picker";
 import type { OsServiceType } from "@/types/os";
 import { supabase } from "@/integrations/supabase/client";
@@ -522,6 +522,18 @@ export function CreateOSDialog({ open, onOpenChange, onSuccess }: CreateOSDialog
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!user || !selectedType) return;
+
+    if (selectedType === "b2c" || selectedType === "b2b") {
+      const { ok, available } = await checkVaptStockNatal();
+      if (!ok) {
+        toast.error(
+          `Sem estoque do Reagente CarboVapt 70ml em Hub Natal (disponível: ${available}). ` +
+          "Produza mais unidades antes de criar a OS."
+        );
+        return;
+      }
+    }
+
     const fd = new FormData(e.currentTarget);
     await createMutation.mutateAsync({
       title:         (fd.get("title") as string) || "",
