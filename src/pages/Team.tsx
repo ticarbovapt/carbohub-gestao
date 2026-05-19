@@ -156,10 +156,12 @@ function MemberInfoModal({ member, profiles, teamMembers, onClose, canEdit, isMa
     const authMember = member.user_id
       ? teamMembers.find((m) => m.id === member.user_id)
       : teamMembers.find((m) => m.email && (orgNode as any)?.email && m.email === (orgNode as any).email);
-    const email = (orgNode as any)?.email || authMember?.email || "";
+    // Also try direct ID match (fallback OrgNodes created from TeamMember have id = profile UUID)
+    const directMatch = teamMembers.find((m) => m.id === member.id);
+    const email = (orgNode as any)?.email || authMember?.email || directMatch?.email || (member as any).email || "";
     const linked = email
       ? teamMembers.find((m) => m.email && m.email.toLowerCase() === email.toLowerCase())
-      : authMember ?? null;
+      : authMember ?? directMatch ?? null;
 
     // Department: prefer profile enum value (e.g. "ops") over org chart display value
     const rawDept = member.department || "";
@@ -210,9 +212,10 @@ function MemberInfoModal({ member, profiles, teamMembers, onClose, canEdit, isMa
       ...(canEdit ? { reports_to: formReportsTo || null } : {}),
     });
 
-    // Find linked auth profile: by user_id (primary) then email (fallback)
+    // Find linked auth profile: by user_id → email → direct ID (fallback OrgNodes have id = profile UUID)
     const linked = (member.user_id ? teamMembers.find((m) => m.id === member.user_id) : null)
-      ?? teamMembers.find((m) => m.email && formEmail && m.email.toLowerCase() === formEmail.toLowerCase());
+      ?? teamMembers.find((m) => m.email && formEmail && m.email.toLowerCase() === formEmail.toLowerCase())
+      ?? teamMembers.find((m) => m.id === member.id);
     if (linked) {
       // Resolve manager_user_id: find the profile whose org_chart_node matches formReportsTo
       let managerProfileId: string | null = null;
@@ -472,7 +475,8 @@ function MemberInfoModal({ member, profiles, teamMembers, onClose, canEdit, isMa
               {(() => {
                 const linkedAcc = member.user_id
                   ? teamMembers.find((m) => m.id === member.user_id)
-                  : teamMembers.find((m) => m.email && formEmail && m.email.toLowerCase() === formEmail.toLowerCase());
+                  : teamMembers.find((m) => m.email && formEmail && m.email.toLowerCase() === formEmail.toLowerCase())
+                  ?? teamMembers.find((m) => m.id === member.id);
                 return linkedAcc ? (
                   <div className="col-span-2 space-y-1">
                     <Label className="flex items-center gap-1.5">
@@ -544,7 +548,8 @@ function MemberInfoModal({ member, profiles, teamMembers, onClose, canEdit, isMa
             {(() => {
               const linkedAccount = member.user_id
                 ? teamMembers.find((m) => m.id === member.user_id)
-                : teamMembers.find((m) => m.email && formEmail && m.email.toLowerCase() === formEmail.toLowerCase());
+                : teamMembers.find((m) => m.email && formEmail && m.email.toLowerCase() === formEmail.toLowerCase())
+                ?? teamMembers.find((m) => m.id === member.id);
               return (
                 <div className="border border-border rounded-lg p-3 space-y-2 bg-muted/30">
                   <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1.5">
