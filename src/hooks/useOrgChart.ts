@@ -124,41 +124,11 @@ function buildTree(nodes: Omit<OrgNode, "children">[]): OrgNode[] {
   return roots;
 }
 
-// ── Hook principal — lê de org_chart_nodes (dinâmico) ─────────────────────
+// ── Hook principal — sempre retorna o árbuore estático ────────────────────
+// O organograma será redesenhado em etapa futura (pós-migração de acessos).
+// Não conectar ao banco para evitar inconsistências durante a transição.
 export function useOrgChart() {
-  return useQuery({
-    queryKey: ["org-chart"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("org_chart_nodes" as any)
-        .select("id, full_name, avatar_url, hierarchy_level, reports_to, department, job_title, dual_role, assistant")
-        .order("hierarchy_level", { ascending: true });
-
-      if (error) {
-        console.warn("[useOrgChart] DB error, usando fallback estático:", error.message);
-        return STATIC_ORG_TREE;
-      }
-      if (!data || data.length === 0) return STATIC_ORG_TREE;
-
-      // Normaliza para OrgNode (campos ausentes ficam null)
-      const normalized = (data as any[]).map((r) => ({
-        id: r.id,
-        full_name: r.full_name,
-        avatar_url: r.avatar_url ?? null,
-        hierarchy_level: r.hierarchy_level ?? 6,
-        reports_to: r.reports_to ?? null,
-        department: r.department ?? null,
-        job_title: r.job_title ?? null,
-        job_category: null,
-        carbo_role: null,
-        dual_role: r.dual_role ?? undefined,
-        assistant: r.assistant ?? false,
-      }));
-
-      return buildTree(normalized);
-    },
-    staleTime: 5 * 60 * 1000, // 5 min
-  });
+  return { data: STATIC_ORG_TREE, isLoading: false };
 }
 
 // ── Mutation — atualizar nó do organograma ────────────────────────────────
