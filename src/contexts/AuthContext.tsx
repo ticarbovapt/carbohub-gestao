@@ -21,6 +21,8 @@ interface Profile {
   temp_password_expires_at: string | null;
   manager_user_id: string | null;
   funcao: string | null;
+  secondary_department: DepartmentType | null;
+  secondary_funcao: string | null;
   escopo: string | null;
   allowed_interfaces: string[];
   requested_role: string | null;

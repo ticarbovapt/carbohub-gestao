@@ -11,6 +11,9 @@ export interface TeamMember {
   full_name: string | null;
   avatar_url: string | null;
   department: DepartmentType | null;
+  funcao: string | null;
+  secondary_department: DepartmentType | null;
+  secondary_funcao: string | null;
   status: string;
   requested_role: string | null;
   roles: AppRole[];
@@ -23,7 +26,6 @@ export interface TeamMember {
   temp_password_sent_at: string | null;
   allowed_interfaces: string[];
   escopo: string | null;
-  funcao: string | null;
 }
 
 export function useTeamMembers() {
@@ -81,6 +83,8 @@ export function useTeamMembers() {
         allowed_interfaces: (p as any).allowed_interfaces || [],
         escopo: (p as any).escopo || null,
         funcao: (p as any).funcao || null,
+        secondary_department: (p as any).secondary_department || null,
+        secondary_funcao: (p as any).secondary_funcao || null,
       }));
 
       return members;

@@ -124,13 +124,16 @@ function MemberInfoModal({ member, profiles, teamMembers, onClose, canEdit, isMa
   const [formLevel,      setFormLevel]       = useState(6);
   const [formEmail,      setFormEmail]       = useState("");
   const [formPhone,      setFormPhone]       = useState("");
-  const [formDualRole,   setFormDualRole]    = useState("");
-  const [formAssistant,  setFormAssistant]   = useState(false);
-  const [formUsername,   setFormUsername]    = useState("");
-  const [formEscopo,     setFormEscopo]      = useState("");
-  const [formReportsTo,  setFormReportsTo]   = useState("");
+  const [formDualRole,        setFormDualRole]        = useState("");
+  const [formAssistant,       setFormAssistant]       = useState(false);
+  const [formUsername,        setFormUsername]        = useState("");
+  const [formEscopo,          setFormEscopo]          = useState("");
+  const [formReportsTo,       setFormReportsTo]       = useState("");
+  const [formSecondaryDept,   setFormSecondaryDept]   = useState("");
+  const [formSecondaryFuncao, setFormSecondaryFuncao] = useState("");
 
   const { data: deptFunctions = [] } = useDepartmentFunctions(formDept || undefined);
+  const { data: secondaryDeptFunctions = [] } = useDepartmentFunctions(formSecondaryDept || undefined);
   const { data: deptOverrides = { labels: {}, siglas: {} } } = useDepartmentLabels();
   // Sigla = DB override → config default → dept key uppercased
   const resolvedSigla = (key: string) =>
@@ -165,6 +168,8 @@ function MemberInfoModal({ member, profiles, teamMembers, onClose, canEdit, isMa
     setFormUsername((linked?.username || "").toUpperCase());
     setFormEscopo(linked?.escopo || "");
     setFormFuncao(linked?.funcao || "");
+    setFormSecondaryDept((linked?.secondary_department as string) || "");
+    setFormSecondaryFuncao(linked?.secondary_funcao || "");
     const flatNode = profiles.find((p) => p.id === member.id);
     setFormReportsTo((flatNode as any)?.reports_to || "");
     setEditing(true);
@@ -177,6 +182,16 @@ function MemberInfoModal({ member, profiles, teamMembers, onClose, canEdit, isMa
     const selectedFn = deptFunctions.find(f => f.function_key === formFuncao);
     const jobTitle = selectedFn?.label || formFuncao || null;
 
+    // Auto-generate dual_role label from secondary function (or keep manual override)
+    let resolvedDualRole = formDualRole || null;
+    if (formSecondaryDept && formSecondaryFuncao) {
+      const secFn = secondaryDeptFunctions.find(f => f.function_key === formSecondaryFuncao);
+      const secDeptLabel = DEPARTMENT_LABELS[formSecondaryDept] || formSecondaryDept;
+      resolvedDualRole = secFn ? `${secFn.label} — ${secDeptLabel}` : formDualRole || null;
+    } else if (!formSecondaryDept && !formSecondaryFuncao) {
+      resolvedDualRole = null;
+    }
+
     await updateNode.mutateAsync({
       id: member.id,
       full_name:       formName,
@@ -185,7 +200,7 @@ function MemberInfoModal({ member, profiles, teamMembers, onClose, canEdit, isMa
       hierarchy_level: formLevel,
       email:           formEmail || null,
       phone:           formPhone || null,
-      dual_role:       formDualRole || null,
+      dual_role:       resolvedDualRole,
       assistant:       formAssistant,
       ...(canEdit ? { reports_to: formReportsTo || null } : {}),
     });
@@ -222,11 +237,13 @@ function MemberInfoModal({ member, profiles, teamMembers, onClose, canEdit, isMa
       const { error: profileUpdateError } = await supabase
         .from("profiles")
         .update({
-          full_name:  formName,
-          department: formDept as any,
-          phone:      formPhone || null,
-          funcao:     formFuncao || null,
-          escopo:     formEscopo || null,
+          full_name:            formName,
+          department:           formDept as any,
+          phone:                formPhone || null,
+          funcao:               formFuncao || null,
+          escopo:               formEscopo || null,
+          secondary_department: (formSecondaryDept || null) as any,
+          secondary_funcao:     formSecondaryFuncao || null,
           ...(usernameChanged ? { username: formUsername } : {}),
           ...(canEdit ? { manager_user_id: managerProfileId } : {}),
         } as any)
@@ -309,8 +326,10 @@ function MemberInfoModal({ member, profiles, teamMembers, onClose, canEdit, isMa
               {member.assistant && (
                 <Badge variant="outline" className="border-dashed text-muted-foreground">Assistente</Badge>
               )}
-              {member.dual_role && (
-                <Badge className="bg-violet-600 text-white border-0 text-[10px]">+ Head B2B</Badge>
+              {(teamMember?.secondary_department || member.dual_role) && (
+                <Badge className="bg-violet-600 text-white border-0 text-[10px]">
+                  + {teamMember?.secondary_department ? getDeptLabel(teamMember.secondary_department) : member.dual_role}
+                </Badge>
               )}
             </div>
 
@@ -328,7 +347,15 @@ function MemberInfoModal({ member, profiles, teamMembers, onClose, canEdit, isMa
                   <p className="font-medium truncate text-foreground">{value}</p>
                 </div>
               ))}
-              {member.dual_role && (
+              {teamMember?.secondary_department && (
+                <div className="col-span-2">
+                  <p className="text-[11px] text-muted-foreground font-medium uppercase tracking-wide mb-0.5">Função Secundária</p>
+                  <p className="font-medium text-foreground">
+                    {teamMember.secondary_funcao || "—"} · {getDeptLabel(teamMember.secondary_department)}
+                  </p>
+                </div>
+              )}
+              {!teamMember?.secondary_department && member.dual_role && (
                 <div className="col-span-2">
                   <p className="text-[11px] text-muted-foreground font-medium uppercase tracking-wide mb-0.5">Dupla Função</p>
                   <p className="font-medium text-foreground">{member.dual_role}</p>
@@ -386,10 +413,45 @@ function MemberInfoModal({ member, profiles, teamMembers, onClose, canEdit, isMa
                 <Label>Telefone</Label>
                 <Input value={formPhone} onChange={(e) => setFormPhone(e.target.value)} placeholder="(11) 9 0000-0000" />
               </div>
+              {/* Dupla Função — departamento + função secundária */}
               <div className="col-span-2 space-y-1">
-                <Label>Dupla Função (opcional)</Label>
-                <Input value={formDualRole} onChange={(e) => setFormDualRole(e.target.value)} placeholder="ex: Head — Desenvolvimento de Negócios" />
+                <Label>Departamento Secundário (opcional)</Label>
+                <Select
+                  value={formSecondaryDept || "_none"}
+                  onValueChange={(v) => {
+                    const val = v === "_none" ? "" : v;
+                    setFormSecondaryDept(val);
+                    setFormSecondaryFuncao("");
+                  }}
+                >
+                  <SelectTrigger><SelectValue placeholder="Sem departamento secundário" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="_none">— Sem departamento secundário —</SelectItem>
+                    {ALL_DEPARTMENTS.filter(d => d.value !== formDept).map((d) => (
+                      <SelectItem key={d.value} value={d.value}>{d.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
+              {formSecondaryDept && (
+                <div className="col-span-2 space-y-1">
+                  <Label>Função Secundária</Label>
+                  <Select
+                    value={formSecondaryFuncao || ""}
+                    onValueChange={setFormSecondaryFuncao}
+                    disabled={secondaryDeptFunctions.length === 0}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder={secondaryDeptFunctions.length === 0 ? "Nenhuma função cadastrada" : "Selecione a função"} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {secondaryDeptFunctions.map(fn => (
+                        <SelectItem key={fn.function_key} value={fn.function_key}>{fn.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
               <div className="col-span-2 flex items-center gap-2">
                 <input
                   type="checkbox"
@@ -751,18 +813,33 @@ const Team = () => {
                     </div>
 
                     {/* funcao */}
-                    <div className="flex gap-1 w-40 justify-end">
+                    <div className="flex flex-col gap-0.5 w-40 items-end">
                       {(() => {
                         const label = resolveFuncaoLabel(member.department as string | null, member.funcao);
-                        return label ? (
-                          <Badge
-                            className="text-[10px] px-1.5 py-0 h-4 bg-primary/10 text-primary border-primary/20 hover:bg-primary/15"
-                            variant="outline"
-                          >
-                            {label}
-                          </Badge>
-                        ) : (
-                          <span className="text-xs text-muted-foreground">—</span>
+                        const secLabel = member.secondary_funcao
+                          ? resolveFuncaoLabel(member.secondary_department as string | null, member.secondary_funcao)
+                          : null;
+                        return (
+                          <>
+                            {label ? (
+                              <Badge
+                                className="text-[10px] px-1.5 py-0 h-4 bg-primary/10 text-primary border-primary/20 hover:bg-primary/15"
+                                variant="outline"
+                              >
+                                {label}
+                              </Badge>
+                            ) : (
+                              <span className="text-xs text-muted-foreground">—</span>
+                            )}
+                            {secLabel && (
+                              <Badge
+                                className="text-[10px] px-1.5 py-0 h-4 bg-violet-500/10 text-violet-600 border-violet-500/20"
+                                variant="outline"
+                              >
+                                +{secLabel}
+                              </Badge>
+                            )}
+                          </>
                         );
                       })()}
                     </div>
