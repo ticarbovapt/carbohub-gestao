@@ -73,7 +73,7 @@ export function CreateSkuDialog({ open, onOpenChange }: CreateSkuDialogProps) {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="w-[calc(100%-2rem)] sm:max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Novo SKU</DialogTitle>
           <DialogDescription>Cadastre um novo produto acabado (SKU)</DialogDescription>

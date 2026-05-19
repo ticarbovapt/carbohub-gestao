@@ -267,7 +267,7 @@ export function ImportMachinesDialog({ open, onOpenChange }: ImportMachinesDialo
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="w-[calc(100%-2rem)] sm:max-w-3xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="font-plex flex items-center gap-2">
             <Upload className="h-5 w-5 text-carbo-green" aria-hidden="true" />
