@@ -4646,6 +4646,8 @@ export type Database = {
           escopo: string | null
           full_name: string | null
           funcao: string | null
+          secondary_department: Database["public"]["Enums"]["department_type"] | null
+          secondary_funcao: string | null
           id: string
           invite_token: string | null
           invite_token_expires_at: string | null
@@ -4676,6 +4678,8 @@ export type Database = {
           escopo?: string | null
           full_name?: string | null
           funcao?: string | null
+          secondary_department?: Database["public"]["Enums"]["department_type"] | null
+          secondary_funcao?: string | null
           id: string
           invite_token?: string | null
           invite_token_expires_at?: string | null
@@ -4706,6 +4710,8 @@ export type Database = {
           escopo?: string | null
           full_name?: string | null
           funcao?: string | null
+          secondary_department?: Database["public"]["Enums"]["department_type"] | null
+          secondary_funcao?: string | null
           id?: string
           invite_token?: string | null
           invite_token_expires_at?: string | null
