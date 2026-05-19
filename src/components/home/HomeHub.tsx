@@ -105,15 +105,15 @@ export function HomeHub() {
   const canAccessLicensee = !!licenseeStatus?.licensee;
   const canAccessPDV = !!pdvStatus?.pdv;
 
-  // Se só tem acesso a uma área, redirecionar direto
+  // Se só tem acesso a uma área E não é ops (ops tem conteúdo próprio na home),
+  // redireciona direto para não mostrar hub vazio
   React.useEffect(() => {
     if (isLoading) return;
-    
-    const accessCount = [canAccessOps, canAccessLicensee, canAccessPDV].filter(Boolean).length;
-    
+    if (canAccessOps) return; // ops sempre vê a home normalmente
+
+    const accessCount = [canAccessLicensee, canAccessPDV].filter(Boolean).length;
     if (accessCount === 1) {
-      if (canAccessOps) navigate("/dashboard", { replace: true });
-      else if (canAccessLicensee) navigate("/licensee/dashboard", { replace: true });
+      if (canAccessLicensee) navigate("/licensee/dashboard", { replace: true });
       else if (canAccessPDV) navigate("/pdv/dashboard", { replace: true });
     }
   }, [canAccessOps, canAccessLicensee, canAccessPDV, navigate, isLoading]);

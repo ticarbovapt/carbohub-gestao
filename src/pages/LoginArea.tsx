@@ -48,7 +48,7 @@ const areaConfigs: Record<AreaType, AreaConfig> = {
     subtitle: "Gestão, operação e estratégia",
     icon: <Settings2 className="h-5 w-5" />,
     gradient: "from-area-controle to-area-controle-dark",
-    dashboardRoute: "/dashboard",
+    dashboardRoute: "/home",
   },
   licensee: {
     id: "licensee",
