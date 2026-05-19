@@ -109,9 +109,10 @@ interface MemberInfoModalProps {
   canEdit: boolean;
   isMasterAdmin: boolean;
   onUpdated: () => void;
+  deptOverrides: { labels: Record<string, string>; siglas: Record<string, string> };
 }
 
-function MemberInfoModal({ member, profiles, teamMembers, onClose, canEdit, isMasterAdmin, onUpdated }: MemberInfoModalProps) {
+function MemberInfoModal({ member, profiles, teamMembers, onClose, canEdit, isMasterAdmin, onUpdated, deptOverrides }: MemberInfoModalProps) {
   const updateNode  = useUpdateOrgChartNode();
   const resendEmail = useResendWelcomeEmail();
   const [editing, setEditing] = useState(false);
@@ -134,10 +135,14 @@ function MemberInfoModal({ member, profiles, teamMembers, onClose, canEdit, isMa
 
   const { data: deptFunctions = [] } = useDepartmentFunctions(formDept || undefined);
   const { data: secondaryDeptFunctions = [] } = useDepartmentFunctions(formSecondaryDept || undefined);
-  const { data: deptOverrides = { labels: {}, siglas: {} } } = useDepartmentLabels();
   // Sigla = DB override → config default → dept key uppercased
   const resolvedSigla = (key: string) =>
     deptOverrides.siglas[key] ?? DEPARTMENT_USERNAME_PREFIX[key] ?? key.toUpperCase().slice(0, 3);
+  // Dept options with resolved labels (override from DB applied)
+  const resolvedDepts = ALL_DEPARTMENTS.map((d) => ({
+    ...d,
+    label: getDeptLabel(d.value, deptOverrides.labels),
+  }));
 
   // Open edit mode — seed from current member
   const openEdit = () => {
@@ -178,7 +183,7 @@ function MemberInfoModal({ member, profiles, teamMembers, onClose, canEdit, isMa
   const handleSave = async () => {
     if (!member) return;
 
-    const orgDept = DEPARTMENT_LABELS[formDept] || formDept || null;
+    const orgDept = getDeptLabel(formDept, deptOverrides.labels) || formDept || null;
     const selectedFn = deptFunctions.find(f => f.function_key === formFuncao);
     const jobTitle = selectedFn?.label || formFuncao || null;
 
@@ -186,7 +191,7 @@ function MemberInfoModal({ member, profiles, teamMembers, onClose, canEdit, isMa
     let resolvedDualRole = formDualRole || null;
     if (formSecondaryDept && formSecondaryFuncao) {
       const secFn = secondaryDeptFunctions.find(f => f.function_key === formSecondaryFuncao);
-      const secDeptLabel = DEPARTMENT_LABELS[formSecondaryDept] || formSecondaryDept;
+      const secDeptLabel = getDeptLabel(formSecondaryDept, deptOverrides.labels);
       resolvedDualRole = secFn ? `${secFn.label} — ${secDeptLabel}` : formDualRole || null;
     } else if (!formSecondaryDept && !formSecondaryFuncao) {
       resolvedDualRole = null;
@@ -328,7 +333,7 @@ function MemberInfoModal({ member, profiles, teamMembers, onClose, canEdit, isMa
               )}
               {(teamMember?.secondary_department || member.dual_role) && (
                 <Badge className="bg-violet-600 text-white border-0 text-[10px]">
-                  + {teamMember?.secondary_department ? getDeptLabel(teamMember.secondary_department) : member.dual_role}
+                  + {teamMember?.secondary_department ? getDeptLabel(teamMember.secondary_department, deptOverrides.labels) : member.dual_role}
                 </Badge>
               )}
             </div>
@@ -351,7 +356,7 @@ function MemberInfoModal({ member, profiles, teamMembers, onClose, canEdit, isMa
                 <div className="col-span-2">
                   <p className="text-[11px] text-muted-foreground font-medium uppercase tracking-wide mb-0.5">Função Secundária</p>
                   <p className="font-medium text-foreground">
-                    {teamMember.secondary_funcao || "—"} · {getDeptLabel(teamMember.secondary_department)}
+                    {teamMember.secondary_funcao || "—"} · {getDeptLabel(teamMember.secondary_department, deptOverrides.labels)}
                   </p>
                 </div>
               )}
@@ -384,7 +389,7 @@ function MemberInfoModal({ member, profiles, teamMembers, onClose, canEdit, isMa
                 <Select value={formDept} onValueChange={(v) => { setFormDept(v); setFormFuncao(""); }}>
                   <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
                   <SelectContent>
-                    {ALL_DEPARTMENTS.map((d) => (
+                    {resolvedDepts.map((d) => (
                       <SelectItem key={d.value} value={d.value}>{d.label}</SelectItem>
                     ))}
                   </SelectContent>
@@ -427,7 +432,7 @@ function MemberInfoModal({ member, profiles, teamMembers, onClose, canEdit, isMa
                   <SelectTrigger><SelectValue placeholder="Sem departamento secundário" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="_none">— Sem departamento secundário —</SelectItem>
-                    {ALL_DEPARTMENTS.filter(d => d.value !== formDept).map((d) => (
+                    {resolvedDepts.filter(d => d.value !== formDept).map((d) => (
                       <SelectItem key={d.value} value={d.value}>{d.label}</SelectItem>
                     ))}
                   </SelectContent>
@@ -600,6 +605,7 @@ function MemberInfoModal({ member, profiles, teamMembers, onClose, canEdit, isMa
 const Team = () => {
   const { data: members, isLoading: membersLoading, refetch } = useTeamMembers();
   const { data: profiles = [] } = useOrgChartFlat();
+  const { data: deptOverrides = { labels: {}, siglas: {} } } = useDepartmentLabels();
   const resendEmail = useResendWelcomeEmail();
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -805,7 +811,7 @@ const Team = () => {
                     <div className="flex flex-col gap-0.5 w-24 items-end">
                       {member.department ? (
                         <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4 capitalize">
-                          {DEPARTMENT_LABELS[member.department] ?? member.department}
+                          {getDeptLabel(member.department, deptOverrides.labels)}
                         </Badge>
                       ) : (
                         <span className="text-xs text-muted-foreground">—</span>
@@ -815,7 +821,7 @@ const Team = () => {
                           variant="outline"
                           className="text-[10px] px-1.5 py-0 h-4 capitalize border-violet-500/40 text-violet-500"
                         >
-                          {DEPARTMENT_LABELS[member.secondary_department] ?? member.secondary_department}
+                          {getDeptLabel(member.secondary_department, deptOverrides.labels)}
                         </Badge>
                       )}
                     </div>
@@ -974,7 +980,7 @@ const Team = () => {
                         className="text-sm font-semibold uppercase tracking-wider"
                         style={{ color }}
                       >
-                        {getDeptLabel(dept)}
+                        {getDeptLabel(dept, deptOverrides.labels)}
                       </h3>
                       <Badge
                         variant="outline"
@@ -1063,6 +1069,7 @@ const Team = () => {
         canEdit={canEdit}
         isMasterAdmin={canEdit}
         onUpdated={() => refetch()}
+        deptOverrides={deptOverrides}
       />
 
       {/* Confirmation dialog — resend email */}
