@@ -787,8 +787,8 @@ const Team = () => {
                 {/* Header */}
                 <div className="grid grid-cols-[1fr_auto_auto_auto] gap-4 items-center px-4 py-2.5 bg-muted/50 border-b text-xs font-semibold text-muted-foreground uppercase tracking-wide">
                   <span>Colaborador</span>
-                  <span className="text-right w-24">Departamento</span>
-                  <span className="text-right w-40">Função</span>
+                  <span className="text-center w-28">Departamento</span>
+                  <span className="text-center w-40">Função</span>
                   <span className="w-32 text-right">Configurar</span>
                 </div>
                 {/* Rows */}
@@ -808,37 +808,23 @@ const Team = () => {
                     </div>
 
                     {/* department */}
-                    <div className="flex flex-col gap-0.5 w-16 items-end">
+                    <div className="flex flex-col gap-1 w-28 items-center">
                       {member.department ? (
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4 font-mono cursor-default">
-                              {deptOverrides.siglas[member.department] ?? DEPARTMENT_USERNAME_PREFIX[member.department] ?? member.department.toUpperCase().slice(0, 3)}
-                            </Badge>
-                          </TooltipTrigger>
-                          <TooltipContent side="left">
-                            {getDeptLabel(member.department, deptOverrides.labels)}
-                          </TooltipContent>
-                        </Tooltip>
+                        <Badge variant="secondary" className="text-[10px] px-2 py-0.5 h-auto whitespace-normal text-center leading-tight">
+                          {getDeptLabel(member.department, deptOverrides.labels)}
+                        </Badge>
                       ) : (
                         <span className="text-xs text-muted-foreground">—</span>
                       )}
                       {member.secondary_department && (
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 font-mono border-violet-500/40 text-violet-500 cursor-default">
-                              +{deptOverrides.siglas[member.secondary_department] ?? DEPARTMENT_USERNAME_PREFIX[member.secondary_department] ?? member.secondary_department.toUpperCase().slice(0, 3)}
-                            </Badge>
-                          </TooltipTrigger>
-                          <TooltipContent side="left">
-                            {getDeptLabel(member.secondary_department, deptOverrides.labels)}
-                          </TooltipContent>
-                        </Tooltip>
+                        <Badge variant="outline" className="text-[10px] px-2 py-0.5 h-auto whitespace-normal text-center leading-tight border-violet-500/40 text-violet-500">
+                          +{getDeptLabel(member.secondary_department, deptOverrides.labels)}
+                        </Badge>
                       )}
                     </div>
 
                     {/* funcao */}
-                    <div className="flex flex-col gap-0.5 w-40 items-end">
+                    <div className="flex flex-col gap-1 w-40 items-center">
                       {(() => {
                         const label = resolveFuncaoLabel(member.department as string | null, member.funcao);
                         const secLabel = member.secondary_funcao
