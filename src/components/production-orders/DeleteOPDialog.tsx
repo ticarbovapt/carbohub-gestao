@@ -33,12 +33,21 @@ export function DeleteOPDialog({ open, onOpenChange, order, onDeleted }: DeleteO
       <AlertDialogContent>
         <AlertDialogHeader>
           <AlertDialogTitle>Excluir Ordem de Produção</AlertDialogTitle>
-          <AlertDialogDescription>
-            Tem certeza que deseja excluir a OP{" "}
-            <span className="font-bold text-foreground">{order.title}</span>?
-            <br />
-            <br />
-            Esta ação é irreversível e removerá também todos os materiais associados.
+          <AlertDialogDescription asChild>
+            <div className="space-y-2 text-sm text-muted-foreground">
+              <p>
+                Tem certeza que deseja excluir a OP{" "}
+                <span className="font-bold text-foreground">
+                  {order.op_number || order.title || order.id.slice(0, 8).toUpperCase()}
+                </span>?
+              </p>
+              {["confirmada", "concluida"].includes(order.op_status) && (
+                <p className="rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-warning-foreground font-medium">
+                  Esta OP foi concluída — o estoque de insumos e produto final será revertido automaticamente em Suprimentos.
+                </p>
+              )}
+              <p>Esta ação é irreversível.</p>
+            </div>
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
