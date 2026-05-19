@@ -49,9 +49,9 @@ export interface ProductionOrder {
   op_status: OpStatus;
   created_at: string;
   updated_at: string;
-  // Legacy fields
-  title: string | null;
-  description: string | null;
+  // Legacy fields (may not exist in all DB versions)
+  title?: string | null;
+  description?: string | null;
   quantity: number | null;
   status: string | null;
   source: string | null;
