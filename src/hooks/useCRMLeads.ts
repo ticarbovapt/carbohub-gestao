@@ -2,12 +2,18 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import type { CRMLead, FunnelType } from "@/types/crm";
+import { useAuth } from "@/contexts/AuthContext";
+import { useFunctionAccess, ENFORCEMENT_ACTIVE } from "@/hooks/useFunctionAccess";
 
 // ===== QUERIES =====
 
 export function useCRMLeads(funnelType: FunnelType, stageFilter?: string) {
+  const { user } = useAuth();
+  const { dataScope } = useFunctionAccess();
+  const ownOnly = ENFORCEMENT_ACTIVE && dataScope === "proprio" && !!user?.id;
+
   return useQuery({
-    queryKey: ["crm-leads", funnelType, stageFilter],
+    queryKey: ["crm-leads", funnelType, stageFilter, ownOnly ? user?.id : "all"],
     queryFn: async () => {
       let query = supabase
         .from("crm_leads")
@@ -17,6 +23,11 @@ export function useCRMLeads(funnelType: FunnelType, stageFilter?: string) {
 
       if (stageFilter && stageFilter !== "all") {
         query = query.eq("stage", stageFilter);
+      }
+
+      // Escopo "próprio" → vendedor vê apenas leads criados por ele ou atribuídos a ele
+      if (ownOnly) {
+        query = query.or(`created_by.eq.${user!.id},assigned_to.eq.${user!.id}`);
       }
 
       const { data, error } = await query;

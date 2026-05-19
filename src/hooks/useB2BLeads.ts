@@ -1,6 +1,8 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { useAuth } from "@/contexts/AuthContext";
+import { useFunctionAccess, ENFORCEMENT_ACTIVE } from "@/hooks/useFunctionAccess";
 
 export type LeadStatus = "novo" | "qualificado" | "em_negociacao" | "ganho" | "perdido";
 
@@ -45,8 +47,12 @@ export interface B2BLead {
 }
 
 export function useB2BLeads(statusFilter?: LeadStatus | "all") {
+  const { user } = useAuth();
+  const { dataScope } = useFunctionAccess();
+  const ownOnly = ENFORCEMENT_ACTIVE && dataScope === "proprio" && !!user?.id;
+
   return useQuery({
-    queryKey: ["b2b-leads", statusFilter],
+    queryKey: ["b2b-leads", statusFilter, ownOnly ? user?.id : "all"],
     queryFn: async () => {
       let query = supabase
         .from("b2b_leads")
@@ -55,6 +61,11 @@ export function useB2BLeads(statusFilter?: LeadStatus | "all") {
 
       if (statusFilter && statusFilter !== "all") {
         query = query.eq("status", statusFilter);
+      }
+
+      // Escopo "próprio" → vendedor vê apenas seus leads
+      if (ownOnly) {
+        query = query.eq("created_by", user!.id);
       }
 
       const { data, error } = await query;
