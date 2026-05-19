@@ -125,7 +125,7 @@ export function CreateMachineDialog({ open, onOpenChange, licensees }: CreateMac
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="w-[calc(100%-2rem)] sm:max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="font-plex">Nova Máquina</DialogTitle>
           <DialogDescription>

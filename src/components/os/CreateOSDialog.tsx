@@ -573,7 +573,7 @@ export function CreateOSDialog({ open, onOpenChange, onSuccess }: CreateOSDialog
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className={cn("transition-all", isChecklist ? "max-w-2xl" : "max-w-lg")}>
+      <DialogContent className={cn("transition-all w-[calc(100%-2rem)]", isChecklist ? "sm:max-w-2xl" : "sm:max-w-lg")}>
         {/* ── Step 1: Tipo ── */}
         {step === "type" && (
           <>
