@@ -113,7 +113,6 @@ export function CreateOPDialog({ open, onOpenChange }: CreateOPDialogProps) {
         priority: data.priority || 3,
         deviation_notes: data.deviation_notes || null,
         op_number: opNumber,
-        title: opNumber,
         // campos legados obrigatórios pelo schema original
         product_code: sku.code,
         quantity: data.planned_quantity,
