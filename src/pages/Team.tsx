@@ -808,21 +808,32 @@ const Team = () => {
                     </div>
 
                     {/* department */}
-                    <div className="flex flex-col gap-0.5 w-24 items-end">
+                    <div className="flex flex-col gap-0.5 w-16 items-end">
                       {member.department ? (
-                        <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4 capitalize">
-                          {getDeptLabel(member.department, deptOverrides.labels)}
-                        </Badge>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4 font-mono cursor-default">
+                              {deptOverrides.siglas[member.department] ?? DEPARTMENT_USERNAME_PREFIX[member.department] ?? member.department.toUpperCase().slice(0, 3)}
+                            </Badge>
+                          </TooltipTrigger>
+                          <TooltipContent side="left">
+                            {getDeptLabel(member.department, deptOverrides.labels)}
+                          </TooltipContent>
+                        </Tooltip>
                       ) : (
                         <span className="text-xs text-muted-foreground">—</span>
                       )}
                       {member.secondary_department && (
-                        <Badge
-                          variant="outline"
-                          className="text-[10px] px-1.5 py-0 h-4 capitalize border-violet-500/40 text-violet-500"
-                        >
-                          {getDeptLabel(member.secondary_department, deptOverrides.labels)}
-                        </Badge>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 font-mono border-violet-500/40 text-violet-500 cursor-default">
+                              +{deptOverrides.siglas[member.secondary_department] ?? DEPARTMENT_USERNAME_PREFIX[member.secondary_department] ?? member.secondary_department.toUpperCase().slice(0, 3)}
+                            </Badge>
+                          </TooltipTrigger>
+                          <TooltipContent side="left">
+                            {getDeptLabel(member.secondary_department, deptOverrides.labels)}
+                          </TooltipContent>
+                        </Tooltip>
                       )}
                     </div>
 
