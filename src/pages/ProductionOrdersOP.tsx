@@ -14,6 +14,7 @@ import { CreateOPDialog } from "@/components/production-orders/CreateOPDialog";
 import { EditOPDialog } from "@/components/production-orders/EditOPDialog";
 import { DeleteOPDialog } from "@/components/production-orders/DeleteOPDialog";
 import { ConfirmOPDialog } from "@/components/production-orders/ConfirmOPDialog";
+import { QuickConfirmOPDialog } from "@/components/production-orders/QuickConfirmOPDialog";
 import { OPKpiCards } from "@/components/production-orders/OPKpiCards";
 
 export default function ProductionOrdersOP() {
@@ -27,6 +28,7 @@ export default function ProductionOrdersOP() {
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
+  const [isQuickConfirmOpen, setIsQuickConfirmOpen] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<ProductionOrder | null>(null);
 
   // Filter state
@@ -41,7 +43,7 @@ export default function ProductionOrdersOP() {
       if (priorityFilter !== "all" && String(order.priority) !== priorityFilter) return false;
       if (searchQuery) {
         const q = searchQuery.toLowerCase();
-        const matchesTitle = (order.title || "").toLowerCase().includes(q);
+        const matchesTitle = (order.op_number || order.title || "").toLowerCase().includes(q);
         const matchesSku =
           (order.sku_code || "").toLowerCase().includes(q) ||
           (order.sku_name || "").toLowerCase().includes(q);
@@ -64,6 +66,11 @@ export default function ProductionOrdersOP() {
   const handleConfirm = (order: ProductionOrder) => {
     setSelectedOrder(order);
     setIsConfirmOpen(true);
+  };
+
+  const handleMoveToComplete = (order: ProductionOrder) => {
+    setSelectedOrder(order);
+    setIsQuickConfirmOpen(true);
   };
 
   if (isLoading) {
@@ -143,6 +150,7 @@ export default function ProductionOrdersOP() {
           <OPKanbanBoard
             orders={filteredOrders}
             onCardClick={(order) => setSelectedOrder(order)}
+            onMoveToComplete={handleMoveToComplete}
           />
         ) : filteredOrders.length === 0 ? (
           <div className="text-center py-16 text-muted-foreground">
@@ -175,6 +183,7 @@ export default function ProductionOrdersOP() {
         <EditOPDialog open={isEditOpen} onOpenChange={setIsEditOpen} order={selectedOrder} />
         <DeleteOPDialog open={isDeleteOpen} onOpenChange={setIsDeleteOpen} order={selectedOrder} />
         <ConfirmOPDialog open={isConfirmOpen} onOpenChange={setIsConfirmOpen} order={selectedOrder} />
+        <QuickConfirmOPDialog open={isQuickConfirmOpen} onOpenChange={setIsQuickConfirmOpen} order={selectedOrder} />
       </div>
     </BoardLayout>
   );

@@ -1,7 +1,7 @@
 import React from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ChevronRight, Calendar, Package } from "lucide-react";
+import { ChevronRight, Calendar, Package, CheckCircle2 } from "lucide-react";
 import type { ProductionOrder, DemandSource } from "@/hooks/useProductionOrders";
 import { formatDistanceToNow, format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -10,6 +10,7 @@ import { useNavigate } from "react-router-dom";
 interface OPKanbanCardProps {
   order: ProductionOrder;
   onAdvance?: (order: ProductionOrder) => void;
+  onComplete?: (order: ProductionOrder) => void;
   onClick?: (order: ProductionOrder) => void;
 }
 
@@ -35,7 +36,7 @@ const DEMAND_COLORS: Record<DemandSource, string> = {
   pcp_manual:   "bg-gray-500/10 text-gray-600 border-gray-400/30",
 };
 
-export function OPKanbanCard({ order, onAdvance, onClick }: OPKanbanCardProps) {
+export function OPKanbanCard({ order, onAdvance, onComplete, onClick }: OPKanbanCardProps) {
   const navigate = useNavigate();
   const priority = PRIORITY_CONFIG[order.priority] ?? PRIORITY_CONFIG[3];
   const demand = order.demand_source as DemandSource;
@@ -111,8 +112,25 @@ export function OPKanbanCard({ order, onAdvance, onClick }: OPKanbanCardProps) {
         <span className="text-muted-foreground/60">{daysSince} atrás</span>
       </div>
 
+      {/* Conclude production button */}
+      {onComplete && (
+        <div className="pt-2 border-t border-border">
+          <Button
+            size="sm"
+            className="w-full h-7 text-xs bg-green-600 hover:bg-green-700 text-white"
+            onClick={(e) => {
+              e.stopPropagation();
+              onComplete(order);
+            }}
+          >
+            <CheckCircle2 className="h-3 w-3 mr-1" />
+            Concluir Produção
+          </Button>
+        </div>
+      )}
+
       {/* Advance action */}
-      {onAdvance && (
+      {onAdvance && !onComplete && (
         <div className="pt-2 border-t border-border">
           <Button
             variant="outline"
