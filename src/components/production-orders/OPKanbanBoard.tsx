@@ -36,9 +36,10 @@ interface OPKanbanBoardProps {
   orders: ProductionOrder[];
   onAdvance?: (order: ProductionOrder) => void;
   onCardClick?: (order: ProductionOrder) => void;
+  onMoveToComplete?: (order: ProductionOrder) => void;
 }
 
-export function OPKanbanBoard({ orders, onAdvance, onCardClick }: OPKanbanBoardProps) {
+export function OPKanbanBoard({ orders, onAdvance, onCardClick, onMoveToComplete }: OPKanbanBoardProps) {
   const updateOP = useUpdateProductionOrderOP();
   const [activeId, setActiveId] = useState<string | null>(null);
   const [optimisticMoves, setOptimisticMoves] = useState<Record<string, string>>({});
@@ -87,6 +88,13 @@ export function OPKanbanBoard({ orders, onAdvance, onCardClick }: OPKanbanBoardP
     const targetStatus = targetCol.statuses[0];
     const currentCol = OP_KANBAN_COLUMNS.find((c) => c.statuses.includes(order.op_status));
     if (currentCol?.id === targetCol.id) return;
+
+    // Moving to "concluída" opens the confirmation dialog instead of directly updating
+    if (targetCol.id === "concluida" && onMoveToComplete) {
+      onMoveToComplete(order);
+      return;
+    }
+
     setOptimisticMoves((prev) => ({ ...prev, [order.id]: targetCol.id }));
     updateOP.mutate({ id: order.id, op_status: targetStatus }, {
       onError: () => setOptimisticMoves((prev) => { const n = { ...prev }; delete n[order.id]; return n; }),
@@ -108,6 +116,7 @@ export function OPKanbanBoard({ orders, onAdvance, onCardClick }: OPKanbanBoardP
             orders={ordersByColumn[col.id] ?? []}
             onAdvance={onAdvance}
             onCardClick={onCardClick}
+            onComplete={onMoveToComplete}
           />
         ))}
       </div>
@@ -126,11 +135,13 @@ function OPColumn({
   orders,
   onAdvance,
   onCardClick,
+  onComplete,
 }: {
   column: OPKanbanColumn;
   orders: ProductionOrder[];
   onAdvance?: (order: ProductionOrder) => void;
   onCardClick?: (order: ProductionOrder) => void;
+  onComplete?: (order: ProductionOrder) => void;
 }) {
   return (
     <div className="flex-shrink-0 w-64 bg-muted/30 rounded-xl border border-border">
@@ -170,6 +181,11 @@ function OPColumn({
                     onAdvance={
                       column.id !== "concluida" && column.id !== "bloqueada"
                         ? onAdvance
+                        : undefined
+                    }
+                    onComplete={
+                      column.id === "em_producao" || column.id === "qualidade"
+                        ? onComplete
                         : undefined
                     }
                     onClick={onCardClick}
