@@ -46,7 +46,7 @@ import {
   normalizeDeptKey,
   getDeptLabel,
 } from "@/constants/departments";
-import { useDepartmentFunctions } from "@/hooks/useDepartmentFunctions";
+import { useDepartmentFunctions, useDepartmentLabels } from "@/hooks/useDepartmentFunctions";
 import { DEPARTMENTS as DEPT_FUNCTIONS_CONFIG } from "@/constants/functionAccessConfig";
 // ── Carbo role labels ────────────────────────────────────────────────────────
 const CARBO_ROLE_BADGE: Record<string, string> = {
@@ -131,6 +131,10 @@ function MemberInfoModal({ member, profiles, teamMembers, onClose, canEdit, isMa
   const [formReportsTo,  setFormReportsTo]   = useState("");
 
   const { data: deptFunctions = [] } = useDepartmentFunctions(formDept || undefined);
+  const { data: deptOverrides = { labels: {}, siglas: {} } } = useDepartmentLabels();
+  // Sigla = DB override → config default → dept key uppercased
+  const resolvedSigla = (key: string) =>
+    deptOverrides.siglas[key] ?? DEPARTMENT_USERNAME_PREFIX[key] ?? key.toUpperCase().slice(0, 3);
 
   // Open edit mode — seed from current member
   const openEdit = () => {
@@ -413,13 +417,13 @@ function MemberInfoModal({ member, profiles, teamMembers, onClose, canEdit, isMa
                       onChange={(e) => setFormUsername(e.target.value.replace(/\s/g, "").toUpperCase())}
                       onFocus={() => {
                         if (!formUsername && formDept) {
-                          const prefix = DEPARTMENT_USERNAME_PREFIX[formDept];
+                          const prefix = resolvedSigla(formDept);
                           if (prefix) setFormUsername(prefix);
                         }
                       }}
                       placeholder={
-                        formDept && DEPARTMENT_USERNAME_PREFIX[formDept]
-                          ? `${DEPARTMENT_USERNAME_PREFIX[formDept]}001`
+                        formDept
+                          ? `${resolvedSigla(formDept)}001`
                           : "OPS001"
                       }
                     />

@@ -135,15 +135,17 @@ export function useDepartmentLabels() {
       try {
         const { data, error } = await (supabase as any)
           .from("department_labels")
-          .select("dept_key, label");
-        // If table doesn't exist yet, fall back to constants (no crash, no error toast)
-        if (error) return { ...DEPARTMENT_LABELS } as Record<string, string>;
-        const overrides = ((data || []) as { dept_key: string; label: string }[])
-          .reduce((acc, r) => { acc[r.dept_key] = r.label; return acc; }, {} as Record<string, string>);
-        // Merge: defaults first, DB overrides win
-        return { ...DEPARTMENT_LABELS, ...overrides };
+          .select("dept_key, label, sigla");
+        if (error) return { labels: { ...DEPARTMENT_LABELS }, siglas: {} as Record<string, string> };
+        const labels: Record<string, string> = { ...DEPARTMENT_LABELS };
+        const siglas: Record<string, string> = {};
+        for (const r of (data || []) as { dept_key: string; label: string; sigla: string | null }[]) {
+          labels[r.dept_key] = r.label;
+          if (r.sigla) siglas[r.dept_key] = r.sigla;
+        }
+        return { labels, siglas };
       } catch {
-        return { ...DEPARTMENT_LABELS } as Record<string, string>;
+        return { labels: { ...DEPARTMENT_LABELS }, siglas: {} as Record<string, string> };
       }
     },
   });
@@ -167,6 +169,32 @@ export function useUpdateDepartmentLabel() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["department-labels"] });
       toast.success("Nome do departamento atualizado!");
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+}
+
+export function useUpdateDepartmentSigla() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (values: { dept_key: string; sigla: string }) => {
+      const sigla = values.sigla.trim().toUpperCase().slice(0, 6);
+      const { error } = await (supabase as any)
+        .from("department_labels")
+        .upsert(
+          { dept_key: values.dept_key, sigla, label: DEPARTMENT_LABELS[values.dept_key] ?? values.dept_key, updated_at: new Date().toISOString() },
+          { onConflict: "dept_key" }
+        );
+      if (error) {
+        if (error.code === "PGRST205" || error.message?.includes("department_labels")) {
+          throw new Error("Tabela department_labels não existe. Rode a migration no Supabase SQL Editor.");
+        }
+        throw error;
+      }
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["department-labels"] });
+      toast.success("Sigla atualizada!");
     },
     onError: (e: any) => toast.error(e.message),
   });
