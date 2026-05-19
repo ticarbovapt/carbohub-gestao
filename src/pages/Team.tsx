@@ -475,7 +475,8 @@ function MemberInfoModal({ member, profiles, teamMembers, onClose, canEdit, isMa
               {(() => {
                 const linkedAcc = member.user_id
                   ? teamMembers.find((m) => m.id === member.user_id)
-                  : teamMembers.find((m) => m.email && formEmail && m.email.toLowerCase() === formEmail.toLowerCase());
+                  : teamMembers.find((m) => m.email && formEmail && m.email.toLowerCase() === formEmail.toLowerCase())
+                  ?? teamMembers.find((m) => m.id === member.id);
                 return linkedAcc ? (
                   <div className="col-span-2 space-y-1">
                     <Label className="flex items-center gap-1.5">
@@ -547,7 +548,8 @@ function MemberInfoModal({ member, profiles, teamMembers, onClose, canEdit, isMa
             {(() => {
               const linkedAccount = member.user_id
                 ? teamMembers.find((m) => m.id === member.user_id)
-                : teamMembers.find((m) => m.email && formEmail && m.email.toLowerCase() === formEmail.toLowerCase());
+                : teamMembers.find((m) => m.email && formEmail && m.email.toLowerCase() === formEmail.toLowerCase())
+                ?? teamMembers.find((m) => m.id === member.id);
               return (
                 <div className="border border-border rounded-lg p-3 space-y-2 bg-muted/30">
                   <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1.5">
