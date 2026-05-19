@@ -2,6 +2,8 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import type { Json } from "@/integrations/supabase/types";
+import { useAuth } from "@/contexts/AuthContext";
+import { useFunctionAccess, ENFORCEMENT_ACTIVE } from "@/hooks/useFunctionAccess";
 
 export type OrderStatus = "pending" | "confirmed" | "invoiced" | "shipped" | "delivered" | "cancelled";
 export type OrderType = "spot" | "recorrente";
@@ -170,8 +172,12 @@ const ORDER_STATUS_LABELS: Record<OrderStatus, string> = {
 };
 
 export function useOrders(statusFilter?: OrderStatus | "all") {
+  const { user } = useAuth();
+  const { dataScope } = useFunctionAccess();
+  const ownOnly = ENFORCEMENT_ACTIVE && dataScope === "proprio" && !!user?.id;
+
   return useQuery({
-    queryKey: ["carboze-orders", statusFilter],
+    queryKey: ["carboze-orders", statusFilter, ownOnly ? user?.id : "all"],
     queryFn: async () => {
       let query = supabase
         .from("carboze_orders_secure")
@@ -183,6 +189,11 @@ export function useOrders(statusFilter?: OrderStatus | "all") {
 
       if (statusFilter && statusFilter !== "all") {
         query = query.eq("status", statusFilter);
+      }
+
+      // Escopo "próprio" → vendedor vê apenas seus próprios pedidos
+      if (ownOnly) {
+        query = query.eq("vendedor_id", user!.id);
       }
 
       const { data, error } = await query;
