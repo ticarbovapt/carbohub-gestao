@@ -23,13 +23,14 @@ function getCorsHeaders(req: Request) {
   };
 }
 
-const DEPARTMENT_PREFIXES: Record<string, string> = {
+const DEPARTMENT_PREFIXES_DEFAULT: Record<string, string> = {
   b2b:        "B2B",
   command:    "COM",
   expansao:   "EXP",
   finance:    "FIN",
   growth:     "GRO",
   ops:        "OPS",
+  ti_suporte: "TI",
   // Legados (mantidos para compatibilidade)
   venda:      "VEN",
   preparacao: "PRE",
@@ -37,6 +38,17 @@ const DEPARTMENT_PREFIXES: Record<string, string> = {
   operacao:   "OPS",
   pos_venda:  "POS",
 };
+
+async function resolveDeptPrefix(supabaseAdmin: ReturnType<typeof createClient>, department: string): Promise<string | null> {
+  // Check DB override first (sigla customizada pelo admin)
+  const { data } = await supabaseAdmin
+    .from("department_labels")
+    .select("sigla")
+    .eq("dept_key", department)
+    .maybeSingle();
+  if (data?.sigla) return (data.sigla as string).toUpperCase();
+  return DEPARTMENT_PREFIXES_DEFAULT[department] ?? null;
+}
 
 interface CreateMemberRequest {
   fullName: string;
@@ -146,7 +158,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
       );
     }
 
-    const deptPrefix = DEPARTMENT_PREFIXES[department];
+    const deptPrefix = await resolveDeptPrefix(supabaseAdmin, department);
     if (!deptPrefix) {
       return new Response(
         JSON.stringify({ success: false, error: `Invalid department: ${department}` }),
@@ -154,7 +166,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
       );
     }
 
-    // Generate username (e.g. OPS0001)
+    // Generate username (e.g. OPS0001 or CGC0001 with custom sigla)
     const { data: username, error: usernameError } = await supabaseAdmin.rpc("generate_username", {
       dept_prefix: deptPrefix,
     });
@@ -210,12 +222,27 @@ Deno.serve(async (req: Request): Promise<Response> => {
       console.error("Profile update error:", profileError);
     }
 
-    // Link org_chart_node to this auth user by exact name match
-    await supabaseAdmin
+    // Link org_chart_node to this auth user by exact name match (if pre-existing node)
+    const { data: updatedNodes } = await supabaseAdmin
       .from("org_chart_nodes")
       .update({ user_id: newUserId, email: placeholderEmail })
       .eq("full_name", fullName)
-      .is("user_id", null);
+      .is("user_id", null)
+      .select("id");
+
+    // If no pre-existing node was found, create one so the Team edit modal works
+    if (!updatedNodes || updatedNodes.length === 0) {
+      await supabaseAdmin
+        .from("org_chart_nodes")
+        .insert({
+          user_id:         newUserId,
+          full_name:       fullName,
+          email:           placeholderEmail,
+          department:      department,
+          hierarchy_level: hierarchyLevel || 6,
+          reports_to:      managerUserId || null,
+        });
+    }
 
     // Set user role (insert — new user has no role row yet)
     const { error: roleError } = await supabaseAdmin
