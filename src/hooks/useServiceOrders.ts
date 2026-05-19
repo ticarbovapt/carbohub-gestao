@@ -4,6 +4,78 @@ import { toast } from "sonner";
 import type { OsStage, OsServiceType, ServiceOrderCarboVAPT } from "@/types/os";
 import { getNextOsStage } from "@/types/os";
 
+// ── Stock deduction helper: 1 VAPT reagent from Hub Natal on OS completion ──
+async function deductVaptReagent(osId: string) {
+  const { data: wh } = await supabase.from("warehouses").select("id").ilike("name", "%natal%").limit(1);
+  const warehouseId = (wh as any)?.[0]?.id as string | undefined;
+  if (!warehouseId) return;
+
+  const { data: products } = await (supabase as any)
+    .from("mrp_products")
+    .select("id, current_stock_qty")
+    .or("product_code.ilike.%VAPT70%,name.ilike.%Reagente CarboVapt%")
+    .limit(1);
+  const product = (products as any)?.[0];
+  if (!product) return;
+
+  const { data: ws } = await (supabase as any)
+    .from("warehouse_stock")
+    .select("id, quantity")
+    .eq("product_id", product.id)
+    .eq("warehouse_id", warehouseId)
+    .maybeSingle();
+
+  if (ws) {
+    await (supabase as any)
+      .from("warehouse_stock")
+      .update({ quantity: Math.max(0, (ws.quantity || 0) - 1), updated_at: new Date().toISOString() })
+      .eq("id", ws.id);
+  }
+
+  const newQty = Math.max(0, ((product.current_stock_qty as number) || 0) - 1);
+  await (supabase as any)
+    .from("mrp_products")
+    .update({ current_stock_qty: newQty, stock_updated_at: new Date().toISOString().split("T")[0] })
+    .eq("id", product.id);
+
+  const { data: authData } = await supabase.auth.getUser();
+  await (supabase as any).from("stock_movements").insert({
+    product_id:  product.id,
+    tipo:        "saida",
+    quantidade:  1,
+    origem:      "OS",
+    origem_id:   osId,
+    warehouse_id: warehouseId,
+    observacoes: "Reagente consumido na descarbonização",
+    created_by:  authData.user?.id ?? null,
+  });
+}
+
+// ── Stock check helper: verify Hub Natal has >= 1 VAPT reagent ──
+export async function checkVaptStockNatal(): Promise<{ ok: boolean; available: number }> {
+  const { data: wh } = await supabase.from("warehouses").select("id").ilike("name", "%natal%").limit(1);
+  const warehouseId = (wh as any)?.[0]?.id as string | undefined;
+  if (!warehouseId) return { ok: true, available: 0 }; // warehouse not found — let through
+
+  const { data: products } = await (supabase as any)
+    .from("mrp_products")
+    .select("id, current_stock_qty")
+    .or("product_code.ilike.%VAPT70%,name.ilike.%Reagente CarboVapt%")
+    .limit(1);
+  const product = (products as any)?.[0];
+  if (!product) return { ok: true, available: 0 };
+
+  const { data: ws } = await (supabase as any)
+    .from("warehouse_stock")
+    .select("quantity")
+    .eq("product_id", product.id)
+    .eq("warehouse_id", warehouseId)
+    .maybeSingle();
+
+  const available = (ws as any)?.quantity ?? (product.current_stock_qty as number) ?? 0;
+  return { ok: available >= 1, available };
+}
+
 // ============================================================
 // Queries
 // ============================================================
@@ -210,10 +282,17 @@ export function useAdvanceOSStage() {
         .update(updates)
         .eq("id", order.id);
       if (error) throw error;
+
+      if (next === "concluida" && order.service_type && ["b2c", "b2b"].includes(order.service_type)) {
+        await deductVaptReagent(order.id);
+      }
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["service-orders-carbovapt"] });
       qc.invalidateQueries({ queryKey: ["os-stats-carbovapt"] });
+      qc.invalidateQueries({ queryKey: ["warehouse-stock-all"] });
+      qc.invalidateQueries({ queryKey: ["mrp-products-stock"] });
+      qc.invalidateQueries({ queryKey: ["suprimentos-kpis"] });
       toast.success("Etapa avançada!");
     },
     onError: (err: Error) => {
@@ -243,10 +322,21 @@ export function useSetOSStage() {
         .update(updates)
         .eq("id", id);
       if (error) throw error;
+
+      if (stage === "concluida") {
+        const { data: osData } = await (supabase as any)
+          .from("service_orders").select("service_type").eq("id", id).single();
+        if (osData && ["b2c", "b2b"].includes(osData.service_type || "")) {
+          await deductVaptReagent(id);
+        }
+      }
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["service-orders-carbovapt"] });
       qc.invalidateQueries({ queryKey: ["os-stats-carbovapt"] });
+      qc.invalidateQueries({ queryKey: ["warehouse-stock-all"] });
+      qc.invalidateQueries({ queryKey: ["mrp-products-stock"] });
+      qc.invalidateQueries({ queryKey: ["suprimentos-kpis"] });
       toast.success("Etapa atualizada!");
     },
     onError: (err: Error) => toast.error(`Erro: ${err.message}`),

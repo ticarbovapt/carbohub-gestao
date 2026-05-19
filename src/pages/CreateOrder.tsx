@@ -357,6 +357,40 @@ export default function CreateOrder() {
       return;
     }
 
+    // ── Check Hub Natal stock before confirming ────────────────────────────
+    const itemsWithCode = orderItems.filter((i) => i.product_code);
+    if (itemsWithCode.length > 0) {
+      const { data: natWh } = await supabase.from("warehouses").select("id").ilike("name", "%natal%").limit(1);
+      const natId = (natWh as any)?.[0]?.id as string | undefined;
+      if (natId) {
+        const codes = [...new Set(itemsWithCode.map((i) => i.product_code))];
+        const { data: mrpProds } = await (supabase as any)
+          .from("mrp_products")
+          .select("id, product_code, current_stock_qty, name")
+          .in("product_code", codes);
+        const prodMap = new Map<string, any>((mrpProds || []).map((p: any) => [p.product_code, p]));
+
+        for (const item of itemsWithCode) {
+          const prod = prodMap.get(item.product_code);
+          if (!prod) continue;
+          const { data: ws } = await (supabase as any)
+            .from("warehouse_stock")
+            .select("quantity")
+            .eq("product_id", prod.id)
+            .eq("warehouse_id", natId)
+            .maybeSingle();
+          const available = (ws as any)?.quantity ?? (prod.current_stock_qty as number) ?? 0;
+          if (available < item.quantity) {
+            toast.error(
+              `Estoque insuficiente em Hub Natal — ${prod.name}: disponível ${available}, solicitado ${item.quantity}. ` +
+              "Verifique Suprimentos ou crie uma OP antes de confirmar o pedido."
+            );
+            return;
+          }
+        }
+      }
+    }
+
     const selectedVendedor = teamMembers?.find((m: any) => m.id === data.vendedor_id);
     const selectedLinha = LINHAS.find((l) => l.value === data.linha);
     const matchedSku = skus?.find((s) => s.code === selectedLinha?.skuCode);

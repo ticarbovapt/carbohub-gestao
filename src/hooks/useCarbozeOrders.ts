@@ -280,11 +280,65 @@ export function useCreateOrder() {
         await supabase.from("production_orders").insert(opRows);
       }
 
+      // ── Deduct sold quantities from Hub Natal stock ──────────────────────
+      const { data: natWh } = await supabase.from("warehouses").select("id").ilike("name", "%natal%").limit(1);
+      const natId = (natWh as any)?.[0]?.id as string | undefined;
+
+      if (natId && lineItems.length > 0) {
+        const productCodes = [...new Set(lineItems.map((i) => (i as any).product_code).filter(Boolean))];
+        if (productCodes.length > 0) {
+          const { data: mrpProds } = await (supabase as any)
+            .from("mrp_products")
+            .select("id, product_code, current_stock_qty")
+            .in("product_code", productCodes);
+          const prodMap = new Map<string, any>((mrpProds || []).map((p: any) => [p.product_code, p]));
+
+          for (const item of lineItems as any[]) {
+            const mrpProd = prodMap.get(item.product_code);
+            if (!mrpProd || !item.quantity || item.quantity <= 0) continue;
+
+            const { data: ws } = await (supabase as any)
+              .from("warehouse_stock")
+              .select("id, quantity")
+              .eq("product_id", mrpProd.id)
+              .eq("warehouse_id", natId)
+              .maybeSingle();
+
+            if (ws) {
+              await (supabase as any)
+                .from("warehouse_stock")
+                .update({ quantity: Math.max(0, (ws.quantity || 0) - item.quantity), updated_at: new Date().toISOString() })
+                .eq("id", ws.id);
+            }
+
+            const newQty = Math.max(0, ((mrpProd.current_stock_qty as number) || 0) - item.quantity);
+            await (supabase as any)
+              .from("mrp_products")
+              .update({ current_stock_qty: newQty, stock_updated_at: new Date().toISOString().split("T")[0] })
+              .eq("id", mrpProd.id);
+
+            await (supabase as any).from("stock_movements").insert({
+              product_id:  mrpProd.id,
+              tipo:        "saida",
+              quantidade:  item.quantity,
+              origem:      "pedido",
+              origem_id:   result.id,
+              warehouse_id: natId,
+              observacoes: `Venda — pedido ${result.order_number || result.id.slice(0, 8)}`,
+              created_by:  user.user?.id ?? null,
+            });
+          }
+        }
+      }
+
       return result;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["carboze-orders"] });
       queryClient.invalidateQueries({ queryKey: ["production-orders"] });
+      queryClient.invalidateQueries({ queryKey: ["warehouse-stock-all"] });
+      queryClient.invalidateQueries({ queryKey: ["mrp-products-stock"] });
+      queryClient.invalidateQueries({ queryKey: ["suprimentos-kpis"] });
       toast.success("Pedido criado e OP gerada automaticamente!");
     },
     onError: (error: Error) => {
