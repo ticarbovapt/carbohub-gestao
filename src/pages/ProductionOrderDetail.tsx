@@ -171,7 +171,7 @@ export default function ProductionOrderDetail() {
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-3 flex-wrap">
               <span className="font-mono text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded">
-                {order.title || `OP-${order.id.slice(0, 8).toUpperCase()}`}
+                {order.op_number || order.title || `OP-${order.id.slice(0, 8).toUpperCase()}`}
               </span>
               <Badge className={cn("text-white border-0 text-xs", statusColor)}>
                 {OP_STATUS_LABELS[order.op_status]}
@@ -181,7 +181,7 @@ export default function ProductionOrderDetail() {
               </Badge>
             </div>
             <h1 className="text-2xl font-bold mt-1 leading-tight">
-              {order.sku_name || order.title || "Ordem de Produção"}
+              {order.sku_name || order.op_number || order.title || "Ordem de Produção"}
             </h1>
             <p className="text-sm text-muted-foreground mt-0.5">
               {order.sku_code && <span className="font-mono mr-2">{order.sku_code}</span>}

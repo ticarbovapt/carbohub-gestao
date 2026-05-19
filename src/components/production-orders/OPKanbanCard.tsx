@@ -40,7 +40,8 @@ export function OPKanbanCard({ order, onAdvance, onClick }: OPKanbanCardProps) {
   const priority = PRIORITY_CONFIG[order.priority] ?? PRIORITY_CONFIG[3];
   const demand = order.demand_source as DemandSource;
 
-  const displayName = order.sku_name || order.title || `OP ${order.id.slice(0, 8)}`;
+  const displayName = order.sku_name || order.op_number || order.title || `OP ${order.id.slice(0, 8)}`;
+  const opCode = order.op_number || order.title || `OP-${order.id.slice(0, 8).toUpperCase()}`;
 
   const daysSince = formatDistanceToNow(new Date(order.updated_at), {
     locale: ptBR,
@@ -61,7 +62,7 @@ export function OPKanbanCard({ order, onAdvance, onClick }: OPKanbanCardProps) {
       <div className="flex items-start justify-between gap-2 mb-2">
         <div className="flex-1 min-w-0">
           <p className="font-mono text-[10px] text-muted-foreground">
-            {order.title || "OP-—"}
+            {opCode}
           </p>
           <p className="font-semibold text-sm truncate mt-0.5">{displayName}</p>
         </div>
