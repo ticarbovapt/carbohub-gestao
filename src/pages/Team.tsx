@@ -802,13 +802,21 @@ const Team = () => {
                     </div>
 
                     {/* department */}
-                    <div className="flex gap-1 w-24 justify-end">
+                    <div className="flex flex-col gap-0.5 w-24 items-end">
                       {member.department ? (
                         <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4 capitalize">
                           {DEPARTMENT_LABELS[member.department] ?? member.department}
                         </Badge>
                       ) : (
                         <span className="text-xs text-muted-foreground">—</span>
+                      )}
+                      {member.secondary_department && (
+                        <Badge
+                          variant="outline"
+                          className="text-[10px] px-1.5 py-0 h-4 capitalize border-violet-500/40 text-violet-500"
+                        >
+                          {DEPARTMENT_LABELS[member.secondary_department] ?? member.secondary_department}
+                        </Badge>
                       )}
                     </div>
 
