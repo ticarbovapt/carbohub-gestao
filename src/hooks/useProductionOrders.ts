@@ -28,6 +28,7 @@ export type QualityResult = "aprovada" | "bloqueada" | "reprovada" | "pendente";
 
 export interface ProductionOrder {
   id: string;
+  op_number: string | null;
   sku_id: string;
   planned_quantity: number;
   good_quantity: number | null;

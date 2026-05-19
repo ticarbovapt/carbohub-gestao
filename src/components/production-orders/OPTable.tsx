@@ -66,7 +66,7 @@ export function OPTable({ orders, onEdit, onDelete, onConfirm, canManage }: OPTa
               >
                 <TableCell>
                   <span className="font-mono text-sm text-blue-500 font-medium hover:underline">
-                    {order.title || order.id.slice(0, 8)}
+                    {order.op_number || order.title || order.id.slice(0, 8)}
                   </span>
                 </TableCell>
                 <TableCell>

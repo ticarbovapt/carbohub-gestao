@@ -86,6 +86,24 @@ export function CreateOPDialog({ open, onOpenChange }: CreateOPDialogProps) {
       const sku = skus.find((s) => s.id === data.sku_id);
       if (!sku) throw new Error("Produto não encontrado.");
 
+      // Build sequential OP number: OP-{CODE}-{YYYYMM}-{NNNN}
+      const cleanCode = sku.code.replace(/^SKU-/i, "");
+      const period = currentPeriod();
+      const prefix = `OP-${cleanCode}-${period}-`;
+
+      const { data: existing } = await (supabase as any)
+        .from("production_orders")
+        .select("op_number")
+        .like("op_number", `${prefix}%`);
+
+      const maxSeq = (existing || []).reduce((max: number, row: any) => {
+        if (!row.op_number) return max;
+        const seq = parseInt(row.op_number.slice(prefix.length), 10);
+        return Math.max(max, isNaN(seq) ? 0 : seq);
+      }, 0);
+
+      const opNumber = `${prefix}${String(maxSeq + 1).padStart(4, "0")}`;
+
       const payload = {
         sku_id: data.sku_id,
         planned_quantity: data.planned_quantity,
@@ -94,7 +112,8 @@ export function CreateOPDialog({ open, onOpenChange }: CreateOPDialogProps) {
         need_date: data.need_date || null,
         priority: data.priority || 3,
         deviation_notes: data.deviation_notes || null,
-        op_number: "",
+        op_number: opNumber,
+        title: opNumber,
         // campos legados obrigatórios pelo schema original
         product_code: sku.code,
         quantity: data.planned_quantity,
@@ -124,9 +143,9 @@ export function CreateOPDialog({ open, onOpenChange }: CreateOPDialogProps) {
   const selectedSkuId = watch("sku_id");
   const selectedSku = skus.find((s) => s.id === selectedSkuId);
 
-  // Preview do número de OP — formato real gerado pelo trigger do banco
+  // Preview do número de OP (formato real, sem prefixo "SKU-")
   const opPreview = selectedSku
-    ? `OP-${selectedSku.code}-${currentPeriod()}-XXXX`
+    ? `OP-${selectedSku.code.replace(/^SKU-/i, "")}-${currentPeriod()}-XXXX`
     : null;
 
   return (
