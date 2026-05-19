@@ -384,25 +384,11 @@ export function useDeleteProductionOrderOP() {
           .eq("origem", "OP")
           .eq("origem_id", id);
 
-        const { data: userData } = await supabase.auth.getUser();
-        const userId = userData.user?.id;
-
-        // 3. Reverse each movement: entrada→saida and vice-versa
+        // 3. Reverse quantities directly (no new movement records — stays invisible in history)
         for (const mov of (movements || []) as any[]) {
-          const reverseTipo = mov.tipo === "entrada" ? "saida" : "entrada";
+          // entrada → undo by subtracting; saida → undo by adding
+          const delta = mov.tipo === "entrada" ? -mov.quantidade : mov.quantidade;
 
-          // Create reversal movement
-          await supabase.from("stock_movements").insert({
-            product_id:  mov.product_id,
-            tipo:        reverseTipo,
-            quantidade:  mov.quantidade,
-            origem:      "ajuste",
-            observacoes: `Estorno automático — OP excluída (${id.slice(0, 8)})`,
-            created_by:  userId ?? null,
-            warehouse_id: mov.warehouse_id ?? null,
-          } as any);
-
-          // Update mrp_products.current_stock_qty
           const { data: product } = await supabase
             .from("mrp_products")
             .select("current_stock_qty")
@@ -410,18 +396,13 @@ export function useDeleteProductionOrderOP() {
             .single();
 
           if (product) {
-            const current = (product as any).current_stock_qty || 0;
-            const newQty = reverseTipo === "entrada"
-              ? current + mov.quantidade
-              : Math.max(0, current - mov.quantidade);
-
+            const newQty = Math.max(0, ((product as any).current_stock_qty || 0) + delta);
             await supabase
               .from("mrp_products")
               .update({ current_stock_qty: newQty, stock_updated_at: new Date().toISOString().split("T")[0] })
               .eq("id", mov.product_id);
           }
 
-          // Update warehouse_stock if movement had a warehouse
           if (mov.warehouse_id) {
             const { data: ws } = await (supabase as any)
               .from("warehouse_stock")
@@ -431,15 +412,19 @@ export function useDeleteProductionOrderOP() {
               .maybeSingle();
 
             if (ws) {
-              const newWsQty = reverseTipo === "entrada"
-                ? ws.quantity + mov.quantidade
-                : Math.max(0, ws.quantity - mov.quantidade);
+              const newWsQty = Math.max(0, (ws.quantity || 0) + delta);
               await (supabase as any)
                 .from("warehouse_stock")
                 .update({ quantity: newWsQty, updated_at: new Date().toISOString() })
                 .eq("id", ws.id);
             }
           }
+        }
+
+        // 4. Delete the original stock movements so they vanish from history and KPIs
+        const movIds = (movements || []).map((m: any) => m.id);
+        if (movIds.length > 0) {
+          await supabase.from("stock_movements").delete().in("id", movIds);
         }
       }
 
