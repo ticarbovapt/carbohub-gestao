@@ -157,13 +157,18 @@ export function useUpdateDepartmentLabel() {
         .from("department_labels")
         .upsert({ dept_key: values.dept_key, label: values.label, updated_at: new Date().toISOString() },
           { onConflict: "dept_key" });
-      if (error) throw error;
+      if (error) {
+        if (error.code === "PGRST205" || error.message?.includes("department_labels")) {
+          throw new Error("A tabela department_labels ainda não existe no banco. Peça ao admin para rodar a migration no Supabase SQL Editor.");
+        }
+        throw error;
+      }
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["department-labels"] });
       toast.success("Nome do departamento atualizado!");
     },
-    onError: (e: any) => toast.error("Erro ao renomear departamento: " + e.message),
+    onError: (e: any) => toast.error(e.message),
   });
 }
 
