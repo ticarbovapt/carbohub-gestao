@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { DEPARTMENT_COLORS, getDeptColorByKey, normalizeDeptKey } from "@/constants/departments";
 
 export interface OrgNode {
   id: string;
@@ -86,22 +87,17 @@ const LEVEL_LABELS: Record<number, string> = {
   6: "Staff",
 };
 
-export const DEPT_COLORS: Record<string, string> = {
-  Command:        "#6366f1",
-  OPS:            "#3b82f6",
-  Growth:         "#22c55e",
-  "Growth & B2B": "#10b981",
-  Finance:        "#f59e0b",
-  Expansão:       "#8b5cf6",
-  B2B:            "#ec4899",
-};
+// Re-export so existing imports of DEPT_COLORS and getDeptColor keep working.
+// Both now operate on department KEYS ("ops", "b2b") — not display labels.
+export const DEPT_COLORS = DEPARTMENT_COLORS;
 
 export function getLevelLabel(level: number): string {
   return LEVEL_LABELS[level] || "Staff";
 }
 
 export function getDeptColor(dept: string | null): string {
-  return DEPT_COLORS[dept || ""] || "#64748b";
+  // Accept both keys and legacy label/prefix aliases
+  return getDeptColorByKey(normalizeDeptKey(dept));
 }
 
 function buildTree(nodes: Omit<OrgNode, "children">[]): OrgNode[] {

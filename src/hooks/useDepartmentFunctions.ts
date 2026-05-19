@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import { DEPARTMENTS as DEPT_CONFIG, type DataScope } from "@/constants/functionAccessConfig";
+import { DEPARTMENT_LABELS } from "@/constants/departments";
 
 export interface DepartmentFunction {
   id: string;
@@ -131,12 +132,19 @@ export function useDepartmentLabels() {
   return useQuery({
     queryKey: ["department-labels"],
     queryFn: async () => {
-      const { data, error } = await (supabase as any)
-        .from("department_labels")
-        .select("dept_key, label");
-      if (error) return {} as Record<string, string>;
-      return ((data || []) as { dept_key: string; label: string }[])
-        .reduce((acc, r) => { acc[r.dept_key] = r.label; return acc; }, {} as Record<string, string>);
+      try {
+        const { data, error } = await (supabase as any)
+          .from("department_labels")
+          .select("dept_key, label");
+        // If table doesn't exist yet, fall back to constants (no crash, no error toast)
+        if (error) return { ...DEPARTMENT_LABELS } as Record<string, string>;
+        const overrides = ((data || []) as { dept_key: string; label: string }[])
+          .reduce((acc, r) => { acc[r.dept_key] = r.label; return acc; }, {} as Record<string, string>);
+        // Merge: defaults first, DB overrides win
+        return { ...DEPARTMENT_LABELS, ...overrides };
+      } catch {
+        return { ...DEPARTMENT_LABELS } as Record<string, string>;
+      }
     },
   });
 }

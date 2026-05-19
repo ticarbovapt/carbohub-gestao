@@ -3,17 +3,23 @@ import { CarboPageHeader } from "@/components/ui/carbo-page-header";
 import { CarboCard, CarboCardContent } from "@/components/ui/carbo-card";
 import { CarboBadge } from "@/components/ui/carbo-badge";
 import { Users } from "lucide-react";
+import { normalizeDeptKey, getDeptColorByKey } from "@/constants/departments";
 
-// ── Data from Mapa_Responsabilidades_CarboVapt — aba Resumo ────────────────
-
-const DEPT_COLORS: Record<string, string> = {
-  Command:  "bg-indigo-500",
-  OPS:      "bg-blue-500",
-  Growth:   "bg-green-500",
-  Finance:  "bg-amber-500",
-  "Expansão": "bg-violet-500",
-  B2B:      "bg-pink-500",
+// ── Tailwind color class from hex color — mapped by dept key ────────────────
+const DEPT_TAILWIND: Record<string, string> = {
+  command:    "bg-indigo-500",
+  finance:    "bg-amber-500",
+  growth:     "bg-green-500",
+  b2b:        "bg-pink-500",
+  ops:        "bg-blue-500",
+  expansao:   "bg-violet-500",
+  ti_suporte: "bg-slate-500",
 };
+
+function getDeptTailwind(raw: string | null | undefined): string {
+  const key = normalizeDeptKey(raw) ?? "";
+  return DEPT_TAILWIND[key] ?? "bg-gray-500";
+}
 
 const ROLE_BADGE: Record<string, "default" | "secondary" | "outline"> = {
   CEO:                      "default",
@@ -128,7 +134,7 @@ export default function ResponsibilityMap() {
           <CarboBadge variant="secondary">{total} colaboradores</CarboBadge>
           {byDept.map(({ dept, count }) => (
             <div key={dept} className="flex items-center gap-1.5 text-sm">
-              <span className={`w-2 h-2 rounded-full ${DEPT_COLORS[dept] || "bg-gray-500"}`} />
+              <span className={`w-2 h-2 rounded-full ${getDeptTailwind(dept)}`} />
               <span className="text-muted-foreground">{dept} <strong>{count}</strong></span>
             </div>
           ))}
@@ -142,8 +148,8 @@ export default function ResponsibilityMap() {
           return (
             <CarboCard key={dept} padding="none">
               {/* Dept header */}
-              <div className={`px-4 py-2 flex items-center gap-2 rounded-t-xl ${DEPT_COLORS[dept] || "bg-gray-500"} bg-opacity-10`}>
-                <span className={`w-2.5 h-2.5 rounded-full ${DEPT_COLORS[dept]}`} />
+              <div className={`px-4 py-2 flex items-center gap-2 rounded-t-xl ${getDeptTailwind(dept)} bg-opacity-10`}>
+                <span className={`w-2.5 h-2.5 rounded-full ${getDeptTailwind(dept)}`} />
                 <span className="font-semibold text-sm">{dept}</span>
                 <CarboBadge variant="secondary" className="text-[10px]">{people.length} pessoas</CarboBadge>
               </div>

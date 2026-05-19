@@ -5,16 +5,11 @@ import { Button } from "@/components/ui/button";
 import { ChevronDown, ChevronRight, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { type OrgNode, getLevelLabel, getDeptColor, DEPT_COLORS } from "@/hooks/useOrgChart";
+import { DEPARTMENT_CONFIGS, getDeptLabel } from "@/constants/departments";
 
 // ── Dept color legend ─────────────────────────────────────────────────────────
-const DEPT_LEGEND = [
-  { key: "Command",  label: "Command"  },
-  { key: "OPS",      label: "OPS"      },
-  { key: "Growth",   label: "Growth"   },
-  { key: "Finance",  label: "Finance"  },
-  { key: "Expansão", label: "Expansão" },
-  { key: "B2B",      label: "B2B"      },
-];
+// Legend derived from DEPARTMENT_CONFIGS — auto-updated when depts change
+const DEPT_LEGEND = DEPARTMENT_CONFIGS.map((d) => ({ key: d.key, label: d.label }));
 
 // Group label mapping for dual-role nodes
 const GROUP_LABELS: Record<string, string> = {

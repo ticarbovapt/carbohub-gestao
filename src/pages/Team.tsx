@@ -38,7 +38,14 @@ import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
 import { useCanEditTeamMembers, useCanAddTeamMember } from "@/hooks/useActionPermissions";
 import { useResendWelcomeEmail } from "@/hooks/useCreateTeamMember";
-import { ALL_DEPARTMENTS, DEPARTMENT_LABELS } from "@/constants/departments";
+import {
+  ALL_DEPARTMENTS,
+  DEPARTMENT_LABELS,
+  DEPARTMENT_ORDER,
+  DEPARTMENT_USERNAME_PREFIX,
+  normalizeDeptKey,
+  getDeptLabel,
+} from "@/constants/departments";
 import { useDepartmentFunctions } from "@/hooks/useDepartmentFunctions";
 import { DEPARTMENTS as DEPT_FUNCTIONS_CONFIG } from "@/constants/functionAccessConfig";
 // ── Carbo role labels ────────────────────────────────────────────────────────
@@ -52,16 +59,7 @@ const CARBO_ROLE_BADGE: Record<string, string> = {
   licensed_user:   "Licenciado",
 };
 
-// ── Mapeamento dept org_chart → profiles ────────────────────────────────────
-const DEPT_TO_PROFILE_DEPT: Record<string, string> = {
-  Command: "command", command: "command",
-  OPS: "ops", Ops: "ops", Operações: "ops", operações: "ops", ops: "ops",
-  Finance: "finance", finance: "finance",
-  Growth: "growth", growth: "growth", "Growth & B2B": "growth",
-  B2B: "b2b", b2b: "b2b", Vendas: "b2b", vendas: "b2b",
-  Expansão: "expansao", expansao: "expansao",
-  "TI / Suporte": "ti_suporte", ti_suporte: "ti_suporte",
-};
+// normalizeDeptKey imported from constants — auto-generated from DEPARTMENT_CONFIGS
 
 // Resolve function label from dept+funcao keys
 function resolveFuncaoLabel(department: string | null, funcao: string | null): string | null {
@@ -70,10 +68,7 @@ function resolveFuncaoLabel(department: string | null, funcao: string | null): s
   return dept?.functions.find(f => f.key === funcao)?.label ?? funcao;
 }
 
-// Prefixo do username por departamento (maiúsculo, 3 chars)
-const DEPT_USERNAME_PREFIX: Record<string, string> = {
-  ops: "OPS", finance: "FIN", growth: "GRO", b2b: "B2B", command: "COM", expansao: "EXP",
-};
+// DEPARTMENT_USERNAME_PREFIX imported from constants
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 function flattenTree(nodes: OrgNode[]): OrgNode[] {
@@ -94,7 +89,7 @@ function buildParentMap(
 
 const ALL_ORG_MEMBERS = flattenTree(STATIC_ORG_TREE);
 const PARENT_MAP = buildParentMap(STATIC_ORG_TREE);
-const DEPT_ORDER = ["Command", "Finance", "Growth & B2B", "Growth", "OPS", "B2B", "Expansão"];
+// DEPARTMENT_ORDER imported from constants — ordered by DepartmentConfig.order
 
 function getInitialsOrg(name: string) {
   return name
@@ -156,7 +151,7 @@ function MemberInfoModal({ member, profiles, teamMembers, onClose, canEdit, isMa
 
     // Department: prefer profile enum value (e.g. "ops") over org chart display value
     const rawDept = member.department || "";
-    const normalizedDept = DEPT_TO_PROFILE_DEPT[rawDept] ?? rawDept.toLowerCase();
+    const normalizedDept = normalizeDeptKey(rawDept) ?? rawDept.toLowerCase();
     setFormDept((linked?.department as string) || normalizedDept);
 
     setFormEmail(email);
@@ -418,13 +413,13 @@ function MemberInfoModal({ member, profiles, teamMembers, onClose, canEdit, isMa
                       onChange={(e) => setFormUsername(e.target.value.replace(/\s/g, "").toUpperCase())}
                       onFocus={() => {
                         if (!formUsername && formDept) {
-                          const prefix = DEPT_USERNAME_PREFIX[formDept];
+                          const prefix = DEPARTMENT_USERNAME_PREFIX[formDept];
                           if (prefix) setFormUsername(prefix);
                         }
                       }}
                       placeholder={
-                        formDept && DEPT_USERNAME_PREFIX[formDept]
-                          ? `${DEPT_USERNAME_PREFIX[formDept]}001`
+                        formDept && DEPARTMENT_USERNAME_PREFIX[formDept]
+                          ? `${DEPARTMENT_USERNAME_PREFIX[formDept]}001`
                           : "OPS001"
                       }
                     />
@@ -601,14 +596,14 @@ const Team = () => {
     }
   };
 
-  // Group org members by department (deterministic order)
+  // Group org members by department (deterministic order from DEPARTMENT_ORDER)
   const grouped = useMemo(() => {
     const map = new Map<string, OrgNode[]>();
-    DEPT_ORDER.forEach((d) => map.set(d, []));
+    DEPARTMENT_ORDER.forEach((key) => map.set(key, []));
     ALL_ORG_MEMBERS.forEach((m) => {
-      const dept = m.department || "Outros";
-      if (!map.has(dept)) map.set(dept, []);
-      map.get(dept)!.push(m);
+      const key = normalizeDeptKey(m.department) ?? m.department ?? "outros";
+      if (!map.has(key)) map.set(key, []);
+      map.get(key)!.push(m);
     });
     return Array.from(map.entries()).filter(([, deptMembers]) => deptMembers.length > 0);
   }, []);
@@ -890,7 +885,7 @@ const Team = () => {
                         className="text-sm font-semibold uppercase tracking-wider"
                         style={{ color }}
                       >
-                        {dept}
+                        {getDeptLabel(dept)}
                       </h3>
                       <Badge
                         variant="outline"
