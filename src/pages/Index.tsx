@@ -87,7 +87,7 @@ const Index = () => {
     } else {
       setShowLoadingScreen(true);
       setTimeout(() => {
-        navigate("/home", { replace: true });
+        navigate("/dashboard", { replace: true });
       }, 1500);
     }
   };
@@ -129,7 +129,7 @@ const Index = () => {
       if (passwordMustChange) {
         navigate("/change-password", { replace: true });
       } else {
-        navigate("/home", { replace: true });
+        navigate("/dashboard", { replace: true });
       }
     }
   }, [user, isLoading, passwordMustChange, tempPasswordExpired]);
