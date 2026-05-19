@@ -50,23 +50,25 @@ export const LEGACY_ACCESS_ACTIVE = !ENFORCEMENT_ACTIVE;
 export function useFunctionAccess(): FunctionAccess {
   const { profile, isMasterAdmin, isSuporte } = useAuth();
 
-  const dept   = profile?.department ?? null;
-  const funcao = profile?.funcao     ?? null;
-  const userId = profile?.id as string | undefined;
+  const dept      = profile?.department          ?? null;
+  const funcao    = profile?.funcao              ?? null;
+  const secDept   = profile?.secondary_department ?? null;
+  const secFuncao = profile?.secondary_funcao    ?? null;
+  const userId    = profile?.id as string | undefined;
 
   const { data, isLoading } = useQuery({
-    queryKey: ["function-access", dept, funcao, userId],
+    queryKey: ["function-access", dept, funcao, secDept, secFuncao, userId],
     enabled: !!dept && !!funcao && !!userId,
     queryFn: async () => {
-      const [screenRes, fnRes, overrideRes] = await Promise.all([
-        // Screen access from function_screen_access
+      const queries: Promise<any>[] = [
+        // Primary: screen access
         (supabase as any)
           .from("function_screen_access")
           .select("screen_ids")
           .eq("department", dept)
           .eq("function_key", funcao)
           .maybeSingle(),
-        // View + edit scope from department_functions
+        // Primary: view + edit scope
         (supabase as any)
           .from("department_functions")
           .select("data_scope, edit_scope")
@@ -79,11 +81,27 @@ export function useFunctionAccess(): FunctionAccess {
           .select("view_scope, edit_scope, extra_screen_ids")
           .eq("user_id", userId)
           .maybeSingle(),
-      ]);
+      ];
 
-      const functionScreenIds = (screenRes.data?.screen_ids ?? []) as string[];
-      const extraScreenIds    = (overrideRes.data?.extra_screen_ids ?? []) as string[];
-      const allScreenIds      = [...new Set([...functionScreenIds, ...extraScreenIds])];
+      // Secondary function queries (only if configured)
+      if (secDept && secFuncao) {
+        queries.push(
+          (supabase as any)
+            .from("function_screen_access")
+            .select("screen_ids")
+            .eq("department", secDept)
+            .eq("function_key", secFuncao)
+            .maybeSingle()
+        );
+      }
+
+      const results = await Promise.all(queries);
+      const [screenRes, fnRes, overrideRes, secScreenRes] = results;
+
+      const primaryScreenIds   = (screenRes.data?.screen_ids ?? []) as string[];
+      const secondaryScreenIds = (secScreenRes?.data?.screen_ids ?? []) as string[];
+      const extraScreenIds     = (overrideRes.data?.extra_screen_ids ?? []) as string[];
+      const allScreenIds       = [...new Set([...primaryScreenIds, ...secondaryScreenIds, ...extraScreenIds])];
 
       const fnViewScope  = (fnRes.data?.data_scope ?? "proprio") as DataScope;
       const fnEditScope  = (fnRes.data?.edit_scope ?? "proprio") as DataScope;
