@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { DEPARTMENTS, SCREEN_GROUPS, DATA_SCOPES, type DataScope } from "@/constants/functionAccessConfig";
+import { ENFORCEMENT_ACTIVE } from "@/hooks/useFunctionAccess";
 import {
   useDepartmentFunctions,
   useCreateDepartmentFunction,
@@ -302,14 +303,24 @@ export function FunctionAccessTab() {
 
   return (
     <div className="space-y-4">
-      {/* Warning banner */}
-      <div className="flex items-start gap-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3">
-        <AlertTriangle className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
-        <p className="text-sm text-amber-700 dark:text-amber-400">
-          <strong>Modo configuração:</strong> as alterações aqui são salvas para organização futura e{" "}
-          <strong>não afetam os acessos reais</strong> até ativação oficial.
-        </p>
-      </div>
+      {/* Active/config banner */}
+      {ENFORCEMENT_ACTIVE ? (
+        <div className="flex items-start gap-3 rounded-lg border border-red-500/40 bg-red-500/10 px-4 py-3">
+          <AlertTriangle className="h-4 w-4 text-red-500 mt-0.5 shrink-0" />
+          <p className="text-sm text-red-700 dark:text-red-400">
+            <strong>Sistema ativo:</strong> as configurações aqui definem exatamente o que cada colaborador pode ver e acessar na plataforma.{" "}
+            Alterações têm <strong>efeito imediato</strong> — o colaborador verá a mudança no próximo login ou ao recarregar a página.
+          </p>
+        </div>
+      ) : (
+        <div className="flex items-start gap-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3">
+          <AlertTriangle className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
+          <p className="text-sm text-amber-700 dark:text-amber-400">
+            <strong>Modo configuração:</strong> as alterações aqui são salvas para organização futura e{" "}
+            <strong>não afetam os acessos reais</strong> até ativação oficial.
+          </p>
+        </div>
+      )}
 
       {loadError && (
         <div className="flex items-start gap-3 rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-3">
