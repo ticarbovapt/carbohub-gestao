@@ -139,8 +139,8 @@ export function QuickConfirmOPDialog({ open, order, onOpenChange }: QuickConfirm
         items,
       });
 
-      // 2. Advance status to "concluida" (submitConfirmation sets "confirmada")
-      await updateOP.mutateAsync({ id: order.id, op_status: "concluida" });
+      // 2. Advance status to "qualidade_aprovada"
+      await updateOP.mutateAsync({ id: order.id, op_status: "qualidade_aprovada" });
 
       onOpenChange(false);
     } catch {

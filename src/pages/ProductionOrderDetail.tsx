@@ -50,9 +50,9 @@ const STATUS_STEP: Partial<Record<OpStatus, number>> = {
   rascunho: 0, planejada: 1, aguardando_separacao: 2, separada: 3,
   aguardando_liberacao: 4, liberada_producao: 5, em_producao: 6,
   aguardando_confirmacao: 7, confirmada: 8, aguardando_qualidade: 9,
-  liberada: 10, concluida: 11,
+  qualidade_aprovada: 10, liberada: 11, concluida: 12,
 };
-const TOTAL_STEPS = 12;
+const TOTAL_STEPS = 13;
 
 const PRIORITY_COLORS: Record<number, string> = {
   1: "bg-red-500/10 text-red-700 border-red-500/30",
@@ -199,7 +199,7 @@ export default function ProductionOrderDetail() {
                   <ClipboardCheck className="h-4 w-4" /> Confirmar
                 </Button>
               )}
-              {(["aguardando_confirmacao", "confirmada", "aguardando_qualidade"] as OpStatus[]).includes(order.op_status) && (
+              {order.op_status === "aguardando_qualidade" && (
                 <Button size="sm" className="gap-2 bg-orange-600 hover:bg-orange-700 text-white" onClick={() => setQualityCheckOpen(true)}>
                   <CheckCircle2 className="h-4 w-4" /> Validar Qualidade
                 </Button>

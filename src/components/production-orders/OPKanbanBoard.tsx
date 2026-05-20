@@ -25,7 +25,7 @@ export const OP_KANBAN_COLUMNS: OPKanbanColumn[] = [
   { id: "materiais",   label: "Materiais",    emoji: "🔧", color: "#f59e0b", statuses: ["aguardando_separacao", "separada"] },
   { id: "liberada",    label: "Liberada",     emoji: "✅", color: "#6366f1", statuses: ["aguardando_liberacao", "liberada_producao"] },
   { id: "em_producao", label: "Em Produção",  emoji: "⚙️", color: "#8b5cf6", statuses: ["em_producao"] },
-  { id: "qualidade",   label: "Qualidade",    emoji: "🔍", color: "#f97316", statuses: ["aguardando_confirmacao", "confirmada", "aguardando_qualidade"] },
+  { id: "qualidade",   label: "Qualidade",    emoji: "🔍", color: "#f97316", statuses: ["aguardando_confirmacao", "confirmada", "aguardando_qualidade", "qualidade_aprovada"] },
   { id: "concluida",   label: "Concluída",    emoji: "📦", color: "#22c55e", statuses: ["liberada", "concluida"] },
   { id: "bloqueada",   label: "Bloqueada",    emoji: "🚫", color: "#ef4444", statuses: ["bloqueada", "cancelada"] },
 ];
