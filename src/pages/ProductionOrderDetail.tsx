@@ -155,6 +155,9 @@ export default function ProductionOrderDetail() {
 
   async function advanceTo(next: OpStatus) {
     await updateOP.mutateAsync({ id: order!.id, op_status: next });
+    if (next === "aguardando_qualidade") {
+      setQualityCheckOpen(true);
+    }
   }
 
   const yieldPct = order.planned_quantity > 0 && order.good_quantity != null
