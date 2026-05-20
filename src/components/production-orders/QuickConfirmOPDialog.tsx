@@ -65,17 +65,29 @@ export function QuickConfirmOPDialog({ open, order, onOpenChange }: QuickConfirm
       const ids = (mats || []).map((m: any) => m.product_id as string);
       if (ids.length === 0) return [];
 
-      const { data: prods } = await supabase
-        .from("mrp_products")
-        .select("id, name, stock_unit")
-        .in("id", ids);
+      const [prodsRes, lotsRes] = await Promise.all([
+        supabase.from("mrp_products").select("id, name, stock_unit").in("id", ids),
+        (supabase as any).from("inventory_lot")
+          .select("id, product_id, available_volume_ml")
+          .in("product_id", ids)
+          .eq("status", "aprovado")
+          .gt("available_volume_ml", 0)
+          .order("created_at", { ascending: false }),
+      ]);
 
-      const prodMap = new Map((prods || []).map(p => [p.id, p]));
+      const prodMap = new Map((prodsRes.data || []).map((p: any) => [p.id, p]));
+      // Pick the lot with most volume available per product
+      const lotMap = new Map<string, string>();
+      for (const lot of (lotsRes.data || [])) {
+        if (!lotMap.has(lot.product_id)) lotMap.set(lot.product_id, lot.id);
+      }
+
       return (mats || []).map((m: any) => ({
         product_id:           m.product_id as string,
         theoretical_quantity: m.theoretical_quantity as number,
         product_name: (prodMap.get(m.product_id) as any)?.name      || "—",
         unit:         (prodMap.get(m.product_id) as any)?.stock_unit || "un",
+        lot_id:       lotMap.get(m.product_id) || null,
       }));
     },
   });
@@ -129,7 +141,7 @@ export function QuickConfirmOPDialog({ open, order, onOpenChange }: QuickConfirm
         actual_quantity:      scaled,
         loss_quantity:        Math.max(0, m.theoretical_quantity - scaled),
         loss_reason:          qtyChanged ? reason : "",
-        lot_id:               null,
+        lot_id:               m.lot_id || null,
         unit:                 m.unit,
       };
     });

@@ -24,7 +24,7 @@ import { Loader2 } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { DEMAND_SOURCE_LABELS, PRIORITY_LABELS } from "@/hooks/useProductionOrders";
+import { DEMAND_SOURCE_LABELS, PRIORITY_LABELS, useExplodeBOM } from "@/hooks/useProductionOrders";
 
 const schema = z.object({
   sku_id: z.string().min(1, "Selecione um produto"),
@@ -52,6 +52,7 @@ function currentPeriod(): string {
 
 export function CreateOPDialog({ open, onOpenChange }: CreateOPDialogProps) {
   const qc = useQueryClient();
+  const explodeBOM = useExplodeBOM();
 
   const { data: skus = [], isLoading: skusLoading } = useQuery({
     queryKey: ["skus_active"],
@@ -128,10 +129,22 @@ export function CreateOPDialog({ open, onOpenChange }: CreateOPDialogProps) {
       if (error) throw error;
       return result;
     },
-    onSuccess: () => {
+    onSuccess: async (result) => {
       qc.invalidateQueries({ queryKey: ["production_orders_op"] });
       qc.invalidateQueries({ queryKey: ["production_orders"] });
-      toast.success("Ordem de Produção criada com sucesso!");
+
+      // Auto-explode BOM so production_order_material is ready from the start
+      try {
+        await explodeBOM.mutateAsync({
+          orderId: result.id,
+          skuId: result.sku_id,
+          plannedQuantity: result.planned_quantity,
+        });
+        toast.success("OP criada com insumos da BOM carregados!");
+      } catch {
+        toast.success("OP criada! (BOM não configurada para este produto — adicione os insumos manualmente)");
+      }
+
       reset();
       onOpenChange(false);
     },
