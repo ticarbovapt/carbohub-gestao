@@ -184,7 +184,7 @@ function OPColumn({
                         : undefined
                     }
                     onComplete={
-                      column.id === "em_producao" || column.id === "qualidade"
+                      column.id === "qualidade"
                         ? onComplete
                         : undefined
                     }

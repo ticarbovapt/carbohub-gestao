@@ -112,19 +112,19 @@ export function OPKanbanCard({ order, onAdvance, onComplete, onClick }: OPKanban
         <span className="text-muted-foreground/60">{daysSince} atrás</span>
       </div>
 
-      {/* Conclude production button */}
+      {/* Quality check button */}
       {onComplete && (
         <div className="pt-2 border-t border-border">
           <Button
             size="sm"
-            className="w-full h-7 text-xs bg-green-600 hover:bg-green-700 text-white"
+            className="w-full h-7 text-xs bg-orange-600 hover:bg-orange-700 text-white"
             onClick={(e) => {
               e.stopPropagation();
               onComplete(order);
             }}
           >
             <CheckCircle2 className="h-3 w-3 mr-1" />
-            Concluir Produção
+            Validar Qualidade
           </Button>
         </div>
       )}
