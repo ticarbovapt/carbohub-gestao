@@ -109,10 +109,24 @@ export function useCreateSku() {
         .select()
         .single();
       if (error) throw error;
+
+      // Sync to mrp_products so production confirmations can credit finished stock
+      await (supabase as any)
+        .from("mrp_products")
+        .upsert({
+          product_code:     data.code,
+          name:             data.name,
+          category:         "produto_final",
+          packaging_size_ml: data.packaging_ml ?? null,
+          is_active:        data.is_active ?? true,
+          current_stock_qty: 0,
+        }, { onConflict: "product_code", ignoreDuplicates: false });
+
       return data as Sku;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["skus"] });
+      qc.invalidateQueries({ queryKey: ["mrp-products"] });
       toast.success("SKU criado com sucesso!");
     },
     onError: (e: Error) => toast.error("Erro ao criar SKU: " + e.message),
@@ -130,10 +144,24 @@ export function useUpdateSku() {
         .select()
         .single();
       if (error) throw error;
+
+      // Keep mrp_products in sync (name, active status, packaging)
+      const mrpUpdate: Record<string, unknown> = {};
+      if (updates.name        !== undefined) mrpUpdate.name             = updates.name;
+      if (updates.is_active   !== undefined) mrpUpdate.is_active        = updates.is_active;
+      if (updates.packaging_ml !== undefined) mrpUpdate.packaging_size_ml = updates.packaging_ml;
+      if (Object.keys(mrpUpdate).length > 0) {
+        await (supabase as any)
+          .from("mrp_products")
+          .update(mrpUpdate)
+          .eq("product_code", data.code);
+      }
+
       return data as Sku;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["skus"] });
+      qc.invalidateQueries({ queryKey: ["mrp-products"] });
       toast.success("SKU atualizado!");
     },
     onError: (e: Error) => toast.error("Erro ao atualizar: " + e.message),
