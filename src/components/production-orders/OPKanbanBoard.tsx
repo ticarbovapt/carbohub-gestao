@@ -20,14 +20,15 @@ interface OPKanbanColumn {
 }
 
 export const OP_KANBAN_COLUMNS: OPKanbanColumn[] = [
-  { id: "backlog",     label: "Backlog",      emoji: "📋", color: "#64748b", statuses: ["rascunho"] },
-  { id: "planejada",   label: "Planejada",    emoji: "📅", color: "#3b82f6", statuses: ["planejada"] },
-  { id: "materiais",   label: "Materiais",    emoji: "🔧", color: "#f59e0b", statuses: ["aguardando_separacao", "separada"] },
-  { id: "liberada",    label: "Liberada",     emoji: "✅", color: "#6366f1", statuses: ["aguardando_liberacao", "liberada_producao"] },
-  { id: "em_producao", label: "Em Produção",  emoji: "⚙️", color: "#8b5cf6", statuses: ["em_producao"] },
-  { id: "qualidade",   label: "Qualidade",    emoji: "🔍", color: "#f97316", statuses: ["aguardando_confirmacao", "confirmada", "aguardando_qualidade", "qualidade_aprovada"] },
-  { id: "concluida",   label: "Concluída",    emoji: "📦", color: "#22c55e", statuses: ["liberada", "concluida"] },
-  { id: "bloqueada",   label: "Bloqueada",    emoji: "🚫", color: "#ef4444", statuses: ["bloqueada", "cancelada"] },
+  { id: "backlog",     label: "Backlog",        emoji: "📋", color: "#64748b", statuses: ["rascunho"] },
+  { id: "planejada",   label: "Planejada",      emoji: "📅", color: "#3b82f6", statuses: ["planejada"] },
+  { id: "materiais",   label: "Materiais",      emoji: "🔧", color: "#f59e0b", statuses: ["aguardando_separacao", "separada"] },
+  { id: "lib_prod",    label: "Lib. Produção",  emoji: "✅", color: "#6366f1", statuses: ["aguardando_liberacao", "liberada_producao"] },
+  { id: "em_producao", label: "Em Produção",    emoji: "⚙️", color: "#8b5cf6", statuses: ["em_producao"] },
+  { id: "qualidade",   label: "Qualidade",      emoji: "🔍", color: "#f97316", statuses: ["aguardando_confirmacao", "confirmada", "aguardando_qualidade", "qualidade_aprovada"] },
+  { id: "liberada",    label: "Liberada",       emoji: "🚀", color: "#22c55e", statuses: ["liberada"] },
+  { id: "concluida",   label: "Concluída",      emoji: "📦", color: "#16a34a", statuses: ["concluida"] },
+  { id: "bloqueada",   label: "Bloqueada",      emoji: "🚫", color: "#ef4444", statuses: ["bloqueada", "cancelada"] },
 ];
 
 // ──────────────────────────────────────────────────────────────
@@ -89,8 +90,8 @@ export function OPKanbanBoard({ orders, onAdvance, onCardClick, onMoveToComplete
     const currentCol = OP_KANBAN_COLUMNS.find((c) => c.statuses.includes(order.op_status));
     if (currentCol?.id === targetCol.id) return;
 
-    // Moving to "qualidade" or "concluída" opens a dialog instead of directly updating
-    if ((targetCol.id === "qualidade" || targetCol.id === "concluida") && onMoveToComplete) {
+    // Moving to "qualidade", "liberada" or "concluida" opens a dialog instead of directly updating
+    if ((targetCol.id === "qualidade" || targetCol.id === "liberada" || targetCol.id === "concluida") && onMoveToComplete) {
       onMoveToComplete(order);
       return;
     }
@@ -179,7 +180,7 @@ function OPColumn({
                   <OPKanbanCard
                     order={order}
                     onAdvance={
-                      column.id !== "concluida" && column.id !== "bloqueada"
+                      column.id !== "liberada" && column.id !== "concluida" && column.id !== "bloqueada"
                         ? onAdvance
                         : undefined
                     }
