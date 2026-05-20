@@ -43,6 +43,7 @@ import { toast } from "sonner";
 import { EditOPDialog } from "@/components/production-orders/EditOPDialog";
 import { DeleteOPDialog } from "@/components/production-orders/DeleteOPDialog";
 import { ConfirmOPDialog } from "@/components/production-orders/ConfirmOPDialog";
+import { QuickConfirmOPDialog } from "@/components/production-orders/QuickConfirmOPDialog";
 
 // ── Status helpers ────────────────────────────────────────────────────────────
 const STATUS_STEP: Partial<Record<OpStatus, number>> = {
@@ -117,6 +118,7 @@ export default function ProductionOrderDetail() {
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [qualityCheckOpen, setQualityCheckOpen] = useState(false);
 
   if (isLoading) {
     return (
@@ -195,6 +197,11 @@ export default function ProductionOrderDetail() {
               {order.op_status === "aguardando_confirmacao" && (
                 <Button size="sm" className="gap-2 carbo-gradient" onClick={() => setConfirmOpen(true)}>
                   <ClipboardCheck className="h-4 w-4" /> Confirmar
+                </Button>
+              )}
+              {(["aguardando_confirmacao", "confirmada", "aguardando_qualidade"] as OpStatus[]).includes(order.op_status) && (
+                <Button size="sm" className="gap-2 bg-orange-600 hover:bg-orange-700 text-white" onClick={() => setQualityCheckOpen(true)}>
+                  <CheckCircle2 className="h-4 w-4" /> Validar Qualidade
                 </Button>
               )}
               <Button size="sm" variant="outline" className="gap-2" onClick={() => setEditOpen(true)}>
@@ -382,6 +389,7 @@ export default function ProductionOrderDetail() {
       <EditOPDialog open={editOpen} onOpenChange={setEditOpen} order={order} />
       <DeleteOPDialog open={deleteOpen} onOpenChange={setDeleteOpen} order={order} onDeleted={() => navigate("/production-orders")} />
       <ConfirmOPDialog open={confirmOpen} onOpenChange={setConfirmOpen} order={order} />
+      <QuickConfirmOPDialog open={qualityCheckOpen} onOpenChange={setQualityCheckOpen} order={order} />
     </BoardLayout>
   );
 }
