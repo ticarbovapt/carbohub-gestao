@@ -89,8 +89,8 @@ export function OPKanbanBoard({ orders, onAdvance, onCardClick, onMoveToComplete
     const currentCol = OP_KANBAN_COLUMNS.find((c) => c.statuses.includes(order.op_status));
     if (currentCol?.id === targetCol.id) return;
 
-    // Moving to "concluída" opens the confirmation dialog instead of directly updating
-    if (targetCol.id === "concluida" && onMoveToComplete) {
+    // Moving to "qualidade" or "concluída" opens a dialog instead of directly updating
+    if ((targetCol.id === "qualidade" || targetCol.id === "concluida") && onMoveToComplete) {
       onMoveToComplete(order);
       return;
     }
