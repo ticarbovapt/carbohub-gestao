@@ -145,17 +145,16 @@ export function useUpdateSku() {
         .single();
       if (error) throw error;
 
-      // Keep mrp_products in sync (name, active status, packaging)
-      const mrpUpdate: Record<string, unknown> = {};
-      if (updates.name        !== undefined) mrpUpdate.name             = updates.name;
-      if (updates.is_active   !== undefined) mrpUpdate.is_active        = updates.is_active;
-      if (updates.packaging_ml !== undefined) mrpUpdate.packaging_size_ml = updates.packaging_ml;
-      if (Object.keys(mrpUpdate).length > 0) {
-        await (supabase as any)
-          .from("mrp_products")
-          .update(mrpUpdate)
-          .eq("product_code", data.code);
-      }
+      // Keep mrp_products in sync — upsert ensures the row exists even for old SKUs
+      await (supabase as any)
+        .from("mrp_products")
+        .upsert({
+          product_code:      data.code,
+          name:              data.name,
+          category:          "produto_final",
+          packaging_size_ml: data.packaging_ml ?? null,
+          is_active:         data.is_active ?? true,
+        }, { onConflict: "product_code", ignoreDuplicates: false });
 
       return data as Sku;
     },
