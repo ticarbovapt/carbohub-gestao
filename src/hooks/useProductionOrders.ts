@@ -17,6 +17,7 @@ export type OpStatus =
   | "aguardando_confirmacao"
   | "confirmada"
   | "aguardando_qualidade"
+  | "qualidade_aprovada"
   | "liberada"
   | "concluida"
   | "bloqueada"
@@ -126,6 +127,7 @@ export const OP_STATUS_LABELS: Record<OpStatus, string> = {
   aguardando_confirmacao: "Aguard. Confirmação",
   confirmada: "Confirmada",
   aguardando_qualidade: "Aguard. Qualidade",
+  qualidade_aprovada: "QA Aprovado",
   liberada: "Liberada",
   concluida: "Concluída",
   bloqueada: "Bloqueada",
@@ -143,6 +145,7 @@ export const OP_STATUS_COLORS: Record<OpStatus, string> = {
   aguardando_confirmacao: "bg-purple-500",
   confirmada: "bg-violet-500",
   aguardando_qualidade: "bg-yellow-500",
+  qualidade_aprovada: "bg-green-500",
   liberada: "bg-emerald-500",
   concluida: "bg-green-600",
   bloqueada: "bg-red-500",
@@ -159,7 +162,8 @@ export const OP_STATUS_TRANSITIONS: Record<OpStatus, OpStatus[]> = {
   em_producao: ["aguardando_confirmacao", "bloqueada"],
   aguardando_confirmacao: ["confirmada"],
   confirmada: ["aguardando_qualidade", "liberada"],
-  aguardando_qualidade: ["liberada", "bloqueada"],
+  aguardando_qualidade: ["qualidade_aprovada", "bloqueada"],
+  qualidade_aprovada: ["liberada"],
   liberada: ["concluida"],
   concluida: [],
   bloqueada: ["planejada", "cancelada"],

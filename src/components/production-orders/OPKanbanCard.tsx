@@ -1,7 +1,7 @@
 import React from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ChevronRight, Calendar, Package, CheckCircle2 } from "lucide-react";
+import { ChevronRight, Calendar, Package, CheckCircle2, ShieldCheck } from "lucide-react";
 import type { ProductionOrder, DemandSource } from "@/hooks/useProductionOrders";
 import { formatDistanceToNow, format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -112,8 +112,8 @@ export function OPKanbanCard({ order, onAdvance, onComplete, onClick }: OPKanban
         <span className="text-muted-foreground/60">{daysSince} atrás</span>
       </div>
 
-      {/* Quality check button */}
-      {onComplete && (
+      {/* Quality check button — only for aguardando_qualidade */}
+      {onComplete && order.op_status === "aguardando_qualidade" && (
         <div className="pt-2 border-t border-border">
           <Button
             size="sm"
@@ -126,6 +126,16 @@ export function OPKanbanCard({ order, onAdvance, onComplete, onClick }: OPKanban
             <CheckCircle2 className="h-3 w-3 mr-1" />
             Validar Qualidade
           </Button>
+        </div>
+      )}
+
+      {/* QA approved badge */}
+      {order.op_status === "qualidade_aprovada" && (
+        <div className="pt-2 border-t border-border">
+          <div className="flex items-center justify-center gap-1.5 text-xs font-semibold text-green-600">
+            <ShieldCheck className="h-3.5 w-3.5" />
+            QA Aprovado
+          </div>
         </div>
       )}
 
