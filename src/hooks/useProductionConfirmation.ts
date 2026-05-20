@@ -319,6 +319,11 @@ export function useSubmitConfirmation() {
             .eq("product_code", sku.code)
             .maybeSingle();
 
+          if (!finishedProduct) {
+            console.warn(`[confirmation] Produto acabado não encontrado no MRP para code="${sku.code}".`);
+            toast.warning(`"${sku.name}" não encontrado no MRP com código ${sku.code} — estoque do produto final não foi creditado. Cadastre-o em Insumos com esse código.`);
+          }
+
           if (finishedProduct) {
             // Create entrada movement for finished goods
             await supabase.from("stock_movements").insert({
