@@ -41,7 +41,7 @@ export interface FunctionAccess {
 
 // Flip to true when enforcement is ready to activate.
 // Exported so all permission hooks share a single source of truth.
-export const ENFORCEMENT_ACTIVE = false;
+export const ENFORCEMENT_ACTIVE = true;
 
 // Convenience inverse: true while the OLD role-based system is still authoritative.
 // Wrap legacy UI sections in {LEGACY_ACCESS_ACTIVE && ...} — they disappear on migration flip.
