@@ -7,19 +7,61 @@ const supabase = createClient(
 
 type Platform = "mercadolivre" | "amazon" | "tiktok" | "shopee";
 
+// ─── Token helper ─────────────────────────────────────────────────────────────
+
+async function getMercadoLivreToken(): Promise<{ accessToken: string; sellerId: string } | null> {
+  const { data, error } = await supabase
+    .from("system_tokens")
+    .select("access_token,refresh_token,expires_at,seller_id")
+    .eq("id", "mercadolivre")
+    .maybeSingle();
+
+  if (error || !data) {
+    console.warn("[mercadolivre] Token not found in system_tokens — skipping sync");
+    return null;
+  }
+
+  // Refresh if expired (or within 5 min of expiry)
+  const expiresAt = data.expires_at ? new Date(data.expires_at).getTime() : 0;
+  if (Date.now() >= expiresAt - 5 * 60 * 1000) {
+    try {
+      const res = await fetch("https://api.mercadolibre.com/oauth/token", {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({
+          grant_type:    "refresh_token",
+          client_id:     Deno.env.get("ML_CLIENT_ID")!,
+          client_secret: Deno.env.get("ML_CLIENT_SECRET")!,
+          refresh_token: data.refresh_token,
+        }),
+      });
+      if (res.ok) {
+        const t = await res.json() as { access_token: string; refresh_token: string; expires_in: number };
+        await supabase.from("system_tokens").upsert({
+          id:            "mercadolivre",
+          access_token:  t.access_token,
+          refresh_token: t.refresh_token,
+          expires_at:    new Date(Date.now() + t.expires_in * 1000).toISOString(),
+          seller_id:     data.seller_id,
+          updated_at:    new Date().toISOString(),
+        }, { onConflict: "id" });
+        return { accessToken: t.access_token, sellerId: data.seller_id };
+      }
+    } catch (e) {
+      console.error("[mercadolivre] Token refresh failed:", e);
+    }
+    return null;
+  }
+
+  return { accessToken: data.access_token, sellerId: data.seller_id };
+}
+
 // ─── Platform pullers ─────────────────────────────────────────────────────────
-// Each function fetches recent orders from the platform API.
-// Returns normalized rows ready to upsert into ecommerce_orders.
-// Replace the stub bodies with real API calls once credentials are available.
 
 async function pullMercadoLivre(since: Date): Promise<Record<string, unknown>[]> {
-  const accessToken = Deno.env.get("ML_ACCESS_TOKEN");
-  const sellerId    = Deno.env.get("ML_SELLER_ID");
-  if (!accessToken || !sellerId) {
-    console.warn("[mercadolivre] Credentials not configured — skipping sync");
-    return [];
-  }
-  // GET /orders/search?seller={sellerId}&sort=date_desc&date_created.from={since}
+  const creds = await getMercadoLivreToken();
+  if (!creds) return [];
+  const { accessToken, sellerId } = creds;
   const url = `https://api.mercadolibre.com/orders/search?seller=${sellerId}&sort=date_desc&date_created.from=${since.toISOString()}`;
   const res  = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
   if (!res.ok) { console.error("[mercadolivre] API error", res.status); return []; }

@@ -26,3 +26,4 @@ jobs:
           supabase functions deploy bling-sync --project-ref ${{ secrets.SUPABASE_PROJECT_ID }} --no-verify-jwt
           supabase functions deploy ecommerce-webhook --project-ref ${{ secrets.SUPABASE_PROJECT_ID }} --no-verify-jwt
           supabase functions deploy ecommerce-sync --project-ref ${{ secrets.SUPABASE_PROJECT_ID }} --no-verify-jwt
+          supabase functions deploy ml-auth --project-ref ${{ secrets.SUPABASE_PROJECT_ID }} --no-verify-jwt
