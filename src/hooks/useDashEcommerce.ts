@@ -228,20 +228,28 @@ export function useEcommerceRawCheck(
 // PATH 2 — System hook (full business logic + real-time)
 // ─────────────────────────────────────────────────────────────────────────────
 
-// Platforms that use OAuth token stored in system_tokens
-const TOKEN_PLATFORMS: Partial<Record<EcommercePlatform, string>> = {
-  mercadolivre: "mercadolivre",
+// Platforms that have a live-check edge function
+const STATUS_FUNCTION: Partial<Record<EcommercePlatform, string>> = {
+  mercadolivre: "ml-auth",
 };
 
 async function isConnectedViaToken(platform: EcommercePlatform): Promise<boolean> {
-  const tokenId = TOKEN_PLATFORMS[platform];
-  if (!tokenId) return false;
-  const { data } = await supabase
-    .from("system_tokens" as never)
-    .select("id")
-    .eq("id", tokenId)
-    .maybeSingle();
-  return !!data;
+  const fn = STATUS_FUNCTION[platform];
+  if (!fn) return false;
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string;
+    const res = await fetch(`${supabaseUrl}/functions/v1/${fn}`, {
+      headers: session?.access_token
+        ? { Authorization: `Bearer ${session.access_token}` }
+        : {},
+    });
+    if (!res.ok) return false;
+    const json = await res.json() as { connected: boolean };
+    return json.connected === true;
+  } catch {
+    return false;
+  }
 }
 
 async function fetchOrders(platform: EcommercePlatform, period: EcommercePeriod): Promise<EcommerceMetrics> {

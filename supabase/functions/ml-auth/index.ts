@@ -77,20 +77,80 @@ Deno.serve(async (req: Request) => {
   const url  = new URL(req.url);
   const code = url.searchParams.get("code");
 
-  // Health / status check
+  // Live connection status check (no code = status probe)
   if (!code) {
     const { data } = await supabase
       .from("system_tokens")
-      .select("seller_id,expires_at,updated_at")
+      .select("access_token,refresh_token,expires_at,seller_id,updated_at")
       .eq("id", "mercadolivre")
       .maybeSingle();
 
+    if (!data?.access_token) {
+      return new Response(JSON.stringify({ ok: false, connected: false, reason: "no_token" }), {
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    // Try to get a valid token (refresh if expired)
+    let token = data.access_token;
+    const expiresAt = data.expires_at ? new Date(data.expires_at).getTime() : 0;
+    if (Date.now() >= expiresAt - 5 * 60 * 1000) {
+      try {
+        const res = await fetch("https://api.mercadolibre.com/oauth/token", {
+          method: "POST",
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          body: new URLSearchParams({
+            grant_type:    "refresh_token",
+            client_id:     Deno.env.get("ML_CLIENT_ID")!,
+            client_secret: Deno.env.get("ML_CLIENT_SECRET")!,
+            refresh_token: data.refresh_token,
+          }),
+        });
+        if (res.ok) {
+          const t = await res.json() as { access_token: string; refresh_token: string; expires_in: number };
+          token = t.access_token;
+          await supabase.from("system_tokens").upsert({
+            id:            "mercadolivre",
+            access_token:  t.access_token,
+            refresh_token: t.refresh_token,
+            expires_at:    new Date(Date.now() + t.expires_in * 1000).toISOString(),
+            seller_id:     data.seller_id,
+            updated_at:    new Date().toISOString(),
+          }, { onConflict: "id" });
+        } else {
+          // Refresh failed — mark as disconnected
+          await supabase.from("system_tokens").delete().eq("id", "mercadolivre");
+          return new Response(JSON.stringify({ ok: false, connected: false, reason: "refresh_failed" }), {
+            headers: { "Content-Type": "application/json" },
+          });
+        }
+      } catch {
+        return new Response(JSON.stringify({ ok: false, connected: false, reason: "refresh_error" }), {
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+    }
+
+    // Verify token works with a live API call
+    const verify = await fetch("https://api.mercadolibre.com/users/me", {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+
+    if (!verify.ok) {
+      // Token invalid — clean up so dashboard shows disconnected
+      await supabase.from("system_tokens").delete().eq("id", "mercadolivre");
+      return new Response(JSON.stringify({ ok: false, connected: false, reason: "token_invalid", status: verify.status }), {
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    const user = await verify.json() as Record<string, unknown>;
     return new Response(JSON.stringify({
-      ok:        !!data,
-      connected: !!data,
-      seller_id: data?.seller_id ?? null,
-      expires_at: data?.expires_at ?? null,
-      updated_at: data?.updated_at ?? null,
+      ok:         true,
+      connected:  true,
+      seller_id:  data.seller_id,
+      nickname:   user.nickname ?? null,
+      updated_at: data.updated_at,
     }), { headers: { "Content-Type": "application/json" } });
   }
 
