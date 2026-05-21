@@ -2,6 +2,7 @@ import React, { ReactNode, useState, useCallback } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useOpsAlertsBadge } from "@/hooks/useOpsAlerts";
 import { useCRMStaleBadge } from "@/hooks/useCRMStaleBadge";
+import { useEcommerceNotifications } from "@/hooks/useEcommerceNotifications";
 import {
   LayoutDashboard,
   ClipboardList,
@@ -396,6 +397,7 @@ export function BoardLayout({ children }: BoardLayoutProps) {
 
   const { data: alertsBadge = 0 } = useOpsAlertsBadge();
   const { data: crmStaleBadge = 0 } = useCRMStaleBadge();
+  useEcommerceNotifications();
 
   // Determine active tab from route
   const isDashboardRoute = location.pathname.startsWith("/dashboards") ||
