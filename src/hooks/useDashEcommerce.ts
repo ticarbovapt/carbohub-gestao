@@ -228,16 +228,43 @@ export function useEcommerceRawCheck(
 // PATH 2 — System hook (full business logic + real-time)
 // ─────────────────────────────────────────────────────────────────────────────
 
+// Platforms that use OAuth token stored in system_tokens
+const TOKEN_PLATFORMS: Partial<Record<EcommercePlatform, string>> = {
+  mercadolivre: "mercadolivre",
+};
+
+async function isConnectedViaToken(platform: EcommercePlatform): Promise<boolean> {
+  const tokenId = TOKEN_PLATFORMS[platform];
+  if (!tokenId) return false;
+  const { data } = await supabase
+    .from("system_tokens" as never)
+    .select("id")
+    .eq("id", tokenId)
+    .maybeSingle();
+  return !!data;
+}
+
 async function fetchOrders(platform: EcommercePlatform, period: EcommercePeriod): Promise<EcommerceMetrics> {
   const from = getRangeStart(period).toISOString();
-  const { data, error } = await supabase
-    .from("ecommerce_orders" as never)
-    .select("id,platform,order_id,product_sku,product_name,quantity,units_real,unit_price,total,status,ordered_at")
-    .eq("platform", platform)
-    .gte("ordered_at", from);
+
+  const [{ data, error }, connected] = await Promise.all([
+    supabase
+      .from("ecommerce_orders" as never)
+      .select("id,platform,order_id,product_sku,product_name,quantity,units_real,unit_price,total,status,ordered_at")
+      .eq("platform", platform)
+      .gte("ordered_at", from),
+    isConnectedViaToken(platform),
+  ]);
 
   if (error) { console.error("[useDashEcommerce]", error.message); return emptyMetrics(platform); }
-  return buildMetrics(platform, (data ?? []) as DBOrder[]);
+
+  const rows = (data ?? []) as DBOrder[];
+  if (rows.length === 0 && !connected) return emptyMetrics(platform);
+
+  // Connected but no orders yet in this period → return zeros with isConnected: true
+  if (rows.length === 0) return { ...emptyMetrics(platform), isConnected: true };
+
+  return buildMetrics(platform, rows);
 }
 
 export function useDashEcommerce(
