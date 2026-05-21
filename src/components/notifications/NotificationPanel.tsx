@@ -15,8 +15,10 @@ import {
   Clock,
   ListTodo,
   MessageCircle,
+  ShoppingBag,
   Trash2,
-  X
+  X,
+  WifiOff,
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -31,8 +33,9 @@ const TYPE_CONFIG: Record<string, { Icon: React.ElementType; label: string; colo
   action_assigned:  { Icon: ListTodo,       label: "Ação atribuída",color: "text-amber-600",        bg: "bg-amber-500/10" },
   action_completed: { Icon: Check,          label: "Ação concluída",color: "text-emerald-600",      bg: "bg-emerald-500/10" },
   message:          { Icon: MessageCircle,  label: "Mensagem",      color: "text-blue-500",         bg: "bg-blue-500/10" },
-  bug_report:       { Icon: Bug,            label: "Bug reportado", color: "text-destructive",      bg: "bg-destructive/10" },
-  bug_resolved:     { Icon: CheckCheck,     label: "Bug corrigido", color: "text-emerald-600",      bg: "bg-emerald-500/10" },
+  bug_report:             { Icon: Bug,         label: "Bug reportado",      color: "text-destructive",  bg: "bg-destructive/10" },
+  bug_resolved:           { Icon: CheckCheck,  label: "Bug corrigido",      color: "text-emerald-600",  bg: "bg-emerald-500/10" },
+  ecommerce_disconnected: { Icon: WifiOff,     label: "E-commerce caído",   color: "text-destructive",  bg: "bg-destructive/10" },
 };
 
 export function NotificationPanel({ onClose }: NotificationPanelProps) {

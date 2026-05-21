@@ -283,14 +283,26 @@ export function useDashEcommerce(
     setLoading(true);
 
     const load = () =>
-      fetchOrders(platform, period).then(m => {
+      fetchOrders(platform, period).then(async m => {
         if (cancelled) return;
-        // Detect disconnection and fire toast
+        // Detect disconnection → toast + persistent notification
         if (prevConnected.current === true && !m.isConnected) {
           toast.error(`⚠️ ${PLATFORM_LABEL[platform]} desconectado`, {
             description: "A integração caiu. Reconecte para continuar recebendo pedidos.",
             duration: 10000,
           });
+          // Save to notification bell so the alert persists even if toast is missed
+          const { data: { user } } = await supabase.auth.getUser();
+          if (user) {
+            await supabase.from("notifications" as never).insert({
+              user_id:        user.id,
+              type:           "ecommerce_disconnected",
+              title:          `⚠️ ${PLATFORM_LABEL[platform]} desconectado`,
+              body:           "A integração caiu. Acesse Vendas Online e reconecte a plataforma.",
+              reference_type: "ecommerce_platform",
+              reference_id:   platform,
+            });
+          }
         }
         prevConnected.current = m.isConnected;
         setData(m);
