@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { subDays, startOfMonth, format, startOfDay } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { supabase } from "@/integrations/supabase/client";
+import { toast } from "@/components/ui/sonner";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -260,21 +261,47 @@ async function fetchOrders(platform: EcommercePlatform, period: EcommercePeriod)
   return buildMetrics(platform, rows);
 }
 
+const PLATFORM_LABEL: Record<EcommercePlatform, string> = {
+  mercadolivre: "Mercado Livre",
+  amazon:       "Amazon",
+  tiktok:       "TikTok Shop",
+  shopee:       "Shopee",
+};
+
 export function useDashEcommerce(
   platform: EcommercePlatform,
   period: EcommercePeriod
 ): { data: EcommerceMetrics; isLoading: boolean } {
   const [data, setData]         = useState<EcommerceMetrics>(emptyMetrics(platform));
   const [isLoading, setLoading] = useState(true);
-  const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  const channelRef    = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  const prevConnected = useRef<boolean | null>(null);
+  const pollRef       = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
 
-    fetchOrders(platform, period).then(m => {
-      if (!cancelled) { setData(m); setLoading(false); }
-    });
+    const load = () =>
+      fetchOrders(platform, period).then(m => {
+        if (cancelled) return;
+        // Detect disconnection and fire toast
+        if (prevConnected.current === true && !m.isConnected) {
+          toast.error(`⚠️ ${PLATFORM_LABEL[platform]} desconectado`, {
+            description: "A integração caiu. Reconecte para continuar recebendo pedidos.",
+            duration: 10000,
+          });
+        }
+        prevConnected.current = m.isConnected;
+        setData(m);
+        setLoading(false);
+      });
+
+    load();
+
+    // Poll connection status every 60s — detects drops without page refresh
+    if (pollRef.current) clearInterval(pollRef.current);
+    pollRef.current = setInterval(load, 60_000);
 
     // Real-time: re-fetch whenever a row for this platform changes
     if (channelRef.current) supabase.removeChannel(channelRef.current);
@@ -283,12 +310,13 @@ export function useDashEcommerce(
       .on(
         "postgres_changes" as never,
         { event: "*", schema: "public", table: "ecommerce_orders", filter: `platform=eq.${platform}` },
-        () => { fetchOrders(platform, period).then(m => { if (!cancelled) setData(m); }); }
+        () => fetchOrders(platform, period).then(m => { if (!cancelled) setData(m); })
       )
       .subscribe();
 
     return () => {
       cancelled = true;
+      if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
       if (channelRef.current) { supabase.removeChannel(channelRef.current); channelRef.current = null; }
     };
   }, [platform, period]);
