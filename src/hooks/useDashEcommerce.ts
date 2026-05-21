@@ -131,7 +131,19 @@ function mockMetrics(
     avgRating:       3.8 + seed * 0.3,
     products,
     dailySales:      daily,
-    isConnected:     false, // ← flip to true when real API is wired
+    isConnected:     false,
+  };
+}
+
+function emptyMetrics(platform: EcommercePlatform): EcommerceMetrics {
+  return {
+    platform,
+    totalOrders: 0, totalUnitsSold: 0, totalRevenue: 0, avgTicket: 0,
+    cancelledOrders: 0, pendingOrders: 0, shippedOrders: 0, deliveredOrders: 0,
+    avgRating: null,
+    products: PRODUCTS_TEMPLATE.map(p => ({ ...p, orders: 0, units_sold: 0, revenue: 0 })),
+    dailySales: [],
+    isConnected: false,
   };
 }
 
@@ -161,12 +173,13 @@ export function useDashEcommerce(
   period: EcommercePeriod
 ): { data: EcommerceMetrics; isLoading: false } {
   const data = useMemo(() => {
-    const [baseOrders, baseRevenue, seed] = PLATFORM_BASELINES[platform];
-    return mockMetrics(platform, getDays(period), baseOrders, baseRevenue, seed);
+    // Returns empty metrics until the platform API is connected (isConnected: true)
+    // When real integration arrives: query Supabase ecommerce_orders filtered by platform + date range
+    // e.g. .from("ecommerce_orders").select(...).eq("platform", platform).gte("created_at", rangeStart)
+    void period; // used once real queries are wired
+    return emptyMetrics(platform);
   }, [platform, period]);
 
-  // When real integration arrives: replace useMemo with useQuery hitting Supabase
-  // e.g. .from("ecommerce_orders").select(...).eq("platform", platform).gte("created_at", rangeStart)
   return { data, isLoading: false };
 }
 
@@ -174,10 +187,10 @@ export function useEcommerceComparativo(
   platforms: EcommercePlatform[],
   period: EcommercePeriod
 ): { data: ComparativoMetrics[]; isLoading: false } {
-  const data = useMemo((): ComparativoMetrics[] =>
-    platforms.map((p) => {
-      const [baseOrders, baseRevenue, seed] = PLATFORM_BASELINES[p];
-      const m = mockMetrics(p, getDays(period), baseOrders, baseRevenue, seed);
+  const data = useMemo((): ComparativoMetrics[] => {
+    void period;
+    return platforms.map((p) => {
+      const m = emptyMetrics(p);
       return {
         platform:        m.platform,
         totalOrders:     m.totalOrders,
@@ -187,8 +200,8 @@ export function useEcommerceComparativo(
         cancelledOrders: m.cancelledOrders,
         dailySales:      m.dailySales,
       };
-    }),
-  [platforms, period]);
+    });
+  }, [platforms, period]);
 
   return { data, isLoading: false };
 }
