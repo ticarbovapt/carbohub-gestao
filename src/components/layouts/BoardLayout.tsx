@@ -830,7 +830,7 @@ export function BoardLayout({ children }: BoardLayoutProps) {
                       </p>
                       <div className="flex flex-col">
                         {roleLines.map((line, i) => (
-                          <p key={i} className="text-[10px] text-muted-foreground leading-tight">{line}</p>
+                          <p key={i} className="text-[10px] text-muted-foreground leading-tight uppercase tracking-wide">{line}</p>
                         ))}
                       </div>
                     </div>
@@ -843,7 +843,7 @@ export function BoardLayout({ children }: BoardLayoutProps) {
                       <p className="font-medium truncate">{profile?.full_name || "Usuário"}</p>
                       <div className="flex flex-col">
                         {roleLines.map((line, i) => (
-                          <p key={i} className="text-xs text-muted-foreground font-normal leading-tight">{line}</p>
+                          <p key={i} className="text-xs text-muted-foreground font-normal leading-tight uppercase tracking-wide">{line}</p>
                         ))}
                       </div>
                     </div>
