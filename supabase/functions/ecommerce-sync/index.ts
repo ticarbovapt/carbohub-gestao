@@ -9,10 +9,10 @@ type Platform = "mercadolivre" | "amazon" | "tiktok" | "shopee";
 
 // ─── Token helper ─────────────────────────────────────────────────────────────
 
-async function getMercadoLivreToken(): Promise<{ accessToken: string; sellerId: string } | null> {
+async function getMercadoLivreToken(): Promise<{ accessToken: string; sellerId: string; lastSyncedAt: Date } | null> {
   const { data, error } = await supabase
     .from("system_tokens")
-    .select("access_token,refresh_token,expires_at,seller_id")
+    .select("access_token,refresh_token,expires_at,seller_id,last_synced_at")
     .eq("id", "mercadolivre")
     .maybeSingle();
 
@@ -45,7 +45,7 @@ async function getMercadoLivreToken(): Promise<{ accessToken: string; sellerId: 
           seller_id:     data.seller_id,
           updated_at:    new Date().toISOString(),
         }, { onConflict: "id" });
-        return { accessToken: t.access_token, sellerId: data.seller_id };
+        return { accessToken: t.access_token, sellerId: data.seller_id, lastSyncedAt: data.last_synced_at ? new Date(data.last_synced_at) : new Date(Date.now() - 48 * 60 * 60 * 1000) };
       }
     } catch (e) {
       console.error("[mercadolivre] Token refresh failed:", e);
@@ -53,20 +53,33 @@ async function getMercadoLivreToken(): Promise<{ accessToken: string; sellerId: 
     return null;
   }
 
-  return { accessToken: data.access_token, sellerId: data.seller_id };
+  // last_synced_at: from where to pick up. If never synced before, go back 48h as safety net.
+  const lastSyncedAt = data.last_synced_at
+    ? new Date(data.last_synced_at)
+    : new Date(Date.now() - 48 * 60 * 60 * 1000);
+
+  return { accessToken: data.access_token, sellerId: data.seller_id, lastSyncedAt };
 }
 
 // ─── Platform pullers ─────────────────────────────────────────────────────────
 
-async function pullMercadoLivre(since: Date): Promise<Record<string, unknown>[]> {
+async function pullMercadoLivre(): Promise<Record<string, unknown>[]> {
   const creds = await getMercadoLivreToken();
   if (!creds) return [];
-  const { accessToken, sellerId } = creds;
+  const { accessToken, sellerId, lastSyncedAt } = creds;
+
+  // Always sync from last checkpoint — covers gaps of any length (weekend, vacation, etc.)
+  // Cap at 30 days to avoid hitting ML API limits
+  const maxLookback = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+  const since = lastSyncedAt < maxLookback ? maxLookback : lastSyncedAt;
+
+  console.log(`[mercadolivre] Syncing from ${since.toISOString()}`);
   const url = `https://api.mercadolibre.com/orders/search?seller=${sellerId}&sort=date_desc&date_created.from=${since.toISOString()}`;
-  const res  = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
+  const res = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
   if (!res.ok) { console.error("[mercadolivre] API error", res.status); return []; }
   const json = await res.json() as { results: Record<string, unknown>[] };
-  return (json.results ?? []).flatMap((order) => {
+
+  const rows = (json.results ?? []).flatMap((order) => {
     const items = order.order_items as Record<string, unknown>[] ?? [];
     return items.map((item) => ({
       platform:     "mercadolivre",
@@ -83,6 +96,13 @@ async function pullMercadoLivre(since: Date): Promise<Record<string, unknown>[]>
       raw:          order,
     }));
   });
+
+  // Update checkpoint so next run starts from now (no gaps, no double-fetching unnecessarily)
+  await supabase.from("system_tokens")
+    .update({ last_synced_at: new Date().toISOString() })
+    .eq("id", "mercadolivre");
+
+  return rows;
 }
 
 function normalizeMLStatus(s: string): string {
@@ -125,14 +145,13 @@ async function pullShopee(since: Date): Promise<Record<string, unknown>[]> {
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
 Deno.serve(async (req: Request) => {
-  // Can be called by Supabase cron or manually
   if (req.method === "OPTIONS") return new Response("ok");
 
-  // Sync last 2 hours by default (overlaps with previous run for safety)
-  const since = new Date(Date.now() - 2 * 60 * 60 * 1000);
+  // since is now managed per-platform inside each puller via last_synced_at
+  const since = new Date(Date.now() - 2 * 60 * 60 * 1000); // kept for Amazon/TikTok/Shopee stubs
 
   const pullers: Record<Platform, (d: Date) => Promise<Record<string, unknown>[]>> = {
-    mercadolivre: pullMercadoLivre,
+    mercadolivre: () => pullMercadoLivre(),
     amazon:       pullAmazon,
     tiktok:       pullTikTok,
     shopee:       pullShopee,
