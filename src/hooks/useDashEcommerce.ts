@@ -228,28 +228,23 @@ export function useEcommerceRawCheck(
 // PATH 2 — System hook (full business logic + real-time)
 // ─────────────────────────────────────────────────────────────────────────────
 
-// Platforms that have a live-check edge function
-const STATUS_FUNCTION: Partial<Record<EcommercePlatform, string>> = {
-  mercadolivre: "ml-auth",
+// Platforms that use OAuth token stored in system_tokens
+const TOKEN_PLATFORMS: Partial<Record<EcommercePlatform, string>> = {
+  mercadolivre: "mercadolivre",
 };
 
 async function isConnectedViaToken(platform: EcommercePlatform): Promise<boolean> {
-  const fn = STATUS_FUNCTION[platform];
-  if (!fn) return false;
-  try {
-    const { data: { session } } = await supabase.auth.getSession();
-    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string;
-    const res = await fetch(`${supabaseUrl}/functions/v1/${fn}`, {
-      headers: session?.access_token
-        ? { Authorization: `Bearer ${session.access_token}` }
-        : {},
-    });
-    if (!res.ok) return false;
-    const json = await res.json() as { connected: boolean };
-    return json.connected === true;
-  } catch {
-    return false;
-  }
+  const tokenId = TOKEN_PLATFORMS[platform];
+  if (!tokenId) return false;
+  const { data } = await supabase
+    .from("system_tokens" as never)
+    .select("access_token,expires_at")
+    .eq("id", tokenId)
+    .maybeSingle() as { data: { access_token: string; expires_at: string } | null };
+  if (!data?.access_token) return false;
+  // Consider connected if token isn't expired yet (cron renews before expiry)
+  if (data.expires_at && new Date(data.expires_at) < new Date()) return false;
+  return true;
 }
 
 async function fetchOrders(platform: EcommercePlatform, period: EcommercePeriod): Promise<EcommerceMetrics> {
