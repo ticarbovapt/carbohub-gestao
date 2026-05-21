@@ -291,16 +291,14 @@ export function useDashEcommerce(
             description: "A integração caiu. Reconecte para continuar recebendo pedidos.",
             duration: 10000,
           });
-          // Save to notification bell so the alert persists even if toast is missed
+          // Save to notification bell via RPC (bypasses RLS safely)
           const { data: { user } } = await supabase.auth.getUser();
           if (user) {
-            await supabase.from("notifications" as never).insert({
-              user_id:        user.id,
-              type:           "ecommerce_disconnected",
-              title:          `⚠️ ${PLATFORM_LABEL[platform]} desconectado`,
-              body:           "A integração caiu. Acesse Vendas Online e reconecte a plataforma.",
-              reference_type: "ecommerce_platform",
-              reference_id:   platform,
+            await (supabase.rpc as Function)("notify_ecommerce_disconnected", {
+              p_user_id:  user.id,
+              p_platform: platform,
+              p_title:    `⚠️ ${PLATFORM_LABEL[platform]} desconectado`,
+              p_body:     "A integração caiu. Acesse Vendas Online e reconecte a plataforma.",
             });
           }
         }
