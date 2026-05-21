@@ -1,25 +1,22 @@
-import { useState, useMemo } from "react";
+import { useState } from "react";
 import { BoardLayout } from "@/components/layouts/BoardLayout";
-import { CarboPageHeader } from "@/components/ui/carbo-page-header";
-import { KPICard } from "@/components/board/KPICard";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
-  AreaChart, Area, BarChart, Bar, LineChart, Line,
-  XAxis, YAxis, CartesianGrid, Tooltip, Legend,
-  ResponsiveContainer,
+  AreaChart, Area, BarChart, Bar, LineChart, Line, Cell,
+  XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
 } from "recharts";
 import {
-  ShoppingCart, Package, TrendingUp, TrendingDown,
-  XCircle, Clock, CheckCircle2, Star, Boxes, AlertCircle,
+  ShoppingCart, Package, TrendingUp, XCircle, Clock,
+  CheckCircle2, Star, Boxes, AlertCircle, BarChart3,
 } from "lucide-react";
 import {
   useDashEcommerce, useEcommerceComparativo,
-  type EcommercePlatform, type EcommercePeriod, type EcommerceMetrics,
+  type EcommercePlatform, type EcommercePeriod,
 } from "@/hooks/useDashEcommerce";
+import { cn } from "@/lib/utils";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Platform config
@@ -29,42 +26,85 @@ interface PlatformConfig {
   id: EcommercePlatform;
   label: string;
   color: string;
-  bgColor: string;
-  textColor: string;
+  gradient: string;
+  textClass: string;
+  bgClass: string;
+  borderClass: string;
   emoji: string;
 }
 
 const PLATFORMS: PlatformConfig[] = [
-  { id: "mercadolivre", label: "Mercado Livre", color: "#FFE600", bgColor: "bg-yellow-400/10", textColor: "text-yellow-600 dark:text-yellow-400", emoji: "🛒" },
-  { id: "amazon",       label: "Amazon",        color: "#FF9900", bgColor: "bg-orange-400/10", textColor: "text-orange-600 dark:text-orange-400", emoji: "📦" },
-  { id: "tiktok",       label: "TikTok Shop",   color: "#FF0050", bgColor: "bg-pink-500/10",   textColor: "text-pink-600 dark:text-pink-400",   emoji: "🎵" },
-  { id: "shopee",       label: "Shopee",         color: "#EE4D2D", bgColor: "bg-red-500/10",    textColor: "text-red-600 dark:text-red-400",    emoji: "🧡" },
+  {
+    id: "mercadolivre", label: "Mercado Livre",
+    color: "#FFD700", gradient: "from-yellow-500 to-yellow-400",
+    textClass: "text-yellow-600 dark:text-yellow-300",
+    bgClass: "bg-yellow-500/10", borderClass: "border-yellow-500/50",
+    emoji: "🛒",
+  },
+  {
+    id: "amazon", label: "Amazon",
+    color: "#FF9900", gradient: "from-orange-500 to-amber-400",
+    textClass: "text-orange-600 dark:text-orange-300",
+    bgClass: "bg-orange-500/10", borderClass: "border-orange-500/50",
+    emoji: "📦",
+  },
+  {
+    id: "tiktok", label: "TikTok Shop",
+    color: "#FF0050", gradient: "from-pink-600 to-rose-400",
+    textClass: "text-pink-600 dark:text-pink-300",
+    bgClass: "bg-pink-500/10", borderClass: "border-pink-500/50",
+    emoji: "🎵",
+  },
+  {
+    id: "shopee", label: "Shopee",
+    color: "#EE4D2D", gradient: "from-red-500 to-orange-400",
+    textClass: "text-red-600 dark:text-red-300",
+    bgClass: "bg-red-500/10", borderClass: "border-red-500/50",
+    emoji: "🧡",
+  },
 ];
 
-const PLATFORM_MAP = Object.fromEntries(PLATFORMS.map(p => [p.id, p])) as Record<EcommercePlatform, PlatformConfig>;
+const PMAP = Object.fromEntries(PLATFORMS.map(p => [p.id, p])) as Record<EcommercePlatform, PlatformConfig>;
 
-function fmtBRL(v: number) {
-  return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
-}
-function fmtNum(v: number) {
-  return v.toLocaleString("pt-BR");
-}
+const fmtBRL = (v: number) =>
+  v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
+const fmtNum = (v: number) => v.toLocaleString("pt-BR");
+const pct = (a: number, b: number) => b > 0 ? ((a / b) * 100).toFixed(1) + "%" : "0%";
+
+const PERIOD_OPTIONS: { value: EcommercePeriod; label: string }[] = [
+  { value: "today", label: "Hoje" },
+  { value: "7d",    label: "Últimos 7 dias" },
+  { value: "30d",   label: "Últimos 30 dias" },
+  { value: "month", label: "Este mês" },
+];
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Connection badge
+// Metric card — custom for this page
 // ─────────────────────────────────────────────────────────────────────────────
 
-function ConnectionBadge({ connected }: { connected: boolean }) {
-  return connected ? (
-    <Badge className="bg-green-500/10 text-green-600 border-green-500/30 gap-1.5">
-      <span className="h-1.5 w-1.5 rounded-full bg-green-500 inline-block animate-pulse" />
-      Conectado
-    </Badge>
-  ) : (
-    <Badge variant="outline" className="bg-amber-500/10 text-amber-600 border-amber-500/30 gap-1.5">
-      <AlertCircle className="h-3 w-3" />
-      Aguardando integração
-    </Badge>
+function MetricCard({
+  label, value, sub, icon, accent, big,
+}: {
+  label: string; value: string; sub?: string;
+  icon: React.ReactNode; accent: string; big?: boolean;
+}) {
+  return (
+    <div
+      className={cn(
+        "rounded-2xl border bg-card p-5 flex flex-col gap-2 transition-all hover:-translate-y-0.5 hover:shadow-md",
+        big && "col-span-2"
+      )}
+      style={{ borderLeftColor: accent, borderLeftWidth: 3 }}
+    >
+      <div className="flex items-start justify-between">
+        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{label}</p>
+        <div className="p-2 rounded-xl" style={{ background: accent + "20" }}>
+          <div style={{ color: accent }}>{icon}</div>
+        </div>
+      </div>
+      <p className={cn("font-bold leading-none", big ? "text-4xl" : "text-2xl")}>{value}</p>
+      {sub && <p className="text-xs text-muted-foreground">{sub}</p>}
+    </div>
   );
 }
 
@@ -73,147 +113,165 @@ function ConnectionBadge({ connected }: { connected: boolean }) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 function PlatformView({ platform, period }: { platform: EcommercePlatform; period: EcommercePeriod }) {
+  const cfg = PMAP[platform];
   const { data: m } = useDashEcommerce(platform, period);
-  const cfg = PLATFORM_MAP[platform];
 
   return (
-    <div className="space-y-6">
-      {/* Status */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <span className="text-xl">{cfg.emoji}</span>
-          <span className="font-semibold">{cfg.label}</span>
+    <div className="space-y-5">
+      {/* Platform header bar */}
+      <div
+        className={cn("rounded-2xl border p-4 flex items-center justify-between", cfg.bgClass, cfg.borderClass)}
+      >
+        <div className="flex items-center gap-3">
+          <span className="text-3xl">{cfg.emoji}</span>
+          <div>
+            <p className={cn("text-lg font-bold", cfg.textClass)}>{cfg.label}</p>
+            <p className="text-xs text-muted-foreground">Dados de vendas externos — período selecionado</p>
+          </div>
         </div>
-        <ConnectionBadge connected={m.isConnected} />
+        {m.isConnected ? (
+          <Badge className="bg-green-500/10 text-green-600 border-green-500/30 gap-1.5 text-xs">
+            <span className="h-1.5 w-1.5 rounded-full bg-green-500 inline-block animate-pulse" />
+            Conectado
+          </Badge>
+        ) : (
+          <Badge variant="outline" className={cn("gap-1.5 text-xs", cfg.bgClass, cfg.textClass, cfg.borderClass)}>
+            <AlertCircle className="h-3 w-3" />
+            Aguardando integração
+          </Badge>
+        )}
       </div>
 
-      {/* KPIs row 1 */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <KPICard
-          title="Pedidos"
-          value={fmtNum(m.totalOrders)}
-          icon={<ShoppingCart className="h-5 w-5" />}
-          variant="default"
+      {/* Not connected notice */}
+      {!m.isConnected && (
+        <div className="rounded-xl border border-dashed border-muted-foreground/30 bg-muted/20 p-6 flex flex-col items-center gap-2 text-center">
+          <AlertCircle className="h-8 w-8 text-muted-foreground/50" />
+          <p className="text-sm font-medium text-muted-foreground">Integração não configurada</p>
+          <p className="text-xs text-muted-foreground/70 max-w-md">
+            Esta plataforma ainda não está conectada. Quando as credenciais forem cadastradas, os dados de pedidos e receita aparecerão aqui automaticamente.
+          </p>
+        </div>
+      )}
+
+      {/* KPIs */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <MetricCard
+          label="Pedidos" value={fmtNum(m.totalOrders)}
+          icon={<ShoppingCart className="h-4 w-4" />} accent={cfg.color}
         />
-        <KPICard
-          title="Receita Total"
-          value={fmtBRL(m.totalRevenue)}
-          icon={<TrendingUp className="h-5 w-5" />}
-          variant="success"
+        <MetricCard
+          label="Receita Total" value={fmtBRL(m.totalRevenue)}
+          icon={<TrendingUp className="h-4 w-4" />} accent={cfg.color}
         />
-        <KPICard
-          title="Ticket Médio"
-          value={fmtBRL(m.avgTicket)}
-          icon={<Package className="h-5 w-5" />}
-          variant="default"
+        <MetricCard
+          label="Ticket Médio" value={fmtBRL(m.avgTicket)}
+          icon={<Package className="h-4 w-4" />} accent={cfg.color}
         />
-        <KPICard
-          title="Cancelamentos"
-          value={fmtNum(m.cancelledOrders)}
-          subtitle={`${m.totalOrders > 0 ? ((m.cancelledOrders / m.totalOrders) * 100).toFixed(1) : 0}% dos pedidos`}
-          icon={<XCircle className="h-5 w-5" />}
-          variant={m.cancelledOrders / m.totalOrders > 0.06 ? "danger" : "warning"}
+        <MetricCard
+          label="Cancelamentos" value={fmtNum(m.cancelledOrders)}
+          sub={m.totalOrders > 0 ? `${pct(m.cancelledOrders, m.totalOrders)} dos pedidos` : undefined}
+          icon={<XCircle className="h-4 w-4" />}
+          accent="#f59e0b"
         />
       </div>
 
-      {/* KPI row 2 — unidades reais destaque */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card className="col-span-2 bg-gradient-to-br from-board-surface to-muted/30 border-l-4" style={{ borderLeftColor: cfg.color }}>
-          <CardContent className="pt-5 pb-4">
-            <p className="text-sm text-muted-foreground font-medium">Unidades Reais Vendidas</p>
-            <p className="text-4xl font-bold mt-1">{fmtNum(m.totalUnitsSold)}</p>
-            <p className="text-xs text-muted-foreground mt-1">considera multiplicador de pack por produto</p>
+      {/* Unidades reais destaque + status pedidos */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <MetricCard
+          label="Unidades Reais Vendidas" value={fmtNum(m.totalUnitsSold)}
+          sub="considera multiplicador de pack"
+          icon={<Boxes className="h-5 w-5" />} accent={cfg.color} big
+        />
+        <MetricCard
+          label="Em transporte" value={fmtNum(m.shippedOrders)}
+          icon={<Clock className="h-4 w-4" />} accent="#f59e0b"
+        />
+        <MetricCard
+          label="Entregues" value={fmtNum(m.deliveredOrders)}
+          icon={<CheckCircle2 className="h-4 w-4" />} accent="#22c55e"
+        />
+      </div>
+
+      {/* Chart — only shown when connected */}
+      {m.isConnected && (
+        <Card className="rounded-2xl border-0 shadow-sm bg-card">
+          <CardHeader className="pb-1 pt-5 px-5">
+            <CardTitle className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+              Evolução de Vendas
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="px-2 pb-4">
+            <ResponsiveContainer width="100%" height={210}>
+              <AreaChart data={m.dailySales} margin={{ top: 4, right: 12, left: -10, bottom: 0 }}>
+                <defs>
+                  <linearGradient id={`g1-${platform}`} x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%"  stopColor={cfg.color} stopOpacity={0.3} />
+                    <stop offset="95%" stopColor={cfg.color} stopOpacity={0} />
+                  </linearGradient>
+                  <linearGradient id={`g2-${platform}`} x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%"  stopColor="#818cf8" stopOpacity={0.2} />
+                    <stop offset="95%" stopColor="#818cf8" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" className="stroke-border/50" />
+                <XAxis dataKey="label" tick={{ fontSize: 10 }} />
+                <YAxis yAxisId="l" tick={{ fontSize: 10 }} />
+                <YAxis yAxisId="r" orientation="right" tick={{ fontSize: 10 }} />
+                <Tooltip
+                  contentStyle={{ background: "var(--background)", border: "1px solid var(--border)", borderRadius: 10, fontSize: 12 }}
+                  formatter={(v: number, n: string) => [fmtNum(v), n === "orders" ? "Pedidos" : "Unidades"]}
+                />
+                <Legend iconType="circle" iconSize={8} formatter={v => v === "orders" ? "Pedidos" : "Unidades reais"} />
+                <Area yAxisId="l" type="monotone" dataKey="orders" stroke={cfg.color} fill={`url(#g1-${platform})`} strokeWidth={2} name="orders" />
+                <Area yAxisId="r" type="monotone" dataKey="units"  stroke="#818cf8" fill={`url(#g2-${platform})`} strokeWidth={2} name="units" />
+              </AreaChart>
+            </ResponsiveContainer>
           </CardContent>
         </Card>
-        <KPICard
-          title="Em transporte"
-          value={fmtNum(m.shippedOrders)}
-          icon={<Clock className="h-5 w-5" />}
-          variant="warning"
-        />
-        <KPICard
-          title="Entregues"
-          value={fmtNum(m.deliveredOrders)}
-          icon={<CheckCircle2 className="h-5 w-5" />}
-          variant="success"
-        />
-      </div>
+      )}
 
-      {/* Chart — vendas por dia */}
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-sm font-semibold">Evolução de Vendas</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <ResponsiveContainer width="100%" height={220}>
-            <AreaChart data={m.dailySales} margin={{ top: 4, right: 16, left: 0, bottom: 0 }}>
-              <defs>
-                <linearGradient id={`grad-${platform}-orders`} x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor={cfg.color} stopOpacity={0.25} />
-                  <stop offset="95%" stopColor={cfg.color} stopOpacity={0} />
-                </linearGradient>
-                <linearGradient id={`grad-${platform}-units`} x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#6366f1" stopOpacity={0.2} />
-                  <stop offset="95%" stopColor="#6366f1" stopOpacity={0} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
-              <XAxis dataKey="label" tick={{ fontSize: 11 }} />
-              <YAxis yAxisId="orders" tick={{ fontSize: 11 }} />
-              <YAxis yAxisId="units" orientation="right" tick={{ fontSize: 11 }} />
-              <Tooltip
-                contentStyle={{ background: "var(--background)", border: "1px solid var(--border)", borderRadius: 8 }}
-                formatter={(v: number, name: string) => [fmtNum(v), name === "orders" ? "Pedidos" : "Unidades"]}
-              />
-              <Legend formatter={v => v === "orders" ? "Pedidos" : "Unidades reais"} />
-              <Area yAxisId="orders" type="monotone" dataKey="orders" stroke={cfg.color} fill={`url(#grad-${platform}-orders)`} strokeWidth={2} name="orders" />
-              <Area yAxisId="units"  type="monotone" dataKey="units"  stroke="#6366f1" fill={`url(#grad-${platform}-units)`}  strokeWidth={2} name="units" />
-            </AreaChart>
-          </ResponsiveContainer>
-        </CardContent>
-      </Card>
-
-      {/* Products table */}
-      <Card>
-        <CardHeader className="pb-2">
+      {/* Products */}
+      <Card className="rounded-2xl border-0 shadow-sm">
+        <CardHeader className="pt-5 px-5 pb-3">
           <CardTitle className="text-sm font-semibold flex items-center gap-2">
-            <Boxes className="h-4 w-4" /> Produtos Vendidos
+            <Boxes className="h-4 w-4" style={{ color: cfg.color }} />
+            Produtos Vendidos
           </CardTitle>
         </CardHeader>
-        <CardContent className="p-0">
+        <CardContent className="p-0 pb-2">
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-border text-muted-foreground text-xs">
-                  <th className="text-left px-4 py-2.5 font-medium">Produto</th>
-                  <th className="text-left px-4 py-2.5 font-medium">SKU</th>
-                  <th className="text-right px-4 py-2.5 font-medium">Pedidos</th>
-                  <th className="text-center px-4 py-2.5 font-medium">Pack</th>
-                  <th className="text-right px-4 py-2.5 font-medium">Unidades reais</th>
-                  <th className="text-right px-4 py-2.5 font-medium">Receita</th>
+                <tr className="border-y border-border/50 text-muted-foreground text-xs bg-muted/30">
+                  <th className="text-left px-5 py-2 font-medium">Produto</th>
+                  <th className="text-left px-4 py-2 font-medium">SKU</th>
+                  <th className="text-right px-4 py-2 font-medium">Pedidos</th>
+                  <th className="text-center px-4 py-2 font-medium">Pack</th>
+                  <th className="text-right px-4 py-2 font-medium">Unidades reais</th>
+                  <th className="text-right px-5 py-2 font-medium">Receita</th>
                 </tr>
               </thead>
-              <tbody>
-                {m.products.map((p, i) => (
-                  <tr key={p.id} className={i % 2 === 0 ? "bg-muted/20" : ""}>
-                    <td className="px-4 py-2.5 font-medium truncate max-w-[180px]">{p.name}</td>
-                    <td className="px-4 py-2.5 text-muted-foreground font-mono text-xs">{p.sku}</td>
-                    <td className="px-4 py-2.5 text-right">{fmtNum(p.orders)}</td>
-                    <td className="px-4 py-2.5 text-center">
-                      <Badge variant="outline" className="text-xs font-mono">×{p.units_per_pack}</Badge>
+              <tbody className="divide-y divide-border/30">
+                {m.products.map(p => (
+                  <tr key={p.id} className="hover:bg-muted/20 transition-colors">
+                    <td className="px-5 py-3 font-medium">{p.name}</td>
+                    <td className="px-4 py-3 text-muted-foreground font-mono text-xs">{p.sku}</td>
+                    <td className="px-4 py-3 text-right">{fmtNum(p.orders)}</td>
+                    <td className="px-4 py-3 text-center">
+                      <Badge variant="outline" className="text-xs font-mono px-2">×{p.units_per_pack}</Badge>
                     </td>
-                    <td className="px-4 py-2.5 text-right font-semibold">{fmtNum(p.units_sold)}</td>
-                    <td className="px-4 py-2.5 text-right">{fmtBRL(p.revenue)}</td>
+                    <td className="px-4 py-3 text-right font-semibold">{fmtNum(p.units_sold)}</td>
+                    <td className="px-5 py-3 text-right">{fmtBRL(p.revenue)}</td>
                   </tr>
                 ))}
               </tbody>
               <tfoot>
-                <tr className="border-t border-border font-semibold bg-muted/30">
-                  <td className="px-4 py-2.5" colSpan={2}>Total</td>
-                  <td className="px-4 py-2.5 text-right">{fmtNum(m.totalOrders)}</td>
+                <tr className="border-t border-border font-semibold bg-muted/20">
+                  <td className="px-5 py-3" colSpan={2}>Total</td>
+                  <td className="px-4 py-3 text-right">{fmtNum(m.totalOrders)}</td>
                   <td />
-                  <td className="px-4 py-2.5 text-right">{fmtNum(m.totalUnitsSold)}</td>
-                  <td className="px-4 py-2.5 text-right">{fmtBRL(m.totalRevenue)}</td>
+                  <td className="px-4 py-3 text-right" style={{ color: cfg.color }}>{fmtNum(m.totalUnitsSold)}</td>
+                  <td className="px-5 py-3 text-right">{fmtBRL(m.totalRevenue)}</td>
                 </tr>
               </tfoot>
             </table>
@@ -221,11 +279,10 @@ function PlatformView({ platform, period }: { platform: EcommercePlatform; perio
         </CardContent>
       </Card>
 
-      {/* Rating */}
       {m.avgRating !== null && (
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+        <div className="flex items-center gap-1.5 text-sm text-muted-foreground px-1">
           <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
-          <span>Avaliação média na plataforma: <strong className="text-foreground">{m.avgRating.toFixed(1)}</strong></span>
+          Avaliação média: <strong className="text-foreground ml-0.5">{m.avgRating.toFixed(1)}</strong>
         </div>
       )}
     </div>
@@ -233,113 +290,109 @@ function PlatformView({ platform, period }: { platform: EcommercePlatform; perio
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Comparativo view
+// Comparativo
 // ─────────────────────────────────────────────────────────────────────────────
 
 function ComparativoView({ period }: { period: EcommercePeriod }) {
   const [selected, setSelected] = useState<EcommercePlatform[]>(["mercadolivre", "amazon"]);
   const [metric, setMetric] = useState<"orders" | "units">("orders");
+  const valid = selected.length >= 2 ? selected : (["mercadolivre", "amazon"] as EcommercePlatform[]);
+  const { data } = useEcommerceComparativo(valid, period);
 
-  const validSelected = selected.length >= 2 ? selected : (["mercadolivre", "amazon"] as EcommercePlatform[]);
-  const { data: comparativo } = useEcommerceComparativo(validSelected, period);
+  const toggle = (p: EcommercePlatform) => setSelected(prev => {
+    if (prev.includes(p)) return prev.length <= 2 ? prev : prev.filter(x => x !== p);
+    return prev.length >= 4 ? prev : [...prev, p];
+  });
 
-  function togglePlatform(p: EcommercePlatform) {
-    setSelected(prev => {
-      if (prev.includes(p)) {
-        if (prev.length <= 2) return prev; // minimum 2
-        return prev.filter(x => x !== p);
-      }
-      if (prev.length >= 4) return prev; // maximum 4
-      return [...prev, p];
-    });
-  }
+  const anyConnected = data.some(c => c.totalOrders > 0);
 
-  // Build bar chart data: one entry per platform
-  const barData = comparativo.map(c => ({
-    name: PLATFORM_MAP[c.platform].label,
+  const barData = data.map(c => ({
+    name: PMAP[c.platform].label,
     receita: c.totalRevenue,
-    pedidos: c.totalOrders,
-    unidades: c.totalUnitsSold,
-    color: PLATFORM_MAP[c.platform].color,
+    color: PMAP[c.platform].color,
   }));
 
-  // Build multi-line daily data: merge all platforms by date index
-  const maxDays = Math.max(...comparativo.map(c => c.dailySales.length));
+  const maxDays = Math.max(0, ...data.map(c => c.dailySales.length));
   const lineData = Array.from({ length: maxDays }, (_, i) => {
-    const entry: Record<string, number | string> = {
-      label: comparativo[0]?.dailySales[i]?.label ?? "",
-    };
-    comparativo.forEach(c => {
-      const d = c.dailySales[i];
-      entry[c.platform] = d ? (metric === "orders" ? d.orders : d.units) : 0;
-    });
+    const entry: Record<string, number | string> = { label: data[0]?.dailySales[i]?.label ?? "" };
+    data.forEach(c => { entry[c.platform] = c.dailySales[i]?.[metric === "orders" ? "orders" : "units"] ?? 0; });
     return entry;
   });
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       {/* Platform selector */}
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-sm font-semibold">Selecione as plataformas (2 a 4)</CardTitle>
+      <Card className="rounded-2xl border-0 shadow-sm">
+        <CardHeader className="pb-2 pt-5 px-5">
+          <CardTitle className="text-sm font-semibold">Selecionar plataformas (2 a 4)</CardTitle>
         </CardHeader>
-        <CardContent>
-          <div className="flex flex-wrap gap-3">
+        <CardContent className="px-5 pb-5">
+          <div className="flex flex-wrap gap-2">
             {PLATFORMS.map(p => {
-              const isOn = selected.includes(p.id);
+              const on = selected.includes(p.id);
               return (
                 <button
                   key={p.id}
-                  onClick={() => togglePlatform(p.id)}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-lg border-2 text-sm font-medium transition-all ${
-                    isOn
-                      ? `border-current ${p.bgColor} ${p.textColor}`
-                      : "border-border text-muted-foreground hover:border-muted-foreground/50"
-                  }`}
+                  onClick={() => toggle(p.id)}
+                  className={cn(
+                    "flex items-center gap-2 px-4 py-2.5 rounded-xl border-2 text-sm font-semibold transition-all",
+                    on
+                      ? cn(p.bgClass, p.borderClass, p.textClass, "shadow-sm")
+                      : "border-border text-muted-foreground hover:border-muted-foreground/40 hover:bg-muted/30"
+                  )}
                 >
-                  <Checkbox checked={isOn} className="pointer-events-none" />
-                  <span>{p.emoji} {p.label}</span>
+                  <span>{p.emoji}</span>
+                  <span>{p.label}</span>
+                  {on && <CheckCircle2 className="h-3.5 w-3.5 ml-0.5" />}
                 </button>
               );
             })}
           </div>
-          {selected.length < 2 && (
-            <p className="text-xs text-destructive mt-2">Selecione pelo menos 2 plataformas.</p>
-          )}
         </CardContent>
       </Card>
 
+      {/* Not connected notice */}
+      {!anyConnected && (
+        <div className="rounded-xl border border-dashed border-muted-foreground/30 bg-muted/20 p-6 flex flex-col items-center gap-2 text-center">
+          <AlertCircle className="h-8 w-8 text-muted-foreground/50" />
+          <p className="text-sm font-medium text-muted-foreground">Nenhuma plataforma conectada</p>
+          <p className="text-xs text-muted-foreground/70 max-w-md">
+            Quando as integrações forem configuradas, o comparativo mostrará dados reais de cada plataforma selecionada.
+          </p>
+        </div>
+      )}
+
       {/* Summary table */}
-      <Card>
-        <CardHeader className="pb-2">
+      <Card className="rounded-2xl border-0 shadow-sm">
+        <CardHeader className="pb-2 pt-5 px-5">
           <CardTitle className="text-sm font-semibold">Resumo Comparativo</CardTitle>
         </CardHeader>
-        <CardContent className="p-0">
+        <CardContent className="p-0 pb-2">
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-border text-muted-foreground text-xs">
-                  <th className="text-left px-4 py-2.5 font-medium">Plataforma</th>
+                <tr className="border-y border-border/50 bg-muted/30 text-muted-foreground text-xs">
+                  <th className="text-left px-5 py-2.5 font-medium">Plataforma</th>
                   <th className="text-right px-4 py-2.5 font-medium">Pedidos</th>
                   <th className="text-right px-4 py-2.5 font-medium">Unidades reais</th>
                   <th className="text-right px-4 py-2.5 font-medium">Receita</th>
-                  <th className="text-right px-4 py-2.5 font-medium">Ticket Médio</th>
-                  <th className="text-right px-4 py-2.5 font-medium">Cancelamentos</th>
+                  <th className="text-right px-4 py-2.5 font-medium">Ticket médio</th>
+                  <th className="text-right px-5 py-2.5 font-medium">Cancelamentos</th>
                 </tr>
               </thead>
-              <tbody>
-                {comparativo.map((c, i) => {
-                  const cfg = PLATFORM_MAP[c.platform];
+              <tbody className="divide-y divide-border/30">
+                {data.map(c => {
+                  const cfg = PMAP[c.platform];
                   return (
-                    <tr key={c.platform} className={i % 2 === 0 ? "bg-muted/20" : ""}>
-                      <td className="px-4 py-2.5">
-                        <span className={`font-semibold ${cfg.textColor}`}>{cfg.emoji} {cfg.label}</span>
+                    <tr key={c.platform} className="hover:bg-muted/20">
+                      <td className="px-5 py-3">
+                        <span className={cn("font-semibold", cfg.textClass)}>{cfg.emoji} {cfg.label}</span>
                       </td>
-                      <td className="px-4 py-2.5 text-right">{fmtNum(c.totalOrders)}</td>
-                      <td className="px-4 py-2.5 text-right font-semibold">{fmtNum(c.totalUnitsSold)}</td>
-                      <td className="px-4 py-2.5 text-right">{fmtBRL(c.totalRevenue)}</td>
-                      <td className="px-4 py-2.5 text-right">{fmtBRL(c.avgTicket)}</td>
-                      <td className="px-4 py-2.5 text-right text-destructive">{fmtNum(c.cancelledOrders)}</td>
+                      <td className="px-4 py-3 text-right">{fmtNum(c.totalOrders)}</td>
+                      <td className="px-4 py-3 text-right font-semibold">{fmtNum(c.totalUnitsSold)}</td>
+                      <td className="px-4 py-3 text-right">{fmtBRL(c.totalRevenue)}</td>
+                      <td className="px-4 py-3 text-right">{fmtBRL(c.avgTicket)}</td>
+                      <td className="px-5 py-3 text-right text-destructive">{fmtNum(c.cancelledOrders)}</td>
                     </tr>
                   );
                 })}
@@ -349,74 +402,74 @@ function ComparativoView({ period }: { period: EcommercePeriod }) {
         </CardContent>
       </Card>
 
-      {/* Bar chart — revenue by platform */}
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-sm font-semibold">Receita por Plataforma</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <ResponsiveContainer width="100%" height={200}>
-            <BarChart data={barData} margin={{ top: 4, right: 16, left: 0, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
-              <XAxis dataKey="name" tick={{ fontSize: 11 }} />
-              <YAxis tick={{ fontSize: 11 }} tickFormatter={v => `R$${(v / 1000).toFixed(0)}k`} />
-              <Tooltip
-                contentStyle={{ background: "var(--background)", border: "1px solid var(--border)", borderRadius: 8 }}
-                formatter={(v: number) => [fmtBRL(v), "Receita"]}
-              />
-              <Bar dataKey="receita" radius={[4, 4, 0, 0]}>
-                {barData.map((entry, i) => (
-                  <rect key={i} fill={entry.color} />
-                ))}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
-        </CardContent>
-      </Card>
+      {/* Charts — only shown when at least one platform has data */}
+      {anyConnected && (
+        <>
+          <Card className="rounded-2xl border-0 shadow-sm">
+            <CardHeader className="pb-1 pt-5 px-5">
+              <CardTitle className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+                Receita por Plataforma
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="px-2 pb-4">
+              <ResponsiveContainer width="100%" height={200}>
+                <BarChart data={barData} margin={{ top: 4, right: 12, left: -10, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" className="stroke-border/50" />
+                  <XAxis dataKey="name" tick={{ fontSize: 11 }} />
+                  <YAxis tick={{ fontSize: 11 }} tickFormatter={v => `R$${(v / 1000).toFixed(0)}k`} />
+                  <Tooltip
+                    contentStyle={{ background: "var(--background)", border: "1px solid var(--border)", borderRadius: 10, fontSize: 12 }}
+                    formatter={(v: number) => [fmtBRL(v), "Receita"]}
+                  />
+                  <Bar dataKey="receita" radius={[6, 6, 0, 0]}>
+                    {barData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </CardContent>
+          </Card>
 
-      {/* Line chart — evolution */}
-      <Card>
-        <CardHeader className="pb-2 flex flex-row items-center justify-between">
-          <CardTitle className="text-sm font-semibold">Evolução — {metric === "orders" ? "Pedidos" : "Unidades reais"}</CardTitle>
-          <div className="flex gap-2">
-            {(["orders", "units"] as const).map(m2 => (
-              <button
-                key={m2}
-                onClick={() => setMetric(m2)}
-                className={`text-xs px-3 py-1 rounded-md border transition-colors ${
-                  metric === m2 ? "bg-primary text-primary-foreground border-primary" : "border-border text-muted-foreground hover:bg-muted"
-                }`}
-              >
-                {m2 === "orders" ? "Pedidos" : "Unidades"}
-              </button>
-            ))}
-          </div>
-        </CardHeader>
-        <CardContent>
-          <ResponsiveContainer width="100%" height={220}>
-            <LineChart data={lineData} margin={{ top: 4, right: 16, left: 0, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
-              <XAxis dataKey="label" tick={{ fontSize: 11 }} />
-              <YAxis tick={{ fontSize: 11 }} />
-              <Tooltip
-                contentStyle={{ background: "var(--background)", border: "1px solid var(--border)", borderRadius: 8 }}
-              />
-              <Legend formatter={v => PLATFORM_MAP[v as EcommercePlatform]?.label ?? v} />
-              {validSelected.map(p => (
-                <Line
-                  key={p}
-                  type="monotone"
-                  dataKey={p}
-                  stroke={PLATFORM_MAP[p].color}
-                  strokeWidth={2}
-                  dot={false}
-                  name={p}
-                />
-              ))}
-            </LineChart>
-          </ResponsiveContainer>
-        </CardContent>
-      </Card>
+          <Card className="rounded-2xl border-0 shadow-sm">
+            <CardHeader className="pb-1 pt-5 px-5 flex flex-row items-center justify-between">
+              <CardTitle className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+                Evolução — {metric === "orders" ? "Pedidos" : "Unidades reais"}
+              </CardTitle>
+              <div className="flex gap-1.5">
+                {(["orders", "units"] as const).map(m2 => (
+                  <button
+                    key={m2}
+                    onClick={() => setMetric(m2)}
+                    className={cn(
+                      "text-xs px-3 py-1 rounded-lg border transition-all font-medium",
+                      metric === m2
+                        ? "bg-primary text-primary-foreground border-transparent"
+                        : "border-border text-muted-foreground hover:bg-muted"
+                    )}
+                  >
+                    {m2 === "orders" ? "Pedidos" : "Unidades"}
+                  </button>
+                ))}
+              </div>
+            </CardHeader>
+            <CardContent className="px-2 pb-4">
+              <ResponsiveContainer width="100%" height={210}>
+                <LineChart data={lineData} margin={{ top: 4, right: 12, left: -10, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" className="stroke-border/50" />
+                  <XAxis dataKey="label" tick={{ fontSize: 10 }} />
+                  <YAxis tick={{ fontSize: 10 }} />
+                  <Tooltip
+                    contentStyle={{ background: "var(--background)", border: "1px solid var(--border)", borderRadius: 10, fontSize: 12 }}
+                  />
+                  <Legend iconType="circle" iconSize={8} formatter={v => PMAP[v as EcommercePlatform]?.label ?? v} />
+                  {valid.map(p => (
+                    <Line key={p} type="monotone" dataKey={p} stroke={PMAP[p].color} strokeWidth={2.5} dot={false} name={p} />
+                  ))}
+                </LineChart>
+              </ResponsiveContainer>
+            </CardContent>
+          </Card>
+        </>
+      )}
     </div>
   );
 }
@@ -425,62 +478,78 @@ function ComparativoView({ period }: { period: EcommercePeriod }) {
 // Main page
 // ─────────────────────────────────────────────────────────────────────────────
 
-const PERIOD_OPTIONS: { value: EcommercePeriod; label: string }[] = [
-  { value: "today",  label: "Hoje" },
-  { value: "7d",     label: "Últimos 7 dias" },
-  { value: "30d",    label: "Últimos 30 dias" },
-  { value: "month",  label: "Este mês" },
-];
+type ActiveView = EcommercePlatform | "comparativo";
 
 export default function DashEcommerceVendas() {
   const [period, setPeriod] = useState<EcommercePeriod>("7d");
+  const [active, setActive] = useState<ActiveView>("mercadolivre");
 
   return (
     <BoardLayout>
-      <div className="space-y-6">
-        <CarboPageHeader
-          title="Vendas Online"
-          description="Acompanhamento de pedidos e receita por plataforma de e-commerce"
-          icon={ShoppingCart}
-          actions={
-            <Select value={period} onValueChange={v => setPeriod(v as EcommercePeriod)}>
-              <SelectTrigger className="w-44">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {PERIOD_OPTIONS.map(o => (
-                  <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          }
-        />
+      <div className="space-y-5">
+        {/* Page header */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div>
+            <h1 className="text-2xl font-bold flex items-center gap-2">
+              <ShoppingCart className="h-6 w-6 text-primary" />
+              Vendas Online
+            </h1>
+            <p className="text-sm text-muted-foreground mt-0.5">
+              Acompanhamento de pedidos, receita e unidades por plataforma de e-commerce
+            </p>
+          </div>
+          <Select value={period} onValueChange={v => setPeriod(v as EcommercePeriod)}>
+            <SelectTrigger className="w-44">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {PERIOD_OPTIONS.map(o => (
+                <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
 
-        <Tabs defaultValue="mercadolivre" className="w-full">
-          <TabsList className="flex flex-wrap h-auto gap-1">
-            {PLATFORMS.map(p => (
-              <TabsTrigger key={p.id} value={p.id} className="gap-1.5">
-                <span>{p.emoji}</span>
-                <span className="hidden sm:inline">{p.label}</span>
-                <span className="sm:hidden">{p.label.split(" ")[0]}</span>
-              </TabsTrigger>
-            ))}
-            <TabsTrigger value="comparativo" className="gap-1.5">
-              <TrendingUp className="h-3.5 w-3.5" />
-              <span>Comparativo</span>
-            </TabsTrigger>
-          </TabsList>
+        {/* Platform selector buttons */}
+        <div className="flex flex-wrap gap-2">
+          {PLATFORMS.map(p => {
+            const on = active === p.id;
+            return (
+              <button
+                key={p.id}
+                onClick={() => setActive(p.id)}
+                className={cn(
+                  "flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold border-2 transition-all",
+                  on
+                    ? cn(p.bgClass, p.borderClass, p.textClass, "shadow-sm scale-[1.02]")
+                    : "border-border text-muted-foreground hover:bg-muted/40 hover:border-muted-foreground/40"
+                )}
+              >
+                <span className="text-base">{p.emoji}</span>
+                {p.label}
+              </button>
+            );
+          })}
+          <button
+            onClick={() => setActive("comparativo")}
+            className={cn(
+              "flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold border-2 transition-all",
+              active === "comparativo"
+                ? "bg-violet-500/10 border-violet-500/50 text-violet-600 dark:text-violet-300 shadow-sm scale-[1.02]"
+                : "border-border text-muted-foreground hover:bg-muted/40 hover:border-muted-foreground/40"
+            )}
+          >
+            <BarChart3 className="h-4 w-4" />
+            Comparativo
+          </button>
+        </div>
 
-          {PLATFORMS.map(p => (
-            <TabsContent key={p.id} value={p.id} className="mt-4">
-              <PlatformView platform={p.id} period={period} />
-            </TabsContent>
-          ))}
-
-          <TabsContent value="comparativo" className="mt-4">
-            <ComparativoView period={period} />
-          </TabsContent>
-        </Tabs>
+        {/* Content */}
+        {active === "comparativo" ? (
+          <ComparativoView period={period} />
+        ) : (
+          <PlatformView platform={active} period={period} />
+        )}
       </div>
     </BoardLayout>
   );
