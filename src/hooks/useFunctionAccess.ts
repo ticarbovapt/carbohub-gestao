@@ -14,9 +14,8 @@
  *     bypasses it, including heads. Heads configure their screens in the matrix.
  *   - data_scope = "global" means the user sees all records within their
  *     allowed screens — it does NOT skip the screen check.
- *   - TI/Suporte (fullAccess flag) is the only role that bypasses screen checks.
- *   - Users without a configured funcao fall back to their app role
- *     (admin → all screens, manager/operator → no change until configured).
+ *   - Users without a configured funcao (isConfigured=false) don't get blocked
+ *     — configure their screens in the Role Matrix to enforce access.
  */
 
 import { useQuery } from "@tanstack/react-query";
@@ -48,7 +47,7 @@ export const ENFORCEMENT_ACTIVE = true;
 export const LEGACY_ACCESS_ACTIVE = !ENFORCEMENT_ACTIVE;
 
 export function useFunctionAccess(): FunctionAccess {
-  const { profile, isMasterAdmin, isSuporte } = useAuth();
+  const { profile } = useAuth();
 
   const dept      = profile?.department          ?? null;
   const funcao    = profile?.funcao              ?? null;
@@ -118,11 +117,6 @@ export function useFunctionAccess(): FunctionAccess {
     },
   });
 
-  // MasterAdmin and TI/Suporte always bypass — full access.
-  if (isMasterAdmin || isSuporte) {
-    return { allowedScreenIds: [], dataScope: "global", editScope: "global", isConfigured: true, hasOverride: false, isLoading: false };
-  }
-
   return {
     allowedScreenIds: data?.screenIds   ?? [],
     dataScope:        data?.dataScope   ?? "proprio",
@@ -141,11 +135,9 @@ export function useFunctionAccess(): FunctionAccess {
  */
 export function useCanSeeScreen(screenId: string): boolean {
   const { allowedScreenIds, isConfigured } = useFunctionAccess();
-  const { isMasterAdmin, isSuporte }       = useAuth();
 
-  if (!ENFORCEMENT_ACTIVE)        return true;
-  if (isMasterAdmin || isSuporte) return true;
-  if (!isConfigured)              return true; // not yet configured → don't block
+  if (!ENFORCEMENT_ACTIVE) return true;
+  if (!isConfigured)       return true; // sem entrada no matrix → não bloqueia
   return allowedScreenIds.includes(screenId);
 }
 
@@ -163,11 +155,5 @@ export function useCanSeeScreen(screenId: string): boolean {
  * To activate: flip ENFORCEMENT_ACTIVE = true above. No other change required here.
  */
 export function useCanManageMatrix(): boolean {
-  const canSeeMatrix = useCanSeeScreen("role-matrix");
-  const { isAdmin, isMasterAdmin, isAnyGestor } = useAuth();
-
-  if (ENFORCEMENT_ACTIVE) return canSeeMatrix;
-
-  // Legacy fallback: role-based until enforcement is on
-  return isAdmin || isMasterAdmin || isAnyGestor;
+  return useCanSeeScreen("role-matrix");
 }

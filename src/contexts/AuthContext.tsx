@@ -246,7 +246,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const isGestorCompras = carboRolesList.includes("gestor_compras") || isCeo;
   const isOperadorFiscal = carboRolesList.includes("operador_fiscal");
   const isOperador = carboRolesList.includes("operador");
-  const isSuporte = carboRolesList.includes("suporte");
+  // isSuporte: somente TI Head (primário ou secundário) tem bypass total.
+  // TI Staff passa pelo function_screen_access normal como qualquer outra função.
+  const isSuporte =
+    (profile?.department === "ti_suporte" && profile?.funcao === "head") ||
+    (profile?.secondary_department === "ti_suporte" && profile?.secondary_funcao === "head") ||
+    carboRolesList.includes("suporte");
   const isAnyGestor = isCeo || isGestorAdm || isGestorFin || isGestorCompras;
   const isAnyOperador = isOperadorFiscal || isOperador;
 

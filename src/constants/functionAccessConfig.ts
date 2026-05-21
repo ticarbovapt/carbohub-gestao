@@ -92,7 +92,6 @@ export const DEPARTMENTS: Department[] = [
   {
     key: "ti_suporte",
     label: "TI / Suporte",
-    fullAccess: true,
     functions: [
       { key: "head",  label: "Head",        scope: "global",       editScope: "global" },
       { key: "staff", label: "Colaborador", scope: "departamento", editScope: "departamento" },
