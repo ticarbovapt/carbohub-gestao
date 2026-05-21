@@ -13,8 +13,8 @@ import {
   CheckCircle2, Star, Boxes, AlertCircle, BarChart3,
 } from "lucide-react";
 import {
-  useDashEcommerce, useEcommerceComparativo,
-  type EcommercePlatform, type EcommercePeriod,
+  useDashEcommerce, useEcommerceComparativo, useEcommerceRawCheck,
+  type EcommercePlatform, type EcommercePeriod, type RawCheckMetrics, type EcommerceMetrics,
 } from "@/hooks/useDashEcommerce";
 import { cn } from "@/lib/utils";
 
@@ -109,6 +109,105 @@ function MetricCard({
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Reconciliation panel — Path 1 (raw DB) vs Path 2 (system logic)
+// ─────────────────────────────────────────────────────────────────────────────
+
+function DiffBadge({ raw, sys }: { raw: number; sys: number }) {
+  const diff = raw === 0 ? 0 : Math.abs((sys - raw) / raw) * 100;
+  const label = raw === 0 && sys === 0 ? "—" : `${diff.toFixed(1)}%`;
+  const cls =
+    raw === 0 && sys === 0
+      ? "bg-muted text-muted-foreground"
+      : diff <= 1
+      ? "bg-green-500/10 text-green-700 dark:text-green-400"
+      : diff <= 5
+      ? "bg-yellow-500/10 text-yellow-700 dark:text-yellow-400"
+      : "bg-red-500/10 text-red-700 dark:text-red-400";
+  return (
+    <span className={cn("inline-block rounded-md px-2 py-0.5 text-xs font-semibold tabular-nums", cls)}>
+      {label}
+    </span>
+  );
+}
+
+function ReconciliacaoPanel({
+  platform,
+  period,
+  m,
+}: {
+  platform: EcommercePlatform;
+  period: EcommercePeriod;
+  m: EcommerceMetrics;
+}) {
+  const raw: RawCheckMetrics | null = useEcommerceRawCheck(platform, period);
+
+  if (!m.isConnected || raw === null) return null;
+
+  const rows: { label: string; rawVal: number; sysVal: number; fmt: (v: number) => string }[] = [
+    {
+      label: "Pedidos",
+      rawVal: raw.totalOrders,
+      sysVal: m.totalOrders,
+      fmt: fmtNum,
+    },
+    {
+      label: "Unidades reais",
+      rawVal: raw.totalUnitsReal,
+      sysVal: m.totalUnitsSold,
+      fmt: fmtNum,
+    },
+    {
+      label: "Receita",
+      rawVal: raw.totalRevenue,
+      sysVal: m.totalRevenue,
+      fmt: fmtBRL,
+    },
+    {
+      label: "Cancelamentos",
+      rawVal: raw.cancelledOrders,
+      sysVal: m.cancelledOrders,
+      fmt: fmtNum,
+    },
+  ];
+
+  return (
+    <Card className="rounded-2xl border-0 shadow-sm">
+      <CardHeader className="pt-5 px-5 pb-3 flex flex-row items-center gap-2">
+        <BarChart3 className="h-4 w-4 text-violet-500" />
+        <CardTitle className="text-sm font-semibold">Verificação de Integridade</CardTitle>
+        <span className="ml-auto text-xs text-muted-foreground">Caminho 1 (Raw DB) vs Caminho 2 (Sistema)</span>
+      </CardHeader>
+      <CardContent className="p-0 pb-4">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-y border-border/50 bg-muted/30 text-muted-foreground text-xs">
+                <th className="text-left px-5 py-2 font-medium">Métrica</th>
+                <th className="text-right px-4 py-2 font-medium">Caminho 1 — Raw DB</th>
+                <th className="text-right px-4 py-2 font-medium">Caminho 2 — Sistema</th>
+                <th className="text-center px-5 py-2 font-medium">Diferença</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border/30">
+              {rows.map(({ label, rawVal, sysVal, fmt }) => (
+                <tr key={label} className="hover:bg-muted/20 transition-colors">
+                  <td className="px-5 py-2.5 font-medium text-muted-foreground">{label}</td>
+                  <td className="px-4 py-2.5 text-right tabular-nums">{fmt(rawVal)}</td>
+                  <td className="px-4 py-2.5 text-right tabular-nums font-semibold">{fmt(sysVal)}</td>
+                  <td className="px-5 py-2.5 text-center">
+                    <DiffBadge raw={rawVal} sys={sysVal} />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Platform view
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -191,6 +290,9 @@ function PlatformView({ platform, period }: { platform: EcommercePlatform; perio
           icon={<CheckCircle2 className="h-4 w-4" />} accent="#22c55e"
         />
       </div>
+
+      {/* Reconciliation panel — Path 1 vs Path 2 (only shown when connected) */}
+      <ReconciliacaoPanel platform={platform} period={period} m={m} />
 
       {/* Chart — only shown when connected */}
       {m.isConnected && (

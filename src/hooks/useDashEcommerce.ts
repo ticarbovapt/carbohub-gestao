@@ -1,6 +1,7 @@
-import { useMemo } from "react";
-import { subDays, format, startOfDay, startOfMonth } from "date-fns";
+import { useEffect, useRef, useState } from "react";
+import { subDays, startOfMonth, format, startOfDay } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { supabase } from "@/integrations/supabase/client";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -13,10 +14,9 @@ export interface EcommerceProduct {
   id: string;
   name: string;
   sku: string;
-  /** How many real units are dispatched per order (pack multiplier). Configurable later. */
   units_per_pack: number;
   orders: number;
-  units_sold: number; // orders × units_per_pack
+  units_sold: number;
   revenue: number;
 }
 
@@ -41,7 +41,6 @@ export interface EcommerceMetrics {
   avgRating: number | null;
   products: EcommerceProduct[];
   dailySales: EcommerceDailySale[];
-  /** false = awaiting API integration; mock data shown */
   isConnected: boolean;
 }
 
@@ -55,83 +54,126 @@ export interface ComparativoMetrics {
   dailySales: EcommerceDailySale[];
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Mock data generators
-// ─────────────────────────────────────────────────────────────────────────────
-
-const PRODUCTS_TEMPLATE: Omit<EcommerceProduct, "orders" | "units_sold" | "revenue">[] = [
-  { id: "p1", name: "CarboPRO 100ml",       sku: "SKU-CP100",  units_per_pack: 10 },
-  { id: "p2", name: "CarboZé 100ml",        sku: "SKU-CZ100",  units_per_pack: 10 },
-  { id: "p3", name: "CarboPRO Pack 5un",    sku: "SKU-CP100-5", units_per_pack: 5 },
-  { id: "p4", name: "CarboVapt 70ml",       sku: "SKU-VAPT70", units_per_pack: 10 },
-  { id: "p5", name: "Kit Iniciante",        sku: "KIT-INIT",   units_per_pack: 1  },
-];
-
-/** Generates a deterministic but varied daily series for mock display */
-function generateDailySales(
-  days: number,
-  baseOrders: number,
-  baseRevenue: number,
-  seed: number
-): EcommerceDailySale[] {
-  const today = startOfDay(new Date());
-  return Array.from({ length: days }, (_, i) => {
-    const d     = subDays(today, days - 1 - i);
-    const noise = Math.sin(i * seed + seed) * 0.3 + 1; // ±30% variation
-    const orders  = Math.max(0, Math.round(baseOrders  * noise));
-    const units   = orders * 8; // avg 8 units per order
-    const revenue = Math.round(baseRevenue * noise * 100) / 100;
-    return {
-      date:    d.toISOString(),
-      label:   format(d, "dd/MM", { locale: ptBR }),
-      orders,
-      units,
-      revenue,
-    };
-  });
+// Path 1 — raw DB aggregation (no business logic transformation)
+export interface RawCheckMetrics {
+  totalOrders: number;
+  totalQuantity: number;
+  totalUnitsReal: number;
+  totalRevenue: number;
+  cancelledOrders: number;
+  pendingOrders: number;
+  shippedOrders: number;
+  deliveredOrders: number;
 }
 
-function mockMetrics(
-  platform: EcommercePlatform,
-  days: number,
-  baseOrders: number,
-  baseRevenue: number,
-  seed: number
-): EcommerceMetrics {
-  const daily = generateDailySales(days, baseOrders, baseRevenue, seed);
-  const totalOrders   = daily.reduce((s, d) => s + d.orders,  0);
-  const totalRevenue  = daily.reduce((s, d) => s + d.revenue, 0);
-  const totalUnits    = daily.reduce((s, d) => s + d.units,   0);
-  const cancelled     = Math.round(totalOrders * 0.04);
-  const pending       = Math.round(totalOrders * 0.08);
-  const shipped       = Math.round(totalOrders * 0.18);
-  const delivered     = totalOrders - cancelled - pending - shipped;
+// ─────────────────────────────────────────────────────────────────────────────
+// Date helpers
+// ─────────────────────────────────────────────────────────────────────────────
 
-  const products: EcommerceProduct[] = PRODUCTS_TEMPLATE.map((p, idx) => {
-    const share  = [0.35, 0.28, 0.17, 0.12, 0.08][idx] ?? 0.05;
-    const orders = Math.round(totalOrders * share);
-    return {
-      ...p,
-      orders,
-      units_sold: orders * p.units_per_pack,
-      revenue:   Math.round(orders * (totalRevenue / totalOrders) * 100) / 100,
-    };
-  });
+export function getRangeStart(period: EcommercePeriod): Date {
+  const today = startOfDay(new Date());
+  switch (period) {
+    case "today": return today;
+    case "7d":    return subDays(today, 6);
+    case "month": return startOfMonth(today);
+    default:      return subDays(today, 29);
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DB row type (what comes from ecommerce_orders)
+// ─────────────────────────────────────────────────────────────────────────────
+
+interface DBOrder {
+  id: string;
+  platform: string;
+  order_id: string;
+  product_sku: string | null;
+  product_name: string | null;
+  quantity: number;
+  units_real: number;
+  unit_price: number;
+  total: number;
+  status: string;
+  ordered_at: string;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// System-logic aggregator (Path 2)
+// ─────────────────────────────────────────────────────────────────────────────
+
+function buildMetrics(platform: EcommercePlatform, rows: DBOrder[]): EcommerceMetrics {
+  if (rows.length === 0) return emptyMetrics(platform);
+
+  const totalOrders    = rows.length;
+  const totalRevenue   = rows.reduce((s, r) => s + Number(r.total), 0);
+  const totalUnitsSold = rows.reduce((s, r) => s + (r.units_real ?? r.quantity), 0);
+
+  const cancelled  = rows.filter(r => r.status === "cancelled").length;
+  const pending    = rows.filter(r => r.status === "pending").length;
+  const shipped    = rows.filter(r => r.status === "shipped").length;
+  const delivered  = rows.filter(r => r.status === "delivered").length;
+
+  // Group by product SKU
+  const skuMap = new Map<string, { name: string; orders: number; units: number; revenue: number }>();
+  for (const r of rows) {
+    const key  = r.product_sku ?? r.product_name ?? "Sem SKU";
+    const name = r.product_name ?? r.product_sku ?? "Produto desconhecido";
+    const prev = skuMap.get(key) ?? { name, orders: 0, units: 0, revenue: 0 };
+    skuMap.set(key, {
+      name,
+      orders:  prev.orders  + 1,
+      units:   prev.units   + (r.units_real ?? r.quantity),
+      revenue: prev.revenue + Number(r.total),
+    });
+  }
+
+  const products: EcommerceProduct[] = Array.from(skuMap.entries()).map(([sku, v], i) => ({
+    id:           `p-${i}`,
+    name:         v.name,
+    sku,
+    units_per_pack: v.orders > 0 ? Math.round(v.units / v.orders) : 1,
+    orders:       v.orders,
+    units_sold:   v.units,
+    revenue:      Math.round(v.revenue * 100) / 100,
+  })).sort((a, b) => b.revenue - a.revenue);
+
+  // Group by day
+  const dayMap = new Map<string, { orders: number; units: number; revenue: number }>();
+  for (const r of rows) {
+    const day = r.ordered_at.slice(0, 10);
+    const prev = dayMap.get(day) ?? { orders: 0, units: 0, revenue: 0 };
+    dayMap.set(day, {
+      orders:  prev.orders  + 1,
+      units:   prev.units   + (r.units_real ?? r.quantity),
+      revenue: prev.revenue + Number(r.total),
+    });
+  }
+
+  const dailySales: EcommerceDailySale[] = Array.from(dayMap.entries())
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([date, v]) => ({
+      date,
+      label:   format(new Date(date + "T12:00:00"), "dd/MM", { locale: ptBR }),
+      orders:  v.orders,
+      units:   v.units,
+      revenue: Math.round(v.revenue * 100) / 100,
+    }));
 
   return {
     platform,
     totalOrders,
-    totalUnitsSold: totalUnits,
-    totalRevenue:   Math.round(totalRevenue * 100) / 100,
-    avgTicket:      totalOrders > 0 ? Math.round((totalRevenue / totalOrders) * 100) / 100 : 0,
+    totalUnitsSold,
+    totalRevenue:    Math.round(totalRevenue * 100) / 100,
+    avgTicket:       totalOrders > 0 ? Math.round((totalRevenue / totalOrders) * 100) / 100 : 0,
     cancelledOrders: cancelled,
     pendingOrders:   pending,
     shippedOrders:   shipped,
     deliveredOrders: delivered,
-    avgRating:       3.8 + seed * 0.3,
+    avgRating:       null,
     products,
-    dailySales:      daily,
-    isConnected:     false,
+    dailySales,
+    isConnected:     true,
   };
 }
 
@@ -140,68 +182,142 @@ function emptyMetrics(platform: EcommercePlatform): EcommerceMetrics {
     platform,
     totalOrders: 0, totalUnitsSold: 0, totalRevenue: 0, avgTicket: 0,
     cancelledOrders: 0, pendingOrders: 0, shippedOrders: 0, deliveredOrders: 0,
-    avgRating: null,
-    products: PRODUCTS_TEMPLATE.map(p => ({ ...p, orders: 0, units_sold: 0, revenue: 0 })),
-    dailySales: [],
+    avgRating: null, products: [], dailySales: [],
     isConnected: false,
   };
 }
 
-function getDays(period: EcommercePeriod): number {
-  switch (period) {
-    case "today":  return 1;
-    case "7d":     return 7;
-    case "month":  return new Date().getDate(); // days elapsed this month
-    default:       return 30;
-  }
+// ─────────────────────────────────────────────────────────────────────────────
+// PATH 1 — Raw check hook (simple DB aggregation, no business logic)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export function useEcommerceRawCheck(
+  platform: EcommercePlatform,
+  period: EcommercePeriod
+): RawCheckMetrics | null {
+  const [data, setData] = useState<RawCheckMetrics | null>(null);
+
+  useEffect(() => {
+    const from = getRangeStart(period).toISOString().slice(0, 10);
+
+    supabase
+      .from("ecommerce_raw_summary" as never)
+      .select("*")
+      .eq("platform", platform)
+      .gte("day", from)
+      .then(({ data: rows, error }) => {
+        if (error || !rows?.length) { setData(null); return; }
+        const r = rows as Record<string, number>[];
+        setData({
+          totalOrders:     r.reduce((s, x) => s + (x.total_orders   ?? 0), 0),
+          totalQuantity:   r.reduce((s, x) => s + (x.total_quantity  ?? 0), 0),
+          totalUnitsReal:  r.reduce((s, x) => s + (x.total_units_real ?? 0), 0),
+          totalRevenue:    r.reduce((s, x) => s + Number(x.total_revenue  ?? 0), 0),
+          cancelledOrders: r.reduce((s, x) => s + (x.cancelled_orders ?? 0), 0),
+          pendingOrders:   r.reduce((s, x) => s + (x.pending_orders  ?? 0), 0),
+          shippedOrders:   r.reduce((s, x) => s + (x.shipped_orders  ?? 0), 0),
+          deliveredOrders: r.reduce((s, x) => s + (x.delivered_orders ?? 0), 0),
+        });
+      });
+  }, [platform, period]);
+
+  return data;
 }
 
-// Per-platform mock baselines (orders/day, revenue/day, seed)
-const PLATFORM_BASELINES: Record<EcommercePlatform, [number, number, number]> = {
-  mercadolivre: [22, 1540, 1.1],
-  amazon:       [14,  980, 1.7],
-  tiktok:       [ 9,  630, 2.3],
-  shopee:       [18, 1260, 0.9],
-};
+// ─────────────────────────────────────────────────────────────────────────────
+// PATH 2 — System hook (full business logic + real-time)
+// ─────────────────────────────────────────────────────────────────────────────
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Hooks
-// ─────────────────────────────────────────────────────────────────────────────
+async function fetchOrders(platform: EcommercePlatform, period: EcommercePeriod): Promise<EcommerceMetrics> {
+  const from = getRangeStart(period).toISOString();
+  const { data, error } = await supabase
+    .from("ecommerce_orders" as never)
+    .select("id,platform,order_id,product_sku,product_name,quantity,units_real,unit_price,total,status,ordered_at")
+    .eq("platform", platform)
+    .gte("ordered_at", from);
+
+  if (error) { console.error("[useDashEcommerce]", error.message); return emptyMetrics(platform); }
+  return buildMetrics(platform, (data ?? []) as DBOrder[]);
+}
 
 export function useDashEcommerce(
   platform: EcommercePlatform,
   period: EcommercePeriod
-): { data: EcommerceMetrics; isLoading: false } {
-  const data = useMemo(() => {
-    // Returns empty metrics until the platform API is connected (isConnected: true)
-    // When real integration arrives: query Supabase ecommerce_orders filtered by platform + date range
-    // e.g. .from("ecommerce_orders").select(...).eq("platform", platform).gte("created_at", rangeStart)
-    void period; // used once real queries are wired
-    return emptyMetrics(platform);
+): { data: EcommerceMetrics; isLoading: boolean } {
+  const [data, setData]         = useState<EcommerceMetrics>(emptyMetrics(platform));
+  const [isLoading, setLoading] = useState(true);
+  const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+
+    fetchOrders(platform, period).then(m => {
+      if (!cancelled) { setData(m); setLoading(false); }
+    });
+
+    // Real-time: re-fetch whenever a row for this platform changes
+    if (channelRef.current) supabase.removeChannel(channelRef.current);
+    channelRef.current = supabase
+      .channel(`ecommerce-rt-${platform}`)
+      .on(
+        "postgres_changes" as never,
+        { event: "*", schema: "public", table: "ecommerce_orders", filter: `platform=eq.${platform}` },
+        () => { fetchOrders(platform, period).then(m => { if (!cancelled) setData(m); }); }
+      )
+      .subscribe();
+
+    return () => {
+      cancelled = true;
+      if (channelRef.current) { supabase.removeChannel(channelRef.current); channelRef.current = null; }
+    };
   }, [platform, period]);
 
-  return { data, isLoading: false };
+  return { data, isLoading };
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Comparativo hook
+// ─────────────────────────────────────────────────────────────────────────────
 
 export function useEcommerceComparativo(
   platforms: EcommercePlatform[],
   period: EcommercePeriod
-): { data: ComparativoMetrics[]; isLoading: false } {
-  const data = useMemo((): ComparativoMetrics[] => {
-    void period;
-    return platforms.map((p) => {
-      const m = emptyMetrics(p);
-      return {
-        platform:        m.platform,
-        totalOrders:     m.totalOrders,
-        totalUnitsSold:  m.totalUnitsSold,
-        totalRevenue:    m.totalRevenue,
-        avgTicket:       m.avgTicket,
-        cancelledOrders: m.cancelledOrders,
-        dailySales:      m.dailySales,
-      };
-    });
-  }, [platforms, period]);
+): { data: ComparativoMetrics[]; isLoading: boolean } {
+  const [data, setData]         = useState<ComparativoMetrics[]>([]);
+  const [isLoading, setLoading] = useState(true);
+  const platformsKey = platforms.join(",");
 
-  return { data, isLoading: false };
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    const from = getRangeStart(period).toISOString();
+
+    supabase
+      .from("ecommerce_orders" as never)
+      .select("platform,order_id,quantity,units_real,total,status,ordered_at")
+      .in("platform", platforms)
+      .gte("ordered_at", from)
+      .then(({ data: rows }) => {
+        if (cancelled) return;
+        const allRows = (rows ?? []) as DBOrder[];
+        const result: ComparativoMetrics[] = platforms.map(p => {
+          const m = buildMetrics(p, allRows.filter(r => r.platform === p));
+          return {
+            platform:        m.platform,
+            totalOrders:     m.totalOrders,
+            totalUnitsSold:  m.totalUnitsSold,
+            totalRevenue:    m.totalRevenue,
+            avgTicket:       m.avgTicket,
+            cancelledOrders: m.cancelledOrders,
+            dailySales:      m.dailySales,
+          };
+        });
+        setData(result);
+        setLoading(false);
+      });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [platformsKey, period]);
+
+  return { data, isLoading };
 }
