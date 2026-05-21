@@ -165,6 +165,7 @@ export const SCREEN_GROUPS: ScreenGroup[] = [
       { id: "dashboard-logistica", label: "Dashboard Logística", path: "/dashboards/logistica" },
       { id: "dashboard-comercial", label: "Dashboard Comercial", path: "/dashboards/comercial" },
       { id: "dashboard-estrategico", label: "Dashboard Estratégico", path: "/dashboards/estrategico" },
+      { id: "dashboard-ecommerce-vendas", label: "Dashboard E-commerce Vendas", path: "/dashboards/ecommerce/vendas-online" },
     ],
   },
   {
