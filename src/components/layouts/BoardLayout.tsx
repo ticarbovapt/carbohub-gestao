@@ -364,7 +364,7 @@ export function BoardLayout({ children }: BoardLayoutProps) {
   const { profile, signOut, passwordMustChange, isAnyGestor, carboRoles, isMasterAdmin, isSuporte } = useAuth();
   const canSeeAdminMenu = useCanSeeAdminMenu();
   const canSeeFinanceMenu = useCanSeeFinanceMenu();
-  const roleLabel = useRoleDisplayLabel();
+  const roleLines = useRoleDisplayLabel();
   const isMobile = useIsMobile();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
@@ -825,10 +825,14 @@ export function BoardLayout({ children }: BoardLayoutProps) {
                       <span className="text-xs font-bold text-white">{getInitials(profile?.full_name)}</span>
                     </div>
                     <div className="hidden md:block text-left min-w-0">
-                      <p className="text-xs font-semibold text-foreground leading-tight truncate max-w-[90px]">
-                        {profile?.full_name?.split(" ")[0] || "Usuário"}
+                      <p className="text-xs font-semibold text-foreground leading-tight truncate max-w-[110px]">
+                        {(() => { const parts = profile?.full_name?.split(" ") ?? []; return parts.length >= 2 ? `${parts[0]} ${parts[parts.length - 1]}` : parts[0] || "Usuário"; })()}
                       </p>
-                      <p className="text-[10px] text-muted-foreground leading-tight">{roleLabel}</p>
+                      <div className="flex flex-col">
+                        {roleLines.map((line, i) => (
+                          <p key={i} className="text-[10px] text-muted-foreground leading-tight">{line}</p>
+                        ))}
+                      </div>
                     </div>
                     <ChevronDown className="h-3 w-3 text-muted-foreground flex-shrink-0 hidden md:block" />
                   </button>
@@ -837,9 +841,11 @@ export function BoardLayout({ children }: BoardLayoutProps) {
                   <DropdownMenuLabel>
                     <div>
                       <p className="font-medium truncate">{profile?.full_name || "Usuário"}</p>
-                      <p className="text-xs text-muted-foreground font-normal">
-                        {roleLabel}
-                      </p>
+                      <div className="flex flex-col">
+                        {roleLines.map((line, i) => (
+                          <p key={i} className="text-xs text-muted-foreground font-normal leading-tight">{line}</p>
+                        ))}
+                      </div>
                     </div>
                   </DropdownMenuLabel>
                   <DropdownMenuSeparator />

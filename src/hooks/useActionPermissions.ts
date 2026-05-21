@@ -312,33 +312,44 @@ export function useCanAccessAllPortals(): boolean {
 
 // ── Role display label ────────────────────────────────────────────────────────
 
-/** Human-readable label for the current user's role/function, shown in the sidebar.
- *  When enforcement is active, derived from funcao + department. */
-export function useRoleDisplayLabel(): string {
-  const { isMasterAdmin, isCeo, isSuporte, isAnyGestor, isAdmin, profile } = useAuth();
+const DEPT_SHORT: Record<string, string> = {
+  command:    "Command",
+  ops:        "OPS",
+  b2b:        "Vendas",
+  finance:    "Finance",
+  growth:     "Growth",
+  expansao:   "Expansão",
+  ti_suporte: "TI",
+};
 
-  if (ENFORCEMENT_ACTIVE) {
-    if (isMasterAdmin) return "Master Admin";
-    if (isSuporte)     return "Suporte & TI";
-    const funcao = profile?.funcao ?? null;
-    switch (funcao) {
-      case "ceo":                  return "CEO";
-      case "head":                 return "Head";
-      case "gerente":              return "Gerente";
-      case "coordenador":          return "Coordenador(a)";
-      case "supervisor":           return "Supervisor(a)";
-      case "analista":             return "Analista";
-      case "assistente_executiva": return "Assistente Executiva";
-      case "vendedor_b2b":         return "Vendedor B2B";
-      case "vendedor_b2c":         return "Vendedor B2C";
-      default:                     return funcao || "Membro da Equipe";
-    }
-  }
+const FUNCAO_LABEL: Record<string, string> = {
+  ceo:                  "CEO",
+  head:                 "Head",
+  gerente:              "Gerente",
+  coordenador:          "Coordenador",
+  supervisor:           "Supervisor",
+  analista:             "Analista",
+  assistente_executiva: "Assistente Exec.",
+  vendedor_b2b:         "Vendedor B2B",
+  vendedor_b2c:         "Vendedor B2C",
+  staff:                "Colaborador",
+  colaborador:          "Colaborador",
+};
 
-  if (isMasterAdmin) return "Master Admin";
-  if (isCeo)         return "CEO";
-  if (isSuporte)     return "Suporte & TI";
-  if (isAnyGestor)   return "Gestor";
-  if (isAdmin)       return "Admin";
-  return "Operador";
+function buildRoleLine(dept: string | null, funcao: string | null): string | null {
+  if (!dept && !funcao) return null;
+  const deptLabel   = dept   ? (DEPT_SHORT[dept]   ?? dept)   : null;
+  const funcaoLabel = funcao ? (FUNCAO_LABEL[funcao] ?? funcao) : null;
+  return [funcaoLabel, deptLabel].filter(Boolean).join(" ");
+}
+
+/** Returns 1 or 2 label lines for the current user's role, shown in the header. */
+export function useRoleDisplayLabel(): string[] {
+  const { profile } = useAuth();
+
+  const primary   = buildRoleLine(profile?.department          ?? null, profile?.funcao           ?? null);
+  const secondary = buildRoleLine(profile?.secondary_department ?? null, profile?.secondary_funcao ?? null);
+
+  const lines = [primary, secondary].filter(Boolean) as string[];
+  return lines.length > 0 ? lines : ["Membro da Equipe"];
 }
