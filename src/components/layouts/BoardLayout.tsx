@@ -18,6 +18,7 @@ import {
   Building2,
   Truck,
   ShoppingCart,
+  ShoppingBag,
   FileSpreadsheet,
   Shield,
   Wallet,
@@ -367,6 +368,7 @@ export function BoardLayout({ children }: BoardLayoutProps) {
   const roleLines = useRoleDisplayLabel();
   const isMobile = useIsMobile();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [ecommerceOpen, setEcommerceOpen] = useState(false);
 
   // ── Onboarding → PasswordChange sequencing ─────────────────────────────────
   // PasswordChangeModal only renders AFTER onboarding is dismissed/done,
@@ -676,22 +678,55 @@ export function BoardLayout({ children }: BoardLayoutProps) {
           })
         ) : (
           /* ── Dashboards: lista plana ───────────────────────────────── */
-          filteredItems.map((item) => {
-            const isActive = isItemActive(item.href);
-            return (
-              <Link key={item.href} to={item.href} onClick={() => setSidebarOpen(false)}
-                className={cn(
-                  "flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition-all duration-200",
-                  isActive ? "bg-area-controle-soft text-area-controle font-medium"
-                           : "text-muted-foreground hover:bg-secondary hover:text-foreground"
-                )}
-              >
-                <item.icon className="h-4 w-4 flex-shrink-0" />
-                <span className="truncate">{item.label}</span>
-                {isActive && <ChevronRight className="h-3.5 w-3.5 ml-auto text-area-controle flex-shrink-0" />}
-              </Link>
-            );
-          })
+          <>
+            {filteredItems.map((item) => {
+              const isActive = isItemActive(item.href);
+              return (
+                <Link key={item.href} to={item.href} onClick={() => setSidebarOpen(false)}
+                  className={cn(
+                    "flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition-all duration-200",
+                    isActive ? "bg-area-controle-soft text-area-controle font-medium"
+                             : "text-muted-foreground hover:bg-secondary hover:text-foreground"
+                  )}
+                >
+                  <item.icon className="h-4 w-4 flex-shrink-0" />
+                  <span className="truncate">{item.label}</span>
+                  {isActive && <ChevronRight className="h-3.5 w-3.5 ml-auto text-area-controle flex-shrink-0" />}
+                </Link>
+              );
+            })}
+
+            {/* ── Pasta: Dash E-commerce ── */}
+            <button
+              onClick={() => setEcommerceOpen(v => !v)}
+              className="flex items-center gap-2.5 w-full rounded-lg px-3 py-2 text-sm text-muted-foreground hover:bg-secondary hover:text-foreground transition-all duration-200"
+            >
+              <ShoppingBag className="h-4 w-4 flex-shrink-0" />
+              <span className="flex-1 text-left truncate">Dash E-commerce</span>
+              <ChevronRight className={cn("h-3.5 w-3.5 flex-shrink-0 transition-transform duration-200", ecommerceOpen && "rotate-90")} />
+            </button>
+            {ecommerceOpen && (
+              <div className="pl-4 space-y-0.5">
+                {(() => {
+                  const href = "/dashboards/ecommerce/vendas-online";
+                  const isActive = isItemActive(href);
+                  return (
+                    <Link to={href} onClick={() => setSidebarOpen(false)}
+                      className={cn(
+                        "flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition-all duration-200",
+                        isActive ? "bg-area-controle-soft text-area-controle font-medium"
+                                 : "text-muted-foreground hover:bg-secondary hover:text-foreground"
+                      )}
+                    >
+                      <TrendingUp className="h-4 w-4 flex-shrink-0" />
+                      <span className="truncate">Vendas Online</span>
+                      {isActive && <ChevronRight className="h-3.5 w-3.5 ml-auto text-area-controle flex-shrink-0" />}
+                    </Link>
+                  );
+                })()}
+              </div>
+            )}
+          </>
         )}
 
         {/* Global items separator */}

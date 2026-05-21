@@ -64,6 +64,7 @@ const DashboardFinanceiro = lazy(() => import("./pages/dashboards/DashboardFinan
 const DashboardLogistica  = lazy(() => import("./pages/dashboards/DashboardLogistica"));
 const DashboardComercial  = lazy(() => import("./pages/dashboards/DashboardComercial"));
 const DashboardEstrategico = lazy(() => import("./pages/dashboards/DashboardEstrategico"));
+const DashEcommerceVendas  = lazy(() => import("./pages/dashboards/ecommerce/DashEcommerceVendas"));
 const NotFound            = lazy(() => import("./pages/NotFound"));
 const AIAssistantPage     = lazy(() => import("./pages/AIAssistantPage"));
 const BlingIntegration    = lazy(() => import("./pages/BlingIntegration"));
@@ -177,6 +178,7 @@ function AnimatedRoutes() {
             <Route path="/dashboards/logistica"  element={<ProtectedRoute screenId="dashboard-logistica"><DashboardLogistica /></ProtectedRoute>} />
             <Route path="/dashboards/comercial"  element={<ProtectedRoute screenId="dashboard-comercial"><DashboardComercial /></ProtectedRoute>} />
             <Route path="/dashboards/estrategico" element={<ProtectedRoute screenId="dashboard-estrategico"><DashboardEstrategico /></ProtectedRoute>} />
+            <Route path="/dashboards/ecommerce/vendas-online" element={<ProtectedRoute screenId="dashboard-ecommerce-vendas"><DashEcommerceVendas /></ProtectedRoute>} />
 
             {/* MRP */}
             <Route path="/mrp"           element={<Navigate to="/dashboards/producao" replace />} />
