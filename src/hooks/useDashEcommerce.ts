@@ -280,7 +280,11 @@ export function useDashEcommerce(
 
   useEffect(() => {
     let cancelled = false;
-    prevConnected.current = null; // reset on platform/period change to avoid cross-platform false alerts
+    // Restore last known state from localStorage to detect disconnects across page refreshes
+    const storageKey = `ecommerce_connected_${platform}`;
+    prevConnected.current = localStorage.getItem(storageKey) === "true" ? true
+                          : localStorage.getItem(storageKey) === "false" ? false
+                          : null;
     setLoading(true);
 
     const load = () =>
@@ -304,6 +308,7 @@ export function useDashEcommerce(
           }
         }
         prevConnected.current = m.isConnected;
+        localStorage.setItem(storageKey, String(m.isConnected));
         setData(m);
         setLoading(false);
       });
@@ -314,14 +319,19 @@ export function useDashEcommerce(
     if (pollRef.current) clearInterval(pollRef.current);
     pollRef.current = setInterval(load, 60_000);
 
-    // Real-time: re-fetch whenever a row for this platform changes
+    // Real-time: re-fetch on order changes AND token changes
     if (channelRef.current) supabase.removeChannel(channelRef.current);
     channelRef.current = supabase
       .channel(`ecommerce-rt-${platform}`)
       .on(
         "postgres_changes" as never,
         { event: "*", schema: "public", table: "ecommerce_orders", filter: `platform=eq.${platform}` },
-        () => fetchOrders(platform, period).then(m => { if (!cancelled) setData(m); })
+        () => fetchOrders(platform, period).then(m => { if (!cancelled) { setData(m); } })
+      )
+      .on(
+        "postgres_changes" as never,
+        { event: "*", schema: "public", table: "system_tokens", filter: `id=eq.${platform}` },
+        () => load()
       )
       .subscribe();
 
