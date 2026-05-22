@@ -258,7 +258,7 @@ async function fetchOrders(platform: EcommercePlatform, period: EcommercePeriod)
   // Connected but no orders yet in this period → return zeros with isConnected: true
   if (rows.length === 0) return { ...emptyMetrics(platform), isConnected: true };
 
-  return buildMetrics(platform, rows);
+  return { ...buildMetrics(platform, rows), isConnected: connected };
 }
 
 const PLATFORM_LABEL: Record<EcommercePlatform, string> = {
