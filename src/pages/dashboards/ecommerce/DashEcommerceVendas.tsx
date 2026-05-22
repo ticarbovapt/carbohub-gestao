@@ -2,15 +2,17 @@ import { useState } from "react";
 import { BoardLayout } from "@/components/layouts/BoardLayout";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
+import { supabase } from "@/integrations/supabase/client";
 import {
   AreaChart, Area, BarChart, Bar, LineChart, Line, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
 } from "recharts";
 import {
   ShoppingCart, Package, TrendingUp, XCircle, Clock,
-  CheckCircle2, Star, Boxes, AlertCircle, BarChart3,
+  CheckCircle2, Star, Boxes, AlertCircle, BarChart3, Loader2,
 } from "lucide-react";
 import {
   useDashEcommerce, useEcommerceComparativo, useEcommerceRawCheck,
@@ -211,9 +213,35 @@ function ReconciliacaoPanel({
 // Platform view
 // ─────────────────────────────────────────────────────────────────────────────
 
+const ML_AUTH_URL = `https://auth.mercadolibre.com.br/authorization?response_type=code&client_id=${import.meta.env.VITE_ML_CLIENT_ID ?? ""}&redirect_uri=${encodeURIComponent(`${import.meta.env.VITE_SUPABASE_URL ?? ""}/functions/v1/ml-auth`)}`;
+
+async function connectAmazon(setLoading: (v: boolean) => void, setError: (v: string | null) => void) {
+  setLoading(true);
+  setError(null);
+  try {
+    const res = await fetch(
+      `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/amazon-auth?generate_auth_url=true`,
+      { headers: { apikey: import.meta.env.VITE_SUPABASE_ANON_KEY ?? "" } }
+    );
+    const json = await res.json();
+    if (json?.auth_url) {
+      window.open(json.auth_url, "_blank");
+    } else {
+      setError("Não foi possível gerar a URL de autorização. Verifique se AMAZON_CLIENT_ID está configurado nos secrets do Supabase.");
+    }
+  } catch (e) {
+    setError("Erro ao conectar com a Amazon. Tente novamente.");
+    console.error("[amazon-auth]", e);
+  } finally {
+    setLoading(false);
+  }
+}
+
 function PlatformView({ platform, period }: { platform: EcommercePlatform; period: EcommercePeriod }) {
   const cfg = PMAP[platform];
   const { data: m } = useDashEcommerce(platform, period);
+  const [connectLoading, setConnectLoading] = useState(false);
+  const [connectError, setConnectError]     = useState<string | null>(null);
 
   return (
     <div className="space-y-5">
@@ -243,12 +271,48 @@ function PlatformView({ platform, period }: { platform: EcommercePlatform; perio
 
       {/* Not connected notice */}
       {!m.isConnected && (
-        <div className="rounded-xl border border-dashed border-muted-foreground/30 bg-muted/20 p-6 flex flex-col items-center gap-2 text-center">
+        <div className="rounded-xl border border-dashed border-muted-foreground/30 bg-muted/20 p-6 flex flex-col items-center gap-3 text-center">
           <AlertCircle className="h-8 w-8 text-muted-foreground/50" />
           <p className="text-sm font-medium text-muted-foreground">Integração não configurada</p>
-          <p className="text-xs text-muted-foreground/70 max-w-md">
-            Esta plataforma ainda não está conectada. Quando as credenciais forem cadastradas, os dados de pedidos e receita aparecerão aqui automaticamente.
-          </p>
+          {platform === "mercadolivre" && (
+            <>
+              <p className="text-xs text-muted-foreground/70 max-w-md">
+                Clique abaixo para autorizar o Carbohub a acessar seus pedidos do Mercado Livre.
+              </p>
+              <Button
+                size="sm"
+                className="bg-yellow-500 hover:bg-yellow-400 text-yellow-950 font-semibold"
+                onClick={() => window.open(ML_AUTH_URL, "_blank")}
+              >
+                🛒 Conectar Mercado Livre
+              </Button>
+            </>
+          )}
+          {platform === "amazon" && (
+            <>
+              <p className="text-xs text-muted-foreground/70 max-w-md">
+                Conecte sua conta Amazon. As credenciais devem estar configuradas nos secrets do Supabase.
+              </p>
+              {connectError && (
+                <p className="text-xs text-red-500 max-w-md">{connectError}</p>
+              )}
+              <Button
+                size="sm"
+                className="bg-orange-500 hover:bg-orange-400 text-white font-semibold"
+                disabled={connectLoading}
+                onClick={() => connectAmazon(setConnectLoading, setConnectError)}
+              >
+                {connectLoading
+                  ? <><Loader2 className="h-3 w-3 mr-1 animate-spin" /> Conectando...</>
+                  : "📦 Conectar Amazon"}
+              </Button>
+            </>
+          )}
+          {(platform === "tiktok" || platform === "shopee") && (
+            <p className="text-xs text-muted-foreground/70 max-w-md">
+              Integração em breve. Quando disponível, os dados aparecerão aqui automaticamente.
+            </p>
+          )}
         </div>
       )}
 
