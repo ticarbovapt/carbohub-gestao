@@ -168,18 +168,21 @@ h2{color:#FF9900;margin-bottom:8px;}p{color:#555;}</style></head>
     .eq("id", "amazon")
     .maybeSingle();
 
-  if (!data?.access_token) {
+  // Sem nenhum token — verdadeiramente desconectado
+  if (!data?.access_token && !data?.refresh_token) {
     return new Response(JSON.stringify({ ok: true, connected: false }), {
       headers: { "Content-Type": "application/json" },
     });
   }
 
-  // Refresh if expired (or within 5 min of expiry)
+  // Se só tem refresh_token (ou access_token expirado), renova agora
   const expiresAt = data.expires_at ? new Date(data.expires_at).getTime() : 0;
-  if (Date.now() >= expiresAt - 5 * 60 * 1000) {
+  const needsRefresh = !data.access_token || Date.now() >= expiresAt - 5 * 60 * 1000;
+
+  if (needsRefresh) {
     const refreshed = await refreshToken(data.refresh_token);
     if (!refreshed) {
-      // Refresh failed — mark as disconnected
+      // Refresh falhou — apaga token inválido
       await supabase.from("system_tokens").delete().eq("id", "amazon");
       return new Response(JSON.stringify({ ok: true, connected: false, reason: "refresh_failed" }), {
         headers: { "Content-Type": "application/json" },
@@ -194,6 +197,8 @@ h2{color:#FF9900;margin-bottom:8px;}p{color:#555;}</style></head>
       seller_id:     data.seller_id,
       updated_at:    new Date().toISOString(),
     }, { onConflict: "id" });
+
+    console.log("[amazon-auth] Access token obtido/renovado com sucesso");
   }
 
   return new Response(JSON.stringify({
