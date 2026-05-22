@@ -219,14 +219,15 @@ async function connectAmazon(setLoading: (v: boolean) => void, setError: (v: str
   setLoading(true);
   setError(null);
   try {
-    const { data, error } = await supabase.functions.invoke("amazon-auth");
-    if (error) throw error;
-    if (data?.connected) {
-      window.location.reload();
+    const res = await fetch(
+      `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/amazon-auth?generate_auth_url=true`,
+      { headers: { apikey: import.meta.env.VITE_SUPABASE_ANON_KEY ?? "" } }
+    );
+    const json = await res.json();
+    if (json?.auth_url) {
+      window.open(json.auth_url, "_blank");
     } else {
-      setError(data?.reason === "no_credentials"
-        ? "Credenciais Amazon não configuradas no servidor. Configure AMAZON_CLIENT_ID, AMAZON_CLIENT_SECRET e AMAZON_REFRESH_TOKEN nos secrets do Supabase."
-        : "Falha ao conectar. Verifique as credenciais Amazon nos secrets do Supabase.");
+      setError("Não foi possível gerar a URL de autorização. Verifique se AMAZON_CLIENT_ID está configurado nos secrets do Supabase.");
     }
   } catch (e) {
     setError("Erro ao conectar com a Amazon. Tente novamente.");
