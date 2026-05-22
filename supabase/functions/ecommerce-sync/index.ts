@@ -115,13 +115,210 @@ function normalizeMLStatus(s: string): string {
   return map[s] ?? "pending";
 }
 
+const LWA_TOKEN_URL = "https://api.amazon.com/auth/o2/token";
+const SP_API_BASE   = "https://sellingpartnerapi-na.amazon.com";
+const BRAZIL_MKT_ID = "A2Q3Y263D00KWC";
+
+async function getAmazonToken(): Promise<{ accessToken: string; sellerId: string; lastSyncedAt: Date } | null> {
+  const { data, error } = await supabase
+    .from("system_tokens")
+    .select("access_token,refresh_token,expires_at,seller_id,last_synced_at")
+    .eq("id", "amazon")
+    .maybeSingle();
+
+  if (error || !data) {
+    console.warn("[amazon] Token not found in system_tokens — skipping sync");
+    return null;
+  }
+
+  // Refresh if expired (or within 5 min of expiry)
+  const expiresAt = data.expires_at ? new Date(data.expires_at).getTime() : 0;
+  if (Date.now() >= expiresAt - 5 * 60 * 1000) {
+    try {
+      const res = await fetch(LWA_TOKEN_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({
+          grant_type:    "refresh_token",
+          refresh_token: data.refresh_token,
+          client_id:     Deno.env.get("AMAZON_CLIENT_ID")!,
+          client_secret: Deno.env.get("AMAZON_CLIENT_SECRET")!,
+        }),
+      });
+      if (res.ok) {
+        const t = await res.json() as { access_token: string; refresh_token: string; expires_in: number };
+        await supabase.from("system_tokens").upsert({
+          id:            "amazon",
+          access_token:  t.access_token,
+          refresh_token: t.refresh_token,
+          expires_at:    new Date(Date.now() + t.expires_in * 1000).toISOString(),
+          seller_id:     data.seller_id,
+          updated_at:    new Date().toISOString(),
+        }, { onConflict: "id" });
+        return {
+          accessToken:  t.access_token,
+          sellerId:     data.seller_id,
+          lastSyncedAt: data.last_synced_at ? new Date(data.last_synced_at) : new Date(Date.now() - 48 * 60 * 60 * 1000),
+        };
+      } else {
+        console.error("[amazon] Token refresh failed:", res.status, await res.text());
+      }
+    } catch (e) {
+      console.error("[amazon] Token refresh error:", e);
+    }
+    return null;
+  }
+
+  return {
+    accessToken:  data.access_token,
+    sellerId:     data.seller_id,
+    lastSyncedAt: data.last_synced_at ? new Date(data.last_synced_at) : new Date(Date.now() - 48 * 60 * 60 * 1000),
+  };
+}
+
+function normalizeAmazonStatus(s: string): string {
+  const map: Record<string, string> = {
+    Pending:            "pending",
+    Unshipped:          "shipped",
+    PartiallyShipped:   "shipped",
+    Shipped:            "shipped",
+    Delivered:          "delivered",
+    Canceled:           "cancelled",
+  };
+  return map[s] ?? "pending";
+}
+
+async function fetchAmazonOrders(accessToken: string, since: Date): Promise<Record<string, unknown>[]> {
+  const orders: Record<string, unknown>[] = [];
+  let nextToken: string | undefined;
+
+  do {
+    const params = new URLSearchParams({
+      MarketplaceIds: BRAZIL_MKT_ID,
+      CreatedAfter:   since.toISOString(),
+      OrderStatuses:  "Unshipped,PartiallyShipped,Shipped,Canceled,Pending",
+    });
+    if (nextToken) params.set("NextToken", nextToken);
+
+    const res = await fetch(`${SP_API_BASE}/orders/v0/orders?${params}`, {
+      headers: {
+        "Authorization":       `Bearer ${accessToken}`,
+        "x-amz-access-token":  accessToken,
+        "Content-Type":        "application/json",
+      },
+    });
+
+    if (!res.ok) {
+      console.error("[amazon] Orders API error:", res.status, await res.text());
+      break;
+    }
+
+    const json = await res.json() as {
+      payload?: {
+        Orders?: Record<string, unknown>[];
+        NextToken?: string;
+      };
+    };
+
+    const batch = json.payload?.Orders ?? [];
+    orders.push(...batch);
+    nextToken = json.payload?.NextToken;
+
+    // Cap at 50 orders per sync to avoid rate limits
+    if (orders.length >= 50) break;
+  } while (nextToken);
+
+  return orders.slice(0, 50);
+}
+
+async function fetchOrderItems(accessToken: string, orderId: string): Promise<Record<string, unknown>[]> {
+  const res = await fetch(`${SP_API_BASE}/orders/v0/orders/${orderId}/orderItems`, {
+    headers: {
+      "Authorization":      `Bearer ${accessToken}`,
+      "x-amz-access-token": accessToken,
+      "Content-Type":       "application/json",
+    },
+  });
+
+  if (!res.ok) {
+    console.warn("[amazon] OrderItems API error for", orderId, res.status);
+    return [];
+  }
+
+  const json = await res.json() as { payload?: { OrderItems?: Record<string, unknown>[] } };
+  return json.payload?.OrderItems ?? [];
+}
+
 async function pullAmazon(since: Date): Promise<Record<string, unknown>[]> {
-  // TODO: implement SP-API OAuth + GET /orders/v0/orders?LastUpdatedAfter={since}&MarketplaceIds={marketplace}
-  // Requires: client_id, client_secret, refresh_token, lwa_endpoint, sp_api_endpoint
-  const clientId = Deno.env.get("AMAZON_CLIENT_ID");
-  if (!clientId) { console.warn("[amazon] Credentials not configured — skipping sync"); return []; }
-  console.warn("[amazon] SP-API integration pending — add implementation when credentials are ready");
-  return [];
+  const creds = await getAmazonToken();
+  if (!creds) { console.warn("[amazon] No valid token — skipping sync"); return []; }
+  const { accessToken, sellerId, lastSyncedAt } = creds;
+
+  // Always sync from last checkpoint — covers gaps of any length
+  const maxLookback = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+  const syncSince = lastSyncedAt < maxLookback ? maxLookback : lastSyncedAt;
+
+  console.log(`[amazon] Syncing from ${syncSince.toISOString()}`);
+
+  const orders = await fetchAmazonOrders(accessToken, syncSince);
+  if (orders.length === 0) {
+    console.log("[amazon] No new orders");
+    await supabase.from("system_tokens")
+      .update({ last_synced_at: new Date().toISOString() })
+      .eq("id", "amazon");
+    return [];
+  }
+
+  // Batch fetch order items for each order
+  const rows: Record<string, unknown>[] = [];
+  for (const order of orders) {
+    const orderId = String(order.AmazonOrderId ?? "");
+    const items   = await fetchOrderItems(accessToken, orderId);
+
+    if (items.length === 0) {
+      // Fallback: create one row from the order-level data
+      rows.push({
+        platform:     "amazon",
+        order_id:     orderId,
+        product_sku:  null,
+        product_name: null,
+        quantity:     1,
+        units_real:   1,
+        unit_price:   Number((order.OrderTotal as Record<string, unknown>)?.Amount ?? 0),
+        total:        Number((order.OrderTotal as Record<string, unknown>)?.Amount ?? 0),
+        status:       normalizeAmazonStatus(String(order.OrderStatus ?? "")),
+        ordered_at:   String(order.PurchaseDate ?? new Date().toISOString()),
+        sync_source:  "cron",
+        raw:          order,
+      });
+    } else {
+      for (const item of items) {
+        const qty       = Number(item.QuantityOrdered ?? 1);
+        const unitPrice = Number((item.ItemPrice as Record<string, unknown>)?.Amount ?? 0) / (qty || 1);
+        rows.push({
+          platform:     "amazon",
+          order_id:     `${orderId}-${item.OrderItemId}`,
+          product_sku:  (item.SellerSKU as string) ?? null,
+          product_name: (item.Title as string) ?? null,
+          quantity:     qty,
+          units_real:   qty,
+          unit_price:   unitPrice,
+          total:        Number((item.ItemPrice as Record<string, unknown>)?.Amount ?? 0),
+          status:       normalizeAmazonStatus(String(order.OrderStatus ?? "")),
+          ordered_at:   String(order.PurchaseDate ?? new Date().toISOString()),
+          sync_source:  "cron",
+          raw:          { ...order, _item: item },
+        });
+      }
+    }
+  }
+
+  // Update checkpoint so next run starts from now
+  await supabase.from("system_tokens")
+    .update({ last_synced_at: new Date().toISOString() })
+    .eq("id", "amazon");
+
+  return rows;
 }
 
 async function pullTikTok(since: Date): Promise<Record<string, unknown>[]> {
