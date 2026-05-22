@@ -56,3 +56,24 @@ verify_jwt = false
 
 [functions.crm-bling-bridge]
 verify_jwt = false
+
+[functions.ml-auth]
+verify_jwt = false
+
+[functions.amazon-auth]
+verify_jwt = false
+
+[functions.ecommerce-sync]
+verify_jwt = false
+
+[functions.ecommerce-webhook]
+verify_jwt = false
+
+[functions.bling-auth]
+verify_jwt = false
+
+[functions.bling-sync]
+verify_jwt = false
+
+[functions.bling-auto-sync]
+verify_jwt = false
