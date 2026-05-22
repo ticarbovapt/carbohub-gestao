@@ -280,6 +280,7 @@ export function useDashEcommerce(
 
   useEffect(() => {
     let cancelled = false;
+    prevConnected.current = null; // reset on platform/period change to avoid cross-platform false alerts
     setLoading(true);
 
     const load = () =>
