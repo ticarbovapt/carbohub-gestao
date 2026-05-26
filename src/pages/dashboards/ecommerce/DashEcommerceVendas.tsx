@@ -476,30 +476,20 @@ function PlatformView({ platform, period }: { platform: EcommercePlatform; perio
             </CardTitle>
           </CardHeader>
           <CardContent className="px-2 pb-4">
-            <ResponsiveContainer width="100%" height={210}>
-              <AreaChart data={m.dailySales} margin={{ top: 4, right: 12, left: -10, bottom: 0 }}>
-                <defs>
-                  <linearGradient id={`g1-${platform}`} x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%"  stopColor={cfg.color} stopOpacity={0.3} />
-                    <stop offset="95%" stopColor={cfg.color} stopOpacity={0} />
-                  </linearGradient>
-                  <linearGradient id={`g2-${platform}`} x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%"  stopColor="#818cf8" stopOpacity={0.2} />
-                    <stop offset="95%" stopColor="#818cf8" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" className="stroke-border/50" />
-                <XAxis dataKey="label" tick={{ fontSize: 10 }} />
-                <YAxis yAxisId="l" tick={{ fontSize: 10 }} />
-                <YAxis yAxisId="r" orientation="right" tick={{ fontSize: 10 }} />
+            <ResponsiveContainer width="100%" height={220}>
+              <BarChart data={m.dailySales} margin={{ top: 4, right: 12, left: -10, bottom: 0 }} barCategoryGap="25%" barGap={2}>
+                <CartesianGrid strokeDasharray="3 3" className="stroke-border/50" vertical={false} />
+                <XAxis dataKey="label" tick={{ fontSize: 10 }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fontSize: 10 }} axisLine={false} tickLine={false} />
                 <Tooltip
                   contentStyle={{ background: "var(--background)", border: "1px solid var(--border)", borderRadius: 10, fontSize: 12 }}
-                  formatter={(v: number, n: string) => [fmtNum(v), n === "orders" ? "Pedidos" : "Unidades"]}
+                  formatter={(v: number, n: string) => [fmtNum(v), n === "orders" ? "Pedidos" : "Unidades reais"]}
+                  cursor={{ fill: "var(--muted)", opacity: 0.3 }}
                 />
-                <Legend iconType="circle" iconSize={8} formatter={v => v === "orders" ? "Pedidos" : "Unidades reais"} />
-                <Area yAxisId="l" type="monotone" dataKey="orders" stroke={cfg.color} fill={`url(#g1-${platform})`} strokeWidth={2} name="orders" />
-                <Area yAxisId="r" type="monotone" dataKey="units"  stroke="#818cf8" fill={`url(#g2-${platform})`} strokeWidth={2} name="units" />
-              </AreaChart>
+                <Legend iconType="square" iconSize={10} formatter={v => v === "orders" ? "Pedidos" : "Unidades reais"} />
+                <Bar dataKey="orders" name="orders" fill={cfg.color} radius={[4, 4, 0, 0]} maxBarSize={28} />
+                <Bar dataKey="units"  name="units"  fill="#818cf8"  radius={[4, 4, 0, 0]} maxBarSize={28} />
+              </BarChart>
             </ResponsiveContainer>
           </CardContent>
         </Card>
