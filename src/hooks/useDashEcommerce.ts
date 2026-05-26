@@ -452,7 +452,7 @@ export function useEcommerceComparativo(
         if (cancelled) return;
         const allRows = (rows ?? []) as DBOrder[];
         const result: ComparativoMetrics[] = platforms.map(p => {
-          const m = buildMetrics(p, allRows.filter(r => r.platform === p));
+          const m = buildMetrics(p, allRows.filter(r => r.platform === p), []);
           return {
             platform:        m.platform,
             totalOrders:     m.totalOrders,
