@@ -676,17 +676,24 @@ function ComparativoView({ period }: { period: EcommercePeriod }) {
                 Receita por Plataforma
               </CardTitle>
             </CardHeader>
-            <CardContent className="px-2 pb-4">
+            <CardContent className="px-4 pb-5">
               <ResponsiveContainer width="100%" height={200}>
-                <BarChart data={barData} margin={{ top: 4, right: 12, left: -10, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" className="stroke-border/50" />
-                  <XAxis dataKey="name" tick={{ fontSize: 11 }} />
-                  <YAxis tick={{ fontSize: 11 }} tickFormatter={v => `R$${(v / 1000).toFixed(0)}k`} />
+                <BarChart data={barData} margin={{ top: 16, right: 16, left: 8, bottom: 0 }} barCategoryGap="35%">
+                  <CartesianGrid strokeDasharray="3 3" className="stroke-border/40" vertical={false} />
+                  <XAxis dataKey="name" tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
+                  <YAxis
+                    tick={{ fontSize: 11 }}
+                    axisLine={false}
+                    tickLine={false}
+                    tickFormatter={v => v === 0 ? "R$0" : `R$${(v / 1000).toFixed(0)}k`}
+                    width={52}
+                  />
                   <Tooltip
                     contentStyle={{ background: "var(--background)", border: "1px solid var(--border)", borderRadius: 10, fontSize: 12 }}
                     formatter={(v: number) => [fmtBRL(v), "Receita"]}
+                    cursor={{ fill: "var(--muted)", opacity: 0.3 }}
                   />
-                  <Bar dataKey="receita" radius={[6, 6, 0, 0]}>
+                  <Bar dataKey="receita" radius={[6, 6, 0, 0]} maxBarSize={64} label={{ position: "top", fontSize: 11, formatter: (v: number) => v > 0 ? `R$${(v/1000).toFixed(1)}k` : "", fill: "var(--muted-foreground)" }}>
                     {barData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
                   </Bar>
                 </BarChart>
