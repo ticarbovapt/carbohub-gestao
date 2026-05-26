@@ -91,26 +91,23 @@ const PERIOD_OPTIONS: { value: EcommercePeriod; label: string }[] = [
 // ─────────────────────────────────────────────────────────────────────────────
 
 function MetricCard({
-  label, value, sub, icon, accent, big,
+  label, value, sub, icon, accent,
 }: {
   label: string; value: string; sub?: string;
-  icon: React.ReactNode; accent: string; big?: boolean;
+  icon: React.ReactNode; accent: string;
 }) {
   return (
     <div
-      className={cn(
-        "rounded-2xl border bg-card p-5 flex flex-col gap-2 transition-all hover:-translate-y-0.5 hover:shadow-md",
-        big && "col-span-2"
-      )}
+      className="rounded-xl border bg-card p-4 flex flex-col gap-1.5 transition-all hover:-translate-y-0.5 hover:shadow-md"
       style={{ borderLeftColor: accent, borderLeftWidth: 3 }}
     >
-      <div className="flex items-start justify-between">
-        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{label}</p>
-        <div className="p-2 rounded-xl" style={{ background: accent + "20" }}>
+      <div className="flex items-start justify-between gap-2">
+        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide leading-tight">{label}</p>
+        <div className="p-1.5 rounded-lg shrink-0" style={{ background: accent + "20" }}>
           <div style={{ color: accent }}>{icon}</div>
         </div>
       </div>
-      <p className={cn("font-bold leading-none", big ? "text-4xl" : "text-2xl")}>{value}</p>
+      <p className="text-xl font-bold leading-none">{value}</p>
       {sub && <p className="text-xs text-muted-foreground">{sub}</p>}
     </div>
   );
@@ -260,7 +257,7 @@ function PlatformView({ platform, period }: { platform: EcommercePlatform; perio
         </div>
       )}
 
-      {/* KPIs */}
+      {/* KPIs — linha 1: pedidos e receita */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <MetricCard
           label="Pedidos" value={fmtNum(m.totalOrders)}
@@ -271,26 +268,30 @@ function PlatformView({ platform, period }: { platform: EcommercePlatform; perio
           icon={<TrendingUp className="h-4 w-4" />} accent={cfg.color}
         />
         <MetricCard
-          label="Ticket Médio" value={fmtBRL(m.avgTicket)}
-          icon={<Package className="h-4 w-4" />} accent={cfg.color}
+          label="Receita Líquida" value={fmtBRL(m.netRevenue)}
+          sub="excluindo cancelados"
+          icon={<Wallet className="h-4 w-4" />} accent="#22c55e"
         />
         <MetricCard
-          label="Cancelamentos" value={fmtNum(m.cancelledOrders)}
-          sub={m.totalOrders > 0 ? `${pct(m.cancelledOrders, m.totalOrders)} dos pedidos` : undefined}
-          icon={<XCircle className="h-4 w-4" />}
-          accent="#f59e0b"
+          label="Comissão Estimada" value={fmtBRL(m.estimatedFee)}
+          sub={`~${(PLATFORM_FEE_RATE_DISPLAY[platform] * 100).toFixed(0)}% s/ receita líquida`}
+          icon={<Receipt className="h-4 w-4" />} accent="#94a3b8"
         />
       </div>
 
-      {/* Unidades reais destaque + status pedidos */}
+      {/* KPIs — linha 2: unidades e status */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <MetricCard
           label="Unidades Reais Vendidas" value={fmtNum(m.totalUnitsSold)}
           sub="considera multiplicador de pack"
-          icon={<Boxes className="h-5 w-5" />} accent={cfg.color} big
+          icon={<Boxes className="h-4 w-4" />} accent={cfg.color}
         />
         <MetricCard
-          label="Em transporte" value={fmtNum(m.shippedOrders)}
+          label="Ticket Médio" value={fmtBRL(m.avgTicket)}
+          icon={<Package className="h-4 w-4" />} accent={cfg.color}
+        />
+        <MetricCard
+          label="Em Transporte" value={fmtNum(m.shippedOrders)}
           icon={<Clock className="h-4 w-4" />} accent="#f59e0b"
         />
         <MetricCard
@@ -299,27 +300,27 @@ function PlatformView({ platform, period }: { platform: EcommercePlatform; perio
         />
       </div>
 
-      {/* Novas métricas */}
+      {/* KPIs — linha 3: cancelamentos e pendentes */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <MetricCard
+          label="Cancelamentos" value={fmtNum(m.cancelledOrders)}
+          sub={m.totalOrders > 0 ? `${pct(m.cancelledOrders, m.totalOrders)} dos pedidos` : undefined}
+          icon={<XCircle className="h-4 w-4" />} accent="#f59e0b"
+        />
+        <MetricCard
+          label="Taxa de Cancelamento" value={`${m.cancellationRate.toFixed(1)}%`}
+          sub={`${fmtNum(m.cancelledOrders)} de ${fmtNum(m.totalOrders)} pedidos`}
+          icon={<Percent className="h-4 w-4" />} accent="#f43f5e"
+        />
         <MetricCard
           label="Pedidos Pendentes" value={fmtNum(m.pendingOrders)}
           sub="aguardando pagamento ou confirmação"
           icon={<Hourglass className="h-4 w-4" />} accent="#a78bfa"
         />
         <MetricCard
-          label="Taxa de Cancelamento" value={`${m.cancellationRate.toFixed(1)}%`}
-          sub={`${fmtNum(m.cancelledOrders)} cancelados de ${fmtNum(m.totalOrders)}`}
-          icon={<Percent className="h-4 w-4" />} accent="#f43f5e"
-        />
-        <MetricCard
-          label="Receita Líquida" value={fmtBRL(m.netRevenue)}
-          sub="excluindo pedidos cancelados"
-          icon={<Wallet className="h-4 w-4" />} accent="#22c55e"
-        />
-        <MetricCard
-          label="Comissão Estimada" value={fmtBRL(m.estimatedFee)}
-          sub={`~${(PLATFORM_FEE_RATE_DISPLAY[platform] * 100).toFixed(0)}% sobre receita líquida`}
-          icon={<Receipt className="h-4 w-4" />} accent="#94a3b8"
+          label="Avaliação Média" value={m.avgRating !== null ? m.avgRating.toFixed(1) : "—"}
+          sub="média do período"
+          icon={<Star className="h-4 w-4" />} accent="#facc15"
         />
       </div>
 
