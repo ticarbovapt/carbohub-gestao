@@ -1,5 +1,5 @@
-import { useState, useMemo } from "react";
-import { Package, Search, Pencil, Save, X, Warehouse, TrendingUp, TrendingDown, Calendar, BarChart3, Shield, Activity, Download, ArrowDownToLine, Tag } from "lucide-react";
+import { useState, useMemo, useEffect } from "react";
+import { Package, Search, Pencil, Save, X, Warehouse, TrendingUp, TrendingDown, Calendar, BarChart3, Shield, Activity, Download, ArrowDownToLine, Tag, Info } from "lucide-react";
 import * as XLSX from "xlsx";
 import { Input } from "@/components/ui/input";
 import { CarboCard, CarboCardContent } from "@/components/ui/carbo-card";
@@ -49,7 +49,7 @@ function getCoverageStatus(days: number | null): CoverageStatus {
 export function StockOverview() {
   const [search, setSearch] = useState("");
   const [selectedWarehouse, setSelectedWarehouse] = useState<string>("all");
-  const [selectedCategory, setSelectedCategory] = useState<string>("all");
+  const [selectedCategory, setSelectedCategory] = useState<string>("Produto Final");
   const [editing, setEditing] = useState<EditingProduct | null>(null);
   const [editHubId, setEditHubId] = useState<string>("");
   const [newQty, setNewQty] = useState("");
@@ -78,6 +78,13 @@ export function StockOverview() {
       return data || [];
     },
   });
+
+  // Auto-seleciona HUB-SP na primeira carga
+  useEffect(() => {
+    if (!warehouses) return;
+    const sp = warehouses.find(w => w.code === "HUB-SP");
+    if (sp) setSelectedWarehouse(sp.id);
+  }, [warehouses]);
 
   const { data: products, isLoading } = useQuery({
     queryKey: ["mrp-products-stock"],
@@ -372,6 +379,17 @@ export function StockOverview() {
           </Button>
         </div>
       </div>
+
+      {/* SP banner */}
+      {selectedWarehouse !== "all" && warehouses?.find(w => w.id === selectedWarehouse)?.code === "HUB-SP" && (
+        <div className="flex items-center gap-2 px-3 py-2 rounded-md bg-blue-500/10 border border-blue-500/20 text-sm text-blue-400">
+          <Info className="h-4 w-4 shrink-0" />
+          <span>
+            <strong>CD São Paulo</strong> — Estoque gerenciado manualmente conforme transferências do CD contratado.
+            Atualize ao receber confirmação de entrada no CD.
+          </span>
+        </div>
+      )}
 
       {/* Cards */}
       {isLoading ? (
