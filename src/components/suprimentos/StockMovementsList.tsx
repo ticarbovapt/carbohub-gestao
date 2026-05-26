@@ -29,17 +29,23 @@ export function StockMovementsList({ hubView = "sp" }: StockMovementsListProps) 
   const [origem, setOrigem] = useState<"PC" | "OP" | "ajuste">("ajuste");
   const [obs, setObs] = useState("");
 
-  // Produto IDs do hub selecionado para filtrar movimentações
-  const { data: hubProductIds } = useQuery({
-    queryKey: ["hub-product-ids", hubView],
+  // Warehouse ID e product IDs do hub ativo
+  const { data: hubData } = useQuery({
+    queryKey: ["hub-warehouse-data", hubView],
     queryFn: async () => {
       const code = hubView === "sp" ? "HUB-SP" : "HUB-RN";
       const { data: wh } = await supabase.from("warehouses").select("id").eq("code", code).maybeSingle();
-      if (!wh) return [];
+      if (!wh) return { warehouseId: null, productIds: [] };
       const { data: ws } = await supabase.from("warehouse_stock").select("product_id").eq("warehouse_id", wh.id);
-      return (ws || []).map((s: any) => s.product_id as string);
+      return {
+        warehouseId: wh.id as string,
+        productIds:  (ws || []).map((s: any) => s.product_id as string),
+      };
     },
   });
+
+  const hubProductIds  = hubData?.productIds;
+  const hubWarehouseId = hubData?.warehouseId ?? undefined;
 
   const { data: allMovements, isLoading } = useStockMovements(
     tipoFilter !== "all" ? { tipo: tipoFilter } : undefined
@@ -67,11 +73,12 @@ export function StockMovementsList({ hubView = "sp" }: StockMovementsListProps) 
   const handleCreate = () => {
     if (!productId || quantidade <= 0) return;
     createMovement.mutate({
-      product_id: productId,
+      product_id:   productId,
       tipo,
       quantidade,
       origem,
-      observacoes: obs || undefined,
+      observacoes:  obs || undefined,
+      warehouse_id: hubWarehouseId, // atualiza warehouse_stock do hub ativo
     }, {
       onSuccess: () => {
         setShowCreate(false);

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Send } from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,6 +19,7 @@ interface Props {
 }
 
 export function CDSPRegistrarEnvio({ open, onClose, spWarehouseId, rnWarehouseId }: Props) {
+  const { user } = useAuth();
   const qc = useQueryClient();
   const [productId, setProductId] = useState("");
   const [quantity,  setQuantity]  = useState("");
@@ -40,20 +42,54 @@ export function CDSPRegistrarEnvio({ open, onClose, spWarehouseId, rnWarehouseId
     mutationFn: async () => {
       const product = products?.find(p => p.id === productId);
       if (!product) throw new Error("Produto não encontrado");
+      const qty  = Number(quantity);
+      const obs  = notes.trim() || "Envio para CD São Paulo";
+
+      // 1. Desconta do warehouse_stock do Hub Natal
+      const { data: ws } = await supabase
+        .from("warehouse_stock")
+        .select("id, quantity")
+        .eq("warehouse_id", rnWarehouseId)
+        .eq("product_id", productId)
+        .maybeSingle();
+
+      if (ws) {
+        const newQty = Math.max(0, (ws.quantity as number) - qty);
+        await supabase.from("warehouse_stock")
+          .update({ quantity: newQty, updated_at: new Date().toISOString() })
+          .eq("id", ws.id);
+      }
+
+      // 2. Registra saída em Natal
+      await supabase.from("stock_movements").insert({
+        product_id:  productId,
+        tipo:        "saida",
+        quantidade:  qty,
+        origem:      "ajuste",
+        observacoes: `Saída Hub Natal → CD São Paulo — ${obs}`,
+        created_by:  user!.id,
+      } as never);
+
+      // 3. Cria transferência em trânsito
       const { error } = await supabase.from("stock_transfers").insert({
         product_id:   productId,
         product_code: product.product_code,
         from_hub:     rnWarehouseId,
         to_hub:       spWarehouseId,
-        quantity:     Number(quantity),
+        quantity:     qty,
         status:       "approved",
-        notes:        notes.trim() || "Envio para CD São Paulo",
+        notes:        obs,
       } as never);
       if (error) throw error;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["sp-transito"] });
-      toast.success("Envio registrado — aparecerá como Em Trânsito");
+      qc.invalidateQueries({ queryKey: ["warehouse-stock"] });
+      qc.invalidateQueries({ queryKey: ["warehouse-stock-all"] });
+      qc.invalidateQueries({ queryKey: ["stock-movements"] });
+      qc.invalidateQueries({ queryKey: ["suprimentos-kpis-hub"] });
+      qc.invalidateQueries({ queryKey: ["mrp-products-stock"] });
+      toast.success("Envio registrado — saída do Hub Natal e Em Trânsito para SP");
       onClose();
       setProductId(""); setQuantity(""); setNotes("");
     },

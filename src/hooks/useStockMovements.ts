@@ -27,45 +27,63 @@ export function useCreateStockMovement() {
   const { user } = useAuth();
   return useMutation({
     mutationFn: async (values: {
-      product_id: string;
-      tipo: 'entrada' | 'saida';
-      quantidade: number;
-      origem: 'PC' | 'OP' | 'ajuste';
-      origem_id?: string;
+      product_id:      string;
+      tipo:            'entrada' | 'saida';
+      quantidade:      number;
+      origem:          'PC' | 'OP' | 'ajuste';
+      origem_id?:      string;
       custo_unitario?: number;
-      observacoes?: string;
+      observacoes?:    string;
+      warehouse_id?:   string; // quando fornecido, atualiza warehouse_stock do hub
     }) => {
-      // Get current product stock
-      const { data: product } = await supabase
-        .from("mrp_products")
-        .select("current_stock_qty")
-        .eq("id", values.product_id)
-        .single();
+      // Atualiza warehouse_stock do hub quando informado
+      if (values.warehouse_id) {
+        const { data: ws } = await supabase
+          .from("warehouse_stock")
+          .select("id, quantity")
+          .eq("warehouse_id", values.warehouse_id)
+          .eq("product_id", values.product_id)
+          .maybeSingle();
 
-      const currentStock = product?.current_stock_qty || 0;
-      const newStock = values.tipo === 'entrada'
-        ? currentStock + values.quantidade
-        : currentStock - values.quantidade;
+        if (ws) {
+          const newQty = values.tipo === 'entrada'
+            ? (ws.quantity as number) + values.quantidade
+            : Math.max(0, (ws.quantity as number) - values.quantidade);
+          await supabase.from("warehouse_stock")
+            .update({ quantity: newQty, updated_at: new Date().toISOString() })
+            .eq("id", ws.id);
+        } else if (values.tipo === 'entrada') {
+          await supabase.from("warehouse_stock").insert({
+            warehouse_id: values.warehouse_id,
+            product_id:   values.product_id,
+            quantity:     values.quantidade,
+          });
+        }
+      }
 
-      if (newStock < 0) throw new Error("Estoque insuficiente");
-
-      // Create movement
+      // Cria registro de movimento
       const { data, error } = await supabase.from("stock_movements").insert({
-        product_id: values.product_id,
-        tipo: values.tipo,
-        quantidade: values.quantidade,
-        origem: values.origem,
-        origem_id: values.origem_id || null,
+        product_id:     values.product_id,
+        tipo:           values.tipo,
+        quantidade:     values.quantidade,
+        origem:         values.origem,
+        origem_id:      values.origem_id || null,
         custo_unitario: values.custo_unitario || 0,
-        observacoes: values.observacoes || null,
-        created_by: user!.id,
+        observacoes:    values.observacoes || null,
+        created_by:     user!.id,
       } as any).select().single();
       if (error) throw error;
 
-      // Update product stock
+      // Mantém current_stock_qty sincronizado no mrp_products (campo legado)
+      const { data: product } = await supabase
+        .from("mrp_products").select("current_stock_qty").eq("id", values.product_id).single();
+      const currentStock = product?.current_stock_qty || 0;
+      const newStock = values.tipo === 'entrada'
+        ? currentStock + values.quantidade
+        : Math.max(0, currentStock - values.quantidade);
       await supabase.from("mrp_products").update({
         current_stock_qty: newStock,
-        stock_updated_at: new Date().toISOString().split("T")[0],
+        stock_updated_at:  new Date().toISOString().split("T")[0],
       }).eq("id", values.product_id);
 
       return data;
@@ -74,8 +92,10 @@ export function useCreateStockMovement() {
       qc.invalidateQueries({ queryKey: ["stock-movements"] });
       qc.invalidateQueries({ queryKey: ["mrp-products"] });
       qc.invalidateQueries({ queryKey: ["mrp-products-stock"] });
+      qc.invalidateQueries({ queryKey: ["warehouse-stock"] });
       qc.invalidateQueries({ queryKey: ["warehouse-stock-all"] });
       qc.invalidateQueries({ queryKey: ["suprimentos-kpis"] });
+      qc.invalidateQueries({ queryKey: ["suprimentos-kpis-hub"] });
       toast.success("Movimento de estoque registrado");
     },
     onError: (e: any) => toast.error("Erro no movimento", { description: e.message }),
