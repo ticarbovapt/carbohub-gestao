@@ -724,19 +724,21 @@ function ComparativoView({ period }: { period: EcommercePeriod }) {
               </div>
             </CardHeader>
             <CardContent className="px-2 pb-4">
-              <ResponsiveContainer width="100%" height={210}>
-                <LineChart data={lineData} margin={{ top: 4, right: 12, left: -10, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" className="stroke-border/50" />
-                  <XAxis dataKey="label" tick={{ fontSize: 10 }} />
-                  <YAxis tick={{ fontSize: 10 }} />
+              <ResponsiveContainer width="100%" height={220}>
+                <BarChart data={lineData} margin={{ top: 4, right: 16, left: 8, bottom: 0 }} barCategoryGap="20%" barGap={2}>
+                  <CartesianGrid strokeDasharray="3 3" className="stroke-border/40" vertical={false} />
+                  <XAxis dataKey="label" tick={{ fontSize: 10 }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fontSize: 10 }} axisLine={false} tickLine={false} width={28} />
                   <Tooltip
                     contentStyle={{ background: "var(--background)", border: "1px solid var(--border)", borderRadius: 10, fontSize: 12 }}
+                    formatter={(v: number, name: string) => [fmtNum(v), PMAP[name as EcommercePlatform]?.label ?? name]}
+                    cursor={{ fill: "var(--muted)", opacity: 0.3 }}
                   />
-                  <Legend iconType="circle" iconSize={8} formatter={v => PMAP[v as EcommercePlatform]?.label ?? v} />
+                  <Legend iconType="square" iconSize={10} formatter={v => PMAP[v as EcommercePlatform]?.label ?? v} />
                   {valid.map(p => (
-                    <Line key={p} type="monotone" dataKey={p} stroke={PMAP[p].color} strokeWidth={2.5} dot={false} name={p} />
+                    <Bar key={p} dataKey={p} fill={PMAP[p].color} radius={[3, 3, 0, 0]} maxBarSize={20} name={p} />
                   ))}
-                </LineChart>
+                </BarChart>
               </ResponsiveContainer>
             </CardContent>
           </Card>
