@@ -34,11 +34,15 @@ export interface EcommerceMetrics {
   totalOrders: number;
   totalUnitsSold: number;
   totalRevenue: number;
+  netRevenue: number;
   avgTicket: number;
   cancelledOrders: number;
+  cancellationRate: number;
   pendingOrders: number;
   shippedOrders: number;
   deliveredOrders: number;
+  estimatedFee: number;
+  topProduct: EcommerceProduct | null;
   avgRating: number | null;
   products: EcommerceProduct[];
   dailySales: EcommerceDailySale[];
@@ -115,6 +119,10 @@ function buildMetrics(platform: EcommercePlatform, rows: DBOrder[]): EcommerceMe
   const shipped    = rows.filter(r => r.status === "shipped").length;
   const delivered  = rows.filter(r => r.status === "delivered").length;
 
+  const netRevenue       = rows.filter(r => r.status !== "cancelled").reduce((s, r) => s + Number(r.total), 0);
+  const cancellationRate = totalOrders > 0 ? (cancelled / totalOrders) * 100 : 0;
+  const estimatedFee     = netRevenue * PLATFORM_FEE_RATE[platform];
+
   // Group by product SKU
   const skuMap = new Map<string, { name: string; orders: number; units: number; revenue: number }>();
   for (const r of rows) {
@@ -166,11 +174,15 @@ function buildMetrics(platform: EcommercePlatform, rows: DBOrder[]): EcommerceMe
     totalOrders,
     totalUnitsSold,
     totalRevenue:    Math.round(totalRevenue * 100) / 100,
+    netRevenue:      Math.round(netRevenue * 100) / 100,
     avgTicket:       totalOrders > 0 ? Math.round((totalRevenue / totalOrders) * 100) / 100 : 0,
     cancelledOrders: cancelled,
+    cancellationRate: Math.round(cancellationRate * 10) / 10,
     pendingOrders:   pending,
     shippedOrders:   shipped,
     deliveredOrders: delivered,
+    estimatedFee:    Math.round(estimatedFee * 100) / 100,
+    topProduct:      products[0] ?? null,
     avgRating:       null,
     products,
     dailySales,
@@ -178,11 +190,19 @@ function buildMetrics(platform: EcommercePlatform, rows: DBOrder[]): EcommerceMe
   };
 }
 
+const PLATFORM_FEE_RATE: Record<EcommercePlatform, number> = {
+  mercadolivre: 0.16,
+  amazon:       0.15,
+  tiktok:       0.06,
+  shopee:       0.12,
+};
+
 function emptyMetrics(platform: EcommercePlatform): EcommerceMetrics {
   return {
     platform,
-    totalOrders: 0, totalUnitsSold: 0, totalRevenue: 0, avgTicket: 0,
-    cancelledOrders: 0, pendingOrders: 0, shippedOrders: 0, deliveredOrders: 0,
+    totalOrders: 0, totalUnitsSold: 0, totalRevenue: 0, netRevenue: 0, avgTicket: 0,
+    cancelledOrders: 0, cancellationRate: 0, pendingOrders: 0, shippedOrders: 0, deliveredOrders: 0,
+    estimatedFee: 0, topProduct: null,
     avgRating: null, products: [], dailySales: [],
     isConnected: false,
   };
