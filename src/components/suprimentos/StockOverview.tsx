@@ -157,7 +157,8 @@ export function StockOverview({ hubView = "sp" }: StockOverviewProps) {
   };
 
   const openEdit = (p: (typeof products extends (infer T)[] ? T : never), hubId?: string) => {
-    const defaultHub = hubId || (warehouses && warehouses.length > 0 ? warehouses[0].id : "");
+    // Usa o hub já selecionado na view (nunca usa warehouses[0] pois a ordem alfabética pode ser RN antes de SP)
+    const defaultHub = hubId || (selectedWarehouse !== "all" ? selectedWarehouse : (warehouses?.find(w => w.code === (isSP ? "HUB-SP" : "HUB-RN"))?.id ?? warehouses?.[0]?.id ?? ""));
     const ws = defaultHub
       ? warehouseStock?.find(s => s.product_id === p.id && s.warehouse_id === defaultHub)
       : undefined;
