@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { BoardLayout } from "@/components/layouts/BoardLayout";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
@@ -17,6 +17,7 @@ import {
   ShoppingCart, Package, TrendingUp, XCircle, Clock,
   CheckCircle2, Star, Boxes, AlertCircle, BarChart3, Calendar,
   Percent, Wallet, Receipt, Trophy, Hourglass, Pencil, X, Check, History,
+  Globe, CreditCard, QrCode, FileText, RefreshCw, KeyRound,
 } from "lucide-react";
 import {
   useDashEcommerce, useEcommerceComparativo, useEcommerceRawCheck, useCommissionRates,
@@ -25,6 +26,10 @@ import {
   type MonthlyMetrics,
   PLATFORM_FEE_DEFAULT,
 } from "@/hooks/useDashEcommerce";
+import {
+  useVindiMetrics, useVindiConnection,
+  type VindiPeriod,
+} from "@/hooks/useVindi";
 import { cn } from "@/lib/utils";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1241,10 +1246,326 @@ function HistoricoMensalView() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Vindi LP's view
+// ─────────────────────────────────────────────────────────────────────────────
+
+const VINDI_PERIOD_OPTIONS: { value: VindiPeriod; label: string }[] = [
+  { value: "today", label: "Hoje" },
+  { value: "7d",    label: "Últimos 7 dias" },
+  { value: "30d",   label: "Últimos 30 dias" },
+  { value: "month", label: "Este mês" },
+];
+
+const PM_ICONS: Record<string, React.ReactNode> = {
+  credit_card: <CreditCard className="h-4 w-4" />,
+  bank_slip:   <FileText className="h-4 w-4" />,
+  pix:         <QrCode className="h-4 w-4" />,
+};
+
+function VindiLPsView() {
+  const [period, setPeriod]     = useState<VindiPeriod>("7d");
+  const [apiKey, setApiKey]     = useState("");
+  const [saveErr, setSaveErr]   = useState<string | null>(null);
+  const [syncing, setSyncing]   = useState(false);
+  const inputRef                = useRef<HTMLInputElement>(null);
+
+  const { connected, lastSync, isSaving, saveApiKey, forceSync } = useVindiConnection();
+  const { metrics, isLoading } = useVindiMetrics(period);
+
+  async function handleSave() {
+    setSaveErr(null);
+    const result = await saveApiKey(apiKey.trim());
+    if (!result.ok) setSaveErr(result.error ?? "Erro ao salvar");
+  }
+
+  async function handleSync() {
+    setSyncing(true);
+    await forceSync();
+    setSyncing(false);
+    window.location.reload();
+  }
+
+  // ── Not connected: setup card ────────────────────────────────────────────────
+  if (connected === false) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[400px] gap-4">
+        <Card className="rounded-2xl border-0 shadow-sm w-full max-w-md">
+          <CardHeader className="pt-6 px-6 pb-3">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <KeyRound className="h-5 w-5 text-emerald-500" />
+              Conectar Vindi
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="px-6 pb-6 space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Insira sua API Key do Vindi para sincronizar as vendas das Landing Pages automaticamente.
+            </p>
+            <div className="space-y-2">
+              <Input
+                ref={inputRef}
+                type="password"
+                placeholder="sua_api_key_do_vindi"
+                value={apiKey}
+                onChange={e => setApiKey(e.target.value)}
+                onKeyDown={e => e.key === "Enter" && handleSave()}
+                className="font-mono text-sm"
+              />
+              {saveErr && <p className="text-xs text-destructive">{saveErr}</p>}
+            </div>
+            <Button onClick={handleSave} disabled={isSaving || !apiKey.trim()} className="w-full">
+              {isSaving ? "Verificando..." : "Conectar"}
+            </Button>
+            <p className="text-xs text-muted-foreground text-center">
+              Onde encontrar: Vindi Dashboard → Configurações → API Keys → Criar nova chave
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  // ── Loading connection state ─────────────────────────────────────────────────
+  if (connected === null) {
+    return <div className="flex items-center gap-2 text-sm text-muted-foreground animate-pulse px-1">
+      <div className="h-4 w-4 rounded-full border-2 border-primary border-t-transparent animate-spin" />
+      Verificando conexão...
+    </div>;
+  }
+
+  const m = metrics;
+
+  return (
+    <div className="space-y-5">
+      {/* ── Header bar ── */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-1.5 text-xs text-green-500 font-semibold bg-green-500/10 border border-green-500/20 rounded-lg px-3 py-1.5">
+            <CheckCircle2 className="h-3.5 w-3.5" /> Vindi conectado
+          </div>
+          {lastSync && (
+            <span className="text-xs text-muted-foreground">
+              Sync: {new Date(lastSync).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
+            </span>
+          )}
+          <button onClick={handleSync} disabled={syncing}
+            className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 transition-colors">
+            <RefreshCw className={cn("h-3 w-3", syncing && "animate-spin")} />
+            {syncing ? "Sincronizando..." : "Forçar sync"}
+          </button>
+        </div>
+        <Select value={period} onValueChange={v => setPeriod(v as VindiPeriod)}>
+          <SelectTrigger className="w-44"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            {VINDI_PERIOD_OPTIONS.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
+          </SelectContent>
+        </Select>
+      </div>
+
+      {isLoading && (
+        <div className="flex items-center gap-2 text-sm text-muted-foreground animate-pulse px-1">
+          <div className="h-4 w-4 rounded-full border-2 border-primary border-t-transparent animate-spin" />
+          Carregando dados...
+        </div>
+      )}
+
+      {!isLoading && m && (
+        <>
+          {/* ── KPI Cards ── */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+            <div className="col-span-2 sm:col-span-1 rounded-xl border bg-card p-4" style={{ borderLeftColor: "#22c55e", borderLeftWidth: 3 }}>
+              <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Receita (pagas)</p>
+              <p className="text-xl font-bold mt-1 leading-none">{fmtBRL(m.totalRevenue)}</p>
+              <p className="text-xs text-muted-foreground mt-1">{m.totalPaid} pedidos pagos</p>
+            </div>
+            <div className="rounded-xl border bg-card p-4" style={{ borderLeftColor: "#3b82f6", borderLeftWidth: 3 }}>
+              <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Tentativas</p>
+              <p className="text-xl font-bold mt-1 leading-none">{fmtNum(m.totalAttempts)}</p>
+              <p className="text-xs text-muted-foreground mt-1">{m.totalPending} pendentes</p>
+            </div>
+            <div className="rounded-xl border bg-card p-4" style={{ borderLeftColor: "#8b5cf6", borderLeftWidth: 3 }}>
+              <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Ticket Médio</p>
+              <p className="text-xl font-bold mt-1 leading-none">{fmtBRL(m.avgTicket)}</p>
+            </div>
+            <div className="rounded-xl border bg-card p-4" style={{ borderLeftColor: "#22c55e", borderLeftWidth: 3 }}>
+              <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Taxa Pagamento</p>
+              <p className="text-xl font-bold mt-1 leading-none text-green-600">{m.paymentRate.toFixed(1)}%</p>
+              <p className="text-xs text-muted-foreground mt-1">dos checkouts</p>
+            </div>
+            <div className="rounded-xl border bg-card p-4" style={{ borderLeftColor: "#ef4444", borderLeftWidth: 3 }}>
+              <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Cancelamentos</p>
+              <p className="text-xl font-bold mt-1 leading-none text-destructive">{m.cancellationRate.toFixed(1)}%</p>
+              <p className="text-xs text-muted-foreground mt-1">{m.totalCanceled + m.totalFraud} pedidos</p>
+            </div>
+            <div className="rounded-xl border bg-green-500/5 border-green-500/20 p-4">
+              <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Fraude</p>
+              <p className="text-xl font-bold mt-1 leading-none">{m.totalFraud}</p>
+              <p className="text-xs text-muted-foreground mt-1">detectadas</p>
+            </div>
+          </div>
+
+          {/* ── Receita por dia ── */}
+          <Card className="rounded-2xl border-0 shadow-sm">
+            <CardHeader className="pb-1 pt-5 px-5">
+              <CardTitle className="text-sm font-semibold">Receita por Dia (pedidos pagos)</CardTitle>
+            </CardHeader>
+            <CardContent className="px-2 pb-4">
+              <ResponsiveContainer width="100%" height={260}>
+                <BarChart data={m.dailySales} margin={{ top: 18, right: 16, left: 8, bottom: 0 }} barCategoryGap="30%">
+                  <CartesianGrid strokeDasharray="3 3" className="stroke-border/40" vertical={false} />
+                  <XAxis dataKey="label" tick={{ fontSize: 10 }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fontSize: 10 }} axisLine={false} tickLine={false} width={60}
+                    tickFormatter={v => v === 0 ? "R$0" : `R$${(v / 1000).toFixed(0)}k`} />
+                  <Tooltip
+                    contentStyle={{ background: "var(--background)", border: "1px solid var(--border)", borderRadius: 10, fontSize: 12 }}
+                    formatter={(v: number) => [fmtBRL(v), "Receita"]}
+                    cursor={{ fill: "var(--muted)", opacity: 0.3 }}
+                  />
+                  <Bar dataKey="revenue" name="revenue" fill="#22c55e" radius={[4,4,0,0]} maxBarSize={40} />
+                </BarChart>
+              </ResponsiveContainer>
+            </CardContent>
+          </Card>
+
+          {/* ── Tentativas por dia ── */}
+          <Card className="rounded-2xl border-0 shadow-sm">
+            <CardHeader className="pb-1 pt-5 px-5">
+              <CardTitle className="text-sm font-semibold">Tentativas de Pagamento por Dia</CardTitle>
+            </CardHeader>
+            <CardContent className="px-2 pb-4">
+              <ResponsiveContainer width="100%" height={220}>
+                <BarChart data={m.dailySales} margin={{ top: 18, right: 16, left: 8, bottom: 0 }} barCategoryGap="30%">
+                  <CartesianGrid strokeDasharray="3 3" className="stroke-border/40" vertical={false} />
+                  <XAxis dataKey="label" tick={{ fontSize: 10 }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fontSize: 10 }} axisLine={false} tickLine={false} width={36} />
+                  <Tooltip
+                    contentStyle={{ background: "var(--background)", border: "1px solid var(--border)", borderRadius: 10, fontSize: 12 }}
+                    formatter={(v: number) => [fmtNum(v), "Tentativas"]}
+                    cursor={{ fill: "var(--muted)", opacity: 0.3 }}
+                  />
+                  <Bar dataKey="orders" name="orders" fill="#3b82f6" radius={[4,4,0,0]} maxBarSize={40} />
+                </BarChart>
+              </ResponsiveContainer>
+            </CardContent>
+          </Card>
+
+          {/* ── Produtos + Métodos de Pagamento ── */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+            {/* Ranking de Produtos */}
+            <Card className="rounded-2xl border-0 shadow-sm">
+              <CardHeader className="pt-5 px-5 pb-3">
+                <CardTitle className="text-sm font-semibold">Ranking de Produtos</CardTitle>
+              </CardHeader>
+              <CardContent className="p-0 pb-3">
+                {m.products.length === 0 ? (
+                  <p className="text-xs text-muted-foreground px-5 py-4">Nenhum produto identificado no período.</p>
+                ) : (
+                  <div className="divide-y divide-border/30">
+                    {m.products.map((p, i) => (
+                      <div key={p.product_id} className="flex items-center gap-3 px-5 py-3 hover:bg-muted/20 transition-colors">
+                        <span className="text-xs font-mono text-muted-foreground w-5 text-center">
+                          {i === 0 ? "🏆" : i + 1}
+                        </span>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold truncate">{p.product_name}</p>
+                          <div className="flex items-center gap-2 mt-1">
+                            <div className="flex-1 h-1.5 rounded-full bg-muted/40">
+                              <div className="h-1.5 rounded-full bg-emerald-500"
+                                style={{ width: `${Math.min(p.pct, 100)}%` }} />
+                            </div>
+                            <span className="text-xs text-muted-foreground shrink-0">{p.pct.toFixed(0)}%</span>
+                          </div>
+                        </div>
+                        <div className="text-right shrink-0">
+                          <p className="text-sm font-bold">{fmtBRL(p.revenue)}</p>
+                          <p className="text-xs text-muted-foreground">{fmtNum(p.orders)} vendas</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Métodos de Pagamento */}
+            <Card className="rounded-2xl border-0 shadow-sm">
+              <CardHeader className="pt-5 px-5 pb-3">
+                <CardTitle className="text-sm font-semibold">Método de Pagamento</CardTitle>
+              </CardHeader>
+              <CardContent className="px-5 pb-4 space-y-3">
+                {m.paymentMethods.length === 0 ? (
+                  <p className="text-xs text-muted-foreground py-2">Nenhuma tentativa no período.</p>
+                ) : (
+                  m.paymentMethods.map(pm => {
+                    const colors: Record<string, string> = {
+                      credit_card: "#8b5cf6",
+                      bank_slip:   "#f59e0b",
+                      pix:         "#22c55e",
+                    };
+                    const c = colors[pm.method] ?? "#6b7280";
+                    return (
+                      <div key={pm.method}>
+                        <div className="flex items-center justify-between mb-1.5">
+                          <div className="flex items-center gap-2 text-sm font-medium" style={{ color: c }}>
+                            {PM_ICONS[pm.method] ?? <Globe className="h-4 w-4" />}
+                            {pm.label}
+                          </div>
+                          <div className="text-right">
+                            <span className="text-sm font-bold">{fmtNum(pm.orders)}</span>
+                            <span className="text-xs text-muted-foreground ml-1.5">({pm.pct.toFixed(0)}%)</span>
+                          </div>
+                        </div>
+                        <div className="h-2 rounded-full bg-muted/40">
+                          <div className="h-2 rounded-full transition-all"
+                            style={{ width: `${Math.min(pm.pct, 100)}%`, background: c }} />
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-1">{fmtBRL(pm.revenue)} em receita</p>
+                      </div>
+                    );
+                  })
+                )}
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* ── Status breakdown ── */}
+          <Card className="rounded-2xl border-0 shadow-sm">
+            <CardHeader className="pt-5 px-5 pb-3">
+              <CardTitle className="text-sm font-semibold">Detalhamento por Status</CardTitle>
+            </CardHeader>
+            <CardContent className="px-5 pb-5">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                {[
+                  { label: "Pagas",      value: m.totalPaid,     color: "#22c55e", icon: <CheckCircle2 className="h-4 w-4" /> },
+                  { label: "Pendentes",  value: m.totalPending,  color: "#f59e0b", icon: <Clock className="h-4 w-4" /> },
+                  { label: "Canceladas", value: m.totalCanceled, color: "#ef4444", icon: <XCircle className="h-4 w-4" /> },
+                  { label: "Fraude",     value: m.totalFraud,    color: "#6b7280", icon: <AlertCircle className="h-4 w-4" /> },
+                ].map(s => (
+                  <div key={s.label} className="rounded-xl border bg-card p-4 flex items-center gap-3"
+                    style={{ borderLeftColor: s.color, borderLeftWidth: 3 }}>
+                    <div style={{ color: s.color }}>{s.icon}</div>
+                    <div>
+                      <p className="text-xs text-muted-foreground">{s.label}</p>
+                      <p className="text-lg font-bold">{fmtNum(s.value)}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {m.totalAttempts > 0 ? ((s.value / m.totalAttempts) * 100).toFixed(1) : 0}%
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Main page
 // ─────────────────────────────────────────────────────────────────────────────
 
-type ActiveView = EcommercePlatform | "comparativo" | "historico";
+type ActiveView = EcommercePlatform | "comparativo" | "historico" | "lps";
 
 const TAB_KEY = "ecommerce_active_tab";
 
@@ -1274,7 +1595,7 @@ export default function DashEcommerceVendas() {
               Acompanhamento de pedidos, receita e unidades por plataforma de e-commerce
             </p>
           </div>
-          {active !== "historico" && (
+          {active !== "historico" && active !== "lps" && (
             <Select value={period} onValueChange={v => setPeriod(v as EcommercePeriod)}>
               <SelectTrigger className="w-44">
                 <SelectValue />
@@ -1332,15 +1653,29 @@ export default function DashEcommerceVendas() {
             <Calendar className="h-4 w-4" />
             Histórico Mensal
           </button>
+          <button
+            onClick={() => handleSetActive("lps")}
+            className={cn(
+              "flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold border-2 transition-all",
+              active === "lps"
+                ? "bg-emerald-500/10 border-emerald-500/50 text-emerald-600 dark:text-emerald-300 shadow-sm scale-[1.02]"
+                : "border-border text-muted-foreground hover:bg-muted/40 hover:border-muted-foreground/40"
+            )}
+          >
+            <Globe className="h-4 w-4" />
+            LP's
+          </button>
         </div>
 
         {/* Content */}
-        {active === "historico" ? (
+        {active === "lps" ? (
+          <VindiLPsView />
+        ) : active === "historico" ? (
           <HistoricoMensalView />
         ) : active === "comparativo" ? (
           <ComparativoView period={period} />
         ) : (
-          <PlatformView platform={active} period={period} />
+          <PlatformView platform={active as EcommercePlatform} period={period} />
         )}
       </div>
     </BoardLayout>
