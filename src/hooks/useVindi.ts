@@ -202,9 +202,10 @@ export function useVindiConnection() {
     fetch(`${SUPABASE_URL}/functions/v1/vindi-auth`, {
       headers: { "Content-Type": "application/json" },
     })
-      .then(r => r.json())
-      .then((d: { connected: boolean; last_synced_at?: string }) => {
-        setConnected(d.connected);
+      .then(async r => {
+        if (!r.ok) { setConnected(false); return; }
+        const d = await r.json() as { connected: boolean; last_synced_at?: string };
+        setConnected(d.connected === true);
         setLastSync(d.last_synced_at ?? null);
       })
       .catch(() => setConnected(false));
