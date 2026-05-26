@@ -488,6 +488,15 @@ export interface MonthlyMetrics {
   avgTicket: number;
 }
 
+interface MonthlyRPCRow {
+  platform:         string;
+  month_str:        string;
+  total_orders:     number;
+  total_units:      number;
+  total_revenue:    number;
+  cancelled_orders: number;
+}
+
 export function useEcommerceHistoricoMensal(
   platforms: EcommercePlatform[],
   fromMonth: string, // "2025-05"
@@ -502,51 +511,34 @@ export function useEcommerceHistoricoMensal(
     let cancelled = false;
     setLoading(true);
 
-    const [ty, tm] = toMonth.split("-").map(Number);
-    const lastDay  = new Date(ty, tm, 0).getDate();
-
     supabase
-      .from("ecommerce_orders" as never)
-      .select("platform,quantity,units_real,total,status,ordered_at")
-      .in("platform", platforms)
-      .gte("ordered_at", `${fromMonth}-01T00:00:00.000Z`)
-      .lte("ordered_at", `${toMonth}-${String(lastDay).padStart(2, "0")}T23:59:59.999Z`)
-      .limit(100000)
-      .then(({ data: rows }) => {
+      .rpc("ecommerce_monthly_summary" as never, {
+        p_platforms: platforms,
+        p_from:      `${fromMonth}-01`,
+        p_to:        `${toMonth}-01`,
+      })
+      .then(({ data: rows, error }) => {
         if (cancelled) return;
+        if (error) { console.error("ecommerce_monthly_summary:", error); setLoading(false); return; }
 
-        const allRows = (rows ?? []) as DBOrder[];
         const MN = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
-        const map = new Map<string, MonthlyMetrics>();
-
-        for (const r of allRows) {
-          const month = r.ordered_at.slice(0, 7);
-          const k     = `${r.platform}__${month}`;
-
-          if (!map.has(k)) {
-            const [y, m] = month.split("-");
-            map.set(k, {
-              month,
-              label:           `${MN[parseInt(m) - 1]}/${y.slice(2)}`,
-              platform:        r.platform as EcommercePlatform,
-              totalOrders:     0, totalRevenue: 0, totalUnitsSold: 0,
-              cancelledOrders: 0, cancellationRate: 0, avgTicket: 0,
-            });
-          }
-
-          const e = map.get(k)!;
-          e.totalOrders++;
-          e.totalRevenue   += Number(r.total);
-          e.totalUnitsSold += r.units_real ?? r.quantity;
-          if (r.status === "cancelled") e.cancelledOrders++;
-        }
-
-        const result = Array.from(map.values()).map(e => ({
-          ...e,
-          totalRevenue:     Math.round(e.totalRevenue * 100) / 100,
-          cancellationRate: e.totalOrders > 0 ? Math.round((e.cancelledOrders / e.totalOrders) * 1000) / 10 : 0,
-          avgTicket:        e.totalOrders > 0 ? Math.round((e.totalRevenue / e.totalOrders) * 100) / 100 : 0,
-        })).sort((a, b) => a.month.localeCompare(b.month));
+        const result: MonthlyMetrics[] = ((rows ?? []) as MonthlyRPCRow[]).map(r => {
+          const [y, m]  = r.month_str.split("-");
+          const orders  = Number(r.total_orders);
+          const revenue = Number(r.total_revenue);
+          const cancelled = Number(r.cancelled_orders);
+          return {
+            month:           r.month_str,
+            label:           `${MN[parseInt(m) - 1]}/${y.slice(2)}`,
+            platform:        r.platform as EcommercePlatform,
+            totalOrders:     orders,
+            totalRevenue:    revenue,
+            totalUnitsSold:  Number(r.total_units),
+            cancelledOrders: cancelled,
+            cancellationRate: orders > 0 ? Math.round((cancelled / orders) * 1000) / 10 : 0,
+            avgTicket:        orders > 0 ? Math.round((revenue / orders) * 100) / 100 : 0,
+          };
+        }).sort((a, b) => a.month.localeCompare(b.month));
 
         setData(result);
         setLoading(false);
