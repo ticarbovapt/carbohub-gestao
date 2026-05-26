@@ -24,6 +24,7 @@ import { PendingSuggestions } from "@/components/suprimentos/PendingSuggestions"
 import { SkuStockPolicy } from "@/components/suprimentos/SkuStockPolicy";
 import { CDSPTransito } from "@/components/suprimentos/CDSPTransito";
 import { CDSPRegistrarEnvio } from "@/components/suprimentos/CDSPRegistrarEnvio";
+import { RNEnviosSP } from "@/components/suprimentos/RNEnviosSP";
 
 type HubView = "sp" | "rn";
 
@@ -89,7 +90,7 @@ export default function Suprimentos() {
   // Reset tab to valid option when switching hubs
   const handleHubChange = (hub: HubView) => {
     setHubView(hub);
-    if (hub === "sp" && (activeTab === "recebimento" || activeTab === "notas")) setActiveTab("estoque");
+    if (hub === "sp" && (activeTab === "recebimento" || activeTab === "notas" || activeTab === "envios-sp")) setActiveTab("estoque");
     if (hub === "rn" && activeTab === "transito") setActiveTab("estoque");
   };
 
@@ -135,7 +136,7 @@ export default function Suprimentos() {
             Hub Natal
           </Button>
 
-          {isSP && spWarehouse && rnWarehouse && (
+          {!isSP && spWarehouse && rnWarehouse && (
             <Button
               size="sm"
               variant="outline"
@@ -143,7 +144,7 @@ export default function Suprimentos() {
               onClick={() => setEnvioOpen(true)}
             >
               <Send className="h-4 w-4" />
-              Registrar Envio para CD
+              Registrar Envio para CD SP
             </Button>
           )}
         </div>
@@ -258,6 +259,10 @@ export default function Suprimentos() {
               </TabsTrigger>
             ) : (
               <>
+                <TabsTrigger value="envios-sp" className="gap-1.5">
+                  <Send className="h-3.5 w-3.5" />
+                  Envios para SP
+                </TabsTrigger>
                 <TabsTrigger value="recebimento" className="gap-1.5">
                   <ArrowDownToLine className="h-3.5 w-3.5" />
                   Recebimento
@@ -286,6 +291,11 @@ export default function Suprimentos() {
             </TabsContent>
           ) : (
             <>
+              {rnWarehouse && (
+                <TabsContent value="envios-sp">
+                  <RNEnviosSP rnWarehouseId={rnWarehouse.id} />
+                </TabsContent>
+              )}
               <TabsContent value="recebimento">
                 <ReceivingsList />
               </TabsContent>

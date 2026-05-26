@@ -277,8 +277,12 @@ export function StockOverview({ hubView = "sp" }: StockOverviewProps) {
   };
 
   const openEntrada = () => {
+    // Usa sempre o hub da view ativa (nunca warehouses[0])
+    const defaultHub = selectedWarehouse !== "all"
+      ? selectedWarehouse
+      : (warehouses?.find(w => w.code === (isSP ? "HUB-SP" : "HUB-RN"))?.id || warehouses?.[0]?.id || "");
     setEntradaProductId(products?.[0]?.id || "");
-    setEntradaHubId(warehouses?.[0]?.id || "");
+    setEntradaHubId(defaultHub);
     setEntradaQty("");
     setEntradaReason("");
     setEntradaOpen(true);
@@ -608,21 +612,30 @@ export function StockOverview({ hubView = "sp" }: StockOverviewProps) {
                 </SelectContent>
               </Select>
             </div>
-            <div>
-              <Label>HUB de Destino</Label>
-              <Select value={entradaHubId} onValueChange={setEntradaHubId}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecione o HUB" />
-                </SelectTrigger>
-                <SelectContent>
-                  {(warehouses || []).map(w => (
-                    <SelectItem key={w.id} value={w.id}>
-                      {w.name} — {w.city}/{w.state}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+            {selectedWarehouse === "all" ? (
+              <div>
+                <Label>HUB de Destino</Label>
+                <Select value={entradaHubId} onValueChange={setEntradaHubId}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione o HUB" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(warehouses || []).map(w => (
+                      <SelectItem key={w.id} value={w.id}>
+                        {w.name} — {w.city}/{w.state}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 px-3 py-2 rounded-md bg-muted/40 border border-border">
+                <Warehouse className="h-4 w-4 text-muted-foreground shrink-0" />
+                <span className="text-sm font-medium">
+                  {warehouses?.find(w => w.id === entradaHubId)?.name || "Hub"}
+                </span>
+              </div>
+            )}
             <div>
               <Label htmlFor="entrada-qty">Quantidade Recebida</Label>
               <Input
