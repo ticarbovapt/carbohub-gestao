@@ -77,6 +77,7 @@ export function CDSPTransito({ spWarehouseId }: Props) {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["sp-transito"] });
+      qc.invalidateQueries({ queryKey: ["rn-envios-sp"] });
       qc.invalidateQueries({ queryKey: ["warehouse-stock"] });
       qc.invalidateQueries({ queryKey: ["warehouse-stock-all"] });
       qc.invalidateQueries({ queryKey: ["stock-movements"] });
