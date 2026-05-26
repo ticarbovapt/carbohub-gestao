@@ -107,3 +107,53 @@ export function useSuprimentosKPIs() {
     },
   });
 }
+
+export function useSuprimentosKPIsByHub(warehouseCode: string, periodDays: number) {
+  return useQuery({
+    queryKey: ["suprimentos-kpis-hub", warehouseCode, periodDays],
+    queryFn: async () => {
+      const { data: wh } = await supabase
+        .from("warehouses")
+        .select("id")
+        .eq("code", warehouseCode)
+        .maybeSingle();
+
+      if (!wh) return null;
+
+      const { data: hubStock } = await supabase
+        .from("warehouse_stock")
+        .select("product_id, quantity, mrp_products:product_id(safety_stock_qty, min_order_qty)")
+        .eq("warehouse_id", wh.id);
+
+      const productIds = (hubStock || []).map((s: any) => s.product_id as string);
+
+      const produtosEmBaixa = (hubStock || []).filter((s: any) => {
+        const prod = s.mrp_products as any;
+        const safety = prod?.safety_stock_qty || prod?.min_order_qty || 5;
+        return s.quantity <= safety;
+      }).length;
+
+      const since = new Date(Date.now() - periodDays * 24 * 60 * 60 * 1000).toISOString();
+      let movements: any[] = [];
+      if (productIds.length > 0) {
+        const { data } = await supabase
+          .from("stock_movements")
+          .select("id, tipo, quantidade")
+          .in("product_id", productIds)
+          .gte("created_at", since);
+        movements = data || [];
+      }
+
+      const totalEntradas = movements.filter(m => m.tipo === 'entrada').reduce((s: number, m: any) => s + Number(m.quantidade), 0);
+      const totalSaidas = movements.filter(m => m.tipo === 'saida').reduce((s: number, m: any) => s + Number(m.quantidade), 0);
+
+      return {
+        totalProdutos: hubStock?.length || 0,
+        produtosEmBaixa,
+        entradasRecentes: totalEntradas,
+        saidasRecentes: totalSaidas,
+        movimentosRecentes: movements.length,
+      };
+    },
+  });
+}

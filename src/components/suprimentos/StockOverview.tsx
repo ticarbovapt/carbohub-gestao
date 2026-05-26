@@ -361,20 +361,22 @@ export function StockOverview({ hubView = "sp" }: StockOverviewProps) {
             </SelectContent>
           </Select>
         )}
-        <Select value={selectedCategory} onValueChange={setSelectedCategory}>
-          <SelectTrigger className="w-[170px]">
-            <Tag className="h-4 w-4 mr-2 text-muted-foreground" />
-            <SelectValue placeholder="Categoria" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Todas as categorias</SelectItem>
-            <SelectItem value="Produto Final">Produto Final</SelectItem>
-            <SelectItem value="Insumo">Insumo</SelectItem>
-            <SelectItem value="Embalagem">Embalagem</SelectItem>
-            <SelectItem value="Carbonatação">Carbonatação</SelectItem>
-            <SelectItem value="Outro">Outro</SelectItem>
-          </SelectContent>
-        </Select>
+        {!isSP && (
+          <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+            <SelectTrigger className="w-[170px]">
+              <Tag className="h-4 w-4 mr-2 text-muted-foreground" />
+              <SelectValue placeholder="Categoria" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todas as categorias</SelectItem>
+              <SelectItem value="Produto Final">Produto Final</SelectItem>
+              <SelectItem value="Insumo">Insumo</SelectItem>
+              <SelectItem value="Embalagem">Embalagem</SelectItem>
+              <SelectItem value="Carbonatação">Carbonatação</SelectItem>
+              <SelectItem value="Outro">Outro</SelectItem>
+            </SelectContent>
+          </Select>
+        )}
         <div className="flex items-center gap-2 ml-auto">
           {canEdit && !isSP && (
             <Button size="sm" className="gap-1.5 bg-carbo-green hover:bg-carbo-green/90 text-white" onClick={openEntrada}>
