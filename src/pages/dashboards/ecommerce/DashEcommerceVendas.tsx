@@ -11,6 +11,7 @@ import {
 import {
   ShoppingCart, Package, TrendingUp, XCircle, Clock,
   CheckCircle2, Star, Boxes, AlertCircle, BarChart3,
+  Percent, Wallet, Receipt, Trophy, Hourglass,
 } from "lucide-react";
 import {
   useDashEcommerce, useEcommerceComparativo, useEcommerceRawCheck,
@@ -65,6 +66,13 @@ const PLATFORMS: PlatformConfig[] = [
 ];
 
 const PMAP = Object.fromEntries(PLATFORMS.map(p => [p.id, p])) as Record<EcommercePlatform, PlatformConfig>;
+
+const PLATFORM_FEE_RATE_DISPLAY: Record<EcommercePlatform, number> = {
+  mercadolivre: 0.16,
+  amazon:       0.15,
+  tiktok:       0.06,
+  shopee:       0.12,
+};
 
 const fmtBRL = (v: number) =>
   v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
@@ -290,6 +298,51 @@ function PlatformView({ platform, period }: { platform: EcommercePlatform; perio
           icon={<CheckCircle2 className="h-4 w-4" />} accent="#22c55e"
         />
       </div>
+
+      {/* Novas métricas */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <MetricCard
+          label="Pedidos Pendentes" value={fmtNum(m.pendingOrders)}
+          sub="aguardando pagamento ou confirmação"
+          icon={<Hourglass className="h-4 w-4" />} accent="#a78bfa"
+        />
+        <MetricCard
+          label="Taxa de Cancelamento" value={`${m.cancellationRate.toFixed(1)}%`}
+          sub={`${fmtNum(m.cancelledOrders)} cancelados de ${fmtNum(m.totalOrders)}`}
+          icon={<Percent className="h-4 w-4" />} accent="#f43f5e"
+        />
+        <MetricCard
+          label="Receita Líquida" value={fmtBRL(m.netRevenue)}
+          sub="excluindo pedidos cancelados"
+          icon={<Wallet className="h-4 w-4" />} accent="#22c55e"
+        />
+        <MetricCard
+          label="Comissão Estimada" value={fmtBRL(m.estimatedFee)}
+          sub={`~${(PLATFORM_FEE_RATE_DISPLAY[platform] * 100).toFixed(0)}% sobre receita líquida`}
+          icon={<Receipt className="h-4 w-4" />} accent="#94a3b8"
+        />
+      </div>
+
+      {/* Produto destaque */}
+      {m.topProduct && (
+        <div
+          className="rounded-2xl border p-4 flex items-center gap-4"
+          style={{ borderLeftColor: cfg.color, borderLeftWidth: 3 }}
+        >
+          <div className="p-2.5 rounded-xl" style={{ background: cfg.color + "20" }}>
+            <Trophy className="h-5 w-5" style={{ color: cfg.color }} />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-0.5">Produto mais vendido</p>
+            <p className="font-bold truncate">{m.topProduct.name}</p>
+            <p className="text-xs text-muted-foreground font-mono">{m.topProduct.sku}</p>
+          </div>
+          <div className="text-right shrink-0">
+            <p className="text-lg font-bold">{fmtBRL(m.topProduct.revenue)}</p>
+            <p className="text-xs text-muted-foreground">{fmtNum(m.topProduct.units_sold)} unid.</p>
+          </div>
+        </div>
+      )}
 
       {/* Reconciliation panel — Path 1 vs Path 2 (only shown when connected) */}
       <ReconciliacaoPanel platform={platform} period={period} m={m} />
