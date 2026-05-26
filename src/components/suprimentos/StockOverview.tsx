@@ -46,10 +46,15 @@ function getCoverageStatus(days: number | null): CoverageStatus {
   return { label: "Excedente", variant: "info" };
 }
 
-export function StockOverview() {
+interface StockOverviewProps {
+  hubView?: "sp" | "rn";
+}
+
+export function StockOverview({ hubView = "sp" }: StockOverviewProps) {
+  const isSP = hubView === "sp";
   const [search, setSearch] = useState("");
   const [selectedWarehouse, setSelectedWarehouse] = useState<string>("all");
-  const [selectedCategory, setSelectedCategory] = useState<string>("Produto Final");
+  const [selectedCategory, setSelectedCategory] = useState<string>(isSP ? "Produto Final" : "all");
   const [editing, setEditing] = useState<EditingProduct | null>(null);
   const [editHubId, setEditHubId] = useState<string>("");
   const [newQty, setNewQty] = useState("");
@@ -79,12 +84,14 @@ export function StockOverview() {
     },
   });
 
-  // Auto-seleciona HUB-SP na primeira carga
+  // Auto-seleciona o hub correto conforme a view
   useEffect(() => {
     if (!warehouses) return;
-    const sp = warehouses.find(w => w.code === "HUB-SP");
-    if (sp) setSelectedWarehouse(sp.id);
-  }, [warehouses]);
+    const code = hubView === "sp" ? "HUB-SP" : "HUB-RN";
+    const hub = warehouses.find(w => w.code === code);
+    if (hub) setSelectedWarehouse(hub.id);
+    setSelectedCategory(hubView === "sp" ? "Produto Final" : "all");
+  }, [warehouses, hubView]);
 
   const { data: products, isLoading } = useQuery({
     queryKey: ["mrp-products-stock"],
@@ -338,20 +345,22 @@ export function StockOverview() {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input placeholder="Buscar produto..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9" />
         </div>
-        <Select value={selectedWarehouse} onValueChange={setSelectedWarehouse}>
-          <SelectTrigger className="w-[200px]">
-            <Warehouse className="h-4 w-4 mr-2 text-muted-foreground" />
-            <SelectValue placeholder="Centro de Distribuição" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Todos os CDs</SelectItem>
-            {(warehouses || []).map(w => (
-              <SelectItem key={w.id} value={w.id}>
-                {w.name} — {w.city}/{w.state}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        {!isSP && (
+          <Select value={selectedWarehouse} onValueChange={setSelectedWarehouse}>
+            <SelectTrigger className="w-[200px]">
+              <Warehouse className="h-4 w-4 mr-2 text-muted-foreground" />
+              <SelectValue placeholder="Centro de Distribuição" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos os CDs</SelectItem>
+              {(warehouses || []).map(w => (
+                <SelectItem key={w.id} value={w.id}>
+                  {w.name} — {w.city}/{w.state}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
         <Select value={selectedCategory} onValueChange={setSelectedCategory}>
           <SelectTrigger className="w-[170px]">
             <Tag className="h-4 w-4 mr-2 text-muted-foreground" />
@@ -367,7 +376,7 @@ export function StockOverview() {
           </SelectContent>
         </Select>
         <div className="flex items-center gap-2 ml-auto">
-          {canEdit && (
+          {canEdit && !isSP && (
             <Button size="sm" className="gap-1.5 bg-carbo-green hover:bg-carbo-green/90 text-white" onClick={openEntrada}>
               <ArrowDownToLine className="h-4 w-4" />
               Nova Entrada
@@ -381,7 +390,7 @@ export function StockOverview() {
       </div>
 
       {/* SP banner */}
-      {selectedWarehouse !== "all" && warehouses?.find(w => w.id === selectedWarehouse)?.code === "HUB-SP" && (
+      {isSP && (
         <div className="flex items-center gap-2 px-3 py-2 rounded-md bg-blue-500/10 border border-blue-500/20 text-sm text-blue-400">
           <Info className="h-4 w-4 shrink-0" />
           <span>
@@ -422,9 +431,9 @@ export function StockOverview() {
               };
             });
 
-            // Fall back to current_stock_qty when the product has no warehouse_stock rows yet
+            // Quando hub específico está selecionado, mostra apenas o stock daquele hub (sem fallback)
             const hasAnyHubData = (warehouseStock || []).some(s => s.product_id === p.id);
-            const totalQty = hasAnyHubData
+            const totalQty = (selectedWarehouse !== "all" || hasAnyHubData)
               ? hubStocks.reduce((sum, h) => sum + h.qty, 0)
               : p.current_stock_qty;
 

@@ -1,11 +1,12 @@
 import { useState } from "react";
-import { Package, ArrowDownToLine, ArrowUpFromLine, BarChart3, AlertTriangle, Layers, History, Lightbulb, Shield } from "lucide-react";
+import { Package, ArrowDownToLine, ArrowUpFromLine, BarChart3, AlertTriangle, Layers, History, Lightbulb, Shield, MapPin } from "lucide-react";
 import { BoardLayout } from "@/components/layouts/BoardLayout";
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
 import { CarboCard, CarboCardContent } from "@/components/ui/carbo-card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
+import { Button } from "@/components/ui/button";
 import { useCanManageStock } from "@/hooks/useActionPermissions";
 import { useSuprimentosKPIs } from "@/hooks/useStockMovements";
 import { StockOverview } from "@/components/suprimentos/StockOverview";
@@ -16,9 +17,12 @@ import { InvoicesList } from "@/components/purchasing/InvoicesList";
 import { PendingSuggestions } from "@/components/suprimentos/PendingSuggestions";
 import { SkuStockPolicy } from "@/components/suprimentos/SkuStockPolicy";
 
+type HubView = "sp" | "rn";
+
 export default function Suprimentos() {
   const [activeTab, setActiveTab] = useState("estoque");
   const [planningMode, setPlanningMode] = useState(false);
+  const [hubView, setHubView] = useState<HubView>("sp");
   const { data: kpis } = useSuprimentosKPIs();
   const canApprove = useCanManageStock();
 
@@ -45,6 +49,28 @@ export default function Suprimentos() {
               />
             </div>
           </div>
+        </div>
+
+        {/* Hub selector */}
+        <div className="flex gap-2">
+          <Button
+            variant={hubView === "sp" ? "default" : "outline"}
+            size="sm"
+            className={`gap-2 ${hubView === "sp" ? "bg-carbo-blue hover:bg-carbo-blue/90 text-white" : ""}`}
+            onClick={() => setHubView("sp")}
+          >
+            <MapPin className="h-4 w-4" />
+            CD São Paulo
+          </Button>
+          <Button
+            variant={hubView === "rn" ? "default" : "outline"}
+            size="sm"
+            className={`gap-2 ${hubView === "rn" ? "bg-carbo-blue hover:bg-carbo-blue/90 text-white" : ""}`}
+            onClick={() => setHubView("rn")}
+          >
+            <MapPin className="h-4 w-4" />
+            Hub Natal
+          </Button>
         </div>
 
         {/* KPIs */}
@@ -129,7 +155,7 @@ export default function Suprimentos() {
           </TabsList>
 
           <TabsContent value="estoque">
-            <StockOverview />
+            <StockOverview hubView={hubView} />
           </TabsContent>
           <TabsContent value="movimentacoes">
             <StockMovementsList />
