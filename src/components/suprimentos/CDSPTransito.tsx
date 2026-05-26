@@ -7,14 +7,12 @@ import { supabase } from "@/integrations/supabase/client";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { toast } from "sonner";
-import { useAuth } from "@/contexts/AuthContext";
 
 interface Props {
   spWarehouseId: string;
 }
 
 export function CDSPTransito({ spWarehouseId }: Props) {
-  const { user } = useAuth();
   const qc = useQueryClient();
 
   const { data: transfers, isLoading } = useQuery({
@@ -55,17 +53,7 @@ export function CDSPTransito({ spWarehouseId }: Props) {
           .insert({ warehouse_id: spWarehouseId, product_id: productId, quantity: qty });
       }
 
-      // Registra movimentação de entrada
-      await supabase.from("stock_movements").insert({
-        product_id:  productId,
-        tipo:        "entrada",
-        quantidade:  qty,
-        origem:      "ajuste",
-        observacoes: `Chegada no CD São Paulo — ${(transfer.notes as string) || "Transferência confirmada"}`,
-        created_by:  user!.id,
-      } as never);
-
-      // Marca transferência como executada
+      // Marca transferência como executada (sem stock_movement — transferências não contaminam KPIs de hub)
       await supabase.from("stock_transfers")
         .update({
           status:       "executed",
