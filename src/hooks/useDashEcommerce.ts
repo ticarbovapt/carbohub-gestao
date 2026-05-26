@@ -11,6 +11,14 @@ import { toast } from "@/components/ui/sonner";
 export type EcommercePlatform = "mercadolivre" | "amazon" | "tiktok" | "shopee";
 export type EcommercePeriod   = "today" | "7d" | "30d" | "month";
 
+export interface CommissionRate {
+  id: string;
+  platform: EcommercePlatform;
+  rate: number;
+  valid_from: string;
+  created_at: string;
+}
+
 export interface EcommerceProduct {
   id: string;
   name: string;
@@ -41,7 +49,7 @@ export interface EcommerceMetrics {
   pendingOrders: number;
   shippedOrders: number;
   deliveredOrders: number;
-  estimatedFee: number;
+  commissionTotal: number;
   topProduct: EcommerceProduct | null;
   avgRating: number | null;
   products: EcommerceProduct[];
@@ -107,7 +115,7 @@ interface DBOrder {
 // System-logic aggregator (Path 2)
 // ─────────────────────────────────────────────────────────────────────────────
 
-function buildMetrics(platform: EcommercePlatform, rows: DBOrder[]): EcommerceMetrics {
+function buildMetrics(platform: EcommercePlatform, rows: DBOrder[], rateHistory: CommissionRate[]): EcommerceMetrics {
   if (rows.length === 0) return emptyMetrics(platform);
 
   const totalOrders    = rows.length;
@@ -119,9 +127,13 @@ function buildMetrics(platform: EcommercePlatform, rows: DBOrder[]): EcommerceMe
   const shipped    = rows.filter(r => r.status === "shipped").length;
   const delivered  = rows.filter(r => r.status === "delivered").length;
 
-  const netRevenue       = rows.filter(r => r.status !== "cancelled").reduce((s, r) => s + Number(r.total), 0);
+  const activeRows       = rows.filter(r => r.status !== "cancelled");
+  const netRevenue       = activeRows.reduce((s, r) => s + Number(r.total), 0);
   const cancellationRate = totalOrders > 0 ? (cancelled / totalOrders) * 100 : 0;
-  const estimatedFee     = netRevenue * PLATFORM_FEE_RATE[platform];
+  const commissionTotal  = activeRows.reduce((s, r) => {
+    const rate = getRateForDate(rateHistory, platform, r.ordered_at);
+    return s + Number(r.total) * rate;
+  }, 0);
 
   // Group by product SKU
   const skuMap = new Map<string, { name: string; orders: number; units: number; revenue: number }>();
@@ -181,7 +193,7 @@ function buildMetrics(platform: EcommercePlatform, rows: DBOrder[]): EcommerceMe
     pendingOrders:   pending,
     shippedOrders:   shipped,
     deliveredOrders: delivered,
-    estimatedFee:    Math.round(estimatedFee * 100) / 100,
+    commissionTotal: Math.round(commissionTotal * 100) / 100,
     topProduct:      products[0] ?? null,
     avgRating:       null,
     products,
@@ -190,19 +202,27 @@ function buildMetrics(platform: EcommercePlatform, rows: DBOrder[]): EcommerceMe
   };
 }
 
-const PLATFORM_FEE_RATE: Record<EcommercePlatform, number> = {
+export const PLATFORM_FEE_DEFAULT: Record<EcommercePlatform, number> = {
   mercadolivre: 0.16,
   amazon:       0.15,
   tiktok:       0.06,
   shopee:       0.12,
 };
 
+function getRateForDate(history: CommissionRate[], platform: EcommercePlatform, date: string): number {
+  const day = date.slice(0, 10);
+  const match = history
+    .filter(r => r.valid_from <= day)
+    .sort((a, b) => b.valid_from.localeCompare(a.valid_from))[0];
+  return match?.rate ?? PLATFORM_FEE_DEFAULT[platform];
+}
+
 function emptyMetrics(platform: EcommercePlatform): EcommerceMetrics {
   return {
     platform,
     totalOrders: 0, totalUnitsSold: 0, totalRevenue: 0, netRevenue: 0, avgTicket: 0,
     cancelledOrders: 0, cancellationRate: 0, pendingOrders: 0, shippedOrders: 0, deliveredOrders: 0,
-    estimatedFee: 0, topProduct: null,
+    commissionTotal: 0, topProduct: null,
     avgRating: null, products: [], dailySales: [],
     isConnected: false,
   };
@@ -261,24 +281,29 @@ async function isConnectedViaToken(platform: EcommercePlatform): Promise<boolean
 async function fetchOrders(platform: EcommercePlatform, period: EcommercePeriod): Promise<EcommerceMetrics> {
   const from = getRangeStart(period).toISOString();
 
-  const [{ data, error }, connected] = await Promise.all([
+  const [{ data, error }, connected, { data: rateData }] = await Promise.all([
     supabase
       .from("ecommerce_orders" as never)
       .select("id,platform,order_id,product_sku,product_name,quantity,units_real,unit_price,total,status,ordered_at")
       .eq("platform", platform)
       .gte("ordered_at", from),
     isConnectedViaToken(platform),
+    supabase
+      .from("platform_commission_rates" as never)
+      .select("id,platform,rate,valid_from,created_at")
+      .eq("platform", platform)
+      .order("valid_from", { ascending: false }),
   ]);
 
   if (error) { console.error("[useDashEcommerce]", error.message); return emptyMetrics(platform); }
 
-  const rows = (data ?? []) as DBOrder[];
-  if (rows.length === 0 && !connected) return emptyMetrics(platform);
+  const rows        = (data ?? []) as DBOrder[];
+  const rateHistory = (rateData ?? []) as CommissionRate[];
 
-  // Connected but no orders yet in this period → return zeros with isConnected: true
+  if (rows.length === 0 && !connected) return emptyMetrics(platform);
   if (rows.length === 0) return { ...emptyMetrics(platform), isConnected: true };
 
-  return { ...buildMetrics(platform, rows), isConnected: connected };
+  return { ...buildMetrics(platform, rows, rateHistory), isConnected: connected };
 }
 
 const PLATFORM_LABEL: Record<EcommercePlatform, string> = {
@@ -363,6 +388,42 @@ export function useDashEcommerce(
   }, [platform, period]);
 
   return { data, isLoading };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Commission rates hook
+// ─────────────────────────────────────────────────────────────────────────────
+
+export function useCommissionRates(platform: EcommercePlatform) {
+  const [history, setHistory] = useState<CommissionRate[]>([]);
+  const [saving, setSaving]   = useState(false);
+
+  const load = async () => {
+    const { data } = await supabase
+      .from("platform_commission_rates" as never)
+      .select("id,platform,rate,valid_from,created_at")
+      .eq("platform", platform)
+      .order("valid_from", { ascending: false }) as { data: CommissionRate[] | null };
+    setHistory(data ?? []);
+  };
+
+  useEffect(() => { load(); }, [platform]);
+
+  const saveRate = async (rate: number, validFrom: string) => {
+    setSaving(true);
+    const { error } = await supabase
+      .from("platform_commission_rates" as never)
+      .insert({ platform, rate, valid_from: validFrom });
+    setSaving(false);
+    if (error) { toast.error("Erro ao salvar taxa"); return false; }
+    toast.success("Taxa salva com sucesso");
+    await load();
+    return true;
+  };
+
+  const currentRate = history[0]?.rate ?? PLATFORM_FEE_DEFAULT[platform];
+
+  return { history, currentRate, saveRate, saving };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

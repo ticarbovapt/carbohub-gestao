@@ -4,6 +4,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import {
   AreaChart, Area, BarChart, Bar, LineChart, Line, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
@@ -11,11 +13,12 @@ import {
 import {
   ShoppingCart, Package, TrendingUp, XCircle, Clock,
   CheckCircle2, Star, Boxes, AlertCircle, BarChart3,
-  Percent, Wallet, Receipt, Trophy, Hourglass,
+  Percent, Wallet, Receipt, Trophy, Hourglass, Pencil, X, Check, History,
 } from "lucide-react";
 import {
-  useDashEcommerce, useEcommerceComparativo, useEcommerceRawCheck,
+  useDashEcommerce, useEcommerceComparativo, useEcommerceRawCheck, useCommissionRates,
   type EcommercePlatform, type EcommercePeriod, type RawCheckMetrics, type EcommerceMetrics,
+  PLATFORM_FEE_DEFAULT,
 } from "@/hooks/useDashEcommerce";
 import { cn } from "@/lib/utils";
 
@@ -67,12 +70,6 @@ const PLATFORMS: PlatformConfig[] = [
 
 const PMAP = Object.fromEntries(PLATFORMS.map(p => [p.id, p])) as Record<EcommercePlatform, PlatformConfig>;
 
-const PLATFORM_FEE_RATE_DISPLAY: Record<EcommercePlatform, number> = {
-  mercadolivre: 0.16,
-  amazon:       0.15,
-  tiktok:       0.06,
-  shopee:       0.12,
-};
 
 const fmtBRL = (v: number) =>
   v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
@@ -91,27 +88,104 @@ const PERIOD_OPTIONS: { value: EcommercePeriod; label: string }[] = [
 // ─────────────────────────────────────────────────────────────────────────────
 
 function MetricCard({
-  label, value, sub, icon, accent, big,
+  label, value, sub, icon, accent,
 }: {
   label: string; value: string; sub?: string;
-  icon: React.ReactNode; accent: string; big?: boolean;
+  icon: React.ReactNode; accent: string;
 }) {
   return (
     <div
-      className={cn(
-        "rounded-2xl border bg-card p-5 flex flex-col gap-2 transition-all hover:-translate-y-0.5 hover:shadow-md",
-        big && "col-span-2"
-      )}
+      className="rounded-xl border bg-card p-4 flex flex-col gap-1.5 transition-all hover:-translate-y-0.5 hover:shadow-md"
       style={{ borderLeftColor: accent, borderLeftWidth: 3 }}
     >
-      <div className="flex items-start justify-between">
-        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{label}</p>
-        <div className="p-2 rounded-xl" style={{ background: accent + "20" }}>
+      <div className="flex items-start justify-between gap-2">
+        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide leading-tight">{label}</p>
+        <div className="p-1.5 rounded-lg shrink-0" style={{ background: accent + "20" }}>
           <div style={{ color: accent }}>{icon}</div>
         </div>
       </div>
-      <p className={cn("font-bold leading-none", big ? "text-4xl" : "text-2xl")}>{value}</p>
+      <p className="text-xl font-bold leading-none">{value}</p>
       {sub && <p className="text-xs text-muted-foreground">{sub}</p>}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Commission card — editable rate with history
+// ─────────────────────────────────────────────────────────────────────────────
+
+function CommissionCard({ platform, commissionTotal }: { platform: EcommercePlatform; commissionTotal: number }) {
+  const { history, currentRate, saveRate, saving } = useCommissionRates(platform);
+  const [editing, setEditing]       = useState(false);
+  const [showHistory, setShowHist]  = useState(false);
+  const [newRate, setNewRate]       = useState("");
+  const [newDate, setNewDate]       = useState(() => new Date().toISOString().slice(0, 10));
+
+  const handleSave = async () => {
+    const r = parseFloat(newRate.replace(",", ".")) / 100;
+    if (isNaN(r) || r < 0 || r > 1) return;
+    const ok = await saveRate(r, newDate);
+    if (ok) { setEditing(false); setNewRate(""); }
+  };
+
+  return (
+    <div className="rounded-xl border bg-card p-4 flex flex-col gap-1.5 transition-all hover:shadow-md"
+      style={{ borderLeftColor: "#94a3b8", borderLeftWidth: 3 }}>
+      <div className="flex items-start justify-between gap-2">
+        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide leading-tight">Comissão da Plataforma</p>
+        <div className="flex gap-1 shrink-0">
+          <button onClick={() => setShowHist(v => !v)} className="p-1 rounded hover:bg-muted transition-colors" title="Histórico">
+            <History className="h-3.5 w-3.5 text-muted-foreground" />
+          </button>
+          <button onClick={() => { setEditing(v => !v); setNewRate((currentRate * 100).toFixed(2)); }} className="p-1 rounded hover:bg-muted transition-colors" title="Editar taxa">
+            <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
+          </button>
+        </div>
+      </div>
+
+      <p className="text-xl font-bold leading-none">{fmtBRL(commissionTotal)}</p>
+      <p className="text-xs text-muted-foreground">taxa atual: {(currentRate * 100).toFixed(2)}%</p>
+
+      {editing && (
+        <div className="mt-2 flex flex-col gap-2 border-t pt-2">
+          <p className="text-xs text-muted-foreground font-medium">Nova taxa (válida a partir de)</p>
+          <div className="flex gap-1.5 items-center">
+            <Input
+              className="h-7 text-xs w-20"
+              placeholder="16.00"
+              value={newRate}
+              onChange={e => setNewRate(e.target.value)}
+            />
+            <span className="text-xs text-muted-foreground">%</span>
+          </div>
+          <Input
+            type="date"
+            className="h-7 text-xs"
+            value={newDate}
+            onChange={e => setNewDate(e.target.value)}
+          />
+          <div className="flex gap-1.5">
+            <Button size="sm" className="h-7 text-xs flex-1" onClick={handleSave} disabled={saving}>
+              <Check className="h-3 w-3 mr-1" /> Salvar
+            </Button>
+            <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setEditing(false)}>
+              <X className="h-3 w-3" />
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {showHistory && history.length > 0 && (
+        <div className="mt-2 border-t pt-2 flex flex-col gap-1">
+          <p className="text-xs font-medium text-muted-foreground">Histórico de taxas</p>
+          {history.map(r => (
+            <div key={r.id} className="flex justify-between text-xs">
+              <span className="text-muted-foreground">a partir de {r.valid_from}</span>
+              <span className="font-semibold">{(r.rate * 100).toFixed(2)}%</span>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -260,7 +334,7 @@ function PlatformView({ platform, period }: { platform: EcommercePlatform; perio
         </div>
       )}
 
-      {/* KPIs */}
+      {/* KPIs — linha 1: pedidos e receita */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <MetricCard
           label="Pedidos" value={fmtNum(m.totalOrders)}
@@ -271,26 +345,26 @@ function PlatformView({ platform, period }: { platform: EcommercePlatform; perio
           icon={<TrendingUp className="h-4 w-4" />} accent={cfg.color}
         />
         <MetricCard
-          label="Ticket Médio" value={fmtBRL(m.avgTicket)}
-          icon={<Package className="h-4 w-4" />} accent={cfg.color}
+          label="Receita Líquida" value={fmtBRL(m.netRevenue)}
+          sub="excluindo cancelados"
+          icon={<Wallet className="h-4 w-4" />} accent="#22c55e"
         />
-        <MetricCard
-          label="Cancelamentos" value={fmtNum(m.cancelledOrders)}
-          sub={m.totalOrders > 0 ? `${pct(m.cancelledOrders, m.totalOrders)} dos pedidos` : undefined}
-          icon={<XCircle className="h-4 w-4" />}
-          accent="#f59e0b"
-        />
+        <CommissionCard platform={platform} commissionTotal={m.commissionTotal} />
       </div>
 
-      {/* Unidades reais destaque + status pedidos */}
+      {/* KPIs — linha 2: unidades e status */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <MetricCard
           label="Unidades Reais Vendidas" value={fmtNum(m.totalUnitsSold)}
           sub="considera multiplicador de pack"
-          icon={<Boxes className="h-5 w-5" />} accent={cfg.color} big
+          icon={<Boxes className="h-4 w-4" />} accent={cfg.color}
         />
         <MetricCard
-          label="Em transporte" value={fmtNum(m.shippedOrders)}
+          label="Ticket Médio" value={fmtBRL(m.avgTicket)}
+          icon={<Package className="h-4 w-4" />} accent={cfg.color}
+        />
+        <MetricCard
+          label="Em Transporte" value={fmtNum(m.shippedOrders)}
           icon={<Clock className="h-4 w-4" />} accent="#f59e0b"
         />
         <MetricCard
@@ -299,27 +373,27 @@ function PlatformView({ platform, period }: { platform: EcommercePlatform; perio
         />
       </div>
 
-      {/* Novas métricas */}
+      {/* KPIs — linha 3: cancelamentos e pendentes */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <MetricCard
+          label="Cancelamentos" value={fmtNum(m.cancelledOrders)}
+          sub={m.totalOrders > 0 ? `${pct(m.cancelledOrders, m.totalOrders)} dos pedidos` : undefined}
+          icon={<XCircle className="h-4 w-4" />} accent="#f59e0b"
+        />
+        <MetricCard
+          label="Taxa de Cancelamento" value={`${m.cancellationRate.toFixed(1)}%`}
+          sub={`${fmtNum(m.cancelledOrders)} de ${fmtNum(m.totalOrders)} pedidos`}
+          icon={<Percent className="h-4 w-4" />} accent="#f43f5e"
+        />
         <MetricCard
           label="Pedidos Pendentes" value={fmtNum(m.pendingOrders)}
           sub="aguardando pagamento ou confirmação"
           icon={<Hourglass className="h-4 w-4" />} accent="#a78bfa"
         />
         <MetricCard
-          label="Taxa de Cancelamento" value={`${m.cancellationRate.toFixed(1)}%`}
-          sub={`${fmtNum(m.cancelledOrders)} cancelados de ${fmtNum(m.totalOrders)}`}
-          icon={<Percent className="h-4 w-4" />} accent="#f43f5e"
-        />
-        <MetricCard
-          label="Receita Líquida" value={fmtBRL(m.netRevenue)}
-          sub="excluindo pedidos cancelados"
-          icon={<Wallet className="h-4 w-4" />} accent="#22c55e"
-        />
-        <MetricCard
-          label="Comissão Estimada" value={fmtBRL(m.estimatedFee)}
-          sub={`~${(PLATFORM_FEE_RATE_DISPLAY[platform] * 100).toFixed(0)}% sobre receita líquida`}
-          icon={<Receipt className="h-4 w-4" />} accent="#94a3b8"
+          label="Avaliação Média" value={m.avgRating !== null ? m.avgRating.toFixed(1) : "—"}
+          sub="média do período"
+          icon={<Star className="h-4 w-4" />} accent="#facc15"
         />
       </div>
 
