@@ -7,6 +7,9 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
+} from "@/components/ui/dialog";
+import {
   AreaChart, Area, BarChart, Bar, LineChart, Line, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
 } from "recharts";
@@ -114,79 +117,122 @@ function MetricCard({
 // Commission card — editable rate with history
 // ─────────────────────────────────────────────────────────────────────────────
 
-function CommissionCard({ platform, commissionTotal }: { platform: EcommercePlatform; commissionTotal: number }) {
+function CommissionCard({ platform, commissionTotal, netRevenue }: {
+  platform: EcommercePlatform; commissionTotal: number; netRevenue: number;
+}) {
   const { history, currentRate, saveRate, saving } = useCommissionRates(platform);
-  const [editing, setEditing]       = useState(false);
-  const [showHistory, setShowHist]  = useState(false);
-  const [newRate, setNewRate]       = useState("");
-  const [newDate, setNewDate]       = useState(() => new Date().toISOString().slice(0, 10));
+  const [open, setOpen]     = useState(false);
+  const [newRate, setNewRate] = useState("");
+  const [newDate, setNewDate] = useState(() => new Date().toISOString().slice(0, 10));
 
   const handleSave = async () => {
     const r = parseFloat(newRate.replace(",", ".")) / 100;
     if (isNaN(r) || r < 0 || r > 1) return;
     const ok = await saveRate(r, newDate);
-    if (ok) { setEditing(false); setNewRate(""); }
+    if (ok) { setNewRate(""); }
   };
 
+  const revenueAfterFee = netRevenue - commissionTotal;
+
   return (
-    <div className="rounded-xl border bg-card p-4 flex flex-col gap-1.5 transition-all hover:shadow-md"
-      style={{ borderLeftColor: "#94a3b8", borderLeftWidth: 3 }}>
-      <div className="flex items-start justify-between gap-2">
-        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide leading-tight">Comissão da Plataforma</p>
-        <div className="flex gap-1 shrink-0">
-          <button onClick={() => setShowHist(v => !v)} className="p-1 rounded hover:bg-muted transition-colors" title="Histórico">
-            <History className="h-3.5 w-3.5 text-muted-foreground" />
-          </button>
-          <button onClick={() => { setEditing(v => !v); setNewRate((currentRate * 100).toFixed(2)); }} className="p-1 rounded hover:bg-muted transition-colors" title="Editar taxa">
-            <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
-          </button>
+    <>
+      <div
+        className="rounded-xl border bg-card p-4 flex flex-col gap-1.5 transition-all hover:-translate-y-0.5 hover:shadow-md cursor-pointer"
+        style={{ borderLeftColor: "#94a3b8", borderLeftWidth: 3 }}
+        onClick={() => setOpen(true)}
+      >
+        <div className="flex items-start justify-between gap-2">
+          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide leading-tight">Comissão da Plataforma</p>
+          <div className="p-1.5 rounded-lg shrink-0" style={{ background: "#94a3b820" }}>
+            <Receipt className="h-4 w-4 text-slate-400" />
+          </div>
         </div>
+        <p className="text-xl font-bold leading-none">{fmtBRL(commissionTotal)}</p>
+        <p className="text-xs text-muted-foreground">taxa: {(currentRate * 100).toFixed(2)}% · clique para gerenciar</p>
       </div>
 
-      <p className="text-xl font-bold leading-none">{fmtBRL(commissionTotal)}</p>
-      <p className="text-xs text-muted-foreground">taxa atual: {(currentRate * 100).toFixed(2)}%</p>
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Receipt className="h-4 w-4 text-slate-400" />
+              Comissão — {PMAP[platform].label}
+            </DialogTitle>
+            <DialogDescription>
+              Gerencie a taxa de comissão da plataforma. Cada taxa vale a partir da data informada, preservando o cálculo de pedidos anteriores.
+            </DialogDescription>
+          </DialogHeader>
 
-      {editing && (
-        <div className="mt-2 flex flex-col gap-2 border-t pt-2">
-          <p className="text-xs text-muted-foreground font-medium">Nova taxa (válida a partir de)</p>
-          <div className="flex gap-1.5 items-center">
-            <Input
-              className="h-7 text-xs w-20"
-              placeholder="16.00"
-              value={newRate}
-              onChange={e => setNewRate(e.target.value)}
-            />
-            <span className="text-xs text-muted-foreground">%</span>
-          </div>
-          <Input
-            type="date"
-            className="h-7 text-xs"
-            value={newDate}
-            onChange={e => setNewDate(e.target.value)}
-          />
-          <div className="flex gap-1.5">
-            <Button size="sm" className="h-7 text-xs flex-1" onClick={handleSave} disabled={saving}>
-              <Check className="h-3 w-3 mr-1" /> Salvar
-            </Button>
-            <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setEditing(false)}>
-              <X className="h-3 w-3" />
-            </Button>
-          </div>
-        </div>
-      )}
-
-      {showHistory && history.length > 0 && (
-        <div className="mt-2 border-t pt-2 flex flex-col gap-1">
-          <p className="text-xs font-medium text-muted-foreground">Histórico de taxas</p>
-          {history.map(r => (
-            <div key={r.id} className="flex justify-between text-xs">
-              <span className="text-muted-foreground">a partir de {r.valid_from}</span>
-              <span className="font-semibold">{(r.rate * 100).toFixed(2)}%</span>
+          {/* Resumo financeiro */}
+          <div className="grid grid-cols-3 gap-3 py-2">
+            <div className="rounded-lg bg-muted/40 p-3 text-center">
+              <p className="text-xs text-muted-foreground mb-1">Receita Líquida</p>
+              <p className="text-sm font-bold">{fmtBRL(netRevenue)}</p>
             </div>
-          ))}
-        </div>
-      )}
-    </div>
+            <div className="rounded-lg bg-red-500/10 p-3 text-center">
+              <p className="text-xs text-muted-foreground mb-1">Comissão</p>
+              <p className="text-sm font-bold text-red-500">− {fmtBRL(commissionTotal)}</p>
+            </div>
+            <div className="rounded-lg bg-green-500/10 p-3 text-center">
+              <p className="text-xs text-muted-foreground mb-1">Após Comissão</p>
+              <p className="text-sm font-bold text-green-600">{fmtBRL(revenueAfterFee)}</p>
+            </div>
+          </div>
+
+          {/* Nova taxa */}
+          <div className="border rounded-xl p-4 flex flex-col gap-3">
+            <p className="text-sm font-semibold flex items-center gap-1.5">
+              <Pencil className="h-3.5 w-3.5" /> Cadastrar nova taxa
+            </p>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="flex flex-col gap-1">
+                <label className="text-xs text-muted-foreground">Taxa (%)</label>
+                <div className="flex items-center gap-1">
+                  <Input className="h-8 text-sm" placeholder={`${(currentRate * 100).toFixed(2)}`} value={newRate} onChange={e => setNewRate(e.target.value)} />
+                  <span className="text-sm text-muted-foreground">%</span>
+                </div>
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className="text-xs text-muted-foreground">Válida a partir de</label>
+                <Input type="date" className="h-8 text-sm" value={newDate} onChange={e => setNewDate(e.target.value)} />
+              </div>
+            </div>
+            <Button size="sm" onClick={handleSave} disabled={saving || !newRate}>
+              <Check className="h-3.5 w-3.5 mr-1.5" /> Salvar taxa
+            </Button>
+          </div>
+
+          {/* Histórico */}
+          {history.length > 0 && (
+            <div className="flex flex-col gap-2">
+              <p className="text-sm font-semibold flex items-center gap-1.5">
+                <History className="h-3.5 w-3.5" /> Histórico de taxas
+              </p>
+              <div className="rounded-xl border overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-muted/30 border-b text-xs text-muted-foreground">
+                      <th className="text-left px-4 py-2 font-medium">Válida a partir de</th>
+                      <th className="text-right px-4 py-2 font-medium">Taxa</th>
+                      <th className="text-right px-4 py-2 font-medium">Cadastrada em</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border/30">
+                    {history.map((r, i) => (
+                      <tr key={r.id} className={cn("hover:bg-muted/20", i === 0 && "bg-green-500/5")}>
+                        <td className="px-4 py-2.5">{r.valid_from}{i === 0 && <Badge className="ml-2 text-xs py-0 h-4 bg-green-500/10 text-green-600 border-green-500/30">atual</Badge>}</td>
+                        <td className="px-4 py-2.5 text-right font-semibold">{(r.rate * 100).toFixed(2)}%</td>
+                        <td className="px-4 py-2.5 text-right text-muted-foreground text-xs">{new Date(r.created_at).toLocaleDateString("pt-BR")}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 
@@ -349,7 +395,7 @@ function PlatformView({ platform, period }: { platform: EcommercePlatform; perio
           sub="excluindo cancelados"
           icon={<Wallet className="h-4 w-4" />} accent="#22c55e"
         />
-        <CommissionCard platform={platform} commissionTotal={m.commissionTotal} />
+        <CommissionCard platform={platform} commissionTotal={m.commissionTotal} netRevenue={m.netRevenue} />
       </div>
 
       {/* KPIs — linha 2: unidades e status */}
