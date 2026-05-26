@@ -1089,7 +1089,7 @@ function HistoricoMensalView() {
               </CardHeader>
               <CardContent className="px-2 pb-4">
                 <ResponsiveContainer width="100%" height={210}>
-                  <LineChart data={barData} margin={{ top: 10, right: 16, left: 8, bottom: 0 }}>
+                  <BarChart data={barData} margin={{ top: 20, right: 16, left: 8, bottom: 0 }} barCategoryGap="28%" barGap={3}>
                     <CartesianGrid strokeDasharray="3 3" className="stroke-border/40" vertical={false} />
                     <XAxis dataKey="label" tick={{ fontSize: 10 }} axisLine={false} tickLine={false} />
                     <YAxis tick={{ fontSize: 10 }} axisLine={false} tickLine={false} width={54}
@@ -1097,14 +1097,15 @@ function HistoricoMensalView() {
                     <Tooltip
                       contentStyle={{ background: "var(--background)", border: "1px solid var(--border)", borderRadius: 10, fontSize: 12 }}
                       formatter={(v: number, name: string) => [fmtBRL(v), PMAP[name.replace("_ticket","") as EcommercePlatform]?.label ?? name]}
+                      cursor={{ fill: "var(--muted)", opacity: 0.3 }}
                     />
-                    <Legend iconType="circle" iconSize={8}
+                    <Legend iconType="square" iconSize={10}
                       formatter={v => PMAP[v.replace("_ticket","") as EcommercePlatform]?.label ?? v} />
                     {selected.map(p => (
-                      <Line key={p} type="monotone" dataKey={`${p}_ticket`} name={`${p}_ticket`}
-                        stroke={PMAP[p].color} strokeWidth={2.5} dot={{ r: 3, fill: PMAP[p].color }} activeDot={{ r: 5 }} />
+                      <Bar key={p} dataKey={`${p}_ticket`} name={`${p}_ticket`}
+                        fill={PMAP[p].color} radius={[4,4,0,0]} maxBarSize={38} />
                     ))}
-                  </LineChart>
+                  </BarChart>
                 </ResponsiveContainer>
               </CardContent>
             </Card>
@@ -1115,22 +1116,23 @@ function HistoricoMensalView() {
               </CardHeader>
               <CardContent className="px-2 pb-4">
                 <ResponsiveContainer width="100%" height={210}>
-                  <LineChart data={barData} margin={{ top: 10, right: 16, left: 8, bottom: 0 }}>
+                  <BarChart data={barData} margin={{ top: 20, right: 16, left: 8, bottom: 0 }} barCategoryGap="28%" barGap={3}>
                     <CartesianGrid strokeDasharray="3 3" className="stroke-border/40" vertical={false} />
                     <XAxis dataKey="label" tick={{ fontSize: 10 }} axisLine={false} tickLine={false} />
                     <YAxis tick={{ fontSize: 10 }} axisLine={false} tickLine={false} width={36}
                       tickFormatter={v => `${v}%`} />
                     <Tooltip
                       contentStyle={{ background: "var(--background)", border: "1px solid var(--border)", borderRadius: 10, fontSize: 12 }}
-                      formatter={(v: number, name: string) => [`${v.toFixed(1)}%`, PMAP[name.replace("_cancel","") as EcommercePlatform]?.label ?? name]}
+                      formatter={(v: number, name: string) => [`${(v as number).toFixed(1)}%`, PMAP[name.replace("_cancel","") as EcommercePlatform]?.label ?? name]}
+                      cursor={{ fill: "var(--muted)", opacity: 0.3 }}
                     />
-                    <Legend iconType="circle" iconSize={8}
+                    <Legend iconType="square" iconSize={10}
                       formatter={v => PMAP[v.replace("_cancel","") as EcommercePlatform]?.label ?? v} />
                     {selected.map(p => (
-                      <Line key={p} type="monotone" dataKey={`${p}_cancel`} name={`${p}_cancel`}
-                        stroke={PMAP[p].color} strokeWidth={2.5} dot={{ r: 3, fill: PMAP[p].color }} activeDot={{ r: 5 }} />
+                      <Bar key={p} dataKey={`${p}_cancel`} name={`${p}_cancel`}
+                        fill={PMAP[p].color} radius={[4,4,0,0]} maxBarSize={38} />
                     ))}
-                  </LineChart>
+                  </BarChart>
                 </ResponsiveContainer>
               </CardContent>
             </Card>
