@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { Send } from "lucide-react";
-import { useAuth } from "@/contexts/AuthContext";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,7 +18,6 @@ interface Props {
 }
 
 export function CDSPRegistrarEnvio({ open, onClose, spWarehouseId, rnWarehouseId }: Props) {
-  const { user } = useAuth();
   const qc = useQueryClient();
   const [productId, setProductId] = useState("");
   const [quantity,  setQuantity]  = useState("");
@@ -60,17 +58,7 @@ export function CDSPRegistrarEnvio({ open, onClose, spWarehouseId, rnWarehouseId
           .eq("id", ws.id);
       }
 
-      // 2. Registra saída em Natal
-      await supabase.from("stock_movements").insert({
-        product_id:  productId,
-        tipo:        "saida",
-        quantidade:  qty,
-        origem:      "ajuste",
-        observacoes: `Saída Hub Natal → CD São Paulo — ${obs}`,
-        created_by:  user!.id,
-      } as never);
-
-      // 3. Cria transferência em trânsito
+      // 2. Cria transferência em trânsito (stock_transfers é o registro de auditoria de transfers, não stock_movements)
       const { error } = await supabase.from("stock_transfers").insert({
         product_id:   productId,
         product_code: product.product_code,
