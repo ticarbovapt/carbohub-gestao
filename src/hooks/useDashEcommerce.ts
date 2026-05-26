@@ -511,6 +511,7 @@ export function useEcommerceHistoricoMensal(
       .in("platform", platforms)
       .gte("ordered_at", `${fromMonth}-01T00:00:00.000Z`)
       .lte("ordered_at", `${toMonth}-${String(lastDay).padStart(2, "0")}T23:59:59.999Z`)
+      .limit(100000)
       .then(({ data: rows }) => {
         if (cancelled) return;
 
