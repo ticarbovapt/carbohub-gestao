@@ -15,7 +15,11 @@ import { supabase } from "@/integrations/supabase/client";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
-export function StockMovementsList() {
+interface StockMovementsListProps {
+  hubView?: "sp" | "rn";
+}
+
+export function StockMovementsList({ hubView = "sp" }: StockMovementsListProps) {
   const canManage = useCanManageStockMovements();
   const [tipoFilter, setTipoFilter] = useState("all");
   const [showCreate, setShowCreate] = useState(false);
@@ -25,17 +29,39 @@ export function StockMovementsList() {
   const [origem, setOrigem] = useState<"PC" | "OP" | "ajuste">("ajuste");
   const [obs, setObs] = useState("");
 
-  const { data: movements, isLoading } = useStockMovements(
+  // Produto IDs do hub selecionado para filtrar movimentações
+  const { data: hubProductIds } = useQuery({
+    queryKey: ["hub-product-ids", hubView],
+    queryFn: async () => {
+      const code = hubView === "sp" ? "HUB-SP" : "HUB-RN";
+      const { data: wh } = await supabase.from("warehouses").select("id").eq("code", code).maybeSingle();
+      if (!wh) return [];
+      const { data: ws } = await supabase.from("warehouse_stock").select("product_id").eq("warehouse_id", wh.id);
+      return (ws || []).map((s: any) => s.product_id as string);
+    },
+  });
+
+  const { data: allMovements, isLoading } = useStockMovements(
     tipoFilter !== "all" ? { tipo: tipoFilter } : undefined
   );
+
+  const movements = hubProductIds
+    ? (allMovements || []).filter(m => hubProductIds.includes((m as any).product_id))
+    : allMovements;
+
   const createMovement = useCreateStockMovement();
 
   const { data: products } = useQuery({
-    queryKey: ["mrp-products-list"],
+    queryKey: ["mrp-products-list", hubView],
     queryFn: async () => {
+      if (hubProductIds && hubProductIds.length > 0) {
+        const { data } = await supabase.from("mrp_products").select("id, name, product_code").in("id", hubProductIds).eq("is_active", true).order("name");
+        return data || [];
+      }
       const { data } = await supabase.from("mrp_products").select("id, name, product_code").eq("is_active", true).order("name");
       return data || [];
     },
+    enabled: hubProductIds !== undefined,
   });
 
   const handleCreate = () => {

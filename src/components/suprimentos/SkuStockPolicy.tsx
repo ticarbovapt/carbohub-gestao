@@ -36,9 +36,12 @@ function useWarehouses() {
   });
 }
 
-export function SkuStockPolicy() {
+export function SkuStockPolicy({ hubView }: { hubView?: "sp" | "rn" }) {
   const { data: skus = [] } = useSkus();
-  const { data: warehouses = [] } = useWarehouses();
+  const { data: allWarehouses = [] } = useWarehouses();
+  const warehouses = hubView
+    ? allWarehouses.filter(w => w.code === (hubView === "sp" ? "HUB-SP" : "HUB-RN"))
+    : allWarehouses;
   const { data: policies = [] } = useSkuWarehousePolicies();
   const { data: deficits = [] } = useInsumoRequirements();
   const upsertPolicy = useUpsertSkuWarehousePolicy();

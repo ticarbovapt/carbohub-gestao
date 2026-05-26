@@ -7,29 +7,46 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useCanManageStock } from "@/hooks/useActionPermissions";
-import { useSuprimentosKPIs } from "@/hooks/useStockMovements";
+import { useSuprimentosKPIs, useSuprimentosKPIsByHub } from "@/hooks/useStockMovements";
 import { StockOverview } from "@/components/suprimentos/StockOverview";
 import { StockMovementsList } from "@/components/suprimentos/StockMovementsList";
 import { ReceivingsList } from "@/components/purchasing/ReceivingsList";
 import { InvoicesList } from "@/components/purchasing/InvoicesList";
-
 import { PendingSuggestions } from "@/components/suprimentos/PendingSuggestions";
 import { SkuStockPolicy } from "@/components/suprimentos/SkuStockPolicy";
 
 type HubView = "sp" | "rn";
 
+const PERIOD_OPTIONS = [
+  { value: "7",   label: "Últimos 7 dias" },
+  { value: "15",  label: "Últimos 15 dias" },
+  { value: "30",  label: "Últimos 30 dias" },
+  { value: "90",  label: "Últimos 90 dias" },
+];
+
 export default function Suprimentos() {
-  const [activeTab, setActiveTab] = useState("estoque");
+  const [activeTab, setActiveTab]     = useState("estoque");
   const [planningMode, setPlanningMode] = useState(false);
-  const [hubView, setHubView] = useState<HubView>("sp");
-  const { data: kpis } = useSuprimentosKPIs();
+  const [hubView, setHubView]         = useState<HubView>("sp");
+  const [period, setPeriod]           = useState("7");
+
+  const isSP = hubView === "sp";
+  const warehouseCode = isSP ? "HUB-SP" : "HUB-RN";
+
+  const { data: kpisHub }     = useSuprimentosKPIsByHub(warehouseCode, Number(period));
+  const { data: kpisGlobal }  = useSuprimentosKPIs();
+  const kpis = isSP ? kpisHub : kpisGlobal;
+
   const canApprove = useCanManageStock();
+
+  const periodLabel = PERIOD_OPTIONS.find(o => o.value === period)?.label.replace("Últimos ", "") ?? `${period}d`;
 
   return (
     <BoardLayout>
       <div className="space-y-6">
-        {/* Header with planning toggle */}
+        {/* Header */}
         <div className="flex items-start justify-between gap-4 flex-wrap">
           <CarboPageHeader
             title="Suprimentos"
@@ -54,18 +71,18 @@ export default function Suprimentos() {
         {/* Hub selector */}
         <div className="flex gap-2">
           <Button
-            variant={hubView === "sp" ? "default" : "outline"}
+            variant={isSP ? "default" : "outline"}
             size="sm"
-            className={`gap-2 ${hubView === "sp" ? "bg-carbo-blue hover:bg-carbo-blue/90 text-white" : ""}`}
+            className={`gap-2 ${isSP ? "bg-carbo-blue hover:bg-carbo-blue/90 text-white" : ""}`}
             onClick={() => setHubView("sp")}
           >
             <MapPin className="h-4 w-4" />
             CD São Paulo
           </Button>
           <Button
-            variant={hubView === "rn" ? "default" : "outline"}
+            variant={!isSP ? "default" : "outline"}
             size="sm"
-            className={`gap-2 ${hubView === "rn" ? "bg-carbo-blue hover:bg-carbo-blue/90 text-white" : ""}`}
+            className={`gap-2 ${!isSP ? "bg-carbo-blue hover:bg-carbo-blue/90 text-white" : ""}`}
             onClick={() => setHubView("rn")}
           >
             <MapPin className="h-4 w-4" />
@@ -75,52 +92,70 @@ export default function Suprimentos() {
 
         {/* KPIs */}
         {kpis && (
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-            <CarboCard variant="kpi" padding="sm">
-              <CarboCardContent>
-                <div className="flex items-center gap-2 mb-1">
-                  <Layers className="h-4 w-4 text-carbo-blue" />
-                  <span className="text-xs text-muted-foreground">Total Produtos</span>
-                </div>
-                <p className="text-2xl font-bold kpi-number">{kpis.totalProdutos}</p>
-              </CarboCardContent>
-            </CarboCard>
-            <CarboCard variant="kpi" padding="sm">
-              <CarboCardContent>
-                <div className="flex items-center gap-2 mb-1">
-                  <AlertTriangle className="h-4 w-4 text-destructive" />
-                  <span className="text-xs text-muted-foreground">Em Baixa</span>
-                </div>
-                <p className="text-2xl font-bold kpi-number text-destructive">{kpis.produtosEmBaixa}</p>
-              </CarboCardContent>
-            </CarboCard>
-            <CarboCard variant="kpi" padding="sm">
-              <CarboCardContent>
-                <div className="flex items-center gap-2 mb-1">
-                  <ArrowDownToLine className="h-4 w-4 text-carbo-green" />
-                  <span className="text-xs text-muted-foreground">Entradas (7d)</span>
-                </div>
-                <p className="text-2xl font-bold kpi-number">{kpis.entradasRecentes}</p>
-              </CarboCardContent>
-            </CarboCard>
-            <CarboCard variant="kpi" padding="sm">
-              <CarboCardContent>
-                <div className="flex items-center gap-2 mb-1">
-                  <ArrowUpFromLine className="h-4 w-4 text-warning" />
-                  <span className="text-xs text-muted-foreground">Saídas (7d)</span>
-                </div>
-                <p className="text-2xl font-bold kpi-number">{kpis.saidasRecentes}</p>
-              </CarboCardContent>
-            </CarboCard>
-            <CarboCard variant="kpi" padding="sm">
-              <CarboCardContent>
-                <div className="flex items-center gap-2 mb-1">
-                  <History className="h-4 w-4 text-muted-foreground" />
-                  <span className="text-xs text-muted-foreground">Movimentações (7d)</span>
-                </div>
-                <p className="text-2xl font-bold kpi-number">{kpis.movimentosRecentes}</p>
-              </CarboCardContent>
-            </CarboCard>
+          <div className="space-y-2">
+            {/* Period selector — only meaningful for SP (hub-scoped KPIs) */}
+            {isSP && (
+              <div className="flex items-center gap-2 justify-end">
+                <span className="text-xs text-muted-foreground">Período dos KPIs:</span>
+                <Select value={period} onValueChange={setPeriod}>
+                  <SelectTrigger className="w-[160px] h-7 text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {PERIOD_OPTIONS.map(o => (
+                      <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+              <CarboCard variant="kpi" padding="sm">
+                <CarboCardContent>
+                  <div className="flex items-center gap-2 mb-1">
+                    <Layers className="h-4 w-4 text-carbo-blue" />
+                    <span className="text-xs text-muted-foreground">Total Produtos</span>
+                  </div>
+                  <p className="text-2xl font-bold kpi-number">{kpis.totalProdutos}</p>
+                </CarboCardContent>
+              </CarboCard>
+              <CarboCard variant="kpi" padding="sm">
+                <CarboCardContent>
+                  <div className="flex items-center gap-2 mb-1">
+                    <AlertTriangle className="h-4 w-4 text-destructive" />
+                    <span className="text-xs text-muted-foreground">Em Baixa</span>
+                  </div>
+                  <p className="text-2xl font-bold kpi-number text-destructive">{kpis.produtosEmBaixa}</p>
+                </CarboCardContent>
+              </CarboCard>
+              <CarboCard variant="kpi" padding="sm">
+                <CarboCardContent>
+                  <div className="flex items-center gap-2 mb-1">
+                    <ArrowDownToLine className="h-4 w-4 text-carbo-green" />
+                    <span className="text-xs text-muted-foreground">Entradas ({periodLabel})</span>
+                  </div>
+                  <p className="text-2xl font-bold kpi-number">{kpis.entradasRecentes}</p>
+                </CarboCardContent>
+              </CarboCard>
+              <CarboCard variant="kpi" padding="sm">
+                <CarboCardContent>
+                  <div className="flex items-center gap-2 mb-1">
+                    <ArrowUpFromLine className="h-4 w-4 text-warning" />
+                    <span className="text-xs text-muted-foreground">Saídas ({periodLabel})</span>
+                  </div>
+                  <p className="text-2xl font-bold kpi-number">{kpis.saidasRecentes}</p>
+                </CarboCardContent>
+              </CarboCard>
+              <CarboCard variant="kpi" padding="sm">
+                <CarboCardContent>
+                  <div className="flex items-center gap-2 mb-1">
+                    <History className="h-4 w-4 text-muted-foreground" />
+                    <span className="text-xs text-muted-foreground">Movimentações ({periodLabel})</span>
+                  </div>
+                  <p className="text-2xl font-bold kpi-number">{kpis.movimentosRecentes}</p>
+                </CarboCardContent>
+              </CarboCard>
+            </div>
           </div>
         )}
 
@@ -158,7 +193,7 @@ export default function Suprimentos() {
             <StockOverview hubView={hubView} />
           </TabsContent>
           <TabsContent value="movimentacoes">
-            <StockMovementsList />
+            <StockMovementsList hubView={hubView} />
           </TabsContent>
           <TabsContent value="recebimento">
             <ReceivingsList />
@@ -167,7 +202,7 @@ export default function Suprimentos() {
             <InvoicesList />
           </TabsContent>
           <TabsContent value="politica">
-            <SkuStockPolicy />
+            <SkuStockPolicy hubView={hubView} />
           </TabsContent>
         </Tabs>
       </div>
