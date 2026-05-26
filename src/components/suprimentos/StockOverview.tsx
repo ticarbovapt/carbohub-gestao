@@ -656,7 +656,9 @@ export function StockOverview({ hubView = "sp" }: StockOverviewProps) {
       <Dialog open={!!editing} onOpenChange={open => !open && setEditing(null)}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Ajustar Estoque por HUB</DialogTitle>
+            <DialogTitle>
+              {isSP ? "Ajustar Estoque — CD São Paulo" : "Ajustar Estoque por HUB"}
+            </DialogTitle>
           </DialogHeader>
           {editing && (
             <div className="space-y-4">
@@ -665,25 +667,28 @@ export function StockOverview({ hubView = "sp" }: StockOverviewProps) {
                 <p className="text-xs text-muted-foreground">{editing.product_code}</p>
               </div>
 
-              <div>
-                <Label>HUB</Label>
-                <Select value={editHubId} onValueChange={handleEditHubChange}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecione o HUB" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {(warehouses || []).map(w => (
-                      <SelectItem key={w.id} value={w.id}>
-                        {w.name} — {w.city}/{w.state}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+              {/* Hub selector: hidden for SP (locked), shown for RN */}
+              {!isSP && (
+                <div>
+                  <Label>HUB</Label>
+                  <Select value={editHubId} onValueChange={handleEditHubChange}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione o HUB" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {(warehouses || []).map(w => (
+                        <SelectItem key={w.id} value={w.id}>
+                          {w.name} — {w.city}/{w.state}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
 
               <div className="flex items-center gap-3">
                 <div className="flex-1">
-                  <Label>Estoque atual ({warehouses?.find(w => w.id === editHubId)?.name || "Hub"})</Label>
+                  <Label>{isSP ? "Estoque atual (CD São Paulo)" : `Estoque atual (${warehouses?.find(w => w.id === editHubId)?.name || "Hub"})`}</Label>
                   <p className="text-lg font-bold text-muted-foreground">{editing.current_qty} {editing.stock_unit}</p>
                 </div>
                 <div className="flex-1">
