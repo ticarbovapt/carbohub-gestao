@@ -162,9 +162,9 @@ export function StockOverview({ hubView = "sp" }: StockOverviewProps) {
     const ws = defaultHub
       ? warehouseStock?.find(s => s.product_id === p.id && s.warehouse_id === defaultHub)
       : undefined;
-    // When this product has no warehouse_stock rows at all, seed qty from current_stock_qty
     const anyHubData = warehouseStock?.some(s => s.product_id === p.id) ?? false;
-    const qty = ws?.quantity ?? (anyHubData ? 0 : p.current_stock_qty);
+    // No SP não usa current_stock_qty como fallback — o dado correto é sempre warehouse_stock
+    const qty = ws?.quantity ?? (isSP ? 0 : (anyHubData ? 0 : p.current_stock_qty));
 
     setEditing({
       id: p.id,
@@ -535,6 +535,15 @@ export function StockOverview({ hubView = "sp" }: StockOverviewProps) {
                           onClick={() => openEdit(p, h.id)}
                         />
                       ))
+                    ) : isSP ? (
+                      // SP sem linha no warehouse_stock ainda → mostra Hub SP com 0 (não usa fallback global)
+                      <StockProgressBar
+                        current={0}
+                        safety={safetyQty}
+                        hubName="Hub SP"
+                        unit={p.stock_unit}
+                        onClick={() => openEdit(p)}
+                      />
                     ) : (
                       <StockProgressBar
                         current={totalQty}
