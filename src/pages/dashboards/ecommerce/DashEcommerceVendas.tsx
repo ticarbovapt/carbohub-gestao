@@ -15,12 +15,14 @@ import {
 } from "recharts";
 import {
   ShoppingCart, Package, TrendingUp, XCircle, Clock,
-  CheckCircle2, Star, Boxes, AlertCircle, BarChart3,
+  CheckCircle2, Star, Boxes, AlertCircle, BarChart3, Calendar,
   Percent, Wallet, Receipt, Trophy, Hourglass, Pencil, X, Check, History,
 } from "lucide-react";
 import {
   useDashEcommerce, useEcommerceComparativo, useEcommerceRawCheck, useCommissionRates,
+  useEcommerceHistoricoMensal,
   type EcommercePlatform, type EcommercePeriod, type RawCheckMetrics, type EcommerceMetrics,
+  type MonthlyMetrics,
   PLATFORM_FEE_DEFAULT,
 } from "@/hooks/useDashEcommerce";
 import { cn } from "@/lib/utils";
@@ -749,10 +751,231 @@ function ComparativoView({ period }: { period: EcommercePeriod }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Histórico Mensal view
+// ─────────────────────────────────────────────────────────────────────────────
+
+function HistoricoMensalView() {
+  const [selected, setSelected] = useState<EcommercePlatform[]>(["mercadolivre", "amazon"]);
+  const { data, isLoading } = useEcommerceHistoricoMensal(selected);
+
+  const toggle = (p: EcommercePlatform) => setSelected(prev => {
+    if (prev.includes(p)) return prev.length <= 1 ? prev : prev.filter(x => x !== p);
+    return [...prev, p];
+  });
+
+  const months = Array.from(new Set(data.map(d => d.month))).sort();
+
+  // Bar chart data: one entry per month, one key per platform
+  const barData = months.map(month => {
+    const entry: Record<string, string | number> = { label: data.find(d => d.month === month)?.label ?? month };
+    for (const p of selected) {
+      const m = data.find(d => d.month === month && d.platform === p);
+      entry[`${p}_receita`] = m?.totalRevenue    ?? 0;
+      entry[`${p}_pedidos`] = m?.totalOrders      ?? 0;
+    }
+    return entry;
+  });
+
+  // Best/worst month per platform (by revenue)
+  const bestWorst = selected.map(p => {
+    const pm = data.filter(d => d.platform === p);
+    if (!pm.length) return null;
+    const best  = pm.reduce((a, b) => a.totalRevenue > b.totalRevenue ? a : b);
+    const worst = pm.reduce((a, b) => a.totalRevenue < b.totalRevenue ? a : b);
+    const cur   = pm[pm.length - 1];
+    const prev  = pm[pm.length - 2];
+    const variation = prev && prev.totalRevenue > 0
+      ? ((cur.totalRevenue - prev.totalRevenue) / prev.totalRevenue) * 100
+      : null;
+    return { platform: p, best, worst, cur, variation };
+  }).filter(Boolean) as NonNullable<ReturnType<typeof selected.map>[number]>[];
+
+  // Ranking table: all months × platform, sorted by revenue desc
+  const ranking: MonthlyMetrics[] = data.slice().sort((a, b) => b.totalRevenue - a.totalRevenue);
+
+  const hasData = data.length > 0;
+
+  return (
+    <div className="space-y-5">
+      {/* Platform selector */}
+      <Card className="rounded-2xl border-0 shadow-sm">
+        <CardHeader className="pb-2 pt-5 px-5">
+          <CardTitle className="text-sm font-semibold">Plataformas</CardTitle>
+        </CardHeader>
+        <CardContent className="px-5 pb-5">
+          <div className="flex flex-wrap gap-2">
+            {PLATFORMS.map(p => {
+              const on = selected.includes(p.id);
+              return (
+                <button key={p.id} onClick={() => toggle(p.id)}
+                  className={cn("flex items-center gap-2 px-4 py-2.5 rounded-xl border-2 text-sm font-semibold transition-all",
+                    on ? cn(p.bgClass, p.borderClass, p.textClass, "shadow-sm") : "border-border text-muted-foreground hover:border-muted-foreground/40 hover:bg-muted/30"
+                  )}>
+                  <span>{p.emoji}</span><span>{p.label}</span>
+                  {on && <CheckCircle2 className="h-3.5 w-3.5 ml-0.5" />}
+                </button>
+              );
+            })}
+          </div>
+        </CardContent>
+      </Card>
+
+      {isLoading && <p className="text-sm text-muted-foreground px-1">Carregando histórico...</p>}
+
+      {!isLoading && !hasData && (
+        <div className="rounded-xl border border-dashed border-muted-foreground/30 bg-muted/20 p-8 flex flex-col items-center gap-2 text-center">
+          <AlertCircle className="h-8 w-8 text-muted-foreground/50" />
+          <p className="text-sm font-medium text-muted-foreground">Sem dados históricos</p>
+          <p className="text-xs text-muted-foreground/70">Os dados aparecerão aqui conforme os meses forem sendo sincronizados.</p>
+        </div>
+      )}
+
+      {!isLoading && hasData && (
+        <>
+          {/* Resumo mês atual */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {bestWorst.map(({ platform: p, best, worst, cur, variation }) => {
+              const cfg = PMAP[p];
+              return (
+                <Card key={p} className="rounded-2xl border-0 shadow-sm">
+                  <CardHeader className="pt-4 px-5 pb-2">
+                    <CardTitle className={cn("text-sm font-bold flex items-center gap-2", cfg.textClass)}>
+                      <span>{cfg.emoji}</span>{cfg.label}
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="px-5 pb-4 grid grid-cols-3 gap-3">
+                    <div className="rounded-lg bg-muted/30 p-3">
+                      <p className="text-xs text-muted-foreground mb-1">Mês atual</p>
+                      <p className="text-sm font-bold">{fmtBRL(cur.totalRevenue)}</p>
+                      {variation !== null && (
+                        <p className={cn("text-xs font-medium mt-0.5", variation >= 0 ? "text-green-500" : "text-red-500")}>
+                          {variation >= 0 ? "▲" : "▼"} {Math.abs(variation).toFixed(1)}% vs mês ant.
+                        </p>
+                      )}
+                    </div>
+                    <div className="rounded-lg bg-green-500/10 p-3">
+                      <p className="text-xs text-muted-foreground mb-1">Melhor mês</p>
+                      <p className="text-sm font-bold text-green-600">{fmtBRL(best.totalRevenue)}</p>
+                      <p className="text-xs text-muted-foreground">{best.label}</p>
+                    </div>
+                    <div className="rounded-lg bg-red-500/10 p-3">
+                      <p className="text-xs text-muted-foreground mb-1">Pior mês</p>
+                      <p className="text-sm font-bold text-red-500">{fmtBRL(worst.totalRevenue)}</p>
+                      <p className="text-xs text-muted-foreground">{worst.label}</p>
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
+
+          {/* Receita por mês */}
+          <Card className="rounded-2xl border-0 shadow-sm">
+            <CardHeader className="pb-1 pt-5 px-5">
+              <CardTitle className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Receita por Mês</CardTitle>
+            </CardHeader>
+            <CardContent className="px-2 pb-4">
+              <ResponsiveContainer width="100%" height={230}>
+                <BarChart data={barData} margin={{ top: 16, right: 16, left: 8, bottom: 0 }} barCategoryGap="25%" barGap={3}>
+                  <CartesianGrid strokeDasharray="3 3" className="stroke-border/40" vertical={false} />
+                  <XAxis dataKey="label" tick={{ fontSize: 10 }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fontSize: 10 }} axisLine={false} tickLine={false} width={52}
+                    tickFormatter={v => v === 0 ? "R$0" : `R$${(v / 1000).toFixed(0)}k`} />
+                  <Tooltip contentStyle={{ background: "var(--background)", border: "1px solid var(--border)", borderRadius: 10, fontSize: 12 }}
+                    formatter={(v: number, name: string) => [fmtBRL(v), PMAP[name.replace("_receita","") as EcommercePlatform]?.label ?? name]}
+                    cursor={{ fill: "var(--muted)", opacity: 0.3 }} />
+                  <Legend iconType="square" iconSize={10} formatter={v => PMAP[v.replace("_receita","") as EcommercePlatform]?.label ?? v} />
+                  {selected.map(p => (
+                    <Bar key={p} dataKey={`${p}_receita`} name={`${p}_receita`} fill={PMAP[p].color} radius={[4,4,0,0]} maxBarSize={32} />
+                  ))}
+                </BarChart>
+              </ResponsiveContainer>
+            </CardContent>
+          </Card>
+
+          {/* Pedidos por mês */}
+          <Card className="rounded-2xl border-0 shadow-sm">
+            <CardHeader className="pb-1 pt-5 px-5">
+              <CardTitle className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Pedidos por Mês</CardTitle>
+            </CardHeader>
+            <CardContent className="px-2 pb-4">
+              <ResponsiveContainer width="100%" height={200}>
+                <BarChart data={barData} margin={{ top: 16, right: 16, left: 8, bottom: 0 }} barCategoryGap="25%" barGap={3}>
+                  <CartesianGrid strokeDasharray="3 3" className="stroke-border/40" vertical={false} />
+                  <XAxis dataKey="label" tick={{ fontSize: 10 }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fontSize: 10 }} axisLine={false} tickLine={false} width={32} />
+                  <Tooltip contentStyle={{ background: "var(--background)", border: "1px solid var(--border)", borderRadius: 10, fontSize: 12 }}
+                    formatter={(v: number, name: string) => [fmtNum(v), PMAP[name.replace("_pedidos","") as EcommercePlatform]?.label ?? name]}
+                    cursor={{ fill: "var(--muted)", opacity: 0.3 }} />
+                  <Legend iconType="square" iconSize={10} formatter={v => PMAP[v.replace("_pedidos","") as EcommercePlatform]?.label ?? v} />
+                  {selected.map(p => (
+                    <Bar key={p} dataKey={`${p}_pedidos`} name={`${p}_pedidos`} fill={PMAP[p].color} radius={[4,4,0,0]} maxBarSize={32} />
+                  ))}
+                </BarChart>
+              </ResponsiveContainer>
+            </CardContent>
+          </Card>
+
+          {/* Ranking de meses */}
+          <Card className="rounded-2xl border-0 shadow-sm">
+            <CardHeader className="pt-5 px-5 pb-3">
+              <CardTitle className="text-sm font-semibold">Ranking de Meses</CardTitle>
+            </CardHeader>
+            <CardContent className="p-0 pb-2">
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-y border-border/50 bg-muted/30 text-muted-foreground text-xs">
+                      <th className="text-left px-5 py-2.5 font-medium">#</th>
+                      <th className="text-left px-4 py-2.5 font-medium">Mês</th>
+                      <th className="text-left px-4 py-2.5 font-medium">Plataforma</th>
+                      <th className="text-right px-4 py-2.5 font-medium">Pedidos</th>
+                      <th className="text-right px-4 py-2.5 font-medium">Unidades</th>
+                      <th className="text-right px-4 py-2.5 font-medium">Receita</th>
+                      <th className="text-right px-4 py-2.5 font-medium">Ticket Médio</th>
+                      <th className="text-right px-5 py-2.5 font-medium">Cancel.</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border/30">
+                    {ranking.map((r, i) => {
+                      const cfg = PMAP[r.platform];
+                      const isBest  = i === 0;
+                      const isWorst = i === ranking.length - 1 && ranking.length > 1;
+                      return (
+                        <tr key={`${r.platform}-${r.month}`}
+                          className={cn("hover:bg-muted/20 transition-colors",
+                            isBest && "bg-green-500/5", isWorst && "bg-red-500/5")}>
+                          <td className="px-5 py-2.5 text-muted-foreground text-xs font-mono">
+                            {isBest ? "🥇" : isWorst ? "🔻" : i + 1}
+                          </td>
+                          <td className="px-4 py-2.5 font-semibold">{r.label}</td>
+                          <td className="px-4 py-2.5">
+                            <span className={cn("text-xs font-semibold", cfg.textClass)}>{cfg.emoji} {cfg.label}</span>
+                          </td>
+                          <td className="px-4 py-2.5 text-right">{fmtNum(r.totalOrders)}</td>
+                          <td className="px-4 py-2.5 text-right">{fmtNum(r.totalUnitsSold)}</td>
+                          <td className="px-4 py-2.5 text-right font-semibold">{fmtBRL(r.totalRevenue)}</td>
+                          <td className="px-4 py-2.5 text-right">{fmtBRL(r.avgTicket)}</td>
+                          <td className="px-5 py-2.5 text-right text-destructive">{r.cancellationRate.toFixed(1)}%</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </CardContent>
+          </Card>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Main page
 // ─────────────────────────────────────────────────────────────────────────────
 
-type ActiveView = EcommercePlatform | "comparativo";
+type ActiveView = EcommercePlatform | "comparativo" | "historico";
 
 const TAB_KEY = "ecommerce_active_tab";
 
@@ -782,16 +1005,18 @@ export default function DashEcommerceVendas() {
               Acompanhamento de pedidos, receita e unidades por plataforma de e-commerce
             </p>
           </div>
-          <Select value={period} onValueChange={v => setPeriod(v as EcommercePeriod)}>
-            <SelectTrigger className="w-44">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {PERIOD_OPTIONS.map(o => (
-                <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          {active !== "historico" && (
+            <Select value={period} onValueChange={v => setPeriod(v as EcommercePeriod)}>
+              <SelectTrigger className="w-44">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {PERIOD_OPTIONS.map(o => (
+                  <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
         </div>
 
         {/* Platform selector buttons */}
@@ -826,10 +1051,24 @@ export default function DashEcommerceVendas() {
             <BarChart3 className="h-4 w-4" />
             Comparativo
           </button>
+          <button
+            onClick={() => handleSetActive("historico")}
+            className={cn(
+              "flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold border-2 transition-all",
+              active === "historico"
+                ? "bg-indigo-500/10 border-indigo-500/50 text-indigo-600 dark:text-indigo-300 shadow-sm scale-[1.02]"
+                : "border-border text-muted-foreground hover:bg-muted/40 hover:border-muted-foreground/40"
+            )}
+          >
+            <Calendar className="h-4 w-4" />
+            Histórico Mensal
+          </button>
         </div>
 
         {/* Content */}
-        {active === "comparativo" ? (
+        {active === "historico" ? (
+          <HistoricoMensalView />
+        ) : active === "comparativo" ? (
           <ComparativoView period={period} />
         ) : (
           <PlatformView platform={active} period={period} />

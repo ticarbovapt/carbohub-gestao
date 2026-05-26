@@ -471,3 +471,85 @@ export function useEcommerceComparativo(
 
   return { data, isLoading };
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Histórico mensal hook
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface MonthlyMetrics {
+  month: string;
+  label: string;
+  platform: EcommercePlatform;
+  totalOrders: number;
+  totalRevenue: number;
+  totalUnitsSold: number;
+  cancelledOrders: number;
+  cancellationRate: number;
+  avgTicket: number;
+}
+
+export function useEcommerceHistoricoMensal(platforms: EcommercePlatform[]) {
+  const [data, setData]         = useState<MonthlyMetrics[]>([]);
+  const [isLoading, setLoading] = useState(true);
+  const platformsKey = platforms.join(",");
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+
+    const from = new Date();
+    from.setMonth(from.getMonth() - 11);
+    from.setDate(1);
+    from.setHours(0, 0, 0, 0);
+
+    supabase
+      .from("ecommerce_orders" as never)
+      .select("platform,quantity,units_real,total,status,ordered_at")
+      .in("platform", platforms)
+      .gte("ordered_at", from.toISOString())
+      .then(({ data: rows }) => {
+        if (cancelled) return;
+
+        const allRows = (rows ?? []) as DBOrder[];
+        const MONTH_NAMES = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
+        const map = new Map<string, MonthlyMetrics>();
+
+        for (const r of allRows) {
+          const month = r.ordered_at.slice(0, 7);
+          const key   = `${r.platform}__${month}`;
+
+          if (!map.has(key)) {
+            const [y, m] = month.split("-");
+            map.set(key, {
+              month,
+              label:           `${MONTH_NAMES[parseInt(m) - 1]}/${y.slice(2)}`,
+              platform:        r.platform as EcommercePlatform,
+              totalOrders:     0, totalRevenue: 0, totalUnitsSold: 0,
+              cancelledOrders: 0, cancellationRate: 0, avgTicket: 0,
+            });
+          }
+
+          const e = map.get(key)!;
+          e.totalOrders++;
+          e.totalRevenue   += Number(r.total);
+          e.totalUnitsSold += r.units_real ?? r.quantity;
+          if (r.status === "cancelled") e.cancelledOrders++;
+        }
+
+        const result = Array.from(map.values()).map(e => ({
+          ...e,
+          totalRevenue:     Math.round(e.totalRevenue * 100) / 100,
+          cancellationRate: e.totalOrders > 0 ? Math.round((e.cancelledOrders / e.totalOrders) * 1000) / 10 : 0,
+          avgTicket:        e.totalOrders > 0 ? Math.round((e.totalRevenue / e.totalOrders) * 100) / 100 : 0,
+        })).sort((a, b) => a.month.localeCompare(b.month));
+
+        setData(result);
+        setLoading(false);
+      });
+
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [platformsKey]);
+
+  return { data, isLoading };
+}
