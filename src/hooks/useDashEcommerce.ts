@@ -488,48 +488,52 @@ export interface MonthlyMetrics {
   avgTicket: number;
 }
 
-export function useEcommerceHistoricoMensal(platforms: EcommercePlatform[]) {
+export function useEcommerceHistoricoMensal(
+  platforms: EcommercePlatform[],
+  fromMonth: string, // "2025-05"
+  toMonth:   string, // "2026-05"
+) {
   const [data, setData]         = useState<MonthlyMetrics[]>([]);
   const [isLoading, setLoading] = useState(true);
-  const platformsKey = platforms.join(",");
+  const key = `${platforms.join(",")}|${fromMonth}|${toMonth}`;
 
   useEffect(() => {
+    if (!platforms.length) { setData([]); setLoading(false); return; }
     let cancelled = false;
     setLoading(true);
 
-    const from = new Date();
-    from.setMonth(from.getMonth() - 11);
-    from.setDate(1);
-    from.setHours(0, 0, 0, 0);
+    const [ty, tm] = toMonth.split("-").map(Number);
+    const lastDay  = new Date(ty, tm, 0).getDate();
 
     supabase
       .from("ecommerce_orders" as never)
       .select("platform,quantity,units_real,total,status,ordered_at")
       .in("platform", platforms)
-      .gte("ordered_at", from.toISOString())
+      .gte("ordered_at", `${fromMonth}-01T00:00:00.000Z`)
+      .lte("ordered_at", `${toMonth}-${String(lastDay).padStart(2, "0")}T23:59:59.999Z`)
       .then(({ data: rows }) => {
         if (cancelled) return;
 
         const allRows = (rows ?? []) as DBOrder[];
-        const MONTH_NAMES = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
+        const MN = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
         const map = new Map<string, MonthlyMetrics>();
 
         for (const r of allRows) {
           const month = r.ordered_at.slice(0, 7);
-          const key   = `${r.platform}__${month}`;
+          const k     = `${r.platform}__${month}`;
 
-          if (!map.has(key)) {
+          if (!map.has(k)) {
             const [y, m] = month.split("-");
-            map.set(key, {
+            map.set(k, {
               month,
-              label:           `${MONTH_NAMES[parseInt(m) - 1]}/${y.slice(2)}`,
+              label:           `${MN[parseInt(m) - 1]}/${y.slice(2)}`,
               platform:        r.platform as EcommercePlatform,
               totalOrders:     0, totalRevenue: 0, totalUnitsSold: 0,
               cancelledOrders: 0, cancellationRate: 0, avgTicket: 0,
             });
           }
 
-          const e = map.get(key)!;
+          const e = map.get(k)!;
           e.totalOrders++;
           e.totalRevenue   += Number(r.total);
           e.totalUnitsSold += r.units_real ?? r.quantity;
@@ -549,7 +553,7 @@ export function useEcommerceHistoricoMensal(platforms: EcommercePlatform[]) {
 
     return () => { cancelled = true; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [platformsKey]);
+  }, [key]);
 
   return { data, isLoading };
 }
