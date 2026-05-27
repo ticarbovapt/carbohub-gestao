@@ -56,14 +56,35 @@ export function OPKanbanBoard({ orders, onAdvance, onCardClick, onMoveToComplete
   // Statuses where confirmation has already been recorded — no need for dialog again
   const ALREADY_CONFIRMED = new Set(["confirmada", "qualidade_aprovada", "liberada", "concluida", "bloqueada", "cancelada"]);
 
-  // Smart advance via button: confirmed/QA-approved cards advance directly to liberada;
-  // everything else opens the appropriate dialog via onAdvance
+  // One-step direct advance mapping for early pipeline stages (no dialog needed)
+  const NEXT_STATUS: Partial<Record<string, { colId: string; status: string }>> = {
+    rascunho:             { colId: "planejada",   status: "planejada" },
+    planejada:            { colId: "materiais",   status: "aguardando_separacao" },
+    aguardando_separacao: { colId: "materiais",   status: "separada" },
+    separada:             { colId: "lib_prod",    status: "aguardando_liberacao" },
+    aguardando_liberacao: { colId: "lib_prod",    status: "liberada_producao" },
+    liberada_producao:    { colId: "em_producao", status: "em_producao" },
+  };
+
+  // Smart advance via button:
+  //  - Early stages (rascunho…liberada_producao) → direct one-step advance, no dialog
+  //  - em_producao / aguardando_confirmacao → open QA+confirmation dialog (credits stock)
+  //  - confirmada / qualidade_aprovada → direct to liberada
   const handleAdvance = (order: ProductionOrder) => {
     if (order.op_status === "qualidade_aprovada" || order.op_status === "confirmada") {
       directAdvance(order, "liberada", "liberada");
-    } else {
-      onAdvance?.(order);
+      return;
     }
+    if (order.op_status === "em_producao" || order.op_status === "aguardando_confirmacao") {
+      onMoveToComplete?.(order); // opens QuickConfirmOPDialog → credits warehouse_stock
+      return;
+    }
+    const next = NEXT_STATUS[order.op_status];
+    if (next) {
+      directAdvance(order, next.colId, next.status);
+      return;
+    }
+    onAdvance?.(order); // fallback (ConfirmOPDialog for any unhandled status)
   };
 
   const sensors = useSensors(
