@@ -264,8 +264,10 @@ export default function OSDetails() {
     .filter((s) => s.status === "completed")
     .map((s) => s.department as DepartmentType);
 
-  // Check if user can advance (manager or assigned operator)
-  const canAdvance = isManager || order.assigned_to === user?.id || profile?.department === order.current_department;
+  // Check if user can advance (manager or assigned operator or matching dept — primary or secondary)
+  const canAdvance = isManager || order.assigned_to === user?.id ||
+    profile?.department === order.current_department ||
+    profile?.secondary_department === order.current_department;
 
   return (
     <BoardLayout>
