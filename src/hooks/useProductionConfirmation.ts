@@ -177,26 +177,45 @@ export function useSubmitConfirmation() {
         ? itemAdherences.reduce((a, b) => a + b, 0) / itemAdherences.length
         : 100;
 
-      // 2. INSERT production_confirmation
+      // 2. Check for an existing confirmation (handles partial-failure retries)
+      const { data: existingConf } = await (supabase as any)
+        .from("production_confirmation")
+        .select("id")
+        .eq("production_order_id", payload.production_order_id)
+        .maybeSingle();
+
+      const isRetry = !!existingConf;
+
+      // UPSERT production_confirmation (safe on retry — no duplicate key error)
       const { data: confirmation, error: confError } = await (supabase as any)
         .from("production_confirmation")
-        .insert({
-          production_order_id: payload.production_order_id,
-          good_quantity: payload.good_quantity,
-          rejected_quantity: payload.rejected_quantity,
-          rejection_reason: payload.rejection_reason || null,
-          deviation_notes: payload.deviation_notes || null,
-          bom_adherence_pct: Math.round(bomAdherencePct * 100) / 100,
-          yield_pct: Math.round(yieldPct * 100) / 100,
-          confirmed_by: userId,
-          confirmed_at: new Date().toISOString(),
-        })
+        .upsert(
+          {
+            production_order_id: payload.production_order_id,
+            good_quantity: payload.good_quantity,
+            rejected_quantity: payload.rejected_quantity,
+            rejection_reason: payload.rejection_reason || null,
+            deviation_notes: payload.deviation_notes || null,
+            bom_adherence_pct: Math.round(bomAdherencePct * 100) / 100,
+            yield_pct: Math.round(yieldPct * 100) / 100,
+            confirmed_by: userId,
+            confirmed_at: new Date().toISOString(),
+          },
+          { onConflict: "production_order_id" }
+        )
         .select("id")
         .single();
 
       if (confError) throw new Error("Erro ao criar confirmação: " + confError.message);
 
-      // 3. INSERT confirmation items
+      // 3. INSERT confirmation items (delete old ones first on retry)
+      if (isRetry) {
+        await (supabase as any)
+          .from("production_confirmation_item")
+          .delete()
+          .eq("confirmation_id", confirmation.id);
+      }
+
       const confirmationItems = payload.items.map((item) => ({
         confirmation_id: confirmation.id,
         product_id: item.product_id,
@@ -215,156 +234,160 @@ export function useSubmitConfirmation() {
         if (itemsError) throw new Error("Erro ao registrar itens: " + itemsError.message);
       }
 
-      // 4. Fetch warehouse assignments for material deductions
-      const { data: opMaterials } = await (supabase as any)
-        .from("production_order_material")
-        .select("product_id, warehouse_id")
-        .eq("production_order_id", payload.production_order_id);
-      const materialWarehouseMap = new Map<string, string>(
-        (opMaterials || [])
-          .filter((m: any) => m.warehouse_id)
-          .map((m: any) => [m.product_id, m.warehouse_id])
-      );
+      // 4–6. Apply stock movements only on first confirmation (not on retry)
+      // On retry (isRetry=true), the stock was already applied in the previous partial attempt.
+      if (!isRetry) {
+        // 4. Fetch warehouse assignments for material deductions
+        const { data: opMaterials } = await (supabase as any)
+          .from("production_order_material")
+          .select("product_id, warehouse_id")
+          .eq("production_order_id", payload.production_order_id);
+        const materialWarehouseMap = new Map<string, string>(
+          (opMaterials || [])
+            .filter((m: any) => m.warehouse_id)
+            .map((m: any) => [m.product_id, m.warehouse_id])
+        );
 
-      // Stock movements: debit consumed materials
-      for (const item of payload.items) {
-        if (item.actual_quantity <= 0) continue;
+        // Stock movements: debit consumed materials
+        for (const item of payload.items) {
+          if (item.actual_quantity <= 0) continue;
 
-        // Create saida movement
-        const { error: movError } = await supabase.from("stock_movements").insert({
-          product_id: item.product_id,
-          tipo: "saida",
-          quantidade: item.actual_quantity,
-          origem: "OP",
-          origem_id: payload.production_order_id,
-          observacoes: `Consumo OP - ${item.product_name}`,
-          created_by: userId,
-        } as any);
+          // Create saida movement
+          const { error: movError } = await supabase.from("stock_movements").insert({
+            product_id: item.product_id,
+            tipo: "saida",
+            quantidade: item.actual_quantity,
+            origem: "OP",
+            origem_id: payload.production_order_id,
+            observacoes: `Consumo OP - ${item.product_name}`,
+            created_by: userId,
+          } as any);
 
-        if (movError) {
-          console.error("[confirmation] Stock movement error:", movError);
-        }
-
-        // Update mrp_products consolidated stock
-        const { data: product } = await supabase
-          .from("mrp_products")
-          .select("current_stock_qty")
-          .eq("id", item.product_id)
-          .single();
-
-        const currentStock = (product as any)?.current_stock_qty || 0;
-        const newStock = Math.max(0, currentStock - item.actual_quantity);
-
-        await supabase.from("mrp_products").update({
-          current_stock_qty: newStock,
-          stock_updated_at: new Date().toISOString().split("T")[0],
-        }).eq("id", item.product_id);
-
-        // Update warehouse_stock for the hub the material was separated from
-        const warehouseId = materialWarehouseMap.get(item.product_id);
-        if (warehouseId) {
-          const { data: ws } = await (supabase as any)
-            .from("warehouse_stock")
-            .select("id, quantity")
-            .eq("product_id", item.product_id)
-            .eq("warehouse_id", warehouseId)
-            .maybeSingle();
-          if (ws) {
-            await (supabase as any)
-              .from("warehouse_stock")
-              .update({ quantity: Math.max(0, ws.quantity - item.actual_quantity), updated_at: new Date().toISOString() })
-              .eq("id", ws.id);
+          if (movError) {
+            console.error("[confirmation] Stock movement error:", movError);
           }
-        }
 
-        // 5. Update lot consumption if lot_id provided
-        if (item.lot_id) {
-          await (supabase as any).from("inventory_lot_consumption").insert({
-            lot_id: item.lot_id,
-            production_order_id: payload.production_order_id,
-            volume_consumed_ml: item.actual_quantity,
-            consumed_by: userId,
-          });
-
-          // Decrement lot available volume
-          const { data: lot } = await (supabase as any)
-            .from("inventory_lot")
-            .select("available_volume_ml")
-            .eq("id", item.lot_id)
+          // Update mrp_products consolidated stock
+          const { data: product } = await supabase
+            .from("mrp_products")
+            .select("current_stock_qty")
+            .eq("id", item.product_id)
             .single();
 
-          if (lot) {
-            const newVolume = Math.max(0, (lot.available_volume_ml || 0) - item.actual_quantity);
-            await (supabase as any)
+          const currentStock = (product as any)?.current_stock_qty || 0;
+          const newStock = Math.max(0, currentStock - item.actual_quantity);
+
+          await supabase.from("mrp_products").update({
+            current_stock_qty: newStock,
+            stock_updated_at: new Date().toISOString().split("T")[0],
+          }).eq("id", item.product_id);
+
+          // Update warehouse_stock for the hub the material was separated from
+          const warehouseId = materialWarehouseMap.get(item.product_id);
+          if (warehouseId) {
+            const { data: ws } = await (supabase as any)
+              .from("warehouse_stock")
+              .select("id, quantity")
+              .eq("product_id", item.product_id)
+              .eq("warehouse_id", warehouseId)
+              .maybeSingle();
+            if (ws) {
+              await (supabase as any)
+                .from("warehouse_stock")
+                .update({ quantity: Math.max(0, ws.quantity - item.actual_quantity), updated_at: new Date().toISOString() })
+                .eq("id", ws.id);
+            }
+          }
+
+          // 5. Update lot consumption if lot_id provided
+          if (item.lot_id) {
+            await (supabase as any).from("inventory_lot_consumption").insert({
+              lot_id: item.lot_id,
+              production_order_id: payload.production_order_id,
+              volume_consumed_ml: item.actual_quantity,
+              consumed_by: userId,
+            });
+
+            // Decrement lot available volume
+            const { data: lot } = await (supabase as any)
               .from("inventory_lot")
-              .update({ available_volume_ml: newVolume })
-              .eq("id", item.lot_id);
+              .select("available_volume_ml")
+              .eq("id", item.lot_id)
+              .single();
+
+            if (lot) {
+              const newVolume = Math.max(0, (lot.available_volume_ml || 0) - item.actual_quantity);
+              await (supabase as any)
+                .from("inventory_lot")
+                .update({ available_volume_ml: newVolume })
+                .eq("id", item.lot_id);
+            }
           }
         }
-      }
 
-      // 6. Credit finished goods (entrada for the finished SKU product)
-      if (payload.good_quantity > 0) {
-        // Fetch SKU to get its code, then match to mrp_products by product_code
-        const { data: sku } = await (supabase as any)
-          .from("sku")
-          .select("code, name")
-          .eq("id", payload.sku_id)
-          .maybeSingle();
-
-        if (sku) {
-          const { data: finishedProduct } = await supabase
-            .from("mrp_products")
-            .select("id, current_stock_qty")
-            .eq("product_code", sku.code)
+        // 6. Credit finished goods (entrada for the finished SKU product)
+        if (payload.good_quantity > 0) {
+          // Fetch SKU to get its code, then match to mrp_products by product_code
+          const { data: sku } = await (supabase as any)
+            .from("sku")
+            .select("code, name")
+            .eq("id", payload.sku_id)
             .maybeSingle();
 
-          if (!finishedProduct) {
-            console.warn(`[confirmation] Produto acabado não encontrado no MRP para code="${sku.code}".`);
-            toast.warning(`"${sku.name}" não encontrado no MRP com código ${sku.code} — estoque do produto final não foi creditado. Cadastre-o em Insumos com esse código.`);
-          }
+          if (sku) {
+            const { data: finishedProduct } = await supabase
+              .from("mrp_products")
+              .select("id, current_stock_qty")
+              .eq("product_code", sku.code)
+              .maybeSingle();
 
-          if (finishedProduct) {
-            // Create entrada movement for finished goods
-            await supabase.from("stock_movements").insert({
-              product_id: (finishedProduct as any).id,
-              tipo: "entrada",
-              quantidade: payload.good_quantity,
-              origem: "OP",
-              origem_id: payload.production_order_id,
-              observacoes: `Produção concluída - ${sku.name}`,
-              created_by: userId,
-            } as any);
+            if (!finishedProduct) {
+              console.warn(`[confirmation] Produto acabado não encontrado no MRP para code="${sku.code}".`);
+              toast.warning(`"${sku.name}" não encontrado no MRP com código ${sku.code} — estoque do produto final não foi creditado. Cadastre-o em Insumos com esse código.`);
+            }
 
-            // Update consolidated stock
-            const newFinishedStock = (finishedProduct as any).current_stock_qty + payload.good_quantity;
-            await supabase.from("mrp_products").update({
-              current_stock_qty: newFinishedStock,
-              stock_updated_at: new Date().toISOString().split("T")[0],
-            }).eq("id", (finishedProduct as any).id);
+            if (finishedProduct) {
+              // Create entrada movement for finished goods
+              await supabase.from("stock_movements").insert({
+                product_id: (finishedProduct as any).id,
+                tipo: "entrada",
+                quantidade: payload.good_quantity,
+                origem: "OP",
+                origem_id: payload.production_order_id,
+                observacoes: `Produção concluída - ${sku.name}`,
+                created_by: userId,
+              } as any);
 
-            // Credit warehouse_stock at destination hub
-            if (payload.destination_warehouse_id) {
-              const { data: ws } = await (supabase as any)
-                .from("warehouse_stock")
-                .select("id, quantity")
-                .eq("product_id", (finishedProduct as any).id)
-                .eq("warehouse_id", payload.destination_warehouse_id)
-                .maybeSingle();
-              if (ws) {
-                await (supabase as any)
+              // Update consolidated stock
+              const newFinishedStock = (finishedProduct as any).current_stock_qty + payload.good_quantity;
+              await supabase.from("mrp_products").update({
+                current_stock_qty: newFinishedStock,
+                stock_updated_at: new Date().toISOString().split("T")[0],
+              }).eq("id", (finishedProduct as any).id);
+
+              // Credit warehouse_stock at destination hub
+              if (payload.destination_warehouse_id) {
+                const { data: ws } = await (supabase as any)
                   .from("warehouse_stock")
-                  .update({ quantity: ws.quantity + payload.good_quantity, updated_at: new Date().toISOString() })
-                  .eq("id", ws.id);
-              } else {
-                await (supabase as any)
-                  .from("warehouse_stock")
-                  .insert({ product_id: (finishedProduct as any).id, warehouse_id: payload.destination_warehouse_id, quantity: payload.good_quantity });
+                  .select("id, quantity")
+                  .eq("product_id", (finishedProduct as any).id)
+                  .eq("warehouse_id", payload.destination_warehouse_id)
+                  .maybeSingle();
+                if (ws) {
+                  await (supabase as any)
+                    .from("warehouse_stock")
+                    .update({ quantity: ws.quantity + payload.good_quantity, updated_at: new Date().toISOString() })
+                    .eq("id", ws.id);
+                } else {
+                  await (supabase as any)
+                    .from("warehouse_stock")
+                    .insert({ product_id: (finishedProduct as any).id, warehouse_id: payload.destination_warehouse_id, quantity: payload.good_quantity });
+                }
               }
             }
           }
         }
-      }
+      } // end !isRetry
 
       // 7. UPDATE production order
       const { error: opError } = await (supabase as any)
