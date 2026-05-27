@@ -148,43 +148,68 @@ export function useMetaActuals(month: Date) {
 // Daily revenue breakdown for the current month (chart)
 // ─────────────────────────────────────────────────────────────────────────────
 
-export function useMetaDailyActuals(month: Date) {
+// platform = null → total (todas as plataformas + vindi)
+// platform = "vindi" → apenas vindi_orders
+// platform = "mercadolivre" | "amazon" | "tiktok" | "shopee" → filtra ecommerce_orders
+export function useMetaDailyActuals(month: Date, platform: MetaPlatform = null) {
   const start = startOfMonth(month).toISOString();
   const end   = endOfMonth(month).toISOString();
 
   return useQuery({
-    queryKey: ["meta_ecommerce_daily", start],
+    queryKey: ["meta_ecommerce_daily", start, platform ?? "all"],
     queryFn: async () => {
-      const { data: orders, error } = await (supabase as any)
-        .from("ecommerce_orders")
-        .select("total, ordered_at, platform")
-        .gte("ordered_at", start)
-        .lte("ordered_at", end)
-        .neq("status", "cancelled");
-
-      if (error) throw error;
-
-      const { data: vindi, error: vindiError } = await (supabase as any)
-        .from("vindi_orders")
-        .select("amount, paid_at")
-        .gte("paid_at", start)
-        .lte("paid_at", end)
-        .eq("status", "paid");
-
-      if (vindiError) throw vindiError;
-
-      // Build day → revenue map
       const dayMap: Record<string, number> = {};
-      for (const o of orders || []) {
-        const day = o.ordered_at?.slice(0, 10);
-        if (day) dayMap[day] = (dayMap[day] || 0) + Number(o.total || 0);
-      }
-      for (const v of vindi || []) {
-        const day = v.paid_at?.slice(0, 10);
-        if (day) dayMap[day] = (dayMap[day] || 0) + Number(v.amount || 0);
+
+      if (platform === "vindi") {
+        // Apenas Vindi
+        const { data: vindi, error: vindiError } = await (supabase as any)
+          .from("vindi_orders")
+          .select("amount, paid_at")
+          .gte("paid_at", start)
+          .lte("paid_at", end)
+          .eq("status", "paid");
+        if (vindiError) throw vindiError;
+        for (const v of vindi || []) {
+          const day = v.paid_at?.slice(0, 10);
+          if (day) dayMap[day] = (dayMap[day] || 0) + Number(v.amount || 0);
+        }
+      } else {
+        // ecommerce_orders, com filtro opcional de plataforma
+        let query = (supabase as any)
+          .from("ecommerce_orders")
+          .select("total, ordered_at, platform")
+          .gte("ordered_at", start)
+          .lte("ordered_at", end)
+          .neq("status", "cancelled");
+
+        if (platform !== null) {
+          query = query.eq("platform", platform);
+        }
+
+        const { data: orders, error } = await query;
+        if (error) throw error;
+        for (const o of orders || []) {
+          const day = o.ordered_at?.slice(0, 10);
+          if (day) dayMap[day] = (dayMap[day] || 0) + Number(o.total || 0);
+        }
+
+        // Total geral também inclui Vindi
+        if (platform === null) {
+          const { data: vindi, error: vindiError } = await (supabase as any)
+            .from("vindi_orders")
+            .select("amount, paid_at")
+            .gte("paid_at", start)
+            .lte("paid_at", end)
+            .eq("status", "paid");
+          if (vindiError) throw vindiError;
+          for (const v of vindi || []) {
+            const day = v.paid_at?.slice(0, 10);
+            if (day) dayMap[day] = (dayMap[day] || 0) + Number(v.amount || 0);
+          }
+        }
       }
 
-      // Generate all days of the month up to today
+      // Gera todos os dias do mês até hoje
       const today = new Date();
       const daysInMonth = getDaysInMonth(month);
       const isCurrentMonth =
