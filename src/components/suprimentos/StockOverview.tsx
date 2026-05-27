@@ -208,22 +208,12 @@ export function StockOverview({ hubView = "sp" }: StockOverviewProps) {
       return;
     }
     const diff = qty - editing.current_qty;
-    const safetyChanged = safetyQty !== editing.safety_stock_qty;
-    if (diff === 0 && !safetyChanged) {
+    if (diff === 0) {
       setEditing(null);
       return;
     }
 
     try {
-      // Update safety stock on product if changed
-      if (safetyChanged) {
-        const { error } = await supabase
-          .from("mrp_products")
-          .update({ safety_stock_qty: safetyQty, updated_at: new Date().toISOString() })
-          .eq("id", editing.id);
-        if (error) throw error;
-      }
-
       if (diff !== 0) {
         if (editing.warehouse_stock_id) {
           const { error } = await supabase
@@ -250,7 +240,7 @@ export function StockOverview({ hubView = "sp" }: StockOverviewProps) {
 
       await supabase.from("flow_audit_logs").insert({
         user_id: user?.id,
-        action_type: safetyChanged && diff !== 0 ? "stock_and_safety_adjusted" : safetyChanged ? "safety_stock_adjusted" : "stock_adjusted",
+        action_type: "stock_adjusted",
         resource_type: "warehouse_stock",
         resource_id: editing.warehouse_stock_id || editing.id,
         reason: reason,
@@ -737,28 +727,7 @@ export function StockOverview({ hubView = "sp" }: StockOverviewProps) {
                 </div>
               )}
 
-              {/* Safety stock */}
-              <div className="border-t border-border pt-4">
-                <div className="flex items-center gap-3">
-                  <div className="flex-1">
-                    <Label>Segurança atual</Label>
-                    <p className="text-lg font-bold text-muted-foreground">{editing.safety_stock_qty} {editing.stock_unit}</p>
-                  </div>
-                  <div className="flex-1">
-                    <Label htmlFor="new-safety">Novo nível de segurança</Label>
-                    <Input
-                      id="new-safety"
-                      type="number"
-                      min={0}
-                      value={newSafetyQty}
-                      onChange={e => setNewSafetyQty(e.target.value)}
-                    />
-                  </div>
-                </div>
-                <p className="text-[10px] text-muted-foreground mt-1">
-                  Quantidade mínima consolidada para alertas e projeções.
-                </p>
-              </div>
+              {/* Safety stock — removed from this dialog; edit via Política de Estoque */}
               <div>
                 <Label htmlFor="reason">Motivo do ajuste <span className="text-destructive">*</span></Label>
                 <Textarea
