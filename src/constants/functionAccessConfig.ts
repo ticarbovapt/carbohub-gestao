@@ -169,6 +169,14 @@ export const SCREEN_GROUPS: ScreenGroup[] = [
     ],
   },
   {
+    id: "metas",
+    label: "Metas",
+    screens: [
+      { id: "dashboard-meta-ecommerce",  label: "Meta E-commerce",  path: "/dashboards/metas/ecommerce" },
+      { id: "dashboard-meta-vendedores", label: "Meta Vendedores",   path: "/dashboards/metas/vendedores" },
+    ],
+  },
+  {
     id: "inteligencia",
     label: "Inteligência / Rede",
     screens: [
