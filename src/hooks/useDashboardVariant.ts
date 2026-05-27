@@ -44,19 +44,31 @@ export function useDashboardVariant(): DashboardVariant {
       (secDept === "ti_suporte" && secFuncao === "head");
     if (isTiHead) return "ceo";
 
-    if (funcao === "ceo" || funcao === "head" || funcao === "assistente_executiva") return "ceo";
-    if (funcao === "gerente" || funcao === "coordenador") {
-      if (dept === "finance") return "gestor_fin";
-      if (dept === "b2b")     return "gestor_compras";
-      return "gestor_adm";
-    }
-    if (funcao === "supervisor") return "operador";
-    if (funcao === "analista") {
-      if (dept === "finance") return "operador_fiscal";
-      return "operador";
-    }
-    if (funcao === "staff" || funcao === "vendedor_b2b" || funcao === "vendedor_b2c") return "operador";
-    return "default";
+    // Helper: converte um par (funcao, dept) em variant
+    const variantFor = (f: string | null, d: string | null): DashboardVariant | null => {
+      if (f === "ceo" || f === "head" || f === "assistente_executiva") return "ceo";
+      if (f === "gerente" || f === "coordenador") {
+        if (d === "finance") return "gestor_fin";
+        if (d === "b2b")     return "gestor_compras";
+        return "gestor_adm";
+      }
+      if (f === "supervisor") return "operador";
+      if (f === "analista") return d === "finance" ? "operador_fiscal" : "operador";
+      if (f === "staff" || f === "vendedor_b2b" || f === "vendedor_b2c") return "operador";
+      return null;
+    };
+
+    // Hierarquia de privilege: ceo > gestor_* > operador_fiscal > operador > default
+    const VARIANT_RANK: Record<DashboardVariant, number> = {
+      ceo: 6, gestor_adm: 5, gestor_fin: 5, gestor_compras: 5,
+      operador_fiscal: 3, operador: 2, default: 1,
+    };
+
+    const primary   = variantFor(funcao, dept)   ?? "default";
+    const secondary = variantFor(secFuncao, secDept) ?? "default";
+
+    // Retorna o variant de maior privilégio entre os dois papéis
+    return VARIANT_RANK[primary] >= VARIANT_RANK[secondary] ? primary : secondary;
   }
 
   // Legacy: carbo_roles-based
