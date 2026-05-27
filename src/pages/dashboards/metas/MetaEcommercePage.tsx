@@ -174,18 +174,41 @@ function PlatformCard({
 // Daily chart
 // ─────────────────────────────────────────────────────────────────────────────
 
+// Opções de filtro: "all" = total geral, ou qualquer MetaPlatform
+type ChartFilter = "all" | MetaPlatform;
+
+const FILTER_OPTIONS: { value: ChartFilter; emoji: string; label: string }[] = [
+  { value: "all",          emoji: "🎯", label: "Total"       },
+  { value: "mercadolivre", emoji: "🛒", label: "ML"          },
+  { value: "amazon",       emoji: "📦", label: "Amazon"      },
+  { value: "tiktok",       emoji: "🎵", label: "TikTok"      },
+  { value: "shopee",       emoji: "🧡", label: "Shopee"      },
+  { value: "vindi",        emoji: "📄", label: "LPs/Assin."  },
+];
+
 function DailyChart({
   month,
   totalTarget,
-  progressColor,
+  platformStats,
 }: {
   month: Date;
   totalTarget: number;
-  progressColor: "green" | "yellow" | "red" | "gray";
+  platformStats: PlatformMetaStats[];
 }) {
-  const { data: daily = [] } = useMetaDailyActuals(month);
+  const [filter, setFilter] = useState<ChartFilter>("all");
+
+  // Plataforma para o hook: "all" → null (total), senão a plataforma
+  const hookPlatform: MetaPlatform = filter === "all" ? null : filter;
+
+  // Meta do filtro selecionado
+  const activeTarget =
+    filter === "all"
+      ? totalTarget
+      : (platformStats.find((s) => s.platform === filter)?.target ?? 0);
+
+  const { data: daily = [] } = useMetaDailyActuals(month, hookPlatform);
   const daysInMonth = getDaysInMonth(month);
-  const dailyTarget = totalTarget > 0 ? totalTarget / daysInMonth : 0;
+  const dailyTarget = activeTarget > 0 ? activeTarget / daysInMonth : 0;
 
   const totalRevenue = daily.reduce((s, d) => s + d.revenue, 0);
 
@@ -219,8 +242,47 @@ function DailyChart({
     );
   };
 
+  // Cor do filtro ativo (usa a progressColor da plataforma, ou do total)
+  const activeColor = filter === "all"
+    ? (platformStats.reduce((s, p) => s + p.actual, 0) > 0 ? "gray" : "gray")
+    : (platformStats.find((s) => s.platform === filter)?.progressColor ?? "gray");
+  const activeBarColor = activeColor === "green" ? "#22c55e"
+    : activeColor === "yellow" ? "#f59e0b"
+    : activeColor === "red" ? "#ef4444"
+    : "#6366f1";
+
   return (
-    <div className="w-full h-72">
+    <div className="w-full space-y-3">
+      {/* Filtro de plataforma */}
+      <div className="flex flex-wrap gap-1.5">
+        {FILTER_OPTIONS.map((opt) => (
+          <button
+            key={String(opt.value)}
+            onClick={() => setFilter(opt.value)}
+            className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium border transition-colors
+              ${filter === opt.value
+                ? "bg-foreground text-background border-foreground"
+                : "bg-muted/40 text-muted-foreground border-transparent hover:border-border hover:text-foreground"
+              }`}
+          >
+            <span>{opt.emoji}</span> {opt.label}
+            {opt.value !== "all" && (() => {
+              const ps = platformStats.find((s) => s.platform === opt.value);
+              return ps && ps.target > 0 ? (
+                <span className={`ml-0.5 ${
+                  ps.progressColor === "green" ? "text-green-500" :
+                  ps.progressColor === "yellow" ? "text-amber-500" :
+                  ps.progressColor === "red" ? "text-red-500" : ""
+                }`}>
+                  {ps.actualPct.toFixed(0)}%
+                </span>
+              ) : null;
+            })()}
+          </button>
+        ))}
+      </div>
+
+      <div className="w-full h-72">
       <ResponsiveContainer width="100%" height="100%">
         <BarChart data={data} margin={{ top: 22, right: 4, left: 0, bottom: 0 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
@@ -263,6 +325,7 @@ function DailyChart({
           </Bar>
         </BarChart>
       </ResponsiveContainer>
+      </div>
     </div>
   );
 }
@@ -538,7 +601,7 @@ export default function MetaEcommercePage() {
             <DailyChart
               month={month}
               totalTarget={totalStats.target}
-              progressColor={totalStats.progressColor}
+              platformStats={platformStats}
             />
           </CarboCardContent>
         </CarboCard>
