@@ -305,6 +305,9 @@ const ROUTE_LABELS: Record<string, string> = {
   "territory-intelligence": "Inteligência Territorial",
   "territory-expansion": "Expansão Territorial",
   "sales-targets": "Metas de Vendas",
+  "metas": "Metas",
+  "ecommerce": "Ecommerce",
+  "vendedores": "Vendedores",
   "org-chart": "Organograma",
   "pdv-network": "Rede PDV",
   "role-matrix": "Matriz de Acesso",
@@ -370,6 +373,7 @@ export function BoardLayout({ children }: BoardLayoutProps) {
   const isMobile = useIsMobile();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [ecommerceOpen, setEcommerceOpen] = useState(false);
+  const [metasOpen, setMetasOpen] = useState(false);
 
   // ── Onboarding → PasswordChange sequencing ─────────────────────────────────
   // PasswordChangeModal only renders AFTER onboarding is dismissed/done,
@@ -726,6 +730,44 @@ export function BoardLayout({ children }: BoardLayoutProps) {
                     </Link>
                   );
                 })()}
+              </div>
+            )}
+
+            {/* ── Pasta: Metas ── */}
+            <button
+              onClick={() => setMetasOpen(v => !v)}
+              className={cn(
+                "flex items-center gap-2.5 w-full rounded-lg px-3 py-2 text-sm transition-all duration-200",
+                (isItemActive("/dashboards/metas") && !metasOpen)
+                  ? "bg-area-controle-soft text-area-controle font-medium"
+                  : "text-muted-foreground hover:bg-secondary hover:text-foreground"
+              )}
+            >
+              <Target className="h-4 w-4 flex-shrink-0" />
+              <span className="flex-1 text-left truncate">Metas</span>
+              <ChevronRight className={cn("h-3.5 w-3.5 flex-shrink-0 transition-transform duration-200", metasOpen && "rotate-90")} />
+            </button>
+            {metasOpen && (
+              <div className="pl-4 space-y-0.5">
+                {[
+                  { href: "/dashboards/metas/ecommerce",  label: "Meta Ecommerce",  Icon: ShoppingBag },
+                  { href: "/dashboards/metas/vendedores", label: "Meta Vendedores", Icon: Users },
+                ].map(({ href, label, Icon }) => {
+                  const isActive = isItemActive(href);
+                  return (
+                    <Link key={href} to={href} onClick={() => setSidebarOpen(false)}
+                      className={cn(
+                        "flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition-all duration-200",
+                        isActive ? "bg-area-controle-soft text-area-controle font-medium"
+                                 : "text-muted-foreground hover:bg-secondary hover:text-foreground"
+                      )}
+                    >
+                      <Icon className="h-4 w-4 flex-shrink-0" />
+                      <span className="truncate">{label}</span>
+                      {isActive && <ChevronRight className="h-3.5 w-3.5 ml-auto text-area-controle flex-shrink-0" />}
+                    </Link>
+                  );
+                })}
               </div>
             )}
           </>
