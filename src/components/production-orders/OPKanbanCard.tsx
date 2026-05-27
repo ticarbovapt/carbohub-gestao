@@ -129,18 +129,31 @@ export function OPKanbanCard({ order, onAdvance, onComplete, onClick }: OPKanban
         </div>
       )}
 
-      {/* QA approved badge */}
+      {/* QA approved: badge + "Liberar" button */}
       {order.op_status === "qualidade_aprovada" && (
-        <div className="pt-2 border-t border-border">
+        <div className="pt-2 border-t border-border space-y-1.5">
           <div className="flex items-center justify-center gap-1.5 text-xs font-semibold text-green-600">
             <ShieldCheck className="h-3.5 w-3.5" />
             QA Aprovado
           </div>
+          {onAdvance && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="w-full h-7 text-xs text-green-600 border-green-500/40 hover:bg-green-500/10"
+              onClick={(e) => {
+                e.stopPropagation();
+                onAdvance(order);
+              }}
+            >
+              Liberar <ChevronRight className="h-3 w-3 ml-1" />
+            </Button>
+          )}
         </div>
       )}
 
-      {/* Advance action */}
-      {onAdvance && !onComplete && (
+      {/* Advance action — all statuses except aguardando_qualidade and qualidade_aprovada */}
+      {onAdvance && order.op_status !== "aguardando_qualidade" && order.op_status !== "qualidade_aprovada" && (
         <div className="pt-2 border-t border-border">
           <Button
             variant="outline"
