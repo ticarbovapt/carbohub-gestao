@@ -136,8 +136,7 @@ export function StockOverview({ hubView = "sp" }: StockOverviewProps) {
         const ws = warehouseStock?.find(s => s.product_id === p.id && s.warehouse_id === w.id);
         return { name: w.name, qty: ws?.quantity || 0 };
       });
-      const hasAnyHubData = (warehouseStock || []).some(s => s.product_id === p.id);
-      const totalQty = hasAnyHubData ? hubStocks.reduce((s, h) => s + h.qty, 0) : p.current_stock_qty;
+      const totalQty = hubStocks.reduce((s, h) => s + h.qty, 0);
       const row: Record<string, unknown> = {
         Código: p.product_code,
         Nome: p.name,
@@ -162,9 +161,8 @@ export function StockOverview({ hubView = "sp" }: StockOverviewProps) {
     const ws = defaultHub
       ? warehouseStock?.find(s => s.product_id === p.id && s.warehouse_id === defaultHub)
       : undefined;
-    const anyHubData = warehouseStock?.some(s => s.product_id === p.id) ?? false;
-    // No SP não usa current_stock_qty como fallback — o dado correto é sempre warehouse_stock
-    const qty = ws?.quantity ?? (isSP ? 0 : (anyHubData ? 0 : p.current_stock_qty));
+    // warehouse_stock é sempre a fonte de verdade — nunca usa current_stock_qty como fallback
+    const qty = ws?.quantity ?? 0;
 
     setEditing({
       id: p.id,
@@ -431,11 +429,9 @@ export function StockOverview({ hubView = "sp" }: StockOverviewProps) {
               };
             });
 
-            // Quando hub específico está selecionado, mostra apenas o stock daquele hub (sem fallback)
+            // warehouse_stock é sempre a fonte de verdade (nunca usa current_stock_qty como fallback)
             const hasAnyHubData = (warehouseStock || []).some(s => s.product_id === p.id);
-            const totalQty = (selectedWarehouse !== "all" || hasAnyHubData)
-              ? hubStocks.reduce((sum, h) => sum + h.qty, 0)
-              : p.current_stock_qty;
+            const totalQty = hubStocks.reduce((sum, h) => sum + h.qty, 0);
 
             const hubTarget = hubStocks.length > 0 ? Math.ceil(safetyQty / Math.max(hubStocks.length, 1)) : safetyQty;
 
