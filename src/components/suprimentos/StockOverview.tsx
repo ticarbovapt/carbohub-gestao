@@ -259,7 +259,10 @@ export function StockOverview({ hubView = "sp" }: StockOverviewProps) {
       qc.invalidateQueries({ queryKey: ["warehouse-stock"] });
       qc.invalidateQueries({ queryKey: ["warehouse-stock-all"] });
       qc.invalidateQueries({ queryKey: ["suprimentos-kpis"] });
-      toast.success("Ajuste salvo com sucesso");
+      toast.success("Ajuste manual registrado", {
+        description: `Motivo: "${reason}" — consulte a aba Movimentos para ver o histórico completo.`,
+        duration: 6000,
+      });
       setEditing(null);
     } catch {
       // error handled by hook
