@@ -1,4 +1,4 @@
-import { Package, Truck, CheckCircle, Users } from "lucide-react";
+import { Package, Truck, CheckCircle, Users, XCircle } from "lucide-react";
 import { CarboCard, CarboCardContent } from "@/components/ui/carbo-card";
 import { CarboBadge } from "@/components/ui/carbo-badge";
 import { Button } from "@/components/ui/button";
@@ -73,6 +73,48 @@ export function CDSPVendasView({ spVendasWarehouseId }: Props) {
       toast.success("Chegada confirmada — estoque atualizado no CD SP Vendas");
     },
     onError: () => toast.error("Erro ao confirmar chegada"),
+  });
+
+  const revertTransfer = useMutation({
+    mutationFn: async (transfer: Record<string, unknown>) => {
+      const transferId = transfer.id as string;
+      const productId  = transfer.product_id as string;
+      const qty        = transfer.quantity as number;
+      const fromHub    = transfer.from_hub as string; // HUB-RN
+
+      // Devolve ao warehouse_stock do Hub Natal
+      const { data: ws } = await supabase
+        .from("warehouse_stock")
+        .select("id, quantity")
+        .eq("warehouse_id", fromHub)
+        .eq("product_id", productId)
+        .maybeSingle();
+
+      if (ws) {
+        await supabase.from("warehouse_stock")
+          .update({ quantity: (ws.quantity as number) + qty, updated_at: new Date().toISOString() })
+          .eq("id", ws.id);
+      } else {
+        await supabase.from("warehouse_stock")
+          .insert({ warehouse_id: fromHub, product_id: productId, quantity: qty });
+      }
+
+      // Cancela a transferência
+      const { error } = await supabase
+        .from("stock_transfers")
+        .update({ status: "cancelled", updated_at: new Date().toISOString() } as never)
+        .eq("id", transferId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["sp-vendas-transito"] });
+      qc.invalidateQueries({ queryKey: ["rn-envios-sp"] });
+      qc.invalidateQueries({ queryKey: ["warehouse-stock"] });
+      qc.invalidateQueries({ queryKey: ["warehouse-stock-all"] });
+      qc.invalidateQueries({ queryKey: ["suprimentos-kpis-hub"] });
+      toast.success("Envio estornado — estoque devolvido ao Hub Natal");
+    },
+    onError: () => toast.error("Erro ao estornar envio"),
   });
 
   const pending  = (transfers || []).filter(t => (t.status as string) !== "executed");
@@ -156,16 +198,28 @@ export function CDSPVendasView({ spVendasWarehouseId }: Props) {
                   </CarboBadge>
                 </div>
                 {!done && (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="gap-1.5 shrink-0 border-green-500/30 text-carbo-green hover:bg-green-500/10"
-                    onClick={() => confirmArrival.mutate(t as Record<string, unknown>)}
-                    disabled={confirmArrival.isPending}
-                  >
-                    <CheckCircle className="h-4 w-4" />
-                    Confirmar chegada
-                  </Button>
+                  <div className="flex flex-col gap-1.5 shrink-0">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="gap-1.5 border-green-500/30 text-carbo-green hover:bg-green-500/10"
+                      onClick={() => confirmArrival.mutate(t as Record<string, unknown>)}
+                      disabled={confirmArrival.isPending || revertTransfer.isPending}
+                    >
+                      <CheckCircle className="h-4 w-4" />
+                      Confirmar chegada
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="gap-1.5 border-destructive/40 text-destructive hover:bg-destructive/10"
+                      onClick={() => revertTransfer.mutate(t as Record<string, unknown>)}
+                      disabled={confirmArrival.isPending || revertTransfer.isPending}
+                    >
+                      <XCircle className="h-4 w-4" />
+                      Não chegou / Estornar
+                    </Button>
+                  </div>
                 )}
               </div>
             </CarboCardContent>
