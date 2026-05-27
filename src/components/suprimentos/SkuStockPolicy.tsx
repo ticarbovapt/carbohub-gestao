@@ -3,7 +3,6 @@ import { CarboCard, CarboCardContent, CarboCardHeader, CarboCardTitle } from "@/
 import { CarboButton } from "@/components/ui/carbo-button";
 import { CarboSearchInput } from "@/components/ui/carbo-input";
 import { CarboBadge } from "@/components/ui/carbo-badge";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
@@ -39,16 +38,14 @@ function useWarehouses() {
 export function SkuStockPolicy({ hubView }: { hubView?: "sp" | "rn" }) {
   const { data: skus = [] } = useSkus();
   const { data: allWarehouses = [] } = useWarehouses();
-  const warehouses = hubView
-    ? allWarehouses.filter(w => w.code === (hubView === "sp" ? "HUB-SP" : "HUB-RN"))
-    : allWarehouses;
+  // Always show all active warehouses — each hub has its own independent policy
+  const warehouses = allWarehouses;
   const { data: policies = [] } = useSkuWarehousePolicies();
   const { data: deficits = [] } = useInsumoRequirements();
   const upsertPolicy = useUpsertSkuWarehousePolicy();
   const [search, setSearch] = useState("");
   const [editDialog, setEditDialog] = useState<{ sku: Sku; warehouse: Warehouse } | null>(null);
   const [editQty, setEditQty] = useState(0);
-  const [editDays, setEditDays] = useState(30);
 
   const activeSkus = useMemo(() => {
     return skus
@@ -67,9 +64,7 @@ export function SkuStockPolicy({ hubView }: { hubView?: "sp" | "rn" }) {
 
   const handleEdit = (sku: Sku, warehouse: Warehouse) => {
     const current = getPolicyQty(sku.id, warehouse.id);
-    const currentPolicy = policies.find((p) => p.sku_id === sku.id && p.warehouse_id === warehouse.id);
     setEditQty(current);
-    setEditDays(currentPolicy?.min_coverage_days || 30);
     setEditDialog({ sku, warehouse });
   };
 
@@ -79,7 +74,6 @@ export function SkuStockPolicy({ hubView }: { hubView?: "sp" | "rn" }) {
       sku_id: editDialog.sku.id,
       warehouse_id: editDialog.warehouse.id,
       safety_stock_qty: editQty,
-      min_coverage_days: editDays,
     });
     setEditDialog(null);
   };
@@ -211,22 +205,6 @@ export function SkuStockPolicy({ hubView }: { hubView?: "sp" | "rn" }) {
               <p className="text-xs text-muted-foreground">
                 Quando o estoque cair abaixo deste valor, o sistema alertará e sugerirá OP/PC automaticamente.
               </p>
-            </div>
-            <div className="space-y-2">
-              <Label>Cobertura mínima (dias)</Label>
-              <Select value={String(editDays)} onValueChange={(v) => setEditDays(Number(v))}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="7">7 dias</SelectItem>
-                  <SelectItem value="15">15 dias</SelectItem>
-                  <SelectItem value="30">30 dias</SelectItem>
-                  <SelectItem value="45">45 dias</SelectItem>
-                  <SelectItem value="60">60 dias</SelectItem>
-                  <SelectItem value="90">90 dias</SelectItem>
-                </SelectContent>
-              </Select>
             </div>
           </div>
           <div className="flex justify-end gap-2">
