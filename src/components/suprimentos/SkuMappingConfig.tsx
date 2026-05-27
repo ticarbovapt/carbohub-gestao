@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Plus, Pencil, Trash2, Save, X, Link2, Info } from "lucide-react";
+import { Plus, Pencil, Trash2, Save, X, Link2, Info, Zap } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { CarboCard, CarboCardContent } from "@/components/ui/carbo-card";
@@ -148,43 +148,73 @@ export function SkuMappingConfig() {
     PLATFORMS.find(x => x.value === (p || ""))?.label ?? p ?? "Todas";
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       {/* Header info */}
       <div className="flex items-start gap-3 px-4 py-3 rounded-lg bg-blue-500/10 border border-blue-500/20">
         <Info className="h-4 w-4 text-blue-400 shrink-0 mt-0.5" />
         <div className="text-sm text-blue-300/90">
           <p className="font-medium mb-0.5">Como funciona o mapeamento</p>
           <p className="text-xs text-muted-foreground">
-            Cada venda no e-commerce usa o SKU da plataforma. Aqui você define qual produto do estoque CD SP
-            esse SKU representa e quantas unidades deduzir por kit vendido.
-            <br />
-            <span className="text-blue-400 font-medium">Exemplo:</span> SKU "MLB-KIT-CZ-SACHE" → CarboZé Sachê 10ml × 10 unidades por kit.
+            O sistema tenta deduzir o estoque CD SP em duas etapas: primeiro busca um mapeamento
+            configurado abaixo; se não encontrar, tenta combinar o SKU da plataforma diretamente com o
+            <strong className="text-foreground"> código interno do produto</strong> (1 vendido = 1 deduzido).
+            Use mapeamentos explícitos para kits ou quando o SKU da plataforma for diferente do código interno.
           </p>
         </div>
       </div>
 
-      <div className="flex justify-end">
-        <Button size="sm" onClick={openNew} className="gap-1.5 carbo-gradient text-white">
-          <Plus className="h-3.5 w-3.5" />
-          Novo Mapeamento
-        </Button>
+      {/* Auto-match: produtos com product_code */}
+      <div className="space-y-2">
+        <div className="flex items-center gap-2">
+          <Zap className="h-4 w-4 text-carbo-green" />
+          <span className="text-sm font-medium">Auto-match por código interno</span>
+          <span className="text-xs text-muted-foreground">(sem configuração necessária)</span>
+        </div>
+        <div className="grid gap-1.5 sm:grid-cols-2">
+          {products.map(p => (
+            <div key={p.id} className="flex items-center gap-2 px-3 py-2 rounded-md bg-muted/40 border border-border">
+              <code className="text-xs font-mono text-carbo-green font-semibold shrink-0">{p.product_code}</code>
+              <span className="text-xs text-muted-foreground">→</span>
+              <span className="text-xs font-medium truncate">{p.name}</span>
+              <span className="ml-auto text-[10px] text-muted-foreground shrink-0">× 1 {p.stock_unit}</span>
+            </div>
+          ))}
+        </div>
+        <p className="text-[11px] text-muted-foreground">
+          Se a plataforma enviar exatamente um desses códigos como SKU, a dedução é automática (1 unidade por venda).
+          Para kits ou SKUs diferentes, crie um mapeamento abaixo.
+        </p>
       </div>
 
-      {isLoading ? (
-        <div className="text-center py-12 text-muted-foreground">Carregando...</div>
-      ) : mappings.length === 0 ? (
-        <CarboCard>
-          <CarboCardContent className="py-12 text-center">
-            <Link2 className="h-12 w-12 mx-auto mb-3 text-muted-foreground/30" />
-            <p className="text-muted-foreground font-medium">Nenhum mapeamento configurado</p>
-            <p className="text-xs text-muted-foreground mt-1">
-              Adicione os SKUs das plataformas e vincule aos produtos do estoque CD SP
-            </p>
-          </CarboCardContent>
-        </CarboCard>
-      ) : (
-        <div className="space-y-2">
-          {mappings.map(m => {
+      {/* Mapeamentos explícitos */}
+      <div className="space-y-2">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Link2 className="h-4 w-4 text-carbo-blue" />
+            <span className="text-sm font-medium">Mapeamentos explícitos</span>
+            <span className="text-xs text-muted-foreground">(SKUs de plataforma e kits)</span>
+          </div>
+          <Button size="sm" onClick={openNew} className="gap-1.5 carbo-gradient text-white">
+            <Plus className="h-3.5 w-3.5" />
+            Novo Mapeamento
+          </Button>
+        </div>
+
+        {isLoading ? (
+          <div className="text-center py-8 text-muted-foreground">Carregando...</div>
+        ) : mappings.length === 0 ? (
+          <CarboCard>
+            <CarboCardContent className="py-8 text-center">
+              <Link2 className="h-10 w-10 mx-auto mb-2 text-muted-foreground/30" />
+              <p className="text-sm text-muted-foreground">Nenhum mapeamento explícito ainda</p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Adicione quando o SKU da plataforma for diferente do código interno ou para kits
+              </p>
+            </CarboCardContent>
+          </CarboCard>
+        ) : (
+          <div className="space-y-2">
+            {mappings.map(m => {
             const prod = m.mrp_products as any;
             return (
               <CarboCard key={m.id} className={!m.is_active ? "opacity-50" : ""}>
@@ -238,7 +268,8 @@ export function SkuMappingConfig() {
             );
           })}
         </div>
-      )}
+        )}
+      </div>
 
       {/* Dialog */}
       <Dialog open={dialogOpen} onOpenChange={v => !v && setDialogOpen(false)}>
