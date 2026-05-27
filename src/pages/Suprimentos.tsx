@@ -2,7 +2,7 @@ import { useState } from "react";
 import {
   Package, ArrowDownToLine, ArrowUpFromLine, BarChart3,
   AlertTriangle, Layers, History, Lightbulb, Shield,
-  MapPin, Send, Truck, AlertCircle, Link2,
+  MapPin, Send, Truck, AlertCircle, Link2, Users,
 } from "lucide-react";
 import { BoardLayout } from "@/components/layouts/BoardLayout";
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
@@ -24,10 +24,11 @@ import { PendingSuggestions } from "@/components/suprimentos/PendingSuggestions"
 import { SkuStockPolicy } from "@/components/suprimentos/SkuStockPolicy";
 import { CDSPTransito } from "@/components/suprimentos/CDSPTransito";
 import { CDSPRegistrarEnvio } from "@/components/suprimentos/CDSPRegistrarEnvio";
+import { CDSPVendasView } from "@/components/suprimentos/CDSPVendasView";
 import { RNEnviosSP } from "@/components/suprimentos/RNEnviosSP";
 import { SkuMappingConfig } from "@/components/suprimentos/SkuMappingConfig";
 
-type HubView = "sp" | "rn";
+type HubView = "sp" | "sp-vendas" | "rn";
 
 const PERIOD_OPTIONS = [
   { value: "7",  label: "Últimos 7 dias"  },
@@ -55,7 +56,6 @@ function useSpLowStockProducts(spWarehouseId: string | undefined) {
         .from("warehouse_stock")
         .select("product_id, quantity, mrp_products:product_id(name, safety_stock_qty, min_order_qty)")
         .eq("warehouse_id", spWarehouseId!);
-
       return (stockRows || []).filter((s: any) => {
         const p = s.mrp_products as any;
         const safety = p?.safety_stock_qty || p?.min_order_qty || 5;
@@ -72,27 +72,32 @@ export default function Suprimentos() {
   const [period,       setPeriod]       = useState("7");
   const [envioOpen,    setEnvioOpen]    = useState(false);
 
-  const isSP = hubView === "sp";
-  const warehouseCode = isSP ? "HUB-SP" : "HUB-RN";
+  const isSP      = hubView === "sp";
+  const isVendas  = hubView === "sp-vendas";
+  const isRN      = hubView === "rn";
+  const warehouseCode = isSP ? "HUB-SP" : isVendas ? "HUB-SP-VENDAS" : "HUB-RN";
 
   const { data: warehouses } = useWarehouses();
-  const spWarehouse = warehouses?.find(w => w.code === "HUB-SP");
-  const rnWarehouse = warehouses?.find(w => w.code === "HUB-RN");
+  const spWarehouse      = warehouses?.find(w => w.code === "HUB-SP");
+  const spVendasWarehouse = warehouses?.find(w => w.code === "HUB-SP-VENDAS");
+  const rnWarehouse      = warehouses?.find(w => w.code === "HUB-RN");
 
   const { data: kpisHub    } = useSuprimentosKPIsByHub(warehouseCode, Number(period));
   const { data: kpisGlobal } = useSuprimentosKPIs();
-  const kpis = isSP ? kpisHub : kpisGlobal;
+  const kpis = isRN ? kpisGlobal : kpisHub;
 
   const { data: lowStockProducts } = useSpLowStockProducts(spWarehouse?.id);
 
   const canApprove = useCanManageStock();
   const periodLabel = PERIOD_OPTIONS.find(o => o.value === period)?.label.replace("Últimos ", "") ?? `${period}d`;
 
-  // Reset tab to valid option when switching hubs
   const handleHubChange = (hub: HubView) => {
     setHubView(hub);
-    if (hub === "sp" && (activeTab === "recebimento" || activeTab === "notas" || activeTab === "envios-sp")) setActiveTab("estoque");
-    if (hub === "rn" && (activeTab === "transito" || activeTab === "mapeamento-sku")) setActiveTab("estoque");
+    const spOnlyTabs = ["recebimento", "notas", "envios-sp"];
+    const rnOnlyTabs = ["transito", "mapeamento-sku", "vendas-transito"];
+    if ((hub === "sp" || hub === "sp-vendas") && spOnlyTabs.includes(activeTab)) setActiveTab("estoque");
+    if (hub === "rn" && rnOnlyTabs.includes(activeTab)) setActiveTab("estoque");
+    if (hub === "sp-vendas" && activeTab === "mapeamento-sku") setActiveTab("estoque");
   };
 
   return (
@@ -116,7 +121,7 @@ export default function Suprimentos() {
           </div>
         </div>
 
-        {/* Hub selector + SP actions */}
+        {/* Hub selector */}
         <div className="flex items-center gap-2 flex-wrap">
           <Button
             variant={isSP ? "default" : "outline"}
@@ -125,19 +130,28 @@ export default function Suprimentos() {
             onClick={() => handleHubChange("sp")}
           >
             <MapPin className="h-4 w-4" />
-            CD São Paulo
+            CD SP LogHouse
           </Button>
           <Button
-            variant={!isSP ? "default" : "outline"}
+            variant={isVendas ? "default" : "outline"}
             size="sm"
-            className={`gap-2 ${!isSP ? "bg-carbo-blue hover:bg-carbo-blue/90 text-white" : ""}`}
+            className={`gap-2 ${isVendas ? "bg-carbo-blue hover:bg-carbo-blue/90 text-white" : ""}`}
+            onClick={() => handleHubChange("sp-vendas")}
+          >
+            <Users className="h-4 w-4" />
+            CD SP Vendas
+          </Button>
+          <Button
+            variant={isRN ? "default" : "outline"}
+            size="sm"
+            className={`gap-2 ${isRN ? "bg-carbo-blue hover:bg-carbo-blue/90 text-white" : ""}`}
             onClick={() => handleHubChange("rn")}
           >
             <MapPin className="h-4 w-4" />
             Hub Natal
           </Button>
 
-          {!isSP && spWarehouse && rnWarehouse && (
+          {isRN && rnWarehouse && (
             <Button
               size="sm"
               variant="outline"
@@ -150,7 +164,7 @@ export default function Suprimentos() {
           )}
         </div>
 
-        {/* Alerta de reposição — SP only */}
+        {/* Alerta reposição — SP LogHouse only */}
         {isSP && lowStockProducts && lowStockProducts.length > 0 && (
           <div className="flex items-start gap-3 px-4 py-3 rounded-lg bg-destructive/10 border border-destructive/30">
             <AlertCircle className="h-5 w-5 text-destructive shrink-0 mt-0.5" />
@@ -172,7 +186,7 @@ export default function Suprimentos() {
         {/* KPIs */}
         {kpis && (
           <div className="space-y-2">
-            {isSP && (
+            {!isRN && (
               <div className="flex items-center gap-2 justify-end">
                 <span className="text-xs text-muted-foreground">Período dos KPIs:</span>
                 <Select value={period} onValueChange={setPeriod}>
@@ -237,12 +251,12 @@ export default function Suprimentos() {
           </div>
         )}
 
-        {/* Planning Mode Panel — RN only */}
-        {planningMode && !isSP && (
+        {/* Planning Mode — RN only */}
+        {planningMode && isRN && (
           <PendingSuggestions canApprove={canApprove} />
         )}
 
-        {/* Tabs — diferentes por hub */}
+        {/* Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab}>
           <TabsList className="w-full justify-start flex-wrap h-auto gap-1 bg-muted/50 p-1">
             <TabsTrigger value="estoque" className="gap-1.5">
@@ -253,7 +267,8 @@ export default function Suprimentos() {
               <History className="h-3.5 w-3.5" />
               Movimentações
             </TabsTrigger>
-            {isSP ? (
+
+            {isSP && (
               <>
                 <TabsTrigger value="transito" className="gap-1.5">
                   <Truck className="h-3.5 w-3.5" />
@@ -264,7 +279,16 @@ export default function Suprimentos() {
                   Mapeamento SKU
                 </TabsTrigger>
               </>
-            ) : (
+            )}
+
+            {isVendas && (
+              <TabsTrigger value="vendas-transito" className="gap-1.5">
+                <Truck className="h-3.5 w-3.5" />
+                Remessas
+              </TabsTrigger>
+            )}
+
+            {isRN && (
               <>
                 <TabsTrigger value="envios-sp" className="gap-1.5">
                   <Send className="h-3.5 w-3.5" />
@@ -280,6 +304,7 @@ export default function Suprimentos() {
                 </TabsTrigger>
               </>
             )}
+
             <TabsTrigger value="politica" className="gap-1.5">
               <Shield className="h-3.5 w-3.5" />
               Política de Estoque
@@ -287,12 +312,14 @@ export default function Suprimentos() {
           </TabsList>
 
           <TabsContent value="estoque">
-            <StockOverview hubView={hubView} />
+            <StockOverview hubView={isSP ? "sp" : isRN ? "rn" : "sp"} />
           </TabsContent>
           <TabsContent value="movimentacoes">
-            <StockMovementsList hubView={hubView} />
+            <StockMovementsList hubView={isSP ? "sp" : isRN ? "rn" : "sp"} />
           </TabsContent>
-          {isSP && spWarehouse ? (
+
+          {/* SP LogHouse tabs */}
+          {spWarehouse && (
             <>
               <TabsContent value="transito">
                 <CDSPTransito spWarehouseId={spWarehouse.id} />
@@ -301,33 +328,41 @@ export default function Suprimentos() {
                 <SkuMappingConfig />
               </TabsContent>
             </>
-          ) : (
-            <>
-              {rnWarehouse && (
-                <TabsContent value="envios-sp">
-                  <RNEnviosSP rnWarehouseId={rnWarehouse.id} />
-                </TabsContent>
-              )}
-              <TabsContent value="recebimento">
-                <ReceivingsList />
-              </TabsContent>
-              <TabsContent value="notas">
-                <InvoicesList />
-              </TabsContent>
-            </>
           )}
+
+          {/* SP Vendas tab */}
+          {spVendasWarehouse && (
+            <TabsContent value="vendas-transito">
+              <CDSPVendasView spVendasWarehouseId={spVendasWarehouse.id} />
+            </TabsContent>
+          )}
+
+          {/* RN tabs */}
+          {rnWarehouse && (
+            <TabsContent value="envios-sp">
+              <RNEnviosSP rnWarehouseId={rnWarehouse.id} />
+            </TabsContent>
+          )}
+          <TabsContent value="recebimento">
+            <ReceivingsList />
+          </TabsContent>
+          <TabsContent value="notas">
+            <InvoicesList />
+          </TabsContent>
+
           <TabsContent value="politica">
-            <SkuStockPolicy hubView={hubView} />
+            <SkuStockPolicy hubView={isSP ? "sp" : isRN ? "rn" : "sp"} />
           </TabsContent>
         </Tabs>
       </div>
 
-      {/* Dialog de registro de envio — SP only */}
-      {spWarehouse && rnWarehouse && (
+      {/* Dialog envio — disponível quando na view RN */}
+      {rnWarehouse && (
         <CDSPRegistrarEnvio
           open={envioOpen}
           onClose={() => setEnvioOpen(false)}
-          spWarehouseId={spWarehouse.id}
+          spWarehouseId={spWarehouse?.id ?? ""}
+          spVendasWarehouseId={spVendasWarehouse?.id}
           rnWarehouseId={rnWarehouse.id}
         />
       )}
