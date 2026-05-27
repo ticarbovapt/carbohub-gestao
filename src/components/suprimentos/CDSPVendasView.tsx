@@ -29,9 +29,31 @@ export function CDSPVendasView({ spVendasWarehouseId }: Props) {
     enabled: !!spVendasWarehouseId,
   });
 
-  // Confirmar chegada: só marca como executado (sem dedução de estoque por enquanto)
+  // Confirmar chegada: credita warehouse_stock[HUB-SP-VENDAS] e marca como executado
   const confirmArrival = useMutation({
-    mutationFn: async (transferId: string) => {
+    mutationFn: async (transfer: Record<string, unknown>) => {
+      const transferId = transfer.id as string;
+      const productId  = transfer.product_id as string;
+      const qty        = transfer.quantity as number;
+
+      // Atualiza (ou cria) linha em warehouse_stock do CD SP Vendas
+      const { data: ws } = await supabase
+        .from("warehouse_stock")
+        .select("id, quantity")
+        .eq("warehouse_id", spVendasWarehouseId)
+        .eq("product_id", productId)
+        .maybeSingle();
+
+      if (ws) {
+        await supabase.from("warehouse_stock")
+          .update({ quantity: (ws.quantity as number) + qty, updated_at: new Date().toISOString() })
+          .eq("id", ws.id);
+      } else {
+        await supabase.from("warehouse_stock")
+          .insert({ warehouse_id: spVendasWarehouseId, product_id: productId, quantity: qty });
+      }
+
+      // Marca transferência como executada
       const { error } = await supabase
         .from("stock_transfers")
         .update({
@@ -45,7 +67,10 @@ export function CDSPVendasView({ spVendasWarehouseId }: Props) {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["sp-vendas-transito"] });
       qc.invalidateQueries({ queryKey: ["rn-envios-sp"] });
-      toast.success("Chegada confirmada — remessa registrada no CD SP Vendas");
+      qc.invalidateQueries({ queryKey: ["warehouse-stock"] });
+      qc.invalidateQueries({ queryKey: ["warehouse-stock-all"] });
+      qc.invalidateQueries({ queryKey: ["suprimentos-kpis-hub"] });
+      toast.success("Chegada confirmada — estoque atualizado no CD SP Vendas");
     },
     onError: () => toast.error("Erro ao confirmar chegada"),
   });
@@ -135,7 +160,7 @@ export function CDSPVendasView({ spVendasWarehouseId }: Props) {
                     size="sm"
                     variant="outline"
                     className="gap-1.5 shrink-0 border-green-500/30 text-carbo-green hover:bg-green-500/10"
-                    onClick={() => confirmArrival.mutate(t.id as string)}
+                    onClick={() => confirmArrival.mutate(t as Record<string, unknown>)}
                     disabled={confirmArrival.isPending}
                   >
                     <CheckCircle className="h-4 w-4" />

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Package, ArrowDownToLine, ArrowUpFromLine, BarChart3,
   AlertTriangle, Layers, History, Lightbulb, Shield,
@@ -66,11 +66,16 @@ function useSpLowStockProducts(spWarehouseId: string | undefined) {
 }
 
 export default function Suprimentos() {
-  const [activeTab,    setActiveTab]    = useState("estoque");
+  const [activeTab,    setActiveTab]    = useState(() => localStorage.getItem("sup-tab")    || "estoque");
   const [planningMode, setPlanningMode] = useState(false);
-  const [hubView,      setHubView]      = useState<HubView>("sp");
-  const [period,       setPeriod]       = useState("7");
+  const [hubView,      setHubView]      = useState<HubView>(() => (localStorage.getItem("sup-hub") as HubView) || "rn");
+  const [period,       setPeriod]       = useState(() => localStorage.getItem("sup-period") || "7");
   const [envioOpen,    setEnvioOpen]    = useState(false);
+
+  // Persiste no localStorage sempre que mudar
+  useEffect(() => { localStorage.setItem("sup-hub",    hubView);    }, [hubView]);
+  useEffect(() => { localStorage.setItem("sup-tab",    activeTab);  }, [activeTab]);
+  useEffect(() => { localStorage.setItem("sup-period", period);     }, [period]);
 
   const isSP      = hubView === "sp";
   const isVendas  = hubView === "sp-vendas";
@@ -121,8 +126,17 @@ export default function Suprimentos() {
           </div>
         </div>
 
-        {/* Hub selector */}
+        {/* Hub selector — Hub Natal primeiro */}
         <div className="flex items-center gap-2 flex-wrap">
+          <Button
+            variant={isRN ? "default" : "outline"}
+            size="sm"
+            className={`gap-2 ${isRN ? "bg-carbo-blue hover:bg-carbo-blue/90 text-white" : ""}`}
+            onClick={() => handleHubChange("rn")}
+          >
+            <MapPin className="h-4 w-4" />
+            Hub Natal
+          </Button>
           <Button
             variant={isSP ? "default" : "outline"}
             size="sm"
@@ -140,15 +154,6 @@ export default function Suprimentos() {
           >
             <Users className="h-4 w-4" />
             CD SP Vendas
-          </Button>
-          <Button
-            variant={isRN ? "default" : "outline"}
-            size="sm"
-            className={`gap-2 ${isRN ? "bg-carbo-blue hover:bg-carbo-blue/90 text-white" : ""}`}
-            onClick={() => handleHubChange("rn")}
-          >
-            <MapPin className="h-4 w-4" />
-            Hub Natal
           </Button>
 
           {isRN && rnWarehouse && (
