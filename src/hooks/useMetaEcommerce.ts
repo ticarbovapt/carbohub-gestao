@@ -319,7 +319,94 @@ export function useMetaStats(month: Date): {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Upsert target mutation
+// Historical monthly totals (all available data, per platform or total)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface MonthlyHistoryEntry {
+  month: string;   // "2025-04"
+  label: string;   // "abr/25"
+  revenue: number;
+  target: number;
+}
+
+export function useMetaMonthlyHistory(platform: MetaPlatform = null) {
+  return useQuery({
+    queryKey: ["meta_ecommerce_history", platform ?? "all"],
+    queryFn: async () => {
+      const dayMap: Record<string, number> = {};
+
+      if (platform === "vindi") {
+        const { data, error } = await (supabase as any)
+          .from("vindi_orders")
+          .select("amount, paid_at")
+          .eq("status", "paid")
+          .not("paid_at", "is", null);
+        if (error) throw error;
+        for (const v of data || []) {
+          const m = v.paid_at?.slice(0, 7);
+          if (m) dayMap[m] = (dayMap[m] || 0) + Number(v.amount || 0);
+        }
+      } else {
+        let query = (supabase as any)
+          .from("ecommerce_orders")
+          .select("total, ordered_at")
+          .neq("status", "cancelled")
+          .not("ordered_at", "is", null);
+        if (platform !== null) query = query.eq("platform", platform);
+        const { data, error } = await query;
+        if (error) throw error;
+        for (const o of data || []) {
+          const m = o.ordered_at?.slice(0, 7);
+          if (m) dayMap[m] = (dayMap[m] || 0) + Number(o.total || 0);
+        }
+        // Total geral inclui Vindi
+        if (platform === null) {
+          const { data: vindi, error: vErr } = await (supabase as any)
+            .from("vindi_orders")
+            .select("amount, paid_at")
+            .eq("status", "paid")
+            .not("paid_at", "is", null);
+          if (vErr) throw vErr;
+          for (const v of vindi || []) {
+            const m = v.paid_at?.slice(0, 7);
+            if (m) dayMap[m] = (dayMap[m] || 0) + Number(v.amount || 0);
+          }
+        }
+      }
+
+      // Busca todas as metas cadastradas para essa plataforma
+      let targetsQuery = (supabase as any)
+        .from("meta_ecommerce")
+        .select("month, target_amount");
+      targetsQuery = platform === null
+        ? targetsQuery.is("platform", null)
+        : targetsQuery.eq("platform", platform);
+      const { data: targets } = await targetsQuery;
+      const targetMap: Record<string, number> = {};
+      for (const t of targets || []) {
+        const m = t.month?.slice(0, 7);
+        if (m) targetMap[m] = Number(t.target_amount || 0);
+      }
+
+      const monthLabel = (m: string) => {
+        const [y, mo] = m.split("-");
+        return new Date(Number(y), Number(mo) - 1, 1)
+          .toLocaleDateString("pt-BR", { month: "short", year: "2-digit" })
+          .replace(".", "");
+      };
+
+      return Object.entries(dayMap)
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([month, revenue]) => ({
+          month,
+          label: monthLabel(month),
+          revenue,
+          target: targetMap[month] || 0,
+        })) as MonthlyHistoryEntry[];
+    },
+    staleTime: 5 * 60 * 1000, // 5 min — histórico muda pouco
+  });
+}
 // ─────────────────────────────────────────────────────────────────────────────
 
 export function useUpsertMetaTarget() {
