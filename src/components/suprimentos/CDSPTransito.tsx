@@ -1,4 +1,4 @@
-import { Truck, CheckCircle, Package } from "lucide-react";
+import { Truck, CheckCircle, Package, XCircle } from "lucide-react";
 import { CarboCard, CarboCardContent } from "@/components/ui/carbo-card";
 import { CarboBadge } from "@/components/ui/carbo-badge";
 import { Button } from "@/components/ui/button";
@@ -78,6 +78,48 @@ export function CDSPTransito({ spWarehouseId }: Props) {
     onError: () => toast.error("Erro ao confirmar chegada"),
   });
 
+  const revertTransfer = useMutation({
+    mutationFn: async (transfer: Record<string, unknown>) => {
+      const productId  = transfer.product_id as string;
+      const qty        = transfer.quantity as number;
+      const transferId = transfer.id as string;
+      const fromHub    = transfer.from_hub as string; // HUB-RN
+
+      // Devolve ao warehouse_stock do Hub Natal
+      const { data: ws } = await supabase
+        .from("warehouse_stock")
+        .select("id, quantity")
+        .eq("warehouse_id", fromHub)
+        .eq("product_id", productId)
+        .maybeSingle();
+
+      if (ws) {
+        await supabase.from("warehouse_stock")
+          .update({ quantity: (ws.quantity as number) + qty, updated_at: new Date().toISOString() })
+          .eq("id", ws.id);
+      } else {
+        await supabase.from("warehouse_stock")
+          .insert({ warehouse_id: fromHub, product_id: productId, quantity: qty });
+      }
+
+      // Cancela a transferência
+      const { error } = await supabase.from("stock_transfers")
+        .update({ status: "cancelled", updated_at: new Date().toISOString() } as never)
+        .eq("id", transferId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["sp-transito"] });
+      qc.invalidateQueries({ queryKey: ["rn-envios-sp"] });
+      qc.invalidateQueries({ queryKey: ["warehouse-stock"] });
+      qc.invalidateQueries({ queryKey: ["warehouse-stock-all"] });
+      qc.invalidateQueries({ queryKey: ["suprimentos-kpis-hub"] });
+      qc.invalidateQueries({ queryKey: ["mrp-products-stock"] });
+      toast.success("Envio estornado — estoque devolvido ao Hub Natal");
+    },
+    onError: () => toast.error("Erro ao estornar envio"),
+  });
+
   if (isLoading) {
     return <div className="text-center py-12 text-muted-foreground">Carregando...</div>;
   }
@@ -137,15 +179,27 @@ export function CDSPTransito({ spWarehouseId }: Props) {
                   </p>
                   <CarboBadge variant="info">Em trânsito</CarboBadge>
                 </div>
-                <Button
-                  size="sm"
-                  className="gap-1.5 bg-carbo-green hover:bg-carbo-green/90 text-white shrink-0"
-                  onClick={() => confirmArrival.mutate(t as Record<string, unknown>)}
-                  disabled={confirmArrival.isPending}
-                >
-                  <CheckCircle className="h-4 w-4" />
-                  Confirmar Chegada
-                </Button>
+                <div className="flex flex-col gap-1.5 shrink-0">
+                  <Button
+                    size="sm"
+                    className="gap-1.5 bg-carbo-green hover:bg-carbo-green/90 text-white"
+                    onClick={() => confirmArrival.mutate(t as Record<string, unknown>)}
+                    disabled={confirmArrival.isPending || revertTransfer.isPending}
+                  >
+                    <CheckCircle className="h-4 w-4" />
+                    Confirmar Chegada
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="gap-1.5 border-destructive/40 text-destructive hover:bg-destructive/10"
+                    onClick={() => revertTransfer.mutate(t as Record<string, unknown>)}
+                    disabled={confirmArrival.isPending || revertTransfer.isPending}
+                  >
+                    <XCircle className="h-4 w-4" />
+                    Não chegou / Estornar
+                  </Button>
+                </div>
               </div>
             </CarboCardContent>
           </CarboCard>

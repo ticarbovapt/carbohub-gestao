@@ -1,4 +1,4 @@
-import { Send, Truck, CheckCircle } from "lucide-react";
+import { Send, Truck, CheckCircle, XCircle } from "lucide-react";
 import { CarboCard, CarboCardContent } from "@/components/ui/carbo-card";
 import { CarboBadge } from "@/components/ui/carbo-badge";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -54,6 +54,7 @@ export function RNEnviosSP({ rnWarehouseId }: Props) {
 
   const emTransito = transfers.filter(t => (t.status as string) === "approved" || (t.status as string) === "suggested");
   const entregues  = transfers.filter(t => (t.status as string) === "executed");
+  const cancelados = transfers.filter(t => (t.status as string) === "cancelled");
 
   return (
     <div className="space-y-4">
@@ -74,6 +75,14 @@ export function RNEnviosSP({ rnWarehouseId }: Props) {
             </span>
           </div>
         )}
+        {cancelados.length > 0 && (
+          <div className="flex items-center gap-1.5">
+            <XCircle className="h-4 w-4 text-destructive" />
+            <span className="text-sm font-medium text-muted-foreground">
+              {cancelados.length} estornado{cancelados.length > 1 ? "s" : ""}
+            </span>
+          </div>
+        )}
       </div>
 
       {transfers.map(t => {
@@ -82,15 +91,18 @@ export function RNEnviosSP({ rnWarehouseId }: Props) {
         const notes     = t.notes as string | null;
         const createdAt = t.created_at as string;
         const status    = t.status as string;
-        const done      = status === "executed";
+        const done       = status === "executed";
+        const cancelled  = status === "cancelled";
 
         return (
           <CarboCard key={t.id as string}>
             <CarboCardContent className="py-4">
               <div className="flex items-center gap-4 flex-wrap">
-                <div className={`p-2 rounded-lg ${done ? "bg-green-500/10" : "bg-blue-500/10"}`}>
+                <div className={`p-2 rounded-lg ${done ? "bg-green-500/10" : cancelled ? "bg-destructive/10" : "bg-blue-500/10"}`}>
                   {done
                     ? <CheckCircle className="h-5 w-5 text-carbo-green" />
+                    : cancelled
+                    ? <XCircle className="h-5 w-5 text-destructive" />
                     : <Truck className="h-5 w-5 text-blue-400" />
                   }
                 </div>
@@ -108,8 +120,8 @@ export function RNEnviosSP({ rnWarehouseId }: Props) {
                       {product?.stock_unit || "un"}
                     </span>
                   </p>
-                  <CarboBadge variant={done ? "success" : "info"}>
-                    {done ? "Chegou no CD SP" : "Em trânsito"}
+                  <CarboBadge variant={done ? "success" : cancelled ? "cancelled" : "info"}>
+                    {done ? "Chegou no CD SP" : cancelled ? "Estornado" : "Em trânsito"}
                   </CarboBadge>
                 </div>
               </div>
