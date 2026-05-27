@@ -311,20 +311,39 @@ export function useUpsertMetaTarget() {
     }) => {
       const { data: userData } = await supabase.auth.getUser();
       const monthStr = startOfMonth(month).toISOString().slice(0, 10);
+      const now = new Date().toISOString();
 
-      const { error } = await (supabase as any)
+      // Upsert manual: não usar onConflict com platform porque NULL != NULL
+      // no PostgreSQL — a constraint nunca dispara para platform IS NULL.
+      let query = (supabase as any)
         .from("meta_ecommerce")
-        .upsert(
-          {
+        .select("id")
+        .eq("month", monthStr);
+
+      query = platform === null
+        ? query.is("platform", null)
+        : query.eq("platform", platform);
+
+      const { data: existing } = await query.maybeSingle();
+
+      if (existing?.id) {
+        const { error } = await (supabase as any)
+          .from("meta_ecommerce")
+          .update({ target_amount, updated_at: now })
+          .eq("id", existing.id);
+        if (error) throw error;
+      } else {
+        const { error } = await (supabase as any)
+          .from("meta_ecommerce")
+          .insert({
             month: monthStr,
             platform,
             target_amount,
             created_by: userData.user?.id,
-            updated_at: new Date().toISOString(),
-          },
-          { onConflict: "month,platform" }
-        );
-      if (error) throw error;
+            updated_at: now,
+          });
+        if (error) throw error;
+      }
     },
     onSuccess: (_, { month }) => {
       const monthStr = startOfMonth(month).toISOString().slice(0, 10);
