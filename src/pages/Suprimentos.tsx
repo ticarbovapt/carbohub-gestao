@@ -2,7 +2,7 @@ import { useState } from "react";
 import {
   Package, ArrowDownToLine, ArrowUpFromLine, BarChart3,
   AlertTriangle, Layers, History, Lightbulb, Shield,
-  MapPin, Send, Truck, AlertCircle,
+  MapPin, Send, Truck, AlertCircle, Link2,
 } from "lucide-react";
 import { BoardLayout } from "@/components/layouts/BoardLayout";
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
@@ -25,6 +25,7 @@ import { SkuStockPolicy } from "@/components/suprimentos/SkuStockPolicy";
 import { CDSPTransito } from "@/components/suprimentos/CDSPTransito";
 import { CDSPRegistrarEnvio } from "@/components/suprimentos/CDSPRegistrarEnvio";
 import { RNEnviosSP } from "@/components/suprimentos/RNEnviosSP";
+import { SkuMappingConfig } from "@/components/suprimentos/SkuMappingConfig";
 
 type HubView = "sp" | "rn";
 
@@ -91,7 +92,7 @@ export default function Suprimentos() {
   const handleHubChange = (hub: HubView) => {
     setHubView(hub);
     if (hub === "sp" && (activeTab === "recebimento" || activeTab === "notas" || activeTab === "envios-sp")) setActiveTab("estoque");
-    if (hub === "rn" && activeTab === "transito") setActiveTab("estoque");
+    if (hub === "rn" && (activeTab === "transito" || activeTab === "mapeamento-sku")) setActiveTab("estoque");
   };
 
   return (
@@ -253,10 +254,16 @@ export default function Suprimentos() {
               Movimentações
             </TabsTrigger>
             {isSP ? (
-              <TabsTrigger value="transito" className="gap-1.5">
-                <Truck className="h-3.5 w-3.5" />
-                Em Trânsito
-              </TabsTrigger>
+              <>
+                <TabsTrigger value="transito" className="gap-1.5">
+                  <Truck className="h-3.5 w-3.5" />
+                  Em Trânsito
+                </TabsTrigger>
+                <TabsTrigger value="mapeamento-sku" className="gap-1.5">
+                  <Link2 className="h-3.5 w-3.5" />
+                  Mapeamento SKU
+                </TabsTrigger>
+              </>
             ) : (
               <>
                 <TabsTrigger value="envios-sp" className="gap-1.5">
@@ -286,9 +293,14 @@ export default function Suprimentos() {
             <StockMovementsList hubView={hubView} />
           </TabsContent>
           {isSP && spWarehouse ? (
-            <TabsContent value="transito">
-              <CDSPTransito spWarehouseId={spWarehouse.id} />
-            </TabsContent>
+            <>
+              <TabsContent value="transito">
+                <CDSPTransito spWarehouseId={spWarehouse.id} />
+              </TabsContent>
+              <TabsContent value="mapeamento-sku">
+                <SkuMappingConfig />
+              </TabsContent>
+            </>
           ) : (
             <>
               {rnWarehouse && (
