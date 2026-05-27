@@ -45,6 +45,23 @@ export function OPKanbanBoard({ orders, onAdvance, onCardClick, onMoveToComplete
   const [activeId, setActiveId] = useState<string | null>(null);
   const [optimisticMoves, setOptimisticMoves] = useState<Record<string, string>>({});
 
+  // Direct status update with optimistic UI (used for kanban-internal advances)
+  const directAdvance = (order: ProductionOrder, targetColId: string, targetStatus: string) => {
+    setOptimisticMoves((prev) => ({ ...prev, [order.id]: targetColId }));
+    updateOP.mutate({ id: order.id, op_status: targetStatus as any }, {
+      onError: () => setOptimisticMoves((prev) => { const n = { ...prev }; delete n[order.id]; return n; }),
+    });
+  };
+
+  // Smart advance: qualidade_aprovada goes directly to liberada; others use dialog
+  const handleAdvance = (order: ProductionOrder) => {
+    if (order.op_status === "qualidade_aprovada") {
+      directAdvance(order, "liberada", "liberada");
+    } else {
+      onAdvance?.(order);
+    }
+  };
+
   const sensors = useSensors(
     useSensor(MouseSensor, { activationConstraint: { distance: 8 } }),
     useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 5 } })
@@ -90,12 +107,19 @@ export function OPKanbanBoard({ orders, onAdvance, onCardClick, onMoveToComplete
     const currentCol = OP_KANBAN_COLUMNS.find((c) => c.statuses.includes(order.op_status));
     if (currentCol?.id === targetCol.id) return;
 
-    // Moving to "qualidade", "liberada" or "concluida" opens a dialog instead of directly updating
-    if ((targetCol.id === "qualidade" || targetCol.id === "liberada" || targetCol.id === "concluida") && onMoveToComplete) {
+    // QA dialog: only when status is aguardando_qualidade (dragging to qualidade/beyond)
+    if (order.op_status === "aguardando_qualidade" && onMoveToComplete) {
       onMoveToComplete(order);
       return;
     }
 
+    // qualidade_aprovada dragged anywhere after → direct advance to liberada
+    if (order.op_status === "qualidade_aprovada" && (targetCol.id === "liberada" || targetCol.id === "concluida")) {
+      directAdvance(order, "liberada", "liberada");
+      return;
+    }
+
+    if (!targetStatus) return;
     setOptimisticMoves((prev) => ({ ...prev, [order.id]: targetCol.id }));
     updateOP.mutate({ id: order.id, op_status: targetStatus }, {
       onError: () => setOptimisticMoves((prev) => { const n = { ...prev }; delete n[order.id]; return n; }),
@@ -115,7 +139,7 @@ export function OPKanbanBoard({ orders, onAdvance, onCardClick, onMoveToComplete
             key={col.id}
             column={col}
             orders={ordersByColumn[col.id] ?? []}
-            onAdvance={onAdvance}
+            onAdvance={handleAdvance}
             onCardClick={onCardClick}
             onComplete={onMoveToComplete}
           />
