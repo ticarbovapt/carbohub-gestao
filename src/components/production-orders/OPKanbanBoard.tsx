@@ -53,9 +53,13 @@ export function OPKanbanBoard({ orders, onAdvance, onCardClick, onMoveToComplete
     });
   };
 
-  // Smart advance: qualidade_aprovada goes directly to liberada; others use dialog
+  // Statuses where confirmation has already been recorded — no need for dialog again
+  const ALREADY_CONFIRMED = new Set(["confirmada", "qualidade_aprovada", "liberada", "concluida", "bloqueada", "cancelada"]);
+
+  // Smart advance via button: confirmed/QA-approved cards advance directly to liberada;
+  // everything else opens the appropriate dialog via onAdvance
   const handleAdvance = (order: ProductionOrder) => {
-    if (order.op_status === "qualidade_aprovada") {
+    if (order.op_status === "qualidade_aprovada" || order.op_status === "confirmada") {
       directAdvance(order, "liberada", "liberada");
     } else {
       onAdvance?.(order);
@@ -107,15 +111,25 @@ export function OPKanbanBoard({ orders, onAdvance, onCardClick, onMoveToComplete
     const currentCol = OP_KANBAN_COLUMNS.find((c) => c.statuses.includes(order.op_status));
     if (currentCol?.id === targetCol.id) return;
 
-    // QA dialog: only when status is aguardando_qualidade (dragging to qualidade/beyond)
-    if (order.op_status === "aguardando_qualidade" && onMoveToComplete) {
+    // Dragging an UNCONFIRMED OP toward the quality/completion gates
+    // → open the QA+confirmation dialog (this is how warehouse_stock gets credited)
+    const isGateColumn = targetCol.id === "qualidade" || targetCol.id === "liberada" || targetCol.id === "concluida";
+    if (isGateColumn && !ALREADY_CONFIRMED.has(order.op_status) && onMoveToComplete) {
       onMoveToComplete(order);
       return;
     }
 
-    // qualidade_aprovada dragged anywhere after → direct advance to liberada
+    // Already confirmed/approved → direct status updates, no dialog
     if (order.op_status === "qualidade_aprovada" && (targetCol.id === "liberada" || targetCol.id === "concluida")) {
       directAdvance(order, "liberada", "liberada");
+      return;
+    }
+    if (order.op_status === "confirmada" && (targetCol.id === "liberada" || targetCol.id === "concluida")) {
+      directAdvance(order, "liberada", "liberada");
+      return;
+    }
+    if (order.op_status === "liberada" && targetCol.id === "concluida") {
+      directAdvance(order, "concluida", "concluida");
       return;
     }
 
