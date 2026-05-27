@@ -8,7 +8,7 @@ import { CarboBadge } from "@/components/ui/carbo-badge";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, ReferenceLine, Cell, LabelList,
-  LineChart, Line, ComposedChart,
+  LineChart, Line, ComposedChart, ReferenceDot,
 } from "recharts";
 import {
   format, startOfMonth, addMonths, subMonths,
@@ -280,10 +280,15 @@ function CumulativeLineChart({ month, activeTarget, hookPlatform }: {
       : last.cumRevenue >= (last.cumTarget ?? 0) * 0.85 ? "#f59e0b"
       : "#ef4444";
 
+  // Primeiro dia em que a meta mensal foi batida
+  const targetHitPoint = activeTarget > 0
+    ? data.find((d) => d.cumRevenue >= activeTarget)
+    : null;
+
   return (
     <div className="w-full h-72">
       <ResponsiveContainer width="100%" height="100%">
-        <LineChart data={data} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
+        <LineChart data={data} margin={{ top: 28, right: 16, left: 0, bottom: 0 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
           <XAxis dataKey="label" tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} tickLine={false} axisLine={false} />
           <YAxis tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} tickLine={false} axisLine={false}
@@ -302,6 +307,24 @@ function CumulativeLineChart({ month, activeTarget, hookPlatform }: {
           )}
           <Line type="monotone" dataKey="cumRevenue" stroke={lineColor}
             strokeWidth={2.5} dot={false} name="cumRevenue" />
+          {/* Marcador no dia em que a meta foi batida */}
+          {targetHitPoint && (
+            <ReferenceDot
+              x={targetHitPoint.label}
+              y={targetHitPoint.cumRevenue}
+              r={7}
+              fill="#22c55e"
+              stroke="white"
+              strokeWidth={2.5}
+              label={{
+                value: `🎯 Dia ${targetHitPoint.label}`,
+                position: "top",
+                fontSize: 11,
+                fontWeight: 600,
+                fill: "#22c55e",
+              }}
+            />
+          )}
         </LineChart>
       </ResponsiveContainer>
     </div>
