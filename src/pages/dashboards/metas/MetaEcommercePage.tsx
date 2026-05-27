@@ -15,6 +15,7 @@ import {
   ResponsiveContainer,
   ReferenceLine,
   Cell,
+  LabelList,
 } from "recharts";
 import { format, startOfMonth, addMonths, subMonths, getDaysInMonth, getDate } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -186,6 +187,8 @@ function DailyChart({
   const daysInMonth = getDaysInMonth(month);
   const dailyTarget = totalTarget > 0 ? totalTarget / daysInMonth : 0;
 
+  const totalRevenue = daily.reduce((s, d) => s + d.revenue, 0);
+
   const data = daily.map((d) => ({
     ...d,
     label: String(d.day),
@@ -196,12 +199,30 @@ function DailyChart({
           ? "#f59e0b"
           : "#ef4444"
       : "#6366f1",
+    contributionPct: totalRevenue > 0 ? (d.revenue / totalRevenue) * 100 : 0,
   }));
 
+  // Rótulo de % contribuição acima de cada barra
+  const renderContributionLabel = (props: any) => {
+    const { x, y, width, value } = props;
+    if (!value || value < 0.3) return null;
+    return (
+      <text
+        x={x + width / 2}
+        y={y - 3}
+        textAnchor="middle"
+        fontSize={9}
+        fill="hsl(var(--muted-foreground))"
+      >
+        {value.toFixed(1)}%
+      </text>
+    );
+  };
+
   return (
-    <div className="w-full h-64">
+    <div className="w-full h-72">
       <ResponsiveContainer width="100%" height="100%">
-        <BarChart data={data} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
+        <BarChart data={data} margin={{ top: 22, right: 4, left: 0, bottom: 0 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
           <XAxis
             dataKey="label"
@@ -238,6 +259,7 @@ function DailyChart({
             {data.map((entry, i) => (
               <Cell key={i} fill={entry.color} />
             ))}
+            <LabelList dataKey="contributionPct" content={renderContributionLabel} />
           </Bar>
         </BarChart>
       </ResponsiveContainer>
