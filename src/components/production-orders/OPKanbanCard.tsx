@@ -129,12 +129,12 @@ export function OPKanbanCard({ order, onAdvance, onComplete, onClick }: OPKanban
         </div>
       )}
 
-      {/* QA approved: badge + "Liberar" button */}
-      {order.op_status === "qualidade_aprovada" && (
+      {/* QA approved OR confirmada: badge + "Liberar" button */}
+      {(order.op_status === "qualidade_aprovada" || order.op_status === "confirmada") && (
         <div className="pt-2 border-t border-border space-y-1.5">
           <div className="flex items-center justify-center gap-1.5 text-xs font-semibold text-green-600">
             <ShieldCheck className="h-3.5 w-3.5" />
-            QA Aprovado
+            {order.op_status === "qualidade_aprovada" ? "QA Aprovado" : "Confirmada"}
           </div>
           {onAdvance && (
             <Button
@@ -152,8 +152,12 @@ export function OPKanbanCard({ order, onAdvance, onComplete, onClick }: OPKanban
         </div>
       )}
 
-      {/* Advance action — all statuses except aguardando_qualidade and qualidade_aprovada */}
-      {onAdvance && order.op_status !== "aguardando_qualidade" && order.op_status !== "qualidade_aprovada" && (
+      {/* Advance action — for all unconfirmed statuses except aguardando_qualidade */}
+      {onAdvance
+        && order.op_status !== "aguardando_qualidade"
+        && order.op_status !== "qualidade_aprovada"
+        && order.op_status !== "confirmada"
+        && (
         <div className="pt-2 border-t border-border">
           <Button
             variant="outline"
