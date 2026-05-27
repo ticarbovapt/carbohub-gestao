@@ -296,8 +296,9 @@ export function useSubmitConfirmation() {
             stock_updated_at: new Date().toISOString().split("T")[0],
           }).eq("id", item.product_id);
 
-          // Update warehouse_stock for the hub the material was separated from
-          const warehouseId = materialWarehouseMap.get(item.product_id);
+          // Deduct from warehouse_stock: use material's assigned warehouse, or fall back
+          // to the production hub (HUB-RN) so stock always comes out of Hub Natal
+          const warehouseId = materialWarehouseMap.get(item.product_id) || payload.destination_warehouse_id;
           if (warehouseId) {
             const { data: ws } = await (supabase as any)
               .from("warehouse_stock")
