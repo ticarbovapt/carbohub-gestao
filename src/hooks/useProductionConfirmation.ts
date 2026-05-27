@@ -164,6 +164,20 @@ export function useSubmitConfirmation() {
 
       if (!userId) throw new Error("Usuário não autenticado");
 
+      // 0. Resolve destination warehouse — use explicit id if set, otherwise fall back to HUB-RN
+      let destinationWarehouseId = payload.destination_warehouse_id ?? null;
+      if (!destinationWarehouseId) {
+        const { data: rnWarehouse } = await (supabase as any)
+          .from("warehouses")
+          .select("id")
+          .ilike("code", "%RN%")
+          .eq("is_active", true)
+          .maybeSingle();
+        destinationWarehouseId = rnWarehouse?.id ?? null;
+      }
+      // Override payload so all downstream references use the resolved id
+      payload = { ...payload, destination_warehouse_id: destinationWarehouseId };
+
       // 1. Calculate KPIs
       const yieldPct = payload.planned_quantity > 0
         ? Math.min(100, Math.max(0, (payload.good_quantity / payload.planned_quantity) * 100))
