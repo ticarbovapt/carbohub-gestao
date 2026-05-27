@@ -68,7 +68,7 @@ export default function MetaVendedoresPage() {
 
   // Form state — vivem no nível do page para resetar quando dialog fecha
   const [vendedorId, setVendedorId]     = useState("");
-  const [targetAmount, setTargetAmount] = useState("0");
+  const [targetDigits, setTargetDigits] = useState(""); // só dígitos para o BRL input
   const [targetQty, setTargetQty]       = useState("0");
   const [linhaVal, setLinhaVal]         = useState(LINHA_GERAL);
 
@@ -98,7 +98,7 @@ export default function MetaVendedoresPage() {
   const openNew = () => {
     setEdit(null);
     setVendedorId("");
-    setTargetAmount("0");
+    setTargetDigits("");
     setTargetQty("0");
     setLinhaVal(LINHA_GERAL);
     setDialog(true);
@@ -107,7 +107,7 @@ export default function MetaVendedoresPage() {
   const openEdit = (t: SalesTargetWithProgress) => {
     setEdit(t);
     setVendedorId(t.vendedor_id);
-    setTargetAmount(String(t.target_amount));
+    setTargetDigits(String(Math.round(Number(t.target_amount))));
     setTargetQty(String(t.target_qty));
     setLinhaVal(t.linha || LINHA_GERAL);
     setDialog(true);
@@ -115,12 +115,17 @@ export default function MetaVendedoresPage() {
 
   const handleClose = () => { setDialog(false); setEdit(null); };
 
+  const targetAmountNum = parseInt(targetDigits.replace(/\D/g, "") || "0", 10);
+  const targetDisplay   = targetAmountNum > 0
+    ? targetAmountNum.toLocaleString("pt-BR", { style: "currency", currency: "BRL", minimumFractionDigits: 0, maximumFractionDigits: 0 })
+    : "";
+
   const handleSave = async () => {
     if (!vendedorId || vendedorId === "") return;
     await upsert.mutateAsync({
       vendedor_id: vendedorId,
       month: monthStr,
-      target_amount: Number(targetAmount) || 0,
+      target_amount: targetAmountNum,
       target_qty: Number(targetQty) || 0,
       linha: linhaVal === LINHA_GERAL ? null : linhaVal,
     });
@@ -323,12 +328,14 @@ export default function MetaVendedoresPage() {
 
             {/* Meta faturamento */}
             <div className="space-y-1.5">
-              <Label>Meta de Faturamento (R$)</Label>
+              <Label>Meta de Faturamento</Label>
               <Input
-                type="number" min={0}
-                value={targetAmount}
-                onChange={e => setTargetAmount(e.target.value)}
-                placeholder="0"
+                type="text"
+                inputMode="numeric"
+                value={targetDisplay}
+                onChange={e => setTargetDigits(e.target.value.replace(/\D/g, ""))}
+                placeholder="R$ 0"
+                className="text-xl font-bold tracking-wide"
               />
             </div>
 

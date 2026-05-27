@@ -249,6 +249,14 @@ function DailyChart({
 // Edit target dialog
 // ─────────────────────────────────────────────────────────────────────────────
 
+// Formata string de dígitos brutos → "R$ 150.000"
+function formatBRLInput(raw: string): string {
+  const digits = raw.replace(/\D/g, "");
+  if (!digits) return "";
+  const num = parseInt(digits, 10);
+  return num.toLocaleString("pt-BR", { style: "currency", currency: "BRL", minimumFractionDigits: 0, maximumFractionDigits: 0 });
+}
+
 function EditTargetDialog({
   open,
   onClose,
@@ -262,14 +270,23 @@ function EditTargetDialog({
   platform: MetaPlatform;
   currentTarget: number;
 }) {
-  const [value, setValue] = useState(String(currentTarget));
+  // Armazena só os dígitos — exibe formatado
+  const [digits, setDigits] = useState(String(currentTarget > 0 ? currentTarget : ""));
   const upsert = useUpsertMetaTarget();
   const meta = platform ? PLATFORM_META[platform] : { label: "Total Geral", emoji: "🎯", color: "#22c55e" };
 
+  const numericValue = parseInt(digits.replace(/\D/g, "") || "0", 10);
+  const displayValue = formatBRLInput(digits);
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    // Aceita apenas dígitos — strips tudo mais (R$, pontos, espaços)
+    const onlyDigits = e.target.value.replace(/\D/g, "");
+    setDigits(onlyDigits);
+  };
+
   const handleSave = async () => {
-    const amount = Number(value.replace(",", ".").replace(/[^0-9.]/g, ""));
-    if (isNaN(amount) || amount < 0) return;
-    await upsert.mutateAsync({ month, platform, target_amount: amount });
+    if (numericValue < 0) return;
+    await upsert.mutateAsync({ month, platform, target_amount: numericValue });
     onClose();
   };
 
@@ -285,16 +302,22 @@ function EditTargetDialog({
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-3 py-2">
-          <p className="text-sm text-muted-foreground">Meta de faturamento (R$)</p>
+          <p className="text-sm text-muted-foreground">Meta de faturamento</p>
+          {/* Input aceita dígitos brutos, exibe formatado */}
           <Input
-            type="number"
-            min={0}
-            value={value}
-            onChange={(e) => setValue(e.target.value)}
-            className="text-xl font-bold"
-            placeholder="0"
+            type="text"
+            inputMode="numeric"
+            value={displayValue}
+            onChange={handleChange}
+            className="text-2xl font-bold tracking-wide"
+            placeholder="R$ 0"
             autoFocus
           />
+          {numericValue > 0 && (
+            <p className="text-xs text-muted-foreground text-right">
+              {numericValue.toLocaleString("pt-BR")} unidades monetárias
+            </p>
+          )}
         </div>
         <div className="flex justify-end gap-2">
           <Button variant="outline" onClick={onClose}>Cancelar</Button>

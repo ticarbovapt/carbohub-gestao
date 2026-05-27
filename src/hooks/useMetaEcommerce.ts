@@ -315,16 +315,19 @@ export function useUpsertMetaTarget() {
 
       // Upsert manual: não usar onConflict com platform porque NULL != NULL
       // no PostgreSQL — a constraint nunca dispara para platform IS NULL.
-      let query = (supabase as any)
+      // Usa limit(1) em vez de maybeSingle() para não lançar erro se houver
+      // duplicatas legadas (criadas antes do fix do índice).
+      let selectQuery = (supabase as any)
         .from("meta_ecommerce")
         .select("id")
         .eq("month", monthStr);
 
-      query = platform === null
-        ? query.is("platform", null)
-        : query.eq("platform", platform);
+      selectQuery = platform === null
+        ? selectQuery.is("platform", null)
+        : selectQuery.eq("platform", platform);
 
-      const { data: existing } = await query.maybeSingle();
+      const { data: rows } = await selectQuery.limit(1);
+      const existing = Array.isArray(rows) ? rows[0] : null;
 
       if (existing?.id) {
         const { error } = await (supabase as any)
