@@ -332,10 +332,18 @@ function CumulativeLineChart({ month, activeTarget, hookPlatform }: {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Historical bar chart (all months available)
+// Historical bar chart — com seletor de período
 // ─────────────────────────────────────────────────────────────────────────────
 
+const PERIOD_OPTIONS = [
+  { value: 3,   label: "3 meses"  },
+  { value: 6,   label: "6 meses"  },
+  { value: 12,  label: "12 meses" },
+  { value: 999, label: "Tudo"     },
+];
+
 function HistoryBarChart({ hookPlatform }: { hookPlatform: MetaPlatform }) {
+  const [periodMonths, setPeriodMonths] = useState(12);
   const { data: history = [], isLoading } = useMetaMonthlyHistory(hookPlatform);
 
   if (isLoading) return (
@@ -349,38 +357,64 @@ function HistoryBarChart({ hookPlatform }: { hookPlatform: MetaPlatform }) {
     </div>
   );
 
-  const data = history.map((h) => ({
+  // Filtra pelos últimos N meses
+  const sliced = periodMonths >= 999 ? history : history.slice(-periodMonths);
+
+  const data = sliced.map((h) => ({
     ...h,
     color: barColor(h.revenue, h.target),
   }));
   const hasTargets = data.some((d) => d.target > 0);
 
   return (
-    <div className="w-full h-72">
-      <ResponsiveContainer width="100%" height="100%">
-        <ComposedChart data={data} margin={{ top: 8, right: 4, left: 0, bottom: 0 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
-          <XAxis dataKey="label" tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} tickLine={false} axisLine={false} />
-          <YAxis tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} tickLine={false} axisLine={false}
-            tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} width={40} />
-          <Tooltip
-            formatter={(v: number, name: string) => [
-              fmtBRL(v),
-              name === "revenue" ? "Faturamento" : "Meta",
-            ]}
-            labelFormatter={(l) => String(l)}
-            contentStyle={TOOLTIP_STYLE}
-          />
-          <Bar dataKey="revenue" radius={[3, 3, 0, 0]} name="revenue">
-            {data.map((entry, i) => <Cell key={i} fill={entry.color} />)}
-          </Bar>
-          {hasTargets && (
-            <Line type="monotone" dataKey="target" stroke="hsl(var(--muted-foreground))"
-              strokeDasharray="4 4" strokeWidth={1.5} dot={{ r: 3, fill: "hsl(var(--muted-foreground))" }}
-              name="target" />
-          )}
-        </ComposedChart>
-      </ResponsiveContainer>
+    <div className="w-full space-y-3">
+      {/* Seletor de período */}
+      <div className="flex items-center gap-1.5">
+        <span className="text-xs text-muted-foreground mr-1">Período:</span>
+        {PERIOD_OPTIONS.map((opt) => (
+          <button
+            key={opt.value}
+            onClick={() => setPeriodMonths(opt.value)}
+            className={`px-2.5 py-0.5 rounded-full text-xs font-medium border transition-colors
+              ${periodMonths === opt.value
+                ? "bg-foreground text-background border-foreground"
+                : "bg-muted/40 text-muted-foreground border-transparent hover:border-border hover:text-foreground"
+              }`}
+          >
+            {opt.label}
+          </button>
+        ))}
+        <span className="text-[10px] text-muted-foreground ml-2">
+          {sliced.length} {sliced.length === 1 ? "mês" : "meses"} exibidos
+        </span>
+      </div>
+
+      <div className="w-full h-72">
+        <ResponsiveContainer width="100%" height="100%">
+          <ComposedChart data={data} margin={{ top: 8, right: 4, left: 0, bottom: 0 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
+            <XAxis dataKey="label" tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} tickLine={false} axisLine={false} />
+            <YAxis tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} tickLine={false} axisLine={false}
+              tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} width={40} />
+            <Tooltip
+              formatter={(v: number, name: string) => [
+                fmtBRL(v),
+                name === "revenue" ? "Faturamento" : "Meta",
+              ]}
+              labelFormatter={(l) => String(l)}
+              contentStyle={TOOLTIP_STYLE}
+            />
+            <Bar dataKey="revenue" radius={[3, 3, 0, 0]} name="revenue">
+              {data.map((entry, i) => <Cell key={i} fill={entry.color} />)}
+            </Bar>
+            {hasTargets && (
+              <Line type="monotone" dataKey="target" stroke="hsl(var(--muted-foreground))"
+                strokeDasharray="4 4" strokeWidth={1.5} dot={{ r: 3, fill: "hsl(var(--muted-foreground))" }}
+                name="target" />
+            )}
+          </ComposedChart>
+        </ResponsiveContainer>
+      </div>
     </div>
   );
 }

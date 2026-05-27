@@ -32,8 +32,17 @@ export function useDashboardVariant(): DashboardVariant {
 
   if (ENFORCEMENT_ACTIVE) {
     if (isMasterAdmin) return "ceo";
-    const dept   = profile?.department ?? null;
-    const funcao = profile?.funcao     ?? null;
+    const dept      = profile?.department        ?? null;
+    const funcao    = profile?.funcao            ?? null;
+    const secDept   = profile?.secondary_department ?? null;
+    const secFuncao = profile?.secondary_funcao     ?? null;
+
+    // TI/head é superusuário — vê o dashboard de CEO independente do papel primário.
+    // Verifica tanto papel primário quanto secundário.
+    const isTiHead =
+      (dept === "ti_suporte" && funcao === "head") ||
+      (secDept === "ti_suporte" && secFuncao === "head");
+    if (isTiHead) return "ceo";
 
     if (funcao === "ceo" || funcao === "head" || funcao === "assistente_executiva") return "ceo";
     if (funcao === "gerente" || funcao === "coordenador") {

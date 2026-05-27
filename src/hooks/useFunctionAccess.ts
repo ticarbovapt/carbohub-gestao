@@ -140,7 +140,11 @@ export function useCanSeeScreen(screenId: string): boolean {
   if (!ENFORCEMENT_ACTIVE) return true;
   // TI/head é superusuário — acesso irrestrito a todas as telas,
   // inclusive as novas criadas no futuro. Nunca precisa ser configurado no Role Matrix.
-  if (profile?.department === "ti_suporte" && profile?.funcao === "head") return true;
+  // Verifica tanto o papel primário quanto o secundário.
+  const isTiHead =
+    (profile?.department === "ti_suporte" && profile?.funcao === "head") ||
+    (profile?.secondary_department === "ti_suporte" && profile?.secondary_funcao === "head");
+  if (isTiHead) return true;
   if (!isConfigured)       return true; // sem entrada no matrix → não bloqueia
   return allowedScreenIds.includes(screenId);
 }
