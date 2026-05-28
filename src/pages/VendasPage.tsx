@@ -22,7 +22,6 @@ interface VendaRow {
   order_number: string;
   created_at: string;
   customer_name: string;
-  cnpj: string | null;
   delivery_city: string | null;
   delivery_state: string | null;
   items: OrderItem[];
@@ -75,8 +74,8 @@ function useVendas(month: Date, vendedorIdFilter: string | null) {
         .toISOString().split("T")[0];
 
       let query = supabase
-        .from("carboze_orders")
-        .select("id, order_number, created_at, customer_name, cnpj, delivery_city, delivery_state, items, total, status, vendedor_id, vendedor_name")
+        .from("carboze_orders_secure")
+        .select("id, order_number, created_at, customer_name, delivery_city, delivery_state, items, total, status, vendedor_id, vendedor_name")
         .gte("created_at", monthStart)
         .lte("created_at", monthEnd + "T23:59:59Z")
         .order("created_at", { ascending: false });
@@ -136,7 +135,6 @@ export default function VendasPage() {
     if (!q) return vendas;
     return vendas.filter(v =>
       v.customer_name?.toLowerCase().includes(q) ||
-      v.cnpj?.includes(q) ||
       v.order_number?.toLowerCase().includes(q)
     );
   }, [vendas, search]);
@@ -202,7 +200,7 @@ export default function VendasPage() {
           <div className="relative flex-1 min-w-[200px]">
             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input
-              placeholder="Buscar por cliente, CNPJ ou nº pedido..."
+              placeholder="Buscar por cliente ou nº pedido..."
               value={search}
               onChange={e => setSearch(e.target.value)}
               className="pl-8"
@@ -247,7 +245,6 @@ export default function VendasPage() {
                     <th className="text-left p-3 font-medium text-xs text-muted-foreground uppercase tracking-wide">Pedido</th>
                     <th className="text-left p-3 font-medium text-xs text-muted-foreground uppercase tracking-wide">Data</th>
                     <th className="text-left p-3 font-medium text-xs text-muted-foreground uppercase tracking-wide">Cliente</th>
-                    <th className="text-left p-3 font-medium text-xs text-muted-foreground uppercase tracking-wide">CNPJ/CPF</th>
                     <th className="text-left p-3 font-medium text-xs text-muted-foreground uppercase tracking-wide">Cidade/UF</th>
                     {isHead && <th className="text-left p-3 font-medium text-xs text-muted-foreground uppercase tracking-wide">Vendedor</th>}
                     <th className="text-right p-3 font-medium text-xs text-muted-foreground uppercase tracking-wide">Total</th>
@@ -272,7 +269,6 @@ export default function VendasPage() {
                         <td className="p-3 font-mono text-xs font-medium">{venda.order_number}</td>
                         <td className="p-3 text-muted-foreground whitespace-nowrap">{fmtDate(venda.created_at)}</td>
                         <td className="p-3 font-medium max-w-[180px] truncate">{venda.customer_name}</td>
-                        <td className="p-3 font-mono text-xs text-muted-foreground">{venda.cnpj || "—"}</td>
                         <td className="p-3 text-muted-foreground whitespace-nowrap">
                           {[venda.delivery_city, venda.delivery_state].filter(Boolean).join("/") || "—"}
                         </td>
@@ -283,7 +279,7 @@ export default function VendasPage() {
                       {/* Expandable products row */}
                       {expandedId === venda.id && venda.items.length > 0 && (
                         <tr key={`${venda.id}-items`} className="border-b bg-muted/10">
-                          <td colSpan={isHead ? 8 : 7} className="px-6 py-3">
+                          <td colSpan={isHead ? 7 : 6} className="px-6 py-3">
                             <div className="flex items-center gap-2 mb-2">
                               <Package className="h-3.5 w-3.5 text-muted-foreground" />
                               <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Produtos</p>

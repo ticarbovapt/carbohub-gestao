@@ -64,7 +64,7 @@ export function useSalesTargetsWithProgress(month: string) {
       if (targetsError) throw targetsError;
 
       // Fetch actual orders for the month
-      const monthStart = month;
+      const monthStart = month + "T00:00:00Z";
       const monthEnd = new Date(new Date(month).getFullYear(), new Date(month).getMonth() + 1, 0)
         .toISOString()
         .split("T")[0];
@@ -74,7 +74,7 @@ export function useSalesTargetsWithProgress(month: string) {
         .select("vendedor_id, total, items, status")
         .gte("created_at", monthStart)
         .lte("created_at", monthEnd + "T23:59:59Z")
-        .eq("status", "delivered");
+        .in("status", ["invoiced", "shipped", "delivered"]);
 
       // Calculate progress per vendedor
       const progressMap: Record<string, { amount: number; qty: number }> = {};
@@ -177,7 +177,7 @@ export function useWeeklyTopVendedores() {
         .from("carboze_orders_secure")
         .select("vendedor_id, total")
         .gte("created_at", monday.toISOString())
-        .eq("status", "delivered");
+        .in("status", ["invoiced", "shipped", "delivered"]);
 
       const totals: Record<string, number> = {};
       for (const order of orders || []) {
@@ -203,6 +203,76 @@ export function useWeeklyTopVendedores() {
         total: totals[id],
         profile: profiles?.find(p => p.id === id) ?? null,
       }));
+    },
+  });
+}
+
+export interface WeeklyVendedorEntry {
+  rank: number;
+  vendedor_id: string;
+  total: number;
+  count: number;
+  profile: {
+    id: string;
+    full_name: string | null;
+    avatar_url: string | null;
+    department: string | null;
+    secondary_department: string | null;
+  } | null;
+}
+
+export function useWeeklyVendedoresData(teamFilter?: "todos" | "cgc" | "expansao") {
+  return useQuery({
+    queryKey: ["weekly-vendedores-data", teamFilter],
+    queryFn: async () => {
+      const now = new Date();
+      const dayOfWeek = now.getDay();
+      const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+      const monday = new Date(now);
+      monday.setDate(now.getDate() + mondayOffset);
+      monday.setHours(0, 0, 0, 0);
+
+      const { data: orders } = await supabase
+        .from("carboze_orders_secure")
+        .select("vendedor_id, total, status")
+        .gte("created_at", monday.toISOString())
+        .in("status", ["invoiced", "shipped", "delivered"]);
+
+      const totals: Record<string, { total: number; count: number }> = {};
+      for (const order of orders || []) {
+        if (!order.vendedor_id) continue;
+        if (!totals[order.vendedor_id]) totals[order.vendedor_id] = { total: 0, count: 0 };
+        totals[order.vendedor_id].total += Number(order.total || 0);
+        totals[order.vendedor_id].count += 1;
+      }
+
+      const vendedorIds = Object.keys(totals);
+      let profiles: Array<{id:string;full_name:string|null;avatar_url:string|null;department:string|null;secondary_department:string|null}> = [];
+      if (vendedorIds.length > 0) {
+        const { data } = await supabase
+          .from("profiles")
+          .select("id, full_name, avatar_url, department, secondary_department")
+          .in("id", vendedorIds);
+        profiles = data || [];
+      }
+
+      let entries: WeeklyVendedorEntry[] = Object.entries(totals)
+        .sort(([, a], [, b]) => b.total - a.total)
+        .map(([id, d], idx) => ({
+          rank: idx + 1,
+          vendedor_id: id,
+          total: d.total,
+          count: d.count,
+          profile: profiles.find(p => p.id === id) ?? null,
+        }));
+
+      if (teamFilter && teamFilter !== "todos") {
+        entries = entries
+          .filter(e => e.profile?.department === teamFilter || e.profile?.secondary_department === teamFilter)
+          .map((e, idx) => ({ ...e, rank: idx + 1 }));
+      }
+
+      return entries;
     },
   });
 }
