@@ -236,6 +236,7 @@ const operacoesGroups: NavGroup[] = [
       { href: "/crm",            label: "CRM — Funis de Venda", icon: Target },
       { href: "/meu-painel",     label: "Meu Painel",           icon: BarChart3 },
       { href: "/orders",         label: "Pedidos (RV)",         icon: ShoppingCart },
+      { href: "/vendas",         label: "Vendas",               icon: ShoppingBag },
       { href: "/sales-targets",  label: "Metas de Vendas",      icon: TrendingUp },
     ],
   },
@@ -753,6 +754,7 @@ export function BoardLayout({ children }: BoardLayoutProps) {
                 {[
                   { href: "/dashboards/metas/ecommerce",  label: "Meta Ecommerce",  Icon: ShoppingBag },
                   { href: "/dashboards/metas/vendedores", label: "Meta Vendedores", Icon: Users },
+                  { href: "/dashboards/metas/config",     label: "Config Metas",    Icon: Settings },
                 ].map(({ href, label, Icon }) => {
                   const isActive = isItemActive(href);
                   return (
