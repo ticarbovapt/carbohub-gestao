@@ -164,7 +164,10 @@ export interface WeeklyTopEntry {
   profile: { id: string; full_name: string | null; avatar_url: string | null; department: string | null; secondary_department: string | null } | null;
 }
 
-// Commercial week: starts Friday, ends Thursday
+// Commercial week: starts Friday, ends Thursday.
+// Capped to the 1st of the current month — if the Friday that started
+// this week belongs to the previous month, sales from the new month
+// already count toward the new month's targets.
 function commercialWeekStart(): Date {
   const now = new Date();
   const dow = now.getDay(); // 0=Sun … 6=Sat
@@ -172,7 +175,9 @@ function commercialWeekStart(): Date {
   const friday = new Date(now);
   friday.setDate(now.getDate() - daysSinceFriday);
   friday.setHours(0, 0, 0, 0);
-  return friday;
+
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  return friday >= monthStart ? friday : monthStart;
 }
 
 export function useWeeklyTopVendedores() {
