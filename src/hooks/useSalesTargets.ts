@@ -51,9 +51,13 @@ export function useSalesTargets(month?: string) {
   });
 }
 
+const POLL_INTERVAL_MS = 15 * 60 * 1000; // 15 minutes
+
 export function useSalesTargetsWithProgress(month: string) {
   return useQuery({
     queryKey: ["sales-targets-progress", month],
+    refetchInterval: POLL_INTERVAL_MS,
+    refetchIntervalInBackground: false,
     queryFn: async () => {
       // Fetch targets
       const { data: targets, error: targetsError } = await supabase
@@ -206,6 +210,8 @@ function commercialWeekStart(): Date {
 export function useWeeklyTopVendedores() {
   return useQuery({
     queryKey: ["weekly-top-vendedores"],
+    refetchInterval: POLL_INTERVAL_MS,
+    refetchIntervalInBackground: false,
     queryFn: async () => {
       const weekStart = commercialWeekStart();
 
@@ -259,6 +265,8 @@ export interface WeeklyVendedorEntry {
 
 export function useWeeklyVendedoresData(teamFilter?: "todos" | "cgc" | "expansao") {
   return useQuery({
+    refetchInterval: POLL_INTERVAL_MS,
+    refetchIntervalInBackground: false,
     queryKey: ["weekly-vendedores-data", teamFilter],
     queryFn: async () => {
       const weekStart = commercialWeekStart();

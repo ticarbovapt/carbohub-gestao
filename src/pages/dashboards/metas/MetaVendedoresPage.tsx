@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { format, startOfMonth, addMonths, subMonths, getDaysInMonth, getDate } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { BoardLayout } from "@/components/layouts/BoardLayout";
@@ -271,10 +271,23 @@ export default function MetaVendedoresPage() {
   // Current month targets (needed for weekly chart even when viewing past months)
   const currentMonthStr = startOfMonth(new Date()).toISOString().slice(0, 10);
 
-  const { data: targets = [], isLoading, dataUpdatedAt } = useSalesTargetsWithProgress(monthStr);
-  const { data: prevTargets = [] }                       = useSalesTargetsWithProgress(prevMonthStr);
-  const { data: currentTargets = [] }                    = useSalesTargetsWithProgress(currentMonthStr);
-  const { data: weeklyAll = [], isLoading: weeklyLoading } = useWeeklyVendedoresData(teamFilter);
+  const { data: targets = [], isLoading, isFetching, dataUpdatedAt } = useSalesTargetsWithProgress(monthStr);
+  const { data: prevTargets = [] }                                   = useSalesTargetsWithProgress(prevMonthStr);
+  const { data: currentTargets = [] }                                = useSalesTargetsWithProgress(currentMonthStr);
+  const { data: weeklyAll = [], isLoading: weeklyLoading, isFetching: weeklyFetching } = useWeeklyVendedoresData(teamFilter);
+
+  // Countdown to next auto-refresh (15 min)
+  const POLL_MIN = 15;
+  const [secondsLeft, setSecondsLeft] = useState(POLL_MIN * 60);
+  useEffect(() => {
+    setSecondsLeft(POLL_MIN * 60);
+  }, [dataUpdatedAt]);
+  useEffect(() => {
+    const t = setInterval(() => setSecondsLeft(s => Math.max(0, s - 1)), 1000);
+    return () => clearInterval(t);
+  }, []);
+  const minsLeft = Math.ceil(secondsLeft / 60);
+  const isRefreshing = isFetching || weeklyFetching;
 
   // Weekly target = monthly target / commercial weeks in current month
   const currentDate = new Date();
@@ -354,11 +367,13 @@ export default function MetaVendedoresPage() {
             <h1 className="text-2xl font-bold flex items-center gap-2">🏆 Meta de Vendedores</h1>
             <div className="flex items-center gap-3 mt-0.5">
               <p className="text-sm text-muted-foreground">Performance e metas mensais por vendedor</p>
-              {updatedAt && (
-                <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
-                  <RefreshCw className="h-3 w-3" /> Atualizado às {updatedAt}
-                </span>
-              )}
+              <span className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                <RefreshCw className={`h-3 w-3 transition-transform ${isRefreshing ? "animate-spin" : ""}`} />
+                {updatedAt ? `Atualizado às ${updatedAt}` : "Carregando..."}
+                {!isRefreshing && (
+                  <span className="text-muted-foreground/60">· próx. {minsLeft}min</span>
+                )}
+              </span>
             </div>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
