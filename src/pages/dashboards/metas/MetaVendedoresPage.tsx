@@ -18,6 +18,16 @@ import { useAuth } from "@/contexts/AuthContext";
 import { getProgressColor } from "@/hooks/useMetaEcommerce";
 import { useNavigate } from "react-router-dom";
 
+// Number of commercial weeks in a month = number of Fridays in that month
+function countCommercialWeeks(year: number, month: number): number {
+  const lastDay = new Date(year, month + 1, 0).getDate();
+  let fridays = 0;
+  for (let d = 1; d <= lastDay; d++) {
+    if (new Date(year, month, d).getDay() === 5) fridays++;
+  }
+  return Math.max(1, fridays);
+}
+
 function useCanSetTargets(): boolean {
   const { profile } = useAuth();
   if (!profile) return false;
@@ -107,9 +117,10 @@ function Top3Card({ entries, label, canSeeValues }: {
 // ─────────────────────────────────────────────────────────────────────────────
 // WeeklyBarChart
 // ─────────────────────────────────────────────────────────────────────────────
-function WeeklyBarChart({ entries, targetMap, canSeeValues }: {
+function WeeklyBarChart({ entries, targetMap, numWeeks, canSeeValues }: {
   entries: WeeklyVendedorEntry[];
   targetMap: Record<string, number>;
+  numWeeks: number;
   canSeeValues: boolean;
 }) {
   if (entries.length === 0) return null;
@@ -119,16 +130,26 @@ function WeeklyBarChart({ entries, targetMap, canSeeValues }: {
   return (
     <CarboCard>
       <CarboCardContent className="p-4">
-        <p className="text-xs uppercase tracking-wider text-muted-foreground mb-4 font-medium">
-          Desempenho da Semana
-        </p>
+        <div className="flex items-center justify-between mb-4">
+          <p className="text-xs uppercase tracking-wider text-muted-foreground font-medium">
+            Desempenho da Semana
+          </p>
+          <span className="text-[10px] text-muted-foreground bg-muted/40 px-2 py-0.5 rounded-full">
+            Meta semanal = mensal ÷ {numWeeks} semanas
+          </span>
+        </div>
         <div className="overflow-x-auto">
           <div className="flex gap-2 justify-center min-w-fit px-2">
             {entries.map((entry, idx) => {
+              const weeklyTarget = targetMap[entry.vendedor_id] || 0;
+              // Bar height: relative to max performer if no target, else % of weekly target
               const barH     = Math.max(8, Math.round((entry.total / maxTotal) * MAX_BAR_H));
-              const target   = targetMap[entry.vendedor_id] || 0;
-              const pctMeta  = target > 0 ? Math.round((entry.total / target) * 100) : null;
-              const barColor = BAR_COLORS[Math.min(idx, BAR_COLORS.length - 1)];
+              const pctMeta  = weeklyTarget > 0 ? Math.round((entry.total / weeklyTarget) * 100) : null;
+              const pctColor = pctMeta === null ? BAR_COLORS[3]
+                : pctMeta >= 100 ? "#22c55e"
+                : pctMeta >= 70  ? "#f59e0b"
+                : "#ef4444";
+              const barColor = idx === 0 ? "#22c55e" : idx === 1 ? "#3b82f6" : idx === 2 ? "#f59e0b" : BAR_COLORS[3];
               const medal    = idx === 0 ? "🥇" : idx === 1 ? "🥈" : idx === 2 ? "🥉" : null;
 
               return (
@@ -158,8 +179,8 @@ function WeeklyBarChart({ entries, targetMap, canSeeValues }: {
                       </p>
                     )}
                     {pctMeta !== null && (
-                      <p className="text-[9px] font-bold leading-tight text-center" style={{ color: barColor }}>
-                        {pctMeta}%
+                      <p className="text-[9px] font-bold leading-tight text-center" style={{ color: pctColor }}>
+                        {pctMeta}% sem.
                       </p>
                     )}
                     <div
@@ -212,11 +233,18 @@ export default function MetaVendedoresPage() {
   const { data: currentTargets = [] }                    = useSalesTargetsWithProgress(currentMonthStr);
   const { data: weeklyAll = [], isLoading: weeklyLoading } = useWeeklyVendedoresData(teamFilter);
 
-  // Monthly target map for weekly chart
-  const currentMonthTargetMap: Record<string, number> = {};
+  // Weekly target = monthly target / commercial weeks in current month
+  const currentDate = new Date();
+  const numWeeks    = countCommercialWeeks(currentDate.getFullYear(), currentDate.getMonth());
+  // First accumulate monthly totals, then divide
+  const monthlyTargetAccum: Record<string, number> = {};
   for (const t of currentTargets) {
-    currentMonthTargetMap[t.vendedor_id] =
-      (currentMonthTargetMap[t.vendedor_id] || 0) + Number(t.target_amount || 0);
+    monthlyTargetAccum[t.vendedor_id] =
+      (monthlyTargetAccum[t.vendedor_id] || 0) + Number(t.target_amount || 0);
+  }
+  const weeklyTargetMap: Record<string, number> = {};
+  for (const [id, monthly] of Object.entries(monthlyTargetAccum)) {
+    weeklyTargetMap[id] = monthly / numWeeks;
   }
 
   // Mapa vendedor → actual do mês anterior
@@ -373,7 +401,8 @@ export default function MetaVendedoresPage() {
                 {/* Bar chart */}
                 <WeeklyBarChart
                   entries={weeklyAll}
-                  targetMap={currentMonthTargetMap}
+                  targetMap={weeklyTargetMap}
+                  numWeeks={numWeeks}
                   canSeeValues={canSeeValues}
                 />
 
