@@ -28,7 +28,7 @@ const TEAM_TEMPLATE_EXAMPLE = [
 ];
 
 const ROLES_VALID = ["admin", "gestor", "operacional", "viewer"];
-const DEPARTMENTS_VALID = ["venda", "preparacao", "expedicao", "operacao", "pos_venda", "command", "finance", "growth", "ops", "expansao", "b2b"];
+const DEPARTMENTS_VALID = ["venda", "preparacao", "expedicao", "operacao", "pos_venda", "command", "finance", "growth", "ops", "expansao", "cgc", "b2b"];
 const ESCOPOS_VALID = ["comercial", "operacional", "adm_financeiro"];
 
 interface ParsedMember {

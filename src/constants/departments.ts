@@ -22,7 +22,7 @@ export const DEPARTMENT_CONFIGS: DepartmentConfig[] = [
   { key: "command",    label: "Command",      color: "#6366f1", usernamePrefix: "COM", order: 1 },
   { key: "finance",    label: "Finance",      color: "#f59e0b", usernamePrefix: "FIN", order: 2 },
   { key: "growth",     label: "Growth",       color: "#22c55e", usernamePrefix: "GRO", order: 3 },
-  { key: "b2b",        label: "Vendas",       color: "#ec4899", usernamePrefix: "B2B", order: 4 },
+  { key: "cgc",        label: "Comercial GC",  color: "#ec4899", usernamePrefix: "CGC", order: 4 },
   { key: "ops",        label: "Operações",    color: "#3b82f6", usernamePrefix: "OPS", order: 5 },
   { key: "expansao",   label: "Expansão",     color: "#8b5cf6", usernamePrefix: "EXP", order: 6 },
   { key: "ti_suporte", label: "TI / Suporte", color: "#64748b", usernamePrefix: "TI",  order: 7 },
@@ -70,7 +70,8 @@ export const DEPT_NORMALIZE: Record<string, string> = (() => {
   }
   // Legacy aliases that existed before (keeps old data working)
   map["Growth & B2B"] = "growth";
-  map["Vendas"]       = "b2b";
+  map["Vendas"]       = "cgc";  // alias legado
+  map["b2b"]          = "cgc";  // alias legado — chave antiga do DB
   return map;
 })();
 

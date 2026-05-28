@@ -54,13 +54,13 @@ export const DEPARTMENTS: Department[] = [
     ],
   },
   {
-    key: "b2b",
-    label: "Vendas",
+    key: "cgc",
+    label: "Comercial GC",
     functions: [
-      { key: "head",         label: "Head",          scope: "global",  editScope: "global" },
-      { key: "supervisor",   label: "Supervisor(a)", scope: "equipe",  editScope: "equipe" },
-      { key: "vendedor_b2b", label: "Vendedor B2B",  scope: "proprio", editScope: "proprio" },
-      { key: "vendedor_b2c", label: "Vendedor B2C",  scope: "proprio", editScope: "proprio" },
+      { key: "head",         label: "Head",             scope: "global",  editScope: "global" },
+      { key: "supervisor",   label: "Supervisor(a)",    scope: "equipe",  editScope: "equipe" },
+      { key: "vendedor_b2b", label: "Vendedor GC",      scope: "proprio", editScope: "proprio" },
+      { key: "vendedor_b2c", label: "Vendedor Carbozé", scope: "proprio", editScope: "proprio" },
     ],
   },
   {
