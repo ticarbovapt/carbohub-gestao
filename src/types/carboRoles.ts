@@ -27,7 +27,7 @@ export type MacroFlow =
  * Departamentos organizacionais do Grupo Carbo
  */
 export type OrgDepartment = 
-  | 'b2b'
+  | 'cgc'
   | 'command'
   | 'expansao'
   | 'finance'
@@ -45,13 +45,13 @@ export const ORG_DEPARTMENT_INFO: Record<OrgDepartment, {
   color: string;
   loginPrefix: string;
 }> = {
-  b2b: {
-    name: 'B2B',
-    fullName: 'Carbo B2B',
+  cgc: {
+    name: 'CGC',
+    fullName: 'Comercial Grandes Contas',
     description: 'Desenvolvimento de negócios corporativos',
     icon: '🏢',
-    color: '#6366F1',
-    loginPrefix: 'B2B',
+    color: '#ec4899',
+    loginPrefix: 'CGC',
   },
   command: {
     name: 'Command',
@@ -187,7 +187,7 @@ export const MACRO_FLOW_INFO: Record<MacroFlow, {
     description: 'Cria OS, cadastra cliente/licenciado, define expectativa',
     icon: '🔵',
     color: '#3B82F6',
-    departments: ['venda', 'b2b', 'expansao', 'growth'],
+    departments: ['venda', 'cgc', 'expansao', 'growth'],
   },
   operacional: {
     name: 'Operacional',
@@ -246,7 +246,7 @@ export const DEPARTMENT_TO_MACRO_FLOW: Record<string, MacroFlow> = {
   operacao: 'operacional',
   pos_venda: 'adm_financeiro',
   // Novos
-  b2b: 'comercial',
+  cgc: 'comercial',
   command: 'comercial',
   expansao: 'comercial',
   finance: 'adm_financeiro',
@@ -287,7 +287,7 @@ export type DepartmentType =
   | 'expedicao'
   | 'operacao'
   | 'pos_venda'
-  | 'b2b'
+  | 'cgc'
   | 'command'
   | 'expansao'
   | 'finance'
@@ -336,7 +336,7 @@ export const ORG_DEPARTMENTS: Array<{
   fullName: string;
   loginPrefix: string;
 }> = [
-  { id: 'b2b', name: 'B2B', fullName: 'Carbo B2B', loginPrefix: 'B2B' },
+  { id: 'cgc', name: 'CGC', fullName: 'Comercial Grandes Contas', loginPrefix: 'CGC' },
   { id: 'command', name: 'Command', fullName: 'Carbo Command', loginPrefix: 'COM' },
   { id: 'expansao', name: 'Expansão', fullName: 'Carbo Expansão', loginPrefix: 'EXP' },
   { id: 'finance', name: 'Finance', fullName: 'Carbo Finance', loginPrefix: 'FIN' },
@@ -353,7 +353,7 @@ export const DEPARTMENT_TYPES: Array<{
   macroFlow: MacroFlow;
 }> = [
   // Novos departamentos organizacionais
-  { id: 'b2b', name: 'Carbo B2B', macroFlow: 'comercial' },
+  { id: 'cgc', name: 'Comercial Grandes Contas', macroFlow: 'comercial' },
   { id: 'command', name: 'Carbo Command', macroFlow: 'comercial' },
   { id: 'expansao', name: 'Carbo Expansão', macroFlow: 'comercial' },
   { id: 'finance', name: 'Carbo Finance', macroFlow: 'adm_financeiro' },

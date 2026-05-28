@@ -49,7 +49,7 @@ export function useDashboardVariant(): DashboardVariant {
       if (f === "ceo" || f === "head" || f === "assistente_executiva") return "ceo";
       if (f === "gerente" || f === "coordenador") {
         if (d === "finance") return "gestor_fin";
-        if (d === "b2b")     return "gestor_compras";
+        if (d === "cgc")     return "gestor_compras";
         return "gestor_adm";
       }
       if (f === "supervisor") return "operador";

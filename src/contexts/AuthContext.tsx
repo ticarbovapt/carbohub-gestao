@@ -5,7 +5,7 @@ import type { Database } from "@/integrations/supabase/types";
 
 // Roles legados (mantidos para compatibilidade)
 type AppRole = "admin" | "manager" | "operator" | "viewer";
-type DepartmentType = "venda" | "preparacao" | "expedicao" | "operacao" | "pos_venda" | "b2b" | "command" | "expansao" | "finance" | "growth" | "ops";
+type DepartmentType = "venda" | "preparacao" | "expedicao" | "operacao" | "pos_venda" | "cgc" | "command" | "expansao" | "finance" | "growth" | "ops";
 
 // Novos roles Carbo
 type CarboRole = "ceo" | "gestor_adm" | "gestor_fin" | "gestor_compras" | "operador_fiscal" | "operador";
