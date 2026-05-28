@@ -108,10 +108,9 @@ function SmartProgressBar({
 // ─────────────────────────────────────────────────────────────────────────────
 
 function PlatformCard({
-  stats, onEdit, canEdit, prevRevenue,
+  stats, prevRevenue,
 }: {
-  stats: PlatformMetaStats; onEdit: () => void;
-  canEdit: boolean; prevRevenue: number;
+  stats: PlatformMetaStats; prevRevenue: number;
 }) {
   const colors = COLOR_MAP[stats.progressColor];
   return (
@@ -130,11 +129,6 @@ function PlatformCard({
           </div>
           <div className="flex items-center gap-1.5">
             <CarboBadge variant={colors.badge} size="sm">{fmtPct(stats.actualPct)}</CarboBadge>
-            {canEdit && (
-              <Button variant="ghost" size="icon" className="h-6 w-6" onClick={onEdit}>
-                <Settings className="h-3 w-3" />
-              </Button>
-            )}
           </div>
         </div>
 
@@ -575,8 +569,7 @@ function EditTargetDialog({ open, onClose, month, platform, currentTarget }: {
 
 export default function MetaEcommercePage() {
   const [month, setMonth]       = useState(() => startOfMonth(new Date()));
-  const [editDialog, setEditDialog] = useState<{ platform: MetaPlatform; target: number } | null>(null);
-  const canEdit = useCanSeeAdminMenu();
+  const canEdit = false; // edição movida para /dashboards/metas/config
 
   const { totalStats, platformStats, isLoading } = useMetaStats(month);
 
@@ -678,12 +671,6 @@ export default function MetaEcommercePage() {
                       <span className="text-muted-foreground text-[10px]">vs mês ant.</span>
                     </span>
                   )}
-                  {canEdit && (
-                    <Button variant="ghost" size="sm" className="h-6 text-xs gap-1"
-                      onClick={() => setEditDialog({ platform: null, target: totalStats.target })}>
-                      <Settings className="h-3 w-3" /> Definir meta total
-                    </Button>
-                  )}
                 </div>
               </div>
 
@@ -771,9 +758,7 @@ export default function MetaEcommercePage() {
                 <PlatformCard
                   key={String(stats.platform)}
                   stats={stats}
-                  canEdit={canEdit}
                   prevRevenue={prevActuals?.platformRevenue[stats.platform as string] ?? 0}
-                  onEdit={() => setEditDialog({ platform: stats.platform, target: stats.target })}
                 />
               ))}
             </div>
@@ -837,16 +822,6 @@ export default function MetaEcommercePage() {
           </CarboCard>
         )}
 
-        {/* Edit dialog */}
-        {editDialog && (
-          <EditTargetDialog
-            open={!!editDialog}
-            onClose={() => setEditDialog(null)}
-            month={month}
-            platform={editDialog.platform}
-            currentTarget={editDialog.target}
-          />
-        )}
       </div>
     </BoardLayout>
   );

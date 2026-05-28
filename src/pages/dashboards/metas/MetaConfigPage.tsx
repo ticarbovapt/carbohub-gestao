@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import {
-  ChevronLeft, ChevronRight, Plus, Pencil, Trash2, Target, Settings, ExternalLink,
+  ChevronLeft, ChevronRight, Plus, Pencil, Trash2, Target, Settings, Loader2,
 } from "lucide-react";
 import {
   useSalesTargetsWithProgress,
@@ -18,8 +18,14 @@ import {
   type SalesTargetWithProgress,
 } from "@/hooks/useSalesTargets";
 import { useTeamMembers } from "@/hooks/useTeamMembers";
+import {
+  useMetaStats,
+  useUpsertMetaTarget,
+  PLATFORM_META,
+  ALL_PLATFORMS,
+  type MetaPlatform,
+} from "@/hooks/useMetaEcommerce";
 import { useAuth } from "@/contexts/AuthContext";
-import { useNavigate } from "react-router-dom";
 
 function useCanSetTargets(): boolean {
   const { profile } = useAuth();
@@ -34,6 +40,54 @@ function fmtBRL(v: number) {
   return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", minimumFractionDigits: 0, maximumFractionDigits: 0 });
 }
 
+// ── Dialog de edição de meta e-commerce ──────────────────────────────────────
+function EcoTargetDialog({ open, onClose, month, platform, currentTarget }: {
+  open: boolean; onClose: () => void;
+  month: Date; platform: MetaPlatform; currentTarget: number;
+}) {
+  const [digits, setDigits] = useState(currentTarget > 0 ? String(currentTarget) : "");
+  const upsert = useUpsertMetaTarget();
+  const meta = platform ? PLATFORM_META[platform] : { label: "Total Geral", emoji: "🎯", color: "#22c55e" };
+  const numericValue = parseInt(digits.replace(/\D/g, "") || "0", 10);
+  const displayValue = numericValue > 0
+    ? numericValue.toLocaleString("pt-BR", { style: "currency", currency: "BRL", minimumFractionDigits: 0 })
+    : "";
+
+  const handleSave = async () => {
+    await upsert.mutateAsync({ month, platform, target_amount: numericValue });
+    onClose();
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onClose}>
+      <DialogContent className="sm:max-w-xs">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <span>{meta.emoji}</span> Meta {meta.label}
+          </DialogTitle>
+          <DialogDescription>{format(month, "MMMM 'de' yyyy", { locale: ptBR })}</DialogDescription>
+        </DialogHeader>
+        <div className="space-y-3 py-2">
+          <Input
+            type="text" inputMode="numeric"
+            value={displayValue}
+            onChange={e => setDigits(e.target.value.replace(/\D/g, ""))}
+            className="text-xl font-bold tracking-wide"
+            placeholder="R$ 0" autoFocus
+          />
+        </div>
+        <div className="flex justify-end gap-2">
+          <Button variant="outline" onClick={onClose}>Cancelar</Button>
+          <Button onClick={handleSave} disabled={upsert.isPending}
+            className="bg-carbo-green hover:bg-carbo-green/90 text-white">
+            Salvar
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 type Tab = "vendedores" | "ecommerce";
 
 export default function MetaConfigPage() {
@@ -41,13 +95,15 @@ export default function MetaConfigPage() {
   const [month, setMonth]   = useState(() => startOfMonth(new Date()));
   const [dialogOpen, setDialog] = useState(false);
   const [editTarget, setEdit]   = useState<SalesTargetWithProgress | null>(null);
+  const [ecoDialog, setEcoDialog] = useState<{ platform: MetaPlatform; target: number } | null>(null);
 
   const [vendedorId, setVendedorId]     = useState("");
   const [targetDigits, setTargetDigits] = useState("");
 
-  const canManage  = useCanSetTargets();
-  const navigate   = useNavigate();
-  const monthStr   = month.toISOString().slice(0, 10);
+  const canManage = useCanSetTargets();
+  const monthStr  = month.toISOString().slice(0, 10);
+
+  const { totalStats, platformStats } = useMetaStats(month);
   const today      = new Date();
   const isCurrentMonth =
     month.getFullYear() === today.getFullYear() &&
@@ -204,22 +260,43 @@ export default function MetaConfigPage() {
 
         {/* ── Tab: E-commerce ─────────────────────────────────────────────── */}
         {tab === "ecommerce" && (
-          <CarboCard>
-            <CarboCardContent className="p-6 flex flex-col items-center text-center gap-4">
-              <div className="w-14 h-14 rounded-full bg-carbo-green/10 flex items-center justify-center">
-                <Target className="h-7 w-7 text-carbo-green" />
-              </div>
-              <div>
-                <p className="font-semibold text-base">Metas de E-commerce</p>
-                <p className="text-sm text-muted-foreground mt-1">
-                  Configure as metas de cada plataforma diretamente no dashboard de e-commerce.
-                </p>
-              </div>
-              <Button variant="outline" className="gap-2" onClick={() => navigate("/dashboards/metas/ecommerce")}>
-                <ExternalLink className="h-4 w-4" /> Ir para Meta E-commerce
-              </Button>
-            </CarboCardContent>
-          </CarboCard>
+          <div className="space-y-3">
+            {/* Meta total */}
+            <CarboCard>
+              <CarboCardContent className="p-3 flex items-center gap-3">
+                <div className="flex-1 min-w-0">
+                  <p className="font-semibold text-sm">🎯 Total Geral</p>
+                  <p className="text-xs text-muted-foreground">
+                    Meta: {totalStats.target > 0 ? fmtBRL(totalStats.target) : "Não definida"}
+                  </p>
+                </div>
+                <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0"
+                  onClick={() => setEcoDialog({ platform: null, target: totalStats.target })}>
+                  <Settings className="h-3.5 w-3.5" />
+                </Button>
+              </CarboCardContent>
+            </CarboCard>
+
+            {/* Por plataforma */}
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-1">Por plataforma</p>
+            {platformStats.map(stats => (
+              <CarboCard key={String(stats.platform)}>
+                <CarboCardContent className="p-3 flex items-center gap-3">
+                  <span className="text-lg shrink-0">{stats.emoji}</span>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-semibold text-sm">{stats.label}</p>
+                    <p className="text-xs text-muted-foreground">
+                      Meta: {stats.target > 0 ? fmtBRL(stats.target) : "Não definida"} · Real: {fmtBRL(stats.actual)} ({stats.actualPct.toFixed(0)}%)
+                    </p>
+                  </div>
+                  <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0"
+                    onClick={() => setEcoDialog({ platform: stats.platform, target: stats.target })}>
+                    <Settings className="h-3.5 w-3.5" />
+                  </Button>
+                </CarboCardContent>
+              </CarboCard>
+            ))}
+          </div>
         )}
       </div>
 
@@ -283,6 +360,17 @@ export default function MetaConfigPage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* ── Dialog E-commerce Meta ────────────────────────────────────── */}
+      {ecoDialog && (
+        <EcoTargetDialog
+          open={!!ecoDialog}
+          onClose={() => setEcoDialog(null)}
+          month={month}
+          platform={ecoDialog.platform}
+          currentTarget={ecoDialog.target}
+        />
+      )}
     </BoardLayout>
   );
 }
