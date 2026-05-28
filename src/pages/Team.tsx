@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import { diceBearUrl } from "@/components/ui/profile-avatar";
 import { supabase } from "@/integrations/supabase/client";
 import { BoardLayout } from "@/components/layouts/BoardLayout";
 import {
@@ -311,10 +312,14 @@ function MemberInfoModal({ member, profiles, teamMembers, onClose, canEdit, isMa
         {!editing && (
           <div className="flex flex-col items-center gap-4 pt-1 pb-2">
             <div
-              className="flex h-20 w-20 items-center justify-center rounded-full text-white font-bold text-xl shadow-lg ring-4 ring-offset-2 ring-offset-background"
-              style={{ backgroundColor: deptColor, ["--tw-ring-color" as string]: deptColor }}
+              className="h-20 w-20 rounded-full shadow-lg ring-4 ring-offset-2 ring-offset-background overflow-hidden"
+              style={{ ["--tw-ring-color" as string]: deptColor }}
             >
-              {getInitialsOrg(member.full_name)}
+              <img
+                src={member.avatar_url || diceBearUrl(member.id)}
+                alt={member.full_name}
+                className="w-full h-full object-cover"
+              />
             </div>
 
             <div className="text-center">
@@ -803,12 +808,19 @@ const Team = () => {
                     className="grid grid-cols-[1fr_auto_auto_auto] gap-4 items-center px-4 py-3 border-b last:border-b-0 hover:bg-muted/20 transition-colors"
                   >
                     {/* Name + dept */}
-                    <div className="min-w-0">
+                    <div className="min-w-0 flex items-center gap-2.5">
+                      <img
+                        src={member.avatar_url || diceBearUrl(member.id)}
+                        alt={member.full_name || ""}
+                        className="h-8 w-8 rounded-full object-cover shrink-0"
+                      />
+                      <div className="min-w-0">
                       <p className="font-medium text-sm truncate">{member.full_name || "—"}</p>
                       <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
                         {member.email && (
                           <span className="text-xs text-muted-foreground truncate">{member.email}</span>
                         )}
+                      </div>
                       </div>
                     </div>
 
@@ -1004,13 +1016,14 @@ const Team = () => {
                         >
                           {/* Avatar */}
                           <div
-                            className="flex h-12 w-12 items-center justify-center rounded-full text-white font-bold text-sm ring-2 ring-offset-2 ring-offset-background shadow-md"
-                            style={{
-                              backgroundColor: color,
-                              ["--tw-ring-color" as string]: color,
-                            }}
+                            className="h-12 w-12 rounded-full ring-2 ring-offset-2 ring-offset-background shadow-md overflow-hidden shrink-0"
+                            style={{ ["--tw-ring-color" as string]: color }}
                           >
-                            {getInitialsOrg(member.full_name)}
+                            <img
+                              src={member.avatar_url || diceBearUrl(member.id)}
+                              alt={member.full_name}
+                              className="w-full h-full object-cover"
+                            />
                           </div>
 
                           {/* Name */}
