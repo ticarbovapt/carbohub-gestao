@@ -115,93 +115,134 @@ function Top3Card({ entries, label, canSeeValues }: {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// WeeklyBarChart
+// WeeklyPanel — Top 3 à esquerda + gráfico de colunas à direita
 // ─────────────────────────────────────────────────────────────────────────────
-function WeeklyBarChart({ entries, targetMap, numWeeks, canSeeValues }: {
+function WeeklyPanel({ entries, targetMap, numWeeks, canSeeValues }: {
   entries: WeeklyVendedorEntry[];
   targetMap: Record<string, number>;
   numWeeks: number;
   canSeeValues: boolean;
 }) {
   if (entries.length === 0) return null;
-  const maxTotal = Math.max(...entries.map(e => e.total), 1);
-  const MAX_BAR_H = 120;
+
+  const top3        = entries.slice(0, 3); // performance order
+  const alphabetical = [...entries].sort((a, b) =>
+    (a.profile?.full_name || "").localeCompare(b.profile?.full_name || "", "pt-BR")
+  );
+  const maxTotal  = Math.max(...entries.map(e => e.total), 1);
+  const MAX_BAR_H = 160;
 
   return (
     <CarboCard>
-      <CarboCardContent className="p-4">
-        <div className="flex items-center justify-between mb-4">
-          <p className="text-xs uppercase tracking-wider text-muted-foreground font-medium">
-            Desempenho da Semana
-          </p>
-          <span className="text-[10px] text-muted-foreground bg-muted/40 px-2 py-0.5 rounded-full">
-            Meta semanal = mensal ÷ {numWeeks} semanas
-          </span>
-        </div>
-        <div className="overflow-x-auto">
-          <div className="flex gap-2 justify-center min-w-fit px-2">
-            {entries.map((entry, idx) => {
-              const weeklyTarget = targetMap[entry.vendedor_id] || 0;
-              // Bar height: relative to max performer if no target, else % of weekly target
-              const barH     = Math.max(8, Math.round((entry.total / maxTotal) * MAX_BAR_H));
-              const pctMeta  = weeklyTarget > 0 ? Math.round((entry.total / weeklyTarget) * 100) : null;
-              const pctColor = pctMeta === null ? BAR_COLORS[3]
-                : pctMeta >= 100 ? "#22c55e"
-                : pctMeta >= 70  ? "#f59e0b"
-                : "#ef4444";
-              const barColor = idx === 0 ? "#22c55e" : idx === 1 ? "#3b82f6" : idx === 2 ? "#f59e0b" : BAR_COLORS[3];
-              const medal    = idx === 0 ? "🥇" : idx === 1 ? "🥈" : idx === 2 ? "🥉" : null;
-
-              return (
-                <div key={entry.vendedor_id} className="flex flex-col items-center gap-1 w-14">
-                  {/* Avatar */}
-                  <div className={`w-9 h-9 rounded-full overflow-hidden border-2 shrink-0 ${
-                    idx === 0 ? "border-yellow-400" : idx === 1 ? "border-gray-400" : idx === 2 ? "border-amber-600" : "border-transparent"
-                  }`}>
+      <CarboCardContent className="p-0">
+        <div className="flex">
+          {/* ── Left: Top 3 vertical ── */}
+          <div className="w-40 shrink-0 p-4 border-r border-border flex flex-col gap-1">
+            <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-3 font-medium">
+              Top 3 da Semana
+            </p>
+            <div className="space-y-4">
+              {top3.map((entry, idx) => (
+                <div key={entry.vendedor_id} className="flex items-center gap-2">
+                  <span className="text-lg shrink-0 leading-none">
+                    {idx === 0 ? "🥇" : idx === 1 ? "🥈" : "🥉"}
+                  </span>
+                  <div className="w-8 h-8 rounded-full overflow-hidden bg-muted shrink-0">
                     {entry.profile?.avatar_url
                       ? <img src={entry.profile.avatar_url} alt="" className="w-full h-full object-cover" />
-                      : <div className="w-full h-full bg-muted flex items-center justify-center text-sm font-bold text-muted-foreground">
+                      : <div className="w-full h-full flex items-center justify-center text-xs font-bold text-muted-foreground">
                           {(entry.profile?.full_name || "?")[0].toUpperCase()}
                         </div>
                     }
                   </div>
-
-                  {/* Bar container — fixed height, bar anchored to bottom */}
-                  <div
-                    className="flex flex-col items-center justify-end gap-0.5"
-                    style={{ height: `${MAX_BAR_H + 32}px` }}
-                  >
+                  <div className="min-w-0">
+                    <p className="text-xs font-semibold truncate">
+                      {entry.profile?.full_name?.split(" ")[0] || "—"}
+                    </p>
                     {canSeeValues && (
-                      <p className="text-[9px] text-muted-foreground tabular-nums text-center leading-tight">
+                      <p className="text-[10px] text-muted-foreground tabular-nums">
                         {entry.total >= 1000
                           ? `R$${(entry.total / 1000).toFixed(0)}k`
                           : fmtBRL(entry.total)}
                       </p>
                     )}
-                    {pctMeta !== null && (
-                      <p className="text-[9px] font-bold leading-tight text-center" style={{ color: pctColor }}>
-                        {pctMeta}% sem.
-                      </p>
-                    )}
-                    <div
-                      className="w-9 rounded-t-lg transition-all duration-700"
-                      style={{ height: `${barH}px`, backgroundColor: barColor }}
-                    />
                   </div>
-
-                  {/* Name */}
-                  <p className="text-[10px] font-semibold truncate max-w-[56px] text-center leading-tight">
-                    {entry.profile?.full_name?.split(" ")[0] || "—"}
-                  </p>
-
-                  {/* Rank */}
-                  {medal
-                    ? <span className="text-sm leading-none">{medal}</span>
-                    : <span className="text-[10px] font-bold text-muted-foreground">{idx + 1}º</span>
-                  }
                 </div>
-              );
-            })}
+              ))}
+            </div>
+          </div>
+
+          {/* ── Right: Bar chart ── */}
+          <div className="flex-1 min-w-0 p-4">
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">
+                Desempenho da Semana
+              </p>
+              <span className="text-[10px] text-muted-foreground">÷ {numWeeks} sem.</span>
+            </div>
+            <div className="overflow-x-auto pb-1">
+              <div className="flex gap-3 items-end px-1">
+                {alphabetical.map(entry => {
+                  const weeklyTarget = targetMap[entry.vendedor_id] || 0;
+                  const barH    = Math.max(8, Math.round((entry.total / maxTotal) * MAX_BAR_H));
+                  const pctMeta = weeklyTarget > 0 ? Math.round((entry.total / weeklyTarget) * 100) : null;
+                  const barFill = pctMeta === null ? "#64748b"
+                    : pctMeta >= 100 ? "#22c55e"
+                    : pctMeta >= 70  ? "#f59e0b"
+                    : "#ef4444";
+                  const perfRank = entries.findIndex(e => e.vendedor_id === entry.vendedor_id) + 1;
+                  const medal    = perfRank === 1 ? "🥇" : perfRank === 2 ? "🥈" : perfRank === 3 ? "🥉" : null;
+
+                  return (
+                    <div key={entry.vendedor_id} className="flex flex-col items-center gap-1 w-12 shrink-0">
+                      {/* Avatar */}
+                      <div className="w-9 h-9 rounded-full overflow-hidden bg-muted shrink-0">
+                        {entry.profile?.avatar_url
+                          ? <img src={entry.profile.avatar_url} alt="" className="w-full h-full object-cover" />
+                          : <div className="w-full h-full flex items-center justify-center text-sm font-bold text-muted-foreground">
+                              {(entry.profile?.full_name || "?")[0].toUpperCase()}
+                            </div>
+                        }
+                      </div>
+
+                      {/* Bar container anchored to bottom */}
+                      <div
+                        className="flex flex-col items-center justify-end gap-0.5"
+                        style={{ height: `${MAX_BAR_H + 30}px` }}
+                      >
+                        {canSeeValues && (
+                          <p className="text-[9px] text-muted-foreground tabular-nums text-center leading-tight">
+                            {entry.total >= 1000
+                              ? `R$${(entry.total / 1000).toFixed(0)}k`
+                              : fmtBRL(entry.total)}
+                          </p>
+                        )}
+                        {pctMeta !== null && (
+                          <p className="text-[9px] font-bold leading-tight" style={{ color: barFill }}>
+                            {pctMeta}%
+                          </p>
+                        )}
+                        <div
+                          className="w-9 rounded-t-lg transition-all duration-700"
+                          style={{ height: `${barH}px`, backgroundColor: barFill }}
+                        />
+                      </div>
+
+                      {/* Name */}
+                      <p className="text-[10px] font-semibold truncate max-w-[48px] text-center leading-tight">
+                        {entry.profile?.full_name?.split(" ")[0] || "—"}
+                      </p>
+
+                      {/* Medal or rank */}
+                      {medal
+                        ? <span className="text-xs leading-none">{medal}</span>
+                        : <span className="text-[10px] font-bold text-muted-foreground">{perfRank}º</span>
+                      }
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
           </div>
         </div>
       </CarboCardContent>
@@ -397,22 +438,12 @@ export default function MetaVendedoresPage() {
                 </CarboCardContent>
               </CarboCard>
             ) : (
-              <>
-                {/* Bar chart */}
-                <WeeklyBarChart
-                  entries={weeklyAll}
-                  targetMap={weeklyTargetMap}
-                  numWeeks={numWeeks}
-                  canSeeValues={canSeeValues}
-                />
-
-                {/* Top 3 podium */}
-                <Top3Card
-                  entries={weeklyAll.slice(0, 3).map((e, i) => ({ ...e, rank: i + 1 }))}
-                  label="Top 3 da Semana"
-                  canSeeValues={canSeeValues}
-                />
-              </>
+              <WeeklyPanel
+                entries={weeklyAll}
+                targetMap={weeklyTargetMap}
+                numWeeks={numWeeks}
+                canSeeValues={canSeeValues}
+              />
             )}
           </>
         )}
