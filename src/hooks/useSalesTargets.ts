@@ -74,7 +74,8 @@ export function useSalesTargetsWithProgress(month: string) {
         .select("vendedor_id, total, items, status")
         .gte("created_at", monthStart)
         .lte("created_at", monthEnd + "T23:59:59Z")
-        .neq("status", "cancelled");
+        .neq("status", "cancelled")
+        .not("vendedor_id", "is", null);
 
       // Calculate progress per vendedor
       const progressMap: Record<string, { amount: number; qty: number }> = {};
@@ -177,7 +178,8 @@ export function useWeeklyTopVendedores() {
         .from("carboze_orders_secure")
         .select("vendedor_id, total")
         .gte("created_at", monday.toISOString())
-        .neq("status", "cancelled");
+        .neq("status", "cancelled")
+        .not("vendedor_id", "is", null);
 
       const totals: Record<string, number> = {};
       for (const order of orders || []) {
@@ -236,7 +238,8 @@ export function useWeeklyVendedoresData(teamFilter?: "todos" | "cgc" | "expansao
         .from("carboze_orders_secure")
         .select("vendedor_id, total, status")
         .gte("created_at", monday.toISOString())
-        .neq("status", "cancelled");
+        .neq("status", "cancelled")
+        .not("vendedor_id", "is", null);
 
       const totals: Record<string, { total: number; count: number }> = {};
       for (const order of orders || []) {
