@@ -1,5 +1,6 @@
 import { useRef, useState } from "react";
 import { diceBearUrl } from "@/components/ui/profile-avatar";
+import { AvatarCropDialog } from "@/components/ui/AvatarCropDialog";
 import { BoardLayout } from "@/components/layouts/BoardLayout";
 import { CarboCard, CarboCardContent } from "@/components/ui/carbo-card";
 import { Button } from "@/components/ui/button";
@@ -38,36 +39,45 @@ function InfoRow({ icon: Icon, label, value }: { icon: React.ElementType; label:
 export default function MyProfilePage() {
   const { profile, user, refreshProfile } = useAuth();
   const [uploading, setUploading] = useState(false);
+  const [cropSrc, setCropSrc] = useState<string | null>(null);
+  const [cropMime, setCropMime] = useState("image/jpeg");
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const initials = profile?.full_name
-    ?.split(" ")
-    .filter(Boolean)
-    .map(w => w[0].toUpperCase())
-    .slice(0, 2)
-    .join("") || "?";
-
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file || !user) return;
+    if (!file) return;
 
     if (!file.type.startsWith("image/")) {
       toast.error("Selecione uma imagem (JPG, PNG, WebP).");
       return;
     }
-    if (file.size > 5 * 1024 * 1024) {
-      toast.error("Imagem deve ter no máximo 5MB.");
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error("Imagem deve ter no máximo 10MB.");
       return;
     }
 
+    const reader = new FileReader();
+    reader.onload = () => {
+      setCropMime(file.type);
+      setCropSrc(reader.result as string);
+    };
+    reader.readAsDataURL(file);
+
+    // reset so same file can be picked again
+    if (inputRef.current) inputRef.current.value = "";
+  };
+
+  const handleCropConfirm = async (blob: Blob) => {
+    if (!user) return;
+    setCropSrc(null);
     setUploading(true);
     try {
-      const ext = file.name.split(".").pop() || "jpg";
+      const ext = cropMime === "image/png" ? "png" : "jpg";
       const path = `${user.id}.${ext}`;
 
       const { error: uploadError } = await supabase.storage
         .from("avatars")
-        .upload(path, file, { upsert: true, contentType: file.type });
+        .upload(path, blob, { upsert: true, contentType: cropMime });
 
       if (uploadError) throw uploadError;
 
@@ -86,7 +96,6 @@ export default function MyProfilePage() {
       toast.error("Erro ao enviar foto: " + (err.message || "tente novamente"));
     } finally {
       setUploading(false);
-      if (inputRef.current) inputRef.current.value = "";
     }
   };
 
@@ -150,6 +159,14 @@ export default function MyProfilePage() {
           Para alterar outras informações, solicite ao seu gestor.
         </p>
       </div>
+
+      {/* Crop dialog — rendered outside the card so it overlays everything */}
+      <AvatarCropDialog
+        imageSrc={cropSrc}
+        mimeType={cropMime}
+        onConfirm={handleCropConfirm}
+        onCancel={() => setCropSrc(null)}
+      />
     </BoardLayout>
   );
 }
