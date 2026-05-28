@@ -69,6 +69,7 @@ const MetaEcommercePage    = lazy(() => import("./pages/dashboards/metas/MetaEco
 const MetaVendedoresPage   = lazy(() => import("./pages/dashboards/metas/MetaVendedoresPage"));
 const MetaConfigPage       = lazy(() => import("./pages/dashboards/metas/MetaConfigPage"));
 const MyProfilePage        = lazy(() => import("./pages/MyProfilePage"));
+const VendasPage           = lazy(() => import("./pages/VendasPage"));
 const NotFound            = lazy(() => import("./pages/NotFound"));
 const AIAssistantPage     = lazy(() => import("./pages/AIAssistantPage"));
 const BlingIntegration    = lazy(() => import("./pages/BlingIntegration"));
@@ -162,6 +163,7 @@ function AnimatedRoutes() {
             <Route path="/crm/:funnelType"  element={<ProtectedRoute screenId="crm"><CRMFunnel /></ProtectedRoute>} />
             <Route path="/meu-painel"       element={<ProtectedRoute screenId="meu-painel"><MeuPainel /></ProtectedRoute>} />
             <Route path="/meu-perfil"       element={<ProtectedRoute><MyProfilePage /></ProtectedRoute>} />
+            <Route path="/vendas"           element={<ProtectedRoute screenId="vendas"><VendasPage /></ProtectedRoute>} />
             <Route path="/import"           element={<ProtectedRoute screenId="import"><DataImport /></ProtectedRoute>} />
             <Route path="/mapa-territorial" element={<ProtectedRoute screenId="mapa-territorial"><MapaTerritorial /></ProtectedRoute>} />
 

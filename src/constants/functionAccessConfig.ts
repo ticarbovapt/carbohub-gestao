@@ -120,6 +120,7 @@ export const SCREEN_GROUPS: ScreenGroup[] = [
     screens: [
       { id: "orders", label: "Controle de Pedidos", path: "/orders" },
       { id: "orders-new", label: "Novo Pedido", path: "/orders/new" },
+      { id: "vendas", label: "Vendas (por vendedor)", path: "/vendas" },
       { id: "b2b", label: "B2B Leads", path: "/b2b" },
       { id: "b2b-funnel", label: "Funil B2B", path: "/b2b/funnel" },
       { id: "crm", label: "CRM Dashboard", path: "/crm" },
