@@ -138,134 +138,130 @@ interface BoardLayoutProps {
   children: ReactNode;
 }
 
-type SidebarTab = "controle" | "operacoes" | "dashboards";
-
-interface NavItem {
+interface SectorNavItem {
   href: string;
   label: string;
   icon: React.ComponentType<{ className?: string }>;
   adminOnly?: boolean;
-  sectionLabel?: string;
 }
-
-interface NavGroup {
+interface Sector {
   id: string;
   label: string;
   icon: React.ComponentType<{ className?: string }>;
-  adminOnly?: boolean;
-  /** Se preenchido e children.length === 1, o grupo vira link direto */
-  directHref?: string;
-  children: NavItem[];
+  items: SectorNavItem[];
 }
 
-const controleGroups: NavGroup[] = [
+const SECTORS: Sector[] = [
   {
-    id: "catalogo",
-    label: "Catálogo",
-    icon: Package,
-    children: [
-      { href: "/mrp/products",      label: "Insumos / SKUs",      icon: Package },
-      { href: "/mrp/products?bom=1",label: "BOM Lists",            icon: ClipboardList },
-      { href: "/skus",              label: "Produtos Finais",      icon: Layers },
-      { href: "/lots",              label: "Lotes / Qualidade",    icon: FileSpreadsheet },
-    ],
-  },
-  {
-    id: "fornecedores",
-    label: "Fornecedores",
-    icon: Factory,
-    directHref: "/mrp/suppliers",
-    children: [{ href: "/mrp/suppliers", label: "Fornecedores", icon: Factory }],
-  },
-  {
-    id: "licenciados",
-    label: "Licenciados",
-    icon: Building2,
-    directHref: "/licensees",
-    children: [{ href: "/licensees", label: "Licenciados", icon: Building2 }],
-  },
-  {
-    id: "equipe",
-    label: "Equipe & Dados",
-    icon: Users,
-    children: [
-      { href: "/team",   label: "Equipe",         icon: Users },
-      { href: "/import", label: "Importar Dados",  icon: FileSpreadsheet },
-    ],
-  },
-];
-
-const dashboardsItems: NavItem[] = [
-  { href: "/dashboard", label: "Visão Geral", icon: LayoutDashboard },
-  { href: "/dashboards/producao", label: "Produção", icon: Factory },
-  { href: "/dashboards/financeiro", label: "Financeiro", icon: Wallet },
-  { href: "/dashboards/logistica", label: "Logística", icon: Truck },
-  { href: "/dashboards/comercial", label: "Comercial", icon: TrendingUp },
-  { href: "/dashboards/estrategico", label: "Estratégico", icon: Star },
-];
-
-const operacoesGroups: NavGroup[] = [
-  {
-    id: "producao",
-    label: "Produção",
-    icon: Factory,
-    directHref: "/production-orders",
-    children: [{ href: "/production-orders", label: "Ordens de Produção (OP)", icon: Factory }],
-  },
-  {
-    id: "servicos",
-    label: "Descarbonização",
-    icon: ClipboardList,
-    directHref: "/os",
-    children: [{ href: "/os", label: "Ordens de Serviço (OS)", icon: ClipboardList }],
-  },
-  {
-    id: "carboops",
-    label: "CarboOPS",
-    icon: Bell,
-    children: [
-      { href: "/ops/alerts",      label: "Central de Alertas", icon: Bell },
-      { href: "/ops/pdv-network", label: "Rede PDV",           icon: Store },
+    id: "dashboards",
+    label: "Dash",
+    icon: BarChart3,
+    items: [
+      { href: "/dashboard",                          label: "Visão Geral",       icon: LayoutDashboard },
+      { href: "/dashboards/producao",                label: "Produção",          icon: Factory },
+      { href: "/dashboards/financeiro",              label: "Financeiro",        icon: Wallet },
+      { href: "/dashboards/logistica",               label: "Logística",         icon: Truck },
+      { href: "/dashboards/comercial",               label: "Comercial",         icon: TrendingUp },
+      { href: "/dashboards/estrategico",             label: "Estratégico",       icon: Star },
+      { href: "/dashboards/ecommerce/vendas-online", label: "E-commerce",        icon: ShoppingBag },
+      { href: "/dashboards/metas/ecommerce",         label: "Meta E-commerce",   icon: Target },
+      { href: "/dashboards/metas/vendedores",        label: "Meta Vendedores",   icon: Users },
+      { href: "/dashboards/metas/config",            label: "Config Metas",      icon: Settings },
     ],
   },
   {
     id: "comercial",
     label: "Comercial",
-    icon: Target,
-    children: [
-      { href: "/crm",            label: "CRM — Funis de Venda", icon: Target },
-      { href: "/meu-painel",     label: "Meu Painel",           icon: BarChart3 },
-      { href: "/orders",         label: "Pedidos (RV)",         icon: ShoppingCart },
-      { href: "/sales-targets",  label: "Metas de Vendas",      icon: TrendingUp },
+    icon: ShoppingBag,
+    items: [
+      { href: "/meu-painel",    label: "Meu Painel",        icon: BarChart3 },
+      { href: "/vendas",        label: "Vendas",            icon: ShoppingBag },
+      { href: "/orders",        label: "Pedidos (RV)",      icon: ShoppingCart },
+      { href: "/crm",           label: "CRM",               icon: Target },
+      { href: "/sales-targets", label: "Metas de Vendas",   icon: TrendingUp },
+      { href: "/licensees",     label: "Licenciados",       icon: Building2 },
+    ],
+  },
+  {
+    id: "ops",
+    label: "OPS",
+    icon: ClipboardList,
+    items: [
+      { href: "/os",            label: "OS Descarbonização",  icon: ClipboardList },
+      { href: "/ops/alerts",    label: "Alertas Operacionais", icon: Bell },
+      { href: "/home",          label: "CarboOPS Hub",        icon: Layers },
+      { href: "/scheduling",    label: "Agendamentos",        icon: Calendar },
+      { href: "/machines",      label: "Máquinas",            icon: Cog },
+      { href: "/checklist",     label: "Checklists",          icon: UserCheck },
+    ],
+  },
+  {
+    id: "producao",
+    label: "Produção",
+    icon: Factory,
+    items: [
+      { href: "/production-orders", label: "Ordens de Produção", icon: Factory },
+      { href: "/mrp/products",      label: "Produtos (MRP)",     icon: Package },
+      { href: "/skus",              label: "SKUs",               icon: Package },
+      { href: "/lots",              label: "Lotes",              icon: Package },
+      { href: "/mrp/suppliers",     label: "Fornecedores MRP",   icon: Building2 },
+      { href: "/suprimentos",       label: "Suprimentos",        icon: Package },
     ],
   },
   {
     id: "financeiro",
-    label: "Financeiro & Supply",
+    label: "Finance",
     icon: Wallet,
-    children: [
-      { href: "/financeiro",          label: "Financeiro",         icon: Wallet },
-      { href: "/suprimentos",         label: "Suprimentos",        icon: Package },
-      { href: "/viagens",             label: "Viagens & PC",       icon: Plane },
-      { href: "/logistics",           label: "Logística",          icon: Truck },
+    items: [
+      { href: "/financeiro",        label: "Financeiro",      icon: Wallet },
+      { href: "/viagens",           label: "Viagens & PC",    icon: Plane },
+      { href: "/logistics",         label: "Logística",       icon: Truck },
+      { href: "/purchasing",        label: "Compras",         icon: ShoppingCart },
+      { href: "/admin/nfse",        label: "NFS-e",           icon: FileInput },
+    ],
+  },
+  {
+    id: "equipe",
+    label: "Equipe",
+    icon: Users,
+    items: [
+      { href: "/team",               label: "Equipe",            icon: Users },
+      { href: "/org-chart",          label: "Organograma",       icon: Network },
+      { href: "/role-matrix",        label: "Matriz de Papéis",  icon: Shield },
+      { href: "/responsibility-map", label: "Responsabilidades", icon: UserCheck },
+      { href: "/import",             label: "Importar Dados",    icon: FileSpreadsheet },
+    ],
+  },
+  {
+    id: "territorial",
+    label: "Territorial",
+    icon: Network,
+    items: [
+      { href: "/mapa-territorial",           label: "Mapa Territorial",    icon: Network },
+      { href: "/ops/network-map",            label: "Mapa da Rede",        icon: Network },
+      { href: "/ops/licensee-ranking",       label: "Ranking Licenciados", icon: Star },
+      { href: "/ops/territory-intelligence", label: "Inteligência Terr.",  icon: BarChart3 },
+      { href: "/ops/territory-expansion",    label: "Expansão Territorial",icon: TrendingUp },
+      { href: "/ops/pdv-network",            label: "Rede PDV",            icon: Store },
     ],
   },
   {
     id: "admin",
     label: "Admin",
     icon: Shield,
-    children: [
-      { href: "/admin/webhooks",       label: "Webhooks CRM",         icon: Zap },
-      { href: "/admin/pipeline",       label: "Config. Pipeline CRM", icon: Cog },
-      { href: "/admin/cockpit",        label: "Cockpit Estratégico",  icon: BarChart3, adminOnly: true },
-      { href: "/integrations/bling",   label: "Integrações Bling",    icon: Link2 },
-      { href: "/admin/nfse",           label: "Integração Direta",    icon: FileInput },
+    items: [
+      { href: "/admin",              label: "Administração",       icon: Shield,    adminOnly: true },
+      { href: "/admin/cockpit",      label: "Cockpit Estratégico", icon: BarChart3, adminOnly: true },
+      { href: "/governance",         label: "Governança",          icon: Shield,    adminOnly: true },
+      { href: "/admin/approval",     label: "Aprovações",          icon: UserCheck },
+      { href: "/admin/pipeline",     label: "Config Pipeline",     icon: Cog },
+      { href: "/admin/webhooks",     label: "Webhooks CRM",        icon: Zap },
+      { href: "/integrations/bling", label: "Bling",               icon: Link2 },
+      { href: "/bugs",               label: "Bugs",                icon: Bug },
+      { href: "/ai-assistant",       label: "Assistente IA",       icon: Star },
     ],
   },
 ];
-
-// Governance/admin tools moved to /team page — accessible via Controle > Equipe
-const globalItems: { href: string; label: string; icon: React.ComponentType<{ className?: string }>; adminOnly?: boolean; financeOrMasterOnly?: boolean }[] = [];
 
 /** Derive a human-readable breadcrumb label from a pathname segment */
 const ROUTE_LABELS: Record<string, string> = {
@@ -373,64 +369,16 @@ export function BoardLayout({ children }: BoardLayoutProps) {
   const roleLines = useRoleDisplayLabel();
   const isMobile = useIsMobile();
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [ecommerceOpen, setEcommerceOpen] = useState(false);
-  const [metasOpen, setMetasOpen] = useState(false);
+  const [activeSector, setActiveSector] = useState<string | null>("dashboards");
 
   // ── Onboarding → PasswordChange sequencing ─────────────────────────────────
   // PasswordChangeModal only renders AFTER onboarding is dismissed/done,
   // so the onboarding always shows first for new users.
   const [onboardingDone, setOnboardingDone] = useState(false);
 
-  // ── Ops accordion open-state ──────────────────────────────────────────────
-  const getInitialOpenGroups = () => {
-    const match = operacoesGroups.find((g) =>
-      g.children.some(
-        (c) => location.pathname === c.href || location.pathname.startsWith(c.href + "/")
-      )
-    );
-    return new Set<string>(match ? [match.id] : ["comercial"]);
-  };
-  const [openGroups, setOpenGroups] = useState<Set<string>>(getInitialOpenGroups);
-  const toggleGroup = useCallback((id: string) => {
-    setOpenGroups((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  }, []);
-
   const { data: alertsBadge = 0 } = useOpsAlertsBadge();
   const { data: crmStaleBadge = 0 } = useCRMStaleBadge();
   useEcommerceNotifications();
-
-  // Determine active tab from route
-  const isDashboardRoute = location.pathname.startsWith("/dashboards") ||
-    location.pathname === "/dashboard";
-  const isControleRoute = !isDashboardRoute && (location.pathname.startsWith("/mrp") ||
-    ["/licensees", "/machines", "/team", "/import", "/skus", "/lots", "/integrations"].some(p => location.pathname.startsWith(p)));
-  const [activeTab, setActiveTab] = useState<SidebarTab>(
-    isDashboardRoute ? "dashboards" : isControleRoute ? "controle" : "operacoes"
-  );
-
-  // ── Controle accordion open-state ─────────────────────────────────────────
-  const getInitialOpenControleGroups = () => {
-    const match = controleGroups.find((g) =>
-      g.children.some(
-        (c) => location.pathname === c.href.split("?")[0] || location.pathname.startsWith(c.href.split("?")[0] + "/")
-      )
-    );
-    return new Set<string>(match ? [match.id] : ["catalogo"]);
-  };
-  const [openControleGroups, setOpenControleGroups] = useState<Set<string>>(getInitialOpenControleGroups);
-  const toggleControleGroup = useCallback((id: string) => {
-    setOpenControleGroups((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  }, []);
 
   const getInitials = (name: string | null | undefined) => {
     if (!name) return "??";
@@ -449,378 +397,111 @@ export function BoardLayout({ children }: BoardLayoutProps) {
     return location.pathname.startsWith(href);
   };
 
-  const currentItems = dashboardsItems;
-  const filteredItems = currentItems.filter((item) => {
-    if (item.adminOnly && !canSeeAdminMenu) return false;
-    return true;
-  });
-  const filteredControleGroups = controleGroups
-    .filter((g) => !g.adminOnly || canSeeAdminMenu)
-    .map((g) => ({ ...g, children: g.children.filter((c) => !c.adminOnly || canSeeAdminMenu) }));
-  const filteredOpsGroups = operacoesGroups
-    .filter((g) => !g.adminOnly || canSeeAdminMenu)
-    .map((g) => ({ ...g, children: g.children.filter((c) => !c.adminOnly || canSeeAdminMenu) }));
-  const filteredGlobalItems = globalItems.filter((item: any) => {
-    if (item.financeOrMasterOnly && !canSeeFinanceMenu) return false;
-    if (item.adminOnly && !canSeeAdminMenu) return false;
-    return true;
-  });
+  const areaLabel = activeSector
+    ? SECTORS.find(s => s.id === activeSector)?.label ?? "Menu"
+    : "Menu";
 
-  const areaLabel = activeTab === "controle" ? "Controle" : activeTab === "dashboards" ? "Dashboards" : "Operações";
+  const SidebarContent = () => {
+    const activeSectorData = SECTORS.find(s => s.id === activeSector);
+    const visibleItems = activeSectorData?.items.filter(item =>
+      !item.adminOnly || canSeeAdminMenu
+    ) ?? [];
 
-  const SidebarContent = () => (
-    <>
-      {/* Sidebar header */}
-      <div className="flex items-center gap-2.5 px-4 py-4 border-b border-border">
-        <img src={logoCarbo} alt="Carbo" className="h-6 w-6 object-contain" />
-        <div>
-          <p className="text-sm font-bold text-foreground leading-none">CARBO CORE</p>
-          <p className="text-[10px] text-muted-foreground leading-none mt-0.5">Plataforma Corporativa</p>
-        </div>
-      </div>
+    return (
+      <div className="flex h-full overflow-hidden">
+        {/* ── Left rail: sector icons ── */}
+        <div className="w-[72px] border-r border-border flex flex-col items-center py-3 gap-0.5 shrink-0">
+          {/* Logo */}
+          <div className="mb-3 flex justify-center">
+            <img src={logoCarbo} alt="Carbo" className="h-7 w-7 object-contain" />
+          </div>
 
-      {/* Tab Switcher — order: Dash → Operações → Controle */}
-      <div className="px-3 pt-3 pb-1">
-        <div className="flex rounded-lg bg-muted p-1 gap-1">
-          <button
-            onClick={() => setActiveTab("dashboards")}
-            className={cn(
-              "flex-1 flex items-center justify-center gap-1 rounded-md px-1.5 py-1.5 text-[10px] font-medium transition-all",
-              activeTab === "dashboards"
-                ? "bg-background text-foreground shadow-sm"
-                : "text-muted-foreground hover:text-foreground"
-            )}
-          >
-            <BarChart3 className="h-3 w-3 flex-shrink-0" />
-            Dash
-          </button>
-          <button
-            onClick={() => setActiveTab("operacoes")}
-            className={cn(
-              "flex-1 flex items-center justify-center gap-1 rounded-md px-1.5 py-1.5 text-[10px] font-medium transition-all",
-              activeTab === "operacoes"
-                ? "bg-background text-foreground shadow-sm"
-                : "text-muted-foreground hover:text-foreground"
-            )}
-          >
-            <Layers className="h-3 w-3 flex-shrink-0" />
-            Ops
-          </button>
-          <button
-            onClick={() => setActiveTab("controle")}
-            className={cn(
-              "flex-1 flex items-center justify-center gap-1 rounded-md px-1.5 py-1.5 text-[10px] font-medium transition-all",
-              activeTab === "controle"
-                ? "bg-background text-foreground shadow-sm"
-                : "text-muted-foreground hover:text-foreground"
-            )}
-          >
-            <Cog className="h-3 w-3 flex-shrink-0" />
-            Controle
-          </button>
-        </div>
-      </div>
-
-      {/* Navigation */}
-      <nav className="flex flex-col gap-0.5 p-3 flex-1 overflow-y-auto pt-2">
-        <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider px-3 mb-1">
-          {activeTab === "controle" ? "Controle" : activeTab === "dashboards" ? "Dashboards" : "Operações"}
-        </p>
-        {activeTab === "operacoes" ? (
-          /* ── Ops: grupos colapsáveis ───────────────────────────────── */
-          filteredOpsGroups.map((group) => {
-            // Grupo com 1 item → link direto
-            if (group.directHref && group.children.length === 1) {
-              const item = group.children[0];
-              const isActive = isItemActive(item.href);
-              return (
-                <Link
-                  key={group.id}
-                  to={item.href}
-                  onClick={() => setSidebarOpen(false)}
-                  className={cn(
-                    "flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition-all duration-200",
-                    isActive
-                      ? "bg-area-controle-soft text-area-controle font-medium"
-                      : "text-muted-foreground hover:bg-secondary hover:text-foreground"
-                  )}
-                >
-                  <group.icon className="h-4 w-4 flex-shrink-0" />
-                  <span className="truncate">{group.label}</span>
-                  {isActive && <ChevronRight className="h-3.5 w-3.5 ml-auto text-area-controle flex-shrink-0" />}
-                </Link>
-              );
-            }
-
-            // Grupo com 2+ itens → accordion
-            const isOpen = openGroups.has(group.id);
-            const hasActiveChild = group.children.some((c) => isItemActive(c.href));
-            const groupBadge =
-              group.id === "carboops" ? alertsBadge :
-              group.id === "comercial" ? crmStaleBadge : 0;
-
-            return (
-              <React.Fragment key={group.id}>
-                <button
-                  onClick={() => toggleGroup(group.id)}
-                  className={cn(
-                    "flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition-all duration-200",
-                    hasActiveChild && !isOpen
-                      ? "bg-area-controle-soft text-area-controle font-medium"
-                      : "text-muted-foreground hover:bg-secondary hover:text-foreground"
-                  )}
-                >
-                  <group.icon className="h-4 w-4 flex-shrink-0" />
-                  <span className="truncate flex-1 text-left">{group.label}</span>
-                  {groupBadge > 0 && !isOpen && (
-                    <span className={cn(
-                      "flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[9px] font-bold text-white flex-shrink-0",
-                      group.id === "carboops" ? "bg-destructive" : "bg-amber-500"
-                    )}>
-                      {groupBadge > 99 ? "99+" : groupBadge}
-                    </span>
-                  )}
-                  <ChevronDown className={cn(
-                    "h-3.5 w-3.5 flex-shrink-0 transition-transform duration-200",
-                    isOpen && "rotate-180"
-                  )} />
-                </button>
-
-                {isOpen && (
-                  <div className="ml-3 pl-3 border-l border-border/50 flex flex-col gap-0.5 pb-1">
-                    {group.children.map((item) => {
-                      const isActive = isItemActive(item.href);
-                      return (
-                        <Link
-                          key={item.href}
-                          to={item.href}
-                          onClick={() => setSidebarOpen(false)}
-                          className={cn(
-                            "flex items-center gap-2.5 rounded-lg px-3 py-1.5 text-sm transition-all duration-200",
-                            isActive
-                              ? "bg-area-controle-soft text-area-controle font-medium"
-                              : "text-muted-foreground hover:bg-secondary hover:text-foreground"
-                          )}
-                        >
-                          <item.icon className="h-3.5 w-3.5 flex-shrink-0" />
-                          <span className="truncate">{item.label}</span>
-                          {item.href === "/ops/alerts" && alertsBadge > 0 && (
-                            <span className="ml-auto flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[9px] font-bold text-white flex-shrink-0">
-                              {alertsBadge > 99 ? "99+" : alertsBadge}
-                            </span>
-                          )}
-                          {item.href === "/crm" && crmStaleBadge > 0 && (
-                            <span className="ml-auto flex h-4 min-w-4 items-center justify-center rounded-full bg-amber-500 px-1 text-[9px] font-bold text-white flex-shrink-0">
-                              {crmStaleBadge > 99 ? "99+" : crmStaleBadge}
-                            </span>
-                          )}
-                          {isActive && item.href !== "/ops/alerts" && item.href !== "/crm" && (
-                            <ChevronRight className="h-3.5 w-3.5 ml-auto text-area-controle flex-shrink-0" />
-                          )}
-                        </Link>
-                      );
-                    })}
-                  </div>
-                )}
-              </React.Fragment>
+          {SECTORS.map(sector => {
+            const isActive = activeSector === sector.id;
+            const hasActivePath = sector.items.some(item =>
+              item.href !== "/dashboard" && location.pathname.startsWith(item.href)
             );
-          })
-        ) : activeTab === "controle" ? (
-          /* ── Controle: grupos colapsáveis ──────────────────────────── */
-          filteredControleGroups.map((group) => {
-            if (group.directHref && group.children.length === 1) {
-              const item = group.children[0];
-              const isActive = isItemActive(item.href.split("?")[0]);
-              return (
-                <Link key={group.id} to={item.href} onClick={() => setSidebarOpen(false)}
-                  className={cn(
-                    "flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition-all duration-200",
-                    isActive ? "bg-area-controle-soft text-area-controle font-medium"
-                             : "text-muted-foreground hover:bg-secondary hover:text-foreground"
-                  )}
-                >
-                  <group.icon className="h-4 w-4 flex-shrink-0" />
-                  <span className="truncate">{group.label}</span>
-                </Link>
-              );
-            }
-            const isOpen = openControleGroups.has(group.id);
-            const hasActiveChild = group.children.some((c) => isItemActive(c.href.split("?")[0]));
             return (
-              <React.Fragment key={group.id}>
-                <button onClick={() => toggleControleGroup(group.id)}
-                  className={cn(
-                    "flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition-all duration-200",
-                    hasActiveChild && !isOpen
-                      ? "bg-area-controle-soft text-area-controle font-medium"
-                      : "text-muted-foreground hover:bg-secondary hover:text-foreground"
-                  )}
-                >
-                  <group.icon className="h-4 w-4 flex-shrink-0" />
-                  <span className="truncate flex-1 text-left">{group.label}</span>
-                  <ChevronDown className={cn("h-3.5 w-3.5 flex-shrink-0 transition-transform duration-200", isOpen && "rotate-180")} />
-                </button>
-                {isOpen && (
-                  <div className="ml-3 pl-3 border-l border-border/50 flex flex-col gap-0.5 pb-1">
-                    {group.children.map((item) => {
-                      const isActive = isItemActive(item.href.split("?")[0]);
-                      return (
-                        <Link key={item.href} to={item.href} onClick={() => setSidebarOpen(false)}
-                          className={cn(
-                            "flex items-center gap-2.5 rounded-lg px-3 py-1.5 text-sm transition-all duration-200",
-                            isActive ? "bg-area-controle-soft text-area-controle font-medium"
-                                     : "text-muted-foreground hover:bg-secondary hover:text-foreground"
-                          )}
-                        >
-                          <item.icon className="h-3.5 w-3.5 flex-shrink-0" />
-                          <span className="truncate">{item.label}</span>
-                          {isActive && <ChevronRight className="h-3.5 w-3.5 ml-auto text-area-controle flex-shrink-0" />}
-                        </Link>
-                      );
-                    })}
-                  </div>
+              <button
+                key={sector.id}
+                onClick={() => setActiveSector(isActive ? null : sector.id)}
+                className={cn(
+                  "flex flex-col items-center gap-1 w-[60px] py-2 px-1 rounded-lg transition-all duration-200",
+                  isActive
+                    ? "bg-carbo-green/10 text-carbo-green"
+                    : hasActivePath
+                    ? "text-carbo-green/70 hover:bg-muted"
+                    : "text-muted-foreground hover:bg-muted hover:text-foreground"
                 )}
-              </React.Fragment>
+              >
+                <sector.icon className="h-4 w-4 shrink-0" />
+                <span className="text-[9px] font-medium leading-none text-center">{sector.label}</span>
+              </button>
             );
-          })
+          })}
+
+          {/* Bottom: Home + ThemeToggle */}
+          <div className="mt-auto flex flex-col items-center gap-1 pt-2 border-t border-border w-full">
+            <Link
+              to="/dashboard"
+              onClick={() => setSidebarOpen(false)}
+              className="flex flex-col items-center gap-1 py-2 px-1 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-all w-[60px]"
+            >
+              <Home className="h-4 w-4" />
+              <span className="text-[9px] font-medium leading-none">Início</span>
+            </Link>
+            <ThemeToggle />
+          </div>
+        </div>
+
+        {/* ── Right panel: sector items ── */}
+        {activeSector ? (
+          <div className="flex-1 flex flex-col overflow-hidden">
+            {/* Panel header */}
+            <div className="px-4 py-3 border-b border-border shrink-0">
+              <p className="text-xs font-bold uppercase tracking-wider text-foreground">
+                {activeSectorData?.label}
+              </p>
+            </div>
+            {/* Items */}
+            <nav className="flex-1 overflow-y-auto p-2 space-y-0.5">
+              {visibleItems.map(item => {
+                const isActive = isItemActive(item.href);
+                return (
+                  <Link
+                    key={item.href}
+                    to={item.href}
+                    onClick={() => setSidebarOpen(false)}
+                    className={cn(
+                      "flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition-all duration-200",
+                      isActive
+                        ? "bg-area-controle-soft text-area-controle font-medium"
+                        : "text-muted-foreground hover:bg-secondary hover:text-foreground"
+                    )}
+                  >
+                    <item.icon className="h-4 w-4 shrink-0" />
+                    <span className="flex-1 truncate">{item.label}</span>
+                    {isActive && <ChevronRight className="h-3.5 w-3.5 shrink-0 text-area-controle" />}
+                  </Link>
+                );
+              })}
+            </nav>
+          </div>
         ) : (
-          /* ── Dashboards: lista plana ───────────────────────────────── */
-          <>
-            {filteredItems.map((item) => {
-              const isActive = isItemActive(item.href);
-              return (
-                <Link key={item.href} to={item.href} onClick={() => setSidebarOpen(false)}
-                  className={cn(
-                    "flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition-all duration-200",
-                    isActive ? "bg-area-controle-soft text-area-controle font-medium"
-                             : "text-muted-foreground hover:bg-secondary hover:text-foreground"
-                  )}
-                >
-                  <item.icon className="h-4 w-4 flex-shrink-0" />
-                  <span className="truncate">{item.label}</span>
-                  {isActive && <ChevronRight className="h-3.5 w-3.5 ml-auto text-area-controle flex-shrink-0" />}
-                </Link>
-              );
-            })}
-
-            {/* ── Pasta: Dash E-commerce ── */}
-            <button
-              onClick={() => setEcommerceOpen(v => !v)}
-              className="flex items-center gap-2.5 w-full rounded-lg px-3 py-2 text-sm text-muted-foreground hover:bg-secondary hover:text-foreground transition-all duration-200"
-            >
-              <ShoppingBag className="h-4 w-4 flex-shrink-0" />
-              <span className="flex-1 text-left truncate">Dash E-commerce</span>
-              <ChevronRight className={cn("h-3.5 w-3.5 flex-shrink-0 transition-transform duration-200", ecommerceOpen && "rotate-90")} />
-            </button>
-            {ecommerceOpen && (
-              <div className="pl-4 space-y-0.5">
-                {(() => {
-                  const href = "/dashboards/ecommerce/vendas-online";
-                  const isActive = isItemActive(href);
-                  return (
-                    <Link to={href} onClick={() => setSidebarOpen(false)}
-                      className={cn(
-                        "flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition-all duration-200",
-                        isActive ? "bg-area-controle-soft text-area-controle font-medium"
-                                 : "text-muted-foreground hover:bg-secondary hover:text-foreground"
-                      )}
-                    >
-                      <TrendingUp className="h-4 w-4 flex-shrink-0" />
-                      <span className="truncate">Vendas Online</span>
-                      {isActive && <ChevronRight className="h-3.5 w-3.5 ml-auto text-area-controle flex-shrink-0" />}
-                    </Link>
-                  );
-                })()}
-              </div>
-            )}
-
-            {/* ── Pasta: Metas ── */}
-            <button
-              onClick={() => setMetasOpen(v => !v)}
-              className={cn(
-                "flex items-center gap-2.5 w-full rounded-lg px-3 py-2 text-sm transition-all duration-200",
-                (isItemActive("/dashboards/metas") && !metasOpen)
-                  ? "bg-area-controle-soft text-area-controle font-medium"
-                  : "text-muted-foreground hover:bg-secondary hover:text-foreground"
-              )}
-            >
-              <Target className="h-4 w-4 flex-shrink-0" />
-              <span className="flex-1 text-left truncate">Metas</span>
-              <ChevronRight className={cn("h-3.5 w-3.5 flex-shrink-0 transition-transform duration-200", metasOpen && "rotate-90")} />
-            </button>
-            {metasOpen && (
-              <div className="pl-4 space-y-0.5">
-                {[
-                  { href: "/dashboards/metas/ecommerce",  label: "Meta Ecommerce",  Icon: ShoppingBag },
-                  { href: "/dashboards/metas/vendedores", label: "Meta Vendedores", Icon: Users },
-                ].map(({ href, label, Icon }) => {
-                  const isActive = isItemActive(href);
-                  return (
-                    <Link key={href} to={href} onClick={() => setSidebarOpen(false)}
-                      className={cn(
-                        "flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition-all duration-200",
-                        isActive ? "bg-area-controle-soft text-area-controle font-medium"
-                                 : "text-muted-foreground hover:bg-secondary hover:text-foreground"
-                      )}
-                    >
-                      <Icon className="h-4 w-4 flex-shrink-0" />
-                      <span className="truncate">{label}</span>
-                      {isActive && <ChevronRight className="h-3.5 w-3.5 ml-auto text-area-controle flex-shrink-0" />}
-                    </Link>
-                  );
-                })}
-              </div>
-            )}
-          </>
+          /* Empty state */
+          <div className="flex-1 flex flex-col items-center justify-center text-center p-4 gap-3">
+            <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center">
+              <img src={logoCarbo} alt="" className="h-7 w-7 opacity-40 object-contain" />
+            </div>
+            <div>
+              <p className="text-sm font-medium text-foreground">CARBO CORE</p>
+              <p className="text-[11px] text-muted-foreground mt-0.5">Selecione um setor</p>
+            </div>
+          </div>
         )}
-
-        {/* Global items separator */}
-        {filteredGlobalItems.length > 0 && (
-          <>
-            <Separator className="my-2" />
-            <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider px-3 mb-1">
-              Gestão
-            </p>
-            {filteredGlobalItems.map((item) => {
-              const isActive = isItemActive(item.href);
-              return (
-                <Link
-                  key={item.href}
-                  to={item.href}
-                  onClick={() => setSidebarOpen(false)}
-                  className={cn(
-                    "flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition-all duration-200",
-                    isActive
-                      ? "bg-area-controle-soft text-area-controle font-medium"
-                      : "text-muted-foreground hover:bg-secondary hover:text-foreground"
-                  )}
-                >
-                  <item.icon className="h-4 w-4 flex-shrink-0" />
-                  <span className="truncate">{item.label}</span>
-                  {isActive && <ChevronRight className="h-3.5 w-3.5 ml-auto text-area-controle flex-shrink-0" />}
-                </Link>
-              );
-            })}
-          </>
-        )}
-      </nav>
-
-      {/* Bottom section */}
-      <div className="border-t border-border p-3 mt-auto">
-        <div className="flex items-center justify-between">
-          <Link
-            to="/dashboard"
-            onClick={() => setSidebarOpen(false)}
-            className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-xs font-medium text-muted-foreground hover:bg-secondary hover:text-foreground transition-all"
-          >
-            <Home className="h-3.5 w-3.5" />
-            <span>Início</span>
-          </Link>
-          <ThemeToggle />
-        </div>
       </div>
-    </>
-  );
+    );
+  };
 
   return (
     <>
