@@ -164,21 +164,27 @@ export interface WeeklyTopEntry {
   profile: { id: string; full_name: string | null; avatar_url: string | null; department: string | null; secondary_department: string | null } | null;
 }
 
+// Commercial week: starts Friday, ends Thursday
+function commercialWeekStart(): Date {
+  const now = new Date();
+  const dow = now.getDay(); // 0=Sun … 6=Sat
+  const daysSinceFriday = dow >= 5 ? dow - 5 : dow + 2;
+  const friday = new Date(now);
+  friday.setDate(now.getDate() - daysSinceFriday);
+  friday.setHours(0, 0, 0, 0);
+  return friday;
+}
+
 export function useWeeklyTopVendedores() {
   return useQuery({
     queryKey: ["weekly-top-vendedores"],
     queryFn: async () => {
-      const now = new Date();
-      const dayOfWeek = now.getDay(); // 0=Sun
-      const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
-      const monday = new Date(now);
-      monday.setDate(now.getDate() + mondayOffset);
-      monday.setHours(0, 0, 0, 0);
+      const weekStart = commercialWeekStart();
 
       const { data: ordersRaw } = await supabase
         .from("carboze_orders")
         .select("vendedor_id, total, status")
-        .gte("created_at", monday.toISOString());
+        .gte("created_at", weekStart.toISOString());
 
       const orders = (ordersRaw || []).filter(o => o.status !== "cancelled" && o.vendedor_id);
       const totals: Record<string, number> = {};
@@ -227,17 +233,12 @@ export function useWeeklyVendedoresData(teamFilter?: "todos" | "cgc" | "expansao
   return useQuery({
     queryKey: ["weekly-vendedores-data", teamFilter],
     queryFn: async () => {
-      const now = new Date();
-      const dayOfWeek = now.getDay();
-      const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
-      const monday = new Date(now);
-      monday.setDate(now.getDate() + mondayOffset);
-      monday.setHours(0, 0, 0, 0);
+      const weekStart = commercialWeekStart();
 
       const { data: ordersRaw } = await supabase
         .from("carboze_orders")
         .select("vendedor_id, total, status")
-        .gte("created_at", monday.toISOString());
+        .gte("created_at", weekStart.toISOString());
 
       const orders = (ordersRaw || []).filter(o => o.status !== "cancelled" && o.vendedor_id);
       const totals: Record<string, { total: number; count: number }> = {};
