@@ -74,7 +74,7 @@ function useVendas(month: Date, vendedorIdFilter: string | null) {
         .toISOString().split("T")[0];
 
       let query = supabase
-        .from("carboze_orders_secure")
+        .from("carboze_orders")
         .select("id, order_number, created_at, customer_name, delivery_city, delivery_state, items, total, status, vendedor_id, vendedor_name")
         .gte("created_at", monthStart)
         .lte("created_at", monthEnd + "T23:59:59Z")
