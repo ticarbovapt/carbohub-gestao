@@ -21,9 +21,6 @@ import { useTeamMembers } from "@/hooks/useTeamMembers";
 import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Permission: command/* ou */head podem criar/editar metas
-// ─────────────────────────────────────────────────────────────────────────────
 function useCanSetTargets(): boolean {
   const { profile } = useAuth();
   if (!profile) return false;
@@ -33,46 +30,25 @@ function useCanSetTargets(): boolean {
   return false;
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Helpers
-// ─────────────────────────────────────────────────────────────────────────────
 function fmtBRL(v: number) {
   return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", minimumFractionDigits: 0, maximumFractionDigits: 0 });
 }
 
-// Radix Select não aceita value="" — usa sentinel para "sem linha"
-const LINHA_GERAL = "__geral__";
-const LINHAS_OPTIONS = [
-  { value: LINHA_GERAL,          label: "Todas as linhas (geral)" },
-  { value: "carboze_100ml",      label: "CarboZé 100ml" },
-  { value: "carboze_1l",         label: "CarboZé 1L" },
-  { value: "carboze_sache_10ml", label: "CarboZé Sachê 10ml" },
-  { value: "carbopro",           label: "CarboPRO 100ml" },
-  { value: "carbovapt",          label: "CarboVapt" },
-];
-
 type Tab = "vendedores" | "ecommerce";
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Main page
-// ─────────────────────────────────────────────────────────────────────────────
 export default function MetaConfigPage() {
-  const [tab, setTab] = useState<Tab>("vendedores");
-  const [month, setMonth] = useState(() => startOfMonth(new Date()));
+  const [tab, setTab]       = useState<Tab>("vendedores");
+  const [month, setMonth]   = useState(() => startOfMonth(new Date()));
   const [dialogOpen, setDialog] = useState(false);
-  const [editTarget, setEdit] = useState<SalesTargetWithProgress | null>(null);
+  const [editTarget, setEdit]   = useState<SalesTargetWithProgress | null>(null);
 
-  // Form state
   const [vendedorId, setVendedorId]     = useState("");
   const [targetDigits, setTargetDigits] = useState("");
-  const [targetQty, setTargetQty]       = useState("0");
-  const [linhaVal, setLinhaVal]         = useState(LINHA_GERAL);
 
-  const canManage = useCanSetTargets();
-  const navigate  = useNavigate();
-  const monthStr  = month.toISOString().slice(0, 10);
-
-  const today         = new Date();
+  const canManage  = useCanSetTargets();
+  const navigate   = useNavigate();
+  const monthStr   = month.toISOString().slice(0, 10);
+  const today      = new Date();
   const isCurrentMonth =
     month.getFullYear() === today.getFullYear() &&
     month.getMonth() === today.getMonth();
@@ -93,8 +69,6 @@ export default function MetaConfigPage() {
     setEdit(null);
     setVendedorId("");
     setTargetDigits("");
-    setTargetQty("0");
-    setLinhaVal(LINHA_GERAL);
     setDialog(true);
   };
 
@@ -102,8 +76,6 @@ export default function MetaConfigPage() {
     setEdit(t);
     setVendedorId(t.vendedor_id);
     setTargetDigits(String(Math.round(Number(t.target_amount))));
-    setTargetQty(String(t.target_qty));
-    setLinhaVal(t.linha || LINHA_GERAL);
     setDialog(true);
   };
 
@@ -115,13 +87,13 @@ export default function MetaConfigPage() {
     : "";
 
   const handleSave = async () => {
-    if (!vendedorId || vendedorId === "") return;
+    if (!vendedorId) return;
     await upsert.mutateAsync({
       vendedor_id: vendedorId,
       month: monthStr,
       target_amount: targetAmountNum,
-      target_qty: Number(targetQty) || 0,
-      linha: linhaVal === LINHA_GERAL ? null : linhaVal,
+      target_qty: 0,
+      linha: null,
     });
     handleClose();
   };
@@ -141,28 +113,24 @@ export default function MetaConfigPage() {
     <BoardLayout>
       <div className="p-4 md:p-6 space-y-5 max-w-3xl mx-auto">
 
-        {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
             <h1 className="text-2xl font-bold flex items-center gap-2">
               <Settings className="h-6 w-6 text-carbo-green" /> Configurar Metas
             </h1>
-            <p className="text-sm text-muted-foreground mt-0.5">Gerencie metas de vendedores e e-commerce</p>
+            <p className="text-sm text-muted-foreground mt-0.5">Gerencie metas mensais de vendedores e e-commerce</p>
           </div>
         </div>
 
         {/* Tabs */}
-        <div className="flex gap-1 border-b border-border pb-0">
+        <div className="flex gap-1 border-b border-border">
           {(["vendedores", "ecommerce"] as Tab[]).map(t => (
-            <button
-              key={t}
-              onClick={() => setTab(t)}
+            <button key={t} onClick={() => setTab(t)}
               className={`px-4 py-2 text-sm font-semibold rounded-t-md transition-colors border-b-2 -mb-px ${
                 tab === t
                   ? "border-carbo-green text-carbo-green bg-carbo-green/5"
                   : "border-transparent text-muted-foreground hover:text-foreground"
-              }`}
-            >
+              }`}>
               {t === "vendedores" ? "Vendedores" : "E-commerce"}
             </button>
           ))}
@@ -171,7 +139,6 @@ export default function MetaConfigPage() {
         {/* ── Tab: Vendedores ─────────────────────────────────────────────── */}
         {tab === "vendedores" && (
           <>
-            {/* Month selector + Nova Meta */}
             <div className="flex items-center justify-between gap-3 flex-wrap">
               <div className="flex items-center gap-1 bg-muted/40 rounded-lg px-2 py-1.5">
                 <Button variant="ghost" size="icon" className="h-7 w-7"
@@ -193,10 +160,9 @@ export default function MetaConfigPage() {
               </Button>
             </div>
 
-            {/* Targets list */}
             {isLoading ? (
-              <div className="space-y-3">
-                {[1, 2, 3].map(i => <div key={i} className="h-16 rounded-xl bg-muted/40 animate-pulse" />)}
+              <div className="space-y-2">
+                {[1, 2, 3].map(i => <div key={i} className="h-14 rounded-xl bg-muted/40 animate-pulse" />)}
               </div>
             ) : targets.length === 0 ? (
               <CarboCard>
@@ -216,8 +182,7 @@ export default function MetaConfigPage() {
                       <div className="flex-1 min-w-0">
                         <p className="font-semibold text-sm truncate">{t.vendedor?.full_name || "—"}</p>
                         <p className="text-xs text-muted-foreground">
-                          {fmtBRL(Number(t.target_amount))} · {t.target_qty} pedidos
-                          {t.linha ? ` · ${t.linha}` : ""}
+                          Meta: {fmtBRL(Number(t.target_amount))} · Real: {fmtBRL(t.actual_amount || 0)} ({t.pct_amount || 0}%)
                         </p>
                       </div>
                       <div className="flex gap-0.5 shrink-0">
@@ -247,14 +212,10 @@ export default function MetaConfigPage() {
               <div>
                 <p className="font-semibold text-base">Metas de E-commerce</p>
                 <p className="text-sm text-muted-foreground mt-1">
-                  Metas de e-commerce são configuradas diretamente no dashboard de metas de e-commerce.
+                  Configure as metas de cada plataforma diretamente no dashboard de e-commerce.
                 </p>
               </div>
-              <Button
-                variant="outline"
-                className="gap-2"
-                onClick={() => navigate("/dashboards/metas/ecommerce")}
-              >
+              <Button variant="outline" className="gap-2" onClick={() => navigate("/dashboards/metas/ecommerce")}>
                 <ExternalLink className="h-4 w-4" /> Ir para Meta E-commerce
               </Button>
             </CarboCardContent>
@@ -262,9 +223,9 @@ export default function MetaConfigPage() {
         )}
       </div>
 
-      {/* ── Dialog de Nova / Editar Meta ─────────────────────────────────── */}
+      {/* ── Dialog Nova / Editar Meta ────────────────────────────────────── */}
       <Dialog open={dialogOpen} onOpenChange={handleClose}>
-        <DialogContent className="sm:max-w-sm">
+        <DialogContent className="sm:max-w-xs">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Target className="h-5 w-5 text-carbo-green" />
@@ -276,7 +237,6 @@ export default function MetaConfigPage() {
           </DialogHeader>
 
           <div className="space-y-4 py-2">
-            {/* Vendedor */}
             <div className="space-y-1.5">
               <Label>Vendedor</Label>
               <Select
@@ -298,46 +258,26 @@ export default function MetaConfigPage() {
               </Select>
             </div>
 
-            {/* Meta faturamento */}
             <div className="space-y-1.5">
-              <Label>Meta de Faturamento</Label>
+              <Label>Meta de Faturamento Mensal</Label>
               <Input
                 type="text" inputMode="numeric"
                 value={targetDisplay}
                 onChange={e => setTargetDigits(e.target.value.replace(/\D/g, ""))}
                 placeholder="R$ 0"
                 className="text-xl font-bold tracking-wide"
+                autoFocus
               />
-            </div>
-
-            {/* Meta pedidos */}
-            <div className="space-y-1.5">
-              <Label>Meta de Pedidos (qtd)</Label>
-              <Input
-                type="number" min={0}
-                value={targetQty}
-                onChange={e => setTargetQty(e.target.value)}
-                placeholder="0"
-              />
-            </div>
-
-            {/* Linha */}
-            <div className="space-y-1.5">
-              <Label>Linha de produto</Label>
-              <Select value={linhaVal} onValueChange={setLinhaVal}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {LINHAS_OPTIONS.map(o => (
-                    <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
             </div>
           </div>
 
           <div className="flex justify-end gap-2">
             <Button variant="outline" onClick={handleClose}>Cancelar</Button>
-            <Button onClick={handleSave} disabled={!vendedorId || vendedorId === "" || upsert.isPending}>
+            <Button
+              onClick={handleSave}
+              disabled={!vendedorId || targetAmountNum === 0 || upsert.isPending}
+              className="bg-carbo-green hover:bg-carbo-green/90 text-white"
+            >
               Salvar
             </Button>
           </div>
