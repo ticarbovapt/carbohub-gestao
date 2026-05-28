@@ -67,6 +67,7 @@ const DashboardEstrategico = lazy(() => import("./pages/dashboards/DashboardEstr
 const DashEcommerceVendas  = lazy(() => import("./pages/dashboards/ecommerce/DashEcommerceVendas"));
 const MetaEcommercePage    = lazy(() => import("./pages/dashboards/metas/MetaEcommercePage"));
 const MetaVendedoresPage   = lazy(() => import("./pages/dashboards/metas/MetaVendedoresPage"));
+const MetaConfigPage       = lazy(() => import("./pages/dashboards/metas/MetaConfigPage"));
 const NotFound            = lazy(() => import("./pages/NotFound"));
 const AIAssistantPage     = lazy(() => import("./pages/AIAssistantPage"));
 const BlingIntegration    = lazy(() => import("./pages/BlingIntegration"));
@@ -184,6 +185,7 @@ function AnimatedRoutes() {
             <Route path="/dashboards/metas"           element={<Navigate to="/dashboards/metas/ecommerce" replace />} />
             <Route path="/dashboards/metas/ecommerce" element={<ProtectedRoute screenId="dashboard-meta-ecommerce"><MetaEcommercePage /></ProtectedRoute>} />
             <Route path="/dashboards/metas/vendedores" element={<ProtectedRoute screenId="dashboard-meta-vendedores"><MetaVendedoresPage /></ProtectedRoute>} />
+            <Route path="/dashboards/metas/config" element={<ProtectedRoute screenId="metas-config"><MetaConfigPage /></ProtectedRoute>} />
 
             {/* MRP */}
             <Route path="/mrp"           element={<Navigate to="/dashboards/producao" replace />} />

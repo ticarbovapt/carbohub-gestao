@@ -5,26 +5,20 @@ import { BoardLayout } from "@/components/layouts/BoardLayout";
 import { CarboCard, CarboCardContent } from "@/components/ui/carbo-card";
 import { CarboBadge } from "@/components/ui/carbo-badge";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import {
   ChevronLeft, ChevronRight, Trophy, TrendingUp, TrendingDown,
-  Plus, Pencil, Trash2, Target, RefreshCw, Calendar, Zap,
+  Target, RefreshCw, Calendar, Zap, Settings,
 } from "lucide-react";
 import {
   useSalesTargetsWithProgress,
-  useUpsertSalesTarget,
-  useDeleteSalesTarget,
-  type SalesTargetWithProgress,
+  useWeeklyTopVendedores,
 } from "@/hooks/useSalesTargets";
-import { useTeamMembers } from "@/hooks/useTeamMembers";
 import { useAuth } from "@/contexts/AuthContext";
 import { getProgressColor } from "@/hooks/useMetaEcommerce";
+import { useNavigate } from "react-router-dom";
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Permission: command/* ou */head podem criar/editar metas
+// Permission: command/* ou */head podem ver valores e configurar metas
 // ─────────────────────────────────────────────────────────────────────────────
 function useCanSetTargets(): boolean {
   const { profile } = useAuth();
@@ -50,17 +44,6 @@ const COLOR_MAP = {
   gray:   { bar: "#64748b", badge: "secondary"   as const, text: "text-muted-foreground", bg: "bg-muted/30"      },
 };
 
-// Radix Select não aceita value="" — usa sentinel para "sem linha"
-const LINHA_GERAL = "__geral__";
-const LINHAS_OPTIONS = [
-  { value: LINHA_GERAL,          label: "Todas as linhas (geral)" },
-  { value: "carboze_100ml",      label: "CarboZé 100ml" },
-  { value: "carboze_1l",         label: "CarboZé 1L" },
-  { value: "carboze_sache_10ml", label: "CarboZé Sachê 10ml" },
-  { value: "carbopro",           label: "CarboPRO 100ml" },
-  { value: "carbovapt",          label: "CarboVapt" },
-];
-
 // Delta badge vs mês anterior
 function DeltaBadge({ current, prev }: { current: number; prev: number }) {
   if (prev <= 0 && current <= 0) return null;
@@ -75,21 +58,18 @@ function DeltaBadge({ current, prev }: { current: number; prev: number }) {
   );
 }
 
+type TeamFilter = "todos" | "cgc" | "expansao";
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Main page
 // ─────────────────────────────────────────────────────────────────────────────
 export default function MetaVendedoresPage() {
-  const [month, setMonth]       = useState(() => startOfMonth(new Date()));
-  const [dialogOpen, setDialog] = useState(false);
-  const [editTarget, setEdit]   = useState<SalesTargetWithProgress | null>(null);
-
-  // Form state — vivem no nível do page para resetar quando dialog fecha
-  const [vendedorId, setVendedorId]     = useState("");
-  const [targetDigits, setTargetDigits] = useState("");
-  const [targetQty, setTargetQty]       = useState("0");
-  const [linhaVal, setLinhaVal]         = useState(LINHA_GERAL);
+  const [month, setMonth]         = useState(() => startOfMonth(new Date()));
+  const [teamFilter, setTeamFilter] = useState<TeamFilter>("todos");
 
   const canManage = useCanSetTargets();
+  const canSeeValues = canManage;
+  const navigate  = useNavigate();
   const monthStr  = month.toISOString().slice(0, 10);
 
   // Mês atual e mês anterior
@@ -98,9 +78,7 @@ export default function MetaVendedoresPage() {
 
   const { data: targets = [], isLoading, dataUpdatedAt } = useSalesTargetsWithProgress(monthStr);
   const { data: prevTargets = [] }                       = useSalesTargetsWithProgress(prevMonthStr);
-  const { data: teamMembers = [] }                       = useTeamMembers();
-  const upsert     = useUpsertSalesTarget();
-  const deleteMeta = useDeleteSalesTarget();
+  const { data: weeklyTop = [] }                         = useWeeklyTopVendedores();
 
   // Mapa vendedor → actual do mês anterior
   const prevActualMap: Record<string, number> = {};
@@ -124,6 +102,14 @@ export default function MetaVendedoresPage() {
     : null;
 
   const sorted = [...targets].sort((a, b) => (b.pct_amount || 0) - (a.pct_amount || 0));
+
+  // Filter by department
+  const filteredTargets = teamFilter === "todos" ? sorted : sorted.filter(t => {
+    const dept = t.vendedor?.department;
+    const secDept = t.vendedor?.secondary_department;
+    return dept === teamFilter || secDept === teamFilter;
+  });
+
   const totalTarget = targets.reduce((s, t) => s + Number(t.target_amount), 0);
   const totalActual = targets.reduce((s, t) => s + (t.actual_amount || 0), 0);
   const totalPct    = totalTarget > 0 ? (totalActual / totalTarget) * 100 : 0;
@@ -136,50 +122,6 @@ export default function MetaVendedoresPage() {
   const teamDailyNeeded = isCurrentMonth && remainingDays > 0 && teamRemaining > 0
     ? Math.ceil(teamRemaining / remainingDays)
     : 0;
-
-  const openNew = () => {
-    setEdit(null);
-    setVendedorId("");
-    setTargetDigits("");
-    setTargetQty("0");
-    setLinhaVal(LINHA_GERAL);
-    setDialog(true);
-  };
-
-  const openEdit = (t: SalesTargetWithProgress) => {
-    setEdit(t);
-    setVendedorId(t.vendedor_id);
-    setTargetDigits(String(Math.round(Number(t.target_amount))));
-    setTargetQty(String(t.target_qty));
-    setLinhaVal(t.linha || LINHA_GERAL);
-    setDialog(true);
-  };
-
-  const handleClose = () => { setDialog(false); setEdit(null); };
-
-  const targetAmountNum = parseInt(targetDigits.replace(/\D/g, "") || "0", 10);
-  const targetDisplay   = targetAmountNum > 0
-    ? targetAmountNum.toLocaleString("pt-BR", { style: "currency", currency: "BRL", minimumFractionDigits: 0, maximumFractionDigits: 0 })
-    : "";
-
-  const handleSave = async () => {
-    if (!vendedorId || vendedorId === "") return;
-    await upsert.mutateAsync({
-      vendedor_id: vendedorId,
-      month: monthStr,
-      target_amount: targetAmountNum,
-      target_qty: Number(targetQty) || 0,
-      linha: linhaVal === LINHA_GERAL ? null : linhaVal,
-    });
-    handleClose();
-  };
-
-  const activeMembers = teamMembers.filter(m =>
-    m.status === "approved" && (
-      m.department === "cgc" || m.department === "expansao" ||
-      m.secondary_department === "cgc" || m.secondary_department === "expansao"
-    )
-  );
 
   return (
     <BoardLayout>
@@ -214,12 +156,26 @@ export default function MetaVendedoresPage() {
               </Button>
             </div>
             {canManage && (
-              <Button size="sm" className="gap-1.5 bg-carbo-green hover:bg-carbo-green/90 text-white"
-                onClick={openNew}>
-                <Plus className="h-4 w-4" /> Nova Meta
+              <Button size="sm" variant="outline" className="gap-1.5"
+                onClick={() => navigate("/dashboards/metas/config")}>
+                <Settings className="h-4 w-4" /> Configurar Metas
               </Button>
             )}
           </div>
+        </div>
+
+        {/* Department filter tabs */}
+        <div className="flex gap-1">
+          {(["todos", "cgc", "expansao"] as const).map(opt => (
+            <button key={opt} onClick={() => setTeamFilter(opt)}
+              className={`px-3 py-1 rounded-full text-xs font-semibold transition-colors ${
+                teamFilter === opt
+                  ? "bg-carbo-green text-white"
+                  : "bg-muted/40 text-muted-foreground hover:bg-muted"
+              }`}>
+              {opt === "todos" ? "Todos" : opt === "cgc" ? "CGC" : "Expansão"}
+            </button>
+          ))}
         </div>
 
         {/* Info bar */}
@@ -240,10 +196,14 @@ export default function MetaVendedoresPage() {
               <div className="flex items-center justify-between gap-4 mb-3">
                 <div>
                   <p className="text-xs text-muted-foreground uppercase tracking-wider">Total do Time</p>
-                  <div className="flex items-end gap-2 mt-0.5">
-                    <p className={`text-2xl font-bold tabular-nums ${totalColors.text}`}>{fmtBRL(totalActual)}</p>
-                    <p className="text-muted-foreground mb-0.5">/ {fmtBRL(totalTarget)}</p>
-                  </div>
+                  {canSeeValues ? (
+                    <div className="flex items-end gap-2 mt-0.5">
+                      <p className={`text-2xl font-bold tabular-nums ${totalColors.text}`}>{fmtBRL(totalActual)}</p>
+                      <p className="text-muted-foreground mb-0.5">/ {fmtBRL(totalTarget)}</p>
+                    </div>
+                  ) : (
+                    <p className={`text-2xl font-bold tabular-nums mt-0.5 ${totalColors.text}`}>{fmtPct(totalPct)}</p>
+                  )}
                 </div>
                 <div className="flex items-center gap-3">
                   {/* Dias restantes */}
@@ -256,7 +216,7 @@ export default function MetaVendedoresPage() {
                     </div>
                   )}
                   {/* R$/dia necessário */}
-                  {teamDailyNeeded > 0 && (
+                  {canSeeValues && teamDailyNeeded > 0 && (
                     <div className="text-center">
                       <p className="text-sm font-bold tabular-nums text-amber-500 flex items-center gap-0.5">
                         <Zap className="h-3 w-3" /> {fmtBRL(teamDailyNeeded)}
@@ -283,26 +243,66 @@ export default function MetaVendedoresPage() {
           </CarboCard>
         )}
 
+        {/* Top 3 da Semana */}
+        {weeklyTop.length > 0 && (
+          <CarboCard>
+            <CarboCardContent className="p-4">
+              <p className="text-xs uppercase tracking-wider text-muted-foreground mb-3 font-medium">Top 3 da Semana</p>
+              <div className="flex gap-4 justify-center">
+                {weeklyTop.map(entry => (
+                  <div key={entry.vendedor_id} className="flex flex-col items-center gap-1.5">
+                    <div className="relative">
+                      <div className={`w-14 h-14 rounded-full overflow-hidden border-2 ${
+                        entry.rank === 1 ? "border-yellow-400" : entry.rank === 2 ? "border-gray-400" : "border-amber-600"
+                      }`}>
+                        {entry.profile?.avatar_url
+                          ? <img src={entry.profile.avatar_url} alt="" className="w-full h-full object-cover" />
+                          : <div className="w-full h-full bg-muted flex items-center justify-center text-lg font-bold text-muted-foreground">
+                              {(entry.profile?.full_name || "?")[0].toUpperCase()}
+                            </div>
+                        }
+                      </div>
+                      <span className="absolute -bottom-1 -right-1 text-sm">
+                        {entry.rank === 1 ? "🥇" : entry.rank === 2 ? "🥈" : "🥉"}
+                      </span>
+                    </div>
+                    <p className="text-xs font-medium text-center max-w-[80px] truncate">
+                      {entry.profile?.full_name?.split(" ")[0] || "—"}
+                    </p>
+                    {canSeeValues && (
+                      <p className="text-[10px] text-muted-foreground">{fmtBRL(entry.total)}</p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </CarboCardContent>
+          </CarboCard>
+        )}
+
         {/* List */}
         {isLoading ? (
           <div className="space-y-3">
             {[1, 2, 3].map(i => <div key={i} className="h-28 rounded-xl bg-muted/40 animate-pulse" />)}
           </div>
-        ) : sorted.length === 0 ? (
+        ) : filteredTargets.length === 0 ? (
           <CarboCard>
             <CarboCardContent className="py-16 text-center space-y-3">
               <Trophy className="h-12 w-12 mx-auto text-muted-foreground/30" />
-              <p className="text-muted-foreground">Nenhuma meta definida para este mês.</p>
-              {canManage && (
-                <Button variant="outline" onClick={openNew}>
-                  <Plus className="h-4 w-4 mr-1" /> Criar primeira meta
+              <p className="text-muted-foreground">
+                {sorted.length === 0
+                  ? "Nenhuma meta definida para este mês."
+                  : "Nenhuma meta para o filtro selecionado."}
+              </p>
+              {canManage && sorted.length === 0 && (
+                <Button variant="outline" onClick={() => navigate("/dashboards/metas/config")}>
+                  <Target className="h-4 w-4 mr-1" /> Configurar metas
                 </Button>
               )}
             </CarboCardContent>
           </CarboCard>
         ) : (
           <div className="space-y-3">
-            {sorted.map((t, idx) => {
+            {filteredTargets.map((t, idx) => {
               const pct        = t.pct_amount || 0;
               const color      = getProgressColor(pct, 100, dayOfMonth, daysInMonth);
               const colors     = COLOR_MAP[color];
@@ -317,34 +317,35 @@ export default function MetaVendedoresPage() {
                   className={`border ${color === "red" ? "border-red-500/30" : color === "yellow" ? "border-amber-500/30" : ""}`}>
                   <CarboCardContent className="p-4">
                     <div className="flex items-center gap-3">
+                      {/* Avatar */}
+                      <div className="w-8 h-8 rounded-full overflow-hidden bg-muted shrink-0">
+                        {t.vendedor?.avatar_url
+                          ? <img src={t.vendedor.avatar_url} alt="" className="w-full h-full object-cover" />
+                          : <div className="w-full h-full flex items-center justify-center text-xs font-bold text-muted-foreground">
+                              {(t.vendedor?.full_name || "?")[0].toUpperCase()}
+                            </div>
+                        }
+                      </div>
+                      {/* Rank */}
                       <div className="w-7 text-center shrink-0">
                         {idx === 0 ? "🥇" : idx === 1 ? "🥈" : idx === 2 ? "🥉"
                           : <span className="text-sm font-bold text-muted-foreground">{idx + 1}º</span>}
                       </div>
                       <div className="flex-1 space-y-2 min-w-0">
-                        {/* Row 1: nome + valor + badge + ações */}
+                        {/* Row 1: nome + valor + badge */}
                         <div className="flex items-center justify-between gap-2">
                           <div className="min-w-0">
                             <p className="font-semibold text-sm truncate">{t.vendedor?.full_name || "—"}</p>
                             {t.linha && <p className="text-xs text-muted-foreground">{t.linha}</p>}
                           </div>
                           <div className="flex items-center gap-2 shrink-0">
-                            <div className="text-right">
-                              <p className={`text-lg font-bold tabular-nums ${colors.text}`}>{fmtBRL(t.actual_amount || 0)}</p>
-                              <p className="text-xs text-muted-foreground">/ {fmtBRL(Number(t.target_amount))}</p>
-                            </div>
-                            <CarboBadge variant={colors.badge} size="sm">{fmtPct(pct)}</CarboBadge>
-                            {canManage && (
-                              <div className="flex gap-0.5">
-                                <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => openEdit(t)}>
-                                  <Pencil className="h-3 w-3" />
-                                </Button>
-                                <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive hover:text-destructive"
-                                  onClick={() => deleteMeta.mutate(t.id)}>
-                                  <Trash2 className="h-3 w-3" />
-                                </Button>
+                            {canSeeValues ? (
+                              <div className="text-right">
+                                <p className={`text-lg font-bold tabular-nums ${colors.text}`}>{fmtBRL(t.actual_amount || 0)}</p>
+                                <p className="text-xs text-muted-foreground">/ {fmtBRL(Number(t.target_amount))}</p>
                               </div>
-                            )}
+                            ) : null}
+                            <CarboBadge variant={colors.badge} size="sm">{fmtPct(pct)}</CarboBadge>
                           </div>
                         </div>
 
@@ -360,17 +361,17 @@ export default function MetaVendedoresPage() {
 
                         {/* Row 3: métricas extras */}
                         <div className="flex items-center justify-between flex-wrap gap-x-4 gap-y-0.5 text-xs text-muted-foreground">
-                          <span>Faltam {fmtBRL(remaining)}</span>
+                          {canSeeValues && <span>Faltam {fmtBRL(remaining)}</span>}
 
                           {/* R$/dia necessário por vendedor */}
-                          {dailyNeeded > 0 && (
+                          {canSeeValues && dailyNeeded > 0 && (
                             <span className="inline-flex items-center gap-0.5 text-amber-500 font-medium">
                               <Zap className="h-3 w-3" /> {fmtBRL(dailyNeeded)}/dia
                             </span>
                           )}
 
                           {/* Delta mês anterior */}
-                          <DeltaBadge current={t.actual_amount || 0} prev={prevActual} />
+                          {canSeeValues && <DeltaBadge current={t.actual_amount || 0} prev={prevActual} />}
 
                           {t.target_qty > 0 && (
                             <span>{t.actual_qty || 0} / {t.target_qty} pedidos</span>
@@ -385,88 +386,6 @@ export default function MetaVendedoresPage() {
           </div>
         )}
       </div>
-
-      {/* ── Dialog de Nova / Editar Meta ─────────────────────────────────── */}
-      <Dialog open={dialogOpen} onOpenChange={handleClose}>
-        <DialogContent className="sm:max-w-sm">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Target className="h-5 w-5 text-carbo-green" />
-              {editTarget ? "Editar Meta" : "Nova Meta"}
-            </DialogTitle>
-            <DialogDescription>
-              {format(month, "MMMM 'de' yyyy", { locale: ptBR })}
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-4 py-2">
-            {/* Vendedor */}
-            <div className="space-y-1.5">
-              <Label>Vendedor</Label>
-              <Select
-                value={vendedorId || "__none__"}
-                onValueChange={v => setVendedorId(v === "__none__" ? "" : v)}
-                disabled={!!editTarget}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecione o vendedor" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__none__" disabled>Selecione o vendedor</SelectItem>
-                  {activeMembers.map(m => (
-                    <SelectItem key={m.id} value={m.id}>
-                      {m.full_name || m.username || m.id}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Meta faturamento */}
-            <div className="space-y-1.5">
-              <Label>Meta de Faturamento</Label>
-              <Input
-                type="text" inputMode="numeric"
-                value={targetDisplay}
-                onChange={e => setTargetDigits(e.target.value.replace(/\D/g, ""))}
-                placeholder="R$ 0"
-                className="text-xl font-bold tracking-wide"
-              />
-            </div>
-
-            {/* Meta pedidos */}
-            <div className="space-y-1.5">
-              <Label>Meta de Pedidos (qtd)</Label>
-              <Input
-                type="number" min={0}
-                value={targetQty}
-                onChange={e => setTargetQty(e.target.value)}
-                placeholder="0"
-              />
-            </div>
-
-            {/* Linha */}
-            <div className="space-y-1.5">
-              <Label>Linha de produto</Label>
-              <Select value={linhaVal} onValueChange={setLinhaVal}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {LINHAS_OPTIONS.map(o => (
-                    <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
-          <div className="flex justify-end gap-2">
-            <Button variant="outline" onClick={handleClose}>Cancelar</Button>
-            <Button onClick={handleSave} disabled={!vendedorId || vendedorId === "" || upsert.isPending}>
-              Salvar
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
     </BoardLayout>
   );
 }

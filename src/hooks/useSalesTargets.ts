@@ -12,7 +12,13 @@ export interface SalesTarget {
   created_at: string;
   updated_at: string;
   // Joined
-  vendedor?: { id: string; full_name: string | null };
+  vendedor?: {
+    id: string;
+    full_name: string | null;
+    avatar_url: string | null;
+    department: string | null;
+    secondary_department: string | null;
+  };
 }
 
 export interface SalesTargetWithProgress extends SalesTarget {
@@ -30,7 +36,7 @@ export function useSalesTargets(month?: string) {
         .from("sales_targets")
         .select(`
           *,
-          vendedor:profiles(id, full_name)
+          vendedor:profiles(id, full_name, avatar_url, department, secondary_department)
         `)
         .order("month", { ascending: false });
 
@@ -52,7 +58,7 @@ export function useSalesTargetsWithProgress(month: string) {
       // Fetch targets
       const { data: targets, error: targetsError } = await supabase
         .from("sales_targets")
-        .select(`*, vendedor:profiles(id, full_name)`)
+        .select(`*, vendedor:profiles(id, full_name, avatar_url, department, secondary_department)`)
         .eq("month", month);
 
       if (targetsError) throw targetsError;
@@ -147,6 +153,58 @@ export function useDeleteSalesTarget() {
       queryClient.invalidateQueries({ queryKey: ["sales-targets"] });
       queryClient.invalidateQueries({ queryKey: ["sales-targets-progress"] });
       toast.success("Meta removida.");
+    },
+  });
+}
+
+export interface WeeklyTopEntry {
+  rank: number;
+  vendedor_id: string;
+  total: number;
+  profile: { id: string; full_name: string | null; avatar_url: string | null; department: string | null; secondary_department: string | null } | null;
+}
+
+export function useWeeklyTopVendedores() {
+  return useQuery({
+    queryKey: ["weekly-top-vendedores"],
+    queryFn: async () => {
+      const now = new Date();
+      const dayOfWeek = now.getDay(); // 0=Sun
+      const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+      const monday = new Date(now);
+      monday.setDate(now.getDate() + mondayOffset);
+      monday.setHours(0, 0, 0, 0);
+
+      const { data: orders } = await supabase
+        .from("carboze_orders_secure")
+        .select("vendedor_id, total")
+        .gte("created_at", monday.toISOString())
+        .eq("status", "delivered");
+
+      const totals: Record<string, number> = {};
+      for (const order of orders || []) {
+        if (!order.vendedor_id) continue;
+        totals[order.vendedor_id] = (totals[order.vendedor_id] || 0) + Number(order.total || 0);
+      }
+
+      const topIds = Object.entries(totals)
+        .sort(([, a], [, b]) => b - a)
+        .slice(0, 3)
+        .map(([id]) => id);
+
+      if (topIds.length === 0) return [];
+
+      const { data: profiles } = await supabase
+        .from("profiles")
+        .select("id, full_name, avatar_url, department, secondary_department")
+        .in("id", topIds);
+
+      return topIds.map((id, idx): WeeklyTopEntry => ({
+        rank: idx + 1,
+        vendedor_id: id,
+        total: totals[id],
+        profile: profiles?.find(p => p.id === id) ?? null,
+      }));
     },
   });
 }
