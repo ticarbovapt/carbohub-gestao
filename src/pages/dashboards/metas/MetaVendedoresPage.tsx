@@ -17,6 +17,7 @@ import {
 import { useAuth } from "@/contexts/AuthContext";
 import { getProgressColor } from "@/hooks/useMetaEcommerce";
 import { useNavigate } from "react-router-dom";
+import { ProfileAvatar } from "@/components/ui/profile-avatar";
 
 // Number of commercial weeks in a month = number of Fridays in that month
 function countCommercialWeeks(year: number, month: number): number {
@@ -80,29 +81,30 @@ function Top3Card({ entries, label, canSeeValues }: {
     <CarboCard>
       <CarboCardContent className="p-4">
         <p className="text-xs uppercase tracking-wider text-muted-foreground mb-3 font-medium">{label}</p>
-        <div className="flex gap-4 justify-center">
+        <div className="flex gap-6 justify-center">
           {entries.slice(0, 3).map(entry => (
             <div key={entry.vendedor_id} className="flex flex-col items-center gap-1.5">
               <div className="relative">
-                <div className={`w-14 h-14 rounded-full overflow-hidden border-2 ${
+                <div className={`border-2 rounded-xl overflow-hidden ${
                   entry.rank === 1 ? "border-yellow-400" : entry.rank === 2 ? "border-gray-400" : "border-amber-600"
                 }`}>
-                  {entry.profile?.avatar_url
-                    ? <img src={entry.profile.avatar_url} alt="" className="w-full h-full object-cover" />
-                    : <div className="w-full h-full bg-muted flex items-center justify-center text-lg font-bold text-muted-foreground">
-                        {(entry.profile?.full_name || "?")[0].toUpperCase()}
-                      </div>
-                  }
+                  <ProfileAvatar
+                    avatarUrl={entry.profile?.avatar_url}
+                    fullName={entry.profile?.full_name}
+                    userId={entry.vendedor_id}
+                    size={64}
+                    square
+                  />
                 </div>
-                <span className="absolute -bottom-1 -right-1 text-sm">
+                <span className="absolute -bottom-1.5 -right-1.5 text-lg leading-none">
                   {entry.rank === 1 ? "🥇" : entry.rank === 2 ? "🥈" : "🥉"}
                 </span>
               </div>
-              <p className="text-xs font-medium text-center max-w-[80px] truncate">
+              <p className="text-xs font-semibold text-center max-w-[80px] truncate mt-1">
                 {entry.profile?.full_name?.split(" ")[0] || "—"}
               </p>
               {canSeeValues && (
-                <p className="text-[10px] text-muted-foreground">
+                <p className="text-[11px] text-muted-foreground tabular-nums">
                   {fmtBRL(entry.total)}
                 </p>
               )}
@@ -137,32 +139,34 @@ function WeeklyPanel({ entries, targetMap, numWeeks, canSeeValues }: {
       <CarboCardContent className="p-0">
         <div className="flex">
           {/* ── Left: Top 3 vertical ── */}
-          <div className="w-40 shrink-0 p-4 border-r border-border flex flex-col gap-1">
-            <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-3 font-medium">
+          <div className="w-44 shrink-0 p-4 border-r border-border">
+            <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-4 font-medium">
               Top 3 da Semana
             </p>
-            <div className="space-y-4">
+            <div className="space-y-3">
               {top3.map((entry, idx) => (
-                <div key={entry.vendedor_id} className="flex items-center gap-2">
-                  <span className="text-lg shrink-0 leading-none">
-                    {idx === 0 ? "🥇" : idx === 1 ? "🥈" : "🥉"}
-                  </span>
-                  <div className="w-8 h-8 rounded-full overflow-hidden bg-muted shrink-0">
-                    {entry.profile?.avatar_url
-                      ? <img src={entry.profile.avatar_url} alt="" className="w-full h-full object-cover" />
-                      : <div className="w-full h-full flex items-center justify-center text-xs font-bold text-muted-foreground">
-                          {(entry.profile?.full_name || "?")[0].toUpperCase()}
-                        </div>
-                    }
+                <div key={entry.vendedor_id} className="flex items-center gap-3">
+                  {/* Large square photo */}
+                  <div className="relative shrink-0">
+                    <ProfileAvatar
+                      avatarUrl={entry.profile?.avatar_url}
+                      fullName={entry.profile?.full_name}
+                      userId={entry.vendedor_id}
+                      size={52}
+                      square
+                    />
+                    <span className="absolute -top-1.5 -right-1.5 text-base leading-none">
+                      {idx === 0 ? "🥇" : idx === 1 ? "🥈" : "🥉"}
+                    </span>
                   </div>
                   <div className="min-w-0">
-                    <p className="text-xs font-semibold truncate">
+                    <p className="text-sm font-bold truncate">
                       {entry.profile?.full_name?.split(" ")[0] || "—"}
                     </p>
                     {canSeeValues && (
-                      <p className="text-[10px] text-muted-foreground tabular-nums">
+                      <p className="text-xs text-muted-foreground tabular-nums">
                         {entry.total >= 1000
-                          ? `R$${(entry.total / 1000).toFixed(0)}k`
+                          ? `R$${(entry.total / 1000).toFixed(1)}k`
                           : fmtBRL(entry.total)}
                       </p>
                     )}
@@ -196,14 +200,12 @@ function WeeklyPanel({ entries, targetMap, numWeeks, canSeeValues }: {
                   return (
                     <div key={entry.vendedor_id} className="flex flex-col items-center gap-1 w-12 shrink-0">
                       {/* Avatar */}
-                      <div className="w-9 h-9 rounded-full overflow-hidden bg-muted shrink-0">
-                        {entry.profile?.avatar_url
-                          ? <img src={entry.profile.avatar_url} alt="" className="w-full h-full object-cover" />
-                          : <div className="w-full h-full flex items-center justify-center text-sm font-bold text-muted-foreground">
-                              {(entry.profile?.full_name || "?")[0].toUpperCase()}
-                            </div>
-                        }
-                      </div>
+                      <ProfileAvatar
+                        avatarUrl={entry.profile?.avatar_url}
+                        fullName={entry.profile?.full_name}
+                        userId={entry.vendedor_id}
+                        size={36}
+                      />
 
                       {/* Bar container anchored to bottom */}
                       <div
@@ -566,14 +568,12 @@ export default function MetaVendedoresPage() {
                       <CarboCardContent className="p-4">
                         <div className="flex items-center gap-3">
                           {/* Avatar */}
-                          <div className="w-8 h-8 rounded-full overflow-hidden bg-muted shrink-0">
-                            {t.vendedor?.avatar_url
-                              ? <img src={t.vendedor.avatar_url} alt="" className="w-full h-full object-cover" />
-                              : <div className="w-full h-full flex items-center justify-center text-xs font-bold text-muted-foreground">
-                                  {(t.vendedor?.full_name || "?")[0].toUpperCase()}
-                                </div>
-                            }
-                          </div>
+                          <ProfileAvatar
+                            avatarUrl={t.vendedor?.avatar_url}
+                            fullName={t.vendedor?.full_name}
+                            userId={t.vendedor_id}
+                            size={32}
+                          />
                           {/* Rank */}
                           <div className="w-7 text-center shrink-0">
                             {idx === 0 ? "🥇" : idx === 1 ? "🥈" : idx === 2 ? "🥉"
