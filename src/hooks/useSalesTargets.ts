@@ -69,16 +69,13 @@ export function useSalesTargetsWithProgress(month: string) {
         .toISOString()
         .split("T")[0];
 
-      const { data: orders, error: ordersError } = await supabase
+      const { data: ordersRaw } = await supabase
         .from("carboze_orders")
         .select("vendedor_id, total, items, status")
         .gte("created_at", monthStart)
-        .lte("created_at", monthEnd + "T23:59:59Z")
-        .neq("status", "cancelled");
+        .lte("created_at", monthEnd + "T23:59:59Z");
 
-      if (ordersError) console.error("[meta] orders error:", ordersError);
-      console.log("[meta] orders count:", orders?.length, "| sample vendedor_id:", orders?.[0]?.vendedor_id);
-      console.log("[meta] targets count:", targets?.length, "| sample vendedor_id:", targets?.[0]?.vendedor_id);
+      const orders = (ordersRaw || []).filter(o => o.status !== "cancelled");
 
       // Calculate progress per vendedor
       const progressMap: Record<string, { amount: number; qty: number }> = {};
@@ -177,13 +174,12 @@ export function useWeeklyTopVendedores() {
       monday.setDate(now.getDate() + mondayOffset);
       monday.setHours(0, 0, 0, 0);
 
-      const { data: orders } = await supabase
+      const { data: ordersRaw } = await supabase
         .from("carboze_orders")
-        .select("vendedor_id, total")
-        .gte("created_at", monday.toISOString())
-        .neq("status", "cancelled")
-        .not("vendedor_id", "is", null);
+        .select("vendedor_id, total, status")
+        .gte("created_at", monday.toISOString());
 
+      const orders = (ordersRaw || []).filter(o => o.status !== "cancelled" && o.vendedor_id);
       const totals: Record<string, number> = {};
       for (const order of orders || []) {
         if (!order.vendedor_id) continue;
@@ -237,13 +233,12 @@ export function useWeeklyVendedoresData(teamFilter?: "todos" | "cgc" | "expansao
       monday.setDate(now.getDate() + mondayOffset);
       monday.setHours(0, 0, 0, 0);
 
-      const { data: orders } = await supabase
+      const { data: ordersRaw } = await supabase
         .from("carboze_orders")
         .select("vendedor_id, total, status")
-        .gte("created_at", monday.toISOString())
-        .neq("status", "cancelled")
-        .not("vendedor_id", "is", null);
+        .gte("created_at", monday.toISOString());
 
+      const orders = (ordersRaw || []).filter(o => o.status !== "cancelled" && o.vendedor_id);
       const totals: Record<string, { total: number; count: number }> = {};
       for (const order of orders || []) {
         if (!order.vendedor_id) continue;
