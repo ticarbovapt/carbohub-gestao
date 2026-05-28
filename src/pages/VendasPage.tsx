@@ -139,10 +139,10 @@ export default function VendasPage() {
     );
   }, [vendas, search]);
 
-  // Summary
-  const delivered  = filtered.filter(v => v.status === "delivered");
-  const totalRevenue = delivered.reduce((s, v) => s + v.total, 0);
-  const pending    = filtered.filter(v => v.status !== "delivered" && v.status !== "cancelled").length;
+  // Summary — vendas ativas (exceto canceladas)
+  const active       = filtered.filter(v => v.status !== "cancelled");
+  const totalRevenue = active.reduce((s, v) => s + v.total, 0);
+  const cancelled    = filtered.filter(v => v.status === "cancelled").length;
 
   return (
     <BoardLayout>
@@ -177,20 +177,20 @@ export default function VendasPage() {
         <div className="grid grid-cols-3 gap-3">
           <CarboCard>
             <CarboCardContent className="p-3 text-center">
-              <p className="text-2xl font-bold text-carbo-green tabular-nums">{delivered.length}</p>
-              <p className="text-xs text-muted-foreground">Entregues</p>
+              <p className="text-2xl font-bold text-carbo-green tabular-nums">{active.length}</p>
+              <p className="text-xs text-muted-foreground">Vendas registradas</p>
             </CarboCardContent>
           </CarboCard>
           <CarboCard>
             <CarboCardContent className="p-3 text-center">
               <p className="text-xl font-bold tabular-nums">{fmtBRL(totalRevenue)}</p>
-              <p className="text-xs text-muted-foreground">Faturado (entregues)</p>
+              <p className="text-xs text-muted-foreground">Total de vendas</p>
             </CarboCardContent>
           </CarboCard>
           <CarboCard>
             <CarboCardContent className="p-3 text-center">
-              <p className="text-2xl font-bold text-amber-500 tabular-nums">{pending}</p>
-              <p className="text-xs text-muted-foreground">Em andamento</p>
+              <p className="text-2xl font-bold text-red-400 tabular-nums">{cancelled}</p>
+              <p className="text-xs text-muted-foreground">Canceladas</p>
             </CarboCardContent>
           </CarboCard>
         </div>
