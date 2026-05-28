@@ -11,7 +11,8 @@ import {
 } from "lucide-react";
 import {
   useSalesTargetsWithProgress,
-  useWeeklyTopVendedores,
+  useWeeklyVendedoresData,
+  type WeeklyVendedorEntry,
 } from "@/hooks/useSalesTargets";
 import { useAuth } from "@/contexts/AuthContext";
 import { getProgressColor } from "@/hooks/useMetaEcommerce";
@@ -59,13 +60,62 @@ function DeltaBadge({ current, prev }: { current: number; prev: number }) {
 }
 
 type TeamFilter = "todos" | "cgc" | "expansao";
+type PeriodView = "mensal" | "semanal";
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Top3Card — reusable for both mensal and semanal
+// ─────────────────────────────────────────────────────────────────────────────
+function Top3Card({ entries, label, canSeeValues }: {
+  entries: Array<{rank:number;vendedor_id:string;total:number;profile:{full_name:string|null;avatar_url:string|null}|null}>;
+  label: string;
+  canSeeValues: boolean;
+}) {
+  if (entries.length === 0) return null;
+  return (
+    <CarboCard>
+      <CarboCardContent className="p-4">
+        <p className="text-xs uppercase tracking-wider text-muted-foreground mb-3 font-medium">{label}</p>
+        <div className="flex gap-4 justify-center">
+          {entries.slice(0, 3).map(entry => (
+            <div key={entry.vendedor_id} className="flex flex-col items-center gap-1.5">
+              <div className="relative">
+                <div className={`w-14 h-14 rounded-full overflow-hidden border-2 ${
+                  entry.rank === 1 ? "border-yellow-400" : entry.rank === 2 ? "border-gray-400" : "border-amber-600"
+                }`}>
+                  {entry.profile?.avatar_url
+                    ? <img src={entry.profile.avatar_url} alt="" className="w-full h-full object-cover" />
+                    : <div className="w-full h-full bg-muted flex items-center justify-center text-lg font-bold text-muted-foreground">
+                        {(entry.profile?.full_name || "?")[0].toUpperCase()}
+                      </div>
+                  }
+                </div>
+                <span className="absolute -bottom-1 -right-1 text-sm">
+                  {entry.rank === 1 ? "🥇" : entry.rank === 2 ? "🥈" : "🥉"}
+                </span>
+              </div>
+              <p className="text-xs font-medium text-center max-w-[80px] truncate">
+                {entry.profile?.full_name?.split(" ")[0] || "—"}
+              </p>
+              {canSeeValues && (
+                <p className="text-[10px] text-muted-foreground">
+                  {entry.total.toLocaleString("pt-BR", { style: "currency", currency: "BRL", minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                </p>
+              )}
+            </div>
+          ))}
+        </div>
+      </CarboCardContent>
+    </CarboCard>
+  );
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Main page
 // ─────────────────────────────────────────────────────────────────────────────
 export default function MetaVendedoresPage() {
-  const [month, setMonth]         = useState(() => startOfMonth(new Date()));
+  const [month, setMonth]           = useState(() => startOfMonth(new Date()));
   const [teamFilter, setTeamFilter] = useState<TeamFilter>("todos");
+  const [periodView, setPeriodView] = useState<PeriodView>("mensal");
 
   const canManage = useCanSetTargets();
   const canSeeValues = canManage;
@@ -78,7 +128,7 @@ export default function MetaVendedoresPage() {
 
   const { data: targets = [], isLoading, dataUpdatedAt } = useSalesTargetsWithProgress(monthStr);
   const { data: prevTargets = [] }                       = useSalesTargetsWithProgress(prevMonthStr);
-  const { data: weeklyTop = [] }                         = useWeeklyTopVendedores();
+  const { data: weeklyAll = [], isLoading: weeklyLoading } = useWeeklyVendedoresData(teamFilter);
 
   // Mapa vendedor → actual do mês anterior
   const prevActualMap: Record<string, number> = {};
@@ -123,6 +173,14 @@ export default function MetaVendedoresPage() {
     ? Math.ceil(teamRemaining / remainingDays)
     : 0;
 
+  // Monthly top 3 entries
+  const monthlyTop3 = filteredTargets.slice(0, 3).map((t, idx) => ({
+    rank: idx + 1,
+    vendedor_id: t.vendedor_id,
+    total: t.actual_amount || 0,
+    profile: t.vendedor || null,
+  }));
+
   return (
     <BoardLayout>
       <div className="p-4 md:p-6 space-y-5 max-w-4xl mx-auto">
@@ -140,21 +198,37 @@ export default function MetaVendedoresPage() {
               )}
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <div className="flex items-center gap-1 bg-muted/40 rounded-lg px-2 py-1.5">
-              <Button variant="ghost" size="icon" className="h-7 w-7"
-                onClick={() => setMonth(m => startOfMonth(subMonths(m, 1)))}>
-                <ChevronLeft className="h-4 w-4" />
-              </Button>
-              <span className="text-sm font-semibold w-32 text-center capitalize">
-                {format(month, "MMM 'de' yyyy", { locale: ptBR })}
-              </span>
-              <Button variant="ghost" size="icon" className="h-7 w-7"
-                onClick={() => setMonth(m => startOfMonth(addMonths(m, 1)))}
-                disabled={isCurrentMonth}>
-                <ChevronRight className="h-4 w-4" />
-              </Button>
+          <div className="flex items-center gap-2 flex-wrap">
+            {/* Period toggle */}
+            <div className="flex gap-1 bg-muted/40 rounded-lg p-1">
+              {(["mensal", "semanal"] as PeriodView[]).map(v => (
+                <button key={v} onClick={() => setPeriodView(v)}
+                  className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors ${
+                    periodView === v ? "bg-carbo-green text-white" : "text-muted-foreground hover:text-foreground"
+                  }`}>
+                  {v === "mensal" ? "Mensal" : "Semanal"}
+                </button>
+              ))}
             </div>
+
+            {/* Month navigator — only in mensal view */}
+            {periodView === "mensal" && (
+              <div className="flex items-center gap-1 bg-muted/40 rounded-lg px-2 py-1.5">
+                <Button variant="ghost" size="icon" className="h-7 w-7"
+                  onClick={() => setMonth(m => startOfMonth(subMonths(m, 1)))}>
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+                <span className="text-sm font-semibold w-32 text-center capitalize">
+                  {format(month, "MMM 'de' yyyy", { locale: ptBR })}
+                </span>
+                <Button variant="ghost" size="icon" className="h-7 w-7"
+                  onClick={() => setMonth(m => startOfMonth(addMonths(m, 1)))}
+                  disabled={isCurrentMonth}>
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
+            )}
+
             {canManage && (
               <Button size="sm" variant="outline" className="gap-1.5"
                 onClick={() => navigate("/dashboards/metas/config")}>
@@ -189,201 +263,233 @@ export default function MetaVendedoresPage() {
           </span>
         </div>
 
-        {/* Team total */}
-        {targets.length > 0 && (
-          <CarboCard className={`border ${totalColor === "green" ? "border-green-500/30" : totalColor === "yellow" ? "border-amber-500/30" : totalColor === "red" ? "border-red-500/30" : ""}`}>
-            <CarboCardContent className="p-4">
-              <div className="flex items-center justify-between gap-4 mb-3">
-                <div>
-                  <p className="text-xs text-muted-foreground uppercase tracking-wider">Total do Time</p>
-                  {canSeeValues ? (
-                    <div className="flex items-end gap-2 mt-0.5">
-                      <p className={`text-2xl font-bold tabular-nums ${totalColors.text}`}>{fmtBRL(totalActual)}</p>
-                      <p className="text-muted-foreground mb-0.5">/ {fmtBRL(totalTarget)}</p>
-                    </div>
-                  ) : (
-                    <p className={`text-2xl font-bold tabular-nums mt-0.5 ${totalColors.text}`}>{fmtPct(totalPct)}</p>
-                  )}
-                </div>
-                <div className="flex items-center gap-3">
-                  {/* Dias restantes */}
-                  {isCurrentMonth && remainingDays > 0 && (
-                    <div className="text-center">
-                      <p className="text-sm font-bold tabular-nums flex items-center gap-0.5">
-                        <Calendar className="h-3 w-3 text-muted-foreground" /> {remainingDays}d
-                      </p>
-                      <p className="text-[10px] text-muted-foreground">restantes</p>
-                    </div>
-                  )}
-                  {/* R$/dia necessário */}
-                  {canSeeValues && teamDailyNeeded > 0 && (
-                    <div className="text-center">
-                      <p className="text-sm font-bold tabular-nums text-amber-500 flex items-center gap-0.5">
-                        <Zap className="h-3 w-3" /> {fmtBRL(teamDailyNeeded)}
-                      </p>
-                      <p className="text-[10px] text-muted-foreground">precisa/dia</p>
-                    </div>
-                  )}
-                  <div className="text-center">
-                    <p className="text-lg font-bold tabular-nums">{hitting}/{targets.length}</p>
-                    <p className="text-[10px] text-muted-foreground">na meta</p>
-                  </div>
-                  <CarboBadge variant={totalColors.badge}>{fmtPct(totalPct)}</CarboBadge>
-                </div>
+        {/* ── SEMANAL VIEW ── */}
+        {periodView === "semanal" && (
+          <>
+            {weeklyLoading ? (
+              <div className="space-y-3">
+                {[1, 2, 3].map(i => <div key={i} className="h-20 rounded-xl bg-muted/40 animate-pulse" />)}
               </div>
-              <div className="relative h-2.5 bg-muted rounded-full overflow-hidden">
-                <div className="h-full rounded-full transition-all duration-700"
-                  style={{ width: `${Math.min(100, totalPct)}%`, backgroundColor: totalColors.bar }} />
-                {expectedPct > 0 && expectedPct < 100 && (
-                  <div className="absolute top-0 bottom-0 w-0.5 bg-foreground/40"
-                    style={{ left: `${expectedPct}%` }} />
-                )}
-              </div>
-            </CarboCardContent>
-          </CarboCard>
+            ) : weeklyAll.length === 0 ? (
+              <CarboCard>
+                <CarboCardContent className="py-16 text-center space-y-3">
+                  <Trophy className="h-12 w-12 mx-auto text-muted-foreground/30" />
+                  <p className="text-muted-foreground">Nenhuma venda registrada esta semana.</p>
+                </CarboCardContent>
+              </CarboCard>
+            ) : (
+              <>
+                {/* Weekly Top 3 */}
+                <Top3Card entries={weeklyAll} label="Top 3 da Semana" canSeeValues={canSeeValues} />
+
+                {/* Full ranked list */}
+                <div className="space-y-2">
+                  {weeklyAll.map(entry => (
+                    <CarboCard key={entry.vendedor_id}>
+                      <CarboCardContent className="p-3">
+                        <div className="flex items-center gap-3">
+                          {/* Avatar */}
+                          <div className="w-9 h-9 rounded-full overflow-hidden bg-muted shrink-0">
+                            {entry.profile?.avatar_url
+                              ? <img src={entry.profile.avatar_url} alt="" className="w-full h-full object-cover" />
+                              : <div className="w-full h-full flex items-center justify-center text-sm font-bold text-muted-foreground">
+                                  {(entry.profile?.full_name || "?")[0].toUpperCase()}
+                                </div>
+                            }
+                          </div>
+                          {/* Rank */}
+                          <div className="w-7 text-center shrink-0">
+                            {entry.rank === 1 ? "🥇" : entry.rank === 2 ? "🥈" : entry.rank === 3 ? "🥉"
+                              : <span className="text-sm font-bold text-muted-foreground">{entry.rank}º</span>}
+                          </div>
+                          {/* Name */}
+                          <div className="flex-1 min-w-0">
+                            <p className="font-semibold text-sm truncate">{entry.profile?.full_name || "—"}</p>
+                            <p className="text-xs text-muted-foreground">{entry.count} {entry.count === 1 ? "pedido" : "pedidos"}</p>
+                          </div>
+                          {/* Total */}
+                          {canSeeValues && (
+                            <p className="text-base font-bold tabular-nums text-carbo-green shrink-0">
+                              {fmtBRL(entry.total)}
+                            </p>
+                          )}
+                        </div>
+                      </CarboCardContent>
+                    </CarboCard>
+                  ))}
+                </div>
+              </>
+            )}
+          </>
         )}
 
-        {/* Top 3 da Semana */}
-        {weeklyTop.length > 0 && (
-          <CarboCard>
-            <CarboCardContent className="p-4">
-              <p className="text-xs uppercase tracking-wider text-muted-foreground mb-3 font-medium">Top 3 da Semana</p>
-              <div className="flex gap-4 justify-center">
-                {weeklyTop.map(entry => (
-                  <div key={entry.vendedor_id} className="flex flex-col items-center gap-1.5">
-                    <div className="relative">
-                      <div className={`w-14 h-14 rounded-full overflow-hidden border-2 ${
-                        entry.rank === 1 ? "border-yellow-400" : entry.rank === 2 ? "border-gray-400" : "border-amber-600"
-                      }`}>
-                        {entry.profile?.avatar_url
-                          ? <img src={entry.profile.avatar_url} alt="" className="w-full h-full object-cover" />
-                          : <div className="w-full h-full bg-muted flex items-center justify-center text-lg font-bold text-muted-foreground">
-                              {(entry.profile?.full_name || "?")[0].toUpperCase()}
-                            </div>
-                        }
-                      </div>
-                      <span className="absolute -bottom-1 -right-1 text-sm">
-                        {entry.rank === 1 ? "🥇" : entry.rank === 2 ? "🥈" : "🥉"}
-                      </span>
+        {/* ── MENSAL VIEW ── */}
+        {periodView === "mensal" && (
+          <>
+            {/* Team total */}
+            {targets.length > 0 && (
+              <CarboCard className={`border ${totalColor === "green" ? "border-green-500/30" : totalColor === "yellow" ? "border-amber-500/30" : totalColor === "red" ? "border-red-500/30" : ""}`}>
+                <CarboCardContent className="p-4">
+                  <div className="flex items-center justify-between gap-4 mb-3">
+                    <div>
+                      <p className="text-xs text-muted-foreground uppercase tracking-wider">Total do Time</p>
+                      {canSeeValues ? (
+                        <div className="flex items-end gap-2 mt-0.5">
+                          <p className={`text-2xl font-bold tabular-nums ${totalColors.text}`}>{fmtBRL(totalActual)}</p>
+                          <p className="text-muted-foreground mb-0.5">/ {fmtBRL(totalTarget)}</p>
+                        </div>
+                      ) : (
+                        <p className={`text-2xl font-bold tabular-nums mt-0.5 ${totalColors.text}`}>{fmtPct(totalPct)}</p>
+                      )}
                     </div>
-                    <p className="text-xs font-medium text-center max-w-[80px] truncate">
-                      {entry.profile?.full_name?.split(" ")[0] || "—"}
-                    </p>
-                    {canSeeValues && (
-                      <p className="text-[10px] text-muted-foreground">{fmtBRL(entry.total)}</p>
+                    <div className="flex items-center gap-3">
+                      {/* Dias restantes */}
+                      {isCurrentMonth && remainingDays > 0 && (
+                        <div className="text-center">
+                          <p className="text-sm font-bold tabular-nums flex items-center gap-0.5">
+                            <Calendar className="h-3 w-3 text-muted-foreground" /> {remainingDays}d
+                          </p>
+                          <p className="text-[10px] text-muted-foreground">restantes</p>
+                        </div>
+                      )}
+                      {/* R$/dia necessário */}
+                      {canSeeValues && teamDailyNeeded > 0 && (
+                        <div className="text-center">
+                          <p className="text-sm font-bold tabular-nums text-amber-500 flex items-center gap-0.5">
+                            <Zap className="h-3 w-3" /> {fmtBRL(teamDailyNeeded)}
+                          </p>
+                          <p className="text-[10px] text-muted-foreground">precisa/dia</p>
+                        </div>
+                      )}
+                      <div className="text-center">
+                        <p className="text-lg font-bold tabular-nums">{hitting}/{targets.length}</p>
+                        <p className="text-[10px] text-muted-foreground">na meta</p>
+                      </div>
+                      <CarboBadge variant={totalColors.badge}>{fmtPct(totalPct)}</CarboBadge>
+                    </div>
+                  </div>
+                  <div className="relative h-2.5 bg-muted rounded-full overflow-hidden">
+                    <div className="h-full rounded-full transition-all duration-700"
+                      style={{ width: `${Math.min(100, totalPct)}%`, backgroundColor: totalColors.bar }} />
+                    {expectedPct > 0 && expectedPct < 100 && (
+                      <div className="absolute top-0 bottom-0 w-0.5 bg-foreground/40"
+                        style={{ left: `${expectedPct}%` }} />
                     )}
                   </div>
-                ))}
+                </CarboCardContent>
+              </CarboCard>
+            )}
+
+            {/* Monthly Top 3 */}
+            <Top3Card entries={monthlyTop3} label="Top 3 do Mês" canSeeValues={canSeeValues} />
+
+            {/* List */}
+            {isLoading ? (
+              <div className="space-y-3">
+                {[1, 2, 3].map(i => <div key={i} className="h-28 rounded-xl bg-muted/40 animate-pulse" />)}
               </div>
-            </CarboCardContent>
-          </CarboCard>
-        )}
+            ) : filteredTargets.length === 0 ? (
+              <CarboCard>
+                <CarboCardContent className="py-16 text-center space-y-3">
+                  <Trophy className="h-12 w-12 mx-auto text-muted-foreground/30" />
+                  <p className="text-muted-foreground">
+                    {sorted.length === 0
+                      ? "Nenhuma meta definida para este mês."
+                      : "Nenhuma meta para o filtro selecionado."}
+                  </p>
+                  {canManage && sorted.length === 0 && (
+                    <Button variant="outline" onClick={() => navigate("/dashboards/metas/config")}>
+                      <Target className="h-4 w-4 mr-1" /> Configurar metas
+                    </Button>
+                  )}
+                </CarboCardContent>
+              </CarboCard>
+            ) : (
+              <div className="space-y-3">
+                {filteredTargets.map((t, idx) => {
+                  const pct        = t.pct_amount || 0;
+                  const color      = getProgressColor(pct, 100, dayOfMonth, daysInMonth);
+                  const colors     = COLOR_MAP[color];
+                  const remaining  = Math.max(0, Number(t.target_amount) - (t.actual_amount || 0));
+                  const dailyNeeded = isCurrentMonth && remainingDays > 0 && remaining > 0
+                    ? Math.ceil(remaining / remainingDays)
+                    : 0;
+                  const prevActual = prevActualMap[t.vendedor_id] ?? 0;
 
-        {/* List */}
-        {isLoading ? (
-          <div className="space-y-3">
-            {[1, 2, 3].map(i => <div key={i} className="h-28 rounded-xl bg-muted/40 animate-pulse" />)}
-          </div>
-        ) : filteredTargets.length === 0 ? (
-          <CarboCard>
-            <CarboCardContent className="py-16 text-center space-y-3">
-              <Trophy className="h-12 w-12 mx-auto text-muted-foreground/30" />
-              <p className="text-muted-foreground">
-                {sorted.length === 0
-                  ? "Nenhuma meta definida para este mês."
-                  : "Nenhuma meta para o filtro selecionado."}
-              </p>
-              {canManage && sorted.length === 0 && (
-                <Button variant="outline" onClick={() => navigate("/dashboards/metas/config")}>
-                  <Target className="h-4 w-4 mr-1" /> Configurar metas
-                </Button>
-              )}
-            </CarboCardContent>
-          </CarboCard>
-        ) : (
-          <div className="space-y-3">
-            {filteredTargets.map((t, idx) => {
-              const pct        = t.pct_amount || 0;
-              const color      = getProgressColor(pct, 100, dayOfMonth, daysInMonth);
-              const colors     = COLOR_MAP[color];
-              const remaining  = Math.max(0, Number(t.target_amount) - (t.actual_amount || 0));
-              const dailyNeeded = isCurrentMonth && remainingDays > 0 && remaining > 0
-                ? Math.ceil(remaining / remainingDays)
-                : 0;
-              const prevActual = prevActualMap[t.vendedor_id] ?? 0;
-
-              return (
-                <CarboCard key={t.id}
-                  className={`border ${color === "red" ? "border-red-500/30" : color === "yellow" ? "border-amber-500/30" : ""}`}>
-                  <CarboCardContent className="p-4">
-                    <div className="flex items-center gap-3">
-                      {/* Avatar */}
-                      <div className="w-8 h-8 rounded-full overflow-hidden bg-muted shrink-0">
-                        {t.vendedor?.avatar_url
-                          ? <img src={t.vendedor.avatar_url} alt="" className="w-full h-full object-cover" />
-                          : <div className="w-full h-full flex items-center justify-center text-xs font-bold text-muted-foreground">
-                              {(t.vendedor?.full_name || "?")[0].toUpperCase()}
-                            </div>
-                        }
-                      </div>
-                      {/* Rank */}
-                      <div className="w-7 text-center shrink-0">
-                        {idx === 0 ? "🥇" : idx === 1 ? "🥈" : idx === 2 ? "🥉"
-                          : <span className="text-sm font-bold text-muted-foreground">{idx + 1}º</span>}
-                      </div>
-                      <div className="flex-1 space-y-2 min-w-0">
-                        {/* Row 1: nome + valor + badge */}
-                        <div className="flex items-center justify-between gap-2">
-                          <div className="min-w-0">
-                            <p className="font-semibold text-sm truncate">{t.vendedor?.full_name || "—"}</p>
-                            {t.linha && <p className="text-xs text-muted-foreground">{t.linha}</p>}
+                  return (
+                    <CarboCard key={t.id}
+                      className={`border ${color === "red" ? "border-red-500/30" : color === "yellow" ? "border-amber-500/30" : ""}`}>
+                      <CarboCardContent className="p-4">
+                        <div className="flex items-center gap-3">
+                          {/* Avatar */}
+                          <div className="w-8 h-8 rounded-full overflow-hidden bg-muted shrink-0">
+                            {t.vendedor?.avatar_url
+                              ? <img src={t.vendedor.avatar_url} alt="" className="w-full h-full object-cover" />
+                              : <div className="w-full h-full flex items-center justify-center text-xs font-bold text-muted-foreground">
+                                  {(t.vendedor?.full_name || "?")[0].toUpperCase()}
+                                </div>
+                            }
                           </div>
-                          <div className="flex items-center gap-2 shrink-0">
-                            {canSeeValues ? (
-                              <div className="text-right">
-                                <p className={`text-lg font-bold tabular-nums ${colors.text}`}>{fmtBRL(t.actual_amount || 0)}</p>
-                                <p className="text-xs text-muted-foreground">/ {fmtBRL(Number(t.target_amount))}</p>
+                          {/* Rank */}
+                          <div className="w-7 text-center shrink-0">
+                            {idx === 0 ? "🥇" : idx === 1 ? "🥈" : idx === 2 ? "🥉"
+                              : <span className="text-sm font-bold text-muted-foreground">{idx + 1}º</span>}
+                          </div>
+                          <div className="flex-1 space-y-2 min-w-0">
+                            {/* Row 1: nome + valor + badge */}
+                            <div className="flex items-center justify-between gap-2">
+                              <div className="min-w-0">
+                                <p className="font-semibold text-sm truncate">{t.vendedor?.full_name || "—"}</p>
+                                {t.linha && <p className="text-xs text-muted-foreground">{t.linha}</p>}
                               </div>
-                            ) : null}
-                            <CarboBadge variant={colors.badge} size="sm">{fmtPct(pct)}</CarboBadge>
+                              <div className="flex items-center gap-2 shrink-0">
+                                {canSeeValues ? (
+                                  <div className="text-right">
+                                    <p className={`text-lg font-bold tabular-nums ${colors.text}`}>{fmtBRL(t.actual_amount || 0)}</p>
+                                    <p className="text-xs text-muted-foreground">/ {fmtBRL(Number(t.target_amount))}</p>
+                                  </div>
+                                ) : null}
+                                <CarboBadge variant={colors.badge} size="sm">{fmtPct(pct)}</CarboBadge>
+                              </div>
+                            </div>
+
+                            {/* Progress bar */}
+                            <div className="relative h-2 bg-muted rounded-full overflow-hidden">
+                              <div className="h-full rounded-full transition-all duration-700"
+                                style={{ width: `${Math.min(100, pct)}%`, backgroundColor: colors.bar }} />
+                              {expectedPct > 0 && expectedPct < 100 && (
+                                <div className="absolute top-0 bottom-0 w-0.5 bg-foreground/40"
+                                  style={{ left: `${expectedPct}%` }} />
+                              )}
+                            </div>
+
+                            {/* Row 3: métricas extras */}
+                            <div className="flex items-center justify-between flex-wrap gap-x-4 gap-y-0.5 text-xs text-muted-foreground">
+                              {canSeeValues && <span>Faltam {fmtBRL(remaining)}</span>}
+
+                              {/* R$/dia necessário por vendedor */}
+                              {canSeeValues && dailyNeeded > 0 && (
+                                <span className="inline-flex items-center gap-0.5 text-amber-500 font-medium">
+                                  <Zap className="h-3 w-3" /> {fmtBRL(dailyNeeded)}/dia
+                                </span>
+                              )}
+
+                              {/* Delta mês anterior */}
+                              {canSeeValues && <DeltaBadge current={t.actual_amount || 0} prev={prevActual} />}
+
+                              {t.target_qty > 0 && (
+                                <span>{t.actual_qty || 0} / {t.target_qty} pedidos</span>
+                              )}
+                            </div>
                           </div>
                         </div>
-
-                        {/* Progress bar */}
-                        <div className="relative h-2 bg-muted rounded-full overflow-hidden">
-                          <div className="h-full rounded-full transition-all duration-700"
-                            style={{ width: `${Math.min(100, pct)}%`, backgroundColor: colors.bar }} />
-                          {expectedPct > 0 && expectedPct < 100 && (
-                            <div className="absolute top-0 bottom-0 w-0.5 bg-foreground/40"
-                              style={{ left: `${expectedPct}%` }} />
-                          )}
-                        </div>
-
-                        {/* Row 3: métricas extras */}
-                        <div className="flex items-center justify-between flex-wrap gap-x-4 gap-y-0.5 text-xs text-muted-foreground">
-                          {canSeeValues && <span>Faltam {fmtBRL(remaining)}</span>}
-
-                          {/* R$/dia necessário por vendedor */}
-                          {canSeeValues && dailyNeeded > 0 && (
-                            <span className="inline-flex items-center gap-0.5 text-amber-500 font-medium">
-                              <Zap className="h-3 w-3" /> {fmtBRL(dailyNeeded)}/dia
-                            </span>
-                          )}
-
-                          {/* Delta mês anterior */}
-                          {canSeeValues && <DeltaBadge current={t.actual_amount || 0} prev={prevActual} />}
-
-                          {t.target_qty > 0 && (
-                            <span>{t.actual_qty || 0} / {t.target_qty} pedidos</span>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  </CarboCardContent>
-                </CarboCard>
-              );
-            })}
-          </div>
+                      </CarboCardContent>
+                    </CarboCard>
+                  );
+                })}
+              </div>
+            )}
+          </>
         )}
       </div>
     </BoardLayout>
