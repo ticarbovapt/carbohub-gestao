@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import { diceBearUrl } from "@/components/ui/profile-avatar";
 import { BoardLayout } from "@/components/layouts/BoardLayout";
 import { CarboCard, CarboCardContent } from "@/components/ui/carbo-card";
 import { Button } from "@/components/ui/button";
@@ -109,12 +110,11 @@ export default function MyProfilePage() {
           <CarboCardContent className="p-6 flex flex-col items-center gap-4">
             <div className="relative">
               <div className="w-24 h-24 rounded-full overflow-hidden ring-4 ring-border">
-                {profile?.avatar_url
-                  ? <img src={profile.avatar_url} alt="avatar" className="w-full h-full object-cover" />
-                  : <div className="w-full h-full carbo-gradient flex items-center justify-center">
-                      <span className="text-3xl font-bold text-white">{initials}</span>
-                    </div>
-                }
+                <img
+                  src={profile?.avatar_url || (user?.id ? diceBearUrl(user.id) : "")}
+                  alt="avatar"
+                  className="w-full h-full object-cover"
+                />
               </div>
               <button
                 onClick={() => inputRef.current?.click()}

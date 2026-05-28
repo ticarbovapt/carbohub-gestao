@@ -37,6 +37,7 @@ import {
   type TeamMember,
 } from "@/hooks/useTeamMembers";
 import { useAuth } from "@/contexts/AuthContext";
+import { diceBearUrl } from "@/components/ui/profile-avatar";
 import {
   MODULES, MATRIX, ROLE_KEY_MAP, PRIORITY, ACCESS_LABEL, getEffectiveAccess,
   type Access, type RoleKey,
@@ -220,8 +221,8 @@ export function AccessConfigDialog({ member, open, onOpenChange }: AccessConfigD
 
         {/* Identidade do usuário */}
         <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/40 border">
-          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary font-bold text-sm shrink-0">
-            {getInitials(member.full_name)}
+          <div className="h-10 w-10 rounded-full overflow-hidden shrink-0">
+            <img src={member.avatar_url || diceBearUrl(member.id)} alt="" className="w-full h-full object-cover" />
           </div>
           <div className="min-w-0">
             <p className="font-semibold text-sm truncate">{member.full_name || "—"}</p>

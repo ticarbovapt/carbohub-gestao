@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { diceBearUrl } from "@/components/ui/profile-avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ChevronDown, ChevronRight, Users } from "lucide-react";
@@ -60,7 +61,7 @@ function NodeCard({
         className={cn(avatarSize, "ring-2 ring-offset-2 ring-offset-background shadow-lg")}
         style={{ "--tw-ring-color": deptColor } as React.CSSProperties}
       >
-        <AvatarImage src={node.avatar_url || undefined} />
+        <AvatarImage src={node.avatar_url || diceBearUrl(node.id)} />
         <AvatarFallback
           className={cn(
             "text-white font-bold",
