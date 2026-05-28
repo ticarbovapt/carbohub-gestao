@@ -70,7 +70,7 @@ export function useSalesTargetsWithProgress(month: string) {
         .split("T")[0];
 
       const { data: orders } = await supabase
-        .from("carboze_orders_secure")
+        .from("carboze_orders")
         .select("vendedor_id, total, items, status")
         .gte("created_at", monthStart)
         .lte("created_at", monthEnd + "T23:59:59Z")
@@ -175,7 +175,7 @@ export function useWeeklyTopVendedores() {
       monday.setHours(0, 0, 0, 0);
 
       const { data: orders } = await supabase
-        .from("carboze_orders_secure")
+        .from("carboze_orders")
         .select("vendedor_id, total")
         .gte("created_at", monday.toISOString())
         .neq("status", "cancelled")
@@ -235,7 +235,7 @@ export function useWeeklyVendedoresData(teamFilter?: "todos" | "cgc" | "expansao
       monday.setHours(0, 0, 0, 0);
 
       const { data: orders } = await supabase
-        .from("carboze_orders_secure")
+        .from("carboze_orders")
         .select("vendedor_id, total, status")
         .gte("created_at", monday.toISOString())
         .neq("status", "cancelled")
