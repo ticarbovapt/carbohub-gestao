@@ -64,10 +64,11 @@ export function useSalesTargetsWithProgress(month: string) {
       if (targetsError) throw targetsError;
 
       // Fetch actual orders for the month
-      const monthStart = month + "T00:00:00Z";
-      const monthEnd = new Date(new Date(month).getFullYear(), new Date(month).getMonth() + 1, 0)
-        .toISOString()
-        .split("T")[0];
+      // Parse month string directly to avoid UTC-vs-local timezone bug
+      const [yearNum, monNum] = month.split("-").map(Number);
+      const lastDay = new Date(yearNum, monNum, 0).getDate();
+      const monthStart = `${month}T00:00:00Z`;
+      const monthEnd = `${yearNum}-${String(monNum).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
 
       const { data: ordersRaw } = await supabase
         .from("carboze_orders")
