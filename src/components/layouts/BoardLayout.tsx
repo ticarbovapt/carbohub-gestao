@@ -14,6 +14,7 @@ import {
   ChevronDown,
   Menu,
   UserPlus,
+  UserCircle,
   Calendar,
   AlertTriangle,
   Building2,
@@ -900,8 +901,13 @@ export function BoardLayout({ children }: BoardLayoutProps) {
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <button className="flex items-center gap-2 rounded-xl pl-1.5 pr-2.5 py-1.5 text-sm transition-all duration-200 hover:bg-secondary active:scale-95 min-w-0">
-                    <div className="h-7 w-7 lg:h-8 lg:w-8 rounded-full carbo-gradient flex items-center justify-center flex-shrink-0 shadow-sm">
-                      <span className="text-xs font-bold text-white">{getInitials(profile?.full_name)}</span>
+                    <div className="h-7 w-7 lg:h-8 lg:w-8 rounded-full overflow-hidden flex-shrink-0 shadow-sm">
+                      {profile?.avatar_url
+                        ? <img src={profile.avatar_url} alt="" className="w-full h-full object-cover" />
+                        : <div className="w-full h-full carbo-gradient flex items-center justify-center">
+                            <span className="text-xs font-bold text-white">{getInitials(profile?.full_name)}</span>
+                          </div>
+                      }
                     </div>
                     <div className="hidden md:block text-left min-w-0">
                       <p className="text-xs font-semibold text-foreground leading-tight truncate max-w-[110px]">
@@ -928,6 +934,10 @@ export function BoardLayout({ children }: BoardLayoutProps) {
                     </div>
                   </DropdownMenuLabel>
                   <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={() => navigate("/meu-perfil")}>
+                    <UserCircle className="mr-2 h-4 w-4" />
+                    Meu Perfil
+                  </DropdownMenuItem>
                   <DropdownMenuItem onClick={() => navigate("/dashboard")}>
                     <Home className="mr-2 h-4 w-4" />
                     Dashboard
