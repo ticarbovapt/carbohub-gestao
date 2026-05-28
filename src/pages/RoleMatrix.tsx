@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
+import { diceBearUrl } from "@/components/ui/profile-avatar";
 import { AccessConfigDialog } from "@/components/team/AccessConfigDialog";
 import type { TeamMember } from "@/hooks/useTeamMembers";
 import {
@@ -72,8 +73,8 @@ function CollaboratorRow({
         {/* Name */}
         <td className="p-2 pl-3 sticky left-0 bg-background z-10 border-r min-w-[180px]">
           <div className="flex items-center gap-2">
-            <div className="h-7 w-7 rounded-full bg-primary/20 flex items-center justify-center text-xs font-bold text-primary flex-shrink-0">
-              {initials}
+            <div className="h-7 w-7 rounded-full overflow-hidden flex-shrink-0">
+              <img src={diceBearUrl(user.id)} alt="" className="w-full h-full object-cover" />
             </div>
             <div className="min-w-0">
               <p className="text-sm font-medium truncate">{user.full_name || "—"}</p>

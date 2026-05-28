@@ -8,7 +8,7 @@ interface ProfileAvatarProps {
 }
 
 // DiceBear fun-emoji as illustrated fallback avatar (consistent per userId seed)
-function diceBearUrl(seed: string) {
+export function diceBearUrl(seed: string) {
   return `https://api.dicebear.com/7.x/fun-emoji/svg?seed=${encodeURIComponent(seed)}&radius=0`;
 }
 
