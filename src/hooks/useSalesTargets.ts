@@ -69,14 +69,12 @@ export function useSalesTargetsWithProgress(month: string) {
         .toISOString()
         .split("T")[0];
 
-      const { data: orders, error: ordersError } = await supabase
+      const { data: orders } = await supabase
         .from("carboze_orders_secure")
-        .select("vendedor_id, vendedor_name, total, items, linha, status")
+        .select("vendedor_id, total, items, status")
         .gte("created_at", monthStart)
         .lte("created_at", monthEnd + "T23:59:59Z")
         .eq("status", "delivered");
-
-      if (ordersError) throw ordersError;
 
       // Calculate progress per vendedor
       const progressMap: Record<string, { amount: number; qty: number }> = {};
