@@ -118,15 +118,38 @@ export function useUpsertSalesTarget() {
       target_qty: number;
       linha?: string | null;
     }) => {
+      // Manual upsert: functional unique index on COALESCE(linha,'') is not
+      // resolvable via PostgREST onConflict column names.
+      let existingQuery = supabase
+        .from("sales_targets")
+        .select("id")
+        .eq("vendedor_id", data.vendedor_id)
+        .eq("month", data.month);
+
+      existingQuery = data.linha
+        ? existingQuery.eq("linha", data.linha)
+        : existingQuery.is("linha", null);
+
+      const { data: existing } = await existingQuery.maybeSingle();
+
+      const payload = { ...data, updated_at: new Date().toISOString() };
+
+      if (existing?.id) {
+        const { data: result, error } = await supabase
+          .from("sales_targets")
+          .update(payload)
+          .eq("id", existing.id)
+          .select()
+          .single();
+        if (error) throw error;
+        return result;
+      }
+
       const { data: result, error } = await supabase
         .from("sales_targets")
-        .upsert(
-          { ...data, updated_at: new Date().toISOString() },
-          { onConflict: "vendedor_id,month,linha" }
-        )
+        .insert(payload)
         .select()
         .single();
-
       if (error) throw error;
       return result;
     },
