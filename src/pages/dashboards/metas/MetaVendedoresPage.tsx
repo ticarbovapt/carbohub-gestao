@@ -18,9 +18,6 @@ import { useAuth } from "@/contexts/AuthContext";
 import { getProgressColor } from "@/hooks/useMetaEcommerce";
 import { useNavigate } from "react-router-dom";
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Permission: command/* ou */head podem ver valores e configurar metas
-// ─────────────────────────────────────────────────────────────────────────────
 function useCanSetTargets(): boolean {
   const { profile } = useAuth();
   if (!profile) return false;
@@ -30,9 +27,6 @@ function useCanSetTargets(): boolean {
   return false;
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Helpers
-// ─────────────────────────────────────────────────────────────────────────────
 function fmtBRL(v: number) {
   return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", minimumFractionDigits: 0, maximumFractionDigits: 0 });
 }
@@ -45,7 +39,8 @@ const COLOR_MAP = {
   gray:   { bar: "#64748b", badge: "secondary"   as const, text: "text-muted-foreground", bg: "bg-muted/30"      },
 };
 
-// Delta badge vs mês anterior
+const BAR_COLORS = ["#22c55e", "#3b82f6", "#f59e0b", "#64748b"];
+
 function DeltaBadge({ current, prev }: { current: number; prev: number }) {
   if (prev <= 0 && current <= 0) return null;
   if (prev <= 0) return <span className="text-[10px] text-muted-foreground italic">primeiro mês</span>;
@@ -63,7 +58,7 @@ type TeamFilter = "todos" | "cgc" | "expansao";
 type PeriodView = "mensal" | "semanal";
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Top3Card — reusable for both mensal and semanal
+// Top3Card
 // ─────────────────────────────────────────────────────────────────────────────
 function Top3Card({ entries, label, canSeeValues }: {
   entries: Array<{rank:number;vendedor_id:string;total:number;profile:{full_name:string|null;avatar_url:string|null}|null}>;
@@ -98,11 +93,95 @@ function Top3Card({ entries, label, canSeeValues }: {
               </p>
               {canSeeValues && (
                 <p className="text-[10px] text-muted-foreground">
-                  {entry.total.toLocaleString("pt-BR", { style: "currency", currency: "BRL", minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                  {fmtBRL(entry.total)}
                 </p>
               )}
             </div>
           ))}
+        </div>
+      </CarboCardContent>
+    </CarboCard>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// WeeklyBarChart
+// ─────────────────────────────────────────────────────────────────────────────
+function WeeklyBarChart({ entries, targetMap, canSeeValues }: {
+  entries: WeeklyVendedorEntry[];
+  targetMap: Record<string, number>;
+  canSeeValues: boolean;
+}) {
+  if (entries.length === 0) return null;
+  const maxTotal = Math.max(...entries.map(e => e.total), 1);
+  const MAX_BAR_H = 120;
+
+  return (
+    <CarboCard>
+      <CarboCardContent className="p-4">
+        <p className="text-xs uppercase tracking-wider text-muted-foreground mb-4 font-medium">
+          Desempenho da Semana
+        </p>
+        <div className="overflow-x-auto">
+          <div className="flex gap-2 justify-center min-w-fit px-2">
+            {entries.map((entry, idx) => {
+              const barH     = Math.max(8, Math.round((entry.total / maxTotal) * MAX_BAR_H));
+              const target   = targetMap[entry.vendedor_id] || 0;
+              const pctMeta  = target > 0 ? Math.round((entry.total / target) * 100) : null;
+              const barColor = BAR_COLORS[Math.min(idx, BAR_COLORS.length - 1)];
+              const medal    = idx === 0 ? "🥇" : idx === 1 ? "🥈" : idx === 2 ? "🥉" : null;
+
+              return (
+                <div key={entry.vendedor_id} className="flex flex-col items-center gap-1 w-14">
+                  {/* Avatar */}
+                  <div className={`w-9 h-9 rounded-full overflow-hidden border-2 shrink-0 ${
+                    idx === 0 ? "border-yellow-400" : idx === 1 ? "border-gray-400" : idx === 2 ? "border-amber-600" : "border-transparent"
+                  }`}>
+                    {entry.profile?.avatar_url
+                      ? <img src={entry.profile.avatar_url} alt="" className="w-full h-full object-cover" />
+                      : <div className="w-full h-full bg-muted flex items-center justify-center text-sm font-bold text-muted-foreground">
+                          {(entry.profile?.full_name || "?")[0].toUpperCase()}
+                        </div>
+                    }
+                  </div>
+
+                  {/* Bar container — fixed height, bar anchored to bottom */}
+                  <div
+                    className="flex flex-col items-center justify-end gap-0.5"
+                    style={{ height: `${MAX_BAR_H + 32}px` }}
+                  >
+                    {canSeeValues && (
+                      <p className="text-[9px] text-muted-foreground tabular-nums text-center leading-tight">
+                        {entry.total >= 1000
+                          ? `R$${(entry.total / 1000).toFixed(0)}k`
+                          : fmtBRL(entry.total)}
+                      </p>
+                    )}
+                    {pctMeta !== null && (
+                      <p className="text-[9px] font-bold leading-tight text-center" style={{ color: barColor }}>
+                        {pctMeta}%
+                      </p>
+                    )}
+                    <div
+                      className="w-9 rounded-t-lg transition-all duration-700"
+                      style={{ height: `${barH}px`, backgroundColor: barColor }}
+                    />
+                  </div>
+
+                  {/* Name */}
+                  <p className="text-[10px] font-semibold truncate max-w-[56px] text-center leading-tight">
+                    {entry.profile?.full_name?.split(" ")[0] || "—"}
+                  </p>
+
+                  {/* Rank */}
+                  {medal
+                    ? <span className="text-sm leading-none">{medal}</span>
+                    : <span className="text-[10px] font-bold text-muted-foreground">{idx + 1}º</span>
+                  }
+                </div>
+              );
+            })}
+          </div>
         </div>
       </CarboCardContent>
     </CarboCard>
@@ -117,18 +196,28 @@ export default function MetaVendedoresPage() {
   const [teamFilter, setTeamFilter] = useState<TeamFilter>("todos");
   const [periodView, setPeriodView] = useState<PeriodView>("mensal");
 
-  const canManage = useCanSetTargets();
+  const canManage    = useCanSetTargets();
   const canSeeValues = canManage;
-  const navigate  = useNavigate();
-  const monthStr  = month.toISOString().slice(0, 10);
+  const navigate     = useNavigate();
+  const monthStr     = month.toISOString().slice(0, 10);
 
-  // Mês atual e mês anterior
   const prevMonth    = startOfMonth(subMonths(month, 1));
   const prevMonthStr = prevMonth.toISOString().slice(0, 10);
 
+  // Current month targets (needed for weekly chart even when viewing past months)
+  const currentMonthStr = startOfMonth(new Date()).toISOString().slice(0, 10);
+
   const { data: targets = [], isLoading, dataUpdatedAt } = useSalesTargetsWithProgress(monthStr);
   const { data: prevTargets = [] }                       = useSalesTargetsWithProgress(prevMonthStr);
+  const { data: currentTargets = [] }                    = useSalesTargetsWithProgress(currentMonthStr);
   const { data: weeklyAll = [], isLoading: weeklyLoading } = useWeeklyVendedoresData(teamFilter);
+
+  // Monthly target map for weekly chart
+  const currentMonthTargetMap: Record<string, number> = {};
+  for (const t of currentTargets) {
+    currentMonthTargetMap[t.vendedor_id] =
+      (currentMonthTargetMap[t.vendedor_id] || 0) + Number(t.target_amount || 0);
+  }
 
   // Mapa vendedor → actual do mês anterior
   const prevActualMap: Record<string, number> = {};
@@ -141,39 +230,42 @@ export default function MetaVendedoresPage() {
   const isCurrentMonth =
     month.getFullYear() === today.getFullYear() &&
     month.getMonth() === today.getMonth();
-  const daysInMonth   = getDaysInMonth(month);
-  const dayOfMonth    = isCurrentMonth ? getDate(today) : daysInMonth;
-  const remainingDays = isCurrentMonth ? daysInMonth - dayOfMonth : 0;
-  const expectedPct   = (dayOfMonth / daysInMonth) * 100;
+  const daysInMonth    = getDaysInMonth(month);
+  const dayOfMonth     = isCurrentMonth ? getDate(today) : daysInMonth;
+  const remainingDays  = isCurrentMonth ? daysInMonth - dayOfMonth : 0;
+  const expectedPct    = (dayOfMonth / daysInMonth) * 100;
 
-  // "Atualizado às HH:mm"
   const updatedAt = dataUpdatedAt
     ? new Date(dataUpdatedAt).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })
     : null;
 
   const sorted = [...targets].sort((a, b) => (b.pct_amount || 0) - (a.pct_amount || 0));
-
-  // Filter by department
   const filteredTargets = teamFilter === "todos" ? sorted : sorted.filter(t => {
-    const dept = t.vendedor?.department;
+    const dept    = t.vendedor?.department;
     const secDept = t.vendedor?.secondary_department;
     return dept === teamFilter || secDept === teamFilter;
   });
 
-  const totalTarget = targets.reduce((s, t) => s + Number(t.target_amount), 0);
-  const totalActual = targets.reduce((s, t) => s + (t.actual_amount || 0), 0);
-  const totalPct    = totalTarget > 0 ? (totalActual / totalTarget) * 100 : 0;
-  const hitting     = targets.filter(t => (t.pct_amount || 0) >= 100).length;
-  const totalColor  = getProgressColor(totalActual, totalTarget, dayOfMonth, daysInMonth);
-  const totalColors = COLOR_MAP[totalColor];
+  const totalTarget  = targets.reduce((s, t) => s + Number(t.target_amount), 0);
+  const totalActual  = targets.reduce((s, t) => s + (t.actual_amount || 0), 0);
+  const totalPct     = totalTarget > 0 ? (totalActual / totalTarget) * 100 : 0;
+  const hitting      = targets.filter(t => (t.pct_amount || 0) >= 100).length;
+  const totalColor   = getProgressColor(totalActual, totalTarget, dayOfMonth, daysInMonth);
+  const totalColors  = COLOR_MAP[totalColor];
 
-  // Dias restantes e R$/dia para o time
-  const teamRemaining  = Math.max(0, totalTarget - totalActual);
+  const teamRemaining   = Math.max(0, totalTarget - totalActual);
   const teamDailyNeeded = isCurrentMonth && remainingDays > 0 && teamRemaining > 0
     ? Math.ceil(teamRemaining / remainingDays)
     : 0;
 
-  // Monthly top 3 entries
+  // Team projection
+  const teamProjected = isCurrentMonth && dayOfMonth > 2 && totalActual > 0 && totalTarget > 0
+    ? Math.round((totalActual / dayOfMonth) * daysInMonth)
+    : null;
+  const teamProjPct     = teamProjected !== null ? (teamProjected / totalTarget) * 100 : null;
+  const teamProjKey     = teamProjPct === null ? "gray" : teamProjPct >= 100 ? "green" : teamProjPct >= 85 ? "yellow" : "red" as keyof typeof COLOR_MAP;
+  const teamProjColors  = COLOR_MAP[teamProjKey];
+
   const monthlyTop3 = filteredTargets.slice(0, 3).map((t, idx) => ({
     rank: idx + 1,
     vendedor_id: t.vendedor_id,
@@ -211,7 +303,6 @@ export default function MetaVendedoresPage() {
               ))}
             </div>
 
-            {/* Month navigator — only in mensal view */}
             {periodView === "mensal" && (
               <div className="flex items-center gap-1 bg-muted/40 rounded-lg px-2 py-1.5">
                 <Button variant="ghost" size="icon" className="h-7 w-7"
@@ -238,7 +329,7 @@ export default function MetaVendedoresPage() {
           </div>
         </div>
 
-        {/* Department filter tabs */}
+        {/* Department filter */}
         <div className="flex gap-1">
           {(["todos", "cgc", "expansao"] as const).map(opt => (
             <button key={opt} onClick={() => setTeamFilter(opt)}
@@ -279,45 +370,19 @@ export default function MetaVendedoresPage() {
               </CarboCard>
             ) : (
               <>
-                {/* Weekly Top 3 */}
-                <Top3Card entries={weeklyAll} label="Top 3 da Semana" canSeeValues={canSeeValues} />
+                {/* Bar chart */}
+                <WeeklyBarChart
+                  entries={weeklyAll}
+                  targetMap={currentMonthTargetMap}
+                  canSeeValues={canSeeValues}
+                />
 
-                {/* Full ranked list */}
-                <div className="space-y-2">
-                  {weeklyAll.map(entry => (
-                    <CarboCard key={entry.vendedor_id}>
-                      <CarboCardContent className="p-3">
-                        <div className="flex items-center gap-3">
-                          {/* Avatar */}
-                          <div className="w-9 h-9 rounded-full overflow-hidden bg-muted shrink-0">
-                            {entry.profile?.avatar_url
-                              ? <img src={entry.profile.avatar_url} alt="" className="w-full h-full object-cover" />
-                              : <div className="w-full h-full flex items-center justify-center text-sm font-bold text-muted-foreground">
-                                  {(entry.profile?.full_name || "?")[0].toUpperCase()}
-                                </div>
-                            }
-                          </div>
-                          {/* Rank */}
-                          <div className="w-7 text-center shrink-0">
-                            {entry.rank === 1 ? "🥇" : entry.rank === 2 ? "🥈" : entry.rank === 3 ? "🥉"
-                              : <span className="text-sm font-bold text-muted-foreground">{entry.rank}º</span>}
-                          </div>
-                          {/* Name */}
-                          <div className="flex-1 min-w-0">
-                            <p className="font-semibold text-sm truncate">{entry.profile?.full_name || "—"}</p>
-                            <p className="text-xs text-muted-foreground">{entry.count} {entry.count === 1 ? "pedido" : "pedidos"}</p>
-                          </div>
-                          {/* Total */}
-                          {canSeeValues && (
-                            <p className="text-base font-bold tabular-nums text-carbo-green shrink-0">
-                              {fmtBRL(entry.total)}
-                            </p>
-                          )}
-                        </div>
-                      </CarboCardContent>
-                    </CarboCard>
-                  ))}
-                </div>
+                {/* Top 3 podium */}
+                <Top3Card
+                  entries={weeklyAll.slice(0, 3).map((e, i) => ({ ...e, rank: i + 1 }))}
+                  label="Top 3 da Semana"
+                  canSeeValues={canSeeValues}
+                />
               </>
             )}
           </>
@@ -343,7 +408,6 @@ export default function MetaVendedoresPage() {
                       )}
                     </div>
                     <div className="flex items-center gap-3">
-                      {/* Dias restantes */}
                       {isCurrentMonth && remainingDays > 0 && (
                         <div className="text-center">
                           <p className="text-sm font-bold tabular-nums flex items-center gap-0.5">
@@ -352,7 +416,6 @@ export default function MetaVendedoresPage() {
                           <p className="text-[10px] text-muted-foreground">restantes</p>
                         </div>
                       )}
-                      {/* R$/dia necessário */}
                       {canSeeValues && teamDailyNeeded > 0 && (
                         <div className="text-center">
                           <p className="text-sm font-bold tabular-nums text-amber-500 flex items-center gap-0.5">
@@ -376,6 +439,17 @@ export default function MetaVendedoresPage() {
                         style={{ left: `${expectedPct}%` }} />
                     )}
                   </div>
+                  {/* Team projection */}
+                  {teamProjected !== null && teamProjPct !== null && (
+                    <div className="flex items-center gap-1.5 text-xs mt-2 pt-2 border-t border-border/50">
+                      <TrendingUp className="h-3 w-3 text-muted-foreground shrink-0" />
+                      <span className="text-muted-foreground">Projeção do time ao fim do mês:</span>
+                      {canSeeValues && (
+                        <span className={`font-bold ${teamProjColors.text}`}>{fmtBRL(teamProjected)}</span>
+                      )}
+                      <CarboBadge variant={teamProjColors.badge} size="sm">{fmtPct(teamProjPct)}</CarboBadge>
+                    </div>
+                  )}
                 </CarboCardContent>
               </CarboCard>
             )}
@@ -407,14 +481,24 @@ export default function MetaVendedoresPage() {
             ) : (
               <div className="space-y-3">
                 {filteredTargets.map((t, idx) => {
-                  const pct        = t.pct_amount || 0;
-                  const color      = getProgressColor(pct, 100, dayOfMonth, daysInMonth);
-                  const colors     = COLOR_MAP[color];
-                  const remaining  = Math.max(0, Number(t.target_amount) - (t.actual_amount || 0));
+                  const pct         = t.pct_amount || 0;
+                  const color       = getProgressColor(pct, 100, dayOfMonth, daysInMonth);
+                  const colors      = COLOR_MAP[color];
+                  const actual      = t.actual_amount || 0;
+                  const target      = Number(t.target_amount);
+                  const remaining   = Math.max(0, target - actual);
                   const dailyNeeded = isCurrentMonth && remainingDays > 0 && remaining > 0
                     ? Math.ceil(remaining / remainingDays)
                     : 0;
-                  const prevActual = prevActualMap[t.vendedor_id] ?? 0;
+                  const prevActual  = prevActualMap[t.vendedor_id] ?? 0;
+
+                  // Projection
+                  const projected    = isCurrentMonth && dayOfMonth > 2 && actual > 0 && target > 0
+                    ? Math.round((actual / dayOfMonth) * daysInMonth)
+                    : null;
+                  const projPct      = projected !== null && target > 0 ? (projected / target) * 100 : null;
+                  const projKey      = projPct === null ? "gray" : projPct >= 100 ? "green" : projPct >= 85 ? "yellow" : "red" as keyof typeof COLOR_MAP;
+                  const projColors   = COLOR_MAP[projKey];
 
                   return (
                     <CarboCard key={t.id}
@@ -445,8 +529,8 @@ export default function MetaVendedoresPage() {
                               <div className="flex items-center gap-2 shrink-0">
                                 {canSeeValues ? (
                                   <div className="text-right">
-                                    <p className={`text-lg font-bold tabular-nums ${colors.text}`}>{fmtBRL(t.actual_amount || 0)}</p>
-                                    <p className="text-xs text-muted-foreground">/ {fmtBRL(Number(t.target_amount))}</p>
+                                    <p className={`text-lg font-bold tabular-nums ${colors.text}`}>{fmtBRL(actual)}</p>
+                                    <p className="text-xs text-muted-foreground">/ {fmtBRL(target)}</p>
                                   </div>
                                 ) : null}
                                 <CarboBadge variant={colors.badge} size="sm">{fmtPct(pct)}</CarboBadge>
@@ -463,24 +547,32 @@ export default function MetaVendedoresPage() {
                               )}
                             </div>
 
-                            {/* Row 3: métricas extras */}
+                            {/* Row 3: métricas */}
                             <div className="flex items-center justify-between flex-wrap gap-x-4 gap-y-0.5 text-xs text-muted-foreground">
                               {canSeeValues && <span>Faltam {fmtBRL(remaining)}</span>}
-
-                              {/* R$/dia necessário por vendedor */}
                               {canSeeValues && dailyNeeded > 0 && (
                                 <span className="inline-flex items-center gap-0.5 text-amber-500 font-medium">
                                   <Zap className="h-3 w-3" /> {fmtBRL(dailyNeeded)}/dia
                                 </span>
                               )}
-
-                              {/* Delta mês anterior */}
-                              {canSeeValues && <DeltaBadge current={t.actual_amount || 0} prev={prevActual} />}
-
+                              {canSeeValues && <DeltaBadge current={actual} prev={prevActual} />}
                               {t.target_qty > 0 && (
                                 <span>{t.actual_qty || 0} / {t.target_qty} pedidos</span>
                               )}
                             </div>
+
+                            {/* Projection */}
+                            {projected !== null && projPct !== null && (
+                              <div className="flex items-center gap-1.5 text-xs pt-1 border-t border-border/40">
+                                <TrendingUp className="h-3 w-3 text-muted-foreground shrink-0" />
+                                <span className="text-muted-foreground">Projeção:</span>
+                                {canSeeValues && (
+                                  <span className={`font-bold ${projColors.text}`}>{fmtBRL(projected)}</span>
+                                )}
+                                <CarboBadge variant={projColors.badge} size="sm">{fmtPct(projPct)}</CarboBadge>
+                                <span className="text-muted-foreground">ao fim do mês</span>
+                              </div>
+                            )}
                           </div>
                         </div>
                       </CarboCardContent>
