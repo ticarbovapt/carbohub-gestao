@@ -247,6 +247,7 @@ export const SCREEN_GROUPS: ScreenGroup[] = [
       { id: "ai-assistant", label: "Assistente IA", path: "/ai-assistant" },
       { id: "bling", label: "Integração Bling", path: "/integrations/bling" },
       { id: "bling-nfs", label: "Notas Fiscais (Bling)", path: "/integrations/bling/nfs" },
+      { id: "faturamento", label: "Fila de Faturamento", path: "/financeiro/faturamento" },
     ],
   },
 ];

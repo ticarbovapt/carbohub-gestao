@@ -43,6 +43,8 @@ import {
   Zap,
   Plane,
   Bug,
+  Receipt,
+  FileText,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -214,11 +216,13 @@ const SECTORS: Sector[] = [
     label: "Finance",
     icon: Wallet,
     items: [
-      { href: "/financeiro",        label: "Financeiro",      icon: Wallet },
-      { href: "/viagens",           label: "Viagens & PC",    icon: Plane },
-      { href: "/logistics",         label: "Logística",       icon: Truck },
-      { href: "/purchasing",        label: "Compras",         icon: ShoppingCart },
-      { href: "/admin/nfse",        label: "NFS-e",           icon: FileInput },
+      { href: "/financeiro",              label: "Financeiro",         icon: Wallet },
+      { href: "/financeiro/faturamento", label: "Fila de Faturamento", icon: Receipt },
+      { href: "/integrations/bling/nfs", label: "Notas Fiscais",       icon: FileText },
+      { href: "/viagens",                label: "Viagens & PC",        icon: Plane },
+      { href: "/logistics",              label: "Logística",           icon: Truck },
+      { href: "/purchasing",             label: "Compras",             icon: ShoppingCart },
+      { href: "/admin/nfse",             label: "NFS-e",               icon: FileInput },
     ],
   },
   {

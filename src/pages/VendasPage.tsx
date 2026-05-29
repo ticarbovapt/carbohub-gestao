@@ -7,13 +7,15 @@ import { CarboCard, CarboCardContent } from "@/components/ui/carbo-card";
 import { CarboBadge } from "@/components/ui/carbo-badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ChevronLeft, ChevronRight, Search, ShoppingBag, TrendingUp, Package, Pencil } from "lucide-react";
+import { ChevronLeft, ChevronRight, Search, ShoppingBag, TrendingUp, Package, Pencil, Users } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTeamMembers } from "@/hooks/useTeamMembers";
 import type { OrderItem, CarbozeOrder } from "@/hooks/useCarbozeOrders";
 import { EditOrderDialog } from "@/components/orders/EditOrderDialog";
+import { BulkVendorAssignDialog } from "@/components/orders/BulkVendorAssignDialog";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -140,8 +142,10 @@ export default function VendasPage() {
   const [month, setMonth]           = useState(() => startOfMonth(new Date()));
   const [search, setSearch]         = useState("");
   const [vendedorFilter, setVendedor] = useState("__all__");
-  const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [editOrder, setEditOrder]   = useState<CarbozeOrder | null>(null);
+  const [expandedId, setExpandedId]       = useState<string | null>(null);
+  const [editOrder, setEditOrder]         = useState<CarbozeOrder | null>(null);
+  const [selectedIds, setSelectedIds]     = useState<Set<string>>(new Set());
+  const [bulkAssignOpen, setBulkAssign]   = useState(false);
 
   const { profile } = useAuth();
   const isHead =
@@ -272,6 +276,18 @@ export default function VendasPage() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b bg-muted/30">
+                    {isHead && (
+                      <th className="w-10 p-3">
+                        <Checkbox
+                          checked={filtered.length > 0 && selectedIds.size === filtered.length}
+                          onCheckedChange={checked => {
+                            if (checked) setSelectedIds(new Set(filtered.map(v => v.id)));
+                            else setSelectedIds(new Set());
+                          }}
+                          aria-label="Selecionar todos"
+                        />
+                      </th>
+                    )}
                     <th className="text-left p-3 font-medium text-xs text-muted-foreground uppercase tracking-wide">Status</th>
                     <th className="text-left p-3 font-medium text-xs text-muted-foreground uppercase tracking-wide">Pedido</th>
                     <th className="text-left p-3 font-medium text-xs text-muted-foreground uppercase tracking-wide">Data</th>
@@ -290,9 +306,24 @@ export default function VendasPage() {
                         className={`border-b transition-colors cursor-pointer hover:bg-muted/20 ${
                           venda.status === "delivered" ? "" :
                           venda.status === "cancelled" ? "opacity-50" : "bg-amber-500/3"
-                        } ${expandedId === venda.id ? "bg-muted/20" : ""}`}
+                        } ${expandedId === venda.id ? "bg-muted/20" : ""} ${selectedIds.has(venda.id) ? "bg-carbo-green/5" : ""}`}
                         onClick={() => setExpandedId(expandedId === venda.id ? null : venda.id)}
                       >
+                        {isHead && (
+                          <td className="p-3" onClick={e => e.stopPropagation()}>
+                            <Checkbox
+                              checked={selectedIds.has(venda.id)}
+                              onCheckedChange={checked => {
+                                setSelectedIds(prev => {
+                                  const next = new Set(prev);
+                                  checked ? next.add(venda.id) : next.delete(venda.id);
+                                  return next;
+                                });
+                              }}
+                              aria-label={`Selecionar ${venda.order_number}`}
+                            />
+                          </td>
+                        )}
                         <td className="p-3">
                           <CarboBadge variant={STATUS_VARIANT[venda.status] ?? "secondary"} size="sm">
                             {STATUS_LABEL[venda.status] ?? venda.status}
@@ -329,7 +360,7 @@ export default function VendasPage() {
                       {/* Expandable products row */}
                       {expandedId === venda.id && venda.items.length > 0 && (
                         <tr key={`${venda.id}-items`} className="border-b bg-muted/10">
-                          <td colSpan={isHead ? 8 : 6} className="px-6 py-3">
+                          <td colSpan={isHead ? 9 : 6} className="px-6 py-3">
                             <div className="flex items-center gap-2 mb-2">
                               <Package className="h-3.5 w-3.5 text-muted-foreground" />
                               <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Produtos</p>
@@ -364,11 +395,40 @@ export default function VendasPage() {
         )}
       </div>
 
+      {/* Barra de ação em massa (flutua no rodapé quando há seleção) */}
+      {isHead && selectedIds.size > 0 && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 rounded-2xl border border-border bg-background/95 backdrop-blur px-4 py-3 shadow-lg">
+          <span className="text-sm font-semibold">
+            <span className="text-carbo-green">{selectedIds.size}</span> pedido(s) selecionado(s)
+          </span>
+          <button
+            className="h-8 px-3 rounded-lg text-sm font-medium bg-carbo-green text-background hover:bg-carbo-green/90 transition-colors flex items-center gap-1.5"
+            onClick={() => setBulkAssign(true)}
+          >
+            <Users className="h-3.5 w-3.5" />
+            Atribuir vendedor
+          </button>
+          <button
+            className="h-8 px-3 rounded-lg text-sm text-muted-foreground hover:text-foreground border border-border transition-colors"
+            onClick={() => setSelectedIds(new Set())}
+          >
+            Cancelar
+          </button>
+        </div>
+      )}
+
       <EditOrderDialog
         open={!!editOrder}
         onOpenChange={open => { if (!open) setEditOrder(null); }}
         order={editOrder}
         canEditSensitive={isHead}
+      />
+
+      <BulkVendorAssignDialog
+        open={bulkAssignOpen}
+        onOpenChange={setBulkAssign}
+        selectedIds={Array.from(selectedIds)}
+        onSuccess={() => setSelectedIds(new Set())}
       />
     </BoardLayout>
   );
