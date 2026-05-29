@@ -96,7 +96,10 @@ export function useCreateBlingPedido() {
       queryClient.invalidateQueries({ queryKey: ["faturamento"] });
       queryClient.invalidateQueries({ queryKey: ["vendas"] });
       const num = data?.data?.numero || data?.data?.id || "";
-      toast.success(`Pedido criado no Bling${num ? ` (nº ${num})` : ""}! O financeiro pode converter em NF no Bling.`);
+      toast.success(
+        `Pedido criado no Bling${num ? ` (nº ${num})` : ""}! Confira o endereço de entrega e gere a NF-e no Bling.`,
+        { duration: 6000 }
+      );
     },
     onError: (err: Error) => {
       toast.error(err.message);
