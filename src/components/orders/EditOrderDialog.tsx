@@ -2,7 +2,7 @@ import React, { useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import { format } from "date-fns";
+import { format, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import {
   Dialog,
@@ -24,11 +24,13 @@ import { useUpdateOrder, type CarbozeOrder, type OrderStatus, ORDER_STATUS_LABEL
 import { useLicensees } from "@/hooks/useLicensees";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { Loader2, CalendarIcon, Repeat, Zap, UserCheck, FileText, Truck } from "lucide-react";
+import { useTeamMembers } from "@/hooks/useTeamMembers";
+import { Loader2, CalendarIcon, Repeat, Zap, UserCheck, FileText, Truck, Receipt } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const formSchema = z.object({
   // ── Aba Pedido ────────────────────────────────────────────────────────────
+  sale_date: z.date().optional().nullable(),     // data real da venda (head/command)
   customer_name: z.string().min(1, "Nome do cliente é obrigatório"),
   customer_email: z.string().email("Email inválido").optional().or(z.literal("")),
   customer_phone: z.string().optional(),
@@ -63,6 +65,9 @@ const formSchema = z.object({
   freight_type: z.enum(["CIF", "FOB"]).optional().nullable(),
   buyer_notes: z.string().optional(),
   general_notes: z.string().optional(),
+  // ── Nota Fiscal (Bling) ───────────────────────────────────────────────────
+  nf_access_key: z.string().optional(),
+  bling_nf_id: z.number().optional().nullable(),
 });
 
 type FormData = z.infer<typeof formSchema>;
@@ -71,29 +76,22 @@ interface EditOrderDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   order: CarbozeOrder | null;
+  /** If true, shows sale_date picker and vendedor select (heads/command only) */
+  canEditSensitive?: boolean;
 }
 
-export function EditOrderDialog({ open, onOpenChange, order }: EditOrderDialogProps) {
+export function EditOrderDialog({ open, onOpenChange, order, canEditSensitive = false }: EditOrderDialogProps) {
   const updateOrder = useUpdateOrder();
   const { data: licensees = [] } = useLicensees("all");
+  const { data: teamMembers = [] } = useTeamMembers();
 
-  // Load all approved collaborators to populate vendedor select
-  const { data: vendedores = [] } = useQuery({
-    queryKey: ["profiles-vendedores"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("profiles")
-        .select("id, full_name, email")
-        .eq("status", "approved")
-        .order("full_name");
-      if (error) throw error;
-      return (data || []).filter((p) => p.full_name) as { id: string; full_name: string; email: string | null }[];
-    },
-  });
+  // Only show actual vendedores (is_vendedor = true) in the dropdown
+  const vendedores = teamMembers.filter(m => m.status === "approved" && m.is_vendedor);
 
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
     defaultValues: {
+      sale_date: null,
       customer_name: "",
       customer_email: "",
       customer_phone: "",
@@ -127,6 +125,8 @@ export function EditOrderDialog({ open, onOpenChange, order }: EditOrderDialogPr
       freight_type: null,
       buyer_notes: "",
       general_notes: "",
+      nf_access_key: "",
+      bling_nf_id: null,
     },
   });
 
@@ -136,6 +136,7 @@ export function EditOrderDialog({ open, onOpenChange, order }: EditOrderDialogPr
   useEffect(() => {
     if (order) {
       form.reset({
+        sale_date: order.sale_date ? parseISO(order.sale_date) : null,
         customer_name: order.customer_name,
         customer_email: order.customer_email || "",
         customer_phone: order.customer_phone || "",
@@ -169,6 +170,8 @@ export function EditOrderDialog({ open, onOpenChange, order }: EditOrderDialogPr
         freight_type: order.freight_type || null,
         buyer_notes: order.buyer_notes || "",
         general_notes: order.general_notes || "",
+        nf_access_key: order.nf_access_key || "",
+        bling_nf_id: order.bling_nf_id ?? null,
       });
     }
   }, [order, form]);
@@ -183,6 +186,7 @@ export function EditOrderDialog({ open, onOpenChange, order }: EditOrderDialogPr
       await updateOrder.mutateAsync({
         id: order.id,
         ...data,
+        sale_date: data.sale_date ? format(data.sale_date, "yyyy-MM-dd") : null,
         customer_email: data.customer_email || undefined,
         licensee_id: data.licensee_id === "none" ? null : data.licensee_id || null,
         vendedor_id: data.vendedor_id === "none" ? null : data.vendedor_id || null,
@@ -205,6 +209,9 @@ export function EditOrderDialog({ open, onOpenChange, order }: EditOrderDialogPr
         freight_type: data.freight_type || null,
         buyer_notes: data.buyer_notes || null,
         general_notes: data.general_notes || null,
+        // NF fields
+        nf_access_key: data.nf_access_key || null,
+        bling_nf_id: data.bling_nf_id ?? null,
       });
       onOpenChange(false);
     } catch (error) {
@@ -238,6 +245,63 @@ export function EditOrderDialog({ open, onOpenChange, order }: EditOrderDialogPr
 
               {/* ── ABA PEDIDO ─────────────────────────────────────────────────── */}
               <TabsContent value="pedido" className="space-y-4 mt-4">
+
+                {/* Sale date — head/command only */}
+                {canEditSensitive && (
+                  <div className="flex items-start gap-3 rounded-xl border border-amber-500/30 bg-amber-500/5 p-3">
+                    <div className="flex-1 space-y-1.5">
+                      <p className="text-xs font-semibold text-amber-600 flex items-center gap-1.5">
+                        <CalendarIcon className="h-3.5 w-3.5" />
+                        Data real da venda
+                      </p>
+                      <p className="text-[11px] text-muted-foreground">
+                        Quando diferente da data de registro, afeta o mês/semana das metas do vendedor.
+                      </p>
+                      <FormField
+                        control={form.control}
+                        name="sale_date"
+                        render={({ field }) => (
+                          <FormItem>
+                            <Popover>
+                              <PopoverTrigger asChild>
+                                <FormControl>
+                                  <CarboButton
+                                    variant="outline"
+                                    className={cn("w-full justify-start text-left font-normal", !field.value && "text-muted-foreground")}
+                                  >
+                                    <CalendarIcon className="mr-2 h-4 w-4" />
+                                    {field.value
+                                      ? format(field.value, "dd/MM/yyyy", { locale: ptBR })
+                                      : `Padrão: ${order?.created_at ? format(parseISO(order.created_at), "dd/MM/yyyy") : "—"}`}
+                                  </CarboButton>
+                                </FormControl>
+                              </PopoverTrigger>
+                              <PopoverContent className="w-auto p-0" align="start">
+                                <Calendar
+                                  mode="single"
+                                  selected={field.value ?? undefined}
+                                  onSelect={field.onChange}
+                                  locale={ptBR}
+                                />
+                              </PopoverContent>
+                            </Popover>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      {form.watch("sale_date") && (
+                        <button
+                          type="button"
+                          className="text-[11px] text-muted-foreground underline"
+                          onClick={() => form.setValue("sale_date", null)}
+                        >
+                          Limpar (usar data de registro)
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )}
+
                 {/* Customer Info */}
                 <div className="grid grid-cols-2 gap-4">
                   <FormField
@@ -335,35 +399,37 @@ export function EditOrderDialog({ open, onOpenChange, order }: EditOrderDialogPr
                   )}
                 />
 
-                {/* Vendedor */}
-                <FormField
-                  control={form.control}
-                  name="vendedor_id"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel className="flex items-center gap-1.5">
-                        <UserCheck className="h-3.5 w-3.5 text-muted-foreground" />
-                        Vendedor
-                      </FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value}>
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Selecione o vendedor" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          <SelectItem value="none">Sem vendedor</SelectItem>
-                          {vendedores.map((v) => (
-                            <SelectItem key={v.id} value={v.id}>
-                              {v.full_name || v.email}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+                {/* Vendedor — only editable by heads/command */}
+                {canEditSensitive && (
+                  <FormField
+                    control={form.control}
+                    name="vendedor_id"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="flex items-center gap-1.5">
+                          <UserCheck className="h-3.5 w-3.5 text-muted-foreground" />
+                          Vendedor
+                        </FormLabel>
+                        <Select onValueChange={field.onChange} value={field.value}>
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Selecione o vendedor" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            <SelectItem value="none">Sem vendedor</SelectItem>
+                            {vendedores.map((v) => (
+                              <SelectItem key={v.id} value={v.id}>
+                                {v.full_name || v.email}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                )}
 
                 {/* Delivery Address */}
                 <div className="space-y-3">
@@ -841,6 +907,54 @@ export function EditOrderDialog({ open, onOpenChange, order }: EditOrderDialogPr
                       </FormItem>
                     )}
                   />
+                </div>
+
+                {/* Nota Fiscal Bling */}
+                <div className="space-y-3">
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+                    <Receipt className="h-3.5 w-3.5" />
+                    Nota Fiscal (Bling)
+                  </p>
+                  <p className="text-[11px] text-muted-foreground -mt-1">
+                    Vincule esta venda à NF emitida no Bling. A chave de acesso é preenchida automaticamente quando o financeiro importa a NF com o número <span className="font-mono font-medium">{order?.order_number}</span> na observação.
+                  </p>
+                  <div className="grid grid-cols-2 gap-4">
+                    <FormField
+                      control={form.control}
+                      name="nf_access_key"
+                      render={({ field }) => (
+                        <FormItem className="col-span-2">
+                          <FormLabel>Chave de Acesso NF-e (44 dígitos)</FormLabel>
+                          <FormControl>
+                            <Input
+                              placeholder="00000000000000000000000000000000000000000000"
+                              maxLength={44}
+                              {...field}
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="bling_nf_id"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>ID da NF no Bling</FormLabel>
+                          <FormControl>
+                            <Input
+                              type="number"
+                              placeholder="ex: 12345678"
+                              value={field.value ?? ""}
+                              onChange={e => field.onChange(e.target.value ? Number(e.target.value) : null)}
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
                 </div>
               </TabsContent>
             </Tabs>

@@ -67,20 +67,29 @@ export function useSalesTargetsWithProgress(month: string) {
 
       if (targetsError) throw targetsError;
 
-      // Fetch actual orders for the month
-      // Parse month string directly to avoid UTC-vs-local timezone bug
+      // Fetch orders for the month.
+      // Uses sale_date when set (head/command correction) with fallback to created_at.
+      // We fetch a ±1-month expanded range so corrections around month boundaries are captured,
+      // then JS-filter by effective date.
       const [yearNum, monNum] = month.split("-").map(Number);
       const lastDay = new Date(yearNum, monNum, 0).getDate();
-      const monthStart = `${month}T00:00:00Z`;
-      const monthEnd = `${yearNum}-${String(monNum).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
+      const monthStartStr = `${month}-01`;
+      const monthEndStr   = `${yearNum}-${String(monNum).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
+      // Expanded created_at window: previous month start → next month end
+      const expandedStart = new Date(yearNum, monNum - 2, 1).toISOString();
+      const expandedEnd   = new Date(yearNum, monNum + 1, 0, 23, 59, 59).toISOString();
 
       const { data: ordersRaw } = await supabase
         .from("carboze_orders")
-        .select("vendedor_id, total, items, status")
-        .gte("created_at", monthStart)
-        .lte("created_at", monthEnd + "T23:59:59Z");
+        .select("vendedor_id, total, items, status, created_at, sale_date")
+        .gte("created_at", expandedStart)
+        .lte("created_at", expandedEnd);
 
-      const orders = (ordersRaw || []).filter(o => o.status !== "cancelled");
+      const orders = (ordersRaw || []).filter(o => {
+        if (o.status === "cancelled") return false;
+        const effectiveDate = o.sale_date ?? o.created_at.substring(0, 10);
+        return effectiveDate >= monthStartStr && effectiveDate <= monthEndStr;
+      });
 
       // Calculate progress per vendedor
       const progressMap: Record<string, { amount: number; qty: number }> = {};
@@ -214,13 +223,20 @@ export function useWeeklyTopVendedores() {
     refetchIntervalInBackground: false,
     queryFn: async () => {
       const weekStart = commercialWeekStart();
+      // Expand by 7 days to catch sale_date corrections
+      const expandedStart = new Date(weekStart);
+      expandedStart.setDate(expandedStart.getDate() - 7);
 
       const { data: ordersRaw } = await supabase
         .from("carboze_orders")
-        .select("vendedor_id, total, status")
-        .gte("created_at", weekStart.toISOString());
+        .select("vendedor_id, total, status, created_at, sale_date")
+        .gte("created_at", expandedStart.toISOString());
 
-      const orders = (ordersRaw || []).filter(o => o.status !== "cancelled" && o.vendedor_id);
+      const orders = (ordersRaw || []).filter(o => {
+        if (o.status === "cancelled" || !o.vendedor_id) return false;
+        const effectiveDate = new Date(o.sale_date ?? o.created_at);
+        return effectiveDate >= weekStart;
+      });
       const totals: Record<string, number> = {};
       for (const order of orders || []) {
         if (!order.vendedor_id) continue;
@@ -270,13 +286,19 @@ export function useWeeklyVendedoresData(teamFilter?: "todos" | "cgc" | "expansao
     queryKey: ["weekly-vendedores-data", teamFilter],
     queryFn: async () => {
       const weekStart = commercialWeekStart();
+      const expandedStart = new Date(weekStart);
+      expandedStart.setDate(expandedStart.getDate() - 7);
 
       const { data: ordersRaw } = await supabase
         .from("carboze_orders")
-        .select("vendedor_id, total, status")
-        .gte("created_at", weekStart.toISOString());
+        .select("vendedor_id, total, status, created_at, sale_date")
+        .gte("created_at", expandedStart.toISOString());
 
-      const orders = (ordersRaw || []).filter(o => o.status !== "cancelled" && o.vendedor_id);
+      const orders = (ordersRaw || []).filter(o => {
+        if (o.status === "cancelled" || !o.vendedor_id) return false;
+        const effectiveDate = new Date(o.sale_date ?? o.created_at);
+        return effectiveDate >= weekStart;
+      });
       const totals: Record<string, { total: number; count: number }> = {};
       for (const order of orders || []) {
         if (!order.vendedor_id) continue;
