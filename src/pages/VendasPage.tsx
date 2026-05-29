@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { format, startOfMonth, addMonths, subMonths } from "date-fns";
+import { format, startOfMonth, addMonths, subMonths, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { useQuery } from "@tanstack/react-query";
 import { BoardLayout } from "@/components/layouts/BoardLayout";
@@ -8,11 +8,12 @@ import { CarboBadge } from "@/components/ui/carbo-badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ChevronLeft, ChevronRight, Search, ShoppingBag, TrendingUp, Package } from "lucide-react";
+import { ChevronLeft, ChevronRight, Search, ShoppingBag, TrendingUp, Package, Pencil } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTeamMembers } from "@/hooks/useTeamMembers";
-import type { OrderItem } from "@/hooks/useCarbozeOrders";
+import type { OrderItem, CarbozeOrder } from "@/hooks/useCarbozeOrders";
+import { EditOrderDialog } from "@/components/orders/EditOrderDialog";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -21,6 +22,7 @@ interface VendaRow {
   id: string;
   order_number: string;
   created_at: string;
+  sale_date: string | null;
   customer_name: string;
   delivery_city: string | null;
   delivery_state: string | null;
@@ -29,6 +31,8 @@ interface VendaRow {
   status: string;
   vendedor_id: string | null;
   vendedor_name: string | null;
+  // Full order for editing
+  _raw?: CarbozeOrder;
 }
 
 const STATUS_LABEL: Record<string, string> = {
@@ -54,7 +58,12 @@ function fmtBRL(v: number) {
 }
 
 function fmtDate(s: string) {
-  return format(new Date(s), "dd/MM/yyyy", { locale: ptBR });
+  // Use parseISO so "2026-05-29" isn't shifted by local timezone offset
+  return format(parseISO(s.length === 10 ? s + "T00:00:00" : s), "dd/MM/yyyy", { locale: ptBR });
+}
+
+function effectiveDate(row: VendaRow): string {
+  return row.sale_date ?? row.created_at.substring(0, 10);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -69,19 +78,24 @@ function useVendas(month: Date, vendedorIdFilter: string | null) {
   return useQuery({
     queryKey: ["vendas", month.toISOString().slice(0, 7), vendedorIdFilter, isHead, user?.id],
     queryFn: async () => {
-      const monthStart = startOfMonth(month).toISOString().split("T")[0];
-      const monthEnd   = new Date(month.getFullYear(), month.getMonth() + 1, 0)
-        .toISOString().split("T")[0];
+      const yr = month.getFullYear();
+      const mo = month.getMonth() + 1; // 1-based
+      const lastDay = new Date(yr, mo, 0).getDate();
+      const monthStartStr = `${yr}-${String(mo).padStart(2, "0")}-01`;
+      const monthEndStr   = `${yr}-${String(mo).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
+
+      // Expand created_at range ±1 month to catch sale_date corrections near boundaries
+      const expandedStart = new Date(yr, mo - 2, 1).toISOString();
+      const expandedEnd   = new Date(yr, mo + 1, 0, 23, 59, 59).toISOString();
 
       let query = supabase
         .from("carboze_orders")
-        .select("id, order_number, created_at, customer_name, delivery_city, delivery_state, items, total, status, vendedor_id, vendedor_name")
-        .gte("created_at", monthStart)
-        .lte("created_at", monthEnd + "T23:59:59Z")
+        .select("id, order_number, created_at, sale_date, customer_name, delivery_city, delivery_state, items, total, status, vendedor_id, vendedor_name, customer_email, customer_phone, delivery_address, delivery_zip, discount, shipping_cost, subtotal, notes, internal_notes, order_type, is_recurring, recurrence_interval_days, next_delivery_date, licensee_id, has_commission, commission_rate, commission_amount, commission_paid_at, confirmed_at, invoiced_at, invoice_number, shipped_at, tracking_code, tracking_url, delivered_at, cancelled_at, cancellation_reason, rv_flow_type, linha, modalidade, created_op_id, created_os_id, sku_id, is_test, source_file, external_ref, po_number, po_date, ie, billing_address, billing_city, billing_state, billing_zip, billing_contact_name, billing_contact_email, payment_terms, freight_type, buyer_notes, general_notes, nf_access_key, bling_nf_id, created_by, updated_at, parent_order_id, last_recurrence_order_id")
+        .gte("created_at", expandedStart)
+        .lte("created_at", expandedEnd)
         .order("created_at", { ascending: false });
 
       if (!isHead) {
-        // Vendedor só vê seus próprios pedidos
         query = query.eq("vendedor_id", user!.id);
       } else if (vendedorIdFilter && vendedorIdFilter !== "__all__") {
         query = query.eq("vendedor_id", vendedorIdFilter);
@@ -90,10 +104,26 @@ function useVendas(month: Date, vendedorIdFilter: string | null) {
       const { data, error } = await query;
       if (error) throw error;
 
-      return (data || []).map((row): VendaRow => ({
-        ...row,
+      // JS-filter by effective date (sale_date if set, else created_at date part)
+      const rows = (data || []).filter(row => {
+        const eff = (row.sale_date as string | null) ?? (row.created_at as string).substring(0, 10);
+        return eff >= monthStartStr && eff <= monthEndStr;
+      });
+
+      return rows.map((row): VendaRow => ({
+        id: row.id,
+        order_number: row.order_number,
+        created_at: row.created_at,
+        sale_date: (row.sale_date as string | null) ?? null,
+        customer_name: row.customer_name,
+        delivery_city: row.delivery_city ?? null,
+        delivery_state: row.delivery_state ?? null,
         items: Array.isArray(row.items) ? (row.items as unknown as OrderItem[]) : [],
         total: Number(row.total || 0),
+        status: row.status,
+        vendedor_id: row.vendedor_id ?? null,
+        vendedor_name: row.vendedor_name ?? null,
+        _raw: row as unknown as CarbozeOrder,
       }));
     },
     enabled: !!user,
@@ -108,19 +138,17 @@ export default function VendasPage() {
   const [search, setSearch]         = useState("");
   const [vendedorFilter, setVendedor] = useState("__all__");
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [editOrder, setEditOrder]   = useState<CarbozeOrder | null>(null);
 
   const { profile } = useAuth();
   const isHead =
     profile?.funcao === "head" || profile?.secondary_funcao === "head" ||
+    profile?.funcao === "ceo" ||
     profile?.department === "command";
 
   const { data: teamMembers = [] } = useTeamMembers();
-  const vendedores = teamMembers.filter(m =>
-    m.status === "approved" && (
-      m.department === "cgc" || m.department === "expansao" ||
-      m.secondary_department === "cgc" || m.secondary_department === "expansao"
-    )
-  );
+  // Only flagged vendedores appear in filter dropdown
+  const vendedores = teamMembers.filter(m => m.status === "approved" && m.is_vendedor);
 
   const { data: vendas = [], isLoading } = useVendas(month, vendedorFilter);
 
@@ -248,6 +276,7 @@ export default function VendasPage() {
                     <th className="text-left p-3 font-medium text-xs text-muted-foreground uppercase tracking-wide">Cidade/UF</th>
                     {isHead && <th className="text-left p-3 font-medium text-xs text-muted-foreground uppercase tracking-wide">Vendedor</th>}
                     <th className="text-right p-3 font-medium text-xs text-muted-foreground uppercase tracking-wide">Total</th>
+                    {isHead && <th className="w-10 p-3" />}
                   </tr>
                 </thead>
                 <tbody>
@@ -267,19 +296,37 @@ export default function VendasPage() {
                           </CarboBadge>
                         </td>
                         <td className="p-3 font-mono text-xs font-medium">{venda.order_number}</td>
-                        <td className="p-3 text-muted-foreground whitespace-nowrap">{fmtDate(venda.created_at)}</td>
+                        <td className="p-3 text-muted-foreground whitespace-nowrap">
+                          <span title={venda.sale_date ? `Registrado: ${fmtDate(venda.created_at)}` : undefined}>
+                            {fmtDate(effectiveDate(venda))}
+                          </span>
+                          {venda.sale_date && venda.sale_date !== venda.created_at.substring(0, 10) && (
+                            <span className="ml-1 text-[10px] text-amber-500 font-medium">✱</span>
+                          )}
+                        </td>
                         <td className="p-3 font-medium max-w-[180px] truncate">{venda.customer_name}</td>
                         <td className="p-3 text-muted-foreground whitespace-nowrap">
                           {[venda.delivery_city, venda.delivery_state].filter(Boolean).join("/") || "—"}
                         </td>
                         {isHead && <td className="p-3 text-muted-foreground">{venda.vendedor_name || "—"}</td>}
                         <td className="p-3 text-right font-bold tabular-nums">{fmtBRL(venda.total)}</td>
+                        {isHead && (
+                          <td className="p-3 text-right">
+                            <button
+                              onClick={e => { e.stopPropagation(); setEditOrder(venda._raw ?? null); }}
+                              className="h-7 w-7 inline-flex items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                              title="Editar pedido"
+                            >
+                              <Pencil className="h-3.5 w-3.5" />
+                            </button>
+                          </td>
+                        )}
                       </tr>
 
                       {/* Expandable products row */}
                       {expandedId === venda.id && venda.items.length > 0 && (
                         <tr key={`${venda.id}-items`} className="border-b bg-muted/10">
-                          <td colSpan={isHead ? 7 : 6} className="px-6 py-3">
+                          <td colSpan={isHead ? 8 : 6} className="px-6 py-3">
                             <div className="flex items-center gap-2 mb-2">
                               <Package className="h-3.5 w-3.5 text-muted-foreground" />
                               <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Produtos</p>
@@ -313,6 +360,13 @@ export default function VendasPage() {
           </p>
         )}
       </div>
+
+      <EditOrderDialog
+        open={!!editOrder}
+        onOpenChange={open => { if (!open) setEditOrder(null); }}
+        order={editOrder}
+        canEditSensitive={isHead}
+      />
     </BoardLayout>
   );
 }

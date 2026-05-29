@@ -99,6 +99,11 @@ export interface CarbozeOrder {
   freight_type: "CIF" | "FOB" | null;
   buyer_notes: string | null;           // Observações do comprador
   general_notes: string | null;         // Observações gerais
+  // Data corrigida da venda (head/command podem alterar para ajuste de mês/semana)
+  sale_date: string | null;             // YYYY-MM-DD; NULL = usar created_at
+  // Nota Fiscal (vinculada via order_number na observação do Bling)
+  nf_access_key: string | null;         // chave de acesso 44 dígitos NF-e
+  bling_nf_id: number | null;           // ID interno da NF no Bling
   // Joined data
   licensee?: {
     id: string;
