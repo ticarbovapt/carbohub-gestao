@@ -21,7 +21,7 @@ export function BlingPreviewDialog({ open, onOpenChange, preview, loading, onCon
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
+      <DialogContent className="max-w-xl max-h-[85vh] overflow-y-auto overflow-x-hidden">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Send className="h-5 w-5 text-carbo-green" />
@@ -87,17 +87,17 @@ export function BlingPreviewDialog({ open, onOpenChange, preview, loading, onCon
               </p>
               <div className="rounded-lg bg-muted/30 divide-y">
                 {preview.items_summary.map((item, i) => (
-                  <div key={i} className="flex items-center justify-between px-3 py-1.5 text-xs">
-                    <div className="min-w-0">
-                      <p className="font-medium truncate">{item.name}</p>
-                      {item.codigo && <p className="text-[10px] text-muted-foreground font-mono">{item.codigo}</p>}
+                  <div key={i} className="flex items-start justify-between gap-2 px-3 py-1.5 text-xs">
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium break-words">{item.name}</p>
+                      {item.codigo && <p className="text-[10px] text-muted-foreground font-mono break-all">{item.codigo}</p>}
                     </div>
                     {item.matched ? (
-                      <span className="text-[10px] text-green-500 flex items-center gap-0.5 shrink-0">
+                      <span className="text-[10px] text-green-500 flex items-center gap-0.5 shrink-0 whitespace-nowrap">
                         <CheckCircle2 className="h-3 w-3" /> casou no catálogo
                       </span>
                     ) : (
-                      <span className="text-[10px] text-amber-500 flex items-center gap-0.5 shrink-0">
+                      <span className="text-[10px] text-amber-500 flex items-center gap-0.5 shrink-0 whitespace-nowrap">
                         <AlertTriangle className="h-3 w-3" /> descrição livre
                       </span>
                     )}
