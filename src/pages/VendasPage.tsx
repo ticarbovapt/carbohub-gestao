@@ -88,9 +88,11 @@ function useVendas(month: Date, vendedorIdFilter: string | null) {
       const expandedStart = new Date(yr, mo - 2, 1).toISOString();
       const expandedEnd   = new Date(yr, mo + 1, 0, 23, 59, 59).toISOString();
 
+      // Use select("*") so the query never breaks if a column listed in the
+      // TS type hasn't been migrated yet (e.g. sale_date before its migration runs).
       let query = supabase
         .from("carboze_orders")
-        .select("id, order_number, created_at, sale_date, customer_name, delivery_city, delivery_state, items, total, status, vendedor_id, vendedor_name, customer_email, customer_phone, delivery_address, delivery_zip, discount, shipping_cost, subtotal, notes, internal_notes, order_type, is_recurring, recurrence_interval_days, next_delivery_date, licensee_id, has_commission, commission_rate, commission_amount, commission_paid_at, confirmed_at, invoiced_at, invoice_number, shipped_at, tracking_code, tracking_url, delivered_at, cancelled_at, cancellation_reason, rv_flow_type, linha, modalidade, created_op_id, created_os_id, sku_id, is_test, source_file, external_ref, po_number, po_date, ie, billing_address, billing_city, billing_state, billing_zip, billing_contact_name, billing_contact_email, payment_terms, freight_type, buyer_notes, general_notes, nf_access_key, bling_nf_id, created_by, updated_at, parent_order_id, last_recurrence_order_id")
+        .select("*")
         .gte("created_at", expandedStart)
         .lte("created_at", expandedEnd)
         .order("created_at", { ascending: false });
@@ -104,8 +106,9 @@ function useVendas(month: Date, vendedorIdFilter: string | null) {
       const { data, error } = await query;
       if (error) throw error;
 
-      // JS-filter by effective date (sale_date if set, else created_at date part)
-      const rows = (data || []).filter(row => {
+      // JS-filter by effective date (sale_date if set, else created_at date part).
+      // sale_date may be absent if the migration hasn't run — falls back to created_at.
+      const rows = ((data || []) as any[]).filter(row => {
         const eff = (row.sale_date as string | null) ?? (row.created_at as string).substring(0, 10);
         return eff >= monthStartStr && eff <= monthEndStr;
       });
