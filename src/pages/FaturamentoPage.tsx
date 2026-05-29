@@ -9,9 +9,13 @@ import { Input } from "@/components/ui/input";
 import {
   Receipt, Search, CheckCircle2, Clock, Copy, Send,
   ChevronDown, ChevronRight, ExternalLink, AlertCircle,
-  MapPin, CreditCard, Truck, FileText, Building2,
+  MapPin, CreditCard, Truck, FileText, Building2, Eye,
 } from "lucide-react";
-import { useFaturamento, useCreateBlingPedido, type FaturamentoOrder } from "@/hooks/useFaturamento";
+import {
+  useFaturamento, useCreateBlingPedido, usePreviewBlingPedido,
+  type FaturamentoOrder, type BlingPreview,
+} from "@/hooks/useFaturamento";
+import { BlingPreviewDialog } from "@/components/orders/BlingPreviewDialog";
 import { toast } from "sonner";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -215,9 +219,13 @@ export default function FaturamentoPage() {
   const [search, setSearch]       = useState("");
   const [expandedId, setExpanded] = useState<string | null>(null);
   const [creatingId, setCreating] = useState<string | null>(null);
+  const [previewOpen, setPreviewOpen]   = useState(false);
+  const [preview, setPreview]           = useState<BlingPreview | null>(null);
+  const [previewOrderId, setPreviewId]  = useState<string | null>(null);
 
   const { data: orders = [], isLoading } = useFaturamento(showAll);
   const createBlingPedido = useCreateBlingPedido();
+  const previewBlingPedido = usePreviewBlingPedido();
 
   const filtered = search
     ? orders.filter(o =>
@@ -241,6 +249,29 @@ export default function FaturamentoPage() {
     setCreating(order.id);
     try {
       await createBlingPedido.mutateAsync(order.id);
+    } finally {
+      setCreating(null);
+    }
+  }
+
+  async function handlePreview(order: FaturamentoOrder) {
+    setPreviewId(order.id);
+    setPreview(null);
+    setPreviewOpen(true);
+    try {
+      const result = await previewBlingPedido.mutateAsync(order.id);
+      setPreview(result);
+    } catch {
+      setPreviewOpen(false);
+    }
+  }
+
+  async function handleConfirmFromPreview() {
+    if (!previewOrderId) return;
+    setCreating(previewOrderId);
+    try {
+      await createBlingPedido.mutateAsync(previewOrderId);
+      setPreviewOpen(false);
     } finally {
       setCreating(null);
     }
@@ -410,6 +441,20 @@ export default function FaturamentoPage() {
 
                         {!hasNF && (
                           <CarboButton
+                            variant="outline"
+                            size="sm"
+                            className="h-8 gap-1.5 text-xs"
+                            onClick={() => handlePreview(order)}
+                            disabled={previewBlingPedido.isPending}
+                            title="Ver exatamente o que será enviado ao Bling, sem enviar nada"
+                          >
+                            <Eye className="h-3.5 w-3.5" />
+                            <span className="hidden md:inline">Pré-visualizar</span>
+                          </CarboButton>
+                        )}
+
+                        {!hasNF && (
+                          <CarboButton
                             size="sm"
                             className="h-8 gap-1.5 text-xs"
                             onClick={() => handleCreateBling(order)}
@@ -459,6 +504,15 @@ export default function FaturamentoPage() {
           {total} pedido(s) aguardando NF · Vinculação automática a cada 15 min
         </p>
       </div>
+
+      <BlingPreviewDialog
+        open={previewOpen}
+        onOpenChange={setPreviewOpen}
+        preview={preview}
+        loading={previewBlingPedido.isPending}
+        onConfirmSend={handleConfirmFromPreview}
+        sending={!!creatingId}
+      />
     </BoardLayout>
   );
 }
