@@ -41,9 +41,19 @@ export interface FaturamentoOrder {
   invoice_number: string | null;
 }
 
-export function useFaturamento(showAll = false) {
+export interface FaturamentoParams {
+  month: Date;
+  search?: string;
+  showAll?: boolean;
+}
+
+export function useFaturamento({ month, search = "", showAll = false }: FaturamentoParams) {
+  const monthKey = `${month.getFullYear()}-${month.getMonth() + 1}`;
+  // Sanitiza o termo para não quebrar a sintaxe do filtro .or do PostgREST
+  const term = search.trim().replace(/[,()]/g, " ").trim();
+
   return useQuery({
-    queryKey: ["faturamento", showAll],
+    queryKey: ["faturamento", monthKey, term, showAll],
     queryFn: async () => {
       let query = supabase
         .from("carboze_orders")
@@ -53,6 +63,20 @@ export function useFaturamento(showAll = false) {
 
       if (!showAll) {
         query = query.is("bling_nf_id", null);
+      }
+
+      if (term) {
+        // Busca global: ignora o mês e vasculha o banco inteiro (limitado para segurança)
+        query = query
+          .or(`customer_name.ilike.%${term}%,order_number.ilike.%${term}%`)
+          .limit(300);
+      } else {
+        // Sem busca: limita ao mês selecionado (filtro no servidor)
+        const yr = month.getFullYear();
+        const mo = month.getMonth();
+        const start = new Date(yr, mo, 1).toISOString();
+        const end = new Date(yr, mo + 1, 0, 23, 59, 59).toISOString();
+        query = query.gte("created_at", start).lte("created_at", end);
       }
 
       const { data, error } = await query;

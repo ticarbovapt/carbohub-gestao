@@ -1,13 +1,15 @@
-import { useState } from "react";
-import { format, parseISO } from "date-fns";
+import { useState, useEffect } from "react";
+import { format, parseISO, startOfMonth, addMonths, subMonths } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { BoardLayout } from "@/components/layouts/BoardLayout";
 import { CarboCard, CarboCardContent } from "@/components/ui/carbo-card";
 import { CarboBadge } from "@/components/ui/carbo-badge";
 import { CarboButton } from "@/components/ui/carbo-button";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
   Receipt, Search, CheckCircle2, Clock, Copy, Send,
+  ChevronLeft, ChevronRight,
   ChevronDown, ChevronRight, ExternalLink, AlertCircle,
   MapPin, CreditCard, Truck, FileText, Building2, Eye, Link2,
 } from "lucide-react";
@@ -217,9 +219,13 @@ function OrderDetail({ order }: { order: FaturamentoOrder }) {
 // ─────────────────────────────────────────────────────────────────────────────
 // Page
 // ─────────────────────────────────────────────────────────────────────────────
+const PAGE_SIZE = 20;
+
 export default function FaturamentoPage() {
   const [showAll, setShowAll]     = useState(false);
   const [search, setSearch]       = useState("");
+  const [month, setMonth]         = useState(() => startOfMonth(new Date()));
+  const [page, setPage]           = useState(0);
   const [expandedId, setExpanded] = useState<string | null>(null);
   const [creatingId, setCreating] = useState<string | null>(null);
   const [previewOpen, setPreviewOpen]   = useState(false);
@@ -228,7 +234,9 @@ export default function FaturamentoPage() {
   const [origin, setOrigin]             = useState<"native" | "bling">("native");
   const [linkNFOrder, setLinkNFOrder]   = useState<FaturamentoOrder | null>(null);
 
-  const { data: orders = [], isLoading } = useFaturamento(showAll);
+  const isSearching = search.trim().length > 0;
+
+  const { data: orders = [], isLoading } = useFaturamento({ month, search, showAll });
   const createBlingPedido = useCreateBlingPedido();
   const previewBlingPedido = usePreviewBlingPedido();
 
@@ -241,17 +249,22 @@ export default function FaturamentoPage() {
 
   const byOrigin = orders.filter(o => (origin === "bling" ? isFromBling(o) : !isFromBling(o)));
 
-  const filtered = search
-    ? byOrigin.filter(o =>
-        o.customer_name?.toLowerCase().includes(search.toLowerCase()) ||
-        o.order_number?.toLowerCase().includes(search.toLowerCase())
-      )
-    : byOrigin;
+  // KPIs (escopo do mês/busca atual, antes de paginar)
+  const total      = byOrigin.length;
+  const semDados   = byOrigin.filter(o => !o.ie && !o.billing_address && !o.payment_terms).length;
+  const valorTotal = byOrigin.reduce((s, o) => s + o.total, 0);
 
-  // KPIs
-  const total      = filtered.length;
-  const semDados   = filtered.filter(o => !o.ie && !o.billing_address && !o.payment_terms).length;
-  const valorTotal = filtered.reduce((s, o) => s + o.total, 0);
+  // Paginação client-side (o dataset já vem limitado ao mês/busca pelo servidor)
+  const pageCount = Math.max(1, Math.ceil(byOrigin.length / PAGE_SIZE));
+  const safePage  = Math.min(page, pageCount - 1);
+  const filtered  = byOrigin.slice(safePage * PAGE_SIZE, safePage * PAGE_SIZE + PAGE_SIZE);
+
+  // Reset da página ao trocar de mês, aba, busca ou filtro de NF
+  useEffect(() => { setPage(0); }, [month, origin, search, showAll]);
+
+  const today = new Date();
+  const isCurrentMonth =
+    month.getFullYear() === today.getFullYear() && month.getMonth() === today.getMonth();
 
   async function handleCopy(order: FaturamentoOrder) {
     const text = buildCopyText(order);
@@ -305,12 +318,29 @@ export default function FaturamentoPage() {
               Pedidos confirmados aguardando emissão de Nota Fiscal no Bling
             </p>
           </div>
-          <button
-            className={`text-xs px-3 py-1.5 rounded-full border transition-colors whitespace-nowrap ${showAll ? "bg-carbo-green/20 border-carbo-green/40 text-carbo-green font-semibold" : "border-border text-muted-foreground hover:border-foreground/30"}`}
-            onClick={() => setShowAll(v => !v)}
-          >
-            {showAll ? "Mostrando todos" : "Só sem NF"}
-          </button>
+          <div className="flex items-center gap-2">
+            {/* Navegador de mês — desabilitado durante busca global */}
+            <div className={`flex items-center gap-1 bg-muted/40 rounded-lg px-2 py-1.5 ${isSearching ? "opacity-40 pointer-events-none" : ""}`}>
+              <Button variant="ghost" size="icon" className="h-7 w-7"
+                onClick={() => setMonth(m => startOfMonth(subMonths(m, 1)))}>
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              <span className="text-sm font-semibold w-28 text-center capitalize">
+                {format(month, "MMM 'de' yyyy", { locale: ptBR })}
+              </span>
+              <Button variant="ghost" size="icon" className="h-7 w-7"
+                onClick={() => setMonth(m => startOfMonth(addMonths(m, 1)))}
+                disabled={isCurrentMonth}>
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
+            <button
+              className={`text-xs px-3 py-1.5 rounded-full border transition-colors whitespace-nowrap ${showAll ? "bg-carbo-green/20 border-carbo-green/40 text-carbo-green font-semibold" : "border-border text-muted-foreground hover:border-foreground/30"}`}
+              onClick={() => setShowAll(v => !v)}
+            >
+              {showAll ? "Mostrando todos" : "Só sem NF"}
+            </button>
+          </div>
         </div>
 
         {/* Instrução */}
@@ -377,11 +407,16 @@ export default function FaturamentoPage() {
         <div className="relative">
           <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
           <Input
-            placeholder="Buscar por cliente ou nº pedido..."
+            placeholder="Buscar por cliente ou nº pedido (em todo o histórico)..."
             value={search}
             onChange={e => setSearch(e.target.value)}
             className="pl-8"
           />
+          {isSearching && (
+            <span className="absolute right-3 top-2 text-[10px] text-carbo-green font-medium">
+              busca global (ignora o mês)
+            </span>
+          )}
         </div>
 
         {/* List */}
@@ -574,8 +609,38 @@ export default function FaturamentoPage() {
           </div>
         )}
 
+        {/* Paginação */}
+        {!isLoading && byOrigin.length > PAGE_SIZE && (
+          <div className="flex items-center justify-center gap-3 pt-1">
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-1.5"
+              onClick={() => setPage(p => Math.max(0, p - 1))}
+              disabled={safePage === 0}
+            >
+              <ChevronLeft className="h-4 w-4" /> Anterior
+            </Button>
+            <span className="text-sm text-muted-foreground tabular-nums">
+              Página {safePage + 1} de {pageCount}
+            </span>
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-1.5"
+              onClick={() => setPage(p => Math.min(pageCount - 1, p + 1))}
+              disabled={safePage >= pageCount - 1}
+            >
+              Próxima <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
+        )}
+
         <p className="text-xs text-center text-muted-foreground">
-          {total} pedido(s) aguardando NF · Vinculação automática a cada 15 min
+          {isSearching
+            ? `${total} resultado(s) na busca global`
+            : `${total} pedido(s) em ${format(month, "MMMM 'de' yyyy", { locale: ptBR })}`}
+          {" · "}Vinculação automática a cada 15 min
         </p>
       </div>
 
