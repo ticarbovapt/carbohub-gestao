@@ -157,9 +157,10 @@ export default function BlingNFsPage() {
     ? undefined
     : `${month.getFullYear()}-${String(month.getMonth() + 1).padStart(2, "0")}`;
 
+  // Busca TODAS as NFs do mês (sem filtro de status) — para os KPIs de balanço
+  // refletirem o mês inteiro, inclusive arquivadas e vinculadas.
   const { data: nfes = [], isLoading } = useBlingNFes({
     month: monthStr,
-    matchStatus: matchFilter,
     search,
   });
 
@@ -167,12 +168,18 @@ export default function BlingNFsPage() {
     month.getFullYear() === today.getFullYear() &&
     month.getMonth() === today.getMonth();
 
-  // ── KPIs ──────────────────────────────────────────────────────────────────
+  // ── KPIs (mês inteiro, inclusive arquivadas — balanço fiel) ────────────────
   const total      = nfes.length;
   const vinculadas = nfes.filter(n => n.match_status === "matched" || n.match_status === "manual").length;
   const semCodigo  = nfes.filter(n => n.match_status === "no_code").length;
   const invalidas  = nfes.filter(n => n.match_status === "invalid_code").length;
+  const arquivadas = nfes.filter(n => n.match_status === "ignored").length;
   const totalValor = nfes.reduce((s, n) => s + (n.valor_total ?? 0), 0);
+
+  // ── Tabela (visão de trabalho): "Todos" esconde arquivadas ─────────────────
+  const visibleNfes = matchFilter === "all"
+    ? nfes.filter(n => n.match_status !== "ignored")
+    : nfes.filter(n => n.match_status === matchFilter);
 
   // ── Trigger sync manual ───────────────────────────────────────────────────
   async function handleSync() {
@@ -346,11 +353,15 @@ export default function BlingNFsPage() {
           <div className="space-y-2">
             {[1, 2, 3, 4, 5].map(i => <div key={i} className="h-14 rounded-xl bg-muted/40 animate-pulse" />)}
           </div>
-        ) : nfes.length === 0 ? (
+        ) : visibleNfes.length === 0 ? (
           <CarboCard>
             <CarboCardContent className="py-16 text-center space-y-3">
               <FileText className="h-12 w-12 mx-auto text-muted-foreground/30" />
-              <p className="text-muted-foreground">Nenhuma nota fiscal encontrada.</p>
+              <p className="text-muted-foreground">
+                {matchFilter === "all" && arquivadas > 0
+                  ? `Nenhuma NF ativa nesta visão (${arquivadas} arquivada${arquivadas !== 1 ? "s" : ""} — veja no filtro "Arquivadas").`
+                  : "Nenhuma nota fiscal encontrada."}
+              </p>
               <p className="text-xs text-muted-foreground">
                 Clique em "Sincronizar NFs" para importar notas do Bling.
               </p>
@@ -374,7 +385,7 @@ export default function BlingNFsPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {nfes.map(nf => (
+                  {visibleNfes.map(nf => (
                     <tr
                       key={nf.id}
                       className="border-b transition-colors hover:bg-muted/10"
@@ -478,8 +489,9 @@ export default function BlingNFsPage() {
         )}
 
         <p className="text-xs text-center text-muted-foreground">
-          {total} nota{total !== 1 ? "s" : ""} {showAllMonths ? "no total" : "neste mês"} ·{" "}
-          Sincronizado automaticamente pelo cron do Bling a cada 15 min
+          {total} nota{total !== 1 ? "s" : ""} {showAllMonths ? "no total" : "neste mês"}
+          {arquivadas > 0 && ` · ${arquivadas} arquivada${arquivadas !== 1 ? "s" : ""} (contam no balanço)`}
+          {" · "}Sincronização automática às 7h e 13h (Fortaleza)
         </p>
       </div>
     </BoardLayout>

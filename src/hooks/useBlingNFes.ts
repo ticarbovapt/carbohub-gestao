@@ -69,11 +69,11 @@ export function useBlingNFes(filters: BlingNFeFilters = {}) {
           .lte("data_emissao", `${filters.month}-${String(lastDay).padStart(2, "0")}`);
       }
 
+      // Filtro de status é aplicado no cliente (BlingNFsPage) para que os KPIs de
+      // balanço do mês considerem TODAS as NFs (inclusive arquivadas), enquanto a
+      // tabela mostra a visão filtrada. Aqui só filtramos se explicitamente pedido.
       if (filters.matchStatus && filters.matchStatus !== "all") {
         query = query.eq("match_status", filters.matchStatus);
-      } else {
-        // "Todos" esconde as arquivadas — elas só aparecem no filtro "Arquivadas"
-        query = query.neq("match_status", "ignored");
       }
 
       const { data, error } = await query;
