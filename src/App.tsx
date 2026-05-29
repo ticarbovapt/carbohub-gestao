@@ -73,6 +73,7 @@ const VendasPage           = lazy(() => import("./pages/VendasPage"));
 const NotFound            = lazy(() => import("./pages/NotFound"));
 const AIAssistantPage     = lazy(() => import("./pages/AIAssistantPage"));
 const BlingIntegration    = lazy(() => import("./pages/BlingIntegration"));
+const BlingNFsPage        = lazy(() => import("./pages/BlingNFsPage"));
 const NFSeImportPage      = lazy(() => import("./pages/admin/NFSeImportPage"));
 const ViagensPage         = lazy(() => import("./pages/ViagensPage"));
 const BlingCallback       = lazy(() => import("./pages/BlingCallback"));
@@ -260,6 +261,7 @@ function AnimatedRoutes() {
             {/* Bling Integration */}
             <Route path="/integrations/bling/callback" element={<BlingCallback />} />
             <Route path="/integrations/bling" element={<ProtectedRoute screenId="bling"><BlingIntegration /></ProtectedRoute>} />
+            <Route path="/integrations/bling/nfs" element={<ProtectedRoute screenId="bling-nfs"><BlingNFsPage /></ProtectedRoute>} />
 
             {/* Viagens & PC */}
             <Route path="/viagens" element={<ProtectedRoute screenId="viagens"><ViagensPage /></ProtectedRoute>} />
