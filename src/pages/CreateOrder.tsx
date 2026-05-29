@@ -176,9 +176,11 @@ export default function CreateOrder() {
   const [cnpjError, setCnpjError] = useState<string | null>(null);
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
 
-  // Gestores podem selecionar outro vendedor; vendedores ficam travados no próprio perfil
-  const isVendedor = VENDEDOR_FUNCOES.includes(profile?.funcao ?? "");
-  const canOverrideVendedor = !isVendedor; // head, gerente, coordenador, TI, etc.
+  // Heads (em qualquer dept) e membros do command podem atribuir o pedido a outro vendedor
+  const canOverrideVendedor =
+    profile?.funcao === "head" ||
+    profile?.funcao === "ceo"  ||
+    profile?.department === "command";
   const [overrideVendedorId, setOverrideVendedorId] = useState<string>("");
 
   const vendedoresOnly = (teamMembers || []).filter(
