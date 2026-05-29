@@ -156,6 +156,8 @@ interface CnpjData {
   raw: any;
 }
 
+const VENDEDOR_FUNCOES = ["vendedor_b2b", "vendedor_b2c"];
+
 export default function CreateOrder() {
   const navigate = useNavigate();
   const { profile } = useAuth();
@@ -173,6 +175,27 @@ export default function CreateOrder() {
   const [cnpjFound, setCnpjFound] = useState(false);
   const [cnpjError, setCnpjError] = useState<string | null>(null);
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
+
+  // Gestores podem selecionar outro vendedor; vendedores ficam travados no próprio perfil
+  const isVendedor = VENDEDOR_FUNCOES.includes(profile?.funcao ?? "");
+  const canOverrideVendedor = !isVendedor; // head, gerente, coordenador, TI, etc.
+  const [overrideVendedorId, setOverrideVendedorId] = useState<string>("");
+
+  const vendedoresOnly = (teamMembers || []).filter(
+    (m) => m.funcao && VENDEDOR_FUNCOES.includes(m.funcao)
+  );
+
+  // ID e nome efetivos do vendedor para o pedido
+  const effectiveVendedorId   = canOverrideVendedor && overrideVendedorId ? overrideVendedorId : (profile?.id ?? "");
+  const effectiveVendedorName = canOverrideVendedor && overrideVendedorId
+    ? (vendedoresOnly.find(m => m.id === overrideVendedorId)?.full_name ?? "")
+    : (profile?.full_name ?? "");
+  const effectiveVendedorAvatar = canOverrideVendedor && overrideVendedorId
+    ? (vendedoresOnly.find(m => m.id === overrideVendedorId)?.avatar_url ?? null)
+    : (profile?.avatar_url ?? null);
+  const effectiveVendedorAvatarId = canOverrideVendedor && overrideVendedorId
+    ? overrideVendedorId
+    : (profile?.id ?? "");
 
   const { data: products } = useQuery({
     queryKey: ["mrp-products-active"],
@@ -418,9 +441,9 @@ export default function CreateOrder() {
     const rvFlowType = selectedLinha?.flow ?? "standard";
 
     await createOrder.mutateAsync({
-      vendedor_id: profile?.id || undefined,
+      vendedor_id: effectiveVendedorId || undefined,
       sku_id: matchedSku?.id || undefined,
-      vendedor_name: profile?.full_name || undefined,
+      vendedor_name: effectiveVendedorName || undefined,
       rv_flow_type: rvFlowType,
       linha: detectedLinha || undefined,
       modalidade: data.modalidade || undefined,
@@ -480,17 +503,40 @@ export default function CreateOrder() {
               Comece pelo CNPJ para preenchimento automático
             </p>
           </div>
-          {/* Vendedor identity — auto from logged-in user */}
+          {/* Vendedor — locked for vendedores, selectable for managers */}
           {profile && (
-            <div className="flex items-center gap-2 rounded-xl border border-border bg-muted/30 px-3 py-2 text-sm">
+            <div className="flex items-center gap-2 rounded-xl border border-border bg-muted/30 px-3 py-2">
               <img
-                src={profile.avatar_url || diceBearUrl(profile.id)}
-                alt={profile.full_name || ""}
-                className="h-7 w-7 rounded-full object-cover"
+                src={effectiveVendedorAvatar || diceBearUrl(effectiveVendedorAvatarId)}
+                alt={effectiveVendedorName}
+                className="h-7 w-7 rounded-full object-cover shrink-0"
               />
-              <div className="text-right leading-tight hidden sm:block">
-                <p className="font-medium text-foreground text-xs">{profile.full_name}</p>
-                <p className="text-[10px] text-muted-foreground">Registrando como vendedor</p>
+              <div className="leading-tight min-w-0">
+                {canOverrideVendedor ? (
+                  <div className="flex flex-col gap-0.5">
+                    <p className="text-[10px] text-muted-foreground">Vendedor do pedido</p>
+                    <select
+                      className="text-xs font-medium bg-transparent border-0 outline-none cursor-pointer text-foreground max-w-[160px]"
+                      value={overrideVendedorId || "__self__"}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        setOverrideVendedorId(v === "__self__" ? "" : v);
+                      }}
+                    >
+                      <option value="__self__">{profile.full_name} (eu)</option>
+                      {vendedoresOnly
+                        .filter(m => m.id !== profile.id)
+                        .map(m => (
+                          <option key={m.id} value={m.id}>{m.full_name}</option>
+                        ))}
+                    </select>
+                  </div>
+                ) : (
+                  <div className="hidden sm:block">
+                    <p className="font-medium text-foreground text-xs">{effectiveVendedorName}</p>
+                    <p className="text-[10px] text-muted-foreground">Registrando como vendedor</p>
+                  </div>
+                )}
               </div>
             </div>
           )}
