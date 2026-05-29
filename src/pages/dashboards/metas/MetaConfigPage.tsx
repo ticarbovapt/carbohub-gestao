@@ -115,10 +115,7 @@ export default function MetaConfigPage() {
   const deleteMeta = useDeleteSalesTarget();
 
   const activeMembers = teamMembers.filter(m =>
-    m.status === "approved" && (
-      m.department === "cgc" || m.department === "expansao" ||
-      m.secondary_department === "cgc" || m.secondary_department === "expansao"
-    )
+    m.status === "approved" && m.is_vendedor
   );
 
   const openNew = () => {
