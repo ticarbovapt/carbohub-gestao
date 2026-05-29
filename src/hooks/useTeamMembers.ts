@@ -26,6 +26,7 @@ export interface TeamMember {
   temp_password_sent_at: string | null;
   allowed_interfaces: string[];
   escopo: string | null;
+  is_vendedor: boolean;
 }
 
 export function useTeamMembers() {
@@ -85,6 +86,7 @@ export function useTeamMembers() {
         funcao: (p as any).funcao || null,
         secondary_department: (p as any).secondary_department || null,
         secondary_funcao: (p as any).secondary_funcao || null,
+        is_vendedor: (p as any).is_vendedor ?? false,
       }));
 
       return members;

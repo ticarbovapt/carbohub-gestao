@@ -183,9 +183,7 @@ export default function CreateOrder() {
     profile?.department === "command";
   const [overrideVendedorId, setOverrideVendedorId] = useState<string>("");
 
-  const vendedoresOnly = (teamMembers || []).filter(
-    (m) => m.funcao && VENDEDOR_FUNCOES.includes(m.funcao)
-  );
+  const vendedoresOnly = (teamMembers || []).filter((m) => m.is_vendedor);
 
   // ID e nome efetivos do vendedor para o pedido
   const effectiveVendedorId   = canOverrideVendedor && overrideVendedorId ? overrideVendedorId : (profile?.id ?? "");

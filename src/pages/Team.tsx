@@ -133,6 +133,7 @@ function MemberInfoModal({ member, profiles, teamMembers, onClose, canEdit, isMa
   const [formReportsTo,       setFormReportsTo]       = useState("");
   const [formSecondaryDept,   setFormSecondaryDept]   = useState("");
   const [formSecondaryFuncao, setFormSecondaryFuncao] = useState("");
+  const [formIsVendedor,      setFormIsVendedor]      = useState(false);
 
   const { data: deptFunctions = [] } = useDepartmentFunctions(formDept || undefined);
   const { data: secondaryDeptFunctions = [] } = useDepartmentFunctions(formSecondaryDept || undefined);
@@ -178,6 +179,7 @@ function MemberInfoModal({ member, profiles, teamMembers, onClose, canEdit, isMa
     setFormFuncao(linked?.funcao || "");
     setFormSecondaryDept((linked?.secondary_department as string) || "");
     setFormSecondaryFuncao(linked?.secondary_funcao || "");
+    setFormIsVendedor(linked?.is_vendedor ?? false);
     const flatNode = profiles.find((p) => p.id === member.id);
     setFormReportsTo((flatNode as any)?.reports_to || "");
     setEditing(true);
@@ -253,6 +255,7 @@ function MemberInfoModal({ member, profiles, teamMembers, onClose, canEdit, isMa
           escopo:               formEscopo || null,
           secondary_department: (formSecondaryDept || null) as any,
           secondary_funcao:     formSecondaryFuncao || null,
+          is_vendedor:          formIsVendedor,
           ...(usernameChanged ? { username: formUsername } : {}),
           ...(canEdit ? { manager_user_id: managerProfileId } : {}),
         } as any)
@@ -475,6 +478,25 @@ function MemberInfoModal({ member, profiles, teamMembers, onClose, canEdit, isMa
                 />
                 <Label htmlFor="assistant-check" className="cursor-pointer">Assistente executivo(a)</Label>
               </div>
+
+              {/* É vendedor? — só heads e command podem marcar */}
+              {canEdit && (
+                <div className="col-span-2 flex items-center justify-between rounded-lg border border-border px-3 py-2.5">
+                  <div>
+                    <Label htmlFor="is-vendedor-check" className="cursor-pointer font-medium">É vendedor?</Label>
+                    <p className="text-[11px] text-muted-foreground mt-0.5">
+                      Aparece nas metas e pode receber pedidos atribuídos
+                    </p>
+                  </div>
+                  <input
+                    type="checkbox"
+                    id="is-vendedor-check"
+                    checked={formIsVendedor}
+                    onChange={(e) => setFormIsVendedor(e.target.checked)}
+                    className="h-4 w-4 rounded border-border"
+                  />
+                </div>
+              )}
 
               {/* Username — editável por admin para definir o login do colaborador */}
               {(() => {
