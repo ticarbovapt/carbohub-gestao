@@ -228,7 +228,8 @@ async function createBlingPedido(
     contato: { id: blingContactId },
     itens: blingItems,
     data: order.sale_date || order.created_at.substring(0, 10),
-    // Número do pedido na observação = chave do vínculo automático com a NF
+    // Número do pedido (PED-XXXX) na observação = chave do vínculo automático com a NF.
+    // NÃO confundir com numeroPedidoCompra abaixo (que é o PO do cliente).
     observacoes: [
       order.order_number,
       order.buyer_notes || "",
@@ -236,10 +237,30 @@ async function createBlingPedido(
     ].filter(Boolean).join(" — "),
   };
 
-  if (order.freight_type) {
+  // Nº do Pedido de Compra do CLIENTE (PO) — campo nativo do Bling, opcional.
+  // É o número que o cliente gerou no sistema dele; independente do nosso order_number.
+  if (order.po_number) {
+    pedidoPayload.numeroPedidoCompra = String(order.po_number);
+  }
+
+  // Transporte: frete + endereço de entrega (etiqueta).
+  // ATENÇÃO: endereço deve ser conferido no Bling — vem como texto livre do nosso sistema.
+  const hasDelivery = order.delivery_address || order.delivery_city || order.delivery_zip;
+  if (order.freight_type || hasDelivery) {
     pedidoPayload.transporte = {
-      fretePorConta: order.freight_type === "CIF" ? 0 : 1,
+      ...(order.freight_type ? { fretePorConta: order.freight_type === "CIF" ? 0 : 1 } : {}),
       ...(order.shipping_cost ? { frete: Number(order.shipping_cost) } : {}),
+      ...(hasDelivery
+        ? {
+            etiqueta: {
+              nome: order.customer_name || "",
+              endereco: order.delivery_address || "",
+              municipio: order.delivery_city || "",
+              uf: order.delivery_state || "",
+              cep: order.delivery_zip ? String(order.delivery_zip).replace(/\D/g, "") : "",
+            },
+          }
+        : {}),
     };
   }
 
