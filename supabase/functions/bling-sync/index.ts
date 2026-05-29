@@ -116,6 +116,152 @@ async function getValidToken(
   return { token: integration.access_token };
 }
 
+// ── blingPost: faz POST na API do Bling com retry em 429 ────────────────────
+async function blingPost(token: string, endpoint: string, body: unknown, _retries = 0): Promise<any> {
+  const MAX_RETRIES = 3;
+  const url = `${BLING_API_BASE}${endpoint}`;
+  const response = await fetch(url, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body),
+  });
+
+  if (response.status === 429) {
+    if (_retries >= MAX_RETRIES) throw new Error("Bling API rate limit exceeded");
+    const wait = Math.pow(2, _retries) * 1000;
+    await new Promise(r => setTimeout(r, wait));
+    return blingPost(token, endpoint, body, _retries + 1);
+  }
+
+  if (!response.ok) {
+    const errText = await response.text();
+    throw new Error(`Bling API error ${response.status}: ${errText}`);
+  }
+
+  return response.json();
+}
+
+// ── createBlingPedido: cria um pedido de venda no Bling a partir de um carboze_order
+// O financeiro converte o pedido em NF no Bling. A NF será vinculada automaticamente
+// quando o sync detectar o número do pedido (PED-XXXX) na observação.
+async function createBlingPedido(
+  supabaseAdmin: ReturnType<typeof createClient>,
+  token: string,
+  orderId: string
+): Promise<any> {
+  // 1. Busca o pedido
+  const { data: order, error: orderErr } = await supabaseAdmin
+    .from("carboze_orders")
+    .select("*")
+    .eq("id", orderId)
+    .single();
+
+  if (orderErr || !order) throw new Error("Pedido não encontrado: " + orderId);
+
+  // 2. Encontrar contato no Bling
+  // Prioridade A: pedido veio do Bling — busca contato_id no bling_orders
+  let blingContactId: number | null = null;
+
+  if (order.external_ref?.startsWith("bling-")) {
+    const blingOrderId = order.external_ref.replace("bling-", "");
+    const { data: blingOrder } = await supabaseAdmin
+      .from("bling_orders")
+      .select("contato_id")
+      .eq("bling_id", Number(blingOrderId))
+      .maybeSingle();
+    blingContactId = blingOrder?.contato_id || null;
+  }
+
+  // Prioridade B: busca por nome no bling_contacts
+  if (!blingContactId) {
+    const { data: contacts } = await supabaseAdmin
+      .from("bling_contacts")
+      .select("bling_id, nome")
+      .ilike("nome", `%${order.customer_name}%`)
+      .limit(1);
+    blingContactId = contacts?.[0]?.bling_id || null;
+  }
+
+  if (!blingContactId) {
+    throw new Error(
+      `Cliente "${order.customer_name}" não encontrado no Bling. ` +
+      `Cadastre o cliente no Bling ou use a função "Sincronizar Contatos" antes de tentar novamente.`
+    );
+  }
+
+  // 3. Montar itens — tenta encontrar o produto no Bling pelo código
+  const rawItems: any[] = Array.isArray(order.items) ? order.items : [];
+  const blingItems = [];
+
+  for (const item of rawItems) {
+    const codigo: string = item.product_code || item.sku_code || "";
+    let blingProductId: number | null = null;
+
+    if (codigo) {
+      const { data: prod } = await supabaseAdmin
+        .from("bling_products")
+        .select("bling_id")
+        .eq("codigo", codigo)
+        .maybeSingle();
+      blingProductId = prod?.bling_id || null;
+    }
+
+    blingItems.push({
+      ...(blingProductId
+        ? { produto: { id: blingProductId } }
+        : { descricao: item.name || "Produto" }
+      ),
+      quantidade: Number(item.quantity) || 1,
+      valor: Number(item.unit_price) || 0,
+    });
+  }
+
+  if (blingItems.length === 0) {
+    throw new Error("O pedido não possui itens para enviar ao Bling.");
+  }
+
+  // 4. Montar payload do pedido de venda
+  const pedidoPayload: Record<string, any> = {
+    contato: { id: blingContactId },
+    itens: blingItems,
+    data: order.sale_date || order.created_at.substring(0, 10),
+    // Número do pedido na observação = chave do vínculo automático com a NF
+    observacoes: [
+      order.order_number,
+      order.buyer_notes || "",
+      order.general_notes || "",
+    ].filter(Boolean).join(" — "),
+  };
+
+  if (order.freight_type) {
+    pedidoPayload.transporte = {
+      fretePorConta: order.freight_type === "CIF" ? 0 : 1,
+      ...(order.shipping_cost ? { frete: Number(order.shipping_cost) } : {}),
+    };
+  }
+
+  if (order.discount) {
+    pedidoPayload.desconto = { tipo: 1, valor: Number(order.discount) };
+  }
+
+  // 5. POST /pedidos/vendas no Bling
+  console.log(`[bling-sync] Creating Bling pedido for order ${order.order_number} (contact ${blingContactId})`);
+  const result = await blingPost(token, "/pedidos/vendas", pedidoPayload);
+
+  // 6. Atualiza external_ref apenas se ainda não veio do Bling
+  if (result?.data?.id && !order.external_ref?.startsWith("bling-")) {
+    await supabaseAdmin.from("carboze_orders").update({
+      external_ref: `bling-${result.data.id}`,
+      updated_at: new Date().toISOString(),
+    }).eq("id", orderId);
+  }
+
+  return result;
+}
+
 async function blingFetch(token: string, endpoint: string, page = 1, limit = 100, _retries = 0): Promise<any> {
   const MAX_RETRIES = 5;
   const separator = endpoint.includes("?") ? "&" : "?";
@@ -1060,6 +1206,31 @@ Deno.serve(async (req: Request): Promise<Response> => {
         JSON.stringify({ success: false, error: tokenError || "No valid token" }),
         { status: 401, headers: { "Content-Type": "application/json", ...corsHeaders } }
       );
+    }
+
+    // ── Ação pontual: criar pedido no Bling (não é sync em loop) ─────────────
+    if (entity === "create_order") {
+      const orderId = body.order_id as string | undefined;
+      if (!orderId) {
+        return new Response(
+          JSON.stringify({ success: false, error: "Missing order_id" }),
+          { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } }
+        );
+      }
+      try {
+        const result = await createBlingPedido(supabaseAdmin, token, orderId);
+        return new Response(
+          JSON.stringify({ success: true, data: result?.data || result }),
+          { status: 200, headers: { "Content-Type": "application/json", ...corsHeaders } }
+        );
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        console.error("[bling-sync] create_order error:", msg);
+        return new Response(
+          JSON.stringify({ success: false, error: msg }),
+          { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } }
+        );
+      }
     }
 
     const results: Record<string, any> = {};
