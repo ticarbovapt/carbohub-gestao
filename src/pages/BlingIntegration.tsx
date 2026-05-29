@@ -42,34 +42,6 @@ interface SyncLog {
   finished_at: string | null;
 }
 
-// ── Bridge helpers (client-side, no edge function needed) ──────────────────
-const SKU_TO_LINHA: Record<string, string> = {
-  "SKU-CZ100": "carboze_100ml", "CZ100": "carboze_100ml",
-  "SKU-CZ1L": "carboze_1l",    "CZ1L": "carboze_1l",
-  "SKU-CZSC10": "carboze_sache_10ml", "CZSC10": "carboze_sache_10ml",
-  "SKU-CP100": "carbopro",     "CP100": "carbopro",
-  "SKU-VAPT70": "carbovapt",   "VAPT70": "carbovapt",
-};
-
-function detectLinha(name: string): string {
-  const n = (name || "").toLowerCase();
-  if (n.includes("sach") || (n.includes("10ml") && !n.includes("100ml"))) return "carboze_sache_10ml";
-  if (n.includes(" 1l") || n.includes("1 l") || n.includes("1l ")) return "carboze_1l";
-  if (n.includes("carbopro") || n.includes("pro ") || n.includes("pro-")) return "carbopro";
-  if (n.includes("vapt") || n.includes("servi")) return "carbovapt";
-  return "carboze_100ml";
-}
-
-function mapBlingStatus(situacaoId: number | null, situacaoValor: string | null): string {
-  const v = (situacaoValor || "").toLowerCase();
-  if (situacaoId === 9  || v.includes("atendido")) return "delivered";
-  if (situacaoId === 12 || v.includes("cancelado")) return "cancelled";
-  if (v.includes("enviado") || v.includes("expedido") || v.includes("transporte")) return "shipped";
-  if (situacaoId === 17 || v.includes("verificado") || v.includes("faturado")) return "invoiced";
-  if (situacaoId === 15 || v.includes("andamento") || v.includes("confirmado")) return "confirmed";
-  return "pending";
-}
-
 export default function BlingIntegration() {
   const navigate = useNavigate();
   const [isConnected, setIsConnected] = useState(false);
@@ -82,6 +54,9 @@ export default function BlingIntegration() {
   const [pipelineStep, setPipelineStep] = useState<"idle" | "syncing" | "done">("idle");
   const [treatmentSummary, setTreatmentSummary] = useState<{ ok: number; warnings: number; errors: number; runId: string } | null>(null);
   const [lastCronRun, setLastCronRun] = useState<string | null>(null);
+  const [nfStatus, setNfStatus] = useState<{
+    total: number; vinculadas: number; pending: number; no_code: number; invalid_code: number;
+  } | null>(null);
 
   const checkStatus = async () => {
     try {
@@ -129,6 +104,23 @@ export default function BlingIntegration() {
       nfe: nfe.count || 0,
     });
   };
+
+  const loadNFStatus = useCallback(async () => {
+    try {
+      const { data } = await (supabase as any).from("bling_nfe").select("match_status");
+      if (!data) return;
+      const acc = { total: data.length, vinculadas: 0, pending: 0, no_code: 0, invalid_code: 0 };
+      for (const r of data) {
+        if (r.match_status === "matched" || r.match_status === "manual") acc.vinculadas++;
+        else if (r.match_status === "pending") acc.pending++;
+        else if (r.match_status === "no_code") acc.no_code++;
+        else if (r.match_status === "invalid_code") acc.invalid_code++;
+      }
+      setNfStatus(acc);
+    } catch {
+      // bling_nfe pode não existir em ambientes antigos
+    }
+  }, []);
 
   const loadTreatmentSummary = useCallback(async () => {
     try {
@@ -185,7 +177,7 @@ export default function BlingIntegration() {
         throw new Error(response.data?.error || "Pipeline falhou");
       }
       setPipelineStep("done");
-      await Promise.all([loadCounts(), loadSyncLogs(), loadTreatmentSummary(), loadLastCronRun()]);
+      await Promise.all([loadCounts(), loadNFStatus(), loadSyncLogs(), loadTreatmentSummary(), loadLastCronRun()]);
       toast.success("Pipeline completo! Dados sincronizados, tratados e importados.");
     } catch (error: any) {
       toast.error(error.message || "Erro no pipeline");
@@ -193,7 +185,7 @@ export default function BlingIntegration() {
     } finally {
       setSyncing(null);
     }
-  }, [loadTreatmentSummary, loadLastCronRun]);
+  }, [loadNFStatus, loadTreatmentSummary, loadLastCronRun]);
 
   // ── Export helpers ─────────────────────────────────────────────────────────
   const exportToXlsx = (rows: Record<string, any>[], filename: string, sheetName: string) => {
@@ -285,9 +277,10 @@ export default function BlingIntegration() {
     checkStatus();
     loadSyncLogs();
     loadCounts();
+    loadNFStatus();
     loadTreatmentSummary();
     loadLastCronRun();
-  }, []);
+  }, [loadNFStatus, loadTreatmentSummary, loadLastCronRun]);
 
   const handleConnect = async () => {
     try {
@@ -342,104 +335,6 @@ export default function BlingIntegration() {
     }
   };
 
-  const handleBridge = useCallback(async () => {
-    setSyncing("bridge");
-    try {
-      // Log entry
-      const { data: logEntry } = await supabase
-        .from("bling_sync_log")
-        .insert({ entity_type: "bridge", status: "running" })
-        .select("id")
-        .single();
-      const logId = (logEntry as any)?.id || "";
-
-      // Load reference data
-      const [{ data: blingOrders }, { data: skus }, { data: licensees }] = await Promise.all([
-        (supabase as any).from("bling_orders").select("*").order("data", { ascending: false }),
-        (supabase as any).from("sku").select("id, code, name"),
-        (supabase as any).from("licensees").select("id, name, trade_name"),
-      ]);
-
-      if (!blingOrders?.length) {
-        toast.info("Nenhum pedido Bling para importar. Execute a sincronização primeiro.");
-        await (supabase as any).from("bling_sync_log").update({ status: "completed", records_synced: 0, finished_at: new Date().toISOString() }).eq("id", logId);
-        return;
-      }
-
-      const skuMap = new Map((skus || []).map((s: any) => [s.code, s]));
-      const normalize = (s: string) => (s || "").toLowerCase().trim();
-      let synced = 0, failed = 0;
-
-      for (const bo of blingOrders) {
-        try {
-          const externalRef = `bling-${bo.bling_id}`;
-          const items: any[] = Array.isArray(bo.items) ? bo.items : [];
-          let detectedLinha = "carboze_100ml";
-          let skuId: string | null = null;
-
-          const carboItems = items.map((item: any) => {
-            const codigo: string = item.codigo || item.produto?.codigo || "";
-            const nome: string = item.descricao || item.produto?.nome || "";
-            const linha = SKU_TO_LINHA[codigo] || detectLinha(nome);
-            if (!skuId) {
-              const matched = skuMap.get(codigo);
-              if (matched) { skuId = matched.id; detectedLinha = linha; }
-              else { detectedLinha = linha; }
-            }
-            const qty = Number(item.quantidade) || 1;
-            const price = Number(item.valor) || 0;
-            return { product_name: nome, sku_code: codigo, quantity: qty, unit_price: price, total: qty * price };
-          });
-
-          const contato = normalize(bo.contato_nome);
-          const licenseeId = (licensees || []).find(
-            (l: any) => normalize(l.name) === contato || normalize(l.trade_name) === contato
-          )?.id || null;
-
-          const status = mapBlingStatus(bo.situacao_id, bo.situacao_valor);
-
-          const { data: existing } = await (supabase as any).from("carboze_orders").select("id, status").eq("external_ref", externalRef).single();
-
-          if (existing) {
-            if (existing.status !== status) {
-              await (supabase as any).from("carboze_orders").update({ status, updated_at: new Date().toISOString() }).eq("id", existing.id);
-            }
-          } else {
-            const orderDate = bo.data ? new Date(bo.data).toISOString() : new Date().toISOString();
-            const { error: insertErr } = await (supabase as any).from("carboze_orders").insert({
-              order_number: "",  // auto-generated by DB trigger
-              customer_name: bo.contato_nome || "Cliente Bling",
-              items: carboItems,
-              subtotal: Number(bo.total_produtos) || 0,
-              shipping_cost: Number(bo.total_frete) || 0,
-              discount: Number(bo.total_desconto) || 0,
-              total: Number(bo.total) || 0,
-              status,
-              licensee_id: licenseeId,
-              external_ref: externalRef,
-              notes: bo.observacoes || null,
-              source_file: "bling_sync",
-              created_at: orderDate,
-            });
-            if (insertErr) throw insertErr;
-          }
-          synced++;
-        } catch (e: any) {
-          console.error("Bridge insert failed:", e?.message, e);
-          failed++;
-        }
-      }
-
-      await (supabase as any).from("bling_sync_log").update({ status: "completed", records_synced: synced, records_failed: failed, finished_at: new Date().toISOString() }).eq("id", logId);
-      toast.success(`Importação concluída! ${synced} pedidos importados para o CarboHub.`);
-      loadSyncLogs();
-    } catch (error: any) {
-      toast.error(error.message || "Erro na importação de pedidos");
-    } finally {
-      setSyncing(null);
-    }
-  }, []);
-
   // Sync a single entity via edge function (products | contacts | orders)
   const syncEntity = async (entity: "products" | "contacts" | "orders"): Promise<number> => {
     const response = await supabase.functions.invoke("bling-sync", { body: { entity } });
@@ -449,26 +344,6 @@ export default function BlingIntegration() {
     throw new Error(response.data?.error || `Erro ao sincronizar ${entity}`);
   };
 
-  // "Sincronizar Tudo" — runs 3 entities individually (no "all" → avoids old bridge bug)
-  // then runs bridge client-side
-  const handleSyncAll = useCallback(async () => {
-    setSyncing("all");
-    let totalSynced = 0;
-    try {
-      for (const entity of ["products", "contacts", "orders"] as const) {
-        setSyncing(entity);
-        totalSynced += await syncEntity(entity);
-        loadCounts();
-      }
-      toast.success(`Sincronização concluída! ${totalSynced} registros atualizados.`);
-      loadSyncLogs();
-    } catch (error: any) {
-      toast.error(error.message || "Erro na sincronização");
-    } finally {
-      setSyncing(null);
-    }
-  }, []);
-
   const handleSync = async (entity: "products" | "contacts" | "orders") => {
     setSyncing(entity);
     try {
@@ -476,6 +351,7 @@ export default function BlingIntegration() {
       toast.success(`Sincronização concluída! ${synced} registros atualizados.`);
       loadSyncLogs();
       loadCounts();
+      loadNFStatus();
     } catch (error: any) {
       toast.error(error.message || "Erro na sincronização");
     } finally {
@@ -547,11 +423,11 @@ export default function BlingIntegration() {
           {/* Compact Stats Row — 4 entities em uma linha */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             {([
-              { label: "Produtos",      count: counts.products, Icon: Package,      color: "text-blue-500",   entity: "products" },
-              { label: "Contatos",      count: counts.contacts, Icon: Users,        color: "text-purple-500", entity: "contacts" },
-              { label: "Pedidos",       count: counts.orders,   Icon: ShoppingCart, color: "text-orange-500", entity: "orders"   },
-              { label: "Notas Fiscais", count: counts.nfe,      Icon: FileText,     color: "text-rose-500",   entity: "nfe"      },
-            ] as const).map(({ label, count, Icon, color, entity }) => (
+              { label: "Produtos",      count: counts.products, Icon: Package,      color: "text-blue-500",   entity: "products", hint: "Catálogo do Bling (nome, código, preço)" },
+              { label: "Contatos",      count: counts.contacts, Icon: Users,        color: "text-purple-500", entity: "contacts", hint: "Clientes e fornecedores" },
+              { label: "Pedidos",       count: counts.orders,   Icon: ShoppingCart, color: "text-orange-500", entity: "orders",   hint: "Pedidos de venda do Bling" },
+              { label: "Notas Fiscais", count: counts.nfe,      Icon: FileText,     color: "text-rose-500",   entity: "nfe",      hint: "Listar NFs + buscar observação + cruzar com pedidos" },
+            ] as const).map(({ label, count, Icon, color, entity, hint }) => (
               <Card key={entity} className="relative overflow-hidden">
                 <CardContent className="p-4">
                   <div className="flex items-center gap-1.5 mb-0.5">
@@ -559,10 +435,11 @@ export default function BlingIntegration() {
                     <span className="text-xs text-muted-foreground font-medium">{label}</span>
                   </div>
                   <p className="text-2xl font-bold tracking-tight">{count}</p>
+                  <p className="text-[10px] text-muted-foreground leading-snug mt-0.5 min-h-[26px]">{hint}</p>
                   <button
                     disabled={!!syncing}
                     onClick={() => handleSync(entity as any)}
-                    className="mt-2 flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors disabled:opacity-40"
+                    className="mt-1.5 flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors disabled:opacity-40"
                   >
                     {syncing === entity
                       ? <><Loader2 className="h-3 w-3 animate-spin" /> Sincronizando...</>
@@ -573,6 +450,55 @@ export default function BlingIntegration() {
               </Card>
             ))}
           </div>
+
+          {/* Status do cruzamento das Notas Fiscais */}
+          {nfStatus && nfStatus.total > 0 && (
+            <Card>
+              <CardHeader className="pb-3">
+                <div className="flex items-center justify-between gap-2">
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    <FileText className="h-5 w-5 text-rose-500" />
+                    Status das Notas Fiscais
+                  </CardTitle>
+                  <Button size="sm" variant="outline" onClick={() => navigate("/integrations/bling/nfs")}>
+                    Ver Notas Fiscais
+                  </Button>
+                </div>
+                <CardDescription>
+                  Cruzamento das NFs com os pedidos. A vinculação automática usa o número do pedido na observação da NF.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                  <div className="rounded-lg border border-border bg-muted/30 p-3 text-center">
+                    <p className="text-2xl font-bold tabular-nums">{nfStatus.total}</p>
+                    <p className="text-xs text-muted-foreground">Total</p>
+                  </div>
+                  <div className="rounded-lg border border-green-500/20 bg-green-500/5 p-3 text-center">
+                    <p className="text-2xl font-bold tabular-nums text-green-500">{nfStatus.vinculadas}</p>
+                    <p className="text-xs text-muted-foreground">Vinculadas</p>
+                  </div>
+                  <div className="rounded-lg border border-border bg-muted/30 p-3 text-center">
+                    <p className="text-2xl font-bold tabular-nums text-muted-foreground">{nfStatus.pending}</p>
+                    <p className="text-xs text-muted-foreground">Aguardando</p>
+                  </div>
+                  <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 p-3 text-center">
+                    <p className="text-2xl font-bold tabular-nums text-amber-400">{nfStatus.no_code}</p>
+                    <p className="text-xs text-muted-foreground">Sem código</p>
+                  </div>
+                  <div className="rounded-lg border border-red-500/20 bg-red-500/5 p-3 text-center">
+                    <p className="text-2xl font-bold tabular-nums text-red-400">{nfStatus.invalid_code}</p>
+                    <p className="text-xs text-muted-foreground">Código inválido</p>
+                  </div>
+                </div>
+                {nfStatus.pending === nfStatus.total && nfStatus.total > 0 && (
+                  <p className="text-xs text-amber-500 mt-3">
+                    ⚠ Todas as NFs estão "aguardando" — o cruzamento ainda não rodou. Clique em "Sincronizar" no card Notas Fiscais para buscar a observação e cruzar.
+                  </p>
+                )}
+              </CardContent>
+            </Card>
+          )}
 
           {/* Export Section */}
           <Card>
@@ -708,17 +634,20 @@ export default function BlingIntegration() {
                 </div>
               </div>
 
-              {/* Cron schedule info */}
+              {/* Cron schedule info — baseado em dados reais (último run registrado) */}
               <div className="flex items-center gap-2 text-xs text-muted-foreground bg-muted/40 rounded-lg px-3 py-2">
                 <Clock className="h-3 w-3 flex-shrink-0" />
-                <span>
-                  Agendado automaticamente: <strong>7h e 13h</strong> (Fortaleza)
-                  {lastCronRun ? (
-                    <> · Último sync automático: {new Date(lastCronRun).toLocaleString("pt-BR")}</>
-                  ) : (
-                    <> · Nenhum sync automático ainda</>
-                  )}
-                </span>
+                {lastCronRun ? (
+                  <span>
+                    Sincronização automática ativa · Último run automático:{" "}
+                    <strong>{new Date(lastCronRun).toLocaleString("pt-BR")}</strong>
+                  </span>
+                ) : (
+                  <span>
+                    Nenhuma sincronização automática detectada ainda. Se houver um agendamento (cron)
+                    no Supabase, ele aparecerá aqui após o primeiro run.
+                  </span>
+                )}
               </div>
 
               {/* Run button */}
