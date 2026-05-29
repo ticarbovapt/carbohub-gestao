@@ -9,14 +9,17 @@ import { Input } from "@/components/ui/input";
 import {
   Receipt, Search, CheckCircle2, Clock, Copy, Send,
   ChevronDown, ChevronRight, ExternalLink, AlertCircle,
-  MapPin, CreditCard, Truck, FileText, Building2, Eye,
+  MapPin, CreditCard, Truck, FileText, Building2, Eye, Link2,
 } from "lucide-react";
 import {
   useFaturamento, useCreateBlingPedido, usePreviewBlingPedido,
   type FaturamentoOrder, type BlingPreview,
 } from "@/hooks/useFaturamento";
 import { BlingPreviewDialog } from "@/components/orders/BlingPreviewDialog";
+import { LinkNFToOrderDialog } from "@/components/orders/LinkNFToOrderDialog";
 import { toast } from "sonner";
+
+const BLING_PEDIDOS_URL = "https://www.bling.com.br/b/pedidos.vendas.php";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers
@@ -222,17 +225,28 @@ export default function FaturamentoPage() {
   const [previewOpen, setPreviewOpen]   = useState(false);
   const [preview, setPreview]           = useState<BlingPreview | null>(null);
   const [previewOrderId, setPreviewId]  = useState<string | null>(null);
+  const [origin, setOrigin]             = useState<"native" | "bling">("native");
+  const [linkNFOrder, setLinkNFOrder]   = useState<FaturamentoOrder | null>(null);
 
   const { data: orders = [], isLoading } = useFaturamento(showAll);
   const createBlingPedido = useCreateBlingPedido();
   const previewBlingPedido = usePreviewBlingPedido();
 
+  // Separa nativos (nascidos no sistema) de importados do Bling
+  const isFromBling = (o: FaturamentoOrder) =>
+    o.external_ref?.startsWith("bling-") || o.order_number?.startsWith("BLING-");
+
+  const nativeCount = orders.filter(o => !isFromBling(o)).length;
+  const blingCount  = orders.filter(o => isFromBling(o)).length;
+
+  const byOrigin = orders.filter(o => (origin === "bling" ? isFromBling(o) : !isFromBling(o)));
+
   const filtered = search
-    ? orders.filter(o =>
+    ? byOrigin.filter(o =>
         o.customer_name?.toLowerCase().includes(search.toLowerCase()) ||
         o.order_number?.toLowerCase().includes(search.toLowerCase())
       )
-    : orders;
+    : byOrigin;
 
   // KPIs
   const total      = filtered.length;
@@ -309,6 +323,34 @@ export default function FaturamentoPage() {
           </p>
         </div>
 
+        {/* Abas: Nativos x Importados do Bling */}
+        <div className="flex items-center gap-1 bg-muted/30 rounded-lg p-1 w-fit">
+          <button
+            className={`text-sm px-4 py-1.5 rounded-md transition-colors ${origin === "native" ? "bg-background shadow-sm font-semibold" : "text-muted-foreground hover:text-foreground"}`}
+            onClick={() => setOrigin("native")}
+          >
+            Nativos do sistema <span className="text-xs text-muted-foreground">({nativeCount})</span>
+          </button>
+          <button
+            className={`text-sm px-4 py-1.5 rounded-md transition-colors flex items-center gap-1.5 ${origin === "bling" ? "bg-background shadow-sm font-semibold" : "text-muted-foreground hover:text-foreground"}`}
+            onClick={() => setOrigin("bling")}
+          >
+            Importados do Bling <span className="text-xs text-muted-foreground">({blingCount})</span>
+          </button>
+        </div>
+
+        {/* Aviso contextual da aba Bling */}
+        {origin === "bling" && (
+          <div className="rounded-xl border border-blue-500/20 bg-blue-500/5 px-4 py-3 text-xs text-muted-foreground leading-relaxed">
+            <p>
+              <strong className="text-foreground">Pedidos que nasceram no Bling.</strong> Eles já existem lá — então
+              <strong> não use "Criar no Bling"</strong> (geraria duplicata). Para faturar, clique em
+              <strong> "Abrir no Bling"</strong> e gere a NF a partir do pedido existente. Se a NF já foi emitida sem o
+              número do pedido na observação, use <strong>"Vincular NF"</strong> para ligar manualmente.
+            </p>
+          </div>
+        )}
+
         {/* KPIs */}
         <div className="grid grid-cols-3 gap-3">
           <CarboCard>
@@ -352,7 +394,9 @@ export default function FaturamentoPage() {
             <CarboCardContent className="py-16 text-center space-y-3">
               <CheckCircle2 className="h-12 w-12 mx-auto text-green-500/40" />
               <p className="text-muted-foreground">
-                {showAll ? "Nenhum pedido encontrado." : "Nenhum pedido aguardando NF. Tudo em dia! ✅"}
+                {origin === "bling"
+                  ? "Nenhum pedido importado do Bling nesta lista."
+                  : showAll ? "Nenhum pedido encontrado." : "Nenhum pedido nativo aguardando NF. Tudo em dia! ✅"}
               </p>
             </CarboCardContent>
           </CarboCard>
@@ -361,7 +405,7 @@ export default function FaturamentoPage() {
             {filtered.map(order => {
               const isExpanded = expandedId === order.id;
               const isCreating = creatingId === order.id;
-              const fromBling = order.external_ref?.startsWith("bling-");
+              const fromBling = isFromBling(order);
               const hasNF = !!order.bling_nf_id;
 
               return (
@@ -439,37 +483,67 @@ export default function FaturamentoPage() {
                           <span className="hidden md:inline">Copiar</span>
                         </CarboButton>
 
+                        {/* Vincular NF manual — útil quando a NF já existe no sistema
+                            mas não foi vinculada automaticamente (obs. sem o nº do pedido) */}
                         {!hasNF && (
                           <CarboButton
                             variant="outline"
                             size="sm"
                             className="h-8 gap-1.5 text-xs"
-                            onClick={() => handlePreview(order)}
-                            disabled={previewBlingPedido.isPending}
-                            title="Ver exatamente o que será enviado ao Bling, sem enviar nada"
+                            onClick={() => setLinkNFOrder(order)}
+                            title="Vincular este pedido a uma NF que já está no sistema"
                           >
-                            <Eye className="h-3.5 w-3.5" />
-                            <span className="hidden md:inline">Pré-visualizar</span>
+                            <Link2 className="h-3.5 w-3.5" />
+                            <span className="hidden md:inline">Vincular NF</span>
                           </CarboButton>
                         )}
 
-                        {!hasNF && (
-                          <CarboButton
-                            size="sm"
-                            className="h-8 gap-1.5 text-xs"
-                            onClick={() => handleCreateBling(order)}
-                            disabled={isCreating || createBlingPedido.isPending}
-                            title="Criar pedido de venda no Bling via API (o financeiro converte em NF no Bling)"
+                        {/* Pedido NASCIDO no Bling: já existe lá → só abrir e gerar NF.
+                            NUNCA "Criar no Bling" (geraria duplicata). */}
+                        {!hasNF && fromBling && (
+                          <a
+                            href={BLING_PEDIDOS_URL}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="h-8 px-2 inline-flex items-center gap-1.5 text-xs rounded-lg border border-blue-500/30 text-blue-400 hover:bg-blue-500/10 transition-colors"
+                            title="Pedido já existe no Bling — abra e gere a NF a partir dele"
                           >
-                            {isCreating ? (
-                              <Clock className="h-3.5 w-3.5 animate-spin" />
-                            ) : (
-                              <Send className="h-3.5 w-3.5" />
-                            )}
-                            <span className="hidden md:inline">
-                              {isCreating ? "Enviando..." : "Criar no Bling"}
-                            </span>
-                          </CarboButton>
+                            <ExternalLink className="h-3.5 w-3.5" />
+                            <span className="hidden md:inline">Abrir no Bling</span>
+                          </a>
+                        )}
+
+                        {/* Pedido NATIVO do sistema: ainda não existe no Bling → pré-visualizar/criar */}
+                        {!hasNF && !fromBling && (
+                          <>
+                            <CarboButton
+                              variant="outline"
+                              size="sm"
+                              className="h-8 gap-1.5 text-xs"
+                              onClick={() => handlePreview(order)}
+                              disabled={previewBlingPedido.isPending}
+                              title="Ver exatamente o que será enviado ao Bling, sem enviar nada"
+                            >
+                              <Eye className="h-3.5 w-3.5" />
+                              <span className="hidden md:inline">Pré-visualizar</span>
+                            </CarboButton>
+                            <CarboButton
+                              size="sm"
+                              className="h-8 gap-1.5 text-xs"
+                              onClick={() => handleCreateBling(order)}
+                              disabled={isCreating || createBlingPedido.isPending}
+                              title="Criar pedido de venda no Bling via API (o financeiro converte em NF no Bling)"
+                            >
+                              {isCreating ? (
+                                <Clock className="h-3.5 w-3.5 animate-spin" />
+                              ) : (
+                                <Send className="h-3.5 w-3.5" />
+                              )}
+                              <span className="hidden md:inline">
+                                {isCreating ? "Enviando..." : "Criar no Bling"}
+                              </span>
+                            </CarboButton>
+                          </>
                         )}
 
                         {hasNF && (
@@ -512,6 +586,13 @@ export default function FaturamentoPage() {
         loading={previewBlingPedido.isPending}
         onConfirmSend={handleConfirmFromPreview}
         sending={!!creatingId}
+      />
+
+      <LinkNFToOrderDialog
+        open={!!linkNFOrder}
+        onOpenChange={open => { if (!open) setLinkNFOrder(null); }}
+        orderNumber={linkNFOrder?.order_number ?? ""}
+        customerName={linkNFOrder?.customer_name ?? ""}
       />
     </BoardLayout>
   );
