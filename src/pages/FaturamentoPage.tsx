@@ -244,9 +244,6 @@ export default function FaturamentoPage() {
   const isFromBling = (o: FaturamentoOrder) =>
     o.external_ref?.startsWith("bling-") || o.order_number?.startsWith("BLING-");
 
-  const nativeCount = orders.filter(o => !isFromBling(o)).length;
-  const blingCount  = orders.filter(o => isFromBling(o)).length;
-
   const byOrigin = orders.filter(o => (origin === "bling" ? isFromBling(o) : !isFromBling(o)));
 
   // KPIs (escopo do mês/busca atual, antes de paginar)
@@ -359,13 +356,13 @@ export default function FaturamentoPage() {
             className={`text-sm px-4 py-1.5 rounded-md transition-colors ${origin === "native" ? "bg-background shadow-sm font-semibold" : "text-muted-foreground hover:text-foreground"}`}
             onClick={() => setOrigin("native")}
           >
-            Nativos do sistema <span className="text-xs text-muted-foreground">({nativeCount})</span>
+            Nativos do sistema
           </button>
           <button
             className={`text-sm px-4 py-1.5 rounded-md transition-colors flex items-center gap-1.5 ${origin === "bling" ? "bg-background shadow-sm font-semibold" : "text-muted-foreground hover:text-foreground"}`}
             onClick={() => setOrigin("bling")}
           >
-            Importados do Bling <span className="text-xs text-muted-foreground">({blingCount})</span>
+            Importados do Bling
           </button>
         </div>
 
