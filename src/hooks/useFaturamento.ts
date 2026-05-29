@@ -107,6 +107,46 @@ export function useCreateBlingPedido() {
   });
 }
 
+export interface BlingPreview {
+  dry_run: true;
+  order_number: string;
+  customer_name: string;
+  contact_found: boolean;
+  contact_id: number | null;
+  contact_source: string;
+  items_summary: Array<{ name: string; matched: boolean; codigo: string }>;
+  warnings: string[];
+  payload: Record<string, any>;
+}
+
+export function usePreviewBlingPedido() {
+  return useMutation({
+    mutationFn: async (orderId: string): Promise<BlingPreview> => {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      if (!token) throw new Error("Não autenticado");
+
+      const res = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/bling-sync`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ entity: "create_order", order_id: orderId, dry_run: true }),
+        }
+      );
+      const json = await res.json().catch(() => ({ error: res.statusText }));
+      if (!res.ok) throw new Error(json.error || "Erro ao gerar pré-visualização");
+      return json as BlingPreview;
+    },
+    onError: (err: Error) => {
+      toast.error(err.message);
+    },
+  });
+}
+
 export function useBulkAssignVendedor() {
   const queryClient = useQueryClient();
 

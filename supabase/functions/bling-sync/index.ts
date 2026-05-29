@@ -147,11 +147,18 @@ async function blingPost(token: string, endpoint: string, body: unknown, _retrie
 // ── createBlingPedido: cria um pedido de venda no Bling a partir de um carboze_order
 // O financeiro converte o pedido em NF no Bling. A NF será vinculada automaticamente
 // quando o sync detectar o número do pedido (PED-XXXX) na observação.
+//
+// dryRun=true: monta o payload e resolve contato/produtos, mas NÃO faz o POST.
+//   Retorna { dry_run, payload, warnings, contact_found, items_summary } para
+//   pré-visualização no front, sem nenhum efeito colateral.
 async function createBlingPedido(
   supabaseAdmin: ReturnType<typeof createClient>,
   token: string,
-  orderId: string
+  orderId: string,
+  dryRun = false
 ): Promise<any> {
+  const warnings: string[] = [];
+
   // 1. Busca o pedido
   const { data: order, error: orderErr } = await supabaseAdmin
     .from("carboze_orders")
@@ -164,6 +171,7 @@ async function createBlingPedido(
   // 2. Encontrar contato no Bling
   // Prioridade A: pedido veio do Bling — busca contato_id no bling_orders
   let blingContactId: number | null = null;
+  let contactSource = "";
 
   if (order.external_ref?.startsWith("bling-")) {
     const blingOrderId = order.external_ref.replace("bling-", "");
@@ -173,6 +181,7 @@ async function createBlingPedido(
       .eq("bling_id", Number(blingOrderId))
       .maybeSingle();
     blingContactId = blingOrder?.contato_id || null;
+    if (blingContactId) contactSource = "pedido original do Bling";
   }
 
   // Prioridade B: busca por nome no bling_contacts
@@ -183,18 +192,22 @@ async function createBlingPedido(
       .ilike("nome", `%${order.customer_name}%`)
       .limit(1);
     blingContactId = contacts?.[0]?.bling_id || null;
+    if (blingContactId) contactSource = `nome "${contacts?.[0]?.nome}"`;
   }
 
   if (!blingContactId) {
-    throw new Error(
+    const msg =
       `Cliente "${order.customer_name}" não encontrado no Bling. ` +
-      `Cadastre o cliente no Bling ou use a função "Sincronizar Contatos" antes de tentar novamente.`
-    );
+      `Cadastre o cliente no Bling ou rode "Sincronizar Contatos" antes de tentar novamente.`;
+    // Em dry-run não interrompe: registra o aviso para o usuário ver na tela.
+    if (!dryRun) throw new Error(msg);
+    warnings.push(msg);
   }
 
   // 3. Montar itens — tenta encontrar o produto no Bling pelo código
   const rawItems: any[] = Array.isArray(order.items) ? order.items : [];
   const blingItems = [];
+  const itemsSummary: Array<{ name: string; matched: boolean; codigo: string }> = [];
 
   for (const item of rawItems) {
     const codigo: string = item.product_code || item.sku_code || "";
@@ -209,6 +222,12 @@ async function createBlingPedido(
       blingProductId = prod?.bling_id || null;
     }
 
+    if (!blingProductId) {
+      warnings.push(`Produto "${item.name || codigo}" não casou com o catálogo do Bling — será enviado como descrição livre.`);
+    }
+
+    itemsSummary.push({ name: item.name || codigo || "Produto", matched: !!blingProductId, codigo });
+
     blingItems.push({
       ...(blingProductId
         ? { produto: { id: blingProductId } }
@@ -220,7 +239,9 @@ async function createBlingPedido(
   }
 
   if (blingItems.length === 0) {
-    throw new Error("O pedido não possui itens para enviar ao Bling.");
+    const msg = "O pedido não possui itens para enviar ao Bling.";
+    if (!dryRun) throw new Error(msg);
+    warnings.push(msg);
   }
 
   // 4. Montar payload do pedido de venda
@@ -262,10 +283,26 @@ async function createBlingPedido(
           }
         : {}),
     };
+    if (hasDelivery) warnings.push("Endereço de entrega vai como texto livre — confira/corrija no Bling após criar.");
   }
 
   if (order.discount) {
     pedidoPayload.desconto = { tipo: 1, valor: Number(order.discount) };
+  }
+
+  // ── DRY-RUN: devolve a pré-visualização sem enviar nada ──────────────────
+  if (dryRun) {
+    return {
+      dry_run: true,
+      order_number: order.order_number,
+      customer_name: order.customer_name,
+      contact_found: !!blingContactId,
+      contact_id: blingContactId,
+      contact_source: contactSource,
+      items_summary: itemsSummary,
+      warnings,
+      payload: pedidoPayload,
+    };
   }
 
   // 5. POST /pedidos/vendas no Bling
@@ -1238,10 +1275,11 @@ Deno.serve(async (req: Request): Promise<Response> => {
           { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } }
         );
       }
+      const dryRun = body.dry_run === true;
       try {
-        const result = await createBlingPedido(supabaseAdmin, token, orderId);
+        const result = await createBlingPedido(supabaseAdmin, token, orderId, dryRun);
         return new Response(
-          JSON.stringify({ success: true, data: result?.data || result }),
+          JSON.stringify(dryRun ? { success: true, ...result } : { success: true, data: result?.data || result }),
           { status: 200, headers: { "Content-Type": "application/json", ...corsHeaders } }
         );
       } catch (e) {
