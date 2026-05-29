@@ -156,8 +156,6 @@ interface CnpjData {
   raw: any;
 }
 
-const VENDEDOR_FUNCOES = ["vendedor_b2b", "vendedor_b2c"];
-
 export default function CreateOrder() {
   const navigate = useNavigate();
   const { profile } = useAuth();
@@ -534,7 +532,9 @@ export default function CreateOrder() {
                 ) : (
                   <div className="hidden sm:block">
                     <p className="font-medium text-foreground text-xs">{effectiveVendedorName}</p>
-                    <p className="text-[10px] text-muted-foreground">Registrando como vendedor</p>
+                    <p className="text-[10px] text-muted-foreground">
+                      {profile?.is_vendedor ? "Registrando como vendedor" : "Criando pedido"}
+                    </p>
                   </div>
                 )}
               </div>

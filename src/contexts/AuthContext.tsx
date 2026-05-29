@@ -26,6 +26,7 @@ interface Profile {
   escopo: string | null;
   allowed_interfaces: string[];
   requested_role: string | null;
+  is_vendedor: boolean;
 }
 
 interface CarboUserRole {
