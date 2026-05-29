@@ -335,30 +335,6 @@ export default function BlingIntegration() {
     }
   };
 
-  // Sync a single entity via edge function (products | contacts | orders)
-  const syncEntity = async (entity: "products" | "contacts" | "orders"): Promise<number> => {
-    const response = await supabase.functions.invoke("bling-sync", { body: { entity } });
-    if (response.data?.success) {
-      return (response.data.data[entity]?.synced || 0);
-    }
-    throw new Error(response.data?.error || `Erro ao sincronizar ${entity}`);
-  };
-
-  const handleSync = async (entity: "products" | "contacts" | "orders") => {
-    setSyncing(entity);
-    try {
-      const synced = await syncEntity(entity);
-      toast.success(`Sincronização concluída! ${synced} registros atualizados.`);
-      loadSyncLogs();
-      loadCounts();
-      loadNFStatus();
-    } catch (error: any) {
-      toast.error(error.message || "Erro na sincronização");
-    } finally {
-      setSyncing(null);
-    }
-  };
-
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
@@ -420,13 +396,14 @@ export default function BlingIntegration() {
 
       {isConnected && (
         <>
-          {/* Compact Stats Row — 4 entities em uma linha */}
+          {/* Compact Stats Row — 4 entities em uma linha (só leitura).
+              A sincronização é feita pelo botão único "Sincronizar tudo" abaixo. */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             {([
               { label: "Produtos",      count: counts.products, Icon: Package,      color: "text-blue-500",   entity: "products", hint: "Catálogo do Bling (nome, código, preço)" },
               { label: "Contatos",      count: counts.contacts, Icon: Users,        color: "text-purple-500", entity: "contacts", hint: "Clientes e fornecedores" },
               { label: "Pedidos",       count: counts.orders,   Icon: ShoppingCart, color: "text-orange-500", entity: "orders",   hint: "Pedidos de venda do Bling" },
-              { label: "Notas Fiscais", count: counts.nfe,      Icon: FileText,     color: "text-rose-500",   entity: "nfe",      hint: "Listar NFs + buscar observação + cruzar com pedidos" },
+              { label: "Notas Fiscais", count: counts.nfe,      Icon: FileText,     color: "text-rose-500",   entity: "nfe",      hint: "NFs emitidas no Bling" },
             ] as const).map(({ label, count, Icon, color, entity, hint }) => (
               <Card key={entity} className="relative overflow-hidden">
                 <CardContent className="p-4">
@@ -435,17 +412,7 @@ export default function BlingIntegration() {
                     <span className="text-xs text-muted-foreground font-medium">{label}</span>
                   </div>
                   <p className="text-2xl font-bold tracking-tight">{count}</p>
-                  <p className="text-[10px] text-muted-foreground leading-snug mt-0.5 min-h-[26px]">{hint}</p>
-                  <button
-                    disabled={!!syncing}
-                    onClick={() => handleSync(entity as any)}
-                    className="mt-1.5 flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors disabled:opacity-40"
-                  >
-                    {syncing === entity
-                      ? <><Loader2 className="h-3 w-3 animate-spin" /> Sincronizando...</>
-                      : <><RefreshCw className="h-3 w-3" /> Sincronizar</>
-                    }
-                  </button>
+                  <p className="text-[10px] text-muted-foreground leading-snug mt-0.5">{hint}</p>
                 </CardContent>
               </Card>
             ))}
