@@ -14,10 +14,10 @@ import {
 import {
   FileText, ChevronLeft, ChevronRight, Search, RefreshCw,
   CheckCircle2, AlertCircle, HelpCircle, Clock, Link2, Unlink,
-  Download, ExternalLink,
+  Download, ExternalLink, Archive, ArchiveRestore,
 } from "lucide-react";
 import {
-  useBlingNFes, useLinkNFeToOrder, useUnlinkNFe,
+  useBlingNFes, useLinkNFeToOrder, useUnlinkNFe, useArchiveNFe,
   NF_MATCH_LABELS, NF_MATCH_VARIANT,
   type BlingNFe, type NFeMatchStatus,
 } from "@/hooks/useBlingNFes";
@@ -132,9 +132,11 @@ function MatchIcon({ status }: { status: NFeMatchStatus }) {
   if (status === "matched" || status === "manual")
     return <CheckCircle2 className="h-3.5 w-3.5 text-green-500 shrink-0" />;
   if (status === "invalid_code")
-    return <AlertCircle className="h-3.5 w-3.5 text-red-400 shrink-0" />;
+    return <AlertCircle className="h-3.5 w-3.5 text-amber-400 shrink-0" />;
+  if (status === "ignored")
+    return <Archive className="h-3.5 w-3.5 text-muted-foreground/60 shrink-0" />;
   if (status === "no_code")
-    return <HelpCircle className="h-3.5 w-3.5 text-amber-400 shrink-0" />;
+    return <HelpCircle className="h-3.5 w-3.5 text-muted-foreground shrink-0" />;
   return <Clock className="h-3.5 w-3.5 text-muted-foreground shrink-0" />;
 }
 
@@ -149,14 +151,16 @@ export default function BlingNFsPage() {
   const [search, setSearch] = useState("");
   const [syncing, setSyncing] = useState(false);
   const queryClient = useQueryClient();
+  const archiveNFe = useArchiveNFe();
 
   const monthStr = showAllMonths
     ? undefined
     : `${month.getFullYear()}-${String(month.getMonth() + 1).padStart(2, "0")}`;
 
+  // Busca TODAS as NFs do mês (sem filtro de status) — para os KPIs de balanço
+  // refletirem o mês inteiro, inclusive arquivadas e vinculadas.
   const { data: nfes = [], isLoading } = useBlingNFes({
     month: monthStr,
-    matchStatus: matchFilter,
     search,
   });
 
@@ -164,12 +168,18 @@ export default function BlingNFsPage() {
     month.getFullYear() === today.getFullYear() &&
     month.getMonth() === today.getMonth();
 
-  // ── KPIs ──────────────────────────────────────────────────────────────────
+  // ── KPIs (mês inteiro, inclusive arquivadas — balanço fiel) ────────────────
   const total      = nfes.length;
   const vinculadas = nfes.filter(n => n.match_status === "matched" || n.match_status === "manual").length;
   const semCodigo  = nfes.filter(n => n.match_status === "no_code").length;
   const invalidas  = nfes.filter(n => n.match_status === "invalid_code").length;
+  const arquivadas = nfes.filter(n => n.match_status === "ignored").length;
   const totalValor = nfes.reduce((s, n) => s + (n.valor_total ?? 0), 0);
+
+  // ── Tabela (visão de trabalho): "Todos" esconde arquivadas ─────────────────
+  const visibleNfes = matchFilter === "all"
+    ? nfes.filter(n => n.match_status !== "ignored")
+    : nfes.filter(n => n.match_status === matchFilter);
 
   // ── Trigger sync manual ───────────────────────────────────────────────────
   async function handleSync() {
@@ -277,13 +287,13 @@ export default function BlingNFsPage() {
           </CarboCard>
           <CarboCard>
             <CarboCardContent className="p-3 text-center">
-              <p className="text-2xl font-bold text-amber-400 tabular-nums">{semCodigo}</p>
-              <p className="text-xs text-muted-foreground">Sem código</p>
+              <p className="text-2xl font-bold text-muted-foreground tabular-nums">{semCodigo}</p>
+              <p className="text-xs text-muted-foreground">Sem pedido</p>
             </CarboCardContent>
           </CarboCard>
           <CarboCard>
             <CarboCardContent className="p-3 text-center">
-              <p className="text-2xl font-bold text-red-400 tabular-nums">{invalidas}</p>
+              <p className="text-2xl font-bold text-amber-400 tabular-nums">{invalidas}</p>
               <p className="text-xs text-muted-foreground">Cód. inválido</p>
             </CarboCardContent>
           </CarboCard>
@@ -305,43 +315,53 @@ export default function BlingNFsPage() {
               <SelectValue placeholder="Status vínculo" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">Todos os status</SelectItem>
+              <SelectItem value="all">Todos (exceto arquivadas)</SelectItem>
               <SelectItem value="matched">Vinculadas</SelectItem>
               <SelectItem value="manual">Vínculo manual</SelectItem>
-              <SelectItem value="no_code">Sem código</SelectItem>
+              <SelectItem value="no_code">Sem pedido</SelectItem>
               <SelectItem value="invalid_code">Código inválido</SelectItem>
-              <SelectItem value="pending">Aguardando</SelectItem>
+              <SelectItem value="pending">Processando</SelectItem>
+              <SelectItem value="ignored">Arquivadas</SelectItem>
             </SelectContent>
           </Select>
         </div>
 
-        {/* Instrução para o financeiro */}
-        {(semCodigo > 0 || invalidas > 0) && (
+        {/* Alerta só para Código inválido — o caso que realmente pede ação.
+            "Sem pedido" é estado neutro (NF avulsa) e não dispara alerta. */}
+        {invalidas > 0 && (
           <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 px-4 py-3 text-sm space-y-1">
             <p className="font-semibold text-amber-600 flex items-center gap-1.5">
               <AlertCircle className="h-4 w-4" />
-              Como vincular automaticamente
+              {invalidas} NF(s) com código de pedido inválido
             </p>
             <p className="text-muted-foreground text-xs leading-relaxed">
-              O sistema encontra o código do pedido em qualquer parte da observação da NF no Bling.{" "}
-              Peça ao financeiro para incluir o número exato do pedido na observação:
-            </p>
-            <p className="font-mono text-xs bg-muted/60 rounded px-2 py-1 mt-1">
-              Ex: "Referente ao pedido <strong>PED-2026-00042</strong> — cliente Posto XYZ"
+              A observação da NF tem um código <span className="font-mono">PED-AAAA-NNNNN</span> que não corresponde a
+              nenhum pedido no sistema. Verifique se o número está correto, vincule manualmente, ou arquive se não se aplica.
             </p>
           </div>
         )}
+
+        {/* Dica informativa (neutra) sobre o vínculo automático */}
+        <div className="rounded-xl border border-border bg-muted/20 px-4 py-2.5 text-xs text-muted-foreground leading-relaxed">
+          💡 Para vínculo automático, inclua o número do pedido na observação da NF no Bling
+          (ex: <span className="font-mono">PED-2026-00042</span>). NFs sem pedido (avulsas) são normais — se não precisam de
+          nada, use o botão <strong>Arquivar</strong> para tirá-las da lista.
+        </div>
 
         {/* Table */}
         {isLoading ? (
           <div className="space-y-2">
             {[1, 2, 3, 4, 5].map(i => <div key={i} className="h-14 rounded-xl bg-muted/40 animate-pulse" />)}
           </div>
-        ) : nfes.length === 0 ? (
+        ) : visibleNfes.length === 0 ? (
           <CarboCard>
             <CarboCardContent className="py-16 text-center space-y-3">
               <FileText className="h-12 w-12 mx-auto text-muted-foreground/30" />
-              <p className="text-muted-foreground">Nenhuma nota fiscal encontrada.</p>
+              <p className="text-muted-foreground">
+                {matchFilter === "all" && arquivadas > 0
+                  ? `Nenhuma NF ativa nesta visão (${arquivadas} arquivada${arquivadas !== 1 ? "s" : ""} — veja no filtro "Arquivadas").`
+                  : "Nenhuma nota fiscal encontrada."}
+              </p>
               <p className="text-xs text-muted-foreground">
                 Clique em "Sincronizar NFs" para importar notas do Bling.
               </p>
@@ -365,7 +385,7 @@ export default function BlingNFsPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {nfes.map(nf => (
+                  {visibleNfes.map(nf => (
                     <tr
                       key={nf.id}
                       className="border-b transition-colors hover:bg-muted/10"
@@ -435,6 +455,29 @@ export default function BlingNFsPage() {
                               <ExternalLink className="h-3.5 w-3.5" />
                             </a>
                           )}
+
+                          {/* Arquivar / Desarquivar — só para NFs não vinculadas */}
+                          {nf.match_status !== "matched" && nf.match_status !== "manual" && (
+                            nf.match_status === "ignored" ? (
+                              <button
+                                onClick={() => archiveNFe.mutate({ nfeId: nf.id, archive: false })}
+                                disabled={archiveNFe.isPending}
+                                className="h-7 w-7 inline-flex items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors disabled:opacity-40"
+                                title="Desarquivar"
+                              >
+                                <ArchiveRestore className="h-3.5 w-3.5" />
+                              </button>
+                            ) : (
+                              <button
+                                onClick={() => archiveNFe.mutate({ nfeId: nf.id, archive: true })}
+                                disabled={archiveNFe.isPending}
+                                className="h-7 w-7 inline-flex items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors disabled:opacity-40"
+                                title="Arquivar (NF sem ação necessária)"
+                              >
+                                <Archive className="h-3.5 w-3.5" />
+                              </button>
+                            )
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -446,8 +489,9 @@ export default function BlingNFsPage() {
         )}
 
         <p className="text-xs text-center text-muted-foreground">
-          {total} nota{total !== 1 ? "s" : ""} {showAllMonths ? "no total" : "neste mês"} ·{" "}
-          Sincronizado automaticamente pelo cron do Bling a cada 15 min
+          {total} nota{total !== 1 ? "s" : ""} {showAllMonths ? "no total" : "neste mês"}
+          {arquivadas > 0 && ` · ${arquivadas} arquivada${arquivadas !== 1 ? "s" : ""} (contam no balanço)`}
+          {" · "}Sincronização automática às 7h e 13h (Fortaleza)
         </p>
       </div>
     </BoardLayout>
