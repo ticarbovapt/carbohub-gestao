@@ -2,7 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
-export type NFeMatchStatus = "pending" | "matched" | "no_code" | "invalid_code" | "manual";
+export type NFeMatchStatus = "pending" | "matched" | "no_code" | "invalid_code" | "manual" | "ignored";
 
 export interface BlingNFe {
   id: string;
@@ -34,19 +34,21 @@ export interface BlingNFeFilters {
 }
 
 export const NF_MATCH_LABELS: Record<NFeMatchStatus, string> = {
-  pending:      "Aguardando",
+  pending:      "Processando",
   matched:      "Vinculada",
-  no_code:      "Sem código",
+  no_code:      "Sem pedido",
   invalid_code: "Código inválido",
   manual:       "Manual",
+  ignored:      "Arquivada",
 };
 
 export const NF_MATCH_VARIANT: Record<NFeMatchStatus, "success" | "warning" | "destructive" | "secondary"> = {
   matched:      "success",
   manual:       "success",
   pending:      "secondary",
-  no_code:      "warning",
-  invalid_code: "destructive",
+  no_code:      "secondary",   // neutro: NF avulsa, sem ação necessária
+  invalid_code: "warning",     // único que realmente pede atenção (código existe mas inválido)
+  ignored:      "secondary",
 };
 
 export function useBlingNFes(filters: BlingNFeFilters = {}) {
@@ -69,6 +71,9 @@ export function useBlingNFes(filters: BlingNFeFilters = {}) {
 
       if (filters.matchStatus && filters.matchStatus !== "all") {
         query = query.eq("match_status", filters.matchStatus);
+      } else {
+        // "Todos" esconde as arquivadas — elas só aparecem no filtro "Arquivadas"
+        query = query.neq("match_status", "ignored");
       }
 
       const { data, error } = await query;
@@ -187,6 +192,29 @@ export function useUnlinkNFe() {
     },
     onError: (err: Error) => {
       toast.error("Erro ao desvincular: " + err.message);
+    },
+  });
+}
+
+/** Arquiva (ignored) ou desarquiva uma NF — para dar baixa explícita em NFs sem ação. */
+export function useArchiveNFe() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ nfeId, archive }: { nfeId: string; archive: boolean }) => {
+      // Ao desarquivar, volta para "no_code" (sem pedido) — estado neutro padrão.
+      const { error } = await supabase.from("bling_nfe").update({
+        match_status: (archive ? "ignored" : "no_code") as NFeMatchStatus,
+        updated_at: new Date().toISOString(),
+      }).eq("id", nfeId);
+      if (error) throw error;
+    },
+    onSuccess: (_, { archive }) => {
+      queryClient.invalidateQueries({ queryKey: ["bling-nfes"] });
+      toast.success(archive ? "NF arquivada." : "NF desarquivada.");
+    },
+    onError: (err: Error) => {
+      toast.error("Erro: " + err.message);
     },
   });
 }

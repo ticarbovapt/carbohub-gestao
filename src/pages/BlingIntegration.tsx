@@ -480,20 +480,20 @@ export default function BlingIntegration() {
                   </div>
                   <div className="rounded-lg border border-border bg-muted/30 p-3 text-center">
                     <p className="text-2xl font-bold tabular-nums text-muted-foreground">{nfStatus.pending}</p>
-                    <p className="text-xs text-muted-foreground">Aguardando</p>
+                    <p className="text-xs text-muted-foreground">Processando</p>
+                  </div>
+                  <div className="rounded-lg border border-border bg-muted/30 p-3 text-center">
+                    <p className="text-2xl font-bold tabular-nums text-muted-foreground">{nfStatus.no_code}</p>
+                    <p className="text-xs text-muted-foreground">Sem pedido</p>
                   </div>
                   <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 p-3 text-center">
-                    <p className="text-2xl font-bold tabular-nums text-amber-400">{nfStatus.no_code}</p>
-                    <p className="text-xs text-muted-foreground">Sem código</p>
-                  </div>
-                  <div className="rounded-lg border border-red-500/20 bg-red-500/5 p-3 text-center">
-                    <p className="text-2xl font-bold tabular-nums text-red-400">{nfStatus.invalid_code}</p>
+                    <p className="text-2xl font-bold tabular-nums text-amber-400">{nfStatus.invalid_code}</p>
                     <p className="text-xs text-muted-foreground">Código inválido</p>
                   </div>
                 </div>
                 {nfStatus.pending === nfStatus.total && nfStatus.total > 0 && (
                   <p className="text-xs text-amber-500 mt-3">
-                    ⚠ Todas as NFs estão "aguardando" — o cruzamento ainda não rodou. Clique em "Sincronizar" no card Notas Fiscais para buscar a observação e cruzar.
+                    ⚠ Todas as NFs estão "processando" — o cruzamento ainda não rodou. Clique em "Sincronizar" no card Notas Fiscais para buscar a observação e cruzar.
                   </p>
                 )}
               </CardContent>
