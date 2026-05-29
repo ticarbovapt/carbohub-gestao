@@ -467,12 +467,17 @@ async function syncStock(
 }
 
 // ── syncNFe: busca notas fiscais emitidas do Bling ─────────────────────────
+// Passo 1: lista + upsert básico
+// Passo 2: busca detalhe (informacoesAdicionais) para NFs sem observação
+// Passo 3: cruzamento automático por código PED-AAAA-NNNNN na observação
 async function syncNFe(
   supabaseAdmin: ReturnType<typeof createClient>,
   token: string,
   logId: string
 ): Promise<{ synced: number; failed: number }> {
   let page = 1, totalSynced = 0, totalFailed = 0, hasMore = true;
+
+  // ── Passo 1: lista ────────────────────────────────────────────────────────
   while (hasMore) {
     const data = await blingFetch(token, "/nfe", page, 100);
     const nfes = data.data || [];
@@ -506,9 +511,114 @@ async function syncNFe(
     page++;
     if (nfes.length < 100) hasMore = false;
   }
+
+  // ── Passo 2: enriquecer com detalhe (informacoesAdicionais) ──────────────
+  // Cap: 150 NFs por execução para não estourar o timeout de 150s do edge function.
+  // O cron chama sync periodicamente, então o histórico é enriquecido em rodadas.
+  const { data: needsDetail } = await supabaseAdmin
+    .from("bling_nfe")
+    .select("id, bling_id")
+    .is("informacoes_adicionais", null)
+    .in("match_status", ["pending"])
+    .limit(150);
+
+  let enriched = 0;
+  for (const nf of (needsDetail || [])) {
+    try {
+      const detail = await blingFetch(token, `/nfe/${nf.bling_id}`, 1, 1);
+      const d = detail.data || {};
+      // Bling API v3 usa "informacoesAdicionais" para NF; fallback "observacoes"
+      const obs = d.informacoesAdicionais || d.observacoes || null;
+      await supabaseAdmin.from("bling_nfe").update({
+        informacoes_adicionais: obs,
+        // match_status só avança depois do matching (passo 3); se obs for null → no_code
+        match_status: obs === null ? "no_code" : "pending",
+        updated_at: new Date().toISOString(),
+      }).eq("id", nf.id);
+      enriched++;
+    } catch (e) {
+      console.error(`[bling-sync] NFe detail fetch failed for bling_id ${nf.bling_id}:`, e);
+      totalFailed++;
+    }
+    await new Promise((r) => setTimeout(r, 350));
+  }
+  console.log(`[bling-sync] NFe detail enrichment: ${enriched} processed`);
+
+  // ── Passo 3: cruzamento automático ────────────────────────────────────────
+  const matched = await matchNFesToOrders(supabaseAdmin);
+  console.log(`[bling-sync] NFe matching: ${matched.matched} matched, ${matched.invalid} invalid`);
+
   await supabaseAdmin.from("bling_sync_log")
     .update({ records_synced: totalSynced, records_failed: totalFailed }).eq("id", logId);
   return { synced: totalSynced, failed: totalFailed };
+}
+
+// ── matchNFesToOrders: cruzamento por PED-AAAA-NNNNN na observação ──────────
+// Lê todas as NFs com status pending (têm informacoes_adicionais mas não foram cruzadas)
+// e tenta vincular ao pedido. Também re-tenta invalid_code (caso pedido seja cadastrado
+// depois da NF).
+async function matchNFesToOrders(
+  supabaseAdmin: ReturnType<typeof createClient>
+): Promise<{ matched: number; invalid: number }> {
+  const { data: nfes } = await supabaseAdmin
+    .from("bling_nfe")
+    .select("id, bling_id, chave_acesso, numero, informacoes_adicionais")
+    .in("match_status", ["pending", "invalid_code"])
+    .not("informacoes_adicionais", "is", null);
+
+  let matched = 0, invalid = 0;
+  // Regex tolerante: encontra PED-AAAA-NNNNN em qualquer posição, case-insensitive
+  const PED_REGEX = /PED-\d{4}-\d{5}/i;
+
+  for (const nf of (nfes || [])) {
+    const obs = nf.informacoes_adicionais || "";
+    const codeMatch = obs.match(PED_REGEX);
+
+    if (!codeMatch) {
+      await supabaseAdmin.from("bling_nfe").update({
+        match_status: "no_code",
+        match_error: null,
+        updated_at: new Date().toISOString(),
+      }).eq("id", nf.id);
+      continue;
+    }
+
+    const orderNumber = codeMatch[0].toUpperCase();
+    const { data: order } = await supabaseAdmin
+      .from("carboze_orders")
+      .select("id, order_number")
+      .eq("order_number", orderNumber)
+      .maybeSingle();
+
+    if (!order) {
+      await supabaseAdmin.from("bling_nfe").update({
+        match_status: "invalid_code",
+        match_error: `Pedido ${orderNumber} não encontrado no sistema`,
+        updated_at: new Date().toISOString(),
+      }).eq("id", nf.id);
+      invalid++;
+      continue;
+    }
+
+    // Vínculo encontrado — atualiza bling_nfe
+    await supabaseAdmin.from("bling_nfe").update({
+      order_id: order.id,
+      matched_order_number: order.order_number,
+      match_status: "matched",
+      match_error: null,
+      updated_at: new Date().toISOString(),
+    }).eq("id", nf.id);
+
+    // Denormaliza no pedido os campos da NF para acesso rápido
+    await supabaseAdmin.from("carboze_orders").update({
+      bling_nf_id:   nf.bling_id,
+      nf_access_key: nf.chave_acesso || null,
+      invoice_number: nf.numero || null,
+    }).eq("id", order.id);
+
+    matched++;
+  }
+  return { matched, invalid };
 }
 
 // ── syncVendedores: busca equipe de vendedores do Bling ────────────────────

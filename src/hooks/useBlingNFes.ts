@@ -1,0 +1,192 @@
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
+
+export type NFeMatchStatus = "pending" | "matched" | "no_code" | "invalid_code" | "manual";
+
+export interface BlingNFe {
+  id: string;
+  bling_id: number;
+  numero: string | null;
+  serie: string | null;
+  chave_acesso: string | null;
+  data_emissao: string | null;
+  contato_nome: string | null;
+  contato_cnpj: string | null;
+  valor_total: number | null;
+  situacao: string | null;
+  informacoes_adicionais: string | null;
+  xml_url: string | null;
+  pdf_url: string | null;
+  order_id: string | null;
+  matched_order_number: string | null;
+  match_status: NFeMatchStatus;
+  match_error: string | null;
+  synced_at: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface BlingNFeFilters {
+  month?: string;         // YYYY-MM
+  matchStatus?: NFeMatchStatus | "all";
+  search?: string;
+}
+
+export const NF_MATCH_LABELS: Record<NFeMatchStatus, string> = {
+  pending:      "Aguardando",
+  matched:      "Vinculada",
+  no_code:      "Sem código",
+  invalid_code: "Código inválido",
+  manual:       "Manual",
+};
+
+export const NF_MATCH_VARIANT: Record<NFeMatchStatus, "success" | "warning" | "destructive" | "secondary"> = {
+  matched:      "success",
+  manual:       "success",
+  pending:      "secondary",
+  no_code:      "warning",
+  invalid_code: "destructive",
+};
+
+export function useBlingNFes(filters: BlingNFeFilters = {}) {
+  return useQuery({
+    queryKey: ["bling-nfes", filters],
+    queryFn: async () => {
+      let query = supabase
+        .from("bling_nfe")
+        .select("*")
+        .order("data_emissao", { ascending: false })
+        .order("created_at", { ascending: false });
+
+      if (filters.month) {
+        const [yr, mo] = filters.month.split("-").map(Number);
+        const lastDay = new Date(yr, mo, 0).getDate();
+        query = query
+          .gte("data_emissao", `${filters.month}-01`)
+          .lte("data_emissao", `${filters.month}-${String(lastDay).padStart(2, "0")}`);
+      }
+
+      if (filters.matchStatus && filters.matchStatus !== "all") {
+        query = query.eq("match_status", filters.matchStatus);
+      }
+
+      const { data, error } = await query;
+      if (error) throw error;
+
+      let rows = (data || []) as BlingNFe[];
+
+      if (filters.search) {
+        const q = filters.search.toLowerCase();
+        rows = rows.filter(nf =>
+          nf.contato_nome?.toLowerCase().includes(q) ||
+          nf.contato_cnpj?.includes(q) ||
+          nf.numero?.includes(q) ||
+          nf.matched_order_number?.toLowerCase().includes(q) ||
+          nf.informacoes_adicionais?.toLowerCase().includes(q)
+        );
+      }
+
+      return rows;
+    },
+  });
+}
+
+export function useLinkNFeToOrder() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ nfeId, orderNumber }: { nfeId: string; orderNumber: string }) => {
+      // Validate order exists
+      const { data: order, error: orderErr } = await supabase
+        .from("carboze_orders")
+        .select("id, order_number, bling_nf_id")
+        .eq("order_number", orderNumber.toUpperCase().trim())
+        .maybeSingle();
+
+      if (orderErr) throw orderErr;
+      if (!order) throw new Error(`Pedido ${orderNumber} não encontrado`);
+
+      // Get NF data
+      const { data: nf, error: nfErr } = await supabase
+        .from("bling_nfe")
+        .select("id, bling_id, chave_acesso, numero")
+        .eq("id", nfeId)
+        .single();
+
+      if (nfErr) throw nfErr;
+
+      // Update bling_nfe
+      const { error: e1 } = await supabase.from("bling_nfe").update({
+        order_id: order.id,
+        matched_order_number: order.order_number,
+        match_status: "manual" as NFeMatchStatus,
+        match_error: null,
+        updated_at: new Date().toISOString(),
+      }).eq("id", nfeId);
+      if (e1) throw e1;
+
+      // Denormalize onto carboze_orders
+      const { error: e2 } = await supabase.from("carboze_orders").update({
+        bling_nf_id:    (nf as any).bling_id,
+        nf_access_key:  (nf as any).chave_acesso || null,
+        invoice_number: (nf as any).numero || null,
+      }).eq("id", order.id);
+      if (e2) throw e2;
+
+      return { order, nf };
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["bling-nfes"] });
+      queryClient.invalidateQueries({ queryKey: ["carboze-orders"] });
+      queryClient.invalidateQueries({ queryKey: ["vendas"] });
+      toast.success("NF vinculada ao pedido com sucesso!");
+    },
+    onError: (err: Error) => {
+      toast.error("Erro ao vincular NF: " + err.message);
+    },
+  });
+}
+
+export function useUnlinkNFe() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (nfeId: string) => {
+      // Get current order_id before unlinking
+      const { data: nf } = await supabase
+        .from("bling_nfe")
+        .select("order_id")
+        .eq("id", nfeId)
+        .single();
+
+      // Unlink bling_nfe
+      const { error: e1 } = await supabase.from("bling_nfe").update({
+        order_id: null,
+        matched_order_number: null,
+        match_status: "no_code" as NFeMatchStatus,
+        match_error: null,
+        updated_at: new Date().toISOString(),
+      }).eq("id", nfeId);
+      if (e1) throw e1;
+
+      // Clear NF fields on carboze_orders
+      if ((nf as any)?.order_id) {
+        await supabase.from("carboze_orders").update({
+          bling_nf_id:    null,
+          nf_access_key:  null,
+          invoice_number: null,
+        }).eq("id", (nf as any).order_id);
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["bling-nfes"] });
+      queryClient.invalidateQueries({ queryKey: ["carboze-orders"] });
+      queryClient.invalidateQueries({ queryKey: ["vendas"] });
+      toast.success("Vínculo removido.");
+    },
+    onError: (err: Error) => {
+      toast.error("Erro ao desvincular: " + err.message);
+    },
+  });
+}
