@@ -235,11 +235,11 @@ export function EditOrderDialog({ open, onOpenChange, order, canEditSensitive = 
               <TabsList className="w-full">
                 <TabsTrigger value="pedido" className="flex-1 gap-1.5">
                   <Zap className="h-3.5 w-3.5" />
-                  Pedido
+                  Dados da Venda
                 </TabsTrigger>
                 <TabsTrigger value="po" className="flex-1 gap-1.5">
                   <FileText className="h-3.5 w-3.5" />
-                  Dados PO / Fiscal
+                  Compra e Nota Fiscal
                 </TabsTrigger>
               </TabsList>
 
@@ -684,9 +684,18 @@ export function EditOrderDialog({ open, onOpenChange, order, canEditSensitive = 
                 </div>
               </TabsContent>
 
-              {/* ── ABA DADOS PO / FISCAL ──────────────────────────────────────── */}
+              {/* ── ABA COMPRA E NOTA FISCAL ──────────────────────────────────── */}
               <TabsContent value="po" className="space-y-5 mt-4">
-                {/* Dados do PO do cliente */}
+                {/* Explicação para leigos */}
+                <div className="rounded-lg border border-border bg-muted/30 px-3 py-2.5">
+                  <p className="text-[11px] text-muted-foreground leading-relaxed">
+                    Esta aba é opcional. Use apenas quando o cliente envia um <strong>Pedido de Compra formal</strong> (documento
+                    que empresas grandes emitem para autorizar a compra) ou quando precisar registrar os dados de
+                    <strong> faturamento</strong> e a <strong>Nota Fiscal</strong>. Em vendas simples pode deixar tudo em branco.
+                  </p>
+                </div>
+
+                {/* Dados do pedido de compra do cliente */}
                 <div className="space-y-3">
                   <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                     Pedido de Compra do Cliente
@@ -697,11 +706,11 @@ export function EditOrderDialog({ open, onOpenChange, order, canEditSensitive = 
                       name="po_number"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Número do PO</FormLabel>
+                          <FormLabel>Número do Pedido de Compra</FormLabel>
                           <FormControl>
                             <Input placeholder="ex: 4500787362" {...field} />
                           </FormControl>
-                          <FormDescription>Número do pedido de compra no ERP do cliente</FormDescription>
+                          <FormDescription>Número que o cliente gerou no sistema dele para autorizar esta compra</FormDescription>
                           <FormMessage />
                         </FormItem>
                       )}
@@ -711,7 +720,7 @@ export function EditOrderDialog({ open, onOpenChange, order, canEditSensitive = 
                       name="po_date"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Data do PO</FormLabel>
+                          <FormLabel>Data do Pedido de Compra</FormLabel>
                           <FormControl>
                             <Input type="date" {...field} />
                           </FormControl>
@@ -725,7 +734,7 @@ export function EditOrderDialog({ open, onOpenChange, order, canEditSensitive = 
                 {/* Faturamento */}
                 <div className="space-y-3">
                   <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                    Faturar Para
+                    Dados para Faturamento
                   </p>
                   <div className="grid grid-cols-2 gap-4">
                     <FormField
@@ -746,9 +755,9 @@ export function EditOrderDialog({ open, onOpenChange, order, canEditSensitive = 
                       name="billing_contact_name"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Responsável (comprador)</FormLabel>
+                          <FormLabel>Responsável pela Compra</FormLabel>
                           <FormControl>
-                            <Input placeholder="Nome do responsável pelo PO" {...field} />
+                            <Input placeholder="Nome de quem fez a compra no cliente" {...field} />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -875,7 +884,7 @@ export function EditOrderDialog({ open, onOpenChange, order, canEditSensitive = 
                 {/* Observações */}
                 <div className="space-y-3">
                   <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                    Observações do PO
+                    Observações
                   </p>
                   <FormField
                     control={form.control}
