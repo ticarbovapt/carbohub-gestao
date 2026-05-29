@@ -17,7 +17,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, CalendarIcon, Loader2, Plus, Trash2, Repeat, Search, Building2, MapPin, CheckCircle2, AlertCircle, ShoppingCart, Gift, User } from "lucide-react";
+import { ArrowLeft, CalendarIcon, Loader2, Plus, Trash2, Repeat, Search, Building2, MapPin, CheckCircle2, AlertCircle, ShoppingCart, Gift } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useCreateOrder, type OrderType, ORDER_TYPE_LABELS } from "@/hooks/useCarbozeOrders";
 import { useLicensees } from "@/hooks/useLicensees";
@@ -28,6 +28,8 @@ import { MapPinSelector } from "@/components/maps/MapPinSelector";
 import { toast } from "sonner";
 import { useTeamMembers } from "@/hooks/useTeamMembers";
 import { useSkus } from "@/hooks/useSkus";
+import { useAuth } from "@/contexts/AuthContext";
+import { diceBearUrl } from "@/components/ui/profile-avatar";
 
 type OrderMode = "venda" | "acao_promocional";
 
@@ -61,6 +63,23 @@ const LINHAS: { value: LinhaCarbo; label: string; flow: RvFlowType; skuCode: str
   { value: "carbovapt", label: "CarboVapt (Serviço)", flow: "service", skuCode: "SKU-VAPT70" },
 ];
 
+// Maps product_code → linha (for auto-detection from items)
+const PRODUCT_CODE_TO_LINHA: Record<string, LinhaCarbo> = {
+  "SKU-CZ100":  "carboze_100ml",
+  "SKU-CZ1L":   "carboze_1l",
+  "SKU-CZSC10": "carboze_sache_10ml",
+  "SKU-CP100":  "carbopro",
+  "SKU-VAPT70": "carbovapt",
+};
+
+function detectLinhaFromItems(items: ItemRow[]): LinhaCarbo | null {
+  for (const item of items) {
+    const match = PRODUCT_CODE_TO_LINHA[item.product_code];
+    if (match) return match;
+  }
+  return null;
+}
+
 const MODALIDADES = [
   { value: "poc", label: "POC — Prova de Conceito" },
   { value: "eventual", label: "Eventual — Avulso" },
@@ -69,9 +88,9 @@ const MODALIDADES = [
 ];
 
 const formSchema = z.object({
-  // Vendedor + Fluxo
-  vendedor_id: z.string().min(1, "Selecione o vendedor"),
-  linha: z.string().min(1, "Selecione a linha"),
+  // Vendedor + Fluxo — preenchidos automaticamente pelo usuário logado
+  vendedor_id: z.string().optional(),
+  linha: z.string().optional(),
   rv_flow_type: z.enum(["standard", "service", "bonus_only"]).default("standard"),
   modalidade: z.string().optional(),
   // CNPJ-first fields
@@ -137,8 +156,11 @@ interface CnpjData {
   raw: any;
 }
 
+const VENDEDOR_FUNCOES = ["vendedor_b2b", "vendedor_b2c"];
+
 export default function CreateOrder() {
   const navigate = useNavigate();
+  const { profile } = useAuth();
   const createOrder = useCreateOrder();
   const { data: licensees } = useLicensees();
   const { data: teamMembers } = useTeamMembers();
@@ -153,6 +175,27 @@ export default function CreateOrder() {
   const [cnpjFound, setCnpjFound] = useState(false);
   const [cnpjError, setCnpjError] = useState<string | null>(null);
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
+
+  // Gestores podem selecionar outro vendedor; vendedores ficam travados no próprio perfil
+  const isVendedor = VENDEDOR_FUNCOES.includes(profile?.funcao ?? "");
+  const canOverrideVendedor = !isVendedor; // head, gerente, coordenador, TI, etc.
+  const [overrideVendedorId, setOverrideVendedorId] = useState<string>("");
+
+  const vendedoresOnly = (teamMembers || []).filter(
+    (m) => m.funcao && VENDEDOR_FUNCOES.includes(m.funcao)
+  );
+
+  // ID e nome efetivos do vendedor para o pedido
+  const effectiveVendedorId   = canOverrideVendedor && overrideVendedorId ? overrideVendedorId : (profile?.id ?? "");
+  const effectiveVendedorName = canOverrideVendedor && overrideVendedorId
+    ? (vendedoresOnly.find(m => m.id === overrideVendedorId)?.full_name ?? "")
+    : (profile?.full_name ?? "");
+  const effectiveVendedorAvatar = canOverrideVendedor && overrideVendedorId
+    ? (vendedoresOnly.find(m => m.id === overrideVendedorId)?.avatar_url ?? null)
+    : (profile?.avatar_url ?? null);
+  const effectiveVendedorAvatarId = canOverrideVendedor && overrideVendedorId
+    ? overrideVendedorId
+    : (profile?.id ?? "");
 
   const { data: products } = useQuery({
     queryKey: ["mrp-products-active"],
@@ -391,16 +434,18 @@ export default function CreateOrder() {
       }
     }
 
-    const selectedVendedor = teamMembers?.find((m: any) => m.id === data.vendedor_id);
-    const selectedLinha = LINHAS.find((l) => l.value === data.linha);
+    // Auto-detect linha from items; fallback to form value
+    const detectedLinha = detectLinhaFromItems(orderItems) ?? (data.linha as LinhaCarbo | null) ?? null;
+    const selectedLinha = LINHAS.find((l) => l.value === detectedLinha);
     const matchedSku = skus?.find((s) => s.code === selectedLinha?.skuCode);
+    const rvFlowType = selectedLinha?.flow ?? "standard";
 
     await createOrder.mutateAsync({
-      vendedor_id: data.vendedor_id || undefined,
+      vendedor_id: effectiveVendedorId || undefined,
       sku_id: matchedSku?.id || undefined,
-      vendedor_name: selectedVendedor?.full_name || selectedVendedor?.name || undefined,
-      rv_flow_type: data.rv_flow_type || "standard",
-      linha: data.linha || undefined,
+      vendedor_name: effectiveVendedorName || undefined,
+      rv_flow_type: rvFlowType,
+      linha: detectedLinha || undefined,
       modalidade: data.modalidade || undefined,
       customer_name: data.customer_name,
       customer_email: data.customer_email || undefined,
@@ -452,96 +497,53 @@ export default function CreateOrder() {
           <CarboButton variant="ghost" size="sm" onClick={() => navigate("/orders")}>
             <ArrowLeft className="h-4 w-4" />
           </CarboButton>
-          <div>
+          <div className="flex-1">
             <h1 className="text-2xl font-bold">Novo Pedido</h1>
             <p className="text-sm text-muted-foreground">
-              V2.1 — Comece pelo CNPJ para preenchimento automático
+              Comece pelo CNPJ para preenchimento automático
             </p>
           </div>
+          {/* Vendedor — locked for vendedores, selectable for managers */}
+          {profile && (
+            <div className="flex items-center gap-2 rounded-xl border border-border bg-muted/30 px-3 py-2">
+              <img
+                src={effectiveVendedorAvatar || diceBearUrl(effectiveVendedorAvatarId)}
+                alt={effectiveVendedorName}
+                className="h-7 w-7 rounded-full object-cover shrink-0"
+              />
+              <div className="leading-tight min-w-0">
+                {canOverrideVendedor ? (
+                  <div className="flex flex-col gap-0.5">
+                    <p className="text-[10px] text-muted-foreground">Vendedor do pedido</p>
+                    <select
+                      className="text-xs font-medium bg-transparent border-0 outline-none cursor-pointer text-foreground max-w-[160px]"
+                      value={overrideVendedorId || "__self__"}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        setOverrideVendedorId(v === "__self__" ? "" : v);
+                      }}
+                    >
+                      <option value="__self__">{profile.full_name} (eu)</option>
+                      {vendedoresOnly
+                        .filter(m => m.id !== profile.id)
+                        .map(m => (
+                          <option key={m.id} value={m.id}>{m.full_name}</option>
+                        ))}
+                    </select>
+                  </div>
+                ) : (
+                  <div className="hidden sm:block">
+                    <p className="font-medium text-foreground text-xs">{effectiveVendedorName}</p>
+                    <p className="text-[10px] text-muted-foreground">Registrando como vendedor</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
         </div>
 
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-            {/* ===== VENDEDOR + LINHA ===== */}
-            <CarboCard>
-              <div className="p-6 space-y-4">
-                <h3 className="font-semibold flex items-center gap-2">
-                  <User className="h-4 w-4" />
-                  Vendedor e Linha
-                </h3>
-                <div className="grid gap-4 sm:grid-cols-3">
-                  <FormField control={form.control} name="vendedor_id" render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Vendedor *</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value}>
-                        <FormControl>
-                          <SelectTrigger><SelectValue placeholder="Selecione o vendedor..." /></SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {(teamMembers || []).map((m: any) => (
-                            <SelectItem key={m.id} value={m.id}>
-                              {m.full_name || m.name || m.email}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )} />
-                  <FormField control={form.control} name="linha" render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Linha *</FormLabel>
-                      <Select onValueChange={(v) => {
-                        field.onChange(v);
-                        const selected = LINHAS.find(l => l.value === v);
-                        if (selected) {
-                          form.setValue("rv_flow_type", selected.flow);
-                        }
-                      }} value={field.value}>
-                        <FormControl>
-                          <SelectTrigger><SelectValue placeholder="Selecione a linha..." /></SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {LINHAS.map(l => (
-                            <SelectItem key={l.value} value={l.value}>{l.label}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )} />
-                  {form.watch("rv_flow_type") === "service" && (
-                    <FormField control={form.control} name="modalidade" render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Modalidade</FormLabel>
-                        <Select onValueChange={field.onChange} value={field.value || ""}>
-                          <FormControl>
-                            <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            {MODALIDADES.map(m => (
-                              <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )} />
-                  )}
-                </div>
-                {form.watch("rv_flow_type") === "service" && (
-                  <div className="text-xs text-blue-600 bg-blue-50 rounded-lg p-2">
-                    Fluxo Serviço: ao confirmar este RV, uma OS será gerada automaticamente.
-                  </div>
-                )}
-                {form.watch("rv_flow_type") === "standard" && form.watch("linha") && (
-                  <div className="text-xs text-emerald-600 bg-emerald-50 rounded-lg p-2">
-                    Fluxo Produto: ao confirmar este RV, uma OP será gerada automaticamente.
-                  </div>
-                )}
-              </div>
-            </CarboCard>
-
             {/* ===== ORDER MODE SELECTOR ===== */}
             <CarboCard>
               <div className="p-6 space-y-4">
