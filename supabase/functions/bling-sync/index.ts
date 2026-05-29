@@ -670,9 +670,49 @@ async function syncStock(
   return { synced: totalSynced, failed: totalFailed };
 }
 
+// Situação da NF-e no Bling v3 (código numérico → rótulo legível)
+const NFE_SITUACAO_LABELS: Record<string, string> = {
+  "1": "Pendente",
+  "2": "Cancelada",
+  "3": "Aguardando recibo",
+  "4": "Rejeitada",
+  "5": "Autorizada",
+  "6": "Emitida DANFE",
+  "7": "Registrada",
+  "8": "Aguardando protocolo",
+  "9": "Denegada",
+  "10": "Consulta situação",
+  "11": "Bloqueada",
+};
+
+function nfeSituacaoLabel(situacao: unknown): string | null {
+  if (situacao == null) return null;
+  // pode vir como número (6), string ("6") ou objeto ({ valor: 6 } / { valor: "Autorizada" })
+  const raw = typeof situacao === "object"
+    ? (situacao as any).valor ?? (situacao as any).id
+    : situacao;
+  if (raw == null) return null;
+  const key = String(raw);
+  // se já vier um texto (não-numérico), mantém
+  if (!/^\d+$/.test(key)) return key;
+  return NFE_SITUACAO_LABELS[key] || `Situação ${key}`;
+}
+
+// Extrai o CNPJ/CPF do contato da NF, tentando os vários nomes de campo do Bling
+function extractContatoDoc(contato: any): string | null {
+  if (!contato) return null;
+  return contato.numeroDocumento || contato.cpfCnpj || contato.cnpj || contato.cpf || null;
+}
+
+// Extrai o valor total da NF, tentando os vários nomes de campo do Bling
+function extractValorNota(d: any): number | null {
+  const v = d?.valorNota ?? d?.valorTotal ?? d?.valor ?? d?.total;
+  return v != null ? Number(v) : null;
+}
+
 // ── syncNFe: busca notas fiscais emitidas do Bling ─────────────────────────
 // Passo 1: lista + upsert básico
-// Passo 2: busca detalhe (informacoesAdicionais) para NFs sem observação
+// Passo 2: busca detalhe (observação + valor + CNPJ + situação) para NFs sem detalhe
 // Passo 3: cruzamento automático por código PED-AAAA-NNNNN na observação
 async function syncNFe(
   supabaseAdmin: ReturnType<typeof createClient>,
@@ -689,6 +729,10 @@ async function syncNFe(
     for (const nf of nfes) {
       try {
         const contato = nf.contato || {};
+        // IMPORTANTE: a lista do Bling NÃO traz valor_total nem contato_cnpj.
+        // Esses dois campos são preenchidos SÓ no Passo 2 (detalhe) e por isso são
+        // omitidos aqui — senão o upsert os sobrescreveria com null a cada sync,
+        // apagando o que o detalhe já preencheu.
         await supabaseAdmin.from("bling_nfe").upsert({
           bling_id:     nf.id,
           numero:       nf.numero ? String(nf.numero) : null,
@@ -696,9 +740,7 @@ async function syncNFe(
           chave_acesso: nf.chaveAcesso || null,
           data_emissao: nf.dataEmissao || null,
           contato_nome: contato.nome || null,
-          contato_cnpj: contato.cpfCnpj || null,
-          valor_total:  nf.valorTotal != null ? Number(nf.valorTotal) : null,
-          situacao:     nf.situacao?.valor || String(nf.situacao || ""),
+          situacao:     nfeSituacaoLabel(nf.situacao),
           xml_url:      nf.xml  || null,
           pdf_url:      nf.pdf  || null,
           raw_data:     nf,
@@ -716,7 +758,8 @@ async function syncNFe(
     if (nfes.length < 100) hasMore = false;
   }
 
-  // ── Passo 2: enriquecer com detalhe (informacoesAdicionais) ──────────────
+  // ── Passo 2: enriquecer com detalhe (observação + valor + CNPJ + situação) ─
+  // A lista do Bling NÃO traz valor nem CNPJ — só o detalhe (GET /nfe/{id}) traz.
   // Cap: 150 NFs por execução para não estourar o timeout de 150s do edge function.
   // O cron chama sync periodicamente, então o histórico é enriquecido em rodadas.
   const { data: needsDetail } = await supabaseAdmin
@@ -733,12 +776,25 @@ async function syncNFe(
       const d = detail.data || {};
       // Bling API v3 usa "informacoesAdicionais" para NF; fallback "observacoes"
       const obs = d.informacoesAdicionais || d.observacoes || null;
-      await supabaseAdmin.from("bling_nfe").update({
+
+      const update: Record<string, any> = {
         informacoes_adicionais: obs,
         // match_status só avança depois do matching (passo 3); se obs for null → no_code
         match_status: obs === null ? "no_code" : "pending",
+        raw_data: d,  // detalhe é mais rico que a lista — guarda para uso futuro
         updated_at: new Date().toISOString(),
-      }).eq("id", nf.id);
+      };
+      // Backfill dos campos que só existem no detalhe
+      const valor = extractValorNota(d);
+      const cnpj  = extractContatoDoc(d.contato);
+      const situ  = nfeSituacaoLabel(d.situacao);
+      if (valor != null) update.valor_total  = valor;
+      if (cnpj)          update.contato_cnpj  = cnpj;
+      if (situ)          update.situacao      = situ;
+      if (d.contato?.nome) update.contato_nome = d.contato.nome;
+      if (d.chaveAcesso)   update.chave_acesso = d.chaveAcesso;
+
+      await supabaseAdmin.from("bling_nfe").update(update).eq("id", nf.id);
       enriched++;
     } catch (e) {
       console.error(`[bling-sync] NFe detail fetch failed for bling_id ${nf.bling_id}:`, e);

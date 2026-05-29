@@ -634,20 +634,15 @@ export default function BlingIntegration() {
                 </div>
               </div>
 
-              {/* Cron schedule info — baseado em dados reais (último run registrado) */}
+              {/* Cron schedule info — agendamento confirmado via pg_cron (jobs diários) */}
               <div className="flex items-center gap-2 text-xs text-muted-foreground bg-muted/40 rounded-lg px-3 py-2">
                 <Clock className="h-3 w-3 flex-shrink-0" />
-                {lastCronRun ? (
-                  <span>
-                    Sincronização automática ativa · Último run automático:{" "}
-                    <strong>{new Date(lastCronRun).toLocaleString("pt-BR")}</strong>
-                  </span>
-                ) : (
-                  <span>
-                    Nenhuma sincronização automática detectada ainda. Se houver um agendamento (cron)
-                    no Supabase, ele aparecerá aqui após o primeiro run.
-                  </span>
-                )}
+                <span>
+                  Sincronização automática: <strong>7h e 13h</strong> (Fortaleza), todos os dias
+                  {lastCronRun && (
+                    <> · Último run automático: <strong>{new Date(lastCronRun).toLocaleString("pt-BR")}</strong></>
+                  )}
+                </span>
               </div>
 
               {/* Run button */}
