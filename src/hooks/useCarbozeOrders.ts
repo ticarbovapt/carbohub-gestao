@@ -463,6 +463,31 @@ export function useConvertQuoteToOrder() {
   });
 }
 
+// ── Atualiza um orçamento existente (mantém status 'quote'; sem OP/estoque) ────
+export function useUpdateQuote() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ id, ...data }: { id: string } & OrderInsert) => {
+      const { data: result, error } = await supabase
+        .from("carboze_orders")
+        .update({ ...data, commission_amount: calcCommission(data) })
+        .eq("id", id)
+        .select()
+        .single();
+      if (error) throw error;
+      return result;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["carboze-orders"] });
+      toast.success("Orçamento atualizado!");
+    },
+    onError: (error: Error) => {
+      toast.error("Erro ao atualizar orçamento: " + error.message);
+    },
+  });
+}
+
 export function useUpdateOrder() {
   const queryClient = useQueryClient();
 
