@@ -7,7 +7,6 @@ import {
   Users,
   Store,
   ArrowRight,
-  Zap,
   TrendingUp,
   Package,
 } from "lucide-react";
@@ -224,9 +223,11 @@ export function HomeHub() {
             transition={{ delay: 0.2, duration: 0.5, type: "spring" }}
             className="inline-flex items-center gap-3 md:gap-4 mb-4 md:mb-6"
           >
-            <span className="inline-flex items-center justify-center h-12 w-12 md:h-14 md:w-14 rounded-2xl bg-gradient-to-br from-carbo-green to-carbo-blue shadow-xl">
-              <Zap className="h-6 w-6 md:h-7 md:w-7 text-white" />
-            </span>
+            <img
+              src={logoAvatar}
+              alt="Grupo Carbo"
+              className="h-12 w-12 md:h-14 md:w-14 object-contain"
+            />
             <h1 className="text-3xl md:text-4xl lg:text-5xl font-bold text-foreground tracking-tight">
               CARBO Hub
             </h1>
