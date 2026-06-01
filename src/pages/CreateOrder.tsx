@@ -509,35 +509,38 @@ export default function CreateOrder() {
           </div>
           {/* Vendedor — locked for vendedores, selectable for managers */}
           {profile && (
-            <div className="flex items-center gap-2 rounded-xl border border-border bg-muted/30 px-3 py-2">
+            <div className="flex items-center gap-2.5 rounded-xl border border-border bg-muted/30 px-3 py-2 min-w-[210px]">
               <img
                 src={effectiveVendedorAvatar || diceBearUrl(effectiveVendedorAvatarId)}
                 alt={effectiveVendedorName}
-                className="h-7 w-7 rounded-full object-cover shrink-0"
+                className="h-8 w-8 rounded-full object-cover shrink-0 ring-1 ring-border"
               />
-              <div className="leading-tight min-w-0">
+              <div className="leading-tight min-w-0 flex-1">
                 {canOverrideVendedor ? (
-                  <div className="flex flex-col gap-0.5">
-                    <p className="text-[10px] text-muted-foreground">Vendedor do pedido</p>
-                    <select
-                      className="text-xs font-medium bg-transparent border-0 outline-none cursor-pointer text-foreground max-w-[160px]"
+                  <>
+                    <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Vendedor do pedido</p>
+                    <Select
                       value={overrideVendedorId || "__self__"}
-                      onChange={(e) => {
-                        const v = e.target.value;
-                        setOverrideVendedorId(v === "__self__" ? "" : v);
-                      }}
+                      onValueChange={(v) => setOverrideVendedorId(v === "__self__" ? "" : v)}
                     >
-                      <option value="__self__">{profile.full_name} (eu)</option>
-                      {vendedoresOnly
-                        .filter(m => m.id !== profile.id)
-                        .map(m => (
-                          <option key={m.id} value={m.id}>{m.full_name}</option>
-                        ))}
-                    </select>
-                  </div>
+                      <SelectTrigger className="h-6 border-0 bg-transparent px-0 py-0 text-sm font-semibold shadow-none focus:ring-0">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent align="end" className="max-h-72">
+                        <SelectItem value="__self__">{profile.full_name} (eu)</SelectItem>
+                        {vendedoresOnly
+                          .filter((m) => m.id !== profile.id)
+                          .map((m) => (
+                            <SelectItem key={m.id} value={m.id}>
+                              {m.full_name || "Vendedor sem nome"}
+                            </SelectItem>
+                          ))}
+                      </SelectContent>
+                    </Select>
+                  </>
                 ) : (
                   <div className="hidden sm:block">
-                    <p className="font-medium text-foreground text-xs">{effectiveVendedorName}</p>
+                    <p className="font-medium text-foreground text-sm truncate">{effectiveVendedorName}</p>
                     <p className="text-[10px] text-muted-foreground">
                       {profile?.is_vendedor ? "Registrando como vendedor" : "Criando pedido"}
                     </p>
