@@ -469,15 +469,16 @@ export default function CreateOrder() {
         bonus_quantity: item.has_bonus ? item.bonus_quantity : 0,
       }));
 
-  // Checa estoque no Hub Natal. Retorna true se OK. Usado SÓ na venda
-  // (orçamento é proposta, não exige estoque disponível).
-  const checkNatalStock = async (orderItems: ReturnType<typeof buildOrderItems>) => {
+  // Aviso (NÃO bloqueia) de estoque baixo no Hub Natal. Por enquanto a venda é
+  // permitida mesmo sem estoque — a dedução nunca fica negativa (Math.max(0,…)).
+  // TODO: reativar o bloqueio quando o sistema estiver em produção real.
+  const warnLowStock = async (orderItems: ReturnType<typeof buildOrderItems>) => {
     const itemsWithCode = orderItems.filter((i) => i.product_code);
-    if (itemsWithCode.length === 0) return true;
+    if (itemsWithCode.length === 0) return;
 
     const { data: natWh } = await supabase.from("warehouses").select("id").ilike("name", "%natal%").limit(1);
     const natId = (natWh as any)?.[0]?.id as string | undefined;
-    if (!natId) return true;
+    if (!natId) return;
 
     const codes = [...new Set(itemsWithCode.map((i) => i.product_code))];
     const { data: mrpProds } = await (supabase as any)
@@ -486,6 +487,7 @@ export default function CreateOrder() {
       .in("product_code", codes);
     const prodMap = new Map<string, any>((mrpProds || []).map((p: any) => [p.product_code, p]));
 
+    const short: string[] = [];
     for (const item of itemsWithCode) {
       const prod = prodMap.get(item.product_code);
       if (!prod) continue;
@@ -497,14 +499,12 @@ export default function CreateOrder() {
         .maybeSingle();
       const available = (ws as any)?.quantity ?? (prod.current_stock_qty as number) ?? 0;
       if (available < item.quantity) {
-        toast.error(
-          `Estoque insuficiente em Hub Natal — ${prod.name}: disponível ${available}, solicitado ${item.quantity}. ` +
-          "Verifique Suprimentos ou crie uma OP antes de confirmar o pedido."
-        );
-        return false;
+        short.push(`${prod.name} (disp. ${available}, ped. ${item.quantity})`);
       }
     }
-    return true;
+    if (short.length > 0) {
+      toast.warning("Estoque insuficiente no Hub Natal — venda criada mesmo assim: " + short.join("; "));
+    }
   };
 
   // Monta o payload completo do pedido/orçamento (campos idênticos).
@@ -564,7 +564,7 @@ export default function CreateOrder() {
       toast.error("Adicione pelo menos um item ao pedido.");
       return;
     }
-    if (!(await checkNatalStock(orderItems))) return;
+    await warnLowStock(orderItems); // apenas avisa; não bloqueia a venda
 
     if (isEditingQuote && editId) {
       // Salva as edições no orçamento e converte em venda (aí dispara OP+estoque)
