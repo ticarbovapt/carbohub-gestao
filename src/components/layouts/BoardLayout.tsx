@@ -1,4 +1,4 @@
-import React, { ReactNode, useState, useCallback } from "react";
+import React, { ReactNode, useState, useCallback, useEffect } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useOpsAlertsBadge } from "@/hooks/useOpsAlerts";
 import { useCRMStaleBadge } from "@/hooks/useCRMStaleBadge";
@@ -406,7 +406,20 @@ export function BoardLayout({ children }: BoardLayoutProps) {
   }, [isTiHead, isConfigured, allowedScreenIds]);
   const isMobile = useIsMobile();
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [activeSector, setActiveSector] = useState<string | null>("dashboards");
+  // Abre a seção da página atual ao montar (evita "zerar" no F5); cai no
+  // último setor aberto (localStorage) e por fim em "dashboards".
+  const [activeSector, setActiveSector] = useState<string | null>(() => {
+    const path = location.pathname;
+    const match = SECTORS.find(s =>
+      s.items.some(it => it.href !== "/dashboard" && (path === it.href || path.startsWith(it.href)))
+    );
+    return match?.id ?? localStorage.getItem("sidebar-sector") ?? "dashboards";
+  });
+
+  // Persiste o último setor aberto para restaurar entre sessões/refreshes.
+  useEffect(() => {
+    if (activeSector) localStorage.setItem("sidebar-sector", activeSector);
+  }, [activeSector]);
 
   // ── Onboarding → PasswordChange sequencing ─────────────────────────────────
   // PasswordChangeModal only renders AFTER onboarding is dismissed/done,
