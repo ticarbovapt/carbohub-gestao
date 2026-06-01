@@ -48,9 +48,6 @@ function fmtCnpj(cnpj: string | null) {
 // ─────────────────────────────────────────────────────────────────────────────
 // Manual link popover
 // ─────────────────────────────────────────────────────────────────────────────
-const fmtBRL = (v: number | null | undefined) =>
-  v == null ? "" : v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
-
 function LinkPopover({ nfe }: { nfe: BlingNFe }) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
