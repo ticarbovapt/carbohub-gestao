@@ -11,7 +11,6 @@ import {
   Lock,
   ArrowRight,
   Globe,
-  Zap,
   Loader2,
   AlertCircle,
   Eye,
@@ -219,15 +218,15 @@ const Index = () => {
               transition={{ delay: 0.5, duration: 0.5 }}
             >
               Carbo Controle
-              <motion.span
-                className="inline-flex items-center justify-center h-11 w-11 xl:h-14 xl:w-14 rounded-xl bg-gradient-to-br from-carbo-green to-carbo-blue shadow-lg shadow-carbo-green/30"
+              <motion.img
+                src={logoCarbo}
+                alt="Grupo Carbo"
+                className="h-11 xl:h-14 w-auto object-contain"
                 initial={{ rotate: -180, scale: 0 }}
                 animate={{ rotate: 0, scale: 1 }}
                 transition={{ delay: 0.7, duration: 0.6, type: "spring", stiffness: 200 }}
                 whileHover={{ rotate: 15, scale: 1.1 }}
-              >
-                <Zap className="h-6 w-6 xl:h-7 xl:w-7 text-white" />
-              </motion.span>
+              />
             </motion.h1>
             <motion.p
               className="text-xl xl:text-2xl text-foreground font-medium"
@@ -304,14 +303,14 @@ const Index = () => {
             transition={{ delay: 0.2 }}
           >
             Carbo Controle
-            <motion.span
-              className="inline-flex items-center justify-center h-8 w-8 rounded-lg bg-gradient-to-br from-carbo-green to-carbo-blue shadow-md"
+            <motion.img
+              src={logoCarbo}
+              alt="Grupo Carbo"
+              className="h-8 w-auto object-contain"
               initial={{ rotate: -90, scale: 0 }}
               animate={{ rotate: 0, scale: 1 }}
               transition={{ delay: 0.4, type: "spring", stiffness: 200 }}
-            >
-              <Zap className="h-4 w-4 text-white" />
-            </motion.span>
+            />
           </motion.h1>
           <motion.p
             className="text-sm text-foreground font-medium mt-1"

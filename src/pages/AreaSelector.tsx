@@ -7,7 +7,6 @@ import {
   Store,
   ArrowRight,
   Globe,
-  Zap,
 } from "lucide-react";
 import { ThemeToggle } from "@/components/ui/ThemeToggle";
 import { FloatingParticles } from "@/components/animations/FloatingParticles";
@@ -323,14 +322,14 @@ const AreaSelector = () => {
             transition={{ delay: 0.3 }}
           >
             CARBO Hub
-            <motion.span
-              className="inline-flex items-center justify-center h-10 w-10 rounded-xl bg-gradient-to-br from-carbo-green to-carbo-blue shadow-lg shadow-carbo-green/30"
+            <motion.img
+              src={logoCarbo}
+              alt="Grupo Carbo"
+              className="h-10 w-auto object-contain"
               initial={{ rotate: -180, scale: 0 }}
               animate={{ rotate: 0, scale: 1 }}
               transition={{ delay: 0.5, type: "spring", stiffness: 220, damping: 12 }}
-            >
-              <Zap className="h-5 w-5 text-white" />
-            </motion.span>
+            />
           </motion.h1>
 
           {/* Subtitle */}
