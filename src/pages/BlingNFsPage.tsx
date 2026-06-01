@@ -17,7 +17,7 @@ import {
   Download, ExternalLink, Archive, ArchiveRestore,
 } from "lucide-react";
 import {
-  useBlingNFes, useLinkNFeToOrder, useUnlinkNFe, useArchiveNFe,
+  useBlingNFes, useLinkNFeToOrder, useUnlinkNFe, useArchiveNFe, useLinkableOrders,
   NF_MATCH_LABELS, NF_MATCH_VARIANT,
   type BlingNFe, type NFeMatchStatus,
 } from "@/hooks/useBlingNFes";
@@ -48,12 +48,17 @@ function fmtCnpj(cnpj: string | null) {
 // ─────────────────────────────────────────────────────────────────────────────
 // Manual link popover
 // ─────────────────────────────────────────────────────────────────────────────
+const fmtBRL = (v: number | null | undefined) =>
+  v == null ? "" : v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+
 function LinkPopover({ nfe }: { nfe: BlingNFe }) {
   const [open, setOpen] = useState(false);
-  const [code, setCode] = useState(nfe.matched_order_number ?? "");
+  const [search, setSearch] = useState("");
   const link = useLinkNFeToOrder();
   const unlink = useUnlinkNFe();
   const isLinked = nfe.match_status === "matched" || nfe.match_status === "manual";
+  // Só busca pedidos quando o popover está aberto
+  const { data: orders, isLoading: ordersLoading } = useLinkableOrders(search, open);
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -80,46 +85,64 @@ function LinkPopover({ nfe }: { nfe: BlingNFe }) {
           </div>
         )}
 
-        <div className="space-y-1.5">
-          <p className="text-xs text-muted-foreground">
-            {isLinked ? "Alterar para outro pedido:" : "Número do pedido (ex: PED-2026-00042):"}
-          </p>
-          <Input
-            className="font-mono text-sm h-8"
-            placeholder="PED-AAAA-NNNNN"
-            value={code}
-            onChange={e => setCode(e.target.value.toUpperCase())}
-          />
+        {/* Contexto da NF para ajudar a casar com o pedido certo */}
+        <div className="rounded-md bg-muted/40 px-2.5 py-1.5 text-[11px] text-muted-foreground">
+          NF de <span className="font-medium text-foreground">{nfe.contato_nome || "—"}</span>
+          {nfe.valor_total != null && <> · {fmtBRL(nfe.valor_total)}</>}
         </div>
 
-        <div className="flex gap-2">
+        <div className="space-y-1.5">
+          <p className="text-xs text-muted-foreground">
+            {isLinked ? "Alterar para outro pedido:" : "Escolha o pedido (sem NF vinculada):"}
+          </p>
+          <Input
+            className="text-sm h-8"
+            placeholder="Buscar por nº do pedido ou cliente..."
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+          />
+          <div className="max-h-52 overflow-y-auto rounded-md border border-border divide-y divide-border">
+            {ordersLoading ? (
+              <p className="px-3 py-4 text-center text-xs text-muted-foreground">Carregando pedidos…</p>
+            ) : orders && orders.length > 0 ? (
+              orders.map(o => (
+                <button
+                  key={o.id}
+                  disabled={link.isPending || o.order_number === nfe.matched_order_number}
+                  onClick={async () => {
+                    await link.mutateAsync({ nfeId: nfe.id, orderNumber: o.order_number });
+                    setOpen(false);
+                  }}
+                  className="w-full text-left px-3 py-2 hover:bg-muted transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  <span className="font-mono text-xs font-semibold text-foreground">{o.order_number}</span>
+                  <span className="block text-[11px] text-muted-foreground truncate">
+                    {o.customer_name || "—"}{o.total != null && ` · ${fmtBRL(o.total)}`}
+                  </span>
+                </button>
+              ))
+            ) : (
+              <p className="px-3 py-4 text-center text-xs text-muted-foreground">
+                Nenhum pedido sem NF encontrado{search ? " para esta busca" : ""}.
+              </p>
+            )}
+          </div>
+        </div>
+
+        {isLinked && (
           <CarboButton
+            variant="outline"
             size="sm"
-            className="flex-1"
-            disabled={!code.match(/^PED-\d{4}-\d{5}$/) || link.isPending}
+            className="w-full"
+            disabled={unlink.isPending}
             onClick={async () => {
-              await link.mutateAsync({ nfeId: nfe.id, orderNumber: code });
+              await unlink.mutateAsync(nfe.id);
               setOpen(false);
             }}
           >
-            {link.isPending ? "Salvando..." : isLinked ? "Alterar vínculo" : "Vincular"}
+            <Unlink className="h-3.5 w-3.5 mr-1" /> Remover vínculo
           </CarboButton>
-
-          {isLinked && (
-            <CarboButton
-              variant="outline"
-              size="sm"
-              disabled={unlink.isPending}
-              onClick={async () => {
-                await unlink.mutateAsync(nfe.id);
-                setCode("");
-                setOpen(false);
-              }}
-            >
-              <Unlink className="h-3.5 w-3.5" />
-            </CarboButton>
-          )}
-        </div>
+        )}
       </PopoverContent>
     </Popover>
   );
