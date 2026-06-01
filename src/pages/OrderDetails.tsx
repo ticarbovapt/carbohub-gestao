@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { ArrowLeft, Package, Clock, Truck, CheckCircle, XCircle, RefreshCw, Calendar, User, MapPin, FileText, DollarSign, Repeat, Briefcase, Factory, Wrench, ExternalLink, Pencil, Printer, Download, ShoppingCart } from "lucide-react";
+import { ArrowLeft, Package, Clock, Truck, CheckCircle, XCircle, RefreshCw, Calendar, User, MapPin, FileText, DollarSign, Repeat, Briefcase, Factory, Wrench, ExternalLink, Pencil, Printer, Download, ShoppingCart, Trash2 } from "lucide-react";
 import { useCanManageOrders } from "@/hooks/useActionPermissions";
 import { EditOrderDialog } from "@/components/orders/EditOrderDialog";
 import { BoardLayout } from "@/components/layouts/BoardLayout";
@@ -10,8 +10,9 @@ import { CarboButton } from "@/components/ui/carbo-button";
 import { CarboCard } from "@/components/ui/carbo-card";
 import { CarboBadge } from "@/components/ui/carbo-badge";
 import { Separator } from "@/components/ui/separator";
-import { useOrder, useOrderHistory, useConvertQuoteToOrder, ORDER_STATUS_LABELS, ORDER_TYPE_LABELS, OrderStatus, OrderItem } from "@/hooks/useCarbozeOrders";
+import { useOrder, useOrderHistory, useConvertQuoteToOrder, useDeleteOrder, ORDER_STATUS_LABELS, ORDER_TYPE_LABELS, OrderStatus, OrderItem } from "@/hooks/useCarbozeOrders";
 import { generateQuotePdf } from "@/lib/quotePdf";
+import { useAuth } from "@/contexts/AuthContext";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { CarboSkeleton } from "@/components/ui/CarboSkeleton";
@@ -54,6 +55,13 @@ export default function OrderDetails() {
   const { data: order, isLoading: orderLoading } = useOrder(id);
   const { data: history, isLoading: historyLoading } = useOrderHistory(id);
   const convertQuote = useConvertQuoteToOrder();
+  const deleteOrder = useDeleteOrder();
+  const { profile, isSuporte, isCeo } = useAuth();
+  // Excluir é restrito a head (primário/secundário), command ou TI.
+  const canDelete =
+    isSuporte || isCeo ||
+    profile?.funcao === "head" || profile?.secondary_funcao === "head" ||
+    profile?.department === "command" || profile?.secondary_department === "command";
 
   // Get recurrence chain orders
   const { data: recurrenceOrders } = useQuery({
@@ -199,6 +207,26 @@ export default function OrderDetails() {
                   Editar Pedido
                 </CarboButton>
               )
+            )}
+            {canDelete && (
+              <CarboButton
+                variant="destructive"
+                size="sm"
+                disabled={deleteOrder.isPending}
+                onClick={async () => {
+                  const isQuote = order.status === "quote";
+                  const msg = isQuote
+                    ? "Excluir este orçamento? Esta ação não pode ser desfeita."
+                    : "Excluir este pedido? Isso reverte a baixa de estoque e remove as OPs geradas. Esta ação não pode ser desfeita.";
+                  if (!confirm(msg)) return;
+                  await deleteOrder.mutateAsync(order.id);
+                  navigate("/orders");
+                }}
+                title="Excluir (restrito a head/command/TI)"
+              >
+                {deleteOrder.isPending ? <RefreshCw className="h-4 w-4 mr-2 animate-spin" /> : <Trash2 className="h-4 w-4 mr-2" />}
+                Excluir
+              </CarboButton>
             )}
           </div>
         </div>

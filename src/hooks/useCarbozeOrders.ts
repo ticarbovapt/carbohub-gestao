@@ -488,6 +488,93 @@ export function useUpdateQuote() {
   });
 }
 
+// ── Excluir pedido/orçamento COM limpeza de rastro ───────────────────────────
+// Reverte a baixa de estoque, remove/desvincula as OPs geradas, anula
+// referências (créditos, requests, comissões) e então apaga o pedido.
+// Restrição de QUEM pode excluir é feita na UI (head/command/TI).
+export function useDeleteOrder() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (orderId: string) => {
+      const sb = supabase as any;
+      const nowIso = new Date().toISOString();
+
+      // 1. Reverter movimentos de estoque deste pedido (devolve o que foi baixado)
+      const { data: movements } = await sb
+        .from("stock_movements")
+        .select("id, product_id, quantidade, warehouse_id")
+        .eq("origem", "pedido")
+        .eq("origem_id", orderId)
+        .eq("tipo", "saida");
+
+      for (const m of (movements || [])) {
+        const qty = Number(m.quantidade) || 0;
+        if (qty <= 0) continue;
+
+        const { data: ws } = await sb
+          .from("warehouse_stock")
+          .select("id, quantity")
+          .eq("product_id", m.product_id)
+          .eq("warehouse_id", m.warehouse_id)
+          .maybeSingle();
+        if (ws) {
+          await sb.from("warehouse_stock")
+            .update({ quantity: (ws.quantity || 0) + qty, updated_at: nowIso })
+            .eq("id", ws.id);
+        }
+
+        const { data: mp } = await sb
+          .from("mrp_products")
+          .select("id, current_stock_qty")
+          .eq("id", m.product_id)
+          .maybeSingle();
+        if (mp) {
+          await sb.from("mrp_products")
+            .update({ current_stock_qty: (mp.current_stock_qty || 0) + qty })
+            .eq("id", mp.id);
+        }
+      }
+      // remove os movimentos do pedido
+      await sb.from("stock_movements").delete().eq("origem", "pedido").eq("origem_id", orderId);
+
+      // 2. OPs geradas: apaga as exclusivas deste pedido; desvincula as compartilhadas
+      const { data: ops } = await sb
+        .from("production_orders")
+        .select("id, linked_order_ids")
+        .contains("linked_order_ids", [orderId]);
+      for (const op of (ops || [])) {
+        const ids = (op.linked_order_ids || []).filter((x: string) => x !== orderId);
+        if (ids.length === 0) {
+          await sb.from("production_orders").delete().eq("id", op.id);
+        } else {
+          await sb.from("production_orders").update({ linked_order_ids: ids }).eq("id", op.id);
+        }
+      }
+
+      // 3. Anula referências que bloqueariam a exclusão (FK sem cascade)
+      await sb.from("credit_transactions").update({ order_id: null }).eq("order_id", orderId);
+      await sb.from("licensee_requests").update({ carboze_order_id: null }).eq("carboze_order_id", orderId);
+      await sb.from("licensee_commissions").update({ carboze_order_id: null }).eq("carboze_order_id", orderId);
+
+      // 4. Apaga o pedido (order_status_history e bling_nfe.order_id são tratados por cascade/set null)
+      const { error } = await supabase.from("carboze_orders").delete().eq("id", orderId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["carboze-orders"] });
+      queryClient.invalidateQueries({ queryKey: ["production-orders"] });
+      queryClient.invalidateQueries({ queryKey: ["warehouse-stock-all"] });
+      queryClient.invalidateQueries({ queryKey: ["mrp-products-stock"] });
+      queryClient.invalidateQueries({ queryKey: ["suprimentos-kpis"] });
+      toast.success("Pedido excluído e estoque/OP revertidos.");
+    },
+    onError: (error: Error) => {
+      toast.error("Erro ao excluir pedido: " + error.message);
+    },
+  });
+}
+
 export function useUpdateOrder() {
   const queryClient = useQueryClient();
 
