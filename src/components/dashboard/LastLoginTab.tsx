@@ -15,6 +15,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { format, differenceInDays, differenceInHours, isToday } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Users, Store, Building2, Search, Clock } from "lucide-react";
+import { getDepartmentLabel, getFunctionLabel } from "@/constants/functionAccessConfig";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -22,7 +23,9 @@ interface LoginRow {
   user_id: string;
   full_name: string | null;
   department: string | null;
-  role: string | null;
+  funcao: string | null;
+  secondary_department: string | null;
+  secondary_funcao: string | null;
   last_login_at: string | null;
   user_area: string;
   region: string | null;
@@ -66,35 +69,25 @@ function formatLogin(dt: string | null) {
   return format(new Date(dt), "dd/MM/yy HH:mm", { locale: ptBR });
 }
 
-const DEPT_LABELS: Record<string, string> = {
+// Labels legados de departamento (telas/áreas antigas) usados como fallback
+// quando a chave não existe no modelo do Role Matrix (DEPARTMENTS).
+const LEGACY_DEPT_LABELS: Record<string, string> = {
   venda: "Venda",
   preparacao: "Preparação",
   expedicao: "Expedição",
   operacao: "Operação",
   pos_venda: "Pós-Venda",
-  command: "Comando",
-  expansao: "Expansão",
-  finance: "Financeiro",
-  growth: "Growth",
-  ops: "Ops",
   b2b: "B2B",
   adm_financeiro: "Adm/Financeiro",
 };
 
-const ROLE_LABELS: Record<string, string> = {
-  admin: "Admin",
-  manager: "Manager",
-  operator: "Operador",
-  viewer: "Viewer",
-  ceo: "CEO",
-  gestor_adm: "Gestor Adm",
-  gestor_fin: "Gestor Fin",
-  gestor_compras: "Gestor Compras",
-  operador_fiscal: "Operador Fiscal",
-  operador: "Operador",
-  licensee: "Licenciado",
-  pdv: "PDV",
-};
+/** Label de departamento: prioriza o Role Matrix, cai para legado, depois raw. */
+function deptLabel(key?: string | null): string {
+  if (!key) return "—";
+  const fromMatrix = getDepartmentLabel(key);
+  if (fromMatrix && fromMatrix !== key) return fromMatrix;
+  return LEGACY_DEPT_LABELS[key] ?? key;
+}
 
 // ─── Empty state ──────────────────────────────────────────────────────────────
 
@@ -131,16 +124,16 @@ function SkeletonRows({ cols }: { cols: number }) {
 
 function InternalUsersSection({ rows }: { rows: LoginRow[] }) {
   const [filterDept, setFilterDept] = useState("all");
-  const [filterRole, setFilterRole] = useState("all");
+  const [filterFuncao, setFilterFuncao] = useState("all");
   const [filterStatus, setFilterStatus] = useState("all");
   const [search, setSearch] = useState("");
 
   const departments = [...new Set(rows.map((r) => r.department).filter(Boolean))];
-  const roles = [...new Set(rows.map((r) => r.role).filter(Boolean))];
+  const funcoes = [...new Set(rows.map((r) => r.funcao).filter(Boolean))];
 
   const filtered = rows.filter((r) => {
     if (filterDept !== "all" && r.department !== filterDept) return false;
-    if (filterRole !== "all" && r.role !== filterRole) return false;
+    if (filterFuncao !== "all" && r.funcao !== filterFuncao) return false;
     if (filterStatus !== "all") {
       const status = getActivityStatus(r.last_login_at);
       const map: Record<string, string> = {
@@ -177,20 +170,20 @@ function InternalUsersSection({ rows }: { rows: LoginRow[] }) {
             <SelectItem value="all">Todos departamentos</SelectItem>
             {departments.map((d) => (
               <SelectItem key={d!} value={d!}>
-                {DEPT_LABELS[d!] || d}
+                {deptLabel(d)}
               </SelectItem>
             ))}
           </SelectContent>
         </Select>
-        <Select value={filterRole} onValueChange={setFilterRole}>
+        <Select value={filterFuncao} onValueChange={setFilterFuncao}>
           <SelectTrigger className="w-44">
-            <SelectValue placeholder="Role" />
+            <SelectValue placeholder="Função" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">Todos roles</SelectItem>
-            {roles.map((r) => (
-              <SelectItem key={r!} value={r!}>
-                {ROLE_LABELS[r!] || r}
+            <SelectItem value="all">Todas funções</SelectItem>
+            {funcoes.map((f) => (
+              <SelectItem key={f!} value={f!}>
+                {getFunctionLabel(undefined, f) || f}
               </SelectItem>
             ))}
           </SelectContent>
@@ -218,7 +211,7 @@ function InternalUsersSection({ rows }: { rows: LoginRow[] }) {
               <tr className="border-b border-border bg-secondary/30">
                 <th className="px-4 py-3 text-left font-semibold text-muted-foreground uppercase text-xs tracking-wide">Nome</th>
                 <th className="px-4 py-3 text-left font-semibold text-muted-foreground uppercase text-xs tracking-wide">Departamento</th>
-                <th className="px-4 py-3 text-left font-semibold text-muted-foreground uppercase text-xs tracking-wide">Role</th>
+                <th className="px-4 py-3 text-left font-semibold text-muted-foreground uppercase text-xs tracking-wide">Função</th>
                 <th className="px-4 py-3 text-left font-semibold text-muted-foreground uppercase text-xs tracking-wide">Último login</th>
                 <th className="px-4 py-3 text-left font-semibold text-muted-foreground uppercase text-xs tracking-wide">Status</th>
               </tr>
@@ -233,12 +226,29 @@ function InternalUsersSection({ rows }: { rows: LoginRow[] }) {
                     <tr key={row.user_id} className="hover:bg-secondary/20 transition-colors">
                       <td className="px-4 py-3 font-medium">{row.full_name || "—"}</td>
                       <td className="px-4 py-3 text-muted-foreground">
-                        {DEPT_LABELS[row.department || ""] || row.department || "—"}
+                        {deptLabel(row.department)}
+                        {row.secondary_department && (
+                          <span className="text-muted-foreground/60">
+                            {" + "}
+                            {deptLabel(row.secondary_department)}
+                          </span>
+                        )}
                       </td>
                       <td className="px-4 py-3">
-                        <Badge variant="outline" className="text-xs">
-                          {ROLE_LABELS[row.role || ""] || row.role || "—"}
-                        </Badge>
+                        <div className="flex flex-wrap gap-1">
+                          {row.funcao ? (
+                            <Badge variant="outline" className="text-xs">
+                              {getFunctionLabel(row.department, row.funcao)}
+                            </Badge>
+                          ) : (
+                            <span className="text-muted-foreground">—</span>
+                          )}
+                          {row.secondary_funcao && (
+                            <Badge variant="secondary" className="text-xs">
+                              {getFunctionLabel(row.secondary_department, row.secondary_funcao)}
+                            </Badge>
+                          )}
+                        </div>
                       </td>
                       <td className="px-4 py-3 text-muted-foreground tabular-nums">
                         {formatLogin(row.last_login_at)}
