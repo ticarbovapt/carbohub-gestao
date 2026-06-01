@@ -449,8 +449,8 @@ export function BoardLayout({ children }: BoardLayoutProps) {
         {/* ── Left rail: sector icons ── */}
         <div className="w-[72px] border-r border-border flex flex-col items-center py-3 gap-0.5 shrink-0">
           {/* Logo */}
-          <div className="mb-3 flex justify-center">
-            <img src={logoCarbo} alt="Carbo" className="h-7 w-7 object-contain" />
+          <div className="mb-3 flex justify-center px-1">
+            <img src={logoCarbo} alt="Carbo" className="h-10 w-auto object-contain" />
           </div>
 
           {SECTORS.map(sector => {
@@ -543,12 +543,10 @@ export function BoardLayout({ children }: BoardLayoutProps) {
           </div>
         ) : (
           /* Empty state */
-          <div className="flex-1 flex flex-col items-center justify-center text-center p-4 gap-3">
-            <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center">
-              <img src={logoCarbo} alt="" className="h-7 w-7 opacity-40 object-contain" />
-            </div>
+          <div className="flex-1 flex flex-col items-center justify-center text-center p-4 gap-4">
+            <img src={logoCarbo} alt="Grupo Carbo" className="h-20 w-auto object-contain" />
             <div>
-              <p className="text-sm font-medium text-foreground">CARBO CORE</p>
+              <p className="text-sm font-medium text-foreground">CARBOHUB</p>
               <p className="text-[11px] text-muted-foreground mt-0.5">Selecione um setor</p>
             </div>
           </div>
