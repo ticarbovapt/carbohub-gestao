@@ -158,7 +158,7 @@ interface CnpjData {
 
 export default function CreateOrder() {
   const navigate = useNavigate();
-  const { profile } = useAuth();
+  const { profile, isSuporte, isCeo } = useAuth();
   const createOrder = useCreateOrder();
   const { data: licensees } = useLicensees();
   const { data: teamMembers } = useTeamMembers();
@@ -174,11 +174,17 @@ export default function CreateOrder() {
   const [cnpjError, setCnpjError] = useState<string | null>(null);
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
 
-  // Heads (em qualquer dept) e membros do command podem atribuir o pedido a outro vendedor
+  // Heads (em qualquer dept), CEO, command e o superusuário TI podem atribuir o
+  // pedido a outro vendedor. Considera função PRIMÁRIA e SECUNDÁRIA — ex.: um
+  // head cuja função de head está no cargo secundário (HEAD TI) também vale.
   const canOverrideVendedor =
+    isSuporte ||
+    isCeo ||
     profile?.funcao === "head" ||
-    profile?.funcao === "ceo"  ||
-    profile?.department === "command";
+    profile?.funcao === "ceo" ||
+    profile?.secondary_funcao === "head" ||
+    profile?.department === "command" ||
+    profile?.secondary_department === "command";
   const [overrideVendedorId, setOverrideVendedorId] = useState<string>("");
 
   const vendedoresOnly = (teamMembers || []).filter((m) => m.is_vendedor);
