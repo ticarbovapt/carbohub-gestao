@@ -211,12 +211,15 @@ export default function CreateOrder() {
     : (profile?.id ?? "");
 
   const { data: products } = useQuery({
-    queryKey: ["mrp-products-active"],
+    queryKey: ["mrp-products-finished"],
     queryFn: async () => {
+      // Só produto final entra no pedido — insumos/embalagens (ex.: garrafas)
+      // ficam de fora (category = "Produto Final", mesmo filtro do Suprimentos).
       const { data, error } = await supabase
         .from("mrp_products")
         .select("product_code, name")
         .eq("is_active", true)
+        .eq("category", "Produto Final")
         .order("name");
       if (error) throw error;
       return data;
