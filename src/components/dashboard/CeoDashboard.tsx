@@ -42,6 +42,15 @@ export function CeoDashboard() {
   const { data: kpiData, isLoading: kpiLoading } = useQuery({
     queryKey: ["ceo-dashboard-kpis"],
     queryFn: async () => {
+      const now = new Date();
+      const curMonthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+      // Mês anterior comparado no MESMO período (até o mesmo dia/hora de hoje),
+      // para não dar "-100%" artificial no início do mês.
+      const prevMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1).toISOString();
+      const prevMonthSameMoment = new Date(
+        now.getFullYear(), now.getMonth() - 1, now.getDate(), now.getHours(), now.getMinutes()
+      ).toISOString();
+
       const [osResult, osOverdueResult, licenseesResult, machinesResult, ordersResult, prevMonthOrders] = await Promise.all([
         supabase
           .from("service_orders")
@@ -51,7 +60,7 @@ export function CeoDashboard() {
           .from("service_orders")
           .select("id")
           .eq("status", "active")
-          .lt("sla_deadline", new Date().toISOString()),
+          .lt("sla_deadline", now.toISOString()),
         supabase
           .from("licensees")
           .select("id")
@@ -63,12 +72,12 @@ export function CeoDashboard() {
         supabase
           .from("carboze_orders_secure")
           .select("total, created_at")
-          .gte("created_at", new Date(new Date().setDate(1)).toISOString()),
+          .gte("created_at", curMonthStart),
         supabase
           .from("carboze_orders_secure")
           .select("total")
-          .gte("created_at", new Date(new Date().getFullYear(), new Date().getMonth() - 1, 1).toISOString())
-          .lt("created_at", new Date(new Date().setDate(1)).toISOString()),
+          .gte("created_at", prevMonthStart)
+          .lt("created_at", prevMonthSameMoment),
       ]);
 
       const activeOS = osResult.data?.length || 0;
@@ -358,7 +367,6 @@ export function CeoDashboard() {
         <KpiCard
           title="OP Ativas"
           value={kpiLoading ? null : kpiData?.activeOS?.toString() || "0"}
-          change={12}
           icon={<FileText className="h-4 w-4" />}
           color="blue"
           isLoading={kpiLoading}
@@ -366,15 +374,13 @@ export function CeoDashboard() {
         <KpiCard
           title="OP Atrasadas"
           value={kpiLoading ? null : kpiData?.overdueOS?.toString() || "0"}
-          change={kpiData?.overdueOS ? -kpiData.overdueOS : 0}
           icon={<AlertTriangle className="h-4 w-4" />}
           color="amber"
           isLoading={kpiLoading}
         />
         <KpiCard
-          title="Licenciados"
+          title="Licenciados ativos"
           value={kpiLoading ? null : kpiData?.activeLicensees?.toString() || "0"}
-          change={3}
           icon={<Users className="h-4 w-4" />}
           color="green"
           isLoading={kpiLoading}
@@ -382,15 +388,14 @@ export function CeoDashboard() {
         <KpiCard
           title="Receita Mensal"
           value={kpiLoading ? null : formatCurrency(kpiData?.monthlyRevenue || 0)}
-          change={kpiData?.growthPercent || 0}
           icon={<DollarSign className="h-4 w-4" />}
           color="purple"
           isLoading={kpiLoading}
         />
         <KpiCard
-          title="Crescimento"
+          title="Crescimento (vs mês anterior)"
           value={kpiLoading ? null : `${kpiData?.growthPercent || 0}%`}
-          change={kpiData?.growthPercent || 0}
+          change={kpiData?.growthPercent ?? 0}
           icon={<TrendingUp className="h-4 w-4" />}
           color="emerald"
           isLoading={kpiLoading}
@@ -398,7 +403,6 @@ export function CeoDashboard() {
         <KpiCard
           title="Máquinas"
           value={kpiLoading ? null : kpiData?.activeMachines?.toString() || "0"}
-          change={-2}
           icon={<Target className="h-4 w-4" />}
           color="blue"
           isLoading={kpiLoading}
@@ -677,23 +681,25 @@ export function CeoDashboard() {
 }
 
 // Componentes auxiliares
-function KpiCard({ 
-  title, 
-  value, 
-  change, 
-  icon, 
+function KpiCard({
+  title,
+  value,
+  change,
+  icon,
   color,
   isLoading
-}: { 
-  title: string; 
-  value: string | null; 
-  change: number; 
+}: {
+  title: string;
+  value: string | null;
+  change?: number | null;
   icon: React.ReactNode;
   color: string;
   isLoading?: boolean;
 }) {
-  const isPositive = change >= 0;
-  
+  // Só mostra a variação quando há um valor real (evita % decorativo/fake).
+  const hasChange = change !== undefined && change !== null;
+  const isPositive = (change ?? 0) >= 0;
+
   const colorClasses: Record<string, string> = {
     blue: "bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400",
     green: "bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400",
@@ -701,7 +707,7 @@ function KpiCard({
     purple: "bg-purple-100 text-purple-600 dark:bg-purple-900/30 dark:text-purple-400",
     amber: "bg-amber-100 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400",
   };
-  
+
   return (
     <Card className="relative overflow-hidden">
       <CardContent className="pt-4 pb-4 px-4">
@@ -709,10 +715,12 @@ function KpiCard({
           <div className={`p-2 rounded-lg ${colorClasses[color] || colorClasses.blue}`}>
             {icon}
           </div>
-          <div className={`flex items-center gap-0.5 text-xs font-medium ${isPositive ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
-            {isPositive ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
-            {Math.abs(change)}%
-          </div>
+          {hasChange && (
+            <div className={`flex items-center gap-0.5 text-xs font-medium ${isPositive ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+              {isPositive ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
+              {Math.abs(change as number)}%
+            </div>
+          )}
         </div>
         {isLoading ? (
           <Skeleton className="h-7 w-16" />
