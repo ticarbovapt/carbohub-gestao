@@ -97,6 +97,42 @@ export function useBlingNFes(filters: BlingNFeFilters = {}) {
   });
 }
 
+/** Pedidos confirmados que ainda NÃO têm NF vinculada — candidatos para vínculo manual. */
+export interface LinkableOrder {
+  id: string;
+  order_number: string;
+  customer_name: string | null;
+  total: number | null;
+  status: string;
+  created_at: string;
+}
+
+export function useLinkableOrders(search: string, enabled = true) {
+  return useQuery({
+    queryKey: ["linkable-orders", search],
+    enabled,
+    staleTime: 30_000,
+    queryFn: async () => {
+      let q = supabase
+        .from("carboze_orders")
+        .select("id, order_number, customer_name, total, status, created_at")
+        .is("bling_nf_id", null)
+        .in("status", ["confirmed", "invoiced", "shipped", "delivered"])
+        .order("created_at", { ascending: false })
+        .limit(50);
+
+      const term = search.trim();
+      if (term) {
+        q = q.or(`customer_name.ilike.%${term}%,order_number.ilike.%${term}%`);
+      }
+
+      const { data, error } = await q;
+      if (error) throw error;
+      return (data || []) as LinkableOrder[];
+    },
+  });
+}
+
 export function useLinkNFeToOrder() {
   const queryClient = useQueryClient();
 
