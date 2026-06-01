@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import {
   Package, ArrowDownToLine, ArrowUpFromLine, BarChart3,
   AlertTriangle, Layers, History, Lightbulb, Shield,
-  MapPin, Send, Truck, AlertCircle, Link2, Users,
+  MapPin, Send, Truck, AlertCircle, Link2, Users, Cloud,
 } from "lucide-react";
 import { BoardLayout } from "@/components/layouts/BoardLayout";
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
@@ -17,6 +17,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useCanManageStock } from "@/hooks/useActionPermissions";
 import { useSuprimentosKPIs, useSuprimentosKPIsByHub } from "@/hooks/useStockMovements";
 import { StockOverview } from "@/components/suprimentos/StockOverview";
+import { BlingStockOverview } from "@/components/suprimentos/BlingStockOverview";
 import { StockMovementsList } from "@/components/suprimentos/StockMovementsList";
 import { ReceivingsList } from "@/components/purchasing/ReceivingsList";
 import { InvoicesList } from "@/components/purchasing/InvoicesList";
@@ -28,7 +29,7 @@ import { CDSPVendasView } from "@/components/suprimentos/CDSPVendasView";
 import { RNEnviosSP } from "@/components/suprimentos/RNEnviosSP";
 import { SkuMappingConfig } from "@/components/suprimentos/SkuMappingConfig";
 
-type HubView = "sp" | "sp-vendas" | "rn";
+type HubView = "sp" | "sp-vendas" | "rn" | "bling";
 
 const PERIOD_OPTIONS = [
   { value: "7",  label: "Últimos 7 dias"  },
@@ -80,6 +81,7 @@ export default function Suprimentos() {
   const isSP      = hubView === "sp";
   const isVendas  = hubView === "sp-vendas";
   const isRN      = hubView === "rn";
+  const isBling   = hubView === "bling";
   const warehouseCode = isSP ? "HUB-SP" : isVendas ? "HUB-SP-VENDAS" : "HUB-RN";
 
   const { data: warehouses } = useWarehouses();
@@ -155,6 +157,15 @@ export default function Suprimentos() {
             <Users className="h-4 w-4" />
             CD SP Vendas
           </Button>
+          <Button
+            variant={isBling ? "default" : "outline"}
+            size="sm"
+            className={`gap-2 ${isBling ? "bg-carbo-blue hover:bg-carbo-blue/90 text-white" : ""}`}
+            onClick={() => handleHubChange("bling")}
+          >
+            <Cloud className="h-4 w-4" />
+            CD Bling
+          </Button>
 
           {isRN && rnWarehouse && (
             <Button
@@ -189,7 +200,7 @@ export default function Suprimentos() {
         )}
 
         {/* KPIs */}
-        {kpis && (
+        {!isBling && kpis && (
           <div className="space-y-2">
             {!isRN && (
               <div className="flex items-center gap-2 justify-end">
@@ -261,7 +272,11 @@ export default function Suprimentos() {
           <PendingSuggestions canApprove={canApprove} />
         )}
 
+        {/* CD Bling — espelho somente leitura */}
+        {isBling && <BlingStockOverview />}
+
         {/* Tabs */}
+        {!isBling && (
         <Tabs value={activeTab} onValueChange={setActiveTab}>
           <TabsList className="w-full justify-start flex-wrap h-auto gap-1 bg-muted/50 p-1">
             <TabsTrigger value="estoque" className="gap-1.5">
@@ -359,6 +374,7 @@ export default function Suprimentos() {
             <SkuStockPolicy hubView={isSP ? "sp" : isRN ? "rn" : "sp"} />
           </TabsContent>
         </Tabs>
+        )}
       </div>
 
       {/* Dialog envio — disponível quando na view RN */}
