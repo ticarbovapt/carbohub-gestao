@@ -45,12 +45,15 @@ import {
   Bug,
   Receipt,
   FileText,
+  Lock,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
 import { diceBearUrl } from "@/components/ui/profile-avatar";
-import { useCanSeeAdminMenu, useCanSeeFinanceMenu, useRoleDisplayLabel } from "@/hooks/useActionPermissions";
+import { useCanSeeFinanceMenu, useRoleDisplayLabel } from "@/hooks/useActionPermissions";
+import { useFunctionAccess, ENFORCEMENT_ACTIVE } from "@/hooks/useFunctionAccess";
+import { SCREEN_GROUPS } from "@/constants/functionAccessConfig";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { ThemeToggle } from "@/components/ui/ThemeToggle";
 import { NotificationBell } from "@/components/notifications";
@@ -145,7 +148,6 @@ interface SectorNavItem {
   href: string;
   label: string;
   icon: React.ComponentType<{ className?: string }>;
-  adminOnly?: boolean;
 }
 interface Sector {
   id: string;
@@ -255,9 +257,9 @@ const SECTORS: Sector[] = [
     label: "Admin",
     icon: Shield,
     items: [
-      { href: "/admin",              label: "Administração",       icon: Shield,    adminOnly: true },
-      { href: "/admin/cockpit",      label: "Cockpit Estratégico", icon: BarChart3, adminOnly: true },
-      { href: "/governance",         label: "Governança",          icon: Shield,    adminOnly: true },
+      { href: "/admin",              label: "Administração",       icon: Shield },
+      { href: "/admin/cockpit",      label: "Cockpit Estratégico", icon: BarChart3 },
+      { href: "/governance",         label: "Governança",          icon: Shield },
       { href: "/admin/approval",     label: "Aprovações",          icon: UserCheck },
       { href: "/admin/pipeline",     label: "Config Pipeline",     icon: Cog },
       { href: "/admin/webhooks",     label: "Webhooks CRM",        icon: Zap },
@@ -267,6 +269,20 @@ const SECTORS: Sector[] = [
     ],
   },
 ];
+
+/**
+ * Mapa rota → screenId, montado a partir do SCREEN_GROUPS (mesma fonte do Role Matrix).
+ * Rotas que NÃO estão aqui não têm controle de acesso → sempre visíveis.
+ */
+const PATH_TO_SCREEN_ID: Record<string, string> = (() => {
+  const map: Record<string, string> = {};
+  for (const group of SCREEN_GROUPS) {
+    for (const screen of group.screens) {
+      map[screen.path] = screen.id;
+    }
+  }
+  return map;
+})();
 
 /** Derive a human-readable breadcrumb label from a pathname segment */
 const ROUTE_LABELS: Record<string, string> = {
@@ -369,9 +385,25 @@ export function BoardLayout({ children }: BoardLayoutProps) {
   const location = useLocation();
   const navigate = useNavigate();
   const { profile, signOut, passwordMustChange, isAnyGestor, carboRoles, isMasterAdmin, isSuporte } = useAuth();
-  const canSeeAdminMenu = useCanSeeAdminMenu();
   const canSeeFinanceMenu = useCanSeeFinanceMenu();
   const roleLines = useRoleDisplayLabel();
+  const { allowedScreenIds, isConfigured } = useFunctionAccess();
+
+  // TI/head é superusuário — vê tudo. Mesma regra do useCanSeeScreen,
+  // replicada aqui para checar vários itens de uma vez (sem chamar hook em loop).
+  const isTiHead =
+    (profile?.department === "ti_suporte" && profile?.funcao === "head") ||
+    (profile?.secondary_department === "ti_suporte" && profile?.secondary_funcao === "head");
+
+  /** true = usuário pode abrir a tela; false = aparece cinza/bloqueada na barra. */
+  const canSeeItem = useCallback((href: string) => {
+    const screenId = PATH_TO_SCREEN_ID[href];
+    if (!screenId) return true;            // tela sem controle de acesso → sempre liberada
+    if (!ENFORCEMENT_ACTIVE) return true;
+    if (isTiHead) return true;
+    if (!isConfigured) return true;        // sem entrada no matrix → não bloqueia
+    return allowedScreenIds.includes(screenId);
+  }, [isTiHead, isConfigured, allowedScreenIds]);
   const isMobile = useIsMobile();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [activeSector, setActiveSector] = useState<string | null>("dashboards");
@@ -408,9 +440,9 @@ export function BoardLayout({ children }: BoardLayoutProps) {
 
   const SidebarContent = () => {
     const activeSectorData = SECTORS.find(s => s.id === activeSector);
-    const visibleItems = activeSectorData?.items.filter(item =>
-      !item.adminOnly || canSeeAdminMenu
-    ) ?? [];
+    // Todas as telas ficam na lista — as sem acesso aparecem cinzas/bloqueadas
+    // (canSeeItem). O controle é 100% pela Matriz de Acessos; TI/head vê tudo.
+    const visibleItems = activeSectorData?.items ?? [];
 
     return (
       <div className="flex h-full overflow-hidden">
@@ -471,6 +503,23 @@ export function BoardLayout({ children }: BoardLayoutProps) {
             {/* Items */}
             <nav className="flex-1 overflow-y-auto p-2 space-y-0.5">
               {visibleItems.map(item => {
+                // Tela sem acesso liberado → aparece cinza e não clicável.
+                // Fica visível de propósito para se acompanhar telas novas ainda
+                // não liberadas no Role Matrix.
+                if (!canSeeItem(item.href)) {
+                  return (
+                    <div
+                      key={item.href}
+                      aria-disabled="true"
+                      title="Sem acesso — libere em Matriz de Papéis"
+                      className="flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-muted-foreground/40 cursor-not-allowed select-none"
+                    >
+                      <item.icon className="h-4 w-4 shrink-0" />
+                      <span className="flex-1 truncate">{item.label}</span>
+                      <Lock className="h-3 w-3 shrink-0 opacity-70" />
+                    </div>
+                  );
+                }
                 const isActive = isItemActive(item.href);
                 return (
                   <Link
