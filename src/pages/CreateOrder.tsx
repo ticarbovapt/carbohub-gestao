@@ -919,203 +919,6 @@ export default function CreateOrder() {
               </div>
             </CarboCard>
 
-            {/* ===== STRATEGIC FIELDS — Máquina de Vendas ===== */}
-            <CarboCard>
-              <div className="p-6 space-y-4">
-                <div className="flex items-center gap-2">
-                  <MapPin className="h-5 w-5 text-primary" />
-                  <h3 className="font-semibold">Dados Estratégicos</h3>
-                </div>
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <FormField
-                    control={form.control}
-                    name="point_type"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Tipo de Ponto</FormLabel>
-                        <Select onValueChange={field.onChange} value={field.value}>
-                          <FormControl>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Selecione o tipo" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            {availablePointTypes.map((pt) => (
-                              <SelectItem key={pt.value} value={pt.value}>
-                                {pt.label}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        {pointType === "pdv" && (
-                          <p className="text-xs text-primary mt-1">PDV sempre será recorrente automaticamente</p>
-                        )}
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="internal_classification"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Classificação Interna</FormLabel>
-                        <Select onValueChange={field.onChange} value={field.value}>
-                          <FormControl>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Classificar como" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            {CLASSIFICATION_OPTIONS.map((c) => (
-                              <SelectItem key={c.value} value={c.value}>
-                                {c.label}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="avg_monthly_vehicles"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Volume Médio Mensal (veículos)</FormLabel>
-                        <FormControl>
-                          <Input
-                            type="number"
-                            min={0}
-                            placeholder="Ex: 500"
-                            value={field.value ?? ""}
-                            onChange={(e) => field.onChange(e.target.value ? Number(e.target.value) : null)}
-                          />
-                        </FormControl>
-                      </FormItem>
-                    )}
-                  />
-                </div>
-
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <FormField
-                    control={form.control}
-                    name="works_with_diesel"
-                    render={({ field }) => (
-                      <FormItem className="flex items-center justify-between rounded-lg border p-4">
-                        <div>
-                          <FormLabel>Atua com Diesel?</FormLabel>
-                        </div>
-                        <FormControl>
-                          <Switch checked={field.value} onCheckedChange={field.onChange} />
-                        </FormControl>
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="works_with_fleets"
-                    render={({ field }) => (
-                      <FormItem className="flex items-center justify-between rounded-lg border p-4">
-                        <div>
-                          <FormLabel>Atua com Frotas?</FormLabel>
-                        </div>
-                        <FormControl>
-                          <Switch checked={field.value} onCheckedChange={field.onChange} />
-                        </FormControl>
-                      </FormItem>
-                    )}
-                  />
-                </div>
-              </div>
-            </CarboCard>
-
-            {/* ===== DELIVERY ADDRESS + MAP ===== */}
-            <CarboCard>
-              <div className="p-6 space-y-4">
-                <div className="flex items-center justify-between">
-                  <h3 className="font-semibold">Endereço de Entrega</h3>
-                  <CarboButton
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={handleGeocode}
-                    disabled={isGeoLoading || !deliveryCity}
-                  >
-                    {isGeoLoading ? (
-                      <Loader2 className="h-4 w-4 animate-spin mr-1" />
-                    ) : (
-                      <MapPin className="h-4 w-4 mr-1" />
-                    )}
-                    Localizar no mapa
-                  </CarboButton>
-                </div>
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <div className="sm:col-span-2">
-                    <FormField
-                      control={form.control}
-                      name="delivery_address"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Endereço</FormLabel>
-                          <FormControl>
-                            <Input placeholder="Rua, número, complemento" {...field} />
-                          </FormControl>
-                        </FormItem>
-                      )}
-                    />
-                  </div>
-                  <FormField
-                    control={form.control}
-                    name="delivery_city"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Cidade</FormLabel>
-                        <FormControl>
-                          <Input placeholder="Cidade" {...field} />
-                        </FormControl>
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="delivery_state"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Estado</FormLabel>
-                        <FormControl>
-                          <Input placeholder="UF" {...field} />
-                        </FormControl>
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="delivery_zip"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>CEP</FormLabel>
-                        <FormControl>
-                          <Input placeholder="00000-000" {...field} />
-                        </FormControl>
-                      </FormItem>
-                    )}
-                  />
-                </div>
-
-                <MapPinSelector
-                  latitude={coords?.lat ?? null}
-                  longitude={coords?.lng ?? null}
-                  isLoading={isGeoLoading}
-                  address={[
-                    form.watch("delivery_address"),
-                    form.watch("delivery_city"),
-                    form.watch("delivery_state"),
-                  ].filter(Boolean).join(", ")}
-                  onPositionChange={(lat, lng) => setCoords({ lat, lng })}
-                />
-              </div>
-            </CarboCard>
-
             {/* ===== ITEMS ===== */}
             <CarboCard>
               <div className="p-6 space-y-4">
@@ -1226,6 +1029,93 @@ export default function CreateOrder() {
                     <p className="text-xl font-bold">R$ {subtotal.toFixed(2)}</p>
                   </div>
                 </div>
+              </div>
+            </CarboCard>
+
+            {/* ===== DELIVERY ADDRESS + MAP ===== */}
+            <CarboCard>
+              <div className="p-6 space-y-4">
+                <div className="flex items-center justify-between">
+                  <h3 className="font-semibold">Endereço de Entrega</h3>
+                  <CarboButton
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={handleGeocode}
+                    disabled={isGeoLoading || !deliveryCity}
+                  >
+                    {isGeoLoading ? (
+                      <Loader2 className="h-4 w-4 animate-spin mr-1" />
+                    ) : (
+                      <MapPin className="h-4 w-4 mr-1" />
+                    )}
+                    Localizar no mapa
+                  </CarboButton>
+                </div>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="sm:col-span-2">
+                    <FormField
+                      control={form.control}
+                      name="delivery_address"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Endereço</FormLabel>
+                          <FormControl>
+                            <Input placeholder="Rua, número, complemento" {...field} />
+                          </FormControl>
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                  <FormField
+                    control={form.control}
+                    name="delivery_city"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Cidade</FormLabel>
+                        <FormControl>
+                          <Input placeholder="Cidade" {...field} />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="delivery_state"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Estado</FormLabel>
+                        <FormControl>
+                          <Input placeholder="UF" {...field} />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="delivery_zip"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>CEP</FormLabel>
+                        <FormControl>
+                          <Input placeholder="00000-000" {...field} />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+                </div>
+
+                <MapPinSelector
+                  latitude={coords?.lat ?? null}
+                  longitude={coords?.lng ?? null}
+                  isLoading={isGeoLoading}
+                  address={[
+                    form.watch("delivery_address"),
+                    form.watch("delivery_city"),
+                    form.watch("delivery_state"),
+                  ].filter(Boolean).join(", ")}
+                  onPositionChange={(lat, lng) => setCoords({ lat, lng })}
+                />
               </div>
             </CarboCard>
 
@@ -1391,6 +1281,116 @@ export default function CreateOrder() {
                     )}
                   />
                 )}
+              </div>
+            </CarboCard>
+
+            {/* ===== STRATEGIC FIELDS — Máquina de Vendas ===== */}
+            <CarboCard>
+              <div className="p-6 space-y-4">
+                <div className="flex items-center gap-2">
+                  <MapPin className="h-5 w-5 text-primary" />
+                  <h3 className="font-semibold">Dados Estratégicos</h3>
+                </div>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <FormField
+                    control={form.control}
+                    name="point_type"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Tipo de Ponto</FormLabel>
+                        <Select onValueChange={field.onChange} value={field.value}>
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Selecione o tipo" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {availablePointTypes.map((pt) => (
+                              <SelectItem key={pt.value} value={pt.value}>
+                                {pt.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        {pointType === "pdv" && (
+                          <p className="text-xs text-primary mt-1">PDV sempre será recorrente automaticamente</p>
+                        )}
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="internal_classification"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Classificação Interna</FormLabel>
+                        <Select onValueChange={field.onChange} value={field.value}>
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Classificar como" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {CLASSIFICATION_OPTIONS.map((c) => (
+                              <SelectItem key={c.value} value={c.value}>
+                                {c.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="avg_monthly_vehicles"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Volume Médio Mensal (veículos)</FormLabel>
+                        <FormControl>
+                          <Input
+                            type="number"
+                            min={0}
+                            placeholder="Ex: 500"
+                            value={field.value ?? ""}
+                            onChange={(e) => field.onChange(e.target.value ? Number(e.target.value) : null)}
+                          />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+                </div>
+
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <FormField
+                    control={form.control}
+                    name="works_with_diesel"
+                    render={({ field }) => (
+                      <FormItem className="flex items-center justify-between rounded-lg border p-4">
+                        <div>
+                          <FormLabel>Atua com Diesel?</FormLabel>
+                        </div>
+                        <FormControl>
+                          <Switch checked={field.value} onCheckedChange={field.onChange} />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="works_with_fleets"
+                    render={({ field }) => (
+                      <FormItem className="flex items-center justify-between rounded-lg border p-4">
+                        <div>
+                          <FormLabel>Atua com Frotas?</FormLabel>
+                        </div>
+                        <FormControl>
+                          <Switch checked={field.value} onCheckedChange={field.onChange} />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+                </div>
               </div>
             </CarboCard>
 
