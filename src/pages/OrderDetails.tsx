@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { ArrowLeft, Package, Clock, Truck, CheckCircle, XCircle, RefreshCw, Calendar, User, MapPin, FileText, DollarSign, Repeat, Briefcase, Factory, Wrench, ExternalLink, Pencil, Printer } from "lucide-react";
+import { ArrowLeft, Package, Clock, Truck, CheckCircle, XCircle, RefreshCw, Calendar, User, MapPin, FileText, DollarSign, Repeat, Briefcase, Factory, Wrench, ExternalLink, Pencil, Printer, Download, ShoppingCart } from "lucide-react";
 import { useCanManageOrders } from "@/hooks/useActionPermissions";
 import { EditOrderDialog } from "@/components/orders/EditOrderDialog";
 import { BoardLayout } from "@/components/layouts/BoardLayout";
@@ -10,7 +10,8 @@ import { CarboButton } from "@/components/ui/carbo-button";
 import { CarboCard } from "@/components/ui/carbo-card";
 import { CarboBadge } from "@/components/ui/carbo-badge";
 import { Separator } from "@/components/ui/separator";
-import { useOrder, useOrderHistory, ORDER_STATUS_LABELS, ORDER_TYPE_LABELS, OrderStatus, OrderItem } from "@/hooks/useCarbozeOrders";
+import { useOrder, useOrderHistory, useConvertQuoteToOrder, ORDER_STATUS_LABELS, ORDER_TYPE_LABELS, OrderStatus, OrderItem } from "@/hooks/useCarbozeOrders";
+import { generateQuotePdf } from "@/lib/quotePdf";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { CarboSkeleton } from "@/components/ui/CarboSkeleton";
@@ -18,6 +19,7 @@ import type { Json } from "@/integrations/supabase/types";
 
 function getStatusIcon(status: OrderStatus) {
   switch (status) {
+    case "quote":     return <FileText   className="h-4 w-4" />;
     case "pending":   return <Clock      className="h-4 w-4" />;
     case "confirmed": return <CheckCircle className="h-4 w-4" />;
     case "invoiced":  return <FileText   className="h-4 w-4" />;
@@ -28,6 +30,7 @@ function getStatusIcon(status: OrderStatus) {
 }
 
 const STATUS_COLORS: Record<OrderStatus, "default" | "success" | "warning" | "destructive"> = {
+  quote: "default",
   pending: "warning",
   confirmed: "default",
   invoiced: "default",
@@ -50,6 +53,7 @@ export default function OrderDetails() {
   const [isEditOpen, setIsEditOpen] = useState(false);
   const { data: order, isLoading: orderLoading } = useOrder(id);
   const { data: history, isLoading: historyLoading } = useOrderHistory(id);
+  const convertQuote = useConvertQuoteToOrder();
 
   // Get recurrence chain orders
   const { data: recurrenceOrders } = useQuery({
@@ -138,12 +142,53 @@ export default function OrderDetails() {
               </p>
             </div>
           </div>
-          {canEdit && (
-            <CarboButton variant="outline" size="sm" onClick={() => setIsEditOpen(true)}>
-              <Pencil className="h-4 w-4 mr-2" />
-              Editar Pedido
-            </CarboButton>
-          )}
+          <div className="flex items-center gap-2">
+            {order.status === "quote" && (
+              <>
+                <CarboButton
+                  variant="outline"
+                  size="sm"
+                  onClick={() => generateQuotePdf({
+                    order_number: order.order_number,
+                    customer_name: order.customer_name,
+                    legal_name: order.legal_name,
+                    cnpj: order.cnpj,
+                    vendedor_name: order.vendedor_name,
+                    items: order.items,
+                    subtotal: order.subtotal,
+                    total: order.total,
+                    created_at: order.created_at,
+                    notes: order.notes,
+                  })}
+                  title="Baixar o PDF deste orçamento"
+                >
+                  <Download className="h-4 w-4 mr-2" />
+                  Baixar PDF
+                </CarboButton>
+                {canEdit && (
+                  <CarboButton
+                    size="sm"
+                    disabled={convertQuote.isPending}
+                    onClick={() => {
+                      if (confirm("Converter este orçamento em venda? Isso gera Ordem de Produção e dá baixa no estoque.")) {
+                        convertQuote.mutate(order.id);
+                      }
+                    }}
+                    title="Cliente aprovou → vira venda (gera OP + estoque)"
+                  >
+                    {convertQuote.isPending ? <RefreshCw className="h-4 w-4 mr-2 animate-spin" /> : <ShoppingCart className="h-4 w-4 mr-2" />}
+                    Converter em Venda
+                  </CarboButton>
+                )}
+              </>
+            )}
+            {canEdit && (
+              <CarboButton variant="outline" size="sm" onClick={() => setIsEditOpen(true)}>
+                <Pencil className="h-4 w-4 mr-2" />
+                Editar {order.status === "quote" ? "Orçamento" : "Pedido"}
+              </CarboButton>
+            )}
+          </div>
         </div>
 
         {canEdit && order && (
