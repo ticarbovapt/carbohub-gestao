@@ -26,8 +26,7 @@ import { LoginLoading } from "@/components/auth/LoginLoading";
 import { TempPasswordExpired } from "@/components/auth/TempPasswordExpired";
 import { ThemeToggle } from "@/components/ui/ThemeToggle";
 import { FloatingParticles } from "@/components/animations/FloatingParticles";
-import logoCarbo from "@/assets/logo-grupo-carbo.png";
-import logoAvatar from "@/assets/logo-avatar.png";
+import logoCarbo from "@/assets/logo-carbo.png";
 
 type ViewMode = "login" | "forgot-password" | "request-access";
 
@@ -198,9 +197,9 @@ const Index = () => {
             className="mb-8"
           >
             <motion.img
-              src={logoAvatar}
+              src={logoCarbo}
               alt="Grupo Carbo"
-              className="h-40 xl:h-52 2xl:h-64 w-auto drop-shadow-2xl"
+              className="h-28 xl:h-36 2xl:h-44 w-auto"
               whileHover={{ scale: 1.02, rotate: 2 }}
               transition={{ duration: 0.3 }}
             />
@@ -291,9 +290,9 @@ const Index = () => {
           className="lg:hidden text-center mb-8"
         >
           <motion.img
-            src={logoAvatar}
+            src={logoCarbo}
             alt="Grupo Carbo"
-            className="h-24 w-auto mx-auto mb-4"
+            className="h-16 w-auto mx-auto mb-4"
             initial={{ y: -20, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
             transition={{ delay: 0.1, duration: 0.5 }}
