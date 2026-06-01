@@ -51,7 +51,7 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
 import { diceBearUrl } from "@/components/ui/profile-avatar";
-import { useCanSeeAdminMenu, useCanSeeFinanceMenu, useRoleDisplayLabel } from "@/hooks/useActionPermissions";
+import { useCanSeeFinanceMenu, useRoleDisplayLabel } from "@/hooks/useActionPermissions";
 import { useFunctionAccess, ENFORCEMENT_ACTIVE } from "@/hooks/useFunctionAccess";
 import { SCREEN_GROUPS } from "@/constants/functionAccessConfig";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -148,7 +148,6 @@ interface SectorNavItem {
   href: string;
   label: string;
   icon: React.ComponentType<{ className?: string }>;
-  adminOnly?: boolean;
 }
 interface Sector {
   id: string;
@@ -258,9 +257,9 @@ const SECTORS: Sector[] = [
     label: "Admin",
     icon: Shield,
     items: [
-      { href: "/admin",              label: "Administração",       icon: Shield,    adminOnly: true },
-      { href: "/admin/cockpit",      label: "Cockpit Estratégico", icon: BarChart3, adminOnly: true },
-      { href: "/governance",         label: "Governança",          icon: Shield,    adminOnly: true },
+      { href: "/admin",              label: "Administração",       icon: Shield },
+      { href: "/admin/cockpit",      label: "Cockpit Estratégico", icon: BarChart3 },
+      { href: "/governance",         label: "Governança",          icon: Shield },
       { href: "/admin/approval",     label: "Aprovações",          icon: UserCheck },
       { href: "/admin/pipeline",     label: "Config Pipeline",     icon: Cog },
       { href: "/admin/webhooks",     label: "Webhooks CRM",        icon: Zap },
@@ -386,7 +385,6 @@ export function BoardLayout({ children }: BoardLayoutProps) {
   const location = useLocation();
   const navigate = useNavigate();
   const { profile, signOut, passwordMustChange, isAnyGestor, carboRoles, isMasterAdmin, isSuporte } = useAuth();
-  const canSeeAdminMenu = useCanSeeAdminMenu();
   const canSeeFinanceMenu = useCanSeeFinanceMenu();
   const roleLines = useRoleDisplayLabel();
   const { allowedScreenIds, isConfigured } = useFunctionAccess();
@@ -442,11 +440,9 @@ export function BoardLayout({ children }: BoardLayoutProps) {
 
   const SidebarContent = () => {
     const activeSectorData = SECTORS.find(s => s.id === activeSector);
-    // Itens adminOnly continuam ocultos para quem não é admin. As demais telas
-    // ficam SEMPRE na lista — as sem acesso aparecem cinzas/bloqueadas (canSeeItem).
-    const visibleItems = activeSectorData?.items.filter(item =>
-      !item.adminOnly || canSeeAdminMenu
-    ) ?? [];
+    // Todas as telas ficam na lista — as sem acesso aparecem cinzas/bloqueadas
+    // (canSeeItem). O controle é 100% pela Matriz de Acessos; TI/head vê tudo.
+    const visibleItems = activeSectorData?.items ?? [];
 
     return (
       <div className="flex h-full overflow-hidden">
