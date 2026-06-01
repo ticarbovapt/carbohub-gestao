@@ -586,7 +586,7 @@ export function BoardLayout({ children }: BoardLayoutProps) {
                 </button>
               )}
               <Link to="/" className="flex items-center gap-2 group">
-                <img src={logoCarbo} alt="Grupo Carbo" className="h-11 w-11 object-contain transition-transform duration-200 group-hover:scale-105" />
+                <img src={logoCarbo} alt="Grupo Carbo" className="h-12 w-auto object-contain transition-transform duration-200 group-hover:scale-105" />
               </Link>
               <Separator orientation="vertical" className="h-5 hidden sm:block" />
               <Sheet open={sidebarOpen} onOpenChange={setSidebarOpen}>
