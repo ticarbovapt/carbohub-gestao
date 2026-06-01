@@ -99,6 +99,34 @@ export const DEPARTMENTS: Department[] = [
   },
 ];
 
+// ─── Label helpers (fonte da verdade: DEPARTMENTS acima) ──────────────────────
+// Usados para exibir departamento/função do perfil de forma consistente com o
+// Role Matrix em qualquer tela (ex.: dashboard de Last Login).
+
+/** Label do departamento a partir da chave (ex.: "ops" -> "Operações"). */
+export function getDepartmentLabel(key?: string | null): string {
+  if (!key) return "";
+  return DEPARTMENTS.find((d) => d.key === key)?.label ?? key;
+}
+
+/**
+ * Label da função dentro de um departamento. O mesmo `funcao` pode ter labels
+ * diferentes por departamento (ex.: "staff" = "Colaborador"), por isso depende
+ * do par (departamento, função).
+ */
+export function getFunctionLabel(deptKey?: string | null, funcKey?: string | null): string {
+  if (!funcKey) return "";
+  const dept = DEPARTMENTS.find((d) => d.key === deptKey);
+  const inDept = dept?.functions.find((f) => f.key === funcKey)?.label;
+  if (inDept) return inDept;
+  // Sem departamento (ou não encontrado): procura a função em qualquer dept.
+  for (const d of DEPARTMENTS) {
+    const f = d.functions.find((fn) => fn.key === funcKey);
+    if (f) return f.label;
+  }
+  return funcKey;
+}
+
 export const SCREEN_GROUPS: ScreenGroup[] = [
   {
     id: "operacional",
