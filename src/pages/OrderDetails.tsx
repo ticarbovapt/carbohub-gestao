@@ -183,10 +183,22 @@ export default function OrderDetails() {
               </>
             )}
             {canEdit && (
-              <CarboButton variant="outline" size="sm" onClick={() => setIsEditOpen(true)}>
-                <Pencil className="h-4 w-4 mr-2" />
-                Editar {order.status === "quote" ? "Orçamento" : "Pedido"}
-              </CarboButton>
+              order.status === "quote" ? (
+                <CarboButton
+                  variant="outline"
+                  size="sm"
+                  onClick={() => navigate(`/orders/new?edit=${order.id}`)}
+                  title="Editar itens, quantidades e dados do orçamento"
+                >
+                  <Pencil className="h-4 w-4 mr-2" />
+                  Editar Orçamento
+                </CarboButton>
+              ) : (
+                <CarboButton variant="outline" size="sm" onClick={() => setIsEditOpen(true)}>
+                  <Pencil className="h-4 w-4 mr-2" />
+                  Editar Pedido
+                </CarboButton>
+              )
             )}
           </div>
         </div>

@@ -1,5 +1,5 @@
-import React, { useState, useCallback, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import React, { useState, useCallback, useEffect, useRef } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -19,7 +19,7 @@ import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { ArrowLeft, CalendarIcon, Loader2, Plus, Trash2, Repeat, Search, Building2, MapPin, CheckCircle2, AlertCircle, ShoppingCart, Gift, FileText } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useCreateOrder, useCreateQuote, type OrderType, ORDER_TYPE_LABELS } from "@/hooks/useCarbozeOrders";
+import { useCreateOrder, useCreateQuote, useUpdateQuote, useConvertQuoteToOrder, useOrder, type OrderType, ORDER_TYPE_LABELS } from "@/hooks/useCarbozeOrders";
 import { generateQuotePdf } from "@/lib/quotePdf";
 import { useLicensees } from "@/hooks/useLicensees";
 import { useQuery } from "@tanstack/react-query";
@@ -162,6 +162,13 @@ export default function CreateOrder() {
   const { profile, isSuporte, isCeo } = useAuth();
   const createOrder = useCreateOrder();
   const createQuote = useCreateQuote();
+  const updateQuote = useUpdateQuote();
+  const convertQuote = useConvertQuoteToOrder();
+  // Modo edição de orçamento: /orders/new?edit=<id>
+  const [searchParams] = useSearchParams();
+  const editId = searchParams.get("edit");
+  const { data: editingOrder } = useOrder(editId ?? undefined);
+  const isEditingQuote = !!editId;
   const { data: licensees } = useLicensees();
   const { data: teamMembers } = useTeamMembers();
   const { data: skus } = useSkus();
@@ -264,6 +271,63 @@ export default function CreateOrder() {
       form.setValue("is_recurring", true);
     }
   }, [pointType, form]);
+
+  // ── Prefill ao editar um orçamento existente (apenas uma vez) ───────────────
+  const prefilledRef = useRef(false);
+  useEffect(() => {
+    if (!editingOrder || prefilledRef.current) return;
+    const o = editingOrder as any;
+    prefilledRef.current = true;
+
+    form.reset({
+      vendedor_id: o.vendedor_id ?? "",
+      linha: o.linha ?? "",
+      rv_flow_type: o.rv_flow_type ?? "standard",
+      modalidade: o.modalidade ?? "",
+      cnpj: o.cnpj ?? "",
+      legal_name: o.legal_name ?? "",
+      trade_name: o.trade_name ?? "",
+      cnae: o.cnae ?? "",
+      situacao_cadastral: o.situacao_cadastral ?? "",
+      customer_name: o.customer_name ?? "",
+      customer_email: o.customer_email ?? "",
+      customer_phone: o.customer_phone ?? "",
+      is_licensee: !!o.licensee_id,
+      delivery_address: o.delivery_address ?? "",
+      delivery_city: o.delivery_city ?? "",
+      delivery_state: o.delivery_state ?? "",
+      delivery_zip: o.delivery_zip ?? "",
+      notes: o.notes ?? "",
+      internal_notes: o.internal_notes ?? "",
+      order_type: o.order_type ?? "spot",
+      is_recurring: o.is_recurring ?? false,
+      recurrence_interval_days: o.recurrence_interval_days ?? null,
+      next_delivery_date: o.next_delivery_date ? new Date(o.next_delivery_date) : null,
+      has_commission: o.has_commission ?? false,
+      commission_rate: o.commission_rate ?? 0,
+      point_type: o.point_type ?? "",
+      avg_monthly_vehicles: o.avg_monthly_vehicles ?? null,
+      works_with_diesel: o.works_with_diesel ?? false,
+      works_with_fleets: o.works_with_fleets ?? false,
+      internal_classification: o.internal_classification ?? "",
+      operator_name: "",
+    });
+
+    const its = Array.isArray(o.items) ? o.items : [];
+    if (its.length > 0) {
+      setItems(its.map((it: any) => ({
+        product_code: it.product_code ?? "",
+        name: it.name ?? "",
+        quantity: Number(it.quantity) || 0,
+        unit_price: Number(it.unit_price) || 0,
+        has_bonus: !!it.has_bonus,
+        bonus_quantity: Number(it.bonus_quantity) || 0,
+      })));
+    }
+
+    if (o.latitude && o.longitude) setCoords({ lat: o.latitude, lng: o.longitude });
+    if (o.vendedor_id && o.vendedor_id !== profile?.id) setOverrideVendedorId(o.vendedor_id);
+  }, [editingOrder, form, profile?.id]);
 
   // Format CNPJ as user types
   const formatCnpj = (value: string) => {
@@ -489,7 +553,8 @@ export default function CreateOrder() {
     };
   };
 
-  // GERAR VENDA — cria o pedido (gera OP + baixa estoque)
+  // GERAR VENDA — cria o pedido (gera OP + baixa estoque).
+  // Em modo edição de orçamento: salva as alterações e converte em venda.
   const onSubmit = async (data: FormData) => {
     const orderItems = buildOrderItems();
     if (orderItems.length === 0) {
@@ -498,11 +563,19 @@ export default function CreateOrder() {
     }
     if (!(await checkNatalStock(orderItems))) return;
 
+    if (isEditingQuote && editId) {
+      // Salva as edições no orçamento e converte em venda (aí dispara OP+estoque)
+      await updateQuote.mutateAsync({ id: editId, ...buildPayload(data, orderItems) });
+      await convertQuote.mutateAsync(editId);
+      navigate(`/orders/${editId}`);
+      return;
+    }
+
     await createOrder.mutateAsync(buildPayload(data, orderItems));
     navigate("/orders");
   };
 
-  // GERAR ORÇAMENTO — salva como rascunho (sem OP/estoque) e baixa o PDF
+  // GERAR/SALVAR ORÇAMENTO — salva como rascunho (sem OP/estoque) e baixa o PDF.
   const onSaveQuote = async (data: FormData) => {
     const orderItems = buildOrderItems();
     if (orderItems.length === 0) {
@@ -510,7 +583,11 @@ export default function CreateOrder() {
       return;
     }
 
-    const result = await createQuote.mutateAsync(buildPayload(data, orderItems));
+    const payload = buildPayload(data, orderItems);
+    const result = isEditingQuote && editId
+      ? await updateQuote.mutateAsync({ id: editId, ...payload })
+      : await createQuote.mutateAsync(payload);
+
     generateQuotePdf({
       order_number: result.order_number,
       customer_name: result.customer_name,
@@ -523,7 +600,7 @@ export default function CreateOrder() {
       created_at: result.created_at,
       notes: result.notes,
     });
-    navigate("/orders");
+    navigate(isEditingQuote && editId ? `/orders/${editId}` : "/orders");
   };
 
   // Reset point_type when switching modes
@@ -540,7 +617,7 @@ export default function CreateOrder() {
             <ArrowLeft className="h-4 w-4" />
           </CarboButton>
           <div className="flex-1">
-            <h1 className="text-2xl font-bold">Novo Pedido</h1>
+            <h1 className="text-2xl font-bold">{isEditingQuote ? "Editar Orçamento" : "Novo Pedido"}</h1>
             <p className="text-sm text-muted-foreground">
               Comece pelo CNPJ para preenchimento automático
             </p>
@@ -842,203 +919,6 @@ export default function CreateOrder() {
               </div>
             </CarboCard>
 
-            {/* ===== STRATEGIC FIELDS — Máquina de Vendas ===== */}
-            <CarboCard>
-              <div className="p-6 space-y-4">
-                <div className="flex items-center gap-2">
-                  <MapPin className="h-5 w-5 text-primary" />
-                  <h3 className="font-semibold">Dados Estratégicos</h3>
-                </div>
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <FormField
-                    control={form.control}
-                    name="point_type"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Tipo de Ponto</FormLabel>
-                        <Select onValueChange={field.onChange} value={field.value}>
-                          <FormControl>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Selecione o tipo" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            {availablePointTypes.map((pt) => (
-                              <SelectItem key={pt.value} value={pt.value}>
-                                {pt.label}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        {pointType === "pdv" && (
-                          <p className="text-xs text-primary mt-1">PDV sempre será recorrente automaticamente</p>
-                        )}
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="internal_classification"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Classificação Interna</FormLabel>
-                        <Select onValueChange={field.onChange} value={field.value}>
-                          <FormControl>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Classificar como" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            {CLASSIFICATION_OPTIONS.map((c) => (
-                              <SelectItem key={c.value} value={c.value}>
-                                {c.label}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="avg_monthly_vehicles"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Volume Médio Mensal (veículos)</FormLabel>
-                        <FormControl>
-                          <Input
-                            type="number"
-                            min={0}
-                            placeholder="Ex: 500"
-                            value={field.value ?? ""}
-                            onChange={(e) => field.onChange(e.target.value ? Number(e.target.value) : null)}
-                          />
-                        </FormControl>
-                      </FormItem>
-                    )}
-                  />
-                </div>
-
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <FormField
-                    control={form.control}
-                    name="works_with_diesel"
-                    render={({ field }) => (
-                      <FormItem className="flex items-center justify-between rounded-lg border p-4">
-                        <div>
-                          <FormLabel>Atua com Diesel?</FormLabel>
-                        </div>
-                        <FormControl>
-                          <Switch checked={field.value} onCheckedChange={field.onChange} />
-                        </FormControl>
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="works_with_fleets"
-                    render={({ field }) => (
-                      <FormItem className="flex items-center justify-between rounded-lg border p-4">
-                        <div>
-                          <FormLabel>Atua com Frotas?</FormLabel>
-                        </div>
-                        <FormControl>
-                          <Switch checked={field.value} onCheckedChange={field.onChange} />
-                        </FormControl>
-                      </FormItem>
-                    )}
-                  />
-                </div>
-              </div>
-            </CarboCard>
-
-            {/* ===== DELIVERY ADDRESS + MAP ===== */}
-            <CarboCard>
-              <div className="p-6 space-y-4">
-                <div className="flex items-center justify-between">
-                  <h3 className="font-semibold">Endereço de Entrega</h3>
-                  <CarboButton
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={handleGeocode}
-                    disabled={isGeoLoading || !deliveryCity}
-                  >
-                    {isGeoLoading ? (
-                      <Loader2 className="h-4 w-4 animate-spin mr-1" />
-                    ) : (
-                      <MapPin className="h-4 w-4 mr-1" />
-                    )}
-                    Localizar no mapa
-                  </CarboButton>
-                </div>
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <div className="sm:col-span-2">
-                    <FormField
-                      control={form.control}
-                      name="delivery_address"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Endereço</FormLabel>
-                          <FormControl>
-                            <Input placeholder="Rua, número, complemento" {...field} />
-                          </FormControl>
-                        </FormItem>
-                      )}
-                    />
-                  </div>
-                  <FormField
-                    control={form.control}
-                    name="delivery_city"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Cidade</FormLabel>
-                        <FormControl>
-                          <Input placeholder="Cidade" {...field} />
-                        </FormControl>
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="delivery_state"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Estado</FormLabel>
-                        <FormControl>
-                          <Input placeholder="UF" {...field} />
-                        </FormControl>
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="delivery_zip"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>CEP</FormLabel>
-                        <FormControl>
-                          <Input placeholder="00000-000" {...field} />
-                        </FormControl>
-                      </FormItem>
-                    )}
-                  />
-                </div>
-
-                <MapPinSelector
-                  latitude={coords?.lat ?? null}
-                  longitude={coords?.lng ?? null}
-                  isLoading={isGeoLoading}
-                  address={[
-                    form.watch("delivery_address"),
-                    form.watch("delivery_city"),
-                    form.watch("delivery_state"),
-                  ].filter(Boolean).join(", ")}
-                  onPositionChange={(lat, lng) => setCoords({ lat, lng })}
-                />
-              </div>
-            </CarboCard>
-
             {/* ===== ITEMS ===== */}
             <CarboCard>
               <div className="p-6 space-y-4">
@@ -1149,6 +1029,93 @@ export default function CreateOrder() {
                     <p className="text-xl font-bold">R$ {subtotal.toFixed(2)}</p>
                   </div>
                 </div>
+              </div>
+            </CarboCard>
+
+            {/* ===== DELIVERY ADDRESS + MAP ===== */}
+            <CarboCard>
+              <div className="p-6 space-y-4">
+                <div className="flex items-center justify-between">
+                  <h3 className="font-semibold">Endereço de Entrega</h3>
+                  <CarboButton
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={handleGeocode}
+                    disabled={isGeoLoading || !deliveryCity}
+                  >
+                    {isGeoLoading ? (
+                      <Loader2 className="h-4 w-4 animate-spin mr-1" />
+                    ) : (
+                      <MapPin className="h-4 w-4 mr-1" />
+                    )}
+                    Localizar no mapa
+                  </CarboButton>
+                </div>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="sm:col-span-2">
+                    <FormField
+                      control={form.control}
+                      name="delivery_address"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Endereço</FormLabel>
+                          <FormControl>
+                            <Input placeholder="Rua, número, complemento" {...field} />
+                          </FormControl>
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                  <FormField
+                    control={form.control}
+                    name="delivery_city"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Cidade</FormLabel>
+                        <FormControl>
+                          <Input placeholder="Cidade" {...field} />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="delivery_state"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Estado</FormLabel>
+                        <FormControl>
+                          <Input placeholder="UF" {...field} />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="delivery_zip"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>CEP</FormLabel>
+                        <FormControl>
+                          <Input placeholder="00000-000" {...field} />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+                </div>
+
+                <MapPinSelector
+                  latitude={coords?.lat ?? null}
+                  longitude={coords?.lng ?? null}
+                  isLoading={isGeoLoading}
+                  address={[
+                    form.watch("delivery_address"),
+                    form.watch("delivery_city"),
+                    form.watch("delivery_state"),
+                  ].filter(Boolean).join(", ")}
+                  onPositionChange={(lat, lng) => setCoords({ lat, lng })}
+                />
               </div>
             </CarboCard>
 
@@ -1317,6 +1284,116 @@ export default function CreateOrder() {
               </div>
             </CarboCard>
 
+            {/* ===== STRATEGIC FIELDS — Máquina de Vendas ===== */}
+            <CarboCard>
+              <div className="p-6 space-y-4">
+                <div className="flex items-center gap-2">
+                  <MapPin className="h-5 w-5 text-primary" />
+                  <h3 className="font-semibold">Dados Estratégicos</h3>
+                </div>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <FormField
+                    control={form.control}
+                    name="point_type"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Tipo de Ponto</FormLabel>
+                        <Select onValueChange={field.onChange} value={field.value}>
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Selecione o tipo" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {availablePointTypes.map((pt) => (
+                              <SelectItem key={pt.value} value={pt.value}>
+                                {pt.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        {pointType === "pdv" && (
+                          <p className="text-xs text-primary mt-1">PDV sempre será recorrente automaticamente</p>
+                        )}
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="internal_classification"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Classificação Interna</FormLabel>
+                        <Select onValueChange={field.onChange} value={field.value}>
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Classificar como" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {CLASSIFICATION_OPTIONS.map((c) => (
+                              <SelectItem key={c.value} value={c.value}>
+                                {c.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="avg_monthly_vehicles"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Volume Médio Mensal (veículos)</FormLabel>
+                        <FormControl>
+                          <Input
+                            type="number"
+                            min={0}
+                            placeholder="Ex: 500"
+                            value={field.value ?? ""}
+                            onChange={(e) => field.onChange(e.target.value ? Number(e.target.value) : null)}
+                          />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+                </div>
+
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <FormField
+                    control={form.control}
+                    name="works_with_diesel"
+                    render={({ field }) => (
+                      <FormItem className="flex items-center justify-between rounded-lg border p-4">
+                        <div>
+                          <FormLabel>Atua com Diesel?</FormLabel>
+                        </div>
+                        <FormControl>
+                          <Switch checked={field.value} onCheckedChange={field.onChange} />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="works_with_fleets"
+                    render={({ field }) => (
+                      <FormItem className="flex items-center justify-between rounded-lg border p-4">
+                        <div>
+                          <FormLabel>Atua com Frotas?</FormLabel>
+                        </div>
+                        <FormControl>
+                          <Switch checked={field.value} onCheckedChange={field.onChange} />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+                </div>
+              </div>
+            </CarboCard>
+
             {/* ===== NOTES ===== */}
             <CarboCard>
               <div className="p-6 space-y-4">
@@ -1361,16 +1438,16 @@ export default function CreateOrder() {
                 <CarboButton
                   type="button"
                   variant="outline"
-                  disabled={createQuote.isPending || createOrder.isPending}
+                  disabled={createQuote.isPending || updateQuote.isPending || createOrder.isPending || convertQuote.isPending}
                   onClick={form.handleSubmit(onSaveQuote)}
-                  title="Salva como orçamento e baixa o PDF (não gera produção/estoque)"
+                  title="Salva o orçamento e baixa o PDF (não gera produção/estoque)"
                 >
-                  {createQuote.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <FileText className="h-4 w-4 mr-2" />}
-                  Gerar Orçamento
+                  {(createQuote.isPending || updateQuote.isPending) ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <FileText className="h-4 w-4 mr-2" />}
+                  {isEditingQuote ? "Salvar Orçamento" : "Gerar Orçamento"}
                 </CarboButton>
-                <CarboButton type="submit" disabled={createOrder.isPending || createQuote.isPending}>
-                  {createOrder.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <ShoppingCart className="h-4 w-4 mr-2" />}
-                  Gerar Venda
+                <CarboButton type="submit" disabled={createOrder.isPending || convertQuote.isPending || createQuote.isPending || updateQuote.isPending}>
+                  {(createOrder.isPending || convertQuote.isPending) ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <ShoppingCart className="h-4 w-4 mr-2" />}
+                  {isEditingQuote ? "Aprovar e Gerar Venda" : "Gerar Venda"}
                 </CarboButton>
               </div>
             </div>
