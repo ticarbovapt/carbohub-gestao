@@ -58,6 +58,7 @@ import { EditOrderDialog } from "@/components/orders/EditOrderDialog";
 import { Pencil } from "lucide-react";
 
 const STATUS_VARIANTS: Record<OrderStatus, "secondary" | "info" | "warning" | "success" | "destructive"> = {
+  quote: "secondary",
   pending: "warning",
   confirmed: "info",
   invoiced: "info",
@@ -67,6 +68,7 @@ const STATUS_VARIANTS: Record<OrderStatus, "secondary" | "info" | "warning" | "s
 };
 
 const STATUS_ICONS: Record<OrderStatus, React.ComponentType<{ className?: string }>> = {
+  quote: FileText,
   pending: Clock,
   confirmed: CheckCircle,
   invoiced: Package,

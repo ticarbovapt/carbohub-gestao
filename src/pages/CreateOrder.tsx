@@ -17,9 +17,10 @@ import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, CalendarIcon, Loader2, Plus, Trash2, Repeat, Search, Building2, MapPin, CheckCircle2, AlertCircle, ShoppingCart, Gift } from "lucide-react";
+import { ArrowLeft, CalendarIcon, Loader2, Plus, Trash2, Repeat, Search, Building2, MapPin, CheckCircle2, AlertCircle, ShoppingCart, Gift, FileText } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useCreateOrder, type OrderType, ORDER_TYPE_LABELS } from "@/hooks/useCarbozeOrders";
+import { useCreateOrder, useCreateQuote, type OrderType, ORDER_TYPE_LABELS } from "@/hooks/useCarbozeOrders";
+import { generateQuotePdf } from "@/lib/quotePdf";
 import { useLicensees } from "@/hooks/useLicensees";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -160,6 +161,7 @@ export default function CreateOrder() {
   const navigate = useNavigate();
   const { profile, isSuporte, isCeo } = useAuth();
   const createOrder = useCreateOrder();
+  const createQuote = useCreateQuote();
   const { data: licensees } = useLicensees();
   const { data: teamMembers } = useTeamMembers();
   const { data: skus } = useSkus();
@@ -386,8 +388,9 @@ export default function CreateOrder() {
   const isPromo = orderMode === "acao_promocional";
   const availablePointTypes = isPromo ? POINT_TYPES_PROMO : POINT_TYPES_VENDA;
 
-  const onSubmit = async (data: FormData) => {
-    const orderItems = items
+  // Monta os itens normalizados a partir do estado do formulário.
+  const buildOrderItems = () =>
+    items
       .filter((item) => item.name && item.quantity > 0)
       .map((item) => ({
         product_code: item.product_code,
@@ -399,52 +402,52 @@ export default function CreateOrder() {
         bonus_quantity: item.has_bonus ? item.bonus_quantity : 0,
       }));
 
-    if (orderItems.length === 0) {
-      toast.error("Adicione pelo menos um item ao pedido.");
-      return;
-    }
-
-    // ── Check Hub Natal stock before confirming ────────────────────────────
+  // Checa estoque no Hub Natal. Retorna true se OK. Usado SÓ na venda
+  // (orçamento é proposta, não exige estoque disponível).
+  const checkNatalStock = async (orderItems: ReturnType<typeof buildOrderItems>) => {
     const itemsWithCode = orderItems.filter((i) => i.product_code);
-    if (itemsWithCode.length > 0) {
-      const { data: natWh } = await supabase.from("warehouses").select("id").ilike("name", "%natal%").limit(1);
-      const natId = (natWh as any)?.[0]?.id as string | undefined;
-      if (natId) {
-        const codes = [...new Set(itemsWithCode.map((i) => i.product_code))];
-        const { data: mrpProds } = await (supabase as any)
-          .from("mrp_products")
-          .select("id, product_code, current_stock_qty, name")
-          .in("product_code", codes);
-        const prodMap = new Map<string, any>((mrpProds || []).map((p: any) => [p.product_code, p]));
+    if (itemsWithCode.length === 0) return true;
 
-        for (const item of itemsWithCode) {
-          const prod = prodMap.get(item.product_code);
-          if (!prod) continue;
-          const { data: ws } = await (supabase as any)
-            .from("warehouse_stock")
-            .select("quantity")
-            .eq("product_id", prod.id)
-            .eq("warehouse_id", natId)
-            .maybeSingle();
-          const available = (ws as any)?.quantity ?? (prod.current_stock_qty as number) ?? 0;
-          if (available < item.quantity) {
-            toast.error(
-              `Estoque insuficiente em Hub Natal — ${prod.name}: disponível ${available}, solicitado ${item.quantity}. ` +
-              "Verifique Suprimentos ou crie uma OP antes de confirmar o pedido."
-            );
-            return;
-          }
-        }
+    const { data: natWh } = await supabase.from("warehouses").select("id").ilike("name", "%natal%").limit(1);
+    const natId = (natWh as any)?.[0]?.id as string | undefined;
+    if (!natId) return true;
+
+    const codes = [...new Set(itemsWithCode.map((i) => i.product_code))];
+    const { data: mrpProds } = await (supabase as any)
+      .from("mrp_products")
+      .select("id, product_code, current_stock_qty, name")
+      .in("product_code", codes);
+    const prodMap = new Map<string, any>((mrpProds || []).map((p: any) => [p.product_code, p]));
+
+    for (const item of itemsWithCode) {
+      const prod = prodMap.get(item.product_code);
+      if (!prod) continue;
+      const { data: ws } = await (supabase as any)
+        .from("warehouse_stock")
+        .select("quantity")
+        .eq("product_id", prod.id)
+        .eq("warehouse_id", natId)
+        .maybeSingle();
+      const available = (ws as any)?.quantity ?? (prod.current_stock_qty as number) ?? 0;
+      if (available < item.quantity) {
+        toast.error(
+          `Estoque insuficiente em Hub Natal — ${prod.name}: disponível ${available}, solicitado ${item.quantity}. ` +
+          "Verifique Suprimentos ou crie uma OP antes de confirmar o pedido."
+        );
+        return false;
       }
     }
+    return true;
+  };
 
-    // Auto-detect linha from items; fallback to form value
+  // Monta o payload completo do pedido/orçamento (campos idênticos).
+  const buildPayload = (data: FormData, orderItems: ReturnType<typeof buildOrderItems>) => {
     const detectedLinha = detectLinhaFromItems(orderItems) ?? (data.linha as LinhaCarbo | null) ?? null;
     const selectedLinha = LINHAS.find((l) => l.value === detectedLinha);
     const matchedSku = skus?.find((s) => s.code === selectedLinha?.skuCode);
     const rvFlowType = selectedLinha?.flow ?? "standard";
 
-    await createOrder.mutateAsync({
+    return {
       vendedor_id: effectiveVendedorId || undefined,
       sku_id: matchedSku?.id || undefined,
       vendedor_name: effectiveVendedorName || undefined,
@@ -483,8 +486,43 @@ export default function CreateOrder() {
       internal_classification: data.internal_classification || undefined,
       latitude: coords?.lat || undefined,
       longitude: coords?.lng || undefined,
-    });
+    };
+  };
 
+  // GERAR VENDA — cria o pedido (gera OP + baixa estoque)
+  const onSubmit = async (data: FormData) => {
+    const orderItems = buildOrderItems();
+    if (orderItems.length === 0) {
+      toast.error("Adicione pelo menos um item ao pedido.");
+      return;
+    }
+    if (!(await checkNatalStock(orderItems))) return;
+
+    await createOrder.mutateAsync(buildPayload(data, orderItems));
+    navigate("/orders");
+  };
+
+  // GERAR ORÇAMENTO — salva como rascunho (sem OP/estoque) e baixa o PDF
+  const onSaveQuote = async (data: FormData) => {
+    const orderItems = buildOrderItems();
+    if (orderItems.length === 0) {
+      toast.error("Adicione pelo menos um item ao orçamento.");
+      return;
+    }
+
+    const result = await createQuote.mutateAsync(buildPayload(data, orderItems));
+    generateQuotePdf({
+      order_number: result.order_number,
+      customer_name: result.customer_name,
+      legal_name: result.legal_name,
+      cnpj: result.cnpj,
+      vendedor_name: result.vendedor_name,
+      items: result.items,
+      subtotal: result.subtotal,
+      total: result.total,
+      created_at: result.created_at,
+      notes: result.notes,
+    });
     navigate("/orders");
   };
 
@@ -1310,15 +1348,31 @@ export default function CreateOrder() {
               </div>
             </CarboCard>
 
-            {/* ===== ACTIONS ===== */}
-            <div className="flex items-center justify-end gap-3">
-              <CarboButton type="button" variant="outline" onClick={() => navigate("/orders")}>
-                Cancelar
-              </CarboButton>
-              <CarboButton type="submit" disabled={createOrder.isPending}>
-                {createOrder.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-                Criar Pedido
-              </CarboButton>
+            {/* ===== ACTIONS (barra fixa) ===== */}
+            <div className="sticky bottom-0 z-10 -mx-1 flex flex-col gap-3 rounded-t-xl border-t border-border bg-background/95 px-4 py-3 backdrop-blur supports-[backdrop-filter]:bg-background/80 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-baseline gap-2">
+                <span className="text-sm text-muted-foreground">Total</span>
+                <span className="text-xl font-bold">R$ {total.toFixed(2)}</span>
+              </div>
+              <div className="flex items-center justify-end gap-2">
+                <CarboButton type="button" variant="ghost" onClick={() => navigate("/orders")}>
+                  Cancelar
+                </CarboButton>
+                <CarboButton
+                  type="button"
+                  variant="outline"
+                  disabled={createQuote.isPending || createOrder.isPending}
+                  onClick={form.handleSubmit(onSaveQuote)}
+                  title="Salva como orçamento e baixa o PDF (não gera produção/estoque)"
+                >
+                  {createQuote.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <FileText className="h-4 w-4 mr-2" />}
+                  Gerar Orçamento
+                </CarboButton>
+                <CarboButton type="submit" disabled={createOrder.isPending || createQuote.isPending}>
+                  {createOrder.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <ShoppingCart className="h-4 w-4 mr-2" />}
+                  Gerar Venda
+                </CarboButton>
+              </div>
             </div>
           </form>
         </Form>

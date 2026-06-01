@@ -39,7 +39,7 @@ const formSchema = z.object({
   delivery_city: z.string().optional(),
   delivery_state: z.string().optional(),
   delivery_zip: z.string().optional(),
-  status: z.enum(["pending", "confirmed", "invoiced", "shipped", "delivered", "cancelled"]),
+  status: z.enum(["quote", "pending", "confirmed", "invoiced", "shipped", "delivered", "cancelled"]),
   tracking_code: z.string().optional(),
   tracking_url: z.string().optional(),
   vendedor_id: z.string().optional(),
