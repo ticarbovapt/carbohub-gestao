@@ -5,7 +5,7 @@ import type { Json } from "@/integrations/supabase/types";
 import { useAuth } from "@/contexts/AuthContext";
 import { useFunctionAccess, ENFORCEMENT_ACTIVE } from "@/hooks/useFunctionAccess";
 
-export type OrderStatus = "pending" | "confirmed" | "invoiced" | "shipped" | "delivered" | "cancelled";
+export type OrderStatus = "quote" | "pending" | "confirmed" | "invoiced" | "shipped" | "delivered" | "cancelled";
 export type OrderType = "spot" | "recorrente";
 
 export interface OrderItem {
@@ -168,6 +168,7 @@ export const ORDER_TYPE_LABELS: Record<OrderType, string> = {
 };
 
 const ORDER_STATUS_LABELS: Record<OrderStatus, string> = {
+  quote: "Orçamento",
   pending: "Pendente",
   confirmed: "Confirmado",
   invoiced: "Faturado",
@@ -228,25 +229,120 @@ export function useOrder(id: string | undefined) {
   });
 }
 
+// ── Efeitos colaterais de fulfillment de uma VENDA ───────────────────────────
+// Gera Ordem(ns) de Produção e dá baixa no estoque do Hub Natal.
+// É chamado ao criar uma venda direta E ao converter um orçamento em venda.
+// NUNCA é chamado para orçamentos (status 'quote').
+async function applyOrderFulfillment(
+  result: { id: string; order_number?: string | null },
+  items: Json,
+  skuId: string | null | undefined,
+  userId: string | undefined,
+) {
+  type RawItem = { product_id?: string; name?: string; quantity?: number; product_code?: string };
+  const lineItems = (Array.isArray(items) ? items : []) as RawItem[];
+
+  // Ordens de Produção (uma por item com SKU)
+  const opRows = lineItems
+    .filter((item) => item.product_id && item.quantity && item.quantity > 0)
+    .map((item) => ({
+      sku_id:           item.product_id!,
+      planned_quantity: item.quantity!,
+      demand_source:    "venda" as const,
+      op_status:        "planejada" as const,
+      linked_order_ids: [result.id],
+      title:            `OP-${result.order_number || "Venda"}: ${item.name || item.product_id} × ${item.quantity}`,
+      priority:         3,
+    }));
+
+  if (opRows.length === 0 && skuId) {
+    const totalQty = lineItems.reduce((s, i) => s + (i.quantity || 0), 0) || 1;
+    opRows.push({
+      sku_id:           skuId,
+      planned_quantity: totalQty,
+      demand_source:    "venda" as const,
+      op_status:        "planejada" as const,
+      linked_order_ids: [result.id],
+      title:            `OP-${result.order_number || "Venda"}`,
+      priority:         3,
+    });
+  }
+
+  if (opRows.length > 0) {
+    await supabase.from("production_orders").insert(opRows);
+  }
+
+  // Baixa de estoque no Hub Natal
+  const { data: natWh } = await supabase.from("warehouses").select("id").ilike("name", "%natal%").limit(1);
+  const natId = (natWh as any)?.[0]?.id as string | undefined;
+
+  if (natId && lineItems.length > 0) {
+    const productCodes = [...new Set(lineItems.map((i) => i.product_code).filter(Boolean))];
+    if (productCodes.length > 0) {
+      const { data: mrpProds } = await (supabase as any)
+        .from("mrp_products")
+        .select("id, product_code, current_stock_qty")
+        .in("product_code", productCodes);
+      const prodMap = new Map<string, any>((mrpProds || []).map((p: any) => [p.product_code, p]));
+
+      for (const item of lineItems as any[]) {
+        const mrpProd = prodMap.get(item.product_code);
+        if (!mrpProd || !item.quantity || item.quantity <= 0) continue;
+
+        const { data: ws } = await (supabase as any)
+          .from("warehouse_stock")
+          .select("id, quantity")
+          .eq("product_id", mrpProd.id)
+          .eq("warehouse_id", natId)
+          .maybeSingle();
+
+        if (ws) {
+          await (supabase as any)
+            .from("warehouse_stock")
+            .update({ quantity: Math.max(0, (ws.quantity || 0) - item.quantity), updated_at: new Date().toISOString() })
+            .eq("id", ws.id);
+        }
+
+        const newQty = Math.max(0, ((mrpProd.current_stock_qty as number) || 0) - item.quantity);
+        await (supabase as any)
+          .from("mrp_products")
+          .update({ current_stock_qty: newQty, stock_updated_at: new Date().toISOString().split("T")[0] })
+          .eq("id", mrpProd.id);
+
+        await (supabase as any).from("stock_movements").insert({
+          product_id:  mrpProd.id,
+          tipo:        "saida",
+          quantidade:  item.quantity,
+          origem:      "pedido",
+          origem_id:   result.id,
+          warehouse_id: natId,
+          observacoes: `Venda — pedido ${result.order_number || result.id.slice(0, 8)}`,
+          created_by:  userId ?? null,
+        });
+      }
+    }
+  }
+}
+
+function calcCommission(data: OrderInsert): number {
+  return data.has_commission && data.commission_rate
+    ? data.total * (data.commission_rate / 100)
+    : 0;
+}
+
 export function useCreateOrder() {
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: async (data: OrderInsert) => {
       const { data: user } = await supabase.auth.getUser();
-      
-      // Calculate commission if applicable
-      let commissionAmount = 0;
-      if (data.has_commission && data.commission_rate) {
-        commissionAmount = data.total * (data.commission_rate / 100);
-      }
 
       const { data: result, error } = await supabase
         .from("carboze_orders")
         .insert({
           ...data,
           order_number: "", // Auto-generated by trigger
-          commission_amount: commissionAmount,
+          commission_amount: calcCommission(data),
           created_by: user.user?.id,
         })
         .select()
@@ -254,7 +350,6 @@ export function useCreateOrder() {
 
       if (error) throw error;
 
-      // Add to status history
       await supabase.from("order_status_history").insert({
         order_id: result.id,
         status: "pending",
@@ -262,90 +357,8 @@ export function useCreateOrder() {
         changed_by: user.user?.id,
       });
 
-      // ── Auto-generate Production Order(s) ────────────────────────────────
-      // For each line item that has a product_id (SKU), create one OP
-      type RawItem = { product_id?: string; name?: string; quantity?: number };
-      const lineItems = (Array.isArray(data.items) ? data.items : []) as RawItem[];
-      const opRows = lineItems
-        .filter((item) => item.product_id && item.quantity && item.quantity > 0)
-        .map((item) => ({
-          sku_id:           item.product_id!,
-          planned_quantity: item.quantity!,
-          demand_source:    "venda" as const,
-          op_status:        "planejada" as const,
-          linked_order_ids: [result.id],
-          title:            `OP-${result.order_number || "Venda"}: ${item.name || item.product_id} × ${item.quantity}`,
-          priority:         3,
-        }));
-
-      // Fallback: if no items have sku but top-level sku_id is set
-      if (opRows.length === 0 && data.sku_id) {
-        const totalQty = lineItems.reduce((s, i) => s + (i.quantity || 0), 0) || 1;
-        opRows.push({
-          sku_id:           data.sku_id,
-          planned_quantity: totalQty,
-          demand_source:    "venda" as const,
-          op_status:        "planejada" as const,
-          linked_order_ids: [result.id],
-          title:            `OP-${result.order_number || "Venda"}`,
-          priority:         3,
-        });
-      }
-
-      if (opRows.length > 0) {
-        await supabase.from("production_orders").insert(opRows);
-      }
-
-      // ── Deduct sold quantities from Hub Natal stock ──────────────────────
-      const { data: natWh } = await supabase.from("warehouses").select("id").ilike("name", "%natal%").limit(1);
-      const natId = (natWh as any)?.[0]?.id as string | undefined;
-
-      if (natId && lineItems.length > 0) {
-        const productCodes = [...new Set(lineItems.map((i) => (i as any).product_code).filter(Boolean))];
-        if (productCodes.length > 0) {
-          const { data: mrpProds } = await (supabase as any)
-            .from("mrp_products")
-            .select("id, product_code, current_stock_qty")
-            .in("product_code", productCodes);
-          const prodMap = new Map<string, any>((mrpProds || []).map((p: any) => [p.product_code, p]));
-
-          for (const item of lineItems as any[]) {
-            const mrpProd = prodMap.get(item.product_code);
-            if (!mrpProd || !item.quantity || item.quantity <= 0) continue;
-
-            const { data: ws } = await (supabase as any)
-              .from("warehouse_stock")
-              .select("id, quantity")
-              .eq("product_id", mrpProd.id)
-              .eq("warehouse_id", natId)
-              .maybeSingle();
-
-            if (ws) {
-              await (supabase as any)
-                .from("warehouse_stock")
-                .update({ quantity: Math.max(0, (ws.quantity || 0) - item.quantity), updated_at: new Date().toISOString() })
-                .eq("id", ws.id);
-            }
-
-            const newQty = Math.max(0, ((mrpProd.current_stock_qty as number) || 0) - item.quantity);
-            await (supabase as any)
-              .from("mrp_products")
-              .update({ current_stock_qty: newQty, stock_updated_at: new Date().toISOString().split("T")[0] })
-              .eq("id", mrpProd.id);
-
-            await (supabase as any).from("stock_movements").insert({
-              product_id:  mrpProd.id,
-              tipo:        "saida",
-              quantidade:  item.quantity,
-              origem:      "pedido",
-              origem_id:   result.id,
-              warehouse_id: natId,
-              observacoes: `Venda — pedido ${result.order_number || result.id.slice(0, 8)}`,
-              created_by:  user.user?.id ?? null,
-            });
-          }
-        }
-      }
+      // Venda direta → gera OP + baixa estoque
+      await applyOrderFulfillment(result, data.items, data.sku_id, user.user?.id);
 
       return result;
     },
@@ -359,6 +372,93 @@ export function useCreateOrder() {
     },
     onError: (error: Error) => {
       toast.error("Erro ao criar pedido: " + error.message);
+    },
+  });
+}
+
+// ── Orçamento: salva como rascunho (status 'quote') SEM gerar OP/estoque ──────
+export function useCreateQuote() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (data: OrderInsert) => {
+      const { data: user } = await supabase.auth.getUser();
+
+      const { data: result, error } = await supabase
+        .from("carboze_orders")
+        .insert({
+          ...data,
+          status: "quote",
+          order_number: "", // Auto-generated by trigger
+          commission_amount: calcCommission(data),
+          created_by: user.user?.id,
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      await supabase.from("order_status_history").insert({
+        order_id: result.id,
+        status: "quote",
+        notes: "Orçamento criado",
+        changed_by: user.user?.id,
+      });
+
+      // Orçamento NÃO gera OP nem movimenta estoque.
+      return result;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["carboze-orders"] });
+      toast.success("Orçamento salvo!");
+    },
+    onError: (error: Error) => {
+      toast.error("Erro ao salvar orçamento: " + error.message);
+    },
+  });
+}
+
+// ── Converter orçamento aprovado em venda (aí sim dispara OP + estoque) ───────
+export function useConvertQuoteToOrder() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (quoteId: string) => {
+      const { data: user } = await supabase.auth.getUser();
+
+      const { data: order, error } = await supabase
+        .from("carboze_orders")
+        .update({ status: "pending", confirmed_at: new Date().toISOString() })
+        .eq("id", quoteId)
+        .eq("status", "quote") // só converte se ainda for orçamento (idempotente)
+        .select()
+        .single();
+
+      if (error) throw error;
+      if (!order) throw new Error("Orçamento não encontrado ou já convertido.");
+
+      await supabase.from("order_status_history").insert({
+        order_id: order.id,
+        status: "pending",
+        notes: "Orçamento aprovado e convertido em venda",
+        changed_by: user.user?.id,
+      });
+
+      // Agora sim: gera OP + baixa estoque
+      await applyOrderFulfillment(order, order.items, order.sku_id, user.user?.id);
+
+      return order;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["carboze-orders"] });
+      queryClient.invalidateQueries({ queryKey: ["production-orders"] });
+      queryClient.invalidateQueries({ queryKey: ["warehouse-stock-all"] });
+      queryClient.invalidateQueries({ queryKey: ["mrp-products-stock"] });
+      queryClient.invalidateQueries({ queryKey: ["suprimentos-kpis"] });
+      toast.success("Orçamento convertido em venda! OP gerada.");
+    },
+    onError: (error: Error) => {
+      toast.error("Erro ao converter orçamento: " + error.message);
     },
   });
 }
