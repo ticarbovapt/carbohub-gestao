@@ -11,7 +11,7 @@ import {
 } from "lucide-react";
 import { ThemeToggle } from "@/components/ui/ThemeToggle";
 import { FloatingParticles } from "@/components/animations/FloatingParticles";
-import logoAvatar from "@/assets/logo-avatar.png";
+import logoCarbo from "@/assets/logo-carbo.png";
 
 type AreaType = "ops" | "licensee" | "pdv";
 
@@ -307,9 +307,9 @@ const AreaSelector = () => {
         >
           {/* Logo */}
           <motion.img
-            src={logoAvatar}
+            src={logoCarbo}
             alt="Grupo Carbo"
-            className="h-28 md:h-36 w-auto mx-auto mb-6 drop-shadow-2xl"
+            className="h-20 md:h-24 w-auto mx-auto mb-6"
             initial={{ scale: 0.75, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
             transition={{ delay: 0.15, duration: 0.55, type: "spring", stiffness: 160, damping: 14 }}
