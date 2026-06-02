@@ -118,19 +118,22 @@ export function ForcePasswordChange({ userName, onPasswordChanged, onBack }: For
     setIsLoading(true);
 
     try {
-      // Update password and real email simultaneously
-      const { error: updateError } = await supabase.auth.updateUser({
-        password: newPassword,
-        email: emailTrimmed,
+      // 1. Atualiza só a senha (não dispara email de confirmação)
+      const { error: pwError } = await supabase.auth.updateUser({ password: newPassword });
+      if (pwError) throw pwError;
+
+      // 2. Atualiza o email via admin API (sem email de confirmação — evita rate limit)
+      const emailRes = await supabase.functions.invoke("create-team-member", {
+        body: { action: "set_initial_email", email: emailTrimmed },
       });
+      if (emailRes.error || !emailRes.data?.success) {
+        throw new Error(emailRes.data?.error || emailRes.error?.message || "Erro ao salvar e-mail");
+      }
 
-      if (updateError) throw updateError;
-
-      // Get current user
+      // 3. Atualiza o perfil
       const { data: { user } } = await supabase.auth.getUser();
-
       if (user) {
-        const { error: profileError } = await supabase
+        await supabase
           .from("profiles")
           .update({
             password_must_change: false,
@@ -138,10 +141,6 @@ export function ForcePasswordChange({ userName, onPasswordChanged, onBack }: For
             email: emailTrimmed,
           } as any)
           .eq("id", user.id);
-
-        if (profileError) {
-          console.error("Profile update error:", profileError);
-        }
       }
 
       toast.success("Senha e e-mail definidos! Bem-vindo ao Carbo Controle.");

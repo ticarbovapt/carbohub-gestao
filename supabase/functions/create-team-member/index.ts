@@ -115,6 +115,32 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
     const body = await req.json();
 
+    // ── Set initial email (first login) — sem envio de confirmation email ────
+    if (body.action === "set_initial_email") {
+      const { email } = body;
+      if (!email) {
+        return new Response(
+          JSON.stringify({ success: false, error: "Missing email" }),
+          { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } }
+        );
+      }
+      const { error: emailError } = await supabaseAdmin.auth.admin.updateUserById(callingUser.id, {
+        email,
+        email_confirm: true, // confirma direto, sem mandar email
+      });
+      if (emailError) {
+        return new Response(
+          JSON.stringify({ success: false, error: emailError.message }),
+          { status: 500, headers: { "Content-Type": "application/json", ...corsHeaders } }
+        );
+      }
+      return new Response(
+        JSON.stringify({ success: true }),
+        { status: 200, headers: { "Content-Type": "application/json", ...corsHeaders } }
+      );
+    }
+    // ─────────────────────────────────────────────────────────────────────────
+
     // ── Reset-password action ─────────────────────────────────────────────────
     if (body.action === "reset_password") {
       const { userId } = body;
