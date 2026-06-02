@@ -13,6 +13,7 @@ import { AIChatDrawer } from "./components/ai/AIChatDrawer";
 import { HomeHub } from "./components/home/HomeHub";
 
 // ── Lazy page imports ─────────────────────────────────────────────────────────
+const SemAcesso           = lazy(() => import("./pages/SemAcesso"));
 const Index               = lazy(() => import("./pages/Index"));
 const AreaSelector        = lazy(() => import("./pages/AreaSelector"));
 const LoginArea           = lazy(() => import("./pages/LoginArea"));
@@ -137,6 +138,9 @@ function AnimatedRoutes() {
             <Route path="/set-password" element={<SetPassword />} />
             <Route path="/reset-password" element={<ResetPassword />} />
             <Route path="/onboarding" element={<Onboarding />} />
+
+            {/* Sem acesso — página segura sem screenId, nunca cria loop */}
+            <Route path="/sem-acesso" element={<ProtectedRoute><SemAcesso /></ProtectedRoute>} />
 
             {/* Home Hub — acessível a qualquer usuário autenticado; Role Matrix controla o interior */}
             <Route path="/home" element={<ProtectedRoute><HomeHub /></ProtectedRoute>} />
