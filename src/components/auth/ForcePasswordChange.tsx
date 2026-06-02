@@ -148,7 +148,14 @@ export function ForcePasswordChange({ userName, onPasswordChanged, onBack }: For
       navigate("/onboarding");
     } catch (error: any) {
       console.error("Password change error:", error);
-      toast.error(error.message || "Erro ao atualizar senha");
+      const msg: string = error.message || "";
+      if (msg.toLowerCase().includes("different from the old")) {
+        toast.error("A nova senha deve ser diferente da senha temporária. Escolha uma senha nova.");
+      } else if (msg.toLowerCase().includes("rate limit")) {
+        toast.error("Muitas tentativas. Aguarde alguns minutos e tente novamente.");
+      } else {
+        toast.error(msg || "Erro ao atualizar senha");
+      }
     } finally {
       setIsLoading(false);
     }
@@ -211,6 +218,7 @@ export function ForcePasswordChange({ userName, onPasswordChanged, onBack }: For
 
             <div className="space-y-2">
               <Label htmlFor="newPassword">Nova Senha</Label>
+              <p className="text-xs text-muted-foreground">Deve ser diferente da senha temporária recebida.</p>
               <div className="relative">
                 <Input
                   id="newPassword"
