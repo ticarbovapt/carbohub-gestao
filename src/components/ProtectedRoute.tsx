@@ -61,7 +61,12 @@ export function ProtectedRoute({
   // Function-based check (enforcement path): when active + screenId provided, this is authoritative.
   // When it passes, skip all legacy checks to avoid false-positive denials from role mismatches.
   if (ENFORCEMENT_ACTIVE && screenId) {
-    if (!canSeeByFunction) return <Navigate to="/dashboard" replace />;
+    if (!canSeeByFunction) {
+      // Evita loop: se já está em /sem-acesso ou /home, não redireciona novamente
+      const safe = ["/sem-acesso", "/home", "/meu-perfil"];
+      if (safe.includes(location.pathname)) return <>{children}</>;
+      return <Navigate to="/sem-acesso" replace />;
+    }
     return <>{children}</>;
   }
 
