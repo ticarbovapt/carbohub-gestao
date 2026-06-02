@@ -101,21 +101,10 @@ Deno.serve(async (req: Request): Promise<Response> => {
       );
     }
 
-    // Only admins can create team members
-    const { data: isAdmin } = await supabaseAdmin.rpc("is_admin", {
-      _user_id: callingUser.id,
-    });
-
-    if (!isAdmin) {
-      return new Response(
-        JSON.stringify({ success: false, error: "Unauthorized: Only admins can create team members" }),
-        { status: 403, headers: { "Content-Type": "application/json", ...corsHeaders } }
-      );
-    }
-
     const body = await req.json();
 
-    // ── Set initial email (first login) — sem envio de confirmation email ────
+    // ── Set initial email (first login) — qualquer usuário autenticado pode ──
+    // Não exige admin: o usuário só atualiza o próprio email (callingUser.id).
     if (body.action === "set_initial_email") {
       const { email } = body;
       if (!email) {
@@ -126,7 +115,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
       }
       const { error: emailError } = await supabaseAdmin.auth.admin.updateUserById(callingUser.id, {
         email,
-        email_confirm: true, // confirma direto, sem mandar email
+        email_confirm: true,
       });
       if (emailError) {
         return new Response(
@@ -140,6 +129,18 @@ Deno.serve(async (req: Request): Promise<Response> => {
       );
     }
     // ─────────────────────────────────────────────────────────────────────────
+
+    // Only admins can create team members
+    const { data: isAdmin } = await supabaseAdmin.rpc("is_admin", {
+      _user_id: callingUser.id,
+    });
+
+    if (!isAdmin) {
+      return new Response(
+        JSON.stringify({ success: false, error: "Unauthorized: Only admins can create team members" }),
+        { status: 403, headers: { "Content-Type": "application/json", ...corsHeaders } }
+      );
+    }
 
     // ── Reset-password action ─────────────────────────────────────────────────
     if (body.action === "reset_password") {
