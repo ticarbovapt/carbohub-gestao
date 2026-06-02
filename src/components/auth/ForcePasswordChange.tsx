@@ -118,22 +118,20 @@ export function ForcePasswordChange({ userName, onPasswordChanged, onBack }: For
     setIsLoading(true);
 
     try {
-      // 1. Atualiza só a senha (não dispara email de confirmação)
+      // 1. Atualiza a senha — se já foi trocada antes (tentativa anterior
+      //    que falhou pela metade), ignoramos esse erro específico e seguimos.
       const { error: pwError } = await supabase.auth.updateUser({ password: newPassword });
-      if (pwError) throw pwError;
-
-      // 2. Atualiza o email via admin API (sem email de confirmação — evita rate limit)
-      const emailRes = await supabase.functions.invoke("create-team-member", {
-        body: { action: "set_initial_email", email: emailTrimmed },
-      });
-      if (emailRes.error || !emailRes.data?.success) {
-        throw new Error(emailRes.data?.error || emailRes.error?.message || "Erro ao salvar e-mail");
+      if (pwError) {
+        const msg = pwError.message?.toLowerCase() ?? "";
+        if (!msg.includes("different from the old")) throw pwError;
+        // senha já foi trocada numa tentativa anterior — ok, segue o fluxo
       }
 
-      // 3. Atualiza o perfil
+      // 2. Salva o e-mail real só no perfil (sem chamar edge function,
+      //    sem disparar email de confirmação do Supabase)
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
-        await supabase
+        const { error: profileError } = await supabase
           .from("profiles")
           .update({
             password_must_change: false,
@@ -141,6 +139,7 @@ export function ForcePasswordChange({ userName, onPasswordChanged, onBack }: For
             email: emailTrimmed,
           } as any)
           .eq("id", user.id);
+        if (profileError) throw profileError;
       }
 
       toast.success("Senha e e-mail definidos! Bem-vindo ao Carbo Controle.");
@@ -149,9 +148,7 @@ export function ForcePasswordChange({ userName, onPasswordChanged, onBack }: For
     } catch (error: any) {
       console.error("Password change error:", error);
       const msg: string = error.message || "";
-      if (msg.toLowerCase().includes("different from the old")) {
-        toast.error("A nova senha deve ser diferente da senha temporária. Escolha uma senha nova.");
-      } else if (msg.toLowerCase().includes("rate limit")) {
+      if (msg.toLowerCase().includes("rate limit")) {
         toast.error("Muitas tentativas. Aguarde alguns minutos e tente novamente.");
       } else {
         toast.error(msg || "Erro ao atualizar senha");
