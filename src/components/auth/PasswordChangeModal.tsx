@@ -77,9 +77,11 @@ export function PasswordChangeModal() {
   }, [newPassword]);
 
   const isPasswordValid  = PASSWORD_REQUIREMENTS.every((r) => r.test(newPassword));
+  const TEMP_PASSWORD = "Carbo@2026";
+  const isTempPassword   = newPassword === TEMP_PASSWORD;
   const passwordsMatch   = newPassword === confirmPassword && confirmPassword.length > 0;
   const isPasswordPwned  = hibpResult?.isPwned === true;
-  const canSubmit        = isPasswordValid && passwordsMatch && !isLoading && !isPasswordPwned && !isCheckingHIBP;
+  const canSubmit        = isPasswordValid && passwordsMatch && !isLoading && !isPasswordPwned && !isCheckingHIBP && !isTempPassword;
 
   // ── Submit ───────────────────────────────────────────────────────────────
   const handleSubmit = async (e: React.FormEvent) => {
@@ -88,7 +90,15 @@ export function PasswordChangeModal() {
     setIsLoading(true);
     try {
       const { error: pwErr } = await supabase.auth.updateUser({ password: newPassword });
-      if (pwErr) throw pwErr;
+      if (pwErr) {
+        const msg = pwErr.message?.toLowerCase() ?? "";
+        if (msg.includes("rate limit")) {
+          toast.error("Muitas tentativas. Aguarde alguns minutos e tente novamente.");
+          return;
+        }
+        // "different from old" = senha já foi trocada numa tentativa anterior — segue
+        if (!msg.includes("different from the old")) throw pwErr;
+      }
 
       const { data: { user: currentUser } } = await supabase.auth.getUser();
       if (currentUser) {
@@ -98,9 +108,10 @@ export function PasswordChangeModal() {
           .eq("id", currentUser.id);
       }
 
-      toast.success("Senha definida! Bem-vindo ao Carbo Controle.");
+      toast.success("Senha definida com sucesso!");
       refreshProfile();
     } catch (err: any) {
+      console.error("Password change error:", err);
       toast.error(err.message || "Erro ao atualizar senha");
     } finally {
       setIsLoading(false);
@@ -135,6 +146,7 @@ export function PasswordChangeModal() {
           {/* Nova senha */}
           <div className="space-y-1.5">
             <Label htmlFor="modal-newpwd">Nova Senha</Label>
+            <p className="text-xs text-muted-foreground">Deve ser diferente da senha temporária <span className="font-mono font-medium">Carbo@2026</span>.</p>
             <div className="relative">
               <Input
                 id="modal-newpwd"
@@ -171,6 +183,9 @@ export function PasswordChangeModal() {
             </div>
             {confirmPassword && !passwordsMatch && (
               <p className="text-xs text-destructive">As senhas não coincidem</p>
+            )}
+            {isTempPassword && (
+              <p className="text-xs text-destructive">Não é permitido usar a senha temporária. Crie uma senha nova.</p>
             )}
           </div>
 
