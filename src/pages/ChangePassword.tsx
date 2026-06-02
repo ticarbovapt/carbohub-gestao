@@ -36,7 +36,7 @@ const ChangePassword = () => {
       userName={firstName} 
       onPasswordChanged={() => {
         refreshProfile();
-        navigate("/onboarding", { replace: true });
+        navigate("/home", { replace: true });
       }}
       onBack={async () => {
         await supabase.auth.signOut();

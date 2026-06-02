@@ -138,8 +138,8 @@ function AnimatedRoutes() {
             <Route path="/reset-password" element={<ResetPassword />} />
             <Route path="/onboarding" element={<Onboarding />} />
 
-            {/* Home Hub */}
-            <Route path="/home" element={<ProtectedRoute screenId="home"><HomeHub /></ProtectedRoute>} />
+            {/* Home Hub — acessível a qualquer usuário autenticado; Role Matrix controla o interior */}
+            <Route path="/home" element={<ProtectedRoute><HomeHub /></ProtectedRoute>} />
 
             {/* Protected routes */}
             <Route path="/dashboard"        element={<ProtectedRoute screenId="dashboard"><Dashboard /></ProtectedRoute>} />

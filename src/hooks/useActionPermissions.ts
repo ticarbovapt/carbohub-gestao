@@ -200,10 +200,11 @@ export function useCanReceiveAlerts(): boolean {
 
 /** Access the operational area (scheduling, OS, machines, etc.). */
 export function useCanAccessOps(): boolean {
-  const can = useCanSeeScreen("os");
-  const { isAdmin, isManager, isAnyGestor, isCeo, isAnyOperador } = useAuth();
-  if (ENFORCEMENT_ACTIVE) return can;
-  return isAdmin || isManager || isAnyGestor || isCeo || isAnyOperador;
+  const { user } = useAuth();
+  // O hub /home é a porta de entrada do Carbo Controle.
+  // Qualquer usuário autenticado com perfil interno pode entrar —
+  // o Role Matrix controla o que cada um vê DENTRO do sistema.
+  return !!user;
 }
 
 /** See admin-only menu items (system config, pipeline, webhooks). */
