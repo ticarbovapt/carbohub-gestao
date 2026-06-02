@@ -63,9 +63,9 @@ export function ProtectedRoute({
   if (ENFORCEMENT_ACTIVE && screenId) {
     if (!canSeeByFunction) {
       // Evita loop: se já está em /sem-acesso ou /home, não redireciona novamente
-      const safe = ["/sem-acesso", "/home", "/meu-perfil"];
+      const safe = ["/sem-acesso", "/inicio", "/home", "/meu-perfil"];
       if (safe.includes(location.pathname)) return <>{children}</>;
-      return <Navigate to="/sem-acesso" replace />;
+      return <Navigate to="/inicio" replace />;
     }
     return <>{children}</>;
   }

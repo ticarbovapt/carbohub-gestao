@@ -14,6 +14,7 @@ import { HomeHub } from "./components/home/HomeHub";
 
 // ── Lazy page imports ─────────────────────────────────────────────────────────
 const SemAcesso           = lazy(() => import("./pages/SemAcesso"));
+const Inicio              = lazy(() => import("./pages/Inicio"));
 const Index               = lazy(() => import("./pages/Index"));
 const AreaSelector        = lazy(() => import("./pages/AreaSelector"));
 const LoginArea           = lazy(() => import("./pages/LoginArea"));
@@ -139,10 +140,13 @@ function AnimatedRoutes() {
             <Route path="/reset-password" element={<ResetPassword />} />
             <Route path="/onboarding" element={<Onboarding />} />
 
-            {/* Sem acesso — página segura sem screenId, nunca cria loop */}
+            {/* Início — landing page padrão pós-login, sem screenId, nunca bloqueia */}
+            <Route path="/inicio" element={<ProtectedRoute><Inicio /></ProtectedRoute>} />
+
+            {/* Sem acesso — fallback para telas bloqueadas */}
             <Route path="/sem-acesso" element={<ProtectedRoute><SemAcesso /></ProtectedRoute>} />
 
-            {/* Home Hub — acessível a qualquer usuário autenticado; Role Matrix controla o interior */}
+            {/* Home Hub — portal selector (Controle / Licenciado / PDV) */}
             <Route path="/home" element={<ProtectedRoute><HomeHub /></ProtectedRoute>} />
 
             {/* Protected routes */}
