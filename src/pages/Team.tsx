@@ -37,7 +37,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
-import { useCanEditTeamMembers, useCanAddTeamMember } from "@/hooks/useActionPermissions";
+import { useCanEditTeamMembers, useCanAddTeamMember, useCanManageAllTeam } from "@/hooks/useActionPermissions";
 import { useResendWelcomeEmail } from "@/hooks/useCreateTeamMember";
 import {
   ALL_DEPARTMENTS,
@@ -648,15 +648,26 @@ const Team = () => {
   const [emailSentMember, setEmailSentMember] = useState<TeamMember | null>(null);
   const [isBulkSending, setIsBulkSending] = useState(false);
 
-  const approvedMembers = members?.filter((m) => m.status === "approved") || [];
+  const allApproved = members?.filter((m) => m.status === "approved") || [];
+
+  const canManageAll = useCanManageAllTeam();
+  const canEdit = useCanEditTeamMembers();
+  const canAddMember = useCanAddTeamMember();
+
+  // Gestores não-head veem apenas o próprio departamento por padrão
+  const { profile } = useAuth();
+  const [showOnlyMyDept, setShowOnlyMyDept] = useState(!canManageAll);
+  const myDept = profile?.department ?? null;
+
+  const approvedMembers = (canManageAll && !showOnlyMyDept)
+    ? allApproved
+    : allApproved.filter((m) => m.department === myDept);
+
   const adminCount = approvedMembers.filter((m) => m.roles.includes("admin")).length;
   const uniqueDepartments = new Set(
     approvedMembers.map((m) => m.department).filter(Boolean)
   ).size;
   const pendingAccessCount = approvedMembers.filter((m) => m.password_must_change).length;
-
-  const canEdit = useCanEditTeamMembers();
-  const canAddMember = useCanAddTeamMember();
 
   const handleBulkResendAll = async () => {
     const pending = approvedMembers.filter((m) => m.password_must_change && m.username);
@@ -783,7 +794,7 @@ const Team = () => {
 
         {/* Tab row */}
         <Tabs defaultValue="acesso" className="w-full">
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 flex-wrap">
             <TabsList>
               <TabsTrigger value="acesso" className="gap-2">
                 <UserCheck className="h-4 w-4" />
@@ -794,6 +805,29 @@ const Team = () => {
                 Organograma
               </TabsTrigger>
             </TabsList>
+
+            {/* Filtro de departamento: sempre visível; head/command/TI podem alternar */}
+            <div className="flex items-center gap-2 ml-auto text-xs text-muted-foreground">
+              {canManageAll && (
+                <button
+                  onClick={() => setShowOnlyMyDept((v) => !v)}
+                  className={`flex items-center gap-1.5 rounded-full border px-3 py-1 transition-colors ${
+                    showOnlyMyDept
+                      ? "border-primary bg-primary/10 text-primary font-medium"
+                      : "border-border hover:bg-accent"
+                  }`}
+                >
+                  <Users className="h-3 w-3" />
+                  {showOnlyMyDept ? "Meu departamento" : "Todos os departamentos"}
+                </button>
+              )}
+              {!canManageAll && myDept && (
+                <span className="flex items-center gap-1 rounded-full border border-border px-3 py-1">
+                  <Users className="h-3 w-3" />
+                  {getDeptLabel(myDept)}
+                </span>
+              )}
+            </div>
           </div>
 
           {/* ── ABA: Usuários com Acesso ── */}
@@ -894,9 +928,9 @@ const Team = () => {
                       })()}
                     </div>
 
-                    {/* Actions */}
+                    {/* Actions — apenas head/command/TI podem editar e configurar acesso */}
                     <div className="flex items-center gap-1.5 justify-end w-32">
-                      <Button
+                      {canManageAll && <Button
                         variant="ghost"
                         size="sm"
                         className="h-7 w-7 p-0 text-muted-foreground"
@@ -926,8 +960,8 @@ const Team = () => {
                         }}
                       >
                         <Pencil className="h-3.5 w-3.5" />
-                      </Button>
-                      <Button
+                      </Button>}
+                      {canManageAll && <Button
                         variant="outline"
                         size="sm"
                         className="h-7 px-2.5 text-xs font-medium border-primary/40 text-primary hover:bg-primary/10 hover:border-primary gap-1"
@@ -936,7 +970,7 @@ const Team = () => {
                       >
                         <Shield className="h-3 w-3" />
                         Acesso
-                      </Button>
+                      </Button>}
                     </div>
                   </div>
                 ))}
