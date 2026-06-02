@@ -100,6 +100,8 @@ export function ForcePasswordChange({ userName, onPasswordChanged, onBack }: For
     return { score: finalScore, label: "Forte", color: "bg-emerald-500" };
   }, [newPassword]);
 
+  const TEMP_PASSWORD = "Carbo@2026";
+  const isTempPassword = newPassword === TEMP_PASSWORD;
   const isPasswordValid = PASSWORD_REQUIREMENTS.every((req) => req.test(newPassword));
   const passwordsMatch = newPassword === confirmPassword && confirmPassword.length > 0;
   const isPasswordPwned = hibpResult?.isPwned === true;
@@ -108,7 +110,7 @@ export function ForcePasswordChange({ userName, onPasswordChanged, onBack }: For
     emailTrimmed.length > 0 &&
     /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailTrimmed) &&
     !emailTrimmed.endsWith(INTERNAL_EMAIL_SUFFIX);
-  const canSubmit = isPasswordValid && passwordsMatch && isEmailValid && !isLoading && !isPasswordPwned && !isCheckingHIBP;
+  const canSubmit = isPasswordValid && passwordsMatch && isEmailValid && !isLoading && !isPasswordPwned && !isCheckingHIBP && !isTempPassword;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -215,7 +217,7 @@ export function ForcePasswordChange({ userName, onPasswordChanged, onBack }: For
 
             <div className="space-y-2">
               <Label htmlFor="newPassword">Nova Senha</Label>
-              <p className="text-xs text-muted-foreground">Deve ser diferente da senha temporária recebida.</p>
+              <p className="text-xs text-muted-foreground">Deve ser diferente da senha temporária <span className="font-mono font-medium">Carbo@2026</span>.</p>
               <div className="relative">
                 <Input
                   id="newPassword"
@@ -256,6 +258,9 @@ export function ForcePasswordChange({ userName, onPasswordChanged, onBack }: For
               </div>
               {confirmPassword && !passwordsMatch && (
                 <p className="text-sm text-destructive">As senhas não coincidem</p>
+              )}
+              {isTempPassword && (
+                <p className="text-sm text-destructive">Não é permitido usar a senha temporária. Crie uma senha nova.</p>
               )}
             </div>
 
