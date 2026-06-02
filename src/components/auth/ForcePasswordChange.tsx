@@ -146,7 +146,7 @@ export function ForcePasswordChange({ userName, onPasswordChanged, onBack }: For
 
       toast.success("Senha e e-mail definidos! Bem-vindo ao Carbo Controle.");
       onPasswordChanged();
-      navigate("/home");
+      navigate("/inicio");
     } catch (error: any) {
       console.error("Password change error:", error);
       const msg: string = error.message || "";

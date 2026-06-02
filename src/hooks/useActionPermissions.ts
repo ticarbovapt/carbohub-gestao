@@ -36,6 +36,22 @@ export function useCanEditTeamMembers(): boolean {
   return isAdmin || isCeo || isMasterAdmin;
 }
 
+/**
+ * Gestão completa de equipe: criar contas, editar qualquer colaborador,
+ * resetar senhas, configurar acessos.
+ * Apenas head (qualquer dept), command ou TI/suporte.
+ */
+export function useCanManageAllTeam(): boolean {
+  const { isSuporte, isCeo, profile } = useAuth();
+  const isHead =
+    profile?.funcao === "head" ||
+    profile?.secondary_funcao === "head";
+  const isCommand =
+    profile?.department === "command" ||
+    profile?.secondary_department === "command";
+  return isSuporte || isCeo || isHead || isCommand;
+}
+
 /** Create new team member accounts. */
 export function useCanAddTeamMember(): boolean {
   const can = useCanSeeScreen("team");
