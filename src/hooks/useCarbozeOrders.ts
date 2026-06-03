@@ -157,6 +157,7 @@ export interface OrderInsert {
   trade_name?: string;
   cnae?: string;
   situacao_cadastral?: string;
+  ie?: string;
   point_type?: string;
   avg_monthly_vehicles?: number;
   works_with_diesel?: boolean;

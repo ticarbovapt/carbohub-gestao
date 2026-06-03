@@ -64,6 +64,7 @@ export function OrderPrintView({ order }: OrderPrintViewProps) {
   const billingEmail   = order.billing_contact_email ?? order.customer_email ?? "";
 
   const deliveryAddr   = order.delivery_address || "";
+  const deliveryHood   = order.delivery_neighborhood || "";
   const deliveryCity   = order.delivery_city || "";
   const deliveryState  = order.delivery_state || "";
   const deliveryZip    = order.delivery_zip || "";
@@ -123,6 +124,7 @@ export function OrderPrintView({ order }: OrderPrintViewProps) {
               <div style={{ fontWeight: "bold" }}>{billingName}{deliveryCity ? `, ${deliveryCity}/${deliveryState}` : ""}</div>
               {billingCnpj && <div>{billingCnpj}</div>}
               {deliveryAddr && <div>{deliveryAddr}</div>}
+              {deliveryHood && <div>{deliveryHood}</div>}
               {(deliveryCity || deliveryZip) && (
                 <div>CEP: {deliveryZip}. {deliveryCity}/{deliveryState}</div>
               )}
