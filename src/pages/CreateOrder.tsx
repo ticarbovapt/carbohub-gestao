@@ -18,7 +18,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, CalendarIcon, Loader2, Plus, Trash2, Repeat, Search, Building2, MapPin, CheckCircle2, AlertCircle, ShoppingCart, Gift, FileText } from "lucide-react";
+import { ArrowLeft, CalendarIcon, Loader2, Plus, Trash2, Repeat, Search, Building2, MapPin, CheckCircle2, AlertCircle, ShoppingCart, Gift, FileText, User } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useCreateOrder, useCreateQuote, useUpdateQuote, useConvertQuoteToOrder, useOrder, type OrderType, ORDER_TYPE_LABELS } from "@/hooks/useCarbozeOrders";
 import { generateQuotePdf } from "@/lib/quotePdf";
@@ -577,6 +577,13 @@ export default function CreateOrder() {
       delivery_state: data.delivery_state || undefined,
       delivery_zip: data.delivery_zip || undefined,
       notes: data.notes || undefined,
+      // Notas internas (e, em ação promocional, o operador responsável) — antes
+      // eram preenchidas na tela mas nunca gravadas. operator_name não tem coluna
+      // própria, então vai dobrado dentro de internal_notes para não se perder.
+      internal_notes: [
+        data.internal_notes,
+        data.operator_name ? `Operador responsável: ${data.operator_name}` : null,
+      ].filter(Boolean).join(" — ") || undefined,
       items: orderItems,
       subtotal,
       total,

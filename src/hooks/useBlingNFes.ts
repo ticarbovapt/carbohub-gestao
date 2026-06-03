@@ -181,6 +181,7 @@ export function useLinkNFeToOrder() {
       queryClient.invalidateQueries({ queryKey: ["bling-nfes"] });
       queryClient.invalidateQueries({ queryKey: ["carboze-orders"] });
       queryClient.invalidateQueries({ queryKey: ["vendas"] });
+      queryClient.invalidateQueries({ queryKey: ["faturamento"] });
       toast.success("NF vinculada ao pedido com sucesso!");
     },
     onError: (err: Error) => {
@@ -224,6 +225,7 @@ export function useUnlinkNFe() {
       queryClient.invalidateQueries({ queryKey: ["bling-nfes"] });
       queryClient.invalidateQueries({ queryKey: ["carboze-orders"] });
       queryClient.invalidateQueries({ queryKey: ["vendas"] });
+      queryClient.invalidateQueries({ queryKey: ["faturamento"] });
       toast.success("Vínculo removido.");
     },
     onError: (err: Error) => {

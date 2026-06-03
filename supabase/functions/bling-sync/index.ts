@@ -805,6 +805,43 @@ async function syncNFe(
   }
   console.log(`[bling-sync] NFe detail enrichment: ${enriched} processed`);
 
+  // ── Passo 2b: re-checar NFs "no_code" recentes (N1) ───────────────────────
+  // NF emitida SEM o nº do pedido vira "no_code". Se o financeiro adicionar o
+  // PED na NF dentro do Bling DEPOIS, a observação no nosso banco fica velha e
+  // a NF nunca re-vinculava sozinha. Aqui re-buscamos o detalhe de um lote
+  // pequeno e RECENTE (rotativo, mais antigas primeiro) e devolvemos para
+  // "pending" quando há observação — o Passo 3 reavalia. Filtro por data + cap
+  // mantêm o custo de API baixo (não varre todo o histórico a cada execução).
+  const noCodeCutoff = new Date(Date.now() - 45 * 24 * 60 * 60 * 1000)
+    .toISOString().split("T")[0];
+  const { data: recheckNoCode } = await supabaseAdmin
+    .from("bling_nfe")
+    .select("id, bling_id")
+    .eq("match_status", "no_code")
+    .gte("data_emissao", noCodeCutoff)
+    .order("updated_at", { ascending: true })
+    .limit(30);
+
+  let rechecked = 0;
+  for (const nf of (recheckNoCode || [])) {
+    try {
+      const detail = await blingFetch(token, `/nfe/${nf.bling_id}`, 1, 1);
+      const d = detail.data || {};
+      const obs = d.informacoesAdicionais || d.observacoes || null;
+      await supabaseAdmin.from("bling_nfe").update({
+        informacoes_adicionais: obs,
+        // volta para "pending" só se há observação para reavaliar; senão segue no_code
+        match_status: obs ? "pending" : "no_code",
+        updated_at: new Date().toISOString(),
+      }).eq("id", nf.id);
+      rechecked++;
+    } catch (e) {
+      console.error(`[bling-sync] no_code recheck failed for bling_id ${nf.bling_id}:`, e);
+    }
+    await new Promise((r) => setTimeout(r, 350));
+  }
+  if (rechecked > 0) console.log(`[bling-sync] NFe no_code recheck: ${rechecked} reprocessed`);
+
   // ── Passo 3: cruzamento automático ────────────────────────────────────────
   const matched = await matchNFesToOrders(supabaseAdmin);
   console.log(`[bling-sync] NFe matching: ${matched.matched} matched, ${matched.invalid} invalid`);

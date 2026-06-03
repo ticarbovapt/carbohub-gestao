@@ -76,7 +76,11 @@ export function CDSPRegistrarEnvio({
         const qty = Number(row.quantity);
         const obs = row.notes.trim() || `Envio para ${destinos.find(d => d.id === row.destinoId)?.label ?? "CD São Paulo"}`;
 
-        // Debita do warehouse_stock do Hub Natal
+        // Debita do warehouse_stock do Hub Natal — valida saldo ANTES (T4).
+        // Sem esta checagem, enviar acima do saldo era "clampado" em 0 mas o
+        // destino recebia a quantidade cheia, criando estoque do nada. Também
+        // bloqueia o caso de não existir linha de estoque em Natal (que antes
+        // pulava o débito mas criava a transferência mesmo assim).
         const { data: ws } = await supabase
           .from("warehouse_stock")
           .select("id, quantity")
@@ -84,11 +88,16 @@ export function CDSPRegistrarEnvio({
           .eq("product_id", row.productId)
           .maybeSingle();
 
-        if (ws) {
-          await supabase.from("warehouse_stock")
-            .update({ quantity: Math.max(0, (ws.quantity as number) - qty), updated_at: new Date().toISOString() })
-            .eq("id", ws.id);
+        const available = (ws?.quantity as number) ?? 0;
+        if (!ws || available < qty) {
+          throw new Error(
+            `Estoque insuficiente em Natal para "${product.name}": disponível ${available}, envio solicitado ${qty}.`
+          );
         }
+
+        await supabase.from("warehouse_stock")
+          .update({ quantity: available - qty, updated_at: new Date().toISOString() })
+          .eq("id", ws.id);
 
         // Cria transferência para o destino escolhido
         const { error } = await supabase.from("stock_transfers").insert({

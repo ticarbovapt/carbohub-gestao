@@ -136,20 +136,18 @@ export function useFunctionAccess(): FunctionAccess {
  * Role Matrix o usuário não vê a tela. Escape hatches: TI/head, admin e CEO.
  */
 export function useCanSeeScreen(screenId: string): boolean {
-  const { profile, isAdmin, isCeo } = useAuth();
+  const { profile } = useAuth();
   const { allowedScreenIds, isConfigured, isLoading } = useFunctionAccess();
 
   if (!ENFORCEMENT_ACTIVE) return true;
 
-  // TI/head é superusuário — acesso irrestrito a todas as telas, inclusive as
-  // novas criadas no futuro. Verifica tanto o papel primário quanto o secundário.
+  // TI/head é o ÚNICO superusuário — acesso irrestrito a todas as telas, inclusive
+  // as novas criadas no futuro. Verifica papel primário e secundário.
+  // (Sem escape via admin/ceo legados: o acesso é 100% Role Matrix + TI/head.)
   const isTiHead =
     (profile?.department === "ti_suporte" && profile?.funcao === "head") ||
     (profile?.secondary_department === "ti_suporte" && profile?.secondary_funcao === "head");
   if (isTiHead) return true;
-
-  // Escape hatch: admin e CEO nunca ficam travados, mesmo sem função configurada.
-  if (isAdmin || isCeo) return true;
 
   // Enquanto a configuração ainda carrega, NÃO bloqueia — evita um flash de
   // redirect para /inicio em quem de fato tem acesso. A decisão real só vale

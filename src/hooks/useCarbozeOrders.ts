@@ -136,6 +136,7 @@ export interface OrderInsert {
   has_commission?: boolean;
   commission_rate?: number;
   notes?: string;
+  internal_notes?: string;
   // Recurrence fields
   order_type?: OrderType;
   is_recurring?: boolean;
