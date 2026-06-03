@@ -21,7 +21,7 @@ import { BlingPreviewDialog } from "@/components/orders/BlingPreviewDialog";
 import { LinkNFToOrderDialog } from "@/components/orders/LinkNFToOrderDialog";
 import { toast } from "sonner";
 
-const BLING_PEDIDOS_URL = "https://www.bling.com.br/b/pedidos.vendas.php";
+const BLING_PEDIDOS_URL = "https://bling.com.br/";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers
@@ -242,9 +242,10 @@ export default function FaturamentoPage() {
   const createBlingPedido = useCreateBlingPedido();
   const previewBlingPedido = usePreviewBlingPedido();
 
-  // Separa nativos (nascidos no sistema) de importados do Bling
-  const isFromBling = (o: FaturamentoOrder) =>
-    o.external_ref?.startsWith("bling-") || o.order_number?.startsWith("BLING-");
+  // Pedido que NASCEU no Bling (order_number começa com "BLING-")
+  const isFromBling = (o: FaturamentoOrder) => o.order_number?.startsWith("BLING-");
+  // Pedido nativo que já foi enviado ao Bling via "Criar no Bling"
+  const sentToBling = (o: FaturamentoOrder) => !isFromBling(o) && !!o.external_ref?.startsWith("bling-");
 
   const byOrigin = orders.filter(o => (origin === "bling" ? isFromBling(o) : !isFromBling(o)));
 
@@ -266,9 +267,8 @@ export default function FaturamentoPage() {
     month.getFullYear() === today.getFullYear() && month.getMonth() === today.getMonth();
 
   async function handleCopy(order: FaturamentoOrder) {
-    const text = buildCopyText(order);
-    await navigator.clipboard.writeText(text);
-    toast.success("Dados copiados! Cole na observação da NF no Bling.");
+    await navigator.clipboard.writeText(order.order_number);
+    toast.success(`Nº ${order.order_number} copiado! Cole na observação da NF no Bling.`);
   }
 
   async function handleCreateBling(order: FaturamentoOrder) {
@@ -440,7 +440,12 @@ export default function FaturamentoPage() {
               const isExpanded = expandedId === order.id;
               const isCreating = creatingId === order.id;
               const fromBling = isFromBling(order);
+              const alreadySentToBling = sentToBling(order);
               const hasNF = !!order.bling_nf_id;
+              // Extrai o ID do Bling a partir de external_ref ("bling-25981824259")
+              const blingOrderId = order.external_ref?.startsWith("bling-")
+                ? order.external_ref.replace("bling-", "")
+                : null;
 
               return (
                 <CarboCard key={order.id} className={hasNF ? "opacity-60" : ""}>
@@ -506,19 +511,19 @@ export default function FaturamentoPage() {
 
                       {/* Action buttons */}
                       <div className="flex items-center gap-1.5 shrink-0" onClick={e => e.stopPropagation()}>
+                        {/* Copiar Nº — copia apenas o número do pedido para colar na obs. da NF */}
                         <CarboButton
                           variant="outline"
                           size="sm"
                           className="h-8 gap-1.5 text-xs"
                           onClick={() => handleCopy(order)}
-                          title="Copiar todos os dados para criar a NF no Bling"
+                          title="Copiar o número do pedido para colar na observação da NF no Bling"
                         >
                           <Copy className="h-3.5 w-3.5" />
-                          <span className="hidden md:inline">Copiar</span>
+                          <span className="hidden md:inline">Copiar Nº</span>
                         </CarboButton>
 
-                        {/* Vincular NF manual — útil quando a NF já existe no sistema
-                            mas não foi vinculada automaticamente (obs. sem o nº do pedido) */}
+                        {/* Vincular NF manual */}
                         {!hasNF && (
                           <CarboButton
                             variant="outline"
@@ -532,8 +537,7 @@ export default function FaturamentoPage() {
                           </CarboButton>
                         )}
 
-                        {/* Pedido NASCIDO no Bling: já existe lá → só abrir e gerar NF.
-                            NUNCA "Criar no Bling" (geraria duplicata). */}
+                        {/* Pedido NASCIDO no Bling: já existe lá → só abrir e gerar NF */}
                         {!hasNF && fromBling && (
                           <a
                             href={BLING_PEDIDOS_URL}
@@ -547,8 +551,22 @@ export default function FaturamentoPage() {
                           </a>
                         )}
 
-                        {/* Pedido NATIVO do sistema: ainda não existe no Bling → pré-visualizar/criar */}
-                        {!hasNF && !fromBling && (
+                        {/* Pedido nativo JÁ ENVIADO ao Bling → "Abrir no Bling" (não duplicar) */}
+                        {!hasNF && !fromBling && alreadySentToBling && (
+                          <a
+                            href={BLING_PEDIDOS_URL}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="h-8 px-2 inline-flex items-center gap-1.5 text-xs rounded-lg border border-carbo-green/30 text-carbo-green hover:bg-carbo-green/10 transition-colors"
+                            title={`Pedido enviado ao Bling (ID ${blingOrderId}) — abra e gere a NF`}
+                          >
+                            <ExternalLink className="h-3.5 w-3.5" />
+                            <span className="hidden md:inline">Abrir no Bling</span>
+                          </a>
+                        )}
+
+                        {/* Pedido nativo AINDA NÃO enviado ao Bling → pré-visualizar / criar */}
+                        {!hasNF && !fromBling && !alreadySentToBling && (
                           <>
                             <CarboButton
                               variant="outline"
@@ -566,13 +584,11 @@ export default function FaturamentoPage() {
                               className="h-8 gap-1.5 text-xs"
                               onClick={() => handleCreateBling(order)}
                               disabled={isCreating || createBlingPedido.isPending}
-                              title="Criar pedido de venda no Bling via API (o financeiro converte em NF no Bling)"
+                              title="Criar pedido de venda no Bling via API"
                             >
-                              {isCreating ? (
-                                <Clock className="h-3.5 w-3.5 animate-spin" />
-                              ) : (
-                                <Send className="h-3.5 w-3.5" />
-                              )}
+                              {isCreating
+                                ? <Clock className="h-3.5 w-3.5 animate-spin" />
+                                : <Send className="h-3.5 w-3.5" />}
                               <span className="hidden md:inline">
                                 {isCreating ? "Enviando..." : "Criar no Bling"}
                               </span>
@@ -582,7 +598,7 @@ export default function FaturamentoPage() {
 
                         {hasNF && (
                           <a
-                            href={`https://www.bling.com.br/b/notas.fiscais.php`}
+                            href={BLING_PEDIDOS_URL}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="h-8 px-2 inline-flex items-center gap-1.5 text-xs rounded-lg border border-green-500/30 text-green-500 hover:bg-green-500/10 transition-colors"
