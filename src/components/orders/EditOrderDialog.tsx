@@ -1,4 +1,4 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -28,6 +28,11 @@ import { useTeamMembers } from "@/hooks/useTeamMembers";
 import { Loader2, CalendarIcon, Repeat, Zap, UserCheck, FileText, Truck, Receipt, CheckCircle2, AlertCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { validateInscricaoEstadual } from "@/lib/inscricaoEstadual";
+
+const UFS_BRASIL = [
+  "AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG",
+  "PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO",
+];
 
 const formSchema = z.object({
   // ── Aba Pedido ────────────────────────────────────────────────────────────
@@ -85,6 +90,7 @@ export function EditOrderDialog({ open, onOpenChange, order, canEditSensitive = 
   const updateOrder = useUpdateOrder();
   const { data: licensees = [] } = useLicensees("all");
   const { data: teamMembers = [] } = useTeamMembers();
+  const [ieUf, setIeUf] = useState("");
 
   // Only show actual vendedores (is_vendedor = true) in the dropdown
   const vendedores = teamMembers.filter(m => m.status === "approved" && m.is_vendedor);
@@ -742,23 +748,53 @@ export function EditOrderDialog({ open, onOpenChange, order, canEditSensitive = 
                       control={form.control}
                       name="ie"
                       render={({ field }) => {
-                        const uf = form.watch("billing_state") || form.watch("delivery_state") || "";
+                        const detectedUf = form.watch("billing_state") || form.watch("delivery_state") || "";
+                        const uf = ieUf || detectedUf;
+                        const isIsento = /^isento$/i.test((field.value || "").trim());
                         const val = (field.value || "").trim();
-                        const result = val ? validateInscricaoEstadual(val, uf) : null;
+                        const result = (val && !isIsento) ? validateInscricaoEstadual(val, uf) : null;
                         return (
                           <FormItem>
-                            <FormLabel>Inscrição Estadual (IE)</FormLabel>
-                            <FormControl>
-                              <Input
-                                placeholder='ex: 066839440 ou "ISENTO"'
-                                {...field}
-                                className={cn(
-                                  result && !result.valid && "border-destructive focus-visible:ring-destructive",
-                                  result && result.valid && "border-green-500 focus-visible:ring-green-500",
-                                )}
-                              />
-                            </FormControl>
-                            {result && (
+                            <div className="flex items-center justify-between">
+                              <FormLabel>Inscrição Estadual (IE)</FormLabel>
+                              <label className="flex items-center gap-2 text-xs font-normal text-muted-foreground cursor-pointer">
+                                <Switch
+                                  checked={isIsento}
+                                  onCheckedChange={(c) => field.onChange(c ? "ISENTO" : "")}
+                                />
+                                Isento
+                              </label>
+                            </div>
+                            {!isIsento && (
+                              <div className="flex gap-2">
+                                <Select value={uf} onValueChange={setIeUf}>
+                                  <SelectTrigger className="w-20 shrink-0">
+                                    <SelectValue placeholder="UF" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {UFS_BRASIL.map((u) => (
+                                      <SelectItem key={u} value={u}>{u}</SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                                <FormControl>
+                                  <Input
+                                    placeholder="Nº da Inscrição Estadual"
+                                    {...field}
+                                    className={cn(
+                                      "flex-1",
+                                      result && !result.valid && "border-destructive focus-visible:ring-destructive",
+                                      result && result.valid && "border-green-500 focus-visible:ring-green-500",
+                                    )}
+                                  />
+                                </FormControl>
+                              </div>
+                            )}
+                            {isIsento ? (
+                              <p className="text-xs flex items-center gap-1 mt-1 text-green-600">
+                                <CheckCircle2 className="h-3 w-3 shrink-0" /> Cliente isento de IE.
+                              </p>
+                            ) : result && (
                               <p className={cn(
                                 "text-xs flex items-center gap-1 mt-1",
                                 result.valid ? "text-green-600" : "text-destructive",

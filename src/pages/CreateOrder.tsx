@@ -90,6 +90,12 @@ const MODALIDADES = [
   { value: "licenciado", label: "Licenciado — Parceiro" },
 ];
 
+// Todas as UFs do Brasil — usado para validar a IE conforme o estado.
+const UFS_BRASIL = [
+  "AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG",
+  "PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO",
+];
+
 const formSchema = z.object({
   // Vendedor + Fluxo — preenchidos automaticamente pelo usuário logado
   vendedor_id: z.string().optional(),
@@ -196,6 +202,8 @@ export default function CreateOrder() {
   const [cnpjFound, setCnpjFound] = useState(false);
   const [cnpjError, setCnpjError] = useState<string | null>(null);
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
+  // UF escolhida para validar a IE (sobrescreve a detectada do endereço). "" = usa a detectada.
+  const [ieUf, setIeUf] = useState("");
 
   // Heads (em qualquer dept), CEO, command e o superusuário TI podem atribuir o
   // pedido a outro vendedor. Considera função PRIMÁRIA e SECUNDÁRIA — ex.: um
@@ -881,24 +889,53 @@ export default function CreateOrder() {
                         control={form.control}
                         name="ie"
                         render={({ field }) => {
-                          // UF de referência: cobrança, senão entrega
-                          const uf = form.watch("billing_state") || form.watch("delivery_state") || "";
+                          const detectedUf = form.watch("billing_state") || form.watch("delivery_state") || "";
+                          const uf = ieUf || detectedUf;
+                          const isIsento = /^isento$/i.test((field.value || "").trim());
                           const val = (field.value || "").trim();
-                          const result = val ? validateInscricaoEstadual(val, uf) : null;
+                          const result = (val && !isIsento) ? validateInscricaoEstadual(val, uf) : null;
                           return (
                             <FormItem className="sm:col-span-2">
-                              <FormLabel>Inscrição Estadual</FormLabel>
-                              <FormControl>
-                                <Input
-                                  {...field}
-                                  placeholder='Nº da IE ou "ISENTO"'
-                                  className={cn(
-                                    result && !result.valid && "border-destructive focus-visible:ring-destructive",
-                                    result && result.valid && "border-green-500 focus-visible:ring-green-500",
-                                  )}
-                                />
-                              </FormControl>
-                              {result && (
+                              <div className="flex items-center justify-between">
+                                <FormLabel>Inscrição Estadual</FormLabel>
+                                <label className="flex items-center gap-2 text-xs font-normal text-muted-foreground cursor-pointer">
+                                  <Switch
+                                    checked={isIsento}
+                                    onCheckedChange={(c) => field.onChange(c ? "ISENTO" : "")}
+                                  />
+                                  Isento (sem IE)
+                                </label>
+                              </div>
+                              {!isIsento && (
+                                <div className="flex gap-2">
+                                  <Select value={uf} onValueChange={setIeUf}>
+                                    <SelectTrigger className="w-24 shrink-0">
+                                      <SelectValue placeholder="UF" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      {UFS_BRASIL.map((u) => (
+                                        <SelectItem key={u} value={u}>{u}</SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
+                                  <FormControl>
+                                    <Input
+                                      {...field}
+                                      placeholder="Nº da Inscrição Estadual"
+                                      className={cn(
+                                        "flex-1",
+                                        result && !result.valid && "border-destructive focus-visible:ring-destructive",
+                                        result && result.valid && "border-green-500 focus-visible:ring-green-500",
+                                      )}
+                                    />
+                                  </FormControl>
+                                </div>
+                              )}
+                              {isIsento ? (
+                                <p className="text-xs flex items-center gap-1 mt-1 text-green-600">
+                                  <CheckCircle2 className="h-3 w-3 shrink-0" /> Cliente isento de Inscrição Estadual.
+                                </p>
+                              ) : result ? (
                                 <p className={cn(
                                   "text-xs flex items-center gap-1 mt-1",
                                   result.valid ? "text-green-600" : "text-destructive",
@@ -908,10 +945,11 @@ export default function CreateOrder() {
                                     : <AlertCircle className="h-3 w-3 shrink-0" />}
                                   {result.message}
                                 </p>
+                              ) : (
+                                <FormDescription className="text-[11px]">
+                                  Escolha a UF e digite a IE — valida formato e dígito de qualquer estado do Brasil.
+                                </FormDescription>
                               )}
-                              <FormDescription className="text-[11px]">
-                                Valida formato e dígito conforme a UF{uf ? ` (${uf})` : " — selecione a UF acima"}. Aceita "ISENTO".
-                              </FormDescription>
                             </FormItem>
                           );
                         }}
