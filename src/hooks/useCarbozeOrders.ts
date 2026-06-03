@@ -370,7 +370,7 @@ export function useCreateOrder() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["carboze-orders"] });
-      queryClient.invalidateQueries({ queryKey: ["production-orders"] });
+      queryClient.invalidateQueries({ queryKey: ["production_orders_op"] });
       queryClient.invalidateQueries({ queryKey: ["warehouse-stock-all"] });
       queryClient.invalidateQueries({ queryKey: ["mrp-products-stock"] });
       queryClient.invalidateQueries({ queryKey: ["suprimentos-kpis"] });
@@ -457,7 +457,7 @@ export function useConvertQuoteToOrder() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["carboze-orders"] });
-      queryClient.invalidateQueries({ queryKey: ["production-orders"] });
+      queryClient.invalidateQueries({ queryKey: ["production_orders_op"] });
       queryClient.invalidateQueries({ queryKey: ["warehouse-stock-all"] });
       queryClient.invalidateQueries({ queryKey: ["mrp-products-stock"] });
       queryClient.invalidateQueries({ queryKey: ["suprimentos-kpis"] });
@@ -569,7 +569,7 @@ export function useDeleteOrder() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["carboze-orders"] });
-      queryClient.invalidateQueries({ queryKey: ["production-orders"] });
+      queryClient.invalidateQueries({ queryKey: ["production_orders_op"] });
       queryClient.invalidateQueries({ queryKey: ["warehouse-stock-all"] });
       queryClient.invalidateQueries({ queryKey: ["mrp-products-stock"] });
       queryClient.invalidateQueries({ queryKey: ["suprimentos-kpis"] });

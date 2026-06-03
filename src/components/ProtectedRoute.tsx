@@ -29,7 +29,7 @@ export function ProtectedRoute({
   screenId,
 }: ProtectedRouteProps) {
   const {
-    user, isLoading, roles, isAdmin, isManager, passwordMustChange,
+    user, isLoading, roles, isAdmin, isManager, passwordMustChange, tempPasswordExpired,
     isCeo, isAnyGestor, carboRoles,
   } = useAuth();
   // screenId guard: when ENFORCEMENT_ACTIVE = true and screenId is set, this controls access
@@ -51,6 +51,14 @@ export function ProtectedRoute({
   if (!user) {
     // Redirect to login, but save the attempted location
     return <Navigate to="/" state={{ from: location.pathname }} replace />;
+  }
+
+  // Senha temporária EXPIRADA: não pode trocar a senha sozinho — precisa de novo
+  // temp password do gestor. Manda para "/", onde o Index renderiza a tela de
+  // bloqueio TempPasswordExpired. Checado ANTES de passwordMustChange para não
+  // cair na auto-troca em /change-password.
+  if (tempPasswordExpired && location.pathname !== "/") {
+    return <Navigate to="/" replace />;
   }
 
   // If user needs to change password, redirect to change password page

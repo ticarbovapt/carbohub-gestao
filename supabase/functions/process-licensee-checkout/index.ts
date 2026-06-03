@@ -86,6 +86,23 @@ serve(async (req) => {
       );
     }
 
+    // Idempotência: se a solicitação já foi processada (status "confirmed"), não
+    // reprocessa — senão um segundo clique/retry debitaria créditos de novo e
+    // criaria OS/pedido duplicado. Devolve os IDs já gerados.
+    if (request.status === "confirmed") {
+      console.log(`Checkout já processado: ${requestId} (idempotente)`);
+      return new Response(
+        JSON.stringify({
+          success: true,
+          requestId,
+          alreadyProcessed: true,
+          serviceOrderId: request.service_order_id ?? null,
+          carbozeOrderId: request.carboze_order_id ?? null,
+        }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     // ── Per-resource authorization ────────────────────────────────────────────
     // The requester must be: admin/CEO/gestor OR the owner of the licensee request
     if (!isPrivilegedUser && request.created_by !== user.id) {

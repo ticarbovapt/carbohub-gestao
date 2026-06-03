@@ -119,6 +119,19 @@ Deno.serve(async (req: Request) => {
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
   );
 
+  // Auth: exige JWT válido. A função é chamada do front via supabase.functions.invoke,
+  // que anexa o token do usuário logado. Sem esta checagem o endpoint criava contatos e
+  // pedidos de venda reais no Bling de forma anônima (qualquer um com um lead_id).
+  const authHeader = req.headers.get("authorization");
+  const jwt = authHeader?.replace("Bearer ", "") ?? "";
+  const { data: { user: authUser }, error: authError } = await supabase.auth.getUser(jwt);
+  if (authError || !authUser) {
+    return new Response(JSON.stringify({ error: "Unauthorized" }), {
+      status: 401,
+      headers: { "Content-Type": "application/json", ...getCorsHeaders(req) },
+    });
+  }
+
   // Fetch lead
   const { data: lead, error: leadError } = await supabase
     .from("crm_leads")
@@ -132,6 +145,21 @@ Deno.serve(async (req: Request) => {
       status: 404,
       headers: { "Content-Type": "application/json", ...getCorsHeaders(req) },
     });
+  }
+
+  // Idempotência: se o lead já foi enviado ao Bling, não recria contato/pedido —
+  // senão re-advance de etapa / duplo-clique gerariam contatos e pedidos duplicados.
+  const priorMeta = (lead.source_meta as Record<string, any>) || {};
+  if (priorMeta.bling_contact_id) {
+    return new Response(
+      JSON.stringify({
+        ok: true,
+        already_bridged: true,
+        bling_contact_id: priorMeta.bling_contact_id,
+        bling_order_id: priorMeta.bling_order_id ?? null,
+      }),
+      { headers: { "Content-Type": "application/json", ...getCorsHeaders(req) } }
+    );
   }
 
   const clientId = Deno.env.get("BLING_CLIENT_ID") || "";
@@ -237,14 +265,17 @@ Deno.serve(async (req: Request) => {
       .eq("id", lead_id);
   }
 
-  // 4. Log to bling_sync_log
+  // 4. Log to bling_sync_log — usa as colunas reais da tabela
+  // (records_synced/records_failed/error_message). Antes usava nomes inexistentes
+  // (synced_count/meta/…), então TODO insert falhava silenciosamente no .catch().
   await supabase.from("bling_sync_log").insert({
     entity_type: "crm_bridge",
-    status: errors.length === 0 ? "completed" : "partial",
-    synced_count: blingContactId ? 1 : 0,
-    failed_count: errors.length,
-    error_details: errors.length > 0 ? errors.join("; ") : null,
-    meta: { lead_id, bling_contact_id: blingContactId, bling_order_id: blingOrderId },
+    status: errors.length === 0 ? "completed" : "failed",
+    records_synced: blingContactId ? 1 : 0,
+    records_failed: errors.length,
+    error_message: errors.length > 0
+      ? `lead ${lead_id}: ${errors.join("; ")}`
+      : null,
   }).catch((err: Error) => console.error("[crm-bling-bridge] Log error:", err.message));
 
   return new Response(
