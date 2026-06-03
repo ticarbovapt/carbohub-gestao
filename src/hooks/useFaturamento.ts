@@ -58,7 +58,7 @@ export function useFaturamento({ month, search = "", showAll = false }: Faturame
       let query = supabase
         .from("carboze_orders")
         .select("*")
-        .in("status", ["confirmed", "invoiced", "shipped", "delivered"])
+        .in("status", ["pending", "confirmed", "invoiced", "shipped", "delivered"])
         .order("created_at", { ascending: false });
 
       if (!showAll) {

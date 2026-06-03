@@ -36,12 +36,14 @@ function fmtDate(s: string | null) {
 }
 
 const STATUS_LABEL: Record<string, string> = {
+  pending:   "Pendente",
   confirmed: "Confirmado",
   invoiced:  "Faturado",
   shipped:   "Enviado",
   delivered: "Entregue",
 };
 const STATUS_VARIANT: Record<string, "success" | "warning" | "secondary"> = {
+  pending:   "secondary",
   confirmed: "warning",
   invoiced:  "warning",
   shipped:   "warning",
