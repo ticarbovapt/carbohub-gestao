@@ -611,60 +611,82 @@ export function FunctionAccessTab() {
 
               {/* Screen groups */}
               <div className="p-3 space-y-2">
-                {SCREEN_GROUPS.map(group => {
-                  const groupScreenIds = group.screens.map(s => s.id);
-                  const enabledCount = groupScreenIds.filter(id => currentScreens.has(id)).length;
-                  const allEnabled = enabledCount === groupScreenIds.length;
-                  const someEnabled = enabledCount > 0 && !allEnabled;
-                  const expanded = expandedGroups.has(group.id);
+                {(() => {
+                  const sidebarGroups = SCREEN_GROUPS.filter(g => g.inSidebar !== false);
+                  const portalGroups  = SCREEN_GROUPS.filter(g => g.inSidebar === false);
+
+                  function renderGroup(group: typeof SCREEN_GROUPS[number]) {
+                    const groupScreenIds = group.screens.map(s => s.id);
+                    const enabledCount = groupScreenIds.filter(id => currentScreens.has(id)).length;
+                    const allEnabled = enabledCount === groupScreenIds.length;
+                    const someEnabled = enabledCount > 0 && !allEnabled;
+                    const expanded = expandedGroups.has(group.id);
+                    return (
+                      <div key={group.id} className="border border-border rounded-lg overflow-hidden">
+                        <div className="flex items-center gap-2 px-3 py-2 bg-muted/30">
+                          <button
+                            onClick={() => toggleGroupExpand(group.id)}
+                            className="flex items-center gap-2 flex-1 text-left"
+                          >
+                            {expanded
+                              ? <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+                              : <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />}
+                            <span className="text-sm font-medium">{group.label}</span>
+                            <span className={cn(
+                              "text-[11px] ml-1",
+                              allEnabled ? "text-carbo-green" : someEnabled ? "text-warning" : "text-muted-foreground"
+                            )}>
+                              {enabledCount}/{groupScreenIds.length}
+                            </span>
+                          </button>
+                          <Switch
+                            checked={allEnabled}
+                            onCheckedChange={() => toggleGroup(group.id)}
+                            className="scale-75"
+                          />
+                        </div>
+                        {expanded && (
+                          <div className="divide-y divide-border/40">
+                            {group.screens.map(screen => (
+                              <label
+                                key={screen.id}
+                                className="flex items-center justify-between px-4 py-2 cursor-pointer hover:bg-muted/20 transition-colors"
+                              >
+                                <div>
+                                  <span className="text-sm">{screen.label}</span>
+                                  <span className="text-[10px] text-muted-foreground ml-2 font-mono">{screen.path}</span>
+                                </div>
+                                <Switch
+                                  checked={currentScreens.has(screen.id)}
+                                  onCheckedChange={() => toggleScreen(screen.id)}
+                                  className="scale-75"
+                                />
+                              </label>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  }
 
                   return (
-                    <div key={group.id} className="border border-border rounded-lg overflow-hidden">
-                      <div className="flex items-center gap-2 px-3 py-2 bg-muted/30">
-                        <button
-                          onClick={() => toggleGroupExpand(group.id)}
-                          className="flex items-center gap-2 flex-1 text-left"
-                        >
-                          {expanded
-                            ? <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
-                            : <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />}
-                          <span className="text-sm font-medium">{group.label}</span>
-                          <span className={cn(
-                            "text-[11px] ml-1",
-                            allEnabled ? "text-carbo-green" : someEnabled ? "text-warning" : "text-muted-foreground"
-                          )}>
-                            {enabledCount}/{groupScreenIds.length}
-                          </span>
-                        </button>
-                        <Switch
-                          checked={allEnabled}
-                          onCheckedChange={() => toggleGroup(group.id)}
-                          className="scale-75"
-                        />
-                      </div>
-                      {expanded && (
-                        <div className="divide-y divide-border/40">
-                          {group.screens.map(screen => (
-                            <label
-                              key={screen.id}
-                              className="flex items-center justify-between px-4 py-2 cursor-pointer hover:bg-muted/20 transition-colors"
-                            >
-                              <div>
-                                <span className="text-sm">{screen.label}</span>
-                                <span className="text-[10px] text-muted-foreground ml-2 font-mono">{screen.path}</span>
-                              </div>
-                              <Switch
-                                checked={currentScreens.has(screen.id)}
-                                onCheckedChange={() => toggleScreen(screen.id)}
-                                className="scale-75"
-                              />
-                            </label>
-                          ))}
-                        </div>
+                    <>
+                      {sidebarGroups.map(renderGroup)}
+                      {portalGroups.length > 0 && (
+                        <>
+                          <div className="flex items-center gap-2 pt-2">
+                            <div className="flex-1 h-px bg-border" />
+                            <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground px-1">
+                              Portais externos
+                            </span>
+                            <div className="flex-1 h-px bg-border" />
+                          </div>
+                          {portalGroups.map(renderGroup)}
+                        </>
                       )}
-                    </div>
+                    </>
                   );
-                })}
+                })()}
               </div>
             </div>
           )}
