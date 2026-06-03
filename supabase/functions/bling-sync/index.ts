@@ -236,6 +236,19 @@ async function createBlingPedido(
       quantidade: Number(item.quantity) || 1,
       valor: Number(item.unit_price) || 0,
     });
+
+    // V3: bonus units go as a separate line at R$0 so they appear on the NF
+    const bonusQty = Number(item.bonus_quantity) || 0;
+    if (bonusQty > 0) {
+      blingItems.push({
+        ...(blingProductId
+          ? { produto: { id: blingProductId } }
+          : { descricao: `${item.name || "Produto"} (bonificação)` }
+        ),
+        quantidade: bonusQty,
+        valor: 0,
+      });
+    }
   }
 
   if (blingItems.length === 0) {

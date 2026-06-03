@@ -146,13 +146,20 @@ export function QuickConfirmOPDialog({ open, order, onOpenChange }: QuickConfirm
       };
     });
 
+    // P4: only credit finished goods stock when quality is approved.
+    // Materials are still debited (they were consumed regardless of result).
+    const creditableQty  = qualityResult === "aprovada" ? actual : 0;
+    const rejectedQty    = qualityResult === "aprovada"
+      ? Math.max(0, plannedQty - actual)
+      : actual;
+
     try {
       await submitConfirmation.mutateAsync({
         production_order_id:      order.id,
         sku_id:                   order.sku_id,
         planned_quantity:         plannedQty,
-        good_quantity:            actual,
-        rejected_quantity:        Math.max(0, plannedQty - actual),
+        good_quantity:            creditableQty,
+        rejected_quantity:        rejectedQty,
         rejection_reason:         qtyChanged ? reason : undefined,
         deviation_notes:          notes || undefined,
         destination_warehouse_id: warehouseId,

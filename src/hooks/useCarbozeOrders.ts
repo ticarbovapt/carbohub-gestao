@@ -296,6 +296,10 @@ async function applyOrderFulfillment(
         const mrpProd = prodMap.get(item.product_code);
         if (!mrpProd || !item.quantity || item.quantity <= 0) continue;
 
+        // V3: deduct sold qty + any bonus qty together
+        const bonusQty  = Number(item.bonus_quantity) || 0;
+        const totalDeduction = item.quantity + bonusQty;
+
         const { data: ws } = await (supabase as any)
           .from("warehouse_stock")
           .select("id, quantity")
@@ -306,24 +310,28 @@ async function applyOrderFulfillment(
         if (ws) {
           await (supabase as any)
             .from("warehouse_stock")
-            .update({ quantity: Math.max(0, (ws.quantity || 0) - item.quantity), updated_at: new Date().toISOString() })
+            .update({ quantity: Math.max(0, (ws.quantity || 0) - totalDeduction), updated_at: new Date().toISOString() })
             .eq("id", ws.id);
         }
 
-        const newQty = Math.max(0, ((mrpProd.current_stock_qty as number) || 0) - item.quantity);
+        const newQty = Math.max(0, ((mrpProd.current_stock_qty as number) || 0) - totalDeduction);
         await (supabase as any)
           .from("mrp_products")
           .update({ current_stock_qty: newQty, stock_updated_at: new Date().toISOString().split("T")[0] })
           .eq("id", mrpProd.id);
 
+        const obs = bonusQty > 0
+          ? `Venda — pedido ${result.order_number || result.id.slice(0, 8)} (incl. ${bonusQty} bonificação)`
+          : `Venda — pedido ${result.order_number || result.id.slice(0, 8)}`;
+
         await (supabase as any).from("stock_movements").insert({
           product_id:  mrpProd.id,
           tipo:        "saida",
-          quantidade:  item.quantity,
+          quantidade:  totalDeduction,
           origem:      "pedido",
           origem_id:   result.id,
           warehouse_id: natId,
-          observacoes: `Venda — pedido ${result.order_number || result.id.slice(0, 8)}`,
+          observacoes: obs,
           created_by:  userId ?? null,
         });
       }

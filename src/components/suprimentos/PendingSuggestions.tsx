@@ -31,6 +31,7 @@ interface TransferSuggestion {
   status: string;
   notes: string | null;
   suggested_reason: string | null;
+  pre_debited: boolean;
   created_at: string;
 }
 
@@ -122,19 +123,21 @@ export function PendingSuggestions({ canApprove }: { canApprove: boolean }) {
       if (status === "executed") {
         const transfer = transfers.find(t => t.id === id);
         if (transfer) {
-          // Decrease from_hub
-          const { data: fromStock } = await supabase
-            .from("warehouse_stock")
-            .select("id, quantity")
-            .eq("warehouse_id", transfer.from_hub)
-            .eq("product_id", transfer.product_id)
-            .single();
-          if (fromStock && fromStock.quantity >= transfer.quantity) {
-            await supabase.from("warehouse_stock")
-              .update({ quantity: fromStock.quantity - transfer.quantity, updated_at: new Date().toISOString() })
-              .eq("id", fromStock.id);
-          } else {
-            throw new Error("Saldo insuficiente no hub de origem");
+          // T1: only debit from_hub when not already pre-debited by CDSPRegistrarEnvio
+          if (!transfer.pre_debited) {
+            const { data: fromStock } = await supabase
+              .from("warehouse_stock")
+              .select("id, quantity")
+              .eq("warehouse_id", transfer.from_hub)
+              .eq("product_id", transfer.product_id)
+              .single();
+            if (fromStock && fromStock.quantity >= transfer.quantity) {
+              await supabase.from("warehouse_stock")
+                .update({ quantity: fromStock.quantity - transfer.quantity, updated_at: new Date().toISOString() })
+                .eq("id", fromStock.id);
+            } else {
+              throw new Error("Saldo insuficiente no hub de origem");
+            }
           }
 
           // Increase to_hub

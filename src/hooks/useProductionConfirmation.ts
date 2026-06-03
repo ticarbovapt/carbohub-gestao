@@ -287,60 +287,9 @@ export function useSubmitConfirmation() {
             .map((m: any) => [m.product_id, m.warehouse_id])
         );
 
-        // Stock movements: debit consumed materials
+        // 5. Lot consumption (before the atomic RPC so lot data is available)
         for (const item of payload.items) {
-          if (item.actual_quantity <= 0) continue;
-
-          // Create saida movement
-          const { error: movError } = await supabase.from("stock_movements").insert({
-            product_id: item.product_id,
-            tipo: "saida",
-            quantidade: item.actual_quantity,
-            origem: "OP",
-            origem_id: payload.production_order_id,
-            observacoes: `Consumo OP - ${item.product_name}`,
-            created_by: userId,
-          } as any);
-
-          if (movError) {
-            console.error("[confirmation] Stock movement error:", movError);
-          }
-
-          // Update mrp_products consolidated stock
-          const { data: product } = await supabase
-            .from("mrp_products")
-            .select("current_stock_qty")
-            .eq("id", item.product_id)
-            .single();
-
-          const currentStock = (product as any)?.current_stock_qty || 0;
-          const newStock = Math.max(0, currentStock - item.actual_quantity);
-
-          await supabase.from("mrp_products").update({
-            current_stock_qty: newStock,
-            stock_updated_at: new Date().toISOString().split("T")[0],
-          }).eq("id", item.product_id);
-
-          // Deduct from warehouse_stock: use material's assigned warehouse, or fall back
-          // to the production hub (HUB-RN) so stock always comes out of Hub Natal
-          const warehouseId = materialWarehouseMap.get(item.product_id) || payload.destination_warehouse_id;
-          if (warehouseId) {
-            const { data: ws } = await (supabase as any)
-              .from("warehouse_stock")
-              .select("id, quantity")
-              .eq("product_id", item.product_id)
-              .eq("warehouse_id", warehouseId)
-              .maybeSingle();
-            if (ws) {
-              await (supabase as any)
-                .from("warehouse_stock")
-                .update({ quantity: Math.max(0, ws.quantity - item.actual_quantity), updated_at: new Date().toISOString() })
-                .eq("id", ws.id);
-            }
-          }
-
-          // 5. Update lot consumption if lot_id provided
-          if (item.lot_id) {
+          if (item.lot_id && item.actual_quantity > 0) {
             await (supabase as any).from("inventory_lot_consumption").insert({
               lot_id: item.lot_id,
               production_order_id: payload.production_order_id,
@@ -348,7 +297,6 @@ export function useSubmitConfirmation() {
               consumed_by: userId,
             });
 
-            // Decrement lot available volume
             const { data: lot } = await (supabase as any)
               .from("inventory_lot")
               .select("available_volume_ml")
@@ -365,9 +313,10 @@ export function useSubmitConfirmation() {
           }
         }
 
-        // 6. Credit finished goods (entrada for the finished SKU product)
+        // 6. Resolve finished-goods product (needed for both the RPC and pre-flight)
+        let finishedProductId: string | null = null;
+        let finishedProductName = "";
         if (payload.good_quantity > 0) {
-          // Fetch SKU to get its code, then match to mrp_products by product_code
           const { data: sku } = await (supabase as any)
             .from("sku")
             .select("code, name")
@@ -377,56 +326,48 @@ export function useSubmitConfirmation() {
           if (sku) {
             const { data: finishedProduct } = await supabase
               .from("mrp_products")
-              .select("id, current_stock_qty")
+              .select("id")
               .eq("product_code", sku.code)
               .maybeSingle();
 
             if (!finishedProduct) {
-              console.warn(`[confirmation] Produto acabado não encontrado no MRP para code="${sku.code}".`);
               toast.warning(`"${sku.name}" não encontrado no MRP com código ${sku.code} — estoque do produto final não foi creditado. Cadastre-o em Insumos com esse código.`);
-            }
-
-            if (finishedProduct) {
-              // Create entrada movement for finished goods
-              await supabase.from("stock_movements").insert({
-                product_id: (finishedProduct as any).id,
-                tipo: "entrada",
-                quantidade: payload.good_quantity,
-                origem: "OP",
-                origem_id: payload.production_order_id,
-                observacoes: `Produção concluída - ${sku.name}`,
-                created_by: userId,
-              } as any);
-
-              // Update consolidated stock
-              const newFinishedStock = (finishedProduct as any).current_stock_qty + payload.good_quantity;
-              await supabase.from("mrp_products").update({
-                current_stock_qty: newFinishedStock,
-                stock_updated_at: new Date().toISOString().split("T")[0],
-              }).eq("id", (finishedProduct as any).id);
-
-              // Credit warehouse_stock at destination hub
-              if (payload.destination_warehouse_id) {
-                const { data: ws } = await (supabase as any)
-                  .from("warehouse_stock")
-                  .select("id, quantity")
-                  .eq("product_id", (finishedProduct as any).id)
-                  .eq("warehouse_id", payload.destination_warehouse_id)
-                  .maybeSingle();
-                if (ws) {
-                  await (supabase as any)
-                    .from("warehouse_stock")
-                    .update({ quantity: ws.quantity + payload.good_quantity, updated_at: new Date().toISOString() })
-                    .eq("id", ws.id);
-                } else {
-                  await (supabase as any)
-                    .from("warehouse_stock")
-                    .insert({ product_id: (finishedProduct as any).id, warehouse_id: payload.destination_warehouse_id, quantity: payload.good_quantity });
-                }
-              }
+            } else {
+              finishedProductId = (finishedProduct as any).id;
+              finishedProductName = sku.name;
             }
           }
         }
+
+        // P3: Call atomic RPC for all warehouse_stock / mrp_products / stock_movements writes.
+        // Being a single DB transaction, a mid-flight crash leaves no partial credit/debit.
+        const materialsArg = payload.items
+          .filter(i => i.actual_quantity > 0)
+          .map(i => ({
+            product_id:      i.product_id,
+            product_name:    i.product_name,
+            actual_quantity: i.actual_quantity,
+            warehouse_id:    materialWarehouseMap.get(i.product_id) || payload.destination_warehouse_id || null,
+          }));
+
+        const finishedArg = finishedProductId
+          ? {
+              product_id:   finishedProductId,
+              product_name: finishedProductName,
+              good_quantity: payload.good_quantity,
+              warehouse_id:  payload.destination_warehouse_id || null,
+            }
+          : null;
+
+        const { error: rpcError } = await (supabase as any).rpc("apply_production_stock_movements", {
+          p_production_order_id: payload.production_order_id,
+          p_order_number:        String(payload.production_order_id).slice(0, 8),
+          p_user_id:             userId,
+          p_materials:           JSON.stringify(materialsArg),
+          p_finished:            finishedArg ? JSON.stringify(finishedArg) : null,
+        });
+
+        if (rpcError) throw new Error("Erro ao aplicar movimentos de estoque: " + rpcError.message);
       } // end !isRetry
 
       // 7. UPDATE production order
