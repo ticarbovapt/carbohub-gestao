@@ -551,7 +551,9 @@ export default function CreateOrder() {
     const detectedLinha = detectLinhaFromItems(orderItems) ?? (data.linha as LinhaCarbo | null) ?? null;
     const selectedLinha = LINHAS.find((l) => l.value === detectedLinha);
     const matchedSku = skus?.find((s) => s.code === selectedLinha?.skuCode);
-    const rvFlowType = selectedLinha?.flow ?? "standard";
+    // Fluxo "bonus_only" é EXCLUSIVO da Ação Promocional (amostra grátis, sem venda).
+    // Uma venda normal — mesmo contendo itens bonificados — segue o fluxo do produto.
+    const rvFlowType: RvFlowType = isPromo ? "bonus_only" : (selectedLinha?.flow ?? "standard");
 
     return {
       vendedor_id: effectiveVendedorId || undefined,

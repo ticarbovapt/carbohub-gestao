@@ -116,6 +116,10 @@ export default function OrderDetails() {
   const totalQuantity = items.reduce((sum, item) => sum + (item.quantity || 0), 0);
   const totalBonus    = items.reduce((sum, item) => sum + (Number(item.bonus_quantity) || 0), 0);
   const totalWithBonus = totalQuantity + totalBonus;
+  // Fluxo da venda: nulo/legado conta como "standard" (venda de produto).
+  // "bonus_only" é exclusivo da Ação Promocional (amostra grátis, sem venda).
+  // Ter bonificação DENTRO de uma venda NÃO muda o fluxo — continua venda.
+  const flowType = order.rv_flow_type ?? "standard";
 
   return (
     <BoardLayout>
@@ -279,7 +283,7 @@ export default function OrderDetails() {
             </CarboCard>
 
             {/* Vendedor & RV Info */}
-            {(order.vendedor_name || order.rv_flow_type !== "standard" || order.linha || order.sku) && (
+            {(order.vendedor_name || flowType !== "standard" || order.linha || order.sku) && (
               <CarboCard>
                 <div className="p-6">
                   <h3 className="font-semibold mb-4 flex items-center gap-2">
@@ -302,8 +306,8 @@ export default function OrderDetails() {
                     )}
                     <div>
                       <p className="text-sm text-muted-foreground">Fluxo</p>
-                      <CarboBadge variant={order.rv_flow_type === "service" ? "warning" : order.rv_flow_type === "bonus_only" ? "secondary" : "success"}>
-                        {order.rv_flow_type === "standard" ? "Produto → OP" : order.rv_flow_type === "service" ? "Serviço → OS" : "Bonificação"}
+                      <CarboBadge variant={flowType === "service" ? "warning" : flowType === "bonus_only" ? "secondary" : "success"}>
+                        {flowType === "service" ? "Serviço → OS" : flowType === "bonus_only" ? "Bonificação (amostra)" : "Produto → OP"}
                       </CarboBadge>
                     </div>
                     {order.modalidade && (
@@ -370,6 +374,9 @@ export default function OrderDetails() {
                     Endereço de Entrega
                   </h3>
                   <p className="text-foreground">{order.delivery_address}</p>
+                  {order.delivery_neighborhood && (
+                    <p className="text-muted-foreground">{order.delivery_neighborhood}</p>
+                  )}
                   <p className="text-muted-foreground">
                     {[order.delivery_city, order.delivery_state, order.delivery_zip].filter(Boolean).join(" - ")}
                   </p>
