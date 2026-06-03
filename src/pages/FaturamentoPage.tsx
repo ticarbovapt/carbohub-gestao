@@ -275,6 +275,8 @@ export default function FaturamentoPage() {
     setCreating(order.id);
     try {
       await createBlingPedido.mutateAsync(order.id);
+      // Abre o Bling em nova guia para o financeiro revisar e gerar a NF-e
+      window.open(BLING_PEDIDOS_URL, "_blank", "noopener,noreferrer");
     } finally {
       setCreating(null);
     }
@@ -345,10 +347,10 @@ export default function FaturamentoPage() {
         {/* Instrução */}
         <div className="rounded-xl border border-border bg-muted/20 px-4 py-3 text-xs text-muted-foreground leading-relaxed space-y-1">
           <p>
-            <strong className="text-foreground">Como funciona:</strong> Para cada pedido abaixo, o financeiro deve emitir a NF no Bling com o número do pedido na observação (ex: <span className="font-mono font-medium">PED-2026-00140</span>). O sistema vincula a NF ao pedido automaticamente a cada 15 min.
+            <strong className="text-foreground">Como funciona:</strong> Clique em <strong>🔗 Criar no Bling</strong> — o sistema envia todos os dados do pedido para o Bling via API e já abre o Bling em uma nova guia automaticamente.
           </p>
           <p>
-            Use <strong>📋 Copiar dados</strong> para ter todas as informações do pedido prontas para preencher no Bling, ou <strong>🔗 Criar no Bling</strong> para criar o rascunho do pedido diretamente via API.
+            No Bling, acesse <strong>Vendas → Pedidos de Venda</strong>, abra o pedido criado, cole o número do pedido na observação (use <strong>Copiar Nº</strong>) e gere a NF-e. O sistema vincula a NF ao pedido automaticamente a cada 15 min.
           </p>
         </div>
 
