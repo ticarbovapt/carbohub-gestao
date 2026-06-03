@@ -205,7 +205,6 @@ function WeeklyPanel({ entries, targetMap, weekStart, weekEnd, isCurrentWeek, ca
               <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">
                 Desempenho da Semana
               </p>
-              <span className="text-[10px] text-muted-foreground">cor = projeção</span>
             </div>
             <div className="overflow-x-auto pb-1">
               <div className="flex gap-3 items-end px-1">
@@ -225,32 +224,25 @@ function WeeklyPanel({ entries, targetMap, weekStart, weekEnd, isCurrentWeek, ca
                   const medal    = perfRank === 1 ? "🥇" : perfRank === 2 ? "🥈" : perfRank === 3 ? "🥉" : null;
 
                   return (
-                    <div key={entry.vendedor_id} className="flex flex-col items-center gap-1 w-12 shrink-0">
-                      {/* Avatar */}
-                      <ProfileAvatar
-                        avatarUrl={entry.profile?.avatar_url}
-                        fullName={entry.profile?.full_name}
-                        userId={entry.vendedor_id}
-                        size={36}
-                      />
-
-                      {/* Bar container anchored to bottom */}
+                    <div key={entry.vendedor_id} className="flex flex-col items-center gap-1 w-14 shrink-0">
+                      {/* Coluna: tudo ancorado embaixo, então foto+% sobem junto com a barra */}
                       <div
-                        className="flex flex-col items-center justify-end gap-0.5"
-                        style={{ height: `${MAX_BAR_H + 30}px` }}
+                        className="flex flex-col items-center justify-end gap-1"
+                        style={{ height: `${MAX_BAR_H + 70}px` }}
                       >
                         {/* % da semana até o momento */}
-                        <p className="text-[10px] font-bold leading-tight"
+                        <p className="text-[11px] font-bold leading-none"
                           style={{ color: attainPct === null ? "#64748b" : barFill }}>
                           {attainPct === null ? "—" : `${attainPct}%`}
                         </p>
-                        {canSeeValues && (
-                          <p className="text-[9px] text-muted-foreground tabular-nums text-center leading-tight">
-                            {entry.total >= 1000
-                              ? `R$${(entry.total / 1000).toFixed(0)}k`
-                              : fmtBRL(entry.total)}
-                          </p>
-                        )}
+                        {/* Foto colada no topo da barra */}
+                        <ProfileAvatar
+                          avatarUrl={entry.profile?.avatar_url}
+                          fullName={entry.profile?.full_name}
+                          userId={entry.vendedor_id}
+                          size={34}
+                        />
+                        {/* Barra (sobe ao vivo) */}
                         <div
                           className="w-9 rounded-t-lg transition-[height] duration-1000 ease-out"
                           style={{ height: `${barH}px`, backgroundColor: barFill }}
@@ -258,7 +250,7 @@ function WeeklyPanel({ entries, targetMap, weekStart, weekEnd, isCurrentWeek, ca
                       </div>
 
                       {/* Name */}
-                      <p className="text-[10px] font-semibold truncate max-w-[48px] text-center leading-tight">
+                      <p className="text-[10px] font-semibold truncate max-w-[56px] text-center leading-tight">
                         {entry.profile?.full_name?.split(" ")[0] || "—"}
                       </p>
 
@@ -494,22 +486,6 @@ export default function MetaVendedoresPage() {
               <span className="text-green-400 font-medium">verde</span> = na meta ·{" "}
               <span className="text-amber-400 font-medium">amarelo</span> = atenção ·{" "}
               <span className="text-red-400 font-medium">vermelho</span> = abaixo
-            </span>
-          </div>
-        )}
-
-        {/* Info bar — semanal */}
-        {periodView === "semanal" && (
-          <div className="flex items-center gap-2 px-3 py-2 rounded-md bg-blue-500/10 border border-blue-500/20 text-sm text-blue-400 flex-wrap">
-            <Calendar className="h-4 w-4 shrink-0" />
-            <span>
-              Semana de <strong>{format(weekStart, "EEEE dd/MM", { locale: ptBR })}</strong> a{" "}
-              <strong>{format(new Date(weekStart.getFullYear(), weekStart.getMonth(), weekStart.getDate() + 6), "EEEE dd/MM", { locale: ptBR })}</strong>
-              {isCurrentWeek && <span className="text-muted-foreground"> · semana atual</span>}
-              {" · cor da barra = projeção: "}
-              <span className="text-green-400 font-medium">verde ≥100%</span>,{" "}
-              <span className="text-amber-400 font-medium">amarelo 70-99%</span>,{" "}
-              <span className="text-red-400 font-medium">vermelho &lt;70%</span>
             </span>
           </div>
         )}
