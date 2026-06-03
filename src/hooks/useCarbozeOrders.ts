@@ -14,6 +14,7 @@ export interface OrderItem {
   quantity: number;
   unit_price: number;
   total: number;
+  bonus_quantity?: number;    // unidades bonificadas (grátis) — somam ao estoque baixado
   // Campos SAP / PO (opcionais — retrocompatíveis)
   unit_code?: string;         // ex: CDA, PEÇ, UN, KG, L
   client_code?: string;       // código do produto no sistema do cliente

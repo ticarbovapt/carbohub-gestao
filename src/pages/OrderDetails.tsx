@@ -114,6 +114,8 @@ export default function OrderDetails() {
 
   const items = parseItems(order.items);
   const totalQuantity = items.reduce((sum, item) => sum + (item.quantity || 0), 0);
+  const totalBonus    = items.reduce((sum, item) => sum + (Number(item.bonus_quantity) || 0), 0);
+  const totalWithBonus = totalQuantity + totalBonus;
 
   return (
     <BoardLayout>
@@ -380,7 +382,11 @@ export default function OrderDetails() {
               <div className="p-6">
                 <h3 className="font-semibold mb-4 flex items-center gap-2">
                   <Package className="h-4 w-4" />
-                  Itens do Pedido ({totalQuantity} unidades)
+                  Itens do Pedido (
+                  {totalBonus > 0
+                    ? `${totalWithBonus} unidades · ${totalQuantity} pagas + ${totalBonus} bonificação`
+                    : `${totalQuantity} unidades`}
+                  )
                 </h3>
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
@@ -403,6 +409,7 @@ export default function OrderDetails() {
                           ? rawName.substring(0, 60) + "…"
                           : rawName;
                         const productCode = (item as any).product_code || (item as any).sku_code;
+                        const bonusQty = Number(item.bonus_quantity) || 0;
                         return (
                           <tr key={index} className="border-b last:border-0 hover:bg-muted/20 transition-colors">
                             <td className="py-2.5 pr-3">
@@ -410,8 +417,24 @@ export default function OrderDetails() {
                               {productCode && (
                                 <p className="text-xs text-muted-foreground font-mono">{productCode}</p>
                               )}
+                              {bonusQty > 0 && (
+                                <p className="text-xs text-carbo-green font-medium mt-0.5">
+                                  + {bonusQty} bonificação (grátis)
+                                </p>
+                              )}
                             </td>
-                            <td className="py-2.5 px-3 text-center tabular-nums font-medium">{item.quantity}</td>
+                            <td className="py-2.5 px-3 text-center tabular-nums font-medium">
+                              {bonusQty > 0 ? (
+                                <span title={`${item.quantity} pagas + ${bonusQty} bonificadas`}>
+                                  {item.quantity + bonusQty}
+                                  <span className="block text-[10px] font-normal text-muted-foreground">
+                                    {item.quantity}+{bonusQty}
+                                  </span>
+                                </span>
+                              ) : (
+                                item.quantity
+                              )}
+                            </td>
                             <td className="py-2.5 px-3 text-right tabular-nums text-muted-foreground">
                               R$ {Number(item.unit_price).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
                             </td>
@@ -430,6 +453,12 @@ export default function OrderDetails() {
                     <span>Subtotal</span>
                     <span>R$ {Number(order.subtotal).toFixed(2)}</span>
                   </div>
+                  {totalBonus > 0 && (
+                    <div className="flex justify-between text-sm text-carbo-green">
+                      <span>Bonificação (grátis)</span>
+                      <span>{totalBonus} un · R$ 0,00</span>
+                    </div>
+                  )}
                   {order.shipping_cost > 0 && (
                     <div className="flex justify-between text-sm">
                       <span>Frete</span>
