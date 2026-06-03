@@ -108,6 +108,7 @@ export function CDSPRegistrarEnvio({
           quantity:     qty,
           status:       "approved",
           notes:        obs,
+          pre_debited:  true, // T1: from_hub já foi debitado acima
         } as never);
         if (error) throw error;
       }
