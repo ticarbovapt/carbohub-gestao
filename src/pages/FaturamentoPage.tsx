@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import {
   Receipt, Search, CheckCircle2, Clock, Copy, Send,
   ChevronLeft, ChevronRight,
-  ChevronDown, ChevronRight, ExternalLink, AlertCircle,
+  ChevronDown, ExternalLink, AlertCircle,
   MapPin, CreditCard, Truck, FileText, Building2, Eye, Link2,
 } from "lucide-react";
 import {
