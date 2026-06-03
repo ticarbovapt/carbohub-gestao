@@ -65,15 +65,15 @@ export function LinkNFToOrderDialog({ open, onOpenChange, orderNumber, customerN
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg">
-        <DialogHeader>
+      <DialogContent className="max-w-lg max-h-[90vh] flex flex-col overflow-hidden">
+        <DialogHeader className="shrink-0">
           <DialogTitle className="flex items-center gap-2">
             <Link2 className="h-5 w-5 text-carbo-green" />
             Vincular NF ao pedido
           </DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-3">
+        <div className="space-y-3 flex flex-col min-h-0 flex-1">
           {/* Pedido alvo */}
           <div className="rounded-lg bg-muted/40 px-3 py-2 text-sm">
             Vinculando ao pedido{" "}
@@ -112,7 +112,7 @@ export function LinkNFToOrderDialog({ open, onOpenChange, orderNumber, customerN
           )}
 
           {/* Lista */}
-          <div className="space-y-1.5 max-h-[50vh] overflow-y-auto pr-0.5">
+          <div className="space-y-1.5 flex-1 min-h-0 overflow-y-auto overflow-x-hidden pr-1">
             {isLoading ? (
               [1, 2, 3].map(i => <div key={i} className="h-14 rounded-lg bg-muted/40 animate-pulse" />)
             ) : displayed.length === 0 ? (
