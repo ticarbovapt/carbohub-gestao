@@ -9,13 +9,14 @@
  *   2. Use `dataScope` in data-fetching hooks to filter records.
  *   3. Flip `ENFORCEMENT_ACTIVE = true` here (or via a feature flag).
  *
- * Design rules agreed before enforcement:
+ * Design rules:
  *   - Screen access is ALWAYS driven by function_screen_access — no function
  *     bypasses it, including heads. Heads configure their screens in the matrix.
  *   - data_scope = "global" means the user sees all records within their
  *     allowed screens — it does NOT skip the screen check.
- *   - Users without a configured funcao (isConfigured=false) don't get blocked
- *     — configure their screens in the Role Matrix to enforce access.
+ *   - Acesso é FAIL-CLOSED: usuário sem entrada no Role Matrix (isConfigured=false)
+ *     NÃO vê telas com screenId. Exceções (escape hatches) em useCanSeeScreen:
+ *     TI/head (superusuário), admin e CEO nunca ficam travados.
  */
 
 import { useQuery } from "@tanstack/react-query";
@@ -131,21 +132,33 @@ export function useFunctionAccess(): FunctionAccess {
  * Returns true if the current user can see the given screen.
  *
  * While ENFORCEMENT_ACTIVE = false this always returns true.
- * After activation: checks allowedScreenIds (or fullAccess for TI/admin).
+ * Com ENFORCEMENT_ACTIVE = true o acesso é FAIL-CLOSED: sem configuração no
+ * Role Matrix o usuário não vê a tela. Escape hatches: TI/head, admin e CEO.
  */
 export function useCanSeeScreen(screenId: string): boolean {
-  const { profile } = useAuth();
-  const { allowedScreenIds, isConfigured } = useFunctionAccess();
+  const { profile, isAdmin, isCeo } = useAuth();
+  const { allowedScreenIds, isConfigured, isLoading } = useFunctionAccess();
 
   if (!ENFORCEMENT_ACTIVE) return true;
-  // TI/head é superusuário — acesso irrestrito a todas as telas,
-  // inclusive as novas criadas no futuro. Nunca precisa ser configurado no Role Matrix.
-  // Verifica tanto o papel primário quanto o secundário.
+
+  // TI/head é superusuário — acesso irrestrito a todas as telas, inclusive as
+  // novas criadas no futuro. Verifica tanto o papel primário quanto o secundário.
   const isTiHead =
     (profile?.department === "ti_suporte" && profile?.funcao === "head") ||
     (profile?.secondary_department === "ti_suporte" && profile?.secondary_funcao === "head");
   if (isTiHead) return true;
-  if (!isConfigured)       return true; // sem entrada no matrix → não bloqueia
+
+  // Escape hatch: admin e CEO nunca ficam travados, mesmo sem função configurada.
+  if (isAdmin || isCeo) return true;
+
+  // Enquanto a configuração ainda carrega, NÃO bloqueia — evita um flash de
+  // redirect para /inicio em quem de fato tem acesso. A decisão real só vale
+  // depois que isLoading vira false.
+  if (isLoading) return true;
+
+  // FAIL-CLOSED: sem entrada no Role Matrix → sem acesso à tela.
+  if (!isConfigured) return false;
+
   return allowedScreenIds.includes(screenId);
 }
 
