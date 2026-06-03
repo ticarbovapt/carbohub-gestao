@@ -46,6 +46,7 @@ import {
   Receipt,
   FileText,
   Lock,
+  Monitor,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -172,6 +173,7 @@ const SECTORS: Sector[] = [
       { href: "/dashboards/metas/ecommerce",         label: "Meta E-commerce",   icon: Target },
       { href: "/dashboards/metas/vendedores",        label: "Meta Vendedores",   icon: Users },
       { href: "/dashboards/metas/config",            label: "Config Metas",      icon: Settings },
+      { href: "/projecao",                           label: "Projeção (Telão)",  icon: Monitor },
     ],
   },
   {
