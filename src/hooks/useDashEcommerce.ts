@@ -8,7 +8,7 @@ import { toast } from "@/components/ui/sonner";
 // Types
 // ─────────────────────────────────────────────────────────────────────────────
 
-export type EcommercePlatform = "mercadolivre" | "amazon" | "tiktok" | "shopee";
+export type EcommercePlatform = "mercadolivre" | "amazon" | "nuvemshop" | "tiktok" | "shopee";
 export type EcommercePeriod   = "today" | "7d" | "30d" | "month";
 
 export interface CommissionRate {
@@ -205,6 +205,7 @@ function buildMetrics(platform: EcommercePlatform, rows: DBOrder[], rateHistory:
 export const PLATFORM_FEE_DEFAULT: Record<EcommercePlatform, number> = {
   mercadolivre: 0.16,
   amazon:       0.15,
+  nuvemshop:    0,      // loja própria — sem comissão de marketplace
   tiktok:       0.06,
   shopee:       0.12,
 };

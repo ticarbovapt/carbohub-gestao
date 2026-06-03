@@ -45,6 +45,7 @@ interface PlatformConfig {
   bgClass: string;
   borderClass: string;
   emoji: string;
+  disabled?: boolean;   // plataforma ainda não usada — aparece cinza, sem clique
 }
 
 const PLATFORMS: PlatformConfig[] = [
@@ -63,20 +64,30 @@ const PLATFORMS: PlatformConfig[] = [
     emoji: "📦",
   },
   {
+    id: "nuvemshop", label: "Nuvemshop",
+    color: "#2D7FF9", gradient: "from-blue-500 to-sky-400",
+    textClass: "text-blue-600 dark:text-blue-300",
+    bgClass: "bg-blue-500/10", borderClass: "border-blue-500/50",
+    emoji: "🏪",
+  },
+  {
     id: "tiktok", label: "TikTok Shop",
     color: "#FF0050", gradient: "from-pink-600 to-rose-400",
     textClass: "text-pink-600 dark:text-pink-300",
     bgClass: "bg-pink-500/10", borderClass: "border-pink-500/50",
-    emoji: "🎵",
+    emoji: "🎵", disabled: true,
   },
   {
     id: "shopee", label: "Shopee",
     color: "#EE4D2D", gradient: "from-red-500 to-orange-400",
     textClass: "text-red-600 dark:text-red-300",
     bgClass: "bg-red-500/10", borderClass: "border-red-500/50",
-    emoji: "🧡",
+    emoji: "🧡", disabled: true,
   },
 ];
+
+// Plataformas realmente em uso (para comparativo/histórico e seleção)
+const ACTIVE_PLATFORMS = PLATFORMS.filter(p => !p.disabled);
 
 const PMAP = Object.fromEntries(PLATFORMS.map(p => [p.id, p])) as Record<EcommercePlatform, PlatformConfig>;
 
@@ -596,11 +607,11 @@ function ComparativoView({ period }: { period: EcommercePeriod }) {
       {/* Platform selector */}
       <Card className="rounded-2xl border-0 shadow-sm">
         <CardHeader className="pb-2 pt-5 px-5">
-          <CardTitle className="text-sm font-semibold">Selecionar plataformas (2 a 4)</CardTitle>
+          <CardTitle className="text-sm font-semibold">Selecionar plataformas (2 a 3)</CardTitle>
         </CardHeader>
         <CardContent className="px-5 pb-5">
           <div className="flex flex-wrap gap-2">
-            {PLATFORMS.map(p => {
+            {ACTIVE_PLATFORMS.map(p => {
               const on = selected.includes(p.id);
               return (
                 <button
@@ -873,7 +884,7 @@ function HistoricoMensalView() {
             <div className="flex-1">
               <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Plataformas</p>
               <div className="flex flex-wrap gap-2">
-                {PLATFORMS.map(p => {
+                {ACTIVE_PLATFORMS.map(p => {
                   const on = selected.includes(p.id);
                   return (
                     <button key={p.id} onClick={() => toggle(p.id)}
@@ -1565,7 +1576,7 @@ function VindiLPsView() {
 // Main page
 // ─────────────────────────────────────────────────────────────────────────────
 
-type ActiveView = EcommercePlatform | "comparativo" | "historico" | "lps";
+type ActiveView = EcommercePlatform | "comparativo" | "historico";
 
 const TAB_KEY = "ecommerce_active_tab";
 
@@ -1573,7 +1584,9 @@ export default function DashEcommerceVendas() {
   const [period, setPeriod] = useState<EcommercePeriod>("7d");
   const [active, setActive] = useState<ActiveView>(() => {
     const saved = localStorage.getItem(TAB_KEY) as ActiveView | null;
-    return saved ?? "mercadolivre";
+    // "lps" (Vindi) foi descontinuado → cai em mercadolivre. tiktok/shopee desabilitados também.
+    if (!saved || saved === ("lps" as ActiveView) || saved === "tiktok" || saved === "shopee") return "mercadolivre";
+    return saved;
   });
 
   const handleSetActive = (v: ActiveView) => {
@@ -1595,7 +1608,7 @@ export default function DashEcommerceVendas() {
               Acompanhamento de pedidos, receita e unidades por plataforma de e-commerce
             </p>
           </div>
-          {active !== "historico" && active !== "lps" && (
+          {active !== "historico" && (
             <Select value={period} onValueChange={v => setPeriod(v as EcommercePeriod)}>
               <SelectTrigger className="w-44">
                 <SelectValue />
@@ -1613,6 +1626,19 @@ export default function DashEcommerceVendas() {
         <div className="flex flex-wrap gap-2">
           {PLATFORMS.map(p => {
             const on = active === p.id;
+            if (p.disabled) {
+              return (
+                <span
+                  key={p.id}
+                  title="Em breve — integração ainda não disponível"
+                  className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold border-2 border-border/50 text-muted-foreground/40 cursor-not-allowed select-none"
+                >
+                  <span className="text-base grayscale opacity-50">{p.emoji}</span>
+                  {p.label}
+                  <span className="text-[10px] font-normal">(em breve)</span>
+                </span>
+              );
+            }
             return (
               <button
                 key={p.id}
@@ -1653,24 +1679,10 @@ export default function DashEcommerceVendas() {
             <Calendar className="h-4 w-4" />
             Histórico Mensal
           </button>
-          <button
-            onClick={() => handleSetActive("lps")}
-            className={cn(
-              "flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold border-2 transition-all",
-              active === "lps"
-                ? "bg-emerald-500/10 border-emerald-500/50 text-emerald-600 dark:text-emerald-300 shadow-sm scale-[1.02]"
-                : "border-border text-muted-foreground hover:bg-muted/40 hover:border-muted-foreground/40"
-            )}
-          >
-            <Globe className="h-4 w-4" />
-            LP's
-          </button>
         </div>
 
         {/* Content */}
-        {active === "lps" ? (
-          <VindiLPsView />
-        ) : active === "historico" ? (
+        {active === "historico" ? (
           <HistoricoMensalView />
         ) : active === "comparativo" ? (
           <ComparativoView period={period} />
