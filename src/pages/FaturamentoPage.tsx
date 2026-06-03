@@ -542,7 +542,7 @@ export default function FaturamentoPage() {
                         {/* Pedido NASCIDO no Bling: já existe lá → só abrir e gerar NF */}
                         {!hasNF && fromBling && (
                           <a
-                            href={BLING_PEDIDOS_URL}
+                            href={blingOrderId ? `https://www.bling.com.br/vendas.php#edit/${blingOrderId}` : BLING_PEDIDOS_URL}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="h-8 px-2 inline-flex items-center gap-1.5 text-xs rounded-lg border border-blue-500/30 text-blue-400 hover:bg-blue-500/10 transition-colors"
@@ -556,11 +556,11 @@ export default function FaturamentoPage() {
                         {/* Pedido nativo JÁ ENVIADO ao Bling → "Abrir no Bling" (não duplicar) */}
                         {!hasNF && !fromBling && alreadySentToBling && (
                           <a
-                            href={BLING_PEDIDOS_URL}
+                            href={blingOrderId ? `https://www.bling.com.br/vendas.php#edit/${blingOrderId}` : BLING_PEDIDOS_URL}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="h-8 px-2 inline-flex items-center gap-1.5 text-xs rounded-lg border border-carbo-green/30 text-carbo-green hover:bg-carbo-green/10 transition-colors"
-                            title={`Pedido enviado ao Bling (ID ${blingOrderId}) — abra e gere a NF`}
+                            title={`Pedido enviado ao Bling (ID ${blingOrderId}) — clique para abrir diretamente`}
                           >
                             <ExternalLink className="h-3.5 w-3.5" />
                             <span className="hidden md:inline">Abrir no Bling</span>

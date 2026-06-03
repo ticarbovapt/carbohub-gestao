@@ -276,6 +276,7 @@ async function createBlingPedido(
             etiqueta: {
               nome: order.customer_name || "",
               endereco: order.delivery_address || "",
+              bairro: order.delivery_neighborhood || "",
               municipio: order.delivery_city || "",
               uf: order.delivery_state || "",
               cep: order.delivery_zip ? String(order.delivery_zip).replace(/\D/g, "") : "",

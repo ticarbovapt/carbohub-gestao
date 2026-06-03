@@ -106,6 +106,7 @@ const formSchema = z.object({
   customer_phone: z.string().optional(),
   is_licensee: z.boolean(),
   delivery_address: z.string().optional(),
+  delivery_neighborhood: z.string().optional(),
   delivery_city: z.string().optional(),
   delivery_state: z.string().optional(),
   delivery_zip: z.string().optional(),
@@ -243,6 +244,7 @@ export default function CreateOrder() {
       customer_phone: "",
       is_licensee: false,
       delivery_address: "",
+      delivery_neighborhood: "",
       delivery_city: "",
       delivery_state: "",
       delivery_zip: "",
@@ -297,6 +299,7 @@ export default function CreateOrder() {
       customer_phone: o.customer_phone ?? "",
       is_licensee: !!o.licensee_id,
       delivery_address: o.delivery_address ?? "",
+      delivery_neighborhood: o.delivery_neighborhood ?? "",
       delivery_city: o.delivery_city ?? "",
       delivery_state: o.delivery_state ?? "",
       delivery_zip: o.delivery_zip ?? "",
@@ -384,6 +387,7 @@ export default function CreateOrder() {
         .filter(Boolean)
         .join(", ");
       form.setValue("delivery_address", fullAddress);
+      form.setValue("delivery_neighborhood", raw.bairro || "");
       form.setValue("delivery_city", raw.municipio || "");
       form.setValue("delivery_state", raw.uf || "");
       form.setValue("delivery_zip", (raw.cep || "").replace(/\D/g, ""));
@@ -526,6 +530,7 @@ export default function CreateOrder() {
       customer_phone: data.customer_phone || undefined,
       licensee_id: undefined,
       delivery_address: data.delivery_address || undefined,
+      delivery_neighborhood: data.delivery_neighborhood || undefined,
       delivery_city: data.delivery_city || undefined,
       delivery_state: data.delivery_state || undefined,
       delivery_zip: data.delivery_zip || undefined,
