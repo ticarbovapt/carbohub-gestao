@@ -15,6 +15,8 @@ import {
   useSalesTargetsWithProgress,
   useUpsertSalesTarget,
   useDeleteSalesTarget,
+  useUpsertSalesTargetDefault,
+  useDeleteSalesTargetDefault,
   type SalesTargetWithProgress,
 } from "@/hooks/useSalesTargets";
 import { useTeamMembers } from "@/hooks/useTeamMembers";
@@ -99,6 +101,8 @@ export default function MetaConfigPage() {
 
   const [vendedorId, setVendedorId]     = useState("");
   const [targetDigits, setTargetDigits] = useState("");
+  // Escopo da meta sendo editada: "default" (padrão, vale todo mês) ou "month" (exceção do mês)
+  const [editScope, setEditScope]       = useState<"default" | "month">("default");
 
   const canManage = useCanSetTargets();
   const monthStr  = month.toISOString().slice(0, 10);
@@ -111,24 +115,40 @@ export default function MetaConfigPage() {
 
   const { data: targets = [], isLoading } = useSalesTargetsWithProgress(monthStr);
   const { data: teamMembers = [] }        = useTeamMembers();
-  const upsert     = useUpsertSalesTarget();
-  const deleteMeta = useDeleteSalesTarget();
+  const upsert         = useUpsertSalesTarget();
+  const upsertDefault  = useUpsertSalesTargetDefault();
+  const deleteMeta     = useDeleteSalesTarget();
+  const deleteDefault  = useDeleteSalesTargetDefault();
 
   const activeMembers = teamMembers.filter(m =>
     m.status === "approved" && m.is_vendedor
   );
 
+  // Nova meta padrão (vale para todos os meses)
   const openNew = () => {
     setEdit(null);
+    setEditScope("default");
     setVendedorId("");
     setTargetDigits("");
     setDialog(true);
   };
 
-  const openEdit = (t: SalesTargetWithProgress) => {
+  // Editar a meta PADRÃO de um vendedor
+  const openEditDefault = (t: SalesTargetWithProgress) => {
     setEdit(t);
+    setEditScope("default");
     setVendedorId(t.vendedor_id);
-    setTargetDigits(String(Math.round(Number(t.target_amount))));
+    setTargetDigits(String(Math.round(Number(t.default_amount || 0))));
+    setDialog(true);
+  };
+
+  // Criar/editar a EXCEÇÃO do mês selecionado
+  const openEditMonth = (t: SalesTargetWithProgress) => {
+    setEdit(t);
+    setEditScope("month");
+    setVendedorId(t.vendedor_id);
+    // começa do valor efetivo atual (exceção ou padrão) para facilitar o ajuste
+    setTargetDigits(String(Math.round(Number(t.target_amount || t.default_amount || 0))));
     setDialog(true);
   };
 
@@ -141,13 +161,17 @@ export default function MetaConfigPage() {
 
   const handleSave = async () => {
     if (!vendedorId) return;
-    await upsert.mutateAsync({
-      vendedor_id: vendedorId,
-      month: monthStr,
-      target_amount: targetAmountNum,
-      target_qty: 0,
-      linha: null,
-    });
+    if (editScope === "default") {
+      await upsertDefault.mutateAsync({ vendedor_id: vendedorId, target_amount: targetAmountNum });
+    } else {
+      await upsert.mutateAsync({
+        vendedor_id: vendedorId,
+        month: monthStr,
+        target_amount: targetAmountNum,
+        target_qty: 0,
+        linha: null,
+      });
+    }
     handleClose();
   };
 
@@ -209,8 +233,13 @@ export default function MetaConfigPage() {
               </div>
               <Button size="sm" className="gap-1.5 bg-carbo-green hover:bg-carbo-green/90 text-white"
                 onClick={openNew}>
-                <Plus className="h-4 w-4" /> Nova Meta
+                <Plus className="h-4 w-4" /> Meta padrão
               </Button>
+            </div>
+
+            <div className="rounded-lg bg-muted/30 border border-border px-3 py-2 text-xs text-muted-foreground">
+              A <strong className="text-foreground">meta padrão</strong> vale para todos os meses automaticamente.
+              Se um mês for diferente, clique em <strong className="text-foreground">"Meta deste mês"</strong> para criar uma exceção — ela vence só naquele mês.
             </div>
 
             {isLoading ? (
@@ -221,31 +250,52 @@ export default function MetaConfigPage() {
               <CarboCard>
                 <CarboCardContent className="py-12 text-center space-y-3">
                   <Target className="h-10 w-10 mx-auto text-muted-foreground/30" />
-                  <p className="text-muted-foreground">Nenhuma meta definida para este mês.</p>
-                  <Button variant="outline" onClick={openNew}>
-                    <Plus className="h-4 w-4 mr-1" /> Criar primeira meta
-                  </Button>
+                  <p className="text-muted-foreground">Nenhum vendedor ativo encontrado.</p>
                 </CarboCardContent>
               </CarboCard>
             ) : (
               <div className="space-y-2">
-                {targets.map(t => (
+                {[...targets]
+                  .sort((a, b) => (a.vendedor?.full_name || "").localeCompare(b.vendedor?.full_name || ""))
+                  .map(t => (
                   <CarboCard key={t.id}>
-                    <CarboCardContent className="p-3 flex items-center gap-3">
+                    <CarboCardContent className="p-3 flex items-center gap-3 flex-wrap">
                       <div className="flex-1 min-w-0">
-                        <p className="font-semibold text-sm truncate">{t.vendedor?.full_name || "—"}</p>
+                        <div className="flex items-center gap-2">
+                          <p className="font-semibold text-sm truncate">{t.vendedor?.full_name || "—"}</p>
+                          {t.source === "month" && (
+                            <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-600">
+                              Específica deste mês
+                            </span>
+                          )}
+                          {t.source === "default" && (
+                            <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-carbo-green/15 text-carbo-green">
+                              Meta padrão
+                            </span>
+                          )}
+                          {t.source === "none" && (
+                            <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-muted text-muted-foreground">
+                              Sem meta
+                            </span>
+                          )}
+                        </div>
                         <p className="text-xs text-muted-foreground">
                           Meta: {fmtBRL(Number(t.target_amount))} · Real: {fmtBRL(t.actual_amount || 0)} ({t.pct_amount || 0}%)
                         </p>
                       </div>
-                      <div className="flex gap-0.5 shrink-0">
-                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(t)}>
-                          <Pencil className="h-3.5 w-3.5" />
+                      <div className="flex gap-1.5 shrink-0 flex-wrap">
+                        <Button variant="outline" size="sm" className="h-7 text-xs gap-1" onClick={() => openEditDefault(t)}>
+                          <Pencil className="h-3 w-3" /> Meta padrão
                         </Button>
-                        <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive"
-                          onClick={() => deleteMeta.mutate(t.id)}>
-                          <Trash2 className="h-3.5 w-3.5" />
+                        <Button variant="outline" size="sm" className="h-7 text-xs gap-1" onClick={() => openEditMonth(t)}>
+                          <Pencil className="h-3 w-3" /> Meta deste mês
                         </Button>
+                        {t.source === "month" && t.override_id && (
+                          <Button variant="ghost" size="sm" className="h-7 text-xs text-destructive hover:text-destructive gap-1"
+                            onClick={() => deleteMeta.mutate(t.override_id!)}>
+                            <Trash2 className="h-3 w-3" /> Voltar ao padrão
+                          </Button>
+                        )}
                       </div>
                     </CarboCardContent>
                   </CarboCard>
@@ -303,10 +353,12 @@ export default function MetaConfigPage() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Target className="h-5 w-5 text-carbo-green" />
-              {editTarget ? "Editar Meta" : "Nova Meta"}
+              {editScope === "default" ? "Meta padrão" : "Meta deste mês"}
             </DialogTitle>
             <DialogDescription>
-              {format(month, "MMMM 'de' yyyy", { locale: ptBR })}
+              {editScope === "default"
+                ? "Vale para todos os meses, até ser alterada."
+                : `Exceção só para ${format(month, "MMMM 'de' yyyy", { locale: ptBR })}.`}
             </DialogDescription>
           </DialogHeader>
 
@@ -333,7 +385,7 @@ export default function MetaConfigPage() {
             </div>
 
             <div className="space-y-1.5">
-              <Label>Meta de Faturamento Mensal</Label>
+              <Label>{editScope === "default" ? "Meta de Faturamento (padrão mensal)" : "Meta de Faturamento (só este mês)"}</Label>
               <Input
                 type="text" inputMode="numeric"
                 value={targetDisplay}
@@ -345,15 +397,27 @@ export default function MetaConfigPage() {
             </div>
           </div>
 
-          <div className="flex justify-end gap-2">
-            <Button variant="outline" onClick={handleClose}>Cancelar</Button>
-            <Button
-              onClick={handleSave}
-              disabled={!vendedorId || targetAmountNum === 0 || upsert.isPending}
-              className="bg-carbo-green hover:bg-carbo-green/90 text-white"
-            >
-              Salvar
-            </Button>
+          <div className="flex justify-between gap-2">
+            {editScope === "default" && editTarget && (editTarget.default_amount || 0) > 0 ? (
+              <Button
+                variant="ghost"
+                className="text-destructive hover:text-destructive"
+                onClick={async () => { await deleteDefault.mutateAsync(vendedorId); handleClose(); }}
+                disabled={deleteDefault.isPending}
+              >
+                Remover padrão
+              </Button>
+            ) : <span />}
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={handleClose}>Cancelar</Button>
+              <Button
+                onClick={handleSave}
+                disabled={!vendedorId || targetAmountNum === 0 || upsert.isPending || upsertDefault.isPending}
+                className="bg-carbo-green hover:bg-carbo-green/90 text-white"
+              >
+                Salvar
+              </Button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>

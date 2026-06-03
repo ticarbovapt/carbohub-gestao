@@ -26,6 +26,15 @@ export interface SalesTargetWithProgress extends SalesTarget {
   actual_qty: number;
   pct_amount: number;
   pct_qty: number;
+  // De onde veio a meta efetiva deste mês:
+  //  "month"   = exceção específica do mês (linha em sales_targets)
+  //  "default" = meta padrão recorrente (sales_target_defaults)
+  //  "none"    = vendedor sem meta padrão nem exceção (aparece zerado)
+  source: "month" | "default" | "none";
+  // id da exceção do mês (quando source === "month"), para editar/remover
+  override_id: string | null;
+  // valor da meta padrão (para mostrar "voltar ao padrão = R$ X")
+  default_amount: number;
 }
 
 export function useSalesTargets(month?: string) {
@@ -59,13 +68,28 @@ export function useSalesTargetsWithProgress(month: string) {
     refetchInterval: POLL_INTERVAL_MS,
     refetchIntervalInBackground: false,
     queryFn: async () => {
-      // Fetch targets
+      // Exceções do mês (metas específicas)
       const { data: targets, error: targetsError } = await supabase
         .from("sales_targets")
         .select(`*, vendedor:profiles(id, full_name, avatar_url, department, secondary_department)`)
         .eq("month", month);
 
       if (targetsError) throw targetsError;
+
+      // Metas padrão (recorrentes) por vendedor
+      const { data: defaults } = await supabase
+        .from("sales_target_defaults")
+        .select("vendedor_id, target_amount, target_qty");
+      const defaultMap: Record<string, { amount: number; qty: number }> = {};
+      for (const d of defaults || []) {
+        defaultMap[d.vendedor_id] = { amount: Number(d.target_amount || 0), qty: Number(d.target_qty || 0) };
+      }
+
+      // Todos os vendedores ativos — aparecem no dashboard mesmo zerados
+      const { data: vendedores } = await supabase
+        .from("profiles")
+        .select("id, full_name, avatar_url, department, secondary_department")
+        .eq("is_vendedor", true);
 
       // Fetch orders for the month.
       // Uses sale_date when set (head/command correction) with fallback to created_at.
@@ -106,14 +130,49 @@ export function useSalesTargetsWithProgress(month: string) {
         );
       }
 
-      return (targets || []).map((t): SalesTargetWithProgress => {
-        const progress = progressMap[t.vendedor_id] || { amount: 0, qty: 0 };
+      // Indexa exceções do mês por vendedor
+      const overrideMap: Record<string, SalesTarget> = {};
+      for (const t of targets || []) overrideMap[t.vendedor_id] = t as SalesTarget;
+
+      // União de todos os vendedores que devem aparecer: ativos + quem tem
+      // exceção/padrão (cobre vendedor inativo que ainda tenha meta no mês).
+      const vendedorMap: Record<string, SalesTarget["vendedor"]> = {};
+      for (const v of vendedores || []) vendedorMap[v.id] = v as SalesTarget["vendedor"];
+      for (const t of targets || []) if (t.vendedor) vendedorMap[t.vendedor_id] = t.vendedor;
+
+      const allIds = new Set<string>([
+        ...Object.keys(vendedorMap),
+        ...Object.keys(defaultMap),
+      ]);
+
+      return Array.from(allIds).map((vid): SalesTargetWithProgress => {
+        const override = overrideMap[vid];
+        const def      = defaultMap[vid];
+        const progress = progressMap[vid] || { amount: 0, qty: 0 };
+
+        // Resolução: exceção do mês vence; senão a meta padrão; senão zero.
+        const source: SalesTargetWithProgress["source"] =
+          override ? "month" : def ? "default" : "none";
+        const targetAmount = override ? Number(override.target_amount) : (def?.amount ?? 0);
+        const targetQty    = override ? Number(override.target_qty)    : (def?.qty ?? 0);
+
         return {
-          ...t,
+          id: override?.id ?? `${source}-${vid}`,
+          vendedor_id: vid,
+          month,
+          target_amount: targetAmount,
+          target_qty: targetQty,
+          linha: override?.linha ?? null,
+          created_at: override?.created_at ?? "",
+          updated_at: override?.updated_at ?? "",
+          vendedor: vendedorMap[vid],
           actual_amount: progress.amount,
           actual_qty: progress.qty,
-          pct_amount: t.target_amount > 0 ? Math.round((progress.amount / t.target_amount) * 100) : 0,
-          pct_qty: t.target_qty > 0 ? Math.round((progress.qty / t.target_qty) * 100) : 0,
+          pct_amount: targetAmount > 0 ? Math.round((progress.amount / targetAmount) * 100) : 0,
+          pct_qty: targetQty > 0 ? Math.round((progress.qty / targetQty) * 100) : 0,
+          source,
+          override_id: override?.id ?? null,
+          default_amount: def?.amount ?? 0,
         };
       });
     },
@@ -173,6 +232,81 @@ export function useUpsertSalesTarget() {
     },
     onError: (error: Error) => {
       toast.error("Erro ao salvar meta: " + error.message);
+    },
+  });
+}
+
+// ── Metas padrão (recorrentes) ───────────────────────────────────────────────
+
+export interface SalesTargetDefault {
+  vendedor_id: string;
+  target_amount: number;
+  target_qty: number;
+  linha: string | null;
+}
+
+export function useSalesTargetDefaults() {
+  return useQuery({
+    queryKey: ["sales-target-defaults"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("sales_target_defaults")
+        .select("vendedor_id, target_amount, target_qty, linha");
+      if (error) throw error;
+      return (data || []) as SalesTargetDefault[];
+    },
+  });
+}
+
+export function useUpsertSalesTargetDefault() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (data: { vendedor_id: string; target_amount: number; target_qty?: number; linha?: string | null }) => {
+      const linha = data.linha ?? null;
+      let q = supabase.from("sales_target_defaults").select("id").eq("vendedor_id", data.vendedor_id);
+      q = linha ? q.eq("linha", linha) : q.is("linha", null);
+      const { data: existing } = await q.maybeSingle();
+
+      const payload = {
+        vendedor_id: data.vendedor_id,
+        target_amount: data.target_amount,
+        target_qty: data.target_qty ?? 0,
+        linha,
+        updated_at: new Date().toISOString(),
+      };
+
+      if (existing?.id) {
+        const { error } = await supabase.from("sales_target_defaults").update(payload).eq("id", existing.id);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.from("sales_target_defaults").insert(payload);
+        if (error) throw error;
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["sales-target-defaults"] });
+      queryClient.invalidateQueries({ queryKey: ["sales-targets-progress"] });
+      toast.success("Meta padrão salva — vale para todos os meses.");
+    },
+    onError: (e: Error) => toast.error("Erro ao salvar meta padrão: " + e.message),
+  });
+}
+
+export function useDeleteSalesTargetDefault() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (vendedorId: string) => {
+      const { error } = await supabase
+        .from("sales_target_defaults")
+        .delete()
+        .eq("vendedor_id", vendedorId)
+        .is("linha", null);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["sales-target-defaults"] });
+      queryClient.invalidateQueries({ queryKey: ["sales-targets-progress"] });
+      toast.success("Meta padrão removida.");
     },
   });
 }
