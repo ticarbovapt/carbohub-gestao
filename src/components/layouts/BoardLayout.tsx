@@ -568,6 +568,18 @@ export function BoardLayout({ children }: BoardLayoutProps) {
     );
   };
 
+  // Modo "embed": usado pela tela de Projeção, que carrega dashboards dentro de
+  // iframes (?embed=1). Renderiza só o conteúdo, sem topbar/nav/onboarding, para
+  // caber limpo num painel do telão.
+  const isEmbed = new URLSearchParams(location.search).get("embed") === "1";
+  if (isEmbed) {
+    return (
+      <div className="min-h-screen bg-background">
+        <main className="p-3">{children}</main>
+      </div>
+    );
+  }
+
   return (
     <>
       <PlatformOnboarding onDismissed={() => setOnboardingDone(true)} />
