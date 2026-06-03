@@ -20,6 +20,7 @@ const AreaSelector        = lazy(() => import("./pages/AreaSelector"));
 const LoginArea           = lazy(() => import("./pages/LoginArea"));
 const Onboarding          = lazy(() => import("./pages/Onboarding"));
 const Dashboard           = lazy(() => import("./pages/Dashboard"));
+const Analytics           = lazy(() => import("./pages/Analytics"));
 const Team                = lazy(() => import("./pages/Team"));
 const OSBoard             = lazy(() => import("./pages/OSBoard"));
 const OSDetails           = lazy(() => import("./pages/OSDetails"));
@@ -151,6 +152,9 @@ function AnimatedRoutes() {
 
             {/* Protected routes */}
             <Route path="/dashboard"        element={<ProtectedRoute screenId="dashboard"><Dashboard /></ProtectedRoute>} />
+            {/* Placeholder "Em breve" — sem screenId por ora (sem dado sensível). Ao ganhar
+                conteúdo real, registrar screenId + entrada no Role Matrix. */}
+            <Route path="/analytics"        element={<ProtectedRoute><Analytics /></ProtectedRoute>} />
             <Route path="/team"             element={<ProtectedRoute screenId="team"><Team /></ProtectedRoute>} />
             <Route path="/org-chart"        element={<ProtectedRoute screenId="org-chart"><OrgChartPage /></ProtectedRoute>} />
             <Route path="/os"               element={<ProtectedRoute screenId="os"><OSBoard /></ProtectedRoute>} />
