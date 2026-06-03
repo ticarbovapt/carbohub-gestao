@@ -38,7 +38,25 @@ export function CDSPTransito({ spWarehouseId }: Props) {
       const qty        = transfer.quantity as number;
       const transferId = transfer.id as string;
 
-      // Atualiza warehouse_stock do HUB-SP
+      // T5: "reivindica" a remessa ANTES de creditar — o update é condicionado a
+      // status='approved'. Se outra aba/usuário já confirmou a chegada, voltam 0
+      // linhas e abortamos sem creditar o SP de novo (evita crédito em dobro).
+      const { data: claimed, error: claimErr } = await supabase.from("stock_transfers")
+        .update({
+          status:       "executed",
+          executed_by:  user!.id,
+          executed_at:  new Date().toISOString(),
+          updated_at:   new Date().toISOString(),
+        } as never)
+        .eq("id", transferId)
+        .eq("status", "approved")
+        .select("id");
+      if (claimErr) throw claimErr;
+      if (!claimed || claimed.length === 0) {
+        throw new Error("Esta remessa já foi recebida.");
+      }
+
+      // Credita warehouse_stock do HUB-SP (só após reivindicar com sucesso)
       const { data: ws } = await supabase
         .from("warehouse_stock")
         .select("id, quantity")
@@ -54,16 +72,6 @@ export function CDSPTransito({ spWarehouseId }: Props) {
         await supabase.from("warehouse_stock")
           .insert({ warehouse_id: spWarehouseId, product_id: productId, quantity: qty });
       }
-
-      // Marca transferência como executada (sem stock_movement — transferências não contaminam KPIs de hub)
-      await supabase.from("stock_transfers")
-        .update({
-          status:       "executed",
-          executed_by:  user!.id,
-          executed_at:  new Date().toISOString(),
-          updated_at:   new Date().toISOString(),
-        } as never)
-        .eq("id", transferId);
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["sp-transito"] });

@@ -164,6 +164,31 @@ export function useSubmitConfirmation() {
 
       if (!userId) throw new Error("Usuário não autenticado");
 
+      // P1: valida ANTES de qualquer gravação que o produto final existe no MRP.
+      // Sem isto a OP era confirmada mas o estoque do produto acabado NÃO era
+      // creditado (apenas um toast de aviso), gerando "confirmada sem estoque"
+      // silencioso. Como nada foi gravado ainda, o throw não deixa estado parcial.
+      if (payload.good_quantity > 0) {
+        const { data: skuRow } = await (supabase as any)
+          .from("sku")
+          .select("code, name")
+          .eq("id", payload.sku_id)
+          .maybeSingle();
+        if (skuRow) {
+          const { data: mrpRow } = await supabase
+            .from("mrp_products")
+            .select("id")
+            .eq("product_code", skuRow.code)
+            .maybeSingle();
+          if (!mrpRow) {
+            throw new Error(
+              `Produto final "${skuRow.name}" não está cadastrado em Insumos com o código ${skuRow.code}. ` +
+              `Cadastre-o primeiro para o estoque ser creditado — a confirmação foi cancelada para não perder o estoque.`
+            );
+          }
+        }
+      }
+
       // 0. Resolve destination warehouse — use explicit id if set, otherwise fall back to HUB-RN
       let destinationWarehouseId = payload.destination_warehouse_id ?? null;
       if (!destinationWarehouseId) {

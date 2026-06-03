@@ -151,6 +151,10 @@ export default function ProductionOrderDetail() {
   const statusStep = STATUS_STEP[order.op_status] ?? 0;
   const progressPct = (statusStep / (TOTAL_STEPS - 1)) * 100;
   const nextStatuses = OP_STATUS_TRANSITIONS[order.op_status] ?? [];
+  // "confirmada" NÃO entra nos botões genéricos de avançar: confirmar uma OP
+  // precisa creditar estoque, e isso só acontece pelo botão "Confirmar" (que abre
+  // o ConfirmOPDialog). O atalho direto marcava confirmada sem creditar estoque.
+  const advanceButtons = nextStatuses.filter(s => s !== "confirmada");
   const statusColor = OP_STATUS_COLORS[order.op_status] ?? "bg-gray-500";
 
   async function advanceTo(next: OpStatus) {
@@ -238,10 +242,10 @@ export default function ProductionOrderDetail() {
               }
             </div>
             {/* Next-step actions */}
-            {canManage && nextStatuses.length > 0 && (
+            {canManage && advanceButtons.length > 0 && (
               <div className="flex items-center gap-2 pt-2 border-t border-border flex-wrap">
                 <span className="text-xs text-muted-foreground">Avançar para:</span>
-                {nextStatuses.map(next => (
+                {advanceButtons.map(next => (
                   <Button
                     key={next}
                     size="sm"

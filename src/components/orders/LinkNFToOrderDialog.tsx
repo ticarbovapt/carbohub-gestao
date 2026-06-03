@@ -3,7 +3,7 @@ import { format, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { Link2, Search, CheckCircle2, FileText, Lock } from "lucide-react";
+import { Link2, Search, CheckCircle2, FileText, Lock, AlertTriangle } from "lucide-react";
 import { useBlingNFes, useLinkNFeToOrder } from "@/hooks/useBlingNFes";
 
 interface Props {
@@ -28,6 +28,18 @@ function fmtCNPJ(s: string | null) {
     return `${n.slice(0,2)}.${n.slice(2,5)}.${n.slice(5,8)}/${n.slice(8,12)}-${n.slice(12)}`;
   return s;
 }
+// Normaliza nome p/ comparação (minúsculo, sem acento/pontuação).
+function normName(s: string | null): string {
+  return (s || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "")
+    .replace(/[^a-z0-9]/g, " ").replace(/\s+/g, " ").trim();
+}
+// True quando o nome da NF claramente NÃO bate com o do pedido (nenhum contém o
+// outro). Só avisa — não bloqueia — para o operador não vincular NF do cliente errado.
+function nameDiverges(nfName: string | null, orderName: string): boolean {
+  const a = normName(nfName), b = normName(orderName);
+  if (!a || !b) return false;
+  return !a.includes(b) && !b.includes(a);
+}
 
 export function LinkNFToOrderDialog({ open, onOpenChange, orderNumber, customerName }: Props) {
   const [search, setSearch] = useState("");
@@ -40,7 +52,13 @@ export function LinkNFToOrderDialog({ open, onOpenChange, orderNumber, customerN
 
   const displayed = showAll ? nfes : available;
 
-  async function handleLink(nfeId: string) {
+  async function handleLink(nfeId: string, contatoNome: string | null) {
+    if (nameDiverges(contatoNome, customerName)) {
+      const ok = window.confirm(
+        `Atenção: a NF está em nome de "${contatoNome || "—"}", mas o pedido ${orderNumber} é de "${customerName}".\n\nVincular mesmo assim?`
+      );
+      if (!ok) return;
+    }
     await link.mutateAsync({ nfeId, orderNumber });
     onOpenChange(false);
   }
@@ -106,11 +124,12 @@ export function LinkNFToOrderDialog({ open, onOpenChange, orderNumber, customerN
               displayed.map(nf => {
                 const isLinked = nf.match_status === "matched" || nf.match_status === "manual";
                 const cnpj = fmtCNPJ(nf.contato_cnpj);
+                const diverges = !isLinked && nameDiverges(nf.contato_nome, customerName);
 
                 return (
                   <button
                     key={nf.id}
-                    onClick={() => !isLinked && handleLink(nf.id)}
+                    onClick={() => !isLinked && handleLink(nf.id, nf.contato_nome)}
                     disabled={isLinked || link.isPending}
                     className={`w-full flex items-center justify-between gap-3 rounded-lg border px-3 py-2.5 text-left transition-colors ${
                       isLinked
@@ -126,6 +145,12 @@ export function LinkNFToOrderDialog({ open, onOpenChange, orderNumber, customerN
                       <p className="text-[11px] text-muted-foreground mt-0.5">
                         NF {nf.numero || "?"}{nf.serie ? `/${nf.serie}` : ""} · {fmtDate(nf.data_emissao)}
                       </p>
+                      {diverges && (
+                        <p className="text-[10px] text-amber-500 flex items-center gap-1 mt-0.5">
+                          <AlertTriangle className="h-2.5 w-2.5 shrink-0" />
+                          Cliente diferente do pedido
+                        </p>
+                      )}
                     </div>
                     <div className="text-right shrink-0">
                       <p className="text-sm font-bold tabular-nums">{fmtBRL(nf.valor_total)}</p>
