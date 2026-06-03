@@ -413,61 +413,87 @@ export interface WeeklyVendedorEntry {
   } | null;
 }
 
-export function useWeeklyVendedoresData(teamFilter?: "todos" | "cgc" | "expansao") {
+export interface WeeklyVendedoresResult {
+  entries: WeeklyVendedorEntry[];
+  weekStart: string; // ISO date (sexta)
+  weekEnd: string;   // ISO date (quinta)
+}
+
+// Semana comercial: sexta → quinta. SEM corte no início do mês — usado para
+// navegar entre semanas e exibir o intervalo de datas na tela.
+export function commercialWeekStartOf(ref: Date): Date {
+  const d = new Date(ref);
+  const dow = d.getDay(); // 0=Dom … 6=Sáb
+  const daysSinceFriday = dow >= 5 ? dow - 5 : dow + 2;
+  const start = new Date(d);
+  start.setDate(d.getDate() - daysSinceFriday);
+  start.setHours(0, 0, 0, 0);
+  return start;
+}
+
+export function useWeeklyVendedoresData(teamFilter?: "todos" | "cgc" | "expansao", weekStartISO?: string) {
   return useQuery({
     refetchInterval: POLL_INTERVAL_MS,
     refetchIntervalInBackground: false,
-    queryKey: ["weekly-vendedores-data", teamFilter],
-    queryFn: async () => {
-      const weekStart = commercialWeekStart();
-      const expandedStart = new Date(weekStart);
-      expandedStart.setDate(expandedStart.getDate() - 7);
+    queryKey: ["weekly-vendedores-data", teamFilter, weekStartISO ?? "current"],
+    queryFn: async (): Promise<WeeklyVendedoresResult> => {
+      const weekStart = weekStartISO
+        ? new Date(weekStartISO + "T00:00:00")
+        : commercialWeekStartOf(new Date());
+      const weekEnd = new Date(weekStart);
+      weekEnd.setDate(weekStart.getDate() + 6);
+      weekEnd.setHours(23, 59, 59, 999);
+
+      const expandedStart = new Date(weekStart); expandedStart.setDate(expandedStart.getDate() - 2);
+      const expandedEnd   = new Date(weekEnd);   expandedEnd.setDate(expandedEnd.getDate() + 2);
 
       const { data: ordersRaw } = await supabase
         .from("carboze_orders")
         .select("vendedor_id, total, status, created_at, sale_date")
-        .gte("created_at", expandedStart.toISOString());
+        .gte("created_at", expandedStart.toISOString())
+        .lte("created_at", expandedEnd.toISOString());
 
       const orders = (ordersRaw || []).filter(o => {
         if (o.status === "cancelled" || !o.vendedor_id) return false;
-        const effectiveDate = new Date(o.sale_date ?? o.created_at);
-        return effectiveDate >= weekStart;
+        const eff = new Date((o.sale_date ?? o.created_at.substring(0, 10)) + "T12:00:00");
+        return eff >= weekStart && eff <= weekEnd;
       });
+
       const totals: Record<string, { total: number; count: number }> = {};
-      for (const order of orders || []) {
-        if (!order.vendedor_id) continue;
-        if (!totals[order.vendedor_id]) totals[order.vendedor_id] = { total: 0, count: 0 };
-        totals[order.vendedor_id].total += Number(order.total || 0);
-        totals[order.vendedor_id].count += 1;
+      for (const order of orders) {
+        const vid = order.vendedor_id!;
+        if (!totals[vid]) totals[vid] = { total: 0, count: 0 };
+        totals[vid].total += Number(order.total || 0);
+        totals[vid].count += 1;
       }
 
-      const vendedorIds = Object.keys(totals);
-      let profiles: Array<{id:string;full_name:string|null;avatar_url:string|null;department:string|null;secondary_department:string|null}> = [];
-      if (vendedorIds.length > 0) {
-        const { data } = await supabase
-          .from("profiles")
-          .select("id, full_name, avatar_url, department, secondary_department")
-          .in("id", vendedorIds);
-        profiles = data || [];
-      }
+      // Só quem está flegado como vendedor — inclui zerados.
+      const { data: vendedores } = await supabase
+        .from("profiles")
+        .select("id, full_name, avatar_url, department, secondary_department")
+        .eq("is_vendedor", true);
 
-      let entries: WeeklyVendedorEntry[] = Object.entries(totals)
-        .sort(([, a], [, b]) => b.total - a.total)
-        .map(([id, d], idx) => ({
-          rank: idx + 1,
-          vendedor_id: id,
-          total: d.total,
-          count: d.count,
-          profile: profiles.find(p => p.id === id) ?? null,
-        }));
+      let entries: WeeklyVendedorEntry[] = (vendedores || []).map(v => ({
+        rank: 0,
+        vendedor_id: v.id,
+        total: totals[v.id]?.total || 0,
+        count: totals[v.id]?.count || 0,
+        profile: v as WeeklyVendedorEntry["profile"],
+      }));
 
       if (teamFilter && teamFilter !== "todos") {
-        entries = entries
-          .filter(e => e.profile?.department === teamFilter || e.profile?.secondary_department === teamFilter)
-          .map((e, idx) => ({ ...e, rank: idx + 1 }));
+        entries = entries.filter(e =>
+          e.profile?.department === teamFilter || e.profile?.secondary_department === teamFilter);
       }
 
-      return entries;
+      entries.sort((a, b) => b.total - a.total);
+      entries = entries.map((e, idx) => ({ ...e, rank: idx + 1 }));
+
+      return {
+        entries,
+        weekStart: weekStart.toISOString().slice(0, 10),
+        weekEnd: weekEnd.toISOString().slice(0, 10),
+      };
     },
   });
 }

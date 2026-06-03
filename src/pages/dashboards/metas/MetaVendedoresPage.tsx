@@ -12,6 +12,7 @@ import {
 import {
   useSalesTargetsWithProgress,
   useWeeklyVendedoresData,
+  commercialWeekStartOf,
   type WeeklyVendedorEntry,
 } from "@/hooks/useSalesTargets";
 import { useAuth } from "@/contexts/AuthContext";
@@ -119,13 +120,35 @@ function Top3Card({ entries, label, canSeeValues }: {
 // ─────────────────────────────────────────────────────────────────────────────
 // WeeklyPanel — Top 3 à esquerda + gráfico de colunas à direita
 // ─────────────────────────────────────────────────────────────────────────────
-function WeeklyPanel({ entries, targetMap, numWeeks, canSeeValues }: {
+// Cor pela PROJEÇÃO da semana: verde ≥100%, amarelo 70-99%, vermelho <70%.
+function weeklyBarColor(projPct: number | null): string {
+  if (projPct === null) return "#64748b";
+  if (projPct >= 100) return "#22c55e";
+  if (projPct >= 70)  return "#f59e0b";
+  return "#ef4444";
+}
+
+function WeeklyPanel({ entries, targetMap, weekStart, weekEnd, isCurrentWeek, canSeeValues }: {
   entries: WeeklyVendedorEntry[];
   targetMap: Record<string, number>;
-  numWeeks: number;
+  weekStart: Date;
+  weekEnd: Date;
+  isCurrentWeek: boolean;
   canSeeValues: boolean;
 }) {
   if (entries.length === 0) return null;
+
+  // Dias decorridos na semana (para projeção). Semana passada = 7; futura = 0.
+  const now = new Date();
+  let elapsedDays: number;
+  if (isCurrentWeek) {
+    const ms = now.getTime() - weekStart.getTime();
+    elapsedDays = Math.min(7, Math.max(1, Math.ceil(ms / 86400000)));
+  } else if (weekEnd < now) {
+    elapsedDays = 7;
+  } else {
+    elapsedDays = 0;
+  }
 
   const top3        = entries.slice(0, 3); // performance order
   const alphabetical = [...entries].sort((a, b) =>
@@ -182,18 +205,22 @@ function WeeklyPanel({ entries, targetMap, numWeeks, canSeeValues }: {
               <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">
                 Desempenho da Semana
               </p>
-              <span className="text-[10px] text-muted-foreground">÷ {numWeeks} sem.</span>
+              <span className="text-[10px] text-muted-foreground">cor = projeção</span>
             </div>
             <div className="overflow-x-auto pb-1">
               <div className="flex gap-3 items-end px-1">
                 {alphabetical.map(entry => {
-                  const weeklyTarget = targetMap[entry.vendedor_id] || 0;
-                  const barH    = Math.max(8, Math.round((entry.total / maxTotal) * MAX_BAR_H));
-                  const pctMeta = weeklyTarget > 0 ? Math.round((entry.total / weeklyTarget) * 100) : null;
-                  const barFill = pctMeta === null ? "#64748b"
-                    : pctMeta >= 100 ? "#22c55e"
-                    : pctMeta >= 70  ? "#f59e0b"
-                    : "#ef4444";
+                  const weeklyTarget  = targetMap[entry.vendedor_id] || 0;
+                  // % até o momento (atingimento real) e projeção da semana
+                  const attainPct = weeklyTarget > 0 ? Math.round((entry.total / weeklyTarget) * 100) : null;
+                  const projected = elapsedDays > 0 ? (entry.total / elapsedDays) * 7 : entry.total;
+                  const projPct   = weeklyTarget > 0 ? Math.round((projected / weeklyTarget) * 100) : null;
+                  const barFill   = weeklyBarColor(projPct);
+                  // Altura: enche em direção à meta (atingimento). Sem meta → relativo ao maior.
+                  const fillRatio = weeklyTarget > 0
+                    ? Math.min(1, entry.total / weeklyTarget)
+                    : entry.total / maxTotal;
+                  const barH = Math.max(6, Math.round(fillRatio * MAX_BAR_H));
                   const perfRank = entries.findIndex(e => e.vendedor_id === entry.vendedor_id) + 1;
                   const medal    = perfRank === 1 ? "🥇" : perfRank === 2 ? "🥈" : perfRank === 3 ? "🥉" : null;
 
@@ -212,6 +239,11 @@ function WeeklyPanel({ entries, targetMap, numWeeks, canSeeValues }: {
                         className="flex flex-col items-center justify-end gap-0.5"
                         style={{ height: `${MAX_BAR_H + 30}px` }}
                       >
+                        {/* % da semana até o momento */}
+                        <p className="text-[10px] font-bold leading-tight"
+                          style={{ color: attainPct === null ? "#64748b" : barFill }}>
+                          {attainPct === null ? "—" : `${attainPct}%`}
+                        </p>
                         {canSeeValues && (
                           <p className="text-[9px] text-muted-foreground tabular-nums text-center leading-tight">
                             {entry.total >= 1000
@@ -219,13 +251,8 @@ function WeeklyPanel({ entries, targetMap, numWeeks, canSeeValues }: {
                               : fmtBRL(entry.total)}
                           </p>
                         )}
-                        {pctMeta !== null && (
-                          <p className="text-[9px] font-bold leading-tight" style={{ color: barFill }}>
-                            {pctMeta}%
-                          </p>
-                        )}
                         <div
-                          className="w-9 rounded-t-lg transition-all duration-700"
+                          className="w-9 rounded-t-lg transition-[height] duration-1000 ease-out"
                           style={{ height: `${barH}px`, backgroundColor: barFill }}
                         />
                       </div>
@@ -259,6 +286,11 @@ export default function MetaVendedoresPage() {
   const [month, setMonth]           = useState(() => startOfMonth(new Date()));
   const [teamFilter, setTeamFilter] = useState<TeamFilter>("todos");
   const [periodView, setPeriodView] = useState<PeriodView>("mensal");
+  // Semana comercial selecionada (sexta da semana). Default = semana atual.
+  const [weekStart, setWeekStart]   = useState(() => commercialWeekStartOf(new Date()));
+  const weekStartISO = weekStart.toISOString().slice(0, 10);
+  const currentWeekStartISO = commercialWeekStartOf(new Date()).toISOString().slice(0, 10);
+  const isCurrentWeek = weekStartISO === currentWeekStartISO;
 
   const canManage    = useCanSetTargets();
   const canSeeValues = canManage;
@@ -274,7 +306,12 @@ export default function MetaVendedoresPage() {
   const { data: targets = [], isLoading, isFetching, dataUpdatedAt } = useSalesTargetsWithProgress(monthStr);
   const { data: prevTargets = [] }                                   = useSalesTargetsWithProgress(prevMonthStr);
   const { data: currentTargets = [] }                                = useSalesTargetsWithProgress(currentMonthStr);
-  const { data: weeklyAll = [], isLoading: weeklyLoading, isFetching: weeklyFetching } = useWeeklyVendedoresData(teamFilter);
+  // Metas do mês ao qual a semana selecionada pertence (para meta semanal)
+  const weekMonthStr = startOfMonth(weekStart).toISOString().slice(0, 10);
+  const { data: weekMonthTargets = [] }                              = useSalesTargetsWithProgress(weekMonthStr);
+  const { data: weeklyData, isLoading: weeklyLoading, isFetching: weeklyFetching } =
+    useWeeklyVendedoresData(teamFilter, weekStartISO);
+  const weeklyAll = weeklyData?.entries ?? [];
 
   // Countdown to next auto-refresh (15 min)
   const POLL_MIN = 15;
@@ -289,12 +326,10 @@ export default function MetaVendedoresPage() {
   const minsLeft = Math.ceil(secondsLeft / 60);
   const isRefreshing = isFetching || weeklyFetching;
 
-  // Weekly target = monthly target / commercial weeks in current month
-  const currentDate = new Date();
-  const numWeeks    = countCommercialWeeks(currentDate.getFullYear(), currentDate.getMonth());
-  // First accumulate monthly totals, then divide
+  // Meta semanal = meta do mês (da semana selecionada) ÷ nº de semanas comerciais desse mês
+  const numWeeks = countCommercialWeeks(weekStart.getFullYear(), weekStart.getMonth());
   const monthlyTargetAccum: Record<string, number> = {};
-  for (const t of currentTargets) {
+  for (const t of weekMonthTargets) {
     monthlyTargetAccum[t.vendedor_id] =
       (monthlyTargetAccum[t.vendedor_id] || 0) + Number(t.target_amount || 0);
   }
@@ -302,6 +337,8 @@ export default function MetaVendedoresPage() {
   for (const [id, monthly] of Object.entries(monthlyTargetAccum)) {
     weeklyTargetMap[id] = monthly / numWeeks;
   }
+  // currentTargets fica disponível para outros usos futuros; evita lint de não-uso
+  void currentTargets;
 
   // Mapa vendedor → actual do mês anterior
   const prevActualMap: Record<string, number> = {};
@@ -406,6 +443,25 @@ export default function MetaVendedoresPage() {
               </div>
             )}
 
+            {periodView === "semanal" && (
+              <div className="flex items-center gap-1 bg-muted/40 rounded-lg px-2 py-1.5">
+                <Button variant="ghost" size="icon" className="h-7 w-7"
+                  onClick={() => setWeekStart(w => { const n = new Date(w); n.setDate(w.getDate() - 7); return n; })}>
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+                <span className="text-sm font-semibold w-40 text-center">
+                  {format(weekStart, "dd/MM", { locale: ptBR })}
+                  {" — "}
+                  {format(new Date(weekStart.getFullYear(), weekStart.getMonth(), weekStart.getDate() + 6), "dd/MM", { locale: ptBR })}
+                </span>
+                <Button variant="ghost" size="icon" className="h-7 w-7"
+                  onClick={() => setWeekStart(w => { const n = new Date(w); n.setDate(w.getDate() + 7); return n; })}
+                  disabled={isCurrentWeek}>
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
+            )}
+
             {canManage && (
               <Button size="sm" variant="outline" className="gap-1.5"
                 onClick={() => navigate("/dashboards/metas/config")}>
@@ -429,16 +485,34 @@ export default function MetaVendedoresPage() {
           ))}
         </div>
 
-        {/* Info bar */}
-        <div className="flex items-center gap-2 px-3 py-2 rounded-md bg-blue-500/10 border border-blue-500/20 text-sm text-blue-400">
-          <TrendingUp className="h-4 w-4 shrink-0" />
-          <span>
-            Esperado hoje: <strong>{fmtPct(expectedPct)}</strong> (dia {dayOfMonth}/{daysInMonth}) ·{" "}
-            <span className="text-green-400 font-medium">verde</span> = na meta ·{" "}
-            <span className="text-amber-400 font-medium">amarelo</span> = atenção ·{" "}
-            <span className="text-red-400 font-medium">vermelho</span> = abaixo
-          </span>
-        </div>
+        {/* Info bar — mensal */}
+        {periodView === "mensal" && (
+          <div className="flex items-center gap-2 px-3 py-2 rounded-md bg-blue-500/10 border border-blue-500/20 text-sm text-blue-400">
+            <TrendingUp className="h-4 w-4 shrink-0" />
+            <span>
+              Esperado hoje: <strong>{fmtPct(expectedPct)}</strong> (dia {dayOfMonth}/{daysInMonth}) ·{" "}
+              <span className="text-green-400 font-medium">verde</span> = na meta ·{" "}
+              <span className="text-amber-400 font-medium">amarelo</span> = atenção ·{" "}
+              <span className="text-red-400 font-medium">vermelho</span> = abaixo
+            </span>
+          </div>
+        )}
+
+        {/* Info bar — semanal */}
+        {periodView === "semanal" && (
+          <div className="flex items-center gap-2 px-3 py-2 rounded-md bg-blue-500/10 border border-blue-500/20 text-sm text-blue-400 flex-wrap">
+            <Calendar className="h-4 w-4 shrink-0" />
+            <span>
+              Semana de <strong>{format(weekStart, "EEEE dd/MM", { locale: ptBR })}</strong> a{" "}
+              <strong>{format(new Date(weekStart.getFullYear(), weekStart.getMonth(), weekStart.getDate() + 6), "EEEE dd/MM", { locale: ptBR })}</strong>
+              {isCurrentWeek && <span className="text-muted-foreground"> · semana atual</span>}
+              {" · cor da barra = projeção: "}
+              <span className="text-green-400 font-medium">verde ≥100%</span>,{" "}
+              <span className="text-amber-400 font-medium">amarelo 70-99%</span>,{" "}
+              <span className="text-red-400 font-medium">vermelho &lt;70%</span>
+            </span>
+          </div>
+        )}
 
         {/* ── SEMANAL VIEW ── */}
         {periodView === "semanal" && (
@@ -451,14 +525,16 @@ export default function MetaVendedoresPage() {
               <CarboCard>
                 <CarboCardContent className="py-16 text-center space-y-3">
                   <Trophy className="h-12 w-12 mx-auto text-muted-foreground/30" />
-                  <p className="text-muted-foreground">Nenhuma venda registrada esta semana.</p>
+                  <p className="text-muted-foreground">Nenhum vendedor ativo encontrado.</p>
                 </CarboCardContent>
               </CarboCard>
             ) : (
               <WeeklyPanel
                 entries={weeklyAll}
                 targetMap={weeklyTargetMap}
-                numWeeks={numWeeks}
+                weekStart={weekStart}
+                weekEnd={new Date(weekStart.getFullYear(), weekStart.getMonth(), weekStart.getDate() + 6, 23, 59, 59)}
+                isCurrentWeek={isCurrentWeek}
                 canSeeValues={canSeeValues}
               />
             )}
@@ -577,75 +653,57 @@ export default function MetaVendedoresPage() {
                   const projKey      = projPct === null ? "gray" : projPct >= 100 ? "green" : projPct >= 85 ? "yellow" : "red" as keyof typeof COLOR_MAP;
                   const projColors   = COLOR_MAP[projKey];
 
+                  const rankBadge = idx === 0 ? "🥇" : idx === 1 ? "🥈" : idx === 2 ? "🥉" : `${idx + 1}º`;
                   return (
                     <CarboCard key={t.id}
-                      className={`border ${color === "red" ? "border-red-500/30" : color === "yellow" ? "border-amber-500/30" : ""}`}>
-                      <CarboCardContent className="p-4">
-                        <div className="flex items-center gap-3">
-                          {/* Avatar */}
+                      className={`border-l-2 ${color === "red" ? "border-l-red-500" : color === "yellow" ? "border-l-amber-500" : color === "green" ? "border-l-green-500" : "border-l-transparent"}`}>
+                      <CarboCardContent className="px-3 py-2">
+                        <div className="flex items-center gap-2.5">
+                          {/* Rank */}
+                          <span className="w-6 text-center shrink-0 text-sm font-bold text-muted-foreground">{rankBadge}</span>
                           <ProfileAvatar
                             avatarUrl={t.vendedor?.avatar_url}
                             fullName={t.vendedor?.full_name}
                             userId={t.vendedor_id}
-                            size={32}
+                            size={28}
                           />
-                          {/* Rank */}
-                          <div className="w-7 text-center shrink-0">
-                            {idx === 0 ? "🥇" : idx === 1 ? "🥈" : idx === 2 ? "🥉"
-                              : <span className="text-sm font-bold text-muted-foreground">{idx + 1}º</span>}
-                          </div>
-                          <div className="flex-1 space-y-2 min-w-0">
-                            {/* Row 1: nome + valor + badge */}
+                          <div className="flex-1 min-w-0">
+                            {/* Linha 1: nome + (faltam/dia) + valor + % */}
                             <div className="flex items-center justify-between gap-2">
-                              <div className="min-w-0">
-                                <p className="font-semibold text-sm truncate">{t.vendedor?.full_name || "—"}</p>
-                                {t.linha && <p className="text-xs text-muted-foreground">{t.linha}</p>}
-                              </div>
+                              <p className="font-semibold text-sm truncate">{t.vendedor?.full_name || "—"}</p>
                               <div className="flex items-center gap-2 shrink-0">
-                                {canSeeValues ? (
-                                  <div className="text-right">
-                                    <p className={`text-lg font-bold tabular-nums ${colors.text}`}>{fmtBRL(actual)}</p>
-                                    <p className="text-xs text-muted-foreground">/ {fmtBRL(target)}</p>
-                                  </div>
-                                ) : null}
+                                {canSeeValues && (
+                                  <span className={`text-sm font-bold tabular-nums ${colors.text}`}>
+                                    {fmtBRL(actual)}<span className="text-[10px] font-normal text-muted-foreground"> /{fmtBRL(target)}</span>
+                                  </span>
+                                )}
                                 <CarboBadge variant={colors.badge} size="sm">{fmtPct(pct)}</CarboBadge>
                               </div>
                             </div>
-
-                            {/* Progress bar */}
-                            <div className="relative h-2 bg-muted rounded-full overflow-hidden">
+                            {/* Barra fininha */}
+                            <div className="relative h-1.5 bg-muted rounded-full overflow-hidden mt-1">
                               <div className="h-full rounded-full transition-all duration-700"
                                 style={{ width: `${Math.min(100, pct)}%`, backgroundColor: colors.bar }} />
                               {expectedPct > 0 && expectedPct < 100 && (
-                                <div className="absolute top-0 bottom-0 w-0.5 bg-foreground/40"
-                                  style={{ left: `${expectedPct}%` }} />
+                                <div className="absolute top-0 bottom-0 w-0.5 bg-foreground/40" style={{ left: `${expectedPct}%` }} />
                               )}
                             </div>
-
-                            {/* Row 3: métricas */}
-                            <div className="flex items-center justify-between flex-wrap gap-x-4 gap-y-0.5 text-xs text-muted-foreground">
-                              {canSeeValues && <span>Faltam {fmtBRL(remaining)}</span>}
-                              {canSeeValues && dailyNeeded > 0 && (
-                                <span className="inline-flex items-center gap-0.5 text-amber-500 font-medium">
-                                  <Zap className="h-3 w-3" /> {fmtBRL(dailyNeeded)}/dia
-                                </span>
-                              )}
-                              {canSeeValues && <DeltaBadge current={actual} prev={prevActual} />}
-                              {t.target_qty > 0 && (
-                                <span>{t.actual_qty || 0} / {t.target_qty} pedidos</span>
-                              )}
-                            </div>
-
-                            {/* Projection */}
-                            {projected !== null && projPct !== null && (
-                              <div className="flex items-center gap-1.5 text-xs pt-1 border-t border-border/40">
-                                <TrendingUp className="h-3 w-3 text-muted-foreground shrink-0" />
-                                <span className="text-muted-foreground">Projeção:</span>
-                                {canSeeValues && (
-                                  <span className={`font-bold ${projColors.text}`}>{fmtBRL(projected)}</span>
+                            {/* Linha 2: métricas condensadas */}
+                            {canSeeValues && (
+                              <div className="flex items-center gap-x-3 gap-y-0 flex-wrap text-[11px] text-muted-foreground mt-0.5">
+                                {remaining > 0 && <span>Faltam {fmtBRL(remaining)}</span>}
+                                {dailyNeeded > 0 && (
+                                  <span className="inline-flex items-center gap-0.5 text-amber-500 font-medium">
+                                    <Zap className="h-2.5 w-2.5" /> {fmtBRL(dailyNeeded)}/dia
+                                  </span>
                                 )}
-                                <CarboBadge variant={projColors.badge} size="sm">{fmtPct(projPct)}</CarboBadge>
-                                <span className="text-muted-foreground">ao fim do mês</span>
+                                {projPct !== null && (
+                                  <span style={{ color: projColors.bar }} className="font-medium">
+                                    proj. {fmtPct(projPct)}
+                                  </span>
+                                )}
+                                {t.target_qty > 0 && <span>{t.actual_qty || 0}/{t.target_qty} ped.</span>}
+                                <DeltaBadge current={actual} prev={prevActual} />
                               </div>
                             )}
                           </div>
