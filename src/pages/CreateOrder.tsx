@@ -112,6 +112,9 @@ const formSchema = z.object({
   delivery_neighborhood: z.string().optional(),
   billing_same_as_delivery: z.boolean(),
   billing_address: z.string().optional(),
+  billing_street: z.string().optional(),
+  billing_number: z.string().optional(),
+  billing_neighborhood: z.string().optional(),
   billing_city: z.string().optional(),
   billing_state: z.string().optional(),
   billing_zip: z.string().optional(),
@@ -257,6 +260,9 @@ export default function CreateOrder() {
       delivery_neighborhood: "",
       billing_same_as_delivery: true,
       billing_address: "",
+      billing_street: "",
+      billing_number: "",
+      billing_neighborhood: "",
       billing_city: "",
       billing_state: "",
       billing_zip: "",
@@ -319,6 +325,9 @@ export default function CreateOrder() {
       delivery_neighborhood: o.delivery_neighborhood ?? "",
       billing_same_as_delivery: !o.billing_address,
       billing_address: o.billing_address ?? "",
+      billing_street: o.billing_address ?? "",
+      billing_number: "",
+      billing_neighborhood: "",
       billing_city: o.billing_city ?? "",
       billing_state: o.billing_state ?? "",
       billing_zip: o.billing_zip ?? "",
@@ -560,7 +569,7 @@ export default function CreateOrder() {
       delivery_neighborhood: data.delivery_neighborhood || undefined,
       billing_address: data.billing_same_as_delivery
         ? ([data.delivery_street, data.delivery_number].filter(Boolean).join(", ") || data.delivery_address || undefined)
-        : (data.billing_address || undefined),
+        : ([data.billing_street, data.billing_number].filter(Boolean).join(", ") || data.billing_address || undefined),
       billing_city: data.billing_same_as_delivery ? (data.delivery_city || undefined) : (data.billing_city || undefined),
       billing_state: data.billing_same_as_delivery ? (data.delivery_state || undefined) : (data.billing_state || undefined),
       billing_zip: data.billing_same_as_delivery ? (data.delivery_zip || undefined) : (data.billing_zip || undefined),
@@ -1213,57 +1222,96 @@ export default function CreateOrder() {
                     </label>
                   </div>
                   {!form.watch("billing_same_as_delivery") && (
-                    <div className="grid gap-3 sm:grid-cols-2 rounded-lg border border-border/60 p-3 bg-muted/10">
-                      <div className="sm:col-span-2">
+                    <div className="space-y-3 rounded-lg border border-border/60 p-3 bg-muted/10">
+                      {/* Logradouro + Número */}
+                      <div className="grid gap-3 sm:grid-cols-[1fr_auto]">
                         <FormField
                           control={form.control}
-                          name="billing_address"
+                          name="billing_street"
                           render={({ field }) => (
                             <FormItem>
-                              <FormLabel>Logradouro + Número</FormLabel>
+                              <FormLabel>Logradouro</FormLabel>
                               <FormControl>
-                                <Input placeholder="Rua, número, complemento" {...field} />
+                                <Input placeholder="Rua, Avenida, etc." {...field} />
+                              </FormControl>
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={form.control}
+                          name="billing_number"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Número</FormLabel>
+                              <div className="flex gap-2">
+                                <FormControl>
+                                  <Input placeholder="Nº" className="w-24" {...field} />
+                                </FormControl>
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  className="h-10 px-3 text-xs"
+                                  onClick={() => form.setValue("billing_number", "S/N")}
+                                >
+                                  S/N
+                                </Button>
+                              </div>
+                            </FormItem>
+                          )}
+                        />
+                      </div>
+                      {/* Bairro + Cidade + Estado + CEP */}
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <FormField
+                          control={form.control}
+                          name="billing_neighborhood"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Bairro</FormLabel>
+                              <FormControl>
+                                <Input placeholder="Bairro" {...field} />
+                              </FormControl>
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={form.control}
+                          name="billing_city"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Cidade</FormLabel>
+                              <FormControl>
+                                <Input placeholder="Cidade" {...field} />
+                              </FormControl>
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={form.control}
+                          name="billing_state"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Estado</FormLabel>
+                              <FormControl>
+                                <Input placeholder="UF" maxLength={2} {...field} />
+                              </FormControl>
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={form.control}
+                          name="billing_zip"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>CEP</FormLabel>
+                              <FormControl>
+                                <Input placeholder="00000-000" {...field} />
                               </FormControl>
                             </FormItem>
                           )}
                         />
                       </div>
-                      <FormField
-                        control={form.control}
-                        name="billing_city"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Cidade</FormLabel>
-                            <FormControl>
-                              <Input placeholder="Cidade" {...field} />
-                            </FormControl>
-                          </FormItem>
-                        )}
-                      />
-                      <FormField
-                        control={form.control}
-                        name="billing_state"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Estado</FormLabel>
-                            <FormControl>
-                              <Input placeholder="UF" maxLength={2} {...field} />
-                            </FormControl>
-                          </FormItem>
-                        )}
-                      />
-                      <FormField
-                        control={form.control}
-                        name="billing_zip"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>CEP</FormLabel>
-                            <FormControl>
-                              <Input placeholder="00000-000" {...field} />
-                            </FormControl>
-                          </FormItem>
-                        )}
-                      />
                     </div>
                   )}
                 </div>
