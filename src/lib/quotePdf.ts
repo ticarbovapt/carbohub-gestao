@@ -94,8 +94,15 @@ export function generateQuotePdf(order: QuotePdfData) {
       const unit = it.unit_price ?? 0;
       const lineTotal = qty * unit;
       const nome = it.name || it.product_code || "—";
-      const bonus = it.bonus_quantity ? `\n+ ${it.bonus_quantity} bonificação` : "";
-      return [`${nome}${bonus}`, String(qty), brl(unit), brl(lineTotal)];
+      const bonusQty = Number(it.bonus_quantity) || 0;
+      // Quando há bonificação, descreve no nome e mostra a qtd total (pagas + grátis)
+      const nomeCol = bonusQty > 0
+        ? `${nome}\n+ ${bonusQty} un bonificadas (grátis)`
+        : nome;
+      const qtdCol = bonusQty > 0
+        ? `${qty + bonusQty}\n(${qty} + ${bonusQty})`
+        : String(qty);
+      return [nomeCol, qtdCol, brl(unit), brl(lineTotal)];
     });
 
   autoTable(doc, {
@@ -117,7 +124,19 @@ export function generateQuotePdf(order: QuotePdfData) {
   const afterTable = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY;
   const subtotal = order.subtotal ?? order.total ?? 0;
   const total = order.total ?? subtotal;
+  // Soma das unidades bonificadas (grátis) — informativo, não altera o valor
+  const totalBonus = items.reduce((s, it) => s + (Number(it.bonus_quantity) || 0), 0);
   let ty = afterTable + 8;
+  if (totalBonus > 0) {
+    doc.setFontSize(9);
+    doc.setTextColor(16, 122, 87);
+    doc.text(
+      `Inclui ${totalBonus} unidade(s) bonificada(s) sem custo.`,
+      pageW - marginX, ty, { align: "right" },
+    );
+    doc.setTextColor(0);
+    ty += 6;
+  }
   doc.setFontSize(10);
   doc.setFont("helvetica", "bold");
   doc.text(`Total: ${brl(total)}`, pageW - marginX, ty, { align: "right" });

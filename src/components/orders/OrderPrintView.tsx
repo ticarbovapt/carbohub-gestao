@@ -190,6 +190,11 @@ export function OrderPrintView({ order }: OrderPrintViewProps) {
                   <td style={tdStyle}>{item.client_code || "—"}</td>
                   <td style={{ ...tdStyle, lineHeight: "1.4" }}>
                     <div style={{ fontWeight: "bold" }}>{item.name}</div>
+                    {Number(item.bonus_quantity) > 0 && (
+                      <div style={{ marginTop: "2px", color: "#1a7a4a", fontWeight: "bold" }}>
+                        + {item.bonus_quantity} un bonificadas (grátis) — total {item.quantity + Number(item.bonus_quantity)} un
+                      </div>
+                    )}
                     {item.cost_center && (
                       <div style={{ marginTop: "2px" }}>
                         <strong>Motivo:</strong> {item.cost_center}
