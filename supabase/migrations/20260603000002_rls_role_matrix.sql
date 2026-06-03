@@ -364,70 +364,62 @@ CREATE POLICY "Employees can delete suppliers"
   ON public.suppliers FOR DELETE
   USING (public.is_employee(auth.uid()));
 
--- ─── Licensee / CGC module tables ───────────────────────────
--- Plans, subscriptions, wallets, transactions, catalog, requests, user_licensee
+-- ─── Tabelas opcionais (licenciados/CGC, checklist) ─────────
+-- Estas tabelas podem não existir / ter nomes diferentes em cada ambiente.
+-- Cada bloco só roda se a tabela existir (to_regclass) e remove qualquer
+-- política legacy (varrendo pg_policies por is_admin/is_ceo/is_gestor) antes
+-- de recriar a política de funcionário. Assim o script nunca quebra por
+-- tabela ausente.
 
-DROP POLICY IF EXISTS "Admins can manage plans"          ON public.licensee_plans;
-DROP POLICY IF EXISTS "Admins can manage subscriptions"  ON public.licensee_subscriptions;
-DROP POLICY IF EXISTS "Admins can manage wallets"        ON public.licensee_wallets;
-DROP POLICY IF EXISTS "Admins can manage transactions"   ON public.licensee_transactions;
-DROP POLICY IF EXISTS "Admins can manage catalog"        ON public.licensee_service_catalog;
-DROP POLICY IF EXISTS "Admins can manage requests"       ON public.licensee_service_requests;
-DROP POLICY IF EXISTS "Admins can manage user linkages"  ON public.user_licensee;
+DO $rls$
+DECLARE
+  v_tbl text;
+  v_pol record;
+  -- Recebem política "qualquer funcionário"
+  v_employee_tables text[] := ARRAY[
+    'subscription_plans', 'licensee_subscriptions', 'licensee_wallets',
+    'credit_transactions', 'service_catalog', 'licensee_requests',
+    'licensee_users', 'stage_validations'
+  ];
+  -- Recebem política restrita a ti_head
+  v_tihead_tables text[] := ARRAY['stage_config'];
+BEGIN
+  FOREACH v_tbl IN ARRAY v_employee_tables LOOP
+    IF to_regclass('public.' || v_tbl) IS NOT NULL THEN
+      FOR v_pol IN
+        SELECT policyname FROM pg_policies
+        WHERE schemaname = 'public' AND tablename = v_tbl
+          AND (COALESCE(qual,'')       ~* '(is_admin|is_ceo|is_gestor)'
+            OR COALESCE(with_check,'') ~* '(is_admin|is_ceo|is_gestor)')
+      LOOP
+        EXECUTE format('DROP POLICY IF EXISTS %I ON public.%I', v_pol.policyname, v_tbl);
+      END LOOP;
 
-CREATE POLICY "Employees can manage licensee_plans"
-  ON public.licensee_plans FOR ALL
-  USING (public.is_employee(auth.uid()))
-  WITH CHECK (public.is_employee(auth.uid()));
+      EXECUTE format('DROP POLICY IF EXISTS %I ON public.%I',
+        'Employees can manage ' || v_tbl, v_tbl);
+      EXECUTE format(
+        'CREATE POLICY %I ON public.%I FOR ALL USING (public.is_employee(auth.uid())) WITH CHECK (public.is_employee(auth.uid()))',
+        'Employees can manage ' || v_tbl, v_tbl);
+    END IF;
+  END LOOP;
 
-CREATE POLICY "Employees can manage licensee_subscriptions"
-  ON public.licensee_subscriptions FOR ALL
-  USING (public.is_employee(auth.uid()))
-  WITH CHECK (public.is_employee(auth.uid()));
+  FOREACH v_tbl IN ARRAY v_tihead_tables LOOP
+    IF to_regclass('public.' || v_tbl) IS NOT NULL THEN
+      FOR v_pol IN
+        SELECT policyname FROM pg_policies
+        WHERE schemaname = 'public' AND tablename = v_tbl
+          AND (COALESCE(qual,'')       ~* '(is_admin|is_ceo|is_gestor)'
+            OR COALESCE(with_check,'') ~* '(is_admin|is_ceo|is_gestor)')
+      LOOP
+        EXECUTE format('DROP POLICY IF EXISTS %I ON public.%I', v_pol.policyname, v_tbl);
+      END LOOP;
 
-CREATE POLICY "Employees can manage licensee_wallets"
-  ON public.licensee_wallets FOR ALL
-  USING (public.is_employee(auth.uid()))
-  WITH CHECK (public.is_employee(auth.uid()));
-
-CREATE POLICY "Employees can manage licensee_transactions"
-  ON public.licensee_transactions FOR ALL
-  USING (public.is_employee(auth.uid()))
-  WITH CHECK (public.is_employee(auth.uid()));
-
-CREATE POLICY "Employees can manage licensee_service_catalog"
-  ON public.licensee_service_catalog FOR ALL
-  USING (public.is_employee(auth.uid()))
-  WITH CHECK (public.is_employee(auth.uid()));
-
-CREATE POLICY "Employees can manage licensee_service_requests"
-  ON public.licensee_service_requests FOR ALL
-  USING (public.is_employee(auth.uid()))
-  WITH CHECK (public.is_employee(auth.uid()));
-
-CREATE POLICY "Employees can manage user_licensee"
-  ON public.user_licensee FOR ALL
-  USING (public.is_employee(auth.uid()))
-  WITH CHECK (public.is_employee(auth.uid()));
-
--- ─── Stage config (checklist flow) ──────────────────────────
-
-DROP POLICY IF EXISTS "Stage config managed by CEO" ON public.stage_config;
-
-CREATE POLICY "Stage config managed by ti_head"
-  ON public.stage_config FOR ALL
-  USING (public.is_ti_head(auth.uid()))
-  WITH CHECK (public.is_ti_head(auth.uid()));
-
--- ─── Validations / stage history ────────────────────────────
-
-DROP POLICY IF EXISTS "Validations creatable by stage executors" ON public.stage_validations;
-DROP POLICY IF EXISTS "Validations updatable by authorized users" ON public.stage_validations;
-
-CREATE POLICY "Employees can insert stage_validations"
-  ON public.stage_validations FOR INSERT
-  WITH CHECK (public.is_employee(auth.uid()));
-
-CREATE POLICY "Employees can update stage_validations"
-  ON public.stage_validations FOR UPDATE
-  USING (public.is_employee(auth.uid()));
+      EXECUTE format('DROP POLICY IF EXISTS %I ON public.%I',
+        v_tbl || ' managed by ti_head', v_tbl);
+      EXECUTE format(
+        'CREATE POLICY %I ON public.%I FOR ALL USING (public.is_ti_head(auth.uid())) WITH CHECK (public.is_ti_head(auth.uid()))',
+        v_tbl || ' managed by ti_head', v_tbl);
+    END IF;
+  END LOOP;
+END
+$rls$;
