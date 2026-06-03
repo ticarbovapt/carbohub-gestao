@@ -272,6 +272,18 @@ export default function OrderDetails() {
                       <p className="font-medium">{order.customer_phone}</p>
                     </div>
                   )}
+                  {(order as any).cnpj && (
+                    <div>
+                      <p className="text-sm text-muted-foreground">CNPJ</p>
+                      <p className="font-medium font-mono">{(order as any).cnpj}</p>
+                    </div>
+                  )}
+                  {order.ie && (
+                    <div>
+                      <p className="text-sm text-muted-foreground">Inscrição Estadual</p>
+                      <p className="font-medium font-mono">{order.ie}</p>
+                    </div>
+                  )}
                   {order.licensee && (
                     <div>
                       <p className="text-sm text-muted-foreground">Licenciado</p>

@@ -22,6 +22,7 @@ import { ArrowLeft, CalendarIcon, Loader2, Plus, Trash2, Repeat, Search, Buildin
 import { cn } from "@/lib/utils";
 import { useCreateOrder, useCreateQuote, useUpdateQuote, useConvertQuoteToOrder, useOrder, type OrderType, ORDER_TYPE_LABELS } from "@/hooks/useCarbozeOrders";
 import { generateQuotePdf } from "@/lib/quotePdf";
+import { validateInscricaoEstadual } from "@/lib/inscricaoEstadual";
 import { useLicensees } from "@/hooks/useLicensees";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -101,6 +102,7 @@ const formSchema = z.object({
   trade_name: z.string().optional(),
   cnae: z.string().optional(),
   situacao_cadastral: z.string().optional(),
+  ie: z.string().optional(),
   // Original fields
   customer_name: z.string().min(1, "Nome do cliente é obrigatório"),
   customer_email: z.string().email("Email inválido").optional().or(z.literal("")),
@@ -250,6 +252,7 @@ export default function CreateOrder() {
       trade_name: "",
       cnae: "",
       situacao_cadastral: "",
+      ie: "",
       customer_name: "",
       customer_email: "",
       customer_phone: "",
@@ -315,6 +318,7 @@ export default function CreateOrder() {
       trade_name: o.trade_name ?? "",
       cnae: o.cnae ?? "",
       situacao_cadastral: o.situacao_cadastral ?? "",
+      ie: o.ie ?? "",
       customer_name: o.customer_name ?? "",
       customer_email: o.customer_email ?? "",
       customer_phone: o.customer_phone ?? "",
@@ -602,6 +606,7 @@ export default function CreateOrder() {
       trade_name: data.trade_name || undefined,
       cnae: data.cnae || undefined,
       situacao_cadastral: data.situacao_cadastral || undefined,
+      ie: data.ie || undefined,
       point_type: data.point_type || undefined,
       avg_monthly_vehicles: data.avg_monthly_vehicles || undefined,
       works_with_diesel: data.works_with_diesel,
@@ -652,6 +657,7 @@ export default function CreateOrder() {
       customer_name: result.customer_name,
       legal_name: result.legal_name,
       cnpj: result.cnpj,
+      ie: result.ie,
       vendedor_name: result.vendedor_name,
       items: result.items,
       subtotal: result.subtotal,
@@ -870,6 +876,45 @@ export default function CreateOrder() {
                             </FormControl>
                           </FormItem>
                         )}
+                      />
+                      <FormField
+                        control={form.control}
+                        name="ie"
+                        render={({ field }) => {
+                          // UF de referência: cobrança, senão entrega
+                          const uf = form.watch("billing_state") || form.watch("delivery_state") || "";
+                          const val = (field.value || "").trim();
+                          const result = val ? validateInscricaoEstadual(val, uf) : null;
+                          return (
+                            <FormItem className="sm:col-span-2">
+                              <FormLabel>Inscrição Estadual</FormLabel>
+                              <FormControl>
+                                <Input
+                                  {...field}
+                                  placeholder='Nº da IE ou "ISENTO"'
+                                  className={cn(
+                                    result && !result.valid && "border-destructive focus-visible:ring-destructive",
+                                    result && result.valid && "border-green-500 focus-visible:ring-green-500",
+                                  )}
+                                />
+                              </FormControl>
+                              {result && (
+                                <p className={cn(
+                                  "text-xs flex items-center gap-1 mt-1",
+                                  result.valid ? "text-green-600" : "text-destructive",
+                                )}>
+                                  {result.valid
+                                    ? <CheckCircle2 className="h-3 w-3 shrink-0" />
+                                    : <AlertCircle className="h-3 w-3 shrink-0" />}
+                                  {result.message}
+                                </p>
+                              )}
+                              <FormDescription className="text-[11px]">
+                                Valida formato e dígito conforme a UF{uf ? ` (${uf})` : " — selecione a UF acima"}. Aceita "ISENTO".
+                              </FormDescription>
+                            </FormItem>
+                          );
+                        }}
                       />
                     </div>
                   )}

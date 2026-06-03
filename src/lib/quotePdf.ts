@@ -17,6 +17,7 @@ export interface QuotePdfData {
   customer_name?: string | null;
   legal_name?: string | null;
   cnpj?: string | null;
+  ie?: string | null;
   vendedor_name?: string | null;
   items?: unknown;
   subtotal?: number | null;
@@ -80,6 +81,7 @@ export function generateQuotePdf(order: QuotePdfData) {
   const clientLines = [
     order.customer_name || order.legal_name || "—",
     order.cnpj ? `CNPJ: ${order.cnpj}` : "",
+    order.ie ? `Inscrição Estadual: ${order.ie}` : "",
     order.vendedor_name ? `Vendedor: ${order.vendedor_name}` : "",
   ].filter(Boolean);
   doc.setFontSize(9);

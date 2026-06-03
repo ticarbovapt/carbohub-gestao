@@ -25,8 +25,9 @@ import { useLicensees } from "@/hooks/useLicensees";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useTeamMembers } from "@/hooks/useTeamMembers";
-import { Loader2, CalendarIcon, Repeat, Zap, UserCheck, FileText, Truck, Receipt } from "lucide-react";
+import { Loader2, CalendarIcon, Repeat, Zap, UserCheck, FileText, Truck, Receipt, CheckCircle2, AlertCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { validateInscricaoEstadual } from "@/lib/inscricaoEstadual";
 
 const formSchema = z.object({
   // ── Aba Pedido ────────────────────────────────────────────────────────────
@@ -740,15 +741,38 @@ export function EditOrderDialog({ open, onOpenChange, order, canEditSensitive = 
                     <FormField
                       control={form.control}
                       name="ie"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Inscrição Estadual (IE)</FormLabel>
-                          <FormControl>
-                            <Input placeholder="ex: 066839440" {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
+                      render={({ field }) => {
+                        const uf = form.watch("billing_state") || form.watch("delivery_state") || "";
+                        const val = (field.value || "").trim();
+                        const result = val ? validateInscricaoEstadual(val, uf) : null;
+                        return (
+                          <FormItem>
+                            <FormLabel>Inscrição Estadual (IE)</FormLabel>
+                            <FormControl>
+                              <Input
+                                placeholder='ex: 066839440 ou "ISENTO"'
+                                {...field}
+                                className={cn(
+                                  result && !result.valid && "border-destructive focus-visible:ring-destructive",
+                                  result && result.valid && "border-green-500 focus-visible:ring-green-500",
+                                )}
+                              />
+                            </FormControl>
+                            {result && (
+                              <p className={cn(
+                                "text-xs flex items-center gap-1 mt-1",
+                                result.valid ? "text-green-600" : "text-destructive",
+                              )}>
+                                {result.valid
+                                  ? <CheckCircle2 className="h-3 w-3 shrink-0" />
+                                  : <AlertCircle className="h-3 w-3 shrink-0" />}
+                                {result.message}
+                              </p>
+                            )}
+                            <FormMessage />
+                          </FormItem>
+                        );
+                      }}
                     />
                     <FormField
                       control={form.control}
