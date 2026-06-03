@@ -162,6 +162,10 @@ export interface OrderInsert {
   internal_classification?: string;
   latitude?: number;
   longitude?: number;
+  billing_address?: string;
+  billing_city?: string;
+  billing_state?: string;
+  billing_zip?: string;
 }
 
 export const ORDER_TYPE_LABELS: Record<OrderType, string> = {
