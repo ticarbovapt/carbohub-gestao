@@ -21,7 +21,7 @@ import { BlingPreviewDialog } from "@/components/orders/BlingPreviewDialog";
 import { LinkNFToOrderDialog } from "@/components/orders/LinkNFToOrderDialog";
 import { toast } from "sonner";
 
-const BLING_PEDIDOS_URL = "https://bling.com.br/";
+const BLING_PEDIDOS_URL = "https://www.bling.com.br/vendas.php#list";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers
@@ -275,6 +275,8 @@ export default function FaturamentoPage() {
     setCreating(order.id);
     try {
       await createBlingPedido.mutateAsync(order.id);
+      // Abre o Bling em nova guia para o financeiro revisar e gerar a NF-e
+      window.open(BLING_PEDIDOS_URL, "_blank", "noopener,noreferrer");
     } finally {
       setCreating(null);
     }
@@ -345,10 +347,10 @@ export default function FaturamentoPage() {
         {/* Instrução */}
         <div className="rounded-xl border border-border bg-muted/20 px-4 py-3 text-xs text-muted-foreground leading-relaxed space-y-1">
           <p>
-            <strong className="text-foreground">Como funciona:</strong> Para cada pedido abaixo, o financeiro deve emitir a NF no Bling com o número do pedido na observação (ex: <span className="font-mono font-medium">PED-2026-00140</span>). O sistema vincula a NF ao pedido automaticamente a cada 15 min.
+            <strong className="text-foreground">Como funciona:</strong> Clique em <strong>🔗 Criar no Bling</strong> — o sistema envia todos os dados do pedido para o Bling via API e já abre o Bling em uma nova guia automaticamente.
           </p>
           <p>
-            Use <strong>📋 Copiar dados</strong> para ter todas as informações do pedido prontas para preencher no Bling, ou <strong>🔗 Criar no Bling</strong> para criar o rascunho do pedido diretamente via API.
+            No Bling, acesse <strong>Vendas → Pedidos de Venda</strong>, abra o pedido criado, cole o número do pedido na observação (use <strong>Copiar Nº</strong>) e gere a NF-e. O sistema vincula a NF ao pedido automaticamente a cada 15 min.
           </p>
         </div>
 
@@ -540,7 +542,7 @@ export default function FaturamentoPage() {
                         {/* Pedido NASCIDO no Bling: já existe lá → só abrir e gerar NF */}
                         {!hasNF && fromBling && (
                           <a
-                            href={BLING_PEDIDOS_URL}
+                            href={blingOrderId ? `https://www.bling.com.br/vendas.php#edit/${blingOrderId}` : BLING_PEDIDOS_URL}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="h-8 px-2 inline-flex items-center gap-1.5 text-xs rounded-lg border border-blue-500/30 text-blue-400 hover:bg-blue-500/10 transition-colors"
@@ -554,11 +556,11 @@ export default function FaturamentoPage() {
                         {/* Pedido nativo JÁ ENVIADO ao Bling → "Abrir no Bling" (não duplicar) */}
                         {!hasNF && !fromBling && alreadySentToBling && (
                           <a
-                            href={BLING_PEDIDOS_URL}
+                            href={blingOrderId ? `https://www.bling.com.br/vendas.php#edit/${blingOrderId}` : BLING_PEDIDOS_URL}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="h-8 px-2 inline-flex items-center gap-1.5 text-xs rounded-lg border border-carbo-green/30 text-carbo-green hover:bg-carbo-green/10 transition-colors"
-                            title={`Pedido enviado ao Bling (ID ${blingOrderId}) — abra e gere a NF`}
+                            title={`Pedido enviado ao Bling (ID ${blingOrderId}) — clique para abrir diretamente`}
                           >
                             <ExternalLink className="h-3.5 w-3.5" />
                             <span className="hidden md:inline">Abrir no Bling</span>

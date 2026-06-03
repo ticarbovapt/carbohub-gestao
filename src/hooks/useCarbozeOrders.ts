@@ -37,6 +37,7 @@ export interface CarbozeOrder {
   customer_email: string | null;
   customer_phone: string | null;
   delivery_address: string | null;
+  delivery_neighborhood: string | null;
   delivery_city: string | null;
   delivery_state: string | null;
   delivery_zip: string | null;
@@ -123,6 +124,7 @@ export interface OrderInsert {
   customer_phone?: string;
   licensee_id?: string;
   delivery_address?: string;
+  delivery_neighborhood?: string;
   delivery_city?: string;
   delivery_state?: string;
   delivery_zip?: string;
@@ -160,6 +162,10 @@ export interface OrderInsert {
   internal_classification?: string;
   latitude?: number;
   longitude?: number;
+  billing_address?: string;
+  billing_city?: string;
+  billing_state?: string;
+  billing_zip?: string;
 }
 
 export const ORDER_TYPE_LABELS: Record<OrderType, string> = {

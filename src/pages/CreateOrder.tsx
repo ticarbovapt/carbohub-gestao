@@ -7,6 +7,7 @@ import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { BoardLayout } from "@/components/layouts/BoardLayout";
 import { CarboButton } from "@/components/ui/carbo-button";
+import { Button } from "@/components/ui/button";
 import { CarboCard } from "@/components/ui/carbo-card";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
@@ -106,6 +107,14 @@ const formSchema = z.object({
   customer_phone: z.string().optional(),
   is_licensee: z.boolean(),
   delivery_address: z.string().optional(),
+  delivery_street: z.string().optional(),
+  delivery_number: z.string().optional(),
+  delivery_neighborhood: z.string().optional(),
+  billing_same_as_delivery: z.boolean(),
+  billing_address: z.string().optional(),
+  billing_city: z.string().optional(),
+  billing_state: z.string().optional(),
+  billing_zip: z.string().optional(),
   delivery_city: z.string().optional(),
   delivery_state: z.string().optional(),
   delivery_zip: z.string().optional(),
@@ -243,6 +252,14 @@ export default function CreateOrder() {
       customer_phone: "",
       is_licensee: false,
       delivery_address: "",
+      delivery_street: "",
+      delivery_number: "",
+      delivery_neighborhood: "",
+      billing_same_as_delivery: true,
+      billing_address: "",
+      billing_city: "",
+      billing_state: "",
+      billing_zip: "",
       delivery_city: "",
       delivery_state: "",
       delivery_zip: "",
@@ -297,6 +314,14 @@ export default function CreateOrder() {
       customer_phone: o.customer_phone ?? "",
       is_licensee: !!o.licensee_id,
       delivery_address: o.delivery_address ?? "",
+      delivery_street: o.delivery_address ?? "",
+      delivery_number: "",
+      delivery_neighborhood: o.delivery_neighborhood ?? "",
+      billing_same_as_delivery: !o.billing_address,
+      billing_address: o.billing_address ?? "",
+      billing_city: o.billing_city ?? "",
+      billing_state: o.billing_state ?? "",
+      billing_zip: o.billing_zip ?? "",
       delivery_city: o.delivery_city ?? "",
       delivery_state: o.delivery_state ?? "",
       delivery_zip: o.delivery_zip ?? "",
@@ -380,10 +405,14 @@ export default function CreateOrder() {
         form.setValue("cnae", `${raw.cnae_fiscal || ""} - ${raw.cnae_fiscal_descricao}`);
       }
 
+      const streetPart = [raw.logradouro, raw.complemento].filter(Boolean).join(", ");
       const fullAddress = [raw.logradouro, raw.numero, raw.complemento, raw.bairro]
         .filter(Boolean)
         .join(", ");
       form.setValue("delivery_address", fullAddress);
+      form.setValue("delivery_street", streetPart);
+      form.setValue("delivery_number", raw.numero || "");
+      form.setValue("delivery_neighborhood", raw.bairro || "");
       form.setValue("delivery_city", raw.municipio || "");
       form.setValue("delivery_state", raw.uf || "");
       form.setValue("delivery_zip", (raw.cep || "").replace(/\D/g, ""));
@@ -410,7 +439,8 @@ export default function CreateOrder() {
     }
   }, [cnpjInput, form, geocodeAddress]);
 
-  const deliveryAddress = form.watch("delivery_address");
+  const deliveryAddress = [form.watch("delivery_street"), form.watch("delivery_number")]
+    .filter(Boolean).join(", ") || form.watch("delivery_address");
   const deliveryCity = form.watch("delivery_city");
   const deliveryState = form.watch("delivery_state");
 
@@ -525,7 +555,15 @@ export default function CreateOrder() {
       customer_email: data.customer_email || undefined,
       customer_phone: data.customer_phone || undefined,
       licensee_id: undefined,
-      delivery_address: data.delivery_address || undefined,
+      delivery_address: [data.delivery_street, data.delivery_number]
+        .filter(Boolean).join(", ") || data.delivery_address || undefined,
+      delivery_neighborhood: data.delivery_neighborhood || undefined,
+      billing_address: data.billing_same_as_delivery
+        ? ([data.delivery_street, data.delivery_number].filter(Boolean).join(", ") || data.delivery_address || undefined)
+        : (data.billing_address || undefined),
+      billing_city: data.billing_same_as_delivery ? (data.delivery_city || undefined) : (data.billing_city || undefined),
+      billing_state: data.billing_same_as_delivery ? (data.delivery_state || undefined) : (data.billing_state || undefined),
+      billing_zip: data.billing_same_as_delivery ? (data.delivery_zip || undefined) : (data.billing_zip || undefined),
       delivery_city: data.delivery_city || undefined,
       delivery_state: data.delivery_state || undefined,
       delivery_zip: data.delivery_zip || undefined,
@@ -1055,21 +1093,59 @@ export default function CreateOrder() {
                     Localizar no mapa
                   </CarboButton>
                 </div>
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <div className="sm:col-span-2">
-                    <FormField
-                      control={form.control}
-                      name="delivery_address"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Endereço</FormLabel>
+                {/* Row 1: Street + Number */}
+                <div className="grid gap-3 sm:grid-cols-[1fr_auto]">
+                  <FormField
+                    control={form.control}
+                    name="delivery_street"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Logradouro</FormLabel>
+                        <FormControl>
+                          <Input placeholder="Rua, Avenida, etc." {...field} />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="delivery_number"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Número</FormLabel>
+                        <div className="flex gap-2">
                           <FormControl>
-                            <Input placeholder="Rua, número, complemento" {...field} />
+                            <Input placeholder="Nº" className="w-24" {...field} />
                           </FormControl>
-                        </FormItem>
-                      )}
-                    />
-                  </div>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="h-10 px-3 text-xs"
+                            onClick={() => form.setValue("delivery_number", "S/N")}
+                          >
+                            S/N
+                          </Button>
+                        </div>
+                      </FormItem>
+                    )}
+                  />
+                </div>
+
+                {/* Row 2: Neighborhood + City + State + ZIP */}
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <FormField
+                    control={form.control}
+                    name="delivery_neighborhood"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Bairro</FormLabel>
+                        <FormControl>
+                          <Input placeholder="Bairro" {...field} />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
                   <FormField
                     control={form.control}
                     name="delivery_city"
@@ -1089,7 +1165,7 @@ export default function CreateOrder() {
                       <FormItem>
                         <FormLabel>Estado</FormLabel>
                         <FormControl>
-                          <Input placeholder="UF" {...field} />
+                          <Input placeholder="UF" maxLength={2} {...field} />
                         </FormControl>
                       </FormItem>
                     )}
@@ -1113,12 +1189,84 @@ export default function CreateOrder() {
                   longitude={coords?.lng ?? null}
                   isLoading={isGeoLoading}
                   address={[
-                    form.watch("delivery_address"),
+                    form.watch("delivery_street"),
+                    form.watch("delivery_number"),
                     form.watch("delivery_city"),
                     form.watch("delivery_state"),
                   ].filter(Boolean).join(", ")}
                   onPositionChange={(lat, lng) => setCoords({ lat, lng })}
                 />
+
+                {/* ── Endereço de faturamento ─────────────────────────────── */}
+                <Separator />
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm font-semibold">Endereço de Faturamento (NF)</p>
+                    <label className="flex items-center gap-2 text-sm cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        className="h-4 w-4 rounded border-border"
+                        checked={form.watch("billing_same_as_delivery")}
+                        onChange={e => form.setValue("billing_same_as_delivery", e.target.checked)}
+                      />
+                      <span className="text-muted-foreground text-xs">Mesmo endereço da entrega</span>
+                    </label>
+                  </div>
+                  {!form.watch("billing_same_as_delivery") && (
+                    <div className="grid gap-3 sm:grid-cols-2 rounded-lg border border-border/60 p-3 bg-muted/10">
+                      <div className="sm:col-span-2">
+                        <FormField
+                          control={form.control}
+                          name="billing_address"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Logradouro + Número</FormLabel>
+                              <FormControl>
+                                <Input placeholder="Rua, número, complemento" {...field} />
+                              </FormControl>
+                            </FormItem>
+                          )}
+                        />
+                      </div>
+                      <FormField
+                        control={form.control}
+                        name="billing_city"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Cidade</FormLabel>
+                            <FormControl>
+                              <Input placeholder="Cidade" {...field} />
+                            </FormControl>
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={form.control}
+                        name="billing_state"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Estado</FormLabel>
+                            <FormControl>
+                              <Input placeholder="UF" maxLength={2} {...field} />
+                            </FormControl>
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={form.control}
+                        name="billing_zip"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>CEP</FormLabel>
+                            <FormControl>
+                              <Input placeholder="00000-000" {...field} />
+                            </FormControl>
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+                  )}
+                </div>
               </div>
             </CarboCard>
 
