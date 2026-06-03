@@ -21,7 +21,7 @@ import { BlingPreviewDialog } from "@/components/orders/BlingPreviewDialog";
 import { LinkNFToOrderDialog } from "@/components/orders/LinkNFToOrderDialog";
 import { toast } from "sonner";
 
-const BLING_PEDIDOS_URL = "https://bling.com.br/";
+const BLING_PEDIDOS_URL = "https://www.bling.com.br/vendas.php#list";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers
