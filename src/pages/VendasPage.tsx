@@ -1,7 +1,7 @@
 import { useState, useMemo } from "react";
 import { format, startOfMonth, addMonths, subMonths, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { BoardLayout } from "@/components/layouts/BoardLayout";
 import { CarboCard, CarboCardContent } from "@/components/ui/carbo-card";
 import { CarboBadge } from "@/components/ui/carbo-badge";
@@ -9,13 +9,18 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ChevronLeft, ChevronRight, Search, ShoppingBag, TrendingUp, Package, Pencil, Users } from "lucide-react";
+import {
+  ChevronLeft, ChevronRight, Search, ShoppingBag, TrendingUp,
+  Package, Pencil, Users, FileText, ArrowRightCircle, Loader2,
+} from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTeamMembers } from "@/hooks/useTeamMembers";
 import type { OrderItem, CarbozeOrder } from "@/hooks/useCarbozeOrders";
+import { useConvertQuoteToOrder } from "@/hooks/useCarbozeOrders";
 import { EditOrderDialog } from "@/components/orders/EditOrderDialog";
 import { BulkVendorAssignDialog } from "@/components/orders/BulkVendorAssignDialog";
+import { toast } from "sonner";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -33,11 +38,11 @@ interface VendaRow {
   status: string;
   vendedor_id: string | null;
   vendedor_name: string | null;
-  // Full order for editing
   _raw?: CarbozeOrder;
 }
 
 const STATUS_LABEL: Record<string, string> = {
+  quote:     "Orçamento",
   pending:   "Pendente",
   confirmed: "Confirmado",
   invoiced:  "Faturado",
@@ -47,6 +52,7 @@ const STATUS_LABEL: Record<string, string> = {
 };
 
 const STATUS_VARIANT: Record<string, "success" | "warning" | "destructive" | "secondary"> = {
+  quote:     "secondary",
   delivered: "success",
   shipped:   "warning",
   confirmed: "warning",
@@ -60,7 +66,6 @@ function fmtBRL(v: number) {
 }
 
 function fmtDate(s: string) {
-  // Use parseISO so "2026-05-29" isn't shifted by local timezone offset
   return format(parseISO(s.length === 10 ? s + "T00:00:00" : s), "dd/MM/yyyy", { locale: ptBR });
 }
 
@@ -81,17 +86,14 @@ function useVendas(month: Date, vendedorIdFilter: string | null) {
     queryKey: ["vendas", month.toISOString().slice(0, 7), vendedorIdFilter, isHead, user?.id],
     queryFn: async () => {
       const yr = month.getFullYear();
-      const mo = month.getMonth() + 1; // 1-based
+      const mo = month.getMonth() + 1;
       const lastDay = new Date(yr, mo, 0).getDate();
       const monthStartStr = `${yr}-${String(mo).padStart(2, "0")}-01`;
       const monthEndStr   = `${yr}-${String(mo).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
 
-      // Expand created_at range ±1 month to catch sale_date corrections near boundaries
       const expandedStart = new Date(yr, mo - 2, 1).toISOString();
       const expandedEnd   = new Date(yr, mo + 1, 0, 23, 59, 59).toISOString();
 
-      // Use select("*") so the query never breaks if a column listed in the
-      // TS type hasn't been migrated yet (e.g. sale_date before its migration runs).
       let query = supabase
         .from("carboze_orders")
         .select("*")
@@ -108,8 +110,6 @@ function useVendas(month: Date, vendedorIdFilter: string | null) {
       const { data, error } = await query;
       if (error) throw error;
 
-      // JS-filter by effective date (sale_date if set, else created_at date part).
-      // sale_date may be absent if the migration hasn't run — falls back to created_at.
       const rows = ((data || []) as any[]).filter(row => {
         const eff = (row.sale_date as string | null) ?? (row.created_at as string).substring(0, 10);
         return eff >= monthStartStr && eff <= monthEndStr;
@@ -139,23 +139,28 @@ function useVendas(month: Date, vendedorIdFilter: string | null) {
 // Page
 // ─────────────────────────────────────────────────────────────────────────────
 export default function VendasPage() {
-  const [month, setMonth]           = useState(() => startOfMonth(new Date()));
-  const [search, setSearch]         = useState("");
+  const [month, setMonth]             = useState(() => startOfMonth(new Date()));
+  const [search, setSearch]           = useState("");
   const [vendedorFilter, setVendedor] = useState("__all__");
-  const [expandedId, setExpandedId]       = useState<string | null>(null);
-  const [editOrder, setEditOrder]         = useState<CarbozeOrder | null>(null);
-  const [selectedIds, setSelectedIds]     = useState<Set<string>>(new Set());
-  const [bulkAssignOpen, setBulkAssign]   = useState(false);
+  const [expandedId, setExpandedId]   = useState<string | null>(null);
+  const [editOrder, setEditOrder]     = useState<CarbozeOrder | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkAssignOpen, setBulkAssign] = useState(false);
+  const [convertingId, setConvertingId] = useState<string | null>(null);
 
-  const { profile } = useAuth();
+  const { user, profile } = useAuth();
+  const qc = useQueryClient();
   const isHead =
     profile?.funcao === "head" || profile?.secondary_funcao === "head" ||
     profile?.funcao === "ceo" ||
     profile?.department === "command";
 
+  const convertQuote = useConvertQuoteToOrder();
+
   const { data: teamMembers = [] } = useTeamMembers();
-  // Only flagged vendedores appear in filter dropdown
-  const vendedores = teamMembers.filter(m => m.status === "approved" && m.is_vendedor);
+  // Todos os membros aprovados — inclui "avulsos" (não-vendedores que criaram pedidos)
+  const allMembers = teamMembers.filter(m => m.status === "approved");
+  const vendedorSet = new Set(allMembers.filter(m => m.is_vendedor).map(m => m.id));
 
   const { data: vendas = [], isLoading } = useVendas(month, vendedorFilter);
 
@@ -164,7 +169,6 @@ export default function VendasPage() {
     month.getFullYear() === today.getFullYear() &&
     month.getMonth() === today.getMonth();
 
-  // Filter by search
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
     if (!q) return vendas;
@@ -174,10 +178,24 @@ export default function VendasPage() {
     );
   }, [vendas, search]);
 
-  // Summary — vendas ativas (exceto canceladas)
-  const active       = filtered.filter(v => v.status !== "cancelled");
+  // KPIs separados: orçamentos vs vendas confirmadas
+  const quotes     = filtered.filter(v => v.status === "quote");
+  const active     = filtered.filter(v => v.status !== "cancelled" && v.status !== "quote");
   const totalRevenue = active.reduce((s, v) => s + v.total, 0);
-  const cancelled    = filtered.filter(v => v.status === "cancelled").length;
+  const cancelled  = filtered.filter(v => v.status === "cancelled").length;
+
+  async function handleConvert(id: string) {
+    setConvertingId(id);
+    try {
+      await convertQuote.mutateAsync(id);
+      qc.invalidateQueries({ queryKey: ["vendas"] });
+      toast.success("Orçamento convertido em venda!");
+    } catch (e: any) {
+      toast.error("Erro ao converter: " + e.message);
+    } finally {
+      setConvertingId(null);
+    }
+  }
 
   return (
     <BoardLayout>
@@ -187,11 +205,10 @@ export default function VendasPage() {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
             <h1 className="text-2xl font-bold flex items-center gap-2">
-              <ShoppingBag className="h-6 w-6 text-carbo-green" /> Vendas
+              <ShoppingBag className="h-6 w-6 text-carbo-green" /> Vendas e Orçamentos
             </h1>
-            <p className="text-sm text-muted-foreground mt-0.5">Acompanhamento de pedidos por vendedor</p>
+            <p className="text-sm text-muted-foreground mt-0.5">Acompanhamento de pedidos e orçamentos por vendedor</p>
           </div>
-          {/* Month selector */}
           <div className="flex items-center gap-1 bg-muted/40 rounded-lg px-2 py-1.5">
             <Button variant="ghost" size="icon" className="h-7 w-7"
               onClick={() => setMonth(m => startOfMonth(subMonths(m, 1)))}>
@@ -208,12 +225,18 @@ export default function VendasPage() {
           </div>
         </div>
 
-        {/* KPI summary */}
-        <div className="grid grid-cols-3 gap-3">
+        {/* KPIs */}
+        <div className="grid grid-cols-4 gap-3">
+          <CarboCard>
+            <CarboCardContent className="p-3 text-center">
+              <p className="text-2xl font-bold text-amber-400 tabular-nums">{quotes.length}</p>
+              <p className="text-xs text-muted-foreground">Orçamentos</p>
+            </CarboCardContent>
+          </CarboCard>
           <CarboCard>
             <CarboCardContent className="p-3 text-center">
               <p className="text-2xl font-bold text-carbo-green tabular-nums">{active.length}</p>
-              <p className="text-xs text-muted-foreground">Vendas registradas</p>
+              <p className="text-xs text-muted-foreground">Vendas</p>
             </CarboCardContent>
           </CarboCard>
           <CarboCard>
@@ -243,14 +266,21 @@ export default function VendasPage() {
           </div>
           {isHead && (
             <Select value={vendedorFilter} onValueChange={setVendedor}>
-              <SelectTrigger className="w-[200px]">
+              <SelectTrigger className="w-[220px]">
                 <SelectValue placeholder="Todos os vendedores" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="__all__">Todos os vendedores</SelectItem>
-                {vendedores.map(m => (
+                {allMembers.map(m => (
                   <SelectItem key={m.id} value={m.id}>
-                    {m.full_name || m.username || m.id}
+                    <span className="flex items-center gap-2">
+                      {m.full_name || m.username || m.id}
+                      {!vendedorSet.has(m.id) && (
+                        <span className="text-[10px] font-semibold text-amber-500 border border-amber-500/30 rounded px-1 ml-1">
+                          Avulso
+                        </span>
+                      )}
+                    </span>
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -267,7 +297,7 @@ export default function VendasPage() {
           <CarboCard>
             <CarboCardContent className="py-16 text-center space-y-3">
               <TrendingUp className="h-12 w-12 mx-auto text-muted-foreground/30" />
-              <p className="text-muted-foreground">Nenhuma venda encontrada neste período.</p>
+              <p className="text-muted-foreground">Nenhum registro encontrado neste período.</p>
             </CarboCardContent>
           </CarboCard>
         ) : (
@@ -295,93 +325,124 @@ export default function VendasPage() {
                     <th className="text-left p-3 font-medium text-xs text-muted-foreground uppercase tracking-wide">Cidade/UF</th>
                     {isHead && <th className="text-left p-3 font-medium text-xs text-muted-foreground uppercase tracking-wide">Vendedor</th>}
                     <th className="text-right p-3 font-medium text-xs text-muted-foreground uppercase tracking-wide">Total</th>
-                    {isHead && <th className="w-10 p-3" />}
+                    <th className="w-10 p-3" />
                   </tr>
                 </thead>
                 <tbody>
-                  {filtered.map(venda => (
-                    <>
-                      <tr
-                        key={venda.id}
-                        className={`border-b transition-colors cursor-pointer hover:bg-muted/20 ${
-                          venda.status === "delivered" ? "" :
-                          venda.status === "cancelled" ? "opacity-50" : "bg-amber-500/3"
-                        } ${expandedId === venda.id ? "bg-muted/20" : ""} ${selectedIds.has(venda.id) ? "bg-carbo-green/5" : ""}`}
-                        onClick={() => setExpandedId(expandedId === venda.id ? null : venda.id)}
-                      >
-                        {isHead && (
-                          <td className="p-3" onClick={e => e.stopPropagation()}>
-                            <Checkbox
-                              checked={selectedIds.has(venda.id)}
-                              onCheckedChange={checked => {
-                                setSelectedIds(prev => {
-                                  const next = new Set(prev);
-                                  checked ? next.add(venda.id) : next.delete(venda.id);
-                                  return next;
-                                });
-                              }}
-                              aria-label={`Selecionar ${venda.order_number}`}
-                            />
-                          </td>
-                        )}
-                        <td className="p-3">
-                          <CarboBadge variant={STATUS_VARIANT[venda.status] ?? "secondary"} size="sm">
-                            {STATUS_LABEL[venda.status] ?? venda.status}
-                          </CarboBadge>
-                        </td>
-                        <td className="p-3 font-mono text-xs font-medium">{venda.order_number}</td>
-                        <td className="p-3 text-muted-foreground whitespace-nowrap">
-                          <span title={venda.sale_date ? `Registrado: ${fmtDate(venda.created_at)}` : undefined}>
-                            {fmtDate(effectiveDate(venda))}
-                          </span>
-                          {venda.sale_date && venda.sale_date !== venda.created_at.substring(0, 10) && (
-                            <span className="ml-1 text-[10px] text-amber-500 font-medium">✱</span>
-                          )}
-                        </td>
-                        <td className="p-3 font-medium max-w-[180px] truncate">{venda.customer_name}</td>
-                        <td className="p-3 text-muted-foreground whitespace-nowrap">
-                          {[venda.delivery_city, venda.delivery_state].filter(Boolean).join("/") || "—"}
-                        </td>
-                        {isHead && <td className="p-3 text-muted-foreground">{venda.vendedor_name || "—"}</td>}
-                        <td className="p-3 text-right font-bold tabular-nums">{fmtBRL(venda.total)}</td>
-                        {isHead && (
-                          <td className="p-3 text-right">
-                            <button
-                              onClick={e => { e.stopPropagation(); setEditOrder(venda._raw ?? null); }}
-                              className="h-7 w-7 inline-flex items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-                              title="Editar pedido"
-                            >
-                              <Pencil className="h-3.5 w-3.5" />
-                            </button>
-                          </td>
-                        )}
-                      </tr>
+                  {filtered.map(venda => {
+                    const isQuote = venda.status === "quote";
+                    const isConverting = convertingId === venda.id;
+                    const canConvert = isQuote && (isHead || venda.vendedor_id === user?.id);
 
-                      {/* Expandable products row */}
-                      {expandedId === venda.id && venda.items.length > 0 && (
-                        <tr key={`${venda.id}-items`} className="border-b bg-muted/10">
-                          <td colSpan={isHead ? 9 : 6} className="px-6 py-3">
-                            <div className="flex items-center gap-2 mb-2">
-                              <Package className="h-3.5 w-3.5 text-muted-foreground" />
-                              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Produtos</p>
-                            </div>
-                            <div className="grid gap-1">
-                              {venda.items.map((item, idx) => (
-                                <div key={idx} className="flex items-center justify-between text-xs">
-                                  <span className="font-medium">{item.name}</span>
-                                  <div className="flex items-center gap-4 text-muted-foreground">
-                                    <span>{item.quantity}x</span>
-                                    <span>{fmtBRL(item.unit_price)}/un</span>
-                                    <span className="font-semibold text-foreground">{fmtBRL(item.total)}</span>
-                                  </div>
-                                </div>
-                              ))}
+                    return (
+                      <>
+                        <tr
+                          key={venda.id}
+                          className={`border-b transition-colors cursor-pointer hover:bg-muted/20 ${
+                            isQuote ? "bg-amber-500/3 border-l-2 border-l-amber-500/30" :
+                            venda.status === "delivered" ? "" :
+                            venda.status === "cancelled" ? "opacity-50" : ""
+                          } ${expandedId === venda.id ? "bg-muted/20" : ""} ${selectedIds.has(venda.id) ? "bg-carbo-green/5" : ""}`}
+                          onClick={() => setExpandedId(expandedId === venda.id ? null : venda.id)}
+                        >
+                          {isHead && (
+                            <td className="p-3" onClick={e => e.stopPropagation()}>
+                              <Checkbox
+                                checked={selectedIds.has(venda.id)}
+                                onCheckedChange={checked => {
+                                  setSelectedIds(prev => {
+                                    const next = new Set(prev);
+                                    checked ? next.add(venda.id) : next.delete(venda.id);
+                                    return next;
+                                  });
+                                }}
+                                aria-label={`Selecionar ${venda.order_number}`}
+                              />
+                            </td>
+                          )}
+                          <td className="p-3">
+                            <CarboBadge variant={STATUS_VARIANT[venda.status] ?? "secondary"} size="sm">
+                              {STATUS_LABEL[venda.status] ?? venda.status}
+                            </CarboBadge>
+                          </td>
+                          <td className="p-3 font-mono text-xs font-medium">{venda.order_number}</td>
+                          <td className="p-3 text-muted-foreground whitespace-nowrap">
+                            <span title={venda.sale_date ? `Registrado: ${fmtDate(venda.created_at)}` : undefined}>
+                              {fmtDate(effectiveDate(venda))}
+                            </span>
+                            {venda.sale_date && venda.sale_date !== venda.created_at.substring(0, 10) && (
+                              <span className="ml-1 text-[10px] text-amber-500 font-medium">✱</span>
+                            )}
+                          </td>
+                          <td className="p-3 font-medium max-w-[180px] truncate">{venda.customer_name}</td>
+                          <td className="p-3 text-muted-foreground whitespace-nowrap">
+                            {[venda.delivery_city, venda.delivery_state].filter(Boolean).join("/") || "—"}
+                          </td>
+                          {isHead && (
+                            <td className="p-3 text-muted-foreground">
+                              <span>{venda.vendedor_name || "—"}</span>
+                              {venda.vendedor_id && !vendedorSet.has(venda.vendedor_id) && (
+                                <span className="ml-1.5 text-[9px] font-semibold text-amber-500 border border-amber-500/30 rounded px-1">
+                                  Avulso
+                                </span>
+                              )}
+                            </td>
+                          )}
+                          <td className="p-3 text-right font-bold tabular-nums">{fmtBRL(venda.total)}</td>
+                          <td className="p-3 text-right" onClick={e => e.stopPropagation()}>
+                            <div className="flex items-center justify-end gap-1">
+                              {canConvert && (
+                                <button
+                                  onClick={() => handleConvert(venda.id)}
+                                  disabled={isConverting}
+                                  className="h-7 px-2 inline-flex items-center gap-1 rounded-md text-xs font-medium bg-carbo-green/10 text-carbo-green hover:bg-carbo-green/20 border border-carbo-green/30 transition-colors disabled:opacity-50"
+                                  title="Converter orçamento em venda"
+                                >
+                                  {isConverting
+                                    ? <Loader2 className="h-3 w-3 animate-spin" />
+                                    : <ArrowRightCircle className="h-3 w-3" />}
+                                  <span className="hidden sm:inline">Converter</span>
+                                </button>
+                              )}
+                              {isHead && !isQuote && (
+                                <button
+                                  onClick={() => setEditOrder(venda._raw ?? null)}
+                                  className="h-7 w-7 inline-flex items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                                  title="Editar pedido"
+                                >
+                                  <Pencil className="h-3.5 w-3.5" />
+                                </button>
+                              )}
                             </div>
                           </td>
                         </tr>
-                      )}
-                    </>
-                  ))}
+
+                        {/* Expandable products row */}
+                        {expandedId === venda.id && venda.items.length > 0 && (
+                          <tr key={`${venda.id}-items`} className="border-b bg-muted/10">
+                            <td colSpan={isHead ? 9 : 7} className="px-6 py-3">
+                              <div className="flex items-center gap-2 mb-2">
+                                <Package className="h-3.5 w-3.5 text-muted-foreground" />
+                                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Produtos</p>
+                              </div>
+                              <div className="grid gap-1">
+                                {venda.items.map((item, idx) => (
+                                  <div key={idx} className="flex items-center justify-between text-xs">
+                                    <span className="font-medium">{item.name}</span>
+                                    <div className="flex items-center gap-4 text-muted-foreground">
+                                      <span>{item.quantity}x</span>
+                                      <span>{fmtBRL(item.unit_price)}/un</span>
+                                      <span className="font-semibold text-foreground">{fmtBRL(item.total)}</span>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                      </>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -390,12 +451,12 @@ export default function VendasPage() {
 
         {!isHead && (
           <p className="text-xs text-center text-muted-foreground">
-            Você está vendo apenas suas próprias vendas.
+            Você está vendo apenas seus próprios pedidos e orçamentos.
           </p>
         )}
       </div>
 
-      {/* Barra de ação em massa (flutua no rodapé quando há seleção) */}
+      {/* Barra de ação em massa */}
       {isHead && selectedIds.size > 0 && (
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 rounded-2xl border border-border bg-background/95 backdrop-blur px-4 py-3 shadow-lg">
           <span className="text-sm font-semibold">
