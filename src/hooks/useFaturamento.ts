@@ -121,8 +121,14 @@ export function useCreateBlingPedido() {
       queryClient.invalidateQueries({ queryKey: ["vendas"] });
       const num = data?.data?.numero || data?.data?.id || "";
       toast.success(
-        `Pedido criado no Bling${num ? ` (nº ${num})` : ""}! Confira o endereço de entrega e gere a NF-e no Bling.`,
-        { duration: 6000 }
+        `Pedido criado no Bling${num ? ` (nº ${num})` : ""}! Acesse o Bling para conferir e gerar a NF-e.`,
+        {
+          duration: 8000,
+          action: {
+            label: "Abrir Bling →",
+            onClick: () => window.open("https://bling.com.br/", "_blank"),
+          },
+        }
       );
     },
     onError: (err: Error) => {
