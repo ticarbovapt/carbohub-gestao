@@ -1,330 +1,241 @@
 /**
- * useActionPermissions — permission hooks for every action-level check in the app.
+ * useActionPermissions — hooks de permissão por ação.
  *
- * ALL hooks follow the same transition pattern:
- *   ENFORCEMENT_ACTIVE = false  →  legacy role-based fallback (zero behavior change)
- *   ENFORCEMENT_ACTIVE = true   →  delegates to useCanSeeScreen(screenId), which reads
- *                                   function_screen_access for the current user's dept+funcao
- *
- * To activate the new system: flip ENFORCEMENT_ACTIVE = true in useFunctionAccess.ts.
- * No other change is needed here.
- *
- * Future (after access_level is added to function_screen_access):
- *   Replace useCanSeeScreen() with useCanEditScreen() / useCanManageScreen() per hook.
+ * Fonte única: Role Matrix (function_screen_access via useCanSeeScreen), que lê
+ * department + funcao do usuário. O sistema legado de papéis (admin/gestor/
+ * operador/ceo) foi aposentado — não há mais fallback por role aqui.
  */
 
 import { useAuth } from "@/contexts/AuthContext";
-import { useCanSeeScreen, ENFORCEMENT_ACTIVE } from "./useFunctionAccess";
+import { useCanSeeScreen } from "./useFunctionAccess";
 
 // ── Orders ────────────────────────────────────────────────────────────────────
 
 /** Create, edit or delete orders. */
 export function useCanManageOrders(): boolean {
-  const can = useCanSeeScreen("orders");
-  const { isAdmin, isManager, isCeo, isMasterAdmin, isAnyGestor } = useAuth();
-  if (ENFORCEMENT_ACTIVE) return can;
-  return isAdmin || isManager || isCeo || isMasterAdmin || isAnyGestor;
+  return useCanSeeScreen("orders");
 }
 
 // ── Team ──────────────────────────────────────────────────────────────────────
 
 /** Edit existing team member data (name, dept, function, etc.). */
 export function useCanEditTeamMembers(): boolean {
-  const can = useCanSeeScreen("team");
-  const { isAdmin, isCeo, isMasterAdmin } = useAuth();
-  if (ENFORCEMENT_ACTIVE) return can;
-  return isAdmin || isCeo || isMasterAdmin;
+  return useCanSeeScreen("team");
 }
 
 /**
  * Gestão completa de equipe: criar contas, editar qualquer colaborador,
- * resetar senhas, configurar acessos.
- * Apenas head (qualquer dept), command ou TI/suporte.
+ * resetar senhas, configurar acessos. Apenas head (qualquer dept), command
+ * ou TI/suporte (superusuário).
  */
 export function useCanManageAllTeam(): boolean {
-  const { isSuporte, isCeo, profile } = useAuth();
+  const { profile } = useAuth();
+  const isTiHead =
+    (profile?.department === "ti_suporte" && profile?.funcao === "head") ||
+    (profile?.secondary_department === "ti_suporte" && profile?.secondary_funcao === "head");
   const isHead =
-    profile?.funcao === "head" ||
-    profile?.secondary_funcao === "head";
+    profile?.funcao === "head" || profile?.secondary_funcao === "head" || profile?.funcao === "ceo";
   const isCommand =
-    profile?.department === "command" ||
-    profile?.secondary_department === "command";
-  return isSuporte || isCeo || isHead || isCommand;
+    profile?.department === "command" || profile?.secondary_department === "command";
+  return isTiHead || isHead || isCommand;
 }
 
 /** Create new team member accounts. */
 export function useCanAddTeamMember(): boolean {
-  const can = useCanSeeScreen("team");
-  const { isAdmin } = useAuth();
-  if (ENFORCEMENT_ACTIVE) return can;
-  return isAdmin;
+  return useCanSeeScreen("team");
 }
 
 // ── Production ────────────────────────────────────────────────────────────────
 
 /** Create, edit or manage production orders. */
 export function useCanManageProduction(): boolean {
-  const can = useCanSeeScreen("production-orders");
-  const { isAdmin, isManager } = useAuth();
-  if (ENFORCEMENT_ACTIVE) return can;
-  return isAdmin || isManager;
+  return useCanSeeScreen("production-orders");
 }
 
 // ── Purchasing / Suppliers ────────────────────────────────────────────────────
 
 /** Approve or reject purchase requests. */
 export function useCanApprovePurchases(): boolean {
-  const can = useCanSeeScreen("purchasing");
-  const { isCeo, isAnyGestor } = useAuth();
-  if (ENFORCEMENT_ACTIVE) return can;
-  return isCeo || isAnyGestor;
+  return useCanSeeScreen("purchasing");
 }
 
 /** Create, edit or delete suppliers. */
 export function useCanManageSuppliers(): boolean {
-  const can = useCanSeeScreen("mrp-suppliers");
-  const { isAdmin, isCeo, isAnyGestor } = useAuth();
-  if (ENFORCEMENT_ACTIVE) return can;
-  return isAdmin || isCeo || isAnyGestor;
+  return useCanSeeScreen("mrp-suppliers");
 }
 
 // ── Stock / Suprimentos ───────────────────────────────────────────────────────
 
 /** Edit stock overview, approve supply requests. */
 export function useCanManageStock(): boolean {
-  const can = useCanSeeScreen("suprimentos");
-  const { isMasterAdmin, isAdmin, isGestorCompras } = useAuth();
-  if (ENFORCEMENT_ACTIVE) return can;
-  return isMasterAdmin || isAdmin || isGestorCompras;
+  return useCanSeeScreen("suprimentos");
 }
 
-/** Action buttons on stock movement entries (gestor-level). */
+/** Action buttons on stock movement entries. */
 export function useCanManageStockMovements(): boolean {
-  const can = useCanSeeScreen("suprimentos");
-  const { isCeo, isAnyGestor } = useAuth();
-  if (ENFORCEMENT_ACTIVE) return can;
-  return isCeo || isAnyGestor;
+  return useCanSeeScreen("suprimentos");
 }
 
 // ── Financial / Viagens ───────────────────────────────────────────────────────
 
 /** Approve or reject expense/travel reports. */
 export function useCanApproveExpenses(): boolean {
-  const can = useCanSeeScreen("viagens");
-  const { isAnyGestor, isAdmin, isCeo, isMasterAdmin } = useAuth();
-  if (ENFORCEMENT_ACTIVE) return can;
-  return isAnyGestor || isAdmin || isCeo || isMasterAdmin;
+  return useCanSeeScreen("viagens");
 }
 
 // ── Machines ──────────────────────────────────────────────────────────────────
 
 /** Create, edit or delete machines. */
 export function useCanManageMachines(): boolean {
-  const can = useCanSeeScreen("machines");
-  const { isAdmin, isManager } = useAuth();
-  if (ENFORCEMENT_ACTIVE) return can;
-  return isAdmin || isManager;
+  return useCanSeeScreen("machines");
 }
 
 // ── Scheduling ────────────────────────────────────────────────────────────────
 
 /** Create, edit or delete calendar events. */
 export function useCanManageScheduling(): boolean {
-  const can = useCanSeeScreen("scheduling");
-  const { isManager } = useAuth();
-  if (ENFORCEMENT_ACTIVE) return can;
-  return isManager;
+  return useCanSeeScreen("scheduling");
 }
 
 // ── Licensees ─────────────────────────────────────────────────────────────────
 
-/** Edit licensee data, reset passwords, manage licensee accounts (admin-only). */
+/** Edit licensee data, reset passwords, manage licensee accounts. */
 export function useCanManageLicensees(): boolean {
-  const can = useCanSeeScreen("licensees");
-  const { isAdmin } = useAuth();
-  if (ENFORCEMENT_ACTIVE) return can;
-  return isAdmin;
+  return useCanSeeScreen("licensees");
 }
 
-/** Create new licensees (manager-level and above). */
+/** Create new licensees. */
 export function useCanCreateLicensee(): boolean {
-  const can = useCanSeeScreen("licensees");
-  const { isManager } = useAuth();
-  if (ENFORCEMENT_ACTIVE) return can;
-  return isManager;
+  return useCanSeeScreen("licensees");
 }
 
 // ── SKUs / Lots ───────────────────────────────────────────────────────────────
 
 /** Create, edit or delete SKUs. */
 export function useCanManageSkus(): boolean {
-  const can = useCanSeeScreen("skus");
-  const { isAdmin, isManager } = useAuth();
-  if (ENFORCEMENT_ACTIVE) return can;
-  return isAdmin || isManager;
+  return useCanSeeScreen("skus");
 }
 
 /** Create, edit or delete lots. */
 export function useCanManageLots(): boolean {
-  const can = useCanSeeScreen("lots");
-  const { isAdmin, isManager } = useAuth();
-  if (ENFORCEMENT_ACTIVE) return can;
-  return isAdmin || isManager;
+  return useCanSeeScreen("lots");
 }
 
 // ── Sales Targets ─────────────────────────────────────────────────────────────
 
 /** Edit sales targets and goals. */
 export function useCanManageSalesTargets(): boolean {
-  const can = useCanSeeScreen("sales-targets");
-  const { isMasterAdmin, isAdmin } = useAuth();
-  if (ENFORCEMENT_ACTIVE) return can;
-  return isMasterAdmin || isAdmin;
+  return useCanSeeScreen("sales-targets");
 }
 
 // ── MRP Products / BOM ────────────────────────────────────────────────────────
 
 /** Edit MRP products, SKU BOM, and supplier relationships. */
 export function useCanManageMrpProducts(): boolean {
-  const can = useCanSeeScreen("mrp-products");
-  const { isAdmin, isCeo, isMasterAdmin } = useAuth();
-  if (ENFORCEMENT_ACTIVE) return can;
-  return isAdmin || isCeo || isMasterAdmin;
+  return useCanSeeScreen("mrp-products");
 }
 
 // ── Bugs ──────────────────────────────────────────────────────────────────────
 
 /** Manage bug reports (change status, assign, delete). */
 export function useCanManageBugs(): boolean {
-  const can = useCanSeeScreen("bugs");
-  const { isAdmin, isSuporte } = useAuth();
-  if (ENFORCEMENT_ACTIVE) return can;
-  return isAdmin || isSuporte;
+  return useCanSeeScreen("bugs");
 }
 
 // ── Alerts ────────────────────────────────────────────────────────────────────
 
 /** Receive real-time machine alert notifications. */
 export function useCanReceiveAlerts(): boolean {
-  const can = useCanSeeScreen("ops-alerts");
-  const { isManager } = useAuth();
-  if (ENFORCEMENT_ACTIVE) return can;
-  return isManager;
+  return useCanSeeScreen("ops-alerts");
 }
 
 // ── Navigation / Menu ─────────────────────────────────────────────────────────
 
-/** Access the operational area (scheduling, OS, machines, etc.). */
+/** Access the operational area. Qualquer usuário interno autenticado entra;
+ *  o Role Matrix controla o que cada um vê dentro do sistema. */
 export function useCanAccessOps(): boolean {
   const { user } = useAuth();
-  // O hub /home é a porta de entrada do Carbo Controle.
-  // Qualquer usuário autenticado com perfil interno pode entrar —
-  // o Role Matrix controla o que cada um vê DENTRO do sistema.
   return !!user;
 }
 
 /** See admin-only menu items (system config, pipeline, webhooks). */
 export function useCanSeeAdminMenu(): boolean {
-  const can = useCanSeeScreen("admin");
-  const { isMasterAdmin, isSuporte } = useAuth();
-  if (ENFORCEMENT_ACTIVE) return can;
-  return isMasterAdmin || isSuporte;
+  return useCanSeeScreen("admin");
 }
 
 /** See finance-restricted menu items. */
 export function useCanSeeFinanceMenu(): boolean {
-  const can = useCanSeeScreen("financeiro");
-  const { isMasterAdmin, isGestorFin } = useAuth();
-  if (ENFORCEMENT_ACTIVE) return can;
-  return isMasterAdmin || isGestorFin;
+  return useCanSeeScreen("financeiro");
 }
 
 // ── Financeiro ────────────────────────────────────────────────────────────────
 
 /** View financial dashboard KPIs and charts. */
 export function useCanViewFinanceiroDashboard(): boolean {
-  const can = useCanSeeScreen("financeiro");
-  const { isCeo, isAnyGestor } = useAuth();
-  if (ENFORCEMENT_ACTIVE) return can;
-  return isCeo || isAnyGestor;
+  return useCanSeeScreen("financeiro");
 }
 
 // ── Logistics ─────────────────────────────────────────────────────────────────
 
 /** Manage logistics, carriers, and delivery actions. */
 export function useCanManageLogistics(): boolean {
-  const can = useCanSeeScreen("logistics");
-  const { isCeo, isAnyGestor } = useAuth();
-  if (ENFORCEMENT_ACTIVE) return can;
-  return isCeo || isAnyGestor;
+  return useCanSeeScreen("logistics");
 }
 
 /** View logistics KPI dashboard. */
 export function useCanViewLogisticsDashboard(): boolean {
-  const can = useCanSeeScreen("dashboard-logistica");
-  const { isCeo, isAnyGestor } = useAuth();
-  if (ENFORCEMENT_ACTIVE) return can;
-  return isCeo || isAnyGestor;
+  return useCanSeeScreen("dashboard-logistica");
 }
 
 // ── Dashboards ────────────────────────────────────────────────────────────────
 
-/** View strategic dashboard (CEO / gestor view). */
+/** View strategic dashboard. */
 export function useCanViewStrategicDashboard(): boolean {
-  const can = useCanSeeScreen("dashboard-estrategico");
-  const { isCeo, isAnyGestor, isAdmin } = useAuth();
-  if (ENFORCEMENT_ACTIVE) return can;
-  return isCeo || isAnyGestor || isAdmin;
+  return useCanSeeScreen("dashboard-estrategico");
 }
 
 // ── Licensee portal (internal staff access) ───────────────────────────────────
 
 /** Access the licensee portal management view as internal staff. */
 export function useCanViewLicenseeArea(): boolean {
-  const can = useCanSeeScreen("licensees");
-  const { isAdmin, isCeo, isMasterAdmin } = useAuth();
-  if (ENFORCEMENT_ACTIVE) return can;
-  return isAdmin || isCeo || isMasterAdmin;
+  return useCanSeeScreen("licensees");
 }
 
 // ── PDV admin ─────────────────────────────────────────────────────────────────
 
 /** Access PDV management as internal admin. */
 export function useCanManagePDVAdmin(): boolean {
-  const can = useCanSeeScreen("pdv-dashboard");
-  const { isAdmin, isCeo, isMasterAdmin } = useAuth();
-  if (ENFORCEMENT_ACTIVE) return can;
-  return isAdmin || isCeo || isMasterAdmin;
+  return useCanSeeScreen("pdv-dashboard");
 }
 
 // ── OS management ─────────────────────────────────────────────────────────────
 
 /** Perform management actions on OS (advance stage, assign, etc.). */
 export function useCanManageOSActions(): boolean {
-  const can = useCanSeeScreen("os");
-  const { isManager, isAdmin } = useAuth();
-  if (ENFORCEMENT_ACTIVE) return can;
-  return isManager || isAdmin;
+  return useCanSeeScreen("os");
 }
 
 // ── Governance ────────────────────────────────────────────────────────────────
 
 /** Access the governance page. */
 export function useCanAccessGovernance(): boolean {
-  const can = useCanSeeScreen("governance");
-  const { isCeo, isMasterAdmin, isAdmin } = useAuth();
-  if (ENFORCEMENT_ACTIVE) return can;
-  return isCeo || isMasterAdmin || isAdmin;
+  return useCanSeeScreen("governance");
 }
 
 // ── Portals / Area Switcher ───────────────────────────────────────────────────
 
-/** Access all portals (licensee + PDV) as internal staff override.
- *  When enforcement is active, portal access is managed via function_screen_access. */
+/** Acesso a todos os portais (licenciado + PDV) como staff interno.
+ *  Liberado para superusuário TI/head, head ou command. */
 export function useCanAccessAllPortals(): boolean {
-  const { isAdmin, isCeo, isMasterAdmin } = useAuth();
-  if (ENFORCEMENT_ACTIVE) return isMasterAdmin;
-  return isAdmin || isCeo || isMasterAdmin;
+  const { profile } = useAuth();
+  const isTiHead =
+    (profile?.department === "ti_suporte" && profile?.funcao === "head") ||
+    (profile?.secondary_department === "ti_suporte" && profile?.secondary_funcao === "head");
+  const isHead =
+    profile?.funcao === "head" || profile?.secondary_funcao === "head" || profile?.funcao === "ceo";
+  const isCommand =
+    profile?.department === "command" || profile?.secondary_department === "command";
+  return isTiHead || isHead || isCommand;
 }
 
 // ── Role display label ────────────────────────────────────────────────────────
