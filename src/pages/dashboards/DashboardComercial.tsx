@@ -203,176 +203,116 @@ export default function DashboardComercial() {
               Nenhum dado encontrado para o período selecionado.
             </div>
           ) : (
-            <div className="px-6 pt-6 pb-4">
-              {/* Legenda manual acima do gráfico */}
-              <div className="flex items-center gap-6 mb-4">
-                <div className="flex items-center gap-2 text-xs text-board-muted">
-                  <span className="inline-block w-3 h-3 rounded-sm bg-[#2d4a6e]" />
-                  Total de Vendas (qtd)
-                </div>
-                <div className="flex items-center gap-2 text-xs text-board-muted">
-                  <span className="inline-block w-8 h-0.5 bg-[#1a7a4a] rounded" style={{ borderTop: "2.5px solid #1a7a4a" }} />
-                  Total em R$ (eixo direito)
-                </div>
-              </div>
+            <div className="px-6 pt-4 pb-6 grid grid-cols-1 lg:grid-cols-2 gap-6">
 
-              {/* ComposedChart: barras = qtd de vendas, linha suave = R$ */}
-              <ResponsiveContainer width="100%" height={300}>
-                <ComposedChart
-                  data={monthlyData}
-                  margin={{ top: 20, right: 16, bottom: 0, left: 8 }}
-                  barCategoryGap="28%"
-                >
-                  <defs>
-                    <linearGradient id="barGrad" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#3b6ea5" stopOpacity={1} />
-                      <stop offset="100%" stopColor="#2d4a6e" stopOpacity={0.85} />
-                    </linearGradient>
-                  </defs>
-
-                  <CartesianGrid
-                    strokeDasharray="3 3"
-                    stroke="rgba(148,163,184,0.08)"
-                    vertical={false}
-                  />
-
-                  {/* Eixo X — meses */}
-                  <XAxis
-                    dataKey="mes"
-                    tick={{ fontSize: 12, fill: "var(--board-muted, #94a3b8)", fontWeight: 500 }}
-                    axisLine={{ stroke: "rgba(148,163,184,0.15)" }}
-                    tickLine={false}
-                    dy={6}
-                  />
-
-                  {/* Eixo Y esquerdo — quantidade de vendas */}
-                  <YAxis
-                    yAxisId="qty"
-                    orientation="left"
-                    allowDecimals={false}
-                    tick={{ fontSize: 11, fill: "var(--board-muted, #94a3b8)" }}
-                    axisLine={false}
-                    tickLine={false}
-                    width={32}
-                    label={{
-                      value: "Vendas",
-                      angle: -90,
-                      position: "insideLeft",
-                      offset: 8,
-                      style: { fontSize: 10, fill: "var(--board-muted, #94a3b8)" },
-                    }}
-                  />
-
-                  {/* Eixo Y direito — R$ faturado */}
-                  <YAxis
-                    yAxisId="brl"
-                    orientation="right"
-                    tick={{ fontSize: 11, fill: "#1a7a4a" }}
-                    axisLine={false}
-                    tickLine={false}
-                    width={60}
-                    tickFormatter={v =>
-                      v >= 1_000_000
-                        ? `R$${(v / 1_000_000).toFixed(1)}M`
-                        : v >= 1000
-                        ? `R$${(v / 1000).toFixed(0)}k`
-                        : `R$${v}`
-                    }
-                  />
-
-                  <Tooltip
-                    cursor={{ fill: "rgba(148,163,184,0.06)" }}
-                    contentStyle={{
-                      background: "var(--board-surface, #1e2535)",
-                      border: "1px solid rgba(148,163,184,0.15)",
-                      borderRadius: 10,
-                      fontSize: 12,
-                      padding: "10px 14px",
-                    }}
-                    labelStyle={{ color: "var(--board-text, #f1f5f9)", fontWeight: 700, marginBottom: 4 }}
-                    formatter={(value: number, name: string) => {
-                      if (name === "faturado")
-                        return [value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }), "Total em R$"];
-                      return [value, "Total de vendas"];
-                    }}
-                  />
-
-                  {/* Barras — quantidade de vendas */}
-                  <Bar
-                    yAxisId="qty"
-                    dataKey="pedidos"
-                    name="pedidos"
-                    fill="url(#barGrad)"
-                    radius={[6, 6, 0, 0]}
-                    maxBarSize={52}
-                  >
-                    <LabelList
-                      dataKey="pedidos"
-                      position="top"
-                      style={{ fontSize: 11, fill: "var(--board-muted, #94a3b8)", fontWeight: 600 }}
+              {/* ── Gráfico 1: Total Faturado R$ por mês ──────────────── */}
+              <div className="rounded-xl border border-border bg-board-surface/50 p-4">
+                <p className="text-xs font-semibold text-board-muted uppercase tracking-wider mb-1">
+                  Total Faturado por Mês
+                </p>
+                <p className="text-lg font-bold text-green-500 mb-3">
+                  {totalCarboze.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
+                  <span className="text-xs font-normal text-board-muted ml-1">acumulado</span>
+                </p>
+                <ResponsiveContainer width="100%" height={220}>
+                  <ComposedChart data={monthlyData} margin={{ top: 24, right: 8, bottom: 0, left: 0 }}>
+                    <defs>
+                      <linearGradient id="areaGrad" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="#1a7a4a" stopOpacity={0.25} />
+                        <stop offset="100%" stopColor="#1a7a4a" stopOpacity={0.02} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.08)" vertical={false} />
+                    <XAxis
+                      dataKey="mes"
+                      tick={{ fontSize: 11, fill: "var(--board-muted, #94a3b8)" }}
+                      axisLine={false} tickLine={false} dy={4}
                     />
-                  </Bar>
-
-                  {/* Linha suave (tipo S) — R$ faturado, com rótulos de valor */}
-                  <Line
-                    yAxisId="brl"
-                    type="monotoneX"
-                    dataKey="faturado"
-                    name="faturado"
-                    stroke="#1a7a4a"
-                    strokeWidth={2.5}
-                    dot={{ r: 4, fill: "#1a7a4a", strokeWidth: 2, stroke: "#fff" }}
-                    activeDot={{ r: 6, fill: "#1a7a4a", stroke: "#fff", strokeWidth: 2 }}
-                  >
-                    <LabelList
+                    <YAxis
+                      tick={{ fontSize: 10, fill: "var(--board-muted, #94a3b8)" }}
+                      axisLine={false} tickLine={false} width={44}
+                      tickFormatter={v => v >= 1000 ? `${(v / 1000).toFixed(0)}k` : String(v)}
+                    />
+                    <Tooltip
+                      cursor={{ fill: "rgba(148,163,184,0.06)" }}
+                      contentStyle={{ background: "var(--board-surface, #1e2535)", border: "1px solid rgba(148,163,184,0.15)", borderRadius: 8, fontSize: 12 }}
+                      labelStyle={{ color: "var(--board-text, #f1f5f9)", fontWeight: 700 }}
+                      formatter={(v: number) => [v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }), "Faturado"]}
+                    />
+                    <Bar dataKey="faturado" fill="url(#areaGrad)" stroke="#1a7a4a" strokeWidth={1.5} radius={[4, 4, 0, 0]} maxBarSize={48}>
+                      <LabelList
+                        dataKey="faturado"
+                        position="top"
+                        formatter={(v: number) => v >= 1000 ? `R$${(v / 1000).toFixed(0)}k` : `R$${v}`}
+                        style={{ fontSize: 10, fill: "#1a7a4a", fontWeight: 700 }}
+                      />
+                    </Bar>
+                    <Line
+                      type="monotoneX"
                       dataKey="faturado"
-                      position="top"
-                      formatter={(v: number) =>
-                        v >= 1000
-                          ? `R$${(v / 1000).toFixed(0)}k`
-                          : `R$${v}`
-                      }
-                      style={{ fontSize: 10, fill: "#1a7a4a", fontWeight: 700 }}
+                      stroke="#1a7a4a"
+                      strokeWidth={2}
+                      dot={{ r: 3, fill: "#1a7a4a", stroke: "#fff", strokeWidth: 1.5 }}
+                      activeDot={{ r: 5 }}
                     />
-                  </Line>
-                </ComposedChart>
-              </ResponsiveContainer>
-
-              {/* Sumário de totais por mês (mini-tabela) */}
-              <div className="mt-4 overflow-x-auto">
-                <table className="w-full text-xs">
-                  <thead>
-                    <tr className="border-b border-border">
-                      <th className="text-left pb-2 font-semibold text-board-muted pr-4">Mês</th>
-                      {monthlyData.map(d => (
-                        <th key={d.mes} className="text-center pb-2 font-semibold text-board-muted px-2 whitespace-nowrap">
-                          {d.mes}
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr className="border-b border-border/50">
-                      <td className="py-2 text-board-muted pr-4 font-medium">Vendas</td>
-                      {monthlyData.map(d => (
-                        <td key={d.mes} className="text-center py-2 px-2 font-bold text-board-text">
-                          {d.pedidos}
-                        </td>
-                      ))}
-                    </tr>
-                    <tr>
-                      <td className="py-2 text-board-muted pr-4 font-medium">Total R$</td>
-                      {monthlyData.map(d => (
-                        <td key={d.mes} className="text-center py-2 px-2 font-semibold text-green-500 whitespace-nowrap">
-                          {d.faturado >= 1000
-                            ? `${(d.faturado / 1000).toFixed(1)}k`
-                            : d.faturado.toLocaleString("pt-BR", { minimumFractionDigits: 0 })}
-                        </td>
-                      ))}
-                    </tr>
-                  </tbody>
-                </table>
+                  </ComposedChart>
+                </ResponsiveContainer>
               </div>
+
+              {/* ── Gráfico 2: Total de Vendas (qtd) por mês ─────────── */}
+              <div className="rounded-xl border border-border bg-board-surface/50 p-4">
+                <p className="text-xs font-semibold text-board-muted uppercase tracking-wider mb-1">
+                  Total de Vendas por Mês
+                </p>
+                <p className="text-lg font-bold text-[#3b6ea5] mb-3">
+                  {totalCarbozeOrders.toLocaleString("pt-BR")}
+                  <span className="text-xs font-normal text-board-muted ml-1">pedidos no período</span>
+                </p>
+                <ResponsiveContainer width="100%" height={220}>
+                  <ComposedChart data={monthlyData} margin={{ top: 24, right: 8, bottom: 0, left: 0 }}>
+                    <defs>
+                      <linearGradient id="barGrad2" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="#3b6ea5" stopOpacity={1} />
+                        <stop offset="100%" stopColor="#2d4a6e" stopOpacity={0.85} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.08)" vertical={false} />
+                    <XAxis
+                      dataKey="mes"
+                      tick={{ fontSize: 11, fill: "var(--board-muted, #94a3b8)" }}
+                      axisLine={false} tickLine={false} dy={4}
+                    />
+                    <YAxis
+                      allowDecimals={false}
+                      tick={{ fontSize: 10, fill: "var(--board-muted, #94a3b8)" }}
+                      axisLine={false} tickLine={false} width={28}
+                    />
+                    <Tooltip
+                      cursor={{ fill: "rgba(148,163,184,0.06)" }}
+                      contentStyle={{ background: "var(--board-surface, #1e2535)", border: "1px solid rgba(148,163,184,0.15)", borderRadius: 8, fontSize: 12 }}
+                      labelStyle={{ color: "var(--board-text, #f1f5f9)", fontWeight: 700 }}
+                      formatter={(v: number) => [v, "Vendas"]}
+                    />
+                    <Bar dataKey="pedidos" fill="url(#barGrad2)" radius={[6, 6, 0, 0]} maxBarSize={48}>
+                      <LabelList
+                        dataKey="pedidos"
+                        position="top"
+                        style={{ fontSize: 11, fill: "var(--board-muted, #94a3b8)", fontWeight: 700 }}
+                      />
+                    </Bar>
+                    <Line
+                      type="monotoneX"
+                      dataKey="pedidos"
+                      stroke="#3b6ea5"
+                      strokeWidth={2}
+                      strokeDasharray="4 3"
+                      dot={{ r: 3, fill: "#3b6ea5", stroke: "#fff", strokeWidth: 1.5 }}
+                      activeDot={{ r: 5 }}
+                    />
+                  </ComposedChart>
+                </ResponsiveContainer>
+              </div>
+
             </div>
           )}
         </div>
