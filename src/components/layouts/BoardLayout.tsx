@@ -47,6 +47,7 @@ import {
   FileText,
   Lock,
   Monitor,
+  History,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -258,6 +259,7 @@ const SECTORS: Sector[] = [
       { href: "/admin",              label: "Administração",       icon: Shield },
       { href: "/admin/cockpit",      label: "Cockpit Estratégico", icon: BarChart3 },
       { href: "/governance",         label: "Governança",          icon: Shield },
+      { href: "/auditoria",          label: "Auditoria",           icon: History },
       { href: "/admin/approval",     label: "Aprovações",          icon: UserCheck },
       { href: "/admin/pipeline",     label: "Config Pipeline",     icon: Cog },
       { href: "/admin/webhooks",     label: "Webhooks CRM",        icon: Zap },
@@ -393,15 +395,24 @@ export function BoardLayout({ children }: BoardLayoutProps) {
     (profile?.department === "ti_suporte" && profile?.funcao === "head") ||
     (profile?.secondary_department === "ti_suporte" && profile?.secondary_funcao === "head");
 
+  // Liderança (head/ceo, command ou TI/head) — para itens exclusivos.
+  const isLeadership =
+    isTiHead ||
+    profile?.funcao === "ceo" || profile?.funcao === "head" ||
+    profile?.secondary_funcao === "ceo" || profile?.secondary_funcao === "head" ||
+    profile?.department === "command" || profile?.secondary_department === "command";
+
   /** true = usuário pode abrir a tela; false = aparece cinza/bloqueada na barra. */
   const canSeeItem = useCallback((href: string) => {
+    // Auditoria é exclusiva da liderança (head/command/TI), fora do Role Matrix.
+    if (href === "/auditoria") return isLeadership;
     const screenId = PATH_TO_SCREEN_ID[href];
     if (!screenId) return true;            // tela sem controle de acesso → sempre liberada
     if (!ENFORCEMENT_ACTIVE) return true;
     if (isTiHead) return true;
     if (!isConfigured) return true;        // sem entrada no matrix → não bloqueia
     return allowedScreenIds.includes(screenId);
-  }, [isTiHead, isConfigured, allowedScreenIds]);
+  }, [isTiHead, isLeadership, isConfigured, allowedScreenIds]);
   const isMobile = useIsMobile();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   // Abre a seção da página atual ao montar (evita "zerar" no F5); cai no

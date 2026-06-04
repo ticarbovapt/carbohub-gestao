@@ -22,6 +22,7 @@ const Onboarding          = lazy(() => import("./pages/Onboarding"));
 const Dashboard           = lazy(() => import("./pages/Dashboard"));
 const Analytics           = lazy(() => import("./pages/Analytics"));
 const Projecao            = lazy(() => import("./pages/Projecao"));
+const AuditLog            = lazy(() => import("./pages/AuditLog"));
 const Team                = lazy(() => import("./pages/Team"));
 const OSBoard             = lazy(() => import("./pages/OSBoard"));
 const OSDetails           = lazy(() => import("./pages/OSDetails"));
@@ -178,6 +179,8 @@ function AnimatedRoutes() {
                 dashboard em vez de exibir uma tela vazia "Em breve". */}
             <Route path="/analytics"        element={<Navigate to="/dashboard" replace />} />
             <Route path="/projecao"         element={<ProtectedRoute screenId="projecao"><Projecao /></ProtectedRoute>} />
+            {/* Auditoria — gate de lideranca feito DENTRO da pagina (head/command/TI) */}
+            <Route path="/auditoria"        element={<ProtectedRoute><AuditLog /></ProtectedRoute>} />
             <Route path="/team"             element={<ProtectedRoute screenId="team"><Team /></ProtectedRoute>} />
             <Route path="/org-chart"        element={<ProtectedRoute screenId="org-chart"><OrgChartPage /></ProtectedRoute>} />
             <Route path="/os"               element={<ProtectedRoute screenId="os"><OSBoard /></ProtectedRoute>} />
