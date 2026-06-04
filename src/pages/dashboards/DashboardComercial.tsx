@@ -1,7 +1,7 @@
 import { BoardLayout } from "@/components/layouts/BoardLayout";
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
 import { KPICard } from "@/components/board/KPICard";
-import { TrendingUp, ShoppingCart, DollarSign, Trophy, Loader2, BarChart3, Repeat2 } from "lucide-react";
+import { TrendingUp, ShoppingCart, DollarSign, Trophy, Loader2, BarChart3, Repeat2, ArrowUpRight, ArrowDownRight, Minus } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -105,9 +105,8 @@ export default function DashboardComercial() {
   const totalCarboze    = kpis.totalBRL;
   const totalCarbozeOrders = kpis.totalVendas;
 
-  // ── Crescimento Mês a Mês e Anual ────────────────────────────────────────────
+  // ── Crescimento M/M e Rolling 12 Meses ──────────────────────────────────────
   const growth = useMemo(() => {
-    // Dados mensais (todos, sem slice de 12)
     const fullMap: Record<string, { faturado: number; pedidos: number }> = {};
     for (const o of carbozeOrders) {
       if (!o.created_at) continue;
@@ -118,57 +117,44 @@ export default function DashboardComercial() {
     }
 
     const sorted = Object.entries(fullMap).sort(([a], [b]) => a.localeCompare(b));
+    const n = sorted.length;
 
-    // Mês atual e anterior (últimas 2 entradas com dados)
-    const cur  = sorted[sorted.length - 1]?.[1] ?? { faturado: 0, pedidos: 0 };
-    const prev = sorted[sorted.length - 2]?.[1] ?? { faturado: 0, pedidos: 0 };
-    const curLabel  = sorted[sorted.length - 1]?.[0] ?? "";
-    const prevLabel = sorted[sorted.length - 2]?.[0] ?? "";
+    // Mês atual vs mês anterior
+    const cur     = sorted[n - 1]?.[1] ?? { faturado: 0, pedidos: 0 };
+    const prev    = sorted[n - 2]?.[1] ?? { faturado: 0, pedidos: 0 };
+    const curMonthLabel  = sorted[n - 1]?.[0] ?? "";
+    const prevMonthLabel = sorted[n - 2]?.[0] ?? "";
 
-    const pctBRLMonth   = prev.faturado > 0 ? ((cur.faturado - prev.faturado) / prev.faturado) * 100 : null;
-    const pctQtyMonth   = prev.pedidos  > 0 ? ((cur.pedidos  - prev.pedidos)  / prev.pedidos)  * 100 : null;
+    const pctBRLMonth = prev.faturado > 0 ? ((cur.faturado - prev.faturado) / prev.faturado) * 100 : null;
+    const pctQtyMonth = prev.pedidos  > 0 ? ((cur.pedidos  - prev.pedidos)  / prev.pedidos)  * 100 : null;
 
-    // Anual: ano atual (YTD) vs mesmo período ano anterior
-    const currentYear = new Date().getFullYear();
-    const currentMonthNum = new Date().getMonth() + 1; // 1-12
+    // Rolling 12 meses: últimos 12 meses vs 12 meses anteriores
+    const rolling12Cur  = sorted.slice(-12).reduce((a, [, v]) => ({ faturado: a.faturado + v.faturado, pedidos: a.pedidos + v.pedidos }), { faturado: 0, pedidos: 0 });
+    const rolling12Prev = sorted.slice(-24, -12).reduce((a, [, v]) => ({ faturado: a.faturado + v.faturado, pedidos: a.pedidos + v.pedidos }), { faturado: 0, pedidos: 0 });
 
-    let ytdCur  = { faturado: 0, pedidos: 0 };
-    let ytdPrev = { faturado: 0, pedidos: 0 };
+    const pctBRLRolling = rolling12Prev.faturado > 0 ? ((rolling12Cur.faturado - rolling12Prev.faturado) / rolling12Prev.faturado) * 100 : null;
+    const pctQtyRolling = rolling12Prev.pedidos  > 0 ? ((rolling12Cur.pedidos  - rolling12Prev.pedidos)  / rolling12Prev.pedidos)  * 100 : null;
 
-    for (const [key, val] of Object.entries(fullMap)) {
-      const [y, m] = key.split("-").map(Number);
-      if (y === currentYear && m <= currentMonthNum) {
-        ytdCur.faturado += val.faturado;
-        ytdCur.pedidos  += val.pedidos;
-      }
-      if (y === currentYear - 1 && m <= currentMonthNum) {
-        ytdPrev.faturado += val.faturado;
-        ytdPrev.pedidos  += val.pedidos;
-      }
-    }
-
-    const pctBRLYear  = ytdPrev.faturado > 0 ? ((ytdCur.faturado - ytdPrev.faturado) / ytdPrev.faturado) * 100 : null;
-    const pctQtyYear  = ytdPrev.pedidos  > 0 ? ((ytdCur.pedidos  - ytdPrev.pedidos)  / ytdPrev.pedidos)  * 100 : null;
+    // Labels para rolling
+    const roll12Start  = sorted[n - 12]?.[0] ?? "";
+    const roll12End    = sorted[n - 1]?.[0]  ?? "";
+    const prev12Start  = sorted[n - 24]?.[0] ?? "";
+    const prev12End    = sorted[n - 13]?.[0] ?? "";
 
     return {
-      month: { brl: pctBRLMonth, qty: pctQtyMonth, curLabel, prevLabel },
-      year:  { brl: pctBRLYear,  qty: pctQtyYear,  curYear: currentYear, prevYear: currentYear - 1 },
-      raw: { cur, prev, ytdCur, ytdPrev },
+      month:   { brl: pctBRLMonth,   qty: pctQtyMonth,   curLabel: curMonthLabel, prevLabel: prevMonthLabel },
+      rolling: { brl: pctBRLRolling, qty: pctQtyRolling, roll12Start, roll12End, prev12Start, prev12End },
+      raw: { cur, prev, rolling12Cur, rolling12Prev },
     };
   }, [carbozeOrders]);
 
   const formatCurrency = (v: number) =>
     v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
-  function GrowthBadge({ pct }: { pct: number | null }) {
-    if (pct === null) return <span className="text-xs text-board-muted">—</span>;
-    const up = pct >= 0;
-    return (
-      <span className={`inline-flex items-center gap-0.5 text-sm font-bold ${up ? "text-green-500" : "text-red-400"}`}>
-        {up ? "▲" : "▼"} {Math.abs(pct).toFixed(1)}%
-      </span>
-    );
-  }
+  const fmtK = (v: number) =>
+    v >= 1_000_000 ? `R$${(v / 1_000_000).toFixed(1)}M`
+    : v >= 1000    ? `R$${(v / 1000).toFixed(0)}k`
+    : formatCurrency(v);
 
   return (
     <BoardLayout>
@@ -233,66 +219,99 @@ export default function DashboardComercial() {
 
         {/* ── Cards de Crescimento ─────────────────────────────────────── */}
         {!carbozeLoading && carbozeOrders.length > 0 && (
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            {[
+              {
+                label: "Faturamento Mês",
+                sublabel: "vs mês anterior",
+                pct: growth.month.brl,
+                current: fmtK(growth.raw.cur.faturado),
+                reference: `${fmtK(growth.raw.prev.faturado)} em ${growth.month.prevLabel}`,
+                icon: DollarSign,
+              },
+              {
+                label: "Volume de Vendas",
+                sublabel: "vs mês anterior",
+                pct: growth.month.qty,
+                current: `${growth.raw.cur.pedidos} pedidos`,
+                reference: `${growth.raw.prev.pedidos} pedidos em ${growth.month.prevLabel}`,
+                icon: ShoppingCart,
+              },
+              {
+                label: "Faturamento",
+                sublabel: "Rolling 12 meses",
+                pct: growth.rolling.brl,
+                current: fmtK(growth.raw.rolling12Cur.faturado),
+                reference: `anterior: ${fmtK(growth.raw.rolling12Prev.faturado)}`,
+                icon: DollarSign,
+              },
+              {
+                label: "Volume de Vendas",
+                sublabel: "Rolling 12 meses",
+                pct: growth.rolling.qty,
+                current: `${growth.raw.rolling12Cur.pedidos} pedidos`,
+                reference: `anterior: ${growth.raw.rolling12Prev.pedidos} pedidos`,
+                icon: ShoppingCart,
+              },
+            ].map((card, i) => {
+              const isUp     = card.pct !== null && card.pct >= 0;
+              const isNeutral = card.pct === null;
+              const isRolling = i >= 2;
+              return (
+                <div key={i} className={`relative rounded-xl border overflow-hidden bg-board-surface transition-all
+                  ${isNeutral ? "border-border" : isUp ? "border-green-500/20" : "border-red-400/20"}`}>
 
-            {/* Crescimento Mensal R$ */}
-            <div className="rounded-xl border border-border bg-board-surface p-4 space-y-1">
-              <p className="text-xs text-board-muted font-medium uppercase tracking-wider">Faturamento M/M</p>
-              <GrowthBadge pct={growth.month.brl} />
-              <div className="flex items-baseline gap-1 mt-1">
-                <span className="text-sm font-semibold text-board-text">
-                  {formatCurrency(growth.raw.cur.faturado)}
-                </span>
-              </div>
-              <p className="text-[11px] text-board-muted">
-                vs {growth.month.prevLabel}: {formatCurrency(growth.raw.prev.faturado)}
-              </p>
-            </div>
+                  {/* Accent stripe top */}
+                  <div className={`h-1 w-full ${isNeutral ? "bg-border" : isUp ? "bg-green-500" : "bg-red-400"}`} />
 
-            {/* Crescimento Mensal Qtd */}
-            <div className="rounded-xl border border-border bg-board-surface p-4 space-y-1">
-              <p className="text-xs text-board-muted font-medium uppercase tracking-wider">Vendas M/M</p>
-              <GrowthBadge pct={growth.month.qty} />
-              <div className="flex items-baseline gap-1 mt-1">
-                <span className="text-sm font-semibold text-board-text">
-                  {growth.raw.cur.pedidos} pedidos
-                </span>
-              </div>
-              <p className="text-[11px] text-board-muted">
-                vs {growth.month.prevLabel}: {growth.raw.prev.pedidos} pedidos
-              </p>
-            </div>
+                  <div className="p-4">
+                    {/* Header row */}
+                    <div className="flex items-start justify-between mb-3">
+                      <div>
+                        <p className="text-xs font-semibold text-board-muted uppercase tracking-wider leading-none">
+                          {card.label}
+                        </p>
+                        <p className="text-[11px] text-board-muted mt-0.5 flex items-center gap-1">
+                          {isRolling && (
+                            <span className="inline-flex items-center rounded-full bg-primary/10 text-primary px-1.5 py-0 text-[10px] font-semibold">
+                              12M
+                            </span>
+                          )}
+                          {card.sublabel}
+                        </p>
+                      </div>
+                      {/* Delta badge */}
+                      {isNeutral ? (
+                        <span className="flex items-center gap-0.5 rounded-lg px-2 py-1 text-xs font-bold bg-muted text-board-muted">
+                          <Minus className="h-3 w-3" /> —
+                        </span>
+                      ) : (
+                        <span className={`flex items-center gap-0.5 rounded-lg px-2 py-1 text-xs font-bold
+                          ${isUp
+                            ? "bg-green-500/12 text-green-500"
+                            : "bg-red-400/12 text-red-400"}`}>
+                          {isUp
+                            ? <ArrowUpRight className="h-3.5 w-3.5" />
+                            : <ArrowDownRight className="h-3.5 w-3.5" />}
+                          {Math.abs(card.pct!).toFixed(1)}%
+                        </span>
+                      )}
+                    </div>
 
-            {/* Crescimento Anual R$ */}
-            <div className="rounded-xl border border-border bg-board-surface p-4 space-y-1">
-              <p className="text-xs text-board-muted font-medium uppercase tracking-wider">Faturamento YTD</p>
-              <GrowthBadge pct={growth.year.brl} />
-              <div className="flex items-baseline gap-1 mt-1">
-                <span className="text-sm font-semibold text-board-text">
-                  {formatCurrency(growth.raw.ytdCur.faturado)}
-                </span>
-                <span className="text-xs text-board-muted">{growth.year.curYear}</span>
-              </div>
-              <p className="text-[11px] text-board-muted">
-                vs {growth.year.prevYear}: {formatCurrency(growth.raw.ytdPrev.faturado)}
-              </p>
-            </div>
+                    {/* Main value */}
+                    <p className={`text-xl font-bold tabular-nums leading-none
+                      ${isNeutral ? "text-board-text" : isUp ? "text-green-500" : "text-red-400"}`}>
+                      {card.current}
+                    </p>
 
-            {/* Crescimento Anual Qtd */}
-            <div className="rounded-xl border border-border bg-board-surface p-4 space-y-1">
-              <p className="text-xs text-board-muted font-medium uppercase tracking-wider">Vendas YTD</p>
-              <GrowthBadge pct={growth.year.qty} />
-              <div className="flex items-baseline gap-1 mt-1">
-                <span className="text-sm font-semibold text-board-text">
-                  {growth.raw.ytdCur.pedidos} pedidos
-                </span>
-                <span className="text-xs text-board-muted">{growth.year.curYear}</span>
-              </div>
-              <p className="text-[11px] text-board-muted">
-                vs {growth.year.prevYear}: {growth.raw.ytdPrev.pedidos} pedidos
-              </p>
-            </div>
-
+                    {/* Reference */}
+                    <p className="text-[11px] text-board-muted mt-2 leading-relaxed">
+                      {card.reference}
+                    </p>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         )}
 
