@@ -1,8 +1,7 @@
 import { BoardLayout } from "@/components/layouts/BoardLayout";
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
 import { KPICard } from "@/components/board/KPICard";
-import { TrendingUp, Building2, ShoppingCart, Star, DollarSign, Loader2, BarChart3 } from "lucide-react";
-import { useLicensees } from "@/hooks/useLicensees";
+import { TrendingUp, ShoppingCart, DollarSign, Trophy, Users, Loader2, BarChart3, Repeat2 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -20,8 +19,7 @@ import { DashboardFilterBar, DashboardFilters, EMPTY_FILTERS } from "@/component
 export default function DashboardComercial() {
   const [filters, setFilters] = useState<DashboardFilters>(EMPTY_FILTERS);
 
-  const { data: licensees = [], isLoading: licenseesLoading } = useLicensees();
-
+  // Últimos pedidos — tabela no rodapé
   const { data: orders = [], isLoading: ordersLoading } = useQuery({
     queryKey: ["orders-commercial-summary", filters.from, filters.to],
     queryFn: async () => {
@@ -38,24 +36,45 @@ export default function DashboardComercial() {
     },
   });
 
-  // Evolução mensal — carboze_orders (Bling)
+  // Vendas Bling — fonte principal (KPIs + gráfico)
   const { data: carbozeOrders = [], isLoading: carbozeLoading } = useQuery({
     queryKey: ["carboze-orders-monthly", filters.from, filters.to, filters.vendedor],
     queryFn: async () => {
       let q = (supabase as any)
         .from("carboze_orders")
-        .select("total, status, created_at, order_number, vendedor_name")
+        .select("id, total, status, created_at, order_number, vendedor_name, customer_name")
         .order("created_at", { ascending: true });
-      if (filters.from)                   q = q.gte("created_at", filters.from);
-      if (filters.to)                     q = q.lte("created_at", filters.to + "T23:59:59");
-      if (filters.vendedor !== "all")     q = q.eq("vendedor_name", filters.vendedor);
+      if (filters.from)               q = q.gte("created_at", filters.from);
+      if (filters.to)                 q = q.lte("created_at", filters.to + "T23:59:59");
+      if (filters.vendedor !== "all") q = q.eq("vendedor_name", filters.vendedor);
       const { data, error } = await q;
       if (error) throw error;
-      return (data ?? []) as { total: number; status: string; created_at: string; order_number: string; vendedor_name: string }[];
+      return (data ?? []) as {
+        id: string; total: number; status: string;
+        created_at: string; order_number: string;
+        vendedor_name: string; customer_name: string;
+      }[];
     },
   });
 
-  const isLoading = licenseesLoading || ordersLoading;
+  // ── KPIs derivados de carboze_orders ────────────────────────────────────────
+  const kpis = useMemo(() => {
+    const active = carbozeOrders.filter(o => o.status !== "cancelled" && o.status !== "cancelado");
+    const totalVendas   = active.length;
+    const totalBRL      = active.reduce((s, o) => s + Number(o.total ?? 0), 0);
+    const maiorVenda    = active.reduce((max, o) => Math.max(max, Number(o.total ?? 0)), 0);
+
+    // Cliente com mais recorrência
+    const clientCount: Record<string, number> = {};
+    for (const o of active) {
+      const name = o.customer_name?.trim() || "—";
+      clientCount[name] = (clientCount[name] || 0) + 1;
+    }
+    const [topCliente, topQtd] = Object.entries(clientCount)
+      .sort(([, a], [, b]) => b - a)[0] ?? ["—", 0];
+
+    return { totalVendas, totalBRL, maiorVenda, topCliente, topQtd };
+  }, [carbozeOrders]);
 
   // Agrupar carboze_orders por mês
   const monthlyData = useMemo(() => {
@@ -84,19 +103,8 @@ export default function DashboardComercial() {
       });
   }, [carbozeOrders]);
 
-  const totalCarboze = carbozeOrders.reduce((s, o) => s + Number(o.total ?? 0), 0);
-  const totalCarbozeOrders = carbozeOrders.length;
-
-  // KPI calculations
-  const totalLicensees = licensees.length;
-  const activeLicensees = licensees.filter((l) => l.status === "active").length;
-  const totalRevenue = licensees.reduce((sum, l) => sum + (l.total_revenue || 0), 0);
-  const avgScore = totalLicensees
-    ? Math.round(licensees.reduce((sum, l) => sum + (l.performance_score || 0), 0) / totalLicensees)
-    : 0;
-
-  const totalOrders = orders.length;
-  const completedOrders = orders.filter((o: any) => o.status === "completed" || o.status === "concluido").length;
+  const totalCarboze    = kpis.totalBRL;
+  const totalCarbozeOrders = kpis.totalVendas;
 
   const formatCurrency = (v: number) =>
     v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -120,42 +128,43 @@ export default function DashboardComercial() {
 
         {/* KPIs */}
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-          {isLoading ? (
+          {carbozeLoading ? (
             Array.from({ length: 4 }).map((_, i) => (
               <div key={i} className="rounded-xl border border-border bg-board-surface p-6">
-                <Skeleton className="h-6 w-32 mb-2" />
-                <Skeleton className="h-10 w-20 mb-2" />
-                <Skeleton className="h-4 w-24" />
+                <Skeleton className="h-4 w-28 mb-3" />
+                <Skeleton className="h-8 w-32 mb-2" />
+                <Skeleton className="h-3 w-20" />
               </div>
             ))
           ) : (
             <>
               <KPICard
-                title="Licenciados Ativos"
-                value={`${activeLicensees}/${totalLicensees}`}
-                subtitle="Em operação"
-                icon={<Building2 className="h-6 w-6" />}
-                variant={activeLicensees > 0 ? "success" : "default"}
+                title="Total de Vendas"
+                value={kpis.totalVendas.toLocaleString("pt-BR")}
+                subtitle="Pedidos ativos (excl. cancelados)"
+                icon={<ShoppingCart className="h-6 w-6" />}
+                variant="success"
               />
               <KPICard
-                title="Receita Total"
-                value={formatCurrency(totalRevenue)}
-                subtitle="Acumulado licenciados"
+                title="R$ Total Vendido"
+                value={formatCurrency(kpis.totalBRL)}
+                subtitle="Faturamento acumulado"
                 icon={<DollarSign className="h-6 w-6" />}
                 variant="success"
               />
               <KPICard
-                title="Pedidos (últ. 50)"
-                value={`${completedOrders}/${totalOrders}`}
-                subtitle="Concluídos"
-                icon={<ShoppingCart className="h-6 w-6" />}
+                title="Maior Venda"
+                value={formatCurrency(kpis.maiorVenda)}
+                subtitle="Maior pedido individual"
+                icon={<Trophy className="h-6 w-6" />}
               />
               <KPICard
-                title="Score Médio"
-                value={`${avgScore}`}
-                subtitle="Performance licenciados"
-                icon={<Star className="h-6 w-6" />}
-                variant={avgScore >= 80 ? "success" : avgScore >= 60 ? "warning" : "default"}
+                title="Top Recorrência"
+                value={kpis.topCliente.length > 18
+                  ? kpis.topCliente.slice(0, 18) + "…"
+                  : kpis.topCliente}
+                subtitle={`${kpis.topQtd} pedido${kpis.topQtd !== 1 ? "s" : ""} · cliente mais frequente`}
+                icon={<Repeat2 className="h-6 w-6" />}
               />
             </>
           )}
