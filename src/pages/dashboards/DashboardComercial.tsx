@@ -1,13 +1,20 @@
 import { BoardLayout } from "@/components/layouts/BoardLayout";
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
 import { KPICard } from "@/components/board/KPICard";
-import { TrendingUp, Building2, ShoppingCart, Star, DollarSign, Users, Loader2 } from "lucide-react";
+import { TrendingUp, Building2, ShoppingCart, Star, DollarSign, Users, Loader2, BarChart3 } from "lucide-react";
 import { useLicensees } from "@/hooks/useLicensees";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Link } from "react-router-dom";
+import { useMemo } from "react";
+import { format } from "date-fns";
+import { ptBR } from "date-fns/locale";
+import {
+  AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid,
+  Tooltip, ResponsiveContainer, Legend, Cell,
+} from "recharts";
 
 export default function DashboardComercial() {
   const { data: licensees = [], isLoading: licenseesLoading } = useLicensees();
@@ -25,7 +32,50 @@ export default function DashboardComercial() {
     },
   });
 
+  // Evolução mensal — carboze_orders (Bling)
+  const { data: carbozeOrders = [], isLoading: carbozeLoading } = useQuery({
+    queryKey: ["carboze-orders-monthly"],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from("carboze_orders")
+        .select("total, status, created_at, order_number")
+        .order("created_at", { ascending: true });
+      if (error) throw error;
+      return (data ?? []) as { total: number; status: string; created_at: string; order_number: string }[];
+    },
+  });
+
   const isLoading = licenseesLoading || ordersLoading;
+
+  // Agrupar carboze_orders por mês
+  const monthlyData = useMemo(() => {
+    const map: Record<string, { faturado: number; pedidos: number; concluidos: number }> = {};
+    for (const o of carbozeOrders) {
+      if (!o.created_at) continue;
+      const key = o.created_at.slice(0, 7); // "YYYY-MM"
+      if (!map[key]) map[key] = { faturado: 0, pedidos: 0, concluidos: 0 };
+      map[key].pedidos++;
+      map[key].faturado += Number(o.total ?? 0);
+      if (o.status === "completed" || o.status === "concluido" || o.status === "faturado") {
+        map[key].concluidos++;
+      }
+    }
+    return Object.entries(map)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .slice(-12) // últimos 12 meses
+      .map(([key, v]) => {
+        try {
+          const [y, m] = key.split("-");
+          const label = format(new Date(parseInt(y), parseInt(m) - 1, 1), "MMM/yy", { locale: ptBR });
+          return { mes: label, ...v };
+        } catch {
+          return { mes: key, ...v };
+        }
+      });
+  }, [carbozeOrders]);
+
+  const totalCarboze = carbozeOrders.reduce((s, o) => s + Number(o.total ?? 0), 0);
+  const totalCarbozeOrders = carbozeOrders.length;
 
   // KPI calculations
   const totalLicensees = licensees.length;
@@ -94,6 +144,91 @@ export default function DashboardComercial() {
                 variant={avgScore >= 80 ? "success" : avgScore >= 60 ? "warning" : "default"}
               />
             </>
+          )}
+        </div>
+
+        {/* ── Evolução Mensal Bling ─────────────────────────────────────── */}
+        <div className="rounded-xl border border-border bg-board-surface overflow-hidden">
+          <div className="flex items-center justify-between border-b border-border px-6 py-4">
+            <div>
+              <h2 className="text-lg font-semibold text-board-text flex items-center gap-2">
+                <BarChart3 className="h-5 w-5 text-primary" />
+                Evolução Mensal — CarboZé (Bling)
+              </h2>
+              <p className="text-sm text-board-muted">
+                Faturamento e volume de pedidos importados via Bling ·{" "}
+                <span className="font-medium text-board-text">
+                  {totalCarbozeOrders} pedidos · {(totalCarboze).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })} acumulado
+                </span>
+              </p>
+            </div>
+            <Link to="/orders" className="text-sm text-primary hover:underline font-medium">
+              Ver pedidos →
+            </Link>
+          </div>
+
+          {carbozeLoading ? (
+            <div className="flex items-center justify-center h-56">
+              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            </div>
+          ) : monthlyData.length === 0 ? (
+            <div className="flex items-center justify-center h-56 text-sm text-board-muted">
+              Nenhum pedido Bling encontrado.
+            </div>
+          ) : (
+            <div className="p-6 space-y-6">
+              {/* Area chart — faturamento */}
+              <div>
+                <p className="text-xs font-semibold text-board-muted uppercase tracking-wider mb-3">Faturamento (R$)</p>
+                <ResponsiveContainer width="100%" height={200}>
+                  <AreaChart data={monthlyData} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
+                    <defs>
+                      <linearGradient id="colorFat" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#1a7a4a" stopOpacity={0.35} />
+                        <stop offset="95%" stopColor="#1a7a4a" stopOpacity={0} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+                    <XAxis dataKey="mes" tick={{ fontSize: 11, fill: "var(--board-muted, #9ca3af)" }} axisLine={false} tickLine={false} />
+                    <YAxis
+                      tick={{ fontSize: 11, fill: "var(--board-muted, #9ca3af)" }}
+                      axisLine={false} tickLine={false}
+                      tickFormatter={v => v >= 1000 ? `${(v / 1000).toFixed(0)}k` : String(v)}
+                      width={48}
+                    />
+                    <Tooltip
+                      contentStyle={{ background: "var(--board-surface, #1a1f2e)", border: "1px solid var(--border)", borderRadius: 8, fontSize: 12 }}
+                      labelStyle={{ color: "var(--board-text, #f1f5f9)", fontWeight: 600 }}
+                      formatter={(v: number) => [v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }), "Faturado"]}
+                    />
+                    <Area type="monotone" dataKey="faturado" stroke="#1a7a4a" strokeWidth={2.5} fill="url(#colorFat)" dot={{ r: 3, fill: "#1a7a4a" }} activeDot={{ r: 5 }} />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
+
+              {/* Bar chart — pedidos */}
+              <div>
+                <p className="text-xs font-semibold text-board-muted uppercase tracking-wider mb-3">Volume de Pedidos</p>
+                <ResponsiveContainer width="100%" height={120}>
+                  <BarChart data={monthlyData} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
+                    <XAxis dataKey="mes" tick={{ fontSize: 11, fill: "var(--board-muted, #9ca3af)" }} axisLine={false} tickLine={false} />
+                    <YAxis tick={{ fontSize: 11, fill: "var(--board-muted, #9ca3af)" }} axisLine={false} tickLine={false} width={32} allowDecimals={false} />
+                    <Tooltip
+                      contentStyle={{ background: "var(--board-surface, #1a1f2e)", border: "1px solid var(--border)", borderRadius: 8, fontSize: 12 }}
+                      labelStyle={{ color: "var(--board-text, #f1f5f9)", fontWeight: 600 }}
+                      formatter={(v: number, name: string) => [v, name === "pedidos" ? "Total pedidos" : "Concluídos"]}
+                    />
+                    <Legend
+                      wrapperStyle={{ fontSize: 11, paddingTop: 8 }}
+                      formatter={(v) => v === "pedidos" ? "Total pedidos" : "Concluídos"}
+                    />
+                    <Bar dataKey="pedidos" fill="#2d4a6e" radius={[3, 3, 0, 0]} name="pedidos" />
+                    <Bar dataKey="concluidos" fill="#1a7a4a" radius={[3, 3, 0, 0]} name="concluidos" />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
           )}
         </div>
 
