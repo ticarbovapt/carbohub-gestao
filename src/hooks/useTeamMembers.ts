@@ -41,31 +41,7 @@ export function useTeamMembers() {
 
       if (profilesError) throw profilesError;
 
-      // Fetch all roles
-      const { data: roles, error: rolesError } = await supabase
-        .from("user_roles")
-        .select("user_id, role");
-
-      if (rolesError) throw rolesError;
-
-      // Fetch carbo_user_roles
-      const { data: carboRolesData } = await supabase
-        .from("carbo_user_roles")
-        .select("user_id, role");
-
-      // Map roles to users
-      const rolesByUser = roles?.reduce((acc, r) => {
-        if (!acc[r.user_id]) acc[r.user_id] = [];
-        acc[r.user_id].push(r.role);
-        return acc;
-      }, {} as Record<string, AppRole[]>) || {};
-
-      const carboRolesByUser = (carboRolesData || []).reduce((acc, r) => {
-        if (!acc[r.user_id]) acc[r.user_id] = [];
-        acc[r.user_id].push(r.role as string);
-        return acc;
-      }, {} as Record<string, string[]>);
-
+      // Sistema legado de papéis aposentado — acesso é por department+funcao.
       const members: TeamMember[] = (profiles || []).map((p) => ({
         id: p.id,
         full_name: p.full_name,
@@ -73,8 +49,8 @@ export function useTeamMembers() {
         department: p.department,
         status: p.status || "pending",
         requested_role: p.requested_role,
-        roles: rolesByUser[p.id] || [],
-        carbo_roles: carboRolesByUser[p.id] || [],
+        roles: [],
+        carbo_roles: [],
         email: (p as any).email || undefined,
         username: p.username || null,
         password_must_change: p.password_must_change || false,
@@ -106,15 +82,7 @@ export function useApproveUser() {
         .eq("id", userId);
 
       if (profileError) throw profileError;
-
-      // Update user role (delete old operator role if exists, add new role)
-      await supabase.from("user_roles").delete().eq("user_id", userId);
-
-      const { error: roleError } = await supabase
-        .from("user_roles")
-        .insert({ user_id: userId, role });
-
-      if (roleError) throw roleError;
+      // Papel legado não é mais gravado — acesso vem de department+funcao.
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["team-members"] });
@@ -144,24 +112,12 @@ export function useUpdateUserRole() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ userId, role }: { userId: string; role: AppRole }) => {
-      // Delete existing roles
-      const { error: delError } = await supabase.from("user_roles").delete().eq("user_id", userId);
-      if (delError) throw delError;
-
-      // Add new role
-      const { error } = await supabase
-        .from("user_roles")
-        .insert({ user_id: userId, role });
-
-      if (error) throw error;
-    },
+    // Legado: nível de acesso (user_roles) não é mais usado. No-op mantido
+    // para compatibilidade com chamadas existentes.
+    mutationFn: async (_args: { userId: string; role: AppRole }) => {},
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["team-members"] });
-      queryClient.invalidateQueries({ queryKey: ["collab-matrix-data"] });
-      toast.success("Nível de acesso atualizado!");
     },
-    onError: (e: Error) => toast.error("Erro ao atualizar acesso: " + e.message),
   });
 }
 
@@ -169,28 +125,11 @@ export function useUpdateUserRole() {
 export function useReplaceCarboRoles() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({ userId, roles }: { userId: string; roles: string[] }) => {
-      // Remove todos os roles atuais do usuário
-      const { error: delError } = await supabase
-        .from("carbo_user_roles")
-        .delete()
-        .eq("user_id", userId);
-      if (delError) throw delError;
-      // Insere os novos roles (pode ser array vazio — resultado: sem roles)
-      if (roles.length > 0) {
-        const rows = roles.map((role) => ({ user_id: userId, role }));
-        const { error: insError } = await supabase
-          .from("carbo_user_roles")
-          .insert(rows as any);
-        if (insError) throw insError;
-      }
-    },
+    // Legado: carbo_user_roles aposentado. No-op para compatibilidade.
+    mutationFn: async (_args: { userId: string; roles: string[] }) => {},
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["team-members"] });
-      queryClient.invalidateQueries({ queryKey: ["collab-matrix-data"] });
-      toast.success("Funções de acesso atualizadas!");
     },
-    onError: (e: Error) => toast.error("Erro ao atualizar funções: " + e.message),
   });
 }
 

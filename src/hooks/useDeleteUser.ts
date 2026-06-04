@@ -6,15 +6,7 @@ export function useDeleteUser() {
 
   return useMutation({
     mutationFn: async (userId: string) => {
-      // Delete user roles first
-      const { error: rolesError } = await supabase
-        .from("user_roles")
-        .delete()
-        .eq("user_id", userId);
-
-      if (rolesError) throw rolesError;
-
-      // Update profile status to 'deleted' (soft delete)
+      // Soft delete: marca o perfil como 'deleted'. Papéis legados não existem mais.
       const { error: profileError } = await supabase
         .from("profiles")
         .update({ status: "deleted" })

@@ -282,35 +282,20 @@ export default function RoleMatrix() {
   const { data: collabData, isLoading: loadingCollabs } = useQuery({
     queryKey: ["collab-matrix-data"],
     queryFn: async () => {
-      const [
-        { data: profiles },
-        { data: appRolesData },
-        { data: carboRolesData },
-      ] = await Promise.all([
-        supabase.from("profiles").select("id, full_name, email, department, allowed_interfaces").eq("status", "approved"),
-        supabase.from("user_roles" as any).select("user_id, role"),
-        supabase.from("carbo_user_roles" as any).select("user_id, role"),
-      ]);
-
-      // Build maps
-      const appRolesByUser = new Map<string, string[]>();
-      for (const r of (appRolesData || []) as any[]) {
-        if (!appRolesByUser.has(r.user_id)) appRolesByUser.set(r.user_id, []);
-        appRolesByUser.get(r.user_id)!.push(r.role);
-      }
-      const carboRolesByUser = new Map<string, string[]>();
-      for (const r of (carboRolesData || []) as any[]) {
-        if (!carboRolesByUser.has(r.user_id)) carboRolesByUser.set(r.user_id, []);
-        carboRolesByUser.get(r.user_id)!.push(r.role);
-      }
+      // Papéis legados (user_roles/carbo_user_roles) aposentados — acesso é por
+      // department + funcao (Role Matrix). Mantém só os dados do perfil.
+      const { data: profiles } = await supabase
+        .from("profiles")
+        .select("id, full_name, email, department, allowed_interfaces")
+        .eq("status", "approved");
 
       return (profiles || []).map((p: any): CollabUser => ({
         id: p.id,
         full_name: p.full_name,
         email: p.email,
         department: p.department,
-        app_roles: appRolesByUser.get(p.id) || [],
-        carbo_roles: carboRolesByUser.get(p.id) || [],
+        app_roles: [],
+        carbo_roles: [],
         allowed_interfaces: p.allowed_interfaces || [],
       }));
     },

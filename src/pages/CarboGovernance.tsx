@@ -1,6 +1,4 @@
 import { BoardLayout } from "@/components/layouts/BoardLayout";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { CarboRolesManager } from "@/components/admin/CarboRolesManager";
 import { StageAccessManager } from "@/components/admin/StageAccessManager";
 import { Shield, Lock, Users, Settings, KeyRound, UserPlus, Building2, Store, ClipboardCheck } from "lucide-react";
 import { useCanAccessGovernance, useIsLeadership } from "@/hooks/useActionPermissions";
@@ -119,15 +117,9 @@ const CarboGovernance = () => {
           </div>
         </CarboCard>
 
-        {/* Tabs */}
-        <Tabs defaultValue="roles" className="space-y-4">
-          <TabsList>
-            <TabsTrigger value="roles" className="gap-2"><Users className="h-4 w-4" />Atribuição de Roles</TabsTrigger>
-            <TabsTrigger value="access" className="gap-2"><Lock className="h-4 w-4" />Matriz de Acesso</TabsTrigger>
-          </TabsList>
-          <TabsContent value="roles"><CarboRolesManager /></TabsContent>
-          <TabsContent value="access"><StageAccessManager /></TabsContent>
-        </Tabs>
+        {/* Matriz de acesso por etapa de OS. A atribuição de papéis foi
+            aposentada — acesso é por departamento + função (Role Matrix). */}
+        <StageAccessManager />
       </div>
     </BoardLayout>
   );
