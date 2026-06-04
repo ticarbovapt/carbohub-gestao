@@ -1308,6 +1308,162 @@ async function syncOrders(
   return { synced: totalSynced, failed: totalFailed };
 }
 
+// ── FASE 1: Contas a Pagar (Bling → Sistema) ───────────────────────────────
+// Espelha /contas/pagar do Bling em purchase_payables (source='bling').
+// O dashboard financeiro lê dessa tabela, então passa a refletir o Bling.
+function mapContaPagarStatus(situacao: unknown, vencimento: string | null): string {
+  // Bling v3 contas/pagar: 1=em aberto, 2=pago/baixado, 3=parcial, 4/5=cancelado
+  const s = Number(situacao);
+  if (s === 2) return "pago";
+  if (s === 4 || s === 5) return "cancelado";
+  // Em aberto ou parcial: se já venceu, marca como atrasado
+  if (vencimento) {
+    const today = new Date().toISOString().split("T")[0];
+    if (vencimento < today) return "atrasado";
+  }
+  return "programado";
+}
+
+async function syncContasPagar(
+  supabaseAdmin: ReturnType<typeof createClient>,
+  token: string,
+  logId: string
+): Promise<{ synced: number; failed: number }> {
+  let page = 1;
+  let totalSynced = 0;
+  let totalFailed = 0;
+  let hasMore = true;
+
+  while (hasMore) {
+    const data = await blingFetch(token, "/contas/pagar", page, 100);
+    const contas = data.data || [];
+
+    if (contas.length === 0) {
+      hasMore = false;
+      break;
+    }
+
+    for (const conta of contas) {
+      try {
+        const vencimento: string | null = conta.vencimento || conta.dataVencimento || null;
+        const fornecedor = conta.contato?.nome || conta.fornecedor?.nome || conta.contato?.fantasia || "Fornecedor não identificado";
+        const valor = Number(conta.valor ?? conta.valorTotal ?? conta.saldo ?? 0);
+        const numero = conta.numeroDocumento || conta.numero || String(conta.id);
+
+        await supabaseAdmin.from("purchase_payables").upsert(
+          {
+            bling_id: conta.id,
+            bling_numero: numero ? String(numero) : null,
+            source: "bling",
+            supplier_name: fornecedor,
+            amount: valor,
+            due_date: vencimento || new Date().toISOString().split("T")[0],
+            status: mapContaPagarStatus(conta.situacao, vencimento),
+            notes: conta.historico || conta.observacoes || null,
+            bling_raw: conta,
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: "bling_id" }
+        );
+        totalSynced++;
+      } catch (e) {
+        console.error("[bling-sync] Failed to upsert conta a pagar:", e);
+        totalFailed++;
+      }
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 350));
+    page++;
+    if (contas.length < 100) hasMore = false;
+  }
+
+  await supabaseAdmin
+    .from("bling_sync_log")
+    .update({ records_synced: totalSynced, records_failed: totalFailed })
+    .eq("id", logId);
+
+  return { synced: totalSynced, failed: totalFailed };
+}
+
+// ── FASE 1: Pedidos de Compra (Bling → Sistema) ────────────────────────────
+// Espelha /pedidos/compras do Bling em purchase_orders (source='bling').
+// Alimenta o gráfico "Custo por Fornecedor (Top 8)".
+function mapPedidoCompraStatus(situacao: unknown): string {
+  // Tenta extrair um rótulo textual; em caso de dúvida, mantém 'gerada'.
+  const valor = (typeof situacao === "object" && situacao !== null
+    ? (situacao as any).valor ?? (situacao as any).nome
+    : situacao);
+  const label = String(valor ?? "").toLowerCase();
+  if (label.includes("cancel")) return "cancelada";
+  if (label.includes("receb")) return "recebida";
+  if (label.includes("atend")) return "recebida";
+  return "gerada";
+}
+
+async function syncPedidosCompra(
+  supabaseAdmin: ReturnType<typeof createClient>,
+  token: string,
+  logId: string
+): Promise<{ synced: number; failed: number }> {
+  let page = 1;
+  let totalSynced = 0;
+  let totalFailed = 0;
+  let hasMore = true;
+
+  while (hasMore) {
+    const data = await blingFetch(token, "/pedidos/compras", page, 100);
+    const pedidos = data.data || [];
+
+    if (pedidos.length === 0) {
+      hasMore = false;
+      break;
+    }
+
+    for (const pedido of pedidos) {
+      try {
+        const fornecedor = pedido.fornecedor?.nome || pedido.contato?.nome || pedido.fornecedor?.fantasia || "Fornecedor não identificado";
+        const total = Number(pedido.total ?? pedido.totalProdutos ?? 0);
+        const numero = pedido.numero != null ? String(pedido.numero) : String(pedido.id);
+        const dataPrev: string | null = pedido.dataPrevista || pedido.data || null;
+
+        await supabaseAdmin.from("purchase_orders").upsert(
+          {
+            bling_id: pedido.id,
+            bling_numero: numero,
+            // oc_number é NOT NULL; usamos o número do Bling (o trigger preserva)
+            oc_number: `BLING-${numero}`,
+            source: "bling",
+            supplier_name: fornecedor,
+            supplier_document: pedido.fornecedor?.numeroDocumento || pedido.contato?.numeroDocumento || null,
+            total_value: total,
+            expected_delivery: dataPrev,
+            status: mapPedidoCompraStatus(pedido.situacao),
+            items: pedido.itens || pedido.items || [],
+            bling_raw: pedido,
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: "bling_id" }
+        );
+        totalSynced++;
+      } catch (e) {
+        console.error("[bling-sync] Failed to upsert pedido de compra:", e);
+        totalFailed++;
+      }
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 350));
+    page++;
+    if (pedidos.length < 100) hasMore = false;
+  }
+
+  await supabaseAdmin
+    .from("bling_sync_log")
+    .update({ records_synced: totalSynced, records_failed: totalFailed })
+    .eq("id", logId);
+
+  return { synced: totalSynced, failed: totalFailed };
+}
+
 Deno.serve(async (req: Request): Promise<Response> => {
   const corsHeaders = getCorsHeaders(req);
 
@@ -1405,7 +1561,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
     const results: Record<string, any> = {};
 
     const entitiesToSync = entity === "all"
-      ? ["products", "variacoes", "stock", "contacts", "orders", "order_details", "treatment", "vendedores", "nfe", "bridge"]
+      ? ["products", "variacoes", "stock", "contacts", "orders", "order_details", "treatment", "vendedores", "nfe", "contas_pagar", "pedidos_compra", "bridge"]
       : [entity];
 
     // Helper to run a sync function with automatic 401 retry
@@ -1475,6 +1631,12 @@ Deno.serve(async (req: Request): Promise<Response> => {
             break;
           case "nfe":
             result = await syncWithRetry(entityType, syncNFe, logId);
+            break;
+          case "contas_pagar":
+            result = await syncWithRetry(entityType, syncContasPagar, logId);
+            break;
+          case "pedidos_compra":
+            result = await syncWithRetry(entityType, syncPedidosCompra, logId);
             break;
           case "bridge":
             result = await bridgeOrdersToCarbohub(supabaseAdmin, logId);
