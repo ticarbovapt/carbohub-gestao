@@ -61,7 +61,14 @@ export default function DashboardComercial() {
     const active = carbozeOrders.filter(o => o.status !== "cancelled" && o.status !== "cancelado");
     const totalVendas   = active.length;
     const totalBRL      = active.reduce((s, o) => s + Number(o.total ?? 0), 0);
-    const maiorVenda    = active.reduce((max, o) => Math.max(max, Number(o.total ?? 0)), 0);
+
+    // Maior venda + cliente
+    const maiorOrdem = active.reduce<{ total: number; cliente: string } | null>((best, o) => {
+      const t = Number(o.total ?? 0);
+      return !best || t > best.total ? { total: t, cliente: o.customer_name?.trim() || "—" } : best;
+    }, null);
+    const maiorVenda    = maiorOrdem?.total ?? 0;
+    const maiorCliente  = maiorOrdem?.cliente ?? "—";
 
     // Cliente com mais recorrência
     const clientCount: Record<string, number> = {};
@@ -72,7 +79,7 @@ export default function DashboardComercial() {
     const [topCliente, topQtd] = Object.entries(clientCount)
       .sort(([, a], [, b]) => b - a)[0] ?? ["—", 0];
 
-    return { totalVendas, totalBRL, maiorVenda, topCliente, topQtd };
+    return { totalVendas, totalBRL, maiorVenda, maiorCliente, topCliente, topQtd };
   }, [carbozeOrders]);
 
   // Agrupar carboze_orders por mês
@@ -105,46 +112,68 @@ export default function DashboardComercial() {
   const totalCarboze    = kpis.totalBRL;
   const totalCarbozeOrders = kpis.totalVendas;
 
-  // ── Crescimento M/M e Rolling 12 Meses ──────────────────────────────────────
+  // ── Crescimento YTD e Rolling 12 Meses ──────────────────────────────────────
   const growth = useMemo(() => {
+    const today = new Date();
+    const curYear  = today.getFullYear();
+    const curMonth = today.getMonth() + 1;   // 1–12
+    const curDay   = today.getDate();
+
+    // Ponto de corte (ex: "05-31" = dia 31 de maio)
+    const dayOfYearCutoff = `${String(curMonth).padStart(2,"0")}-${String(curDay).padStart(2,"0")}`;
+
+    let ytdCur  = { faturado: 0, pedidos: 0 };
+    let ytdPrev = { faturado: 0, pedidos: 0 };
+
     const fullMap: Record<string, { faturado: number; pedidos: number }> = {};
+
     for (const o of carbozeOrders) {
-      if (!o.created_at) continue;
-      const key = o.created_at.slice(0, 7);
+      const d = o.created_at;
+      if (!d) continue;
+      const dateStr  = d.slice(0, 10);  // "YYYY-MM-DD"
+      const yearNum  = parseInt(dateStr.slice(0, 4));
+      const monthDay = dateStr.slice(5); // "MM-DD"
+      const val      = Number(o.total ?? 0);
+
+      // YTD corrente: 01/01/curYear até hoje
+      if (yearNum === curYear && monthDay <= dayOfYearCutoff) {
+        ytdCur.faturado += val;
+        ytdCur.pedidos++;
+      }
+      // YTD anterior: 01/01/(curYear-1) até mesmo dia do ano passado
+      if (yearNum === curYear - 1 && monthDay <= dayOfYearCutoff) {
+        ytdPrev.faturado += val;
+        ytdPrev.pedidos++;
+      }
+
+      // Mapa mensal (para rolling)
+      const key = dateStr.slice(0, 7);
       if (!fullMap[key]) fullMap[key] = { faturado: 0, pedidos: 0 };
       fullMap[key].pedidos++;
-      fullMap[key].faturado += Number(o.total ?? 0);
+      fullMap[key].faturado += val;
     }
 
+    // Rolling 12 meses vs 12 anteriores
     const sorted = Object.entries(fullMap).sort(([a], [b]) => a.localeCompare(b));
     const n = sorted.length;
+    const rolling12Cur  = sorted.slice(-12).reduce((a, [,v]) => ({ faturado: a.faturado+v.faturado, pedidos: a.pedidos+v.pedidos }), { faturado:0, pedidos:0 });
+    const rolling12Prev = sorted.slice(-24,-12).reduce((a, [,v]) => ({ faturado: a.faturado+v.faturado, pedidos: a.pedidos+v.pedidos }), { faturado:0, pedidos:0 });
 
-    // Mês atual vs mês anterior
-    const cur     = sorted[n - 1]?.[1] ?? { faturado: 0, pedidos: 0 };
-    const prev    = sorted[n - 2]?.[1] ?? { faturado: 0, pedidos: 0 };
-    const curMonthLabel  = sorted[n - 1]?.[0] ?? "";
-    const prevMonthLabel = sorted[n - 2]?.[0] ?? "";
-
-    const pctBRLMonth = prev.faturado > 0 ? ((cur.faturado - prev.faturado) / prev.faturado) * 100 : null;
-    const pctQtyMonth = prev.pedidos  > 0 ? ((cur.pedidos  - prev.pedidos)  / prev.pedidos)  * 100 : null;
-
-    // Rolling 12 meses: últimos 12 meses vs 12 meses anteriores
-    const rolling12Cur  = sorted.slice(-12).reduce((a, [, v]) => ({ faturado: a.faturado + v.faturado, pedidos: a.pedidos + v.pedidos }), { faturado: 0, pedidos: 0 });
-    const rolling12Prev = sorted.slice(-24, -12).reduce((a, [, v]) => ({ faturado: a.faturado + v.faturado, pedidos: a.pedidos + v.pedidos }), { faturado: 0, pedidos: 0 });
-
-    const pctBRLRolling = rolling12Prev.faturado > 0 ? ((rolling12Cur.faturado - rolling12Prev.faturado) / rolling12Prev.faturado) * 100 : null;
-    const pctQtyRolling = rolling12Prev.pedidos  > 0 ? ((rolling12Cur.pedidos  - rolling12Prev.pedidos)  / rolling12Prev.pedidos)  * 100 : null;
-
-    // Labels para rolling
-    const roll12Start  = sorted[n - 12]?.[0] ?? "";
-    const roll12End    = sorted[n - 1]?.[0]  ?? "";
-    const prev12Start  = sorted[n - 24]?.[0] ?? "";
-    const prev12End    = sorted[n - 13]?.[0] ?? "";
+    const pct = (cur: number, prev: number) => prev > 0 ? ((cur - prev) / prev) * 100 : null;
 
     return {
-      month:   { brl: pctBRLMonth,   qty: pctQtyMonth,   curLabel: curMonthLabel, prevLabel: prevMonthLabel },
-      rolling: { brl: pctBRLRolling, qty: pctQtyRolling, roll12Start, roll12End, prev12Start, prev12End },
-      raw: { cur, prev, rolling12Cur, rolling12Prev },
+      ytd: {
+        brl: pct(ytdCur.faturado, ytdPrev.faturado),
+        qty: pct(ytdCur.pedidos, ytdPrev.pedidos),
+        curYear, prevYear: curYear - 1,
+        curLabel: `01/01–${String(curDay).padStart(2,"0")}/${String(curMonth).padStart(2,"0")}/${curYear}`,
+      },
+      rolling: {
+        brl: pct(rolling12Cur.faturado, rolling12Prev.faturado),
+        qty: pct(rolling12Cur.pedidos,  rolling12Prev.pedidos),
+        curStart: sorted[n-12]?.[0] ?? "", curEnd: sorted[n-1]?.[0] ?? "",
+      },
+      raw: { ytdCur, ytdPrev, rolling12Cur, rolling12Prev },
     };
   }, [carbozeOrders]);
 
@@ -202,7 +231,9 @@ export default function DashboardComercial() {
               <KPICard
                 title="Maior Venda"
                 value={formatCurrency(kpis.maiorVenda)}
-                subtitle="Maior pedido individual"
+                subtitle={kpis.maiorCliente.length > 22
+                  ? kpis.maiorCliente.slice(0, 22) + "…"
+                  : kpis.maiorCliente}
                 icon={<Trophy className="h-6 w-6" />}
               />
               <KPICard
@@ -218,102 +249,85 @@ export default function DashboardComercial() {
         </div>
 
         {/* ── Cards de Crescimento ─────────────────────────────────────── */}
-        {!carbozeLoading && carbozeOrders.length > 0 && (
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            {[
-              {
-                label: "Faturamento Mês",
-                sublabel: "vs mês anterior",
-                pct: growth.month.brl,
-                current: fmtK(growth.raw.cur.faturado),
-                reference: `${fmtK(growth.raw.prev.faturado)} em ${growth.month.prevLabel}`,
-                icon: DollarSign,
-              },
-              {
-                label: "Volume de Vendas",
-                sublabel: "vs mês anterior",
-                pct: growth.month.qty,
-                current: `${growth.raw.cur.pedidos} pedidos`,
-                reference: `${growth.raw.prev.pedidos} pedidos em ${growth.month.prevLabel}`,
-                icon: ShoppingCart,
-              },
-              {
-                label: "Faturamento",
-                sublabel: "Rolling 12 meses",
-                pct: growth.rolling.brl,
-                current: fmtK(growth.raw.rolling12Cur.faturado),
-                reference: `anterior: ${fmtK(growth.raw.rolling12Prev.faturado)}`,
-                icon: DollarSign,
-              },
-              {
-                label: "Volume de Vendas",
-                sublabel: "Rolling 12 meses",
-                pct: growth.rolling.qty,
-                current: `${growth.raw.rolling12Cur.pedidos} pedidos`,
-                reference: `anterior: ${growth.raw.rolling12Prev.pedidos} pedidos`,
-                icon: ShoppingCart,
-              },
-            ].map((card, i) => {
-              const isUp     = card.pct !== null && card.pct >= 0;
-              const isNeutral = card.pct === null;
-              const isRolling = i >= 2;
-              return (
-                <div key={i} className={`relative rounded-xl border overflow-hidden bg-board-surface transition-all
-                  ${isNeutral ? "border-border" : isUp ? "border-green-500/20" : "border-red-400/20"}`}>
+        {!carbozeLoading && carbozeOrders.length > 0 && (() => {
+          const groups = [
+            {
+              groupLabel: "Ano Corrente",
+              groupSub: `01/01/${growth.ytd.curYear} até hoje vs mesmo período ${growth.ytd.prevYear}`,
+              color: "blue" as const,
+              cards: [
+                { label: "Faturamento", pct: growth.ytd.brl, current: fmtK(growth.raw.ytdCur.faturado), ref: `${growth.ytd.prevYear}: ${fmtK(growth.raw.ytdPrev.faturado)}` },
+                { label: "Volume Vendas", pct: growth.ytd.qty, current: `${growth.raw.ytdCur.pedidos} pedidos`, ref: `${growth.ytd.prevYear}: ${growth.raw.ytdPrev.pedidos} pedidos` },
+              ],
+            },
+            {
+              groupLabel: "Últimos 12 Meses",
+              groupSub: `Rolling vs 12 meses anteriores`,
+              color: "purple" as const,
+              cards: [
+                { label: "Faturamento", pct: growth.rolling.brl, current: fmtK(growth.raw.rolling12Cur.faturado), ref: `anterior: ${fmtK(growth.raw.rolling12Prev.faturado)}` },
+                { label: "Volume Vendas", pct: growth.rolling.qty, current: `${growth.raw.rolling12Cur.pedidos} pedidos`, ref: `anterior: ${growth.raw.rolling12Prev.pedidos} pedidos` },
+              ],
+            },
+          ];
 
-                  {/* Accent stripe top */}
-                  <div className={`h-1 w-full ${isNeutral ? "bg-border" : isUp ? "bg-green-500" : "bg-red-400"}`} />
+          const colorMap = {
+            blue:   { badge: "bg-blue-500/10 text-blue-400",   stripe: "bg-blue-500",   border: "border-blue-500/20",   tag: "bg-blue-500/10 text-blue-400" },
+            purple: { badge: "bg-violet-500/10 text-violet-400", stripe: "bg-violet-500", border: "border-violet-500/20", tag: "bg-violet-500/10 text-violet-400" },
+          };
 
-                  <div className="p-4">
-                    {/* Header row */}
-                    <div className="flex items-start justify-between mb-3">
-                      <div>
-                        <p className="text-xs font-semibold text-board-muted uppercase tracking-wider leading-none">
-                          {card.label}
-                        </p>
-                        <p className="text-[11px] text-board-muted mt-0.5 flex items-center gap-1">
-                          {isRolling && (
-                            <span className="inline-flex items-center rounded-full bg-primary/10 text-primary px-1.5 py-0 text-[10px] font-semibold">
-                              12M
-                            </span>
-                          )}
-                          {card.sublabel}
-                        </p>
-                      </div>
-                      {/* Delta badge */}
-                      {isNeutral ? (
-                        <span className="flex items-center gap-0.5 rounded-lg px-2 py-1 text-xs font-bold bg-muted text-board-muted">
-                          <Minus className="h-3 w-3" /> —
-                        </span>
-                      ) : (
-                        <span className={`flex items-center gap-0.5 rounded-lg px-2 py-1 text-xs font-bold
-                          ${isUp
-                            ? "bg-green-500/12 text-green-500"
-                            : "bg-red-400/12 text-red-400"}`}>
-                          {isUp
-                            ? <ArrowUpRight className="h-3.5 w-3.5" />
-                            : <ArrowDownRight className="h-3.5 w-3.5" />}
-                          {Math.abs(card.pct!).toFixed(1)}%
-                        </span>
-                      )}
+          return (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              {groups.map(group => (
+                <div key={group.groupLabel} className={`rounded-xl border overflow-hidden bg-board-surface ${colorMap[group.color].border}`}>
+                  {/* Stripe */}
+                  <div className={`h-1 w-full ${colorMap[group.color].stripe}`} />
+                  {/* Group header */}
+                  <div className="px-4 pt-3 pb-2 border-b border-border/50 flex items-center justify-between">
+                    <div>
+                      <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${colorMap[group.color].tag}`}>
+                        {group.groupLabel}
+                      </span>
+                      <p className="text-[11px] text-board-muted mt-0.5">{group.groupSub}</p>
                     </div>
-
-                    {/* Main value */}
-                    <p className={`text-xl font-bold tabular-nums leading-none
-                      ${isNeutral ? "text-board-text" : isUp ? "text-green-500" : "text-red-400"}`}>
-                      {card.current}
-                    </p>
-
-                    {/* Reference */}
-                    <p className="text-[11px] text-board-muted mt-2 leading-relaxed">
-                      {card.reference}
-                    </p>
+                  </div>
+                  {/* Cards side by side */}
+                  <div className="grid grid-cols-2 divide-x divide-border/50">
+                    {group.cards.map((card, ci) => {
+                      const isUp      = card.pct !== null && card.pct >= 0;
+                      const isNeutral = card.pct === null;
+                      return (
+                        <div key={ci} className="p-4 space-y-2">
+                          <div className="flex items-center justify-between">
+                            <p className="text-[11px] font-semibold text-board-muted uppercase tracking-wider">
+                              {card.label}
+                            </p>
+                            {isNeutral ? (
+                              <span className="flex items-center gap-0.5 rounded-md px-1.5 py-0.5 text-[11px] font-bold bg-muted text-board-muted">
+                                <Minus className="h-3 w-3" /> s/d
+                              </span>
+                            ) : (
+                              <span className={`flex items-center gap-0.5 rounded-md px-1.5 py-0.5 text-[11px] font-bold
+                                ${isUp ? "bg-green-500/10 text-green-500" : "bg-red-400/10 text-red-400"}`}>
+                                {isUp ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownRight className="h-3 w-3" />}
+                                {Math.abs(card.pct!).toFixed(1)}%
+                              </span>
+                            )}
+                          </div>
+                          <p className={`text-lg font-bold tabular-nums leading-none
+                            ${isNeutral ? "text-board-text" : isUp ? "text-green-500" : "text-red-400"}`}>
+                            {card.current}
+                          </p>
+                          <p className="text-[11px] text-board-muted">{card.ref}</p>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
-              );
-            })}
-          </div>
-        )}
+              ))}
+            </div>
+          );
+        })()}
 
         {/* ── Evolução Mensal de Vendas ────────────────────────────────── */}
         <div className="rounded-xl border border-border bg-board-surface overflow-hidden">
