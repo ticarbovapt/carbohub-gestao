@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { DashboardFilterBar, DashboardFilters, EMPTY_FILTERS } from "@/components/dashboard/DashboardFilterBar";
 import { BoardLayout } from "@/components/layouts/BoardLayout";
 import { KPICard } from "@/components/board/KPICard";
 import { StatusBadge } from "@/components/board/StatusBadge";
@@ -41,6 +42,7 @@ const DEPARTMENT_LABELS: Record<string, string> = {
 
 export default function DashboardProducao() {
   const [period, setPeriod] = useState<"today" | "week" | "month">("week");
+  const [filters, setFilters] = useState<DashboardFilters>(EMPTY_FILTERS);
   const { data: stats, isLoading: statsLoading } = useDashboardStats(period);
   const { data: recentChecklists, isLoading: checklistsLoading } = useRecentChecklists(10);
   const { data: checklistTrend, isLoading: trendLoading } = useChecklistTrend(7);
@@ -64,13 +66,15 @@ export default function DashboardProducao() {
     <BoardLayout>
       <div className="space-y-8">
         {/* Header */}
-        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+        <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
           <CarboPageHeader
             title="Dashboard — Produção"
             description="Checklists, Ordens de Produção e eficiência operacional"
             icon={Factory}
           />
-          <div className="flex items-center gap-3">
+          <div className="flex flex-col gap-2 items-end">
+            <DashboardFilterBar filters={filters} onChange={setFilters} />
+            <div className="flex items-center gap-3">
             <Select value={period} onValueChange={(v) => setPeriod(v as typeof period)}>
               <SelectTrigger className="w-40">
                 <Calendar className="mr-2 h-4 w-4" />
@@ -100,6 +104,7 @@ export default function DashboardProducao() {
               <Download className="h-4 w-4" />
               Exportar
             </Button>
+          </div>
           </div>
         </div>
 

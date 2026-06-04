@@ -109,7 +109,7 @@ export function useApprovePurchaseRequest() {
 
 // ---- Purchase Orders ----
 
-export function usePurchaseOrders(filters?: { status?: string }) {
+export function usePurchaseOrders(filters?: { status?: string; from?: string; to?: string }) {
   return useQuery({
     queryKey: ["purchase-orders", filters],
     queryFn: async () => {
@@ -119,6 +119,8 @@ export function usePurchaseOrders(filters?: { status?: string }) {
         .order("created_at", { ascending: false });
 
       if (filters?.status) query = query.eq("status", filters.status as any);
+      if (filters?.from)   query = query.gte("created_at", filters.from);
+      if (filters?.to)     query = query.lte("created_at", filters.to + "T23:59:59");
 
       const { data, error } = await query;
       if (error) throw error;
@@ -331,7 +333,7 @@ export function useCreateInvoice() {
 
 // ---- Payables ----
 
-export function usePurchasePayables(filters?: { status?: string }) {
+export function usePurchasePayables(filters?: { status?: string; from?: string; to?: string }) {
   return useQuery({
     queryKey: ["purchase-payables", filters],
     queryFn: async () => {
@@ -341,6 +343,8 @@ export function usePurchasePayables(filters?: { status?: string }) {
         .order("due_date", { ascending: true });
 
       if (filters?.status) query = query.eq("status", filters.status as any);
+      if (filters?.from)   query = query.gte("due_date", filters.from);
+      if (filters?.to)     query = query.lte("due_date", filters.to);
 
       const { data, error } = await query;
       if (error) throw error;

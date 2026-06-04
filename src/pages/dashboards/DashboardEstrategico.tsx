@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { BoardLayout } from "@/components/layouts/BoardLayout";
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
 import { Star } from "lucide-react";
@@ -5,10 +6,12 @@ import { CeoDashboard } from "@/components/dashboard/CeoDashboard";
 import { GestorDashboard } from "@/components/dashboard/GestorDashboard";
 import { useDashboardVariant } from "@/hooks/useDashboardVariant";
 import { useCanViewStrategicDashboard } from "@/hooks/useActionPermissions";
+import { DashboardFilterBar, DashboardFilters, EMPTY_FILTERS } from "@/components/dashboard/DashboardFilterBar";
 
 export default function DashboardEstrategico() {
   const variant = useDashboardVariant();
   const canView = useCanViewStrategicDashboard();
+  const [filters, setFilters] = useState<DashboardFilters>(EMPTY_FILTERS);
 
   const renderContent = () => {
     if (variant === "ceo")             return <CeoDashboard />;
@@ -33,11 +36,14 @@ export default function DashboardEstrategico() {
     <BoardLayout>
       <div className="space-y-6">
         {canView && (
-          <CarboPageHeader
-            title="Dashboard — Estratégico"
-            description="Visão executiva: KPIs consolidados, metas e performance geral"
-            icon={Star}
-          />
+          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+            <CarboPageHeader
+              title="Dashboard — Estratégico"
+              description="Visão executiva: KPIs consolidados, metas e performance geral"
+              icon={Star}
+            />
+            <DashboardFilterBar filters={filters} onChange={setFilters} className="sm:pt-1 shrink-0" />
+          </div>
         )}
         {renderContent()}
       </div>

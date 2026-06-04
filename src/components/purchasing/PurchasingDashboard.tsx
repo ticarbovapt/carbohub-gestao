@@ -11,10 +11,15 @@ import { usePurchasePayables, usePurchaseOrders } from "@/hooks/usePurchasing";
 
 const COLORS = ["hsl(145, 55%, 51%)", "hsl(207, 77%, 61%)", "hsl(45, 93%, 54%)", "hsl(0, 72%, 51%)", "hsl(280, 60%, 55%)"];
 
-export function PurchasingDashboard() {
+interface PurchasingDashboardProps {
+  from?: string;
+  to?: string;
+}
+
+export function PurchasingDashboard({ from, to }: PurchasingDashboardProps = {}) {
   const queryClient = useQueryClient();
-  const { data: payables } = usePurchasePayables();
-  const { data: orders } = usePurchaseOrders();
+  const { data: payables } = usePurchasePayables({ from, to });
+  const { data: orders } = usePurchaseOrders({ from, to });
   const [syncing, setSyncing] = useState(false);
 
   // Quantos registros vieram do Bling (apenas informativo)

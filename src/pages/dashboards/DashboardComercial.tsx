@@ -1,32 +1,38 @@
 import { BoardLayout } from "@/components/layouts/BoardLayout";
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
 import { KPICard } from "@/components/board/KPICard";
-import { TrendingUp, Building2, ShoppingCart, Star, DollarSign, Users, Loader2, BarChart3 } from "lucide-react";
+import { TrendingUp, Building2, ShoppingCart, Star, DollarSign, Loader2, BarChart3 } from "lucide-react";
 import { useLicensees } from "@/hooks/useLicensees";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Link } from "react-router-dom";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import {
   AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, Legend, Cell,
 } from "recharts";
+import { DashboardFilterBar, DashboardFilters, EMPTY_FILTERS } from "@/components/dashboard/DashboardFilterBar";
 
 export default function DashboardComercial() {
+  const [filters, setFilters] = useState<DashboardFilters>(EMPTY_FILTERS);
+
   const { data: licensees = [], isLoading: licenseesLoading } = useLicensees();
 
   const { data: orders = [], isLoading: ordersLoading } = useQuery({
-    queryKey: ["orders-commercial-summary"],
+    queryKey: ["orders-commercial-summary", filters.from, filters.to],
     queryFn: async () => {
-      const { data, error } = await supabase
+      let q = supabase
         .from("orders")
         .select("id, status, total_value, created_at, client_name")
         .order("created_at", { ascending: false })
         .limit(50);
+      if (filters.from) q = q.gte("created_at", filters.from);
+      if (filters.to)   q = q.lte("created_at", filters.to + "T23:59:59");
+      const { data, error } = await q;
       if (error) throw error;
       return data ?? [];
     },
@@ -34,14 +40,18 @@ export default function DashboardComercial() {
 
   // Evolução mensal — carboze_orders (Bling)
   const { data: carbozeOrders = [], isLoading: carbozeLoading } = useQuery({
-    queryKey: ["carboze-orders-monthly"],
+    queryKey: ["carboze-orders-monthly", filters.from, filters.to, filters.vendedor],
     queryFn: async () => {
-      const { data, error } = await (supabase as any)
+      let q = (supabase as any)
         .from("carboze_orders")
-        .select("total, status, created_at, order_number")
+        .select("total, status, created_at, order_number, vendedor_name")
         .order("created_at", { ascending: true });
+      if (filters.from)                   q = q.gte("created_at", filters.from);
+      if (filters.to)                     q = q.lte("created_at", filters.to + "T23:59:59");
+      if (filters.vendedor !== "all")     q = q.eq("vendedor_name", filters.vendedor);
+      const { data, error } = await q;
       if (error) throw error;
-      return (data ?? []) as { total: number; status: string; created_at: string; order_number: string }[];
+      return (data ?? []) as { total: number; status: string; created_at: string; order_number: string; vendedor_name: string }[];
     },
   });
 
@@ -98,11 +108,19 @@ export default function DashboardComercial() {
   return (
     <BoardLayout>
       <div className="space-y-8">
-        <CarboPageHeader
-          title="Dashboard — Comercial"
-          description="Licenciados, pedidos e performance de vendas"
-          icon={TrendingUp}
-        />
+        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+          <CarboPageHeader
+            title="Dashboard — Comercial"
+            description="Licenciados, pedidos e performance de vendas"
+            icon={TrendingUp}
+          />
+          <DashboardFilterBar
+            filters={filters}
+            onChange={setFilters}
+            showVendedor
+            className="sm:pt-1 shrink-0"
+          />
+        </div>
 
         {/* KPIs */}
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">

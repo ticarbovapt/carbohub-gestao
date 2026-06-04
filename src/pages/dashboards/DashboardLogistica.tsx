@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { DashboardFilterBar, DashboardFilters, EMPTY_FILTERS } from "@/components/dashboard/DashboardFilterBar";
 import { BoardLayout } from "@/components/layouts/BoardLayout";
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
 import { Truck } from "lucide-react";
@@ -14,6 +15,7 @@ import { useCanViewLogisticsDashboard } from "@/hooks/useActionPermissions";
 
 export default function DashboardLogistica() {
   const canViewStrategic = useCanViewLogisticsDashboard();
+  const [filters, setFilters] = useState<DashboardFilters>(EMPTY_FILTERS);
   const { data: shipments = [], isLoading } = useShipments();
   const updateStatus = useUpdateShipmentStatus();
   const [selectedShipment, setSelectedShipment] = useState<Shipment | null>(null);
@@ -25,11 +27,14 @@ export default function DashboardLogistica() {
   return (
     <BoardLayout>
       <div className="space-y-6">
-        <CarboPageHeader
-          title="Dashboard — Logística"
-          description="Rastreamento de remessas, KPIs de entrega e visão estratégica"
-          icon={Truck}
-        />
+        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+          <CarboPageHeader
+            title="Dashboard — Logística"
+            description="Rastreamento de remessas, KPIs de entrega e visão estratégica"
+            icon={Truck}
+          />
+          <DashboardFilterBar filters={filters} onChange={setFilters} className="sm:pt-1 shrink-0" />
+        </div>
 
         {isLoading ? (
           <div className="flex items-center justify-center h-64">
