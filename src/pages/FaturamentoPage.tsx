@@ -19,6 +19,7 @@ import {
 } from "@/hooks/useFaturamento";
 import { BlingPreviewDialog } from "@/components/orders/BlingPreviewDialog";
 import { LinkNFToOrderDialog } from "@/components/orders/LinkNFToOrderDialog";
+import { NfeLinkSuggestions } from "@/components/orders/NfeLinkSuggestions";
 import { toast } from "sonner";
 
 const BLING_PEDIDOS_URL = "https://www.bling.com.br/vendas.php#list";
@@ -381,6 +382,9 @@ export default function FaturamentoPage() {
             </p>
           </div>
         )}
+
+        {/* Sugestões de vínculo automático (recomendação — confirmação manual) */}
+        {origin === "bling" && <NfeLinkSuggestions />}
 
         {/* KPIs */}
         <div className="grid grid-cols-3 gap-3">
