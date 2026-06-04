@@ -10,8 +10,11 @@
 -- has_role/has_carbo_role, retorno de get_carbo_roles e profiles.requested_role).
 -- ============================================================================
 
-DROP TABLE IF EXISTS public.user_roles;
-DROP TABLE IF EXISTS public.carbo_user_roles;
+-- CASCADE: a policy da carbo_user_roles referencia user_roles (dependência
+-- cruzada). CASCADE remove só as policies das próprias tabelas legadas —
+-- nada externo depende delas (verificado pela query de descoberta).
+DROP TABLE IF EXISTS public.carbo_user_roles CASCADE;
+DROP TABLE IF EXISTS public.user_roles CASCADE;
 
 -- Verificação final (deve retornar 0 linhas):
 --   SELECT 'policy', tablename, policyname FROM pg_policies
