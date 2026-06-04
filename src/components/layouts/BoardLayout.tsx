@@ -81,6 +81,33 @@ import logoCarbo from "@/assets/logo-carbo.png";
 function QuickActionsMenu() {
   const [open, setOpen] = useState(false);
   const navigate = useNavigate();
+  const { profile } = useAuth();
+  const { allowedScreenIds, isConfigured } = useFunctionAccess();
+
+  // Mesma regra do Role Matrix usada no menu lateral: TI/head vê tudo;
+  // sem enforcement ou sem config no matrix, não bloqueia.
+  const isTiHead =
+    (profile?.department === "ti_suporte" && profile?.funcao === "head") ||
+    (profile?.secondary_department === "ti_suporte" && profile?.secondary_funcao === "head");
+  const canSee = (screenId: string) => {
+    if (!ENFORCEMENT_ACTIVE) return true;
+    if (isTiHead) return true;
+    if (!isConfigured) return true;
+    return allowedScreenIds.includes(screenId);
+  };
+
+  // Cada ação rápida é liberada pelo screenId da tela de destino (igual ao
+  // ProtectedRoute da rota), para o menu "+" ficar coerente com o Role Matrix.
+  const actions = [
+    { screenId: "os",         to: "/os?action=new",   icon: ClipboardList, label: "+ Nova Descarbonização", primary: true },
+    { screenId: "orders-new", to: "/orders/new",       icon: ShoppingCart,  label: "+ Nova Venda" },
+    { screenId: "licensees",  to: "/licensee/new",     icon: UserPlus,      label: "+ Novo Licenciado" },
+    { screenId: "team",       to: "/team?action=add",  icon: Users,         label: "+ Nova Conta" },
+    { screenId: "financeiro", to: "/financeiro",       icon: Wallet,        label: "+ Nova RC" },
+  ].filter(a => canSee(a.screenId));
+
+  // Sem nenhuma ação permitida → não mostra o botão "+"
+  if (actions.length === 0) return null;
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -100,41 +127,21 @@ function QuickActionsMenu() {
       </PopoverTrigger>
       <PopoverContent align="end" sideOffset={8} className="w-52 p-1.5 bg-popover border border-border shadow-lg rounded-xl">
         <div className="space-y-0.5">
-          <button
-            onClick={() => { navigate("/os?action=new"); setOpen(false); }}
-            className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm font-semibold text-foreground border border-border hover:border-primary/40 hover:bg-primary/5 transition-all"
-          >
-            <ClipboardList className="h-4 w-4 flex-shrink-0 text-primary" />
-            + Nova Descarbonização
-          </button>
-          <button
-            onClick={() => { navigate("/orders/new"); setOpen(false); }}
-            className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
-          >
-            <ShoppingCart className="h-4 w-4 flex-shrink-0" />
-            + Nova Venda
-          </button>
-          <button
-            onClick={() => { navigate("/licensee/new"); setOpen(false); }}
-            className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
-          >
-            <UserPlus className="h-4 w-4 flex-shrink-0" />
-            + Novo Licenciado
-          </button>
-          <button
-            onClick={() => { navigate("/team?action=add"); setOpen(false); }}
-            className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
-          >
-            <Users className="h-4 w-4 flex-shrink-0" />
-            + Nova Conta
-          </button>
-          <button
-            onClick={() => { navigate("/financeiro"); setOpen(false); }}
-            className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
-          >
-            <Wallet className="h-4 w-4 flex-shrink-0" />
-            + Nova RC
-          </button>
+          {actions.map(({ screenId, to, icon: Icon, label, primary }) => (
+            <button
+              key={screenId}
+              onClick={() => { navigate(to); setOpen(false); }}
+              className={cn(
+                "flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm transition-all",
+                primary
+                  ? "font-semibold text-foreground border border-border hover:border-primary/40 hover:bg-primary/5"
+                  : "font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
+              )}
+            >
+              <Icon className={cn("h-4 w-4 flex-shrink-0", primary && "text-primary")} />
+              {label}
+            </button>
+          ))}
         </div>
       </PopoverContent>
     </Popover>
