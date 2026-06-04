@@ -1558,6 +1558,50 @@ Deno.serve(async (req: Request): Promise<Response> => {
       }
     }
 
+    // ── Ação pontual: buscar o link do DANFE/XML de uma NF (sob demanda) ──────
+    // A lista do Bling não traz o PDF; o detalhe (GET /nfe/{id}) traz. Busca,
+    // salva em bling_nfe (cache) e devolve os links. Aceita bling_nf_id (number).
+    if (entity === "nfe_links") {
+      const blingNfId = body.bling_nf_id as number | string | undefined;
+      if (!blingNfId) {
+        return new Response(
+          JSON.stringify({ success: false, error: "Missing bling_nf_id" }),
+          { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } }
+        );
+      }
+      try {
+        let detail = await blingFetch(token, `/nfe/${blingNfId}`, 1, 1);
+        // retry 401 (token expirado) uma vez
+        if (detail?.error) throw new Error(JSON.stringify(detail.error));
+        const d = detail.data || {};
+        // Tenta vários nomes de campo possíveis para o link do DANFE/XML
+        const pdf =
+          d.pdf || d.linkPDF || d.linkPdf || d.linkDanfe || d.danfe || d.link || null;
+        const xml = d.xml || d.linkXml || d.linkXML || null;
+
+        // Cacheia no banco se achou algo
+        if (pdf || xml) {
+          await supabaseAdmin.from("bling_nfe").update({
+            ...(pdf ? { pdf_url: pdf } : {}),
+            ...(xml ? { xml_url: xml } : {}),
+            updated_at: new Date().toISOString(),
+          }).eq("bling_id", Number(blingNfId));
+        }
+
+        return new Response(
+          JSON.stringify({ success: true, pdf, xml, situacao: d.situacao ?? null, keys: Object.keys(d) }),
+          { status: 200, headers: { "Content-Type": "application/json", ...corsHeaders } }
+        );
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        console.error("[bling-sync] nfe_links error:", msg);
+        return new Response(
+          JSON.stringify({ success: false, error: msg }),
+          { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } }
+        );
+      }
+    }
+
     const results: Record<string, any> = {};
 
     const entitiesToSync = entity === "all"

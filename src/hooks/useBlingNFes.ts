@@ -391,6 +391,29 @@ export function useNfeLinkSuggestions() {
   });
 }
 
+/**
+ * Busca sob demanda o link do DANFE/XML de uma NF no Bling (a lista não traz;
+ * só o detalhe GET /nfe/{id}). Cacheia em bling_nfe e devolve os links.
+ */
+export function useFetchNfeLinks() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (blingNfId: number): Promise<{ pdf: string | null; xml: string | null; keys?: string[] }> => {
+      const res = await supabase.functions.invoke("bling-sync", {
+        body: { entity: "nfe_links", bling_nf_id: blingNfId },
+      });
+      if (!res.data?.success) {
+        throw new Error(res.data?.error || "Falha ao buscar a NF no Bling");
+      }
+      return { pdf: res.data.pdf ?? null, xml: res.data.xml ?? null, keys: res.data.keys };
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["vendas"] });
+      queryClient.invalidateQueries({ queryKey: ["bling-nfes"] });
+    },
+  });
+}
+
 /** Arquiva (ignored) ou desarquiva uma NF — para dar baixa explícita em NFs sem ação. */
 export function useArchiveNFe() {
   const queryClient = useQueryClient();
