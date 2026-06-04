@@ -221,19 +221,26 @@ export function TerritorialMap({
     ) => {
       let finalLat = lat;
       let finalLng = lng;
+      // estimated = posição aproximada (centro do estado), não é o GPS real.
+      let estimated = false;
 
       if (!finalLat || !finalLng) {
         if (state && STATE_COORDS[state]) {
           const [baseLat, baseLng] = STATE_COORDS[state];
           finalLat = baseLat + (Math.random() - 0.5) * 2;
           finalLng = baseLng + (Math.random() - 0.5) * 2;
+          estimated = true;
         } else {
           return;
         }
       }
 
-      const marker = L.marker([finalLat, finalLng], { icon });
-      marker.bindPopup(popupContent, { maxWidth: 300 });
+      // Marcador estimado fica mais apagado e ganha aviso no popup.
+      const marker = L.marker([finalLat, finalLng], { icon, opacity: estimated ? 0.5 : 1 });
+      const finalPopup = estimated
+        ? `<div class="text-[10px] font-semibold text-amber-600 mb-1">📍 Localização aproximada (sem GPS exato)</div>${popupContent}`
+        : popupContent;
+      marker.bindPopup(finalPopup, { maxWidth: 300 });
       markersRef.current?.addLayer(marker);
     };
 

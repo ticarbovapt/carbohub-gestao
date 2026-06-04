@@ -17,6 +17,8 @@ export interface NetworkMachine {
   licensee_name: string | null;
   licensee_code: string | null;
   installation_date: string | null;
+  /** true = posição aproximada (coordenada da cidade), não é o GPS real. */
+  estimated_location?: boolean;
 }
 
 export interface RankedLicensee {
@@ -250,6 +252,9 @@ export function useNetworkMap() {
         // Resolve coordinates: DB value → city fallback
         let lat = m.latitude != null ? Number(m.latitude) : null;
         let lng = m.longitude != null ? Number(m.longitude) : null;
+        // true quando a posição NÃO é o GPS real da máquina, e sim a coordenada
+        // aproximada da cidade (com leve dispersão) — usada como fallback.
+        let estimated = false;
 
         if (lat === null || lng === null) {
           const fallback = getCityCoords(m.location_city, m.location_state);
@@ -257,6 +262,7 @@ export function useNetworkMap() {
             // Add slight jitter (±0.01°) so stacked machines spread visually
             lat = fallback[0] + (Math.random() - 0.5) * 0.02;
             lng = fallback[1] + (Math.random() - 0.5) * 0.02;
+            estimated = true;
           }
         }
 
@@ -277,6 +283,7 @@ export function useNetworkMap() {
           installation_date: m.installation_date,
           licensee_name: lic?.name || null,
           licensee_code: lic?.code || null,
+          estimated_location: estimated,
         });
       }
       return result;
