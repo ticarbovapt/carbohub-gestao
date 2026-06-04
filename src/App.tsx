@@ -270,15 +270,15 @@ function AnimatedRoutes() {
             <Route path="/portal/pedidos"  element={<ProtectedRoute><LicenseeRequests /></ProtectedRoute>} />
             <Route path="/portal/creditos" element={<ProtectedRoute><LicenseeCredits /></ProtectedRoute>} />
 
-            {/* Admin — mantém requiredRole como guard legacy + screenId para enforcement */}
-            <Route path="/admin"          element={<ProtectedRoute requiredRole="admin" screenId="admin"><Admin /></ProtectedRoute>} />
-            <Route path="/admin/approval" element={<ProtectedRoute requiredRole="admin" screenId="admin-approval"><AdminApproval /></ProtectedRoute>} />
-            <Route path="/admin/cockpit"  element={<ProtectedRoute requiredRole="admin" requiresCeo screenId="cockpit"><CockpitEstrategico /></ProtectedRoute>} />
-            <Route path="/admin/pipeline" element={<ProtectedRoute requiredRole="admin" screenId="admin-pipeline"><PipelineConfig /></ProtectedRoute>} />
-            <Route path="/admin/webhooks" element={<ProtectedRoute requiredRole="admin" screenId="admin-webhooks"><WebhookConfig /></ProtectedRoute>} />
-            <Route path="/admin/nfse"     element={<ProtectedRoute requiredRole="admin" screenId="nfse"><NFSeImportPage /></ProtectedRoute>} />
-            <Route path="/governance"     element={<ProtectedRoute requiresCeo screenId="governance"><CarboGovernance /></ProtectedRoute>} />
-            <Route path="/admin/*"        element={<ProtectedRoute requiredRole="admin" screenId="admin"><Admin /></ProtectedRoute>} />
+            {/* Admin — acesso controlado pelo Role Matrix via screenId */}
+            <Route path="/admin"          element={<ProtectedRoute screenId="admin"><Admin /></ProtectedRoute>} />
+            <Route path="/admin/approval" element={<ProtectedRoute screenId="admin-approval"><AdminApproval /></ProtectedRoute>} />
+            <Route path="/admin/cockpit"  element={<ProtectedRoute screenId="cockpit"><CockpitEstrategico /></ProtectedRoute>} />
+            <Route path="/admin/pipeline" element={<ProtectedRoute screenId="admin-pipeline"><PipelineConfig /></ProtectedRoute>} />
+            <Route path="/admin/webhooks" element={<ProtectedRoute screenId="admin-webhooks"><WebhookConfig /></ProtectedRoute>} />
+            <Route path="/admin/nfse"     element={<ProtectedRoute screenId="nfse"><NFSeImportPage /></ProtectedRoute>} />
+            <Route path="/governance"     element={<ProtectedRoute screenId="governance"><CarboGovernance /></ProtectedRoute>} />
+            <Route path="/admin/*"        element={<ProtectedRoute screenId="admin"><Admin /></ProtectedRoute>} />
 
             {/* PDV Routes — screenId no ProtectedRoute pai cobre toda a área /pdv/* */}
             <Route path="/pdv" element={<ProtectedRoute screenId="pdv-dashboard"><PDVLayout /></ProtectedRoute>}>
