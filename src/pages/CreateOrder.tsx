@@ -33,6 +33,7 @@ import { toast } from "sonner";
 import { useTeamMembers } from "@/hooks/useTeamMembers";
 import { useSkus } from "@/hooks/useSkus";
 import { useAuth } from "@/contexts/AuthContext";
+import { useIsLeadership } from "@/hooks/useActionPermissions";
 import { diceBearUrl } from "@/components/ui/profile-avatar";
 
 type OrderMode = "venda" | "acao_promocional";
@@ -180,7 +181,7 @@ interface CnpjData {
 
 export default function CreateOrder() {
   const navigate = useNavigate();
-  const { profile, isSuporte, isCeo } = useAuth();
+  const { profile } = useAuth();
   const createOrder = useCreateOrder();
   const createQuote = useCreateQuote();
   const updateQuote = useUpdateQuote();
@@ -207,17 +208,9 @@ export default function CreateOrder() {
   // UF escolhida para validar a IE (sobrescreve a detectada do endereço). "" = usa a detectada.
   const [ieUf, setIeUf] = useState("");
 
-  // Heads (em qualquer dept), CEO, command e o superusuário TI podem atribuir o
-  // pedido a outro vendedor. Considera função PRIMÁRIA e SECUNDÁRIA — ex.: um
-  // head cuja função de head está no cargo secundário (HEAD TI) também vale.
-  const canOverrideVendedor =
-    isSuporte ||
-    isCeo ||
-    profile?.funcao === "head" ||
-    profile?.funcao === "ceo" ||
-    profile?.secondary_funcao === "head" ||
-    profile?.department === "command" ||
-    profile?.secondary_department === "command";
+  // Liderança (head/ceo, command ou TI/head) pode atribuir o pedido a outro
+  // vendedor. Mesma regra do Role Matrix (useIsLeadership).
+  const canOverrideVendedor = useIsLeadership();
   const [overrideVendedorId, setOverrideVendedorId] = useState<string>("");
 
   const vendedoresOnly = (teamMembers || []).filter((m) => m.is_vendedor);

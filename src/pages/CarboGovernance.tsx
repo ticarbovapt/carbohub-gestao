@@ -3,8 +3,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CarboRolesManager } from "@/components/admin/CarboRolesManager";
 import { StageAccessManager } from "@/components/admin/StageAccessManager";
 import { Shield, Lock, Users, Settings, KeyRound, UserPlus, Building2, Store, ClipboardCheck } from "lucide-react";
-import { useAuth } from "@/contexts/AuthContext";
-import { useCanAccessGovernance } from "@/hooks/useActionPermissions";
+import { useCanAccessGovernance, useIsLeadership } from "@/hooks/useActionPermissions";
 import { Navigate, useNavigate } from "react-router-dom";
 import { CarboButton } from "@/components/ui/carbo-button";
 import { CarboCard } from "@/components/ui/carbo-card";
@@ -61,7 +60,7 @@ function GovernanceActionButton({
 }
 
 const CarboGovernance = () => {
-  const { isMasterAdmin } = useAuth();
+  const isMasterAdmin = useIsLeadership();
   const canAccess = useCanAccessGovernance();
 
   if (!canAccess) return <Navigate to="/dashboard" replace />;

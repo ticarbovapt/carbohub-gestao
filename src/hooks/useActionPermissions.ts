@@ -9,6 +9,25 @@
 import { useAuth } from "@/contexts/AuthContext";
 import { useCanSeeScreen } from "./useFunctionAccess";
 
+// ── Liderança (Role Matrix) ─────────────────────────────────────────────────
+/**
+ * Liderança máxima: superusuário TI/head, diretoria (ceo/head) ou Command.
+ * Mesma regra do is_ceo/is_admin no banco. Use para ações sensíveis que antes
+ * eram gateadas por isMasterAdmin/isCeo/isSuporte.
+ */
+export function useIsLeadership(): boolean {
+  const { profile } = useAuth();
+  const isTiHead =
+    (profile?.department === "ti_suporte" && profile?.funcao === "head") ||
+    (profile?.secondary_department === "ti_suporte" && profile?.secondary_funcao === "head");
+  const isExec =
+    profile?.funcao === "ceo" || profile?.funcao === "head" ||
+    profile?.secondary_funcao === "ceo" || profile?.secondary_funcao === "head";
+  const isCommand =
+    profile?.department === "command" || profile?.secondary_department === "command";
+  return isTiHead || isExec || isCommand;
+}
+
 // ── Orders ────────────────────────────────────────────────────────────────────
 
 /** Create, edit or delete orders. */

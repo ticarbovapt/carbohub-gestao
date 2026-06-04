@@ -10,6 +10,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { useIsLeadership } from "@/hooks/useActionPermissions";
 import { toast } from "sonner";
 import type { DataScope } from "@/constants/functionAccessConfig";
 
@@ -112,8 +113,9 @@ export function useClearUserAccessOverride() {
  * Head: pode para membros do mesmo departamento.
  */
 export function useCanGrantOverride(targetDepartment: string | null): boolean {
-  const { isAdmin, profile } = useAuth();
-  if (isAdmin) return true;
+  const { profile } = useAuth();
+  const isLeadership = useIsLeadership();
+  if (isLeadership) return true;
   if (!targetDepartment) return false;
   // Head pode conceder override para membros do seu departamento — primário ou secundário
   const isPrimaryHead   = profile?.funcao            === "head" && profile?.department            === targetDepartment;

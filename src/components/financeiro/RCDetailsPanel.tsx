@@ -11,7 +11,7 @@ import { useRCRequests, useRCQuotations, useRCAnalysis, useRCApprovalLogs, useCr
 import { RC_STATUS_LABELS, RC_FLOW_STEPS, type RCStatus } from "@/types/rcPurchasing";
 import { RCFlowStepper } from "./RCFlowStepper";
 import { useAuth } from "@/contexts/AuthContext";
-import { useCanApproveExpenses } from "@/hooks/useActionPermissions";
+import { useCanApproveExpenses, useIsLeadership } from "@/hooks/useActionPermissions";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
@@ -21,7 +21,8 @@ interface Props {
 }
 
 export function RCDetailsPanel({ rcId, onBack }: Props) {
-  const { isMasterAdmin, user } = useAuth();
+  const { user } = useAuth();
+  const isLeadership = useIsLeadership();
   const isApprover = useCanApproveExpenses();
   const { data: rcs } = useRCRequests();
   const rc = rcs?.find(r => r.id === rcId);
@@ -85,7 +86,7 @@ export function RCDetailsPanel({ rcId, onBack }: Props) {
   };
 
   const handleApprove = () => {
-    const nivel = needsMasterAdmin ? (isMasterAdmin ? 2 : 1) : 1;
+    const nivel = needsMasterAdmin ? (isLeadership ? 2 : 1) : 1;
     approveRC.mutate({ rc_id: rcId, approved: true, nivel });
   };
 
