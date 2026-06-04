@@ -11,7 +11,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   ChevronLeft, ChevronRight, Search, ShoppingBag, TrendingUp,
-  Package, Pencil, Users, FileText, ArrowRightCircle, Loader2,
+  Package, Pencil, Users, FileText, ArrowRightCircle, Loader2, FileDown,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -38,6 +38,8 @@ interface VendaRow {
   status: string;
   vendedor_id: string | null;
   vendedor_name: string | null;
+  invoice_number: string | null;
+  nf_pdf_url: string | null;
   _raw?: CarbozeOrder;
 }
 
@@ -115,6 +117,21 @@ function useVendas(month: Date, vendedorIdFilter: string | null) {
         return eff >= monthStartStr && eff <= monthEndStr;
       });
 
+      // Busca o PDF/XML das NFs vinculadas (pdf_url vive em bling_nfe, não no pedido)
+      const nfIds = Array.from(
+        new Set(rows.map(r => r.bling_nf_id).filter((x): x is number => x != null)),
+      );
+      const pdfByBlingId: Record<number, string | null> = {};
+      if (nfIds.length > 0) {
+        const { data: nfRows } = await supabase
+          .from("bling_nfe")
+          .select("bling_id, pdf_url")
+          .in("bling_id", nfIds);
+        (nfRows || []).forEach((nf: any) => {
+          pdfByBlingId[nf.bling_id] = nf.pdf_url ?? null;
+        });
+      }
+
       return rows.map((row): VendaRow => ({
         id: row.id,
         order_number: row.order_number,
@@ -128,6 +145,8 @@ function useVendas(month: Date, vendedorIdFilter: string | null) {
         status: row.status,
         vendedor_id: row.vendedor_id ?? null,
         vendedor_name: row.vendedor_name ?? null,
+        invoice_number: row.invoice_number ?? null,
+        nf_pdf_url: row.bling_nf_id != null ? (pdfByBlingId[row.bling_nf_id] ?? null) : null,
         _raw: row as unknown as CarbozeOrder,
       }));
     },
@@ -391,6 +410,18 @@ export default function VendasPage() {
                           <td className="p-3 text-right font-bold tabular-nums">{fmtBRL(venda.total)}</td>
                           <td className="p-3 text-right" onClick={e => e.stopPropagation()}>
                             <div className="flex items-center justify-end gap-1">
+                              {venda.nf_pdf_url && (
+                                <a
+                                  href={venda.nf_pdf_url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="h-7 px-2 inline-flex items-center gap-1 rounded-md text-xs font-medium bg-green-500/10 text-green-600 hover:bg-green-500/20 border border-green-500/30 transition-colors"
+                                  title={venda.invoice_number ? `Baixar PDF da NF ${venda.invoice_number}` : "Baixar PDF da NF"}
+                                >
+                                  <FileDown className="h-3 w-3" />
+                                  <span className="hidden sm:inline">NF{venda.invoice_number ? ` ${venda.invoice_number}` : ""}</span>
+                                </a>
+                              )}
                               {canConvert && (
                                 <button
                                   onClick={() => handleConvert(venda.id)}
