@@ -26,10 +26,8 @@ import { useDashboardStats, useRecentChecklists } from "@/hooks/useDashboardStat
 import { useChecklistTrend, useOSTrend, useDepartmentDistribution } from "@/hooks/useDashboardCharts";
 import { TrendChart } from "@/components/dashboard/TrendChart";
 import { DepartmentChart } from "@/components/dashboard/DepartmentChart";
-// Dashboards Carbo (por role)
+// Visões de dashboard: executiva (CEO) ou geral (todo o restante)
 import { CeoDashboard } from "@/components/dashboard/CeoDashboard";
-import { GestorDashboard } from "@/components/dashboard/GestorDashboard";
-import { OperadorDashboard } from "@/components/dashboard/OperadorDashboard";
 import { Skeleton } from "@/components/ui/skeleton";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -53,13 +51,8 @@ const Dashboard = () => {
   }
 
   if (variant === "ceo") return <BoardLayout><CeoDashboard /></BoardLayout>;
-  if (variant === "gestor_adm") return <BoardLayout><GestorDashboard role="gestor_adm" /></BoardLayout>;
-  if (variant === "gestor_fin") return <BoardLayout><GestorDashboard role="gestor_fin" /></BoardLayout>;
-  if (variant === "gestor_compras") return <BoardLayout><GestorDashboard role="gestor_compras" /></BoardLayout>;
-  if (variant === "operador_fiscal") return <BoardLayout><OperadorDashboard role="operador_fiscal" /></BoardLayout>;
-  if (variant === "operador") return <BoardLayout><OperadorDashboard role="operador" /></BoardLayout>;
 
-  // Default: dashboard geral para qualquer usuário
+  // Todo o restante usa o dashboard geral real (gestor/operador foram aposentados).
   return <DefaultDashboard />;
 };
 
