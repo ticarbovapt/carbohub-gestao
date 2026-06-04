@@ -182,6 +182,7 @@ export function useLinkNFeToOrder() {
       queryClient.invalidateQueries({ queryKey: ["carboze-orders"] });
       queryClient.invalidateQueries({ queryKey: ["vendas"] });
       queryClient.invalidateQueries({ queryKey: ["faturamento"] });
+      queryClient.invalidateQueries({ queryKey: ["nfe-link-suggestions"] });
       toast.success("NF vinculada ao pedido com sucesso!");
     },
     onError: (err: Error) => {
@@ -230,6 +231,162 @@ export function useUnlinkNFe() {
     },
     onError: (err: Error) => {
       toast.error("Erro ao desvincular: " + err.message);
+    },
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Sugestões de vínculo NF ↔ pedido (para pedidos nascidos no Bling)
+//
+// O matcher automático "oficial" só casa pela observação (PED-AAAA-NNNNN), que
+// pedidos nascidos no Bling (BLING-XXX) não têm. Aqui calculamos uma RECOMENDAÇÃO
+// por cliente + valor + data. O sistema sugere; o humano confirma (nada é
+// aplicado sozinho — assim a vinculação é uma decisão registrada de quem clicou).
+// ─────────────────────────────────────────────────────────────────────────────
+export type SuggestionConfidence = "alta" | "media" | "baixa";
+
+export interface NfeLinkSuggestion {
+  orderId: string;
+  orderNumber: string;
+  orderCustomer: string | null;
+  orderTotal: number | null;
+  orderDate: string | null;
+  nfeId: string;
+  nfeNumero: string | null;
+  nfeContato: string | null;
+  nfeValor: number | null;
+  nfeData: string | null;
+  confidence: SuggestionConfidence;
+  reasons: string[];
+}
+
+function normalizeName(s: string | null): string {
+  return (s || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+function brl(v: number): string {
+  return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+}
+
+export function useNfeLinkSuggestions() {
+  return useQuery({
+    queryKey: ["nfe-link-suggestions"],
+    staleTime: 30_000,
+    queryFn: async (): Promise<NfeLinkSuggestion[]> => {
+      // Pedidos nascidos no Bling, ainda sem NF vinculada
+      const { data: ordersData, error: oErr } = await supabase
+        .from("carboze_orders")
+        .select("id, order_number, customer_name, total, created_at, sale_date")
+        .is("bling_nf_id", null)
+        .like("order_number", "BLING-%")
+        .limit(500);
+      if (oErr) throw oErr;
+
+      // NFs do Bling ainda não vinculadas a nenhum pedido (e não arquivadas)
+      const { data: nfData, error: nErr } = await supabase
+        .from("bling_nfe")
+        .select("id, numero, contato_nome, valor_total, data_emissao, order_id, match_status")
+        .is("order_id", null)
+        .neq("match_status", "ignored")
+        .limit(1000);
+      if (nErr) throw nErr;
+
+      const orders = ordersData || [];
+      const nfs = nfData || [];
+
+      // Gera todos os pares candidatos com pontuação
+      type Pair = { orderIdx: number; nfIdx: number; score: number; reasons: string[] };
+      const pairs: Pair[] = [];
+
+      orders.forEach((o, oi) => {
+        const ov = Number(o.total) || 0;
+        const on = normalizeName(o.customer_name);
+        const od = (o.sale_date || o.created_at || "").slice(0, 10);
+
+        nfs.forEach((nf, ni) => {
+          const nv = Number(nf.valor_total) || 0;
+          const nn = normalizeName(nf.contato_nome);
+          const nd = (nf.data_emissao || "").slice(0, 10);
+          const reasons: string[] = [];
+          let score = 0;
+
+          // Valor
+          const diff = Math.abs(ov - nv);
+          if (diff < 0.01) {
+            score += 50;
+            reasons.push(`mesmo valor (${brl(ov)})`);
+          } else if (ov > 0 && diff / ov <= 0.02) {
+            score += 25;
+            reasons.push("valor muito próximo");
+          }
+
+          // Cliente
+          if (on && nn) {
+            if (on === nn) {
+              score += 40;
+              reasons.push("mesmo cliente");
+            } else if (on.includes(nn) || nn.includes(on)) {
+              score += 25;
+              reasons.push("cliente semelhante");
+            }
+          }
+
+          // Data
+          if (od && nd) {
+            const days = Math.abs((new Date(od).getTime() - new Date(nd).getTime()) / 86_400_000);
+            if (days <= 3) {
+              score += 10;
+              reasons.push("datas próximas");
+            } else if (days <= 10) {
+              score += 5;
+            }
+          }
+
+          // Só considera pares com sinal mínimo (evita ruído)
+          if (score >= 25) pairs.push({ orderIdx: oi, nfIdx: ni, score, reasons });
+        });
+      });
+
+      // Atribuição gulosa: maior pontuação primeiro, cada NF e cada pedido
+      // entram em no máximo uma sugestão.
+      pairs.sort((a, b) => b.score - a.score);
+      const usedOrders = new Set<number>();
+      const usedNfs = new Set<number>();
+      const out: NfeLinkSuggestion[] = [];
+
+      for (const p of pairs) {
+        if (usedOrders.has(p.orderIdx) || usedNfs.has(p.nfIdx)) continue;
+        usedOrders.add(p.orderIdx);
+        usedNfs.add(p.nfIdx);
+        const o = orders[p.orderIdx];
+        const nf = nfs[p.nfIdx];
+        const confidence: SuggestionConfidence =
+          p.score >= 80 ? "alta" : p.score >= 50 ? "media" : "baixa";
+        out.push({
+          orderId: o.id,
+          orderNumber: o.order_number,
+          orderCustomer: o.customer_name,
+          orderTotal: o.total,
+          orderDate: (o.sale_date || o.created_at || "").slice(0, 10),
+          nfeId: nf.id,
+          nfeNumero: nf.numero,
+          nfeContato: nf.contato_nome,
+          nfeValor: nf.valor_total,
+          nfeData: nf.data_emissao,
+          confidence,
+          reasons: p.reasons,
+        });
+      }
+
+      // Ordena por confiança (alta → baixa) para revisão
+      const rank: Record<SuggestionConfidence, number> = { alta: 0, media: 1, baixa: 2 };
+      out.sort((a, b) => rank[a.confidence] - rank[b.confidence]);
+      return out;
     },
   });
 }
