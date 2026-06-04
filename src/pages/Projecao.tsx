@@ -46,19 +46,28 @@ function loadConfig(): ProjConfig {
 export default function Projecao() {
   const [config, setConfig] = useState<ProjConfig>(loadConfig);
   const [showConfig, setShowConfig] = useState(false);
-  const [tick, setTick] = useState(Date.now());
   const gridRef = useRef<HTMLDivElement>(null);
+  const iframeRefs = useRef<Record<string, HTMLIFrameElement | null>>({});
   const [isFullscreen, setIsFullscreen] = useState(false);
+
+  // Atualização "suave": em vez de recarregar o iframe (o que dá flash branco
+  // e joga o scroll de volta pro topo), avisa cada painel para rebuscar os
+  // dados. O conteúdo se mantém no lugar — só os números atualizam.
+  const broadcastRefresh = () => {
+    Object.values(iframeRefs.current).forEach((f) => {
+      f?.contentWindow?.postMessage({ type: "carbo-refresh" }, window.location.origin);
+    });
+  };
 
   // Persiste a configuração sempre que muda
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(config));
   }, [config]);
 
-  // Atualização automática: recarrega os iframes no intervalo escolhido
+  // Atualização automática: pede aos painéis que rebusquem os dados (sem F5)
   useEffect(() => {
     if (!config.refreshSec) return;
-    const id = setInterval(() => setTick(Date.now()), config.refreshSec * 1000);
+    const id = setInterval(broadcastRefresh, config.refreshSec * 1000);
     return () => clearInterval(id);
   }, [config.refreshSec]);
 
@@ -116,8 +125,8 @@ export default function Projecao() {
             style={{ minHeight: isFullscreen ? undefined : 460 }}
           >
             <iframe
-              key={`${panel.id}-${tick}`}
-              src={`${panel.path}?embed=1&_=${tick}`}
+              ref={(el) => { iframeRefs.current[panel.id] = el; }}
+              src={`${panel.path}?embed=1`}
               title={panel.label}
               className="w-full h-full border-0"
               style={{ minHeight: isFullscreen ? undefined : 460 }}
@@ -146,7 +155,7 @@ export default function Projecao() {
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <Button variant="outline" onClick={() => setTick(Date.now())} className="gap-1.5">
+            <Button variant="outline" onClick={broadcastRefresh} className="gap-1.5">
               <RefreshCw className="h-4 w-4" /> Atualizar agora
             </Button>
             <Button variant="outline" onClick={() => setShowConfig(v => !v)} className="gap-1.5">

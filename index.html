@@ -17,6 +17,63 @@
     <meta name="twitter:site" content="@GrupoCarbo" />
     <meta name="twitter:image" content="/favicon.png" />
     <meta name="build" content="20260406c" />
+
+    <!-- Captura de erros: em vez de tela branca, mostra o erro na tela.
+         Escrito em ES5 puro para rodar mesmo em navegadores muito antigos. -->
+    <script>
+      (function () {
+        function show(title, detail) {
+          try {
+            var el = document.getElementById("carbo-fatal");
+            if (!el) {
+              el = document.createElement("div");
+              el.id = "carbo-fatal";
+              el.style.cssText =
+                "position:fixed;top:0;left:0;right:0;bottom:0;z-index:99999;" +
+                "background:#0b0b0c;color:#f5f5f5;font-family:monospace;" +
+                "padding:20px;overflow:auto;font-size:14px;line-height:1.5";
+              if (document.body) document.body.appendChild(el);
+              else
+                document.addEventListener("DOMContentLoaded", function () {
+                  document.body.appendChild(el);
+                });
+            }
+            el.innerHTML =
+              '<div style="color:#ff6b6b;font-size:18px;margin-bottom:12px">' +
+              "Erro ao carregar o Carbo HUB</div>" +
+              '<div style="color:#ffd166;margin-bottom:8px">' +
+              String(title) +
+              "</div>" +
+              '<pre style="white-space:pre-wrap;word-break:break-word">' +
+              String(detail || "") +
+              "</pre>" +
+              '<div style="margin-top:16px;color:#888">User-Agent:<br>' +
+              String(navigator.userAgent) +
+              "</div>";
+          } catch (e) {}
+        }
+        window.addEventListener("error", function (ev) {
+          var d = ev && ev.error && ev.error.stack ? ev.error.stack : ev && ev.message;
+          show(ev && ev.message ? ev.message : "Erro de script", d);
+        });
+        window.addEventListener("unhandledrejection", function (ev) {
+          var r = ev && ev.reason;
+          show("Promise rejeitada", r && r.stack ? r.stack : String(r));
+        });
+        // Se o app não montar nada em 12s, avisa (provável incompatibilidade).
+        setTimeout(function () {
+          var root = document.getElementById("root");
+          if (root && root.children.length === 0) {
+            show(
+              "O aplicativo não iniciou (tela em branco)",
+              "Nenhum erro foi capturado, mas a tela continua vazia. " +
+                "Isso costuma indicar um navegador incompatível. " +
+                "Tente abrir por outro navegador (ex.: Kiwi ou Firefox)."
+            );
+          }
+        }, 12000);
+      })();
+    </script>
   </head>
 
   <body>
