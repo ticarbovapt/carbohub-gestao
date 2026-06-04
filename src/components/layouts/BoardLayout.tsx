@@ -82,32 +82,21 @@ function QuickActionsMenu() {
   const [open, setOpen] = useState(false);
   const navigate = useNavigate();
   const { profile } = useAuth();
-  const { allowedScreenIds, isConfigured } = useFunctionAccess();
 
-  // Mesma regra do Role Matrix usada no menu lateral: TI/head vê tudo;
-  // sem enforcement ou sem config no matrix, não bloqueia.
-  const isTiHead =
-    (profile?.department === "ti_suporte" && profile?.funcao === "head") ||
-    (profile?.secondary_department === "ti_suporte" && profile?.secondary_funcao === "head");
-  const canSee = (screenId: string) => {
-    if (!ENFORCEMENT_ACTIVE) return true;
-    if (isTiHead) return true;
-    if (!isConfigured) return true;
-    return allowedScreenIds.includes(screenId);
-  };
+  // Ações de venda são liberadas para todos (todo mundo pode vender).
+  // Só "Nova Conta" (criar usuário) é restrita a head, command ou TI.
+  const canCreateAccount =
+    profile?.funcao === "head" || profile?.secondary_funcao === "head" ||
+    profile?.department === "command" || profile?.secondary_department === "command" ||
+    profile?.department === "ti_suporte" || profile?.secondary_department === "ti_suporte";
 
-  // Cada ação rápida é liberada pelo screenId da tela de destino (igual ao
-  // ProtectedRoute da rota), para o menu "+" ficar coerente com o Role Matrix.
   const actions = [
-    { screenId: "os",         to: "/os?action=new",   icon: ClipboardList, label: "+ Nova Descarbonização", primary: true },
-    { screenId: "orders-new", to: "/orders/new",       icon: ShoppingCart,  label: "+ Nova Venda" },
-    { screenId: "licensees",  to: "/licensee/new",     icon: UserPlus,      label: "+ Novo Licenciado" },
-    { screenId: "team",       to: "/team?action=add",  icon: Users,         label: "+ Nova Conta" },
-    { screenId: "financeiro", to: "/financeiro",       icon: Wallet,        label: "+ Nova RC" },
-  ].filter(a => canSee(a.screenId));
-
-  // Sem nenhuma ação permitida → não mostra o botão "+"
-  if (actions.length === 0) return null;
+    { key: "os",        to: "/os?action=new",   icon: ClipboardList, label: "+ Nova Descarbonização", primary: true, show: true },
+    { key: "venda",     to: "/orders/new",       icon: ShoppingCart,  label: "+ Nova Venda",          show: true },
+    { key: "licenciado",to: "/licensee/new",     icon: UserPlus,      label: "+ Novo Licenciado",     show: true },
+    { key: "conta",     to: "/team?action=add",  icon: Users,         label: "+ Nova Conta",          show: canCreateAccount },
+    { key: "rc",        to: "/financeiro",       icon: Wallet,        label: "+ Nova RC",             show: true },
+  ].filter(a => a.show);
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -127,9 +116,9 @@ function QuickActionsMenu() {
       </PopoverTrigger>
       <PopoverContent align="end" sideOffset={8} className="w-52 p-1.5 bg-popover border border-border shadow-lg rounded-xl">
         <div className="space-y-0.5">
-          {actions.map(({ screenId, to, icon: Icon, label, primary }) => (
+          {actions.map(({ key, to, icon: Icon, label, primary }) => (
             <button
-              key={screenId}
+              key={key}
               onClick={() => { navigate(to); setOpen(false); }}
               className={cn(
                 "flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm transition-all",
