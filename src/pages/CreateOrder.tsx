@@ -34,6 +34,7 @@ import { useTeamMembers } from "@/hooks/useTeamMembers";
 import { useSkus } from "@/hooks/useSkus";
 import { useAuth } from "@/contexts/AuthContext";
 import { useIsLeadership } from "@/hooks/useActionPermissions";
+import { useCanSeeScreen } from "@/hooks/useFunctionAccess";
 import { diceBearUrl } from "@/components/ui/profile-avatar";
 
 type OrderMode = "venda" | "acao_promocional";
@@ -181,6 +182,10 @@ interface CnpjData {
 
 export default function CreateOrder() {
   const navigate = useNavigate();
+  // Vendedores sem acesso à lista de pedidos voltam ao início após salvar
+  // (a venda é criada normalmente; só não veem a tela de gestão de pedidos).
+  const canSeeOrders = useCanSeeScreen("orders");
+  const afterSavePath = canSeeOrders ? "/orders" : "/inicio";
   const { profile } = useAuth();
   const createOrder = useCreateOrder();
   const createQuote = useCreateQuote();
@@ -673,7 +678,7 @@ export default function CreateOrder() {
     }
 
     await createOrder.mutateAsync(buildPayload(data, orderItems));
-    navigate("/orders");
+    navigate(afterSavePath);
   };
 
   // GERAR/SALVAR ORÇAMENTO — salva como rascunho (sem OP/estoque) e baixa o PDF.
@@ -702,7 +707,7 @@ export default function CreateOrder() {
       created_at: result.created_at,
       notes: result.notes,
     });
-    navigate(isEditingQuote && editId ? `/orders/${editId}` : "/orders");
+    navigate(isEditingQuote && editId ? `/orders/${editId}` : afterSavePath);
   };
 
   // Reset point_type when switching modes

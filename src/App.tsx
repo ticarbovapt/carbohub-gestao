@@ -188,7 +188,8 @@ function AnimatedRoutes() {
             <Route path="/licensees/:id"    element={<ProtectedRoute screenId="licensees"><LicenseeDetails /></ProtectedRoute>} />
             <Route path="/machines"         element={<ProtectedRoute screenId="machines"><Machines /></ProtectedRoute>} />
             <Route path="/orders"           element={<ProtectedRoute screenId="orders"><Orders /></ProtectedRoute>} />
-            <Route path="/orders/new"       element={<ProtectedRoute screenId="orders-new"><CreateOrder /></ProtectedRoute>} />
+            {/* Criar venda é ação universal (todo mundo vende) — sem screenId */}
+            <Route path="/orders/new"       element={<ProtectedRoute><CreateOrder /></ProtectedRoute>} />
             <Route path="/orders/:id"       element={<ProtectedRoute screenId="orders"><OrderDetails /></ProtectedRoute>} />
             <Route path="/orders/:id/print" element={<ProtectedRoute screenId="orders"><OrderPrintPage /></ProtectedRoute>} />
             <Route path="/role-matrix"      element={<ProtectedRoute screenId="role-matrix"><RoleMatrix /></ProtectedRoute>} />
