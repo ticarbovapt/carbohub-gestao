@@ -34,8 +34,8 @@ RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS
     FROM public.service_orders so
     JOIN public.profiles p ON p.id = _user_id
     WHERE so.id = _os_id
-      AND (so.current_department::text = p.department
-        OR so.current_department::text = p.secondary_department)
+      AND (so.current_department::text = p.department::text
+        OR so.current_department::text = p.secondary_department::text)
   );
 $$;
 
