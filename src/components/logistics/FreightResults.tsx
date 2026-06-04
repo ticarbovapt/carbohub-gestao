@@ -10,7 +10,7 @@ function EnvBadge({ env }: { env: "sandbox" | "production" | "mock" }) {
     return <Badge className="bg-green-600 text-white text-[10px]">🟢 Produção</Badge>;
   if (env === "sandbox")
     return <Badge className="bg-amber-500 text-white text-[10px]">🟡 Sandbox</Badge>;
-  return <Badge variant="outline" className="text-[10px]">⚪ Mock (demonstração)</Badge>;
+  return <Badge className="bg-red-500 text-white text-[10px]">⚠️ Simulado</Badge>;
 }
 
 function formatDays(min: number | null, max: number | null) {
@@ -69,8 +69,19 @@ export function FreightResults({ result, note, onSave, isSaving }: FreightResult
         <EnvBadge env={result.env} />
       </div>
 
-      {/* Mock note */}
-      {note && (
+      {/* Banner de cotação simulada — preços NÃO são reais */}
+      {result.env === "mock" && (
+        <div className="px-4 py-2.5 bg-red-50 dark:bg-red-950/30 text-xs text-red-700 dark:text-red-300 border-b border-red-200 dark:border-red-800 flex items-start gap-2">
+          <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+          <span>
+            <strong>Cotação simulada — valores ilustrativos, não são reais.</strong>{" "}
+            {note || "A integração de frete não está ativa. Não use estes preços para fechar pedido."}
+          </span>
+        </div>
+      )}
+
+      {/* Nota adicional (sandbox/produção) */}
+      {note && result.env !== "mock" && (
         <div className="px-4 py-2 bg-amber-50 dark:bg-amber-950/20 text-[11px] text-amber-700 dark:text-amber-400 border-b border-amber-200 dark:border-amber-800">
           ⚠️ {note}
         </div>
