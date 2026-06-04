@@ -441,13 +441,13 @@ export default function VendasPage() {
                                 <button
                                   onClick={() => handleDownloadNF(venda)}
                                   disabled={nfLoadingId === venda.id}
-                                  className="h-7 px-2 inline-flex items-center gap-1 rounded-md text-xs font-medium bg-green-500/10 text-green-600 hover:bg-green-500/20 border border-green-500/30 transition-colors disabled:opacity-50"
+                                  className="h-7 px-2 inline-flex items-center gap-1 rounded-md text-xs font-medium bg-green-500/10 text-green-600 hover:bg-green-500/20 border border-green-500/30 transition-colors disabled:opacity-50 whitespace-nowrap"
                                   title={venda.invoice_number ? `Baixar PDF da NF ${venda.invoice_number}` : "Baixar PDF da NF"}
                                 >
                                   {nfLoadingId === venda.id
                                     ? <Loader2 className="h-3 w-3 animate-spin" />
                                     : <FileDown className="h-3 w-3" />}
-                                  <span className="hidden sm:inline">NF{venda.invoice_number ? ` ${venda.invoice_number}` : ""}</span>
+                                  <span className="hidden sm:inline">Baixar NF</span>
                                 </button>
                               )}
                               {canConvert && (
