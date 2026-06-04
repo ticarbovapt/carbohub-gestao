@@ -159,6 +159,29 @@ export default function DashboardComercial() {
     : v >= 1000    ? `R$${(v / 1000).toFixed(0)}k`
     : formatCurrency(v);
 
+  // Tooltip customizado — evita entradas duplicadas (Bar + Line com mesmo dataKey)
+  const TooltipBRL = ({ active, payload, label }: any) => {
+    if (!active || !payload?.length) return null;
+    const main = payload.find((p: any) => p.type === "bar") ?? payload[0];
+    return (
+      <div style={{ background: "#1a2234", border: "1px solid rgba(255,255,255,0.14)", boxShadow: "0 8px 28px rgba(0,0,0,0.45)", borderRadius: 10, padding: "8px 14px", fontSize: 12 }}>
+        <p style={{ color: "#fff", fontWeight: 700, marginBottom: 6, fontSize: 13 }}>{label}</p>
+        <p style={{ color: "#4ade80" }}>{Number(main.value).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</p>
+      </div>
+    );
+  };
+
+  const TooltipQty = ({ active, payload, label }: any) => {
+    if (!active || !payload?.length) return null;
+    const main = payload.find((p: any) => p.type === "bar") ?? payload[0];
+    return (
+      <div style={{ background: "#1a2234", border: "1px solid rgba(255,255,255,0.14)", boxShadow: "0 8px 28px rgba(0,0,0,0.45)", borderRadius: 10, padding: "8px 14px", fontSize: 12 }}>
+        <p style={{ color: "#fff", fontWeight: 700, marginBottom: 6, fontSize: 13 }}>{label}</p>
+        <p style={{ color: "#93c5fd" }}>{Number(main.value)} vendas</p>
+      </div>
+    );
+  };
+
   return (
     <BoardLayout>
       <div className="space-y-3 max-w-[1600px] mx-auto">
@@ -402,13 +425,7 @@ export default function DashboardComercial() {
                     <XAxis dataKey="mes" tick={{ fontSize: 11, fill: "#94a3b8" }} axisLine={false} tickLine={false} dy={4} />
                     <YAxis tick={{ fontSize: 10, fill: "#94a3b8" }} axisLine={false} tickLine={false} width={44}
                       tickFormatter={v => v >= 1000 ? `${(v / 1000).toFixed(0)}k` : String(v)} />
-                    <Tooltip
-                      cursor={{ fill: "rgba(148,163,184,0.08)" }}
-                      contentStyle={{ background: "#1a2234", border: "1px solid rgba(255,255,255,0.12)", boxShadow: "0 8px 24px rgba(0,0,0,0.4)", borderRadius: 10, fontSize: 12, padding: "8px 12px", color: "#f1f5f9" }}
-                      labelStyle={{ color: "#ffffff", fontWeight: 700, marginBottom: 4, fontSize: 13 }}
-                      itemStyle={{ color: "#94a3b8" }}
-                      formatter={(v: number) => [v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }), "Faturado"]}
-                    />
+                    <Tooltip cursor={{ fill: "rgba(148,163,184,0.08)" }} content={<TooltipBRL />} />
                     <Bar dataKey="faturado" fill="rgba(26,122,74,0.18)" stroke="#1a7a4a" strokeWidth={1.5} radius={[4, 4, 0, 0]} maxBarSize={48} isAnimationActive={false}>
                       <LabelList dataKey="faturado" position="top"
                         formatter={(v: number) => v >= 1000 ? `R$${(v / 1000).toFixed(0)}k` : `R$${v}`}
@@ -437,13 +454,7 @@ export default function DashboardComercial() {
                     <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.08)" vertical={false} />
                     <XAxis dataKey="mes" tick={{ fontSize: 11, fill: "#94a3b8" }} axisLine={false} tickLine={false} dy={4} />
                     <YAxis allowDecimals={false} tick={{ fontSize: 10, fill: "#94a3b8" }} axisLine={false} tickLine={false} width={28} />
-                    <Tooltip
-                      cursor={{ fill: "rgba(148,163,184,0.08)" }}
-                      contentStyle={{ background: "#1a2234", border: "1px solid rgba(255,255,255,0.12)", boxShadow: "0 8px 24px rgba(0,0,0,0.4)", borderRadius: 10, fontSize: 12, padding: "8px 12px", color: "#f1f5f9" }}
-                      labelStyle={{ color: "#ffffff", fontWeight: 700, marginBottom: 4, fontSize: 13 }}
-                      itemStyle={{ color: "#94a3b8" }}
-                      formatter={(v: number) => [v, "Vendas"]}
-                    />
+                    <Tooltip cursor={{ fill: "rgba(148,163,184,0.08)" }} content={<TooltipQty />} />
                     <Bar dataKey="pedidos" fill="rgba(59,110,165,0.75)" radius={[5, 5, 0, 0]} maxBarSize={48} isAnimationActive={false}>
                       <LabelList dataKey="pedidos" position="top"
                         style={{ fontSize: 11, fill: "#94a3b8", fontWeight: 700 }} />
