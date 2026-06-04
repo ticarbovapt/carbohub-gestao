@@ -64,7 +64,8 @@ export default function DashboardComercial() {
     const [topCliente, topQtd] = Object.entries(clientCount)
       .sort(([, a], [, b]) => b - a)[0] ?? ["—", 0];
 
-    return { totalVendas, totalBRL, maiorVenda, maiorCliente, topCliente, topQtd };
+    const ticketMedio = totalVendas > 0 ? totalBRL / totalVendas : 0;
+    return { totalVendas, totalBRL, maiorVenda, maiorCliente, topCliente, topQtd, ticketMedio };
   }, [carbozeOrders]);
 
   // Agrupar carboze_orders por mês
@@ -87,7 +88,8 @@ export default function DashboardComercial() {
         try {
           const [y, m] = key.split("-");
           const label = format(new Date(parseInt(y), parseInt(m) - 1, 1), "MMM/yy", { locale: ptBR });
-          return { mes: label, ...v };
+          const ticketMedio = v.pedidos > 0 ? Math.round(v.faturado / v.pedidos) : 0;
+          return { mes: label, ...v, ticketMedio };
         } catch {
           return { mes: key, ...v };
         }
@@ -200,7 +202,7 @@ export default function DashboardComercial() {
         </div>
 
         {/* KPIs */}
-        <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-5">
           {carbozeLoading ? (
             Array.from({ length: 4 }).map((_, i) => (
               <div key={i} className="rounded-xl border border-border bg-board-surface p-4">
@@ -244,6 +246,14 @@ export default function DashboardComercial() {
                   icon: Repeat2,
                   accent: "border-l-blue-400",
                   iconBg: "bg-blue-400/10 text-blue-500",
+                },
+                {
+                  title: "Ticket Médio",
+                  value: fmtK(kpis.ticketMedio),
+                  sub: "Por pedido (período)",
+                  icon: TrendingUp,
+                  accent: "border-l-violet-400",
+                  iconBg: "bg-violet-400/10 text-violet-500",
                 },
               ].map(({ title, value, sub, icon: Icon, accent, iconBg }) => {
                 // Responsive font: shrink if value is long
@@ -468,6 +478,53 @@ export default function DashboardComercial() {
             </div>
           )}
         </div>
+
+        {/* ── Evolução Ticket Médio ─────────────────────────────────────── */}
+        {!carbozeLoading && monthlyData.length > 0 && (
+          <div className="rounded-2xl border border-border bg-board-surface overflow-hidden">
+            <div className="flex items-center justify-between border-b border-border px-6 py-3">
+              <div>
+                <h2 className="text-base font-bold text-board-text flex items-center gap-2">
+                  <TrendingUp className="h-4 w-4 text-violet-500" />
+                  Evolução do Ticket Médio
+                </h2>
+                <p className="text-xs text-board-muted mt-0.5">
+                  Valor médio por pedido mês a mês ·{" "}
+                  <span className="font-semibold text-violet-500">{fmtK(kpis.ticketMedio)} média geral</span>
+                </p>
+              </div>
+            </div>
+            <div className="px-4 pt-4 pb-4">
+              <ResponsiveContainer width="100%" height={160}>
+                <ComposedChart data={monthlyData} margin={{ top: 22, right: 8, bottom: 0, left: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.08)" vertical={false} />
+                  <XAxis dataKey="mes" tick={{ fontSize: 11, fill: "#94a3b8" }} axisLine={false} tickLine={false} dy={4} />
+                  <YAxis tick={{ fontSize: 10, fill: "#94a3b8" }} axisLine={false} tickLine={false} width={48}
+                    tickFormatter={v => v >= 1000 ? `${(v / 1000).toFixed(0)}k` : String(v)} />
+                  <Tooltip cursor={{ fill: "rgba(148,163,184,0.08)" }}
+                    content={({ active, payload, label }: any) => {
+                      if (!active || !payload?.length) return null;
+                      const v = payload[0]?.value ?? 0;
+                      return (
+                        <div style={{ background: "#1a2234", border: "1px solid rgba(255,255,255,0.14)", boxShadow: "0 8px 28px rgba(0,0,0,0.45)", borderRadius: 10, padding: "8px 14px", fontSize: 12 }}>
+                          <p style={{ color: "#fff", fontWeight: 700, marginBottom: 6, fontSize: 13 }}>{label}</p>
+                          <p style={{ color: "#c4b5fd" }}>Ticket: {Number(v).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</p>
+                        </div>
+                      );
+                    }}
+                  />
+                  <Bar dataKey="ticketMedio" fill="rgba(139,92,246,0.2)" stroke="#8b5cf6" strokeWidth={1.5} radius={[4, 4, 0, 0]} maxBarSize={48} isAnimationActive={false}>
+                    <LabelList dataKey="ticketMedio" position="top"
+                      formatter={(v: number) => v >= 1000 ? `R$${(v / 1000).toFixed(0)}k` : `R$${v}`}
+                      style={{ fontSize: 10, fill: "#8b5cf6", fontWeight: 700 }} />
+                  </Bar>
+                  <Line type="monotoneX" dataKey="ticketMedio" stroke="#8b5cf6" strokeWidth={2.5}
+                    dot={{ r: 3, fill: "#8b5cf6", stroke: "#fff", strokeWidth: 2 }} activeDot={{ r: 5 }} isAnimationActive={false} />
+                </ComposedChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        )}
 
         {/* Atalhos para páginas detalhadas */}
         <div className="flex items-center justify-end gap-4 pb-1">
