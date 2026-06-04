@@ -100,45 +100,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const fetchRoles = async (userId: string) => {
-    try {
-      const { data, error } = await supabase
-        .from("user_roles")
-        .select("role")
-        .eq("user_id", userId);
-
-      if (error) {
-        console.error("Error fetching roles:", error);
-        return [];
-      }
-      return (data?.map((r) => r.role) || []) as AppRole[];
-    } catch (err) {
-      console.error("Roles fetch error:", err);
-      return [];
-    }
-  };
-
-  const fetchCarboRoles = async (userId: string): Promise<CarboUserRole[]> => {
-    try {
-      const { data, error } = await supabase
-        .from("carbo_user_roles")
-        .select("*")
-        .eq("user_id", userId);
-
-      if (error) {
-        console.error("Error fetching carbo roles:", error);
-        return [];
-      }
-      return (data || []).map((r) => ({
-        role: r.role as CarboRole,
-        scope_departments: r.scope_departments || [],
-        scope_macro_flows: (r.scope_macro_flows || []) as MacroFlow[],
-      }));
-    } catch (err) {
-      console.error("Carbo roles fetch error:", err);
-      return [];
-    }
-  };
+  // Sistema legado de papéis (user_roles / carbo_user_roles) foi aposentado.
+  // Acesso é 100% por Role Matrix (profiles.department + funcao). Mantemos as
+  // funções como stubs (retornam vazio) para não quebrar chamadas existentes;
+  // os símbolos isAdmin/isCeo/... abaixo são derivados de `profile`.
+  const fetchRoles = async (_userId: string): Promise<AppRole[]> => [];
+  const fetchCarboRoles = async (_userId: string): Promise<CarboUserRole[]> => [];
 
   const refreshProfile = async () => {
     if (user) {
@@ -235,34 +202,45 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setCarboRoles([]);
   };
 
-  // Roles legados
-  const isAdmin = roles.includes("admin");
-  const isManager = roles.includes("manager") || isAdmin;
-  
-  // Novos roles Carbo
-  const carboRolesList = carboRoles.map(r => r.role);
-  const isCeo = carboRolesList.includes("ceo");
-  const isGestorAdm = carboRolesList.includes("gestor_adm") || isCeo;
-  const isGestorFin = carboRolesList.includes("gestor_fin") || isCeo;
-  const isGestorCompras = carboRolesList.includes("gestor_compras") || isCeo;
-  const isOperadorFiscal = carboRolesList.includes("operador_fiscal");
-  const isOperador = carboRolesList.includes("operador");
-  // isSuporte: somente TI Head (primário ou secundário) tem bypass total.
-  // TI Staff passa pelo function_screen_access normal como qualquer outra função.
-  const isSuporte =
-    (profile?.department === "ti_suporte" && profile?.funcao === "head") ||
-    (profile?.secondary_department === "ti_suporte" && profile?.secondary_funcao === "head") ||
-    carboRolesList.includes("suporte");
-  const isAnyGestor = isCeo || isGestorAdm || isGestorFin || isGestorCompras;
-  const isAnyOperador = isOperadorFiscal || isOperador;
+  // ── Símbolos de papel derivados do PERFIL (Role Matrix) ───────────────────
+  // Sistema antigo (user_roles/carbo_user_roles) aposentado. De-para idêntico
+  // ao do banco: liderança = TI/head ou funcao(ceo|head) ou departamento command.
+  const _dept      = profile?.department          ?? null;
+  const _funcao    = profile?.funcao              ?? null;
+  const _secDept   = profile?.secondary_department ?? null;
+  const _secFuncao = profile?.secondary_funcao     ?? null;
+  const _isMgmtFuncao = (f: string | null) =>
+    f === "gerente" || f === "coordenador" || f === "supervisor";
 
-  // MasterAdmin: SOMENTE Admin legado + CEO carbo (dual-role obrigatório)
-  // SECURITY FIX: Removido bypass via requested_role que permitia escalação de privilégios
-  const isMasterAdmin = isAdmin && isCeo;
-  
-  // Governance & Cockpit access — strictly MasterAdmin only
-  const canAccessGovernance = isMasterAdmin;
-  const canAccessCockpit = isMasterAdmin;
+  // TI/head: superusuário (bypass total).
+  const isSuporte =
+    (_dept === "ti_suporte" && _funcao === "head") ||
+    (_secDept === "ti_suporte" && _secFuncao === "head");
+
+  // Liderança máxima (ceo/head/command/TI)
+  const isCeo =
+    isSuporte ||
+    _funcao === "ceo" || _funcao === "head" ||
+    _secFuncao === "ceo" || _secFuncao === "head" ||
+    _dept === "command" || _secDept === "command";
+  const isAdmin = isCeo;
+  const isMasterAdmin = isCeo;
+
+  // Tier gerencial (liderança + gerente/coordenador/supervisor)
+  const isManager = isCeo || _isMgmtFuncao(_funcao) || _isMgmtFuncao(_secFuncao);
+  const isGestorAdm = isManager;
+  const isGestorFin = isManager;
+  const isGestorCompras = isManager;
+  const isAnyGestor = isManager;
+
+  // Operacional (qualquer funcionário interno com departamento)
+  const isOperador = !!_dept;
+  const isOperadorFiscal = (_dept === "finance" || _secDept === "finance");
+  const isAnyOperador = isOperador;
+
+  // Governance & Cockpit access — liderança
+  const canAccessGovernance = isCeo;
+  const canAccessCockpit = isCeo;
   
   const passwordMustChange = profile?.password_must_change ?? false;
   
