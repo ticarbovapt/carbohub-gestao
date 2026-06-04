@@ -20,9 +20,16 @@ export default defineConfig(({ mode }) => ({
     // desatualizado de projetores/TVs Android). Navegadores modernos continuam
     // recebendo o bundle moderno sem alteração — isto é puramente aditivo.
     legacy({
-      targets: ["chrome >= 64", "android >= 5", "ios >= 11", "safari >= 11"],
-      // Polyfills detectados automaticamente a partir do uso real do código.
+      // Alvo bem antigo (ES5) para cobrir o Chrome desatualizado de
+      // projetores/TVs Android. Quanto mais baixo o alvo, mais o código é
+      // rebaixado e mais polyfills entram — navegadores modernos não usam
+      // esse bundle, então não há custo para eles.
+      targets: ["chrome >= 49", "android >= 4.4", "ios >= 10", "safari >= 10"],
+      // Garante polyfills de funcionalidades modernas (Promise, fetch,
+      // Object.assign, etc.) tanto no bundle legacy quanto no moderno.
+      polyfills: true,
       modernPolyfills: true,
+      additionalLegacyPolyfills: ["regenerator-runtime/runtime"],
     }),
   ].filter(Boolean),
   resolve: {
