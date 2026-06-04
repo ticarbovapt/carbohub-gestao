@@ -1,7 +1,7 @@
 import { BoardLayout } from "@/components/layouts/BoardLayout";
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
 import { KPICard } from "@/components/board/KPICard";
-import { TrendingUp, ShoppingCart, DollarSign, Trophy, Users, Loader2, BarChart3, Repeat2 } from "lucide-react";
+import { TrendingUp, ShoppingCart, DollarSign, Trophy, Loader2, BarChart3, Repeat2 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -11,8 +11,7 @@ import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import {
   ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid,
-  Tooltip, ResponsiveContainer, Legend, LabelList,
-  ReferenceLine,
+  Tooltip, ResponsiveContainer, LabelList,
 } from "recharts";
 import { DashboardFilterBar, DashboardFilters, EMPTY_FILTERS } from "@/components/dashboard/DashboardFilterBar";
 
@@ -314,7 +313,7 @@ export default function DashboardComercial() {
                     />
                   </Bar>
 
-                  {/* Linha suave (tipo S) — R$ faturado */}
+                  {/* Linha suave (tipo S) — R$ faturado, com rótulos de valor */}
                   <Line
                     yAxisId="brl"
                     type="monotoneX"
@@ -324,7 +323,18 @@ export default function DashboardComercial() {
                     strokeWidth={2.5}
                     dot={{ r: 4, fill: "#1a7a4a", strokeWidth: 2, stroke: "#fff" }}
                     activeDot={{ r: 6, fill: "#1a7a4a", stroke: "#fff", strokeWidth: 2 }}
-                  />
+                  >
+                    <LabelList
+                      dataKey="faturado"
+                      position="top"
+                      formatter={(v: number) =>
+                        v >= 1000
+                          ? `R$${(v / 1000).toFixed(0)}k`
+                          : `R$${v}`
+                      }
+                      style={{ fontSize: 10, fill: "#1a7a4a", fontWeight: 700 }}
+                    />
+                  </Line>
                 </ComposedChart>
               </ResponsiveContainer>
 
