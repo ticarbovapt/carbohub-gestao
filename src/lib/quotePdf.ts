@@ -80,7 +80,7 @@ export function generateQuotePdf(order: QuotePdfData) {
   y += 6;
   const clientLines = [
     order.customer_name || order.legal_name || "—",
-    order.cnpj ? `CNPJ: ${order.cnpj}` : "",
+    order.cnpj ? `CNPJ/CPF: ${order.cnpj}` : "",
     order.ie ? `Inscrição Estadual: ${order.ie}` : "",
     order.vendedor_name ? `Vendedor: ${order.vendedor_name}` : "",
   ].filter(Boolean);
