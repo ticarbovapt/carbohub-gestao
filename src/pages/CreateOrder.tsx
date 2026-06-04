@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { CarboCard } from "@/components/ui/carbo-card";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+import { DecimalInput } from "@/components/ui/decimal-input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
@@ -1096,21 +1097,20 @@ export default function CreateOrder() {
                         </div>
                         <div className="sm:col-span-3">
                           <label className="text-sm font-medium">Quantidade</label>
-                          <Input
-                            type="number"
+                          <DecimalInput
+                            allowDecimal={false}
                             min={1}
                             value={item.quantity}
-                            onChange={(e) => updateItem(index, "quantity", Number(e.target.value))}
+                            onValueChange={(v) => updateItem(index, "quantity", v)}
                           />
                         </div>
                         <div className="sm:col-span-3">
                           <label className="text-sm font-medium">Preço Unit. (R$)</label>
-                          <Input
-                            type="number"
+                          <DecimalInput
                             min={0}
-                            step={0.01}
+                            placeholder="0,00"
                             value={item.unit_price}
-                            onChange={(e) => updateItem(index, "unit_price", Number(e.target.value))}
+                            onValueChange={(v) => updateItem(index, "unit_price", v)}
                           />
                         </div>
                         <div className="sm:col-span-1 text-right">
@@ -1148,13 +1148,13 @@ export default function CreateOrder() {
                         {item.has_bonus && (
                           <div className="flex items-center gap-2">
                             <label className="text-sm text-muted-foreground">Qtd. bonificação:</label>
-                            <Input
-                              type="number"
+                            <DecimalInput
+                              allowDecimal={false}
                               min={0}
                               max={75}
                               className="w-24 h-8"
                               value={item.bonus_quantity}
-                              onChange={(e) => updateItem(index, "bonus_quantity", Number(e.target.value))}
+                              onValueChange={(v) => updateItem(index, "bonus_quantity", v)}
                             />
                             <span className="text-xs text-muted-foreground">(máx. 75)</span>
                           </div>
