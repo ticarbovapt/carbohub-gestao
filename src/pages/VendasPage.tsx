@@ -18,6 +18,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useTeamMembers } from "@/hooks/useTeamMembers";
 import type { OrderItem, CarbozeOrder } from "@/hooks/useCarbozeOrders";
 import { useConvertQuoteToOrder } from "@/hooks/useCarbozeOrders";
+import { useFetchNfeLinks } from "@/hooks/useBlingNFes";
 import { EditOrderDialog } from "@/components/orders/EditOrderDialog";
 import { BulkVendorAssignDialog } from "@/components/orders/BulkVendorAssignDialog";
 import { toast } from "sonner";
@@ -40,6 +41,7 @@ interface VendaRow {
   vendedor_name: string | null;
   invoice_number: string | null;
   nf_pdf_url: string | null;
+  bling_nf_id: number | null;
   _raw?: CarbozeOrder;
 }
 
@@ -147,6 +149,7 @@ function useVendas(month: Date, vendedorIdFilter: string | null) {
         vendedor_name: row.vendedor_name ?? null,
         invoice_number: row.invoice_number ?? null,
         nf_pdf_url: row.bling_nf_id != null ? (pdfByBlingId[row.bling_nf_id] ?? null) : null,
+        bling_nf_id: row.bling_nf_id ?? null,
         _raw: row as unknown as CarbozeOrder,
       }));
     },
@@ -166,6 +169,30 @@ export default function VendasPage() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkAssignOpen, setBulkAssign] = useState(false);
   const [convertingId, setConvertingId] = useState<string | null>(null);
+  const [nfLoadingId, setNfLoadingId] = useState<string | null>(null);
+  const fetchNfLinks = useFetchNfeLinks();
+
+  // Abre o PDF da NF. Se ainda não temos o link salvo, busca no Bling na hora.
+  async function handleDownloadNF(venda: VendaRow) {
+    if (venda.nf_pdf_url) {
+      window.open(venda.nf_pdf_url, "_blank", "noopener,noreferrer");
+      return;
+    }
+    if (venda.bling_nf_id == null) return;
+    setNfLoadingId(venda.id);
+    try {
+      const { pdf } = await fetchNfLinks.mutateAsync(venda.bling_nf_id);
+      if (pdf) {
+        window.open(pdf, "_blank", "noopener,noreferrer");
+      } else {
+        toast.error("O Bling não retornou o PDF desta NF. Verifique se ela está autorizada.");
+      }
+    } catch (e: any) {
+      toast.error("Erro ao buscar a NF: " + (e?.message ?? ""));
+    } finally {
+      setNfLoadingId(null);
+    }
+  }
 
   const { user, profile } = useAuth();
   const qc = useQueryClient();
@@ -410,17 +437,18 @@ export default function VendasPage() {
                           <td className="p-3 text-right font-bold tabular-nums">{fmtBRL(venda.total)}</td>
                           <td className="p-3 text-right" onClick={e => e.stopPropagation()}>
                             <div className="flex items-center justify-end gap-1">
-                              {venda.nf_pdf_url && (
-                                <a
-                                  href={venda.nf_pdf_url}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="h-7 px-2 inline-flex items-center gap-1 rounded-md text-xs font-medium bg-green-500/10 text-green-600 hover:bg-green-500/20 border border-green-500/30 transition-colors"
+                              {venda.bling_nf_id != null && (
+                                <button
+                                  onClick={() => handleDownloadNF(venda)}
+                                  disabled={nfLoadingId === venda.id}
+                                  className="h-7 px-2 inline-flex items-center gap-1 rounded-md text-xs font-medium bg-green-500/10 text-green-600 hover:bg-green-500/20 border border-green-500/30 transition-colors disabled:opacity-50"
                                   title={venda.invoice_number ? `Baixar PDF da NF ${venda.invoice_number}` : "Baixar PDF da NF"}
                                 >
-                                  <FileDown className="h-3 w-3" />
+                                  {nfLoadingId === venda.id
+                                    ? <Loader2 className="h-3 w-3 animate-spin" />
+                                    : <FileDown className="h-3 w-3" />}
                                   <span className="hidden sm:inline">NF{venda.invoice_number ? ` ${venda.invoice_number}` : ""}</span>
-                                </a>
+                                </button>
                               )}
                               {canConvert && (
                                 <button
