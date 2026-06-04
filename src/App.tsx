@@ -1,8 +1,8 @@
-import React, { lazy, Suspense } from "react";
+import React, { lazy, Suspense, useEffect } from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClient, QueryClientProvider, useQueryClient } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, useLocation, Navigate } from "react-router-dom";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
@@ -117,6 +117,25 @@ const BugReportsPage = lazy(() => import("./pages/BugReportsPage"));
 // ─────────────────────────────────────────────────────────────────────────────
 
 const queryClient = new QueryClient();
+
+// Ponte de atualização da Projeção: quando a tela de telão pede um refresh,
+// ela envia uma mensagem para cada iframe. Aqui a gente apenas rebusca os
+// dados (invalida o cache) — sem recarregar a página, então o scroll e as
+// posições dos painéis não se perdem.
+function ProjectionRefreshBridge() {
+  const qc = useQueryClient();
+  useEffect(() => {
+    const onMsg = (e: MessageEvent) => {
+      if (e.origin !== window.location.origin) return;
+      if (e.data && e.data.type === "carbo-refresh") {
+        qc.invalidateQueries();
+      }
+    };
+    window.addEventListener("message", onMsg);
+    return () => window.removeEventListener("message", onMsg);
+  }, [qc]);
+  return null;
+}
 
 function PageLoader() {
   return (
@@ -300,6 +319,7 @@ function AnimatedRoutes() {
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
+    <ProjectionRefreshBridge />
     <AuthProvider>
       <RealtimeMachineAlertsProvider>
         <TooltipProvider>
