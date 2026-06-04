@@ -216,45 +216,23 @@ export default function DashboardComercial() {
                 </p>
                 <ResponsiveContainer width="100%" height={220}>
                   <ComposedChart data={monthlyData} margin={{ top: 24, right: 8, bottom: 0, left: 0 }}>
-                    <defs>
-                      <linearGradient id="areaGrad" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor="#1a7a4a" stopOpacity={0.25} />
-                        <stop offset="100%" stopColor="#1a7a4a" stopOpacity={0.02} />
-                      </linearGradient>
-                    </defs>
                     <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.08)" vertical={false} />
-                    <XAxis
-                      dataKey="mes"
-                      tick={{ fontSize: 11, fill: "var(--board-muted, #94a3b8)" }}
-                      axisLine={false} tickLine={false} dy={4}
-                    />
-                    <YAxis
-                      tick={{ fontSize: 10, fill: "var(--board-muted, #94a3b8)" }}
-                      axisLine={false} tickLine={false} width={44}
-                      tickFormatter={v => v >= 1000 ? `${(v / 1000).toFixed(0)}k` : String(v)}
-                    />
+                    <XAxis dataKey="mes" tick={{ fontSize: 11, fill: "var(--board-muted, #94a3b8)" }} axisLine={false} tickLine={false} dy={4} />
+                    <YAxis tick={{ fontSize: 10, fill: "var(--board-muted, #94a3b8)" }} axisLine={false} tickLine={false} width={44}
+                      tickFormatter={v => v >= 1000 ? `${(v / 1000).toFixed(0)}k` : String(v)} />
                     <Tooltip
                       cursor={{ fill: "rgba(148,163,184,0.06)" }}
                       contentStyle={{ background: "var(--board-surface, #1e2535)", border: "1px solid rgba(148,163,184,0.15)", borderRadius: 8, fontSize: 12 }}
                       labelStyle={{ color: "var(--board-text, #f1f5f9)", fontWeight: 700 }}
                       formatter={(v: number) => [v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }), "Faturado"]}
                     />
-                    <Bar dataKey="faturado" fill="url(#areaGrad)" stroke="#1a7a4a" strokeWidth={1.5} radius={[4, 4, 0, 0]} maxBarSize={48}>
-                      <LabelList
-                        dataKey="faturado"
-                        position="top"
+                    <Bar dataKey="faturado" fill="rgba(26,122,74,0.18)" stroke="#1a7a4a" strokeWidth={1.5} radius={[4, 4, 0, 0]} maxBarSize={48} isAnimationActive={false}>
+                      <LabelList dataKey="faturado" position="top"
                         formatter={(v: number) => v >= 1000 ? `R$${(v / 1000).toFixed(0)}k` : `R$${v}`}
-                        style={{ fontSize: 10, fill: "#1a7a4a", fontWeight: 700 }}
-                      />
+                        style={{ fontSize: 10, fill: "#1a7a4a", fontWeight: 700 }} />
                     </Bar>
-                    <Line
-                      type="monotoneX"
-                      dataKey="faturado"
-                      stroke="#1a7a4a"
-                      strokeWidth={2}
-                      dot={{ r: 3, fill: "#1a7a4a", stroke: "#fff", strokeWidth: 1.5 }}
-                      activeDot={{ r: 5 }}
-                    />
+                    <Line type="monotoneX" dataKey="faturado" stroke="#1a7a4a" strokeWidth={2.5}
+                      dot={{ r: 3, fill: "#1a7a4a", stroke: "#fff", strokeWidth: 1.5 }} activeDot={{ r: 5 }} isAnimationActive={false} />
                   </ComposedChart>
                 </ResponsiveContainer>
               </div>
@@ -270,45 +248,21 @@ export default function DashboardComercial() {
                 </p>
                 <ResponsiveContainer width="100%" height={220}>
                   <ComposedChart data={monthlyData} margin={{ top: 24, right: 8, bottom: 0, left: 0 }}>
-                    <defs>
-                      <linearGradient id="barGrad2" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor="#3b6ea5" stopOpacity={1} />
-                        <stop offset="100%" stopColor="#2d4a6e" stopOpacity={0.85} />
-                      </linearGradient>
-                    </defs>
                     <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.08)" vertical={false} />
-                    <XAxis
-                      dataKey="mes"
-                      tick={{ fontSize: 11, fill: "var(--board-muted, #94a3b8)" }}
-                      axisLine={false} tickLine={false} dy={4}
-                    />
-                    <YAxis
-                      allowDecimals={false}
-                      tick={{ fontSize: 10, fill: "var(--board-muted, #94a3b8)" }}
-                      axisLine={false} tickLine={false} width={28}
-                    />
+                    <XAxis dataKey="mes" tick={{ fontSize: 11, fill: "var(--board-muted, #94a3b8)" }} axisLine={false} tickLine={false} dy={4} />
+                    <YAxis allowDecimals={false} tick={{ fontSize: 10, fill: "var(--board-muted, #94a3b8)" }} axisLine={false} tickLine={false} width={28} />
                     <Tooltip
                       cursor={{ fill: "rgba(148,163,184,0.06)" }}
                       contentStyle={{ background: "var(--board-surface, #1e2535)", border: "1px solid rgba(148,163,184,0.15)", borderRadius: 8, fontSize: 12 }}
                       labelStyle={{ color: "var(--board-text, #f1f5f9)", fontWeight: 700 }}
                       formatter={(v: number) => [v, "Vendas"]}
                     />
-                    <Bar dataKey="pedidos" fill="url(#barGrad2)" radius={[6, 6, 0, 0]} maxBarSize={48}>
-                      <LabelList
-                        dataKey="pedidos"
-                        position="top"
-                        style={{ fontSize: 11, fill: "var(--board-muted, #94a3b8)", fontWeight: 700 }}
-                      />
+                    <Bar dataKey="pedidos" fill="rgba(59,110,165,0.75)" radius={[6, 6, 0, 0]} maxBarSize={48} isAnimationActive={false}>
+                      <LabelList dataKey="pedidos" position="top"
+                        style={{ fontSize: 11, fill: "var(--board-muted, #94a3b8)", fontWeight: 700 }} />
                     </Bar>
-                    <Line
-                      type="monotoneX"
-                      dataKey="pedidos"
-                      stroke="#3b6ea5"
-                      strokeWidth={2}
-                      strokeDasharray="4 3"
-                      dot={{ r: 3, fill: "#3b6ea5", stroke: "#fff", strokeWidth: 1.5 }}
-                      activeDot={{ r: 5 }}
-                    />
+                    <Line type="monotoneX" dataKey="pedidos" stroke="#3b6ea5" strokeWidth={2} strokeDasharray="4 3"
+                      dot={{ r: 3, fill: "#3b6ea5", stroke: "#fff", strokeWidth: 1.5 }} activeDot={{ r: 5 }} isAnimationActive={false} />
                   </ComposedChart>
                 </ResponsiveContainer>
               </div>
