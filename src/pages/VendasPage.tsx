@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import {
   ChevronLeft, ChevronRight, Search, ShoppingBag, TrendingUp,
   Package, Pencil, Users, FileText, ArrowRightCircle, Loader2, FileDown,
+  CalendarDays, X,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -80,29 +81,47 @@ function effectiveDate(row: VendaRow): string {
 // ─────────────────────────────────────────────────────────────────────────────
 // Hook
 // ─────────────────────────────────────────────────────────────────────────────
-function useVendas(month: Date, vendedorIdFilter: string | null) {
+function useVendas(
+  month: Date,
+  vendedorIdFilter: string | null,
+  customFrom?: string,
+  customTo?: string,
+) {
   const { user, profile } = useAuth();
   const isHead =
     profile?.funcao === "head" || profile?.secondary_funcao === "head" ||
     profile?.department === "command";
 
-  return useQuery({
-    queryKey: ["vendas", month.toISOString().slice(0, 7), vendedorIdFilter, isHead, user?.id],
-    queryFn: async () => {
-      const yr = month.getFullYear();
-      const mo = month.getMonth() + 1;
-      const lastDay = new Date(yr, mo, 0).getDate();
-      const monthStartStr = `${yr}-${String(mo).padStart(2, "0")}-01`;
-      const monthEndStr   = `${yr}-${String(mo).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
+  const hasCustomRange = !!(customFrom || customTo);
 
-      const expandedStart = new Date(yr, mo - 2, 1).toISOString();
-      const expandedEnd   = new Date(yr, mo + 1, 0, 23, 59, 59).toISOString();
+  return useQuery({
+    queryKey: ["vendas", month.toISOString().slice(0, 7), vendedorIdFilter, isHead, user?.id, customFrom, customTo],
+    queryFn: async () => {
+      let rangeStartStr: string;
+      let rangeEndStr:   string;
+      let queryStart:    string;
+      let queryEnd:      string;
+
+      if (hasCustomRange) {
+        rangeStartStr = customFrom ?? "2000-01-01";
+        rangeEndStr   = customTo   ?? "2099-12-31";
+        queryStart    = rangeStartStr + "T00:00:00.000Z";
+        queryEnd      = rangeEndStr   + "T23:59:59.999Z";
+      } else {
+        const yr = month.getFullYear();
+        const mo = month.getMonth() + 1;
+        const lastDay = new Date(yr, mo, 0).getDate();
+        rangeStartStr = `${yr}-${String(mo).padStart(2, "0")}-01`;
+        rangeEndStr   = `${yr}-${String(mo).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
+        queryStart    = new Date(yr, mo - 2, 1).toISOString();
+        queryEnd      = new Date(yr, mo + 1, 0, 23, 59, 59).toISOString();
+      }
 
       let query = supabase
         .from("carboze_orders")
         .select("*")
-        .gte("created_at", expandedStart)
-        .lte("created_at", expandedEnd)
+        .gte("created_at", queryStart)
+        .lte("created_at", queryEnd)
         .order("created_at", { ascending: false });
 
       if (!isHead) {
@@ -116,7 +135,7 @@ function useVendas(month: Date, vendedorIdFilter: string | null) {
 
       const rows = ((data || []) as any[]).filter(row => {
         const eff = (row.sale_date as string | null) ?? (row.created_at as string).substring(0, 10);
-        return eff >= monthStartStr && eff <= monthEndStr;
+        return eff >= rangeStartStr && eff <= rangeEndStr;
       });
 
       // Busca o PDF/XML das NFs vinculadas (pdf_url vive em bling_nfe, não no pedido)
@@ -162,8 +181,13 @@ function useVendas(month: Date, vendedorIdFilter: string | null) {
 // ─────────────────────────────────────────────────────────────────────────────
 export default function VendasPage() {
   const [month, setMonth]             = useState(() => startOfMonth(new Date()));
+  const [customFrom, setCustomFrom]   = useState("");
+  const [customTo, setCustomTo]       = useState("");
   const [search, setSearch]           = useState("");
   const [vendedorFilter, setVendedor] = useState("__all__");
+
+  const hasCustomRange = !!(customFrom || customTo);
+  const clearCustomRange = () => { setCustomFrom(""); setCustomTo(""); };
   const [expandedId, setExpandedId]   = useState<string | null>(null);
   const [editOrder, setEditOrder]     = useState<CarbozeOrder | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -208,7 +232,7 @@ export default function VendasPage() {
   const allMembers = teamMembers.filter(m => m.status === "approved");
   const vendedorSet = new Set(allMembers.filter(m => m.is_vendedor).map(m => m.id));
 
-  const { data: vendas = [], isLoading } = useVendas(month, vendedorFilter);
+  const { data: vendas = [], isLoading } = useVendas(month, vendedorFilter, customFrom || undefined, customTo || undefined);
 
   const today = new Date();
   const isCurrentMonth =
@@ -248,26 +272,69 @@ export default function VendasPage() {
       <div className="p-4 md:p-6 space-y-5 max-w-5xl mx-auto">
 
         {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
           <div>
             <h1 className="text-2xl font-bold flex items-center gap-2">
               <ShoppingBag className="h-6 w-6 text-carbo-green" /> Vendas e Orçamentos
             </h1>
             <p className="text-sm text-muted-foreground mt-0.5">Acompanhamento de pedidos e orçamentos por vendedor</p>
           </div>
-          <div className="flex items-center gap-1 bg-muted/40 rounded-lg px-2 py-1.5">
-            <Button variant="ghost" size="icon" className="h-7 w-7"
-              onClick={() => setMonth(m => startOfMonth(subMonths(m, 1)))}>
-              <ChevronLeft className="h-4 w-4" />
-            </Button>
-            <span className="text-sm font-semibold w-32 text-center capitalize">
-              {format(month, "MMM 'de' yyyy", { locale: ptBR })}
-            </span>
-            <Button variant="ghost" size="icon" className="h-7 w-7"
-              onClick={() => setMonth(m => startOfMonth(addMonths(m, 1)))}
-              disabled={isCurrentMonth}>
-              <ChevronRight className="h-4 w-4" />
-            </Button>
+
+          {/* Controles de período */}
+          <div className="flex flex-col items-end gap-2 shrink-0">
+            {/* Navegação por mês — some quando há range customizado */}
+            {!hasCustomRange && (
+              <div className="flex items-center gap-1 bg-muted/40 rounded-lg px-2 py-1.5">
+                <Button variant="ghost" size="icon" className="h-7 w-7"
+                  onClick={() => setMonth(m => startOfMonth(subMonths(m, 1)))}>
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+                <span className="text-sm font-semibold w-32 text-center capitalize">
+                  {format(month, "MMM 'de' yyyy", { locale: ptBR })}
+                </span>
+                <Button variant="ghost" size="icon" className="h-7 w-7"
+                  onClick={() => setMonth(m => startOfMonth(addMonths(m, 1)))}
+                  disabled={isCurrentMonth}>
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
+            )}
+
+            {/* Filtro de período livre */}
+            <div className="flex items-center gap-2 flex-wrap justify-end">
+              <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                <CalendarDays className="h-3.5 w-3.5" />
+                Período:
+              </div>
+              <Input
+                type="date"
+                className="h-8 w-36 text-xs"
+                value={customFrom}
+                onChange={e => setCustomFrom(e.target.value)}
+                title="Data início"
+              />
+              <span className="text-xs text-muted-foreground">até</span>
+              <Input
+                type="date"
+                className="h-8 w-36 text-xs"
+                value={customTo}
+                onChange={e => setCustomTo(e.target.value)}
+                title="Data fim"
+              />
+              {hasCustomRange && (
+                <Button variant="ghost" size="sm" className="h-8 text-xs text-muted-foreground px-2"
+                  onClick={clearCustomRange}>
+                  <X className="h-3 w-3 mr-1" /> Limpar
+                </Button>
+              )}
+            </div>
+
+            {/* Indicador de modo ativo */}
+            {hasCustomRange && (
+              <p className="text-[11px] text-primary font-medium">
+                Exibindo período personalizado
+              </p>
+            )}
           </div>
         </div>
 
