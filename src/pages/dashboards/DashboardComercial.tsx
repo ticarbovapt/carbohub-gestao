@@ -112,68 +112,57 @@ export default function DashboardComercial() {
   const totalCarboze    = kpis.totalBRL;
   const totalCarbozeOrders = kpis.totalVendas;
 
-  // ── Crescimento YTD e Rolling 12 Meses ──────────────────────────────────────
+  // ── Crescimento M/M e Último Mês vs Janeiro ─────────────────────────────────
   const growth = useMemo(() => {
-    const today = new Date();
-    const curYear  = today.getFullYear();
-    const curMonth = today.getMonth() + 1;   // 1–12
-    const curDay   = today.getDate();
-
-    // Ponto de corte (ex: "05-31" = dia 31 de maio)
-    const dayOfYearCutoff = `${String(curMonth).padStart(2,"0")}-${String(curDay).padStart(2,"0")}`;
-
-    let ytdCur  = { faturado: 0, pedidos: 0 };
-    let ytdPrev = { faturado: 0, pedidos: 0 };
-
     const fullMap: Record<string, { faturado: number; pedidos: number }> = {};
-
     for (const o of carbozeOrders) {
-      const d = o.created_at;
-      if (!d) continue;
-      const dateStr  = d.slice(0, 10);  // "YYYY-MM-DD"
-      const yearNum  = parseInt(dateStr.slice(0, 4));
-      const monthDay = dateStr.slice(5); // "MM-DD"
-      const val      = Number(o.total ?? 0);
-
-      // YTD corrente: 01/01/curYear até hoje
-      if (yearNum === curYear && monthDay <= dayOfYearCutoff) {
-        ytdCur.faturado += val;
-        ytdCur.pedidos++;
-      }
-      // YTD anterior: 01/01/(curYear-1) até mesmo dia do ano passado
-      if (yearNum === curYear - 1 && monthDay <= dayOfYearCutoff) {
-        ytdPrev.faturado += val;
-        ytdPrev.pedidos++;
-      }
-
-      // Mapa mensal (para rolling)
-      const key = dateStr.slice(0, 7);
+      if (!o.created_at) continue;
+      if (o.status === "cancelled" || o.status === "cancelado") continue;
+      const key = o.created_at.slice(0, 7);
       if (!fullMap[key]) fullMap[key] = { faturado: 0, pedidos: 0 };
       fullMap[key].pedidos++;
-      fullMap[key].faturado += val;
+      fullMap[key].faturado += Number(o.total ?? 0);
     }
 
-    // Rolling 12 meses vs 12 anteriores
     const sorted = Object.entries(fullMap).sort(([a], [b]) => a.localeCompare(b));
     const n = sorted.length;
-    const rolling12Cur  = sorted.slice(-12).reduce((a, [,v]) => ({ faturado: a.faturado+v.faturado, pedidos: a.pedidos+v.pedidos }), { faturado:0, pedidos:0 });
-    const rolling12Prev = sorted.slice(-24,-12).reduce((a, [,v]) => ({ faturado: a.faturado+v.faturado, pedidos: a.pedidos+v.pedidos }), { faturado:0, pedidos:0 });
 
-    const pct = (cur: number, prev: number) => prev > 0 ? ((cur - prev) / prev) * 100 : null;
+    const pct = (cur: number, prev: number) =>
+      prev > 0 ? ((cur - prev) / prev) * 100 : null;
+
+    const fmtMonthKey = (key: string) => {
+      try {
+        const [y, m] = key.split("-");
+        return format(new Date(parseInt(y), parseInt(m) - 1, 1), "MMM/yy", { locale: ptBR });
+      } catch { return key; }
+    };
+
+    // Card 1: último mês vs mês anterior (M/M)
+    const curEntry  = sorted[n - 1];
+    const prevEntry = sorted[n - 2];
+    const cur  = curEntry?.[1]  ?? { faturado: 0, pedidos: 0 };
+    const prev = prevEntry?.[1] ?? { faturado: 0, pedidos: 0 };
+
+    // Card 2: último mês vs Janeiro do ano corrente
+    const currentYear = new Date().getFullYear();
+    const janKey = `${currentYear}-01`;
+    const jan    = fullMap[janKey] ?? null;
 
     return {
-      ytd: {
-        brl: pct(ytdCur.faturado, ytdPrev.faturado),
-        qty: pct(ytdCur.pedidos, ytdPrev.pedidos),
-        curYear, prevYear: curYear - 1,
-        curLabel: `01/01–${String(curDay).padStart(2,"0")}/${String(curMonth).padStart(2,"0")}/${curYear}`,
+      mom: {
+        brl: pct(cur.faturado, prev.faturado),
+        qty: pct(cur.pedidos,  prev.pedidos),
+        curLabel:  curEntry  ? fmtMonthKey(curEntry[0])  : "—",
+        prevLabel: prevEntry ? fmtMonthKey(prevEntry[0]) : "—",
+        cur, prev,
       },
-      rolling: {
-        brl: pct(rolling12Cur.faturado, rolling12Prev.faturado),
-        qty: pct(rolling12Cur.pedidos,  rolling12Prev.pedidos),
-        curStart: sorted[n-12]?.[0] ?? "", curEnd: sorted[n-1]?.[0] ?? "",
+      vsJan: {
+        brl: jan ? pct(cur.faturado, jan.faturado) : null,
+        qty: jan ? pct(cur.pedidos,  jan.pedidos)  : null,
+        curLabel:  curEntry ? fmtMonthKey(curEntry[0]) : "—",
+        janLabel:  fmtMonthKey(janKey),
+        cur, jan: jan ?? { faturado: 0, pedidos: 0 },
       },
-      raw: { ytdCur, ytdPrev, rolling12Cur, rolling12Prev },
     };
   }, [carbozeOrders]);
 
@@ -252,64 +241,79 @@ export default function DashboardComercial() {
         {!carbozeLoading && carbozeOrders.length > 0 && (() => {
           const groups = [
             {
-              groupLabel: "Ano Corrente",
-              groupSub: `01/01/${growth.ytd.curYear} até hoje vs mesmo período ${growth.ytd.prevYear}`,
+              groupLabel: "Crescimento Mês a Mês",
+              groupSub: `${growth.mom.curLabel} vs ${growth.mom.prevLabel}`,
               color: "blue" as const,
               cards: [
-                { label: "Faturamento", pct: growth.ytd.brl, current: fmtK(growth.raw.ytdCur.faturado), ref: `${growth.ytd.prevYear}: ${fmtK(growth.raw.ytdPrev.faturado)}` },
-                { label: "Volume Vendas", pct: growth.ytd.qty, current: `${growth.raw.ytdCur.pedidos} pedidos`, ref: `${growth.ytd.prevYear}: ${growth.raw.ytdPrev.pedidos} pedidos` },
+                {
+                  label: "Faturamento",
+                  pct: growth.mom.brl,
+                  current: fmtK(growth.mom.cur.faturado),
+                  ref: `${growth.mom.prevLabel}: ${fmtK(growth.mom.prev.faturado)}`,
+                },
+                {
+                  label: "Volume de Vendas",
+                  pct: growth.mom.qty,
+                  current: `${growth.mom.cur.pedidos} pedidos`,
+                  ref: `${growth.mom.prevLabel}: ${growth.mom.prev.pedidos} pedidos`,
+                },
               ],
             },
             {
-              groupLabel: "Últimos 12 Meses",
-              groupSub: `Rolling vs 12 meses anteriores`,
-              color: "purple" as const,
+              groupLabel: `Último Mês vs Janeiro`,
+              groupSub: `${growth.vsJan.curLabel} vs ${growth.vsJan.janLabel}`,
+              color: "green" as const,
               cards: [
-                { label: "Faturamento", pct: growth.rolling.brl, current: fmtK(growth.raw.rolling12Cur.faturado), ref: `anterior: ${fmtK(growth.raw.rolling12Prev.faturado)}` },
-                { label: "Volume Vendas", pct: growth.rolling.qty, current: `${growth.raw.rolling12Cur.pedidos} pedidos`, ref: `anterior: ${growth.raw.rolling12Prev.pedidos} pedidos` },
+                {
+                  label: "Faturamento",
+                  pct: growth.vsJan.brl,
+                  current: fmtK(growth.vsJan.cur.faturado),
+                  ref: `${growth.vsJan.janLabel}: ${fmtK(growth.vsJan.jan.faturado)}`,
+                },
+                {
+                  label: "Volume de Vendas",
+                  pct: growth.vsJan.qty,
+                  current: `${growth.vsJan.cur.pedidos} pedidos`,
+                  ref: `${growth.vsJan.janLabel}: ${growth.vsJan.jan.pedidos} pedidos`,
+                },
               ],
             },
           ];
 
           const colorMap = {
-            blue:   { badge: "bg-blue-500/10 text-blue-400",   stripe: "bg-blue-500",   border: "border-blue-500/20",   tag: "bg-blue-500/10 text-blue-400" },
-            purple: { badge: "bg-violet-500/10 text-violet-400", stripe: "bg-violet-500", border: "border-violet-500/20", tag: "bg-violet-500/10 text-violet-400" },
+            blue:  { stripe: "bg-blue-500",  border: "border-blue-500/20",  tag: "bg-blue-500/10 text-blue-500" },
+            green: { stripe: "bg-green-500", border: "border-green-500/20", tag: "bg-green-500/10 text-green-600" },
           };
 
           return (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               {groups.map(group => (
                 <div key={group.groupLabel} className={`rounded-xl border overflow-hidden bg-board-surface ${colorMap[group.color].border}`}>
-                  {/* Stripe */}
                   <div className={`h-1 w-full ${colorMap[group.color].stripe}`} />
-                  {/* Group header */}
-                  <div className="px-5 pt-4 pb-3 border-b border-border/50 flex items-center justify-between">
-                    <div>
-                      <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wider ${colorMap[group.color].tag}`}>
-                        {group.groupLabel}
-                      </span>
-                      <p className="text-xs text-board-muted mt-1">{group.groupSub}</p>
-                    </div>
+                  <div className="px-5 pt-4 pb-3 border-b border-border/50">
+                    <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wider ${colorMap[group.color].tag}`}>
+                      {group.groupLabel}
+                    </span>
+                    <p className="text-xs text-board-muted mt-1 font-medium">{group.groupSub}</p>
                   </div>
-                  {/* Cards side by side */}
                   <div className="grid grid-cols-2 divide-x divide-border/50">
                     {group.cards.map((card, ci) => {
                       const isUp      = card.pct !== null && card.pct >= 0;
                       const isNeutral = card.pct === null;
                       return (
                         <div key={ci} className="p-5 space-y-3">
-                          <div className="flex items-center justify-between">
+                          <div className="flex items-center justify-between gap-2">
                             <p className="text-xs font-semibold text-board-muted uppercase tracking-wider">
                               {card.label}
                             </p>
                             {isNeutral ? (
-                              <span className="flex items-center gap-0.5 rounded-md px-2 py-1 text-xs font-bold bg-muted text-board-muted">
+                              <span className="flex items-center gap-0.5 rounded-md px-2 py-1 text-xs font-bold bg-muted text-board-muted shrink-0">
                                 <Minus className="h-3 w-3" /> s/d
                               </span>
                             ) : (
-                              <span className={`flex items-center gap-0.5 rounded-md px-2 py-1 text-xs font-bold
+                              <span className={`flex items-center gap-0.5 rounded-md px-2 py-1 text-sm font-bold shrink-0
                                 ${isUp ? "bg-green-500/10 text-green-500" : "bg-red-400/10 text-red-400"}`}>
-                                {isUp ? <ArrowUpRight className="h-3.5 w-3.5" /> : <ArrowDownRight className="h-3.5 w-3.5" />}
+                                {isUp ? <ArrowUpRight className="h-4 w-4" /> : <ArrowDownRight className="h-4 w-4" />}
                                 {Math.abs(card.pct!).toFixed(1)}%
                               </span>
                             )}
@@ -318,7 +322,7 @@ export default function DashboardComercial() {
                             ${isNeutral ? "text-board-text" : isUp ? "text-green-500" : "text-red-400"}`}>
                             {card.current}
                           </p>
-                          <p className="text-xs text-board-muted leading-relaxed">{card.ref}</p>
+                          <p className="text-xs text-board-muted">{card.ref}</p>
                         </div>
                       );
                     })}
