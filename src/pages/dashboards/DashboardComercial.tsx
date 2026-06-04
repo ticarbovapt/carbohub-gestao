@@ -6,14 +6,14 @@ import { useLicensees } from "@/hooks/useLicensees";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Badge } from "@/components/ui/badge";
 import { Link } from "react-router-dom";
 import { useMemo, useState } from "react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import {
-  AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid,
-  Tooltip, ResponsiveContainer, Legend, Cell,
+  ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid,
+  Tooltip, ResponsiveContainer, Legend, LabelList,
+  ReferenceLine,
 } from "recharts";
 import { DashboardFilterBar, DashboardFilters, EMPTY_FILTERS } from "@/components/dashboard/DashboardFilterBar";
 
@@ -101,10 +101,6 @@ export default function DashboardComercial() {
   const formatCurrency = (v: number) =>
     v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
-  const topLicensees = [...licensees]
-    .sort((a, b) => (b.total_revenue || 0) - (a.total_revenue || 0))
-    .slice(0, 5);
-
   return (
     <BoardLayout>
       <div className="space-y-8">
@@ -165,133 +161,201 @@ export default function DashboardComercial() {
           )}
         </div>
 
-        {/* ── Evolução Mensal Bling ─────────────────────────────────────── */}
+        {/* ── Evolução Mensal de Vendas ────────────────────────────────── */}
         <div className="rounded-xl border border-border bg-board-surface overflow-hidden">
+          {/* Header */}
           <div className="flex items-center justify-between border-b border-border px-6 py-4">
             <div>
               <h2 className="text-lg font-semibold text-board-text flex items-center gap-2">
                 <BarChart3 className="h-5 w-5 text-primary" />
-                Evolução Mensal — CarboZé (Bling)
+                Evolução Mensal de Vendas
               </h2>
-              <p className="text-sm text-board-muted">
-                Faturamento e volume de pedidos importados via Bling ·{" "}
-                <span className="font-medium text-board-text">
-                  {totalCarbozeOrders} pedidos · {(totalCarboze).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })} acumulado
+              <p className="text-sm text-board-muted mt-0.5">
+                Total de vendas e faturamento mês a mês (via Bling) ·{" "}
+                <span className="font-semibold text-board-text">
+                  {totalCarbozeOrders} pedidos
+                </span>
+                {" · "}
+                <span className="font-semibold text-green-500">
+                  {totalCarboze.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })} acumulado
                 </span>
               </p>
             </div>
-            <Link to="/orders" className="text-sm text-primary hover:underline font-medium">
-              Ver pedidos →
+            <Link to="/vendas" className="text-sm text-primary hover:underline font-medium shrink-0">
+              Ver vendas →
             </Link>
           </div>
 
           {carbozeLoading ? (
-            <div className="flex items-center justify-center h-56">
+            <div className="flex items-center justify-center h-72">
               <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
             </div>
           ) : monthlyData.length === 0 ? (
-            <div className="flex items-center justify-center h-56 text-sm text-board-muted">
-              Nenhum pedido Bling encontrado.
+            <div className="flex items-center justify-center h-72 text-sm text-board-muted">
+              Nenhum dado encontrado para o período selecionado.
             </div>
           ) : (
-            <div className="p-6 space-y-6">
-              {/* Area chart — faturamento */}
-              <div>
-                <p className="text-xs font-semibold text-board-muted uppercase tracking-wider mb-3">Faturamento (R$)</p>
-                <ResponsiveContainer width="100%" height={200}>
-                  <AreaChart data={monthlyData} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
-                    <defs>
-                      <linearGradient id="colorFat" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#1a7a4a" stopOpacity={0.35} />
-                        <stop offset="95%" stopColor="#1a7a4a" stopOpacity={0} />
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
-                    <XAxis dataKey="mes" tick={{ fontSize: 11, fill: "var(--board-muted, #9ca3af)" }} axisLine={false} tickLine={false} />
-                    <YAxis
-                      tick={{ fontSize: 11, fill: "var(--board-muted, #9ca3af)" }}
-                      axisLine={false} tickLine={false}
-                      tickFormatter={v => v >= 1000 ? `${(v / 1000).toFixed(0)}k` : String(v)}
-                      width={48}
-                    />
-                    <Tooltip
-                      contentStyle={{ background: "var(--board-surface, #1a1f2e)", border: "1px solid var(--border)", borderRadius: 8, fontSize: 12 }}
-                      labelStyle={{ color: "var(--board-text, #f1f5f9)", fontWeight: 600 }}
-                      formatter={(v: number) => [v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }), "Faturado"]}
-                    />
-                    <Area type="monotone" dataKey="faturado" stroke="#1a7a4a" strokeWidth={2.5} fill="url(#colorFat)" dot={{ r: 3, fill: "#1a7a4a" }} activeDot={{ r: 5 }} />
-                  </AreaChart>
-                </ResponsiveContainer>
+            <div className="px-6 pt-6 pb-4">
+              {/* Legenda manual acima do gráfico */}
+              <div className="flex items-center gap-6 mb-4">
+                <div className="flex items-center gap-2 text-xs text-board-muted">
+                  <span className="inline-block w-3 h-3 rounded-sm bg-[#2d4a6e]" />
+                  Total de Vendas (qtd)
+                </div>
+                <div className="flex items-center gap-2 text-xs text-board-muted">
+                  <span className="inline-block w-8 h-0.5 bg-[#1a7a4a] rounded" style={{ borderTop: "2.5px solid #1a7a4a" }} />
+                  Total em R$ (eixo direito)
+                </div>
               </div>
 
-              {/* Bar chart — pedidos */}
-              <div>
-                <p className="text-xs font-semibold text-board-muted uppercase tracking-wider mb-3">Volume de Pedidos</p>
-                <ResponsiveContainer width="100%" height={120}>
-                  <BarChart data={monthlyData} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
-                    <XAxis dataKey="mes" tick={{ fontSize: 11, fill: "var(--board-muted, #9ca3af)" }} axisLine={false} tickLine={false} />
-                    <YAxis tick={{ fontSize: 11, fill: "var(--board-muted, #9ca3af)" }} axisLine={false} tickLine={false} width={32} allowDecimals={false} />
-                    <Tooltip
-                      contentStyle={{ background: "var(--board-surface, #1a1f2e)", border: "1px solid var(--border)", borderRadius: 8, fontSize: 12 }}
-                      labelStyle={{ color: "var(--board-text, #f1f5f9)", fontWeight: 600 }}
-                      formatter={(v: number, name: string) => [v, name === "pedidos" ? "Total pedidos" : "Concluídos"]}
+              {/* ComposedChart: barras = qtd de vendas, linha suave = R$ */}
+              <ResponsiveContainer width="100%" height={300}>
+                <ComposedChart
+                  data={monthlyData}
+                  margin={{ top: 20, right: 16, bottom: 0, left: 8 }}
+                  barCategoryGap="28%"
+                >
+                  <defs>
+                    <linearGradient id="barGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#3b6ea5" stopOpacity={1} />
+                      <stop offset="100%" stopColor="#2d4a6e" stopOpacity={0.85} />
+                    </linearGradient>
+                  </defs>
+
+                  <CartesianGrid
+                    strokeDasharray="3 3"
+                    stroke="rgba(148,163,184,0.08)"
+                    vertical={false}
+                  />
+
+                  {/* Eixo X — meses */}
+                  <XAxis
+                    dataKey="mes"
+                    tick={{ fontSize: 12, fill: "var(--board-muted, #94a3b8)", fontWeight: 500 }}
+                    axisLine={{ stroke: "rgba(148,163,184,0.15)" }}
+                    tickLine={false}
+                    dy={6}
+                  />
+
+                  {/* Eixo Y esquerdo — quantidade de vendas */}
+                  <YAxis
+                    yAxisId="qty"
+                    orientation="left"
+                    allowDecimals={false}
+                    tick={{ fontSize: 11, fill: "var(--board-muted, #94a3b8)" }}
+                    axisLine={false}
+                    tickLine={false}
+                    width={32}
+                    label={{
+                      value: "Vendas",
+                      angle: -90,
+                      position: "insideLeft",
+                      offset: 8,
+                      style: { fontSize: 10, fill: "var(--board-muted, #94a3b8)" },
+                    }}
+                  />
+
+                  {/* Eixo Y direito — R$ faturado */}
+                  <YAxis
+                    yAxisId="brl"
+                    orientation="right"
+                    tick={{ fontSize: 11, fill: "#1a7a4a" }}
+                    axisLine={false}
+                    tickLine={false}
+                    width={60}
+                    tickFormatter={v =>
+                      v >= 1_000_000
+                        ? `R$${(v / 1_000_000).toFixed(1)}M`
+                        : v >= 1000
+                        ? `R$${(v / 1000).toFixed(0)}k`
+                        : `R$${v}`
+                    }
+                  />
+
+                  <Tooltip
+                    cursor={{ fill: "rgba(148,163,184,0.06)" }}
+                    contentStyle={{
+                      background: "var(--board-surface, #1e2535)",
+                      border: "1px solid rgba(148,163,184,0.15)",
+                      borderRadius: 10,
+                      fontSize: 12,
+                      padding: "10px 14px",
+                    }}
+                    labelStyle={{ color: "var(--board-text, #f1f5f9)", fontWeight: 700, marginBottom: 4 }}
+                    formatter={(value: number, name: string) => {
+                      if (name === "faturado")
+                        return [value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }), "Total em R$"];
+                      return [value, "Total de vendas"];
+                    }}
+                  />
+
+                  {/* Barras — quantidade de vendas */}
+                  <Bar
+                    yAxisId="qty"
+                    dataKey="pedidos"
+                    name="pedidos"
+                    fill="url(#barGrad)"
+                    radius={[6, 6, 0, 0]}
+                    maxBarSize={52}
+                  >
+                    <LabelList
+                      dataKey="pedidos"
+                      position="top"
+                      style={{ fontSize: 11, fill: "var(--board-muted, #94a3b8)", fontWeight: 600 }}
                     />
-                    <Legend
-                      wrapperStyle={{ fontSize: 11, paddingTop: 8 }}
-                      formatter={(v) => v === "pedidos" ? "Total pedidos" : "Concluídos"}
-                    />
-                    <Bar dataKey="pedidos" fill="#2d4a6e" radius={[3, 3, 0, 0]} name="pedidos" />
-                    <Bar dataKey="concluidos" fill="#1a7a4a" radius={[3, 3, 0, 0]} name="concluidos" />
-                  </BarChart>
-                </ResponsiveContainer>
+                  </Bar>
+
+                  {/* Linha suave (tipo S) — R$ faturado */}
+                  <Line
+                    yAxisId="brl"
+                    type="monotoneX"
+                    dataKey="faturado"
+                    name="faturado"
+                    stroke="#1a7a4a"
+                    strokeWidth={2.5}
+                    dot={{ r: 4, fill: "#1a7a4a", strokeWidth: 2, stroke: "#fff" }}
+                    activeDot={{ r: 6, fill: "#1a7a4a", stroke: "#fff", strokeWidth: 2 }}
+                  />
+                </ComposedChart>
+              </ResponsiveContainer>
+
+              {/* Sumário de totais por mês (mini-tabela) */}
+              <div className="mt-4 overflow-x-auto">
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="border-b border-border">
+                      <th className="text-left pb-2 font-semibold text-board-muted pr-4">Mês</th>
+                      {monthlyData.map(d => (
+                        <th key={d.mes} className="text-center pb-2 font-semibold text-board-muted px-2 whitespace-nowrap">
+                          {d.mes}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr className="border-b border-border/50">
+                      <td className="py-2 text-board-muted pr-4 font-medium">Vendas</td>
+                      {monthlyData.map(d => (
+                        <td key={d.mes} className="text-center py-2 px-2 font-bold text-board-text">
+                          {d.pedidos}
+                        </td>
+                      ))}
+                    </tr>
+                    <tr>
+                      <td className="py-2 text-board-muted pr-4 font-medium">Total R$</td>
+                      {monthlyData.map(d => (
+                        <td key={d.mes} className="text-center py-2 px-2 font-semibold text-green-500 whitespace-nowrap">
+                          {d.faturado >= 1000
+                            ? `${(d.faturado / 1000).toFixed(1)}k`
+                            : d.faturado.toLocaleString("pt-BR", { minimumFractionDigits: 0 })}
+                        </td>
+                      ))}
+                    </tr>
+                  </tbody>
+                </table>
               </div>
             </div>
           )}
-        </div>
-
-        {/* Top Licenciados */}
-        <div className="rounded-xl border border-border bg-board-surface overflow-hidden">
-          <div className="flex items-center justify-between border-b border-border px-6 py-4">
-            <div>
-              <h2 className="text-lg font-semibold text-board-text">Top Licenciados — Receita</h2>
-              <p className="text-sm text-board-muted">Melhores desempenhos de faturamento</p>
-            </div>
-            <Link
-              to="/licensees"
-              className="text-sm text-primary hover:underline font-medium"
-            >
-              Ver todos →
-            </Link>
-          </div>
-          <div className="divide-y divide-border">
-            {isLoading
-              ? Array.from({ length: 5 }).map((_, i) => (
-                  <div key={i} className="flex items-center justify-between px-6 py-4">
-                    <Skeleton className="h-5 w-40" />
-                    <Skeleton className="h-5 w-24" />
-                  </div>
-                ))
-              : topLicensees.map((l, idx) => (
-                  <div key={l.id} className="flex items-center justify-between px-6 py-4 hover:bg-secondary/20 transition-colors">
-                    <div className="flex items-center gap-3">
-                      <span className="text-sm font-bold text-muted-foreground w-5">#{idx + 1}</span>
-                      <div>
-                        <p className="text-sm font-medium text-board-text">{l.name}</p>
-                        <p className="text-xs text-board-muted">{l.address_city || "—"} · Score: {l.performance_score}</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <Badge variant={l.status === "active" ? "default" : "secondary"}>
-                        {l.status === "active" ? "Ativo" : l.status === "inactive" ? "Inativo" : l.status}
-                      </Badge>
-                      <span className="text-sm font-semibold text-board-text">
-                        {formatCurrency(l.total_revenue || 0)}
-                      </span>
-                    </div>
-                  </div>
-                ))}
-          </div>
         </div>
 
         {/* Últimos Pedidos */}
