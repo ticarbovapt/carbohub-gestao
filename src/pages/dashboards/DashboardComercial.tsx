@@ -1,6 +1,5 @@
 import { BoardLayout } from "@/components/layouts/BoardLayout";
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
-import { KPICard } from "@/components/board/KPICard";
 import { TrendingUp, ShoppingCart, DollarSign, Trophy, Loader2, BarChart3, Repeat2, ArrowUpRight, ArrowDownRight, Minus } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -189,36 +188,68 @@ export default function DashboardComercial() {
             ))
           ) : (
             <>
-              <KPICard
-                title="Total de Vendas"
-                value={kpis.totalVendas.toLocaleString("pt-BR")}
-                subtitle="Pedidos ativos (excl. cancelados)"
-                icon={<ShoppingCart className="h-6 w-6" />}
-                variant="success"
-              />
-              <KPICard
-                title="R$ Total Vendido"
-                value={formatCurrency(kpis.totalBRL)}
-                subtitle="Faturamento acumulado"
-                icon={<DollarSign className="h-6 w-6" />}
-                variant="success"
-              />
-              <KPICard
-                title="Maior Venda"
-                value={formatCurrency(kpis.maiorVenda)}
-                subtitle={kpis.maiorCliente.length > 22
-                  ? kpis.maiorCliente.slice(0, 22) + "…"
-                  : kpis.maiorCliente}
-                icon={<Trophy className="h-6 w-6" />}
-              />
-              <KPICard
-                title="Top Recorrência"
-                value={kpis.topCliente.length > 18
-                  ? kpis.topCliente.slice(0, 18) + "…"
-                  : kpis.topCliente}
-                subtitle={`${kpis.topQtd} pedido${kpis.topQtd !== 1 ? "s" : ""} · cliente mais frequente`}
-                icon={<Repeat2 className="h-6 w-6" />}
-              />
+              {/* Helper: text size adapts to string length */}
+              {[
+                {
+                  title: "Total de Vendas",
+                  value: kpis.totalVendas.toLocaleString("pt-BR"),
+                  sub: "Pedidos ativos (excl. cancelados)",
+                  icon: ShoppingCart,
+                  accent: "border-l-green-500",
+                  iconBg: "bg-green-500/10 text-green-600",
+                },
+                {
+                  title: "R$ Total Vendido",
+                  value: fmtK(kpis.totalBRL),
+                  sub: "Faturamento acumulado",
+                  icon: DollarSign,
+                  accent: "border-l-green-500",
+                  iconBg: "bg-green-500/10 text-green-600",
+                },
+                {
+                  title: "Maior Venda",
+                  value: fmtK(kpis.maiorVenda),
+                  sub: kpis.maiorCliente,
+                  icon: Trophy,
+                  accent: "border-l-amber-400",
+                  iconBg: "bg-amber-400/10 text-amber-500",
+                },
+                {
+                  title: "Top Recorrência",
+                  value: kpis.topCliente,
+                  sub: `${kpis.topQtd} pedido${kpis.topQtd !== 1 ? "s" : ""} · mais frequente`,
+                  icon: Repeat2,
+                  accent: "border-l-blue-400",
+                  iconBg: "bg-blue-400/10 text-blue-500",
+                },
+              ].map(({ title, value, sub, icon: Icon, accent, iconBg }) => {
+                // Responsive font: shrink if value is long
+                const valLen = String(value).length;
+                const valSize = valLen <= 6  ? "text-3xl"
+                              : valLen <= 10 ? "text-2xl"
+                              : valLen <= 16 ? "text-xl"
+                              : "text-base";
+                return (
+                  <div key={title} className={`relative overflow-hidden rounded-xl bg-board-surface p-4 border-l-4 ${accent} kpi-glow transition-all hover:-translate-y-0.5`}>
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0 flex-1">
+                        <p className="text-xs font-medium text-board-muted truncate">{title}</p>
+                        <p className={`mt-1.5 font-bold text-board-text leading-tight break-words ${valSize}`}>
+                          {value}
+                        </p>
+                        {sub && (
+                          <p className="mt-1 text-xs text-board-muted leading-snug line-clamp-2" title={sub}>
+                            {sub}
+                          </p>
+                        )}
+                      </div>
+                      <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${iconBg}`}>
+                        <Icon className="h-4.5 w-4.5" />
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
             </>
           )}
         </div>
