@@ -187,7 +187,7 @@ export default function DashboardComercial() {
 
   return (
     <BoardLayout>
-      <div className="space-y-8">
+      <div className="space-y-6 max-w-[1600px] mx-auto">
         <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
           <CarboPageHeader
             title="Dashboard — Comercial"
@@ -203,13 +203,13 @@ export default function DashboardComercial() {
         </div>
 
         {/* KPIs */}
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
           {carbozeLoading ? (
             Array.from({ length: 4 }).map((_, i) => (
-              <div key={i} className="rounded-xl border border-border bg-board-surface p-6">
-                <Skeleton className="h-4 w-28 mb-3" />
-                <Skeleton className="h-8 w-32 mb-2" />
-                <Skeleton className="h-3 w-20" />
+              <div key={i} className="rounded-2xl border border-border bg-board-surface p-6">
+                <Skeleton className="h-4 w-28 mb-4" />
+                <Skeleton className="h-10 w-36 mb-3" />
+                <Skeleton className="h-3 w-24" />
               </div>
             ))
           ) : (
@@ -283,12 +283,12 @@ export default function DashboardComercial() {
                   {/* Stripe */}
                   <div className={`h-1 w-full ${colorMap[group.color].stripe}`} />
                   {/* Group header */}
-                  <div className="px-4 pt-3 pb-2 border-b border-border/50 flex items-center justify-between">
+                  <div className="px-5 pt-4 pb-3 border-b border-border/50 flex items-center justify-between">
                     <div>
-                      <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${colorMap[group.color].tag}`}>
+                      <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wider ${colorMap[group.color].tag}`}>
                         {group.groupLabel}
                       </span>
-                      <p className="text-[11px] text-board-muted mt-0.5">{group.groupSub}</p>
+                      <p className="text-xs text-board-muted mt-1">{group.groupSub}</p>
                     </div>
                   </div>
                   {/* Cards side by side */}
@@ -297,28 +297,28 @@ export default function DashboardComercial() {
                       const isUp      = card.pct !== null && card.pct >= 0;
                       const isNeutral = card.pct === null;
                       return (
-                        <div key={ci} className="p-4 space-y-2">
+                        <div key={ci} className="p-5 space-y-3">
                           <div className="flex items-center justify-between">
-                            <p className="text-[11px] font-semibold text-board-muted uppercase tracking-wider">
+                            <p className="text-xs font-semibold text-board-muted uppercase tracking-wider">
                               {card.label}
                             </p>
                             {isNeutral ? (
-                              <span className="flex items-center gap-0.5 rounded-md px-1.5 py-0.5 text-[11px] font-bold bg-muted text-board-muted">
+                              <span className="flex items-center gap-0.5 rounded-md px-2 py-1 text-xs font-bold bg-muted text-board-muted">
                                 <Minus className="h-3 w-3" /> s/d
                               </span>
                             ) : (
-                              <span className={`flex items-center gap-0.5 rounded-md px-1.5 py-0.5 text-[11px] font-bold
+                              <span className={`flex items-center gap-0.5 rounded-md px-2 py-1 text-xs font-bold
                                 ${isUp ? "bg-green-500/10 text-green-500" : "bg-red-400/10 text-red-400"}`}>
-                                {isUp ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownRight className="h-3 w-3" />}
+                                {isUp ? <ArrowUpRight className="h-3.5 w-3.5" /> : <ArrowDownRight className="h-3.5 w-3.5" />}
                                 {Math.abs(card.pct!).toFixed(1)}%
                               </span>
                             )}
                           </div>
-                          <p className={`text-lg font-bold tabular-nums leading-none
+                          <p className={`text-2xl font-bold tabular-nums leading-none
                             ${isNeutral ? "text-board-text" : isUp ? "text-green-500" : "text-red-400"}`}>
                             {card.current}
                           </p>
-                          <p className="text-[11px] text-board-muted">{card.ref}</p>
+                          <p className="text-xs text-board-muted leading-relaxed">{card.ref}</p>
                         </div>
                       );
                     })}
@@ -330,26 +330,24 @@ export default function DashboardComercial() {
         })()}
 
         {/* ── Evolução Mensal de Vendas ────────────────────────────────── */}
-        <div className="rounded-xl border border-border bg-board-surface overflow-hidden">
+        <div className="rounded-2xl border border-border bg-board-surface overflow-hidden">
           {/* Header */}
-          <div className="flex items-center justify-between border-b border-border px-6 py-4">
+          <div className="flex items-center justify-between border-b border-border px-6 py-5">
             <div>
-              <h2 className="text-lg font-semibold text-board-text flex items-center gap-2">
+              <h2 className="text-xl font-bold text-board-text flex items-center gap-2">
                 <BarChart3 className="h-5 w-5 text-primary" />
                 Evolução Mensal de Vendas
               </h2>
-              <p className="text-sm text-board-muted mt-0.5">
-                Total de vendas e faturamento mês a mês (via Bling) ·{" "}
-                <span className="font-semibold text-board-text">
-                  {totalCarbozeOrders} pedidos
-                </span>
+              <p className="text-sm text-board-muted mt-1">
+                Via Bling ·{" "}
+                <span className="font-semibold text-board-text">{totalCarbozeOrders} pedidos</span>
                 {" · "}
                 <span className="font-semibold text-green-500">
                   {totalCarboze.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })} acumulado
                 </span>
               </p>
             </div>
-            <Link to="/vendas" className="text-sm text-primary hover:underline font-medium shrink-0">
+            <Link to="/vendas" className="text-sm font-semibold text-primary hover:underline shrink-0 flex items-center gap-1">
               Ver vendas →
             </Link>
           </div>
@@ -363,66 +361,76 @@ export default function DashboardComercial() {
               Nenhum dado encontrado para o período selecionado.
             </div>
           ) : (
-            <div className="px-6 pt-4 pb-6 grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="px-6 pt-6 pb-8 grid grid-cols-1 lg:grid-cols-2 gap-6">
 
               {/* ── Gráfico 1: Total Faturado R$ por mês ──────────────── */}
-              <div className="rounded-xl border border-border bg-board-surface/50 p-4">
-                <p className="text-xs font-semibold text-board-muted uppercase tracking-wider mb-1">
-                  Total Faturado por Mês
-                </p>
-                <p className="text-lg font-bold text-green-500 mb-3">
-                  {totalCarboze.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
-                  <span className="text-xs font-normal text-board-muted ml-1">acumulado</span>
-                </p>
-                <ResponsiveContainer width="100%" height={220}>
-                  <ComposedChart data={monthlyData} margin={{ top: 24, right: 8, bottom: 0, left: 0 }}>
+              <div className="rounded-xl border border-border bg-board-surface/40 p-5">
+                <div className="flex items-start justify-between mb-4">
+                  <div>
+                    <p className="text-xs font-semibold text-board-muted uppercase tracking-widest mb-1">
+                      Total Faturado por Mês
+                    </p>
+                    <p className="text-3xl font-bold text-green-500 leading-none tabular-nums">
+                      {fmtK(totalCarboze)}
+                    </p>
+                    <p className="text-xs text-board-muted mt-1">acumulado no período</p>
+                  </div>
+                  <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold uppercase bg-green-500/10 text-green-500">R$</span>
+                </div>
+                <ResponsiveContainer width="100%" height={260}>
+                  <ComposedChart data={monthlyData} margin={{ top: 28, right: 12, bottom: 4, left: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.08)" vertical={false} />
-                    <XAxis dataKey="mes" tick={{ fontSize: 11, fill: "var(--board-muted, #94a3b8)" }} axisLine={false} tickLine={false} dy={4} />
-                    <YAxis tick={{ fontSize: 10, fill: "var(--board-muted, #94a3b8)" }} axisLine={false} tickLine={false} width={44}
+                    <XAxis dataKey="mes" tick={{ fontSize: 12, fill: "var(--board-muted, #94a3b8)" }} axisLine={false} tickLine={false} dy={6} />
+                    <YAxis tick={{ fontSize: 11, fill: "var(--board-muted, #94a3b8)" }} axisLine={false} tickLine={false} width={48}
                       tickFormatter={v => v >= 1000 ? `${(v / 1000).toFixed(0)}k` : String(v)} />
                     <Tooltip
                       cursor={{ fill: "rgba(148,163,184,0.06)" }}
-                      contentStyle={{ background: "var(--board-surface, #1e2535)", border: "1px solid rgba(148,163,184,0.15)", borderRadius: 8, fontSize: 12 }}
-                      labelStyle={{ color: "var(--board-text, #f1f5f9)", fontWeight: 700 }}
+                      contentStyle={{ background: "var(--board-surface, #1e2535)", border: "1px solid rgba(148,163,184,0.15)", borderRadius: 10, fontSize: 13, padding: "10px 14px" }}
+                      labelStyle={{ color: "var(--board-text, #f1f5f9)", fontWeight: 700, marginBottom: 4 }}
                       formatter={(v: number) => [v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }), "Faturado"]}
                     />
-                    <Bar dataKey="faturado" fill="rgba(26,122,74,0.18)" stroke="#1a7a4a" strokeWidth={1.5} radius={[4, 4, 0, 0]} maxBarSize={48} isAnimationActive={false}>
+                    <Bar dataKey="faturado" fill="rgba(26,122,74,0.18)" stroke="#1a7a4a" strokeWidth={1.5} radius={[5, 5, 0, 0]} maxBarSize={52} isAnimationActive={false}>
                       <LabelList dataKey="faturado" position="top"
                         formatter={(v: number) => v >= 1000 ? `R$${(v / 1000).toFixed(0)}k` : `R$${v}`}
-                        style={{ fontSize: 10, fill: "#1a7a4a", fontWeight: 700 }} />
+                        style={{ fontSize: 11, fill: "#1a7a4a", fontWeight: 700 }} />
                     </Bar>
                     <Line type="monotoneX" dataKey="faturado" stroke="#1a7a4a" strokeWidth={2.5}
-                      dot={{ r: 3, fill: "#1a7a4a", stroke: "#fff", strokeWidth: 1.5 }} activeDot={{ r: 5 }} isAnimationActive={false} />
+                      dot={{ r: 4, fill: "#1a7a4a", stroke: "#fff", strokeWidth: 2 }} activeDot={{ r: 6 }} isAnimationActive={false} />
                   </ComposedChart>
                 </ResponsiveContainer>
               </div>
 
               {/* ── Gráfico 2: Total de Vendas (qtd) por mês ─────────── */}
-              <div className="rounded-xl border border-border bg-board-surface/50 p-4">
-                <p className="text-xs font-semibold text-board-muted uppercase tracking-wider mb-1">
-                  Total de Vendas por Mês
-                </p>
-                <p className="text-lg font-bold text-[#3b6ea5] mb-3">
-                  {totalCarbozeOrders.toLocaleString("pt-BR")}
-                  <span className="text-xs font-normal text-board-muted ml-1">pedidos no período</span>
-                </p>
-                <ResponsiveContainer width="100%" height={220}>
-                  <ComposedChart data={monthlyData} margin={{ top: 24, right: 8, bottom: 0, left: 0 }}>
+              <div className="rounded-xl border border-border bg-board-surface/40 p-5">
+                <div className="flex items-start justify-between mb-4">
+                  <div>
+                    <p className="text-xs font-semibold text-board-muted uppercase tracking-widest mb-1">
+                      Total de Vendas por Mês
+                    </p>
+                    <p className="text-3xl font-bold text-[#3b6ea5] leading-none tabular-nums">
+                      {totalCarbozeOrders.toLocaleString("pt-BR")}
+                    </p>
+                    <p className="text-xs text-board-muted mt-1">pedidos no período</p>
+                  </div>
+                  <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold uppercase bg-blue-500/10 text-blue-400">Qtd</span>
+                </div>
+                <ResponsiveContainer width="100%" height={260}>
+                  <ComposedChart data={monthlyData} margin={{ top: 28, right: 12, bottom: 4, left: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.08)" vertical={false} />
-                    <XAxis dataKey="mes" tick={{ fontSize: 11, fill: "var(--board-muted, #94a3b8)" }} axisLine={false} tickLine={false} dy={4} />
-                    <YAxis allowDecimals={false} tick={{ fontSize: 10, fill: "var(--board-muted, #94a3b8)" }} axisLine={false} tickLine={false} width={28} />
+                    <XAxis dataKey="mes" tick={{ fontSize: 12, fill: "var(--board-muted, #94a3b8)" }} axisLine={false} tickLine={false} dy={6} />
+                    <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: "var(--board-muted, #94a3b8)" }} axisLine={false} tickLine={false} width={32} />
                     <Tooltip
                       cursor={{ fill: "rgba(148,163,184,0.06)" }}
-                      contentStyle={{ background: "var(--board-surface, #1e2535)", border: "1px solid rgba(148,163,184,0.15)", borderRadius: 8, fontSize: 12 }}
-                      labelStyle={{ color: "var(--board-text, #f1f5f9)", fontWeight: 700 }}
+                      contentStyle={{ background: "var(--board-surface, #1e2535)", border: "1px solid rgba(148,163,184,0.15)", borderRadius: 10, fontSize: 13, padding: "10px 14px" }}
+                      labelStyle={{ color: "var(--board-text, #f1f5f9)", fontWeight: 700, marginBottom: 4 }}
                       formatter={(v: number) => [v, "Vendas"]}
                     />
-                    <Bar dataKey="pedidos" fill="rgba(59,110,165,0.75)" radius={[6, 6, 0, 0]} maxBarSize={48} isAnimationActive={false}>
+                    <Bar dataKey="pedidos" fill="rgba(59,110,165,0.75)" radius={[6, 6, 0, 0]} maxBarSize={52} isAnimationActive={false}>
                       <LabelList dataKey="pedidos" position="top"
-                        style={{ fontSize: 11, fill: "var(--board-muted, #94a3b8)", fontWeight: 700 }} />
+                        style={{ fontSize: 12, fill: "var(--board-muted, #94a3b8)", fontWeight: 700 }} />
                     </Bar>
-                    <Line type="monotoneX" dataKey="pedidos" stroke="#3b6ea5" strokeWidth={2} strokeDasharray="4 3"
-                      dot={{ r: 3, fill: "#3b6ea5", stroke: "#fff", strokeWidth: 1.5 }} activeDot={{ r: 5 }} isAnimationActive={false} />
+                    <Line type="monotoneX" dataKey="pedidos" stroke="#3b6ea5" strokeWidth={2.5} strokeDasharray="5 3"
+                      dot={{ r: 4, fill: "#3b6ea5", stroke: "#fff", strokeWidth: 2 }} activeDot={{ r: 6 }} isAnimationActive={false} />
                   </ComposedChart>
                 </ResponsiveContainer>
               </div>
