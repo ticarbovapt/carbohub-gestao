@@ -201,6 +201,7 @@ export default function CreateOrder() {
   const [cnpjInput, setCnpjInput] = useState("");
   const [cnpjLoading, setCnpjLoading] = useState(false);
   const [cnpjFound, setCnpjFound] = useState(false);
+  const [cpfOk, setCpfOk] = useState(false);
   const [cnpjError, setCnpjError] = useState<string | null>(null);
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
   // UF escolhida para validar a IE (sobrescreve a detectada do endereço). "" = usa a detectada.
@@ -379,24 +380,58 @@ export default function CreateOrder() {
     if (o.vendedor_id && o.vendedor_id !== profile?.id) setOverrideVendedorId(o.vendedor_id);
   }, [editingOrder, form, profile?.id]);
 
-  // Format CNPJ as user types
+  // Formata como CPF (até 11 dígitos) ou CNPJ (12+). O documento do cliente
+  // pode ser PF (CPF) ou PJ (CNPJ).
   const formatCnpj = (value: string) => {
     const digits = value.replace(/\D/g, "").slice(0, 14);
-    if (digits.length <= 2) return digits;
-    if (digits.length <= 5) return `${digits.slice(0, 2)}.${digits.slice(2)}`;
-    if (digits.length <= 8) return `${digits.slice(0, 2)}.${digits.slice(2, 5)}.${digits.slice(5)}`;
-    if (digits.length <= 12) return `${digits.slice(0, 2)}.${digits.slice(2, 5)}.${digits.slice(5, 8)}/${digits.slice(8)}`;
+    if (digits.length <= 11) {
+      // CPF: 000.000.000-00
+      if (digits.length <= 3) return digits;
+      if (digits.length <= 6) return `${digits.slice(0, 3)}.${digits.slice(3)}`;
+      if (digits.length <= 9) return `${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6)}`;
+      return `${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6, 9)}-${digits.slice(9)}`;
+    }
+    // CNPJ: 00.000.000/0000-00
     return `${digits.slice(0, 2)}.${digits.slice(2, 5)}.${digits.slice(5, 8)}/${digits.slice(8, 12)}-${digits.slice(12)}`;
   };
 
-  // CNPJ lookup — chama BrasilAPI diretamente (suporta CORS), sem depender do Edge Function
+  // Validação de CPF (dígitos verificadores)
+  const isValidCpf = (cpf: string) => {
+    const d = cpf.replace(/\D/g, "");
+    if (d.length !== 11 || /^(\d)\1{10}$/.test(d)) return false;
+    const calc = (len: number) => {
+      let sum = 0;
+      for (let i = 0; i < len; i++) sum += parseInt(d[i]) * (len + 1 - i);
+      const r = (sum * 10) % 11;
+      return r === 10 ? 0 : r;
+    };
+    return calc(9) === parseInt(d[9]) && calc(10) === parseInt(d[10]);
+  };
+
+  // Lookup do documento — CPF segue manual (sem API); CNPJ busca na BrasilAPI.
   const handleCnpjLookup = useCallback(async () => {
     const digits = cnpjInput.replace(/\D/g, "");
-    if (digits.length !== 14) {
-      setCnpjError("CNPJ deve conter 14 dígitos");
+
+    // ── CPF: pessoa física — sem consulta, segue preenchimento manual ────────
+    if (digits.length === 11) {
+      if (!isValidCpf(digits)) {
+        setCnpjError("CPF inválido. Verifique os números.");
+        setCpfOk(false);
+        return;
+      }
+      form.setValue("cnpj", digits);
+      setCnpjError(null);
+      setCnpjFound(false);
+      setCpfOk(true);
+      toast.success("CPF válido — preencha os dados do cliente abaixo.");
       return;
     }
 
+    if (digits.length !== 14) {
+      setCnpjError("Digite um CPF (11 dígitos) ou CNPJ (14 dígitos).");
+      return;
+    }
+    setCpfOk(false);
     setCnpjLoading(true);
     setCnpjError(null);
     setCnpjFound(false);
@@ -789,18 +824,27 @@ export default function CreateOrder() {
                 <div className="p-6 space-y-4">
                   <div className="flex items-center gap-2">
                     <Building2 className="h-5 w-5 text-primary" />
-                    <h3 className="font-semibold">Busca por CNPJ</h3>
+                    <h3 className="font-semibold">Busca por CNPJ ou CPF</h3>
                     {cnpjFound && (
                       <Badge variant="outline" className="ml-auto text-primary border-primary/30 bg-primary/10">
                         <CheckCircle2 className="h-3 w-3 mr-1" />
                         Dados carregados
                       </Badge>
                     )}
+                    {cpfOk && (
+                      <Badge variant="outline" className="ml-auto text-primary border-primary/30 bg-primary/10">
+                        <CheckCircle2 className="h-3 w-3 mr-1" />
+                        CPF válido
+                      </Badge>
+                    )}
                   </div>
+                  <p className="text-xs text-muted-foreground -mt-2">
+                    CNPJ busca os dados automaticamente. CPF (pessoa física) é validado e segue com preenchimento manual.
+                  </p>
                   <div className="flex gap-3">
                     <div className="flex-1">
                       <Input
-                        placeholder="00.000.000/0000-00"
+                        placeholder="CNPJ ou CPF"
                         value={cnpjInput}
                         onChange={(e) => setCnpjInput(formatCnpj(e.target.value))}
                         onKeyDown={(e) => {
@@ -814,16 +858,21 @@ export default function CreateOrder() {
                     <CarboButton
                       type="button"
                       onClick={handleCnpjLookup}
-                      disabled={cnpjLoading || cnpjInput.replace(/\D/g, "").length !== 14}
+                      disabled={cnpjLoading || ![11, 14].includes(cnpjInput.replace(/\D/g, "").length)}
                     >
                       {cnpjLoading ? (
                         <Loader2 className="h-4 w-4 animate-spin mr-1" />
                       ) : (
                         <Search className="h-4 w-4 mr-1" />
                       )}
-                      Buscar dados
+                      {cnpjInput.replace(/\D/g, "").length === 11 ? "Validar CPF" : "Buscar dados"}
                     </CarboButton>
                   </div>
+                  {cpfOk && (
+                    <div className="rounded-lg border border-primary/30 bg-primary/5 p-3 text-xs text-muted-foreground">
+                      Venda para pessoa física (CPF). Preencha o nome e os demais dados do cliente nos campos abaixo.
+                    </div>
+                  )}
                   {cnpjError && (
                     <div className="rounded-lg border border-destructive/30 bg-destructive/10 p-3 space-y-1">
                       <div className="flex items-center gap-2 text-sm font-medium text-destructive">
