@@ -105,8 +105,70 @@ export default function DashboardComercial() {
   const totalCarboze    = kpis.totalBRL;
   const totalCarbozeOrders = kpis.totalVendas;
 
+  // ── Crescimento Mês a Mês e Anual ────────────────────────────────────────────
+  const growth = useMemo(() => {
+    // Dados mensais (todos, sem slice de 12)
+    const fullMap: Record<string, { faturado: number; pedidos: number }> = {};
+    for (const o of carbozeOrders) {
+      if (!o.created_at) continue;
+      const key = o.created_at.slice(0, 7);
+      if (!fullMap[key]) fullMap[key] = { faturado: 0, pedidos: 0 };
+      fullMap[key].pedidos++;
+      fullMap[key].faturado += Number(o.total ?? 0);
+    }
+
+    const sorted = Object.entries(fullMap).sort(([a], [b]) => a.localeCompare(b));
+
+    // Mês atual e anterior (últimas 2 entradas com dados)
+    const cur  = sorted[sorted.length - 1]?.[1] ?? { faturado: 0, pedidos: 0 };
+    const prev = sorted[sorted.length - 2]?.[1] ?? { faturado: 0, pedidos: 0 };
+    const curLabel  = sorted[sorted.length - 1]?.[0] ?? "";
+    const prevLabel = sorted[sorted.length - 2]?.[0] ?? "";
+
+    const pctBRLMonth   = prev.faturado > 0 ? ((cur.faturado - prev.faturado) / prev.faturado) * 100 : null;
+    const pctQtyMonth   = prev.pedidos  > 0 ? ((cur.pedidos  - prev.pedidos)  / prev.pedidos)  * 100 : null;
+
+    // Anual: ano atual (YTD) vs mesmo período ano anterior
+    const currentYear = new Date().getFullYear();
+    const currentMonthNum = new Date().getMonth() + 1; // 1-12
+
+    let ytdCur  = { faturado: 0, pedidos: 0 };
+    let ytdPrev = { faturado: 0, pedidos: 0 };
+
+    for (const [key, val] of Object.entries(fullMap)) {
+      const [y, m] = key.split("-").map(Number);
+      if (y === currentYear && m <= currentMonthNum) {
+        ytdCur.faturado += val.faturado;
+        ytdCur.pedidos  += val.pedidos;
+      }
+      if (y === currentYear - 1 && m <= currentMonthNum) {
+        ytdPrev.faturado += val.faturado;
+        ytdPrev.pedidos  += val.pedidos;
+      }
+    }
+
+    const pctBRLYear  = ytdPrev.faturado > 0 ? ((ytdCur.faturado - ytdPrev.faturado) / ytdPrev.faturado) * 100 : null;
+    const pctQtyYear  = ytdPrev.pedidos  > 0 ? ((ytdCur.pedidos  - ytdPrev.pedidos)  / ytdPrev.pedidos)  * 100 : null;
+
+    return {
+      month: { brl: pctBRLMonth, qty: pctQtyMonth, curLabel, prevLabel },
+      year:  { brl: pctBRLYear,  qty: pctQtyYear,  curYear: currentYear, prevYear: currentYear - 1 },
+      raw: { cur, prev, ytdCur, ytdPrev },
+    };
+  }, [carbozeOrders]);
+
   const formatCurrency = (v: number) =>
     v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+
+  function GrowthBadge({ pct }: { pct: number | null }) {
+    if (pct === null) return <span className="text-xs text-board-muted">—</span>;
+    const up = pct >= 0;
+    return (
+      <span className={`inline-flex items-center gap-0.5 text-sm font-bold ${up ? "text-green-500" : "text-red-400"}`}>
+        {up ? "▲" : "▼"} {Math.abs(pct).toFixed(1)}%
+      </span>
+    );
+  }
 
   return (
     <BoardLayout>
@@ -168,6 +230,71 @@ export default function DashboardComercial() {
             </>
           )}
         </div>
+
+        {/* ── Cards de Crescimento ─────────────────────────────────────── */}
+        {!carbozeLoading && carbozeOrders.length > 0 && (
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+
+            {/* Crescimento Mensal R$ */}
+            <div className="rounded-xl border border-border bg-board-surface p-4 space-y-1">
+              <p className="text-xs text-board-muted font-medium uppercase tracking-wider">Faturamento M/M</p>
+              <GrowthBadge pct={growth.month.brl} />
+              <div className="flex items-baseline gap-1 mt-1">
+                <span className="text-sm font-semibold text-board-text">
+                  {formatCurrency(growth.raw.cur.faturado)}
+                </span>
+              </div>
+              <p className="text-[11px] text-board-muted">
+                vs {growth.month.prevLabel}: {formatCurrency(growth.raw.prev.faturado)}
+              </p>
+            </div>
+
+            {/* Crescimento Mensal Qtd */}
+            <div className="rounded-xl border border-border bg-board-surface p-4 space-y-1">
+              <p className="text-xs text-board-muted font-medium uppercase tracking-wider">Vendas M/M</p>
+              <GrowthBadge pct={growth.month.qty} />
+              <div className="flex items-baseline gap-1 mt-1">
+                <span className="text-sm font-semibold text-board-text">
+                  {growth.raw.cur.pedidos} pedidos
+                </span>
+              </div>
+              <p className="text-[11px] text-board-muted">
+                vs {growth.month.prevLabel}: {growth.raw.prev.pedidos} pedidos
+              </p>
+            </div>
+
+            {/* Crescimento Anual R$ */}
+            <div className="rounded-xl border border-border bg-board-surface p-4 space-y-1">
+              <p className="text-xs text-board-muted font-medium uppercase tracking-wider">Faturamento YTD</p>
+              <GrowthBadge pct={growth.year.brl} />
+              <div className="flex items-baseline gap-1 mt-1">
+                <span className="text-sm font-semibold text-board-text">
+                  {formatCurrency(growth.raw.ytdCur.faturado)}
+                </span>
+                <span className="text-xs text-board-muted">{growth.year.curYear}</span>
+              </div>
+              <p className="text-[11px] text-board-muted">
+                vs {growth.year.prevYear}: {formatCurrency(growth.raw.ytdPrev.faturado)}
+              </p>
+            </div>
+
+            {/* Crescimento Anual Qtd */}
+            <div className="rounded-xl border border-border bg-board-surface p-4 space-y-1">
+              <p className="text-xs text-board-muted font-medium uppercase tracking-wider">Vendas YTD</p>
+              <GrowthBadge pct={growth.year.qty} />
+              <div className="flex items-baseline gap-1 mt-1">
+                <span className="text-sm font-semibold text-board-text">
+                  {growth.raw.ytdCur.pedidos} pedidos
+                </span>
+                <span className="text-xs text-board-muted">{growth.year.curYear}</span>
+              </div>
+              <p className="text-[11px] text-board-muted">
+                vs {growth.year.prevYear}: {growth.raw.ytdPrev.pedidos} pedidos
+              </p>
+            </div>
+
+          </div>
+        )}
 
         {/* ── Evolução Mensal de Vendas ────────────────────────────────── */}
         <div className="rounded-xl border border-border bg-board-surface overflow-hidden">
