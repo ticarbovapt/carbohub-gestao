@@ -144,12 +144,8 @@ export function AddMemberDialog({ onMemberAdded, variant = "default" }: AddMembe
         allowedInterfaces: form.allowedInterfaces,
       });
 
-      // Assign carbo_user_roles
-      if (form.carboRoles.length > 0) {
-        const rows = form.carboRoles.map((r) => ({ user_id: result.userId, role: r as any }));
-        const { error } = await supabase.from("carbo_user_roles").insert(rows);
-        if (error) toast.warning("Conta criada, mas erro ao atribuir funções: " + error.message);
-      }
+      // Papéis legados (carbo_user_roles) aposentados — acesso é por
+      // department + funcao, já definidos na criação do perfil.
 
       setCredentials({ username: result.username, password: DEFAULT_PASSWORD });
       setStep("credentials");

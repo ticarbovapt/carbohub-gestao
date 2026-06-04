@@ -99,20 +99,14 @@ const LoginArea = () => {
   const checkUserAccess = async (userId: string): Promise<boolean> => {
     try {
       if (areaType === "ops") {
-        const { data: userRoles } = await supabase
-          .from("user_roles")
-          .select("role")
-          .eq("user_id", userId);
-        
-        const { data: carboRoles } = await supabase
-          .from("carbo_user_roles")
-          .select("role")
-          .eq("user_id", userId);
-        
-        return (
-          (userRoles && userRoles.some(r => ["admin", "manager", "operator"].includes(r.role))) ||
-          (carboRoles && carboRoles.length > 0)
-        ) || false;
+        // Acesso ao Carbo Controle (ops) = funcionário interno, identificado pelo
+        // departamento no perfil (Role Matrix). Sem mais user_roles/carbo_user_roles.
+        const { data: prof } = await supabase
+          .from("profiles")
+          .select("department")
+          .eq("id", userId)
+          .maybeSingle();
+        return !!prof?.department;
       } else if (areaType === "licensee") {
         const { data } = await supabase
           .from("licensee_users")

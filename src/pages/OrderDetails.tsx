@@ -3,7 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { ArrowLeft, Package, Clock, Truck, CheckCircle, XCircle, RefreshCw, Calendar, User, MapPin, FileText, DollarSign, Repeat, Briefcase, Factory, Wrench, ExternalLink, Pencil, Printer, Download, ShoppingCart, Trash2 } from "lucide-react";
-import { useCanManageOrders } from "@/hooks/useActionPermissions";
+import { useCanManageOrders, useIsLeadership } from "@/hooks/useActionPermissions";
 import { EditOrderDialog } from "@/components/orders/EditOrderDialog";
 import { BoardLayout } from "@/components/layouts/BoardLayout";
 import { CarboButton } from "@/components/ui/carbo-button";
@@ -12,7 +12,6 @@ import { CarboBadge } from "@/components/ui/carbo-badge";
 import { Separator } from "@/components/ui/separator";
 import { useOrder, useOrderHistory, useConvertQuoteToOrder, useDeleteOrder, ORDER_STATUS_LABELS, ORDER_TYPE_LABELS, OrderStatus, OrderItem } from "@/hooks/useCarbozeOrders";
 import { generateQuotePdf } from "@/lib/quotePdf";
-import { useAuth } from "@/contexts/AuthContext";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { CarboSkeleton } from "@/components/ui/CarboSkeleton";
@@ -56,12 +55,8 @@ export default function OrderDetails() {
   const { data: history, isLoading: historyLoading } = useOrderHistory(id);
   const convertQuote = useConvertQuoteToOrder();
   const deleteOrder = useDeleteOrder();
-  const { profile, isSuporte, isCeo } = useAuth();
-  // Excluir é restrito a head (primário/secundário), command ou TI.
-  const canDelete =
-    isSuporte || isCeo ||
-    profile?.funcao === "head" || profile?.secondary_funcao === "head" ||
-    profile?.department === "command" || profile?.secondary_department === "command";
+  // Excluir é restrito à liderança (head/ceo, command ou TI/head).
+  const canDelete = useIsLeadership();
 
   // Get recurrence chain orders
   const { data: recurrenceOrders } = useQuery({

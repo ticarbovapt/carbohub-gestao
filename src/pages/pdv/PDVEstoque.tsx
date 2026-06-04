@@ -322,7 +322,7 @@ function PDVEstoqueManager() {
 // ── ADMIN VIEW ───────────────────────────────────────────────────────────────
 function PDVEstoqueAdmin() {
   const navigate = useNavigate();
-  const { carboRoles } = useAuth();
+  const { profile } = useAuth();
   const { data: pdvStatus } = usePDVStatus();
   const { data: allStock = [], isLoading } = useAdminAllProductStock();
   const adjustStock = useAdjustPDVStock();
@@ -340,7 +340,8 @@ function PDVEstoqueAdmin() {
 
   // Permission: who can edit stock
   const isMasterAdmin = useCanManagePDVAdmin();
-  const isExpansion = carboRoles.some(r => r.role === "expansion");
+  const isExpansion =
+    profile?.department === "expansao" || profile?.secondary_department === "expansao";
   const myPDVId = pdvStatus?.pdv?.id;
   function canEdit(pdvId: string): boolean {
     if (isMasterAdmin) return true;
