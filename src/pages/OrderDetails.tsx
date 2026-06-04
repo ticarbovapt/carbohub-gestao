@@ -274,7 +274,7 @@ export default function OrderDetails() {
                   )}
                   {(order as any).cnpj && (
                     <div>
-                      <p className="text-sm text-muted-foreground">CNPJ</p>
+                      <p className="text-sm text-muted-foreground">CNPJ/CPF</p>
                       <p className="font-medium font-mono">{(order as any).cnpj}</p>
                     </div>
                   )}
