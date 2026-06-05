@@ -63,6 +63,12 @@ verify_jwt = false
 [functions.amazon-auth]
 verify_jwt = false
 
+[functions.nuvemshop-auth]
+verify_jwt = false
+
+[functions.nuvemshop-lgpd]
+verify_jwt = false
+
 [functions.ecommerce-sync]
 verify_jwt = false
 

@@ -28,3 +28,5 @@ jobs:
           supabase functions deploy ecommerce-webhook --project-ref ${{ secrets.SUPABASE_PROJECT_ID }} --no-verify-jwt
           supabase functions deploy ecommerce-sync --project-ref ${{ secrets.SUPABASE_PROJECT_ID }} --no-verify-jwt
           supabase functions deploy ml-auth --project-ref ${{ secrets.SUPABASE_PROJECT_ID }} --no-verify-jwt
+          supabase functions deploy nuvemshop-auth --project-ref ${{ secrets.SUPABASE_PROJECT_ID }} --no-verify-jwt
+          supabase functions deploy nuvemshop-lgpd --project-ref ${{ secrets.SUPABASE_PROJECT_ID }} --no-verify-jwt
