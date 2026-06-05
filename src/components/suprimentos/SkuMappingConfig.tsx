@@ -11,8 +11,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { toast } from "sonner";
 
+// Radix Select não aceita item com value="" — usamos "all" como sentinela
+// para "todas as plataformas" e convertemos para null ao salvar.
+const ALL_PLATFORMS = "all";
+
 const PLATFORMS = [
-  { value: "",              label: "Todas as plataformas" },
+  { value: ALL_PLATFORMS,   label: "Todas as plataformas" },
   { value: "mercadolivre",  label: "Mercado Livre" },
   { value: "amazon",        label: "Amazon" },
   { value: "nuvemshop",     label: "Nuvemshop" },
@@ -41,7 +45,7 @@ interface FormState {
 }
 
 const EMPTY_FORM: FormState = {
-  platform:      "",
+  platform:      ALL_PLATFORMS,
   platform_sku:  "",
   product_id:    "",
   units_per_kit: "1",
@@ -88,13 +92,16 @@ export function SkuMappingConfig() {
     queryFn: async () => {
       const { data: orders } = await supabase
         .from("ecommerce_orders" as never)
-        .select("platform, product_sku")
+        .select("platform, product_sku, sync_source")
         .not("product_sku", "is", null)
         .order("ordered_at", { ascending: false })
         .limit(2000);
 
-      const rows = (orders || []) as { platform: string; product_sku: string }[];
+      const rows = (orders || []) as { platform: string; product_sku: string; sync_source: string | null }[];
       if (rows.length === 0) return [];
+
+      // Ignora pedidos de demonstração/seed — só conta venda real (webhook/cron).
+      const isTest = (src: string | null) => !!src && (src === "test_12m" || src.startsWith("test"));
 
       const productCodes = new Set(products.map(p => p.product_code));
       const activeMappings = (mappings as Mapping[]).filter(m => m.is_active);
@@ -108,7 +115,7 @@ export function SkuMappingConfig() {
 
       const agg = new Map<string, { platform: string; product_sku: string; count: number }>();
       for (const r of rows) {
-        if (!r.product_sku || isMapped(r.platform, r.product_sku)) continue;
+        if (!r.product_sku || isTest(r.sync_source) || isMapped(r.platform, r.product_sku)) continue;
         const key = `${r.platform}::${r.product_sku}`;
         const cur = agg.get(key);
         if (cur) cur.count += 1;
@@ -122,7 +129,7 @@ export function SkuMappingConfig() {
   const saveMutation = useMutation({
     mutationFn: async () => {
       const payload = {
-        platform:      form.platform || null,
+        platform:      form.platform === ALL_PLATFORMS ? null : form.platform,
         platform_sku:  form.platform_sku.trim(),
         product_id:    form.product_id,
         units_per_kit: Number(form.units_per_kit),
@@ -173,14 +180,14 @@ export function SkuMappingConfig() {
 
   const openFromPending = (platform: string, sku: string) => {
     setEditId(null);
-    setForm({ ...EMPTY_FORM, platform: platform || "", platform_sku: sku });
+    setForm({ ...EMPTY_FORM, platform: platform || ALL_PLATFORMS, platform_sku: sku });
     setDialogOpen(true);
   };
 
   const openEdit = (m: Mapping) => {
     setEditId(m.id);
     setForm({
-      platform:      m.platform || "",
+      platform:      m.platform || ALL_PLATFORMS,
       platform_sku:  m.platform_sku,
       product_id:    m.product_id,
       units_per_kit: String(m.units_per_kit),
@@ -192,7 +199,7 @@ export function SkuMappingConfig() {
   const isValid = form.platform_sku.trim() && form.product_id && Number(form.units_per_kit) > 0;
 
   const platformLabel = (p: string | null) =>
-    PLATFORMS.find(x => x.value === (p || ""))?.label ?? p ?? "Todas";
+    PLATFORMS.find(x => x.value === (p || ALL_PLATFORMS))?.label ?? p ?? "Todas";
 
   return (
     <div className="space-y-5">
