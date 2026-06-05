@@ -2,7 +2,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { crypto } from "https://deno.land/std@0.208.0/crypto/mod.ts";
 import { encodeHex } from "https://deno.land/std@0.208.0/encoding/hex.ts";
 import {
-  getNuvemshopCreds, fetchNuvemshopOrder, mapNuvemshopOrder,
+  getNuvemshopCreds, fetchNuvemshopOrder, mapNuvemshopOrder, enrichUnitsReal,
 } from "../_shared/nuvemshop.ts";
 
 const supabase = createClient(
@@ -108,7 +108,8 @@ async function normalizeNuvemshop(body: unknown, _platform: Platform): Promise<N
   }
   const order = await fetchNuvemshopOrder(creds.accessToken, creds.storeId, orderId as string | number);
   if (!order) return [];
-  return mapNuvemshopOrder(order, "webhook") as unknown as NormalizedOrder[];
+  const rows = await enrichUnitsReal(supabase, mapNuvemshopOrder(order, "webhook"));
+  return rows as unknown as NormalizedOrder[];
 }
 
 function normalizeMercadoLivre(body: unknown, platform: Platform): NormalizedOrder[] {

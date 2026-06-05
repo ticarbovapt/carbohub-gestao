@@ -149,6 +149,34 @@ export function mapNuvemshopOrder(order: any, syncSource = "webhook"): Nuvemshop
   });
 }
 
+/**
+ * Preenche units_real = quantity × units_per_kit consultando o mapeamento de SKU.
+ * Assim o dashboard mostra as unidades físicas reais (ex.: kit 100ml = 5).
+ * Sem mapeamento, mantém units_real = quantity (fallback 1×).
+ */
+export async function enrichUnitsReal(supabase: any, rows: NuvemshopRow[]): Promise<NuvemshopRow[]> {
+  const skus = [...new Set(rows.map((r) => r.product_sku).filter(Boolean))] as string[];
+  if (skus.length === 0) return rows;
+
+  const { data: maps } = await supabase
+    .from("sku_product_mappings")
+    .select("platform, platform_sku, units_per_kit")
+    .in("platform_sku", skus)
+    .eq("is_active", true);
+
+  const list = (maps || []) as any[];
+  const mult = (platform: string, sku: string): number => {
+    const specific = list.find((m) => m.platform_sku === sku && m.platform === platform);
+    if (specific) return Number(specific.units_per_kit) || 1;
+    const generic = list.find((m) => m.platform_sku === sku && m.platform == null);
+    return generic ? (Number(generic.units_per_kit) || 1) : 1;
+  };
+
+  return rows.map((r) =>
+    r.product_sku ? { ...r, units_real: r.quantity * mult(r.platform, r.product_sku) } : r
+  );
+}
+
 /** Busca UM pedido pelo id (usado pelo webhook, que recebe só o id). */
 export async function fetchNuvemshopOrder(
   accessToken: string, storeId: string, orderId: string | number,

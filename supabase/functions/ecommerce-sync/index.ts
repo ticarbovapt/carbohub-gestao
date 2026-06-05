@@ -1,6 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import {
-  getNuvemshopCreds, fetchNuvemshopOrdersSince, mapNuvemshopOrder,
+  getNuvemshopCreds, fetchNuvemshopOrdersSince, mapNuvemshopOrder, enrichUnitsReal,
 } from "../_shared/nuvemshop.ts";
 
 const supabase = createClient(
@@ -355,7 +355,8 @@ async function pullNuvemshop(): Promise<Record<string, unknown>[]> {
   const orders = await fetchNuvemshopOrdersSince(accessToken, storeId, since);
 
   // Mesma função de mapeamento do webhook → order_id idêntico, upsert idempotente.
-  const rows = orders.flatMap((o) => mapNuvemshopOrder(o, "cron"));
+  const mapped = orders.flatMap((o) => mapNuvemshopOrder(o, "cron"));
+  const rows = await enrichUnitsReal(supabase, mapped);
 
   // Atualiza o checkpoint para a próxima execução.
   await supabase.from("system_tokens")
