@@ -145,7 +145,18 @@ export function useSalesTargetsWithProgress(month: string) {
         ...Object.keys(defaultMap),
       ]);
 
-      return Array.from(allIds).map((vid): SalesTargetWithProgress => {
+      return Array.from(allIds)
+        .filter((vid) => {
+          // Esconde "fantasmas": id que só tem meta padrão sobrando, sem ser
+          // vendedor ativo (vendedorMap), sem exceção do mês e sem vendas.
+          // Ex.: vendedor que teve a flag is_vendedor removida mas cuja meta
+          // padrão ficou no banco — apareceria como "—" sem este filtro.
+          if (vendedorMap[vid]) return true;
+          if (overrideMap[vid]) return true;
+          if (progressMap[vid]) return true;
+          return false;
+        })
+        .map((vid): SalesTargetWithProgress => {
         const override = overrideMap[vid];
         const def      = defaultMap[vid];
         const progress = progressMap[vid] || { amount: 0, qty: 0 };
