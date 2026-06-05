@@ -11,8 +11,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { toast } from "sonner";
 
+// Radix Select não aceita item com value="" — usamos "all" como sentinela
+// para "todas as plataformas" e convertemos para null ao salvar.
+const ALL_PLATFORMS = "all";
+
 const PLATFORMS = [
-  { value: "",              label: "Todas as plataformas" },
+  { value: ALL_PLATFORMS,   label: "Todas as plataformas" },
   { value: "mercadolivre",  label: "Mercado Livre" },
   { value: "amazon",        label: "Amazon" },
   { value: "nuvemshop",     label: "Nuvemshop" },
@@ -41,7 +45,7 @@ interface FormState {
 }
 
 const EMPTY_FORM: FormState = {
-  platform:      "",
+  platform:      ALL_PLATFORMS,
   platform_sku:  "",
   product_id:    "",
   units_per_kit: "1",
@@ -125,7 +129,7 @@ export function SkuMappingConfig() {
   const saveMutation = useMutation({
     mutationFn: async () => {
       const payload = {
-        platform:      form.platform || null,
+        platform:      form.platform === ALL_PLATFORMS ? null : form.platform,
         platform_sku:  form.platform_sku.trim(),
         product_id:    form.product_id,
         units_per_kit: Number(form.units_per_kit),
@@ -176,14 +180,14 @@ export function SkuMappingConfig() {
 
   const openFromPending = (platform: string, sku: string) => {
     setEditId(null);
-    setForm({ ...EMPTY_FORM, platform: platform || "", platform_sku: sku });
+    setForm({ ...EMPTY_FORM, platform: platform || ALL_PLATFORMS, platform_sku: sku });
     setDialogOpen(true);
   };
 
   const openEdit = (m: Mapping) => {
     setEditId(m.id);
     setForm({
-      platform:      m.platform || "",
+      platform:      m.platform || ALL_PLATFORMS,
       platform_sku:  m.platform_sku,
       product_id:    m.product_id,
       units_per_kit: String(m.units_per_kit),
@@ -195,7 +199,7 @@ export function SkuMappingConfig() {
   const isValid = form.platform_sku.trim() && form.product_id && Number(form.units_per_kit) > 0;
 
   const platformLabel = (p: string | null) =>
-    PLATFORMS.find(x => x.value === (p || ""))?.label ?? p ?? "Todas";
+    PLATFORMS.find(x => x.value === (p || ALL_PLATFORMS))?.label ?? p ?? "Todas";
 
   return (
     <div className="space-y-5">
