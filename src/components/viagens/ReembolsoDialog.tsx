@@ -9,7 +9,7 @@
  * para aprovação financeira.
  */
 
-import { useState, useRef } from "react";
+import { useState, useRef, useImperativeHandle, forwardRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useQueryClient } from "@tanstack/react-query";
@@ -115,11 +115,17 @@ function ExpenseRow({
 
 // ─── AddExpenseForm ────────────────────────────────────────────────────────────
 
+export interface AddExpenseFormHandle {
+  /** Tenta adicionar a despesa pendente no formulário. Retorna a despesa ou null. */
+  tryFlush: () => DespesaLocal | null;
+}
+
 interface AddExpenseFormProps {
   onAdd: (d: DespesaLocal) => void;
 }
 
-function AddExpenseForm({ onAdd }: AddExpenseFormProps) {
+const AddExpenseForm = forwardRef<AddExpenseFormHandle, AddExpenseFormProps>(
+function AddExpenseForm({ onAdd }, ref) {
   const fileRef = useRef<HTMLInputElement>(null);
   const [form, setForm] = useState<Partial<DespesaLocal>>({
     data_despesa: today(),
@@ -130,6 +136,30 @@ function AddExpenseForm({ onAdd }: AddExpenseFormProps) {
   const tip = form.categoria ? POLITICA_TIPS[form.categoria] : null;
   const isRepresentacao =
     form.categoria === "representacao" || form.categoria === "alimentacao_representacao";
+
+  // Expõe tryFlush para o pai chamar no submit
+  // Retorna a despesa adicionada (para uso imediato) ou null
+  useImperativeHandle(ref, () => ({
+    tryFlush: (): DespesaLocal | null => {
+      if (!form.categoria || !form.descricao || !form.valor || !form.data_despesa) return null;
+      if (isRepresentacao && !form.cliente_identificado) return null;
+      if ((form.valor ?? 0) <= 0) return null;
+      const d: DespesaLocal = {
+        id: crypto.randomUUID(),
+        categoria: form.categoria as DespesaCategoria,
+        descricao: form.descricao,
+        valor: form.valor,
+        data_despesa: form.data_despesa,
+        cliente_identificado: form.cliente_identificado,
+        file: file ?? undefined,
+      };
+      onAdd(d);
+      setForm({ data_despesa: today(), valor: 0 });
+      setFile(null);
+      if (fileRef.current) fileRef.current.value = "";
+      return d;
+    },
+  }));
 
   const handleAdd = () => {
     if (!form.categoria || !form.descricao || !form.valor || !form.data_despesa) {
@@ -287,7 +317,8 @@ function AddExpenseForm({ onAdd }: AddExpenseFormProps) {
       </Button>
     </div>
   );
-}
+});
+AddExpenseForm.displayName = "AddExpenseForm";
 
 // ─── ReembolsoDialog ──────────────────────────────────────────────────────────
 
@@ -299,6 +330,7 @@ export interface ReembolsoDialogProps {
 export function ReembolsoDialog({ open, onOpenChange }: ReembolsoDialogProps) {
   const { user } = useAuth();
   const queryClient = useQueryClient();
+  const addExpenseRef = useRef<AddExpenseFormHandle>(null);
 
   const [justificativa, setJustificativa] = useState("");
   const [despesas, setDespesas] = useState<DespesaLocal[]>([]);
@@ -321,8 +353,15 @@ export function ReembolsoDialog({ open, onOpenChange }: ReembolsoDialogProps) {
       toast.error("Informe a justificativa / motivo do reembolso.");
       return;
     }
-    if (despesas.length === 0) {
-      toast.error("Adicione ao menos uma despesa antes de enviar.");
+
+    // Auto-inclui despesa pendente no formulário (caso o usuário não tenha clicado em "+ Adicionar")
+    const flushedDespesa = addExpenseRef.current?.tryFlush() ?? null;
+
+    // Lista final = despesas na state + possível despesa recém-adicionada via flush
+    const todasDespesas = flushedDespesa ? [...despesas, flushedDespesa] : despesas;
+
+    if (todasDespesas.length === 0) {
+      toast.error("Preencha e adicione ao menos uma despesa antes de enviar.");
       return;
     }
 
@@ -342,7 +381,7 @@ export function ReembolsoDialog({ open, onOpenChange }: ReembolsoDialogProps) {
           meio_transporte: "outro",
           necessita_hotel: false,
           adiantamento_solicitado: 0,
-          estimativa_total: total,
+          estimativa_total: todasDespesas.reduce((s, d) => s + d.valor, 0),
           status: "em_andamento", // sem etapa de aprovação de adiantamento
         })
         .select()
@@ -352,7 +391,7 @@ export function ReembolsoDialog({ open, onOpenChange }: ReembolsoDialogProps) {
       const solicitacaoId: string = viagem.id;
 
       // 2. Inserir todas as despesas
-      for (const d of despesas) {
+      for (const d of todasDespesas) {
         const { data: despesaCriada, error: dErr } = await (supabase as any)
           .from("viagem_despesas")
           .insert({
@@ -392,7 +431,7 @@ export function ReembolsoDialog({ open, onOpenChange }: ReembolsoDialogProps) {
         .insert({
           solicitacao_id: solicitacaoId,
           adiantamento_recebido: 0,
-          total_despesas: total,
+          total_despesas: todasDespesas.reduce((s, d) => s + d.valor, 0),
           status: "enviada",
           submetido_em: new Date().toISOString(),
         })
@@ -460,7 +499,7 @@ export function ReembolsoDialog({ open, onOpenChange }: ReembolsoDialogProps) {
           )}
 
           {/* Form para adicionar despesa */}
-          <AddExpenseForm onAdd={(d) => setDespesas((prev) => [...prev, d])} />
+          <AddExpenseForm ref={addExpenseRef} onAdd={(d) => setDespesas((prev) => [...prev, d])} />
 
           <DialogFooter className="pt-2">
             <Button type="button" variant="outline" onClick={handleClose} disabled={submitting}>
@@ -468,7 +507,7 @@ export function ReembolsoDialog({ open, onOpenChange }: ReembolsoDialogProps) {
             </Button>
             <Button
               type="submit"
-              disabled={submitting || despesas.length === 0}
+              disabled={submitting}
               className="carbo-gradient text-white gap-2"
             >
               {submitting ? (
