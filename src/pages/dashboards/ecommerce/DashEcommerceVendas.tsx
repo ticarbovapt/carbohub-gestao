@@ -451,13 +451,13 @@ function PlatformView({ platform, period }: { platform: EcommercePlatform; perio
         />
         <MetricCard
           label="Pedidos Pendentes" value={fmtNum(m.pendingOrders)}
-          sub="aguardando pagamento ou confirmação"
+          sub="aguardando pagamento"
           icon={<Hourglass className="h-4 w-4" />} accent="#a78bfa"
         />
         <MetricCard
-          label="Avaliação Média" value={m.avgRating !== null ? m.avgRating.toFixed(1) : "—"}
-          sub="média do período"
-          icon={<Star className="h-4 w-4" />} accent="#facc15"
+          label="A enviar" value={fmtNum(m.paidOrders)}
+          sub="pago, aguardando despacho"
+          icon={<Package className="h-4 w-4" />} accent="#38bdf8"
         />
       </div>
 
