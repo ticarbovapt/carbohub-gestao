@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/dialog";
 import {
   AreaChart, Area, BarChart, Bar, LineChart, Line, Cell,
+  PieChart, Pie,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
 } from "recharts";
 import {
@@ -23,7 +24,7 @@ import {
   useDashEcommerce, useEcommerceComparativo, useEcommerceRawCheck, useCommissionRates,
   useEcommerceHistoricoMensal,
   type EcommercePlatform, type EcommercePeriod, type RawCheckMetrics, type EcommerceMetrics,
-  type MonthlyMetrics,
+  type ComparativoMetrics, type MonthlyMetrics,
   PLATFORM_FEE_DEFAULT,
 } from "@/hooks/useDashEcommerce";
 import {
@@ -577,8 +578,8 @@ function PlatformView({ platform, period }: { platform: EcommercePlatform; perio
 // ─────────────────────────────────────────────────────────────────────────────
 
 function ComparativoView({ period }: { period: EcommercePeriod }) {
-  const [selected, setSelected] = useState<EcommercePlatform[]>(["mercadolivre", "amazon"]);
-  const [metric, setMetric] = useState<"orders" | "units">("orders");
+  const [selected, setSelected] = useState<EcommercePlatform[]>(["mercadolivre", "amazon", "nuvemshop"]);
+  const [metric, setMetric] = useState<"orders" | "units" | "revenue">("revenue");
   const valid = selected.length >= 2 ? selected : (["mercadolivre", "amazon"] as EcommercePlatform[]);
   const { data } = useEcommerceComparativo(valid, period);
 
@@ -589,18 +590,33 @@ function ComparativoView({ period }: { period: EcommercePeriod }) {
 
   const anyConnected = data.some(c => c.totalOrders > 0);
 
-  const barData = data.map(c => ({
-    name: PMAP[c.platform].label,
-    receita: c.totalRevenue,
-    color: PMAP[c.platform].color,
-  }));
+  // ── Agregados do período ────────────────────────────────────────────────────
+  const totalRevenue = data.reduce((s, c) => s + c.totalRevenue, 0);
+  const totalOrders  = data.reduce((s, c) => s + c.totalOrders, 0);
+  const totalUnits   = data.reduce((s, c) => s + c.totalUnitsSold, 0);
+  const totalCancel  = data.reduce((s, c) => s + c.cancelledOrders, 0);
+  const overallTicket = totalOrders > 0 ? totalRevenue / totalOrders : 0;
+
+  // ── Líderes (entre as que tiveram pedidos) ──────────────────────────────────
+  const cancelRate = (c: ComparativoMetrics) => c.totalOrders > 0 ? c.cancelledOrders / c.totalOrders : 0;
+  const withOrders = data.filter(c => c.totalOrders > 0);
+  const leaderRevenue = [...withOrders].sort((a, b) => b.totalRevenue - a.totalRevenue)[0];
+  const leaderTicket  = [...withOrders].sort((a, b) => b.avgTicket - a.avgTicket)[0];
+  const leaderLowCancel = [...withOrders].sort((a, b) => cancelRate(a) - cancelRate(b))[0];
+
+  // ── Dados de gráficos ───────────────────────────────────────────────────────
+  const pieData = withOrders
+    .map(c => ({ name: PMAP[c.platform].label, value: c.totalRevenue, color: PMAP[c.platform].color }))
+    .filter(d => d.value > 0);
 
   const maxDays = Math.max(0, ...data.map(c => c.dailySales.length));
+  const evoKey  = metric === "orders" ? "orders" : metric === "units" ? "units" : "revenue";
   const lineData = Array.from({ length: maxDays }, (_, i) => {
     const entry: Record<string, number | string> = { label: data[0]?.dailySales[i]?.label ?? "" };
-    data.forEach(c => { entry[c.platform] = c.dailySales[i]?.[metric === "orders" ? "orders" : "units"] ?? 0; });
+    data.forEach(c => { entry[c.platform] = c.dailySales[i]?.[evoKey] ?? 0; });
     return entry;
   });
+  const evoFmt = (v: number) => metric === "revenue" ? fmtBRL(v) : fmtNum(v);
 
   return (
     <div className="space-y-5">
@@ -645,7 +661,36 @@ function ComparativoView({ period }: { period: EcommercePeriod }) {
         </div>
       )}
 
-      {/* Summary table */}
+      {/* ── Destaques ───────────────────────────────────────────────────────── */}
+      {anyConnected && (
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <MetricCard
+            label="Receita total" value={fmtBRL(totalRevenue)}
+            sub={`${fmtNum(totalOrders)} pedidos · ${fmtNum(totalUnits)} un · ticket ${fmtBRL(overallTicket)}`}
+            icon={<Wallet className="h-4 w-4" />} accent="#22c55e"
+          />
+          <MetricCard
+            label="Líder em receita"
+            value={leaderRevenue ? `${PMAP[leaderRevenue.platform].emoji} ${PMAP[leaderRevenue.platform].label}` : "—"}
+            sub={leaderRevenue ? `${fmtBRL(leaderRevenue.totalRevenue)} · ${pct(leaderRevenue.totalRevenue, totalRevenue)} do total` : undefined}
+            icon={<Trophy className="h-4 w-4" />} accent={leaderRevenue ? PMAP[leaderRevenue.platform].color : "#94a3b8"}
+          />
+          <MetricCard
+            label="Maior ticket médio"
+            value={leaderTicket ? `${PMAP[leaderTicket.platform].emoji} ${PMAP[leaderTicket.platform].label}` : "—"}
+            sub={leaderTicket ? `${fmtBRL(leaderTicket.avgTicket)} por pedido` : undefined}
+            icon={<Receipt className="h-4 w-4" />} accent={leaderTicket ? PMAP[leaderTicket.platform].color : "#94a3b8"}
+          />
+          <MetricCard
+            label="Menor cancelamento"
+            value={leaderLowCancel ? `${PMAP[leaderLowCancel.platform].emoji} ${PMAP[leaderLowCancel.platform].label}` : "—"}
+            sub={leaderLowCancel ? `${pct(leaderLowCancel.cancelledOrders, leaderLowCancel.totalOrders)} dos pedidos` : undefined}
+            icon={<CheckCircle2 className="h-4 w-4" />} accent="#22c55e"
+          />
+        </div>
+      )}
+
+      {/* ── Tabela rica ─────────────────────────────────────────────────────── */}
       <Card className="rounded-2xl border-0 shadow-sm">
         <CardHeader className="pb-2 pt-5 px-5">
           <CardTitle className="text-sm font-semibold">Resumo Comparativo</CardTitle>
@@ -657,110 +702,153 @@ function ComparativoView({ period }: { period: EcommercePeriod }) {
                 <tr className="border-y border-border/50 bg-muted/30 text-muted-foreground text-xs">
                   <th className="text-left px-5 py-2.5 font-medium">Plataforma</th>
                   <th className="text-right px-4 py-2.5 font-medium">Pedidos</th>
-                  <th className="text-right px-4 py-2.5 font-medium">Unidades reais</th>
-                  <th className="text-right px-4 py-2.5 font-medium">Receita</th>
+                  <th className="text-right px-4 py-2.5 font-medium">Unidades</th>
+                  <th className="text-left px-4 py-2.5 font-medium">Receita · participação</th>
                   <th className="text-right px-4 py-2.5 font-medium">Ticket médio</th>
-                  <th className="text-right px-5 py-2.5 font-medium">Cancelamentos</th>
+                  <th className="text-right px-5 py-2.5 font-medium">Cancel.</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border/30">
-                {data.map(c => {
+                {[...data].sort((a, b) => b.totalRevenue - a.totalRevenue).map(c => {
                   const cfg = PMAP[c.platform];
+                  const share = totalRevenue > 0 ? (c.totalRevenue / totalRevenue) * 100 : 0;
+                  const isLeader = leaderRevenue?.platform === c.platform && c.totalRevenue > 0;
                   return (
-                    <tr key={c.platform} className="hover:bg-muted/20">
+                    <tr key={c.platform} className={cn("hover:bg-muted/20", isLeader && "bg-muted/10")}>
                       <td className="px-5 py-3">
-                        <span className={cn("font-semibold", cfg.textClass)}>{cfg.emoji} {cfg.label}</span>
+                        <span className="inline-flex items-center gap-1.5">
+                          <span className={cn("font-semibold", cfg.textClass)}>{cfg.emoji} {cfg.label}</span>
+                          {isLeader && <Trophy className="h-3.5 w-3.5 text-amber-500" />}
+                        </span>
                       </td>
-                      <td className="px-4 py-3 text-right">{fmtNum(c.totalOrders)}</td>
-                      <td className="px-4 py-3 text-right font-semibold">{fmtNum(c.totalUnitsSold)}</td>
-                      <td className="px-4 py-3 text-right">{fmtBRL(c.totalRevenue)}</td>
-                      <td className="px-4 py-3 text-right">{fmtBRL(c.avgTicket)}</td>
-                      <td className="px-5 py-3 text-right text-destructive">{fmtNum(c.cancelledOrders)}</td>
+                      <td className="px-4 py-3 text-right tabular-nums">{fmtNum(c.totalOrders)}</td>
+                      <td className="px-4 py-3 text-right tabular-nums font-semibold">{fmtNum(c.totalUnitsSold)}</td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-2">
+                          <span className="tabular-nums w-20 shrink-0">{fmtBRL(c.totalRevenue)}</span>
+                          <div className="flex-1 min-w-[60px] h-1.5 rounded-full bg-muted overflow-hidden">
+                            <div className="h-full rounded-full" style={{ width: `${share}%`, background: cfg.color }} />
+                          </div>
+                          <span className="text-xs text-muted-foreground tabular-nums w-10 text-right">{share.toFixed(0)}%</span>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-right tabular-nums">{fmtBRL(c.avgTicket)}</td>
+                      <td className="px-5 py-3 text-right tabular-nums">
+                        <span className={cn(c.cancelledOrders > 0 ? "text-destructive" : "text-muted-foreground")}>
+                          {fmtNum(c.cancelledOrders)}
+                          <span className="text-xs text-muted-foreground ml-1">({pct(c.cancelledOrders, c.totalOrders)})</span>
+                        </span>
+                      </td>
                     </tr>
                   );
                 })}
               </tbody>
+              <tfoot>
+                <tr className="border-t-2 border-border/60 bg-muted/20 font-semibold">
+                  <td className="px-5 py-3">Total</td>
+                  <td className="px-4 py-3 text-right tabular-nums">{fmtNum(totalOrders)}</td>
+                  <td className="px-4 py-3 text-right tabular-nums">{fmtNum(totalUnits)}</td>
+                  <td className="px-4 py-3 tabular-nums">{fmtBRL(totalRevenue)}</td>
+                  <td className="px-4 py-3 text-right tabular-nums">{fmtBRL(overallTicket)}</td>
+                  <td className="px-5 py-3 text-right tabular-nums">
+                    {fmtNum(totalCancel)}
+                    <span className="text-xs text-muted-foreground ml-1">({pct(totalCancel, totalOrders)})</span>
+                  </td>
+                </tr>
+              </tfoot>
             </table>
           </div>
         </CardContent>
       </Card>
 
-      {/* Charts — only shown when at least one platform has data */}
+      {/* ── Gráficos ────────────────────────────────────────────────────────── */}
       {anyConnected && (
-        <>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+          {/* Donut — mix de receita */}
           <Card className="rounded-2xl border-0 shadow-sm">
             <CardHeader className="pb-1 pt-5 px-5">
               <CardTitle className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
-                Receita por Plataforma
+                Mix de Receita
               </CardTitle>
             </CardHeader>
             <CardContent className="px-4 pb-5">
-              <ResponsiveContainer width="100%" height={200}>
-                <BarChart data={barData} margin={{ top: 16, right: 16, left: 8, bottom: 0 }} barCategoryGap="35%">
-                  <CartesianGrid strokeDasharray="3 3" className="stroke-border/40" vertical={false} />
-                  <XAxis dataKey="name" tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
-                  <YAxis
-                    tick={{ fontSize: 11 }}
-                    axisLine={false}
-                    tickLine={false}
-                    tickFormatter={v => v === 0 ? "R$0" : `R$${(v / 1000).toFixed(0)}k`}
-                    width={52}
-                  />
+              <ResponsiveContainer width="100%" height={240}>
+                <PieChart>
+                  <Pie
+                    data={pieData} dataKey="value" nameKey="name"
+                    cx="50%" cy="50%" innerRadius={58} outerRadius={88} paddingAngle={2}
+                    stroke="var(--background)" strokeWidth={2}
+                  >
+                    {pieData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
+                  </Pie>
                   <Tooltip
                     contentStyle={{ background: "var(--background)", border: "1px solid var(--border)", borderRadius: 10, fontSize: 12 }}
-                    formatter={(v: number) => [fmtBRL(v), "Receita"]}
-                    cursor={{ fill: "var(--muted)", opacity: 0.3 }}
+                    formatter={(v: number, n: string) => [`${fmtBRL(v)} · ${pct(v, totalRevenue)}`, n]}
                   />
-                  <Bar dataKey="receita" radius={[6, 6, 0, 0]} maxBarSize={64} label={{ position: "top", fontSize: 11, formatter: (v: number) => v > 0 ? `R$${(v/1000).toFixed(1)}k` : "", fill: "var(--muted-foreground)" }}>
-                    {barData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
-                  </Bar>
-                </BarChart>
+                  <Legend iconType="circle" iconSize={9} />
+                </PieChart>
               </ResponsiveContainer>
             </CardContent>
           </Card>
 
+          {/* Evolução — pedidos / unidades / receita */}
           <Card className="rounded-2xl border-0 shadow-sm">
-            <CardHeader className="pb-1 pt-5 px-5 flex flex-row items-center justify-between">
+            <CardHeader className="pb-1 pt-5 px-5 flex flex-row items-center justify-between gap-2">
               <CardTitle className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
-                Evolução — {metric === "orders" ? "Pedidos" : "Unidades reais"}
+                Evolução
               </CardTitle>
               <div className="flex gap-1.5">
-                {(["orders", "units"] as const).map(m2 => (
+                {([["revenue", "Receita"], ["orders", "Pedidos"], ["units", "Unidades"]] as const).map(([m2, lbl]) => (
                   <button
                     key={m2}
                     onClick={() => setMetric(m2)}
                     className={cn(
-                      "text-xs px-3 py-1 rounded-lg border transition-all font-medium",
+                      "text-xs px-2.5 py-1 rounded-lg border transition-all font-medium",
                       metric === m2
                         ? "bg-primary text-primary-foreground border-transparent"
                         : "border-border text-muted-foreground hover:bg-muted"
                     )}
                   >
-                    {m2 === "orders" ? "Pedidos" : "Unidades"}
+                    {lbl}
                   </button>
                 ))}
               </div>
             </CardHeader>
             <CardContent className="px-2 pb-4">
-              <ResponsiveContainer width="100%" height={220}>
-                <BarChart data={lineData} margin={{ top: 4, right: 16, left: 8, bottom: 0 }} barCategoryGap="20%" barGap={2}>
+              <ResponsiveContainer width="100%" height={240}>
+                <AreaChart data={lineData} margin={{ top: 8, right: 16, left: 8, bottom: 0 }}>
+                  <defs>
+                    {valid.map(p => (
+                      <linearGradient key={p} id={`grad-${p}`} x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor={PMAP[p].color} stopOpacity={0.35} />
+                        <stop offset="100%" stopColor={PMAP[p].color} stopOpacity={0.02} />
+                      </linearGradient>
+                    ))}
+                  </defs>
                   <CartesianGrid strokeDasharray="3 3" className="stroke-border/40" vertical={false} />
                   <XAxis dataKey="label" tick={{ fontSize: 10 }} axisLine={false} tickLine={false} />
-                  <YAxis tick={{ fontSize: 10 }} axisLine={false} tickLine={false} width={28} />
+                  <YAxis
+                    tick={{ fontSize: 10 }} axisLine={false} tickLine={false} width={metric === "revenue" ? 44 : 28}
+                    tickFormatter={v => metric === "revenue" ? (v === 0 ? "0" : `${(v / 1000).toFixed(0)}k`) : fmtNum(v)}
+                  />
                   <Tooltip
                     contentStyle={{ background: "var(--background)", border: "1px solid var(--border)", borderRadius: 10, fontSize: 12 }}
-                    formatter={(v: number, name: string) => [fmtNum(v), PMAP[name as EcommercePlatform]?.label ?? name]}
-                    cursor={{ fill: "var(--muted)", opacity: 0.3 }}
+                    formatter={(v: number, name: string) => [evoFmt(v), PMAP[name as EcommercePlatform]?.label ?? name]}
+                    cursor={{ stroke: "var(--muted-foreground)", strokeOpacity: 0.3 }}
                   />
-                  <Legend iconType="square" iconSize={10} formatter={v => PMAP[v as EcommercePlatform]?.label ?? v} />
+                  <Legend iconType="circle" iconSize={9} formatter={v => PMAP[v as EcommercePlatform]?.label ?? v} />
                   {valid.map(p => (
-                    <Bar key={p} dataKey={p} fill={PMAP[p].color} radius={[3, 3, 0, 0]} maxBarSize={20} name={p} />
+                    <Area
+                      key={p} type="monotone" dataKey={p} name={p}
+                      stroke={PMAP[p].color} strokeWidth={2}
+                      fill={`url(#grad-${p})`} dot={false} activeDot={{ r: 4 }}
+                    />
                   ))}
-                </BarChart>
+                </AreaChart>
               </ResponsiveContainer>
             </CardContent>
           </Card>
-        </>
+        </div>
       )}
     </div>
   );
