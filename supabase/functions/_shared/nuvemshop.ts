@@ -69,15 +69,29 @@ function authHeaders(accessToken: string): HeadersInit {
   };
 }
 
-/** Mapeia o status do pedido da Nuvemshop para o nosso (pending/shipped/delivered/cancelled). */
+/**
+ * Mapeia o status do pedido da Nuvemshop para o nosso.
+ * Considera PAGAMENTO (não só envio), porque o estoque só baixa quando pago.
+ *  - cancelado/estornado            → 'cancelled' (não consome / estorna)
+ *  - pago (mesmo sem enviar)        → 'shipped'   (consome estoque)
+ *  - enviado / entregue             → 'shipped' / 'delivered'
+ *  - aguardando pagamento           → 'pending'   (não consome)
+ */
 export function mapNuvemshopStatus(order: any): string {
-  const status = String(order?.status ?? "").toLowerCase();
+  const status   = String(order?.status ?? "").toLowerCase();          // open | closed | cancelled
+  const payment  = String(order?.payment_status ?? "").toLowerCase();  // pending | authorized | paid | voided | refunded | abandoned
+  const shipping = String(order?.shipping_status ?? "").toLowerCase(); // unpacked | unfulfilled | fulfilled | shipped | delivered
+
+  // Cancelado ou pagamento estornado/anulado → não consome estoque (e estorna se já tinha consumido)
   if (status === "cancelled" || status === "canceled") return "cancelled";
+  if (payment === "voided" || payment === "refunded") return "cancelled";
 
-  const ship = String(order?.shipping_status ?? "").toLowerCase();
-  if (ship === "shipped" || ship === "fulfilled") return "shipped";
-  if (ship === "delivered") return "delivered";
+  if (shipping === "delivered") return "delivered";
 
+  // Pago (ainda que não enviado) OU já em transporte → estado que consome estoque
+  if (payment === "paid" || shipping === "shipped" || shipping === "fulfilled") return "shipped";
+
+  // Aguardando pagamento
   return "pending";
 }
 
