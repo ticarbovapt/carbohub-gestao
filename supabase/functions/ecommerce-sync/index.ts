@@ -112,7 +112,8 @@ function normalizeMLStatus(s: string): string {
   const map: Record<string, string> = {
     confirmed: "pending", payment_required: "pending",
     partially_paid: "pending", payment_in_process: "pending",
-    paid: "shipped", shipped: "shipped", partially_delivered: "shipped",
+    paid: "paid",                 // pago, aguardando despacho → consome (card "A enviar")
+    shipped: "shipped", partially_delivered: "shipped",
     delivered: "delivered", cancelled: "cancelled",
   };
   return map[s] ?? "pending";
@@ -181,10 +182,10 @@ async function getAmazonToken(): Promise<{ accessToken: string; sellerId: string
 
 function normalizeAmazonStatus(s: string): string {
   const map: Record<string, string> = {
-    Pending:            "pending",
-    Unshipped:          "shipped",
-    PartiallyShipped:   "shipped",
-    Shipped:            "shipped",
+    Pending:            "pending",  // aguardando pagamento → não consome
+    Unshipped:          "paid",     // pago, aguardando despacho → consome (card "A enviar")
+    PartiallyShipped:   "shipped",  // parte já despachada → Em Transporte
+    Shipped:            "shipped",  // despachado → Em Transporte
     Delivered:          "delivered",
     Canceled:           "cancelled",
   };
