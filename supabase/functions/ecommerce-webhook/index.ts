@@ -148,7 +148,7 @@ function normalizeAmazon(body: unknown, platform: Platform): NormalizedOrder[] {
     units_real:   1,
     unit_price:   0,
     total:        0,
-    status:       payload?.OrderStatus?.toLowerCase()?.replace("unshipped", "pending") ?? "pending",
+    status:       payload?.OrderStatus?.toLowerCase()?.replace("unshipped", "paid") ?? "pending",
     ordered_at:   payload?.PurchaseDate ?? new Date().toISOString(),
     raw:          body,
   }];
