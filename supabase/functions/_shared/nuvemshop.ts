@@ -88,10 +88,11 @@ export function mapNuvemshopStatus(order: any): string {
 
   if (shipping === "delivered") return "delivered";
 
-  // Pago (ainda que não enviado) OU já em transporte → estado que consome estoque
-  if (payment === "paid" || shipping === "shipped" || shipping === "fulfilled") return "shipped";
+  // Só consome estoque quando realmente despachado pelo lojista.
+  // Pedido pago mas ainda "por embalar" (unpacked/unfulfilled) permanece 'pending'.
+  if (shipping === "shipped" || shipping === "fulfilled") return "shipped";
 
-  // Aguardando pagamento
+  // Pago mas ainda não enviado → pending (não deduz estoque)
   return "pending";
 }
 
