@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Plus, Pencil, Trash2, Save, X, Link2, Info, Zap } from "lucide-react";
+import { Plus, Pencil, Trash2, Save, X, Link2, Info, Zap, AlertTriangle } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { CarboCard, CarboCardContent } from "@/components/ui/carbo-card";
@@ -15,6 +15,7 @@ const PLATFORMS = [
   { value: "",              label: "Todas as plataformas" },
   { value: "mercadolivre",  label: "Mercado Livre" },
   { value: "amazon",        label: "Amazon" },
+  { value: "nuvemshop",     label: "Nuvemshop" },
   { value: "shopee",        label: "Shopee" },
   { value: "tiktok",        label: "TikTok Shop" },
   { value: "lp",            label: "Landing Page / Vindi" },
@@ -78,6 +79,46 @@ export function SkuMappingConfig() {
     },
   });
 
+  // SKUs que já chegaram em pedidos do e-commerce mas ainda não têm
+  // mapeamento ativo (nem explícito, nem auto-match por product_code).
+  // Enquanto um SKU estiver aqui, as vendas dele NÃO deduzem estoque.
+  const { data: pendingSkus = [] } = useQuery({
+    queryKey: ["pending-sku-mappings", mappings.length, products.length],
+    refetchInterval: 30_000,
+    queryFn: async () => {
+      const { data: orders } = await supabase
+        .from("ecommerce_orders" as never)
+        .select("platform, product_sku")
+        .not("product_sku", "is", null)
+        .order("ordered_at", { ascending: false })
+        .limit(2000);
+
+      const rows = (orders || []) as { platform: string; product_sku: string }[];
+      if (rows.length === 0) return [];
+
+      const productCodes = new Set(products.map(p => p.product_code));
+      const activeMappings = (mappings as Mapping[]).filter(m => m.is_active);
+
+      const isMapped = (platform: string, sku: string) => {
+        if (productCodes.has(sku)) return true; // auto-match por código interno
+        return activeMappings.some(
+          m => m.platform_sku === sku && (m.platform === platform || m.platform == null),
+        );
+      };
+
+      const agg = new Map<string, { platform: string; product_sku: string; count: number }>();
+      for (const r of rows) {
+        if (!r.product_sku || isMapped(r.platform, r.product_sku)) continue;
+        const key = `${r.platform}::${r.product_sku}`;
+        const cur = agg.get(key);
+        if (cur) cur.count += 1;
+        else agg.set(key, { platform: r.platform, product_sku: r.product_sku, count: 1 });
+      }
+      return [...agg.values()].sort((a, b) => b.count - a.count);
+    },
+    enabled: products.length >= 0,
+  });
+
   const saveMutation = useMutation({
     mutationFn: async () => {
       const payload = {
@@ -130,6 +171,12 @@ export function SkuMappingConfig() {
     setDialogOpen(true);
   };
 
+  const openFromPending = (platform: string, sku: string) => {
+    setEditId(null);
+    setForm({ ...EMPTY_FORM, platform: platform || "", platform_sku: sku });
+    setDialogOpen(true);
+  };
+
   const openEdit = (m: Mapping) => {
     setEditId(m.id);
     setForm({
@@ -162,6 +209,42 @@ export function SkuMappingConfig() {
           </p>
         </div>
       </div>
+
+      {/* SKUs aguardando mapeamento — vendas que ainda não deduzem estoque */}
+      {pendingSkus.length > 0 && (
+        <div className="space-y-2">
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="h-4 w-4 text-amber-400" />
+            <span className="text-sm font-medium">SKUs aguardando mapeamento</span>
+            <CarboBadge variant="destructive">{pendingSkus.length}</CarboBadge>
+          </div>
+          <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 divide-y divide-amber-500/15">
+            {pendingSkus.map(s => (
+              <div key={`${s.platform}::${s.product_sku}`} className="flex items-center gap-3 px-4 py-2.5 flex-wrap">
+                <code className="text-sm font-mono font-semibold text-foreground bg-muted px-1.5 py-0.5 rounded shrink-0">
+                  {s.product_sku}
+                </code>
+                <CarboBadge variant="secondary">{platformLabel(s.platform)}</CarboBadge>
+                <span className="text-xs text-muted-foreground">
+                  {s.count} pedido{s.count > 1 ? "s" : ""} sem dedução de estoque
+                </span>
+                <Button
+                  size="sm"
+                  className="ml-auto gap-1.5 carbo-gradient text-white"
+                  onClick={() => openFromPending(s.platform, s.product_sku)}
+                >
+                  <Link2 className="h-3.5 w-3.5" />
+                  Mapear agora
+                </Button>
+              </div>
+            ))}
+          </div>
+          <p className="text-[11px] text-muted-foreground">
+            Estes SKUs apareceram em vendas mas ainda não estão ligados a nenhum produto.
+            Enquanto não forem mapeados, as vendas deles <strong className="text-amber-400">não deduzem o estoque CD SP</strong>.
+          </p>
+        </div>
+      )}
 
       {/* Auto-match: produtos com product_code */}
       <div className="space-y-2">
