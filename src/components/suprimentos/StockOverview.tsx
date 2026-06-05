@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from "react";
-import { Package, Search, Pencil, Save, X, Warehouse, TrendingUp, TrendingDown, Calendar, BarChart3, Shield, Activity, Download, ArrowDownToLine, Tag, Info } from "lucide-react";
+import { Package, Search, Pencil, Save, X, Warehouse, TrendingUp, TrendingDown, Calendar, BarChart3, Shield, Activity, Download, ArrowDownToLine, Tag, Info, Settings2, Layers } from "lucide-react";
 import * as XLSX from "xlsx";
 import { Input } from "@/components/ui/input";
 import { CarboCard, CarboCardContent } from "@/components/ui/carbo-card";
@@ -9,6 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -16,6 +17,7 @@ import { useCanManageStock } from "@/hooks/useActionPermissions";
 import { useCreateStockMovement } from "@/hooks/useStockMovements";
 import { useProductMovements30d } from "@/hooks/useProductMovements30d";
 import { toast } from "sonner";
+import { cn } from "@/lib/utils";
 import { StockProgressBar } from "./StockProgressBar";
 import { MiniTrendChart } from "./MiniTrendChart";
 import { addDays, format } from "date-fns";
@@ -36,6 +38,11 @@ type CoverageStatus = {
   label: string;
   variant: "destructive" | "warning" | "success" | "info" | "secondary";
 };
+
+// Equivalência mostrada no card: "multiply" = produto é kit, mostra unidades (×fator);
+// "divide" = produto é unidade, mostra quantos kits (÷fator).
+type EquivCfg = { mode: "multiply" | "divide"; factor: number };
+type DisplayCfg = { hidden: string[]; equiv: Record<string, EquivCfg> };
 
 function getCoverageStatus(days: number | null): CoverageStatus {
   if (days === null) return { label: "Sem consumo", variant: "secondary" };
@@ -70,6 +77,24 @@ export function StockOverview({ hubView = "sp" }: StockOverviewProps) {
   const qc = useQueryClient();
   const { user } = useAuth();
   const canEdit = useCanManageStock();
+
+  // ── Preferências de exibição (só front, salvas no navegador) ────────────────
+  // hidden: códigos de produto que não aparecem.
+  // equiv:  equivalência mostrada no card (kit↔unidades) por código de produto.
+  const [displayCfg, setDisplayCfg] = useState<DisplayCfg>({ hidden: [], equiv: {} });
+  const [displayOpen, setDisplayOpen] = useState(false);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(`suprimentos_display_${hubView}`);
+      setDisplayCfg(raw ? JSON.parse(raw) : { hidden: [], equiv: {} });
+    } catch { setDisplayCfg({ hidden: [], equiv: {} }); }
+  }, [hubView]);
+
+  const saveDisplayCfg = (next: DisplayCfg) => {
+    setDisplayCfg(next);
+    try { localStorage.setItem(`suprimentos_display_${hubView}`, JSON.stringify(next)); } catch { /* ignore */ }
+  };
 
   const { data: warehouses } = useQuery({
     queryKey: ["warehouses"],
@@ -121,11 +146,17 @@ export function StockOverview({ hubView = "sp" }: StockOverviewProps) {
   const { data: movements30d } = useProductMovements30d(productIds);
 
   const filtered = (products || []).filter(p => {
+    if (displayCfg.hidden.includes(p.product_code)) return false;
     if (selectedCategory !== "all" && p.category !== selectedCategory) return false;
     if (!search) return true;
     const s = search.toLowerCase();
     return p.name.toLowerCase().includes(s) || p.product_code.toLowerCase().includes(s);
   });
+
+  // Produtos configuráveis no diálogo de exibição (mesma categoria da view).
+  const configurableProducts = (products || []).filter(
+    p => selectedCategory === "all" || p.category === selectedCategory
+  );
 
   const handleExport = () => {
     const exportWarehouses = selectedWarehouse === "all"
@@ -380,6 +411,10 @@ export function StockOverview({ hubView = "sp" }: StockOverviewProps) {
               Nova Entrada
             </Button>
           )}
+          <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setDisplayOpen(true)}>
+            <Settings2 className="h-4 w-4" />
+            Exibição
+          </Button>
           <Button variant="outline" size="sm" className="gap-1.5" onClick={handleExport}>
             <Download className="h-4 w-4" />
             Exportar Excel
@@ -482,6 +517,21 @@ export function StockOverview({ hubView = "sp" }: StockOverviewProps) {
                     <p className="text-[11px] text-muted-foreground mt-1">
                       {p.stock_unit} total · Segurança: {safetyQty.toLocaleString("pt-BR")} {p.stock_unit}
                     </p>
+                    {(() => {
+                      const eq = displayCfg.equiv[p.product_code];
+                      if (!eq || eq.factor <= 0) return null;
+                      const val = eq.mode === "multiply"
+                        ? totalQty * eq.factor
+                        : Math.floor(totalQty / eq.factor);
+                      return (
+                        <p className="inline-flex items-center gap-1 mt-1.5 text-[11px] font-semibold text-sky-600 dark:text-sky-400">
+                          <Layers className="h-3 w-3" />
+                          {eq.mode === "multiply"
+                            ? `≈ ${val.toLocaleString("pt-BR")} un · kit de ${eq.factor}`
+                            : `≈ ${val.toLocaleString("pt-BR")} kits · ${eq.factor} un/kit`}
+                        </p>
+                      );
+                    })()}
                   </div>
 
                   {/* BI Indicators */}
@@ -575,6 +625,87 @@ export function StockOverview({ hubView = "sp" }: StockOverviewProps) {
           })}
         </div>
       )}
+
+      {/* Diálogo de Exibição (só front: o que aparece + equivalência kit↔un) */}
+      <Dialog open={displayOpen} onOpenChange={setDisplayOpen}>
+        <DialogContent className="sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Settings2 className="h-5 w-5 text-carbo-green" />
+              Exibição dos produtos
+            </DialogTitle>
+          </DialogHeader>
+          <p className="text-xs text-muted-foreground -mt-1">
+            Escolha quais produtos aparecem e configure a equivalência mostrada no card
+            (ex.: kit de sachê → unidades; CarboZé 100ml → quantos kits). Preferência salva neste navegador.
+          </p>
+          <div className="max-h-[55vh] overflow-y-auto divide-y divide-border/40 -mx-1 px-1">
+            {configurableProducts.map(p => {
+              const visible = !displayCfg.hidden.includes(p.product_code);
+              const eq = displayCfg.equiv[p.product_code];
+              return (
+                <div key={p.id} className="flex items-center gap-3 py-2.5">
+                  <Checkbox
+                    checked={visible}
+                    onCheckedChange={(c) => {
+                      const hidden = c === true
+                        ? displayCfg.hidden.filter(x => x !== p.product_code)
+                        : [...new Set([...displayCfg.hidden, p.product_code])];
+                      saveDisplayCfg({ ...displayCfg, hidden });
+                    }}
+                  />
+                  <div className="min-w-0 flex-1">
+                    <p className={cn("text-sm font-medium truncate", !visible && "text-muted-foreground line-through")}>
+                      {p.name}
+                    </p>
+                    <p className="text-[11px] text-muted-foreground font-mono">{p.product_code}</p>
+                  </div>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <Select
+                      value={eq?.mode ?? "none"}
+                      onValueChange={(v) => {
+                        const equiv = { ...displayCfg.equiv };
+                        if (v === "none") delete equiv[p.product_code];
+                        else equiv[p.product_code] = { mode: v as EquivCfg["mode"], factor: eq?.factor || 1 };
+                        saveDisplayCfg({ ...displayCfg, equiv });
+                      }}
+                    >
+                      <SelectTrigger className="w-[185px] h-8 text-xs">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">Sem equivalência</SelectItem>
+                        <SelectItem value="multiply">Kit → mostra unidades</SelectItem>
+                        <SelectItem value="divide">Unidade → mostra kits</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Input
+                      type="number"
+                      min={1}
+                      className="w-16 h-8 text-xs"
+                      placeholder="fator"
+                      value={eq?.factor ?? ""}
+                      disabled={!eq}
+                      onChange={(e) => {
+                        if (!displayCfg.equiv[p.product_code]) return;
+                        const f = Math.max(1, Number(e.target.value) || 1);
+                        const equiv = { ...displayCfg.equiv, [p.product_code]: { ...displayCfg.equiv[p.product_code], factor: f } };
+                        saveDisplayCfg({ ...displayCfg, equiv });
+                      }}
+                    />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          <DialogFooter className="gap-2 sm:gap-2">
+            <Button variant="outline" onClick={() => saveDisplayCfg({ hidden: [], equiv: {} })}>
+              Restaurar padrão
+            </Button>
+            <Button onClick={() => setDisplayOpen(false)}>Concluir</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Nova Entrada Dialog */}
       <Dialog open={entradaOpen} onOpenChange={setEntradaOpen}>
