@@ -1,11 +1,14 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import {
+  getNuvemshopCreds, fetchNuvemshopOrdersSince, mapNuvemshopOrder,
+} from "../_shared/nuvemshop.ts";
 
 const supabase = createClient(
   Deno.env.get("SUPABASE_URL")!,
   Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
 );
 
-type Platform = "mercadolivre" | "amazon" | "tiktok" | "shopee";
+type Platform = "mercadolivre" | "amazon" | "tiktok" | "shopee" | "nuvemshop";
 
 // ─── Token helper ─────────────────────────────────────────────────────────────
 
@@ -339,6 +342,29 @@ async function pullShopee(since: Date): Promise<Record<string, unknown>[]> {
   return [];
 }
 
+async function pullNuvemshop(): Promise<Record<string, unknown>[]> {
+  const creds = await getNuvemshopCreds(supabase);
+  if (!creds) { console.warn("[nuvemshop] Sem token — pulando sync"); return []; }
+  const { accessToken, storeId, lastSyncedAt } = creds;
+
+  // Sincroniza desde o último checkpoint, com teto de 30 dias.
+  const maxLookback = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+  const since = lastSyncedAt < maxLookback ? maxLookback : lastSyncedAt;
+
+  console.log(`[nuvemshop] Sincronizando desde ${since.toISOString()}`);
+  const orders = await fetchNuvemshopOrdersSince(accessToken, storeId, since);
+
+  // Mesma função de mapeamento do webhook → order_id idêntico, upsert idempotente.
+  const rows = orders.flatMap((o) => mapNuvemshopOrder(o, "cron"));
+
+  // Atualiza o checkpoint para a próxima execução.
+  await supabase.from("system_tokens")
+    .update({ last_synced_at: new Date().toISOString() })
+    .eq("id", "nuvemshop");
+
+  return rows as unknown as Record<string, unknown>[];
+}
+
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
 Deno.serve(async (req: Request) => {
@@ -352,6 +378,7 @@ Deno.serve(async (req: Request) => {
     amazon:       pullAmazon,
     tiktok:       pullTikTok,
     shopee:       pullShopee,
+    nuvemshop:    () => pullNuvemshop(),
   };
 
   const results: Record<string, number | string> = {};

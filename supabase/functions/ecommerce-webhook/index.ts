@@ -1,6 +1,9 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { crypto } from "https://deno.land/std@0.208.0/crypto/mod.ts";
 import { encodeHex } from "https://deno.land/std@0.208.0/encoding/hex.ts";
+import {
+  getNuvemshopCreds, fetchNuvemshopOrder, mapNuvemshopOrder,
+} from "../_shared/nuvemshop.ts";
 
 const supabase = createClient(
   Deno.env.get("SUPABASE_URL")!,
@@ -9,7 +12,7 @@ const supabase = createClient(
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
-type Platform = "mercadolivre" | "amazon" | "tiktok" | "shopee";
+type Platform = "mercadolivre" | "amazon" | "tiktok" | "shopee" | "nuvemshop";
 
 interface NormalizedOrder {
   platform: Platform;
@@ -79,7 +82,34 @@ async function validateShopee(req: Request, body: string): Promise<boolean> {
   return auth === expected;
 }
 
+async function validateNuvemshop(req: Request, body: string): Promise<boolean> {
+  // Nuvemshop assina o corpo com HMAC-SHA256 usando o client_secret do app.
+  const secret = Deno.env.get("NUVEMSHOP_CLIENT_SECRET");
+  if (!secret) return true; // sem secret configurado → não bloqueia (ainda em setup)
+  const received = req.headers.get("x-linkedstore-hmac-sha256") ?? "";
+  const expected = await hmacSHA256(secret, body);
+  return received === expected;
+}
+
 // ─── Normalizers ─────────────────────────────────────────────────────────────
+
+async function normalizeNuvemshop(body: unknown, _platform: Platform): Promise<NormalizedOrder[]> {
+  // Webhook da Nuvemshop manda só { store_id, event, id }. Buscamos o pedido
+  // completo na API (token não expira) e montamos as linhas — mesmo order_id
+  // que o sync usa, então o upsert é idempotente (sem dedução em dobro).
+  const b = body as Record<string, unknown>;
+  const orderId = b.id;
+  if (!orderId) return [];
+
+  const creds = await getNuvemshopCreds(supabase);
+  if (!creds) {
+    console.warn("[nuvemshop] Loja não conectada — webhook ignorado");
+    return [];
+  }
+  const order = await fetchNuvemshopOrder(creds.accessToken, creds.storeId, orderId as string | number);
+  if (!order) return [];
+  return mapNuvemshopOrder(order, "webhook") as unknown as NormalizedOrder[];
+}
 
 function normalizeMercadoLivre(body: unknown, platform: Platform): NormalizedOrder[] {
   // ML webhooks send one notification per event; order details must be fetched via API
@@ -224,7 +254,7 @@ Deno.serve(async (req: Request) => {
   const segments = url.pathname.split("/").filter(Boolean);
   const platform = segments[segments.length - 1] as Platform;
 
-  if (!["mercadolivre", "amazon", "tiktok", "shopee"].includes(platform)) {
+  if (!["mercadolivre", "amazon", "tiktok", "shopee", "nuvemshop"].includes(platform)) {
     return new Response("Unknown platform", { status: 400 });
   }
 
@@ -236,6 +266,7 @@ Deno.serve(async (req: Request) => {
     amazon:       validateAmazon,
     tiktok:       validateTikTok,
     shopee:       validateShopee,
+    nuvemshop:    validateNuvemshop,
   };
 
   const valid = await validators[platform](req, body);
@@ -249,15 +280,16 @@ Deno.serve(async (req: Request) => {
     return new Response("Invalid JSON", { status: 400 });
   }
 
-  // Normalize to common schema
-  const normalizers: Record<Platform, (b: unknown, p: Platform) => NormalizedOrder[]> = {
+  // Normalize to common schema (alguns normalizers são async — ex.: nuvemshop)
+  const normalizers: Record<Platform, (b: unknown, p: Platform) => NormalizedOrder[] | Promise<NormalizedOrder[]>> = {
     mercadolivre: normalizeMercadoLivre,
     amazon:       normalizeAmazon,
     tiktok:       normalizeTikTok,
     shopee:       normalizeShopee,
+    nuvemshop:    normalizeNuvemshop,
   };
 
-  const orders = normalizers[platform](parsed, platform);
+  const orders = await normalizers[platform](parsed, platform);
 
   if (orders.length === 0) {
     // Acknowledge but nothing to store (e.g. non-order event)
