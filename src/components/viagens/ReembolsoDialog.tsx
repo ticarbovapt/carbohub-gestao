@@ -460,7 +460,7 @@ export function ReembolsoDialog({ open, onOpenChange }: ReembolsoDialogProps) {
           </DialogTitle>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-4" noValidate>
           {/* Justificativa */}
           <div className="space-y-1.5">
             <Label htmlFor="reembolso-justificativa">Justificativa / Motivo *</Label>
