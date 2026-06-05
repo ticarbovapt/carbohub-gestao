@@ -88,13 +88,16 @@ export function SkuMappingConfig() {
     queryFn: async () => {
       const { data: orders } = await supabase
         .from("ecommerce_orders" as never)
-        .select("platform, product_sku")
+        .select("platform, product_sku, sync_source")
         .not("product_sku", "is", null)
         .order("ordered_at", { ascending: false })
         .limit(2000);
 
-      const rows = (orders || []) as { platform: string; product_sku: string }[];
+      const rows = (orders || []) as { platform: string; product_sku: string; sync_source: string | null }[];
       if (rows.length === 0) return [];
+
+      // Ignora pedidos de demonstração/seed — só conta venda real (webhook/cron).
+      const isTest = (src: string | null) => !!src && (src === "test_12m" || src.startsWith("test"));
 
       const productCodes = new Set(products.map(p => p.product_code));
       const activeMappings = (mappings as Mapping[]).filter(m => m.is_active);
@@ -108,7 +111,7 @@ export function SkuMappingConfig() {
 
       const agg = new Map<string, { platform: string; product_sku: string; count: number }>();
       for (const r of rows) {
-        if (!r.product_sku || isMapped(r.platform, r.product_sku)) continue;
+        if (!r.product_sku || isTest(r.sync_source) || isMapped(r.platform, r.product_sku)) continue;
         const key = `${r.platform}::${r.product_sku}`;
         const cur = agg.get(key);
         if (cur) cur.count += 1;
