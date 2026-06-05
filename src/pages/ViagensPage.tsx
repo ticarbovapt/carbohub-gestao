@@ -48,15 +48,20 @@ import { toast } from "sonner";
 import {
   useViagens,
   useCreateViagem,
+  useAprovarPC,
   STATUS_LABEL,
   STATUS_COLOR,
+  PC_STATUS_LABEL,
+  PC_STATUS_COLOR,
   TRANSPORTE_LABEL,
+  isReembolso,
   type CreateViagemInput,
   type MeioTransporte,
   type ViagemStatus,
   type ViagemSolicitacao,
 } from "@/hooks/useViagens";
 import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 import { PrestacaoContasDialog } from "@/components/viagens/PrestacaoContasDialog";
 import { ReembolsoDialog } from "@/components/viagens/ReembolsoDialog";
@@ -305,16 +310,18 @@ function CreateViagemDialog({
 
 // ─── Viagens Table ─────────────────────────────────────────────────────────
 
-const PC_ELIGIBLE_STATUSES: ViagemStatus[] = ["aprovado", "em_andamento", "concluido"];
+const PC_ELIGIBLE_STATUSES: ViagemStatus[] = ["aprovado", "em_andamento", "concluido", "pendente_financeiro"];
 
 function ViagensTable({
   data,
   loading,
   onOpenPC,
+  showApprovePC,
 }: {
   data: ReturnType<typeof useViagens>["data"];
   loading: boolean;
   onOpenPC: (v: ViagemSolicitacao) => void;
+  showApprovePC?: boolean;
 }) {
   if (loading) {
     return (
@@ -334,78 +341,116 @@ function ViagensTable({
     );
   }
 
+  const aprovarPC = useAprovarPC();
+
   return (
     <div className="overflow-x-auto">
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead>Destino</TableHead>
+            <TableHead>Tipo / Destino</TableHead>
             <TableHead>Solicitante</TableHead>
-            <TableHead>Datas</TableHead>
-            <TableHead>Duração</TableHead>
-            <TableHead>Estimativa</TableHead>
+            <TableHead>Data</TableHead>
+            <TableHead>Valor</TableHead>
             <TableHead>Status</TableHead>
-            <TableHead className="w-[100px]">Ações</TableHead>
+            <TableHead>PC</TableHead>
+            <TableHead className="w-[110px]">Ações</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
-          {data.map((v) => (
-            <TableRow key={v.id} className="hover:bg-muted/20">
-              <TableCell>
-                <div className="flex items-center gap-1.5">
-                  <MapPin className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                  <span className="font-medium">{v.destino}</span>
-                </div>
-                <p className="text-xs text-muted-foreground mt-0.5 truncate max-w-[200px]">
-                  {v.objetivo}
-                </p>
-              </TableCell>
-              <TableCell>
-                <span className="text-sm">{v.solicitante?.full_name || "—"}</span>
-              </TableCell>
-              <TableCell>
-                <div className="flex items-center gap-1 text-xs text-muted-foreground whitespace-nowrap">
-                  <Calendar className="h-3 w-3 shrink-0" />
-                  {new Date(v.data_ida).toLocaleDateString("pt-BR")} →{" "}
-                  {new Date(v.data_volta).toLocaleDateString("pt-BR")}
-                </div>
-              </TableCell>
-              <TableCell>
-                <span className="text-sm">{v.duracao_dias}d</span>
-              </TableCell>
-              <TableCell>
-                {v.estimativa_total > 0 ? (
-                  <span className="text-sm font-medium">
-                    R${" "}
-                    {v.estimativa_total.toLocaleString("pt-BR", {
-                      minimumFractionDigits: 2,
-                    })}
+          {data.map((v) => {
+            const reembolso = isReembolso(v);
+            const pc = Array.isArray((v as any).prestacao_contas)
+              ? (v as any).prestacao_contas[0]
+              : (v as any).prestacao_contas;
+
+            return (
+              <TableRow key={v.id} className="hover:bg-muted/20">
+                <TableCell>
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    {reembolso ? (
+                      <Receipt className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
+                    ) : (
+                      <MapPin className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                    )}
+                    <span className="font-medium">
+                      {reembolso ? "Reembolso" : v.destino}
+                    </span>
+                    {reembolso && (
+                      <span className="text-[10px] font-bold bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300 px-1.5 py-0.5 rounded-full">
+                        Reembolso
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-0.5 truncate max-w-[180px]">
+                    {v.objetivo}
+                  </p>
+                </TableCell>
+                <TableCell>
+                  <span className="text-sm">{v.solicitante?.full_name || "—"}</span>
+                </TableCell>
+                <TableCell>
+                  <span className="text-xs text-muted-foreground whitespace-nowrap">
+                    {new Date(v.data_ida).toLocaleDateString("pt-BR")}
                   </span>
-                ) : (
-                  <span className="text-xs text-muted-foreground">—</span>
-                )}
-              </TableCell>
-              <TableCell>
-                <StatusBadge status={v.status} />
-              </TableCell>
-              <TableCell>
-                <div className="flex items-center gap-1">
-                  {PC_ELIGIBLE_STATUSES.includes(v.status) && (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="h-7 px-2 text-xs gap-1"
-                      onClick={() => onOpenPC(v)}
-                      aria-label={`Abrir prestação de contas — ${v.destino}`}
-                    >
-                      <FileText className="h-3 w-3" />
-                      PC
-                    </Button>
+                </TableCell>
+                <TableCell>
+                  {v.estimativa_total > 0 ? (
+                    <span className="text-sm font-medium">
+                      R$ {v.estimativa_total.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                    </span>
+                  ) : (
+                    <span className="text-xs text-muted-foreground">—</span>
                   )}
-                </div>
-              </TableCell>
-            </TableRow>
-          ))}
+                </TableCell>
+                <TableCell>
+                  <StatusBadge status={v.status} />
+                </TableCell>
+                <TableCell>
+                  {pc ? (
+                    <span className={cn("text-xs font-semibold px-2 py-0.5 rounded-full", PC_STATUS_COLOR[pc.status as keyof typeof PC_STATUS_COLOR])}>
+                      {PC_STATUS_LABEL[pc.status as keyof typeof PC_STATUS_LABEL]}
+                    </span>
+                  ) : (
+                    <span className="text-xs text-muted-foreground">—</span>
+                  )}
+                </TableCell>
+                <TableCell>
+                  <div className="flex items-center gap-1 flex-wrap">
+                    {PC_ELIGIBLE_STATUSES.includes(v.status) && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-7 px-2 text-xs gap-1"
+                        onClick={() => onOpenPC(v)}
+                      >
+                        <FileText className="h-3 w-3" />
+                        {pc ? "Ver PC" : "Abrir PC"}
+                      </Button>
+                    )}
+                    {showApprovePC && pc?.status === "enviada" && (
+                      <Button
+                        size="sm"
+                        className="h-7 px-2 text-xs gap-1 bg-green-600 hover:bg-green-700 text-white"
+                        disabled={aprovarPC.isPending}
+                        onClick={() => {
+                          aprovarPC.mutate(pc.id);
+                          // atualiza viagem para concluido
+                          (supabase as any)
+                            .from("viagem_solicitacoes")
+                            .update({ status: "concluido" })
+                            .eq("id", v.id);
+                        }}
+                      >
+                        <CheckCircle className="h-3 w-3" />
+                        Aprovar
+                      </Button>
+                    )}
+                  </div>
+                </TableCell>
+              </TableRow>
+            );
+          })}
         </TableBody>
       </Table>
     </div>
@@ -419,6 +464,9 @@ const PENDING_STATUSES: ViagemStatus[] = [
   "pendente_financeiro",
   "pendente_ceo",
 ];
+
+// Reembolsos pendentes: status pendente_financeiro (com PC enviada)
+const isPendente = (v: ViagemSolicitacao) => PENDING_STATUSES.includes(v.status);
 
 export default function ViagensPage() {
   const { user } = useAuth();
@@ -434,10 +482,8 @@ export default function ViagensPage() {
   // "Todas" — sem filtro, para gestores/admin
   const { data: todas, isLoading: loadingTodas } = useViagens();
 
-  // Pendentes de aprovação (todas com status pendente_*)
-  const pendentes = (todas || []).filter((v) =>
-    PENDING_STATUSES.includes(v.status)
-  );
+  // Pendentes de aprovação (viagens pendentes + reembolsos pendente_financeiro)
+  const pendentes = (todas || []).filter(isPendente);
 
   // Em andamento
   const emAndamento = (todas || []).filter((v) => v.status === "em_andamento");
@@ -596,6 +642,7 @@ export default function ViagensPage() {
                 data={pendentes}
                 loading={loadingTodas}
                 onOpenPC={setPcViagem}
+                showApprovePC
               />
             </TabsContent>
             <TabsContent value="todas" className="m-0">

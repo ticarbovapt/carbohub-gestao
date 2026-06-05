@@ -382,7 +382,7 @@ export function ReembolsoDialog({ open, onOpenChange }: ReembolsoDialogProps) {
           necessita_hotel: false,
           adiantamento_solicitado: 0,
           estimativa_total: todasDespesas.reduce((s, d) => s + d.valor, 0),
-          status: "em_andamento", // sem etapa de aprovação de adiantamento
+          status: "pendente_financeiro", // reembolso vai direto para aprovação financeira
         })
         .select()
         .single();

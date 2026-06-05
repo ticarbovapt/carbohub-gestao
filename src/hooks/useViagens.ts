@@ -43,6 +43,12 @@ export interface ViagemSolicitacao {
   updated_at: string;
   // joined
   solicitante?: { full_name: string | null; email: string | null };
+  prestacao_contas?: { status: PCStatus; total_despesas: number; id: string } | null;
+}
+
+/** Indica se a solicitação é um reembolso (sem adiantamento, criado via ReembolsoDialog) */
+export function isReembolso(v: ViagemSolicitacao): boolean {
+  return v.destino === "Reembolso de Despesas" && v.adiantamento_solicitado === 0;
 }
 
 export interface ViagemAprovacao {
@@ -122,7 +128,7 @@ export function useViagens(filter?: { status?: ViagemStatus; solicitanteId?: str
     queryFn: async () => {
       let q = (supabase as any)
         .from("viagem_solicitacoes")
-        .select("*, solicitante:profiles!solicitante_id(full_name, email)")
+        .select("*, solicitante:profiles!solicitante_id(full_name, email), prestacao_contas:viagem_prestacao_contas(id, status, total_despesas)")
         .order("created_at", { ascending: false });
 
       if (filter?.status) q = q.eq("status", filter.status);
