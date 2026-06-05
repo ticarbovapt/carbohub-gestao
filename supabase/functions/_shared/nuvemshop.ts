@@ -71,10 +71,10 @@ function authHeaders(accessToken: string): HeadersInit {
 
 /**
  * Mapeia o status do pedido da Nuvemshop para o nosso.
- * Considera PAGAMENTO (não só envio), porque o estoque só baixa quando pago.
  *  - cancelado/estornado            → 'cancelled' (não consome / estorna)
- *  - pago (mesmo sem enviar)        → 'shipped'   (consome estoque)
- *  - enviado / entregue             → 'shipped' / 'delivered'
+ *  - enviado de fato                → 'shipped'   (Em Transporte; consome)
+ *  - entregue                       → 'delivered' (consome)
+ *  - pago, ainda "por embalar"      → 'paid'      (consome / reserva; card "A enviar")
  *  - aguardando pagamento           → 'pending'   (não consome)
  */
 export function mapNuvemshopStatus(order: any): string {
@@ -88,11 +88,15 @@ export function mapNuvemshopStatus(order: any): string {
 
   if (shipping === "delivered") return "delivered";
 
-  // Só consome estoque quando realmente despachado pelo lojista.
-  // Pedido pago mas ainda "por embalar" (unpacked/unfulfilled) permanece 'pending'.
+  // Realmente despachado pelo lojista → "Em Transporte".
   if (shipping === "shipped" || shipping === "fulfilled") return "shipped";
 
-  // Pago mas ainda não enviado → pending (não deduz estoque)
+  // Venda confirmada (paga) mas ainda "por embalar": status próprio 'paid'.
+  // Já CONSOME estoque (reserva anti-overselling, igual Amazon), mas NÃO conta
+  // como "Em Transporte" — aparece no card "A enviar".
+  if (payment === "paid") return "paid";
+
+  // Aguardando pagamento → não consome estoque.
   return "pending";
 }
 

@@ -47,6 +47,7 @@ export interface EcommerceMetrics {
   cancelledOrders: number;
   cancellationRate: number;
   pendingOrders: number;
+  paidOrders: number;
   shippedOrders: number;
   deliveredOrders: number;
   commissionTotal: number;
@@ -124,6 +125,7 @@ function buildMetrics(platform: EcommercePlatform, rows: DBOrder[], rateHistory:
 
   const cancelled  = rows.filter(r => r.status === "cancelled").length;
   const pending    = rows.filter(r => r.status === "pending").length;
+  const paid       = rows.filter(r => r.status === "paid").length;
   const shipped    = rows.filter(r => r.status === "shipped").length;
   const delivered  = rows.filter(r => r.status === "delivered").length;
 
@@ -191,6 +193,7 @@ function buildMetrics(platform: EcommercePlatform, rows: DBOrder[], rateHistory:
     cancelledOrders: cancelled,
     cancellationRate: Math.round(cancellationRate * 10) / 10,
     pendingOrders:   pending,
+    paidOrders:      paid,
     shippedOrders:   shipped,
     deliveredOrders: delivered,
     commissionTotal: Math.round(commissionTotal * 100) / 100,
@@ -222,7 +225,7 @@ function emptyMetrics(platform: EcommercePlatform): EcommerceMetrics {
   return {
     platform,
     totalOrders: 0, totalUnitsSold: 0, totalRevenue: 0, netRevenue: 0, avgTicket: 0,
-    cancelledOrders: 0, cancellationRate: 0, pendingOrders: 0, shippedOrders: 0, deliveredOrders: 0,
+    cancelledOrders: 0, cancellationRate: 0, pendingOrders: 0, paidOrders: 0, shippedOrders: 0, deliveredOrders: 0,
     commissionTotal: 0, topProduct: null,
     avgRating: null, products: [], dailySales: [],
     isConnected: false,
