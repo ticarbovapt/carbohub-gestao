@@ -54,8 +54,6 @@ function InicioContent() {
     .map((g) => ({ ...g, screens: g.screens.filter((s) => canSee(s.id)) }))
     .filter((g) => g.screens.length > 0);
 
-  const totalScreens = visibleGroups.reduce((n, g) => n + g.screens.length, 0);
-
   return (
     <div className="p-4 md:p-8 max-w-5xl mx-auto space-y-8">
       {/* Cabeçalho */}
@@ -76,9 +74,6 @@ function InicioContent() {
             </h1>
             <p className="text-sm text-muted-foreground mt-0.5">
               {roleLines.join(" · ")}
-              {totalScreens > 0 && (
-                <span className="text-muted-foreground/70"> · {totalScreens} tela{totalScreens > 1 ? "s" : ""} liberada{totalScreens > 1 ? "s" : ""}</span>
-              )}
             </p>
           </div>
         </div>
