@@ -478,7 +478,9 @@ function PlatformView({ platform, period }: { platform: EcommercePlatform; perio
           </div>
           <div className="text-right shrink-0">
             <p className="text-lg font-bold">{fmtBRL(m.topProduct.revenue)}</p>
-            <p className="text-xs text-muted-foreground">{fmtNum(m.topProduct.units_sold)} unid.</p>
+            <p className="text-xs text-muted-foreground">
+              {fmtNum(m.topProduct.orders)} {m.topProduct.orders === 1 ? "pedido" : "pedidos"} · {fmtNum(m.topProduct.units_sold)} un.
+            </p>
           </div>
         </div>
       )}
