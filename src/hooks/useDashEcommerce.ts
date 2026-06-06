@@ -116,12 +116,26 @@ interface DBOrder {
 // System-logic aggregator (Path 2)
 // ─────────────────────────────────────────────────────────────────────────────
 
-function buildMetrics(platform: EcommercePlatform, rows: DBOrder[], rateHistory: CommissionRate[]): EcommerceMetrics {
+function buildMetrics(
+  platform: EcommercePlatform,
+  rows: DBOrder[],
+  rateHistory: CommissionRate[],
+  skuMappings: Map<string, number> = new Map(),
+): EcommerceMetrics {
   if (rows.length === 0) return emptyMetrics(platform);
+
+  // Display units: use mapping factor when available, fall back to stored units_real
+  const displayUnits = (r: DBOrder): number => {
+    if (r.product_sku) {
+      const factor = skuMappings.get(r.product_sku);
+      if (factor !== undefined) return r.quantity * factor;
+    }
+    return r.units_real ?? r.quantity;
+  };
 
   const totalOrders    = rows.length;
   const totalRevenue   = rows.reduce((s, r) => s + Number(r.total), 0);
-  const totalUnitsSold = rows.reduce((s, r) => s + (r.units_real ?? r.quantity), 0);
+  const totalUnitsSold = rows.reduce((s, r) => s + displayUnits(r), 0);
 
   const cancelled  = rows.filter(r => r.status === "cancelled").length;
   const pending    = rows.filter(r => r.status === "pending").length;
@@ -146,7 +160,7 @@ function buildMetrics(platform: EcommercePlatform, rows: DBOrder[], rateHistory:
     skuMap.set(key, {
       name,
       orders:  prev.orders  + 1,
-      units:   prev.units   + (r.units_real ?? r.quantity),
+      units:   prev.units   + displayUnits(r),
       revenue: prev.revenue + Number(r.total),
     });
   }
@@ -159,7 +173,7 @@ function buildMetrics(platform: EcommercePlatform, rows: DBOrder[], rateHistory:
     orders:       v.orders,
     units_sold:   v.units,
     revenue:      Math.round(v.revenue * 100) / 100,
-  })).sort((a, b) => b.revenue - a.revenue);
+  })).sort((a, b) => b.orders - a.orders || b.revenue - a.revenue);
 
   // Group by day
   const dayMap = new Map<string, { orders: number; units: number; revenue: number }>();
@@ -168,7 +182,7 @@ function buildMetrics(platform: EcommercePlatform, rows: DBOrder[], rateHistory:
     const prev = dayMap.get(day) ?? { orders: 0, units: 0, revenue: 0 };
     dayMap.set(day, {
       orders:  prev.orders  + 1,
-      units:   prev.units   + (r.units_real ?? r.quantity),
+      units:   prev.units   + displayUnits(r),
       revenue: prev.revenue + Number(r.total),
     });
   }
@@ -307,7 +321,24 @@ async function fetchOrders(platform: EcommercePlatform, period: EcommercePeriod)
   if (rows.length === 0 && !connected) return emptyMetrics(platform);
   if (rows.length === 0) return { ...emptyMetrics(platform), isConnected: true };
 
-  return { ...buildMetrics(platform, rows, rateHistory), isConnected: connected };
+  // Fetch SKU→units_per_kit mapping for display correction (front-end only, no DB writes)
+  const skus = [...new Set(rows.map(r => r.product_sku).filter(Boolean))] as string[];
+  const skuMappings = new Map<string, number>();
+  if (skus.length > 0) {
+    const { data: mData } = await supabase
+      .from("sku_product_mappings" as never)
+      .select("platform_sku, units_per_kit, platform")
+      .in("platform_sku", skus)
+      .eq("is_active", true) as { data: { platform_sku: string; units_per_kit: number; platform: string | null }[] | null };
+    for (const m of mData ?? []) {
+      // Platform-specific entry wins over generic (platform=null)
+      if (!skuMappings.has(m.platform_sku) || m.platform === platform) {
+        skuMappings.set(m.platform_sku, m.units_per_kit ?? 1);
+      }
+    }
+  }
+
+  return { ...buildMetrics(platform, rows, rateHistory, skuMappings), isConnected: connected };
 }
 
 const PLATFORM_LABEL: Record<EcommercePlatform, string> = {
