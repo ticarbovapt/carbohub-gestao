@@ -1,6 +1,33 @@
 # carbohub-gestao — Instruções para o Claude
 
-## Regra obrigatória: novas telas → Role Matrix
+## ⚠️ Estrutura em transição: monólito → monorepo (CRM/ERP/Portais)
+
+Este repo está sendo reorganizado em monorepo (ver `docs/ARQUITETURA-SEPARACAO.md`).
+Layout atual:
+
+```
+/ (raiz)        = sistema ATUAL "controle" (monólito, VIVO no ar). src/, supabase/.
+apps/crm/       = sistema novo CRM (app standalone, próprio package.json/build).
+apps/erp/       = (futuro)
+packages/       = (futuro) core, ui, supabase compartilhados
+```
+
+### Regras anti-confusão (OBRIGATÓRIAS)
+1. **Todo pedido nomeia o alvo.** "no CRM" → `apps/crm`; "no controle"/"atual" → raiz (`src/`).
+2. **Na dúvida, PERGUNTE — nunca adivinhe.** Se a tela existe em mais de um app, liste os candidatos antes de mexer.
+3. **Congelamento do `controle`:** raiz só recebe correção crítica. Funcionalidade nova vai pros apps novos.
+4. **Mudança em `packages/`** → avise que afeta vários apps antes de aplicar.
+5. **Cada app é autossuficiente.** `apps/crm` tem build/lockfile próprio; NÃO mexer no `package.json` da raiz (3 lockfiles frágeis — risco ao deploy do controle).
+
+### Modelo de acesso dos sistemas novos (NÃO usar Role Matrix)
+- Sem matriz tela-a-tela. Nível decide: **gestor** (vê tudo + botões de gestão) vs **membro** (próprio escopo).
+- Escopo de dado reaproveitado: `proprio | equipe | departamento | global`.
+- Crescimento via **capabilities** (`apps/crm/src/lib/access.ts`), nunca telas numa matriz.
+- App Admin (futuro) espelha cada sistema via `access.manifest`.
+
+---
+
+## Regra obrigatória (LEGADO — só vale na raiz/controle): novas telas → Role Matrix
 
 **Sempre que criar uma nova página com controle de acesso**, três arquivos devem ser atualizados juntos — sem exceção:
 
