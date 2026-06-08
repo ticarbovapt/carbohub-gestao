@@ -550,11 +550,13 @@ export default function DashboardComercial() {
                         const rv = realEntry?.value != null ? Number(realEntry.value) : null;
                         const pv = projEntry?.value != null ? Number(projEntry.value) : null;
                         const diff = rv != null && pv != null ? ((rv - pv) / pv) * 100 : null;
+                        const fmtExact = (v: number) =>
+                          v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
                         return (
                           <div style={{ background: "#1a2234", border: "1px solid rgba(255,255,255,0.14)", boxShadow: "0 8px 28px rgba(0,0,0,0.45)", borderRadius: 10, padding: "8px 14px", fontSize: 12 }}>
                             <p style={{ color: "#fff", fontWeight: 700, marginBottom: 6, fontSize: 13 }}>{lbl}</p>
-                            {rv != null && <p style={{ color: "#34d399" }}>Real: {fmtK(rv)}</p>}
-                            {pv != null && <p style={{ color: "#fb923c" }}>Meta: {fmtK(pv)}</p>}
+                            {rv != null && <p style={{ color: "#34d399" }}>Real: {fmtExact(rv)}</p>}
+                            {pv != null && <p style={{ color: "#fb923c" }}>Meta: {fmtExact(pv)}</p>}
                             {diff != null && (
                               <p style={{ color: diff >= 0 ? "#86efac" : "#f87171", marginTop: 4, fontWeight: 600 }}>
                                 {diff >= 0 ? "▲" : "▼"} {Math.abs(diff).toFixed(1)}% vs meta
