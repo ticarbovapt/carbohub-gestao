@@ -1,4 +1,5 @@
-import { Boxes, ShieldCheck, LogOut, UserCircle } from "lucide-react";
+import { Boxes, ShieldCheck, LogOut, UserCircle, Kanban } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { CRM_MANIFEST, CAPABILITIES, can } from "@/lib/access";
@@ -7,6 +8,7 @@ import { CRM_MANIFEST, CAPABILITIES, can } from "@/lib/access";
 // mostra a identidade logada, o nível derivado e quais capabilities ela tem.
 export default function Home() {
   const { profile, level, scope, isGestor, signOut } = useAuth();
+  const navigate = useNavigate();
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -66,9 +68,20 @@ export default function Home() {
           </ul>
         </div>
 
-        <p className="text-xs text-muted-foreground text-center">
-          Fundação Fase 0 · próximo: Kanban de leads usando estas regras.
-        </p>
+        {/* CTA para Leads */}
+        <div
+          onClick={() => navigate("/leads")}
+          className="rounded-2xl border bg-card p-5 cursor-pointer hover:shadow-md transition-shadow flex items-center gap-3"
+        >
+          <Kanban className="h-8 w-8 text-carbo-green flex-shrink-0" />
+          <div>
+            <p className="font-semibold text-sm">Kanban de Leads</p>
+            <p className="text-xs text-muted-foreground">
+              {isGestor ? "Visão global · todos os vendedores" : "Seus leads · visão própria"}
+            </p>
+          </div>
+          <span className="ml-auto text-muted-foreground text-xs">→</span>
+        </div>
       </main>
     </div>
   );
