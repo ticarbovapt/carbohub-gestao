@@ -153,6 +153,29 @@ export default function DashboardComercial() {
     };
   }, [carbozeOrders]);
 
+  // ── Crescimento Anual: real vs projeção +25%/mês desde R$30k ───────────────
+  const annualGrowthData = useMemo(() => {
+    const BASE_JAN = 30_000;
+    const RATE     = 0.25;
+    const currentYear = new Date().getFullYear();
+
+    const realMap: Record<string, number> = {};
+    for (const o of carbozeOrders) {
+      if (!o.created_at) continue;
+      if (o.status === "cancelled" || o.status === "cancelado") continue;
+      const key = o.created_at.slice(0, 7);
+      realMap[key] = (realMap[key] ?? 0) + Number(o.total ?? 0);
+    }
+
+    return Array.from({ length: 12 }, (_, i) => {
+      const monthKey = `${currentYear}-${String(i + 1).padStart(2, "0")}`;
+      const label    = format(new Date(currentYear, i, 1), "MMM/yy", { locale: ptBR });
+      const projecao = Math.round(BASE_JAN * Math.pow(1 + RATE, i));
+      const real     = realMap[monthKey] != null ? realMap[monthKey] : null;
+      return { label, projecao, real };
+    });
+  }, [carbozeOrders]);
+
   const formatCurrency = (v: number) =>
     v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
@@ -479,50 +502,128 @@ export default function DashboardComercial() {
           )}
         </div>
 
-        {/* ── Evolução Ticket Médio ─────────────────────────────────────── */}
+        {/* ── Grid inferior: Crescimento Anual + Ticket Médio ─────────── */}
         {!carbozeLoading && monthlyData.length > 0 && (
-          <div className="rounded-2xl border border-border bg-board-surface overflow-hidden">
-            <div className="flex items-center justify-between border-b border-border px-6 py-3">
-              <div>
-                <h2 className="text-base font-bold text-board-text flex items-center gap-2">
-                  <TrendingUp className="h-4 w-4 text-violet-500" />
-                  Evolução do Ticket Médio
-                </h2>
-                <p className="text-xs text-board-muted mt-0.5">
-                  Valor médio por pedido mês a mês ·{" "}
-                  <span className="font-semibold text-violet-500">{fmtK(kpis.ticketMedio)} média geral</span>
-                </p>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+
+            {/* ── Crescimento Anual (Curva S) ─────────────────────────── */}
+            <div className="rounded-2xl border border-border bg-board-surface overflow-hidden">
+              <div className="flex items-center justify-between border-b border-border px-6 py-3">
+                <div>
+                  <h2 className="text-base font-bold text-board-text flex items-center gap-2">
+                    <TrendingUp className="h-4 w-4 text-orange-400" />
+                    Crescimento Anual
+                  </h2>
+                  <p className="text-xs text-board-muted mt-0.5">
+                    Real vs projeção +25%/mês ·{" "}
+                    <span className="font-semibold text-orange-400">base R$30k jan/26</span>
+                  </p>
+                </div>
+                {/* Legenda */}
+                <div className="flex items-center gap-3 text-[10px] text-board-muted">
+                  <span className="flex items-center gap-1">
+                    <span className="inline-block w-3 h-3 rounded-sm bg-emerald-500/70" />
+                    Real
+                  </span>
+                  <span className="flex items-center gap-1.5">
+                    <span className="inline-block w-5 border-t-2 border-dashed border-orange-400" />
+                    Meta
+                  </span>
+                </div>
+              </div>
+              <div className="px-4 pt-4 pb-4">
+                <ResponsiveContainer width="100%" height={175}>
+                  <ComposedChart data={annualGrowthData} margin={{ top: 20, right: 8, bottom: 0, left: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.08)" vertical={false} />
+                    <XAxis dataKey="label" tick={{ fontSize: 10, fill: "#94a3b8" }} axisLine={false} tickLine={false} dy={4} />
+                    <YAxis
+                      tick={{ fontSize: 10, fill: "#94a3b8" }}
+                      axisLine={false} tickLine={false} width={44}
+                      tickFormatter={v => v >= 1000 ? `${(v / 1000).toFixed(0)}k` : String(v)}
+                    />
+                    <Tooltip
+                      cursor={{ fill: "rgba(148,163,184,0.08)" }}
+                      content={({ active, payload, label: lbl }: any) => {
+                        if (!active || !payload?.length) return null;
+                        const realEntry = payload.find((p: any) => p.dataKey === "real");
+                        const projEntry = payload.find((p: any) => p.dataKey === "projecao");
+                        const rv = realEntry?.value != null ? Number(realEntry.value) : null;
+                        const pv = projEntry?.value != null ? Number(projEntry.value) : null;
+                        const diff = rv != null && pv != null ? ((rv - pv) / pv) * 100 : null;
+                        return (
+                          <div style={{ background: "#1a2234", border: "1px solid rgba(255,255,255,0.14)", boxShadow: "0 8px 28px rgba(0,0,0,0.45)", borderRadius: 10, padding: "8px 14px", fontSize: 12 }}>
+                            <p style={{ color: "#fff", fontWeight: 700, marginBottom: 6, fontSize: 13 }}>{lbl}</p>
+                            {rv != null && <p style={{ color: "#34d399" }}>Real: {fmtK(rv)}</p>}
+                            {pv != null && <p style={{ color: "#fb923c" }}>Meta: {fmtK(pv)}</p>}
+                            {diff != null && (
+                              <p style={{ color: diff >= 0 ? "#86efac" : "#f87171", marginTop: 4, fontWeight: 600 }}>
+                                {diff >= 0 ? "▲" : "▼"} {Math.abs(diff).toFixed(1)}% vs meta
+                              </p>
+                            )}
+                          </div>
+                        );
+                      }}
+                    />
+                    {/* Barras reais — null não renderiza barra (meses futuros) */}
+                    <Bar dataKey="real" fill="rgba(16,185,129,0.55)" stroke="#10b981" strokeWidth={1.5}
+                         radius={[4, 4, 0, 0]} maxBarSize={40} isAnimationActive={false}>
+                      <LabelList dataKey="real" position="top"
+                        formatter={(v: number | null) => v != null ? fmtK(v) : ""}
+                        style={{ fontSize: 9, fill: "#6ee7b7", fontWeight: 700 }} />
+                    </Bar>
+                    {/* Linha de projeção tracejada */}
+                    <Line dataKey="projecao" type="monotone" stroke="#fb923c" strokeWidth={2}
+                          strokeDasharray="5 3" dot={false} isAnimationActive={false} />
+                  </ComposedChart>
+                </ResponsiveContainer>
               </div>
             </div>
-            <div className="px-4 pt-4 pb-4">
-              <ResponsiveContainer width="100%" height={160}>
-                <ComposedChart data={monthlyData} margin={{ top: 22, right: 8, bottom: 0, left: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.08)" vertical={false} />
-                  <XAxis dataKey="mes" tick={{ fontSize: 11, fill: "#94a3b8" }} axisLine={false} tickLine={false} dy={4} />
-                  <YAxis tick={{ fontSize: 10, fill: "#94a3b8" }} axisLine={false} tickLine={false} width={48}
-                    tickFormatter={v => v >= 1000 ? `${(v / 1000).toFixed(0)}k` : String(v)} />
-                  <Tooltip cursor={{ fill: "rgba(148,163,184,0.08)" }}
-                    content={({ active, payload, label }: any) => {
-                      if (!active || !payload?.length) return null;
-                      const v = payload[0]?.value ?? 0;
-                      return (
-                        <div style={{ background: "#1a2234", border: "1px solid rgba(255,255,255,0.14)", boxShadow: "0 8px 28px rgba(0,0,0,0.45)", borderRadius: 10, padding: "8px 14px", fontSize: 12 }}>
-                          <p style={{ color: "#fff", fontWeight: 700, marginBottom: 6, fontSize: 13 }}>{label}</p>
-                          <p style={{ color: "#c4b5fd" }}>Ticket: {Number(v).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</p>
-                        </div>
-                      );
-                    }}
-                  />
-                  <Bar dataKey="ticketMedio" fill="rgba(139,92,246,0.2)" stroke="#8b5cf6" strokeWidth={1.5} radius={[4, 4, 0, 0]} maxBarSize={48} isAnimationActive={false}>
-                    <LabelList dataKey="ticketMedio" position="top"
-                      formatter={(v: number) => v >= 1000 ? `R$${(v / 1000).toFixed(0)}k` : `R$${v}`}
-                      style={{ fontSize: 10, fill: "#8b5cf6", fontWeight: 700 }} />
-                  </Bar>
-                  <Line type="monotoneX" dataKey="ticketMedio" stroke="#8b5cf6" strokeWidth={2.5}
-                    dot={{ r: 3, fill: "#8b5cf6", stroke: "#fff", strokeWidth: 2 }} activeDot={{ r: 5 }} isAnimationActive={false} />
-                </ComposedChart>
-              </ResponsiveContainer>
+
+            {/* ── Evolução Ticket Médio ────────────────────────────────── */}
+            <div className="rounded-2xl border border-border bg-board-surface overflow-hidden">
+              <div className="flex items-center justify-between border-b border-border px-6 py-3">
+                <div>
+                  <h2 className="text-base font-bold text-board-text flex items-center gap-2">
+                    <TrendingUp className="h-4 w-4 text-violet-500" />
+                    Evolução do Ticket Médio
+                  </h2>
+                  <p className="text-xs text-board-muted mt-0.5">
+                    Valor médio por pedido mês a mês ·{" "}
+                    <span className="font-semibold text-violet-500">{fmtK(kpis.ticketMedio)} média geral</span>
+                  </p>
+                </div>
+              </div>
+              <div className="px-4 pt-4 pb-4">
+                <ResponsiveContainer width="100%" height={175}>
+                  <ComposedChart data={monthlyData} margin={{ top: 22, right: 8, bottom: 0, left: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.08)" vertical={false} />
+                    <XAxis dataKey="mes" tick={{ fontSize: 11, fill: "#94a3b8" }} axisLine={false} tickLine={false} dy={4} />
+                    <YAxis tick={{ fontSize: 10, fill: "#94a3b8" }} axisLine={false} tickLine={false} width={48}
+                      tickFormatter={v => v >= 1000 ? `${(v / 1000).toFixed(0)}k` : String(v)} />
+                    <Tooltip cursor={{ fill: "rgba(148,163,184,0.08)" }}
+                      content={({ active, payload, label }: any) => {
+                        if (!active || !payload?.length) return null;
+                        const v = payload.find((p: any) => p.type === "bar")?.value ?? payload[0]?.value ?? 0;
+                        return (
+                          <div style={{ background: "#1a2234", border: "1px solid rgba(255,255,255,0.14)", boxShadow: "0 8px 28px rgba(0,0,0,0.45)", borderRadius: 10, padding: "8px 14px", fontSize: 12 }}>
+                            <p style={{ color: "#fff", fontWeight: 700, marginBottom: 6, fontSize: 13 }}>{label}</p>
+                            <p style={{ color: "#c4b5fd" }}>Ticket: {Number(v).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</p>
+                          </div>
+                        );
+                      }}
+                    />
+                    <Bar dataKey="ticketMedio" fill="rgba(139,92,246,0.2)" stroke="#8b5cf6" strokeWidth={1.5} radius={[4, 4, 0, 0]} maxBarSize={48} isAnimationActive={false}>
+                      <LabelList dataKey="ticketMedio" position="top"
+                        formatter={(v: number) => v >= 1000 ? `R$${(v / 1000).toFixed(0)}k` : `R$${v}`}
+                        style={{ fontSize: 10, fill: "#8b5cf6", fontWeight: 700 }} />
+                    </Bar>
+                    <Line type="monotoneX" dataKey="ticketMedio" stroke="#8b5cf6" strokeWidth={2.5}
+                      dot={{ r: 3, fill: "#8b5cf6", stroke: "#fff", strokeWidth: 2 }} activeDot={{ r: 5 }} isAnimationActive={false} />
+                  </ComposedChart>
+                </ResponsiveContainer>
+              </div>
             </div>
+
           </div>
         )}
 
