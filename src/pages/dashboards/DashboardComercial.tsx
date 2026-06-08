@@ -156,7 +156,7 @@ export default function DashboardComercial() {
   // ── Crescimento Anual: real vs projeção +25%/mês desde R$30k ───────────────
   const annualGrowthData = useMemo(() => {
     const BASE_JAN = 30_000;
-    const RATE     = 0.25;
+    const RATE     = 0.15;
     const currentYear = new Date().getFullYear();
 
     const realMap: Record<string, number> = {};
@@ -515,7 +515,7 @@ export default function DashboardComercial() {
                     Crescimento Anual
                   </h2>
                   <p className="text-xs text-board-muted mt-0.5">
-                    Real vs projeção +25%/mês ·{" "}
+                    Real vs projeção +15%/mês ·{" "}
                     <span className="font-semibold text-orange-400">base R$30k jan/26</span>
                   </p>
                 </div>
