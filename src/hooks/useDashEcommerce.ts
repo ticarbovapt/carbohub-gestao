@@ -151,15 +151,17 @@ function buildMetrics(
     return s + Number(r.total) * rate;
   }, 0);
 
-  // Group by product SKU
-  const skuMap = new Map<string, { name: string; orders: number; units: number; revenue: number }>();
+  // Group by product SKU — orders = sum(quantity), not count of rows.
+  // A single order with qty=2 counts as 2 packs sold.
+  const skuMap = new Map<string, { name: string; orders: number; txns: number; units: number; revenue: number }>();
   for (const r of rows) {
     const key  = r.product_sku ?? r.product_name ?? "Sem SKU";
     const name = r.product_name ?? r.product_sku ?? "Produto desconhecido";
-    const prev = skuMap.get(key) ?? { name, orders: 0, units: 0, revenue: 0 };
+    const prev = skuMap.get(key) ?? { name, orders: 0, txns: 0, units: 0, revenue: 0 };
     skuMap.set(key, {
       name,
-      orders:  prev.orders  + 1,
+      orders:  prev.orders  + r.quantity,         // packs sold
+      txns:    prev.txns    + 1,                  // unique orders (kept for reference)
       units:   prev.units   + displayUnits(r),
       revenue: prev.revenue + Number(r.total),
     });
@@ -169,9 +171,8 @@ function buildMetrics(
     id:           `p-${i}`,
     name:         v.name,
     sku,
-    // Use mapping factor directly — avoids distortion when orders have qty > 1
     units_per_pack: skuMappings.get(sku) ?? (v.orders > 0 ? Math.round(v.units / v.orders) : 1),
-    orders:       v.orders,
+    orders:       v.orders,   // packs sold = sum(quantity)
     units_sold:   v.units,
     revenue:      Math.round(v.revenue * 100) / 100,
   })).sort((a, b) => b.orders - a.orders || b.revenue - a.revenue);

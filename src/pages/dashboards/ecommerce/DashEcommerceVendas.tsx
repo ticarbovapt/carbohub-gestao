@@ -531,8 +531,8 @@ function PlatformView({ platform, period }: { platform: EcommercePlatform; perio
                 <tr className="border-y border-border/50 text-muted-foreground text-xs bg-muted/30">
                   <th className="text-left px-5 py-2 font-medium">Produto</th>
                   <th className="text-left px-4 py-2 font-medium">SKU</th>
-                  <th className="text-right px-4 py-2 font-medium">Pedidos</th>
-                  <th className="text-center px-4 py-2 font-medium">Pack</th>
+                  <th className="text-right px-4 py-2 font-medium">Qtd. packs</th>
+                  <th className="text-center px-4 py-2 font-medium">Un./pack</th>
                   <th className="text-right px-4 py-2 font-medium">Unidades reais</th>
                   <th className="text-right px-5 py-2 font-medium">Receita</th>
                 </tr>
