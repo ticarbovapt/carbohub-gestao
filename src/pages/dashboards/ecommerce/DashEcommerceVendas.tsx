@@ -898,13 +898,14 @@ function generateMonthOptions(): { value: string; label: string }[] {
 function HistoricoMensalView() {
   const now = new Date();
   const curMonthStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
-  const def12ago = (() => {
-    const d = new Date(now); d.setMonth(d.getMonth() - 12);
+  // Default: últimos 3 meses (não 12 — evita encher o chart com meses vazios)
+  const def3ago = (() => {
+    const d = new Date(now); d.setMonth(d.getMonth() - 2);
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
   })();
 
   const [selected, setSelected]   = useState<EcommercePlatform[]>(["mercadolivre", "amazon"]);
-  const [fromMonth, setFromMonth] = useState(def12ago);
+  const [fromMonth, setFromMonth] = useState(def3ago);
   const [toMonth,   setToMonth]   = useState(curMonthStr);
 
   const { data, isLoading } = useEcommerceHistoricoMensal(selected, fromMonth, toMonth);
@@ -915,7 +916,7 @@ function HistoricoMensalView() {
   const monthOpts  = generateMonthOptions();
   const allMonths  = monthsBetween(fromMonth, toMonth);
 
-  // Chart data: one row per month with keys per platform
+  // Chart data: apenas meses com pelo menos 1 pedido em alguma plataforma
   const barData = allMonths.map(month => {
     const entry: Record<string, string | number> = { month, label: getMonthLabel(month) };
     for (const p of selected) {
@@ -927,7 +928,9 @@ function HistoricoMensalView() {
       entry[`${p}_cancel`]   = m?.cancellationRate ?? 0;
     }
     return entry;
-  });
+  }).filter(entry =>
+    selected.some(p => (entry[`${p}_pedidos`] as number) > 0)
+  );
 
   // Aggregate KPIs
   const totalReceita    = data.reduce((s, d) => s + d.totalRevenue,   0);
