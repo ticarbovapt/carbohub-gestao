@@ -169,7 +169,8 @@ function buildMetrics(
     id:           `p-${i}`,
     name:         v.name,
     sku,
-    units_per_pack: v.orders > 0 ? Math.round(v.units / v.orders) : 1,
+    // Use mapping factor directly — avoids distortion when orders have qty > 1
+    units_per_pack: skuMappings.get(sku) ?? (v.orders > 0 ? Math.round(v.units / v.orders) : 1),
     orders:       v.orders,
     units_sold:   v.units,
     revenue:      Math.round(v.revenue * 100) / 100,
@@ -321,19 +322,28 @@ async function fetchOrders(platform: EcommercePlatform, period: EcommercePeriod)
   if (rows.length === 0 && !connected) return emptyMetrics(platform);
   if (rows.length === 0) return { ...emptyMetrics(platform), isConnected: true };
 
-  // Fetch SKU→units_per_kit mapping for display correction (front-end only, no DB writes)
+  // Fetch display multipliers — display_units_per_pack (visual only) wins over units_per_kit.
+  // units_per_kit stays untouched for the stock trigger.
   const skus = [...new Set(rows.map(r => r.product_sku).filter(Boolean))] as string[];
   const skuMappings = new Map<string, number>();
   if (skus.length > 0) {
     const { data: mData } = await supabase
       .from("sku_product_mappings" as never)
-      .select("platform_sku, units_per_kit, platform")
+      .select("platform_sku, units_per_kit, display_units_per_pack, platform")
       .in("platform_sku", skus)
-      .eq("is_active", true) as { data: { platform_sku: string; units_per_kit: number; platform: string | null }[] | null };
+      .eq("is_active", true) as {
+        data: {
+          platform_sku: string;
+          units_per_kit: number;
+          display_units_per_pack: number | null;
+          platform: string | null;
+        }[] | null;
+      };
     for (const m of mData ?? []) {
       // Platform-specific entry wins over generic (platform=null)
       if (!skuMappings.has(m.platform_sku) || m.platform === platform) {
-        skuMappings.set(m.platform_sku, m.units_per_kit ?? 1);
+        // display_units_per_pack takes priority; fall back to units_per_kit
+        skuMappings.set(m.platform_sku, m.display_units_per_pack ?? m.units_per_kit ?? 1);
       }
     }
   }
