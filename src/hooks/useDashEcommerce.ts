@@ -41,6 +41,7 @@ export interface EcommerceMetrics {
   platform: EcommercePlatform;
   totalOrders: number;
   totalUnitsSold: number;
+  totalQuantityRaw: number;  // sum(quantity) sem multiplicador — usado na verificação de integridade
   totalRevenue: number;
   netRevenue: number;
   avgTicket: number;
@@ -133,9 +134,10 @@ function buildMetrics(
     return r.units_real ?? r.quantity;
   };
 
-  const totalOrders    = rows.length;
-  const totalRevenue   = rows.reduce((s, r) => s + Number(r.total), 0);
-  const totalUnitsSold = rows.reduce((s, r) => s + displayUnits(r), 0);
+  const totalOrders      = rows.length;
+  const totalRevenue     = rows.reduce((s, r) => s + Number(r.total), 0);
+  const totalUnitsSold   = rows.reduce((s, r) => s + displayUnits(r), 0);
+  const totalQuantityRaw = rows.reduce((s, r) => s + r.quantity, 0);
 
   const cancelled  = rows.filter(r => r.status === "cancelled").length;
   const pending    = rows.filter(r => r.status === "pending").length;
@@ -203,6 +205,7 @@ function buildMetrics(
     platform,
     totalOrders,
     totalUnitsSold,
+    totalQuantityRaw,
     totalRevenue:    Math.round(totalRevenue * 100) / 100,
     netRevenue:      Math.round(netRevenue * 100) / 100,
     avgTicket:       totalOrders > 0 ? Math.round((totalRevenue / totalOrders) * 100) / 100 : 0,
@@ -240,7 +243,7 @@ function getRateForDate(history: CommissionRate[], platform: EcommercePlatform, 
 function emptyMetrics(platform: EcommercePlatform): EcommerceMetrics {
   return {
     platform,
-    totalOrders: 0, totalUnitsSold: 0, totalRevenue: 0, netRevenue: 0, avgTicket: 0,
+    totalOrders: 0, totalUnitsSold: 0, totalQuantityRaw: 0, totalRevenue: 0, netRevenue: 0, avgTicket: 0,
     cancelledOrders: 0, cancellationRate: 0, pendingOrders: 0, paidOrders: 0, shippedOrders: 0, deliveredOrders: 0,
     commissionTotal: 0, topProduct: null,
     avgRating: null, products: [], dailySales: [],

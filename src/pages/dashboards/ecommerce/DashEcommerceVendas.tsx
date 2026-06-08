@@ -298,9 +298,9 @@ function ReconciliacaoPanel({
       fmt: fmtNum,
     },
     {
-      label: "Unidades reais",
-      rawVal: raw.totalUnitsReal,
-      sysVal: m.totalUnitsSold,
+      label: "Qtd. packs",
+      rawVal: raw.totalQuantity,
+      sysVal: m.totalQuantityRaw,
       fmt: fmtNum,
     },
     {
