@@ -163,3 +163,62 @@ Cada sistema copia as tabelas que precisa e sincroniza por webhook/ETL.
 ## 8. Decisões ainda pendentes
 - Dono do `service_orders` e `carboze_orders` (ERP ou CRM) — decidir ao chegar no ERP.
 - Ferramenta de monorepo: pnpm workspaces (simples) vs turborepo (cache de build).
+
+---
+
+## 9. Modelo de acesso (decisão final)
+
+### O que a role-matrix atual realmente é (3 mecanismos empacotados)
+1. **Identidade/hierarquia** — `departamento + função` no `profiles`.
+2. **Matriz tela-a-tela** — `function_screen_access` mapeia (depto+função) → telas.
+3. **Escopo de dado** — `department_functions` → `proprio | equipe | departamento | global`.
+- (+) overrides por usuário; (+) TI/head superusuário.
+
+### O que aproveita vs. o que sai
+| Aproveita | Joga fora |
+|---|---|
+| Escopo de dado (próprio/equipe/depto/global) | Matriz tela-a-tela (`function_screen_access`) |
+| Identidade/hierarquia (depto + função) | Tela RoleMatrix de configuração |
+| Conceito de superusuário (TI/head) | Liberar tela por tela por pessoa |
+
+> **Insight:** a matriz tela-a-tela era *sintoma do monólito* (112 telas). Com cada
+> sistema pequeno e de um domínio só, não é mais necessária.
+
+### As 3 camadas do modelo novo
+```
+CAMADA 1 — Acesso a SISTEMAS (CORE/Hub): quais sistemas a pessoa entra.
+           Derivado do papel/departamento. Hub mostra só os azulejos liberados.
+CAMADA 2 — Nível dentro do sistema: "gestor" (vê tudo + botões de filtro +
+           reatribuir) vs "membro" (operacional, sem esses botões).
+           Telas definidas em CÓDIGO; papel escolhe o subconjunto. SEM matriz.
+CAMADA 3 — Escopo de dado (linha a linha): reaproveitado do atual.
+           gestor → global; membro → próprio; supervisor → equipe.
+```
+
+### Extensão por CAPABILITIES (não por telas)
+Crescimento futuro adiciona **capabilities** (permissões nomeadas, poucas e semânticas),
+nunca telas numa matriz:
+```ts
+capabilities: {
+  ver_todos_leads:    [head, command, ceo, ti],
+  reatribuir_lead:    [head, command, ti],
+  editar_metas:       [head, command],
+  exportar_relatorio: [head, command, ti, supervisor],
+}
+```
+Vive num objeto de config em código (versionado, revisável). Mudar = editar + deploy.
+Exceção por pessoa = reaproveitar `user_access_overrides` como camada fina e rara.
+
+### Admin espelhado (manifesto)
+- Cada sistema declara o próprio acesso em `apps/<sistema>/access.manifest.ts`
+  (telas, capabilities, níveis).
+- O **app Admin** importa os manifestos (mesmo monorepo) e se monta sozinho,
+  espelhando cada sistema. Nova capability no CRM → aparece no Admin automático.
+- **Admin** escreve identidade + atribuições (quem é o quê). Só precisa de acesso ao Admin.
+- **Cada sistema** lê a identidade + o próprio manifesto e decide o que mostrar. Autossuficiente.
+- Decisão de acesso em runtime acontece DENTRO de cada sistema → lógicas não se quebram entre si.
+
+### Identidade compartilhada + login único
+- Criação de usuário num lugar só (Admin/Equipe). 1 pessoa = 1 conta.
+- Login único no Hub (`app.carbohub.com.br`), sessão compartilhada via cookie em
+  `.carbohub.com.br`, trocador de sistema no topo de cada app.
