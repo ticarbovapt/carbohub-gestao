@@ -1,0 +1,99 @@
+import { createContext, useContext, useEffect, useState, ReactNode } from "react";
+import { User, Session } from "@supabase/supabase-js";
+import { supabase } from "@/integrations/supabase/client";
+import {
+  levelFromIdentity, scopeFromLevel,
+  type AccessLevel, type DataScope, type Identity,
+} from "@/lib/access";
+
+// Perfil mínimo que o CRM precisa (identidade vem do CORE compartilhado).
+export interface Profile extends Identity {
+  id: string;
+  full_name: string | null;
+  avatar_url: string | null;
+  username: string | null;
+}
+
+interface AuthContextType {
+  user: User | null;
+  session: Session | null;
+  profile: Profile | null;
+  /** Nível derivado da identidade (Camada 2): gestor | membro. */
+  level: AccessLevel;
+  /** Escopo de dado derivado do nível (Camada 3). */
+  scope: DataScope;
+  isGestor: boolean;
+  isLoading: boolean;
+  signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
+  signOut: () => Promise<void>;
+}
+
+const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+export function AuthProvider({ children }: { children: ReactNode }) {
+  const [user, setUser]       = useState<User | null>(null);
+  const [session, setSession] = useState<Session | null>(null);
+  const [profile, setProfile] = useState<Profile | null>(null);
+  const [isLoading, setLoading] = useState(true);
+
+  const fetchProfile = async (userId: string): Promise<Profile | null> => {
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("id, full_name, avatar_url, username, department, funcao, secondary_department, secondary_funcao")
+      .eq("id", userId)
+      .single();
+    if (error) { console.error("[CRM] perfil:", error.message); return null; }
+    return data as unknown as Profile;
+  };
+
+  useEffect(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, s) => {
+      setSession(s);
+      setUser(s?.user ?? null);
+      if (s?.user) {
+        setTimeout(async () => {
+          setProfile(await fetchProfile(s.user.id));
+          setLoading(false);
+        }, 0);
+      } else {
+        setProfile(null);
+        setLoading(false);
+      }
+    });
+
+    supabase.auth.getSession().then(({ data: { session: s } }) => {
+      if (!s) setLoading(false);
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  const signIn = async (email: string, password: string) => {
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    return { error: error ? new Error(error.message) : null };
+  };
+
+  const signOut = async () => {
+    await supabase.auth.signOut();
+    setUser(null); setSession(null); setProfile(null);
+  };
+
+  const level = levelFromIdentity(profile);
+  const scope = scopeFromLevel(level);
+
+  return (
+    <AuthContext.Provider value={{
+      user, session, profile,
+      level, scope, isGestor: level === "gestor",
+      isLoading, signIn, signOut,
+    }}>
+      {children}
+    </AuthContext.Provider>
+  );
+}
+
+export function useAuth() {
+  const ctx = useContext(AuthContext);
+  if (!ctx) throw new Error("useAuth deve ser usado dentro de AuthProvider");
+  return ctx;
+}
