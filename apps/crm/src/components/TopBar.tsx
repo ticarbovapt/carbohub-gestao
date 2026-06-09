@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Boxes, LogOut, UserCircle, Moon, Sun, Menu } from "lucide-react";
+import { LogOut, UserCircle, Moon, Sun, Menu } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { diceBearUrl } from "@/components/ui/profile-avatar";
+import logoCarbo from "@/assets/logo-carbo.png";
 import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent,
   DropdownMenuItem, DropdownMenuSeparator, DropdownMenuLabel,
@@ -72,9 +73,9 @@ export function TopBar({ appName, onMenu }: { appName: string; onMenu?: () => vo
             </Button>
           )}
           <button onClick={() => { window.location.href = `${HUB_URL}/home`; }}
-            className="flex items-center gap-2 hover:opacity-80 transition-opacity" title="Ir para o Hub">
-            <Boxes className="h-5 w-5 text-carbo-green" />
-            <span className="font-bold">{appName}</span>
+            className="flex items-center gap-2.5 hover:opacity-80 transition-opacity" title="Ir para o Hub">
+            <img src={logoCarbo} alt="Carbo" className="h-7 w-auto object-contain" />
+            <span className="font-bold text-sm hidden sm:inline">{appName}</span>
           </button>
         </div>
 
