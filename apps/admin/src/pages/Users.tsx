@@ -8,14 +8,17 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { DEPARTMENT_CONFIGS, getDeptLabel } from "@/constants/departments";
 import { SYSTEMS, DEFAULT_INTERFACES } from "@/lib/interfaces";
-import { useProfiles, useDeptFunctions, useCreateUser } from "@/hooks/useAdminUsers";
+import { useProfiles, useCreateUser } from "@/hooks/useAdminUsers";
 
 const DEFAULT_PASSWORD = "Carbo@2026";
 const DEPTS = [...DEPARTMENT_CONFIGS].sort((a, b) => a.order - b.order);
-const ROLES = [
-  { value: "operator", label: "Operador" },
-  { value: "manager", label: "Gestor" },
-  { value: "admin", label: "Administrador" },
+
+// Modelo novo: cada departamento tem só duas funções.
+// 'head' (manda no departamento) e 'colaborador'. Quem vê tudo é derivado da
+// regra de acesso (head / command / TI) — ver lib/access.ts.
+const FUNCOES = [
+  { value: "head", label: "Head" },
+  { value: "colaborador", label: "Colaborador" },
 ];
 
 const selectCls =
@@ -31,11 +34,9 @@ export default function Users() {
   const [funcao, setFuncao] = useState("");
   const [escopo, setEscopo] = useState("");
   const [managerUserId, setManagerUserId] = useState("");
-  const [role, setRole] = useState("operator");
   const [interfaces, setInterfaces] = useState<string[]>(DEFAULT_INTERFACES);
   const [credentials, setCredentials] = useState<{ username: string; password: string } | null>(null);
 
-  const { data: deptFunctions = [] } = useDeptFunctions(department || undefined);
   const approved = useMemo(() => profiles.filter((p) => p.status === "approved" && p.full_name), [profiles]);
 
   const canSubmit = fullName.trim().length > 0 && department !== "" && interfaces.length > 0;
@@ -46,13 +47,17 @@ export default function Users() {
 
   function resetForm() {
     setFullName(""); setDepartment(""); setFuncao(""); setEscopo("");
-    setManagerUserId(""); setRole("operator"); setInterfaces(DEFAULT_INTERFACES);
+    setManagerUserId(""); setInterfaces(DEFAULT_INTERFACES);
   }
 
   async function handleSubmit() {
     try {
       const result = await createUser.mutateAsync({
-        fullName, department, role,
+        fullName, department,
+        // app_role legado não governa mais o acesso (quem manda = head/command/TI,
+        // derivado do perfil). Enviamos 'operator' só porque a edge function
+        // ainda grava user_roles; o valor é irrelevante para o modelo novo.
+        role: "operator",
         funcao: funcao || undefined,
         escopo: escopo || undefined,
         managerUserId: managerUserId || undefined,
@@ -120,10 +125,10 @@ export default function Users() {
               </div>
               <div className="space-y-1.5">
                 <label className="text-sm font-medium">Função</label>
-                <select className={selectCls} value={funcao} disabled={!department}
+                <select className={selectCls} value={funcao}
                   onChange={(e) => setFuncao(e.target.value)}>
-                  <option value="">{department ? "—" : "Dept. primeiro"}</option>
-                  {deptFunctions.map((f) => <option key={f.function_key} value={f.function_key}>{f.label}</option>)}
+                  <option value="">—</option>
+                  {FUNCOES.map((f) => <option key={f.value} value={f.value}>{f.label}</option>)}
                 </select>
               </div>
             </div>
@@ -139,13 +144,6 @@ export default function Users() {
                 <option value="">— Sem superior —</option>
                 {approved.sort((a, b) => (a.full_name ?? "").localeCompare(b.full_name ?? ""))
                   .map((m) => <option key={m.id} value={m.id}>{m.full_name}</option>)}
-              </select>
-            </div>
-
-            <div className="space-y-1.5">
-              <label className="text-sm font-medium">Nível de acesso</label>
-              <select className={selectCls} value={role} onChange={(e) => setRole(e.target.value)}>
-                {ROLES.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
               </select>
             </div>
 

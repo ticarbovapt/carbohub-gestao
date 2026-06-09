@@ -135,14 +135,39 @@ Deno.serve(async (req: Request): Promise<Response> => {
     }
     // ─────────────────────────────────────────────────────────────────────────
 
-    // Only admins can create team members
-    const { data: isAdmin } = await supabaseAdmin.rpc("is_admin", {
+    // ── Autorização (MODELO NOVO) ────────────────────────────────────────────
+    // Quem "manda" é derivado do PERFIL (não mais do is_admin/app_role):
+    //   department = command | ti_suporte  OU  funcao = head (qualquer dep).
+    // O is_admin legado fica só como OR de compatibilidade com o Controle
+    // (congelado), que usa esta mesma função.
+    const MANDA_FUNCOES = ["head", "ceo", "command"];
+    const MANDA_DEPARTAMENTOS = ["command", "ti_suporte"];
+
+    const { data: callerProfile } = await supabaseAdmin
+      .from("profiles")
+      .select("department, funcao, secondary_department, secondary_funcao")
+      .eq("id", callingUser.id)
+      .maybeSingle();
+
+    const p = callerProfile as {
+      department?: string; funcao?: string;
+      secondary_department?: string; secondary_funcao?: string;
+    } | null;
+
+    const isCommand = !!p && (
+      MANDA_DEPARTAMENTOS.includes(p.department ?? "") ||
+      MANDA_DEPARTAMENTOS.includes(p.secondary_department ?? "") ||
+      MANDA_FUNCOES.includes(p.funcao ?? "") ||
+      MANDA_FUNCOES.includes(p.secondary_funcao ?? "")
+    );
+
+    const { data: legacyAdmin } = await supabaseAdmin.rpc("is_admin", {
       _user_id: callingUser.id,
     });
 
-    if (!isAdmin) {
+    if (!isCommand && !legacyAdmin) {
       return new Response(
-        JSON.stringify({ success: false, error: "Unauthorized: Only admins can create team members" }),
+        JSON.stringify({ success: false, error: "Unauthorized: apenas gestão (Command, Head ou TI) pode criar usuários" }),
         { status: 403, headers: { "Content-Type": "application/json", ...corsHeaders } }
       );
     }
