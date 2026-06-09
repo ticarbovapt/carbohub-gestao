@@ -1,8 +1,9 @@
-import { ReactNode } from "react";
+import { ReactNode, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Boxes, LogOut, UserCircle, Moon, Sun } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
+import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { diceBearUrl } from "@/components/ui/profile-avatar";
 import {
@@ -16,10 +17,46 @@ import { HUB_URL } from "@/lib/sso";
 // Logo → Hub · tema claro/escuro · perfil. (Bugs e Notificações entram aqui nos
 // próximos incrementos, com lógica compartilhada via mesmas tabelas do Supabase.)
 // ─────────────────────────────────────────────────────────────────────────────
+// Papéis (primário/secundário) com labels do banco — ex.: "COLABORADOR OPS".
+function useRoleLabels(p: {
+  department?: string | null; funcao?: string | null;
+  secondary_department?: string | null; secondary_funcao?: string | null;
+} | null) {
+  const [siglas, setSiglas] = useState<Record<string, string>>({});
+  const [fnLabels, setFnLabels] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      const [{ data: deps }, { data: fns }] = await Promise.all([
+        supabase.from("carbo_departments").select("key,sigla"),
+        supabase.from("carbo_functions").select("department,function_key,label"),
+      ]);
+      if (!active) return;
+      setSiglas(Object.fromEntries((deps ?? []).map((d) => [d.key, d.sigla])));
+      setFnLabels(Object.fromEntries((fns ?? []).map((f) => [`${f.department}:${f.function_key}`, f.label])));
+    })();
+    return () => { active = false; };
+  }, []);
+
+  const role = (dep?: string | null, fn?: string | null) => {
+    if (!dep && !fn) return null;
+    const fl = fn ? (fnLabels[`${dep}:${fn}`] ?? fn) : null;
+    const sg = dep ? (siglas[dep] ?? dep) : null;
+    return [fl, sg].filter(Boolean).join(" ").toUpperCase();
+  };
+
+  return {
+    primary: role(p?.department, p?.funcao),
+    secondary: role(p?.secondary_department, p?.secondary_funcao),
+  };
+}
+
 export function TopBar({ appName, left }: { appName: string; left?: ReactNode }) {
   const { user, profile, signOut } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
+  const { primary, secondary } = useRoleLabels(profile);
 
   const avatar = (profile as { avatar_url?: string } | null)?.avatar_url
     || (user?.id ? diceBearUrl(user.id) : "");
@@ -45,13 +82,20 @@ export function TopBar({ appName, left }: { appName: string; left?: ReactNode })
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <button className="flex items-center gap-2 rounded-full pl-1 pr-2.5 py-1 hover:bg-muted transition-colors">
+              <button className="flex items-center gap-2.5 rounded-full pl-1 pr-2.5 py-1 hover:bg-muted transition-colors">
                 <img src={avatar} alt="" className="h-8 w-8 rounded-full object-cover ring-1 ring-border" />
-                <span className="text-sm font-medium hidden sm:inline max-w-[140px] truncate">{name}</span>
+                <span className="hidden sm:flex flex-col items-start leading-tight min-w-0">
+                  <span className="text-sm font-medium max-w-[160px] truncate">{name}</span>
+                  {primary && <span className="text-[10px] text-muted-foreground max-w-[160px] truncate">{primary}</span>}
+                </span>
               </button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-52">
-              <DropdownMenuLabel className="truncate">{name}</DropdownMenuLabel>
+            <DropdownMenuContent align="end" className="w-56">
+              <DropdownMenuLabel className="flex flex-col gap-0.5">
+                <span className="truncate">{name}</span>
+                {primary && <span className="text-[11px] font-normal text-muted-foreground">{primary}</span>}
+                {secondary && <span className="text-[11px] font-normal text-muted-foreground">{secondary}</span>}
+              </DropdownMenuLabel>
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={() => navigate("/perfil")}>
                 <UserCircle className="h-4 w-4 mr-2" /> Meu Perfil
