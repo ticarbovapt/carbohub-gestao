@@ -1,6 +1,6 @@
-import { ReactNode, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Boxes, LogOut, UserCircle, Moon, Sun } from "lucide-react";
+import { Boxes, LogOut, UserCircle, Moon, Sun, Menu } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import { supabase } from "@/integrations/supabase/client";
@@ -52,7 +52,7 @@ function useRoleLabels(p: {
   };
 }
 
-export function TopBar({ appName, left }: { appName: string; left?: ReactNode }) {
+export function TopBar({ appName, onMenu }: { appName: string; onMenu?: () => void }) {
   const { user, profile, signOut } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
@@ -65,9 +65,13 @@ export function TopBar({ appName, left }: { appName: string; left?: ReactNode })
   return (
     <header className="border-b bg-card sticky top-0 z-30">
       <div className="px-4 h-14 flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
-          {left}
-          <button onClick={() => { window.location.href = HUB_URL; }}
+        <div className="flex items-center gap-1.5">
+          {onMenu && (
+            <Button variant="ghost" size="icon" className="h-9 w-9" onClick={onMenu} title="Abrir/fechar menu">
+              <Menu className="h-4 w-4" />
+            </Button>
+          )}
+          <button onClick={() => { window.location.href = `${HUB_URL}/home`; }}
             className="flex items-center gap-2 hover:opacity-80 transition-opacity" title="Ir para o Hub">
             <Boxes className="h-5 w-5 text-carbo-green" />
             <span className="font-bold">{appName}</span>
@@ -85,8 +89,9 @@ export function TopBar({ appName, left }: { appName: string; left?: ReactNode })
               <button className="flex items-center gap-2.5 rounded-full pl-1 pr-2.5 py-1 hover:bg-muted transition-colors">
                 <img src={avatar} alt="" className="h-8 w-8 rounded-full object-cover ring-1 ring-border" />
                 <span className="hidden sm:flex flex-col items-start leading-tight min-w-0">
-                  <span className="text-sm font-medium max-w-[160px] truncate">{name}</span>
-                  {primary && <span className="text-[10px] text-muted-foreground max-w-[160px] truncate">{primary}</span>}
+                  <span className="text-sm font-medium max-w-[180px] truncate">{name}</span>
+                  {primary && <span className="text-[10px] text-muted-foreground max-w-[180px] truncate">{primary}</span>}
+                  {secondary && <span className="text-[10px] text-muted-foreground max-w-[180px] truncate">{secondary}</span>}
                 </span>
               </button>
             </DropdownMenuTrigger>

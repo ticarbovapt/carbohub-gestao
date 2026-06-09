@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { NavLink, Outlet } from "react-router-dom";
 import {
   KanbanSquare, ShoppingCart, ClipboardList, TrendingUp, Target, BarChart3, Globe,
@@ -20,21 +21,24 @@ const navCls = ({ isActive }: { isActive: boolean }) =>
   }`;
 
 export function SalesShell() {
+  const [sidebarOpen, setSidebarOpen] = useState(true);
   return (
     <div className="min-h-screen bg-background text-foreground flex flex-col">
-      <TopBar appName="Carbo Sales" />
+      <TopBar appName="Carbo Sales" onMenu={() => setSidebarOpen((o) => !o)} />
 
       <div className="flex flex-1 min-h-0">
-        {/* Sidebar */}
-        <aside className="w-52 shrink-0 border-r bg-card p-3 hidden md:block">
-          <nav className="space-y-1">
-            {NAV.map((n) => (
-              <NavLink key={n.to} to={n.to} end={n.end} className={navCls}>
-                <n.icon className="h-4 w-4" /> {n.label}
-              </NavLink>
-            ))}
-          </nav>
-        </aside>
+        {/* Sidebar (toggle pela barra) */}
+        {sidebarOpen && (
+          <aside className="w-52 shrink-0 border-r bg-card p-3">
+            <nav className="space-y-1">
+              {NAV.map((n) => (
+                <NavLink key={n.to} to={n.to} end={n.end} className={navCls}>
+                  <n.icon className="h-4 w-4" /> {n.label}
+                </NavLink>
+              ))}
+            </nav>
+          </aside>
+        )}
 
         {/* Conteúdo */}
         <main className="flex-1 min-w-0 flex flex-col">
