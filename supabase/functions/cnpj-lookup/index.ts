@@ -3,8 +3,14 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 const ALLOWED_ORIGINS = [
   "https://controle.carbohub.com.br",
   "https://carbohub.com.br",
+  "https://www.carbohub.com.br",
+  "https://admin.carbohub.com.br",
+  "https://sales.carbohub.com.br",
+  "https://ops.carbohub.com.br",
   "http://localhost:5173",
   "http://localhost:8080",
+  "http://localhost:8082",
+  "http://localhost:3000",
 ];
 
 function getCorsHeaders(req: Request) {

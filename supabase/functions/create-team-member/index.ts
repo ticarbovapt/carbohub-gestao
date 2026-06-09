@@ -6,6 +6,8 @@ const ALLOWED_ORIGINS = [
   "https://carbohub.com.br",
   "https://www.carbohub.com.br",
   "https://admin.carbohub.com.br",
+  "https://sales.carbohub.com.br",
+  "https://ops.carbohub.com.br",
   // Domínios provisórios .vercel.app (até os subdomínios reais ficarem prontos)
   "https://carbohub-admin.vercel.app",
   "https://carbohub-crm.vercel.app",
