@@ -45,3 +45,29 @@ export function levelFromIdentity(id: Identity | null | undefined): AccessLevel 
 export function scopeFromLevel(level: AccessLevel): DataScope {
   return level === "gestor" ? "global" : "proprio";
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Nível CIENTE da função (carbo_functions.access_level) — a regra que manda.
+// Mapa: `${department}:${function_key}` → 'gestor' | 'colaborador'.
+// Manda se QUALQUER papel (primário OU secundário) for gestor, ou se o
+// departamento for command/ti_suporte. Pega sempre o maior — nunca trava.
+// ─────────────────────────────────────────────────────────────────────────────
+export type FnAccessMap = Record<string, "gestor" | "colaborador">;
+
+export function fnKey(dept?: string | null, fn?: string | null): string {
+  return `${dept ?? ""}:${fn ?? ""}`;
+}
+
+export function isManager(id: Identity | null | undefined, fnMap?: FnAccessMap): boolean {
+  if (!id) return false;
+  if (
+    MANDA_DEPARTAMENTOS.has(id.department ?? "") ||
+    MANDA_DEPARTAMENTOS.has(id.secondary_department ?? "")
+  ) return true;
+  if (fnMap) {
+    if (fnMap[fnKey(id.department, id.funcao)] === "gestor") return true;
+    if (fnMap[fnKey(id.secondary_department, id.secondary_funcao)] === "gestor") return true;
+  }
+  // fallback por nome (caso o mapa não esteja carregado)
+  return MANDA_FUNCOES.has(id.funcao ?? "") || MANDA_FUNCOES.has(id.secondary_funcao ?? "");
+}
