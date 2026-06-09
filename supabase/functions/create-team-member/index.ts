@@ -47,7 +47,15 @@ const DEPARTMENT_PREFIXES_DEFAULT: Record<string, string> = {
 };
 
 async function resolveDeptPrefix(supabaseAdmin: ReturnType<typeof createClient>, department: string): Promise<string | null> {
-  // Check DB override first (sigla customizada pelo admin)
+  // Mundo novo: sigla vem de carbo_departments (inclui departamentos criados no Admin).
+  const { data: cd } = await supabaseAdmin
+    .from("carbo_departments")
+    .select("sigla")
+    .eq("key", department)
+    .maybeSingle();
+  if (cd?.sigla) return (cd.sigla as string).toUpperCase();
+
+  // Fallback legado (Controle): department_labels
   const { data } = await supabaseAdmin
     .from("department_labels")
     .select("sigla")

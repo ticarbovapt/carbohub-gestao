@@ -1,28 +1,24 @@
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
-  UserPlus, Loader2, Copy, CheckCircle2, KeyRound, ShieldCheck, LogOut, Users as UsersIcon, Pencil,
-  Search, ListTree,
+  UserPlus, Loader2, Copy, CheckCircle2, KeyRound, Users as UsersIcon, Pencil, Search,
 } from "lucide-react";
-import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { DEPARTMENT_CONFIGS, getDeptLabel } from "@/constants/departments";
 import { SYSTEMS, DEFAULT_INTERFACES } from "@/lib/interfaces";
 import { useProfiles, useCreateUser, useDeptFunctions, useAllDeptFunctions, type AdminProfile } from "@/hooks/useAdminUsers";
+import { useDepartments } from "@/hooks/useStructure";
 import { EditUserDialog } from "@/components/EditUserDialog";
-import { ManageFunctionsDialog } from "@/components/ManageFunctionsDialog";
 import { isManager, fnKey, type FnAccessMap } from "@/lib/access";
 
 const DEFAULT_PASSWORD = "Carbo@2026";
-const DEPTS = [...DEPARTMENT_CONFIGS].sort((a, b) => a.order - b.order);
 
 const selectCls =
   "flex h-10 w-full rounded-lg border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50";
 
 export default function Users() {
-  const { profile, signOut } = useAuth();
   const { data: profiles = [], isLoading: loadingList } = useProfiles();
+  const { data: departments = [] } = useDepartments();
   const createUser = useCreateUser();
 
   const [fullName, setFullName] = useState("");
@@ -35,9 +31,15 @@ export default function Users() {
   const [interfaces, setInterfaces] = useState<string[]>(DEFAULT_INTERFACES);
   const [credentials, setCredentials] = useState<{ username: string; password: string } | null>(null);
   const [editing, setEditing] = useState<AdminProfile | null>(null);
-  const [manageOpen, setManageOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [deptFilter, setDeptFilter] = useState("");
+
+  const deptLabel = useMemo<Record<string, string>>(() => {
+    const m: Record<string, string> = {};
+    for (const d of departments) m[d.key] = d.label;
+    return m;
+  }, [departments]);
+  const getDept = (k?: string | null) => (k ? deptLabel[k] ?? k : "—");
 
   const { data: deptFunctions = [] } = useDeptFunctions(department || undefined);
   const { data: secFunctions = [] } = useDeptFunctions(secDepartment || undefined);
@@ -107,30 +109,7 @@ export default function Users() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      {/* Topbar */}
-      <header className="border-b bg-card">
-        <div className="mx-auto max-w-6xl px-6 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <div className="h-9 w-9 rounded-xl carbo-gradient flex items-center justify-center">
-              <ShieldCheck className="h-5 w-5 text-white" />
-            </div>
-            <div>
-              <p className="font-bold leading-none">Carbo Admin</p>
-              <p className="text-xs text-muted-foreground">Identidades e acessos</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-3">
-            <span className="text-sm text-muted-foreground hidden sm:inline">
-              {profile?.full_name ?? profile?.username}
-            </span>
-            <Button variant="outline" size="sm" onClick={signOut}>
-              <LogOut className="h-4 w-4" /> Sair
-            </Button>
-          </div>
-        </div>
-      </header>
-
+    <>
       <main className="mx-auto max-w-6xl px-6 py-8 grid gap-6 lg:grid-cols-[420px_1fr]">
         {/* ── Criar usuário ── */}
         <section className="rounded-2xl border bg-card p-5 h-fit">
@@ -150,7 +129,7 @@ export default function Users() {
                 <select className={selectCls} value={department}
                   onChange={(e) => { setDepartment(e.target.value); setFuncao(""); }}>
                   <option value="">Selecione</option>
-                  {DEPTS.map((d) => <option key={d.key} value={d.key}>{d.label}</option>)}
+                  {departments.map((d) => <option key={d.key} value={d.key}>{d.label}</option>)}
                 </select>
               </div>
               <div className="space-y-1.5">
@@ -185,7 +164,7 @@ export default function Users() {
                 <select className={selectCls} value={secDepartment}
                   onChange={(e) => { setSecDepartment(e.target.value); setSecFuncao(""); }}>
                   <option value="">— Nenhum —</option>
-                  {DEPTS.map((d) => <option key={d.key} value={d.key}>{d.label}</option>)}
+                  {departments.map((d) => <option key={d.key} value={d.key}>{d.label}</option>)}
                 </select>
               </div>
               <div className="space-y-1.5">
@@ -243,14 +222,9 @@ export default function Users() {
 
         {/* ── Lista de usuários ── */}
         <section className="rounded-2xl border bg-card overflow-hidden h-fit">
-          <div className="px-5 py-4 border-b flex items-center justify-between gap-2">
-            <div className="flex items-center gap-2">
-              <UsersIcon className="h-5 w-5 text-muted-foreground" />
-              <h2 className="font-semibold">Usuários ({filtered.length})</h2>
-            </div>
-            <Button variant="outline" size="sm" onClick={() => setManageOpen(true)}>
-              <ListTree className="h-4 w-4" /> Gerenciar funções
-            </Button>
+          <div className="px-5 py-4 border-b flex items-center gap-2">
+            <UsersIcon className="h-5 w-5 text-muted-foreground" />
+            <h2 className="font-semibold">Usuários ({filtered.length})</h2>
           </div>
 
           {/* Busca + filtro por departamento */}
@@ -262,7 +236,7 @@ export default function Users() {
             </div>
             <select className={`${selectCls} sm:w-52`} value={deptFilter} onChange={(e) => setDeptFilter(e.target.value)}>
               <option value="">Todos os departamentos</option>
-              {DEPTS.map((d) => <option key={d.key} value={d.key}>{d.label}</option>)}
+              {departments.map((d) => <option key={d.key} value={d.key}>{d.label}</option>)}
             </select>
           </div>
           {loadingList ? (
@@ -294,9 +268,9 @@ export default function Users() {
                       <td className="px-4 py-2.5 font-medium">{p.full_name ?? "—"}</td>
                       <td className="px-4 py-2.5 font-mono text-xs">{p.username ?? "—"}</td>
                       <td className="px-4 py-2.5">
-                        {getDeptLabel(p.department)}
+                        {getDept(p.department)}
                         {p.secondary_department && (
-                          <span className="text-xs text-muted-foreground"> + {getDeptLabel(p.secondary_department)}</span>
+                          <span className="text-xs text-muted-foreground"> + {getDept(p.secondary_department)}</span>
                         )}
                       </td>
                       <td className="px-4 py-2.5">
@@ -332,9 +306,6 @@ export default function Users() {
 
       {/* ── Editar usuário ── */}
       <EditUserDialog user={editing} approved={approved} onClose={() => setEditing(null)} />
-
-      {/* ── Gerenciar funções ── */}
-      <ManageFunctionsDialog open={manageOpen} onClose={() => setManageOpen(false)} />
 
       {/* ── Credenciais (após criar) ── */}
       {credentials && (
@@ -372,6 +343,6 @@ export default function Users() {
           </div>
         </div>
       )}
-    </div>
+    </>
   );
 }
