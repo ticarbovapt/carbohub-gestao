@@ -4,6 +4,8 @@ import {
   KanbanSquare, ShoppingCart, ClipboardList, TrendingUp, Target, BarChart3, Globe,
 } from "lucide-react";
 import { TopBar } from "@/components/TopBar";
+import { Sheet, SheetContent } from "@/components/ui/sheet";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 const NAV = [
   { to: "/", end: true, label: "CRM", icon: KanbanSquare },
@@ -20,27 +22,47 @@ const navCls = ({ isActive }: { isActive: boolean }) =>
     isActive ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-muted hover:text-foreground"
   }`;
 
+function Nav({ onNavigate }: { onNavigate?: () => void }) {
+  return (
+    <nav className="space-y-1 p-3">
+      {NAV.map((n) => (
+        <NavLink key={n.to} to={n.to} end={n.end} className={navCls} onClick={onNavigate}>
+          <n.icon className="h-4 w-4" /> {n.label}
+        </NavLink>
+      ))}
+    </nav>
+  );
+}
+
 export function SalesShell() {
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const isMobile = useIsMobile();
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const [deskOpen, setDeskOpen] = useState(true);
+
+  const handleMenu = () => {
+    if (isMobile) setMobileOpen(true);
+    else setDeskOpen((o) => !o);
+  };
+
   return (
     <div className="min-h-screen bg-background text-foreground flex flex-col">
-      <TopBar appName="Carbo Sales" onMenu={() => setSidebarOpen((o) => !o)} />
+      <TopBar appName="Carbo Sales" onMenu={handleMenu} />
 
       <div className="flex flex-1 min-h-0">
-        {/* Sidebar (toggle pela barra) */}
-        {sidebarOpen && (
-          <aside className="w-52 shrink-0 border-r bg-card p-3">
-            <nav className="space-y-1">
-              {NAV.map((n) => (
-                <NavLink key={n.to} to={n.to} end={n.end} className={navCls}>
-                  <n.icon className="h-4 w-4" /> {n.label}
-                </NavLink>
-              ))}
-            </nav>
+        {/* Desktop: sidebar fixa (toggle pelo botão) */}
+        {deskOpen && (
+          <aside className="hidden md:block w-52 shrink-0 border-r bg-card">
+            <Nav />
           </aside>
         )}
 
-        {/* Conteúdo */}
+        {/* Mobile: gaveta sobreposta */}
+        <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
+          <SheetContent side="left" className="w-[260px] p-0">
+            <Nav onNavigate={() => setMobileOpen(false)} />
+          </SheetContent>
+        </Sheet>
+
         <main className="flex-1 min-w-0 flex flex-col">
           <Outlet />
         </main>
