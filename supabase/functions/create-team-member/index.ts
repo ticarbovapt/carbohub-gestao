@@ -5,7 +5,9 @@ const ALLOWED_ORIGINS = [
   "https://controle.carbohub.com.br",
   "https://carbohub.com.br",
   "https://www.carbohub.com.br",
+  "https://admin.carbohub.com.br",
   "http://localhost:8080",
+  "http://localhost:8082",
   "http://localhost:5173",
   "http://localhost:3000",
 ];
