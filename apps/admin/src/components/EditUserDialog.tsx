@@ -3,11 +3,10 @@ import { toast } from "sonner";
 import { Loader2, Save, X, Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { DEPARTMENT_CONFIGS } from "@/constants/departments";
 import { SYSTEMS } from "@/lib/interfaces";
 import { useDeptFunctions, useUpdateUser, type AdminProfile } from "@/hooks/useAdminUsers";
+import { useDepartments } from "@/hooks/useStructure";
 
-const DEPTS = [...DEPARTMENT_CONFIGS].sort((a, b) => a.order - b.order);
 const selectCls =
   "flex h-10 w-full rounded-lg border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50";
 
@@ -21,6 +20,7 @@ interface Props {
 // as funções daquele departamento aparecem (department_functions).
 export function EditUserDialog({ user, approved, onClose }: Props) {
   const updateUser = useUpdateUser();
+  const { data: DEPTS = [] } = useDepartments();
 
   const [fullName, setFullName] = useState("");
   const [department, setDepartment] = useState("");
