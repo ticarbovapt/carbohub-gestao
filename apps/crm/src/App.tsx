@@ -3,6 +3,7 @@ import { ProtectedRoute } from "./components/ProtectedRoute";
 import { SalesShell } from "./components/SalesShell";
 import Login from "./pages/Login";
 import CRM from "./pages/CRM";
+import Profile from "./pages/Profile";
 import EmConstrucao from "./pages/EmConstrucao";
 import { isCarbohubDomain, goToHubLogin } from "@/lib/sso";
 
@@ -28,6 +29,7 @@ export default function App() {
         <Route path="/metas" element={<EmConstrucao titulo="Metas" origem="/sales-targets · /dashboards/metas/vendedores" />} />
         <Route path="/dashboard-comercial" element={<EmConstrucao titulo="Dashboard comercial" origem="/dashboards/comercial" />} />
         <Route path="/ecommerce" element={<EmConstrucao titulo="E-commerce — Vendas online" origem="/dashboards/ecommerce/vendas-online" />} />
+        <Route path="/perfil" element={<Profile />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
