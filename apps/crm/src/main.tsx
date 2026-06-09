@@ -21,3 +21,5 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
     </QueryClientProvider>
   </React.StrictMode>,
 );
+
+// build: re-trigger vercel 20260609T190530Z
