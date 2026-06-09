@@ -1,25 +1,18 @@
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
-  UserPlus, Loader2, Copy, CheckCircle2, KeyRound, ShieldCheck, LogOut, Users as UsersIcon,
+  UserPlus, Loader2, Copy, CheckCircle2, KeyRound, ShieldCheck, LogOut, Users as UsersIcon, Pencil,
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { DEPARTMENT_CONFIGS, getDeptLabel } from "@/constants/departments";
 import { SYSTEMS, DEFAULT_INTERFACES } from "@/lib/interfaces";
-import { useProfiles, useCreateUser } from "@/hooks/useAdminUsers";
+import { useProfiles, useCreateUser, useDeptFunctions, type AdminProfile } from "@/hooks/useAdminUsers";
+import { EditUserDialog } from "@/components/EditUserDialog";
 
 const DEFAULT_PASSWORD = "Carbo@2026";
 const DEPTS = [...DEPARTMENT_CONFIGS].sort((a, b) => a.order - b.order);
-
-// Modelo novo: cada departamento tem só duas funções.
-// 'head' (manda no departamento) e 'colaborador'. Quem vê tudo é derivado da
-// regra de acesso (head / command / TI) — ver lib/access.ts.
-const FUNCOES = [
-  { value: "head", label: "Head" },
-  { value: "colaborador", label: "Colaborador" },
-];
 
 const selectCls =
   "flex h-10 w-full rounded-lg border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50";
@@ -36,7 +29,9 @@ export default function Users() {
   const [managerUserId, setManagerUserId] = useState("");
   const [interfaces, setInterfaces] = useState<string[]>(DEFAULT_INTERFACES);
   const [credentials, setCredentials] = useState<{ username: string; password: string } | null>(null);
+  const [editing, setEditing] = useState<AdminProfile | null>(null);
 
+  const { data: deptFunctions = [] } = useDeptFunctions(department || undefined);
   const approved = useMemo(() => profiles.filter((p) => p.status === "approved" && p.full_name), [profiles]);
 
   const canSubmit = fullName.trim().length > 0 && department !== "" && interfaces.length > 0;
@@ -125,10 +120,10 @@ export default function Users() {
               </div>
               <div className="space-y-1.5">
                 <label className="text-sm font-medium">Função</label>
-                <select className={selectCls} value={funcao}
+                <select className={selectCls} value={funcao} disabled={!department}
                   onChange={(e) => setFuncao(e.target.value)}>
-                  <option value="">—</option>
-                  {FUNCOES.map((f) => <option key={f.value} value={f.value}>{f.label}</option>)}
+                  <option value="">{department ? "—" : "Dept. primeiro"}</option>
+                  {deptFunctions.map((f) => <option key={f.function_key} value={f.function_key}>{f.label}</option>)}
                 </select>
               </div>
             </div>
@@ -193,11 +188,13 @@ export default function Users() {
                     <th className="px-4 py-2.5 font-semibold">Usuário</th>
                     <th className="px-4 py-2.5 font-semibold">Departamento</th>
                     <th className="px-4 py-2.5 font-semibold">Sistemas</th>
+                    <th className="px-4 py-2.5 font-semibold text-right">Editar</th>
                   </tr>
                 </thead>
                 <tbody>
                   {profiles.map((p) => (
-                    <tr key={p.id} className="border-t hover:bg-muted/30">
+                    <tr key={p.id} className="border-t hover:bg-muted/30 cursor-pointer"
+                      onClick={() => setEditing(p)}>
                       <td className="px-4 py-2.5 font-medium">{p.full_name ?? "—"}</td>
                       <td className="px-4 py-2.5 font-mono text-xs">{p.username ?? "—"}</td>
                       <td className="px-4 py-2.5">{getDeptLabel(p.department)}</td>
@@ -210,6 +207,9 @@ export default function Users() {
                           ))}
                         </div>
                       </td>
+                      <td className="px-4 py-2.5 text-right">
+                        <Pencil className="h-4 w-4 text-muted-foreground inline-block" />
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -218,6 +218,9 @@ export default function Users() {
           )}
         </section>
       </main>
+
+      {/* ── Editar usuário ── */}
+      <EditUserDialog user={editing} approved={approved} onClose={() => setEditing(null)} />
 
       {/* ── Credenciais (após criar) ── */}
       {credentials && (

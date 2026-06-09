@@ -7,9 +7,21 @@ export interface AdminProfile {
   username: string | null;
   department: string | null;
   funcao: string | null;
+  escopo: string | null;
+  manager_user_id: string | null;
   status: string | null;
   allowed_interfaces: string[] | null;
   created_at: string | null;
+}
+
+export interface UpdateUserParams {
+  userId: string;
+  fullName?: string;
+  department?: string;
+  funcao?: string;
+  escopo?: string;
+  managerUserId?: string;
+  allowedInterfaces?: string[];
 }
 
 export interface DeptFunction {
@@ -40,7 +52,7 @@ export function useProfiles() {
     queryFn: async (): Promise<AdminProfile[]> => {
       const { data, error } = await supabase
         .from("profiles")
-        .select("id, full_name, username, department, funcao, status, allowed_interfaces, created_at")
+        .select("id, full_name, username, department, funcao, escopo, manager_user_id, status, allowed_interfaces, created_at")
         .order("created_at", { ascending: false })
         .limit(200);
       if (error) throw error;
@@ -81,6 +93,26 @@ export function useCreateUser() {
       if (res.error) throw new Error(res.error.message || "Erro ao criar usuário");
       if (!res.data?.success) throw new Error(res.data?.error || "Erro ao criar usuário");
       return res.data.data as CreateUserResult;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["admin", "profiles"] });
+    },
+  });
+}
+
+/** Edita um usuário existente (action update_user na mesma edge function). */
+export function useUpdateUser() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (params: UpdateUserParams): Promise<void> => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error("Sessão expirada. Faça login novamente.");
+
+      const res = await supabase.functions.invoke("create-team-member", {
+        body: { action: "update_user", ...params, platformUrl: window.location.origin },
+      });
+      if (res.error) throw new Error(res.error.message || "Erro ao salvar");
+      if (!res.data?.success) throw new Error(res.data?.error || "Erro ao salvar");
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["admin", "profiles"] });

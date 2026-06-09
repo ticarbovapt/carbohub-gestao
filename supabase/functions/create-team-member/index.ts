@@ -199,6 +199,49 @@ Deno.serve(async (req: Request): Promise<Response> => {
     }
     // ─────────────────────────────────────────────────────────────────────────
 
+    // ── Update user action — editar perfil existente (gestão) ─────────────────
+    // Reusa o gate acima (command/head/TI). Atualiza só os campos enviados.
+    if (body.action === "update_user") {
+      const { userId } = body;
+      if (!userId) {
+        return new Response(
+          JSON.stringify({ success: false, error: "Missing userId" }),
+          { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } }
+        );
+      }
+      const updates: Record<string, unknown> = {};
+      if (body.fullName !== undefined) updates.full_name = body.fullName;
+      if (body.department !== undefined) updates.department = body.department;
+      if (body.funcao !== undefined) updates.funcao = body.funcao || null;
+      if (body.escopo !== undefined) updates.escopo = body.escopo || null;
+      if (body.managerUserId !== undefined) updates.manager_user_id = body.managerUserId || null;
+      if (body.allowedInterfaces !== undefined) updates.allowed_interfaces = body.allowedInterfaces;
+
+      if (Object.keys(updates).length === 0) {
+        return new Response(
+          JSON.stringify({ success: false, error: "Nada para atualizar" }),
+          { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } }
+        );
+      }
+
+      const { error: updErr } = await supabaseAdmin
+        .from("profiles")
+        .update(updates)
+        .eq("id", userId);
+
+      if (updErr) {
+        return new Response(
+          JSON.stringify({ success: false, error: updErr.message }),
+          { status: 500, headers: { "Content-Type": "application/json", ...corsHeaders } }
+        );
+      }
+      return new Response(
+        JSON.stringify({ success: true }),
+        { status: 200, headers: { "Content-Type": "application/json", ...corsHeaders } }
+      );
+    }
+    // ─────────────────────────────────────────────────────────────────────────
+
     const {
       fullName,
       department,
