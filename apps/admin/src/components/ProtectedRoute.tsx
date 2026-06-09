@@ -3,6 +3,7 @@ import { Navigate } from "react-router-dom";
 import { Loader2, ShieldAlert } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
+import { isCarbohubDomain, goToHubLogin } from "@/lib/sso";
 
 export function ProtectedRoute({ children }: { children: ReactNode }) {
   const { user, canAdmin, isLoading, signOut } = useAuth();
@@ -15,7 +16,19 @@ export function ProtectedRoute({ children }: { children: ReactNode }) {
     );
   }
 
-  if (!user) return <Navigate to="/login" replace />;
+  // Não logado: login é ÚNICO, no Hub (carbohub.com.br). Não pedimos login aqui.
+  // Em dev/preview (fora do domínio) cai no /login local standalone.
+  if (!user) {
+    if (isCarbohubDomain()) {
+      goToHubLogin();
+      return (
+        <div className="min-h-screen flex items-center justify-center bg-background">
+          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        </div>
+      );
+    }
+    return <Navigate to="/login" replace />;
+  }
 
   // Logado mas sem perfil de comando (command / head / TI).
   if (!canAdmin) {
