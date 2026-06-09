@@ -3,8 +3,7 @@ import { Navigate } from "react-router-dom";
 import { Loader2, ShieldAlert } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
-
-const HUB_URL = "https://carbohub.com.br";
+import { HUB_URL, isCarbohubDomain, goToHubLogin } from "@/lib/sso";
 
 export function ProtectedRoute({ children }: { children: ReactNode }) {
   const { user, profile, hasAppAccess, isLoading } = useAuth();
@@ -17,7 +16,19 @@ export function ProtectedRoute({ children }: { children: ReactNode }) {
     );
   }
 
-  if (!user) return <Navigate to="/login" replace />;
+  // Não logado: login é ÚNICO, no Hub (carbohub.com.br). Em dev/preview cai no
+  // /login local standalone.
+  if (!user) {
+    if (isCarbohubDomain()) {
+      goToHubLogin();
+      return (
+        <div className="min-h-screen flex items-center justify-center bg-background">
+          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        </div>
+      );
+    }
+    return <Navigate to="/login" replace />;
+  }
 
   // Camada 1: logado, mas sem este app liberado no perfil (allowed_interfaces).
   // Bloqueia mesmo quem souber o domínio direto. Espera o profile carregar.
