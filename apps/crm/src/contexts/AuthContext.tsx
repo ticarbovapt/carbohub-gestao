@@ -6,12 +6,16 @@ import {
   type AccessLevel, type DataScope, type Identity,
 } from "@/lib/access";
 
+// Interface deste app em profiles.allowed_interfaces (Camada 1).
+export const APP_INTERFACE = "carbo_crm";
+
 // Perfil mínimo que o CRM precisa (identidade vem do CORE compartilhado).
 export interface Profile extends Identity {
   id: string;
   full_name: string | null;
   avatar_url: string | null;
   username: string | null;
+  allowed_interfaces: string[] | null;
 }
 
 interface AuthContextType {
@@ -23,6 +27,8 @@ interface AuthContextType {
   /** Escopo de dado derivado do nível (Camada 3). */
   scope: DataScope;
   isGestor: boolean;
+  /** Camada 1: a pessoa tem este app (carbo_crm) liberado no perfil? */
+  hasAppAccess: boolean;
   isLoading: boolean;
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
@@ -39,7 +45,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const fetchProfile = async (userId: string): Promise<Profile | null> => {
     const { data, error } = await supabase
       .from("profiles")
-      .select("id, full_name, avatar_url, username, department, funcao, secondary_department, secondary_funcao")
+      .select("id, full_name, avatar_url, username, department, funcao, secondary_department, secondary_funcao, allowed_interfaces")
       .eq("id", userId)
       .single();
     if (error) { console.error("[CRM] perfil:", error.message); return null; }
@@ -80,11 +86,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const level = levelFromIdentity(profile);
   const scope = scopeFromLevel(level);
+  const hasAppAccess = !!profile?.allowed_interfaces?.includes(APP_INTERFACE);
 
   return (
     <AuthContext.Provider value={{
       user, session, profile,
       level, scope, isGestor: level === "gestor",
+      hasAppAccess,
       isLoading, signIn, signOut,
     }}>
       {children}
