@@ -1,9 +1,8 @@
 import { NavLink, Outlet } from "react-router-dom";
 import {
-  Boxes, LogOut, KanbanSquare, ShoppingCart, ClipboardList, TrendingUp, Target, BarChart3, Globe,
+  KanbanSquare, ShoppingCart, ClipboardList, TrendingUp, Target, BarChart3, Globe,
 } from "lucide-react";
-import { useAuth } from "@/contexts/AuthContext";
-import { Button } from "@/components/ui/button";
+import { TopBar } from "@/components/TopBar";
 
 const NAV = [
   { to: "/", end: true, label: "CRM", icon: KanbanSquare },
@@ -21,25 +20,9 @@ const navCls = ({ isActive }: { isActive: boolean }) =>
   }`;
 
 export function SalesShell() {
-  const { profile, signOut } = useAuth();
-
   return (
     <div className="min-h-screen bg-background text-foreground flex flex-col">
-      {/* Topbar */}
-      <header className="border-b bg-card sticky top-0 z-30">
-        <div className="px-5 h-14 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Boxes className="h-5 w-5 text-carbo-green" />
-            <span className="font-bold">Carbo Sales</span>
-          </div>
-          <div className="flex items-center gap-3">
-            <span className="text-sm text-muted-foreground hidden sm:inline">
-              {profile?.full_name ?? profile?.username}
-            </span>
-            <Button variant="ghost" size="sm" onClick={signOut}><LogOut className="h-4 w-4" /> Sair</Button>
-          </div>
-        </div>
-      </header>
+      <TopBar appName="Carbo Sales" />
 
       <div className="flex flex-1 min-h-0">
         {/* Sidebar */}
