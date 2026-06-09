@@ -5,8 +5,9 @@
 > Atualizado sempre que o contexto da conversa atinge ~90% (antes de compactar) e a cada
 > bloco de mudanças concluído.
 >
-> **Última atualização:** 2026-06-08
-> **Branch de trabalho (ambos repos):** `claude/gracious-goldberg-qa0ssu`
+> **Última atualização:** 2026-06-09
+> **Branch de trabalho atual:** `claude/zen-hawking-fy3z6g`
+> **Branches anteriores:** `claude/gracious-goldberg-qa0ssu`, `claude/pensive-hamilton-7ijq0`
 
 ---
 
@@ -68,6 +69,7 @@ src/
 ```
 / (raiz)      = sistema ATUAL "controle" (monólito vivo). src/, supabase/
 apps/crm/     = CRM novo standalone (Fase 1, build/lockfile próprios)
+apps/admin/   = Admin de identidades/acessos (Fase 0, Camada 1) — NOVO
 apps/erp/     = futuro
 packages/     = futuro (core, ui, supabase compartilhados)
 ```
@@ -114,6 +116,21 @@ packages/     = futuro (core, ui, supabase compartilhados)
 - `carbohub-crm` — build/deploy/lockfile independentes (NÃO mexer no `package.json` da raiz).
 - `pages/`: Home, Leads (kanban dnd-kit), Login. `lib/access.ts` = modelo de capabilities.
 
+### apps/admin (Fase 0 — Identidades & acessos) — **NOVO (PR #290)**
+- `carbohub-admin` — app standalone (Vite+React+TS+shadcn+TanStack Query), build/lockfile próprios.
+- **Propósito:** criar usuários e definir **Camada 1** (quais sistemas a pessoa entra) num lugar só.
+- `pages/`: `Login.tsx`, `Users.tsx` (form de criação + lista de perfis).
+- `hooks/useAdminUsers.ts`: `useProfiles` (lê `profiles`), `useDeptFunctions` (lê `department_functions`),
+  `useCreateUser` → **reusa a edge function compartilhada `create-team-member`** (não duplica lógica de auth).
+- `lib/interfaces.ts` = catálogo `SYSTEMS` (Camada 1), grava `profiles.allowed_interfaces`:
+  `carbo_ops` (Controle) · `carbo_crm` (CRM) · `portal_licenciado` (Licenciados) · `portal_pdv` (Loja).
+  Default ao criar: `["carbo_ops"]`.
+- `constants/departments.ts` = departamentos/funções; `role` (app_role): `operator | manager | admin`.
+- Fluxo: cria usuário → username auto (ex. `OPS0001`) + senha padrão `Carbo@2026` → 1º acesso troca senha/e-mail.
+- **Liga as pontas:** Admin escreve `allowed_interfaces`; o Hub (carbohub-landing) lê a MESMA coluna
+  para decidir azulejos. (No diário a Camada 1 era `profiles.allowed_apps` — o app novo padroniza em
+  `allowed_interfaces`; conferir/alinhar nomenclatura entre Hub e Admin → ver Pendências.)
+
 ### Stack & scripts
 - React 18 + TS 5.8 + Vite 5.4 + Router v6, shadcn/ui, Tailwind 3.4, TanStack Query v5, Recharts, dnd-kit, zod, react-hook-form, jspdf, xlsx, leaflet.
 - `npm run dev | build | build:dev | lint | preview | test | test:watch` (Vitest).
@@ -137,6 +154,13 @@ packages/     = futuro (core, ui, supabase compartilhados)
 
 > Formato: `data — repo — branch — resumo (arquivos)`. Mais recente no topo.
 
+### 2026-06-09
+- **carbohub-gestao** — `claude/zen-hawking-fy3z6g` — Re-mapeamento completo do repo e
+  atualização do diário. Documentado o novo `apps/admin` (PR #290 — app de identidades/acessos
+  da Camada 1, reusa edge `create-team-member`, grava `profiles.allowed_interfaces`). Contagens
+  conferidas: 146 migrations, 39 edge functions, 87 arquivos de hooks, 113 `<Route>` / 75 `screenId`
+  em `src/App.tsx`, 84 ids em `functionAccessConfig.ts`. Nenhuma alteração funcional. (somente documentação)
+
 ### 2026-06-08
 - **carbohub-gestao** — `claude/gracious-goldberg-qa0ssu` — Mapeamento inicial completo dos
   dois repositórios e criação deste diário de bordo (`docs/CHANGELOG-CLAUDE.md`). Nenhuma
@@ -146,6 +170,13 @@ packages/     = futuro (core, ui, supabase compartilhados)
 
 ## 6. Pendências / Observações futuras
 - [ ] SSO cross-domain entre subdomínios (hoje cada app reloga; cookie `.carbohub.com.br`).
-- [ ] App Admin que espelha `allowed_apps` (Camada 1) e os manifests de capabilities.
+- [~] App Admin (Camada 1) — **MVP entregue em `apps/admin` (PR #290)**: cria usuário + grava
+      `allowed_interfaces`. Falta: espelhar os **manifests de capabilities** (Camada 2) de cada sistema.
+- [ ] **Alinhar nomenclatura da Camada 1:** no banco do `gestao` a coluna canônica é
+      `profiles.allowed_interfaces` (confirmado em migrations + `types.ts` + `AuthContext`; **não existe**
+      `allowed_apps`). O Admin (`apps/admin`) já usa a correta. ⚠️ O diário registrava que o Hub
+      (carbohub-landing) lê `profiles.allowed_apps` — se isso ainda for verdade no repo da landing,
+      os azulejos NÃO refletem o que o Admin grava. Conferir o `carbohub-landing` e migrar p/ `allowed_interfaces`.
 - [ ] Roadmap monorepo (ARQUITETURA-SEPARACAO.md): decidir 1 banco c/ schemas vs bancos separados.
-- [ ] Extrair CORE compartilhado p/ `packages/` (auth, ui, acesso, tipos).
+- [ ] Extrair CORE compartilhado p/ `packages/` (auth, ui, acesso, tipos) — hoje `apps/admin` e
+      `apps/crm` duplicam `ProtectedRoute`, `AuthContext`, `ui/`, client Supabase.
