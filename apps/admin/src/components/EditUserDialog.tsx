@@ -25,6 +25,8 @@ export function EditUserDialog({ user, approved, onClose }: Props) {
   const [fullName, setFullName] = useState("");
   const [department, setDepartment] = useState("");
   const [funcao, setFuncao] = useState("");
+  const [secDepartment, setSecDepartment] = useState("");
+  const [secFuncao, setSecFuncao] = useState("");
   const [escopo, setEscopo] = useState("");
   const [managerUserId, setManagerUserId] = useState("");
   const [interfaces, setInterfaces] = useState<string[]>([]);
@@ -35,12 +37,15 @@ export function EditUserDialog({ user, approved, onClose }: Props) {
     setFullName(user.full_name ?? "");
     setDepartment(user.department ?? "");
     setFuncao(user.funcao ?? "");
+    setSecDepartment(user.secondary_department ?? "");
+    setSecFuncao(user.secondary_funcao ?? "");
     setEscopo(user.escopo ?? "");
     setManagerUserId(user.manager_user_id ?? "");
     setInterfaces(user.allowed_interfaces ?? []);
   }, [user]);
 
   const { data: deptFunctions = [] } = useDeptFunctions(department || undefined);
+  const { data: secFunctions = [] } = useDeptFunctions(secDepartment || undefined);
 
   if (!user) return null;
 
@@ -58,6 +63,8 @@ export function EditUserDialog({ user, approved, onClose }: Props) {
         fullName,
         department,
         funcao: funcao || undefined,
+        secondaryDepartment: secDepartment || "",
+        secondaryFuncao: secFuncao || "",
         escopo: escopo || undefined,
         managerUserId: managerUserId || undefined,
         allowedInterfaces: interfaces,
@@ -105,6 +112,26 @@ export function EditUserDialog({ user, approved, onClose }: Props) {
                 onChange={(e) => setFuncao(e.target.value)}>
                 <option value="">{department ? "—" : "Dept. primeiro"}</option>
                 {deptFunctions.map((f) => <option key={f.function_key} value={f.function_key}>{f.label}</option>)}
+              </select>
+            </div>
+          </div>
+
+          {/* 2º papel (opcional) — ex.: também é TI. O sistema pega o maior. */}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium text-muted-foreground">2º Departamento <span className="text-xs">(opcional)</span></label>
+              <select className={selectCls} value={secDepartment}
+                onChange={(e) => { setSecDepartment(e.target.value); setSecFuncao(""); }}>
+                <option value="">— Nenhum —</option>
+                {DEPTS.map((d) => <option key={d.key} value={d.key}>{d.label}</option>)}
+              </select>
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium text-muted-foreground">2ª Função</label>
+              <select className={selectCls} value={secFuncao} disabled={!secDepartment}
+                onChange={(e) => setSecFuncao(e.target.value)}>
+                <option value="">{secDepartment ? "—" : "Dept. primeiro"}</option>
+                {secFunctions.map((f) => <option key={f.function_key} value={f.function_key}>{f.label}</option>)}
               </select>
             </div>
           </div>

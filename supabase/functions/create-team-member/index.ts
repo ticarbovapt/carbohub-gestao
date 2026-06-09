@@ -213,6 +213,8 @@ Deno.serve(async (req: Request): Promise<Response> => {
       if (body.fullName !== undefined) updates.full_name = body.fullName;
       if (body.department !== undefined) updates.department = body.department;
       if (body.funcao !== undefined) updates.funcao = body.funcao || null;
+      if (body.secondaryDepartment !== undefined) updates.secondary_department = body.secondaryDepartment || null;
+      if (body.secondaryFuncao !== undefined) updates.secondary_funcao = body.secondaryFuncao || null;
       if (body.escopo !== undefined) updates.escopo = body.escopo || null;
       if (body.managerUserId !== undefined) updates.manager_user_id = body.managerUserId || null;
       if (body.allowedInterfaces !== undefined) updates.allowed_interfaces = body.allowedInterfaces;
@@ -316,6 +318,8 @@ Deno.serve(async (req: Request): Promise<Response> => {
         status:               "approved",
         manager_user_id:      managerUserId || callingUser.id,
         funcao:               funcao || null,
+        secondary_department: body.secondaryDepartment || null,
+        secondary_funcao:     body.secondaryFuncao || null,
         escopo:               escopo || null,
         allowed_interfaces:   allowedInterfaces || ["carbo_ops"],
       }, { onConflict: "id" });
