@@ -4,6 +4,7 @@ import { Layout } from "./components/Layout";
 import Login from "./pages/Login";
 import Users from "./pages/Users";
 import Structure from "./pages/Structure";
+import Profile from "./pages/Profile";
 import { isCarbohubDomain, goToHubLogin } from "@/lib/sso";
 
 // Login é ÚNICO no Hub: /login direto em produção é redirecionado pra lá.
@@ -23,6 +24,7 @@ export default function App() {
       <Route element={<ProtectedRoute><Layout /></ProtectedRoute>}>
         <Route path="/" element={<Users />} />
         <Route path="/estrutura" element={<Structure />} />
+        <Route path="/perfil" element={<Profile />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
