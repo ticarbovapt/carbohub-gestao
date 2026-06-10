@@ -10,7 +10,7 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 import {
-  Package, Lightbulb, MapPin, Users, Cloud, Send, AlertCircle, Boxes, ArrowLeftRight, Settings2,
+  Package, Lightbulb, MapPin, Users, Cloud, Send, AlertCircle, ArrowLeftRight, Settings2,
   ArrowDownToLine, ArrowUpFromLine,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -19,7 +19,6 @@ import { toast } from "sonner";
 // ⚠️ PORT VISUAL FIEL ao Controle (/suprimentos → Suprimentos) — dados MOCK.
 
 type Hub = "rn" | "sp" | "sp-vendas" | "bling";
-const HUB_LABEL: Record<Hub, string> = { rn: "Hub Natal", sp: "CD SP LogHouse", "sp-vendas": "CD SP Vendas", bling: "CD Bling" };
 
 interface Mov { id: string; data: string; produto: string; tipo: "entrada" | "saida"; qtd: number; unidade: string; hub: string; }
 const MOVS: Mov[] = [
@@ -42,7 +41,7 @@ const dt = (s: string) => new Date(s + "T00:00:00").toLocaleDateString("pt-BR");
 export default function Suprimentos() {
   const [hub, setHub] = useState<Hub>("rn");
   const [planningMode, setPlanningMode] = useState(false);
-  const [activeTab, setActiveTab] = useState("estoque");
+  const [activeTab, setActiveTab] = useState("movimentacoes");
   const isRN = hub === "rn", isSP = hub === "sp", isVendas = hub === "sp-vendas", isBling = hub === "bling";
 
   return (
@@ -83,20 +82,9 @@ export default function Suprimentos() {
         {/* Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab}>
           <TabsList className="w-full justify-start flex-wrap h-auto gap-1 bg-muted/50 p-1">
-            <TabsTrigger value="estoque" className="gap-1.5"><Boxes className="h-3.5 w-3.5" /> Estoque</TabsTrigger>
             <TabsTrigger value="movimentacoes" className="gap-1.5"><ArrowLeftRight className="h-3.5 w-3.5" /> Movimentações</TabsTrigger>
             <TabsTrigger value="politica" className="gap-1.5"><Settings2 className="h-3.5 w-3.5" /> Política de Estoque</TabsTrigger>
           </TabsList>
-
-          <TabsContent value="estoque" className="mt-4">
-            <CarboCard>
-              <CarboCardContent className="py-8 text-center text-muted-foreground">
-                <Boxes className="h-10 w-10 mx-auto mb-2 opacity-30" />
-                <p className="text-sm">Saldo detalhado de <strong>{HUB_LABEL[hub]}</strong> na tela <strong>Estoque → Saldos por Hub</strong>.</p>
-                <p className="text-xs mt-1">Aqui ficam as ações de suprimento (entrada, transferência) — entram na fase de lógica.</p>
-              </CarboCardContent>
-            </CarboCard>
-          </TabsContent>
 
           <TabsContent value="movimentacoes" className="mt-4">
             <div className="rounded-lg border bg-card overflow-x-auto">
