@@ -203,51 +203,7 @@ export default function Vender() {
         </CarboCardContent>
       </CarboCard>
 
-      {/* Dados Estratégicos (opcional, recolhível) */}
-      <CollapsibleCard title="Dados Estratégicos" icon={Target} open={showEstrategicos} onToggle={() => setShowEstrategicos((o) => !o)}>
-        <div className="grid md:grid-cols-2 gap-3">
-          <div className="space-y-1.5">
-            <Label>Tipo de Ponto</Label>
-            <Select>
-              <SelectTrigger><SelectValue placeholder="Selecione o tipo" /></SelectTrigger>
-              <SelectContent>{TIPOS_PONTO.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-1.5">
-            <Label>Classificação Interna</Label>
-            <Select>
-              <SelectTrigger><SelectValue placeholder="Classificar como" /></SelectTrigger>
-              <SelectContent>{CLASSIFICACOES.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
-            </Select>
-          </div>
-        </div>
-        <div className="space-y-1.5">
-          <Label>Volume Médio Mensal (veículos)</Label>
-          <Input type="number" placeholder="Ex: 500" />
-        </div>
-        <div className="grid md:grid-cols-2 gap-3">
-          <label className="flex items-center justify-between gap-3 rounded-xl border p-3">
-            <span className="text-sm font-medium">Atua com Diesel?</span><Switch />
-          </label>
-          <label className="flex items-center justify-between gap-3 rounded-xl border p-3">
-            <span className="text-sm font-medium">Atua com Frotas?</span><Switch />
-          </label>
-        </div>
-      </CollapsibleCard>
-
-      {/* Observações (opcional, recolhível) */}
-      <CollapsibleCard title="Observações" icon={FileText} open={showObs} onToggle={() => setShowObs((o) => !o)}>
-        <div className="space-y-1.5">
-          <Label>Observações Públicas</Label>
-          <Textarea value={obsPublica} onChange={(e) => setObsPublica(e.target.value)} placeholder="Visíveis para o cliente" />
-        </div>
-        <div className="space-y-1.5">
-          <Label>Notas Internas</Label>
-          <Textarea placeholder="Visíveis apenas internamente" />
-        </div>
-      </CollapsibleCard>
-
-      {/* Itens do Pedido — ÚLTIMA seção: pôr o produto e fazer a venda */}
+      {/* Itens do Pedido — pôr o produto e fechar a venda */}
       <CarboCard>
         <CarboCardContent className="p-4 space-y-4">
           <div className="flex items-center justify-between">
@@ -312,6 +268,50 @@ export default function Vender() {
           </div>
         </CarboCardContent>
       </CarboCard>
+
+      {/* Dados Estratégicos (opcional, recolhível) */}
+      <CollapsibleCard title="Dados Estratégicos" icon={Target} open={showEstrategicos} onToggle={() => setShowEstrategicos((o) => !o)}>
+        <div className="grid md:grid-cols-2 gap-3">
+          <div className="space-y-1.5">
+            <Label>Tipo de Ponto</Label>
+            <Select>
+              <SelectTrigger><SelectValue placeholder="Selecione o tipo" /></SelectTrigger>
+              <SelectContent>{TIPOS_PONTO.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1.5">
+            <Label>Classificação Interna</Label>
+            <Select>
+              <SelectTrigger><SelectValue placeholder="Classificar como" /></SelectTrigger>
+              <SelectContent>{CLASSIFICACOES.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
+            </Select>
+          </div>
+        </div>
+        <div className="space-y-1.5">
+          <Label>Volume Médio Mensal (veículos)</Label>
+          <Input type="number" placeholder="Ex: 500" />
+        </div>
+        <div className="grid md:grid-cols-2 gap-3">
+          <label className="flex items-center justify-between gap-3 rounded-xl border p-3">
+            <span className="text-sm font-medium">Atua com Diesel?</span><Switch />
+          </label>
+          <label className="flex items-center justify-between gap-3 rounded-xl border p-3">
+            <span className="text-sm font-medium">Atua com Frotas?</span><Switch />
+          </label>
+        </div>
+      </CollapsibleCard>
+
+      {/* Observações (opcional, recolhível) */}
+      <CollapsibleCard title="Observações" icon={FileText} open={showObs} onToggle={() => setShowObs((o) => !o)}>
+        <div className="space-y-1.5">
+          <Label>Observações Públicas</Label>
+          <Textarea value={obsPublica} onChange={(e) => setObsPublica(e.target.value)} placeholder="Visíveis para o cliente" />
+        </div>
+        <div className="space-y-1.5">
+          <Label>Notas Internas</Label>
+          <Textarea placeholder="Visíveis apenas internamente" />
+        </div>
+      </CollapsibleCard>
 
       {/* Rodapé: total + ações */}
       <div className="sticky bottom-0 bg-background/95 backdrop-blur border-t -mx-4 md:-mx-6 px-4 md:px-6 py-3 flex items-center justify-between gap-3 flex-wrap">
