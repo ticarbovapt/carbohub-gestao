@@ -6,12 +6,13 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 import {
   Package, Lightbulb, MapPin, Users, Cloud, Send, AlertCircle, ArrowLeftRight, Settings2,
-  ArrowDownToLine, ArrowUpFromLine, Boxes,
+  ArrowDownToLine, ArrowUpFromLine, Boxes, Layers, AlertTriangle, Activity, Info, Link2, Truck,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -41,12 +42,34 @@ const POLITICAS: Politica[] = [
 ];
 
 const LOW_STOCK = [{ name: "Garrafa PET 1L", qty: 0 }, { name: "CarboVapt", qty: 30 }];
+
+// Transferências CD-SP em trânsito (mock)
+interface Transito { id: string; produto: string; qtd: number; unidade: string; origem: string; destino: string; enviado: string; status: "em_transito" | "recebido"; }
+const TRANSITO: Transito[] = [
+  { id: "1", produto: "CarboZé 100ml", qtd: 600, unidade: "un", origem: "Hub Natal", destino: "CD SP LogHouse", enviado: "2026-06-07", status: "em_transito" },
+  { id: "2", produto: "CarboPRO", qtd: 150, unidade: "un", origem: "Hub Natal", destino: "CD SP LogHouse", enviado: "2026-06-05", status: "recebido" },
+  { id: "3", produto: "Garrafa PET 1L", qtd: 1000, unidade: "un", origem: "Hub Natal", destino: "CD SP LogHouse", enviado: "2026-06-09", status: "em_transito" },
+];
+
+// Mapeamento SKU plataforma → produto interno (auto-match por código), mock
+const SKU_MAP: { sku: string; produto: string }[] = [
+  { sku: "SKU-CP100", produto: "CarboPRO 100ml" }, { sku: "SKU-CZ1L", produto: "CarboZé 1 Litro" },
+  { sku: "SKU-CZ100", produto: "CarboZé 100ml" }, { sku: "CARB-SACH-10ML", produto: "CARBOZE SACHÊ 10ML" },
+  { sku: "INS-GARR-100ML", produto: "Garrafa 100ml Boca 24" }, { sku: "INS-GARR-1L", produto: "Garrafa 1L com Tampa" },
+  { sku: "KIT-CARB-SACH-10ML", produto: "KIT 10und CARBOZE SACHÊ 10ML" }, { sku: "KIT-5UN-CARB-100ML", produto: "KIT 5un CARBOZE 100ML" },
+  { sku: "INS-LIQ-CARBO", produto: "Líquido CARBO (ml)" }, { sku: "SKU-VAPT70", produto: "Reagente CarboVapt 70ml" },
+  { sku: "INS-ROT-CP", produto: "Rótulo CarboPRO" }, { sku: "INS-ROT-CZ", produto: "Rótulo CarboZé" },
+];
+
+const PERIODOS = [{ v: "7d", label: "Últimos 7 dias" }, { v: "30d", label: "Últimos 30 dias" }, { v: "mes", label: "Este mês" }];
 const dt = (s: string) => new Date(s + "T00:00:00").toLocaleDateString("pt-BR");
 
 export default function Suprimentos() {
   const [hub, setHub] = useState<Hub>("rn");
   const [planningMode, setPlanningMode] = useState(false);
   const [activeTab, setActiveTab] = useState("estoque");
+  const [periodo, setPeriodo] = useState("7d");
+  const periodLabel = periodo === "7d" ? "7 dias" : periodo === "30d" ? "30 dias" : "mês";
   const isRN = hub === "rn", isSP = hub === "sp", isVendas = hub === "sp-vendas", isBling = hub === "bling";
   const stockHub = HUBS.find((h) => h.id === STOCK_HUB_ID[hub]) ?? HUBS[0];
 
@@ -85,15 +108,43 @@ export default function Suprimentos() {
           </div>
         )}
 
+        {/* KPIs + período */}
+        {!isBling && (
+          <div className="space-y-2">
+            <div className="flex items-center gap-2 justify-end">
+              <span className="text-xs text-muted-foreground">Período dos KPIs:</span>
+              <Select value={periodo} onValueChange={setPeriodo}>
+                <SelectTrigger className="w-[160px] h-7 text-xs"><SelectValue /></SelectTrigger>
+                <SelectContent>{PERIODOS.map((p) => <SelectItem key={p.v} value={p.v}>{p.label}</SelectItem>)}</SelectContent>
+              </Select>
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+              <CarboCard variant="kpi" padding="sm"><CarboCardContent><div className="flex items-center gap-2 mb-1"><Layers className="h-4 w-4 text-carbo-blue" /><span className="text-xs text-muted-foreground">Total Produtos</span></div><p className="text-2xl font-bold">3</p></CarboCardContent></CarboCard>
+              <CarboCard variant="kpi" padding="sm"><CarboCardContent><div className="flex items-center gap-2 mb-1"><AlertTriangle className="h-4 w-4 text-destructive" /><span className="text-xs text-muted-foreground">Em Baixa</span></div><p className="text-2xl font-bold text-destructive">1</p></CarboCardContent></CarboCard>
+              <CarboCard variant="kpi" padding="sm"><CarboCardContent><div className="flex items-center gap-2 mb-1"><ArrowDownToLine className="h-4 w-4 text-carbo-green" /><span className="text-xs text-muted-foreground">Entradas ({periodLabel})</span></div><p className="text-2xl font-bold">11.146</p></CarboCardContent></CarboCard>
+              <CarboCard variant="kpi" padding="sm"><CarboCardContent><div className="flex items-center gap-2 mb-1"><ArrowUpFromLine className="h-4 w-4 text-warning" /><span className="text-xs text-muted-foreground">Saídas ({periodLabel})</span></div><p className="text-2xl font-bold">9.450</p></CarboCardContent></CarboCard>
+              <CarboCard variant="kpi" padding="sm"><CarboCardContent><div className="flex items-center gap-2 mb-1"><Activity className="h-4 w-4 text-muted-foreground" /><span className="text-xs text-muted-foreground">Movimentações ({periodLabel})</span></div><p className="text-2xl font-bold">4</p></CarboCardContent></CarboCard>
+            </div>
+          </div>
+        )}
+
         {/* Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab}>
           <TabsList className="w-full justify-start flex-wrap h-auto gap-1 bg-muted/50 p-1">
             <TabsTrigger value="estoque" className="gap-1.5"><Boxes className="h-3.5 w-3.5" /> Estoque</TabsTrigger>
             <TabsTrigger value="movimentacoes" className="gap-1.5"><ArrowLeftRight className="h-3.5 w-3.5" /> Movimentações</TabsTrigger>
+            {isSP && <TabsTrigger value="transito" className="gap-1.5"><Truck className="h-3.5 w-3.5" /> Em Trânsito</TabsTrigger>}
+            {isSP && <TabsTrigger value="mapeamento" className="gap-1.5"><Link2 className="h-3.5 w-3.5" /> Mapeamento SKU</TabsTrigger>}
             <TabsTrigger value="politica" className="gap-1.5"><Settings2 className="h-3.5 w-3.5" /> Política de Estoque</TabsTrigger>
           </TabsList>
 
-          <TabsContent value="estoque" className="mt-4">
+          <TabsContent value="estoque" className="mt-4 space-y-3">
+            {isSP && (
+              <div className="flex items-start gap-2 px-3 py-2 rounded-md bg-blue-500/10 border border-blue-500/20 text-sm text-blue-500">
+                <Info className="h-4 w-4 shrink-0 mt-0.5" />
+                <span><strong>CD São Paulo</strong> — Estoque gerenciado manualmente conforme transferências do CD contratado. Atualize ao receber confirmação de entrada no CD.</span>
+              </div>
+            )}
             <StockView hub={stockHub} editable />
           </TabsContent>
 
@@ -117,6 +168,54 @@ export default function Suprimentos() {
                   ))}
                 </TableBody>
               </Table>
+            </div>
+          </TabsContent>
+
+          {/* Em Trânsito (SP) */}
+          <TabsContent value="transito" className="mt-4">
+            <div className="rounded-lg border bg-card overflow-x-auto">
+              <Table>
+                <TableHeader><TableRow><TableHead>Produto</TableHead><TableHead className="text-right">Qtd</TableHead><TableHead>Origem → Destino</TableHead><TableHead>Enviado em</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
+                <TableBody>
+                  {TRANSITO.map((t) => (
+                    <TableRow key={t.id}>
+                      <TableCell className="font-medium">{t.produto}</TableCell>
+                      <TableCell className="text-right tabular-nums">{t.qtd.toLocaleString("pt-BR")} {t.unidade}</TableCell>
+                      <TableCell className="text-sm text-muted-foreground">{t.origem} → {t.destino}</TableCell>
+                      <TableCell className="text-sm text-muted-foreground">{dt(t.enviado)}</TableCell>
+                      <TableCell><CarboBadge variant={t.status === "recebido" ? "success" : "warning"} dot>{t.status === "recebido" ? "Recebido" : "Em trânsito"}</CarboBadge></TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          </TabsContent>
+
+          {/* Mapeamento SKU (SP) */}
+          <TabsContent value="mapeamento" className="mt-4 space-y-4">
+            <div className="flex items-start gap-2 px-4 py-3 rounded-lg bg-blue-500/10 border border-blue-500/20">
+              <Info className="h-4 w-4 text-blue-400 shrink-0 mt-0.5" />
+              <div className="text-sm">
+                <p className="font-medium mb-0.5">Como funciona o mapeamento</p>
+                <p className="text-xs text-muted-foreground">
+                  O sistema deduz o estoque CD SP em duas etapas: primeiro busca um mapeamento configurado; se não encontrar,
+                  combina o SKU da plataforma com o <strong className="text-foreground">código interno do produto</strong> (1 vendido = 1 deduzido).
+                  Use mapeamentos explícitos para kits ou quando o SKU da plataforma for diferente do código interno.
+                </p>
+              </div>
+            </div>
+            <div>
+              <p className="text-sm font-medium mb-2">Auto-match por código interno <span className="text-xs text-muted-foreground">(sem configuração necessária)</span></p>
+              <div className="grid gap-2 md:grid-cols-2">
+                {SKU_MAP.map((m) => (
+                  <div key={m.sku} className="flex items-center gap-2 rounded-lg border bg-card px-3 py-2">
+                    <code className="text-xs font-mono text-carbo-green font-semibold shrink-0">{m.sku}</code>
+                    <span className="text-muted-foreground shrink-0">→</span>
+                    <span className="text-sm truncate">{m.produto}</span>
+                    <span className="ml-auto text-[10px] text-muted-foreground shrink-0">× 1 un</span>
+                  </div>
+                ))}
+              </div>
             </div>
           </TabsContent>
 
