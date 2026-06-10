@@ -84,9 +84,9 @@ export const OPS_GROUPS: OpsNavGroup[] = [
   {
     label: "Acompanhamento (Vendas)",
     items: [
-      { path: "/acompanhamento/comercial", label: "Dashboard Comercial", icon: TrendingUp, from: "/dashboards/comercial", mirror: true },
-      { path: "/acompanhamento/vendas-online", label: "Vendas Online", icon: Globe, from: "/dashboards/ecommerce/vendas-online", mirror: true },
-      { path: "/acompanhamento/metas", label: "Metas de Vendedores", icon: Target, from: "/dashboards/metas/vendedores", mirror: true },
+      { path: "/acompanhamento/comercial", label: "Dashboard Comercial", icon: TrendingUp, from: "/dashboards/comercial", mirror: true, ready: true },
+      { path: "/acompanhamento/vendas-online", label: "Vendas Online", icon: Globe, from: "/dashboards/ecommerce/vendas-online", mirror: true, ready: true },
+      { path: "/acompanhamento/metas", label: "Metas de Vendedores", icon: Target, from: "/dashboards/metas/vendedores", mirror: true, ready: true },
     ],
   },
 ];
