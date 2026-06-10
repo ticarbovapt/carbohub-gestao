@@ -30,6 +30,26 @@ export function useCRMLeads(funnelType: FunnelType, assignedFilter?: string) {
   });
 }
 
+// Todos os leads (sem filtro de funil) — usado na visão "Todos" das Pipelines.
+export function useAllCRMLeads() {
+  const { user, scope } = useAuth();
+  const ownOnly = scope === "proprio" && !!user?.id;
+
+  return useQuery({
+    queryKey: ["crm-leads", "all-funnels", ownOnly ? user?.id : "all"],
+    queryFn: async () => {
+      let query = supabase
+        .from("crm_leads")
+        .select("*")
+        .order("created_at", { ascending: false });
+      if (ownOnly) query = query.or(`created_by.eq.${user!.id},assigned_to.eq.${user!.id}`);
+      const { data, error } = await query;
+      if (error) throw error;
+      return (data || []) as CRMLead[];
+    },
+  });
+}
+
 export function useCRMStats(funnelType: FunnelType) {
   return useQuery({
     queryKey: ["crm-stats", funnelType],

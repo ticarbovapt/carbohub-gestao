@@ -37,7 +37,7 @@ export default function CRM() {
             {funnels.map((funnel) => {
               const count = stats?.byFunnel?.[funnel.id] || 0;
               return (
-                <CarboCard key={funnel.id} className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => navigate(`/crm/${funnel.id}`)}>
+                <CarboCard key={funnel.id} className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => navigate(`/crm/pipelines?funil=${funnel.id}`)}>
                   <CarboCardContent className="p-4">
                     <div className="flex items-center justify-between mb-3">
                       <div className="flex items-center gap-2">
@@ -73,7 +73,7 @@ export default function CRM() {
           <CarboCardContent className="pt-0">
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               {([["f4", "🏪", "PDVs CarboZé"], ["f2", "🏢", "Licenciados"], ["f1", "🛒", "B2C"], ["f3", "🚛", "Frotistas"]] as const).map(([id, icon, label]) => (
-                <CarboButton key={id} variant="outline" className="h-auto py-3 flex-col gap-1" onClick={() => navigate(`/crm/${id}`)}>
+                <CarboButton key={id} variant="outline" className="h-auto py-3 flex-col gap-1" onClick={() => navigate(`/crm/pipelines?funil=${id}`)}>
                   <span className="text-lg">{icon}</span>
                   <span className="text-xs">{label}</span>
                   <span className="text-[10px] text-muted-foreground">{stats?.byFunnel?.[id] || 0} leads</span>
