@@ -11,14 +11,19 @@ import {
 } from "@/components/ui/table";
 import {
   Package, Lightbulb, MapPin, Users, Cloud, Send, AlertCircle, ArrowLeftRight, Settings2,
-  ArrowDownToLine, ArrowUpFromLine,
+  ArrowDownToLine, ArrowUpFromLine, Boxes,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { StockView } from "@/components/estoque/StockView";
+import { HUBS } from "@/components/estoque/stockData";
 
 // ⚠️ PORT VISUAL FIEL ao Controle (/suprimentos → Suprimentos) — dados MOCK.
+// É a versão EDITÁVEL do estoque (gestores). A versão somente leitura vive em Estoque.
 
 type Hub = "rn" | "sp" | "sp-vendas" | "bling";
+// Suprimentos usa "sp-vendas"; o módulo de estoque usa "spv".
+const STOCK_HUB_ID: Record<Hub, string> = { rn: "rn", sp: "sp", "sp-vendas": "spv", bling: "bling" };
 
 interface Mov { id: string; data: string; produto: string; tipo: "entrada" | "saida"; qtd: number; unidade: string; hub: string; }
 const MOVS: Mov[] = [
@@ -41,8 +46,9 @@ const dt = (s: string) => new Date(s + "T00:00:00").toLocaleDateString("pt-BR");
 export default function Suprimentos() {
   const [hub, setHub] = useState<Hub>("rn");
   const [planningMode, setPlanningMode] = useState(false);
-  const [activeTab, setActiveTab] = useState("movimentacoes");
+  const [activeTab, setActiveTab] = useState("estoque");
   const isRN = hub === "rn", isSP = hub === "sp", isVendas = hub === "sp-vendas", isBling = hub === "bling";
+  const stockHub = HUBS.find((h) => h.id === STOCK_HUB_ID[hub]) ?? HUBS[0];
 
   return (
     <div className="p-4 md:p-6">
@@ -82,9 +88,14 @@ export default function Suprimentos() {
         {/* Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab}>
           <TabsList className="w-full justify-start flex-wrap h-auto gap-1 bg-muted/50 p-1">
+            <TabsTrigger value="estoque" className="gap-1.5"><Boxes className="h-3.5 w-3.5" /> Estoque</TabsTrigger>
             <TabsTrigger value="movimentacoes" className="gap-1.5"><ArrowLeftRight className="h-3.5 w-3.5" /> Movimentações</TabsTrigger>
             <TabsTrigger value="politica" className="gap-1.5"><Settings2 className="h-3.5 w-3.5" /> Política de Estoque</TabsTrigger>
           </TabsList>
+
+          <TabsContent value="estoque" className="mt-4">
+            <StockView hub={stockHub} editable />
+          </TabsContent>
 
           <TabsContent value="movimentacoes" className="mt-4">
             <div className="rounded-lg border bg-card overflow-x-auto">
