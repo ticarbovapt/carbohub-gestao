@@ -44,7 +44,7 @@ export const OPS_GROUPS: OpsNavGroup[] = [
   {
     label: "Estoque",
     items: [
-      { path: "/estoque", label: "Saldos por Hub", icon: Warehouse, from: "warehouse_stock" },
+      { path: "/estoque", label: "Saldos por Hub", icon: Warehouse, from: "warehouse_stock", ready: true },
     ],
   },
   {
