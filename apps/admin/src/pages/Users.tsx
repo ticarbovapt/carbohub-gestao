@@ -199,6 +199,7 @@ export default function Users() {
                     <input type="checkbox" className="h-4 w-4 accent-primary"
                       checked={interfaces.includes(s.iface)} onChange={() => toggleInterface(s.iface)} />
                     <span className="font-medium">{s.label}</span>
+                    {s.comingSoon && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-500/15 text-amber-600 font-medium">Em breve</span>}
                     <span className="text-muted-foreground text-xs">— {s.hint}</span>
                   </label>
                 ))}
