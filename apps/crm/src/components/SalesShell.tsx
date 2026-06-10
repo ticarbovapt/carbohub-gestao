@@ -12,9 +12,9 @@ const NAV = [
   { to: "/vender", label: "Vender", icon: ShoppingCart },
   { to: "/pedidos", label: "Pedidos", icon: ClipboardList },
   { to: "/vendas", label: "Vendas", icon: TrendingUp },
-  { to: "/metas", label: "Metas", icon: Target },
-  { to: "/dashboard-comercial", label: "Dashboard comercial", icon: BarChart3 },
-  { to: "/ecommerce", label: "E-commerce", icon: Globe },
+  { to: "/metas", label: "Metas de Vendedores", icon: Target },
+  { to: "/comercial", label: "Dashboard Comercial", icon: BarChart3 },
+  { to: "/vendas-online", label: "Vendas Online", icon: Globe },
 ];
 
 const navCls = ({ isActive }: { isActive: boolean }) =>
