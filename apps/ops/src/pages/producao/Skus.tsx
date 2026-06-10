@@ -1,0 +1,117 @@
+import { useMemo, useState } from "react";
+import { CarboPageHeader } from "@/components/ui/carbo-page-header";
+import { CarboButton } from "@/components/ui/carbo-button";
+import { CarboKPI } from "@/components/ui/carbo-kpi";
+import { CarboEmptyState } from "@/components/ui/carbo-empty-state";
+import { CarboBadge } from "@/components/ui/carbo-badge";
+import { CarboSearchInput } from "@/components/ui/carbo-input";
+import {
+  CarboTable, CarboTableHeader, CarboTableBody, CarboTableRow, CarboTableHead, CarboTableCell,
+} from "@/components/ui/carbo-table";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Package, Plus, RefreshCw, PackageCheck, PackageX, Pencil, Trash2 } from "lucide-react";
+import { toast } from "sonner";
+
+// ⚠️ PORT VISUAL FIEL ao Controle (/skus → Skus "Gestão de SKUs") — dados MOCK.
+
+interface Sku { id: string; code: string; name: string; description: string | null; category: string; packaging_ml: number | null; safety_stock_qty: number; is_active: boolean; bom_version: number | null; }
+const MOCK: Sku[] = [
+  { id: "1", code: "SKU-ZE-100", name: "CarboZé 100ml", description: "Estabilizador 100ml", category: "produto_final", packaging_ml: 100, safety_stock_qty: 500, is_active: true, bom_version: 3 },
+  { id: "2", code: "SKU-ZE-1L", name: "CarboZé 1L", description: "Estabilizador 1 litro", category: "produto_final", packaging_ml: 1000, safety_stock_qty: 200, is_active: true, bom_version: 2 },
+  { id: "3", code: "SKU-PRO", name: "CarboPRO", description: "Linha premium", category: "produto_final", packaging_ml: 500, safety_stock_qty: 150, is_active: true, bom_version: 1 },
+  { id: "4", code: "SKU-ZE-SCH", name: "CarboZé Sachê", description: "Sachê 10ml", category: "produto_final", packaging_ml: 10, safety_stock_qty: 3000, is_active: true, bom_version: null },
+  { id: "5", code: "SKU-VAPT", name: "CarboVapt", description: "Reagente VAPT", category: "reagente", packaging_ml: null, safety_stock_qty: 80, is_active: false, bom_version: null },
+];
+
+export default function Skus() {
+  const canManage = true;
+  const [searchQuery, setSearchQuery] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState("all");
+
+  const stats = useMemo(() => ({ total: MOCK.length, active: MOCK.filter((s) => s.is_active).length, inactive: MOCK.filter((s) => !s.is_active).length }), []);
+  const filtered = useMemo(() => MOCK.filter((sku) => {
+    if (categoryFilter !== "all" && sku.category !== categoryFilter) return false;
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      if (!sku.name.toLowerCase().includes(q) && !sku.code.toLowerCase().includes(q)) return false;
+    }
+    return true;
+  }), [searchQuery, categoryFilter]);
+
+  return (
+    <div className="p-4 md:p-6">
+      <div className="space-y-6 max-w-[1500px] mx-auto">
+        <CarboPageHeader
+          title="Gestão de SKUs"
+          description="Produtos acabados e fichas técnicas (BOM)"
+          icon={Package}
+          actions={
+            <div className="flex items-center gap-3">
+              <CarboButton variant="outline" size="sm" onClick={() => toast("Atualizar (em breve)")}><RefreshCw className="h-4 w-4 mr-2" /> Atualizar</CarboButton>
+              {canManage && <CarboButton size="sm" onClick={() => toast("Novo SKU (em breve)")}><Plus className="h-4 w-4 mr-2" /> Novo SKU</CarboButton>}
+            </div>
+          }
+        />
+
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+          <CarboKPI title="Total SKUs" value={stats.total} icon={Package} iconColor="blue" />
+          <CarboKPI title="Ativos" value={stats.active} icon={PackageCheck} iconColor="green" />
+          <CarboKPI title="Inativos" value={stats.inactive} icon={PackageX} iconColor="muted" />
+        </div>
+
+        <div className="flex flex-col sm:flex-row gap-3">
+          <div className="flex-1 max-w-sm"><CarboSearchInput placeholder="Buscar por código ou nome..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} /></div>
+          <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+            <SelectTrigger className="w-[200px]"><SelectValue placeholder="Todas categorias" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todas categorias</SelectItem>
+              <SelectItem value="produto_final">Produto Final</SelectItem>
+              <SelectItem value="reagente">Reagente</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        {filtered.length === 0 ? (
+          <CarboEmptyState title="Nenhum SKU encontrado" description="Tente ajustar os filtros de busca." icon={Package} />
+        ) : (
+          <div className="overflow-x-auto">
+            <CarboTable>
+              <CarboTableHeader>
+                <CarboTableRow>
+                  <CarboTableHead>Código</CarboTableHead><CarboTableHead>Nome</CarboTableHead><CarboTableHead>Categoria</CarboTableHead>
+                  <CarboTableHead>Embalagem</CarboTableHead><CarboTableHead>Estoque Seg.</CarboTableHead><CarboTableHead>Status</CarboTableHead>
+                  <CarboTableHead>BOM</CarboTableHead>{canManage && <CarboTableHead className="w-20">Ações</CarboTableHead>}
+                </CarboTableRow>
+              </CarboTableHeader>
+              <CarboTableBody>
+                {filtered.map((sku) => (
+                  <CarboTableRow key={sku.id} interactive onClick={() => toast(`Editar ${sku.code} (em breve)`)}>
+                    <CarboTableCell><span className="font-mono text-sm font-medium text-carbo-green">{sku.code}</span></CarboTableCell>
+                    <CarboTableCell>
+                      <p className="font-medium">{sku.name}</p>
+                      {sku.description && <p className="text-xs text-muted-foreground truncate max-w-48">{sku.description}</p>}
+                    </CarboTableCell>
+                    <CarboTableCell><span className="text-sm capitalize">{sku.category?.replace("_", " ") || "---"}</span></CarboTableCell>
+                    <CarboTableCell>{sku.packaging_ml ? `${sku.packaging_ml} ml` : "---"}</CarboTableCell>
+                    <CarboTableCell><span className="font-medium">{sku.safety_stock_qty}</span></CarboTableCell>
+                    <CarboTableCell><CarboBadge variant={sku.is_active ? "success" : "secondary"} dot>{sku.is_active ? "Ativo" : "Inativo"}</CarboBadge></CarboTableCell>
+                    <CarboTableCell>{sku.bom_version ? <CarboBadge variant="outline">v{sku.bom_version}</CarboBadge> : <span className="text-sm text-muted-foreground">---</span>}</CarboTableCell>
+                    {canManage && (
+                      <CarboTableCell>
+                        <div className="flex items-center gap-1">
+                          <CarboButton variant="ghost" size="icon" className="h-8 w-8" onClick={(e) => { e.stopPropagation(); toast("Editar (em breve)"); }}><Pencil className="h-4 w-4" /></CarboButton>
+                          <CarboButton variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive" onClick={(e) => { e.stopPropagation(); toast("Excluir (em breve)"); }}><Trash2 className="h-4 w-4" /></CarboButton>
+                        </div>
+                      </CarboTableCell>
+                    )}
+                  </CarboTableRow>
+                ))}
+              </CarboTableBody>
+            </CarboTable>
+          </div>
+        )}
+        <p className="text-xs text-muted-foreground text-center">Tela em port visual — dados de exemplo. SKUs reais e BOM entram na fase de lógica.</p>
+      </div>
+    </div>
+  );
+}

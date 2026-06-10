@@ -34,11 +34,11 @@ export const OPS_GROUPS: OpsNavGroup[] = [
     label: "Produção",
     items: [
       { path: "/producao/ordens", label: "Ordens de Produção", icon: Factory, from: "/production-orders", ready: true },
-      { path: "/producao/dashboard", label: "Dashboard de Produção", icon: BarChart3, from: "/dashboards/producao" },
-      { path: "/producao/produtos", label: "Produtos (MRP)", icon: Package, from: "/mrp/products" },
-      { path: "/producao/skus", label: "SKUs", icon: Boxes, from: "/skus" },
-      { path: "/producao/lotes", label: "Lotes", icon: Layers, from: "/lots" },
-      { path: "/producao/fornecedores", label: "Fornecedores", icon: Building2, from: "/mrp/suppliers" },
+      { path: "/producao/dashboard", label: "Dashboard de Produção", icon: BarChart3, from: "/dashboards/producao", ready: true },
+      { path: "/producao/produtos", label: "Produtos (MRP)", icon: Package, from: "/mrp/products", ready: true },
+      { path: "/producao/skus", label: "SKUs", icon: Boxes, from: "/skus", ready: true },
+      { path: "/producao/lotes", label: "Lotes", icon: Layers, from: "/lots", ready: true },
+      { path: "/producao/fornecedores", label: "Fornecedores", icon: Building2, from: "/mrp/suppliers", ready: true },
     ],
   },
   {
