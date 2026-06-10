@@ -32,8 +32,11 @@ export default function App() {
         <Route path="/pedidos" element={<Pedidos />} />
         <Route path="/vendas" element={<Vendas />} />
         <Route path="/metas" element={<Metas />} />
-        <Route path="/dashboard-comercial" element={<DashboardComercial />} />
-        <Route path="/ecommerce" element={<Ecommerce />} />
+        <Route path="/comercial" element={<DashboardComercial />} />
+        <Route path="/vendas-online" element={<Ecommerce />} />
+        {/* compatibilidade com rotas antigas */}
+        <Route path="/dashboard-comercial" element={<Navigate to="/comercial" replace />} />
+        <Route path="/ecommerce" element={<Navigate to="/vendas-online" replace />} />
         <Route path="/perfil" element={<Profile />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
