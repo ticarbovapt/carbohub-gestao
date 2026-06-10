@@ -66,9 +66,9 @@ export const OPS_GROUPS: OpsNavGroup[] = [
   {
     label: "Logística",
     items: [
-      { path: "/logistica", label: "Logística", icon: Truck, from: "/logistics" },
-      { path: "/logistica/viagens", label: "Viagens & PC", icon: Plane, from: "/viagens" },
-      { path: "/logistica/dashboard", label: "Dashboard de Logística", icon: BarChart3, from: "/dashboards/logistica" },
+      { path: "/logistica", label: "Logística", icon: Truck, from: "/logistics", ready: true },
+      { path: "/logistica/viagens", label: "Viagens & PC", icon: Plane, from: "/viagens", ready: true },
+      { path: "/logistica/dashboard", label: "Dashboard de Logística", icon: BarChart3, from: "/dashboards/logistica", ready: true },
     ],
   },
   {
