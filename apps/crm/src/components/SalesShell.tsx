@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { NavLink, Outlet } from "react-router-dom";
 import {
-  KanbanSquare, ShoppingCart, ClipboardList, TrendingUp, Target, BarChart3, Globe, LayoutDashboard,
+  KanbanSquare, ShoppingCart, ClipboardList, TrendingUp, Target, BarChart3, LayoutDashboard,
 } from "lucide-react";
 import { TopBar } from "@/components/TopBar";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
@@ -18,7 +18,6 @@ const NAV = [
   { to: "/vendas", label: "Vendas", icon: TrendingUp },
   { to: "/metas", label: "Metas de Vendedores", icon: Target },
   { to: "/comercial", label: "Dashboard Comercial", icon: BarChart3 },
-  { to: "/vendas-online", label: "Vendas Online", icon: Globe },
 ];
 
 const navCls = ({ isActive }: { isActive: boolean }) =>
