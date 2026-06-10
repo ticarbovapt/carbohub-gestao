@@ -5,7 +5,7 @@ import { CarboBadge } from "@/components/ui/carbo-badge";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Warehouse, Search, Tag, Download, Activity, Shield, Calendar, Package } from "lucide-react";
+import { Warehouse, Search, Tag, Download, Activity, Shield, Calendar, Package, Eye } from "lucide-react";
 import { StockProgressBar } from "@/components/estoque/StockProgressBar";
 import { addDays, format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -62,6 +62,12 @@ export default function SaldosPorHub() {
     <div className="p-4 md:p-6">
       <div className="space-y-4 max-w-[1500px] mx-auto">
         <CarboPageHeader title="Estoque — Saldos por Hub" description="Saldo de produtos e insumos por centro de distribuição" icon={Warehouse} />
+
+        {/* Espelho somente leitura — a edição/operação de estoque vive em Suprimentos */}
+        <div className="flex items-center gap-2 px-3 py-2 rounded-md bg-blue-500/10 border border-blue-500/20 text-sm text-blue-500">
+          <Eye className="h-4 w-4 shrink-0" />
+          <span>Visualização consolidada (somente leitura). Movimentações e entradas são feitas em <strong>Suprimentos</strong>; quantidades de produção na área <strong>Produção</strong>.</span>
+        </div>
 
         {/* Filtros */}
         <div className="flex items-center gap-3 flex-wrap">
