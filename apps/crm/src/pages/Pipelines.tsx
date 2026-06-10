@@ -32,6 +32,10 @@ const NORMALIZED = [
 const normalizeStage = (stage: string) => NORMALIZED.find((n) => n.match.includes(stage))?.id ?? "andamento";
 
 // ── Visão "Todos os funis": kanban read-only por estágio normalizado ───────
+function tempColor(t?: string) {
+  return t === "quente" ? "#ef4444" : t === "morno" ? "#f59e0b" : t === "frio" ? "#3b82f6" : "#94a3b8";
+}
+
 function AllFunnelsBoard({ leads, onLeadClick }: { leads: CRMLead[]; onLeadClick: (l: CRMLead) => void }) {
   const byCol = useMemo(() => {
     const map: Record<string, CRMLead[]> = {};
@@ -41,33 +45,50 @@ function AllFunnelsBoard({ leads, onLeadClick }: { leads: CRMLead[]; onLeadClick
   }, [leads]);
 
   return (
-    <div className="flex gap-3 overflow-x-auto pb-3">
-      {NORMALIZED.map((col) => (
-        <div key={col.id} className="w-72 shrink-0">
-          <div className="flex items-center justify-between mb-2 px-1">
-            <span className="inline-flex items-center gap-2 text-sm font-semibold">
-              <span className="h-2.5 w-2.5 rounded-full" style={{ background: col.color }} /> {col.label}
-            </span>
-            <span className="text-xs text-muted-foreground">{byCol[col.id]?.length ?? 0}</span>
+    <div className="flex gap-3 overflow-x-auto pb-3 -mx-1 px-1">
+      {NORMALIZED.map((col) => {
+        const items = byCol[col.id] ?? [];
+        return (
+          <div key={col.id} className="w-[300px] shrink-0 rounded-2xl border border-border bg-board-surface/40 flex flex-col max-h-[calc(100vh-300px)]">
+            {/* Header da coluna com faixa de cor */}
+            <div className="rounded-t-2xl px-3 py-2.5 border-b border-border" style={{ background: col.color + "12" }}>
+              <div className="flex items-center justify-between">
+                <span className="inline-flex items-center gap-2 text-sm font-semibold">
+                  <span className="h-2.5 w-2.5 rounded-full" style={{ background: col.color }} /> {col.label}
+                </span>
+                <span className="text-xs font-bold tabular-nums rounded-full px-2 py-0.5" style={{ background: col.color + "20", color: col.color }}>{items.length}</span>
+              </div>
+            </div>
+            {/* Cards */}
+            <div className="flex-1 overflow-y-auto p-2 space-y-2">
+              {items.map((lead) => {
+                const cfg = FUNNEL_CONFIG[lead.funnel_type as FunnelType];
+                const t = (lead as { temperature?: string }).temperature;
+                return (
+                  <button key={lead.id} onClick={() => onLeadClick(lead)}
+                    className="w-full text-left rounded-xl border border-border bg-card p-3 hover:shadow-md hover:border-muted-foreground/30 transition-all relative overflow-hidden">
+                    <div className="absolute left-0 top-0 bottom-0 w-1" style={{ background: cfg?.color ?? "#94A3B8" }} />
+                    <div className="flex items-start justify-between gap-2 mb-1 pl-1.5">
+                      <p className="font-semibold text-sm truncate leading-tight">{lead.trade_name || lead.legal_name || lead.contact_name || "Sem nome"}</p>
+                      {t && <span className="shrink-0 h-2 w-2 rounded-full mt-1" style={{ background: tempColor(t) }} title={`Lead ${t}`} />}
+                    </div>
+                    <p className="text-xs text-muted-foreground truncate pl-1.5">{[lead.city, lead.contact_phone].filter(Boolean).join(" · ") || "—"}</p>
+                    <span className="ml-1.5 inline-flex items-center gap-1 mt-2 text-[10px] font-medium rounded-full px-1.5 py-0.5" style={{ background: (cfg?.color ?? "#94A3B8") + "1a", color: cfg?.color ?? "#94A3B8" }}>
+                      <span>{cfg?.icon}</span> {cfg?.shortName}
+                    </span>
+                  </button>
+                );
+              })}
+              {items.length === 0 && (
+                <div className="flex flex-col items-center justify-center gap-1 py-10 text-center">
+                  <div className="h-8 w-8 rounded-full border-2 border-dashed border-muted-foreground/20" />
+                  <p className="text-[11px] text-muted-foreground/50">Sem leads</p>
+                </div>
+              )}
+            </div>
           </div>
-          <div className="space-y-2">
-            {(byCol[col.id] ?? []).map((lead) => {
-              const cfg = FUNNEL_CONFIG[lead.funnel_type as FunnelType];
-              return (
-                <button key={lead.id} onClick={() => onLeadClick(lead)} className="w-full text-left rounded-xl border bg-card p-3 hover:shadow-md transition-shadow">
-                  <div className="flex items-center justify-between gap-2 mb-1">
-                    <p className="font-medium text-sm truncate">{lead.trade_name || lead.legal_name || lead.contact_name || "Sem nome"}</p>
-                    <span className="text-base shrink-0" title={cfg?.name}>{cfg?.icon}</span>
-                  </div>
-                  <p className="text-xs text-muted-foreground truncate">{[lead.city, lead.contact_phone].filter(Boolean).join(" · ") || "—"}</p>
-                  <span className="inline-block mt-1.5 text-[10px] font-medium rounded-full px-1.5 py-0.5" style={{ background: (cfg?.color ?? "#94A3B8") + "20", color: cfg?.color ?? "#94A3B8" }}>{cfg?.shortName}</span>
-                </button>
-              );
-            })}
-            {(byCol[col.id]?.length ?? 0) === 0 && <p className="text-xs text-muted-foreground/60 text-center py-6">Vazio</p>}
-          </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
