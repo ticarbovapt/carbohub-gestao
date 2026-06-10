@@ -1,14 +1,18 @@
 import { useState } from "react";
 import { NavLink, Outlet } from "react-router-dom";
 import {
-  KanbanSquare, ShoppingCart, ClipboardList, TrendingUp, Target, BarChart3, Globe,
+  KanbanSquare, ShoppingCart, ClipboardList, TrendingUp, Target, BarChart3, Globe, LayoutDashboard,
 } from "lucide-react";
 import { TopBar } from "@/components/TopBar";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { useIsMobile } from "@/hooks/use-mobile";
 
+// CRM é uma seção com sub-itens (Funis de Venda = dashboard, Pipelines = kanban).
+const CRM_SUB = [
+  { to: "/", end: true, label: "Funis de Venda", icon: LayoutDashboard },
+  { to: "/crm/pipelines", label: "Pipelines", icon: KanbanSquare },
+];
 const NAV = [
-  { to: "/", end: true, label: "CRM", icon: KanbanSquare },
   { to: "/vender", label: "Vender", icon: ShoppingCart },
   { to: "/pedidos", label: "Pedidos", icon: ClipboardList },
   { to: "/vendas", label: "Vendas", icon: TrendingUp },
@@ -21,15 +25,31 @@ const navCls = ({ isActive }: { isActive: boolean }) =>
   `flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
     isActive ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-muted hover:text-foreground"
   }`;
+const subCls = ({ isActive }: { isActive: boolean }) =>
+  `flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-sm transition-colors ${
+    isActive ? "bg-primary/10 text-primary font-medium" : "text-muted-foreground hover:bg-muted hover:text-foreground"
+  }`;
 
 function Nav({ onNavigate }: { onNavigate?: () => void }) {
   return (
     <nav className="space-y-1 p-3">
-      {NAV.map((n) => (
-        <NavLink key={n.to} to={n.to} end={n.end} className={navCls} onClick={onNavigate}>
-          <n.icon className="h-4 w-4" /> {n.label}
-        </NavLink>
-      ))}
+      {/* Seção CRM */}
+      <p className="px-3 pt-1 pb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/70">CRM</p>
+      <div className="space-y-1 border-l border-border ml-3 pl-1">
+        {CRM_SUB.map((n) => (
+          <NavLink key={n.to} to={n.to} end={n.end} className={subCls} onClick={onNavigate}>
+            <n.icon className="h-4 w-4" /> {n.label}
+          </NavLink>
+        ))}
+      </div>
+
+      <div className="pt-2 space-y-1">
+        {NAV.map((n) => (
+          <NavLink key={n.to} to={n.to} className={navCls} onClick={onNavigate}>
+            <n.icon className="h-4 w-4" /> {n.label}
+          </NavLink>
+        ))}
+      </div>
     </nav>
   );
 }

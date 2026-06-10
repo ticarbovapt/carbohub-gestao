@@ -3,7 +3,7 @@ import { ProtectedRoute } from "./components/ProtectedRoute";
 import { SalesShell } from "./components/SalesShell";
 import Login from "./pages/Login";
 import CRM from "./pages/CRM";
-import CRMFunnel from "./pages/CRMFunnel";
+import Pipelines from "./pages/Pipelines";
 import Vender from "./pages/Vender";
 import Pedidos from "./pages/Pedidos";
 import DashboardComercial from "./pages/DashboardComercial";
@@ -29,7 +29,9 @@ export default function App() {
       <Route path="/login" element={<LoginRoute />} />
       <Route element={<ProtectedRoute><SalesShell /></ProtectedRoute>}>
         <Route path="/" element={<CRM />} />
-        <Route path="/crm/:funnelType" element={<CRMFunnel />} />
+        <Route path="/crm/pipelines" element={<Pipelines />} />
+        {/* compat: rotas antigas por funil → pipelines com filtro */}
+        <Route path="/crm/:funnelType" element={<Navigate to="/crm/pipelines" replace />} />
         <Route path="/vender" element={<Vender />} />
         <Route path="/pedidos" element={<Pedidos />} />
         <Route path="/vendas" element={<Vendas />} />
