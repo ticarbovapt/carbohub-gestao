@@ -9,7 +9,6 @@ import Pedidos from "./pages/Pedidos";
 import DashboardComercial from "./pages/DashboardComercial";
 import Vendas from "./pages/Vendas";
 import Metas from "./pages/Metas";
-import Ecommerce from "./pages/Ecommerce";
 import Profile from "./pages/Profile";
 import { isCarbohubDomain, goToHubLogin } from "@/lib/sso";
 
@@ -37,10 +36,8 @@ export default function App() {
         <Route path="/vendas" element={<Vendas />} />
         <Route path="/metas" element={<Metas />} />
         <Route path="/comercial" element={<DashboardComercial />} />
-        <Route path="/vendas-online" element={<Ecommerce />} />
-        {/* compatibilidade com rotas antigas */}
+        {/* compatibilidade com rotas antigas (e-commerce migrou para o Carbo Ops) */}
         <Route path="/dashboard-comercial" element={<Navigate to="/comercial" replace />} />
-        <Route path="/ecommerce" element={<Navigate to="/vendas-online" replace />} />
         <Route path="/perfil" element={<Profile />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
