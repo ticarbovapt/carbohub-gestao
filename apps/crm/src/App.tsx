@@ -3,6 +3,7 @@ import { ProtectedRoute } from "./components/ProtectedRoute";
 import { SalesShell } from "./components/SalesShell";
 import Login from "./pages/Login";
 import CRM from "./pages/CRM";
+import CRMFunnel from "./pages/CRMFunnel";
 import Vender from "./pages/Vender";
 import Pedidos from "./pages/Pedidos";
 import DashboardComercial from "./pages/DashboardComercial";
@@ -28,6 +29,7 @@ export default function App() {
       <Route path="/login" element={<LoginRoute />} />
       <Route element={<ProtectedRoute><SalesShell /></ProtectedRoute>}>
         <Route path="/" element={<CRM />} />
+        <Route path="/crm/:funnelType" element={<CRMFunnel />} />
         <Route path="/vender" element={<Vender />} />
         <Route path="/pedidos" element={<Pedidos />} />
         <Route path="/vendas" element={<Vendas />} />

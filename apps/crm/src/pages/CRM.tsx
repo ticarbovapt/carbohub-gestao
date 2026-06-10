@@ -1,92 +1,88 @@
-import { useState } from "react";
-import { Plus, Filter } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { KanbanBoard } from "@/components/crm/KanbanBoard";
-import { LeadForm } from "@/components/crm/LeadForm";
-import { LeadDrawer } from "@/components/crm/LeadDrawer";
-import { useAuth } from "@/contexts/AuthContext";
-import { useCRMLeads, useAdvanceLeadStage } from "@/hooks/useCRMLeads";
-import type { CRMLead, FunnelType } from "@/types/crm";
-import { FUNNEL_CONFIG, getNextStage } from "@/types/crm";
+import { useNavigate } from "react-router-dom";
+import { CarboPageHeader } from "@/components/ui/carbo-page-header";
+import { CarboCard, CarboCardContent, CarboCardHeader, CarboCardTitle } from "@/components/ui/carbo-card";
+import { CarboKPI } from "@/components/ui/carbo-kpi";
+import { CarboButton } from "@/components/ui/carbo-button";
+import { Users, TrendingUp, AlertTriangle, Flame, ChevronRight, BarChart3 } from "lucide-react";
+import { useCRMAllStats } from "@/hooks/useCRMLeads";
+import { FUNNEL_CONFIG } from "@/types/crm";
 
-// Os "funis" de hoje viram TIPOS DE LEAD de um kanban único: cadastra-se o lead
-// escolhendo o tipo, e aqui filtramos por tipo. (Visual; a unificação real do
-// pipeline é lógica — fica pra fase seguinte.)
-const TIPOS: FunnelType[] = ["f1", "f2", "f3", "f4", "f5", "f6", "f7", "f8"];
-
+// PORT FIEL ao Controle (/crm → CRMDashboard) — visão geral dos funis.
 export default function CRM() {
-  const { isGestor } = useAuth();
-  const [tipo, setTipo] = useState<FunnelType>("f1");
-  const [showForm, setShowForm] = useState(false);
-  const [selectedLead, setSelectedLead] = useState<CRMLead | null>(null);
-
-  const { data: leads = [], isLoading } = useCRMLeads(tipo);
-  const advance = useAdvanceLeadStage();
-  const cfg = FUNNEL_CONFIG[tipo];
-
-  function handleAdvance(lead: CRMLead) {
-    const next = getNextStage(tipo, lead.stage);
-    if (!next) return;
-    advance.mutate({ id: lead.id, newStage: next, funnelType: tipo, currentStage: lead.stage });
-  }
+  const navigate = useNavigate();
+  const { data: stats, isLoading } = useCRMAllStats();
+  const funnels = Object.values(FUNNEL_CONFIG);
 
   return (
-    <div className="flex flex-col flex-1 min-h-0">
-      {/* Cabeçalho da tela + filtro por TIPO de lead */}
-      <div className="px-4 pt-4 pb-2 flex items-center justify-between gap-3 flex-wrap">
+    <div className="p-4 md:p-6">
+      <div className="space-y-6">
+        <CarboPageHeader
+          title="CRM — Funis de Venda"
+          description="Gestão de leads, prospecção e pipeline comercial"
+          icon={BarChart3}
+        />
+
+        {/* KPIs globais */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <CarboKPI title="Total Leads" value={stats?.total || 0} icon={Users} iconColor="blue" loading={isLoading} />
+          <CarboKPI title="Quentes" value={stats?.hot || 0} icon={Flame} iconColor="warning" loading={isLoading} />
+          <CarboKPI title="Sem Atividade >3d" value={stats?.stale || 0} icon={AlertTriangle} iconColor="warning" loading={isLoading} />
+          <CarboKPI title="Funis Ativos" value={Object.keys(stats?.byFunnel || {}).length} icon={TrendingUp} iconColor="green" loading={isLoading} />
+        </div>
+
+        {/* Cards de funil */}
         <div>
-          <h1 className="font-semibold">CRM — Funil</h1>
-          <p className="text-xs text-muted-foreground">
-            {cfg.description} · {leads.length} leads {isGestor ? "(visão global)" : "(seus)"}
-          </p>
+          <h3 className="text-sm font-semibold uppercase text-muted-foreground tracking-wider mb-3">Funis de Venda</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            {funnels.map((funnel) => {
+              const count = stats?.byFunnel?.[funnel.id] || 0;
+              return (
+                <CarboCard key={funnel.id} className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => navigate(`/crm/${funnel.id}`)}>
+                  <CarboCardContent className="p-4">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-2">
+                        <span className="text-2xl">{funnel.icon}</span>
+                        <div>
+                          <p className="font-semibold text-sm">{funnel.shortName}</p>
+                          <p className="text-[10px] text-muted-foreground">{funnel.cycleLabel}</p>
+                        </div>
+                      </div>
+                      <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                    </div>
+                    <div className="flex items-end justify-between">
+                      <div>
+                        <p className="text-2xl font-bold" style={{ color: funnel.color }}>{count}</p>
+                        <p className="text-[10px] text-muted-foreground">leads ativos</p>
+                      </div>
+                      <div className="h-8 w-8 rounded-full flex items-center justify-center" style={{ backgroundColor: funnel.color + "20" }}>
+                        <span className="text-sm">{funnel.icon}</span>
+                      </div>
+                    </div>
+                  </CarboCardContent>
+                </CarboCard>
+              );
+            })}
+          </div>
         </div>
-        <Button size="sm" onClick={() => setShowForm(true)}>
-          <Plus className="h-4 w-4 mr-1" /> Novo lead
-        </Button>
+
+        {/* Ações rápidas */}
+        <CarboCard>
+          <CarboCardHeader>
+            <CarboCardTitle className="text-sm">Ações Rápidas</CarboCardTitle>
+          </CarboCardHeader>
+          <CarboCardContent className="pt-0">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              {([["f4", "🏪", "PDVs CarboZé"], ["f2", "🏢", "Licenciados"], ["f1", "🛒", "B2C"], ["f3", "🚛", "Frotistas"]] as const).map(([id, icon, label]) => (
+                <CarboButton key={id} variant="outline" className="h-auto py-3 flex-col gap-1" onClick={() => navigate(`/crm/${id}`)}>
+                  <span className="text-lg">{icon}</span>
+                  <span className="text-xs">{label}</span>
+                  <span className="text-[10px] text-muted-foreground">{stats?.byFunnel?.[id] || 0} leads</span>
+                </CarboButton>
+              ))}
+            </div>
+          </CarboCardContent>
+        </CarboCard>
       </div>
-
-      {/* Filtro por tipo de lead (ex.: B2C, PDV...) */}
-      <div className="border-b bg-muted/30">
-        <div className="flex items-center gap-2 px-4 py-1.5 overflow-x-auto scrollbar-hide">
-          <span className="flex items-center gap-1 text-xs text-muted-foreground shrink-0">
-            <Filter className="h-3.5 w-3.5" /> Tipo:
-          </span>
-          {TIPOS.map((t) => {
-            const c = FUNNEL_CONFIG[t];
-            const active = t === tipo;
-            return (
-              <button key={t} onClick={() => setTipo(t)}
-                className={`flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-                  active ? "bg-background border shadow-sm text-foreground"
-                         : "text-muted-foreground hover:text-foreground hover:bg-background/60"}`}>
-                <span>{c.icon}</span><span>{c.shortName}</span>
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Kanban */}
-      <main className="flex-1 overflow-hidden px-4 py-4">
-        {isLoading ? (
-          <div className="flex items-center justify-center h-40 text-muted-foreground text-sm">Carregando leads…</div>
-        ) : (
-          <KanbanBoard
-            leads={leads}
-            funnelType={tipo}
-            onAdvance={handleAdvance}
-            onMarkLost={(lead) => setSelectedLead(lead)}
-            onLeadClick={(lead) => setSelectedLead(lead)}
-            onDragMove={(lead, toStage) =>
-              advance.mutate({ id: lead.id, newStage: toStage, funnelType: tipo, currentStage: lead.stage })}
-          />
-        )}
-      </main>
-
-      {showForm && <LeadForm funnelType={tipo} onClose={() => setShowForm(false)} />}
-      {selectedLead && (
-        <LeadDrawer lead={selectedLead} funnelType={tipo} onClose={() => setSelectedLead(null)} />
-      )}
     </div>
   );
 }
