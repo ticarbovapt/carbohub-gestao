@@ -6,7 +6,7 @@ import logoUrl from "@/assets/logo-grupo-carbo.png";
 // ⚠️ DADOS DA EMPRESA: confirme/ajuste em COMPANY abaixo (CNPJ, endereço, contato).
 const COMPANY = {
   name: "Carbo Soluções LTDA",
-  cnpj: "",                                 // TODO: preencher o nº do CNPJ
+  cnpj: "36.060.692/0003-72",
   endereco: "Rua Coronel José Guimarães, 299",
   cidade: "Lagoa Nova · Natal - RN · CEP 59054-795",
   telefone: "(84) 3207-5055",
