@@ -9,7 +9,7 @@ import {
 } from "@/components/ui/carbo-table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Cog, Plus, Wrench, Power, PowerOff, AlertTriangle, Pencil } from "lucide-react";
-import { toast } from "sonner";
+import { MachineDialog, type MachineDialogValues } from "@/components/campo/MachineDialog";
 
 // ⚠️ PORT VISUAL FIEL ao Controle (/machines → Machines "Gestão de Máquinas") — dados MOCK.
 
@@ -30,6 +30,8 @@ const dt = (s: string | null) => (s ? new Date(s + "T00:00:00").toLocaleDateStri
 export default function Maquinas() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<MachineStatus | "all">("all");
+  const [createOpen, setCreateOpen] = useState(false);
+  const [editValues, setEditValues] = useState<MachineDialogValues | null>(null);
 
   const stats = useMemo(() => ({
     total: MOCK.length,
@@ -52,7 +54,7 @@ export default function Maquinas() {
           title="Gestão de Máquinas"
           description="Equipamentos, consumo, alertas e manutenção"
           icon={Cog}
-          actions={<CarboButton onClick={() => toast("Nova Máquina (em breve)")}><Plus className="h-4 w-4 mr-1" /> Nova Máquina</CarboButton>}
+          actions={<CarboButton onClick={() => setCreateOpen(true)}><Plus className="h-4 w-4 mr-1" /> Nova Máquina</CarboButton>}
         />
 
         <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
@@ -91,7 +93,7 @@ export default function Maquinas() {
                   <CarboTableCell className="text-sm text-muted-foreground">{dt(m.ultimaManut)}</CarboTableCell>
                   <CarboTableCell className="text-sm text-muted-foreground">{dt(m.proximaManut)}</CarboTableCell>
                   <CarboTableCell className={`text-right font-semibold tabular-nums ${m.creditos < 100 ? "text-destructive" : ""}`}>{m.creditos.toLocaleString("pt-BR")}</CarboTableCell>
-                  <CarboTableCell><button onClick={() => toast("Editar máquina (em breve)")} className="p-1.5 hover:bg-muted rounded-md"><Pencil className="h-3.5 w-3.5 text-muted-foreground" /></button></CarboTableCell>
+                  <CarboTableCell><button onClick={() => setEditValues({ modelo: m.modelo, serie: m.codigo, licenciado: m.licenciado, instalacao: m.ultimaManut ?? "", status: m.status })} className="p-1.5 hover:bg-muted rounded-md"><Pencil className="h-3.5 w-3.5 text-muted-foreground" /></button></CarboTableCell>
                 </CarboTableRow>
               ))}
             </CarboTableBody>
@@ -99,6 +101,14 @@ export default function Maquinas() {
         </div>
         <p className="text-xs text-muted-foreground text-center">Tela em port visual — dados de exemplo. Consumo, alertas e manutenção entram na fase de lógica.</p>
       </div>
+
+      <MachineDialog mode="create" open={createOpen} onOpenChange={setCreateOpen} />
+      <MachineDialog
+        mode="edit"
+        open={editValues !== null}
+        onOpenChange={(o) => { if (!o) setEditValues(null); }}
+        initial={editValues ?? undefined}
+      />
     </div>
   );
 }

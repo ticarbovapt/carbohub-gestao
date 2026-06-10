@@ -10,7 +10,9 @@ import {
   Pencil, Trash2, ClipboardCheck,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { toast } from "sonner";
+import { OPFormDialog } from "@/components/producao/OPFormDialog";
+import { ConfirmOPDialog } from "@/components/producao/ConfirmOPDialog";
+import { DeleteConfirmDialog } from "@/components/producao/DeleteConfirmDialog";
 
 // ⚠️ PORT VISUAL FIEL ao Controle (/production-orders → ProductionOrdersOP) — dados MOCK.
 // TODO: ligar em production_orders (Supabase) na fase de lógica.
@@ -88,6 +90,11 @@ export default function OrdensProducao() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [priorityFilter, setPriorityFilter] = useState("all");
 
+  const [createOpen, setCreateOpen] = useState(false);
+  const [editOp, setEditOp] = useState<OP | null>(null);
+  const [confirmOp, setConfirmOp] = useState<OP | null>(null);
+  const [deleteOp, setDeleteOp] = useState<OP | null>(null);
+
   const filtered = useMemo(() => MOCK.filter((o) => {
     if (statusFilter !== "all" && o.op_status !== statusFilter) return false;
     if (priorityFilter !== "all" && String(o.priority) !== priorityFilter) return false;
@@ -116,7 +123,7 @@ export default function OrdensProducao() {
                 <LayoutGrid className="h-3.5 w-3.5" /> Kanban
               </button>
             </div>
-            {canManage && <Button onClick={() => toast("Nova OP (em breve)")} className="gap-2"><Plus className="h-4 w-4" /> Nova OP</Button>}
+            {canManage && <Button onClick={() => setCreateOpen(true)} className="gap-2"><Plus className="h-4 w-4" /> Nova OP</Button>}
           </div>
         </div>
 
@@ -221,10 +228,10 @@ export default function OrdensProducao() {
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-1">
                           {o.op_status === "aguardando_confirmacao" && (
-                            <Button variant="ghost" size="icon" className="h-8 w-8 text-purple-500" onClick={() => toast("Confirmar produção (em breve)")} title="Confirmar Produção"><ClipboardCheck className="h-4 w-4" /></Button>
+                            <Button variant="ghost" size="icon" className="h-8 w-8 text-purple-500" onClick={() => setConfirmOp(o)} title="Confirmar Produção"><ClipboardCheck className="h-4 w-4" /></Button>
                           )}
-                          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => toast("Editar OP (em breve)")}><Pencil className="h-4 w-4" /></Button>
-                          <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => toast("Excluir OP (em breve)")}><Trash2 className="h-4 w-4" /></Button>
+                          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setEditOp(o)}><Pencil className="h-4 w-4" /></Button>
+                          <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => setDeleteOp(o)}><Trash2 className="h-4 w-4" /></Button>
                         </div>
                       </TableCell>
                     )}
@@ -239,6 +246,34 @@ export default function OrdensProducao() {
           Tela em port visual — dados de exemplo. OPs reais, criação/edição e confirmação entram na fase de lógica.
         </p>
       </div>
+
+      {/* Dialogs */}
+      <OPFormDialog open={createOpen} onOpenChange={setCreateOpen} mode="create" />
+      {editOp && (
+        <OPFormDialog
+          key={editOp.id}
+          open={!!editOp}
+          onOpenChange={(v) => { if (!v) setEditOp(null); }}
+          mode="edit"
+          initial={{
+            planned_quantity: editOp.planned_quantity,
+            priority: String(editOp.priority),
+            demand_source: editOp.demand_source,
+            need_date: editOp.need_date ?? "",
+          }}
+        />
+      )}
+      <ConfirmOPDialog
+        open={!!confirmOp}
+        onOpenChange={(v) => { if (!v) setConfirmOp(null); }}
+        order={confirmOp ? { op_number: confirmOp.op_number, sku_code: confirmOp.sku_code, sku_name: confirmOp.sku_name, planned_quantity: confirmOp.planned_quantity } : null}
+      />
+      <DeleteConfirmDialog
+        open={!!deleteOp}
+        onOpenChange={(v) => { if (!v) setDeleteOp(null); }}
+        title="Excluir OP?"
+        description={`Esta ação não pode ser desfeita. A ordem de produção ${deleteOp?.op_number ?? ""} será excluída permanentemente.`}
+      />
     </div>
   );
 }

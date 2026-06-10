@@ -11,6 +11,8 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Package, Plus, RefreshCw, PackageCheck, PackageX, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
+import { SkuFormDialog } from "@/components/producao/SkuFormDialog";
+import { DeleteConfirmDialog } from "@/components/producao/DeleteConfirmDialog";
 
 // ⚠️ PORT VISUAL FIEL ao Controle (/skus → Skus "Gestão de SKUs") — dados MOCK.
 
@@ -27,6 +29,9 @@ export default function Skus() {
   const canManage = true;
   const [searchQuery, setSearchQuery] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("all");
+  const [createOpen, setCreateOpen] = useState(false);
+  const [editSku, setEditSku] = useState<Sku | null>(null);
+  const [deleteSku, setDeleteSku] = useState<Sku | null>(null);
 
   const stats = useMemo(() => ({ total: MOCK.length, active: MOCK.filter((s) => s.is_active).length, inactive: MOCK.filter((s) => !s.is_active).length }), []);
   const filtered = useMemo(() => MOCK.filter((sku) => {
@@ -48,7 +53,7 @@ export default function Skus() {
           actions={
             <div className="flex items-center gap-3">
               <CarboButton variant="outline" size="sm" onClick={() => toast("Atualizar (em breve)")}><RefreshCw className="h-4 w-4 mr-2" /> Atualizar</CarboButton>
-              {canManage && <CarboButton size="sm" onClick={() => toast("Novo SKU (em breve)")}><Plus className="h-4 w-4 mr-2" /> Novo SKU</CarboButton>}
+              {canManage && <CarboButton size="sm" onClick={() => setCreateOpen(true)}><Plus className="h-4 w-4 mr-2" /> Novo SKU</CarboButton>}
             </div>
           }
         />
@@ -85,7 +90,7 @@ export default function Skus() {
               </CarboTableHeader>
               <CarboTableBody>
                 {filtered.map((sku) => (
-                  <CarboTableRow key={sku.id} interactive onClick={() => toast(`Editar ${sku.code} (em breve)`)}>
+                  <CarboTableRow key={sku.id} interactive onClick={() => setEditSku(sku)}>
                     <CarboTableCell><span className="font-mono text-sm font-medium text-carbo-green">{sku.code}</span></CarboTableCell>
                     <CarboTableCell>
                       <p className="font-medium">{sku.name}</p>
@@ -99,8 +104,8 @@ export default function Skus() {
                     {canManage && (
                       <CarboTableCell>
                         <div className="flex items-center gap-1">
-                          <CarboButton variant="ghost" size="icon" className="h-8 w-8" onClick={(e) => { e.stopPropagation(); toast("Editar (em breve)"); }}><Pencil className="h-4 w-4" /></CarboButton>
-                          <CarboButton variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive" onClick={(e) => { e.stopPropagation(); toast("Excluir (em breve)"); }}><Trash2 className="h-4 w-4" /></CarboButton>
+                          <CarboButton variant="ghost" size="icon" className="h-8 w-8" onClick={(e) => { e.stopPropagation(); setEditSku(sku); }}><Pencil className="h-4 w-4" /></CarboButton>
+                          <CarboButton variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive" onClick={(e) => { e.stopPropagation(); setDeleteSku(sku); }}><Trash2 className="h-4 w-4" /></CarboButton>
                         </div>
                       </CarboTableCell>
                     )}
@@ -112,6 +117,32 @@ export default function Skus() {
         )}
         <p className="text-xs text-muted-foreground text-center">Tela em port visual — dados de exemplo. SKUs reais e BOM entram na fase de lógica.</p>
       </div>
+
+      {/* Dialogs */}
+      <SkuFormDialog open={createOpen} onOpenChange={setCreateOpen} mode="create" />
+      {editSku && (
+        <SkuFormDialog
+          key={editSku.id}
+          open={!!editSku}
+          onOpenChange={(v) => { if (!v) setEditSku(null); }}
+          mode="edit"
+          initial={{
+            code: editSku.code,
+            name: editSku.name,
+            description: editSku.description ?? "",
+            category: editSku.category,
+            packaging_ml: editSku.packaging_ml,
+            safety_stock_qty: editSku.safety_stock_qty,
+            is_active: editSku.is_active,
+          }}
+        />
+      )}
+      <DeleteConfirmDialog
+        open={!!deleteSku}
+        onOpenChange={(v) => { if (!v) setDeleteSku(null); }}
+        title="Excluir SKU?"
+        description={`Esta ação não pode ser desfeita. O SKU ${deleteSku?.code ?? ""} será excluído permanentemente.`}
+      />
     </div>
   );
 }

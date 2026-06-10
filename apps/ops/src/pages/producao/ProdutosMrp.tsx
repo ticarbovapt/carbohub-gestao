@@ -10,7 +10,8 @@ import {
 } from "@/components/ui/carbo-table";
 import { Package, Plus, ClipboardList, Pencil, AlertTriangle, AlertCircle, CheckCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { toast } from "sonner";
+import { MrpProductFormDialog } from "@/components/producao/MrpProductFormDialog";
+import { BomDialog } from "@/components/producao/BomDialog";
 
 // ⚠️ PORT VISUAL FIEL ao Controle (/mrp/products → MrpProducts "Catálogo MRP") — dados MOCK.
 
@@ -56,6 +57,9 @@ export default function ProdutosMrp() {
   const [view, setView] = useState<"produtos" | "bom">("produtos");
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("all");
+  const [createOpen, setCreateOpen] = useState(false);
+  const [editProduct, setEditProduct] = useState<MrpProduct | null>(null);
+  const [bomProduct, setBomProduct] = useState<MrpProduct | null>(null);
 
   const filtered = MOCK.filter((p) => {
     if (categoryFilter !== "all" && p.category !== categoryFilter) return false;
@@ -72,7 +76,7 @@ export default function ProdutosMrp() {
           title="Catálogo MRP"
           description="Insumos, SKUs, BOM Lists e controle de qualidade"
           icon={Package}
-          actions={canEdit ? <CarboButton onClick={() => toast("Novo Produto (em breve)")}><Plus className="h-4 w-4 mr-1" /> Novo Produto</CarboButton> : undefined}
+          actions={canEdit ? <CarboButton onClick={() => setCreateOpen(true)}><Plus className="h-4 w-4 mr-1" /> Novo Produto</CarboButton> : undefined}
         />
 
         {/* Tabs */}
@@ -96,7 +100,7 @@ export default function ProdutosMrp() {
                       <Package className="h-4 w-4 text-muted-foreground flex-shrink-0" />
                       <div className="min-w-0"><p className="text-sm font-medium text-foreground truncate">{p.name}</p><p className="text-xs text-muted-foreground">{p.product_code}</p></div>
                     </div>
-                    <CarboButton variant="outline" onClick={() => toast(`BOM de ${p.name} (em breve)`)} className="flex-shrink-0 gap-1.5"><ClipboardList className="h-3.5 w-3.5" /> Ver / Editar BOM</CarboButton>
+                    <CarboButton variant="outline" onClick={() => setBomProduct(p)} className="flex-shrink-0 gap-1.5"><ClipboardList className="h-3.5 w-3.5" /> Ver / Editar BOM</CarboButton>
                   </div>
                 ))}
               </div>
@@ -133,7 +137,7 @@ export default function ProdutosMrp() {
                           <CarboTableRow key={p.id}>
                             <CarboTableCell className="font-medium text-foreground">
                               {p.category === "Produto Final" ? (
-                                <button className="flex items-center gap-1.5 text-left hover:underline text-primary font-semibold" onClick={() => toast(`BOM de ${p.name} (em breve)`)}>{p.name}<ClipboardList className="h-3.5 w-3.5 shrink-0 opacity-60" /></button>
+                                <button className="flex items-center gap-1.5 text-left hover:underline text-primary font-semibold" onClick={() => setBomProduct(p)}>{p.name}<ClipboardList className="h-3.5 w-3.5 shrink-0 opacity-60" /></button>
                               ) : p.name}
                             </CarboTableCell>
                             <CarboTableCell className="font-mono text-xs text-muted-foreground">{p.product_code}</CarboTableCell>
@@ -151,7 +155,7 @@ export default function ProdutosMrp() {
                                 ))}
                               </div>
                             </CarboTableCell>
-                            {canEdit && <CarboTableCell><button onClick={() => toast("Editar produto (em breve)")} className="p-1.5 hover:bg-muted rounded-md"><Pencil className="h-3.5 w-3.5 text-muted-foreground" /></button></CarboTableCell>}
+                            {canEdit && <CarboTableCell><button onClick={() => setEditProduct(p)} className="p-1.5 hover:bg-muted rounded-md"><Pencil className="h-3.5 w-3.5 text-muted-foreground" /></button></CarboTableCell>}
                           </CarboTableRow>
                         );
                       })}
@@ -164,6 +168,29 @@ export default function ProdutosMrp() {
         )}
         <p className="text-xs text-muted-foreground text-center">Tela em port visual — dados de exemplo. Catálogo, BOM e estoque por hub entram na fase de lógica.</p>
       </div>
+
+      {/* Dialogs */}
+      <MrpProductFormDialog open={createOpen} onOpenChange={setCreateOpen} mode="create" />
+      {editProduct && (
+        <MrpProductFormDialog
+          key={editProduct.id}
+          open={!!editProduct}
+          onOpenChange={(v) => { if (!v) setEditProduct(null); }}
+          mode="edit"
+          initial={{
+            name: editProduct.name,
+            product_code: editProduct.product_code,
+            category: editProduct.category,
+            stock_unit: editProduct.stock_unit,
+            safety_stock_qty: editProduct.safety_stock_qty,
+          }}
+        />
+      )}
+      <BomDialog
+        open={!!bomProduct}
+        onOpenChange={(v) => { if (!v) setBomProduct(null); }}
+        productName={bomProduct?.name ?? ""}
+      />
     </div>
   );
 }

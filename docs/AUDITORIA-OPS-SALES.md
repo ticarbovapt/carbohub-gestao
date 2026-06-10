@@ -78,18 +78,23 @@ Todas as abas do Controle reproduzidas no Ops:
 - `transito` + `mapeamento` (SP LogHouse) — já existiam. ✅
 > Falta apenas a **lógica**: botão "Registrar Envio para CD SP" abre dialog (`CDSPRegistrarEnvio`); confirmar/estornar remessa credita/devolve `warehouse_stock`.
 
-### 2. Ordens de Produção — diálogos/forms ausentes (são "lógica", mas a base de form ajuda)
-Controle tem `CreateOPDialog`, `EditOPDialog`, `DeleteOPDialog`, `ConfirmOPDialog`, `QuickConfirmOPDialog`.
-Ops: botões existem mas chamam `toast(...)`. **Forms de criação/edição/confirmação a construir.**
+### 2. Ordens de Produção — diálogos/forms ✅ COMPLETO (visual)
+`OPFormDialog` (Nova/Editar OP), `ConfirmOPDialog`, `DeleteConfirmDialog` montados e religados.
+Botões abrem o dialog real; submit dá `toast.info("Disponível na fase de lógica")`.
 
-### 3. Financeiro — painel de detalhe da RC
-Controle tem `RCDetailsPanel` (clicar numa RC abre detalhe com itens/cotações/aprovação). Ops mostra só a lista. **Falta o detalhe da RC.**
+### 3. Financeiro — painel de detalhe da RC ✅ COMPLETO (visual)
+`RCDetailsDialog` (detalhe com itens/cotações/status) + `RCAprovarDialog`/`RCRejeitarDialog` (AlertDialog). Botão Ver/Aprovar/Rejeitar religados.
 
-### 4. Mapeamento SKU — cadastro de mapeamento explícito (kits)
-Ops mostra o auto-match e o "Como funciona". Falta o **formulário de mapeamento explícito** (SKU plataforma → produto + unidades por kit) e a lista de mapeamentos configurados — `SkuMappingConfig` do Controle.
+### 4. Mapeamento SKU — cadastro de mapeamento explícito (kits) ⏳ PENDENTE
+Ops mostra o auto-match e o "Como funciona". Falta o **formulário de mapeamento explícito** (SKU plataforma → produto + unidades por kit) e a lista de mapeamentos configurados — `SkuMappingConfig` do Controle. (Não é botão-toast existente; é feature nova.)
 
-### 5. Diálogos de cadastro/edição nas telas de Produção/Compras
-SKUs, Lotes, Produtos MRP, Fornecedores, Compras (Nova Requisição) — botões existem, **forms/dialogs a construir** (hoje toast).
+### 5. Diálogos de cadastro/edição em Produção/Compras ✅ COMPLETO (visual)
+SKUs (`SkuFormDialog`), Lotes (`LotFormDialog`), Produtos MRP (`MrpProductFormDialog` + `BomDialog`), Fornecedores (`SupplierFormDialog`), Compras (`NovaRequisicaoDialog`).
+Estoque/Suprimentos: `NovaEntradaDialog`, `AjustarEstoqueDialog`, `CDSPRegistrarEnvioDialog`, `RemessaConfirmDialog`.
+Logística: `SolicitacaoViagemDialog`, `ViagemDetailsDialog`, `FreightCalculatorDialog`, `ShipmentDetailsDialog`.
+Campo: `CreateOSDialog`, `MachineDialog`, `CreateEventDialog`, `ChecklistDialog`, `ResolveAlertDialog`.
+Financeiro: `BlingPreviewDialog`.
+> **Convenção dos botões nesta fase:** o clique abre a tela/dialog real (campos fiéis ao Controle, mock); só o Salvar/Confirmar dá `toast.info("Disponível na fase de lógica")`. Ações simples (Atualizar, Copiar, Exportar, Abrir no Bling) seguem como toast.
 
 ### 6. Telas grandes simplificadas (reproduzidas no essencial; aprofundar se quiser 100%)
 - **Logística → Frete**: calculadora + resultado + relatórios são placeholders simples (Controle: `FreightCalculator/Results/Reports`).

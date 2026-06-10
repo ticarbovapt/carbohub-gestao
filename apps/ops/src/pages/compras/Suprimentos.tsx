@@ -16,9 +16,10 @@ import {
   CheckCircle, XCircle, CheckCircle2, FileText,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { toast } from "sonner";
 import { StockView } from "@/components/estoque/StockView";
 import { HUBS } from "@/components/estoque/stockData";
+import { CDSPRegistrarEnvioDialog } from "@/components/estoque/CDSPRegistrarEnvioDialog";
+import { RemessaConfirmDialog } from "@/components/estoque/RemessaConfirmDialog";
 
 // ⚠️ PORT VISUAL FIEL ao Controle (/suprimentos → Suprimentos) — dados MOCK.
 // É a versão EDITÁVEL do estoque (gestores). A versão somente leitura vive em Estoque.
@@ -109,6 +110,8 @@ export default function Suprimentos() {
   const [planningMode, setPlanningMode] = useState(false);
   const [activeTab, setActiveTab] = useState("estoque");
   const [periodo, setPeriodo] = useState("7d");
+  const [envioOpen, setEnvioOpen] = useState(false);
+  const [remessaConfirm, setRemessaConfirm] = useState<{ action: "confirmar" | "estornar"; produto: string } | null>(null);
   const periodLabel = periodo === "7d" ? "7 dias" : periodo === "30d" ? "30 dias" : "mês";
   const isRN = hub === "rn", isSP = hub === "sp", isVendas = hub === "sp-vendas", isBling = hub === "bling";
   const stockHub = HUBS.find((h) => h.id === STOCK_HUB_ID[hub]) ?? HUBS[0];
@@ -145,7 +148,7 @@ export default function Suprimentos() {
           <Button variant={isSP ? "default" : "outline"} size="sm" className={cn("gap-2", isSP && "bg-carbo-blue hover:bg-carbo-blue/90 text-white")} onClick={() => changeHub("sp")}><MapPin className="h-4 w-4" /> CD SP LogHouse</Button>
           <Button variant={isVendas ? "default" : "outline"} size="sm" className={cn("gap-2", isVendas && "bg-carbo-blue hover:bg-carbo-blue/90 text-white")} onClick={() => changeHub("sp-vendas")}><Users className="h-4 w-4" /> CD SP Vendas</Button>
           <Button variant={isBling ? "default" : "outline"} size="sm" className={cn("gap-2", isBling && "bg-carbo-blue hover:bg-carbo-blue/90 text-white")} onClick={() => changeHub("bling")}><Cloud className="h-4 w-4" /> CD Bling</Button>
-          {isRN && <Button size="sm" variant="outline" className="gap-2 ml-auto border-blue-500/30 text-blue-400 hover:bg-blue-500/10" onClick={() => toast("Registrar envio (em breve)")}><Send className="h-4 w-4" /> Registrar Envio para CD SP</Button>}
+          {isRN && <Button size="sm" variant="outline" className="gap-2 ml-auto border-blue-500/30 text-blue-400 hover:bg-blue-500/10" onClick={() => setEnvioOpen(true)}><Send className="h-4 w-4" /> Registrar Envio para CD SP</Button>}
         </div>
 
         {/* Alerta reposição — SP */}
@@ -296,8 +299,8 @@ export default function Suprimentos() {
                         <div className="text-right shrink-0"><p className="font-bold text-xl">{r.qtd.toLocaleString("pt-BR")} <span className="text-xs font-normal text-muted-foreground">{r.unidade}</span></p><CarboBadge variant={done ? "success" : "info"}>{done ? "Entregue" : "Em trânsito"}</CarboBadge></div>
                         {!done && (
                           <div className="flex flex-col gap-1.5 shrink-0">
-                            <Button size="sm" variant="outline" className="gap-1.5 border-green-500/30 text-carbo-green hover:bg-green-500/10" onClick={() => toast("Confirmar chegada (em breve)")}><CheckCircle className="h-4 w-4" /> Confirmar chegada</Button>
-                            <Button size="sm" variant="outline" className="gap-1.5 border-destructive/40 text-destructive hover:bg-destructive/10" onClick={() => toast("Estornar envio (em breve)")}><XCircle className="h-4 w-4" /> Não chegou / Estornar</Button>
+                            <Button size="sm" variant="outline" className="gap-1.5 border-green-500/30 text-carbo-green hover:bg-green-500/10" onClick={() => setRemessaConfirm({ action: "confirmar", produto: r.produto })}><CheckCircle className="h-4 w-4" /> Confirmar chegada</Button>
+                            <Button size="sm" variant="outline" className="gap-1.5 border-destructive/40 text-destructive hover:bg-destructive/10" onClick={() => setRemessaConfirm({ action: "estornar", produto: r.produto })}><XCircle className="h-4 w-4" /> Não chegou / Estornar</Button>
                           </div>
                         )}
                       </div>
@@ -401,6 +404,14 @@ export default function Suprimentos() {
         </Tabs>
         <p className="text-xs text-muted-foreground text-center">Tela em port visual — dados de exemplo. Movimentações, transferências CD-SP e política entram na fase de lógica.</p>
       </div>
+
+      <CDSPRegistrarEnvioDialog open={envioOpen} onOpenChange={setEnvioOpen} />
+      <RemessaConfirmDialog
+        action={remessaConfirm?.action ?? null}
+        produto={remessaConfirm?.produto ?? null}
+        open={remessaConfirm !== null}
+        onOpenChange={(v) => !v && setRemessaConfirm(null)}
+      />
     </div>
   );
 }
