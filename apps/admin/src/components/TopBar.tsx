@@ -59,7 +59,19 @@ export function TopBar({ appName, onMenu }: { appName: string; onMenu?: () => vo
   const navigate = useNavigate();
   const { primary, secondary } = useRoleLabels(profile);
 
-  const avatar = (profile as { avatar_url?: string } | null)?.avatar_url
+  // Foto vem do banco (igual ao Meu Perfil) → imagem real em todos os apps,
+  // mesmo onde o AuthContext não carrega avatar_url.
+  const [photo, setPhoto] = useState<string | null>(null);
+  useEffect(() => {
+    if (!user?.id) return;
+    let active = true;
+    supabase.from("profiles").select("avatar_url").eq("id", user.id).maybeSingle()
+      .then(({ data }) => { if (active) setPhoto((data as { avatar_url?: string } | null)?.avatar_url ?? null); });
+    return () => { active = false; };
+  }, [user?.id]);
+
+  const avatar = photo
+    || (profile as { avatar_url?: string } | null)?.avatar_url
     || (user?.id ? diceBearUrl(user.id) : "");
   const name = profile?.full_name ?? profile?.username ?? "Usuário";
 
