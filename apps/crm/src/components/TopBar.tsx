@@ -12,6 +12,7 @@ import {
   DropdownMenuItem, DropdownMenuSeparator, DropdownMenuLabel,
 } from "@/components/ui/dropdown-menu";
 import { HUB_URL } from "@/lib/sso";
+import { BugButton } from "@/components/BugButton";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Barra de topo COMPARTILHADA do ecossistema (replicada em cada app: admin/sales).
@@ -92,6 +93,7 @@ export function TopBar({ appName, onMenu }: { appName: string; onMenu?: () => vo
         </div>
 
         <div className="flex items-center gap-1">
+          <BugButton />
           <Button variant="ghost" size="icon" className="h-9 w-9" onClick={toggleTheme}
             title={theme === "dark" ? "Modo claro" : "Modo escuro"}>
             {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
