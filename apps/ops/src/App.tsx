@@ -13,6 +13,10 @@ import FornecedoresMrp from "./pages/producao/FornecedoresMrp";
 import SaldosPorHub from "./pages/estoque/SaldosPorHub";
 import Compras from "./pages/compras/Compras";
 import Suprimentos from "./pages/compras/Suprimentos";
+import Financeiro from "./pages/financeiro/Financeiro";
+import Faturamento from "./pages/financeiro/Faturamento";
+import NotasFiscais from "./pages/financeiro/NotasFiscais";
+import DashboardFinanceiro from "./pages/financeiro/DashboardFinanceiro";
 import { OPS_ALL_ITEMS } from "@/lib/opsNav";
 
 // Login é ÚNICO no Hub (carbohub.com.br). O ProtectedRoute cuida do acesso.
@@ -38,6 +42,12 @@ export default function App() {
         {/* Compras & Suprimentos */}
         <Route path="/compras" element={<Compras />} />
         <Route path="/suprimentos" element={<Suprimentos />} />
+
+        {/* Financeiro */}
+        <Route path="/financeiro" element={<Financeiro />} />
+        <Route path="/financeiro/faturamento" element={<Faturamento />} />
+        <Route path="/financeiro/notas-fiscais" element={<NotasFiscais />} />
+        <Route path="/financeiro/dashboard" element={<DashboardFinanceiro />} />
 
         {/* Demais áreas: placeholder até o port (telas com ready=false) */}
         {OPS_ALL_ITEMS.filter((i) => !i.ready).map((i) => (
