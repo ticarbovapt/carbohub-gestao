@@ -20,6 +20,11 @@ import DashboardFinanceiro from "./pages/financeiro/DashboardFinanceiro";
 import Logistica from "./pages/logistica/Logistica";
 import ViagensLog from "./pages/logistica/Viagens";
 import DashboardLogistica from "./pages/logistica/DashboardLogistica";
+import OrdensServico from "./pages/campo/OrdensServico";
+import Agendamentos from "./pages/campo/Agendamentos";
+import Maquinas from "./pages/campo/Maquinas";
+import Checklists from "./pages/campo/Checklists";
+import Alertas from "./pages/campo/Alertas";
 import { OPS_ALL_ITEMS } from "@/lib/opsNav";
 
 // Login é ÚNICO no Hub (carbohub.com.br). O ProtectedRoute cuida do acesso.
@@ -56,6 +61,13 @@ export default function App() {
         <Route path="/logistica" element={<Logistica />} />
         <Route path="/logistica/viagens" element={<ViagensLog />} />
         <Route path="/logistica/dashboard" element={<DashboardLogistica />} />
+
+        {/* Operação de Campo */}
+        <Route path="/campo/os" element={<OrdensServico />} />
+        <Route path="/campo/agendamentos" element={<Agendamentos />} />
+        <Route path="/campo/maquinas" element={<Maquinas />} />
+        <Route path="/campo/checklists" element={<Checklists />} />
+        <Route path="/campo/alertas" element={<Alertas />} />
 
         {/* Demais áreas: placeholder até o port (telas com ready=false) */}
         {OPS_ALL_ITEMS.filter((i) => !i.ready).map((i) => (
