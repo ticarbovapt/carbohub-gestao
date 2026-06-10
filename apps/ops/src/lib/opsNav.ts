@@ -57,10 +57,10 @@ export const OPS_GROUPS: OpsNavGroup[] = [
   {
     label: "Financeiro",
     items: [
-      { path: "/financeiro", label: "Financeiro", icon: Wallet, from: "/financeiro" },
-      { path: "/financeiro/faturamento", label: "Fila de Faturamento", icon: Receipt, from: "/financeiro/faturamento" },
-      { path: "/financeiro/notas-fiscais", label: "Notas Fiscais", icon: FileText, from: "/integrations/bling/nfs" },
-      { path: "/financeiro/dashboard", label: "Dashboard Financeiro", icon: BarChart3, from: "/dashboards/financeiro" },
+      { path: "/financeiro", label: "Financeiro", icon: Wallet, from: "/financeiro", ready: true },
+      { path: "/financeiro/faturamento", label: "Fila de Faturamento", icon: Receipt, from: "/financeiro/faturamento", ready: true },
+      { path: "/financeiro/notas-fiscais", label: "Notas Fiscais", icon: FileText, from: "/integrations/bling/nfs", ready: true },
+      { path: "/financeiro/dashboard", label: "Dashboard Financeiro", icon: BarChart3, from: "/dashboards/financeiro", ready: true },
     ],
   },
   {
