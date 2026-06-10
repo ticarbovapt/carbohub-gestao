@@ -5,13 +5,13 @@ import logoUrl from "@/assets/logo-grupo-carbo.png";
 // Orçamento em PDF com a identidade do Grupo Carbo (logo + dados da empresa).
 // ⚠️ DADOS DA EMPRESA: confirme/ajuste em COMPANY abaixo (CNPJ, endereço, contato).
 const COMPANY = {
-  name: "Grupo Carbo",
-  cnpj: "00.000.000/0001-00",          // TODO: CNPJ real
-  endereco: "Endereço da empresa",      // TODO: logradouro, nº
-  cidade: "Cidade - UF · CEP 00000-000",// TODO
-  telefone: "(00) 00000-0000",          // TODO
-  email: "contato@carbohub.com.br",     // TODO confirmar
-  site: "carbohub.com.br",
+  name: "Carbo Soluções LTDA",
+  cnpj: "",                                 // TODO: preencher o nº do CNPJ
+  endereco: "Rua Coronel José Guimarães, 299",
+  cidade: "Lagoa Nova · Natal - RN · CEP 59054-795",
+  telefone: "(84) 3207-5055",
+  email: "administrativo@carbovapt.com.br",
+  site: "carboze.com.br",
 };
 
 interface QuoteItem {
@@ -79,7 +79,7 @@ export async function generateQuotePdf(order: QuotePdfData) {
   doc.setFont("helvetica", "normal");
   doc.setTextColor(110);
   [
-    `${COMPANY.name} · CNPJ ${COMPANY.cnpj}`,
+    COMPANY.cnpj ? `${COMPANY.name} · CNPJ ${COMPANY.cnpj}` : COMPANY.name,
     `${COMPANY.endereco} · ${COMPANY.cidade}`,
     `${COMPANY.telefone} · ${COMPANY.email} · ${COMPANY.site}`,
   ].forEach((line, i) => doc.text(line, marginX, headerY + i * 4));
