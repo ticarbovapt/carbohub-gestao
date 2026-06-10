@@ -48,7 +48,7 @@ Todos os Hubs `/estoque` · Hub Natal `/estoque/hub-natal` · CD SP LogHouse `/e
 
 ### Compras & Suprimentos
 - Compras `/compras` ✅ (7 abas iguais ao Controle).
-- Suprimentos `/suprimentos` ⚠️ (editável) — **ver gaps abaixo**.
+- Suprimentos `/suprimentos` ✅ (editável) — abas por hub completas (RN: Estoque, Movimentações, Envios para SP, Recebimento, Notas Fiscais, Política · SP LogHouse: + Em Trânsito, Mapeamento SKU · SP Vendas: + Remessas · Bling).
 
 ### Financeiro ✅
 Financeiro `/financeiro` · Fila de Faturamento `/financeiro/faturamento` · Notas Fiscais `/financeiro/notas-fiscais` · Dashboard `/financeiro/dashboard`.
@@ -69,14 +69,14 @@ Dashboard Comercial `/acompanhamento/comercial` · Metas de Vendedores `/acompan
 
 ## GAPS DE BASE A COMPLETAR (antes/junto da lógica)
 
-### 1. Suprimentos — abas por hub faltando (Controle tem 9, Ops tem 5)
-Ops tem: estoque, movimentacoes, transito (SP), mapeamento (SP), politica.
-**Faltam:**
-- `recebimento` (Hub Natal) — recebimento de insumos/NFs de entrada.
-- `notas` (Hub Natal) — notas fiscais de entrada.
-- `envios-sp` (Hub Natal) — registrar/listar envios para o CD SP (hoje só há o botão "Registrar Envio").
-- `vendas-transito` (CD SP Vendas) — vendas em trânsito do CD de vendas.
-> Componentes-fonte no Controle: `CDSPTransito`, `CDSPVendasView`, `CDSPRegistrarEnvio`, `SkuMappingConfig` (já reproduzido), `StockMovementsList`.
+### 1. Suprimentos — abas por hub ✅ COMPLETO (mock)
+Todas as abas do Controle reproduzidas no Ops:
+- `envios-sp` (Hub Natal) — lista de envios RN→CD SP (em trânsito/entregue/estornado). ✅
+- `recebimento` (Hub Natal) — conferência de OC com status e divergência. ✅
+- `notas` (Hub Natal) — notas fiscais de entrada com 3-way match (OC/Receb./Valor). ✅
+- `vendas-transito` "Remessas" (CD SP Vendas) — remessas a licenciados com botões Confirmar/Estornar (toast). ✅
+- `transito` + `mapeamento` (SP LogHouse) — já existiam. ✅
+> Falta apenas a **lógica**: botão "Registrar Envio para CD SP" abre dialog (`CDSPRegistrarEnvio`); confirmar/estornar remessa credita/devolve `warehouse_stock`.
 
 ### 2. Ordens de Produção — diálogos/forms ausentes (são "lógica", mas a base de form ajuda)
 Controle tem `CreateOPDialog`, `EditOPDialog`, `DeleteOPDialog`, `ConfirmOPDialog`, `QuickConfirmOPDialog`.
