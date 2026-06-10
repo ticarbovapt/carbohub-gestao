@@ -8,8 +8,8 @@ import Pedidos from "./pages/Pedidos";
 import DashboardComercial from "./pages/DashboardComercial";
 import Vendas from "./pages/Vendas";
 import Metas from "./pages/Metas";
+import Ecommerce from "./pages/Ecommerce";
 import Profile from "./pages/Profile";
-import EmConstrucao from "./pages/EmConstrucao";
 import { isCarbohubDomain, goToHubLogin } from "@/lib/sso";
 
 // Login é ÚNICO no Hub: /login direto em produção é redirecionado pra lá.
@@ -33,7 +33,7 @@ export default function App() {
         <Route path="/vendas" element={<Vendas />} />
         <Route path="/metas" element={<Metas />} />
         <Route path="/dashboard-comercial" element={<DashboardComercial />} />
-        <Route path="/ecommerce" element={<EmConstrucao titulo="E-commerce — Vendas online" origem="/dashboards/ecommerce/vendas-online" />} />
+        <Route path="/ecommerce" element={<Ecommerce />} />
         <Route path="/perfil" element={<Profile />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
