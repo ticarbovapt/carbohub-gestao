@@ -74,11 +74,11 @@ export const OPS_GROUPS: OpsNavGroup[] = [
   {
     label: "Operação de Campo",
     items: [
-      { path: "/campo/os", label: "OS Descarbonização", icon: ClipboardList, from: "/os" },
-      { path: "/campo/agendamentos", label: "Agendamentos", icon: Calendar, from: "/scheduling" },
-      { path: "/campo/maquinas", label: "Máquinas", icon: Cog, from: "/machines" },
-      { path: "/campo/checklists", label: "Checklists", icon: UserCheck, from: "/checklist" },
-      { path: "/campo/alertas", label: "Alertas Operacionais", icon: Bell, from: "/ops/alerts" },
+      { path: "/campo/os", label: "OS Descarbonização", icon: ClipboardList, from: "/os", ready: true },
+      { path: "/campo/agendamentos", label: "Agendamentos", icon: Calendar, from: "/scheduling", ready: true },
+      { path: "/campo/maquinas", label: "Máquinas", icon: Cog, from: "/machines", ready: true },
+      { path: "/campo/checklists", label: "Checklists", icon: UserCheck, from: "/checklist", ready: true },
+      { path: "/campo/alertas", label: "Alertas Operacionais", icon: Bell, from: "/ops/alerts", ready: true },
     ],
   },
   {
