@@ -7,14 +7,30 @@ export interface Profile extends Identity {
   id: string;
   full_name: string | null;
   username: string | null;
+  allowed_interfaces: string[] | null;
+}
+
+// Chave que o Admin concede (allowed_interfaces) para liberar o app Ops.
+// Mesmo mapeamento do Hub (carbohub-landing/src/lib/apps.ts): carbo_ops_app → Ops.
+const OPS_INTERFACE = "carbo_ops_app";
+
+/** Acesso ao Ops: liberado pelo Admin (allowed_interfaces) OU gestão/TI. */
+export function canAccessOps(p: Profile | null): boolean {
+  if (!p) return false;
+  if (seesEverything(p)) return true; // command / head / TI sempre entram
+  const ifaces = p.allowed_interfaces;
+  if (!Array.isArray(ifaces) || ifaces.length === 0) return false; // nada liberado
+  return ifaces.map((i) => i.toLowerCase()).includes(OPS_INTERFACE);
 }
 
 interface AuthContextType {
   user: User | null;
   session: Session | null;
   profile: Profile | null;
-  /** Quem "manda" (command / head / TI) opera o Admin. Sem is_admin legado. */
+  /** Quem "manda" (command / head / TI). */
   canAdmin: boolean;
+  /** Tem o Ops liberado (Admin via allowed_interfaces, ou gestão/TI). */
+  canAccessOps: boolean;
   isLoading: boolean;
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
@@ -31,7 +47,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const loadIdentity = async (userId: string) => {
     const { data: prof } = await supabase
       .from("profiles")
-      .select("id, full_name, username, department, funcao, secondary_department, secondary_funcao")
+      .select("id, full_name, username, department, funcao, secondary_department, secondary_funcao, allowed_interfaces")
       .eq("id", userId)
       .maybeSingle();
     setProfile((prof as Profile) ?? null);
@@ -73,6 +89,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     <AuthContext.Provider value={{
       user, session, profile,
       canAdmin: seesEverything(profile),
+      canAccessOps: canAccessOps(profile),
       isLoading, signIn, signOut,
     }}>
       {children}
