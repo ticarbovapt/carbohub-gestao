@@ -85,6 +85,8 @@ export const OPS_GROUPS: OpsNavGroup[] = [
     label: "E-commerce",
     items: [
       { path: "/ecommerce/vendas-online", label: "Vendas Online", icon: Globe, from: "/dashboards/ecommerce/vendas-online", ready: true },
+      { path: "/ecommerce/acompanhamento", label: "Acompanhamento de Metas", icon: Target, from: "/dashboards/metas/ecommerce", ready: true },
+      { path: "/ecommerce/metas", label: "Metas E-commerce", icon: Target, from: "/dashboards/metas/ecommerce", ready: true },
     ],
   },
   {
