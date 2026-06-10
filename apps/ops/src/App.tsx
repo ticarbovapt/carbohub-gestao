@@ -5,6 +5,11 @@ import Home from "./pages/Home";
 import Profile from "./pages/Profile";
 import EmBreve from "./pages/EmBreve";
 import OrdensProducao from "./pages/producao/OrdensProducao";
+import DashboardProducao from "./pages/producao/DashboardProducao";
+import ProdutosMrp from "./pages/producao/ProdutosMrp";
+import Skus from "./pages/producao/Skus";
+import Lotes from "./pages/producao/Lotes";
+import FornecedoresMrp from "./pages/producao/FornecedoresMrp";
 import { OPS_ALL_ITEMS } from "@/lib/opsNav";
 
 // Login é ÚNICO no Hub (carbohub.com.br). O ProtectedRoute cuida do acesso.
@@ -18,6 +23,11 @@ export default function App() {
 
         {/* Produção */}
         <Route path="/producao/ordens" element={<OrdensProducao />} />
+        <Route path="/producao/dashboard" element={<DashboardProducao />} />
+        <Route path="/producao/produtos" element={<ProdutosMrp />} />
+        <Route path="/producao/skus" element={<Skus />} />
+        <Route path="/producao/lotes" element={<Lotes />} />
+        <Route path="/producao/fornecedores" element={<FornecedoresMrp />} />
 
         {/* Demais áreas: placeholder até o port (telas com ready=false) */}
         {OPS_ALL_ITEMS.filter((i) => !i.ready).map((i) => (
