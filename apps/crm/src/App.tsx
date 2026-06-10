@@ -3,6 +3,7 @@ import { ProtectedRoute } from "./components/ProtectedRoute";
 import { SalesShell } from "./components/SalesShell";
 import Login from "./pages/Login";
 import CRM from "./pages/CRM";
+import Vender from "./pages/Vender";
 import Pedidos from "./pages/Pedidos";
 import Profile from "./pages/Profile";
 import EmConstrucao from "./pages/EmConstrucao";
@@ -24,7 +25,7 @@ export default function App() {
       <Route path="/login" element={<LoginRoute />} />
       <Route element={<ProtectedRoute><SalesShell /></ProtectedRoute>}>
         <Route path="/" element={<CRM />} />
-        <Route path="/vender" element={<EmConstrucao titulo="Vender" origem="/orders/new" />} />
+        <Route path="/vender" element={<Vender />} />
         <Route path="/pedidos" element={<Pedidos />} />
         <Route path="/vendas" element={<EmConstrucao titulo="Vendas" origem="/vendas" />} />
         <Route path="/metas" element={<EmConstrucao titulo="Metas" origem="/sales-targets · /dashboards/metas/vendedores" />} />
