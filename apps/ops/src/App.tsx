@@ -11,6 +11,8 @@ import Skus from "./pages/producao/Skus";
 import Lotes from "./pages/producao/Lotes";
 import FornecedoresMrp from "./pages/producao/FornecedoresMrp";
 import SaldosPorHub from "./pages/estoque/SaldosPorHub";
+import Compras from "./pages/compras/Compras";
+import Suprimentos from "./pages/compras/Suprimentos";
 import { OPS_ALL_ITEMS } from "@/lib/opsNav";
 
 // Login é ÚNICO no Hub (carbohub.com.br). O ProtectedRoute cuida do acesso.
@@ -32,6 +34,10 @@ export default function App() {
 
         {/* Estoque */}
         <Route path="/estoque" element={<SaldosPorHub />} />
+
+        {/* Compras & Suprimentos */}
+        <Route path="/compras" element={<Compras />} />
+        <Route path="/suprimentos" element={<Suprimentos />} />
 
         {/* Demais áreas: placeholder até o port (telas com ready=false) */}
         {OPS_ALL_ITEMS.filter((i) => !i.ready).map((i) => (

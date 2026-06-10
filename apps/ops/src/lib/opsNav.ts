@@ -50,8 +50,8 @@ export const OPS_GROUPS: OpsNavGroup[] = [
   {
     label: "Compras & Suprimentos",
     items: [
-      { path: "/compras", label: "Compras", icon: ShoppingCart, from: "/purchasing" },
-      { path: "/suprimentos", label: "Suprimentos", icon: PackagePlus, from: "/suprimentos" },
+      { path: "/compras", label: "Compras", icon: ShoppingCart, from: "/purchasing", ready: true },
+      { path: "/suprimentos", label: "Suprimentos", icon: PackagePlus, from: "/suprimentos", ready: true },
     ],
   },
   {
