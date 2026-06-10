@@ -1,0 +1,110 @@
+import { useState } from "react";
+import { CarboPageHeader } from "@/components/ui/carbo-page-header";
+import { Button } from "@/components/ui/button";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Plane, Plus, Check, X, Eye } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { toast } from "sonner";
+
+// ⚠️ PORT VISUAL FIEL ao Controle (/viagens → ViagensPage "Viagens & Prestação de Contas") — dados MOCK.
+
+type ViagemStatus = "rascunho" | "pendente_gestor" | "pendente_financeiro" | "pendente_ceo" | "aprovado" | "reprovado" | "em_andamento" | "concluido" | "cancelado";
+const STATUS_LABEL: Record<ViagemStatus, string> = {
+  rascunho: "Rascunho", pendente_gestor: "Ag. Gestor", pendente_financeiro: "Ag. Financeiro", pendente_ceo: "Ag. CEO",
+  aprovado: "Aprovado", reprovado: "Reprovado", em_andamento: "Em Andamento", concluido: "Concluído", cancelado: "Cancelado",
+};
+const STATUS_COLOR: Record<ViagemStatus, string> = {
+  rascunho: "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300",
+  pendente_gestor: "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300",
+  pendente_financeiro: "bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300",
+  pendente_ceo: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300",
+  aprovado: "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300",
+  reprovado: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300",
+  em_andamento: "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300",
+  concluido: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300",
+  cancelado: "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-400",
+};
+type PCStatus = "aberta" | "enviada" | "aprovada" | "reprovada" | "encerrada";
+const PC_STATUS_LABEL: Record<PCStatus, string> = { aberta: "Em Preenchimento", enviada: "Aguardando Aprovação", aprovada: "Aprovada", reprovada: "Reprovada", encerrada: "Encerrada" };
+const PC_STATUS_COLOR: Record<PCStatus, string> = {
+  aberta: "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300",
+  enviada: "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300",
+  aprovada: "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300",
+  reprovada: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300",
+  encerrada: "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-400",
+};
+
+const brl = (v: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
+
+interface Viagem { id: string; destino: string; objetivo: string; solicitante: string; data: string; valor: number; status: ViagemStatus; pc: PCStatus | null; }
+const VIAGENS: Viagem[] = [
+  { id: "1", destino: "São Paulo/SP", objetivo: "Visita ao CD LogHouse", solicitante: "Lucas Padilha", data: "2026-06-18", valor: 2400, status: "pendente_financeiro", pc: null },
+  { id: "2", destino: "Recife/PE", objetivo: "Prospecção licenciados", solicitante: "Marcio Vannucci", data: "2026-06-12", valor: 1800, status: "aprovado", pc: "aberta" },
+  { id: "3", destino: "Fortaleza/CE", objetivo: "Treinamento PDV", solicitante: "Marcius D'Ávila", data: "2026-06-05", valor: 1500, status: "concluido", pc: "aprovada" },
+  { id: "4", destino: "Mossoró/RN", objetivo: "Manutenção máquina", solicitante: "João Silva", data: "2026-06-20", valor: 600, status: "pendente_gestor", pc: null },
+];
+
+const dt = (s: string) => new Date(s + "T00:00:00").toLocaleDateString("pt-BR");
+
+export default function Viagens() {
+  const [tab, setTab] = useState("todas");
+  const pendentes = VIAGENS.filter((v) => v.status.startsWith("pendente"));
+  const minhas = VIAGENS.filter((v) => v.solicitante === "Lucas Padilha");
+  const rows = tab === "pendentes" ? pendentes : tab === "minhas" ? minhas : VIAGENS;
+
+  return (
+    <div className="p-4 md:p-6">
+      <div className="space-y-5 max-w-[1500px] mx-auto">
+        <CarboPageHeader
+          title="Viagens & Prestação de Contas"
+          description="Solicite, aprove e preste contas de viagens corporativas"
+          icon={Plane}
+          actions={<Button className="gap-2" onClick={() => toast("Nova Solicitação de Viagem (em breve)")}><Plus className="h-4 w-4" /> Nova Solicitação</Button>}
+        />
+
+        <Tabs value={tab} onValueChange={setTab}>
+          <TabsList>
+            <TabsTrigger value="minhas">Minhas ({minhas.length})</TabsTrigger>
+            <TabsTrigger value="pendentes">Pendentes ({pendentes.length})</TabsTrigger>
+            <TabsTrigger value="todas">Todas ({VIAGENS.length})</TabsTrigger>
+          </TabsList>
+          <TabsContent value={tab} className="mt-4">
+            <div className="rounded-lg border bg-card overflow-x-auto">
+              <Table>
+                <TableHeader><TableRow>
+                  <TableHead>Tipo / Destino</TableHead><TableHead>Solicitante</TableHead><TableHead>Data</TableHead>
+                  <TableHead className="text-right">Valor</TableHead><TableHead>Status</TableHead><TableHead>PC</TableHead><TableHead className="w-[110px]">Ações</TableHead>
+                </TableRow></TableHeader>
+                <TableBody>
+                  {rows.map((v) => (
+                    <TableRow key={v.id}>
+                      <TableCell><p className="font-medium">{v.destino}</p><p className="text-xs text-muted-foreground truncate max-w-[220px]">{v.objetivo}</p></TableCell>
+                      <TableCell className="text-sm">{v.solicitante}</TableCell>
+                      <TableCell className="text-sm text-muted-foreground">{dt(v.data)}</TableCell>
+                      <TableCell className="text-right font-semibold tabular-nums">{brl(v.valor)}</TableCell>
+                      <TableCell><span className={cn("text-xs font-semibold px-2 py-0.5 rounded-full", STATUS_COLOR[v.status])}>{STATUS_LABEL[v.status]}</span></TableCell>
+                      <TableCell>{v.pc ? <span className={cn("text-xs font-semibold px-2 py-0.5 rounded-full", PC_STATUS_COLOR[v.pc])}>{PC_STATUS_LABEL[v.pc]}</span> : <span className="text-xs text-muted-foreground">—</span>}</TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-1">
+                          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => toast("Ver viagem (em breve)")}><Eye className="h-4 w-4" /></Button>
+                          {v.status.startsWith("pendente") && (
+                            <>
+                              <Button variant="ghost" size="icon" className="h-8 w-8 text-success" onClick={() => toast("Aprovar (em breve)")}><Check className="h-4 w-4" /></Button>
+                              <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => toast("Reprovar (em breve)")}><X className="h-4 w-4" /></Button>
+                            </>
+                          )}
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          </TabsContent>
+        </Tabs>
+        <p className="text-xs text-muted-foreground text-center">Tela em port visual — dados de exemplo. Aprovações e prestação de contas entram na fase de lógica.</p>
+      </div>
+    </div>
+  );
+}
