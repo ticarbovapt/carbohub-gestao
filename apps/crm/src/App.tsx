@@ -7,6 +7,7 @@ import Vender from "./pages/Vender";
 import Pedidos from "./pages/Pedidos";
 import DashboardComercial from "./pages/DashboardComercial";
 import Vendas from "./pages/Vendas";
+import Metas from "./pages/Metas";
 import Profile from "./pages/Profile";
 import EmConstrucao from "./pages/EmConstrucao";
 import { isCarbohubDomain, goToHubLogin } from "@/lib/sso";
@@ -30,7 +31,7 @@ export default function App() {
         <Route path="/vender" element={<Vender />} />
         <Route path="/pedidos" element={<Pedidos />} />
         <Route path="/vendas" element={<Vendas />} />
-        <Route path="/metas" element={<EmConstrucao titulo="Metas" origem="/sales-targets · /dashboards/metas/vendedores" />} />
+        <Route path="/metas" element={<Metas />} />
         <Route path="/dashboard-comercial" element={<DashboardComercial />} />
         <Route path="/ecommerce" element={<EmConstrucao titulo="E-commerce — Vendas online" origem="/dashboards/ecommerce/vendas-online" />} />
         <Route path="/perfil" element={<Profile />} />
