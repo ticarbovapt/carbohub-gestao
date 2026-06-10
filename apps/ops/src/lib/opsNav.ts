@@ -33,7 +33,7 @@ export const OPS_GROUPS: OpsNavGroup[] = [
   {
     label: "Produção",
     items: [
-      { path: "/producao/ordens", label: "Ordens de Produção", icon: Factory, from: "/production-orders" },
+      { path: "/producao/ordens", label: "Ordens de Produção", icon: Factory, from: "/production-orders", ready: true },
       { path: "/producao/dashboard", label: "Dashboard de Produção", icon: BarChart3, from: "/dashboards/producao" },
       { path: "/producao/produtos", label: "Produtos (MRP)", icon: Package, from: "/mrp/products" },
       { path: "/producao/skus", label: "SKUs", icon: Boxes, from: "/skus" },

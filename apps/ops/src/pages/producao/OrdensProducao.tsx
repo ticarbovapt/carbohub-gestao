@@ -1,0 +1,244 @@
+import { useMemo, useState } from "react";
+import { CarboPageHeader } from "@/components/ui/carbo-page-header";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Factory, Plus, LayoutGrid, List, Search, TrendingUp, Target, CheckCircle, XCircle,
+  Pencil, Trash2, ClipboardCheck,
+} from "lucide-react";
+import { cn } from "@/lib/utils";
+import { toast } from "sonner";
+
+// ⚠️ PORT VISUAL FIEL ao Controle (/production-orders → ProductionOrdersOP) — dados MOCK.
+// TODO: ligar em production_orders (Supabase) na fase de lógica.
+
+type OpStatus =
+  | "rascunho" | "planejada" | "aguardando_separacao" | "separada" | "aguardando_liberacao"
+  | "liberada_producao" | "em_producao" | "aguardando_confirmacao" | "confirmada"
+  | "aguardando_qualidade" | "qualidade_aprovada" | "liberada" | "concluida" | "bloqueada" | "cancelada";
+
+const OP_STATUS_LABELS: Record<OpStatus, string> = {
+  rascunho: "Rascunho", planejada: "Planejada", aguardando_separacao: "Aguard. Separação",
+  separada: "Separada", aguardando_liberacao: "Aguard. Liberação", liberada_producao: "Liberada p/ Produção",
+  em_producao: "Em Produção", aguardando_confirmacao: "Aguard. Confirmação", confirmada: "Confirmada",
+  aguardando_qualidade: "Aguard. Qualidade", qualidade_aprovada: "QA Aprovado", liberada: "Liberada",
+  concluida: "Concluída", bloqueada: "Bloqueada", cancelada: "Cancelada",
+};
+const OP_STATUS_COLORS: Record<OpStatus, string> = {
+  rascunho: "bg-gray-500", planejada: "bg-blue-500", aguardando_separacao: "bg-amber-500",
+  separada: "bg-cyan-500", aguardando_liberacao: "bg-indigo-500", liberada_producao: "bg-teal-500",
+  em_producao: "bg-orange-500", aguardando_confirmacao: "bg-purple-500", confirmada: "bg-violet-500",
+  aguardando_qualidade: "bg-yellow-500", qualidade_aprovada: "bg-green-500", liberada: "bg-emerald-500",
+  concluida: "bg-green-600", bloqueada: "bg-red-500", cancelada: "bg-gray-400",
+};
+const PRIORITY_LABELS: Record<number, string> = { 1: "Urgente", 2: "Alta", 3: "Normal", 4: "Baixa", 5: "Planejado" };
+const PRIORITY_BADGE_COLORS: Record<number, string> = { 1: "bg-red-500", 2: "bg-orange-500", 3: "bg-blue-500", 4: "bg-gray-400", 5: "bg-gray-300" };
+const DEMAND_SOURCE_LABELS: Record<string, string> = { venda: "Venda", recorrencia: "Recorrência", safety_stock: "Safety Stock", pcp_manual: "PCP Manual" };
+
+const KANBAN_COLUMNS: { id: string; label: string; emoji: string; color: string; statuses: OpStatus[] }[] = [
+  { id: "backlog", label: "Backlog", emoji: "📋", color: "#64748b", statuses: ["rascunho"] },
+  { id: "planejada", label: "Planejada", emoji: "📅", color: "#3b82f6", statuses: ["planejada"] },
+  { id: "materiais", label: "Materiais", emoji: "🔧", color: "#f59e0b", statuses: ["aguardando_separacao", "separada"] },
+  { id: "lib_prod", label: "Lib. Produção", emoji: "✅", color: "#6366f1", statuses: ["aguardando_liberacao", "liberada_producao"] },
+  { id: "em_producao", label: "Em Produção", emoji: "⚙️", color: "#8b5cf6", statuses: ["em_producao"] },
+  { id: "qualidade", label: "Qualidade", emoji: "🔍", color: "#f97316", statuses: ["aguardando_confirmacao", "confirmada", "aguardando_qualidade", "qualidade_aprovada"] },
+  { id: "liberada", label: "Liberada", emoji: "🚀", color: "#22c55e", statuses: ["liberada"] },
+  { id: "concluida", label: "Concluída", emoji: "📦", color: "#16a34a", statuses: ["concluida"] },
+  { id: "bloqueada", label: "Bloqueada", emoji: "🚫", color: "#ef4444", statuses: ["bloqueada", "cancelada"] },
+];
+
+interface OP {
+  id: string; op_number: string; sku_code: string; sku_name: string;
+  planned_quantity: number; good_quantity: number | null; rejected_quantity: number | null;
+  priority: number; op_status: OpStatus; demand_source: string; need_date: string | null;
+}
+
+const MOCK: OP[] = [
+  { id: "1", op_number: "OP-2042", sku_code: "SKU-ZE-100", sku_name: "CarboZé 100ml", planned_quantity: 1200, good_quantity: null, rejected_quantity: null, priority: 1, op_status: "em_producao", demand_source: "venda", need_date: "2026-06-14" },
+  { id: "2", op_number: "OP-2041", sku_code: "SKU-ZE-1L", sku_name: "CarboZé 1L", planned_quantity: 600, good_quantity: null, rejected_quantity: null, priority: 2, op_status: "aguardando_separacao", demand_source: "recorrencia", need_date: "2026-06-16" },
+  { id: "3", op_number: "OP-2040", sku_code: "SKU-PRO", sku_name: "CarboPRO", planned_quantity: 300, good_quantity: 295, rejected_quantity: 5, priority: 3, op_status: "concluida", demand_source: "venda", need_date: "2026-06-09" },
+  { id: "4", op_number: "OP-2039", sku_code: "SKU-VAPT", sku_name: "CarboVapt", planned_quantity: 450, good_quantity: null, rejected_quantity: null, priority: 2, op_status: "planejada", demand_source: "safety_stock", need_date: "2026-06-20" },
+  { id: "5", op_number: "OP-2038", sku_code: "SKU-ZE-SCH", sku_name: "CarboZé Sachê", planned_quantity: 5000, good_quantity: null, rejected_quantity: null, priority: 4, op_status: "aguardando_confirmacao", demand_source: "pcp_manual", need_date: "2026-06-12" },
+  { id: "6", op_number: "OP-2037", sku_code: "SKU-ZE-100", sku_name: "CarboZé 100ml", planned_quantity: 800, good_quantity: null, rejected_quantity: null, priority: 1, op_status: "bloqueada", demand_source: "venda", need_date: "2026-06-11" },
+  { id: "7", op_number: "OP-2036", sku_code: "SKU-PRO", sku_name: "CarboPRO", planned_quantity: 200, good_quantity: 200, rejected_quantity: 0, priority: 3, op_status: "liberada", demand_source: "recorrencia", need_date: "2026-06-08" },
+  { id: "8", op_number: "OP-2035", sku_code: "SKU-ZE-1L", sku_name: "CarboZé 1L", planned_quantity: 1000, good_quantity: null, rejected_quantity: null, priority: 5, op_status: "rascunho", demand_source: "pcp_manual", need_date: null },
+];
+
+function KpiCard({ icon: Icon, label, value, sub, color }: { icon: typeof TrendingUp; label: string; value: string; sub: string; color: string }) {
+  return (
+    <div className="rounded-xl border bg-card p-4 space-y-1">
+      <div className={cn("flex items-center gap-2 text-sm", color)}>
+        <Icon className="h-4 w-4" /><span>{label}</span>
+      </div>
+      <p className={cn("text-2xl font-bold", color)}>{value}</p>
+      <p className="text-xs text-muted-foreground">{sub}</p>
+    </div>
+  );
+}
+
+const dt = (s: string | null) => (s ? new Date(s + "T00:00:00").toLocaleDateString("pt-BR") : "—");
+
+export default function OrdensProducao() {
+  const canManage = true; // mock: gestor
+  const [viewMode, setViewMode] = useState<"list" | "kanban">("list");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [priorityFilter, setPriorityFilter] = useState("all");
+
+  const filtered = useMemo(() => MOCK.filter((o) => {
+    if (statusFilter !== "all" && o.op_status !== statusFilter) return false;
+    if (priorityFilter !== "all" && String(o.priority) !== priorityFilter) return false;
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      if (!o.op_number.toLowerCase().includes(q) && !o.sku_code.toLowerCase().includes(q) && !o.sku_name.toLowerCase().includes(q)) return false;
+    }
+    return true;
+  }), [searchQuery, statusFilter, priorityFilter]);
+
+  return (
+    <div className="p-4 md:p-6">
+      <div className="space-y-6 max-w-[1500px] mx-auto">
+        {/* Header */}
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-bold flex items-center gap-3"><Factory className="h-6 w-6 text-orange-500" /> Ordens de Produção</h1>
+            <p className="text-muted-foreground mt-1">Gestão e acompanhamento de OPs</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="flex rounded-lg border overflow-hidden">
+              <button onClick={() => setViewMode("list")} className={`px-3 py-2 text-xs flex items-center gap-1.5 transition-colors ${viewMode === "list" ? "bg-primary text-primary-foreground" : "hover:bg-muted text-muted-foreground"}`}>
+                <List className="h-3.5 w-3.5" /> Lista
+              </button>
+              <button onClick={() => setViewMode("kanban")} className={`px-3 py-2 text-xs flex items-center gap-1.5 border-l transition-colors ${viewMode === "kanban" ? "bg-primary text-primary-foreground" : "hover:bg-muted text-muted-foreground"}`}>
+                <LayoutGrid className="h-3.5 w-3.5" /> Kanban
+              </button>
+            </div>
+            {canManage && <Button onClick={() => toast("Nova OP (em breve)")} className="gap-2"><Plus className="h-4 w-4" /> Nova OP</Button>}
+          </div>
+        </div>
+
+        {/* KPIs */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <KpiCard icon={TrendingUp} label="Rendimento Médio" value="94,2%" sub="Últimos 30 dias" color="text-green-500" />
+          <KpiCard icon={Target} label="Aderência BOM" value="88,5%" sub="Últimos 30 dias" color="text-yellow-500" />
+          <KpiCard icon={CheckCircle} label="OPs Confirmadas" value="37" sub="Últimos 30 dias" color="text-green-500" />
+          <KpiCard icon={XCircle} label="Perdas Totais" value="142" sub="Unidades rejeitadas" color="text-red-500" />
+        </div>
+
+        {/* Filtros */}
+        <div className="flex flex-col sm:flex-row gap-3">
+          <div className="relative flex-1 max-w-sm">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input placeholder="Buscar por OP ou SKU..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="pl-9" />
+          </div>
+          <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <SelectTrigger className="w-[220px]"><SelectValue placeholder="Todos os status" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos os status</SelectItem>
+              {Object.entries(OP_STATUS_LABELS).map(([k, l]) => <SelectItem key={k} value={k}>{l}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <Select value={priorityFilter} onValueChange={setPriorityFilter}>
+            <SelectTrigger className="w-[200px]"><SelectValue placeholder="Todas as prioridades" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todas as prioridades</SelectItem>
+              {Object.entries(PRIORITY_LABELS).map(([k, l]) => <SelectItem key={k} value={k}>{l}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+
+        {/* Kanban ou Lista */}
+        {viewMode === "kanban" ? (
+          <div className="flex gap-3 overflow-x-auto pb-3">
+            {KANBAN_COLUMNS.map((col) => {
+              const items = filtered.filter((o) => col.statuses.includes(o.op_status));
+              return (
+                <div key={col.id} className="w-64 shrink-0 rounded-2xl border border-border bg-board-surface/40 flex flex-col">
+                  <div className="rounded-t-2xl px-3 py-2.5 border-b border-border flex items-center justify-between" style={{ background: col.color + "12" }}>
+                    <span className="text-sm font-semibold flex items-center gap-1.5">{col.emoji} {col.label}</span>
+                    <span className="text-xs font-bold rounded-full px-2 py-0.5" style={{ background: col.color + "20", color: col.color }}>{items.length}</span>
+                  </div>
+                  <div className="p-2 space-y-2 min-h-[80px]">
+                    {items.map((o) => (
+                      <div key={o.id} className="rounded-xl border border-border bg-card p-3 relative overflow-hidden">
+                        <div className="absolute left-0 top-0 bottom-0 w-1" style={{ background: col.color }} />
+                        <div className="flex items-center justify-between gap-2 pl-1.5">
+                          <span className="font-mono text-xs font-medium text-blue-500">{o.op_number}</span>
+                          <Badge variant="outline" className={cn("text-white border-0 text-[10px]", PRIORITY_BADGE_COLORS[o.priority])}>{PRIORITY_LABELS[o.priority]}</Badge>
+                        </div>
+                        <p className="text-sm font-semibold mt-1 pl-1.5">{o.sku_name}</p>
+                        <p className="text-xs text-muted-foreground pl-1.5">{o.planned_quantity} un · {DEMAND_SOURCE_LABELS[o.demand_source]}</p>
+                      </div>
+                    ))}
+                    {items.length === 0 && <p className="text-[11px] text-muted-foreground/50 text-center py-4">Vazio</p>}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : filtered.length === 0 ? (
+          <div className="text-center py-16 text-muted-foreground">
+            <Factory className="h-12 w-12 mx-auto mb-4 opacity-30" />
+            <p className="text-lg font-medium">Nenhuma OP encontrada</p>
+            <p className="text-sm">Tente ajustar os filtros de busca.</p>
+          </div>
+        ) : (
+          <div className="rounded-lg border bg-card overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>OP</TableHead><TableHead>SKU</TableHead><TableHead>Qtd</TableHead>
+                  <TableHead>Prioridade</TableHead><TableHead>Status</TableHead><TableHead>Demanda</TableHead>
+                  <TableHead>Necessidade</TableHead>{canManage && <TableHead className="text-right">Ações</TableHead>}
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filtered.map((o) => (
+                  <TableRow key={o.id} className="cursor-pointer hover:bg-muted/50">
+                    <TableCell><span className="font-mono text-sm text-blue-500 font-medium">{o.op_number}</span></TableCell>
+                    <TableCell>
+                      <div className="space-y-0.5">
+                        <span className="font-mono text-sm text-green-500 font-medium">{o.sku_code}</span>
+                        <p className="text-xs text-muted-foreground">{o.sku_name}</p>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="space-y-0.5">
+                        <span className="font-bold text-sm">{o.planned_quantity}</span>
+                        {(o.good_quantity != null || o.rejected_quantity != null) && (
+                          <p className="text-xs text-muted-foreground">{o.good_quantity ?? 0} ok / {o.rejected_quantity ?? 0} rej</p>
+                        )}
+                      </div>
+                    </TableCell>
+                    <TableCell><Badge variant="outline" className={cn("text-white border-0 text-xs", PRIORITY_BADGE_COLORS[o.priority])}>{PRIORITY_LABELS[o.priority]}</Badge></TableCell>
+                    <TableCell><Badge variant="outline" className={cn("text-white border-0 text-xs", OP_STATUS_COLORS[o.op_status])}>{OP_STATUS_LABELS[o.op_status]}</Badge></TableCell>
+                    <TableCell className="text-sm text-muted-foreground">{DEMAND_SOURCE_LABELS[o.demand_source] || "—"}</TableCell>
+                    <TableCell className="text-sm text-muted-foreground">{dt(o.need_date)}</TableCell>
+                    {canManage && (
+                      <TableCell className="text-right">
+                        <div className="flex justify-end gap-1">
+                          {o.op_status === "aguardando_confirmacao" && (
+                            <Button variant="ghost" size="icon" className="h-8 w-8 text-purple-500" onClick={() => toast("Confirmar produção (em breve)")} title="Confirmar Produção"><ClipboardCheck className="h-4 w-4" /></Button>
+                          )}
+                          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => toast("Editar OP (em breve)")}><Pencil className="h-4 w-4" /></Button>
+                          <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => toast("Excluir OP (em breve)")}><Trash2 className="h-4 w-4" /></Button>
+                        </div>
+                      </TableCell>
+                    )}
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        )}
+
+        <p className="text-xs text-muted-foreground text-center">
+          Tela em port visual — dados de exemplo. OPs reais, criação/edição e confirmação entram na fase de lógica.
+        </p>
+      </div>
+    </div>
+  );
+}

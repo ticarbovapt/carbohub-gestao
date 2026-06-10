@@ -4,6 +4,7 @@ import { Layout } from "./components/Layout";
 import Home from "./pages/Home";
 import Profile from "./pages/Profile";
 import EmBreve from "./pages/EmBreve";
+import OrdensProducao from "./pages/producao/OrdensProducao";
 import { OPS_ALL_ITEMS } from "@/lib/opsNav";
 
 // Login é ÚNICO no Hub (carbohub.com.br). O ProtectedRoute cuida do acesso.
@@ -14,6 +15,11 @@ export default function App() {
       <Route element={<ProtectedRoute><Layout /></ProtectedRoute>}>
         <Route path="/" element={<Home />} />
         <Route path="/perfil" element={<Profile />} />
+
+        {/* Produção */}
+        <Route path="/producao/ordens" element={<OrdensProducao />} />
+
+        {/* Demais áreas: placeholder até o port (telas com ready=false) */}
         {OPS_ALL_ITEMS.filter((i) => !i.ready).map((i) => (
           <Route
             key={i.path}
