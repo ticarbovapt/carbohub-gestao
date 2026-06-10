@@ -66,6 +66,7 @@ export interface FunnelConfig {
   description: string;
   icon: string;
   color: string;
+  cycleLabel: string;
   stages: StageConfig[];
 }
 
@@ -112,14 +113,14 @@ const STAGES_PDV: StageConfig[] = [
 ];
 
 export const FUNNEL_CONFIG: Record<FunnelType, FunnelConfig> = {
-  f1: { id: "f1", name: "B2C CarboZé / CarboPRO",          shortName: "B2C",           description: "Consumidor final",          icon: "🛒", color: "#3BC770", stages: STAGES_COMMERCIAL },
-  f2: { id: "f2", name: "Licenciados CarboVapt",            shortName: "Licenciados",   description: "Licenciamento",             icon: "🏢", color: "#8B5CF6", stages: STAGES_LICENSEE  },
-  f3: { id: "f3", name: "Frotistas Diretos",                shortName: "Frotistas",     description: "Clientes com frota",        icon: "🚛", color: "#F59E0B", stages: STAGES_COMMERCIAL },
-  f4: { id: "f4", name: "PDVs CarboZé",                     shortName: "PDVs CarboZé",  description: "Revendas e postos",         icon: "🏪", color: "#3B82F6", stages: STAGES_PDV       },
-  f5: { id: "f5", name: "PDVs CarboPRO",                    shortName: "PDVs CarboPRO", description: "PDVs premium",              icon: "⭐", color: "#06B6D4", stages: STAGES_PDV       },
-  f6: { id: "f6", name: "Frotistas via Licenciado",         shortName: "Frotistas Lic.",description: "Frotistas de licenciados",  icon: "🔗", color: "#F97316", stages: STAGES_COMMERCIAL },
-  f7: { id: "f7", name: "Empresas com Motores",             shortName: "Motores",       description: "Geradores, compressores",   icon: "⚙️", color: "#EF4444", stages: STAGES_ENTERPRISE },
-  f8: { id: "f8", name: "Empresas c/ Estoque Combustível",  shortName: "Estoque Comb.", description: "Alto valor + recorrência",  icon: "⛽", color: "#10B981", stages: STAGES_ENTERPRISE },
+  f1: { id: "f1", name: "B2C CarboZé / CarboPRO",          shortName: "B2C",           description: "Consumidor final",          icon: "🛒", color: "#3BC770", cycleLabel: "1-7 dias",   stages: STAGES_COMMERCIAL },
+  f2: { id: "f2", name: "Licenciados CarboVapt",            shortName: "Licenciados",   description: "Licenciamento",             icon: "🏢", color: "#8B5CF6", cycleLabel: "15-60 dias", stages: STAGES_LICENSEE  },
+  f3: { id: "f3", name: "Frotistas Diretos",                shortName: "Frotistas",     description: "Clientes com frota",        icon: "🚛", color: "#F59E0B", cycleLabel: "7-30 dias",  stages: STAGES_COMMERCIAL },
+  f4: { id: "f4", name: "PDVs CarboZé",                     shortName: "PDVs CarboZé",  description: "Revendas e postos",         icon: "🏪", color: "#3B82F6", cycleLabel: "7-21 dias",  stages: STAGES_PDV       },
+  f5: { id: "f5", name: "PDVs CarboPRO",                    shortName: "PDVs CarboPRO", description: "PDVs premium",              icon: "⭐", color: "#06B6D4", cycleLabel: "14-30 dias", stages: STAGES_PDV       },
+  f6: { id: "f6", name: "Frotistas via Licenciado",         shortName: "Frotistas Lic.",description: "Frotistas de licenciados",  icon: "🔗", color: "#F97316", cycleLabel: "15-45 dias", stages: STAGES_COMMERCIAL },
+  f7: { id: "f7", name: "Empresas com Motores",             shortName: "Motores",       description: "Geradores, compressores",   icon: "⚙️", color: "#EF4444", cycleLabel: "30-90 dias", stages: STAGES_ENTERPRISE },
+  f8: { id: "f8", name: "Empresas c/ Estoque Combustível",  shortName: "Estoque Comb.", description: "Alto valor + recorrência",  icon: "⛽", color: "#10B981", cycleLabel: "30-90 dias", stages: STAGES_ENTERPRISE },
 };
 
 export const LOSS_REASONS = [
