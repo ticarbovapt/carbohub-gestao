@@ -1,10 +1,9 @@
 import { useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import {
-  ShoppingCart, Plus, Trash2, Building2, User, MapPin, Repeat, Package, FileText,
+  ShoppingCart, Plus, Trash2, Building2, MapPin, Package, Gift, FileText, Search, Target,
 } from "lucide-react";
-import { generateQuotePdf } from "@/lib/quotePdf";
-import { CarboPageHeader } from "@/components/ui/carbo-page-header";
 import { CarboCard, CarboCardContent } from "@/components/ui/carbo-card";
 import { CarboButton } from "@/components/ui/carbo-button";
 import { Input } from "@/components/ui/input";
@@ -13,9 +12,11 @@ import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useAuth } from "@/contexts/AuthContext";
+import { generateQuotePdf } from "@/lib/quotePdf";
 
-// ⚠️ PORT VISUAL — sem lógica real (CNPJ lookup, mapa, SKUs, submit no banco).
-// TODO: ligar useCreateOrder/useSkus/geocode na fase de lógica.
+// ⚠️ PORT VISUAL — sem lógica real (CNPJ lookup, mapa, SKUs, gravação). TODO na fase de lógica.
+// O VENDEDOR é o usuário logado (não há dropdown de vendedor).
 
 const PRODUTOS = [
   { id: "p1", name: "CarboZé 100ml", price: 28.0 },
@@ -24,76 +25,83 @@ const PRODUTOS = [
   { id: "p4", name: "CarboPRO", price: 320.0 },
   { id: "p5", name: "CarboVapt", price: 150.0 },
 ];
-const OPERADORES = ["Lucas Padilha", "Marcio Vannucci", "Marcius D'Ávila"];
-const TIPOS_PEDIDO = ["Venda", "Bonificação", "Amostra", "Troca"];
+const TIPOS_PONTO = ["Posto", "Oficina", "Frota", "PDV", "Licenciado"];
+const CLASSIFICACOES = ["Estratégico", "Potencial", "Regular"];
 const UFS = ["SP", "RJ", "MG", "RN", "BA", "PR", "RS", "SC"];
 
 const brl = (n: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(n);
 
-interface CartItem { id: string; productId: string; name: string; price: number; qty: number; }
-
-const inputCls = ""; // usa o Input do kit
+interface ItemRow {
+  id: string; productId: string; qty: number; unitPrice: number; hasBonus: boolean; bonusQty: number;
+}
+const emptyRow = (): ItemRow => ({ id: crypto.randomUUID(), productId: "", qty: 1, unitPrice: 0, hasBonus: false, bonusQty: 0 });
 
 export default function Vender() {
+  const navigate = useNavigate();
+  const { profile } = useAuth();
+  const vendedor = profile?.full_name ?? profile?.username ?? "";
+
   const [mode, setMode] = useState<"venda" | "promo">("venda");
   const [doc, setDoc] = useState("");
   const [customerName, setCustomerName] = useState("");
-  const [operador, setOperador] = useState("");
-  const [notes, setNotes] = useState("");
+  const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
   const [isLicenciado, setIsLicenciado] = useState(false);
-  const [items, setItems] = useState<CartItem[]>([]);
-  const [pickProduct, setPickProduct] = useState("");
-  const [pickQty, setPickQty] = useState(1);
-  const [recorrente, setRecorrente] = useState(false);
+  const [rows, setRows] = useState<ItemRow[]>([emptyRow()]);
+  const [obsPublica, setObsPublica] = useState("");
   const [generating, setGenerating] = useState(false);
 
-  const total = useMemo(() => items.reduce((s, i) => s + i.price * i.qty, 0), [items]);
+  const subtotal = useMemo(
+    () => rows.reduce((s, r) => s + r.qty * r.unitPrice, 0),
+    [rows],
+  );
 
-  function addItem() {
-    const p = PRODUTOS.find((x) => x.id === pickProduct);
-    if (!p || pickQty < 1) return;
-    setItems((prev) => [...prev, { id: crypto.randomUUID(), productId: p.id, name: p.name, price: p.price, qty: pickQty }]);
-    setPickProduct(""); setPickQty(1);
+  function updateRow(id: string, patch: Partial<ItemRow>) {
+    setRows((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch } : r)));
   }
-  function removeItem(id: string) {
-    setItems((prev) => prev.filter((i) => i.id !== id));
+  function onProduct(id: string, productId: string) {
+    const p = PRODUTOS.find((x) => x.id === productId);
+    updateRow(id, { productId, unitPrice: p ? p.price : 0 });
   }
 
-  function handleSubmit() {
-    toast.success("Pedido criado! (demonstração — lógica real entra na próxima fase)");
-  }
+  const validItems = () =>
+    rows.filter((r) => r.productId && r.qty > 0).map((r) => ({
+      name: PRODUTOS.find((p) => p.id === r.productId)?.name ?? "Produto",
+      quantity: r.qty,
+      unit_price: r.unitPrice,
+      bonus_quantity: r.hasBonus ? r.bonusQty : 0,
+    }));
 
   async function handleQuote() {
-    if (items.length === 0) return;
+    const items = validItems();
+    if (items.length === 0) { toast.error("Adicione ao menos um item."); return; }
     setGenerating(true);
     try {
       await generateQuotePdf({
         customer_name: customerName || "Cliente",
         cnpj: doc || undefined,
-        vendedor_name: operador || undefined,
-        items: items.map((i) => ({ name: i.name, quantity: i.qty, unit_price: i.price })),
-        total,
-        notes: notes || undefined,
-        created_at: new Date().toISOString(),
-        validityDays: 7,
+        vendedor_name: vendedor || undefined,
+        items, total: subtotal, notes: obsPublica || undefined,
+        created_at: new Date().toISOString(), validityDays: 7,
       });
       toast.success("Orçamento gerado!");
     } catch (e) {
       toast.error("Erro ao gerar orçamento: " + (e instanceof Error ? e.message : "tente de novo"));
-    } finally {
-      setGenerating(false);
-    }
+    } finally { setGenerating(false); }
+  }
+
+  function handleSell() {
+    if (validItems().length === 0) { toast.error("Adicione ao menos um item."); return; }
+    toast.success("Venda gerada! (demonstração — gravação real entra na próxima fase)");
   }
 
   return (
-    <div className="p-4 md:p-6 max-w-3xl mx-auto w-full space-y-5 pb-24">
-      <CarboPageHeader title="Nova venda" description="Monte o pedido e finalize a venda" icon={ShoppingCart} />
-
+    <div className="p-4 md:p-6 max-w-4xl mx-auto w-full space-y-5 pb-24">
       {/* Tipo de Operação */}
       <CarboCard>
         <CarboCardContent className="p-4 space-y-3">
-          <h3 className="font-semibold flex items-center gap-2"><Package className="h-4 w-4 text-primary" /> Tipo de Operação</h3>
-          <div className="grid grid-cols-2 gap-2">
+          <h3 className="font-semibold flex items-center gap-2"><Package className="h-4 w-4 text-carbo-green" /> Tipo de Operação</h3>
+          <div className="grid grid-cols-2 gap-2 max-w-md">
             {([["venda", "Venda"], ["promo", "Ação Promocional"]] as const).map(([v, label]) => (
               <button key={v} onClick={() => setMode(v)}
                 className={`rounded-xl border p-3 text-sm font-medium transition-all ${
@@ -105,107 +113,141 @@ export default function Vender() {
         </CarboCardContent>
       </CarboCard>
 
-      {/* Cliente */}
+      {/* Busca por CNPJ ou CPF */}
       <CarboCard>
         <CarboCardContent className="p-4 space-y-3">
-          <h3 className="font-semibold flex items-center gap-2"><Building2 className="h-4 w-4 text-primary" /> Cliente</h3>
-          <div className="space-y-1.5">
-            <Label>CNPJ / CPF</Label>
-            <div className="flex gap-2">
-              <Input value={doc} onChange={(e) => setDoc(e.target.value)} placeholder="00.000.000/0000-00" />
-              <Button variant="outline" type="button" onClick={() => toast.info("Busca de CNPJ entra na fase de lógica.")}>Buscar</Button>
-            </div>
+          <h3 className="font-semibold flex items-center gap-2"><Search className="h-4 w-4 text-carbo-green" /> Busca por CNPJ ou CPF</h3>
+          <p className="text-xs text-muted-foreground">
+            CNPJ busca os dados automaticamente. CPF (pessoa física) é validado e segue com preenchimento manual.
+          </p>
+          <div className="flex flex-col sm:flex-row gap-2">
+            <Input value={doc} onChange={(e) => setDoc(e.target.value)} placeholder="CNPJ ou CPF" />
+            <CarboButton type="button" onClick={() => toast.info("Busca de CNPJ entra na fase de lógica.")}>
+              <Search className="h-4 w-4 mr-1" /> Buscar dados
+            </CarboButton>
           </div>
-          <div className="grid md:grid-cols-2 gap-3">
-            <div className="space-y-1.5 md:col-span-2">
-              <Label>Nome / Razão Social *</Label>
-              <Input value={customerName} onChange={(e) => setCustomerName(e.target.value)} placeholder="Cliente" />
-            </div>
-            <div className="space-y-1.5">
-              <Label>E-mail</Label>
-              <Input type="email" placeholder="cliente@email.com" />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Telefone</Label>
-              <Input placeholder="(00) 00000-0000" />
-            </div>
-          </div>
-          <label className="flex items-center gap-2 pt-1">
-            <Switch checked={isLicenciado} onCheckedChange={setIsLicenciado} />
-            <span className="text-sm">É licenciado?</span>
-          </label>
         </CarboCardContent>
       </CarboCard>
 
-      {/* Operador */}
+      {/* Informações do Cliente */}
       <CarboCard>
         <CarboCardContent className="p-4 space-y-3">
-          <h3 className="font-semibold flex items-center gap-2"><User className="h-4 w-4 text-primary" /> Operador responsável</h3>
-          <Select value={operador} onValueChange={setOperador}>
-            <SelectTrigger><SelectValue placeholder="Selecione o operador" /></SelectTrigger>
-            <SelectContent>
-              {OPERADORES.map((o) => <SelectItem key={o} value={o}>{o}</SelectItem>)}
-            </SelectContent>
-          </Select>
+          <h3 className="font-semibold flex items-center gap-2"><Building2 className="h-4 w-4 text-carbo-green" /> Informações do Cliente</h3>
+          <div className="grid md:grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label>Nome / Razão Social *</Label>
+              <Input value={customerName} onChange={(e) => setCustomerName(e.target.value)} placeholder="Nome do cliente" />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Email</Label>
+              <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="email@exemplo.com" />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Telefone</Label>
+              <Input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="(00) 00000-0000" />
+            </div>
+            <div className="flex items-start justify-between gap-3 rounded-xl border p-3">
+              <div>
+                <p className="text-sm font-medium">É Licenciado?</p>
+                <p className="text-xs text-muted-foreground">Marque se o cliente é um licenciado Carbo</p>
+              </div>
+              <Switch checked={isLicenciado} onCheckedChange={setIsLicenciado} />
+            </div>
+          </div>
         </CarboCardContent>
       </CarboCard>
 
       {/* Itens do Pedido */}
       <CarboCard>
-        <CarboCardContent className="p-4 space-y-3">
-          <h3 className="font-semibold flex items-center gap-2"><ShoppingCart className="h-4 w-4 text-primary" /> Itens do pedido</h3>
-
-          <div className="flex flex-col sm:flex-row gap-2">
-            <div className="flex-1">
-              <Select value={pickProduct} onValueChange={setPickProduct}>
-                <SelectTrigger><SelectValue placeholder="Escolha um produto" /></SelectTrigger>
-                <SelectContent>
-                  {PRODUTOS.map((p) => <SelectItem key={p.id} value={p.id}>{p.name} — {brl(p.price)}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-            <Input type="number" min={1} value={pickQty} onChange={(e) => setPickQty(Number(e.target.value))} className="sm:w-24" />
-            <CarboButton type="button" onClick={addItem} disabled={!pickProduct}>
-              <Plus className="h-4 w-4 mr-1" /> Adicionar
-            </CarboButton>
+        <CarboCardContent className="p-4 space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="font-semibold flex items-center gap-2"><ShoppingCart className="h-4 w-4 text-carbo-green" /> Itens do Pedido</h3>
+            <Button variant="outline" size="sm" onClick={() => setRows((p) => [...p, emptyRow()])}>
+              <Plus className="h-4 w-4 mr-1" /> Adicionar Item
+            </Button>
           </div>
 
-          {items.length === 0 ? (
-            <p className="text-sm text-muted-foreground text-center py-6 border rounded-xl border-dashed">
-              Nenhum item adicionado.
-            </p>
-          ) : (
-            <div className="border rounded-xl divide-y">
-              {items.map((i) => (
-                <div key={i.id} className="flex items-center justify-between gap-3 px-3 py-2.5">
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium truncate">{i.name}</p>
-                    <p className="text-xs text-muted-foreground">{i.qty} × {brl(i.price)}</p>
+          {rows.map((r) => {
+            const lineTotal = r.qty * r.unitPrice;
+            return (
+              <div key={r.id} className="rounded-xl border p-3 space-y-3">
+                <div className="grid grid-cols-1 sm:grid-cols-[1fr_90px_120px_auto] gap-3 items-end">
+                  <div className="space-y-1.5">
+                    <Label>Produto</Label>
+                    <Select value={r.productId} onValueChange={(v) => onProduct(r.id, v)}>
+                      <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
+                      <SelectContent>
+                        {PRODUTOS.map((p) => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
                   </div>
-                  <div className="flex items-center gap-3">
-                    <span className="text-sm font-semibold">{brl(i.price * i.qty)}</span>
-                    <button onClick={() => removeItem(i.id)} className="p-1.5 rounded hover:bg-destructive/10 text-destructive">
-                      <Trash2 className="h-4 w-4" />
-                    </button>
+                  <div className="space-y-1.5">
+                    <Label>Quantidade</Label>
+                    <Input type="number" min={1} value={r.qty} onChange={(e) => updateRow(r.id, { qty: Number(e.target.value) })} />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Preço Unit. (R$)</Label>
+                    <Input type="number" min={0} step="0.01" value={r.unitPrice} onChange={(e) => updateRow(r.id, { unitPrice: Number(e.target.value) })} placeholder="0,00" />
+                  </div>
+                  <div className="flex items-center justify-between sm:justify-end gap-3 sm:pb-2">
+                    <div className="text-right">
+                      <p className="text-xs text-muted-foreground">Total</p>
+                      <p className="font-semibold">{brl(lineTotal)}</p>
+                    </div>
+                    {rows.length > 1 && (
+                      <button onClick={() => setRows((p) => p.filter((x) => x.id !== r.id))}
+                        className="p-1.5 rounded hover:bg-destructive/10 text-destructive"><Trash2 className="h-4 w-4" /></button>
+                    )}
                   </div>
                 </div>
-              ))}
+
+                <div className="flex flex-wrap items-center gap-3">
+                  <label className="flex items-center gap-2">
+                    <Switch checked={r.hasBonus} onCheckedChange={(v) => updateRow(r.id, { hasBonus: v })} />
+                    <span className="text-sm flex items-center gap-1"><Gift className="h-3.5 w-3.5 text-carbo-green" /> Tem bonificação</span>
+                  </label>
+                  {r.hasBonus && (
+                    <div className="flex items-center gap-2">
+                      <Label className="text-xs">Qtd bonificada</Label>
+                      <Input type="number" min={0} value={r.bonusQty} onChange={(e) => updateRow(r.id, { bonusQty: Number(e.target.value) })} className="w-24" />
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+
+          <div className="flex justify-end border-t pt-3">
+            <div className="text-right">
+              <p className="text-xs text-muted-foreground">Subtotal</p>
+              <p className="text-lg font-bold">{brl(subtotal)}</p>
             </div>
-          )}
+          </div>
         </CarboCardContent>
       </CarboCard>
 
       {/* Endereço de Entrega */}
       <CarboCard>
         <CarboCardContent className="p-4 space-y-3">
-          <h3 className="font-semibold flex items-center gap-2"><MapPin className="h-4 w-4 text-primary" /> Endereço de entrega</h3>
+          <div className="flex items-center justify-between">
+            <h3 className="font-semibold flex items-center gap-2"><MapPin className="h-4 w-4 text-carbo-green" /> Endereço de Entrega</h3>
+            <Button variant="outline" size="sm" onClick={() => toast.info("Mapa entra na fase de lógica.")}>
+              <MapPin className="h-4 w-4 mr-1" /> Localizar no mapa
+            </Button>
+          </div>
           <div className="grid md:grid-cols-3 gap-3">
-            <div className="space-y-1.5 md:col-span-2"><Label>Logradouro</Label><Input placeholder="Rua / Av." /></div>
-            <div className="space-y-1.5"><Label>Número</Label><Input placeholder="123" /></div>
-            <div className="space-y-1.5"><Label>Bairro</Label><Input /></div>
-            <div className="space-y-1.5"><Label>Cidade</Label><Input /></div>
+            <div className="space-y-1.5 md:col-span-2"><Label>Logradouro</Label><Input placeholder="Rua, Avenida, etc." /></div>
             <div className="space-y-1.5">
-              <Label>UF</Label>
+              <Label>Número</Label>
+              <div className="flex gap-2">
+                <Input placeholder="Nº" />
+                <Button variant="outline" type="button" className="shrink-0">S/N</Button>
+              </div>
+            </div>
+            <div className="space-y-1.5"><Label>Bairro</Label><Input placeholder="Bairro" /></div>
+            <div className="space-y-1.5"><Label>Cidade</Label><Input placeholder="Cidade" /></div>
+            <div className="space-y-1.5">
+              <Label>Estado</Label>
               <Select>
                 <SelectTrigger><SelectValue placeholder="UF" /></SelectTrigger>
                 <SelectContent>{UFS.map((u) => <SelectItem key={u} value={u}>{u}</SelectItem>)}</SelectContent>
@@ -213,55 +255,84 @@ export default function Vender() {
             </div>
             <div className="space-y-1.5"><Label>CEP</Label><Input placeholder="00000-000" /></div>
           </div>
+          <div className="rounded-xl border border-dashed flex flex-col items-center justify-center gap-2 py-10 text-center text-muted-foreground">
+            <MapPin className="h-6 w-6" />
+            <p className="text-sm px-6">Preencha o endereço e clique em <b>Localizar no mapa</b> para visualizar e ajustar o ponto de entrega.</p>
+          </div>
         </CarboCardContent>
       </CarboCard>
 
-      {/* Tipo e Recorrência */}
+      {/* Dados Estratégicos */}
       <CarboCard>
         <CarboCardContent className="p-4 space-y-3">
-          <h3 className="font-semibold flex items-center gap-2"><Repeat className="h-4 w-4 text-primary" /> Tipo e recorrência</h3>
-          <div className="space-y-1.5">
-            <Label>Tipo do pedido</Label>
-            <Select>
-              <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
-              <SelectContent>{TIPOS_PEDIDO.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
-            </Select>
-          </div>
-          <label className="flex items-center gap-2">
-            <Switch checked={recorrente} onCheckedChange={setRecorrente} />
-            <span className="text-sm">Pedido recorrente</span>
-          </label>
-          {recorrente && (
-            <div className="grid md:grid-cols-2 gap-3">
-              <div className="space-y-1.5"><Label>Intervalo (dias)</Label><Input type="number" placeholder="30" /></div>
-              <div className="space-y-1.5"><Label>Próxima entrega</Label><Input type="date" /></div>
+          <h3 className="font-semibold flex items-center gap-2"><Target className="h-4 w-4 text-carbo-green" /> Dados Estratégicos</h3>
+          <div className="grid md:grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label>Tipo de Ponto</Label>
+              <Select>
+                <SelectTrigger><SelectValue placeholder="Selecione o tipo" /></SelectTrigger>
+                <SelectContent>{TIPOS_PONTO.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
+              </Select>
             </div>
-          )}
+            <div className="space-y-1.5">
+              <Label>Classificação Interna</Label>
+              <Select>
+                <SelectTrigger><SelectValue placeholder="Classificar como" /></SelectTrigger>
+                <SelectContent>{CLASSIFICACOES.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
+              </Select>
+            </div>
+          </div>
           <div className="space-y-1.5">
-            <Label>Observações</Label>
-            <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Observações do pedido" />
+            <Label>Volume Médio Mensal (veículos)</Label>
+            <Input type="number" placeholder="Ex: 500" />
+          </div>
+          <div className="grid md:grid-cols-2 gap-3">
+            <label className="flex items-center justify-between gap-3 rounded-xl border p-3">
+              <span className="text-sm font-medium">Atua com Diesel?</span>
+              <Switch />
+            </label>
+            <label className="flex items-center justify-between gap-3 rounded-xl border p-3">
+              <span className="text-sm font-medium">Atua com Frotas?</span>
+              <Switch />
+            </label>
           </div>
         </CarboCardContent>
       </CarboCard>
 
-      {/* Resumo / total + ação */}
-      <div className="sticky bottom-0 bg-background/95 backdrop-blur border-t -mx-4 md:-mx-6 px-4 md:px-6 py-3 flex items-center justify-between gap-4">
+      {/* Observações */}
+      <CarboCard>
+        <CarboCardContent className="p-4 space-y-3">
+          <h3 className="font-semibold">Observações</h3>
+          <div className="space-y-1.5">
+            <Label>Observações Públicas</Label>
+            <Textarea value={obsPublica} onChange={(e) => setObsPublica(e.target.value)} placeholder="Visíveis para o cliente" />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Notas Internas</Label>
+            <Textarea placeholder="Visíveis apenas internamente" />
+          </div>
+        </CarboCardContent>
+      </CarboCard>
+
+      {/* Rodapé: total + ações */}
+      <div className="sticky bottom-0 bg-background/95 backdrop-blur border-t -mx-4 md:-mx-6 px-4 md:px-6 py-3 flex items-center justify-between gap-3 flex-wrap">
         <div>
           <p className="text-xs text-muted-foreground">Total</p>
-          <p className="text-xl font-bold">{brl(total)}</p>
+          <p className="text-xl font-bold">{brl(subtotal)}</p>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" onClick={handleQuote} disabled={items.length === 0 || generating}>
-            <FileText className="h-4 w-4 mr-1" /> {generating ? "Gerando..." : "Gerar orçamento"}
+          <Button variant="ghost" onClick={() => navigate("/pedidos")}>Cancelar</Button>
+          <Button variant="outline" onClick={handleQuote} disabled={generating}>
+            <FileText className="h-4 w-4 mr-1" /> {generating ? "Gerando..." : "Gerar Orçamento"}
           </Button>
-          <CarboButton onClick={handleSubmit} disabled={items.length === 0} className="min-w-[150px]">
-            <ShoppingCart className="h-4 w-4 mr-1" /> Criar pedido
+          <CarboButton onClick={handleSell} className="min-w-[150px]">
+            <ShoppingCart className="h-4 w-4 mr-1" /> Gerar Venda
           </CarboButton>
         </div>
       </div>
 
       <p className="text-xs text-muted-foreground text-center">
-        Tela em port visual — dados de exemplo. Busca de CNPJ, produtos do estoque e gravação real entram na próxima fase.
+        Vendedor: <b>{vendedor || "—"}</b> (usuário logado) · Tela em port visual — CNPJ, mapa, produtos do estoque e gravação real entram na próxima fase.
       </p>
     </div>
   );
