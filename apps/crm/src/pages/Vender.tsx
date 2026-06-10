@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import {
-  ShoppingCart, Plus, Trash2, Building2, MapPin, Package, Gift, FileText, Search, Target,
+  ShoppingCart, Plus, Trash2, Building2, MapPin, Package, Gift, FileText, Search, Target, ChevronDown,
 } from "lucide-react";
 import { CarboCard, CarboCardContent } from "@/components/ui/carbo-card";
 import { CarboButton } from "@/components/ui/carbo-button";
@@ -36,6 +36,26 @@ interface ItemRow {
 }
 const emptyRow = (): ItemRow => ({ id: crypto.randomUUID(), productId: "", qty: 1, unitPrice: 0, hasBonus: false, bonusQty: 0 });
 
+// Cabeçalho clicável de seção opcional (recolhível).
+function CollapsibleCard({
+  title, icon: Icon, open, onToggle, children,
+}: { title: string; icon: React.ElementType; open: boolean; onToggle: () => void; children: React.ReactNode }) {
+  return (
+    <CarboCard>
+      <CarboCardContent className="p-4">
+        <button onClick={onToggle} className="w-full flex items-center justify-between">
+          <h3 className="font-semibold flex items-center gap-2">
+            <Icon className="h-4 w-4 text-carbo-green" /> {title}
+            <span className="text-xs text-muted-foreground font-normal">(opcional)</span>
+          </h3>
+          <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${open ? "rotate-180" : ""}`} />
+        </button>
+        {open && <div className="mt-4 space-y-3">{children}</div>}
+      </CarboCardContent>
+    </CarboCard>
+  );
+}
+
 export default function Vender() {
   const navigate = useNavigate();
   const { profile } = useAuth();
@@ -49,12 +69,11 @@ export default function Vender() {
   const [isLicenciado, setIsLicenciado] = useState(false);
   const [rows, setRows] = useState<ItemRow[]>([emptyRow()]);
   const [obsPublica, setObsPublica] = useState("");
+  const [showEstrategicos, setShowEstrategicos] = useState(false);
+  const [showObs, setShowObs] = useState(false);
   const [generating, setGenerating] = useState(false);
 
-  const subtotal = useMemo(
-    () => rows.reduce((s, r) => s + r.qty * r.unitPrice, 0),
-    [rows],
-  );
+  const subtotal = useMemo(() => rows.reduce((s, r) => s + r.qty * r.unitPrice, 0), [rows]);
 
   function updateRow(id: string, patch: Partial<ItemRow>) {
     setRows((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch } : r)));
@@ -63,13 +82,10 @@ export default function Vender() {
     const p = PRODUTOS.find((x) => x.id === productId);
     updateRow(id, { productId, unitPrice: p ? p.price : 0 });
   }
-
   const validItems = () =>
     rows.filter((r) => r.productId && r.qty > 0).map((r) => ({
       name: PRODUTOS.find((p) => p.id === r.productId)?.name ?? "Produto",
-      quantity: r.qty,
-      unit_price: r.unitPrice,
-      bonus_quantity: r.hasBonus ? r.bonusQty : 0,
+      quantity: r.qty, unit_price: r.unitPrice, bonus_quantity: r.hasBonus ? r.bonusQty : 0,
     }));
 
   async function handleQuote() {
@@ -78,18 +94,15 @@ export default function Vender() {
     setGenerating(true);
     try {
       await generateQuotePdf({
-        customer_name: customerName || "Cliente",
-        cnpj: doc || undefined,
-        vendedor_name: vendedor || undefined,
-        items, total: subtotal, notes: obsPublica || undefined,
-        created_at: new Date().toISOString(), validityDays: 7,
+        customer_name: customerName || "Cliente", cnpj: doc || undefined,
+        vendedor_name: vendedor || undefined, items, total: subtotal,
+        notes: obsPublica || undefined, created_at: new Date().toISOString(), validityDays: 7,
       });
       toast.success("Orçamento gerado!");
     } catch (e) {
       toast.error("Erro ao gerar orçamento: " + (e instanceof Error ? e.message : "tente de novo"));
     } finally { setGenerating(false); }
   }
-
   function handleSell() {
     if (validItems().length === 0) { toast.error("Adicione ao menos um item."); return; }
     toast.success("Venda gerada! (demonstração — gravação real entra na próxima fase)");
@@ -157,7 +170,84 @@ export default function Vender() {
         </CarboCardContent>
       </CarboCard>
 
-      {/* Itens do Pedido */}
+      {/* Endereço de Entrega */}
+      <CarboCard>
+        <CarboCardContent className="p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <h3 className="font-semibold flex items-center gap-2"><MapPin className="h-4 w-4 text-carbo-green" /> Endereço de Entrega</h3>
+            <Button variant="outline" size="sm" onClick={() => toast.info("Mapa entra na fase de lógica.")}>
+              <MapPin className="h-4 w-4 mr-1" /> Localizar no mapa
+            </Button>
+          </div>
+          <div className="grid md:grid-cols-3 gap-3">
+            <div className="space-y-1.5 md:col-span-2"><Label>Logradouro</Label><Input placeholder="Rua, Avenida, etc." /></div>
+            <div className="space-y-1.5">
+              <Label>Número</Label>
+              <div className="flex gap-2"><Input placeholder="Nº" /><Button variant="outline" type="button" className="shrink-0">S/N</Button></div>
+            </div>
+            <div className="space-y-1.5"><Label>Bairro</Label><Input placeholder="Bairro" /></div>
+            <div className="space-y-1.5"><Label>Cidade</Label><Input placeholder="Cidade" /></div>
+            <div className="space-y-1.5">
+              <Label>Estado</Label>
+              <Select>
+                <SelectTrigger><SelectValue placeholder="UF" /></SelectTrigger>
+                <SelectContent>{UFS.map((u) => <SelectItem key={u} value={u}>{u}</SelectItem>)}</SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5"><Label>CEP</Label><Input placeholder="00000-000" /></div>
+          </div>
+          <div className="rounded-xl border border-dashed flex flex-col items-center justify-center gap-2 py-10 text-center text-muted-foreground">
+            <MapPin className="h-6 w-6" />
+            <p className="text-sm px-6">Preencha o endereço e clique em <b>Localizar no mapa</b> para visualizar e ajustar o ponto de entrega.</p>
+          </div>
+        </CarboCardContent>
+      </CarboCard>
+
+      {/* Dados Estratégicos (opcional, recolhível) */}
+      <CollapsibleCard title="Dados Estratégicos" icon={Target} open={showEstrategicos} onToggle={() => setShowEstrategicos((o) => !o)}>
+        <div className="grid md:grid-cols-2 gap-3">
+          <div className="space-y-1.5">
+            <Label>Tipo de Ponto</Label>
+            <Select>
+              <SelectTrigger><SelectValue placeholder="Selecione o tipo" /></SelectTrigger>
+              <SelectContent>{TIPOS_PONTO.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1.5">
+            <Label>Classificação Interna</Label>
+            <Select>
+              <SelectTrigger><SelectValue placeholder="Classificar como" /></SelectTrigger>
+              <SelectContent>{CLASSIFICACOES.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
+            </Select>
+          </div>
+        </div>
+        <div className="space-y-1.5">
+          <Label>Volume Médio Mensal (veículos)</Label>
+          <Input type="number" placeholder="Ex: 500" />
+        </div>
+        <div className="grid md:grid-cols-2 gap-3">
+          <label className="flex items-center justify-between gap-3 rounded-xl border p-3">
+            <span className="text-sm font-medium">Atua com Diesel?</span><Switch />
+          </label>
+          <label className="flex items-center justify-between gap-3 rounded-xl border p-3">
+            <span className="text-sm font-medium">Atua com Frotas?</span><Switch />
+          </label>
+        </div>
+      </CollapsibleCard>
+
+      {/* Observações (opcional, recolhível) */}
+      <CollapsibleCard title="Observações" icon={FileText} open={showObs} onToggle={() => setShowObs((o) => !o)}>
+        <div className="space-y-1.5">
+          <Label>Observações Públicas</Label>
+          <Textarea value={obsPublica} onChange={(e) => setObsPublica(e.target.value)} placeholder="Visíveis para o cliente" />
+        </div>
+        <div className="space-y-1.5">
+          <Label>Notas Internas</Label>
+          <Textarea placeholder="Visíveis apenas internamente" />
+        </div>
+      </CollapsibleCard>
+
+      {/* Itens do Pedido — ÚLTIMA seção: pôr o produto e fazer a venda */}
       <CarboCard>
         <CarboCardContent className="p-4 space-y-4">
           <div className="flex items-center justify-between">
@@ -176,9 +266,7 @@ export default function Vender() {
                     <Label>Produto</Label>
                     <Select value={r.productId} onValueChange={(v) => onProduct(r.id, v)}>
                       <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
-                      <SelectContent>
-                        {PRODUTOS.map((p) => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
-                      </SelectContent>
+                      <SelectContent>{PRODUTOS.map((p) => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}</SelectContent>
                     </Select>
                   </div>
                   <div className="space-y-1.5">
@@ -200,7 +288,6 @@ export default function Vender() {
                     )}
                   </div>
                 </div>
-
                 <div className="flex flex-wrap items-center gap-3">
                   <label className="flex items-center gap-2">
                     <Switch checked={r.hasBonus} onCheckedChange={(v) => updateRow(r.id, { hasBonus: v })} />
@@ -222,94 +309,6 @@ export default function Vender() {
               <p className="text-xs text-muted-foreground">Subtotal</p>
               <p className="text-lg font-bold">{brl(subtotal)}</p>
             </div>
-          </div>
-        </CarboCardContent>
-      </CarboCard>
-
-      {/* Endereço de Entrega */}
-      <CarboCard>
-        <CarboCardContent className="p-4 space-y-3">
-          <div className="flex items-center justify-between">
-            <h3 className="font-semibold flex items-center gap-2"><MapPin className="h-4 w-4 text-carbo-green" /> Endereço de Entrega</h3>
-            <Button variant="outline" size="sm" onClick={() => toast.info("Mapa entra na fase de lógica.")}>
-              <MapPin className="h-4 w-4 mr-1" /> Localizar no mapa
-            </Button>
-          </div>
-          <div className="grid md:grid-cols-3 gap-3">
-            <div className="space-y-1.5 md:col-span-2"><Label>Logradouro</Label><Input placeholder="Rua, Avenida, etc." /></div>
-            <div className="space-y-1.5">
-              <Label>Número</Label>
-              <div className="flex gap-2">
-                <Input placeholder="Nº" />
-                <Button variant="outline" type="button" className="shrink-0">S/N</Button>
-              </div>
-            </div>
-            <div className="space-y-1.5"><Label>Bairro</Label><Input placeholder="Bairro" /></div>
-            <div className="space-y-1.5"><Label>Cidade</Label><Input placeholder="Cidade" /></div>
-            <div className="space-y-1.5">
-              <Label>Estado</Label>
-              <Select>
-                <SelectTrigger><SelectValue placeholder="UF" /></SelectTrigger>
-                <SelectContent>{UFS.map((u) => <SelectItem key={u} value={u}>{u}</SelectItem>)}</SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1.5"><Label>CEP</Label><Input placeholder="00000-000" /></div>
-          </div>
-          <div className="rounded-xl border border-dashed flex flex-col items-center justify-center gap-2 py-10 text-center text-muted-foreground">
-            <MapPin className="h-6 w-6" />
-            <p className="text-sm px-6">Preencha o endereço e clique em <b>Localizar no mapa</b> para visualizar e ajustar o ponto de entrega.</p>
-          </div>
-        </CarboCardContent>
-      </CarboCard>
-
-      {/* Dados Estratégicos */}
-      <CarboCard>
-        <CarboCardContent className="p-4 space-y-3">
-          <h3 className="font-semibold flex items-center gap-2"><Target className="h-4 w-4 text-carbo-green" /> Dados Estratégicos</h3>
-          <div className="grid md:grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <Label>Tipo de Ponto</Label>
-              <Select>
-                <SelectTrigger><SelectValue placeholder="Selecione o tipo" /></SelectTrigger>
-                <SelectContent>{TIPOS_PONTO.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1.5">
-              <Label>Classificação Interna</Label>
-              <Select>
-                <SelectTrigger><SelectValue placeholder="Classificar como" /></SelectTrigger>
-                <SelectContent>{CLASSIFICACOES.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
-              </Select>
-            </div>
-          </div>
-          <div className="space-y-1.5">
-            <Label>Volume Médio Mensal (veículos)</Label>
-            <Input type="number" placeholder="Ex: 500" />
-          </div>
-          <div className="grid md:grid-cols-2 gap-3">
-            <label className="flex items-center justify-between gap-3 rounded-xl border p-3">
-              <span className="text-sm font-medium">Atua com Diesel?</span>
-              <Switch />
-            </label>
-            <label className="flex items-center justify-between gap-3 rounded-xl border p-3">
-              <span className="text-sm font-medium">Atua com Frotas?</span>
-              <Switch />
-            </label>
-          </div>
-        </CarboCardContent>
-      </CarboCard>
-
-      {/* Observações */}
-      <CarboCard>
-        <CarboCardContent className="p-4 space-y-3">
-          <h3 className="font-semibold">Observações</h3>
-          <div className="space-y-1.5">
-            <Label>Observações Públicas</Label>
-            <Textarea value={obsPublica} onChange={(e) => setObsPublica(e.target.value)} placeholder="Visíveis para o cliente" />
-          </div>
-          <div className="space-y-1.5">
-            <Label>Notas Internas</Label>
-            <Textarea placeholder="Visíveis apenas internamente" />
           </div>
         </CarboCardContent>
       </CarboCard>
