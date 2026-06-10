@@ -1,8 +1,9 @@
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
-  ShoppingCart, Plus, Trash2, Building2, User, MapPin, Repeat, Package,
+  ShoppingCart, Plus, Trash2, Building2, User, MapPin, Repeat, Package, FileText,
 } from "lucide-react";
+import { generateQuotePdf } from "@/lib/quotePdf";
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
 import { CarboCard, CarboCardContent } from "@/components/ui/carbo-card";
 import { CarboButton } from "@/components/ui/carbo-button";
@@ -36,11 +37,15 @@ const inputCls = ""; // usa o Input do kit
 export default function Vender() {
   const [mode, setMode] = useState<"venda" | "promo">("venda");
   const [doc, setDoc] = useState("");
+  const [customerName, setCustomerName] = useState("");
+  const [operador, setOperador] = useState("");
+  const [notes, setNotes] = useState("");
   const [isLicenciado, setIsLicenciado] = useState(false);
   const [items, setItems] = useState<CartItem[]>([]);
   const [pickProduct, setPickProduct] = useState("");
   const [pickQty, setPickQty] = useState(1);
   const [recorrente, setRecorrente] = useState(false);
+  const [generating, setGenerating] = useState(false);
 
   const total = useMemo(() => items.reduce((s, i) => s + i.price * i.qty, 0), [items]);
 
@@ -56,6 +61,28 @@ export default function Vender() {
 
   function handleSubmit() {
     toast.success("Pedido criado! (demonstração — lógica real entra na próxima fase)");
+  }
+
+  async function handleQuote() {
+    if (items.length === 0) return;
+    setGenerating(true);
+    try {
+      await generateQuotePdf({
+        customer_name: customerName || "Cliente",
+        cnpj: doc || undefined,
+        vendedor_name: operador || undefined,
+        items: items.map((i) => ({ name: i.name, quantity: i.qty, unit_price: i.price })),
+        total,
+        notes: notes || undefined,
+        created_at: new Date().toISOString(),
+        validityDays: 7,
+      });
+      toast.success("Orçamento gerado!");
+    } catch (e) {
+      toast.error("Erro ao gerar orçamento: " + (e instanceof Error ? e.message : "tente de novo"));
+    } finally {
+      setGenerating(false);
+    }
   }
 
   return (
@@ -92,7 +119,7 @@ export default function Vender() {
           <div className="grid md:grid-cols-2 gap-3">
             <div className="space-y-1.5 md:col-span-2">
               <Label>Nome / Razão Social *</Label>
-              <Input placeholder="Cliente" />
+              <Input value={customerName} onChange={(e) => setCustomerName(e.target.value)} placeholder="Cliente" />
             </div>
             <div className="space-y-1.5">
               <Label>E-mail</Label>
@@ -114,7 +141,7 @@ export default function Vender() {
       <CarboCard>
         <CarboCardContent className="p-4 space-y-3">
           <h3 className="font-semibold flex items-center gap-2"><User className="h-4 w-4 text-primary" /> Operador responsável</h3>
-          <Select>
+          <Select value={operador} onValueChange={setOperador}>
             <SelectTrigger><SelectValue placeholder="Selecione o operador" /></SelectTrigger>
             <SelectContent>
               {OPERADORES.map((o) => <SelectItem key={o} value={o}>{o}</SelectItem>)}
@@ -212,7 +239,7 @@ export default function Vender() {
           )}
           <div className="space-y-1.5">
             <Label>Observações</Label>
-            <Textarea placeholder="Observações do pedido" />
+            <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Observações do pedido" />
           </div>
         </CarboCardContent>
       </CarboCard>
@@ -223,9 +250,14 @@ export default function Vender() {
           <p className="text-xs text-muted-foreground">Total</p>
           <p className="text-xl font-bold">{brl(total)}</p>
         </div>
-        <CarboButton onClick={handleSubmit} disabled={items.length === 0} className="min-w-[160px]">
-          <ShoppingCart className="h-4 w-4 mr-1" /> Criar pedido
-        </CarboButton>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" onClick={handleQuote} disabled={items.length === 0 || generating}>
+            <FileText className="h-4 w-4 mr-1" /> {generating ? "Gerando..." : "Gerar orçamento"}
+          </Button>
+          <CarboButton onClick={handleSubmit} disabled={items.length === 0} className="min-w-[150px]">
+            <ShoppingCart className="h-4 w-4 mr-1" /> Criar pedido
+          </CarboButton>
+        </div>
       </div>
 
       <p className="text-xs text-muted-foreground text-center">
