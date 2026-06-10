@@ -196,7 +196,9 @@ export async function fetchNuvemshopOrder(
   return res.json();
 }
 
-/** Lista pedidos criados a partir de `since` (usado pelo sync; paginado). */
+/** Lista pedidos atualizados a partir de `since` (usado pelo sync; paginado).
+ * Usa updated_at_min (não created_at_min) para capturar pedidos antigos que
+ * mudaram de status — ex.: pedido criado há 3 dias e expedido hoje. */
 export async function fetchNuvemshopOrdersSince(
   accessToken: string, storeId: string, since: Date,
 ): Promise<any[]> {
@@ -206,7 +208,7 @@ export async function fetchNuvemshopOrdersSince(
 
   while (page <= MAX_PAGES) {
     const params = new URLSearchParams({
-      created_at_min: since.toISOString(),
+      updated_at_min: since.toISOString(),
       per_page:       "50",
       page:           String(page),
     });

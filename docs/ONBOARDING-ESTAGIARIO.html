@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Manual de Onboarding — Sistemas Carbo</title>
+<style>
+  :root{ --green:#3BC770; --ink:#1a2234; --muted:#5b6472; --line:#e4e8ee; --bg:#ffffff; --soft:#f6f8fa; }
+  *{box-sizing:border-box;}
+  html{-webkit-text-size-adjust:100%;}
+  body{ font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
+        color:var(--ink); background:var(--soft); margin:0; line-height:1.65; }
+  .wrap{ max-width:820px; margin:0 auto; background:var(--bg); padding:0 0 64px; box-shadow:0 1px 30px rgba(20,30,50,.06); }
+  .cover{ background:linear-gradient(135deg,#0f1c2e 0%,#15324a 60%,#1d6b46 100%); color:#fff; padding:64px 56px 52px; }
+  .cover .badge{ display:inline-block; font-size:12px; letter-spacing:.14em; text-transform:uppercase;
+        background:rgba(255,255,255,.14); padding:6px 12px; border-radius:999px; margin-bottom:22px; }
+  .cover h1{ font-size:38px; line-height:1.15; margin:0 0 14px; font-weight:800; letter-spacing:-.01em; }
+  .cover p{ font-size:16px; opacity:.85; margin:6px 0; max-width:560px; }
+  .cover .dot{ color:var(--green); }
+  .content{ padding:44px 56px; }
+  h1{ font-size:26px; margin:48px 0 6px; padding-top:22px; border-top:3px solid var(--green); font-weight:800; letter-spacing:-.01em; }
+  .content > h1:first-child{ border-top:none; padding-top:0; margin-top:0; }
+  h2{ font-size:20px; margin:34px 0 10px; font-weight:700; }
+  h3{ font-size:16px; margin:24px 0 8px; font-weight:700; color:#28425e; }
+  p{ margin:10px 0; }
+  a{ color:#1d6b46; }
+  code{ background:#eef2f6; padding:.12em .4em; border-radius:5px; font-size:.88em;
+        font-family:'SF Mono',Menlo,Consolas,monospace; color:#0b3d2c; }
+  pre{ background:#0f1c2e; color:#dce6f0; padding:16px 18px; border-radius:10px; overflow-x:auto;
+       font-size:13px; line-height:1.5; }
+  pre code{ background:none; color:inherit; padding:0; }
+  ul,ol{ margin:10px 0; padding-left:22px; }
+  li{ margin:5px 0; }
+  table{ border-collapse:collapse; width:100%; margin:16px 0; font-size:14px; }
+  th,td{ border:1px solid var(--line); padding:8px 11px; text-align:left; vertical-align:top; }
+  th{ background:var(--soft); font-weight:700; }
+  tr:nth-child(even) td{ background:#fafbfc; }
+  blockquote{ margin:16px 0; padding:14px 18px; background:#f0f9f3; border-left:4px solid var(--green);
+              border-radius:0 8px 8px 0; color:#1f3b2c; }
+  hr{ border:none; border-top:1px solid var(--line); margin:8px 0; }
+  .foot{ text-align:center; color:var(--muted); font-size:12px; padding:30px 56px 0; }
+  @media print{
+    body{ background:#fff; } .wrap{ box-shadow:none; max-width:none; }
+    .cover{ -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+    h1{ page-break-after:avoid; } table,pre,blockquote{ page-break-inside:avoid; }
+  }
+  @media(max-width:640px){ .cover{padding:44px 24px;} .content{padding:28px 22px;} .cover h1{font-size:30px;} }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="cover">
+      <span class="badge">Tecnologia · Carbo</span>
+      <h1>Manual de Onboarding<br/><span class="dot">·</span> Sistemas Carbo</h1>
+      <p>Tudo que você precisa entender antes de mexer no código: o sistema atual, o plano de separação em CRM + ERP + Portais, e as regras que protegem o que está no ar.</p>
+      <p style="margin-top:22px;font-size:13px;opacity:.7;">Documento de estudo · junho/2026</p>
+    </div>
+    <div class="content">
+      <h1>Manual de Onboarding — Sistemas Carbo</h1>
+<blockquote><strong>Para quem está chegando agora no time de tecnologia.</strong> Leia este documento <strong>inteiro</strong> antes de mexer em qualquer código. Ele explica o que existe hoje, por que está sendo reorganizado, e as regras que evitam quebrar o sistema que está no ar.  <em>Última atualização: junho/2026.</em></blockquote>
+<hr/>
+<h2>0. Como usar este manual</h2>
+<ul>
+<li><strong>Parte I</strong> — entenda o sistema que existe hoje (o "controle").</li>
+<li><strong>Parte II</strong> — entenda o plano de separar tudo em CRM, ERP e Portais.</li>
+<li><strong>Parte III</strong> — as regras de ouro (o que pode e o que não pode mexer).</li>
+<li><strong>Parte IV</strong> — glossário e primeiros passos práticos.</li>
+</ul>
+<p>Se em algum momento você pensar <em>"acho que é aqui que mexo"</em> e não tiver certeza absoluta — <strong>pare e pergunte.</strong> Esse é o reflexo mais importante do manual inteiro.</p>
+<hr/>
+<h1>PARTE I — O sistema que existe hoje</h1>
+<h2>1. O que é o "controle"</h2>
+<p>O <strong>controle</strong> é o sistema que a Carbo usa no dia a dia, <strong>vivo, no ar agora</strong>. Ele não é um sistema pequeno: é um <strong>mega-monólito</strong> — vários produtos diferentes morando dentro de um app só, no mesmo banco de dados, com o mesmo deploy.</p>
+<table><thead><tr><th>Métrica</th><th>Quantidade</th></tr></thead><tbody><tr><td>Rotas / telas</td><td><strong>~112</strong></td></tr><tr><td>Tabelas no banco (Postgres)</td><td><strong>~116</strong></td></tr><tr><td>Hooks (funções de dados)</td><td><strong>~381</strong> em 93 arquivos</td></tr><tr><td>Edge functions (back-end serverless)</td><td><strong>~41</strong></td></tr><tr><td>Integrações externas</td><td>Bling, Nuvemshop, Mercado Livre, Amazon, Vindi, Meta, Chatwoot, Melhor Envio, CNPJ, entre outras</td></tr></tbody></table>
+<p>Por isso a gente chama, com carinho, de <strong>"frankenstein"</strong>: são <strong>8 domínios de negócio</strong> convivendo no mesmo lugar. Mexer numa parte pode, sem querer, afetar outra. É justamente por isso que existe um plano de separação (Parte II).</p>
+<h2>2. A stack (as ferramentas)</h2>
+<p>Tudo que você precisa conhecer pra começar:</p>
+<table><thead><tr><th>Camada</th><th>Ferramenta</th><th>Pra que serve</th></tr></thead><tbody><tr><td>Front-end</td><td><strong>React + TypeScript</strong></td><td>A interface (as telas)</td></tr><tr><td>Build/dev</td><td><strong>Vite</strong></td><td>Roda e empacota o front</td></tr><tr><td>Banco + Auth + tempo real</td><td><strong>Supabase</strong> (Postgres)</td><td>Onde os dados vivem, login, e regras de segurança (RLS)</td></tr><tr><td>Busca de dados</td><td><strong>TanStack Query</strong></td><td>Carrega dados do banco e faz cache</td></tr><tr><td>Visual</td><td><strong>shadcn/ui + Tailwind CSS</strong></td><td>Componentes prontos e estilo</td></tr><tr><td>Gráficos</td><td><strong>Recharts</strong></td><td>Dashboards</td></tr><tr><td>Kanban (arrastar cards)</td><td><strong>dnd-kit</strong></td><td>Funis de venda</td></tr><tr><td>Deploy</td><td><strong>Vercel</strong></td><td>Sobe o site automaticamente a cada <code>git push</code></td></tr></tbody></table>
+<p><strong>Importante:</strong> o deploy é <strong>automático</strong>. Você dá <code>git push</code> na branch certa e a Vercel publica sozinha. Você nunca precisa de senha ou token da Vercel pra isso.</p>
+<h2>3. Como funciona o acesso às telas (Role Matrix)</h2>
+<p>Esse é o conceito mais importante do sistema atual. Preste atenção aqui.</p>
+<p>No controle, <strong>quem vê qual tela</strong> é controlado por uma "matriz de acesso" (a <strong>Role Matrix</strong>). Funciona assim:</p>
+<ol><li>Cada pessoa tem um <strong>departamento</strong> e uma <strong>função</strong> no perfil</li></ol>
+<p>   (ex.: <code>cgc</code> + <code>vendedor_b2b</code>, ou <code>ti_suporte</code> + <code>colaborador</code>).</p>
+<ol><li>A tela <code>/role-matrix</code> é onde o admin <strong>libera telas</strong> por departamento/função.</li><li>Toda tela "protegida" tem um <code>screenId</code>. Se a combinação depto+função da</li></ol>
+<p>   pessoa não estiver liberada pra aquele <code>screenId</code>, ela <strong>não vê</strong> a tela.</p>
+<pre><code>Pessoa (depto + função) ──▶ Role Matrix ──▶ telas liberadas</code></pre>
+<h3>Regra obrigatória ao criar tela nova no controle</h3>
+<p>Toda vez que se cria uma página nova <strong>com controle de acesso</strong>, três arquivos mudam <strong>juntos</strong> (sem exceção):</p>
+<ol><li><code>src/App.tsx</code> — registra a rota com o <code>screenId</code>.</li><li><code>src/constants/functionAccessConfig.ts</code> — registra a tela na lista da Role</li></ol>
+<p>   Matrix. <strong>Se esquecer este passo, a tela não aparece pro admin liberar — e    ninguém consegue acessar.</strong></p>
+<ol><li>Avisar que a tela nova já aparece em <code>/role-matrix</code> pro admin liberar.</li></ol>
+<h3>O superusuário: TI</h3>
+<p>Quem é do departamento <strong><code>ti_suporte</code></strong> (qualquer função) é <strong>superusuário</strong>: enxerga <strong>todas</strong> as telas sem precisar de configuração na Role Matrix, inclusive telas futuras. No banco, isso também vale pra ações de admin (como criar usuários). É por isso que você, do TI, vê tudo.</p>
+<blockquote>⚠️ Esse poder é grande. Superusuário enxerga e mexe em tudo. Use com cuidado e na dúvida, pergunte antes de executar ações que criam/apagam dados.</blockquote>
+<h2>4. Os armazéns (warehouses)</h2>
+<p>O estoque é organizado por "hub". Você vai ver esses códigos bastante:</p>
+<table><thead><tr><th>Código</th><th>O que é</th></tr></thead><tbody><tr><td><code>HUB-RN</code></td><td>Hub Natal — produção, estoque de insumos</td></tr><tr><td><code>HUB-SP</code></td><td>CD São Paulo (LogHouse)</td></tr><tr><td><code>HUB-SP-VENDAS</code></td><td>CD São Paulo (Vendas)</td></tr></tbody></table>
+<p>A tabela <strong><code>warehouse_stock</code></strong> é a <strong>fonte de verdade</strong> do estoque por hub. Nunca use outro campo como atalho pra mostrar estoque.</p>
+<h2>5. Migrações de banco (mudanças no Postgres)</h2>
+<p>Quando se precisa mudar a estrutura do banco (criar coluna, função, etc.):</p>
+<ol><li>Cria-se um arquivo em <code>supabase/migrations/</code> com um carimbo de data/hora</li></ol>
+<p>   sequencial (ex.: <code>20260608000002_descricao.sql</code>).</p>
+<ol><li><strong>O arquivo no repositório NÃO altera o banco de produção sozinho.</strong> Alguém</li></ol>
+<p>   com acesso precisa <strong>rodar o SQL</strong> no painel do Supabase (SQL Editor).</p>
+<p>Decorar isto evita muita confusão: <em>"mas eu criei a migração, por que não funcionou?"</em> — porque ela ainda não foi <strong>executada</strong> no banco.</p>
+<hr/>
+<h1>PARTE II — O plano de separação (CRM + ERP + Portais)</h1>
+<h2>6. Por que separar</h2>
+<p>O monólito cresceu demais. Separar resolve três dores:</p>
+<ul>
+<li><strong>Acesso</strong> — cada sistema pequeno só conhece as próprias telas. Sem matriz</li>
+</ul>
+<p>  gigante.</p>
+<ul>
+<li><strong>Deploy</strong> — mexer no CRM não arrisca derrubar a produção.</li>
+<li><strong>Código limpo</strong> — cada domínio no seu lugar, fácil de entender.</li>
+</ul>
+<h2>7. A arquitetura-alvo: 4 sistemas + 1 núcleo</h2>
+<pre><code>                 ┌─────────────────────────┐
+                 │   CORE (compartilhado)  │
+                 │  auth, perfis, equipe,  │
+                 │  acesso, auditoria      │
+                 └────────────┬────────────┘
+          ┌───────────┬───────┴───────┬───────────┐
+          ▼           ▼               ▼           ▼
+      ┌───────┐   ┌───────┐     ┌──────────┐ ┌──────────┐
+      │  CRM  │   │  ERP  │     │ Portal   │ │ Portal   │
+      │vendas │   │produç.│     │Licenciad.│ │ Lojas    │
+      │       │   │financ.│     │          │ │ (PDV)    │
+      └───────┘   └───────┘     └──────────┘ └──────────┘</code></pre>
+<ul>
+<li><strong>CRM</strong> — vendas, funis de lead, e-commerce, comercial, metas, comissões.</li>
+<li><strong>ERP</strong> — produção, MRP, estoque, suprimentos, OS, financeiro, faturamento.</li>
+<li><strong>Portal Licenciados</strong> — tudo dos licenciados CarboVapt (já é quase isolado).</li>
+<li><strong>Portal Lojas / PDV</strong> — pontos de venda (já é quase isolado).</li>
+<li><strong>CORE</strong> — o que todos compartilham: login, perfis, equipe, acesso.</li>
+</ul>
+<h2>8. O nó da questão: tabelas de fronteira</h2>
+<p>Separar <strong>telas</strong> é fácil. Separar o <strong>banco</strong> é o difícil, porque existem ~15 tabelas que vivem em <strong>mais de um domínio ao mesmo tempo</strong>, algumas com "gatilhos" (triggers) que disparam efeitos entre domínios. Exemplos:</p>
+<table><thead><tr><th>Tabela</th><th>Quem usa</th><th>Por que é delicada</th></tr></thead><tbody><tr><td><code>warehouse_stock</code></td><td>CRM + ERP + PDV</td><td>Venda no e-commerce <strong>dá baixa</strong> no estoque automaticamente</td></tr><tr><td><code>service_orders</code></td><td>CRM + ERP + Ops + Financeiro</td><td>Centro de tudo: venda gera OS, OS gera compra, OS alimenta faturamento</td></tr><tr><td><code>carboze_orders</code></td><td>CRM + Financeiro + Licenciado</td><td>Pedido B2C/frota/licenciado</td></tr><tr><td><code>sku</code> / <code>mrp_products</code></td><td>ERP + CRM + E-commerce</td><td>Produto/insumo único pra todo mundo</td></tr><tr><td><code>profiles</code> / <code>function_screen_access</code></td><td><strong>TODOS</strong></td><td>Base do login e da segurança</td></tr></tbody></table>
+<p>São esses pontos que tornam "dividir o banco" um trabalho cirúrgico.</p>
+<h2>9. A estratégia escolhida (faseada)</h2>
+<p>Foram avaliadas três opções. A decisão foi:</p>
+<blockquote><strong>Começar com um banco só, separando os apps; migrar pra bancos separados depois, parte por parte.</strong> Assim ganha-se a organização sem parar a operação nem reescrever os gatilhos de uma vez.</blockquote>
+<p>Em ordem:</p>
+<ol><li><strong>Fase 0 — Fundação</strong> _(em andamento)_: criar a base do CRM novo, login e</li></ol>
+<p>   modelo de acesso.</p>
+<ol><li><strong>Fase 1 — CRM</strong>: migrar vendas/CRM/e-commerce.</li><li><strong>Fase 2 — ERP</strong>: produção/financeiro/suprimentos/OS.</li><li><strong>Fase 3 — Portais</strong>: licenciados e lojas (mais limpos).</li><li><strong>Fase 4 — Desligar</strong> o monólito, depois que tudo rodar em paralelo e</li></ol>
+<p>   validado.</p>
+<p><strong>O controle (atual) NÃO morre durante a migração.</strong> A regra é: <strong>copiar, nunca cortar.</strong> O sistema novo copia o que precisa; o antigo segue intacto.</p>
+<h2>10. O modelo de acesso NOVO (sem Role Matrix)</h2>
+<p>Esta é a maior diferença pra você entender. Nos sistemas novos <strong>não existe matriz tela-a-tela.</strong> Em vez disso, três camadas:</p>
+<pre><code>CAMADA 1 — Quais SISTEMAS a pessoa entra (decidido no Hub/login).
+CAMADA 2 — Nível dentro do sistema:
+             • gestor → vê tudo + botões de gestão (filtrar, reatribuir)
+             • membro → só o operacional do próprio escopo
+CAMADA 3 — Escopo de dado (quais linhas a pessoa vê):
+             proprio | equipe | departamento | global</code></pre>
+<p>O nível (gestor/membro) é <strong>derivado</strong> do departamento + função que a pessoa já tem no perfil — não precisa configurar tela por tela.</p>
+<h3>Crescimento por "capabilities", não por telas</h3>
+<p>Quando o sistema precisar de uma permissão nova, adiciona-se uma <strong>capability</strong> (permissão nomeada) num arquivo de código — nunca uma linha numa matriz:</p>
+<pre><code>capabilities: {
+  ver_todos_leads:      ["gestor"],
+  reatribuir_lead:      ["gestor"],
+  filtrar_por_vendedor: ["gestor"],
+  editar_metas:         ["gestor"],
+  exportar_relatorio:   ["gestor"],
+}</code></pre>
+<blockquote><strong>Por que a matriz sumiu?</strong> Ela era um *sintoma do monólito* (112 telas num app só). Com cada sistema pequeno e de um domínio só, ela não é mais necessária.</blockquote>
+<h3>Login único (Hub)</h3>
+<p>A ideia final é <strong>1 pessoa = 1 conta</strong>. A pessoa loga uma vez no Hub (<code>carbohub.com.br</code>), vê os "azulejos" dos sistemas que pode acessar, e entra em cada um sem logar de novo.</p>
+<hr/>
+<h1>PARTE III — Regras de ouro (decore estas)</h1>
+<p>Estas regras existem pra ninguém "desmontar o frankenstein e ficar sem saber se o que tirou era um parafuso ou parte do corpo".</p>
+<ol><li><strong>Todo pedido nomeia o alvo.</strong> "no CRM" → pasta <code>apps/crm</code>. "no controle" ou</li></ol>
+<p>   "no atual" → raiz do projeto (<code>src/</code>). Se não estiver dito, <strong>pergunte</strong>.</p>
+<ol><li><strong>Na dúvida, PERGUNTE — nunca adivinhe.</strong> Se a mesma tela existe em mais de um</li></ol>
+<p>   app, liste os candidatos antes de mexer.</p>
+<ol><li><strong>O <code>controle</code> está congelado.</strong> A raiz só recebe <strong>correção crítica</strong>.</li></ol>
+<p>   Funcionalidade nova vai pros apps novos (<code>apps/crm</code>, etc.).</p>
+<ol><li><strong>Mudança em código compartilhado (<code>packages/</code>) afeta vários apps.</strong> Avise</li></ol>
+<p>   antes de aplicar.</p>
+<ol><li><strong>Cada app é autossuficiente.</strong> O <code>apps/crm</code> tem o próprio build e</li></ol>
+<p>   dependências. <strong>Não mexa no <code>package.json</code> da raiz</strong> (a base de dependências    do controle é frágil — risco de quebrar o deploy do que está no ar).</p>
+<ol><li><strong>Migração só vale quando é executada no Supabase.</strong> Criar o arquivo <code>.sql</code></li></ol>
+<p>   não basta.</p>
+<ol><li><strong>Copiar, nunca cortar.</strong> Ao migrar algo pro sistema novo, o original no</li></ol>
+<p>   controle permanece até tudo estar validado.</p>
+<hr/>
+<h1>PARTE IV — Glossário e primeiros passos</h1>
+<h2>11. Glossário rápido</h2>
+<table><thead><tr><th>Termo</th><th>Significado</th></tr></thead><tbody><tr><td><strong>Controle</strong></td><td>O sistema monolítico atual, no ar</td></tr><tr><td><strong>Monólito</strong></td><td>Um app só com tudo dentro</td></tr><tr><td><strong>CRM / ERP</strong></td><td>Os sistemas novos (vendas / operação-financeiro)</td></tr><tr><td><strong>Hub</strong></td><td>Tela única de login que leva aos sistemas</td></tr><tr><td><strong>RLS</strong></td><td><em>Row Level Security</em> — regras no banco que decidem quais linhas cada um vê</td></tr><tr><td><strong>Edge function</strong></td><td>Código de back-end que roda sob demanda no Supabase</td></tr><tr><td><strong>Migração</strong></td><td>Arquivo SQL que muda a estrutura do banco</td></tr><tr><td><strong>Role Matrix</strong></td><td>A matriz tela-a-tela do controle (só no sistema atual)</td></tr><tr><td><strong>Capability</strong></td><td>Permissão nomeada do modelo novo (substitui a matriz)</td></tr><tr><td><strong>screenId</strong></td><td>Identificador de uma tela protegida no controle</td></tr><tr><td><strong>Trigger</strong></td><td>Gatilho no banco que dispara uma ação automática</td></tr><tr><td><strong>Warehouse / Hub de estoque</strong></td><td>Local físico de estoque (<code>HUB-RN</code>, etc.)</td></tr><tr><td><strong>gestor / membro</strong></td><td>Níveis de acesso do modelo novo</td></tr><tr><td><strong>escopo de dado</strong></td><td>proprio / equipe / departamento / global</td></tr></tbody></table>
+<h2>12. Seus primeiros passos (sugestão)</h2>
+<ol><li><strong>Leia este manual até o fim</strong> (você está quase lá).</li><li><strong>Explore sem mexer:</strong> abra o sistema, navegue pelas telas, veja o que existe.</li><li><strong>Leia o <code>CLAUDE.md</code></strong> na raiz do projeto — é o resumo de regras que o time</li></ol>
+<p>   segue.</p>
+<ol><li><strong>Leia <code>docs/ARQUITETURA-SEPARACAO.md</code></strong> — a versão técnica completa do plano.</li><li><strong>Faça sua primeira tarefa pequena e supervisionada</strong> — de preferência no</li></ol>
+<p>   <code>apps/crm</code> (sistema novo), não no controle.</p>
+<ol><li><strong>Pergunte sempre que a dúvida for "onde mexo?".</strong> É o reflexo certo.</li></ol>
+<h2>13. O que você NÃO deve fazer no começo</h2>
+<ul>
+<li>❌ Mexer no <code>controle</code> (raiz <code>src/</code>) sem combinar — ele está no ar.</li>
+<li>❌ Tocar no <code>package.json</code> ou nos lockfiles da raiz.</li>
+<li>❌ Rodar migração em produção sem revisão.</li>
+<li>❌ Apagar/sobrescrever dados sem ter certeza e autorização.</li>
+<li>❌ Adivinhar em qual app mexer quando o pedido não disser.</li>
+</ul>
+<hr/>
+<blockquote><strong>Resumo em uma frase:</strong> o sistema atual (controle) está vivo e sendo separado, com calma e em fases, em CRM + ERP + Portais — e a regra que protege tudo é <strong>na dúvida, pergunte antes de mexer.</strong></blockquote>
+<p>Bem-vindo ao time. 🚀</p>
+
+    </div>
+    <div class="foot">Carbo · Manual de Onboarding de Tecnologia — uso interno.</div>
+  </div>
+</body>
+</html>

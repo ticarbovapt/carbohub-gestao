@@ -71,7 +71,7 @@ Após o deploy, informar que a nova tela aparece no `/role-matrix` no grupo corr
 - `src/constants/functionAccessConfig.ts` → lista todas as telas disponíveis no Role Matrix
 - `/role-matrix` → interface do admin para liberar telas por departamento/função
 - Telas **sem** `screenId` são acessíveis a qualquer usuário autenticado (sem controle)
-- **`ti_suporte/head` é superusuário**: bypass total de `useCanSeeScreen` — vê todas as telas sem configuração, inclusive futuras. Implementado em `src/hooks/useFunctionAccess.ts`.
+- **`ti_suporte` (qualquer função) é superusuário**: bypass total de `useCanSeeScreen` — vê todas as telas sem configuração, inclusive futuras. Implementado em `src/hooks/useFunctionAccess.ts`. No banco, `is_admin` também trata todo o `ti_suporte` como admin (migração `20260608000002`, lê `profiles` direto sem depender de `is_ceo`), então edge functions que exigem `is_admin` (ex.: `create-team-member`) liberam todo o TI — não só o head.
 
 ## Warehouses
 - `HUB-RN` = Hub Natal (produção, estoque de insumos)

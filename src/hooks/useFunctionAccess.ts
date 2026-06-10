@@ -16,7 +16,8 @@
  *     allowed screens — it does NOT skip the screen check.
  *   - Acesso é FAIL-CLOSED: usuário sem entrada no Role Matrix (isConfigured=false)
  *     NÃO vê telas com screenId. Exceções (escape hatches) em useCanSeeScreen:
- *     TI/head (superusuário), admin e CEO nunca ficam travados.
+ *     TI inteiro (qualquer função em ti_suporte = superusuário), admin e CEO
+ *     nunca ficam travados.
  */
 
 import { useQuery } from "@tanstack/react-query";
@@ -141,13 +142,14 @@ export function useCanSeeScreen(screenId: string): boolean {
 
   if (!ENFORCEMENT_ACTIVE) return true;
 
-  // TI/head é o ÚNICO superusuário — acesso irrestrito a todas as telas, inclusive
-  // as novas criadas no futuro. Verifica papel primário e secundário.
-  // (Sem escape via admin/ceo legados: o acesso é 100% Role Matrix + TI/head.)
-  const isTiHead =
-    (profile?.department === "ti_suporte" && profile?.funcao === "head") ||
-    (profile?.secondary_department === "ti_suporte" && profile?.secondary_funcao === "head");
-  if (isTiHead) return true;
+  // TI inteiro é superusuário — acesso irrestrito a todas as telas, inclusive
+  // as novas criadas no futuro. Qualquer função dentro de ti_suporte (head ou
+  // colaborador) entra. Verifica papel primário e secundário.
+  // (Sem escape via admin/ceo legados: o acesso é 100% Role Matrix + TI.)
+  const isTi =
+    profile?.department === "ti_suporte" ||
+    profile?.secondary_department === "ti_suporte";
+  if (isTi) return true;
 
   // Enquanto a configuração ainda carrega, NÃO bloqueia — evita um flash de
   // redirect para /inicio em quem de fato tem acesso. A decisão real só vale

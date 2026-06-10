@@ -28,3 +28,6 @@ dist-ssr
 .env
 .vercel
 .claude/worktrees/
+
+# PDFs de onboarding (gerados a partir do .md/.html — não versionar)
+docs/ONBOARDING-ESTAGIARIO.pdf

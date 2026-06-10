@@ -134,16 +134,28 @@ function buildMetrics(
     return r.units_real ?? r.quantity;
   };
 
-  const totalOrders      = rows.length;
+  // Revenue/units: sum all rows (each row = one SKU line with its own total/qty).
   const totalRevenue     = rows.reduce((s, r) => s + Number(r.total), 0);
   const totalUnitsSold   = rows.reduce((s, r) => s + displayUnits(r), 0);
   const totalQuantityRaw = rows.reduce((s, r) => s + r.quantity, 0);
 
-  const cancelled  = rows.filter(r => r.status === "cancelled").length;
-  const pending    = rows.filter(r => r.status === "pending").length;
-  const paid       = rows.filter(r => r.status === "paid").length;
-  const shipped    = rows.filter(r => r.status === "shipped").length;
-  const delivered  = rows.filter(r => r.status === "delivered").length;
+  // Order counts: deduplicate by base order ID.
+  // Nuvemshop (and Amazon) produce one row per SKU per order (order_id = "orderId-lineId").
+  // All rows for the same order share the same status, so we must count unique orders —
+  // otherwise a 2-item cancelled order counts as 2 cancellations.
+  const orderById = new Map<string, DBOrder>();
+  for (const r of rows) {
+    const baseId = r.order_id.replace(/-\w+$/, ""); // strip "-lineId" suffix
+    if (!orderById.has(baseId)) orderById.set(baseId, r);
+  }
+  const uniqueOrders = [...orderById.values()];
+
+  const totalOrders = uniqueOrders.length;
+  const cancelled   = uniqueOrders.filter(r => r.status === "cancelled").length;
+  const pending     = uniqueOrders.filter(r => r.status === "pending").length;
+  const paid        = uniqueOrders.filter(r => r.status === "paid").length;
+  const shipped     = uniqueOrders.filter(r => r.status === "shipped").length;
+  const delivered   = uniqueOrders.filter(r => r.status === "delivered").length;
 
   const activeRows       = rows.filter(r => r.status !== "cancelled");
   const netRevenue       = activeRows.reduce((s, r) => s + Number(r.total), 0);
@@ -179,16 +191,20 @@ function buildMetrics(
     revenue:      Math.round(v.revenue * 100) / 100,
   })).sort((a, b) => b.orders - a.orders || b.revenue - a.revenue);
 
-  // Group by day
+  // Group by day — orders = unique orders that day, units/revenue sum all rows.
+  const dayOrdersSeen = new Set<string>();
   const dayMap = new Map<string, { orders: number; units: number; revenue: number }>();
   for (const r of rows) {
-    const day = r.ordered_at.slice(0, 10);
-    const prev = dayMap.get(day) ?? { orders: 0, units: 0, revenue: 0 };
+    const day    = r.ordered_at.slice(0, 10);
+    const baseId = r.order_id.replace(/-\w+$/, "");
+    const key    = `${day}|${baseId}`;
+    const prev   = dayMap.get(day) ?? { orders: 0, units: 0, revenue: 0 };
     dayMap.set(day, {
-      orders:  prev.orders  + 1,
+      orders:  prev.orders  + (dayOrdersSeen.has(key) ? 0 : 1),
       units:   prev.units   + displayUnits(r),
       revenue: prev.revenue + Number(r.total),
     });
+    dayOrdersSeen.add(key);
   }
 
   const dailySales: EcommerceDailySale[] = Array.from(dayMap.entries())
