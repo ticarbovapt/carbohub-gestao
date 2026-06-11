@@ -13,6 +13,7 @@ export interface AdminProfile {
   manager_user_id: string | null;
   status: string | null;
   allowed_interfaces: string[] | null;
+  is_vendedor: boolean | null;
   created_at: string | null;
 }
 
@@ -61,7 +62,7 @@ export function useProfiles() {
     queryFn: async (): Promise<AdminProfile[]> => {
       const { data, error } = await supabase
         .from("profiles")
-        .select("id, full_name, username, department, funcao, secondary_department, secondary_funcao, escopo, manager_user_id, status, allowed_interfaces, created_at")
+        .select("id, full_name, username, department, funcao, secondary_department, secondary_funcao, escopo, manager_user_id, status, allowed_interfaces, is_vendedor, created_at")
         .order("created_at", { ascending: false })
         .limit(200);
       if (error) throw error;
@@ -179,6 +180,21 @@ export function useCreateUser() {
 }
 
 /** Edita um usuário existente (action update_user na mesma edge function). */
+/** Marca/desmarca o usuário como vendedor (RPC dedicada; só gestor). */
+export function useSetIsVendedor() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ userId, value }: { userId: string; value: boolean }): Promise<void> => {
+      const { error } = await (supabase as unknown as { rpc: (fn: string, args: unknown) => Promise<{ error: unknown }> })
+        .rpc("set_is_vendedor", { p_user_id: userId, p_value: value });
+      if (error) throw error as Error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["admin", "profiles"] });
+    },
+  });
+}
+
 export function useUpdateUser() {
   const qc = useQueryClient();
   return useMutation({
