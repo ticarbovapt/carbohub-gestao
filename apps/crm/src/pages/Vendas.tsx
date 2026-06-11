@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { useVendas, useVendedorNomes, useUpdateVendaStatus } from "@/hooks/useVendas";
+import { EditPedidoDialog } from "@/components/EditPedidoDialog";
 
 // Vendas e Orçamentos — lê de crm_vendas (orçamentos + vendas salvas).
 
@@ -116,6 +117,7 @@ export default function Vendas() {
   const [search, setSearch] = useState("");
   const [vendedorFilter, setVendedor] = useState("__all__");
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [editId, setEditId] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   const hasCustomRange = !!(customFrom || customTo);
@@ -261,7 +263,7 @@ export default function Vendas() {
                                 </button>
                               )}
                               {isHead && !isQuote && (
-                                <button onClick={() => toast.info("Edição de pedido — disponível em breve")} className="h-7 w-7 inline-flex items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors" title="Editar pedido">
+                                <button onClick={(e) => { e.stopPropagation(); setEditId(venda.id); }} className="h-7 w-7 inline-flex items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors" title="Editar pedido">
                                   <Pencil className="h-3.5 w-3.5" />
                                 </button>
                               )}
@@ -344,6 +346,8 @@ export default function Vendas() {
           <button className="h-8 px-3 rounded-lg text-sm text-muted-foreground hover:text-foreground border border-border transition-colors" onClick={() => setSelectedIds(new Set())}>Cancelar</button>
         </div>
       )}
+
+      <EditPedidoDialog vendaId={editId} open={!!editId} onOpenChange={(o) => !o && setEditId(null)} />
     </div>
   );
 }
