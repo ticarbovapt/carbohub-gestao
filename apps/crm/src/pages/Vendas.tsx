@@ -17,11 +17,25 @@ import { useVendas, useVendedorNomes, useUpdateVendaStatus } from "@/hooks/useVe
 // Vendas e Orçamentos — lê de crm_vendas (orçamentos + vendas salvas).
 
 interface Item { name: string; quantity: number; unit_price: number; total: number; }
+type Endereco = Record<string, unknown> | null;
 interface VendaRow {
   id: string; order_number: string; created_at: string; sale_date: string | null;
-  customer_name: string; delivery_city: string | null; delivery_state: string | null;
+  customer_name: string; customer_doc: string | null; customer_ie: string | null;
+  customer_email: string | null; customer_phone: string | null;
+  delivery_city: string | null; delivery_state: string | null;
+  endereco: Endereco; endereco_faturamento: Endereco; notes: string | null;
   items: Item[]; total: number; status: string; vendedor_id: string; vendedor_name: string;
   invoice_number: string | null; has_nf: boolean; is_avulso?: boolean;
+}
+
+// Formata um endereço (jsonb) para uma linha legível.
+function fmtEndereco(e: Endereco): string | null {
+  if (!e) return null;
+  const s = (k: string) => (e[k] != null ? String(e[k]) : "");
+  const l1 = [s("logradouro"), s("numero")].filter(Boolean).join(", ");
+  const l2 = [s("bairro"), [s("cidade"), s("uf")].filter(Boolean).join("/")].filter(Boolean).join(" · ");
+  const cep = s("cep") ? `CEP ${s("cep")}` : "";
+  return [l1, l2, cep].filter(Boolean).join(" — ") || null;
 }
 
 const STATUS_LABEL: Record<string, string> = {
@@ -63,14 +77,22 @@ export default function Vendas() {
       unit_price: Number(i.preco_unitario) || 0,
       total: (i.quantidade || 0) * (Number(i.preco_unitario) || 0),
     }));
+    const end = (v.endereco ?? null) as Endereco;
     return {
       id: v.id,
       order_number: `${v.status === "orcamento" ? "ORC" : "VND"}-${v.id.slice(0, 8).toUpperCase()}`,
       created_at: v.created_at,
       sale_date: null,
       customer_name: v.customer_name ?? "—",
-      delivery_city: null,
-      delivery_state: null,
+      customer_doc: v.customer_doc ?? null,
+      customer_ie: v.customer_ie ?? null,
+      customer_email: v.customer_email ?? null,
+      customer_phone: v.customer_phone ?? null,
+      delivery_city: end && end.cidade != null ? String(end.cidade) : null,
+      delivery_state: end && end.uf != null ? String(end.uf) : null,
+      endereco: end,
+      endereco_faturamento: (v.endereco_faturamento ?? null) as Endereco,
+      notes: v.notes ?? null,
       items,
       total: Number(v.total) || 0,
       status: toDisplayStatus(v.status),
@@ -246,20 +268,57 @@ export default function Vendas() {
                             </div>
                           </td>
                         </tr>
-                        {expandedId === venda.id && venda.items.length > 0 && (
+                        {expandedId === venda.id && (
                           <tr className="border-b bg-muted/10">
-                            <td colSpan={isHead ? 9 : 7} className="px-6 py-3">
-                              <div className="flex items-center gap-2 mb-2"><Package className="h-3.5 w-3.5 text-muted-foreground" /><p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Produtos</p></div>
-                              <div className="grid gap-1">
-                                {venda.items.map((item, idx) => (
-                                  <div key={idx} className="flex items-center justify-between text-xs">
-                                    <span className="font-medium">{item.name}</span>
-                                    <div className="flex items-center gap-4 text-muted-foreground">
-                                      <span>{item.quantity}x</span><span>{fmtBRL(item.unit_price)}/un</span><span className="font-semibold text-foreground">{fmtBRL(item.total)}</span>
-                                    </div>
-                                  </div>
-                                ))}
+                            <td colSpan={isHead ? 9 : 7} className="px-6 py-4 space-y-4">
+                              {/* Cliente */}
+                              <div>
+                                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5">Cliente</p>
+                                <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-x-6 gap-y-1 text-xs">
+                                  <div><span className="text-muted-foreground">Nome:</span> <span className="font-medium">{venda.customer_name}</span></div>
+                                  <div><span className="text-muted-foreground">CNPJ/CPF:</span> <span className="font-medium">{venda.customer_doc || "—"}</span></div>
+                                  <div><span className="text-muted-foreground">Inscr. Estadual:</span> <span className="font-medium">{venda.customer_ie || "—"}</span></div>
+                                  <div><span className="text-muted-foreground">Contato:</span> <span className="font-medium">{[venda.customer_email, venda.customer_phone].filter(Boolean).join(" · ") || "—"}</span></div>
+                                </div>
                               </div>
+
+                              {/* Endereços */}
+                              <div className="grid sm:grid-cols-2 gap-4">
+                                <div>
+                                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">Endereço de Entrega</p>
+                                  <p className="text-xs">{fmtEndereco(venda.endereco) || <span className="text-muted-foreground">—</span>}</p>
+                                </div>
+                                <div>
+                                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">Endereço de Faturamento (NF)</p>
+                                  <p className="text-xs">{venda.endereco_faturamento ? fmtEndereco(venda.endereco_faturamento) : <span className="text-muted-foreground">Mesmo da entrega</span>}</p>
+                                </div>
+                              </div>
+
+                              {/* Produtos */}
+                              <div>
+                                <div className="flex items-center gap-2 mb-2"><Package className="h-3.5 w-3.5 text-muted-foreground" /><p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Produtos</p></div>
+                                {venda.items.length === 0 ? (
+                                  <p className="text-xs text-muted-foreground">Sem itens.</p>
+                                ) : (
+                                  <div className="grid gap-1">
+                                    {venda.items.map((item, idx) => (
+                                      <div key={idx} className="flex items-center justify-between text-xs">
+                                        <span className="font-medium">{item.name}</span>
+                                        <div className="flex items-center gap-4 text-muted-foreground">
+                                          <span>{item.quantity}x</span><span>{fmtBRL(item.unit_price)}/un</span><span className="font-semibold text-foreground">{fmtBRL(item.total)}</span>
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+
+                              {venda.notes && (
+                                <div>
+                                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">Observações</p>
+                                  <p className="text-xs">{venda.notes}</p>
+                                </div>
+                              )}
                             </td>
                           </tr>
                         )}
