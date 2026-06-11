@@ -6,7 +6,7 @@ import { CarboBadge } from "@/components/ui/carbo-badge";
 import { Button } from "@/components/ui/button";
 import {
   ChevronLeft, ChevronRight, Trophy, TrendingUp, TrendingDown,
-  Calendar, Zap, Wind,
+  Calendar, Zap,
 } from "lucide-react";
 import { ProfileAvatar } from "@/components/ui/profile-avatar";
 import { useMetasVendedores } from "@/hooks/useMetas";
@@ -21,15 +21,6 @@ interface MetaTarget {
   pct_amount: number; target_qty: number; actual_qty: number; vendedor: VendedorProfile;
 }
 interface WeeklyEntry { vendedor_id: string; total: number; profile: VendedorProfile; }
-
-// Ranking de descarbonizações por QUANTIDADE vendida (ainda mock — OS não persiste).
-interface DescRank { vendedor_id: string; full_name: string; avatar_url: string | null; qty: number; }
-const MOCK_DESC_RANKING: DescRank[] = [
-  { vendedor_id: "u3", full_name: "Marcius D'Ávila", avatar_url: null, qty: 38 },
-  { vendedor_id: "u1", full_name: "Lucas Padilha", avatar_url: null, qty: 31 },
-  { vendedor_id: "u2", full_name: "Marcio Vannucci", avatar_url: null, qty: 22 },
-  { vendedor_id: "u4", full_name: "Equipe B2C", avatar_url: null, qty: 14 },
-];
 
 // ── Helpers ───────────────────────────────────────────────────────────────
 function getProgressColor(actual: number, target: number, dayOfMonth: number, daysInMonth: number): "green" | "yellow" | "red" | "gray" {
@@ -182,47 +173,6 @@ function WeeklyPanel({ entries, targetMap, elapsedDays, canSeeValues }: {
   );
 }
 
-// ── Ranking de Descarbonizações (por quantidade) ──────────────────────────
-function DescarbonizacaoRanking({ entries }: { entries: DescRank[] }) {
-  const sorted = [...entries].sort((a, b) => b.qty - a.qty);
-  const max = Math.max(...sorted.map((e) => e.qty), 1);
-  const total = sorted.reduce((s, e) => s + e.qty, 0);
-  return (
-    <CarboCard>
-      <CarboCardContent className="p-4">
-        <div className="flex items-center justify-between mb-3 gap-3">
-          <div>
-            <p className="text-sm font-semibold flex items-center gap-1.5"><Wind className="h-4 w-4 text-purple-500" /> Ranking de Descarbonizações</p>
-            <p className="text-[11px] text-muted-foreground">Por quantidade vendida (não por valor)</p>
-          </div>
-          <CarboBadge variant="secondary">{total} no mês</CarboBadge>
-        </div>
-        <div className="space-y-2">
-          {sorted.map((e, idx) => {
-            const rank = idx + 1;
-            const medal = rank === 1 ? "🥇" : rank === 2 ? "🥈" : rank === 3 ? "🥉" : `${rank}º`;
-            return (
-              <div key={e.vendedor_id} className="flex items-center gap-2.5">
-                <span className="w-6 text-center text-sm font-bold text-muted-foreground shrink-0">{medal}</span>
-                <ProfileAvatar avatarUrl={e.avatar_url} fullName={e.full_name} userId={e.vendedor_id} size={28} />
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="text-sm font-medium truncate">{e.full_name}</p>
-                    <span className="text-sm font-bold tabular-nums">{e.qty} <span className="text-[10px] font-normal text-muted-foreground">descarb.</span></span>
-                  </div>
-                  <div className="h-1.5 bg-muted rounded-full overflow-hidden mt-1">
-                    <div className="h-full rounded-full bg-purple-500 transition-all duration-700" style={{ width: `${(e.qty / max) * 100}%` }} />
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </CarboCardContent>
-    </CarboCard>
-  );
-}
-
 // ── Página ───────────────────────────────────────────────────────────────
 export default function Metas() {
   const [month, setMonth] = useState(() => startOfMonth(new Date()));
@@ -338,9 +288,6 @@ export default function Metas() {
           </button>
         ))}
       </div>
-
-      {/* Ranking de descarbonizações (por quantidade) — vale para os dois períodos */}
-      <DescarbonizacaoRanking entries={MOCK_DESC_RANKING} />
 
       {/* Info bar — mensal */}
       {periodView === "mensal" && (
@@ -473,7 +420,7 @@ export default function Metas() {
       )}
 
       <p className="text-xs text-muted-foreground text-center pt-1">
-        Acompanhamento (somente leitura). Realizado das vendas salvas (status “pedido”). Configuração de metas é no Carbo Ops. Ranking de descarbonizações ainda é exemplo.
+        Acompanhamento (somente leitura). Realizado das vendas salvas (status “pedido”). A configuração de metas é no Carbo Ops.
       </p>
     </div>
   );

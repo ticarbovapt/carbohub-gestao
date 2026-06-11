@@ -9,7 +9,7 @@ import { CarboCard } from "@/components/ui/carbo-card";
 import { CarboEmptyState } from "@/components/ui/carbo-empty-state";
 import {
   ShoppingBag, Plus, RefreshCw, Filter, ChevronRight, Clock, CheckCircle, Truck,
-  Package, XCircle, DollarSign, BarChart3, Repeat, Zap, Calendar, Users, Download,
+  Package, XCircle, DollarSign, BarChart3, Calendar, Users, Download,
   FileText, Printer, ArrowUpDown, ArrowUp, ArrowDown, Pencil,
 } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -29,9 +29,6 @@ const ORDER_STATUS_LABELS: Record<OrderStatus, string> = {
   quote: "Orçamento", pending: "Pendente", confirmed: "Confirmado", invoiced: "Faturado",
   shipped: "Enviado", delivered: "Entregue", cancelled: "Cancelado",
 };
-const ORDER_TYPE_LABELS = { spot: "Spot", recorrente: "Recorrente" } as const;
-type OrderType = keyof typeof ORDER_TYPE_LABELS;
-
 const STATUS_VARIANTS: Record<OrderStatus, "secondary" | "info" | "warning" | "success" | "destructive"> = {
   quote: "secondary", pending: "warning", confirmed: "info", invoiced: "info",
   shipped: "info", delivered: "success", cancelled: "destructive",
@@ -43,7 +40,7 @@ const STATUS_ICONS: Record<OrderStatus, React.ComponentType<{ className?: string
 
 interface MockOrder {
   id: string; order_number: string; invoice_number: string | null; linha: string;
-  order_type: OrderType; vendedor_name: string; customer_name: string; customer_email: string | null;
+  vendedor_name: string; customer_name: string; customer_email: string | null;
   created_at: string; qty: number; items: number; total: number; status: OrderStatus;
 }
 
@@ -73,7 +70,6 @@ export default function Pedidos() {
         order_number: `PED-${v.id.slice(0, 8).toUpperCase()}`,
         invoice_number: null,
         linha: firstProd,
-        order_type: "spot" as OrderType,
         vendedor_name: nomes[v.vendedor_id] ?? "—",
         customer_name: v.customer_name ?? "—",
         customer_email: v.customer_email,
@@ -87,7 +83,6 @@ export default function Pedidos() {
 
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<OrderStatus | "all">("all");
-  const [typeFilter, setTypeFilter] = useState<"all" | "spot" | "recorrente">("all");
   const [productFilter, setProductFilter] = useState("all");
   const [vendedorFilter, setVendedorFilter] = useState("all");
   const [clienteFilter, setClienteFilter] = useState("all");
@@ -124,7 +119,6 @@ export default function Pedidos() {
   const filteredOrders = useMemo(() => orders.filter((order) => {
     if (dateFrom && new Date(order.created_at) < new Date(dateFrom)) return false;
     if (dateTo) { const end = new Date(dateTo); end.setDate(end.getDate() + 1); if (new Date(order.created_at) >= end) return false; }
-    if (typeFilter !== "all" && order.order_type !== typeFilter) return false;
     if (productFilter !== "all" && order.linha !== productFilter) return false;
     if (vendedorFilter !== "all" && order.vendedor_name !== vendedorFilter) return false;
     if (clienteFilter !== "all" && order.customer_name !== clienteFilter) return false;
@@ -132,7 +126,7 @@ export default function Pedidos() {
     const s = searchQuery.toLowerCase();
     return order.order_number.toLowerCase().includes(s) || order.customer_name.toLowerCase().includes(s) ||
       (order.customer_email ?? "").toLowerCase().includes(s) || (order.invoice_number ?? "").toLowerCase().includes(s);
-  }), [orders, searchQuery, typeFilter, productFilter, vendedorFilter, clienteFilter, dateFrom, dateTo]);
+  }), [orders, searchQuery, productFilter, vendedorFilter, clienteFilter, dateFrom, dateTo]);
 
   const sortedOrders = useMemo(() => [...filteredOrders].sort((a, b) => {
     let va: string | number = "", vb: string | number = "";
@@ -152,7 +146,7 @@ export default function Pedidos() {
   const handleExportCsv = () => {
     const rows = filteredOrders.map((o) => ({
       Pedido: o.order_number, NF: o.invoice_number ?? "", Produto: LINHA_LABELS[o.linha] ?? o.linha,
-      Tipo: ORDER_TYPE_LABELS[o.order_type], Vendedor: o.vendedor_name, Cliente: o.customer_name,
+      Vendedor: o.vendedor_name, Cliente: o.customer_name,
       Data: format(new Date(o.created_at), "dd/MM/yyyy HH:mm", { locale: ptBR }), Quantidade: o.qty,
       "Total (R$)": o.total, Status: ORDER_STATUS_LABELS[o.status],
     }));
@@ -246,14 +240,6 @@ export default function Pedidos() {
                     {Object.entries(ORDER_STATUS_LABELS).map(([key, label]) => <SelectItem key={key} value={key}>{label}</SelectItem>)}
                   </SelectContent>
                 </Select>
-                <Select value={typeFilter} onValueChange={(v) => setTypeFilter(v as "all" | "spot" | "recorrente")}>
-                  <SelectTrigger className="w-40 h-11 rounded-xl">{typeFilter === "recorrente" ? <Repeat className="h-4 w-4 mr-2" /> : <Zap className="h-4 w-4 mr-2" />}<SelectValue placeholder="Tipo" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Todos Tipos</SelectItem>
-                    <SelectItem value="spot"><span className="flex items-center gap-2"><Zap className="h-3 w-3" /> Spot</span></SelectItem>
-                    <SelectItem value="recorrente"><span className="flex items-center gap-2"><Repeat className="h-3 w-3" /> Recorrente</span></SelectItem>
-                  </SelectContent>
-                </Select>
               </div>
 
               <div className="flex flex-wrap items-center gap-3">
@@ -302,7 +288,6 @@ export default function Pedidos() {
                       <CarboTableHead><button onClick={() => handleSort("order_number")} className="flex items-center hover:text-foreground transition-colors">Pedido <SortIcon col="order_number" /></button></CarboTableHead>
                       <CarboTableHead>NF</CarboTableHead>
                       <CarboTableHead>Produto</CarboTableHead>
-                      <CarboTableHead>Tipo</CarboTableHead>
                       <CarboTableHead><button onClick={() => handleSort("vendedor_name")} className="flex items-center hover:text-foreground transition-colors">Vendedor <SortIcon col="vendedor_name" /></button></CarboTableHead>
                       <CarboTableHead><button onClick={() => handleSort("customer_name")} className="flex items-center hover:text-foreground transition-colors">Cliente <SortIcon col="customer_name" /></button></CarboTableHead>
                       <CarboTableHead><button onClick={() => handleSort("created_at")} className="flex items-center hover:text-foreground transition-colors">Data <SortIcon col="created_at" /></button></CarboTableHead>
@@ -319,7 +304,6 @@ export default function Pedidos() {
                         <CarboTableCell><span className="font-mono text-sm font-medium text-carbo-green">{order.order_number}</span></CarboTableCell>
                         <CarboTableCell>{order.invoice_number ? <span className="font-mono text-xs text-muted-foreground">{order.invoice_number}</span> : <span className="text-muted-foreground">—</span>}</CarboTableCell>
                         <CarboTableCell><CarboBadge variant={order.linha === "carbovapt" ? "warning" : "success"} className="text-[10px]">{LINHA_LABELS[order.linha] ?? order.linha}</CarboBadge></CarboTableCell>
-                        <CarboTableCell><CarboBadge variant={order.order_type === "recorrente" ? "info" : "secondary"} className="gap-1">{order.order_type === "recorrente" ? <Repeat className="h-3 w-3" /> : <Zap className="h-3 w-3" />}{ORDER_TYPE_LABELS[order.order_type]}</CarboBadge></CarboTableCell>
                         <CarboTableCell><span className="text-sm">{order.vendedor_name}</span></CarboTableCell>
                         <CarboTableCell><div><p className="font-medium">{order.customer_name}</p>{order.customer_email && <p className="text-xs text-muted-foreground">{order.customer_email}</p>}</div></CarboTableCell>
                         <CarboTableCell><p className="text-sm">{format(new Date(order.created_at), "dd/MM/yyyy", { locale: ptBR })}</p><p className="text-xs text-muted-foreground">{format(new Date(order.created_at), "HH:mm", { locale: ptBR })}</p></CarboTableCell>

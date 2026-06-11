@@ -12,7 +12,7 @@ import {
   Package, Pencil, Users, ArrowRightCircle, FileDown, CalendarDays, X,
 } from "lucide-react";
 import { toast } from "sonner";
-import { useVendas, useVendedorNomes } from "@/hooks/useVendas";
+import { useVendas, useVendedorNomes, useUpdateVendaStatus } from "@/hooks/useVendas";
 
 // Vendas e Orçamentos — lê de crm_vendas (orçamentos + vendas salvas).
 
@@ -45,6 +45,16 @@ export default function Vendas() {
   // ── Dados reais (crm_vendas: orçamentos + vendas) ──
   const { data: vendasRaw = [] } = useVendas("all");
   const { data: nomes = {} } = useVendedorNomes();
+  const updateStatus = useUpdateVendaStatus();
+
+  async function converterEmVenda(id: string) {
+    try {
+      await updateStatus.mutateAsync({ id, status: "pedido" });
+      toast.success("Orçamento convertido em venda!");
+    } catch (e) {
+      toast.error("Erro ao converter: " + (e instanceof Error ? e.message : "tente de novo"));
+    }
+  }
 
   const rows: VendaRow[] = useMemo(() => vendasRaw.map((v) => {
     const items: Item[] = (v.itens ?? []).map((i) => ({
@@ -219,17 +229,17 @@ export default function Vendas() {
                           <td className="p-3 text-right" onClick={(e) => e.stopPropagation()}>
                             <div className="flex items-center justify-end gap-1">
                               {venda.has_nf && (
-                                <button onClick={() => toast.success(`Baixando NF ${venda.invoice_number} (mock)`)} className="h-7 px-2 inline-flex items-center gap-1 rounded-md text-xs font-medium bg-green-500/10 text-green-600 hover:bg-green-500/20 border border-green-500/30 transition-colors whitespace-nowrap" title="Baixar PDF da NF">
+                                <button onClick={() => toast.info("Baixar NF — disponível em breve")} className="h-7 px-2 inline-flex items-center gap-1 rounded-md text-xs font-medium bg-green-500/10 text-green-600 hover:bg-green-500/20 border border-green-500/30 transition-colors whitespace-nowrap" title="Baixar PDF da NF">
                                   <FileDown className="h-3 w-3" /><span className="hidden sm:inline">Baixar NF</span>
                                 </button>
                               )}
                               {isQuote && (
-                                <button onClick={() => toast.success("Orçamento convertido em venda! (mock)")} className="h-7 px-2 inline-flex items-center gap-1 rounded-md text-xs font-medium bg-carbo-green/10 text-carbo-green hover:bg-carbo-green/20 border border-carbo-green/30 transition-colors" title="Converter orçamento em venda">
+                                <button onClick={() => converterEmVenda(venda.id)} className="h-7 px-2 inline-flex items-center gap-1 rounded-md text-xs font-medium bg-carbo-green/10 text-carbo-green hover:bg-carbo-green/20 border border-carbo-green/30 transition-colors" title="Converter orçamento em venda">
                                   <ArrowRightCircle className="h-3 w-3" /><span className="hidden sm:inline">Converter</span>
                                 </button>
                               )}
                               {isHead && !isQuote && (
-                                <button onClick={() => toast("Editar pedido (mock)")} className="h-7 w-7 inline-flex items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors" title="Editar pedido">
+                                <button onClick={() => toast.info("Edição de pedido — disponível em breve")} className="h-7 w-7 inline-flex items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors" title="Editar pedido">
                                   <Pencil className="h-3.5 w-3.5" />
                                 </button>
                               )}
@@ -271,7 +281,7 @@ export default function Vendas() {
       {isHead && selectedIds.size > 0 && (
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 rounded-2xl border border-border bg-background/95 backdrop-blur px-4 py-3 shadow-lg">
           <span className="text-sm font-semibold"><span className="text-carbo-green">{selectedIds.size}</span> pedido(s) selecionado(s)</span>
-          <button className="h-8 px-3 rounded-lg text-sm font-medium bg-carbo-green text-background hover:bg-carbo-green/90 transition-colors flex items-center gap-1.5" onClick={() => toast.success("Atribuir vendedor (mock)")}><Users className="h-3.5 w-3.5" /> Atribuir vendedor</button>
+          <button className="h-8 px-3 rounded-lg text-sm font-medium bg-carbo-green text-background hover:bg-carbo-green/90 transition-colors flex items-center gap-1.5" onClick={() => toast.info("Atribuir vendedor — disponível em breve")}><Users className="h-3.5 w-3.5" /> Atribuir vendedor</button>
           <button className="h-8 px-3 rounded-lg text-sm text-muted-foreground hover:text-foreground border border-border transition-colors" onClick={() => setSelectedIds(new Set())}>Cancelar</button>
         </div>
       )}
