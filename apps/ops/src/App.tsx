@@ -32,6 +32,7 @@ import AcompanhamentoMetas from "./pages/ecommerce/AcompanhamentoMetas";
 import MetasEcommerce from "./pages/ecommerce/MetasEcommerce";
 import AcompDashboardComercial from "./pages/acompanhamento/DashboardComercial";
 import AcompMetasVendedores from "./pages/acompanhamento/MetasVendedores";
+import MetasVendedoresConfig from "./pages/config/MetasVendedores";
 import { OPS_ALL_ITEMS } from "@/lib/opsNav";
 
 // Login é ÚNICO no Hub (carbohub.com.br). O ProtectedRoute cuida do acesso.
@@ -86,6 +87,9 @@ export default function App() {
         {/* Acompanhamento (Vendas) — espelho do Sales, visualização */}
         <Route path="/acompanhamento/comercial" element={<AcompDashboardComercial />} />
         <Route path="/acompanhamento/metas" element={<AcompMetasVendedores />} />
+
+        {/* Configuração de Metas — gestor define (o acompanhamento fica no Sales) */}
+        <Route path="/config/metas-vendedores" element={<MetasVendedoresConfig />} />
 
         {/* Demais áreas: placeholder até o port (telas com ready=false) */}
         {OPS_ALL_ITEMS.filter((i) => !i.ready).map((i) => (
