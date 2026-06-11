@@ -1,9 +1,8 @@
-// ⚠️ PORT VISUAL FIEL ao Controle (src/pages/NetworkMap.tsx) — dados MOCK.
-// Sem supabase, sem @tanstack/react-query, sem hooks reais. Apenas mockTerritorio.ts.
+// Mapa da Rede CarboVAPT — dados REAIS do CORE (machines / pdvs).
 import { useMemo, useState } from "react";
 import { MapContainer, TileLayer, CircleMarker, Popup } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
-import { MapPin, Cpu, Users, Activity, Map, Store } from "lucide-react";
+import { MapPin, Cpu, Users, Activity, Map, Store, Loader2 } from "lucide-react";
 import {
   Select,
   SelectContent,
@@ -13,16 +12,17 @@ import {
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import {
-  MOCK_MACHINES,
-  MOCK_PDVS,
-  MOCK_STATS,
+  useTerritorioMapa,
   STATUS_COLORS,
   STATUS_LABELS,
   BRAZIL_CENTER,
-} from "./mockTerritorio";
+} from "@/hooks/useTerritorio";
 
 export default function NetworkMap() {
-  const machines = MOCK_MACHINES;
+  const { data, isLoading, isError } = useTerritorioMapa();
+  const machines = data?.machines ?? [];
+  const pdvs = data?.pdvs ?? [];
+  const licensees = data?.licensees ?? [];
 
   const [stateFilter, setStateFilter] = useState<string>("all");
   const [licenseeFilter, setLicenseeFilter] = useState<string>("all");
@@ -50,8 +50,16 @@ export default function NetworkMap() {
     });
   }, [machines, stateFilter, licenseeFilter, statusFilter]);
 
-  const stats = MOCK_STATS;
-  const inactivePDVs = MOCK_PDVS.filter((p) => p.status !== "active").length;
+  const stats = useMemo(() => ({
+    totalMachines: machines.length,
+    activeMachines: machines.filter((m) => m.status === "ativa").length,
+    activeLicensees: licensees.filter((l) => l.status === "active").length,
+    activePDVs: pdvs.filter((p) => p.status === "active").length,
+    stockAlerts: pdvs.filter((p) => p.hasStockAlert).length,
+  }), [machines, licensees, pdvs]);
+
+  const inactivePDVs = pdvs.filter((p) => p.status !== "active").length;
+  const hasData = machines.length + pdvs.length > 0;
 
   return (
     <div className="p-4 md:p-6">
@@ -160,6 +168,17 @@ export default function NetworkMap() {
 
         {/* Map */}
         <div className="relative rounded-xl border border-border overflow-hidden bg-card">
+          {isLoading && (
+            <div className="absolute inset-0 z-[1100] flex items-center justify-center bg-background/60">
+              <Loader2 className="h-6 w-6 animate-spin text-primary" />
+            </div>
+          )}
+          {!isLoading && (isError || !hasData) && (
+            <div className="absolute inset-0 z-[1100] flex items-center justify-center bg-background/70">
+              <p className="text-sm text-muted-foreground">Sem dados para exibir no mapa.</p>
+            </div>
+          )}
+
           <MapContainer center={BRAZIL_CENTER} zoom={4} style={{ height: "500px", width: "100%" }} scrollWheelZoom>
             <TileLayer
               attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
@@ -167,12 +186,12 @@ export default function NetworkMap() {
             />
 
             {showPDVLayer &&
-              MOCK_PDVS.map((pdv) => {
+              pdvs.map((pdv) => {
                 const pdvColor = pdv.hasStockAlert ? "#ef4444" : pdv.status === "active" ? "#22c55e" : "#f59e0b";
                 return (
                   <CircleMarker
                     key={`pdv-${pdv.id}`}
-                    center={[pdv.lat, pdv.lng]}
+                    center={[pdv.lat as number, pdv.lng as number]}
                     radius={8}
                     pathOptions={{ color: pdvColor, fillColor: pdvColor, fillOpacity: 0.7, weight: 2 }}
                   >
@@ -204,8 +223,11 @@ export default function NetworkMap() {
                     <div className="text-sm space-y-1 min-w-[180px]">
                       <p className="font-bold text-foreground">{machine.machine_id}</p>
                       <p className="text-muted-foreground"><span className="font-medium">Modelo:</span> {machine.model}</p>
-                      <p className="text-muted-foreground"><span className="font-medium">Licenciado:</span> {machine.licensee_name}</p>
+                      <p className="text-muted-foreground"><span className="font-medium">Licenciado:</span> {machine.licensee_name ?? "—"}</p>
                       <p className="text-muted-foreground"><span className="font-medium">Local:</span> {machine.location_city}, {machine.location_state}</p>
+                      {machine.estimatedLocation && (
+                        <p className="text-muted-foreground text-xs italic">Posição aproximada (cidade)</p>
+                      )}
                       <p>
                         <span className="inline-block rounded-full px-2 py-0.5 text-xs font-medium text-white" style={{ backgroundColor: color }}>
                           {STATUS_LABELS[machine.status] || machine.status}
@@ -242,7 +264,7 @@ export default function NetworkMap() {
         </div>
 
         <p className="text-xs text-muted-foreground text-center">
-          Tela em port visual — dados de exemplo. Telemetria e localização reais das máquinas entram na fase de lógica.
+          Dados reais da rede CarboVAPT. Máquinas sem GPS são plotadas na coordenada aproximada da cidade.
         </p>
       </div>
     </div>
