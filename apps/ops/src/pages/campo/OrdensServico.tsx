@@ -1,12 +1,11 @@
 import { useMemo, useState } from "react";
-import { CarboPageHeader } from "@/components/ui/carbo-page-header";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { ClipboardList, Calendar, Zap, CheckCircle2, Search, LayoutGrid, List, Plus, RefreshCw } from "lucide-react";
-import { toast } from "sonner";
-import { CreateOSDialog } from "@/components/campo/CreateOSDialog";
+import { ClipboardList, Calendar, Zap, CheckCircle2, Search, LayoutGrid, List, RefreshCw, Loader2, Eye } from "lucide-react";
+import { useOS, type OSRow } from "@/hooks/useOS";
 
-// ⚠️ PORT VISUAL FIEL ao Controle (/os → OSBoard "Ordens de Serviço") — dados MOCK.
+// Espelho/acompanhamento das Ordens de Serviço de descarbonização (crm_os).
+// No Ops é SOMENTE LEITURA — criação/edição vivem no Carbo Sales.
 
 const OS_STAGES = [
   { id: "nova", label: "Nova OS", emoji: "📥", color: "#64748b" },
@@ -18,30 +17,48 @@ const OS_STAGES = [
   { id: "concluida", label: "Concluída", emoji: "✔️", color: "#22c55e" },
 ];
 
-interface OS { id: string; numero: string; cliente: string; tipo: string; veiculo: string; agendamento: string | null; stage: string; }
-const MOCK: OS[] = [
-  { id: "1", numero: "OS-1042", cliente: "Posto Shell Centro", tipo: "B2B", veiculo: "Frota (8 veíc.)", agendamento: "2026-06-14", stage: "agendamento" },
-  { id: "2", numero: "OS-1041", cliente: "João Particular", tipo: "B2C", veiculo: "Civic ABC-1D23", agendamento: "2026-06-12", stage: "confirmada" },
-  { id: "3", numero: "OS-1040", cliente: "Transportadora Veloz", tipo: "Frota", veiculo: "Frota (22 veíc.)", agendamento: null, stage: "qualificacao" },
-  { id: "4", numero: "OS-1039", cliente: "Maria Silva", tipo: "B2C", veiculo: "HB20 XYZ-4E56", agendamento: "2026-06-10", stage: "em_execucao" },
-  { id: "5", numero: "OS-1038", cliente: "Auto Posto Sul", tipo: "B2B", veiculo: "Gerador", agendamento: "2026-06-09", stage: "concluida" },
-  { id: "6", numero: "OS-1037", cliente: "Lead novo", tipo: "B2C", veiculo: "—", agendamento: null, stage: "nova" },
-];
+const TIPO_LABEL: Record<string, string> = { b2c: "B2C", b2b: "B2B", frota: "Frota" };
 
-const dt = (s: string | null) => (s ? new Date(s + "T00:00:00").toLocaleDateString("pt-BR") : "—");
+interface OSView { id: string; numero: string; cliente: string; tipo: string; veiculo: string; agendamento: string | null; stage: string; }
+const dt = (s: string | null) => (s ? new Date(s).toLocaleDateString("pt-BR") : "—");
+
+function toView(o: OSRow): OSView {
+  const veiculo = [o.placa, o.modelo].filter(Boolean).join(" · ") || "—";
+  return {
+    id: o.id,
+    numero: o.titulo?.trim() || `OS-${o.id.slice(0, 8)}`,
+    cliente: o.cliente_nome || "—",
+    tipo: TIPO_LABEL[o.tipo] ?? o.tipo,
+    veiculo,
+    agendamento: o.data_prevista,
+    stage: o.stage,
+  };
+}
 
 export default function OrdensServico() {
   const [search, setSearch] = useState("");
   const [viewMode, setViewMode] = useState<"kanban" | "list">("kanban");
-  const [createOpen, setCreateOpen] = useState(false);
 
-  const filtered = useMemo(() => MOCK.filter((o) => {
+  const { data, isLoading, isError, refetch, isFetching } = useOS();
+  const all = useMemo(() => (data ?? []).map(toView), [data]);
+
+  const filtered = useMemo(() => all.filter((o) => {
     if (!search) return true;
     const q = search.toLowerCase();
     return o.numero.toLowerCase().includes(q) || o.cliente.toLowerCase().includes(q) || o.veiculo.toLowerCase().includes(q);
-  }), [search]);
+  }), [all, search]);
 
-  const stats = { total: MOCK.length, agendadasHoje: 2, emExecucao: MOCK.filter((o) => o.stage === "em_execucao").length, concluidasMes: 14 };
+  const stats = useMemo(() => {
+    const now = new Date();
+    const today = now.toDateString();
+    const isSameMonth = (d: Date) => d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+    return {
+      total: all.filter((o) => o.stage !== "concluida").length,
+      agendadasHoje: all.filter((o) => o.agendamento && new Date(o.agendamento).toDateString() === today).length,
+      emExecucao: all.filter((o) => o.stage === "em_execucao").length,
+      concluidasMes: all.filter((o) => o.stage === "concluida" && o.agendamento && isSameMonth(new Date(o.agendamento))).length,
+    };
+  }, [all]);
 
   return (
     <div className="p-4 md:p-6">
@@ -51,10 +68,13 @@ export default function OrdensServico() {
             <h1 className="text-2xl font-bold flex items-center gap-3"><ClipboardList className="h-6 w-6 text-purple-500" /> Ordens de Serviço</h1>
             <p className="text-muted-foreground mt-1">Descarbonização CarboVAPT — B2C · B2B · Frota</p>
           </div>
-          <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" onClick={() => toast("Atualizar (em breve)")} className="gap-1"><RefreshCw className="h-3.5 w-3.5" /></Button>
-            <Button size="sm" onClick={() => setCreateOpen(true)} className="gap-2 bg-purple-600 hover:bg-purple-700 text-white"><Plus className="h-4 w-4" /> Nova OS</Button>
-          </div>
+          <Button variant="outline" size="sm" onClick={() => refetch()} className="gap-1"><RefreshCw className={`h-3.5 w-3.5 ${isFetching ? "animate-spin" : ""}`} /></Button>
+        </div>
+
+        {/* Banner de espelho/somente leitura */}
+        <div className="flex items-center gap-2 px-3 py-2 rounded-md bg-blue-500/10 border border-blue-500/20 text-sm text-blue-500">
+          <Eye className="h-4 w-4 shrink-0" />
+          <span>Acompanhamento (somente leitura). Criação e gestão das OS são feitas no <strong>Carbo Sales</strong>.</span>
         </div>
 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -75,12 +95,21 @@ export default function OrdensServico() {
           </div>
         </div>
 
-        {viewMode === "kanban" ? (
+        {isLoading ? (
+          <div className="flex items-center justify-center py-20 text-muted-foreground gap-2"><Loader2 className="h-5 w-5 animate-spin" /> Carregando ordens de serviço...</div>
+        ) : isError ? (
+          <div className="text-center py-20 text-sm text-destructive">Erro ao carregar as ordens de serviço.</div>
+        ) : all.length === 0 ? (
+          <div className="text-center py-20 space-y-2">
+            <ClipboardList className="h-10 w-10 mx-auto text-muted-foreground/40" />
+            <p className="text-sm text-muted-foreground">Nenhuma ordem de serviço ainda. As OS criadas no Carbo Sales aparecem aqui.</p>
+          </div>
+        ) : viewMode === "kanban" ? (
           <div className="flex gap-3 overflow-x-auto pb-3">
             {OS_STAGES.map((col) => {
               const items = filtered.filter((o) => o.stage === col.id);
               return (
-                <div key={col.id} className="w-60 shrink-0 rounded-2xl border border-border bg-board-surface/40 flex flex-col">
+                <div key={col.id} className="w-60 shrink-0 rounded-2xl border border-border bg-muted/20 flex flex-col">
                   <div className="rounded-t-2xl px-3 py-2.5 border-b border-border flex items-center justify-between" style={{ background: col.color + "12" }}>
                     <span className="text-sm font-semibold flex items-center gap-1.5">{col.emoji} {col.label}</span>
                     <span className="text-xs font-bold rounded-full px-2 py-0.5" style={{ background: col.color + "20", color: col.color }}>{items.length}</span>
@@ -127,10 +156,8 @@ export default function OrdensServico() {
             </table>
           </div>
         )}
-        <p className="text-xs text-muted-foreground text-center">Tela em port visual — dados de exemplo. OS reais, agendamento e execução entram na fase de lógica.</p>
+        <p className="text-xs text-muted-foreground text-center">Espelho do Carbo Sales — dados reais (crm_os). Aqui é só acompanhamento.</p>
       </div>
-
-      <CreateOSDialog open={createOpen} onOpenChange={setCreateOpen} />
     </div>
   );
 }
