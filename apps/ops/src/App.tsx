@@ -17,6 +17,7 @@ import Suprimentos from "./pages/compras/Suprimentos";
 import Financeiro from "./pages/financeiro/Financeiro";
 import Faturamento from "./pages/financeiro/Faturamento";
 import NotasFiscais from "./pages/financeiro/NotasFiscais";
+import NFSe from "./pages/financeiro/NFSe";
 import DashboardFinanceiro from "./pages/financeiro/DashboardFinanceiro";
 import Logistica from "./pages/logistica/Logistica";
 import ViagensLog from "./pages/logistica/Viagens";
@@ -62,6 +63,7 @@ export default function App() {
         <Route path="/financeiro" element={<Financeiro />} />
         <Route path="/financeiro/faturamento" element={<Faturamento />} />
         <Route path="/financeiro/notas-fiscais" element={<NotasFiscais />} />
+        <Route path="/financeiro/nfse" element={<NFSe />} />
         <Route path="/financeiro/dashboard" element={<DashboardFinanceiro />} />
 
         {/* Logística */}

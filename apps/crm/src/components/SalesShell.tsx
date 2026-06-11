@@ -2,7 +2,7 @@ import { useState } from "react";
 import { NavLink, Outlet } from "react-router-dom";
 import {
   KanbanSquare, ClipboardList, TrendingUp, Target, BarChart3, LayoutDashboard,
-  Wind, CalendarDays,
+  Wind, CalendarDays, MapPinned, Map, Share2,
 } from "lucide-react";
 import { TopBar } from "@/components/TopBar";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
@@ -23,6 +23,12 @@ const NAV = [
 const DESC_SUB = [
   { to: "/descarbonizacao/os", label: "Ordens de Serviço", icon: ClipboardList },
   { to: "/descarbonizacao/agendamentos", label: "Agendamentos", icon: CalendarDays },
+];
+// Território — bases/licenciados pra mostrar durante a venda (port visual, dados MOCK).
+const TERR_SUB = [
+  { to: "/territorio/mapa", label: "Mapa Territorial", icon: Map },
+  { to: "/territorio/rede", label: "Mapa da Rede", icon: Share2 },
+  { to: "/territorio/expansao", label: "Expansão", icon: TrendingUp },
 ];
 
 const navCls = ({ isActive }: { isActive: boolean }) =>
@@ -61,6 +67,18 @@ function Nav({ onNavigate }: { onNavigate?: () => void }) {
       </p>
       <div className="space-y-1 border-l border-border ml-3 pl-1">
         {DESC_SUB.map((n) => (
+          <NavLink key={n.to} to={n.to} className={subCls} onClick={onNavigate}>
+            <n.icon className="h-4 w-4" /> {n.label}
+          </NavLink>
+        ))}
+      </div>
+
+      {/* Seção Território */}
+      <p className="px-3 pt-3 pb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/70 flex items-center gap-1.5">
+        <MapPinned className="h-3 w-3" /> Território
+      </p>
+      <div className="space-y-1 border-l border-border ml-3 pl-1">
+        {TERR_SUB.map((n) => (
           <NavLink key={n.to} to={n.to} className={subCls} onClick={onNavigate}>
             <n.icon className="h-4 w-4" /> {n.label}
           </NavLink>

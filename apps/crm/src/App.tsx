@@ -12,6 +12,9 @@ import Metas from "./pages/Metas";
 import Profile from "./pages/Profile";
 import DescOrdensServico from "./pages/descarbonizacao/OrdensServico";
 import DescAgendamentos from "./pages/descarbonizacao/Agendamentos";
+import MapaTerritorial from "./pages/territorio/MapaTerritorial";
+import NetworkMap from "./pages/territorio/NetworkMap";
+import TerritoryExpansion from "./pages/territorio/TerritoryExpansion";
 import { isCarbohubDomain, goToHubLogin } from "@/lib/sso";
 
 // Login é ÚNICO no Hub: /login direto em produção é redirecionado pra lá.
@@ -41,6 +44,10 @@ export default function App() {
         {/* Descarbonização — acompanhamento (pra onde o "+ Nova Descarbonização" leva) */}
         <Route path="/descarbonizacao/os" element={<DescOrdensServico />} />
         <Route path="/descarbonizacao/agendamentos" element={<DescAgendamentos />} />
+        {/* Território — bases/licenciados, rede e expansão (port visual, dados MOCK) */}
+        <Route path="/territorio/mapa" element={<MapaTerritorial />} />
+        <Route path="/territorio/rede" element={<NetworkMap />} />
+        <Route path="/territorio/expansao" element={<TerritoryExpansion />} />
         {/* compatibilidade com rotas antigas (e-commerce migrou para o Carbo Ops) */}
         <Route path="/dashboard-comercial" element={<Navigate to="/comercial" replace />} />
         <Route path="/perfil" element={<Profile />} />
