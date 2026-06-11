@@ -79,6 +79,18 @@ export function useVendas(status?: VendaStatus | "all") {
   });
 }
 
+/** Atualiza o status de uma venda (ex.: converter orçamento → pedido). */
+export function useUpdateVendaStatus() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, status }: { id: string; status: VendaStatus }) => {
+      const { error } = await db.from("crm_vendas").update({ status }).eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["crm_vendas"] }),
+  });
+}
+
 /** Mapa id→nome dos vendedores (profiles) — usado para exibir o nome nas listas
  *  quando o gestor vê vendas de vários vendedores. */
 export function useVendedorNomes() {
