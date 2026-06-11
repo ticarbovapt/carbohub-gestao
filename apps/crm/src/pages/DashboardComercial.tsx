@@ -11,33 +11,12 @@ import { CarboPageHeader } from "@/components/ui/carbo-page-header";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useVendas, useVendedorNomes } from "@/hooks/useVendas";
 
-// ⚠️ PORT VISUAL FIEL ao Controle (/dashboards/comercial) — dados MOCK.
-// TODO: ligar em carboze_orders (Supabase) na fase de lógica.
-
-const VENDEDORES = ["Lucas Padilha", "Marcio Vannucci", "Marcius D'Ávila"];
-
-// Mock mensal no formato real: faturado (R$) + pedidos (qtd) + ticket médio
-const MESES = ["set/25", "out/25", "nov/25", "dez/25", "jan/26", "fev/26", "mar/26", "abr/26", "mai/26"];
-const FATURADO = [2000, 18000, 4000, 53000, 33000, 46000, 40000, 86000, 101000];
-const PEDIDOS = [7, 6, 4, 23, 18, 20, 20, 25, 20];
-const monthlyData = MESES.map((mes, i) => ({
-  mes,
-  faturado: FATURADO[i],
-  pedidos: PEDIDOS[i],
-  ticketMedio: PEDIDOS[i] > 0 ? Math.round(FATURADO[i] / PEDIDOS[i]) : 0,
-}));
-
-// KPIs mock
-const kpis = {
-  totalVendas: 143,
-  totalBRL: 382740.5,
-  maiorVenda: 55000,
-  maiorCliente: "BRISANET SERVICOS DE TELECOMUNICACOES S.A.",
-  topCliente: "M CONSTRUÇÕES & SERVIÇOS LTDA",
-  topQtd: 11,
-  ticketMedio: 382740.5 / 143,
-};
+// Dashboard Comercial — agrega as VENDAS salvas (crm_vendas, status "pedido").
+const MES_ABBR = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
+const monthLabel = (d: Date) => `${MES_ABBR[d.getMonth()]}/${String(d.getFullYear()).slice(2)}`;
+const BASE_JAN = 30_000, RATE = 0.15; // projeção +15%/mês (meta)
 
 const formatCurrency = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 const fmtK = (v: number) =>
@@ -46,30 +25,7 @@ const fmtK = (v: number) =>
   : formatCurrency(v);
 const pct = (cur: number, prev: number) => (prev > 0 ? ((cur - prev) / prev) * 100 : null);
 
-// Crescimento M/M e vs Janeiro (derivado do mock)
-const lastIdx = monthlyData.length - 1;
-const cur = monthlyData[lastIdx];
-const prev = monthlyData[lastIdx - 1];
-const jan = monthlyData.find((m) => m.mes === "jan/26")!;
-const growth = {
-  mom: {
-    brl: pct(cur.faturado, prev.faturado), qty: pct(cur.pedidos, prev.pedidos),
-    curLabel: cur.mes, prevLabel: prev.mes, cur, prev,
-  },
-  vsJan: {
-    brl: pct(cur.faturado, jan.faturado), qty: pct(cur.pedidos, jan.pedidos),
-    curLabel: cur.mes, janLabel: jan.mes, cur, jan,
-  },
-};
-
-// Crescimento anual: real vs projeção +15%/mês desde R$30k
-const BASE_JAN = 30_000, RATE = 0.15;
-const annualGrowthData = Array.from({ length: 12 }, (_, i) => {
-  const label = ["jan/26","fev/26","mar/26","abr/26","mai/26","jun/26","jul/26","ago/26","set/26","out/26","nov/26","dez/26"][i];
-  const projecao = Math.round(BASE_JAN * Math.pow(1 + RATE, i));
-  const realMatch = monthlyData.find((m) => m.mes === label);
-  return { label, projecao, real: realMatch ? realMatch.faturado : null };
-});
+interface MonthRow { mes: string; faturado: number; pedidos: number; ticketMedio: number; }
 
 const TooltipBRL = ({ active, payload, label }: any) => {
   if (!active || !payload?.length) return null;
@@ -94,16 +50,90 @@ const TooltipQty = ({ active, payload, label }: any) => {
 
 export default function DashboardComercial() {
   const [vendedor, setVendedor] = useState("all");
+  const { data: vendas = [] } = useVendas("all");
+  const { data: nomes = {} } = useVendedorNomes();
+
+  // Apenas vendas efetivas (status "pedido"), filtradas por vendedor selecionado.
+  const pedidos = useMemo(() => vendas.filter((v) =>
+    v.status === "pedido" && (vendedor === "all" || v.vendedor_id === vendedor)
+  ), [vendas, vendedor]);
+
+  // Opções de vendedor (a partir dos dados reais).
+  const vendedorOpts = useMemo(() => {
+    const ids = Array.from(new Set(vendas.map((v) => v.vendedor_id)));
+    return ids.map((id) => ({ id, name: nomes[id] ?? "—" })).sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
+  }, [vendas, nomes]);
+
+  // Série dos últimos 9 meses (faturado + pedidos + ticket médio).
+  const monthlyData = useMemo<MonthRow[]>(() => {
+    const now = new Date();
+    const buckets = new Map<string, { faturado: number; pedidos: number }>();
+    for (const v of pedidos) {
+      const d = new Date(v.created_at);
+      const key = `${d.getFullYear()}-${d.getMonth()}`;
+      const b = buckets.get(key) ?? { faturado: 0, pedidos: 0 };
+      b.faturado += Number(v.total) || 0; b.pedidos += 1;
+      buckets.set(key, b);
+    }
+    const out: MonthRow[] = [];
+    for (let i = 8; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const b = buckets.get(`${d.getFullYear()}-${d.getMonth()}`) ?? { faturado: 0, pedidos: 0 };
+      out.push({ mes: monthLabel(d), faturado: b.faturado, pedidos: b.pedidos, ticketMedio: b.pedidos > 0 ? Math.round(b.faturado / b.pedidos) : 0 });
+    }
+    return out;
+  }, [pedidos]);
+
+  // KPIs (sobre o conjunto filtrado).
+  const kpis = useMemo(() => {
+    const totalBRL = pedidos.reduce((s, v) => s + (Number(v.total) || 0), 0);
+    const totalVendas = pedidos.length;
+    let maiorVenda = 0, maiorCliente = "—";
+    const byCliente = new Map<string, number>();
+    for (const v of pedidos) {
+      const t = Number(v.total) || 0;
+      if (t > maiorVenda) { maiorVenda = t; maiorCliente = v.customer_name || "—"; }
+      const c = v.customer_name || "—";
+      byCliente.set(c, (byCliente.get(c) ?? 0) + 1);
+    }
+    let topCliente = "—", topQtd = 0;
+    for (const [c, q] of byCliente) if (q > topQtd) { topQtd = q; topCliente = c; }
+    return { totalVendas, totalBRL, maiorVenda, maiorCliente, topCliente, topQtd, ticketMedio: totalVendas > 0 ? totalBRL / totalVendas : 0 };
+  }, [pedidos]);
+
+  // Crescimento M/M e vs Janeiro.
+  const growth = useMemo(() => {
+    const cur = monthlyData[monthlyData.length - 1] ?? { mes: "", faturado: 0, pedidos: 0, ticketMedio: 0 };
+    const prev = monthlyData[monthlyData.length - 2] ?? { mes: "", faturado: 0, pedidos: 0, ticketMedio: 0 };
+    const janLbl = monthLabel(new Date(new Date().getFullYear(), 0, 1));
+    const jan = monthlyData.find((m) => m.mes === janLbl) ?? { mes: janLbl, faturado: 0, pedidos: 0, ticketMedio: 0 };
+    return {
+      mom: { brl: pct(cur.faturado, prev.faturado), qty: pct(cur.pedidos, prev.pedidos), curLabel: cur.mes, prevLabel: prev.mes, cur, prev },
+      vsJan: { brl: pct(cur.faturado, jan.faturado), qty: pct(cur.pedidos, jan.pedidos), curLabel: cur.mes, janLabel: jan.mes, cur, jan },
+    };
+  }, [monthlyData]);
+
+  // Crescimento anual: real (do mês) vs projeção +15%/mês.
+  const annualGrowthData = useMemo(() => {
+    const year = new Date().getFullYear();
+    return Array.from({ length: 12 }, (_, i) => {
+      const d = new Date(year, i, 1);
+      const label = monthLabel(d);
+      const real = monthlyData.find((m) => m.mes === label)?.faturado ?? null;
+      return { label, projecao: Math.round(BASE_JAN * Math.pow(1 + RATE, i)), real: real && real > 0 ? real : null };
+    });
+  }, [monthlyData]);
+
   const totalCarboze = kpis.totalBRL;
   const totalCarbozeOrders = kpis.totalVendas;
 
   const kpiCards = useMemo(() => [
-    { title: "Total de Vendas", value: kpis.totalVendas.toLocaleString("pt-BR"), sub: "Pedidos ativos (excl. cancelados)", icon: ShoppingCart, accent: "border-l-green-500", iconBg: "bg-green-500/10 text-green-600" },
+    { title: "Total de Vendas", value: kpis.totalVendas.toLocaleString("pt-BR"), sub: "Vendas (status pedido)", icon: ShoppingCart, accent: "border-l-green-500", iconBg: "bg-green-500/10 text-green-600" },
     { title: "R$ Total Vendido", value: fmtK(kpis.totalBRL), sub: "Faturamento acumulado", icon: DollarSign, accent: "border-l-green-500", iconBg: "bg-green-500/10 text-green-600" },
     { title: "Maior Venda", value: fmtK(kpis.maiorVenda), sub: kpis.maiorCliente, icon: Trophy, accent: "border-l-amber-400", iconBg: "bg-amber-400/10 text-amber-500" },
-    { title: "Top Recorrência", value: kpis.topCliente, sub: `${kpis.topQtd} pedidos · mais frequente`, icon: Repeat2, accent: "border-l-blue-400", iconBg: "bg-blue-400/10 text-blue-500" },
+    { title: "Top Recorrência", value: kpis.topCliente, sub: kpis.topQtd > 0 ? `${kpis.topQtd} pedidos · mais frequente` : "—", icon: Repeat2, accent: "border-l-blue-400", iconBg: "bg-blue-400/10 text-blue-500" },
     { title: "Ticket Médio", value: fmtK(kpis.ticketMedio), sub: "Por pedido (período)", icon: TrendingUp, accent: "border-l-violet-400", iconBg: "bg-violet-400/10 text-violet-500" },
-  ], []);
+  ], [kpis]);
 
   const growthGroups = [
     {
@@ -131,7 +161,7 @@ export default function DashboardComercial() {
       <div className="space-y-3 max-w-[1600px] mx-auto">
         {/* Header + filtros */}
         <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
-          <CarboPageHeader title="Dashboard — Comercial" description="Licenciados, pedidos e performance de vendas" icon={TrendingUp} />
+          <CarboPageHeader title="Dashboard — Comercial" description="Vendas, pedidos e performance comercial" icon={TrendingUp} />
           <div className="flex flex-wrap items-end gap-2 shrink-0">
             <div className="space-y-1">
               <Label className="text-[10px] text-muted-foreground flex items-center gap-1"><CalendarRange className="h-3 w-3" /> Período</Label>
@@ -147,7 +177,7 @@ export default function DashboardComercial() {
                 <SelectTrigger className="h-8 w-[160px] text-xs"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Todos vendedores</SelectItem>
-                  {VENDEDORES.map((v) => <SelectItem key={v} value={v}>{v}</SelectItem>)}
+                  {vendedorOpts.map((v) => <SelectItem key={v.id} value={v.id}>{v.name}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
@@ -217,7 +247,7 @@ export default function DashboardComercial() {
             <div>
               <h2 className="text-base font-bold text-board-text flex items-center gap-2"><BarChart3 className="h-4 w-4 text-primary" /> Evolução Mensal de Vendas</h2>
               <p className="text-xs text-board-muted mt-0.5">
-                Via Bling · <span className="font-semibold text-board-text">{totalCarbozeOrders} pedidos</span>
+                <span className="font-semibold text-board-text">{totalCarbozeOrders} pedidos</span>
                 {" · "}<span className="font-semibold text-green-500">{totalCarboze.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })} acumulado</span>
               </p>
             </div>
@@ -239,7 +269,7 @@ export default function DashboardComercial() {
                   <YAxis tick={{ fontSize: 10, fill: "#94a3b8" }} axisLine={false} tickLine={false} width={44} tickFormatter={(v) => (v >= 1000 ? `${(v / 1000).toFixed(0)}k` : String(v))} />
                   <Tooltip cursor={{ fill: "rgba(148,163,184,0.08)" }} content={<TooltipBRL />} />
                   <Bar dataKey="faturado" fill="rgba(26,122,74,0.18)" stroke="#1a7a4a" strokeWidth={1.5} radius={[4, 4, 0, 0]} maxBarSize={48} isAnimationActive={false}>
-                    <LabelList dataKey="faturado" position="top" formatter={(v: number) => (v >= 1000 ? `R$${(v / 1000).toFixed(0)}k` : `R$${v}`)} style={{ fontSize: 10, fill: "#1a7a4a", fontWeight: 700 }} />
+                    <LabelList dataKey="faturado" position="top" formatter={(v: number) => (v >= 1000 ? `R$${(v / 1000).toFixed(0)}k` : v > 0 ? `R$${v}` : "")} style={{ fontSize: 10, fill: "#1a7a4a", fontWeight: 700 }} />
                   </Bar>
                   <Line type="monotoneX" dataKey="faturado" stroke="#1a7a4a" strokeWidth={2.5} dot={{ r: 3, fill: "#1a7a4a", stroke: "#fff", strokeWidth: 2 }} activeDot={{ r: 5 }} isAnimationActive={false} />
                 </ComposedChart>
@@ -261,7 +291,7 @@ export default function DashboardComercial() {
                   <YAxis allowDecimals={false} tick={{ fontSize: 10, fill: "#94a3b8" }} axisLine={false} tickLine={false} width={28} />
                   <Tooltip cursor={{ fill: "rgba(148,163,184,0.08)" }} content={<TooltipQty />} />
                   <Bar dataKey="pedidos" fill="rgba(59,110,165,0.75)" radius={[5, 5, 0, 0]} maxBarSize={48} isAnimationActive={false}>
-                    <LabelList dataKey="pedidos" position="top" style={{ fontSize: 11, fill: "#94a3b8", fontWeight: 700 }} />
+                    <LabelList dataKey="pedidos" position="top" formatter={(v: number) => (v > 0 ? String(v) : "")} style={{ fontSize: 11, fill: "#94a3b8", fontWeight: 700 }} />
                   </Bar>
                   <Line type="monotoneX" dataKey="pedidos" stroke="#3b6ea5" strokeWidth={2.5} strokeDasharray="5 3" dot={{ r: 3, fill: "#3b6ea5", stroke: "#fff", strokeWidth: 2 }} activeDot={{ r: 5 }} isAnimationActive={false} />
                 </ComposedChart>
@@ -277,7 +307,7 @@ export default function DashboardComercial() {
             <div className="flex items-center justify-between border-b border-border px-6 py-3">
               <div>
                 <h2 className="text-base font-bold text-board-text flex items-center gap-2"><TrendingUp className="h-4 w-4 text-orange-400" /> Crescimento Anual</h2>
-                <p className="text-xs text-board-muted mt-0.5">Real vs projeção +15%/mês · <span className="font-semibold text-orange-400">base R$30k jan/26</span></p>
+                <p className="text-xs text-board-muted mt-0.5">Real vs projeção +15%/mês · <span className="font-semibold text-orange-400">base R$30k jan</span></p>
               </div>
               <div className="flex items-center gap-3 text-[10px] text-board-muted">
                 <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-sm bg-emerald-500/70" /> Real</span>
@@ -339,7 +369,7 @@ export default function DashboardComercial() {
                     );
                   }} />
                   <Bar dataKey="ticketMedio" fill="rgba(139,92,246,0.2)" stroke="#8b5cf6" strokeWidth={1.5} radius={[4, 4, 0, 0]} maxBarSize={48} isAnimationActive={false}>
-                    <LabelList dataKey="ticketMedio" position="top" formatter={(v: number) => (v >= 1000 ? `R$${(v / 1000).toFixed(0)}k` : `R$${v}`)} style={{ fontSize: 10, fill: "#8b5cf6", fontWeight: 700 }} />
+                    <LabelList dataKey="ticketMedio" position="top" formatter={(v: number) => (v >= 1000 ? `R$${(v / 1000).toFixed(0)}k` : v > 0 ? `R$${v}` : "")} style={{ fontSize: 10, fill: "#8b5cf6", fontWeight: 700 }} />
                   </Bar>
                   <Line type="monotoneX" dataKey="ticketMedio" stroke="#8b5cf6" strokeWidth={2.5} dot={{ r: 3, fill: "#8b5cf6", stroke: "#fff", strokeWidth: 2 }} activeDot={{ r: 5 }} isAnimationActive={false} />
                 </ComposedChart>
@@ -349,7 +379,7 @@ export default function DashboardComercial() {
         </div>
 
         <p className="text-xs text-muted-foreground text-center pt-1">
-          Tela em port visual — números de exemplo. Os dados reais (carboze_orders / Bling) entram na fase de lógica.
+          Dados reais das vendas salvas (crm_vendas, status “pedido”). A linha de meta é uma projeção (+15%/mês).
         </p>
       </div>
     </div>
