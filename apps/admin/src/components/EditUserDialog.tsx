@@ -4,7 +4,7 @@ import { Loader2, Save, X, Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { SYSTEMS } from "@/lib/interfaces";
-import { useDeptFunctions, useUpdateUser, type AdminProfile } from "@/hooks/useAdminUsers";
+import { useDeptFunctions, useUpdateUser, useSetIsVendedor, type AdminProfile } from "@/hooks/useAdminUsers";
 import { useDepartments } from "@/hooks/useStructure";
 
 const selectCls =
@@ -20,6 +20,7 @@ interface Props {
 // as funções daquele departamento aparecem (department_functions).
 export function EditUserDialog({ user, approved, onClose }: Props) {
   const updateUser = useUpdateUser();
+  const setIsVendedor = useSetIsVendedor();
   const { data: DEPTS = [] } = useDepartments();
 
   const [fullName, setFullName] = useState("");
@@ -30,6 +31,7 @@ export function EditUserDialog({ user, approved, onClose }: Props) {
   const [escopo, setEscopo] = useState("");
   const [managerUserId, setManagerUserId] = useState("");
   const [interfaces, setInterfaces] = useState<string[]>([]);
+  const [isVendedor, setIsVendedorState] = useState(false);
 
   // Re-hidrata o form sempre que abre com um usuário diferente.
   useEffect(() => {
@@ -42,6 +44,7 @@ export function EditUserDialog({ user, approved, onClose }: Props) {
     setEscopo(user.escopo ?? "");
     setManagerUserId(user.manager_user_id ?? "");
     setInterfaces(user.allowed_interfaces ?? []);
+    setIsVendedorState(!!user.is_vendedor);
   }, [user]);
 
   const { data: deptFunctions = [] } = useDeptFunctions(department || undefined);
@@ -69,6 +72,10 @@ export function EditUserDialog({ user, approved, onClose }: Props) {
         managerUserId: managerUserId || undefined,
         allowedInterfaces: interfaces,
       });
+      // Flag de vendedor via RPC dedicada (só altera se mudou).
+      if (isVendedor !== !!user.is_vendedor) {
+        await setIsVendedor.mutateAsync({ userId: user.id, value: isVendedor });
+      }
       toast.success("Usuário atualizado!");
       onClose();
     } catch (e) {
@@ -165,6 +172,16 @@ export function EditUserDialog({ user, approved, onClose }: Props) {
               ))}
             </div>
           </div>
+
+          {/* É vendedor? — entra no quadro de Metas do Carbo Sales */}
+          <label className="flex items-start gap-3 rounded-xl border p-3 cursor-pointer bg-muted/30">
+            <input type="checkbox" className="h-4 w-4 mt-0.5 accent-primary"
+              checked={isVendedor} onChange={(e) => setIsVendedorState(e.target.checked)} />
+            <span>
+              <span className="text-sm font-medium">É vendedor?</span>
+              <span className="block text-xs text-muted-foreground">Marca o usuário como vendedor — passa a aparecer no quadro de Metas e nos rankings do Carbo Sales.</span>
+            </span>
+          </label>
 
           <div className="flex gap-2 pt-1">
             <Button variant="outline" className="flex-1" onClick={onClose}>Cancelar</Button>
