@@ -84,6 +84,23 @@ export function useVendas(status?: VendaStatus | "all") {
   });
 }
 
+/** Uma venda específica (cabeçalho + itens) — para a tela de detalhes. */
+export function useVenda(id: string | null) {
+  return useQuery({
+    queryKey: ["crm_venda", id],
+    enabled: !!id,
+    queryFn: async (): Promise<VendaRow | null> => {
+      const { data, error } = await db
+        .from("crm_vendas")
+        .select("*, itens:crm_venda_itens(produto, quantidade, preco_unitario, bonificacao)")
+        .eq("id", id)
+        .maybeSingle();
+      if (error) throw error;
+      return (data ?? null) as VendaRow | null;
+    },
+  });
+}
+
 /** Atualiza o status de uma venda (ex.: converter orçamento → pedido). */
 export function useUpdateVendaStatus() {
   const qc = useQueryClient();

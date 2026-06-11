@@ -21,6 +21,7 @@ import { useNavigate } from "react-router-dom";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { useVendas, useVendedorNomes } from "@/hooks/useVendas";
+import { VendaDetailsDialog } from "@/components/VendaDetailsDialog";
 
 // Controle de pedidos — lê as vendas salvas (crm_vendas, status "pedido").
 
@@ -58,6 +59,7 @@ export default function Pedidos() {
   // ── Dados reais: vendas salvas (status "pedido") ──
   const { data: vendas = [], refetch, isFetching } = useVendas("all");
   const { data: nomes = {} } = useVendedorNomes();
+  const [detailId, setDetailId] = useState<string | null>(null);
 
   const allOrders: MockOrder[] = useMemo(() => vendas
     .filter((v) => v.status !== "orcamento")
@@ -300,7 +302,7 @@ export default function Pedidos() {
                   </CarboTableHeader>
                   <CarboTableBody>
                     {sortedOrders.map((order) => (
-                      <CarboTableRow key={order.id} interactive>
+                      <CarboTableRow key={order.id} interactive onClick={() => setDetailId(order.id)} className="cursor-pointer">
                         <CarboTableCell><span className="font-mono text-sm font-medium text-carbo-green">{order.order_number}</span></CarboTableCell>
                         <CarboTableCell>{order.invoice_number ? <span className="font-mono text-xs text-muted-foreground">{order.invoice_number}</span> : <span className="text-muted-foreground">—</span>}</CarboTableCell>
                         <CarboTableCell><CarboBadge variant={order.linha === "carbovapt" ? "warning" : "success"} className="text-[10px]">{LINHA_LABELS[order.linha] ?? order.linha}</CarboBadge></CarboTableCell>
@@ -310,7 +312,7 @@ export default function Pedidos() {
                         <CarboTableCell className="text-center"><div className="flex flex-col items-center"><span className="font-bold text-lg">{order.qty}</span><span className="text-xs text-muted-foreground">{order.items} {order.items === 1 ? "item" : "itens"}</span></div></CarboTableCell>
                         <CarboTableCell><span className="font-medium">{fmtBRL(order.total)}</span></CarboTableCell>
                         <CarboTableCell><CarboBadge variant={STATUS_VARIANTS[order.status]} dot>{ORDER_STATUS_LABELS[order.status]}</CarboBadge></CarboTableCell>
-                        {canManageOrders && <CarboTableCell><button className="p-2 hover:bg-muted rounded-md transition-colors"><Pencil className="h-4 w-4" /></button></CarboTableCell>}
+                        {canManageOrders && <CarboTableCell><button onClick={(e) => { e.stopPropagation(); setDetailId(order.id); }} className="p-2 hover:bg-muted rounded-md transition-colors" title="Ver detalhes"><Pencil className="h-4 w-4" /></button></CarboTableCell>}
                         <CarboTableCell><ChevronRight className="h-4 w-4 text-muted-foreground" /></CarboTableCell>
                       </CarboTableRow>
                     ))}
@@ -322,9 +324,11 @@ export default function Pedidos() {
         </Tabs>
 
         <p className="text-xs text-muted-foreground text-center">
-          Pedidos reais (vendas salvas). Edição, NF e relatórios entram nas próximas etapas.
+          Pedidos reais (vendas salvas). Clique numa linha para ver os detalhes. Edição, NF e relatórios entram nas próximas etapas.
         </p>
       </div>
+
+      <VendaDetailsDialog vendaId={detailId} open={!!detailId} onOpenChange={(o) => !o && setDetailId(null)} />
     </div>
   );
 }
