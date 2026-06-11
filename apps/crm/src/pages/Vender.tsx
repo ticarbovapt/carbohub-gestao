@@ -18,6 +18,9 @@ import { generateQuotePdf } from "@/lib/quotePdf";
 import { useCreateVenda } from "@/hooks/useVendas";
 import { useProdutos } from "@/hooks/useProdutos";
 import { validateInscricaoEstadual } from "@/lib/inscricaoEstadual";
+import { useGeocode } from "@/hooks/useGeocode";
+import { MapContainer, TileLayer, CircleMarker, Popup } from "react-leaflet";
+import "leaflet/dist/leaflet.css";
 
 // Vender — grava a venda de verdade (crm_vendas) e lê o catálogo real (mrp_products).
 // Pendências de fora do escopo de venda: lookup de CNPJ e mapa (próximas fases).
@@ -81,6 +84,22 @@ export default function Vender() {
   const isIsento = /^isento$/i.test(ie.trim());
   const ieUfEff = ieUf || endereco.uf || "";
   const ieResult = ie && !isIsento ? validateInscricaoEstadual(ie, ieUfEff) : null;
+  const { geocodeAddress, isLoading: geoLoading } = useGeocode();
+  const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
+  const [mapMsg, setMapMsg] = useState<string | null>(null);
+
+  // Localiza a posição aproximada do endereço no mapa (para conferência visual).
+  async function localizarNoMapa() {
+    setMapMsg(null);
+    if (!endereco.cidade || !endereco.uf) {
+      setMapMsg("Preencha ao menos Cidade e Estado para localizar no mapa.");
+      return;
+    }
+    const addr = [endereco.logradouro, endereco.numero].filter(Boolean).join(", ");
+    const geo = await geocodeAddress(addr, endereco.cidade, endereco.uf);
+    if (geo) { setCoords({ lat: geo.lat, lng: geo.lng }); }
+    else { setCoords(null); setMapMsg("Não foi possível localizar este endereço. Confira os dados."); }
+  }
 
   const subtotal = useMemo(() => rows.reduce((s, r) => s + r.qty * r.unitPrice, 0), [rows]);
 
@@ -136,6 +155,11 @@ export default function Vender() {
         cep: (raw.cep || "").replace(/\D/g, ""),
       });
       setDocFeedback({ kind: "ok", msg: "Dados do CNPJ carregados com sucesso!" });
+      // Localiza no mapa automaticamente após o CNPJ.
+      if (raw.municipio && raw.uf) {
+        const geo = await geocodeAddress([raw.logradouro, raw.numero].filter(Boolean).join(", "), raw.municipio, raw.uf);
+        if (geo) { setCoords({ lat: geo.lat, lng: geo.lng }); setMapMsg(null); }
+      }
     } catch (err) {
       const name = (err as { name?: string }).name;
       setDocFeedback({ kind: "err", msg: name === "TimeoutError" || name === "AbortError"
@@ -186,6 +210,7 @@ export default function Vender() {
     setIsLicenciado(false); setRows([emptyRow()]); setObsPublica("");
     setEndereco({ logradouro: "", numero: "", bairro: "", cidade: "", uf: "", cep: "" });
     setIe(""); setIeUf(""); setDocFeedback(null);
+    setCoords(null); setMapMsg(null);
   }
 
   async function handleQuote() {
@@ -336,8 +361,9 @@ export default function Vender() {
         <CarboCardContent className="p-4 space-y-3">
           <div className="flex items-center justify-between">
             <h3 className="font-semibold flex items-center gap-2"><MapPin className="h-4 w-4 text-carbo-green" /> Endereço de Entrega</h3>
-            <Button variant="outline" size="sm" onClick={() => toast.info("Mapa entra na fase de lógica.")}>
-              <MapPin className="h-4 w-4 mr-1" /> Localizar no mapa
+            <Button variant="outline" size="sm" onClick={localizarNoMapa} disabled={geoLoading}>
+              {geoLoading ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <MapPin className="h-4 w-4 mr-1" />}
+              {geoLoading ? "Localizando..." : "Localizar no mapa"}
             </Button>
           </div>
           <div className="grid md:grid-cols-3 gap-3">
@@ -360,10 +386,24 @@ export default function Vender() {
             </div>
             <div className="space-y-1.5"><Label>CEP</Label><Input placeholder="00000-000" value={endereco.cep} onChange={(e) => setEnd({ cep: e.target.value })} /></div>
           </div>
-          <div className="rounded-xl border border-dashed flex flex-col items-center justify-center gap-2 py-10 text-center text-muted-foreground">
-            <MapPin className="h-6 w-6" />
-            <p className="text-sm px-6">Preencha o endereço e clique em <b>Localizar no mapa</b> para visualizar e ajustar o ponto de entrega.</p>
-          </div>
+          {coords ? (
+            <div className="space-y-1.5">
+              <div className="rounded-xl overflow-hidden border" style={{ height: 260 }}>
+                <MapContainer key={`${coords.lat},${coords.lng}`} center={[coords.lat, coords.lng]} zoom={15} style={{ height: "100%", width: "100%" }} scrollWheelZoom={false}>
+                  <TileLayer attribution='&copy; OpenStreetMap' url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+                  <CircleMarker center={[coords.lat, coords.lng]} radius={11} pathOptions={{ color: "#16A34A", fillColor: "#16A34A", fillOpacity: 0.5, weight: 2 }}>
+                    <Popup>{[endereco.logradouro, endereco.numero].filter(Boolean).join(", ") || "Local aproximado"}<br />{[endereco.cidade, endereco.uf].filter(Boolean).join("/")}</Popup>
+                  </CircleMarker>
+                </MapContainer>
+              </div>
+              <p className="text-[11px] text-muted-foreground flex items-center gap-1"><MapPin className="h-3 w-3" /> Posição <b>aproximada</b> pelo endereço — confira se bate com o local de entrega.</p>
+            </div>
+          ) : (
+            <div className="rounded-xl border border-dashed flex flex-col items-center justify-center gap-2 py-10 text-center text-muted-foreground">
+              <MapPin className="h-6 w-6" />
+              <p className="text-sm px-6">{mapMsg ?? <>Preencha o endereço e clique em <b>Localizar no mapa</b> para visualizar o ponto aproximado de entrega.</>}</p>
+            </div>
+          )}
         </CarboCardContent>
       </CarboCard>
 
