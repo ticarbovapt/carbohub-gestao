@@ -101,6 +101,12 @@ export const OPS_GROUPS: OpsNavGroup[] = [
       { path: "/acompanhamento/metas", label: "Metas de Vendedores", icon: Target, from: "/dashboards/metas/vendedores", mirror: true, ready: true },
     ],
   },
+  {
+    label: "Configuração de Metas",
+    items: [
+      { path: "/config/metas-vendedores", label: "Metas de Vendedores", icon: Target, from: "/dashboards/metas/config", ready: true },
+    ],
+  },
 ];
 
 // Lista achatada (para gerar rotas no App).

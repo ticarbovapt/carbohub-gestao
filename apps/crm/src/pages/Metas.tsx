@@ -6,14 +6,13 @@ import { CarboBadge } from "@/components/ui/carbo-badge";
 import { Button } from "@/components/ui/button";
 import {
   ChevronLeft, ChevronRight, Trophy, TrendingUp, TrendingDown,
-  Calendar, Zap, Settings, Wind,
+  Calendar, Zap, Wind,
 } from "lucide-react";
 import { ProfileAvatar } from "@/components/ui/profile-avatar";
 import { useMetasVendedores } from "@/hooks/useMetas";
-import { ConfigMetasDialog } from "@/components/ConfigMetasDialog";
 
-// Visual 1:1 com o Controle (/dashboards/metas/vendedores); lógica nova:
-// vendedores marcados (is_vendedor) + realizado de crm_vendas + metas próprias.
+// Visual 1:1 com o Controle (/dashboards/metas/vendedores); lógica nova.
+// No Sales é SÓ ACOMPANHAMENTO (ver quadro + ranking). Configurar metas é no Ops.
 
 // ── Tipos ─────────────────────────────────────────────────────────────────
 interface VendedorProfile { full_name: string | null; avatar_url: string | null; department?: string; secondary_department?: string; }
@@ -231,9 +230,7 @@ export default function Metas() {
   const [periodView, setPeriodView] = useState<PeriodView>("mensal");
   const [weekStart, setWeekStart] = useState(() => commercialWeekStartOf(new Date()));
 
-  const canManage = true;   // gestor (camada de acesso fina entra depois)
   const canSeeValues = true;
-  const [configOpen, setConfigOpen] = useState(false);
 
   // ── Dados reais ──
   const { data: metas = [] } = useMetasVendedores(month, weekStart);
@@ -330,9 +327,6 @@ export default function Metas() {
             </div>
           )}
 
-          {canManage && (
-            <Button size="sm" variant="outline" className="gap-1.5" onClick={() => setConfigOpen(true)}><Settings className="h-4 w-4" /> Configurar Metas</Button>
-          )}
         </div>
       </div>
 
@@ -479,10 +473,8 @@ export default function Metas() {
       )}
 
       <p className="text-xs text-muted-foreground text-center pt-1">
-        Realizado das vendas salvas (status “pedido”). Ranking de descarbonizações ainda é exemplo (OS não persiste).
+        Acompanhamento (somente leitura). Realizado das vendas salvas (status “pedido”). Configuração de metas é no Carbo Ops. Ranking de descarbonizações ainda é exemplo.
       </p>
-
-      <ConfigMetasDialog open={configOpen} onOpenChange={setConfigOpen} month={month} metas={metas} />
     </div>
   );
 }
