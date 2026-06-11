@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useAuth } from "@/contexts/AuthContext";
 import { generateQuotePdf } from "@/lib/quotePdf";
+import { useCreateVenda } from "@/hooks/useVendas";
 
 // ⚠️ PORT VISUAL — sem lógica real (CNPJ lookup, mapa, SKUs, gravação). TODO na fase de lógica.
 // O VENDEDOR é o usuário logado (não há dropdown de vendedor).
@@ -60,6 +61,7 @@ export default function Vender() {
   const navigate = useNavigate();
   const { profile } = useAuth();
   const vendedor = profile?.full_name ?? profile?.username ?? "";
+  const createVenda = useCreateVenda();
 
   const [mode, setMode] = useState<"venda" | "promo">("venda");
   const [doc, setDoc] = useState("");
@@ -88,24 +90,63 @@ export default function Vender() {
       quantity: r.qty, unit_price: r.unitPrice, bonus_quantity: r.hasBonus ? r.bonusQty : 0,
     }));
 
+  // Monta o payload de gravação (cabeçalho + itens) a partir do estado da tela.
+  function buildPayload(status: "orcamento" | "pedido") {
+    return {
+      tipo: mode,
+      status,
+      customer_name: customerName || undefined,
+      customer_doc: doc || undefined,
+      customer_email: email || undefined,
+      customer_phone: phone || undefined,
+      is_licenciado: isLicenciado,
+      total: subtotal,
+      notes: obsPublica || undefined,
+      itens: validItems().map((i) => ({
+        produto: i.name,
+        quantidade: i.quantity,
+        preco_unitario: i.unit_price,
+        bonificacao: i.bonus_quantity,
+      })),
+    } as const;
+  }
+
+  // Limpa o formulário após salvar.
+  function resetForm() {
+    setMode("venda"); setDoc(""); setCustomerName(""); setEmail(""); setPhone("");
+    setIsLicenciado(false); setRows([emptyRow()]); setObsPublica("");
+  }
+
   async function handleQuote() {
     const items = validItems();
     if (items.length === 0) { toast.error("Adicione ao menos um item."); return; }
     setGenerating(true);
     try {
+      // 1) Gera o PDF do orçamento (como antes).
       await generateQuotePdf({
         customer_name: customerName || "Cliente", cnpj: doc || undefined,
         vendedor_name: vendedor || undefined, items, total: subtotal,
         notes: obsPublica || undefined, created_at: new Date().toISOString(), validityDays: 7,
       });
-      toast.success("Orçamento gerado!");
+      // 2) Salva o orçamento (status = orcamento).
+      await createVenda.mutateAsync(buildPayload("orcamento"));
+      toast.success("Orçamento gerado e salvo!");
+      resetForm();
     } catch (e) {
-      toast.error("Erro ao gerar orçamento: " + (e instanceof Error ? e.message : "tente de novo"));
+      toast.error("Erro ao gerar/salvar orçamento: " + (e instanceof Error ? e.message : "tente de novo"));
     } finally { setGenerating(false); }
   }
-  function handleSell() {
+
+  async function handleSell() {
     if (validItems().length === 0) { toast.error("Adicione ao menos um item."); return; }
-    toast.success("Venda gerada! (demonstração — gravação real entra na próxima fase)");
+    try {
+      await createVenda.mutateAsync(buildPayload("pedido"));
+      toast.success("Venda registrada!");
+      resetForm();
+      navigate("/pedidos");
+    } catch (e) {
+      toast.error("Erro ao registrar venda: " + (e instanceof Error ? e.message : "tente de novo"));
+    }
   }
 
   return (
