@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useAuth } from "@/contexts/AuthContext";
@@ -79,6 +80,10 @@ export default function Vender() {
   const [docFeedback, setDocFeedback] = useState<{ kind: "ok" | "err"; msg: string } | null>(null);
   const [endereco, setEndereco] = useState({ logradouro: "", numero: "", bairro: "", cidade: "", uf: "", cep: "" });
   const setEnd = (patch: Partial<typeof endereco>) => setEndereco((e) => ({ ...e, ...patch }));
+  // Faturamento (NF): o endereço da empresa (CNPJ) pode diferir do de entrega.
+  const [fatMesmo, setFatMesmo] = useState(true);
+  const [fatEndereco, setFatEndereco] = useState({ logradouro: "", numero: "", bairro: "", cidade: "", uf: "", cep: "" });
+  const setFat = (patch: Partial<typeof fatEndereco>) => setFatEndereco((e) => ({ ...e, ...patch }));
   const [ie, setIe] = useState("");
   const [ieUf, setIeUf] = useState(""); // override da UF p/ validar a IE; vazio = usa a do endereço
   const isIsento = /^isento$/i.test(ie.trim());
@@ -193,6 +198,7 @@ export default function Vender() {
       customer_ie: ie.trim() || undefined,
       is_licenciado: isLicenciado,
       endereco: (endereco.logradouro || endereco.cidade || endereco.cep) ? endereco : null,
+      endereco_faturamento: fatMesmo ? null : ((fatEndereco.logradouro || fatEndereco.cidade || fatEndereco.cep) ? fatEndereco : null),
       total: subtotal,
       notes: obsPublica || undefined,
       itens: validItems().map((i) => ({
@@ -211,6 +217,7 @@ export default function Vender() {
     setEndereco({ logradouro: "", numero: "", bairro: "", cidade: "", uf: "", cep: "" });
     setIe(""); setIeUf(""); setDocFeedback(null);
     setCoords(null); setMapMsg(null);
+    setFatMesmo(true); setFatEndereco({ logradouro: "", numero: "", bairro: "", cidade: "", uf: "", cep: "" });
   }
 
   async function handleQuote() {
@@ -404,6 +411,32 @@ export default function Vender() {
               <p className="text-sm px-6">{mapMsg ?? <>Preencha o endereço e clique em <b>Localizar no mapa</b> para visualizar o ponto aproximado de entrega.</>}</p>
             </div>
           )}
+
+          {/* Endereço de Faturamento (NF) — pode diferir do de entrega */}
+          <div className="border-t pt-3 mt-1 space-y-3">
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+              <h4 className="font-semibold text-sm flex items-center gap-2"><FileText className="h-4 w-4 text-carbo-green" /> Endereço de Faturamento (NF)</h4>
+              <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer">
+                <Checkbox checked={fatMesmo} onCheckedChange={(c) => setFatMesmo(!!c)} /> Mesmo endereço da entrega
+              </label>
+            </div>
+            {!fatMesmo && (
+              <div className="grid md:grid-cols-3 gap-3">
+                <div className="space-y-1.5 md:col-span-2"><Label>Logradouro</Label><Input placeholder="Rua, Avenida, etc." value={fatEndereco.logradouro} onChange={(e) => setFat({ logradouro: e.target.value })} /></div>
+                <div className="space-y-1.5"><Label>Número</Label><Input placeholder="Nº" value={fatEndereco.numero} onChange={(e) => setFat({ numero: e.target.value })} /></div>
+                <div className="space-y-1.5"><Label>Bairro</Label><Input placeholder="Bairro" value={fatEndereco.bairro} onChange={(e) => setFat({ bairro: e.target.value })} /></div>
+                <div className="space-y-1.5"><Label>Cidade</Label><Input placeholder="Cidade" value={fatEndereco.cidade} onChange={(e) => setFat({ cidade: e.target.value })} /></div>
+                <div className="space-y-1.5">
+                  <Label>Estado</Label>
+                  <Select value={fatEndereco.uf} onValueChange={(uf) => setFat({ uf })}>
+                    <SelectTrigger><SelectValue placeholder="UF" /></SelectTrigger>
+                    <SelectContent>{UFS.map((u) => <SelectItem key={u} value={u}>{u}</SelectItem>)}</SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5"><Label>CEP</Label><Input placeholder="00000-000" value={fatEndereco.cep} onChange={(e) => setFat({ cep: e.target.value })} /></div>
+              </div>
+            )}
+          </div>
         </CarboCardContent>
       </CarboCard>
 

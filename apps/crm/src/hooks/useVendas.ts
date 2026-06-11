@@ -31,6 +31,7 @@ export interface NovaVendaInput {
   customer_ie?: string;
   is_licenciado?: boolean;
   endereco?: Record<string, unknown> | null;
+  endereco_faturamento?: Record<string, unknown> | null;
   payment_terms?: string;
   freight_type?: string;
   total: number;
@@ -54,7 +55,10 @@ export interface VendaRow {
   customer_doc: string | null;
   customer_email: string | null;
   customer_phone: string | null;
+  customer_ie: string | null;
   is_licenciado: boolean;
+  endereco: Record<string, unknown> | null;
+  endereco_faturamento: Record<string, unknown> | null;
   total: number;
   notes: string | null;
   created_at: string;
