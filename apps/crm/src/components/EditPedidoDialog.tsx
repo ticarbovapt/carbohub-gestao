@@ -23,14 +23,16 @@ import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { CarboButton } from "@/components/ui/carbo-button";
 import { supabase } from "@/integrations/supabase/client";
-import { useVenda } from "@/hooks/useVendas";
+import { useVenda, useUpdateVenda } from "@/hooks/useVendas";
+import type { VendaStatus } from "@/hooks/useVendas";
 import { CalendarIcon, Repeat, Zap, UserCheck, FileText, Truck, Receipt, CheckCircle2, AlertCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { validateInscricaoEstadual } from "@/lib/inscricaoEstadual";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Tela "Editar Pedido" — réplica fiel da do Carbo Controle (EditOrderDialog).
-// FASE ATUAL: somente visual + prefill a partir de crm_vendas. Não grava ainda.
+// Prefill a partir de crm_vendas e GRAVA a edição (campos centrais em colunas;
+// auxiliares no jsonb `extra`). Ilha isolada: não dispara estoque/produção/Bling.
 // ─────────────────────────────────────────────────────────────────────────────
 
 // Labels/tipos locais (copiados do Controle — useCarbozeOrders.ts).
@@ -63,6 +65,39 @@ function mapVendaStatus(s: string | null | undefined): OrderStatus {
   if (s === "orcamento") return "quote";
   if (s === "cancelado") return "cancelled";
   return "confirmed"; // pedido
+}
+
+// Status do form (7 estados) → status canônico de crm_vendas (3 estados).
+// O estado granular é preservado em extra.status_detalhado p/ reabrir igual.
+function toVendaStatus(s: OrderStatus): VendaStatus {
+  if (s === "quote") return "orcamento";
+  if (s === "cancelled") return "cancelado";
+  return "pedido";
+}
+
+// Lê uma string do jsonb `extra`.
+function ex(e: Record<string, unknown> | null | undefined, k: string): string {
+  if (!e || e[k] == null) return "";
+  return String(e[k]);
+}
+
+// Reconstrói o endereço estruturado preservando o bairro original. O texto livre
+// editado vira `logradouro` e `numero` é zerado (a tela junta logradouro+numero
+// na exibição, então isso mantém o ciclo ler→salvar→reler estável).
+function buildEndereco(
+  prev: Record<string, unknown> | null | undefined,
+  addr: string, city: string, state: string, zip: string,
+): Record<string, unknown> | null {
+  const bairro = ja(prev, "bairro");
+  if (![addr, city, state, zip, bairro].some(Boolean)) return null;
+  return {
+    logradouro: addr || "",
+    numero: "",
+    bairro,
+    cidade: city || "",
+    uf: (state || "").toUpperCase(),
+    cep: zip || "",
+  };
 }
 
 // Acesso pontual a tabelas ainda não tipadas (mesmo padrão do useVendas.ts).
@@ -159,6 +194,7 @@ export function EditPedidoDialog({ vendaId, open, onOpenChange, canEditSensitive
   const { data: licensees = [] } = useLicensees();
   const { data: vendedores = [] } = useVendedores();
   const [ieUf, setIeUf] = useState("");
+  const updateVenda = useUpdateVenda();
 
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
@@ -210,53 +246,105 @@ export function EditPedidoDialog({ vendaId, open, onOpenChange, canEditSensitive
     if (venda) {
       const end = venda.endereco as Record<string, unknown> | null;
       const endFat = venda.endereco_faturamento as Record<string, unknown> | null;
+      const x = (venda.extra ?? {}) as Record<string, unknown>;
       const deliveryAddr = [ja(end, "logradouro"), ja(end, "numero")].filter(Boolean).join(", ");
       const billingAddr = [ja(endFat, "logradouro"), ja(endFat, "numero")].filter(Boolean).join(", ");
+      const blingId = x.bling_nf_id != null ? Number(x.bling_nf_id) : null;
+      const recDays = x.recurrence_interval_days != null ? Number(x.recurrence_interval_days) : null;
+      const statusDetalhado = (ex(x, "status_detalhado") || mapVendaStatus(venda.status)) as OrderStatus;
+      setIeUf(ex(x, "ie_uf"));
       form.reset({
-        sale_date: venda.created_at ? parseISO(venda.created_at) : null,
+        sale_date: venda.sale_date ? parseISO(venda.sale_date) : null,
         customer_name: venda.customer_name || "",
         customer_email: venda.customer_email || "",
         customer_phone: venda.customer_phone || "",
-        licensee_id: "none",
+        licensee_id: ex(x, "licensee_id") || "none",
         delivery_address: deliveryAddr,
         delivery_city: ja(end, "cidade"),
         delivery_state: ja(end, "uf"),
         delivery_zip: ja(end, "cep"),
-        status: mapVendaStatus(venda.status),
-        tracking_code: "",
-        tracking_url: "",
+        status: statusDetalhado,
+        tracking_code: ex(x, "tracking_code"),
+        tracking_url: ex(x, "tracking_url"),
         notes: venda.notes || "",
-        internal_notes: "",
-        order_type: "spot",
-        is_recurring: false,
-        recurrence_interval_days: null,
-        next_delivery_date: null,
-        vendedor_id: "none",
+        internal_notes: ex(x, "internal_notes"),
+        order_type: (ex(x, "order_type") || "spot") as OrderType,
+        is_recurring: x.is_recurring === true,
+        recurrence_interval_days: recDays,
+        next_delivery_date: ex(x, "next_delivery_date") ? parseISO(ex(x, "next_delivery_date")) : null,
+        vendedor_id: venda.vendedor_id || "none",
         vendedor_name: "",
         // PO fields
-        po_number: "",
-        po_date: "",
+        po_number: ex(x, "po_number"),
+        po_date: ex(x, "po_date"),
         ie: venda.customer_ie || "",
         billing_address: billingAddr,
         billing_city: ja(endFat, "cidade"),
         billing_state: ja(endFat, "uf"),
         billing_zip: ja(endFat, "cep"),
-        billing_contact_name: "",
-        billing_contact_email: "",
-        payment_terms: "",
-        freight_type: null,
-        buyer_notes: "",
-        general_notes: "",
-        nf_access_key: "",
-        bling_nf_id: null,
+        billing_contact_name: ex(x, "billing_contact_name"),
+        billing_contact_email: ex(x, "billing_contact_email"),
+        payment_terms: venda.payment_terms || "",
+        freight_type: (venda.freight_type === "CIF" || venda.freight_type === "FOB") ? venda.freight_type : null,
+        buyer_notes: ex(x, "buyer_notes"),
+        general_notes: ex(x, "general_notes"),
+        nf_access_key: ex(x, "nf_access_key"),
+        bling_nf_id: blingId,
       });
     }
   }, [venda, form]);
 
-  const onSubmit = async (_data: FormData) => {
-    // FASE ATUAL: não persiste. Próxima fase grava em crm_vendas.
-    toast.info("Edição da venda entra na próxima fase");
-    onOpenChange(false);
+  const onSubmit = async (data: FormData) => {
+    if (!vendaId) return;
+    const licsel = data.licensee_id && data.licensee_id !== "none" ? data.licensee_id : "";
+
+    const extra = {
+      status_detalhado: data.status,
+      tracking_code: data.tracking_code || "",
+      tracking_url: data.tracking_url || "",
+      internal_notes: data.internal_notes || "",
+      order_type: data.order_type,
+      is_recurring: !!data.is_recurring,
+      recurrence_interval_days: data.recurrence_interval_days ?? null,
+      next_delivery_date: data.next_delivery_date ? format(data.next_delivery_date, "yyyy-MM-dd") : "",
+      po_number: data.po_number || "",
+      po_date: data.po_date || "",
+      billing_contact_name: data.billing_contact_name || "",
+      billing_contact_email: data.billing_contact_email || "",
+      buyer_notes: data.buyer_notes || "",
+      general_notes: data.general_notes || "",
+      nf_access_key: data.nf_access_key || "",
+      bling_nf_id: data.bling_nf_id ?? null,
+      licensee_id: licsel,
+      ie_uf: ieUf || data.billing_state || data.delivery_state || "",
+    };
+
+    try {
+      await updateVenda.mutateAsync({
+        id: vendaId,
+        status: toVendaStatus(data.status),
+        // reatribuição de vendedor só quando há um escolhido (gestor)
+        ...(canEditSensitive && data.vendedor_id && data.vendedor_id !== "none"
+          ? { vendedor_id: data.vendedor_id }
+          : {}),
+        customer_name: data.customer_name || null,
+        customer_email: data.customer_email || null,
+        customer_phone: data.customer_phone || null,
+        customer_ie: data.ie || null,
+        is_licenciado: !!licsel,
+        endereco: buildEndereco(venda?.endereco, data.delivery_address || "", data.delivery_city || "", data.delivery_state || "", data.delivery_zip || ""),
+        endereco_faturamento: buildEndereco(venda?.endereco_faturamento, data.billing_address || "", data.billing_city || "", data.billing_state || "", data.billing_zip || ""),
+        payment_terms: data.payment_terms || null,
+        freight_type: data.freight_type ?? null,
+        notes: data.notes || null,
+        sale_date: data.sale_date ? format(data.sale_date, "yyyy-MM-dd") : null,
+        extra,
+      });
+      toast.success("Venda atualizada");
+      onOpenChange(false);
+    } catch (e) {
+      toast.error("Erro ao salvar: " + (e instanceof Error ? e.message : "tente novamente"));
+    }
   };
 
   const orderNumber = venda ? (venda.numero ?? `${venda.status === "orcamento" ? "ORC" : "VND"}-${venda.id.slice(0, 8).toUpperCase()}`) : "";
@@ -1064,11 +1152,11 @@ export function EditPedidoDialog({ vendaId, open, onOpenChange, canEditSensitive
             </Tabs>
 
             <div className="flex justify-end gap-3 pt-2 border-t">
-              <CarboButton type="button" variant="outline" onClick={() => onOpenChange(false)}>
+              <CarboButton type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={updateVenda.isPending}>
                 Cancelar
               </CarboButton>
-              <CarboButton type="submit">
-                Salvar
+              <CarboButton type="submit" disabled={updateVenda.isPending}>
+                {updateVenda.isPending ? "Salvando..." : "Salvar"}
               </CarboButton>
             </div>
           </form>
