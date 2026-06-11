@@ -28,6 +28,7 @@ export interface NovaVendaInput {
   customer_doc?: string;
   customer_email?: string;
   customer_phone?: string;
+  customer_ie?: string;
   is_licenciado?: boolean;
   endereco?: Record<string, unknown> | null;
   payment_terms?: string;

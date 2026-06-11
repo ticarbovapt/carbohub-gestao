@@ -17,6 +17,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { generateQuotePdf } from "@/lib/quotePdf";
 import { useCreateVenda } from "@/hooks/useVendas";
 import { useProdutos } from "@/hooks/useProdutos";
+import { validateInscricaoEstadual } from "@/lib/inscricaoEstadual";
 
 // Vender — grava a venda de verdade (crm_vendas) e lê o catálogo real (mrp_products).
 // Pendências de fora do escopo de venda: lookup de CNPJ e mapa (próximas fases).
@@ -75,6 +76,11 @@ export default function Vender() {
   const [docFeedback, setDocFeedback] = useState<{ kind: "ok" | "err"; msg: string } | null>(null);
   const [endereco, setEndereco] = useState({ logradouro: "", numero: "", bairro: "", cidade: "", uf: "", cep: "" });
   const setEnd = (patch: Partial<typeof endereco>) => setEndereco((e) => ({ ...e, ...patch }));
+  const [ie, setIe] = useState("");
+  const [ieUf, setIeUf] = useState(""); // override da UF p/ validar a IE; vazio = usa a do endereço
+  const isIsento = /^isento$/i.test(ie.trim());
+  const ieUfEff = ieUf || endereco.uf || "";
+  const ieResult = ie && !isIsento ? validateInscricaoEstadual(ie, ieUfEff) : null;
 
   const subtotal = useMemo(() => rows.reduce((s, r) => s + r.qty * r.unitPrice, 0), [rows]);
 
@@ -160,6 +166,7 @@ export default function Vender() {
       customer_doc: doc || undefined,
       customer_email: email || undefined,
       customer_phone: phone || undefined,
+      customer_ie: ie.trim() || undefined,
       is_licenciado: isLicenciado,
       endereco: (endereco.logradouro || endereco.cidade || endereco.cep) ? endereco : null,
       total: subtotal,
@@ -178,7 +185,7 @@ export default function Vender() {
     setMode("venda"); setDoc(""); setCustomerName(""); setEmail(""); setPhone("");
     setIsLicenciado(false); setRows([emptyRow()]); setObsPublica("");
     setEndereco({ logradouro: "", numero: "", bairro: "", cidade: "", uf: "", cep: "" });
-    setDocFeedback(null);
+    setIe(""); setIeUf(""); setDocFeedback(null);
   }
 
   async function handleQuote() {
@@ -284,6 +291,41 @@ export default function Vender() {
                 <p className="text-xs text-muted-foreground">Marque se o cliente é um licenciado Carbo</p>
               </div>
               <Switch checked={isLicenciado} onCheckedChange={setIsLicenciado} />
+            </div>
+
+            {/* Inscrição Estadual — validação de formato/dígito por UF */}
+            <div className="space-y-1.5 md:col-span-2">
+              <div className="flex items-center justify-between">
+                <Label>Inscrição Estadual</Label>
+                <label className="flex items-center gap-2 text-xs font-normal text-muted-foreground cursor-pointer">
+                  <Switch checked={isIsento} onCheckedChange={(c) => setIe(c ? "ISENTO" : "")} />
+                  Isento (sem IE)
+                </label>
+              </div>
+              {!isIsento && (
+                <div className="flex gap-2">
+                  <Select value={ieUfEff} onValueChange={setIeUf}>
+                    <SelectTrigger className="w-24 shrink-0"><SelectValue placeholder="UF" /></SelectTrigger>
+                    <SelectContent>{UFS.map((u) => <SelectItem key={u} value={u}>{u}</SelectItem>)}</SelectContent>
+                  </Select>
+                  <Input
+                    value={ie}
+                    onChange={(e) => setIe(e.target.value)}
+                    placeholder="Nº da Inscrição Estadual"
+                    className={`flex-1 ${ieResult && !ieResult.valid ? "border-destructive focus-visible:ring-destructive" : ""} ${ieResult && ieResult.valid ? "border-green-500 focus-visible:ring-green-500" : ""}`}
+                  />
+                </div>
+              )}
+              {isIsento ? (
+                <p className="text-xs flex items-center gap-1 mt-1 text-green-600"><CheckCircle2 className="h-3 w-3 shrink-0" /> Cliente isento de Inscrição Estadual.</p>
+              ) : ieResult ? (
+                <p className={`text-xs flex items-center gap-1 mt-1 ${ieResult.valid ? "text-green-600" : "text-destructive"}`}>
+                  {ieResult.valid ? <CheckCircle2 className="h-3 w-3 shrink-0" /> : <AlertCircle className="h-3 w-3 shrink-0" />}
+                  {ieResult.message}
+                </p>
+              ) : (
+                <p className="text-[11px] text-muted-foreground">Escolha a UF e digite a IE — valida formato e dígito de qualquer estado do Brasil. Marque “Isento” se não houver.</p>
+              )}
             </div>
           </div>
         </CarboCardContent>
