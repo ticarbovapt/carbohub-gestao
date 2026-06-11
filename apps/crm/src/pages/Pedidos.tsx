@@ -20,9 +20,9 @@ import { Input } from "@/components/ui/input";
 import { useNavigate } from "react-router-dom";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { useVendas, useVendedorNomes } from "@/hooks/useVendas";
 
-// ⚠️ PORT VISUAL FIEL ao Controle (/orders → "Controle de pedidos") — dados MOCK.
-// TODO: ligar em useOrders / useOrderStats (Supabase) na fase de lógica.
+// Controle de pedidos — lê as vendas salvas (crm_vendas, status "pedido").
 
 type OrderStatus = "quote" | "pending" | "confirmed" | "invoiced" | "shipped" | "delivered" | "cancelled";
 const ORDER_STATUS_LABELS: Record<OrderStatus, string> = {
@@ -52,20 +52,38 @@ const LINHA_LABELS: Record<string, string> = {
   carbopro: "CarboPRO", carbovapt: "CarboVapt", carbonz: "CarbonZ", outros: "Outros",
 };
 
-const MOCK_ORDERS: MockOrder[] = [
-  { id: "1", order_number: "PED-2042", invoice_number: "000123456", linha: "carboze_100ml", order_type: "spot", vendedor_name: "Lucas Padilha", customer_name: "Posto Shell Centro", customer_email: "compras@shellcentro.com", created_at: "2026-06-09T10:30:00", qty: 120, items: 2, total: 4850, status: "confirmed" },
-  { id: "2", order_number: "PED-2041", invoice_number: "000123455", linha: "carboze_1l", order_type: "recorrente", vendedor_name: "Marcio Vannucci", customer_name: "Auto Posto Bandeirantes", customer_email: null, created_at: "2026-06-08T15:12:00", qty: 300, items: 3, total: 12300, status: "invoiced" },
-  { id: "3", order_number: "PED-2040", invoice_number: null, linha: "carbopro", order_type: "spot", vendedor_name: "Marcius D'Ávila", customer_name: "Rede ABC Combustíveis", customer_email: "financeiro@redeabc.com", created_at: "2026-06-08T09:05:00", qty: 80, items: 1, total: 7600, status: "pending" },
-  { id: "4", order_number: "PED-2039", invoice_number: "000123450", linha: "carbovapt", order_type: "spot", vendedor_name: "Marcius D'Ávila", customer_name: "Posto Ipiranga Sul", customer_email: null, created_at: "2026-06-07T14:40:00", qty: 40, items: 1, total: 2200, status: "delivered" },
-  { id: "5", order_number: "PED-2038", invoice_number: null, linha: "carboze_sache", order_type: "recorrente", vendedor_name: "Lucas Padilha", customer_name: "Oficina do Zé", customer_email: null, created_at: "2026-06-06T11:20:00", qty: 200, items: 2, total: 980, status: "shipped" },
-  { id: "6", order_number: "PED-2037", invoice_number: null, linha: "carboze_100ml", order_type: "spot", vendedor_name: "Marcio Vannucci", customer_name: "Transportadora Veloz", customer_email: "compras@veloz.com", created_at: "2026-06-05T16:00:00", qty: 60, items: 1, total: 3100, status: "cancelled" },
-];
-
 const fmtBRL = (v: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
 
 export default function Pedidos() {
   const navigate = useNavigate();
-  const canManageOrders = true; // mock: gestor
+  const canManageOrders = true; // gestor (camada de acesso fina entra depois)
+
+  // ── Dados reais: vendas salvas (status "pedido") ──
+  const { data: vendas = [], refetch, isFetching } = useVendas("all");
+  const { data: nomes = {} } = useVendedorNomes();
+
+  const allOrders: MockOrder[] = useMemo(() => vendas
+    .filter((v) => v.status !== "orcamento")
+    .map((v) => {
+      const itens = v.itens ?? [];
+      const qty = itens.reduce((s, i) => s + (i.quantidade || 0), 0);
+      const firstProd = itens[0]?.produto ?? "—";
+      return {
+        id: v.id,
+        order_number: `PED-${v.id.slice(0, 8).toUpperCase()}`,
+        invoice_number: null,
+        linha: firstProd,
+        order_type: "spot" as OrderType,
+        vendedor_name: nomes[v.vendedor_id] ?? "—",
+        customer_name: v.customer_name ?? "—",
+        customer_email: v.customer_email,
+        created_at: v.created_at,
+        qty,
+        items: itens.length,
+        total: Number(v.total) || 0,
+        status: (v.status === "cancelado" ? "cancelled" : "pending") as OrderStatus,
+      };
+    }), [vendas, nomes]);
 
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<OrderStatus | "all">("all");
@@ -89,18 +107,18 @@ export default function Pedidos() {
     return sortDir === "asc" ? <ArrowUp className="h-3.5 w-3.5 ml-1 text-primary" /> : <ArrowDown className="h-3.5 w-3.5 ml-1 text-primary" />;
   };
 
-  const orders = statusFilter === "all" ? MOCK_ORDERS : MOCK_ORDERS.filter((o) => o.status === statusFilter);
+  const orders = statusFilter === "all" ? allOrders : allOrders.filter((o) => o.status === statusFilter);
 
-  const vendedores = useMemo(() => Array.from(new Set(MOCK_ORDERS.map((o) => o.vendedor_name))).sort(), []);
+  const vendedores = useMemo(() => Array.from(new Set(allOrders.map((o) => o.vendedor_name))).sort(), []);
   const clientes = useMemo(() => Array.from(new Set(orders.map((o) => o.customer_name))).sort(), [orders]);
   const availableLinhas = useMemo(() => Array.from(new Set(orders.map((o) => o.linha))), [orders]);
 
   const stats = useMemo(() => ({
-    total: MOCK_ORDERS.length,
-    pending: MOCK_ORDERS.filter((o) => o.status === "pending").length,
-    shipped: MOCK_ORDERS.filter((o) => o.status === "shipped").length,
-    delivered: MOCK_ORDERS.filter((o) => o.status === "delivered").length,
-    totalRevenue: MOCK_ORDERS.filter((o) => o.status !== "cancelled").reduce((s, o) => s + o.total, 0),
+    total: allOrders.length,
+    pending: allOrders.filter((o) => o.status === "pending").length,
+    shipped: allOrders.filter((o) => o.status === "shipped").length,
+    delivered: allOrders.filter((o) => o.status === "delivered").length,
+    totalRevenue: allOrders.filter((o) => o.status !== "cancelled").reduce((s, o) => s + o.total, 0),
   }), []);
 
   const filteredOrders = useMemo(() => orders.filter((order) => {
@@ -157,8 +175,8 @@ export default function Pedidos() {
           icon={ShoppingBag}
           actions={
             <>
-              <CarboButton variant="outline" size="sm">
-                <RefreshCw className="h-4 w-4 mr-1" /> Atualizar
+              <CarboButton variant="outline" size="sm" onClick={() => refetch()} disabled={isFetching}>
+                <RefreshCw className={`h-4 w-4 mr-1 ${isFetching ? "animate-spin" : ""}`} /> Atualizar
               </CarboButton>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -201,7 +219,7 @@ export default function Pedidos() {
             {/* Pipeline Visual */}
             <div className="grid grid-cols-3 md:grid-cols-6 gap-2">
               {(["pending", "confirmed", "invoiced", "shipped", "delivered", "cancelled"] as OrderStatus[]).map((status) => {
-                const count = MOCK_ORDERS.filter((o) => o.status === status).length;
+                const count = allOrders.filter((o) => o.status === status).length;
                 const Icon = STATUS_ICONS[status];
                 return (
                   <div key={status}
@@ -320,7 +338,7 @@ export default function Pedidos() {
         </Tabs>
 
         <p className="text-xs text-muted-foreground text-center">
-          Tela em port visual — dados de exemplo. Pedidos reais, edição e relatórios entram na fase de lógica.
+          Pedidos reais (vendas salvas). Edição, NF e relatórios entram nas próximas etapas.
         </p>
       </div>
     </div>

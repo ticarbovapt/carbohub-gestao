@@ -12,9 +12,9 @@ import {
   Package, Pencil, Users, ArrowRightCircle, FileDown, CalendarDays, X,
 } from "lucide-react";
 import { toast } from "sonner";
+import { useVendas, useVendedorNomes } from "@/hooks/useVendas";
 
-// ⚠️ PORT VISUAL FIEL ao Controle (/vendas → VendasPage "Vendas e Orçamentos") — dados MOCK.
-// TODO: ligar em carboze_orders + Bling NFe (Supabase) na fase de lógica.
+// Vendas e Orçamentos — lê de crm_vendas (orçamentos + vendas salvas).
 
 interface Item { name: string; quantity: number; unit_price: number; total: number; }
 interface VendaRow {
@@ -37,24 +37,47 @@ const fmtBRL = (v: number) => v.toLocaleString("pt-BR", { style: "currency", cur
 const fmtDate = (s: string) => format(parseISO(s.length === 10 ? s + "T00:00:00" : s), "dd/MM/yyyy", { locale: ptBR });
 const effectiveDate = (r: VendaRow) => r.sale_date ?? r.created_at.substring(0, 10);
 
-const VENDEDORES = [
-  { id: "u1", name: "Lucas Padilha", avulso: false },
-  { id: "u2", name: "Marcio Vannucci", avulso: false },
-  { id: "u3", name: "Marcius D'Ávila", avulso: false },
-  { id: "u4", name: "João (avulso)", avulso: true },
-];
-
-const MOCK: VendaRow[] = [
-  { id: "1", order_number: "VND-2042", created_at: "2026-06-09T10:30:00", sale_date: null, customer_name: "Posto Shell Centro", delivery_city: "Natal", delivery_state: "RN", items: [{ name: "CarboZé 100ml", quantity: 80, unit_price: 42, total: 3360 }, { name: "CarboPRO", quantity: 10, unit_price: 149, total: 1490 }], total: 4850, status: "confirmed", vendedor_id: "u1", vendedor_name: "Lucas Padilha", invoice_number: null, has_nf: false },
-  { id: "2", order_number: "VND-2041", created_at: "2026-06-08T15:12:00", sale_date: "2026-06-08", customer_name: "Auto Posto Bandeirantes", delivery_city: "São Paulo", delivery_state: "SP", items: [{ name: "CarboZé 1L", quantity: 100, unit_price: 123, total: 12300 }], total: 12300, status: "invoiced", vendedor_id: "u2", vendedor_name: "Marcio Vannucci", invoice_number: "000123455", has_nf: true },
-  { id: "3", order_number: "ORC-1190", created_at: "2026-06-08T09:05:00", sale_date: null, customer_name: "Rede ABC Combustíveis", delivery_city: "Recife", delivery_state: "PE", items: [{ name: "CarboPRO", quantity: 50, unit_price: 152, total: 7600 }], total: 7600, status: "quote", vendedor_id: "u1", vendedor_name: "Lucas Padilha", invoice_number: null, has_nf: false },
-  { id: "4", order_number: "VND-2039", created_at: "2026-06-07T14:40:00", sale_date: null, customer_name: "Posto Ipiranga Sul", delivery_city: "Curitiba", delivery_state: "PR", items: [{ name: "CarboVapt", quantity: 40, unit_price: 55, total: 2200 }], total: 2200, status: "delivered", vendedor_id: "u3", vendedor_name: "Marcius D'Ávila", invoice_number: "000123450", has_nf: true },
-  { id: "5", order_number: "ORC-1188", created_at: "2026-06-06T11:20:00", sale_date: null, customer_name: "Oficina do Zé", delivery_city: "Natal", delivery_state: "RN", items: [{ name: "CarboZé Sachê", quantity: 200, unit_price: 4.9, total: 980 }], total: 980, status: "quote", vendedor_id: "u4", vendedor_name: "João (avulso)", invoice_number: null, has_nf: false, is_avulso: true },
-  { id: "6", order_number: "VND-2037", created_at: "2026-06-05T16:00:00", sale_date: null, customer_name: "Transportadora Veloz", delivery_city: "Fortaleza", delivery_state: "CE", items: [{ name: "CarboZé 100ml", quantity: 60, unit_price: 42, total: 2520 }], total: 2520, status: "cancelled", vendedor_id: "u2", vendedor_name: "Marcio Vannucci", invoice_number: null, has_nf: false },
-];
+const toDisplayStatus = (s: string) => (s === "orcamento" ? "quote" : s === "cancelado" ? "cancelled" : "confirmed");
 
 export default function Vendas() {
-  const isHead = true; // mock: gestor vê tudo + ações de gestão
+  const isHead = true; // gestor vê tudo (camada de acesso fina entra depois)
+
+  // ── Dados reais (crm_vendas: orçamentos + vendas) ──
+  const { data: vendasRaw = [] } = useVendas("all");
+  const { data: nomes = {} } = useVendedorNomes();
+
+  const rows: VendaRow[] = useMemo(() => vendasRaw.map((v) => {
+    const items: Item[] = (v.itens ?? []).map((i) => ({
+      name: i.produto ?? "—",
+      quantity: i.quantidade || 0,
+      unit_price: Number(i.preco_unitario) || 0,
+      total: (i.quantidade || 0) * (Number(i.preco_unitario) || 0),
+    }));
+    return {
+      id: v.id,
+      order_number: `${v.status === "orcamento" ? "ORC" : "VND"}-${v.id.slice(0, 8).toUpperCase()}`,
+      created_at: v.created_at,
+      sale_date: null,
+      customer_name: v.customer_name ?? "—",
+      delivery_city: null,
+      delivery_state: null,
+      items,
+      total: Number(v.total) || 0,
+      status: toDisplayStatus(v.status),
+      vendedor_id: v.vendedor_id,
+      vendedor_name: nomes[v.vendedor_id] ?? "—",
+      invoice_number: null,
+      has_nf: false,
+    };
+  }), [vendasRaw, nomes]);
+
+  // Lista de vendedores para o filtro (distintos a partir dos dados).
+  const VENDEDORES = useMemo(() => {
+    const seen = new Map<string, string>();
+    rows.forEach((r) => { if (!seen.has(r.vendedor_id)) seen.set(r.vendedor_id, r.vendedor_name); });
+    return Array.from(seen, ([id, name]) => ({ id, name, avulso: false }));
+  }, [rows]);
+
   const [month, setMonth] = useState(() => startOfMonth(new Date()));
   const [customFrom, setCustomFrom] = useState("");
   const [customTo, setCustomTo] = useState("");
@@ -69,13 +92,13 @@ export default function Vendas() {
   const isCurrentMonth = month.getFullYear() === today.getFullYear() && month.getMonth() === today.getMonth();
 
   const filtered = useMemo(() => {
-    return MOCK.filter((v) => {
+    return rows.filter((v) => {
       if (vendedorFilter !== "__all__" && v.vendedor_id !== vendedorFilter) return false;
       if (!search) return true;
       const q = search.toLowerCase();
       return v.customer_name.toLowerCase().includes(q) || v.order_number.toLowerCase().includes(q);
     });
-  }, [search, vendedorFilter]);
+  }, [rows, search, vendedorFilter]);
 
   const quotes = filtered.filter((v) => v.status === "quote");
   const active = filtered.filter((v) => v.status !== "cancelled" && v.status !== "quote");
@@ -240,7 +263,7 @@ export default function Vendas() {
         )}
 
         <p className="text-xs text-muted-foreground text-center">
-          Tela em port visual — dados de exemplo. Conversão de orçamento, NF-e e atribuição em massa entram na fase de lógica.
+          Vendas e orçamentos salvos. Conversão de orçamento, NF-e e atribuição em massa entram nas próximas etapas.
         </p>
       </div>
 

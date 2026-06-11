@@ -37,6 +37,13 @@ export interface NovaVendaInput {
   itens: VendaItemInput[];
 }
 
+export interface VendaItemRow {
+  produto: string | null;
+  quantidade: number;
+  preco_unitario: number;
+  bonificacao: number;
+}
+
 export interface VendaRow {
   id: string;
   vendedor_id: string;
@@ -51,18 +58,42 @@ export interface VendaRow {
   notes: string | null;
   created_at: string;
   updated_at: string;
+  itens?: VendaItemRow[];
 }
 
-/** Lista de vendas (RLS decide o escopo: próprio vendedor ou tudo p/ gestor). */
+/** Lista de vendas (RLS decide o escopo: próprio vendedor ou tudo p/ gestor).
+ *  Já traz os itens embutidos (FK crm_venda_itens.venda_id). */
 export function useVendas(status?: VendaStatus | "all") {
   return useQuery({
     queryKey: ["crm_vendas", status ?? "all"],
     queryFn: async (): Promise<VendaRow[]> => {
-      let q = db.from("crm_vendas").select("*").order("created_at", { ascending: false });
+      let q = db
+        .from("crm_vendas")
+        .select("*, itens:crm_venda_itens(produto, quantidade, preco_unitario, bonificacao)")
+        .order("created_at", { ascending: false });
       if (status && status !== "all") q = q.eq("status", status);
       const { data, error } = await q;
       if (error) throw error;
       return (data ?? []) as VendaRow[];
+    },
+  });
+}
+
+/** Mapa id→nome dos vendedores (profiles) — usado para exibir o nome nas listas
+ *  quando o gestor vê vendas de vários vendedores. */
+export function useVendedorNomes() {
+  return useQuery({
+    queryKey: ["crm_vendedor_nomes"],
+    queryFn: async (): Promise<Record<string, string>> => {
+      const { data, error } = await db
+        .from("profiles")
+        .select("id, full_name, username");
+      if (error) throw error;
+      const map: Record<string, string> = {};
+      for (const p of (data ?? []) as { id: string; full_name: string | null; username: string | null }[]) {
+        map[p.id] = p.full_name || p.username || "—";
+      }
+      return map;
     },
   });
 }
