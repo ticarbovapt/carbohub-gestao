@@ -15,17 +15,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useAuth } from "@/contexts/AuthContext";
 import { generateQuotePdf } from "@/lib/quotePdf";
 import { useCreateVenda } from "@/hooks/useVendas";
+import { useProdutos } from "@/hooks/useProdutos";
 
-// ⚠️ PORT VISUAL — sem lógica real (CNPJ lookup, mapa, SKUs, gravação). TODO na fase de lógica.
+// Vender — grava a venda de verdade (crm_vendas) e lê o catálogo real (mrp_products).
+// Pendências de fora do escopo de venda: lookup de CNPJ e mapa (próximas fases).
 // O VENDEDOR é o usuário logado (não há dropdown de vendedor).
 
-const PRODUTOS = [
-  { id: "p1", name: "CarboZé 100ml", price: 28.0 },
-  { id: "p2", name: "CarboZé 1L", price: 190.0 },
-  { id: "p3", name: "CarboZé Sachê 10ml", price: 4.5 },
-  { id: "p4", name: "CarboPRO", price: 320.0 },
-  { id: "p5", name: "CarboVapt", price: 150.0 },
-];
 const TIPOS_PONTO = ["Posto", "Oficina", "Frota", "PDV", "Licenciado"];
 const CLASSIFICACOES = ["Estratégico", "Potencial", "Regular"];
 const UFS = ["SP", "RJ", "MG", "RN", "BA", "PR", "RS", "SC"];
@@ -62,6 +57,7 @@ export default function Vender() {
   const { profile } = useAuth();
   const vendedor = profile?.full_name ?? profile?.username ?? "";
   const createVenda = useCreateVenda();
+  const { data: produtos = [] } = useProdutos();
 
   const [mode, setMode] = useState<"venda" | "promo">("venda");
   const [doc, setDoc] = useState("");
@@ -81,12 +77,12 @@ export default function Vender() {
     setRows((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch } : r)));
   }
   function onProduct(id: string, productId: string) {
-    const p = PRODUTOS.find((x) => x.id === productId);
-    updateRow(id, { productId, unitPrice: p ? p.price : 0 });
+    // O catálogo (mrp_products) não tem preço de venda; o vendedor informa o preço.
+    updateRow(id, { productId });
   }
   const validItems = () =>
     rows.filter((r) => r.productId && r.qty > 0).map((r) => ({
-      name: PRODUTOS.find((p) => p.id === r.productId)?.name ?? "Produto",
+      name: produtos.find((p) => p.id === r.productId)?.name ?? "Produto",
       quantity: r.qty, unit_price: r.unitPrice, bonus_quantity: r.hasBonus ? r.bonusQty : 0,
     }));
 
@@ -263,7 +259,7 @@ export default function Vender() {
                     <Label>Produto</Label>
                     <Select value={r.productId} onValueChange={(v) => onProduct(r.id, v)}>
                       <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
-                      <SelectContent>{PRODUTOS.map((p) => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}</SelectContent>
+                      <SelectContent>{produtos.map((p) => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}</SelectContent>
                     </Select>
                   </div>
                   <div className="space-y-1.5">
@@ -372,7 +368,7 @@ export default function Vender() {
       </div>
 
       <p className="text-xs text-muted-foreground text-center">
-        Vendedor: <b>{vendedor || "—"}</b> (usuário logado) · Tela em port visual — CNPJ, mapa, produtos do estoque e gravação real entram na próxima fase.
+        Vendedor: <b>{vendedor || "—"}</b> (usuário logado) · Produtos do catálogo real e gravação ativos. CNPJ e mapa entram nas próximas fases.
       </p>
     </div>
   );
