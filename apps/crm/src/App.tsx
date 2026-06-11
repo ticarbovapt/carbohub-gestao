@@ -10,6 +10,8 @@ import DashboardComercial from "./pages/DashboardComercial";
 import Vendas from "./pages/Vendas";
 import Metas from "./pages/Metas";
 import Profile from "./pages/Profile";
+import DescOrdensServico from "./pages/descarbonizacao/OrdensServico";
+import DescAgendamentos from "./pages/descarbonizacao/Agendamentos";
 import { isCarbohubDomain, goToHubLogin } from "@/lib/sso";
 
 // Login é ÚNICO no Hub: /login direto em produção é redirecionado pra lá.
@@ -36,6 +38,9 @@ export default function App() {
         <Route path="/vendas" element={<Vendas />} />
         <Route path="/metas" element={<Metas />} />
         <Route path="/comercial" element={<DashboardComercial />} />
+        {/* Descarbonização — acompanhamento (pra onde o "+ Nova Descarbonização" leva) */}
+        <Route path="/descarbonizacao/os" element={<DescOrdensServico />} />
+        <Route path="/descarbonizacao/agendamentos" element={<DescAgendamentos />} />
         {/* compatibilidade com rotas antigas (e-commerce migrou para o Carbo Ops) */}
         <Route path="/dashboard-comercial" element={<Navigate to="/comercial" replace />} />
         <Route path="/perfil" element={<Profile />} />
