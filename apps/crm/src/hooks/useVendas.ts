@@ -60,11 +60,35 @@ export interface VendaRow {
   is_licenciado: boolean;
   endereco: Record<string, unknown> | null;
   endereco_faturamento: Record<string, unknown> | null;
+  payment_terms: string | null;
+  freight_type: string | null;
   total: number;
   notes: string | null;
+  sale_date: string | null;
+  extra: Record<string, unknown> | null;
   created_at: string;
   updated_at: string;
   itens?: VendaItemRow[];
+}
+
+/** Campos editáveis da venda (tela "Editar Pedido"). Tudo opcional: só os
+ *  presentes no objeto são gravados. */
+export interface UpdateVendaInput {
+  id: string;
+  status?: VendaStatus;
+  vendedor_id?: string;
+  customer_name?: string | null;
+  customer_email?: string | null;
+  customer_phone?: string | null;
+  customer_ie?: string | null;
+  is_licenciado?: boolean;
+  endereco?: Record<string, unknown> | null;
+  endereco_faturamento?: Record<string, unknown> | null;
+  payment_terms?: string | null;
+  freight_type?: string | null;
+  notes?: string | null;
+  sale_date?: string | null;
+  extra?: Record<string, unknown> | null;
 }
 
 /** Lista de vendas (RLS decide o escopo: próprio vendedor ou tudo p/ gestor).
@@ -111,6 +135,21 @@ export function useUpdateVendaStatus() {
       if (error) throw error;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["crm_vendas"] }),
+  });
+}
+
+/** Atualiza os campos editáveis de uma venda (tela "Editar Pedido"). */
+export function useUpdateVenda() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, ...patch }: UpdateVendaInput) => {
+      const { error } = await db.from("crm_vendas").update(patch).eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: (_data, vars) => {
+      qc.invalidateQueries({ queryKey: ["crm_vendas"] });
+      qc.invalidateQueries({ queryKey: ["crm_venda", vars.id] });
+    },
   });
 }
 
