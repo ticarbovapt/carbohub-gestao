@@ -24,7 +24,7 @@ const DESC_SUB = [
   { to: "/descarbonizacao/os", label: "Ordens de Serviço", icon: ClipboardList },
   { to: "/descarbonizacao/agendamentos", label: "Agendamentos", icon: CalendarDays },
 ];
-// Território — bases/licenciados pra mostrar durante a venda (port visual, dados MOCK).
+// Território — bases/licenciados (dados reais do CORE) pra mostrar durante a venda.
 const TERR_SUB = [
   { to: "/territorio/mapa", label: "Mapa Territorial", icon: Map },
   { to: "/territorio/rede", label: "Mapa da Rede", icon: Share2 },

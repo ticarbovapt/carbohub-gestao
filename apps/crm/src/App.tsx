@@ -44,7 +44,7 @@ export default function App() {
         {/* Descarbonização — acompanhamento (pra onde o "+ Nova Descarbonização" leva) */}
         <Route path="/descarbonizacao/os" element={<DescOrdensServico />} />
         <Route path="/descarbonizacao/agendamentos" element={<DescAgendamentos />} />
-        {/* Território — bases/licenciados, rede e expansão (port visual, dados MOCK) */}
+        {/* Território — bases/licenciados, rede e expansão (dados reais do CORE) */}
         <Route path="/territorio/mapa" element={<MapaTerritorial />} />
         <Route path="/territorio/rede" element={<NetworkMap />} />
         <Route path="/territorio/expansao" element={<TerritoryExpansion />} />
