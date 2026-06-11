@@ -220,7 +220,7 @@ export default function Metas() {
   const weeklyTargetMap: Record<string, number> = {};
   for (const t of targetsData) weeklyTargetMap[t.vendedor_id] = t.target_amount / numWeeks;
 
-  // Dias decorridos da semana (mock: semana atual)
+  // Dias decorridos da semana (semana atual)
   const elapsedDays = isCurrentWeek ? Math.min(7, Math.max(1, Math.ceil((today.getTime() - weekStart.getTime()) / 86400000))) : 7;
 
   const sorted = [...targetsData].sort((a, b) => (b.pct_amount || 0) - (a.pct_amount || 0));

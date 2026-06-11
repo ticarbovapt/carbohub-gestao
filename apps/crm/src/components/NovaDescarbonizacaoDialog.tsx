@@ -1,5 +1,4 @@
-// ⚠️ Form em port visual — campos MOCK; submit liga na fase de lógica.
-// Cópia fiel do CreateOSDialog do Controle (Nova Descarbonização) — B2C / B2B / Frota.
+// Nova Descarbonização — B2C / B2B / Frota. Cria uma OS real (crm_os).
 import { useState } from "react";
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
@@ -15,15 +14,14 @@ import { DateTimePicker } from "@/components/ui/date-time-picker";
 import { Car, Building2, Truck, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { useCreateOS, type OsTipo } from "@/hooks/useOS";
 
 interface NovaDescarbonizacaoDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
 
-type OsType = "b2c" | "b2b" | "frota";
-
-const SERVICE_TYPES: { value: OsType; label: string; description: string; icon: React.ReactNode; color: string }[] = [
+const SERVICE_TYPES: { value: OsTipo; label: string; description: string; icon: React.ReactNode; color: string }[] = [
   {
     value: "b2c",
     label: "B2C — Eventual",
@@ -49,21 +47,49 @@ const SERVICE_TYPES: { value: OsType; label: string; description: string; icon: 
 
 export function NovaDescarbonizacaoDialog({ open, onOpenChange }: NovaDescarbonizacaoDialogProps) {
   const [step, setStep] = useState<"type" | "form">("type");
-  const [selectedType, setSelectedType] = useState<OsType | null>(null);
+  const [selectedType, setSelectedType] = useState<OsTipo | null>(null);
+  const [clienteNome, setClienteNome] = useState("");
   const [cnpj, setCnpj] = useState("");
+  const [placa, setPlaca] = useState("");
+  const [modelo, setModelo] = useState("");
   const [scheduledAt, setScheduledAt] = useState("");
+  const [prioridade, setPrioridade] = useState("3");
+  const [titulo, setTitulo] = useState("");
+  const [observacoes, setObservacoes] = useState("");
+
+  const createOS = useCreateOS();
+
+  const reset = () => {
+    setStep("type"); setSelectedType(null);
+    setClienteNome(""); setCnpj(""); setPlaca(""); setModelo("");
+    setScheduledAt(""); setPrioridade("3"); setTitulo(""); setObservacoes("");
+  };
 
   const handleOpenChange = (isOpen: boolean) => {
     onOpenChange(isOpen);
-    if (!isOpen) {
-      setTimeout(() => { setStep("type"); setSelectedType(null); setCnpj(""); setScheduledAt(""); }, 200);
-    }
+    if (!isOpen) setTimeout(reset, 200);
   };
 
-  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    toast.info("Disponível na fase de lógica");
-    handleOpenChange(false);
+    if (!selectedType) return;
+    try {
+      await createOS.mutateAsync({
+        tipo: selectedType,
+        cliente_nome: clienteNome.trim() || undefined,
+        cnpj: cnpj.trim() || undefined,
+        placa: placa.trim() || undefined,
+        modelo: modelo.trim() || undefined,
+        data_prevista: scheduledAt || null,
+        prioridade: Number(prioridade),
+        titulo: titulo.trim() || undefined,
+        observacoes: observacoes.trim() || undefined,
+      });
+      toast.success("OS criada com sucesso");
+      handleOpenChange(false);
+    } catch (err) {
+      toast.error("Erro ao criar OS", { description: (err as Error)?.message });
+    }
   };
 
   const current = SERVICE_TYPES.find((t) => t.value === selectedType);
@@ -112,7 +138,7 @@ export function NovaDescarbonizacaoDialog({ open, onOpenChange }: NovaDescarboni
                   <Label>CNPJ</Label>
                   <div className="flex gap-2">
                     <Input value={cnpj} onChange={(e) => setCnpj(e.target.value)} placeholder="00.000.000/0000-00" maxLength={18} className="font-mono" />
-                    <Button type="button" variant="outline" size="sm" className="shrink-0 px-3" onClick={() => toast.info("Disponível na fase de lógica")}>
+                    <Button type="button" variant="outline" size="sm" className="shrink-0 px-3" onClick={() => toast.info("Busca de CNPJ disponível em breve")}>
                       <Search className="h-4 w-4" />
                     </Button>
                   </div>
@@ -121,7 +147,12 @@ export function NovaDescarbonizacaoDialog({ open, onOpenChange }: NovaDescarboni
 
               <div className="space-y-1.5">
                 <Label htmlFor="customer_name">{selectedType === "frota" ? "Empresa / Frota" : "Nome do Cliente"}</Label>
-                <Input id="customer_name" placeholder={selectedType === "frota" ? "Ex: Transportadora XYZ" : "Nome do cliente"} />
+                <Input
+                  id="customer_name"
+                  value={clienteNome}
+                  onChange={(e) => setClienteNome(e.target.value)}
+                  placeholder={selectedType === "frota" ? "Ex: Transportadora XYZ" : "Nome do cliente"}
+                />
               </div>
 
               <div className="grid grid-cols-2 gap-3">
@@ -129,13 +160,13 @@ export function NovaDescarbonizacaoDialog({ open, onOpenChange }: NovaDescarboni
                   <Label htmlFor="vehicle_plate" className="flex items-center gap-1">
                     Placa <span className="text-[10px] text-muted-foreground font-normal">(preencher depois)</span>
                   </Label>
-                  <Input id="vehicle_plate" placeholder="ABC-1234" className="uppercase" />
+                  <Input id="vehicle_plate" value={placa} onChange={(e) => setPlaca(e.target.value)} placeholder="ABC-1234" className="uppercase" />
                 </div>
                 <div className="space-y-1.5">
                   <Label htmlFor="vehicle_model" className="flex items-center gap-1">
                     Modelo <span className="text-[10px] text-muted-foreground font-normal">(preencher depois)</span>
                   </Label>
-                  <Input id="vehicle_model" placeholder="Ex: Caminhão, Fiat Uno" />
+                  <Input id="vehicle_model" value={modelo} onChange={(e) => setModelo(e.target.value)} placeholder="Ex: Caminhão, Fiat Uno" />
                 </div>
               </div>
 
@@ -150,7 +181,7 @@ export function NovaDescarbonizacaoDialog({ open, onOpenChange }: NovaDescarboni
 
               <div className="space-y-1.5">
                 <Label>Prioridade</Label>
-                <Select defaultValue="3">
+                <Select value={prioridade} onValueChange={setPrioridade}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="1">🔴 Urgente</SelectItem>
@@ -167,6 +198,8 @@ export function NovaDescarbonizacaoDialog({ open, onOpenChange }: NovaDescarboni
                 </Label>
                 <Input
                   id="title"
+                  value={titulo}
+                  onChange={(e) => setTitulo(e.target.value)}
                   placeholder={
                     selectedType === "b2b" ? "Ex: DESC_B2B_00012 — Café Santa Clara" :
                     selectedType === "b2c" ? "Ex: DESC_B2C_00015 — João Silva" :
@@ -177,12 +210,14 @@ export function NovaDescarbonizacaoDialog({ open, onOpenChange }: NovaDescarboni
 
               <div className="space-y-1.5">
                 <Label htmlFor="description">Observações</Label>
-                <Textarea id="description" placeholder="Informações adicionais..." rows={2} />
+                <Textarea id="description" value={observacoes} onChange={(e) => setObservacoes(e.target.value)} placeholder="Informações adicionais..." rows={2} />
               </div>
             </div>
             <DialogFooter className="gap-2">
               <Button type="button" variant="outline" onClick={() => setStep("type")}>Voltar</Button>
-              <Button type="submit">Criar OS</Button>
+              <Button type="submit" disabled={createOS.isPending}>
+                {createOS.isPending ? "Criando..." : "Criar OS"}
+              </Button>
             </DialogFooter>
           </form>
         )}

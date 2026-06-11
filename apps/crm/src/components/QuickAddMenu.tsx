@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils";
 import { NovaDescarbonizacaoDialog } from "@/components/NovaDescarbonizacaoDialog";
 
 // Botão "+" do topo (speed-dial). No Sales:
-//  • Nova Descarbonização → abre dialog (mock).
+//  • Nova Descarbonização → abre dialog (salva em crm_os).
 //  • Nova Venda → vai para a página "Vender" (a tela de venda do Sales).
 export function QuickAddMenu() {
   const navigate = useNavigate();
