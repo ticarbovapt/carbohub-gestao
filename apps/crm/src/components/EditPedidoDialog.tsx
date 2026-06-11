@@ -259,7 +259,7 @@ export function EditPedidoDialog({ vendaId, open, onOpenChange, canEditSensitive
     onOpenChange(false);
   };
 
-  const orderNumber = venda ? `${venda.status === "orcamento" ? "ORC" : "VND"}-${venda.id.slice(0, 8).toUpperCase()}` : "";
+  const orderNumber = venda ? (venda.numero ?? `${venda.status === "orcamento" ? "ORC" : "VND"}-${venda.id.slice(0, 8).toUpperCase()}`) : "";
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

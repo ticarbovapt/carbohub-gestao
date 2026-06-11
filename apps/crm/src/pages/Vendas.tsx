@@ -81,7 +81,7 @@ export default function Vendas() {
     const end = (v.endereco ?? null) as Endereco;
     return {
       id: v.id,
-      order_number: `${v.status === "orcamento" ? "ORC" : "VND"}-${v.id.slice(0, 8).toUpperCase()}`,
+      order_number: v.numero ?? `${v.status === "orcamento" ? "ORC" : "VND"}-${v.id.slice(0, 8).toUpperCase()}`,
       created_at: v.created_at,
       sale_date: null,
       customer_name: v.customer_name ?? "—",
