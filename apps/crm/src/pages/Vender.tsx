@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import {
   ShoppingCart, Plus, Trash2, Building2, MapPin, Package, Gift, FileText, Search, Target, ChevronDown,
+  Loader2, CheckCircle2, AlertCircle,
 } from "lucide-react";
 import { CarboCard, CarboCardContent } from "@/components/ui/carbo-card";
 import { CarboButton } from "@/components/ui/carbo-button";
@@ -23,7 +24,7 @@ import { useProdutos } from "@/hooks/useProdutos";
 
 const TIPOS_PONTO = ["Posto", "Oficina", "Frota", "PDV", "Licenciado"];
 const CLASSIFICACOES = ["Estratégico", "Potencial", "Regular"];
-const UFS = ["SP", "RJ", "MG", "RN", "BA", "PR", "RS", "SC"];
+const UFS = ["AC", "AL", "AP", "AM", "BA", "CE", "DF", "ES", "GO", "MA", "MT", "MS", "MG", "PA", "PB", "PR", "PE", "PI", "RJ", "RN", "RS", "RO", "RR", "SC", "SP", "SE", "TO"];
 
 const brl = (n: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(n);
 
@@ -70,8 +71,72 @@ export default function Vender() {
   const [showEstrategicos, setShowEstrategicos] = useState(false);
   const [showObs, setShowObs] = useState(false);
   const [generating, setGenerating] = useState(false);
+  const [buscando, setBuscando] = useState(false);
+  const [docFeedback, setDocFeedback] = useState<{ kind: "ok" | "err"; msg: string } | null>(null);
+  const [endereco, setEndereco] = useState({ logradouro: "", numero: "", bairro: "", cidade: "", uf: "", cep: "" });
+  const setEnd = (patch: Partial<typeof endereco>) => setEndereco((e) => ({ ...e, ...patch }));
 
   const subtotal = useMemo(() => rows.reduce((s, r) => s + r.qty * r.unitPrice, 0), [rows]);
+
+  // Formata CPF (≤11 díg.) ou CNPJ (12+).
+  function formatDoc(v: string) {
+    const d = v.replace(/\D/g, "").slice(0, 14);
+    if (d.length <= 11) {
+      if (d.length <= 3) return d;
+      if (d.length <= 6) return `${d.slice(0, 3)}.${d.slice(3)}`;
+      if (d.length <= 9) return `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6)}`;
+      return `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6, 9)}-${d.slice(9)}`;
+    }
+    return `${d.slice(0, 2)}.${d.slice(2, 5)}.${d.slice(5, 8)}/${d.slice(8, 12)}-${d.slice(12)}`;
+  }
+  // Validação de CPF (dígitos verificadores).
+  function isValidCpf(cpf: string) {
+    const d = cpf.replace(/\D/g, "");
+    if (d.length !== 11 || /^(\d)\1{10}$/.test(d)) return false;
+    const calc = (len: number) => {
+      let sum = 0;
+      for (let i = 0; i < len; i++) sum += parseInt(d[i]) * (len + 1 - i);
+      const r = (sum * 10) % 11;
+      return r === 10 ? 0 : r;
+    };
+    return calc(9) === parseInt(d[9]) && calc(10) === parseInt(d[10]);
+  }
+  // CPF → valida (manual); CNPJ → busca na BrasilAPI e auto-preenche cliente + endereço.
+  async function handleBuscarDoc() {
+    const digits = doc.replace(/\D/g, "");
+    setDocFeedback(null);
+    if (digits.length === 11) {
+      if (!isValidCpf(digits)) { setDocFeedback({ kind: "err", msg: "CPF inválido. Verifique os números." }); return; }
+      setDocFeedback({ kind: "ok", msg: "CPF válido — preencha os dados do cliente abaixo." });
+      return;
+    }
+    if (digits.length !== 14) { setDocFeedback({ kind: "err", msg: "Digite um CPF (11 dígitos) ou CNPJ (14 dígitos)." }); return; }
+    setBuscando(true);
+    try {
+      const res = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${digits}`, { signal: AbortSignal.timeout(10000) });
+      if (res.status === 404) { setDocFeedback({ kind: "err", msg: "CNPJ não encontrado na Receita Federal. Verifique o número ou preencha manualmente." }); return; }
+      if (!res.ok) throw new Error(`Erro ${res.status}`);
+      const raw = await res.json();
+      setCustomerName(raw.nome_fantasia || raw.razao_social || "");
+      if (raw.email) setEmail(raw.email);
+      const tel = raw.ddd_telefone_1 || raw.ddd_telefone_2;
+      if (tel) setPhone(String(tel));
+      setEndereco({
+        logradouro: [raw.logradouro, raw.complemento].filter(Boolean).join(", "),
+        numero: raw.numero || "",
+        bairro: raw.bairro || "",
+        cidade: raw.municipio || "",
+        uf: raw.uf || "",
+        cep: (raw.cep || "").replace(/\D/g, ""),
+      });
+      setDocFeedback({ kind: "ok", msg: "Dados do CNPJ carregados com sucesso!" });
+    } catch (err) {
+      const name = (err as { name?: string }).name;
+      setDocFeedback({ kind: "err", msg: name === "TimeoutError" || name === "AbortError"
+        ? "Tempo esgotado na consulta. Tente de novo ou preencha manualmente."
+        : "Serviço de consulta indisponível. Preencha os dados manualmente." });
+    } finally { setBuscando(false); }
+  }
 
   function updateRow(id: string, patch: Partial<ItemRow>) {
     setRows((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch } : r)));
@@ -96,6 +161,7 @@ export default function Vender() {
       customer_email: email || undefined,
       customer_phone: phone || undefined,
       is_licenciado: isLicenciado,
+      endereco: (endereco.logradouro || endereco.cidade || endereco.cep) ? endereco : null,
       total: subtotal,
       notes: obsPublica || undefined,
       itens: validItems().map((i) => ({
@@ -111,6 +177,8 @@ export default function Vender() {
   function resetForm() {
     setMode("venda"); setDoc(""); setCustomerName(""); setEmail(""); setPhone("");
     setIsLicenciado(false); setRows([emptyRow()]); setObsPublica("");
+    setEndereco({ logradouro: "", numero: "", bairro: "", cidade: "", uf: "", cep: "" });
+    setDocFeedback(null);
   }
 
   async function handleQuote() {
@@ -171,11 +239,25 @@ export default function Vender() {
             CNPJ busca os dados automaticamente. CPF (pessoa física) é validado e segue com preenchimento manual.
           </p>
           <div className="flex flex-col sm:flex-row gap-2">
-            <Input value={doc} onChange={(e) => setDoc(e.target.value)} placeholder="CNPJ ou CPF" />
-            <CarboButton type="button" onClick={() => toast.info("Busca de CNPJ entra na fase de lógica.")}>
-              <Search className="h-4 w-4 mr-1" /> Buscar dados
+            <Input
+              value={doc}
+              onChange={(e) => { setDoc(formatDoc(e.target.value)); setDocFeedback(null); }}
+              onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleBuscarDoc(); } }}
+              placeholder="CNPJ ou CPF"
+              maxLength={18}
+              className="font-mono"
+            />
+            <CarboButton type="button" onClick={handleBuscarDoc} disabled={buscando}>
+              {buscando ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Search className="h-4 w-4 mr-1" />}
+              {buscando ? "Buscando..." : "Buscar dados"}
             </CarboButton>
           </div>
+          {docFeedback && (
+            <p className={`flex items-center gap-1.5 text-xs font-medium ${docFeedback.kind === "ok" ? "text-carbo-green" : "text-destructive"}`}>
+              {docFeedback.kind === "ok" ? <CheckCircle2 className="h-3.5 w-3.5 shrink-0" /> : <AlertCircle className="h-3.5 w-3.5 shrink-0" />}
+              {docFeedback.msg}
+            </p>
+          )}
         </CarboCardContent>
       </CarboCard>
 
@@ -217,21 +299,24 @@ export default function Vender() {
             </Button>
           </div>
           <div className="grid md:grid-cols-3 gap-3">
-            <div className="space-y-1.5 md:col-span-2"><Label>Logradouro</Label><Input placeholder="Rua, Avenida, etc." /></div>
+            <div className="space-y-1.5 md:col-span-2"><Label>Logradouro</Label><Input placeholder="Rua, Avenida, etc." value={endereco.logradouro} onChange={(e) => setEnd({ logradouro: e.target.value })} /></div>
             <div className="space-y-1.5">
               <Label>Número</Label>
-              <div className="flex gap-2"><Input placeholder="Nº" /><Button variant="outline" type="button" className="shrink-0">S/N</Button></div>
+              <div className="flex gap-2">
+                <Input placeholder="Nº" value={endereco.numero} onChange={(e) => setEnd({ numero: e.target.value })} />
+                <Button variant="outline" type="button" className="shrink-0" onClick={() => setEnd({ numero: "S/N" })}>S/N</Button>
+              </div>
             </div>
-            <div className="space-y-1.5"><Label>Bairro</Label><Input placeholder="Bairro" /></div>
-            <div className="space-y-1.5"><Label>Cidade</Label><Input placeholder="Cidade" /></div>
+            <div className="space-y-1.5"><Label>Bairro</Label><Input placeholder="Bairro" value={endereco.bairro} onChange={(e) => setEnd({ bairro: e.target.value })} /></div>
+            <div className="space-y-1.5"><Label>Cidade</Label><Input placeholder="Cidade" value={endereco.cidade} onChange={(e) => setEnd({ cidade: e.target.value })} /></div>
             <div className="space-y-1.5">
               <Label>Estado</Label>
-              <Select>
+              <Select value={endereco.uf} onValueChange={(uf) => setEnd({ uf })}>
                 <SelectTrigger><SelectValue placeholder="UF" /></SelectTrigger>
                 <SelectContent>{UFS.map((u) => <SelectItem key={u} value={u}>{u}</SelectItem>)}</SelectContent>
               </Select>
             </div>
-            <div className="space-y-1.5"><Label>CEP</Label><Input placeholder="00000-000" /></div>
+            <div className="space-y-1.5"><Label>CEP</Label><Input placeholder="00000-000" value={endereco.cep} onChange={(e) => setEnd({ cep: e.target.value })} /></div>
           </div>
           <div className="rounded-xl border border-dashed flex flex-col items-center justify-center gap-2 py-10 text-center text-muted-foreground">
             <MapPin className="h-6 w-6" />
