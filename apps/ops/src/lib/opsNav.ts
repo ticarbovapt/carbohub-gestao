@@ -64,6 +64,7 @@ export const OPS_GROUPS: OpsNavGroup[] = [
       { path: "/financeiro", label: "Financeiro", icon: Wallet, from: "/financeiro", ready: true },
       { path: "/financeiro/faturamento", label: "Fila de Faturamento", icon: Receipt, from: "/financeiro/faturamento", ready: true },
       { path: "/financeiro/notas-fiscais", label: "Notas Fiscais", icon: FileText, from: "/integrations/bling/nfs", ready: true },
+      { path: "/financeiro/nfse", label: "NFSe", icon: FileText, from: "/admin/nfse", ready: true },
       { path: "/financeiro/dashboard", label: "Dashboard Financeiro", icon: BarChart3, from: "/dashboards/financeiro", ready: true },
     ],
   },
