@@ -8,14 +8,17 @@ import { StockProgressBar } from "@/components/estoque/StockProgressBar";
 import { Search, Tag, Activity, Shield, Calendar, Package, Pencil, Plus } from "lucide-react";
 import { addDays, format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { toast } from "sonner";
 import { MOCK_ESTOQUE, coverageStatus, type Hub } from "@/components/estoque/stockData";
+import { NovaEntradaDialog } from "@/components/estoque/NovaEntradaDialog";
+import { AjustarEstoqueDialog, type AjusteTarget } from "@/components/estoque/AjustarEstoqueDialog";
 
 // Visão de estoque de UM hub. `editable` decide se mostra ações de edição
 // (Suprimentos) ou se é só leitura (Estoque).
 export function StockView({ hub, editable }: { hub: Hub; editable: boolean }) {
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("all");
+  const [novaEntradaOpen, setNovaEntradaOpen] = useState(false);
+  const [ajuste, setAjuste] = useState<AjusteTarget | null>(null);
 
   const filtered = useMemo(() => MOCK_ESTOQUE.filter((p) => {
     if (category !== "all" && p.category !== category) return false;
@@ -43,7 +46,7 @@ export function StockView({ hub, editable }: { hub: Hub; editable: boolean }) {
             <SelectItem value="Carbonatação">Carbonatação</SelectItem>
           </SelectContent>
         </Select>
-        {editable && <Button size="sm" className="gap-1.5 ml-auto bg-carbo-green hover:bg-carbo-green/90 text-white" onClick={() => toast("Nova entrada (em breve)")}><Plus className="h-4 w-4" /> Nova Entrada</Button>}
+        {editable && <Button size="sm" className="gap-1.5 ml-auto bg-carbo-green hover:bg-carbo-green/90 text-white" onClick={() => setNovaEntradaOpen(true)}><Plus className="h-4 w-4" /> Nova Entrada</Button>}
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
@@ -63,7 +66,7 @@ export function StockView({ hub, editable }: { hub: Hub; editable: boolean }) {
                     </div>
                     <p className="text-[11px] text-muted-foreground font-mono tracking-wide">{p.product_code}<span className="ml-2 font-sans">· {p.category}</span></p>
                   </div>
-                  {editable && <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" onClick={() => toast(`Ajustar ${p.name} (em breve)`)}><Pencil className="h-3.5 w-3.5" /></Button>}
+                  {editable && <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" onClick={() => setAjuste({ name: p.name, product_code: p.product_code, current: qty, unit: p.stock_unit })}><Pencil className="h-3.5 w-3.5" /></Button>}
                 </div>
 
                 <div className="text-center px-5 pb-3">
@@ -78,7 +81,7 @@ export function StockView({ hub, editable }: { hub: Hub; editable: boolean }) {
                 </div>
 
                 <div className="border-t border-border px-5 py-4">
-                  <StockProgressBar current={qty} safety={p.safety_stock_qty} hubName={hub.label} unit={p.stock_unit} onClick={editable ? () => toast(`Ajustar ${p.name} (em breve)`) : undefined} />
+                  <StockProgressBar current={qty} safety={p.safety_stock_qty} hubName={hub.label} unit={p.stock_unit} onClick={editable ? () => setAjuste({ name: p.name, product_code: p.product_code, current: qty, unit: p.stock_unit }) : undefined} />
                 </div>
               </CarboCardContent>
             </CarboCard>
@@ -86,6 +89,13 @@ export function StockView({ hub, editable }: { hub: Hub; editable: boolean }) {
         })}
         {filtered.length === 0 && <CarboCard className="sm:col-span-2 xl:col-span-3"><CarboCardContent className="py-12 text-center"><Package className="h-12 w-12 mx-auto mb-3 text-muted-foreground/30" /><p className="text-muted-foreground">Nenhum produto encontrado</p></CarboCardContent></CarboCard>}
       </div>
+
+      {editable && (
+        <>
+          <NovaEntradaDialog hub={hub} open={novaEntradaOpen} onOpenChange={setNovaEntradaOpen} />
+          <AjustarEstoqueDialog target={ajuste} hub={hub} open={ajuste !== null} onOpenChange={(v) => !v && setAjuste(null)} />
+        </>
+      )}
     </div>
   );
 }

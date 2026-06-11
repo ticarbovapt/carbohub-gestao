@@ -4,7 +4,7 @@ import { CarboCard, CarboCardContent } from "@/components/ui/carbo-card";
 import { CarboBadge } from "@/components/ui/carbo-badge";
 import { UserCheck, CheckCircle2, Circle, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { toast } from "sonner";
+import { ChecklistDialog } from "@/components/campo/ChecklistDialog";
 
 // ⚠️ PORT VISUAL FIEL ao Controle (/checklist → Checklist "Carbo Check") — dados MOCK.
 
@@ -26,6 +26,7 @@ const MOCK: Checklist[] = [
 
 export default function Checklists() {
   const [dep, setDep] = useState("preparacao");
+  const [openChecklist, setOpenChecklist] = useState<Checklist | null>(null);
   const lists = MOCK.filter((c) => c.departamento === dep);
 
   return (
@@ -63,7 +64,7 @@ export default function Checklists() {
                       </div>
                     ))}
                   </div>
-                  <button onClick={() => toast(`Abrir checklist ${c.nome} (em breve)`)} className="mt-3 inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline">
+                  <button onClick={() => setOpenChecklist(c)} className="mt-3 inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline">
                     Abrir checklist <ChevronRight className="h-3.5 w-3.5" />
                   </button>
                 </CarboCardContent>
@@ -74,6 +75,13 @@ export default function Checklists() {
         </div>
         <p className="text-xs text-muted-foreground text-center">Tela em port visual — dados de exemplo. Fluxo de execução (Carbo Check) entra na fase de lógica.</p>
       </div>
+
+      <ChecklistDialog
+        open={openChecklist !== null}
+        onOpenChange={(o) => { if (!o) setOpenChecklist(null); }}
+        nome={openChecklist?.nome ?? ""}
+        etapas={openChecklist?.etapas ?? []}
+      />
     </div>
   );
 }

@@ -4,6 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { ClipboardList, Calendar, Zap, CheckCircle2, Search, LayoutGrid, List, Plus, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
+import { CreateOSDialog } from "@/components/campo/CreateOSDialog";
 
 // ⚠️ PORT VISUAL FIEL ao Controle (/os → OSBoard "Ordens de Serviço") — dados MOCK.
 
@@ -32,6 +33,7 @@ const dt = (s: string | null) => (s ? new Date(s + "T00:00:00").toLocaleDateStri
 export default function OrdensServico() {
   const [search, setSearch] = useState("");
   const [viewMode, setViewMode] = useState<"kanban" | "list">("kanban");
+  const [createOpen, setCreateOpen] = useState(false);
 
   const filtered = useMemo(() => MOCK.filter((o) => {
     if (!search) return true;
@@ -51,7 +53,7 @@ export default function OrdensServico() {
           </div>
           <div className="flex items-center gap-2">
             <Button variant="outline" size="sm" onClick={() => toast("Atualizar (em breve)")} className="gap-1"><RefreshCw className="h-3.5 w-3.5" /></Button>
-            <Button size="sm" onClick={() => toast("Nova OS (em breve)")} className="gap-2 bg-purple-600 hover:bg-purple-700 text-white"><Plus className="h-4 w-4" /> Nova OS</Button>
+            <Button size="sm" onClick={() => setCreateOpen(true)} className="gap-2 bg-purple-600 hover:bg-purple-700 text-white"><Plus className="h-4 w-4" /> Nova OS</Button>
           </div>
         </div>
 
@@ -127,6 +129,8 @@ export default function OrdensServico() {
         )}
         <p className="text-xs text-muted-foreground text-center">Tela em port visual — dados de exemplo. OS reais, agendamento e execução entram na fase de lógica.</p>
       </div>
+
+      <CreateOSDialog open={createOpen} onOpenChange={setCreateOpen} />
     </div>
   );
 }

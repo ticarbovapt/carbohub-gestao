@@ -6,13 +6,16 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Truck, Calculator, BarChart3 } from "lucide-react";
-import { MOCK_SHIPMENTS, ShipmentsKanban, LogisticsKpis } from "@/components/logistica/shipments";
-import { toast } from "sonner";
+import { MOCK_SHIPMENTS, ShipmentsKanban, LogisticsKpis, type Shipment } from "@/components/logistica/shipments";
+import { FreightCalculatorDialog } from "@/components/logistica/FreightCalculatorDialog";
+import { ShipmentDetailsDialog } from "@/components/logistica/ShipmentDetailsDialog";
 
 // ⚠️ PORT VISUAL FIEL ao Controle (/logistics → Logistics "Controle Logístico") — dados MOCK.
 
 export default function Logistica() {
   const [cep, setCep] = useState("");
+  const [freteOpen, setFreteOpen] = useState(false);
+  const [shipment, setShipment] = useState<Shipment | null>(null);
 
   return (
     <div className="p-4 md:p-6">
@@ -28,7 +31,7 @@ export default function Logistica() {
           </TabsList>
 
           <TabsContent value="operacional" className="space-y-4 mt-4">
-            <ShipmentsKanban shipments={MOCK_SHIPMENTS} onView={(s) => toast(`Detalhes ${s.order_number} (em breve)`)} />
+            <ShipmentsKanban shipments={MOCK_SHIPMENTS} onView={setShipment} />
           </TabsContent>
 
           <TabsContent value="gestao" className="space-y-4 mt-4">
@@ -45,7 +48,7 @@ export default function Logistica() {
                     <div className="space-y-1.5"><Label>Produto</Label><Input placeholder="CarboZé 100ml" /></div>
                     <div className="space-y-1.5"><Label>Quantidade</Label><Input type="number" placeholder="100" /></div>
                   </div>
-                  <Button className="w-full gap-1.5" onClick={() => toast("Cotar frete (em breve)")}><Calculator className="h-4 w-4" /> Calcular Frete</Button>
+                  <Button className="w-full gap-1.5" onClick={() => setFreteOpen(true)}><Calculator className="h-4 w-4" /> Calcular Frete</Button>
                 </CarboCardContent>
               </CarboCard>
               <CarboCard>
@@ -68,6 +71,13 @@ export default function Logistica() {
         </Tabs>
         <p className="text-xs text-muted-foreground text-center">Tela em port visual — dados de exemplo. Rastreio, cotação de frete e estratégico entram na fase de lógica.</p>
       </div>
+
+      <FreightCalculatorDialog open={freteOpen} onOpenChange={setFreteOpen} />
+      <ShipmentDetailsDialog
+        shipment={shipment}
+        open={shipment !== null}
+        onOpenChange={(o) => { if (!o) setShipment(null); }}
+      />
     </div>
   );
 }

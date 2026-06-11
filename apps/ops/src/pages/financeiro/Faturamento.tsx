@@ -6,6 +6,7 @@ import {
   Receipt, ChevronLeft, ChevronRight, Copy, ExternalLink, Eye, Link2,
 } from "lucide-react";
 import { toast } from "sonner";
+import { BlingPreviewDialog, type BlingOrder } from "@/components/financeiro/BlingPreviewDialog";
 
 // ⚠️ PORT VISUAL FIEL ao Controle (/financeiro/faturamento → FaturamentoPage) — dados MOCK.
 
@@ -27,6 +28,7 @@ const ORDERS: Order[] = [
 
 export default function Faturamento() {
   const [showAll, setShowAll] = useState(false);
+  const [previewOrder, setPreviewOrder] = useState<BlingOrder | null>(null);
   const visible = showAll ? ORDERS : ORDERS.filter((o) => !o.has_nf);
 
   return (
@@ -82,8 +84,8 @@ export default function Faturamento() {
                 </div>
                 <div className="flex items-center gap-2 mt-3 flex-wrap">
                   <Button variant="outline" size="sm" className="gap-1.5 h-8 text-xs" onClick={() => toast("Número copiado (mock)")}><Copy className="h-3.5 w-3.5" /> Copiar Nº</Button>
-                  {!o.has_nf && !o.bling && <Button size="sm" className="gap-1.5 h-8 text-xs" onClick={() => toast("Criar no Bling (em breve)")}><Link2 className="h-3.5 w-3.5" /> Criar no Bling</Button>}
-                  {!o.has_nf && <Button variant="outline" size="sm" className="gap-1.5 h-8 text-xs" onClick={() => toast("Pré-visualizar envio (em breve)")}><Eye className="h-3.5 w-3.5" /> Pré-visualizar</Button>}
+                  {!o.has_nf && !o.bling && <Button size="sm" className="gap-1.5 h-8 text-xs" onClick={() => setPreviewOrder(o)}><Link2 className="h-3.5 w-3.5" /> Criar no Bling</Button>}
+                  {!o.has_nf && <Button variant="outline" size="sm" className="gap-1.5 h-8 text-xs" onClick={() => setPreviewOrder(o)}><Eye className="h-3.5 w-3.5" /> Pré-visualizar</Button>}
                   {(o.bling || o.has_nf) && <Button variant="outline" size="sm" className="gap-1.5 h-8 text-xs" onClick={() => toast("Abrir no Bling (em breve)")}><ExternalLink className="h-3.5 w-3.5" /> Abrir no Bling</Button>}
                 </div>
               </CarboCardContent>
@@ -93,6 +95,7 @@ export default function Faturamento() {
         </div>
         <p className="text-xs text-muted-foreground text-center">Tela em port visual — dados de exemplo. Integração Bling e emissão de NF entram na fase de lógica.</p>
       </div>
+      <BlingPreviewDialog order={previewOrder} open={!!previewOrder} onOpenChange={(o) => !o && setPreviewOrder(null)} />
     </div>
   );
 }

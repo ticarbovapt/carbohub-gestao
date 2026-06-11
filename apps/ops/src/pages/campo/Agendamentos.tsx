@@ -3,7 +3,7 @@ import { CarboPageHeader } from "@/components/ui/carbo-page-header";
 import { CarboCard, CarboCardContent } from "@/components/ui/carbo-card";
 import { Button } from "@/components/ui/button";
 import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, Plus } from "lucide-react";
-import { toast } from "sonner";
+import { CreateEventDialog } from "@/components/campo/CreateEventDialog";
 
 // ⚠️ PORT VISUAL FIEL ao Controle (/scheduling → Scheduling "Agendamentos") — dados MOCK.
 
@@ -24,6 +24,7 @@ const UPCOMING = [
 ];
 
 export default function Agendamentos() {
+  const [createOpen, setCreateOpen] = useState(false);
   const [ref] = useState(new Date(2026, 5, 1)); // jun/2026 (mock)
   const year = ref.getFullYear();
   const month = ref.getMonth();
@@ -36,7 +37,7 @@ export default function Agendamentos() {
       <div className="space-y-5 max-w-[1500px] mx-auto">
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <CarboPageHeader title="Agendamentos" description="Gerencie eventos e prazos vinculados às Ordens de Produção" icon={CalendarIcon} />
-          <Button className="gap-2" onClick={() => toast("Novo agendamento (em breve)")}><Plus className="h-4 w-4" /> Novo Evento</Button>
+          <Button className="gap-2" onClick={() => setCreateOpen(true)}><Plus className="h-4 w-4" /> Novo Evento</Button>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
@@ -86,6 +87,8 @@ export default function Agendamentos() {
         </div>
         <p className="text-xs text-muted-foreground text-center">Tela em port visual — dados de exemplo. Eventos reais e vínculo com OS/OP entram na fase de lógica.</p>
       </div>
+
+      <CreateEventDialog open={createOpen} onOpenChange={setCreateOpen} />
     </div>
   );
 }

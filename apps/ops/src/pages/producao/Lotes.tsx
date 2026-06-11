@@ -11,6 +11,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { FlaskConical, Plus, RefreshCw, ShieldCheck, ShieldAlert, ShieldX, Pencil, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { LotFormDialog } from "@/components/producao/LotFormDialog";
+import { DeleteConfirmDialog } from "@/components/producao/DeleteConfirmDialog";
 
 // ⚠️ PORT VISUAL FIEL ao Controle (/lots → Lots "Gestão de Lotes") — dados MOCK.
 
@@ -43,6 +45,9 @@ export default function Lotes() {
   const canManage = true;
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [createOpen, setCreateOpen] = useState(false);
+  const [editLot, setEditLot] = useState<Lot | null>(null);
+  const [deleteLot, setDeleteLot] = useState<Lot | null>(null);
 
   const stats = useMemo(() => ({
     total: MOCK.length,
@@ -69,7 +74,7 @@ export default function Lotes() {
           actions={
             <div className="flex items-center gap-3">
               <CarboButton variant="outline" size="sm" onClick={() => toast("Atualizar (em breve)")}><RefreshCw className="h-4 w-4 mr-2" /> Atualizar</CarboButton>
-              {canManage && <CarboButton size="sm" onClick={() => toast("Novo Lote (em breve)")}><Plus className="h-4 w-4 mr-2" /> Novo Lote</CarboButton>}
+              {canManage && <CarboButton size="sm" onClick={() => setCreateOpen(true)}><Plus className="h-4 w-4 mr-2" /> Novo Lote</CarboButton>}
             </div>
           }
         />
@@ -126,8 +131,8 @@ export default function Lotes() {
                       {canManage && (
                         <TableCell className="text-right">
                           <div className="flex justify-end gap-1">
-                            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => toast("Editar (em breve)")}><Pencil className="h-4 w-4" /></Button>
-                            <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive" onClick={() => toast("Excluir (em breve)")}><Trash2 className="h-4 w-4" /></Button>
+                            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setEditLot(lot)}><Pencil className="h-4 w-4" /></Button>
+                            <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive" onClick={() => setDeleteLot(lot)}><Trash2 className="h-4 w-4" /></Button>
                           </div>
                         </TableCell>
                       )}
@@ -140,6 +145,28 @@ export default function Lotes() {
         )}
         <p className="text-xs text-muted-foreground text-center">Tela em port visual — dados de exemplo. Lotes reais e qualidade entram na fase de lógica.</p>
       </div>
+
+      {/* Dialogs */}
+      <LotFormDialog open={createOpen} onOpenChange={setCreateOpen} mode="create" />
+      {editLot && (
+        <LotFormDialog
+          key={editLot.id}
+          open={!!editLot}
+          onOpenChange={(v) => { if (!v) setEditLot(null); }}
+          mode="edit"
+          initial={{
+            initial_volume_ml: editLot.initial_volume_ml,
+            expected_samples: editLot.expected_samples,
+            received_at: editLot.received_at ?? "",
+          }}
+        />
+      )}
+      <DeleteConfirmDialog
+        open={!!deleteLot}
+        onOpenChange={(v) => { if (!v) setDeleteLot(null); }}
+        title="Excluir lote?"
+        description={`Esta ação não pode ser desfeita. O lote ${deleteLot?.lot_code ?? ""} será excluído permanentemente.`}
+      />
     </div>
   );
 }

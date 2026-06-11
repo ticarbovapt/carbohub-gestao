@@ -13,11 +13,13 @@ import {
 import {
   Package, Lightbulb, MapPin, Users, Cloud, Send, AlertCircle, ArrowLeftRight, Settings2,
   ArrowDownToLine, ArrowUpFromLine, Boxes, Layers, AlertTriangle, Activity, Info, Link2, Truck,
+  CheckCircle, XCircle, CheckCircle2, FileText,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { toast } from "sonner";
 import { StockView } from "@/components/estoque/StockView";
 import { HUBS } from "@/components/estoque/stockData";
+import { CDSPRegistrarEnvioDialog } from "@/components/estoque/CDSPRegistrarEnvioDialog";
+import { RemessaConfirmDialog } from "@/components/estoque/RemessaConfirmDialog";
 
 // ⚠️ PORT VISUAL FIEL ao Controle (/suprimentos → Suprimentos) — dados MOCK.
 // É a versão EDITÁVEL do estoque (gestores). A versão somente leitura vive em Estoque.
@@ -61,6 +63,45 @@ const SKU_MAP: { sku: string; produto: string }[] = [
   { sku: "INS-ROT-CP", produto: "Rótulo CarboPRO" }, { sku: "INS-ROT-CZ", produto: "Rótulo CarboZé" },
 ];
 
+// Envios do Hub Natal → CD SP (stock_transfers from_hub = RN), mock
+interface Envio { id: string; produto: string; qtd: number; unidade: string; enviado: string; nota?: string; status: "em_transito" | "entregue" | "estornado"; }
+const ENVIOS_SP: Envio[] = [
+  { id: "1", produto: "CarboZé 100ml", qtd: 600, unidade: "un", enviado: "2026-06-07 09:14", nota: "Remessa semanal CD SP", status: "em_transito" },
+  { id: "2", produto: "CarboPRO", qtd: 150, unidade: "un", enviado: "2026-06-05 16:40", status: "entregue" },
+  { id: "3", produto: "Garrafa PET 1L", qtd: 1000, unidade: "un", enviado: "2026-06-02 11:05", nota: "Reposição embalagem", status: "entregue" },
+  { id: "4", produto: "Rótulo CarboPRO", qtd: 2000, unidade: "un", enviado: "2026-05-29 08:20", status: "estornado" },
+];
+
+// Remessas Hub Natal → CD SP Vendas (licenciados), mock
+interface Remessa { id: string; produto: string; qtd: number; unidade: string; enviado: string; nota?: string; status: "em_transito" | "entregue"; }
+const REMESSAS_VENDAS: Remessa[] = [
+  { id: "1", produto: "CarboZé 100ml", qtd: 400, unidade: "un", enviado: "2026-06-08 10:30", nota: "Licenciado SP-Centro", status: "em_transito" },
+  { id: "2", produto: "CarboPRO", qtd: 80, unidade: "un", enviado: "2026-06-06 14:00", nota: "Licenciado Campinas", status: "em_transito" },
+  { id: "3", produto: "CarboZé 1L", qtd: 120, unidade: "un", enviado: "2026-06-03 09:00", status: "entregue" },
+];
+
+// Recebimentos de OC (purchase_receivings), mock
+interface Recebimento { id: string; oc: string; recebidoEm: string; itens: number; status: "pendente" | "conferido_ok" | "conferido_divergencia"; divergencia?: string; }
+const RECEBIMENTOS: Recebimento[] = [
+  { id: "a1b2c3d4", oc: "a1b2c3d4", recebidoEm: "2026-06-09 15:20", itens: 4, status: "conferido_ok" },
+  { id: "e5f6g7h8", oc: "e5f6g7h8", recebidoEm: "2026-06-07 10:05", itens: 7, status: "conferido_divergencia", divergencia: "2 un a menos no item Garrafa PET 1L" },
+  { id: "i9j0k1l2", oc: "i9j0k1l2", recebidoEm: "2026-06-04 08:45", itens: 3, status: "pendente" },
+];
+const RECEB_STATUS: Record<Recebimento["status"], { label: string; variant: "warning" | "success" | "destructive" }> = {
+  pendente: { label: "Pendente", variant: "warning" },
+  conferido_ok: { label: "Conferido", variant: "success" },
+  conferido_divergencia: { label: "Divergência", variant: "destructive" },
+};
+
+// Notas fiscais de entrada (purchase_invoices), mock
+interface Nota { id: string; numero: string; data: string; valor: number; ocMatch: boolean; recebMatch: boolean; valorMatch: boolean; }
+const NOTAS: Nota[] = [
+  { id: "1", numero: "000.123.456", data: "2026-06-09", valor: 12450.0, ocMatch: true, recebMatch: true, valorMatch: true },
+  { id: "2", numero: "000.123.401", data: "2026-06-06", valor: 8320.5, ocMatch: true, recebMatch: false, valorMatch: true },
+  { id: "3", numero: "000.122.998", data: "2026-06-02", valor: 3990.0, ocMatch: true, recebMatch: true, valorMatch: false },
+];
+const brl = (v: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
+
 const PERIODOS = [{ v: "7d", label: "Últimos 7 dias" }, { v: "30d", label: "Últimos 30 dias" }, { v: "mes", label: "Este mês" }];
 const dt = (s: string) => new Date(s + "T00:00:00").toLocaleDateString("pt-BR");
 
@@ -69,9 +110,24 @@ export default function Suprimentos() {
   const [planningMode, setPlanningMode] = useState(false);
   const [activeTab, setActiveTab] = useState("estoque");
   const [periodo, setPeriodo] = useState("7d");
+  const [envioOpen, setEnvioOpen] = useState(false);
+  const [remessaConfirm, setRemessaConfirm] = useState<{ action: "confirmar" | "estornar"; produto: string } | null>(null);
   const periodLabel = periodo === "7d" ? "7 dias" : periodo === "30d" ? "30 dias" : "mês";
   const isRN = hub === "rn", isSP = hub === "sp", isVendas = hub === "sp-vendas", isBling = hub === "bling";
   const stockHub = HUBS.find((h) => h.id === STOCK_HUB_ID[hub]) ?? HUBS[0];
+
+  // Ao trocar de hub, volta para "estoque" se a aba ativa não existir no novo hub.
+  const changeHub = (next: Hub) => {
+    const spOnly = ["transito", "mapeamento"];
+    const vendasOnly = ["vendas-transito"];
+    const rnOnly = ["envios-sp", "recebimento", "notas"];
+    const invalid =
+      (next !== "sp" && spOnly.includes(activeTab)) ||
+      (next !== "sp-vendas" && vendasOnly.includes(activeTab)) ||
+      (next !== "rn" && rnOnly.includes(activeTab));
+    if (invalid) setActiveTab("estoque");
+    setHub(next);
+  };
 
   return (
     <div className="p-4 md:p-6">
@@ -88,11 +144,11 @@ export default function Suprimentos() {
 
         {/* Hub selector */}
         <div className="flex items-center gap-2 flex-wrap">
-          <Button variant={isRN ? "default" : "outline"} size="sm" className={cn("gap-2", isRN && "bg-carbo-blue hover:bg-carbo-blue/90 text-white")} onClick={() => setHub("rn")}><MapPin className="h-4 w-4" /> Hub Natal</Button>
-          <Button variant={isSP ? "default" : "outline"} size="sm" className={cn("gap-2", isSP && "bg-carbo-blue hover:bg-carbo-blue/90 text-white")} onClick={() => setHub("sp")}><MapPin className="h-4 w-4" /> CD SP LogHouse</Button>
-          <Button variant={isVendas ? "default" : "outline"} size="sm" className={cn("gap-2", isVendas && "bg-carbo-blue hover:bg-carbo-blue/90 text-white")} onClick={() => setHub("sp-vendas")}><Users className="h-4 w-4" /> CD SP Vendas</Button>
-          <Button variant={isBling ? "default" : "outline"} size="sm" className={cn("gap-2", isBling && "bg-carbo-blue hover:bg-carbo-blue/90 text-white")} onClick={() => setHub("bling")}><Cloud className="h-4 w-4" /> CD Bling</Button>
-          {isRN && <Button size="sm" variant="outline" className="gap-2 ml-auto border-blue-500/30 text-blue-400 hover:bg-blue-500/10" onClick={() => toast("Registrar envio (em breve)")}><Send className="h-4 w-4" /> Registrar Envio para CD SP</Button>}
+          <Button variant={isRN ? "default" : "outline"} size="sm" className={cn("gap-2", isRN && "bg-carbo-blue hover:bg-carbo-blue/90 text-white")} onClick={() => changeHub("rn")}><MapPin className="h-4 w-4" /> Hub Natal</Button>
+          <Button variant={isSP ? "default" : "outline"} size="sm" className={cn("gap-2", isSP && "bg-carbo-blue hover:bg-carbo-blue/90 text-white")} onClick={() => changeHub("sp")}><MapPin className="h-4 w-4" /> CD SP LogHouse</Button>
+          <Button variant={isVendas ? "default" : "outline"} size="sm" className={cn("gap-2", isVendas && "bg-carbo-blue hover:bg-carbo-blue/90 text-white")} onClick={() => changeHub("sp-vendas")}><Users className="h-4 w-4" /> CD SP Vendas</Button>
+          <Button variant={isBling ? "default" : "outline"} size="sm" className={cn("gap-2", isBling && "bg-carbo-blue hover:bg-carbo-blue/90 text-white")} onClick={() => changeHub("bling")}><Cloud className="h-4 w-4" /> CD Bling</Button>
+          {isRN && <Button size="sm" variant="outline" className="gap-2 ml-auto border-blue-500/30 text-blue-400 hover:bg-blue-500/10" onClick={() => setEnvioOpen(true)}><Send className="h-4 w-4" /> Registrar Envio para CD SP</Button>}
         </div>
 
         {/* Alerta reposição — SP */}
@@ -135,6 +191,10 @@ export default function Suprimentos() {
             <TabsTrigger value="movimentacoes" className="gap-1.5"><ArrowLeftRight className="h-3.5 w-3.5" /> Movimentações</TabsTrigger>
             {isSP && <TabsTrigger value="transito" className="gap-1.5"><Truck className="h-3.5 w-3.5" /> Em Trânsito</TabsTrigger>}
             {isSP && <TabsTrigger value="mapeamento" className="gap-1.5"><Link2 className="h-3.5 w-3.5" /> Mapeamento SKU</TabsTrigger>}
+            {isVendas && <TabsTrigger value="vendas-transito" className="gap-1.5"><Truck className="h-3.5 w-3.5" /> Remessas</TabsTrigger>}
+            {isRN && <TabsTrigger value="envios-sp" className="gap-1.5"><Send className="h-3.5 w-3.5" /> Envios para SP</TabsTrigger>}
+            {isRN && <TabsTrigger value="recebimento" className="gap-1.5"><ArrowDownToLine className="h-3.5 w-3.5" /> Recebimento</TabsTrigger>}
+            {isRN && <TabsTrigger value="notas" className="gap-1.5"><FileText className="h-3.5 w-3.5" /> Notas Fiscais</TabsTrigger>}
             <TabsTrigger value="politica" className="gap-1.5"><Settings2 className="h-3.5 w-3.5" /> Política de Estoque</TabsTrigger>
           </TabsList>
 
@@ -219,6 +279,111 @@ export default function Suprimentos() {
             </div>
           </TabsContent>
 
+          {/* Remessas — CD SP Vendas (licenciados) */}
+          <TabsContent value="vendas-transito" className="mt-4 space-y-4">
+            {REMESSAS_VENDAS.length === 0 ? (
+              <CarboCard><CarboCardContent className="py-12 text-center"><Users className="h-12 w-12 mx-auto mb-3 text-muted-foreground/30" /><p className="text-muted-foreground font-medium">Nenhuma remessa registrada</p></CarboCardContent></CarboCard>
+            ) : (
+              <>
+                <div className="flex items-center gap-5 px-1 flex-wrap text-sm">
+                  <span className="flex items-center gap-1.5 text-blue-400 font-medium"><Truck className="h-4 w-4" /> {REMESSAS_VENDAS.filter((r) => r.status === "em_transito").length} em trânsito</span>
+                  <span className="flex items-center gap-1.5 text-muted-foreground font-medium"><CheckCircle className="h-4 w-4 text-carbo-green" /> {REMESSAS_VENDAS.filter((r) => r.status === "entregue").length} entregues</span>
+                </div>
+                {REMESSAS_VENDAS.map((r) => {
+                  const done = r.status === "entregue";
+                  return (
+                    <CarboCard key={r.id}><CarboCardContent className="py-4">
+                      <div className="flex items-center gap-4 flex-wrap">
+                        <div className={cn("p-2 rounded-lg", done ? "bg-green-500/10" : "bg-blue-500/10")}>{done ? <CheckCircle className="h-5 w-5 text-carbo-green" /> : <Package className="h-5 w-5 text-blue-400" />}</div>
+                        <div className="flex-1 min-w-0"><p className="font-semibold text-sm">{r.produto}</p><p className="text-xs text-muted-foreground mt-0.5">{r.enviado}{r.nota ? ` · ${r.nota}` : ""}</p></div>
+                        <div className="text-right shrink-0"><p className="font-bold text-xl">{r.qtd.toLocaleString("pt-BR")} <span className="text-xs font-normal text-muted-foreground">{r.unidade}</span></p><CarboBadge variant={done ? "success" : "info"}>{done ? "Entregue" : "Em trânsito"}</CarboBadge></div>
+                        {!done && (
+                          <div className="flex flex-col gap-1.5 shrink-0">
+                            <Button size="sm" variant="outline" className="gap-1.5 border-green-500/30 text-carbo-green hover:bg-green-500/10" onClick={() => setRemessaConfirm({ action: "confirmar", produto: r.produto })}><CheckCircle className="h-4 w-4" /> Confirmar chegada</Button>
+                            <Button size="sm" variant="outline" className="gap-1.5 border-destructive/40 text-destructive hover:bg-destructive/10" onClick={() => setRemessaConfirm({ action: "estornar", produto: r.produto })}><XCircle className="h-4 w-4" /> Não chegou / Estornar</Button>
+                          </div>
+                        )}
+                      </div>
+                    </CarboCardContent></CarboCard>
+                  );
+                })}
+              </>
+            )}
+          </TabsContent>
+
+          {/* Envios para SP — Hub Natal */}
+          <TabsContent value="envios-sp" className="mt-4 space-y-4">
+            <div className="flex items-center gap-5 px-1 flex-wrap text-sm">
+              <span className="flex items-center gap-1.5 text-blue-400 font-medium"><Truck className="h-4 w-4" /> {ENVIOS_SP.filter((e) => e.status === "em_transito").length} em trânsito</span>
+              <span className="flex items-center gap-1.5 text-muted-foreground font-medium"><CheckCircle className="h-4 w-4 text-carbo-green" /> {ENVIOS_SP.filter((e) => e.status === "entregue").length} entregues no CD SP</span>
+              <span className="flex items-center gap-1.5 text-muted-foreground font-medium"><XCircle className="h-4 w-4 text-destructive" /> {ENVIOS_SP.filter((e) => e.status === "estornado").length} estornados</span>
+            </div>
+            {ENVIOS_SP.map((e) => {
+              const done = e.status === "entregue", cancelled = e.status === "estornado";
+              return (
+                <CarboCard key={e.id}><CarboCardContent className="py-4">
+                  <div className="flex items-center gap-4 flex-wrap">
+                    <div className={cn("p-2 rounded-lg", done ? "bg-green-500/10" : cancelled ? "bg-destructive/10" : "bg-blue-500/10")}>{done ? <CheckCircle className="h-5 w-5 text-carbo-green" /> : cancelled ? <XCircle className="h-5 w-5 text-destructive" /> : <Truck className="h-5 w-5 text-blue-400" />}</div>
+                    <div className="flex-1 min-w-0"><p className="font-semibold text-sm">{e.produto}</p><p className="text-xs text-muted-foreground mt-0.5">Enviado em {e.enviado}{e.nota ? ` · ${e.nota}` : ""}</p></div>
+                    <div className="text-right shrink-0"><p className="font-bold text-xl">{e.qtd.toLocaleString("pt-BR")} <span className="text-xs font-normal text-muted-foreground">{e.unidade}</span></p><CarboBadge variant={done ? "success" : cancelled ? "cancelled" : "info"}>{done ? "Chegou no CD SP" : cancelled ? "Estornado" : "Em trânsito"}</CarboBadge></div>
+                  </div>
+                </CarboCardContent></CarboCard>
+              );
+            })}
+          </TabsContent>
+
+          {/* Recebimento — Hub Natal (conferência de OC) */}
+          <TabsContent value="recebimento" className="mt-4">
+            <div className="rounded-lg border bg-card overflow-x-auto">
+              <Table>
+                <TableHeader><TableRow><TableHead>OC</TableHead><TableHead>Data Recebimento</TableHead><TableHead>Itens</TableHead><TableHead>Status</TableHead><TableHead>Divergência</TableHead></TableRow></TableHeader>
+                <TableBody>
+                  {RECEBIMENTOS.map((r) => (
+                    <TableRow key={r.id}>
+                      <TableCell className="font-mono text-sm">{r.oc.slice(0, 8)}...</TableCell>
+                      <TableCell className="text-sm text-muted-foreground">{r.recebidoEm}</TableCell>
+                      <TableCell>{r.itens} itens</TableCell>
+                      <TableCell><CarboBadge variant={RECEB_STATUS[r.status].variant} dot>{RECEB_STATUS[r.status].label}</CarboBadge></TableCell>
+                      <TableCell>
+                        {r.divergencia ? (
+                          <span className="inline-flex items-center gap-1.5 text-destructive text-sm"><AlertTriangle className="h-3.5 w-3.5" /> {r.divergencia}</span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1.5 text-carbo-green text-sm"><CheckCircle2 className="h-3.5 w-3.5" /> Sem divergências</span>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          </TabsContent>
+
+          {/* Notas Fiscais de entrada — Hub Natal (3-way match) */}
+          <TabsContent value="notas" className="mt-4">
+            <div className="rounded-lg border bg-card overflow-x-auto">
+              <Table>
+                <TableHeader><TableRow><TableHead>Nº NF</TableHead><TableHead>Data NF</TableHead><TableHead>Valor</TableHead><TableHead>OC ✓</TableHead><TableHead>Receb. ✓</TableHead><TableHead>Valor ✓</TableHead><TableHead>Verificação</TableHead></TableRow></TableHeader>
+                <TableBody>
+                  {NOTAS.map((n) => {
+                    const allMatch = n.ocMatch && n.recebMatch && n.valorMatch;
+                    const mark = (ok: boolean) => ok ? <CheckCircle2 className="h-4 w-4 text-carbo-green" /> : <XCircle className="h-4 w-4 text-destructive" />;
+                    return (
+                      <TableRow key={n.id}>
+                        <TableCell className="font-mono font-medium">{n.numero}</TableCell>
+                        <TableCell className="text-sm text-muted-foreground">{dt(n.data)}</TableCell>
+                        <TableCell className="font-mono">{brl(n.valor)}</TableCell>
+                        <TableCell>{mark(n.ocMatch)}</TableCell>
+                        <TableCell>{mark(n.recebMatch)}</TableCell>
+                        <TableCell>{mark(n.valorMatch)}</TableCell>
+                        <TableCell><CarboBadge variant={allMatch ? "success" : "warning"} dot>{allMatch ? "Conferida" : "Pendente"}</CarboBadge></TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
+          </TabsContent>
+
           <TabsContent value="politica" className="mt-4">
             <div className="rounded-lg border bg-card overflow-x-auto">
               <Table>
@@ -239,6 +404,14 @@ export default function Suprimentos() {
         </Tabs>
         <p className="text-xs text-muted-foreground text-center">Tela em port visual — dados de exemplo. Movimentações, transferências CD-SP e política entram na fase de lógica.</p>
       </div>
+
+      <CDSPRegistrarEnvioDialog open={envioOpen} onOpenChange={setEnvioOpen} />
+      <RemessaConfirmDialog
+        action={remessaConfirm?.action ?? null}
+        produto={remessaConfirm?.produto ?? null}
+        open={remessaConfirm !== null}
+        onOpenChange={(v) => !v && setRemessaConfirm(null)}
+      />
     </div>
   );
 }

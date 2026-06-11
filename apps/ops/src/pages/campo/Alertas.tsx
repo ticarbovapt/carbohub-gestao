@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { toast } from "sonner";
+import { ResolveAlertDialog } from "@/components/campo/ResolveAlertDialog";
 
 // ⚠️ PORT VISUAL FIEL ao Controle (/ops/alerts → OpsAlerts "Central de Alertas") — dados MOCK.
 
@@ -29,6 +30,7 @@ const TIPO_ICON = { maquina: Cog, estoque: Package, manutencao: Wrench };
 
 export default function Alertas() {
   const [prioFilter, setPrioFilter] = useState<Prioridade | "all">("all");
+  const [resolveAlert, setResolveAlert] = useState<Alert | null>(null);
 
   const stats = useMemo(() => ({
     open: MOCK.filter((a) => a.status === "open").length,
@@ -98,7 +100,7 @@ export default function Alertas() {
                   </div>
                 </div>
                 {a.status !== "resolved" && (
-                  <Button variant="ghost" size="sm" className="h-8 text-xs shrink-0" onClick={() => toast("Resolver alerta (em breve)")}>Resolver</Button>
+                  <Button variant="ghost" size="sm" className="h-8 text-xs shrink-0" onClick={() => setResolveAlert(a)}>Resolver</Button>
                 )}
               </div>
             );
@@ -106,6 +108,12 @@ export default function Alertas() {
         </div>
         <p className="text-xs text-muted-foreground text-center">Tela em port visual — dados de exemplo. Alertas reais da rede entram na fase de lógica.</p>
       </div>
+
+      <ResolveAlertDialog
+        open={resolveAlert !== null}
+        onOpenChange={(o) => { if (!o) setResolveAlert(null); }}
+        titulo={resolveAlert?.titulo}
+      />
     </div>
   );
 }

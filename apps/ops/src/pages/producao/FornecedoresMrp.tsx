@@ -8,7 +8,7 @@ import {
   CarboTable, CarboTableHeader, CarboTableBody, CarboTableRow, CarboTableHead, CarboTableCell,
 } from "@/components/ui/carbo-table";
 import { Building2, Plus, Pencil } from "lucide-react";
-import { toast } from "sonner";
+import { SupplierFormDialog } from "@/components/producao/SupplierFormDialog";
 
 // ⚠️ PORT VISUAL FIEL ao Controle (/mrp/suppliers → MrpSuppliers "Fornecedores (MRP)") — dados MOCK.
 
@@ -25,6 +25,8 @@ const MOCK: Supplier[] = [
 export default function FornecedoresMrp() {
   const canEdit = true;
   const [search, setSearch] = useState("");
+  const [createOpen, setCreateOpen] = useState(false);
+  const [editSupplier, setEditSupplier] = useState<Supplier | null>(null);
 
   const filtered = MOCK.filter((s) => {
     if (!search) return true;
@@ -39,7 +41,7 @@ export default function FornecedoresMrp() {
           title="Fornecedores (MRP)"
           description="Cadastro mestre de fornecedores — consulta automática por CNPJ"
           icon={Building2}
-          actions={canEdit ? <CarboButton onClick={() => toast("Novo Fornecedor (em breve)")}><Plus className="h-4 w-4 mr-1" /> Novo Fornecedor</CarboButton> : undefined}
+          actions={canEdit ? <CarboButton onClick={() => setCreateOpen(true)}><Plus className="h-4 w-4 mr-1" /> Novo Fornecedor</CarboButton> : undefined}
         />
 
         <div className="max-w-md"><CarboSearchInput placeholder="Buscar por CNPJ, razão social ou nome fantasia..." value={search} onChange={(e) => setSearch(e.target.value)} /></div>
@@ -63,7 +65,7 @@ export default function FornecedoresMrp() {
                     <CarboTableCell>{s.trade_name || "—"}</CarboTableCell>
                     <CarboTableCell>{s.category || "—"}</CarboTableCell>
                     <CarboTableCell><CarboBadge variant={s.status === "active" ? "success" : "secondary"}>{s.status === "active" ? "Ativo" : "Inativo"}</CarboBadge></CarboTableCell>
-                    {canEdit && <CarboTableCell><button onClick={() => toast("Editar fornecedor (em breve)")} className="p-2 hover:bg-muted rounded-md"><Pencil className="h-4 w-4" /></button></CarboTableCell>}
+                    {canEdit && <CarboTableCell><button onClick={() => setEditSupplier(s)} className="p-2 hover:bg-muted rounded-md"><Pencil className="h-4 w-4" /></button></CarboTableCell>}
                   </CarboTableRow>
                 ))}
               </CarboTableBody>
@@ -72,6 +74,21 @@ export default function FornecedoresMrp() {
         )}
         <p className="text-xs text-muted-foreground text-center">Tela em port visual — dados de exemplo. Cadastro real e consulta CNPJ entram na fase de lógica.</p>
       </div>
+
+      {/* Dialogs */}
+      <SupplierFormDialog open={createOpen} onOpenChange={setCreateOpen} mode="create" />
+      {editSupplier && (
+        <SupplierFormDialog
+          key={editSupplier.id}
+          open={!!editSupplier}
+          onOpenChange={(v) => { if (!v) setEditSupplier(null); }}
+          mode="edit"
+          initial={{
+            legal_name: editSupplier.legal_name,
+            cnpj: editSupplier.cnpj,
+          }}
+        />
+      )}
     </div>
   );
 }

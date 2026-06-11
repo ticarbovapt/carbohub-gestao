@@ -13,7 +13,10 @@ import {
   Wallet, Plus, FileText, Package, Receipt, CreditCard, BarChart3, Clock, AlertTriangle,
   CheckCircle2, Building2, Check, X, Eye,
 } from "lucide-react";
-import { toast } from "sonner";
+import { NovaRequisicaoDialog } from "@/components/compras/NovaRequisicaoDialog";
+import { RCDetailsDialog, type RCLite } from "@/components/compras/RCDetailsDialog";
+import { RCAprovarDialog } from "@/components/compras/RCAprovarDialog";
+import { RCRejeitarDialog } from "@/components/compras/RCRejeitarDialog";
 
 // ⚠️ PORT VISUAL FIEL ao Controle (/purchasing → Purchasing "Financeiro & Suprimentos") — dados MOCK.
 // No Carbo Ops esta é a tela de COMPRAS (requisições aprovadas pelo financeiro).
@@ -102,6 +105,10 @@ function SimpleTable({ headers, rows, showValor = true }: { headers: string[]; r
 export default function Compras() {
   const canSeeDashboard = true;
   const [activeTab, setActiveTab] = useState("requisicoes");
+  const [novaOpen, setNovaOpen] = useState(false);
+  const [detailRc, setDetailRc] = useState<RCLite | null>(null);
+  const [aprovarRc, setAprovarRc] = useState<string | null>(null);
+  const [rejeitarRc, setRejeitarRc] = useState<string | null>(null);
 
   return (
     <div className="p-4 md:p-6">
@@ -110,7 +117,7 @@ export default function Compras() {
           title="Compras"
           description="Requisições, ordens de compra, recebimento, notas fiscais e contas a pagar"
           icon={Wallet}
-          actions={<Button onClick={() => toast("Nova Requisição (em breve)")} className="gap-2"><Plus className="h-4 w-4" /> Nova Requisição</Button>}
+          actions={<Button onClick={() => setNovaOpen(true)} className="gap-2"><Plus className="h-4 w-4" /> Nova Requisição</Button>}
         />
 
         {/* KPIs */}
@@ -164,11 +171,11 @@ export default function Compras() {
                       <CarboTableCell className="text-sm text-muted-foreground">{dt(rc.data)}</CarboTableCell>
                       <CarboTableCell>
                         <div className="flex items-center gap-1">
-                          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => toast(`Ver ${rc.rc_number} (em breve)`)}><Eye className="h-4 w-4" /></Button>
+                          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setDetailRc({ rc_number: rc.rc_number, cost_center: rc.cost_center, tipo: rc.tipo, valor: rc.valor, statusLabel: RC_STATUS_LABELS[rc.status], statusVariant: RC_STATUS_VARIANT[rc.status] })}><Eye className="h-4 w-4" /></Button>
                           {rc.status === "aguardando_aprovacao" && (
                             <>
-                              <Button variant="ghost" size="icon" className="h-8 w-8 text-success" onClick={() => toast("Aprovar RC (em breve)")} title="Aprovar"><Check className="h-4 w-4" /></Button>
-                              <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => toast("Rejeitar RC (em breve)")} title="Rejeitar"><X className="h-4 w-4" /></Button>
+                              <Button variant="ghost" size="icon" className="h-8 w-8 text-success" onClick={() => setAprovarRc(rc.rc_number)} title="Aprovar"><Check className="h-4 w-4" /></Button>
+                              <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => setRejeitarRc(rc.rc_number)} title="Rejeitar"><X className="h-4 w-4" /></Button>
                             </>
                           )}
                         </div>
@@ -193,6 +200,11 @@ export default function Compras() {
         </Tabs>
         <p className="text-xs text-muted-foreground text-center">Tela em port visual — dados de exemplo. Aprovação do financeiro e dados reais entram na fase de lógica.</p>
       </div>
+
+      <NovaRequisicaoDialog open={novaOpen} onOpenChange={setNovaOpen} />
+      <RCDetailsDialog rc={detailRc} open={detailRc !== null} onOpenChange={(v) => !v && setDetailRc(null)} />
+      <RCAprovarDialog rcNumber={aprovarRc} open={aprovarRc !== null} onOpenChange={(v) => !v && setAprovarRc(null)} />
+      <RCRejeitarDialog rcNumber={rejeitarRc} open={rejeitarRc !== null} onOpenChange={(v) => !v && setRejeitarRc(null)} />
     </div>
   );
 }

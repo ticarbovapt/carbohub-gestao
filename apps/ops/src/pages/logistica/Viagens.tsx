@@ -6,6 +6,19 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Plane, Plus, Check, X, Eye } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogFooter,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogAction,
+  AlertDialogCancel,
+} from "@/components/ui/alert-dialog";
+import { SolicitacaoViagemDialog } from "@/components/logistica/SolicitacaoViagemDialog";
+import { ViagemDetailsDialog, type ViagemDetail } from "@/components/logistica/ViagemDetailsDialog";
 
 // ⚠️ PORT VISUAL FIEL ao Controle (/viagens → ViagensPage "Viagens & Prestação de Contas") — dados MOCK.
 
@@ -53,6 +66,31 @@ export default function Viagens() {
   const minhas = VIAGENS.filter((v) => v.solicitante === "Lucas Padilha");
   const rows = tab === "pendentes" ? pendentes : tab === "minhas" ? minhas : VIAGENS;
 
+  const [novaOpen, setNovaOpen] = useState(false);
+  const [detalhe, setDetalhe] = useState<ViagemDetail | null>(null);
+  const [aprovarViagem, setAprovarViagem] = useState<Viagem | null>(null);
+  const [reprovarViagem, setReprovarViagem] = useState<Viagem | null>(null);
+  const [motivoReprova, setMotivoReprova] = useState("");
+
+  const abrirDetalhe = (v: Viagem) =>
+    setDetalhe({
+      id: v.id,
+      destino: v.destino,
+      objetivo: v.objetivo,
+      solicitante: v.solicitante,
+      data: v.data,
+      valor: v.valor,
+      statusLabel: STATUS_LABEL[v.status],
+      pcLabel: v.pc ? PC_STATUS_LABEL[v.pc] : null,
+    });
+
+  const confirmar = () => {
+    toast.info("Disponível na fase de lógica");
+    setAprovarViagem(null);
+    setReprovarViagem(null);
+    setMotivoReprova("");
+  };
+
   return (
     <div className="p-4 md:p-6">
       <div className="space-y-5 max-w-[1500px] mx-auto">
@@ -60,7 +98,7 @@ export default function Viagens() {
           title="Viagens & Prestação de Contas"
           description="Solicite, aprove e preste contas de viagens corporativas"
           icon={Plane}
-          actions={<Button className="gap-2" onClick={() => toast("Nova Solicitação de Viagem (em breve)")}><Plus className="h-4 w-4" /> Nova Solicitação</Button>}
+          actions={<Button className="gap-2" onClick={() => setNovaOpen(true)}><Plus className="h-4 w-4" /> Nova Solicitação</Button>}
         />
 
         <Tabs value={tab} onValueChange={setTab}>
@@ -87,11 +125,11 @@ export default function Viagens() {
                       <TableCell>{v.pc ? <span className={cn("text-xs font-semibold px-2 py-0.5 rounded-full", PC_STATUS_COLOR[v.pc])}>{PC_STATUS_LABEL[v.pc]}</span> : <span className="text-xs text-muted-foreground">—</span>}</TableCell>
                       <TableCell>
                         <div className="flex items-center gap-1">
-                          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => toast("Ver viagem (em breve)")}><Eye className="h-4 w-4" /></Button>
+                          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => abrirDetalhe(v)}><Eye className="h-4 w-4" /></Button>
                           {v.status.startsWith("pendente") && (
                             <>
-                              <Button variant="ghost" size="icon" className="h-8 w-8 text-success" onClick={() => toast("Aprovar (em breve)")}><Check className="h-4 w-4" /></Button>
-                              <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => toast("Reprovar (em breve)")}><X className="h-4 w-4" /></Button>
+                              <Button variant="ghost" size="icon" className="h-8 w-8 text-success" onClick={() => setAprovarViagem(v)}><Check className="h-4 w-4" /></Button>
+                              <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => setReprovarViagem(v)}><X className="h-4 w-4" /></Button>
                             </>
                           )}
                         </div>
@@ -105,6 +143,56 @@ export default function Viagens() {
         </Tabs>
         <p className="text-xs text-muted-foreground text-center">Tela em port visual — dados de exemplo. Aprovações e prestação de contas entram na fase de lógica.</p>
       </div>
+
+      <SolicitacaoViagemDialog open={novaOpen} onOpenChange={setNovaOpen} />
+
+      <ViagemDetailsDialog
+        viagem={detalhe}
+        open={detalhe !== null}
+        onOpenChange={(o) => { if (!o) setDetalhe(null); }}
+      />
+
+      <AlertDialog open={aprovarViagem !== null} onOpenChange={(o) => { if (!o) setAprovarViagem(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Aprovar solicitação de viagem?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {aprovarViagem && (
+                <>Confirma a aprovação da viagem para <strong>{aprovarViagem.destino}</strong> de <strong>{aprovarViagem.solicitante}</strong>?</>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmar}>Aprovar</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={reprovarViagem !== null} onOpenChange={(o) => { if (!o) { setReprovarViagem(null); setMotivoReprova(""); } }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Reprovar solicitação de viagem?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {reprovarViagem && (
+                <>Informe o motivo da reprovação da viagem para <strong>{reprovarViagem.destino}</strong> de <strong>{reprovarViagem.solicitante}</strong>.</>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="space-y-1.5 py-1">
+            <Textarea
+              placeholder="Motivo da reprovação..."
+              rows={3}
+              value={motivoReprova}
+              onChange={(e) => setMotivoReprova(e.target.value)}
+            />
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmar} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">Reprovar</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
