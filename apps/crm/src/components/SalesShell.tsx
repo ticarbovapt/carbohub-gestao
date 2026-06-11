@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { NavLink, Outlet } from "react-router-dom";
 import {
-  KanbanSquare, ShoppingCart, ClipboardList, TrendingUp, Target, BarChart3, LayoutDashboard,
+  KanbanSquare, ClipboardList, TrendingUp, Target, BarChart3, LayoutDashboard,
 } from "lucide-react";
 import { TopBar } from "@/components/TopBar";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
@@ -13,7 +13,6 @@ const CRM_SUB = [
   { to: "/crm/pipelines", label: "Pipelines", icon: KanbanSquare },
 ];
 const NAV = [
-  { to: "/vender", label: "Vender", icon: ShoppingCart },
   { to: "/pedidos", label: "Pedidos", icon: ClipboardList },
   { to: "/vendas", label: "Vendas", icon: TrendingUp },
   { to: "/metas", label: "Metas de Vendedores", icon: Target },

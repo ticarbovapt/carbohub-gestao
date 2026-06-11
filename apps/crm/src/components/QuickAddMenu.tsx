@@ -1,21 +1,22 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
 import { Plus, ClipboardList, ShoppingCart } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { NovaDescarbonizacaoDialog } from "@/components/NovaDescarbonizacaoDialog";
-import { NovaVendaDialog } from "@/components/NovaVendaDialog";
 
-// Botão "+" do topo (speed-dial). No ecossistema novo só expõe as duas ações
-// universais: Nova Descarbonização e Nova Venda — ambas abrem dialog (mock).
+// Botão "+" do topo (speed-dial). No Sales:
+//  • Nova Descarbonização → abre dialog (mock).
+//  • Nova Venda → vai para a página "Vender" (a tela de venda do Sales).
 export function QuickAddMenu() {
+  const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const [descOpen, setDescOpen] = useState(false);
-  const [vendaOpen, setVendaOpen] = useState(false);
 
   const actions = [
     { key: "desc", icon: ClipboardList, label: "+ Nova Descarbonização", primary: true, onClick: () => setDescOpen(true) },
-    { key: "venda", icon: ShoppingCart, label: "+ Nova Venda", onClick: () => setVendaOpen(true) },
+    { key: "venda", icon: ShoppingCart, label: "+ Nova Venda", onClick: () => navigate("/vender") },
   ];
 
   return (
@@ -52,7 +53,6 @@ export function QuickAddMenu() {
       </Popover>
 
       <NovaDescarbonizacaoDialog open={descOpen} onOpenChange={setDescOpen} />
-      <NovaVendaDialog open={vendaOpen} onOpenChange={setVendaOpen} />
     </>
   );
 }
