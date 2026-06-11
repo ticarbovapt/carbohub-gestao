@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { format, startOfMonth, addMonths, subMonths, getDaysInMonth, getDate } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { CarboCard, CarboCardContent } from "@/components/ui/carbo-card";
@@ -9,35 +9,21 @@ import {
   Calendar, Zap, Settings, Wind,
 } from "lucide-react";
 import { ProfileAvatar } from "@/components/ui/profile-avatar";
+import { useMetasVendedores } from "@/hooks/useMetas";
+import { ConfigMetasDialog } from "@/components/ConfigMetasDialog";
 
-// ⚠️ PORT VISUAL FIEL ao Controle (/dashboards/metas/vendedores) — dados MOCK.
-// TODO: ligar em useSalesTargetsWithProgress / useWeeklyVendedoresData (Supabase).
+// Visual 1:1 com o Controle (/dashboards/metas/vendedores); lógica nova:
+// vendedores marcados (is_vendedor) + realizado de crm_vendas + metas próprias.
 
-// ── Tipos / mock ────────────────────────────────────────────────────────────
+// ── Tipos ─────────────────────────────────────────────────────────────────
 interface VendedorProfile { full_name: string | null; avatar_url: string | null; department?: string; secondary_department?: string; }
 interface MetaTarget {
   id: string; vendedor_id: string; target_amount: number; actual_amount: number;
   pct_amount: number; target_qty: number; actual_qty: number; vendedor: VendedorProfile;
 }
-
-const MOCK_TARGETS: MetaTarget[] = [
-  { id: "1", vendedor_id: "u1", target_amount: 80000, actual_amount: 92000, pct_amount: 115, target_qty: 20, actual_qty: 24, vendedor: { full_name: "Lucas Padilha", avatar_url: null, department: "expansao" } },
-  { id: "2", vendedor_id: "u2", target_amount: 120000, actual_amount: 86000, pct_amount: 71.7, target_qty: 30, actual_qty: 21, vendedor: { full_name: "Marcio Vannucci", avatar_url: null, department: "cgc" } },
-  { id: "3", vendedor_id: "u3", target_amount: 60000, actual_amount: 61500, pct_amount: 102.5, target_qty: 15, actual_qty: 16, vendedor: { full_name: "Marcius D'Ávila", avatar_url: null, department: "expansao" } },
-  { id: "4", vendedor_id: "u4", target_amount: 50000, actual_amount: 28000, pct_amount: 56, target_qty: 12, actual_qty: 7, vendedor: { full_name: "Equipe B2C", avatar_url: null, department: "cgc" } },
-];
-// Mock mês anterior (para DeltaBadge)
-const MOCK_PREV: Record<string, number> = { u1: 78000, u2: 95000, u3: 54000, u4: 31000 };
-
 interface WeeklyEntry { vendedor_id: string; total: number; profile: VendedorProfile; }
-const MOCK_WEEKLY: WeeklyEntry[] = [
-  { vendedor_id: "u1", total: 24000, profile: { full_name: "Lucas Padilha", avatar_url: null } },
-  { vendedor_id: "u3", total: 18500, profile: { full_name: "Marcius D'Ávila", avatar_url: null } },
-  { vendedor_id: "u2", total: 16000, profile: { full_name: "Marcio Vannucci", avatar_url: null } },
-  { vendedor_id: "u4", total: 7000, profile: { full_name: "Equipe B2C", avatar_url: null } },
-];
 
-// Ranking de descarbonizações por QUANTIDADE vendida (não por valor).
+// Ranking de descarbonizações por QUANTIDADE vendida (ainda mock — OS não persiste).
 interface DescRank { vendedor_id: string; full_name: string; avatar_url: string | null; qty: number; }
 const MOCK_DESC_RANKING: DescRank[] = [
   { vendedor_id: "u3", full_name: "Marcius D'Ávila", avatar_url: null, qty: 38 },
@@ -245,8 +231,31 @@ export default function Metas() {
   const [periodView, setPeriodView] = useState<PeriodView>("mensal");
   const [weekStart, setWeekStart] = useState(() => commercialWeekStartOf(new Date()));
 
-  const canManage = true;   // mock: gestor
+  const canManage = true;   // gestor (camada de acesso fina entra depois)
   const canSeeValues = true;
+  const [configOpen, setConfigOpen] = useState(false);
+
+  // ── Dados reais ──
+  const { data: metas = [] } = useMetasVendedores(month, weekStart);
+  const targetsData: MetaTarget[] = useMemo(() => metas.map((m) => ({
+    id: m.vendedor_id,
+    vendedor_id: m.vendedor_id,
+    target_amount: m.target_amount,
+    actual_amount: m.actual_amount,
+    pct_amount: m.pct_amount,
+    target_qty: m.target_qty,
+    actual_qty: m.actual_qty,
+    vendedor: {
+      full_name: m.full_name, avatar_url: m.avatar_url,
+      department: m.department ?? undefined, secondary_department: m.secondary_department ?? undefined,
+    },
+  })), [metas]);
+  const prevMap: Record<string, number> = useMemo(
+    () => Object.fromEntries(metas.map((m) => [m.vendedor_id, m.prev_amount])), [metas]);
+  const weeklyData: WeeklyEntry[] = useMemo(() => metas
+    .filter((m) => m.week_amount > 0)
+    .map((m) => ({ vendedor_id: m.vendedor_id, total: m.week_amount, profile: { full_name: m.full_name, avatar_url: m.avatar_url } }))
+    .sort((a, b) => b.total - a.total), [metas]);
 
   const currentWeekStart = commercialWeekStartOf(new Date());
   const isCurrentWeek = weekStart.toISOString().slice(0, 10) === currentWeekStart.toISOString().slice(0, 10);
@@ -262,18 +271,18 @@ export default function Metas() {
   // Meta semanal = meta mensal ÷ nº de semanas comerciais
   const numWeeks = countCommercialWeeks(weekStart.getFullYear(), weekStart.getMonth());
   const weeklyTargetMap: Record<string, number> = {};
-  for (const t of MOCK_TARGETS) weeklyTargetMap[t.vendedor_id] = t.target_amount / numWeeks;
+  for (const t of targetsData) weeklyTargetMap[t.vendedor_id] = t.target_amount / numWeeks;
 
   // Dias decorridos da semana (mock: semana atual)
   const elapsedDays = isCurrentWeek ? Math.min(7, Math.max(1, Math.ceil((today.getTime() - weekStart.getTime()) / 86400000))) : 7;
 
-  const sorted = [...MOCK_TARGETS].sort((a, b) => (b.pct_amount || 0) - (a.pct_amount || 0));
+  const sorted = [...targetsData].sort((a, b) => (b.pct_amount || 0) - (a.pct_amount || 0));
   const filteredTargets = teamFilter === "todos" ? sorted : sorted.filter((t) => t.vendedor?.department === teamFilter || t.vendedor?.secondary_department === teamFilter);
 
-  const totalTarget = MOCK_TARGETS.reduce((s, t) => s + t.target_amount, 0);
-  const totalActual = MOCK_TARGETS.reduce((s, t) => s + (t.actual_amount || 0), 0);
+  const totalTarget = targetsData.reduce((s, t) => s + t.target_amount, 0);
+  const totalActual = targetsData.reduce((s, t) => s + (t.actual_amount || 0), 0);
   const totalPct = totalTarget > 0 ? (totalActual / totalTarget) * 100 : 0;
-  const hitting = MOCK_TARGETS.filter((t) => (t.pct_amount || 0) >= 100).length;
+  const hitting = targetsData.filter((t) => (t.pct_amount || 0) >= 100).length;
   const totalColor = getProgressColor(totalActual, totalTarget, dayOfMonth, daysInMonth);
   const totalColors = COLOR_MAP[totalColor];
 
@@ -322,7 +331,7 @@ export default function Metas() {
           )}
 
           {canManage && (
-            <Button size="sm" variant="outline" className="gap-1.5"><Settings className="h-4 w-4" /> Configurar Metas</Button>
+            <Button size="sm" variant="outline" className="gap-1.5" onClick={() => setConfigOpen(true)}><Settings className="h-4 w-4" /> Configurar Metas</Button>
           )}
         </div>
       </div>
@@ -354,7 +363,7 @@ export default function Metas() {
 
       {/* SEMANAL */}
       {periodView === "semanal" && (
-        <WeeklyPanel entries={MOCK_WEEKLY} targetMap={weeklyTargetMap} elapsedDays={elapsedDays} canSeeValues={canSeeValues} />
+        <WeeklyPanel entries={weeklyData} targetMap={weeklyTargetMap} elapsedDays={elapsedDays} canSeeValues={canSeeValues} />
       )}
 
       {/* MENSAL */}
@@ -385,7 +394,7 @@ export default function Metas() {
                     </div>
                   )}
                   <div className="text-center">
-                    <p className="text-lg font-bold tabular-nums">{hitting}/{MOCK_TARGETS.length}</p>
+                    <p className="text-lg font-bold tabular-nums">{hitting}/{targetsData.length}</p>
                     <p className="text-[10px] text-muted-foreground">na meta</p>
                   </div>
                   <CarboBadge variant={totalColors.badge}>{fmtPct(totalPct)}</CarboBadge>
@@ -427,7 +436,7 @@ export default function Metas() {
                 const target = t.target_amount;
                 const remaining = Math.max(0, target - actual);
                 const dailyNeeded = isCurrentMonth && remainingDays > 0 && remaining > 0 ? Math.ceil(remaining / remainingDays) : 0;
-                const prevActual = MOCK_PREV[t.vendedor_id] ?? 0;
+                const prevActual = prevMap[t.vendedor_id] ?? 0;
                 const projected = isCurrentMonth && dayOfMonth > 2 && actual > 0 && target > 0 ? Math.round((actual / dayOfMonth) * daysInMonth) : null;
                 const projPct = projected !== null && target > 0 ? (projected / target) * 100 : null;
                 const projKey = (projPct === null ? "gray" : projPct >= 100 ? "green" : projPct >= 85 ? "yellow" : "red") as keyof typeof COLOR_MAP;
@@ -470,8 +479,10 @@ export default function Metas() {
       )}
 
       <p className="text-xs text-muted-foreground text-center pt-1">
-        Tela em port visual — dados de exemplo. Metas reais e configuração entram na fase de lógica.
+        Realizado das vendas salvas (status “pedido”). Ranking de descarbonizações ainda é exemplo (OS não persiste).
       </p>
+
+      <ConfigMetasDialog open={configOpen} onOpenChange={setConfigOpen} month={month} metas={metas} />
     </div>
   );
 }
