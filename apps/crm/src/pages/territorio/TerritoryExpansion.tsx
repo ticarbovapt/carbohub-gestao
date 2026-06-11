@@ -1,5 +1,4 @@
-// ⚠️ PORT VISUAL FIEL ao Controle (src/pages/TerritoryExpansion.tsx) — dados MOCK.
-// Sem supabase, sem @tanstack/react-query, sem hooks reais. Apenas mockTerritorio.ts.
+// Expansão Territorial do Carbo Sales — dados REAIS do CORE (territories / licensees).
 import { useMemo, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -11,10 +10,10 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { Progress } from "@/components/ui/progress";
-import { TrendingUp, MapPin, Target, Users, ExternalLink, Zap } from "lucide-react";
+import { TrendingUp, MapPin, Target, Users, ExternalLink, Zap, Loader2 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
-import { MOCK_TERRITORIES, type MockTerritory } from "./mockTerritorio";
+import { useTerritorios, type TTerritory } from "@/hooks/useTerritorio";
 
 function getCompetitionLabel(level: number) {
   if (level < 3) return { label: "Baixa", color: "bg-green-500" };
@@ -33,12 +32,12 @@ function StrategyDialog({
   opportunity,
   onClose,
 }: {
-  opportunity: MockTerritory | null;
+  opportunity: TTerritory | null;
   onClose: () => void;
 }) {
   const opp = opportunity;
 
-  // Score integrado (sem leads reais — usa apenas dados do território mock).
+  // Score integrado (sem leads reais — usa apenas dados do território).
   const oppScore = useMemo(() => {
     if (!opp) return 0;
     const territoryPart = (opp.territory_score || 0) * 0.55;
@@ -120,10 +119,11 @@ function StrategyDialog({
 
 // ── Main Page ─────────────────────────────────────────────────────────────────
 export default function TerritoryExpansion() {
-  const allTerritories = MOCK_TERRITORIES;
+  const { data, isLoading, isError } = useTerritorios();
+  const allTerritories = useMemo(() => data ?? [], [data]);
   const opportunities = useMemo(() => allTerritories.filter((t) => !t.licensee_id), [allTerritories]);
   const claimedTerritories = useMemo(() => allTerritories.filter((t) => t.licensee_id), [allTerritories]);
-  const [strategyTarget, setStrategyTarget] = useState<MockTerritory | null>(null);
+  const [strategyTarget, setStrategyTarget] = useState<TTerritory | null>(null);
 
   const avgScore = useMemo(() => {
     if (opportunities.length === 0) return 0;
@@ -171,59 +171,73 @@ export default function TerritoryExpansion() {
           </div>
         </div>
 
+        {/* Loading / vazio */}
+        {isLoading && (
+          <div className="flex items-center justify-center py-16">
+            <Loader2 className="h-6 w-6 animate-spin text-primary" />
+          </div>
+        )}
+        {!isLoading && (isError || allTerritories.length === 0) && (
+          <div className="rounded-xl border bg-card py-16 text-center">
+            <p className="text-sm text-muted-foreground">Sem dados de territórios para exibir.</p>
+          </div>
+        )}
+
         {/* Expansion Opportunities */}
-        <div>
-          <h2 className="text-lg font-semibold mb-4">Oportunidades de Expansão</h2>
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            {opportunities.map((opp) => {
-              const comp = getCompetitionLabel(opp.competition_level || 0);
-              return (
-                <Card key={opp.id} className="hover:shadow-md transition-shadow">
-                  <CardHeader className="pb-3">
-                    <div className="flex items-center justify-between">
-                      <CardTitle className="text-base">{opp.city}, {opp.state}</CardTitle>
-                      <Badge className={`${getScoreColor(opp.territory_score)} text-white border-0`}>
-                        Score: {Math.round(opp.territory_score)}
-                      </Badge>
-                    </div>
-                  </CardHeader>
-                  <CardContent className="space-y-3 text-sm">
-                    <Progress value={opp.territory_score} className="h-2" />
-                    <div className="grid grid-cols-2 gap-2 text-muted-foreground">
-                      <div>
-                        <span className="font-medium text-foreground">População:</span>{" "}
-                        {opp.population?.toLocaleString("pt-BR") || "—"}
-                      </div>
-                      <div>
-                        <span className="font-medium text-foreground">Renda Média:</span>{" "}
-                        {opp.avg_income ? `R$ ${opp.avg_income.toLocaleString("pt-BR")}` : "—"}
-                      </div>
-                      <div>
-                        <span className="font-medium text-foreground">Densidade Moto:</span>{" "}
-                        {opp.motorcycle_density || "—"}
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <span className="font-medium text-foreground">Competição:</span>
-                        <Badge variant="outline" className={`${comp.color} text-white border-0 text-xs`}>
-                          {comp.label}
+        {!isLoading && opportunities.length > 0 && (
+          <div>
+            <h2 className="text-lg font-semibold mb-4">Oportunidades de Expansão</h2>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              {opportunities.map((opp) => {
+                const comp = getCompetitionLabel(opp.competition_level || 0);
+                return (
+                  <Card key={opp.id} className="hover:shadow-md transition-shadow">
+                    <CardHeader className="pb-3">
+                      <div className="flex items-center justify-between">
+                        <CardTitle className="text-base">{opp.city}, {opp.state}</CardTitle>
+                        <Badge className={`${getScoreColor(opp.territory_score)} text-white border-0`}>
+                          Score: {Math.round(opp.territory_score)}
                         </Badge>
                       </div>
-                    </div>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="w-full gap-2 border-emerald-500/40 text-emerald-600 hover:bg-emerald-500/10"
-                      onClick={() => setStrategyTarget(opp)}
-                    >
-                      <Zap className="h-3.5 w-3.5" />
-                      Criar Estratégia
-                    </Button>
-                  </CardContent>
-                </Card>
-              );
-            })}
+                    </CardHeader>
+                    <CardContent className="space-y-3 text-sm">
+                      <Progress value={opp.territory_score} className="h-2" />
+                      <div className="grid grid-cols-2 gap-2 text-muted-foreground">
+                        <div>
+                          <span className="font-medium text-foreground">População:</span>{" "}
+                          {opp.population?.toLocaleString("pt-BR") || "—"}
+                        </div>
+                        <div>
+                          <span className="font-medium text-foreground">Renda Média:</span>{" "}
+                          {opp.avg_income ? `R$ ${opp.avg_income.toLocaleString("pt-BR")}` : "—"}
+                        </div>
+                        <div>
+                          <span className="font-medium text-foreground">Densidade Moto:</span>{" "}
+                          {opp.motorcycle_density || "—"}
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <span className="font-medium text-foreground">Competição:</span>
+                          <Badge variant="outline" className={`${comp.color} text-white border-0 text-xs`}>
+                            {comp.label}
+                          </Badge>
+                        </div>
+                      </div>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="w-full gap-2 border-emerald-500/40 text-emerald-600 hover:bg-emerald-500/10"
+                        onClick={() => setStrategyTarget(opp)}
+                      >
+                        <Zap className="h-3.5 w-3.5" />
+                        Criar Estratégia
+                      </Button>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Claimed Territories */}
         {claimedTerritories.length > 0 && (
@@ -264,7 +278,7 @@ export default function TerritoryExpansion() {
         )}
 
         <p className="text-xs text-muted-foreground text-center">
-          Tela em port visual — dados de exemplo. Scores e leads reais (integração com o CRM) entram na fase de lógica.
+          Dados reais de territórios do ecossistema Carbo. Scores e leads (integração com o CRM) entram na fase de lógica.
         </p>
       </div>
 

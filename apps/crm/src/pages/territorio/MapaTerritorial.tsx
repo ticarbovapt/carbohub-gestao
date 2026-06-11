@@ -1,23 +1,14 @@
-// ⚠️ PORT VISUAL FIEL ao Controle (src/pages/MapaTerritorial.tsx + TerritorialMap.tsx) — dados MOCK.
-// Sem supabase, sem @tanstack/react-query, sem hooks reais. Apenas mockTerritorio.ts.
+// Mapa Territorial do Carbo Sales — dados REAIS do CORE (licensees / pdvs / machines).
 import { useMemo, useState } from "react";
 import { MapContainer, TileLayer, CircleMarker, Popup, Tooltip } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { MapPin, Building2, Store, Cpu, AlertTriangle, Layers, X } from "lucide-react";
+import { MapPin, Building2, Store, Cpu, AlertTriangle, Layers, X, Loader2 } from "lucide-react";
 import { toast } from "sonner";
-import {
-  MOCK_LICENSEES,
-  MOCK_PDVS,
-  MOCK_MACHINES,
-  MOCK_STATS,
-  BRAZIL_CENTER,
-  BRAZIL_ZOOM,
-} from "./mockTerritorio";
+import { useTerritorioMapa, BRAZIL_CENTER, BRAZIL_ZOOM } from "@/hooks/useTerritorio";
 
 interface LayerConfig {
   id: string;
@@ -30,6 +21,11 @@ interface LayerConfig {
 const HEIGHT = "calc(100vh - 280px)";
 
 export default function MapaTerritorial() {
+  const { data, isLoading, isError } = useTerritorioMapa();
+  const licensees = data?.licensees ?? [];
+  const pdvs = data?.pdvs ?? [];
+  const machines = data?.machines ?? [];
+
   const [layers, setLayers] = useState<LayerConfig[]>([
     { id: "licensees", label: "Licenciados", icon: <Building2 className="h-4 w-4" />, color: "#3BC770", enabled: true },
     { id: "pdvs", label: "Lojas", icon: <Store className="h-4 w-4" />, color: "#F59E0B", enabled: true },
@@ -41,28 +37,45 @@ export default function MapaTerritorial() {
   const toggleLayer = (id: string) =>
     setLayers((prev) => prev.map((l) => (l.id === id ? { ...l, enabled: !l.enabled } : l)));
 
-  const stats = MOCK_STATS;
+  // KPIs derivados dos dados reais.
+  const stats = useMemo(() => {
+    const states = new Set<string>();
+    const cities = new Set<string>();
+    [...licensees, ...pdvs].forEach((i) => {
+      if (i.state) states.add(i.state);
+      if (i.city) cities.add(i.city);
+    });
+    machines.forEach((m) => {
+      if (m.location_state) states.add(m.location_state);
+      if (m.location_city) cities.add(m.location_city);
+    });
+    return {
+      totalStates: states.size,
+      totalCities: cities.size,
+      activeLicensees: licensees.filter((l) => l.status === "active").length,
+      totalMachines: machines.length,
+      activePDVs: pdvs.filter((p) => p.status === "active").length,
+      stockAlerts:
+        pdvs.filter((p) => p.hasStockAlert).length + machines.filter((m) => m.hasActiveAlert).length,
+    };
+  }, [licensees, pdvs, machines]);
 
-  // Resumo lateral por estado
+  // Resumo lateral por estado.
   const byState = useMemo(() => {
     const map = new Map<string, { licensees: number; machines: number; pdvs: number }>();
-    MOCK_LICENSEES.forEach((l) => {
-      const e = map.get(l.state) || { licensees: 0, machines: 0, pdvs: 0 };
-      e.licensees += 1;
-      map.set(l.state, e);
-    });
-    MOCK_MACHINES.forEach((m) => {
-      const e = map.get(m.location_state) || { licensees: 0, machines: 0, pdvs: 0 };
-      e.machines += 1;
-      map.set(m.location_state, e);
-    });
-    MOCK_PDVS.forEach((p) => {
-      const e = map.get(p.state) || { licensees: 0, machines: 0, pdvs: 0 };
-      e.pdvs += 1;
-      map.set(p.state, e);
-    });
+    const get = (uf: string | null) => {
+      if (!uf) return null;
+      const e = map.get(uf) || { licensees: 0, machines: 0, pdvs: 0 };
+      map.set(uf, e);
+      return e;
+    };
+    licensees.forEach((l) => { const e = get(l.state); if (e) e.licensees += 1; });
+    machines.forEach((m) => { const e = get(m.location_state); if (e) e.machines += 1; });
+    pdvs.forEach((p) => { const e = get(p.state); if (e) e.pdvs += 1; });
     return Array.from(map.entries()).sort((a, b) => b[1].machines - a[1].machines);
-  }, []);
+  }, [licensees, machines, pdvs]);
+
+  const hasData = licensees.length + pdvs.length + machines.length > 0;
 
   return (
     <div className="p-4 md:p-6">
@@ -147,6 +160,18 @@ export default function MapaTerritorial() {
                 </div>
               )}
 
+              {/* Estados de loading / vazio sobre o mapa */}
+              {isLoading && (
+                <div className="absolute inset-0 z-[1100] flex items-center justify-center bg-background/60">
+                  <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                </div>
+              )}
+              {!isLoading && (isError || !hasData) && (
+                <div className="absolute inset-0 z-[1100] flex items-center justify-center bg-background/70">
+                  <p className="text-sm text-muted-foreground">Sem dados para exibir no mapa.</p>
+                </div>
+              )}
+
               {/* Map */}
               <MapContainer center={BRAZIL_CENTER} zoom={BRAZIL_ZOOM} scrollWheelZoom style={{ height: HEIGHT, width: "100%" }}>
                 <TileLayer
@@ -156,12 +181,12 @@ export default function MapaTerritorial() {
 
                 {/* Licenciados */}
                 {isOn("licensees") &&
-                  MOCK_LICENSEES.map((l) => {
+                  licensees.map((l) => {
                     const color = l.status === "active" ? "#3BC770" : "#6B7280";
                     return (
                       <CircleMarker
                         key={l.id}
-                        center={[l.lat, l.lng]}
+                        center={[l.lat as number, l.lng as number]}
                         radius={10}
                         pathOptions={{ color, fillColor: color, fillOpacity: 0.75, weight: 2 }}
                       >
@@ -183,12 +208,12 @@ export default function MapaTerritorial() {
 
                 {/* PDVs */}
                 {isOn("pdvs") &&
-                  MOCK_PDVS.map((p) => {
+                  pdvs.map((p) => {
                     const color = p.hasStockAlert ? "#EF4444" : p.status === "active" ? "#F59E0B" : "#9CA3AF";
                     return (
                       <CircleMarker
                         key={p.id}
-                        center={[p.lat, p.lng]}
+                        center={[p.lat as number, p.lng as number]}
                         radius={7}
                         pathOptions={{ color, fillColor: color, fillOpacity: 0.7, weight: 2 }}
                       >
@@ -209,7 +234,7 @@ export default function MapaTerritorial() {
 
                 {/* Máquinas */}
                 {isOn("machines") &&
-                  MOCK_MACHINES.map((m) => {
+                  machines.map((m) => {
                     const color = m.hasActiveAlert ? "#EF4444" : "#8B5CF6";
                     return (
                       <CircleMarker
@@ -223,7 +248,10 @@ export default function MapaTerritorial() {
                             <p className="font-bold flex items-center gap-1">⚙️ {m.machine_id}</p>
                             <p className="text-muted-foreground text-xs">{m.model}</p>
                             <p className="text-muted-foreground">{m.location_city}, {m.location_state}</p>
-                            <p className="text-muted-foreground text-xs">{m.licensee_name}</p>
+                            <p className="text-muted-foreground text-xs">{m.licensee_name ?? "—"}</p>
+                            {m.estimatedLocation && (
+                              <p className="text-muted-foreground text-xs italic">Posição aproximada (cidade)</p>
+                            )}
                             {m.hasActiveAlert && <p className="text-red-500 font-medium text-xs">⚠ Alerta ativo</p>}
                           </div>
                         </Popup>
@@ -263,6 +291,9 @@ export default function MapaTerritorial() {
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-2">
+              {byState.length === 0 && (
+                <p className="text-sm text-muted-foreground py-2">Sem dados.</p>
+              )}
               {byState.map(([uf, e]) => (
                 <div key={uf} className="flex items-center justify-between rounded-lg border bg-muted/20 px-3 py-2">
                   <span className="font-semibold text-sm">{uf}</span>
@@ -286,7 +317,7 @@ export default function MapaTerritorial() {
         </div>
 
         <p className="text-xs text-muted-foreground text-center">
-          Tela em port visual — dados de exemplo. Localizações e estoques reais entram na fase de lógica.
+          Dados reais do ecossistema Carbo. Itens sem coordenada de cidade conhecida não são plotados.
         </p>
       </div>
     </div>
