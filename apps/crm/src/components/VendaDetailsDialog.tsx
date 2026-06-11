@@ -35,7 +35,7 @@ const Campo = ({ label, children }: { label: string; children: React.ReactNode }
 export function VendaDetailsDialog({ vendaId, open, onOpenChange }: Props) {
   const { data: v, isLoading } = useVenda(open ? vendaId : null);
   const itens = v?.itens ?? [];
-  const numero = v ? `${v.status === "orcamento" ? "ORC" : "VND"}-${v.id.slice(0, 8).toUpperCase()}` : "";
+  const numero = v ? (v.numero ?? `${v.status === "orcamento" ? "ORC" : "VND"}-${v.id.slice(0, 8).toUpperCase()}`) : "";
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

@@ -48,6 +48,7 @@ export interface VendaItemRow {
 
 export interface VendaRow {
   id: string;
+  numero: string | null;
   vendedor_id: string;
   tipo: VendaTipo;
   status: VendaStatus;

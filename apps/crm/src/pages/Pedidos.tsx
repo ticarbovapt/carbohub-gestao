@@ -69,7 +69,7 @@ export default function Pedidos() {
       const firstProd = itens[0]?.produto ?? "—";
       return {
         id: v.id,
-        order_number: `PED-${v.id.slice(0, 8).toUpperCase()}`,
+        order_number: v.numero ?? `PED-${v.id.slice(0, 8).toUpperCase()}`,
         invoice_number: null,
         linha: firstProd,
         vendedor_name: nomes[v.vendedor_id] ?? "—",
