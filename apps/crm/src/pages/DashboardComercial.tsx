@@ -11,13 +11,13 @@ import { CarboPageHeader } from "@/components/ui/carbo-page-header";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useVendas, useVendedorNomes, useVendedoresDir } from "@/hooks/useVendas";
+import { useVendas, useVendedoresDir } from "@/hooks/useVendas";
+import { useMetasAno } from "@/hooks/useMetas";
 import { useAuth } from "@/contexts/AuthContext";
 
 // Dashboard Comercial — agrega as VENDAS salvas (crm_vendas, status "pedido").
 const MES_ABBR = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
 const monthLabel = (d: Date) => `${MES_ABBR[d.getMonth()]}/${String(d.getFullYear()).slice(2)}`;
-const BASE_JAN = 30_000, RATE = 0.15; // projeção +15%/mês (meta)
 
 const formatCurrency = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 const fmtK = (v: number) =>
@@ -50,10 +50,10 @@ const TooltipQty = ({ active, payload, label }: any) => {
 };
 
 export default function DashboardComercial() {
-  const { isGestor } = useAuth();
+  const { isGestor, user } = useAuth();
   const [vendedor, setVendedor] = useState("all");
   const { data: vendas = [] } = useVendas("all");
-  const { data: nomes = {} } = useVendedorNomes();
+  const { data: metasAno = [] } = useMetasAno(new Date().getFullYear());
 
   // Apenas vendas efetivas (status "pedido"), filtradas por vendedor selecionado.
   const pedidos = useMemo(() => vendas.filter((v) =>
@@ -116,16 +116,31 @@ export default function DashboardComercial() {
     };
   }, [monthlyData]);
 
-  // Crescimento anual: real (do mês) vs projeção +15%/mês.
+  // Meta mensal REAL (crm_vendedor_metas), no mesmo escopo da linha "real":
+  //  • filtro por vendedor → meta daquele vendedor;
+  //  • "todos" + gestor → soma do time;
+  //  • "todos" + membro → só a própria meta.
+  const metaPorMes = useMemo(() => {
+    const m = new Map<number, number>();
+    for (const r of metasAno) {
+      if (vendedor !== "all" && r.vendedor_id !== vendedor) continue;
+      if (vendedor === "all" && !isGestor && r.vendedor_id !== user?.id) continue;
+      m.set(r.mes, (m.get(r.mes) ?? 0) + Number(r.target_amount || 0));
+    }
+    return m;
+  }, [metasAno, vendedor, isGestor, user]);
+
+  // Crescimento anual: faturamento real (do mês) vs meta real configurada.
   const annualGrowthData = useMemo(() => {
     const year = new Date().getFullYear();
     return Array.from({ length: 12 }, (_, i) => {
       const d = new Date(year, i, 1);
       const label = monthLabel(d);
       const real = monthlyData.find((m) => m.mes === label)?.faturado ?? null;
-      return { label, projecao: Math.round(BASE_JAN * Math.pow(1 + RATE, i)), real: real && real > 0 ? real : null };
+      const meta = metaPorMes.get(i + 1) ?? 0;
+      return { label, meta: meta > 0 ? meta : null, real: real && real > 0 ? real : null };
     });
-  }, [monthlyData]);
+  }, [monthlyData, metaPorMes]);
 
   const totalCarboze = kpis.totalBRL;
   const totalCarbozeOrders = kpis.totalVendas;
@@ -321,7 +336,7 @@ export default function DashboardComercial() {
             <div className="flex items-center justify-between border-b border-border px-6 py-3">
               <div>
                 <h2 className="text-base font-bold text-board-text flex items-center gap-2"><TrendingUp className="h-4 w-4 text-orange-400" /> Crescimento Anual</h2>
-                <p className="text-xs text-board-muted mt-0.5">Real vs projeção +15%/mês · <span className="font-semibold text-orange-400">base R$30k jan</span></p>
+                <p className="text-xs text-board-muted mt-0.5">Faturamento real vs <span className="font-semibold text-orange-400">meta configurada</span> (Metas de Vendedores)</p>
               </div>
               <div className="flex items-center gap-3 text-[10px] text-board-muted">
                 <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-sm bg-emerald-500/70" /> Real</span>
@@ -337,7 +352,7 @@ export default function DashboardComercial() {
                   <Tooltip cursor={{ fill: "rgba(148,163,184,0.08)" }} content={({ active, payload, label: lbl }: any) => {
                     if (!active || !payload?.length) return null;
                     const rv = payload.find((p: any) => p.dataKey === "real")?.value;
-                    const pv = payload.find((p: any) => p.dataKey === "projecao")?.value;
+                    const pv = payload.find((p: any) => p.dataKey === "meta")?.value;
                     const diff = rv != null && pv != null ? ((Number(rv) - Number(pv)) / Number(pv)) * 100 : null;
                     const fx = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
                     return (
@@ -352,7 +367,7 @@ export default function DashboardComercial() {
                   <Bar dataKey="real" fill="rgba(16,185,129,0.55)" stroke="#10b981" strokeWidth={1.5} radius={[4, 4, 0, 0]} maxBarSize={40} isAnimationActive={false}>
                     <LabelList dataKey="real" position="top" formatter={(v: number | null) => (v != null ? fmtK(v) : "")} style={{ fontSize: 9, fill: "#6ee7b7", fontWeight: 700 }} />
                   </Bar>
-                  <Line dataKey="projecao" type="monotone" stroke="#fb923c" strokeWidth={2} strokeDasharray="5 3" dot={false} isAnimationActive={false} />
+                  <Line dataKey="meta" type="monotone" stroke="#fb923c" strokeWidth={2} strokeDasharray="5 3" dot={false} isAnimationActive={false} connectNulls />
                 </ComposedChart>
               </ResponsiveContainer>
             </div>
@@ -393,7 +408,7 @@ export default function DashboardComercial() {
         </div>
 
         <p className="text-xs text-muted-foreground text-center pt-1">
-          Dados reais das vendas salvas (crm_vendas, status “pedido”). A linha de meta é uma projeção (+15%/mês).
+          Dados reais das vendas salvas (crm_vendas, status “pedido”). A linha de meta vem das metas configuradas (crm_vendedor_metas).
         </p>
       </div>
     </div>

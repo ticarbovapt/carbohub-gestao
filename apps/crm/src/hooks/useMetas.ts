@@ -89,6 +89,22 @@ export function useMetasVendedores(month: Date, weekStart: Date) {
   });
 }
 
+/** Metas de um ano inteiro (por vendedor/mês) — para a linha de meta do Dashboard.
+ *  RLS: qualquer autenticado lê; o escopo de exibição é decidido no componente. */
+export function useMetasAno(ano: number) {
+  return useQuery({
+    queryKey: ["crm_metas_ano", ano],
+    queryFn: async (): Promise<{ vendedor_id: string; mes: number; target_amount: number }[]> => {
+      const { data, error } = await db
+        .from("crm_vendedor_metas")
+        .select("vendedor_id, mes, target_amount")
+        .eq("ano", ano);
+      if (error) throw error;
+      return (data ?? []) as { vendedor_id: string; mes: number; target_amount: number }[];
+    },
+  });
+}
+
 /** Upsert da meta de um vendedor no mês (gestor). */
 export function useUpsertMeta() {
   const qc = useQueryClient();
