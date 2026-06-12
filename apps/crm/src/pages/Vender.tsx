@@ -225,8 +225,11 @@ export default function Vender() {
     if (items.length === 0) { toast.error("Adicione ao menos um item."); return; }
     setGenerating(true);
     try {
-      // 1) Gera o PDF do orçamento (como antes).
+      // 1) Salva o orçamento primeiro — o banco atribui o número (atômico).
+      const { numero } = await createVenda.mutateAsync(buildPayload("orcamento"));
+      // 2) Gera o PDF já com o número do pedido (orçamento fica atrelado a ele).
       await generateQuotePdf({
+        order_number: numero ?? undefined,
         customer_name: customerName || "Cliente", cnpj: doc || undefined,
         ie: ie || undefined,
         endereco,
@@ -234,9 +237,7 @@ export default function Vender() {
         vendedor_name: vendedor || undefined, items, total: subtotal,
         notes: obsPublica || undefined, created_at: new Date().toISOString(), validityDays: 7,
       });
-      // 2) Salva o orçamento (status = orcamento).
-      await createVenda.mutateAsync(buildPayload("orcamento"));
-      toast.success("Orçamento gerado e salvo!");
+      toast.success(`Orçamento ${numero ?? ""} gerado e salvo!`);
       resetForm();
     } catch (e) {
       toast.error("Erro ao gerar/salvar orçamento: " + (e instanceof Error ? e.message : "tente de novo"));
@@ -246,8 +247,8 @@ export default function Vender() {
   async function handleSell() {
     if (validItems().length === 0) { toast.error("Adicione ao menos um item."); return; }
     try {
-      await createVenda.mutateAsync(buildPayload("pedido"));
-      toast.success("Venda registrada!");
+      const { numero } = await createVenda.mutateAsync(buildPayload("pedido"));
+      toast.success(`Venda ${numero ?? ""} registrada!`);
       resetForm();
       navigate("/pedidos");
     } catch (e) {
