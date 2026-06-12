@@ -1,5 +1,6 @@
 // Expansão Territorial do Carbo Sales — dados REAIS do CORE (territories / licensees).
 import { useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -12,7 +13,6 @@ import {
 import { Progress } from "@/components/ui/progress";
 import { TrendingUp, MapPin, Target, Users, ExternalLink, Zap, Loader2 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { toast } from "sonner";
 import { useTerritorios, type TTerritory } from "@/hooks/useTerritorio";
 
 function getCompetitionLabel(level: number) {
@@ -35,6 +35,7 @@ function StrategyDialog({
   opportunity: TTerritory | null;
   onClose: () => void;
 }) {
+  const navigate = useNavigate();
   const opp = opportunity;
 
   // Score integrado (sem leads reais — usa apenas dados do território).
@@ -102,7 +103,7 @@ function StrategyDialog({
           <div className="flex gap-2 pt-1">
             <Button
               className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white"
-              onClick={() => { toast("Abrir Funil B2B no CRM (em breve)"); onClose(); }}
+              onClick={() => { onClose(); navigate("/crm/pipelines"); }}
             >
               <ExternalLink className="h-4 w-4 mr-2" />
               Abrir Funil B2B no CRM

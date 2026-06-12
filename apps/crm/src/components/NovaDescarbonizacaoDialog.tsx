@@ -56,8 +56,28 @@ export function NovaDescarbonizacaoDialog({ open, onOpenChange }: NovaDescarboni
   const [prioridade, setPrioridade] = useState("3");
   const [titulo, setTitulo] = useState("");
   const [observacoes, setObservacoes] = useState("");
+  const [buscandoCnpj, setBuscandoCnpj] = useState(false);
 
   const createOS = useCreateOS();
+
+  // Busca o CNPJ na BrasilAPI e auto-preenche a razão social (mesma fonte do Vender).
+  async function handleBuscarCnpj() {
+    const digits = cnpj.replace(/\D/g, "");
+    if (digits.length !== 14) { toast.error("Digite um CNPJ com 14 dígitos."); return; }
+    setBuscandoCnpj(true);
+    try {
+      const res = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${digits}`, { signal: AbortSignal.timeout(10000) });
+      if (!res.ok) { toast.error("CNPJ não encontrado."); return; }
+      const data = await res.json();
+      const nome = data.nome_fantasia || data.razao_social || "";
+      if (nome) { setClienteNome(nome); toast.success("Cliente preenchido pelo CNPJ."); }
+      else toast.info("CNPJ encontrado, sem razão social.");
+    } catch {
+      toast.error("Falha ao consultar o CNPJ. Tente de novo.");
+    } finally {
+      setBuscandoCnpj(false);
+    }
+  }
 
   const reset = () => {
     setStep("type"); setSelectedType(null);
@@ -137,8 +157,8 @@ export function NovaDescarbonizacaoDialog({ open, onOpenChange }: NovaDescarboni
                 <div className="space-y-1.5">
                   <Label>CNPJ</Label>
                   <div className="flex gap-2">
-                    <Input value={cnpj} onChange={(e) => setCnpj(e.target.value)} placeholder="00.000.000/0000-00" maxLength={18} className="font-mono" />
-                    <Button type="button" variant="outline" size="sm" className="shrink-0 px-3" onClick={() => toast.info("Busca de CNPJ disponível em breve")}>
+                    <Input value={cnpj} onChange={(e) => setCnpj(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleBuscarCnpj(); } }} placeholder="00.000.000/0000-00" maxLength={18} className="font-mono" />
+                    <Button type="button" variant="outline" size="sm" className="shrink-0 px-3" onClick={handleBuscarCnpj} disabled={buscandoCnpj}>
                       <Search className="h-4 w-4" />
                     </Button>
                   </div>

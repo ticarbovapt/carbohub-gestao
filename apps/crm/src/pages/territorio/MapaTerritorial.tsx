@@ -7,7 +7,6 @@ import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { MapPin, Building2, Store, Cpu, AlertTriangle, Layers, X, Loader2 } from "lucide-react";
-import { toast } from "sonner";
 import { useTerritorioMapa, BRAZIL_CENTER, BRAZIL_ZOOM } from "@/hooks/useTerritorio";
 
 interface LayerConfig {
@@ -308,7 +307,15 @@ export default function MapaTerritorial() {
                 variant="outline"
                 size="sm"
                 className="w-full mt-2"
-                onClick={() => toast("Exportar mapa territorial (em breve)")}
+                onClick={() => {
+                  const header = "UF;Licenciados;Maquinas;PDVs\n";
+                  const rows = byState.map(([uf, e]) => `${uf};${e.licensees};${e.machines};${e.pdvs}`).join("\n");
+                  const blob = new Blob([header + rows], { type: "text/csv;charset=utf-8" });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement("a");
+                  a.href = url; a.download = "mapa-territorial.csv"; a.click();
+                  URL.revokeObjectURL(url);
+                }}
               >
                 Exportar visão
               </Button>

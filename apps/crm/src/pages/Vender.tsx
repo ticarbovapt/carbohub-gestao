@@ -568,7 +568,7 @@ export default function Vender() {
       </div>
 
       <p className="text-xs text-muted-foreground text-center">
-        Vendedor: <b>{vendedor || "—"}</b> (usuário logado) · Produtos do catálogo real e gravação ativos. CNPJ e mapa entram nas próximas fases.
+        Vendedor: <b>{vendedor || "—"}</b> (usuário logado) · Catálogo real, busca de CNPJ, mapa e gravação ativos.
       </p>
     </div>
   );
