@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { useVendas, useVendedorNomes, useUpdateVendaStatus } from "@/hooks/useVendas";
+import { useAuth } from "@/contexts/AuthContext";
 import { EditPedidoDialog } from "@/components/EditPedidoDialog";
 
 // Vendas e Orçamentos — lê de crm_vendas (orçamentos + vendas salvas).
@@ -55,7 +56,10 @@ const effectiveDate = (r: VendaRow) => r.sale_date ?? r.created_at.substring(0, 
 const toDisplayStatus = (s: string) => (s === "orcamento" ? "quote" : s === "cancelado" ? "cancelled" : "confirmed");
 
 export default function Vendas() {
-  const isHead = true; // gestor vê tudo (camada de acesso fina entra depois)
+  // Gestor (head/command/ti) vê tudo: coluna/filtro de vendedor, edição, atribuição
+  // em massa. Colaborador comum só vê as próprias vendas (RLS) e sem esses controles.
+  const { isGestor } = useAuth();
+  const isHead = isGestor;
 
   // ── Dados reais (crm_vendas: orçamentos + vendas) ──
   const { data: vendasRaw = [] } = useVendas("all");
@@ -347,7 +351,7 @@ export default function Vendas() {
         </div>
       )}
 
-      <EditPedidoDialog vendaId={editId} open={!!editId} onOpenChange={(o) => !o && setEditId(null)} />
+      <EditPedidoDialog vendaId={editId} open={!!editId} onOpenChange={(o) => !o && setEditId(null)} canEditSensitive={isGestor} />
     </div>
   );
 }
