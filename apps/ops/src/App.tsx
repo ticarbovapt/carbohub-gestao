@@ -29,7 +29,6 @@ import Checklists from "./pages/campo/Checklists";
 import Alertas from "./pages/campo/Alertas";
 import VendasOnline from "./pages/ecommerce/VendasOnline";
 import AcompanhamentoMetas from "./pages/ecommerce/AcompanhamentoMetas";
-import MetasEcommerce from "./pages/ecommerce/MetasEcommerce";
 import AcompDashboardComercial from "./pages/acompanhamento/DashboardComercial";
 import AcompMetasVendedores from "./pages/acompanhamento/MetasVendedores";
 import MetasVendedoresConfig from "./pages/config/MetasVendedores";
@@ -82,7 +81,7 @@ export default function App() {
         {/* E-commerce — área de operação online */}
         <Route path="/ecommerce/vendas-online" element={<VendasOnline />} />
         <Route path="/ecommerce/acompanhamento" element={<AcompanhamentoMetas />} />
-        <Route path="/ecommerce/metas" element={<MetasEcommerce />} />
+        <Route path="/ecommerce/metas" element={<Navigate to="/config/metas-vendedores" replace />} />
 
         {/* Acompanhamento (Vendas) — espelho do Sales, visualização */}
         <Route path="/acompanhamento/comercial" element={<AcompDashboardComercial />} />

@@ -8,8 +8,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { ChevronLeft, ChevronRight, Plus, Pencil, Trash2, Target, Settings } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, Pencil, Trash2, Target, Settings, Save } from "lucide-react";
 import { useMetasVendedores, useUpsertMeta, type MetaVendedor } from "@/hooks/useMetas";
+import { ECOM_PLATFORMS, brl } from "../ecommerce/platforms";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Configurar Metas (Carbo Ops) — réplica 1:1 da tela do Carbo Controle
@@ -40,6 +41,12 @@ export default function MetasVendedoresConfig() {
   const [editScope, setEditScope] = useState<Scope>("default");
   const [vendedorId, setVendedorId]     = useState("");
   const [targetDigits, setTargetDigits] = useState("");
+
+  // Metas de e-commerce (port visual — gravação real entra na fase de lógica)
+  const onlyDigits = (s: string) => s.replace(/\D/g, "");
+  const fmtEcom = (raw: string) => { const d = onlyDigits(raw); return d ? Number(d).toLocaleString("pt-BR") : ""; };
+  const [ecom, setEcom] = useState<Record<string, string>>({ mercadolivre: "90000", amazon: "65000", nuvemshop: "40000" });
+  const ecomTotal = ECOM_PLATFORMS.reduce((s, p) => s + Number(onlyDigits(ecom[p.id] || "0")), 0);
 
   const today = new Date();
   const isCurrentMonth = month.getFullYear() === today.getFullYear() && month.getMonth() === today.getMonth();
@@ -185,12 +192,56 @@ export default function MetasVendedoresConfig() {
 
         {/* ── Tab: E-commerce ─────────────────────────────────────────────── */}
         {tab === "ecommerce" && (
-          <CarboCard>
-            <CarboCardContent className="py-12 text-center space-y-3">
-              <Target className="h-10 w-10 mx-auto text-muted-foreground/30" />
-              <p className="text-muted-foreground">Metas de e-commerce entram na próxima fase.</p>
-            </CarboCardContent>
-          </CarboCard>
+          <>
+            <div className="flex items-center justify-end">
+              <div className="flex items-center gap-1 bg-muted/40 rounded-lg px-2 py-1.5">
+                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setMonth((m) => startOfMonth(subMonths(m, 1)))}>
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+                <span className="text-sm font-semibold w-32 text-center capitalize">{format(month, "MMM 'de' yyyy", { locale: ptBR })}</span>
+                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setMonth((m) => startOfMonth(addMonths(m, 1)))} disabled={isCurrentMonth}>
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              {ECOM_PLATFORMS.map((p) => (
+                <CarboCard key={p.id}>
+                  <CarboCardContent className="p-4 flex items-center gap-4">
+                    <div className="h-11 w-11 rounded-xl flex items-center justify-center text-xl shrink-0" style={{ background: p.color + "20" }}>{p.emoji}</div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-semibold text-sm">{p.label}</p>
+                      <p className="text-xs text-muted-foreground">Meta de faturamento mensal</p>
+                    </div>
+                    <div className="w-44 space-y-1">
+                      <Label className="text-[10px] text-muted-foreground">Meta (R$)</Label>
+                      <div className="relative">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">R$</span>
+                        <Input className="pl-9 text-right font-semibold tabular-nums" value={fmtEcom(ecom[p.id] || "")} onChange={(e) => setEcom((m) => ({ ...m, [p.id]: onlyDigits(e.target.value) }))} placeholder="0" />
+                      </div>
+                    </div>
+                  </CarboCardContent>
+                </CarboCard>
+              ))}
+            </div>
+
+            {/* Total geral */}
+            <CarboCard className="border-carbo-green/30">
+              <CarboCardContent className="p-4 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="h-11 w-11 rounded-xl bg-carbo-green/10 flex items-center justify-center text-xl">🎯</div>
+                  <div><p className="font-semibold text-sm">Total Geral</p><p className="text-xs text-muted-foreground">Soma das metas por plataforma</p></div>
+                </div>
+                <p className="text-2xl font-bold tabular-nums text-carbo-green">{brl(ecomTotal)}</p>
+              </CarboCardContent>
+            </CarboCard>
+
+            <div className="flex justify-end">
+              <Button className="gap-2" onClick={() => toast.success("Metas salvas! (port visual — lógica entra depois)")}><Save className="h-4 w-4" /> Salvar metas</Button>
+            </div>
+            <p className="text-xs text-muted-foreground text-center">Aba de e-commerce em port visual — dados de exemplo. A gravação real entra na fase de lógica.</p>
+          </>
         )}
 
         <p className="text-xs text-muted-foreground text-center">
