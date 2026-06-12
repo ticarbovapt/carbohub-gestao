@@ -9,7 +9,7 @@ import { CarboCard } from "@/components/ui/carbo-card";
 import { CarboEmptyState } from "@/components/ui/carbo-empty-state";
 import {
   ShoppingBag, Plus, RefreshCw, Filter, ChevronRight, Clock, CheckCircle, Truck,
-  Package, XCircle, DollarSign, BarChart3, Calendar, Users, Download,
+  Package, XCircle, DollarSign, Calendar, Users, Download,
   FileText, Printer, ArrowUpDown, ArrowUp, ArrowDown, Pencil,
 } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -199,16 +199,9 @@ export default function Pedidos() {
         />
 
         <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "list" | "analytics")}>
-          <TabsList className="grid w-fit grid-cols-2">
+          <TabsList className="grid w-fit grid-cols-1">
             <TabsTrigger value="list" className="gap-2"><ShoppingBag className="h-4 w-4" /> Pedidos</TabsTrigger>
-            <TabsTrigger value="analytics" className="gap-2"><BarChart3 className="h-4 w-4" /> Relatórios</TabsTrigger>
           </TabsList>
-
-          <TabsContent value="analytics" className="mt-6">
-            <CarboCard>
-              <CarboEmptyState icon={BarChart3} title="Relatórios" description="Os gráficos e relatórios analíticos de pedidos entram na fase de lógica." />
-            </CarboCard>
-          </TabsContent>
 
           <TabsContent value="list" className="mt-6 space-y-6">
             {/* KPIs */}

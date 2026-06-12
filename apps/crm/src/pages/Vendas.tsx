@@ -12,7 +12,7 @@ import {
   Package, Pencil, Users, ArrowRightCircle, FileDown, CalendarDays, X,
 } from "lucide-react";
 import { toast } from "sonner";
-import { useVendas, useVendedorNomes, useUpdateVendaStatus, useVendedoresDir } from "@/hooks/useVendas";
+import { useVendas, useVendedorNomes, useUpdateVendaStatus, useUpdateVenda, useVendedoresDir } from "@/hooks/useVendas";
 import { useAuth } from "@/contexts/AuthContext";
 import { EditPedidoDialog } from "@/components/EditPedidoDialog";
 
@@ -64,7 +64,26 @@ export default function Vendas() {
   // ── Dados reais (crm_vendas: orçamentos + vendas) ──
   const { data: vendasRaw = [] } = useVendas("all");
   const { data: nomes = {} } = useVendedorNomes();
+  const { data: dir = [] } = useVendedoresDir();
   const updateStatus = useUpdateVendaStatus();
+  const updateVenda = useUpdateVenda();
+  const [assigning, setAssigning] = useState(false);
+
+  async function atribuirVendedor(vendedorId: string) {
+    if (!vendedorId) return;
+    setAssigning(true);
+    const ids = Array.from(selectedIds);
+    try {
+      await Promise.all(ids.map((id) => updateVenda.mutateAsync({ id, vendedor_id: vendedorId })));
+      const nome = dir.find((d) => d.id === vendedorId)?.full_name ?? "vendedor";
+      toast.success(`${ids.length} pedido(s) atribuído(s) a ${nome}`);
+      setSelectedIds(new Set());
+    } catch (e) {
+      toast.error("Erro ao atribuir: " + (e instanceof Error ? e.message : "tente de novo"));
+    } finally {
+      setAssigning(false);
+    }
+  }
 
   async function converterEmVenda(id: string) {
     try {
@@ -108,9 +127,7 @@ export default function Vendas() {
     };
   }), [vendasRaw, nomes]);
 
-  // Lista de vendedores para o filtro (distintos a partir dos dados).
-  // Diretório completo (todos os perfis): vendedores no topo, avulsos depois.
-  const { data: dir = [] } = useVendedoresDir();
+  // Lista de vendedores para o filtro — diretório completo (vendedores no topo).
   const VENDEDORES = useMemo(
     () => dir.map((v) => ({ id: v.id, name: v.full_name || "—", avulso: !v.is_vendedor })),
     [dir],
@@ -352,7 +369,16 @@ export default function Vendas() {
       {isHead && selectedIds.size > 0 && (
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 rounded-2xl border border-border bg-background/95 backdrop-blur px-4 py-3 shadow-lg">
           <span className="text-sm font-semibold"><span className="text-carbo-green">{selectedIds.size}</span> pedido(s) selecionado(s)</span>
-          <button className="h-8 px-3 rounded-lg text-sm font-medium bg-carbo-green text-background hover:bg-carbo-green/90 transition-colors flex items-center gap-1.5" onClick={() => toast.info("Atribuir vendedor — disponível em breve")}><Users className="h-3.5 w-3.5" /> Atribuir vendedor</button>
+          <Select value="" onValueChange={atribuirVendedor}>
+            <SelectTrigger className="h-8 w-[210px] text-sm"><span className="flex items-center gap-1.5"><Users className="h-3.5 w-3.5" /> {assigning ? "Atribuindo..." : "Atribuir vendedor"}</span></SelectTrigger>
+            <SelectContent>
+              {dir.map((v) => (
+                <SelectItem key={v.id} value={v.id}>
+                  <span className="flex items-center gap-2">{v.full_name || "—"}{!v.is_vendedor && <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground border">Avulso</span>}</span>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           <button className="h-8 px-3 rounded-lg text-sm text-muted-foreground hover:text-foreground border border-border transition-colors" onClick={() => setSelectedIds(new Set())}>Cancelar</button>
         </div>
       )}
