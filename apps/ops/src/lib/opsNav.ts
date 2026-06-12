@@ -91,7 +91,6 @@ export const OPS_GROUPS: OpsNavGroup[] = [
     items: [
       { path: "/ecommerce/vendas-online", label: "Vendas Online", icon: Globe, from: "/dashboards/ecommerce/vendas-online", ready: true },
       { path: "/ecommerce/acompanhamento", label: "Acompanhamento de Metas", icon: Target, from: "/dashboards/metas/ecommerce", ready: true },
-      { path: "/ecommerce/metas", label: "Metas E-commerce", icon: Target, from: "/dashboards/metas/ecommerce", ready: true },
     ],
   },
   {
@@ -104,7 +103,7 @@ export const OPS_GROUPS: OpsNavGroup[] = [
   {
     label: "Configuração de Metas",
     items: [
-      { path: "/config/metas-vendedores", label: "Metas de Vendedores", icon: Target, from: "/dashboards/metas/config", ready: true },
+      { path: "/config/metas-vendedores", label: "Configurar Metas", icon: Target, from: "/dashboards/metas/config", ready: true },
     ],
   },
 ];
