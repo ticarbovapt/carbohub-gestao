@@ -12,7 +12,7 @@ import {
   Package, Pencil, Users, ArrowRightCircle, FileDown, CalendarDays, X,
 } from "lucide-react";
 import { toast } from "sonner";
-import { useVendas, useVendedorNomes, useUpdateVendaStatus } from "@/hooks/useVendas";
+import { useVendas, useVendedorNomes, useUpdateVendaStatus, useVendedoresDir } from "@/hooks/useVendas";
 import { useAuth } from "@/contexts/AuthContext";
 import { EditPedidoDialog } from "@/components/EditPedidoDialog";
 
@@ -109,11 +109,12 @@ export default function Vendas() {
   }), [vendasRaw, nomes]);
 
   // Lista de vendedores para o filtro (distintos a partir dos dados).
-  const VENDEDORES = useMemo(() => {
-    const seen = new Map<string, string>();
-    rows.forEach((r) => { if (!seen.has(r.vendedor_id)) seen.set(r.vendedor_id, r.vendedor_name); });
-    return Array.from(seen, ([id, name]) => ({ id, name, avulso: false }));
-  }, [rows]);
+  // Diretório completo (todos os perfis): vendedores no topo, avulsos depois.
+  const { data: dir = [] } = useVendedoresDir();
+  const VENDEDORES = useMemo(
+    () => dir.map((v) => ({ id: v.id, name: v.full_name || "—", avulso: !v.is_vendedor })),
+    [dir],
+  );
 
   const [month, setMonth] = useState(() => startOfMonth(new Date()));
   const [customFrom, setCustomFrom] = useState("");
@@ -192,7 +193,12 @@ export default function Vendas() {
                 <SelectItem value="__all__">Todos os vendedores</SelectItem>
                 {VENDEDORES.map((m) => (
                   <SelectItem key={m.id} value={m.id}>
-                    <span className="flex items-center gap-2">{m.name}{m.avulso && <span className="text-[10px] font-semibold text-amber-500 border border-amber-500/30 rounded px-1 ml-1">Avulso</span>}</span>
+                    <span className="flex items-center gap-2">
+                      {m.name}
+                      {m.avulso
+                        ? <span className="text-[10px] font-semibold text-amber-500 border border-amber-500/30 rounded px-1">Avulso</span>
+                        : <span className="text-[10px] font-semibold text-carbo-green border border-carbo-green/30 rounded px-1">Vendedor</span>}
+                    </span>
                   </SelectItem>
                 ))}
               </SelectContent>

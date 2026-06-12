@@ -11,7 +11,7 @@ import { CarboPageHeader } from "@/components/ui/carbo-page-header";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useVendas, useVendedorNomes } from "@/hooks/useVendas";
+import { useVendas, useVendedorNomes, useVendedoresDir } from "@/hooks/useVendas";
 import { useAuth } from "@/contexts/AuthContext";
 
 // Dashboard Comercial — agrega as VENDAS salvas (crm_vendas, status "pedido").
@@ -60,11 +60,12 @@ export default function DashboardComercial() {
     v.status === "pedido" && (vendedor === "all" || v.vendedor_id === vendedor)
   ), [vendas, vendedor]);
 
-  // Opções de vendedor (a partir dos dados reais).
-  const vendedorOpts = useMemo(() => {
-    const ids = Array.from(new Set(vendas.map((v) => v.vendedor_id)));
-    return ids.map((id) => ({ id, name: nomes[id] ?? "—" })).sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
-  }, [vendas, nomes]);
+  // Opções de vendedor: diretório completo (vendedores no topo, avulsos depois).
+  const { data: vendedoresDir = [] } = useVendedoresDir();
+  const vendedorOpts = useMemo(
+    () => vendedoresDir.map((v) => ({ id: v.id, name: v.full_name || "—", avulso: !v.is_vendedor })),
+    [vendedoresDir],
+  );
 
   // Série dos últimos 9 meses (faturado + pedidos + ticket médio).
   const monthlyData = useMemo<MonthRow[]>(() => {
@@ -180,7 +181,16 @@ export default function DashboardComercial() {
                   <SelectTrigger className="h-8 w-[160px] text-xs"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">Todos vendedores</SelectItem>
-                    {vendedorOpts.map((v) => <SelectItem key={v.id} value={v.id}>{v.name}</SelectItem>)}
+                    {vendedorOpts.map((v) => (
+                      <SelectItem key={v.id} value={v.id}>
+                        <span className="flex items-center gap-2">
+                          {v.name}
+                          {v.avulso
+                            ? <span className="text-[10px] font-semibold text-amber-500 border border-amber-500/30 rounded px-1">Avulso</span>
+                            : <span className="text-[10px] font-semibold text-carbo-green border border-carbo-green/30 rounded px-1">Vendedor</span>}
+                        </span>
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
