@@ -1,17 +1,19 @@
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Metas de vendedores (Carbo Sales).
-//  • Vendedores = profiles com is_vendedor = true.
-//  • Meta = crm_vendedor_metas (por vendedor/mês).
-//  • Realizado = RPC crm_vendas_agregado (status 'pedido') no mês, no mês anterior
-//    e na semana selecionada.
+// Metas de vendedores (Carbo Sales) — somente LEITURA (config fica no Ops).
+//  • Vendedores = profiles com is_vendedor = true (via crm_list_vendedores).
+//  • Meta = RESOLVIDA no banco (crm_metas_resolvidas): exceção do mês > degrau de
+//    meta padrão vigente > 0.
+//  • Realizado = RPC crm_vendas_agregado (status 'pedido').
 // ─────────────────────────────────────────────────────────────────────────────
 const db = supabase as unknown as {
   from: (t: string) => any;
-  rpc: (fn: string, args: unknown) => Promise<{ data: any; error: any }>;
+  rpc: (fn: string, args?: unknown) => Promise<{ data: any; error: any }>;
 };
+
+export type MetaSource = "mes" | "padrao" | "none";
 
 export interface MetaVendedor {
   vendedor_id: string;
@@ -21,6 +23,7 @@ export interface MetaVendedor {
   secondary_department: string | null;
   target_amount: number;
   target_qty: number;
+  source: MetaSource;
   actual_amount: number;
   actual_qty: number;
   pct_amount: number;
@@ -50,16 +53,17 @@ export function useMetasVendedores(month: Date, weekStart: Date) {
     queryFn: async (): Promise<MetaVendedor[]> => {
       const [vendsRes, metasRes, monthRes, prevRes, weekRes] = await Promise.all([
         db.rpc("crm_list_vendedores", {}),
-        db.from("crm_vendedor_metas").select("vendedor_id, target_amount, target_qty").eq("ano", ano).eq("mes", mes),
+        db.rpc("crm_metas_resolvidas", { p_ano: ano, p_mes: mes }),
         db.rpc("crm_vendas_agregado", { p_from: iso(monthStart), p_to: iso(monthEnd) }),
         db.rpc("crm_vendas_agregado", { p_from: iso(prevStart), p_to: iso(monthStart) }),
         db.rpc("crm_vendas_agregado", { p_from: iso(weekFrom), p_to: iso(weekTo) }),
       ]);
       if (vendsRes.error) throw vendsRes.error;
+      if (metasRes.error) throw metasRes.error;
 
-      const metaMap = new Map<string, { target_amount: number; target_qty: number }>();
-      for (const r of (metasRes.data ?? []) as { vendedor_id: string; target_amount: number; target_qty: number }[]) {
-        metaMap.set(r.vendedor_id, { target_amount: Number(r.target_amount) || 0, target_qty: Number(r.target_qty) || 0 });
+      const metaMap = new Map<string, { target_amount: number; source: MetaSource }>();
+      for (const r of (metasRes.data ?? []) as { vendedor_id: string; target_amount: number; source: MetaSource }[]) {
+        metaMap.set(r.vendedor_id, { target_amount: Number(r.target_amount) || 0, source: r.source });
       }
       const monthAgg = aggMap(monthRes.data);
       const prevAgg = aggMap(prevRes.data);
@@ -68,7 +72,7 @@ export function useMetasVendedores(month: Date, weekStart: Date) {
       // Só quem tem a flag de vendedor entra no quadro de metas (avulsos ficam de fora).
       type Prof = { id: string; full_name: string | null; avatar_url: string | null; department: string | null; secondary_department: string | null; is_vendedor: boolean };
       return ((vendsRes.data ?? []) as Prof[]).filter((p) => p.is_vendedor).map((p) => {
-        const meta = metaMap.get(p.id) ?? { target_amount: 0, target_qty: 0 };
+        const meta = metaMap.get(p.id) ?? { target_amount: 0, source: "none" as MetaSource };
         const act = monthAgg.get(p.id) ?? { total: 0, qtd: 0 };
         return {
           vendedor_id: p.id,
@@ -77,7 +81,8 @@ export function useMetasVendedores(month: Date, weekStart: Date) {
           department: p.department,
           secondary_department: p.secondary_department,
           target_amount: meta.target_amount,
-          target_qty: meta.target_qty,
+          target_qty: 0,
+          source: meta.source,
           actual_amount: act.total,
           actual_qty: act.qtd,
           pct_amount: meta.target_amount > 0 ? (act.total / meta.target_amount) * 100 : 0,
@@ -89,32 +94,16 @@ export function useMetasVendedores(month: Date, weekStart: Date) {
   });
 }
 
-/** Metas de um ano inteiro (por vendedor/mês) — para a linha de meta do Dashboard.
- *  RLS: qualquer autenticado lê; o escopo de exibição é decidido no componente. */
+/** Metas RESOLVIDAS de um ano inteiro (por vendedor/mês) — para a linha de meta do
+ *  Dashboard. Já aplica exceção do mês > degrau de padrão vigente. */
 export function useMetasAno(ano: number) {
   return useQuery({
     queryKey: ["crm_metas_ano", ano],
     queryFn: async (): Promise<{ vendedor_id: string; mes: number; target_amount: number }[]> => {
-      const { data, error } = await db
-        .from("crm_vendedor_metas")
-        .select("vendedor_id, mes, target_amount")
-        .eq("ano", ano);
+      const { data, error } = await db.rpc("crm_metas_resolvidas_ano", { p_ano: ano });
       if (error) throw error;
-      return (data ?? []) as { vendedor_id: string; mes: number; target_amount: number }[];
+      return ((data ?? []) as { vendedor_id: string; mes: number; target_amount: number }[])
+        .map((r) => ({ vendedor_id: r.vendedor_id, mes: Number(r.mes), target_amount: Number(r.target_amount) || 0 }));
     },
-  });
-}
-
-/** Upsert da meta de um vendedor no mês (gestor). */
-export function useUpsertMeta() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async (p: { vendedor_id: string; ano: number; mes: number; target_amount: number; target_qty: number }) => {
-      const { error } = await db
-        .from("crm_vendedor_metas")
-        .upsert({ ...p }, { onConflict: "vendedor_id,ano,mes" });
-      if (error) throw error;
-    },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["crm_metas"] }),
   });
 }

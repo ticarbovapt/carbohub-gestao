@@ -9,15 +9,17 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { ChevronLeft, ChevronRight, Plus, Pencil, Trash2, Target, Settings, Save } from "lucide-react";
-import { useMetasVendedores, useUpsertMeta, type MetaVendedor } from "@/hooks/useMetas";
+import {
+  useMetasVendedores, useMetaDefaultsStartingAt,
+  useSetMetaDefault, useRemoveMetaDefault, useSetMetaMes, useRemoveMetaMes,
+  type MetaVendedor,
+} from "@/hooks/useMetas";
 import { ECOM_PLATFORMS, brl } from "../ecommerce/platforms";
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Configurar Metas (Carbo Ops) — réplica 1:1 da tela do Carbo Controle
-// (/dashboards/metas/config). O Save persiste a meta do mês em crm_vendedor_metas
-// (o que alimenta o Carbo Sales). O MOTOR de "meta padrão (vale todo mês) vs
-// exceção do mês" é a lógica que entra na próxima fase — por ora, ambos os botões
-// gravam a meta do mês selecionado.
+// Configurar Metas (Carbo Ops). Vendedores: meta PADRÃO com vigência (a partir do
+// mês selecionado, vale daí pra frente) + EXCEÇÃO por mês. Histórico não muda:
+// uma padrão nova só vale do mês escolhido em diante. E-commerce: port visual.
 // ─────────────────────────────────────────────────────────────────────────────
 
 function fmtBRL(v: number) {
@@ -30,31 +32,39 @@ type Scope = "default" | "month";
 export default function MetasVendedoresConfig() {
   const [tab, setTab]     = useState<Tab>("vendedores");
   const [month, setMonth] = useState(() => startOfMonth(new Date()));
-  const weekStart = useMemo(() => new Date(), []); // semana não importa aqui
+  const weekStart = useMemo(() => new Date(), []);
 
   const { data: metas = [], isLoading } = useMetasVendedores(month, weekStart);
-  const upsert = useUpsertMeta();
+  const { data: defaultsAt = new Set<string>() } = useMetaDefaultsStartingAt(month);
+  const setDefault    = useSetMetaDefault();
+  const removeDefault = useRemoveMetaDefault();
+  const setMes        = useSetMetaMes();
+  const removeMes     = useRemoveMetaMes();
+  const saving = setDefault.isPending || setMes.isPending || removeDefault.isPending || removeMes.isPending;
 
-  // Estado do dialog
+  // Navegação: até 24 meses à frente.
+  const maxMonth = useMemo(() => startOfMonth(addMonths(startOfMonth(new Date()), 24)), []);
+  const canNext = month < maxMonth;
+  const ano = month.getFullYear(); const mes = month.getMonth() + 1;
+
+  // Dialog
   const [dialogOpen, setDialog] = useState(false);
   const [editTarget, setEdit]   = useState<MetaVendedor | null>(null);
   const [editScope, setEditScope] = useState<Scope>("default");
   const [vendedorId, setVendedorId]     = useState("");
   const [targetDigits, setTargetDigits] = useState("");
 
-  // Metas de e-commerce (port visual — gravação real entra na fase de lógica)
-  const onlyDigits = (s: string) => s.replace(/\D/g, "");
-  const fmtEcom = (raw: string) => { const d = onlyDigits(raw); return d ? Number(d).toLocaleString("pt-BR") : ""; };
-  const [ecom, setEcom] = useState<Record<string, string>>({ mercadolivre: "90000", amazon: "65000", nuvemshop: "40000" });
-  const ecomTotal = ECOM_PLATFORMS.reduce((s, p) => s + Number(onlyDigits(ecom[p.id] || "0")), 0);
-
-  const today = new Date();
-  const isCurrentMonth = month.getFullYear() === today.getFullYear() && month.getMonth() === today.getMonth();
-
-  // Nova meta padrão (vendedor em branco)
   const openNew = () => { setEdit(null); setEditScope("default"); setVendedorId(""); setTargetDigits(""); setDialog(true); };
-  const openEditDefault = (m: MetaVendedor) => { setEdit(m); setEditScope("default"); setVendedorId(m.vendedor_id); setTargetDigits(String(Math.round(Number(m.target_amount || 0)))); setDialog(true); };
-  const openEditMonth   = (m: MetaVendedor) => { setEdit(m); setEditScope("month");   setVendedorId(m.vendedor_id); setTargetDigits(String(Math.round(Number(m.target_amount || 0)))); setDialog(true); };
+  const openEditDefault = (m: MetaVendedor) => {
+    setEdit(m); setEditScope("default"); setVendedorId(m.vendedor_id);
+    setTargetDigits(m.source === "padrao" ? String(Math.round(Number(m.target_amount || 0))) : "");
+    setDialog(true);
+  };
+  const openEditMonth = (m: MetaVendedor) => {
+    setEdit(m); setEditScope("month"); setVendedorId(m.vendedor_id);
+    setTargetDigits(String(Math.round(Number(m.target_amount || 0))));
+    setDialog(true);
+  };
   const handleClose = () => { setDialog(false); setEdit(null); };
 
   const targetAmountNum = parseInt(targetDigits.replace(/\D/g, "") || "0", 10);
@@ -64,14 +74,12 @@ export default function MetasVendedoresConfig() {
 
   const handleSave = async () => {
     if (!vendedorId) return;
-    const ano = month.getFullYear(); const mes = month.getMonth() + 1;
-    const existing = metas.find((m) => m.vendedor_id === vendedorId);
     try {
-      await upsert.mutateAsync({
-        vendedor_id: vendedorId, ano, mes,
-        target_amount: targetAmountNum,
-        target_qty: existing?.target_qty ?? 0,
-      });
+      if (editScope === "default") {
+        await setDefault.mutateAsync({ vendedor_id: vendedorId, month, target_amount: targetAmountNum });
+      } else {
+        await setMes.mutateAsync({ vendedor_id: vendedorId, ano, mes, target_amount: targetAmountNum });
+      }
       toast.success("Meta salva");
       handleClose();
     } catch (e) {
@@ -79,16 +87,43 @@ export default function MetasVendedoresConfig() {
     }
   };
 
-  // "Voltar ao padrão" → por ora zera a meta do mês (a exceção real entra na lógica)
-  const handleClearMonth = async (m: MetaVendedor) => {
-    const ano = month.getFullYear(); const mes = month.getMonth() + 1;
+  const handleRemoveDefault = async () => {
+    if (!vendedorId) return;
     try {
-      await upsert.mutateAsync({ vendedor_id: m.vendedor_id, ano, mes, target_amount: 0, target_qty: m.target_qty ?? 0 });
-      toast.success("Meta do mês removida");
+      await removeDefault.mutateAsync({ vendedor_id: vendedorId, month });
+      toast.success("Meta padrão removida a partir deste mês");
+      handleClose();
     } catch (e) {
       toast.error("Erro: " + (e instanceof Error ? e.message : "tente de novo"));
     }
   };
+
+  const handleVoltarPadrao = async (m: MetaVendedor) => {
+    try {
+      await removeMes.mutateAsync({ vendedor_id: m.vendedor_id, ano, mes });
+      toast.success("Exceção removida — voltou à meta padrão");
+    } catch (e) {
+      toast.error("Erro: " + (e instanceof Error ? e.message : "tente de novo"));
+    }
+  };
+
+  // Metas de e-commerce (port visual)
+  const onlyDigits = (s: string) => s.replace(/\D/g, "");
+  const fmtEcom = (raw: string) => { const d = onlyDigits(raw); return d ? Number(d).toLocaleString("pt-BR") : ""; };
+  const [ecom, setEcom] = useState<Record<string, string>>({ mercadolivre: "90000", amazon: "65000", nuvemshop: "40000" });
+  const ecomTotal = ECOM_PLATFORMS.reduce((s, p) => s + Number(onlyDigits(ecom[p.id] || "0")), 0);
+
+  const MonthNav = () => (
+    <div className="flex items-center gap-1 bg-muted/40 rounded-lg px-2 py-1.5">
+      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setMonth((m) => startOfMonth(subMonths(m, 1)))}>
+        <ChevronLeft className="h-4 w-4" />
+      </Button>
+      <span className="text-sm font-semibold w-32 text-center capitalize">{format(month, "MMM 'de' yyyy", { locale: ptBR })}</span>
+      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setMonth((m) => startOfMonth(addMonths(m, 1)))} disabled={!canNext}>
+        <ChevronRight className="h-4 w-4" />
+      </Button>
+    </div>
+  );
 
   return (
     <div className="p-4 md:p-6">
@@ -118,23 +153,15 @@ export default function MetasVendedoresConfig() {
         {tab === "vendedores" && (
           <>
             <div className="flex items-center justify-between gap-3 flex-wrap">
-              <div className="flex items-center gap-1 bg-muted/40 rounded-lg px-2 py-1.5">
-                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setMonth((m) => startOfMonth(subMonths(m, 1)))}>
-                  <ChevronLeft className="h-4 w-4" />
-                </Button>
-                <span className="text-sm font-semibold w-32 text-center capitalize">{format(month, "MMM 'de' yyyy", { locale: ptBR })}</span>
-                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setMonth((m) => startOfMonth(addMonths(m, 1)))} disabled={isCurrentMonth}>
-                  <ChevronRight className="h-4 w-4" />
-                </Button>
-              </div>
+              <MonthNav />
               <Button size="sm" className="gap-1.5 bg-carbo-green hover:bg-carbo-green/90 text-white" onClick={openNew}>
                 <Plus className="h-4 w-4" /> Meta padrão
               </Button>
             </div>
 
             <div className="rounded-lg bg-muted/30 border border-border px-3 py-2 text-xs text-muted-foreground">
-              A <strong className="text-foreground">meta padrão</strong> vale para todos os meses automaticamente.
-              Se um mês for diferente, clique em <strong className="text-foreground">"Meta deste mês"</strong> para criar uma exceção — ela vence só naquele mês.
+              A <strong className="text-foreground">meta padrão</strong> passa a valer <strong className="text-foreground">a partir do mês selecionado</strong> ({format(month, "MMM/yyyy", { locale: ptBR })}) e segue para os próximos — sem mexer nos meses anteriores.
+              Para um mês pontual diferente, use <strong className="text-foreground">"Meta deste mês"</strong>.
             </div>
 
             {isLoading ? (
@@ -150,61 +177,51 @@ export default function MetasVendedoresConfig() {
               <div className="space-y-2">
                 {[...metas]
                   .sort((a, b) => (a.full_name || "").localeCompare(b.full_name || ""))
-                  .map((m) => {
-                    const hasMeta = Number(m.target_amount) > 0;
-                    return (
-                      <CarboCard key={m.vendedor_id}>
-                        <CarboCardContent className="p-3 flex items-center gap-3 flex-wrap">
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2">
-                              <p className="font-semibold text-sm truncate">{m.full_name || "—"}</p>
-                              {hasMeta ? (
-                                <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-carbo-green/15 text-carbo-green">Meta padrão</span>
-                              ) : (
-                                <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-muted text-muted-foreground">Sem meta</span>
-                              )}
-                            </div>
-                            <p className="text-xs text-muted-foreground">
-                              Meta: {fmtBRL(Number(m.target_amount))} · Real: {fmtBRL(m.actual_amount || 0)} ({Math.round(m.pct_amount || 0)}%)
-                            </p>
-                          </div>
-                          <div className="flex gap-1.5 shrink-0 flex-wrap">
-                            <Button variant="outline" size="sm" className="h-7 text-xs gap-1" onClick={() => openEditDefault(m)}>
-                              <Pencil className="h-3 w-3" /> Meta padrão
-                            </Button>
-                            <Button variant="outline" size="sm" className="h-7 text-xs gap-1" onClick={() => openEditMonth(m)}>
-                              <Pencil className="h-3 w-3" /> Meta deste mês
-                            </Button>
-                            {hasMeta && (
-                              <Button variant="ghost" size="sm" className="h-7 text-xs text-destructive hover:text-destructive gap-1" onClick={() => handleClearMonth(m)}>
-                                <Trash2 className="h-3 w-3" /> Voltar ao padrão
-                              </Button>
+                  .map((m) => (
+                    <CarboCard key={m.vendedor_id}>
+                      <CarboCardContent className="p-3 flex items-center gap-3 flex-wrap">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <p className="font-semibold text-sm truncate">{m.full_name || "—"}</p>
+                            {m.source === "mes" && (
+                              <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-600">Específica deste mês</span>
+                            )}
+                            {m.source === "padrao" && (
+                              <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-carbo-green/15 text-carbo-green">Meta padrão</span>
+                            )}
+                            {m.source === "none" && (
+                              <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-muted text-muted-foreground">Sem meta</span>
                             )}
                           </div>
-                        </CarboCardContent>
-                      </CarboCard>
-                    );
-                  })}
+                          <p className="text-xs text-muted-foreground">
+                            Meta: {fmtBRL(Number(m.target_amount))} · Real: {fmtBRL(m.actual_amount || 0)} ({Math.round(m.pct_amount || 0)}%)
+                          </p>
+                        </div>
+                        <div className="flex gap-1.5 shrink-0 flex-wrap">
+                          <Button variant="outline" size="sm" className="h-7 text-xs gap-1" onClick={() => openEditDefault(m)}>
+                            <Pencil className="h-3 w-3" /> Meta padrão
+                          </Button>
+                          <Button variant="outline" size="sm" className="h-7 text-xs gap-1" onClick={() => openEditMonth(m)}>
+                            <Pencil className="h-3 w-3" /> Meta deste mês
+                          </Button>
+                          {m.source === "mes" && (
+                            <Button variant="ghost" size="sm" className="h-7 text-xs text-destructive hover:text-destructive gap-1" onClick={() => handleVoltarPadrao(m)} disabled={saving}>
+                              <Trash2 className="h-3 w-3" /> Voltar ao padrão
+                            </Button>
+                          )}
+                        </div>
+                      </CarboCardContent>
+                    </CarboCard>
+                  ))}
               </div>
             )}
           </>
         )}
 
-        {/* ── Tab: E-commerce ─────────────────────────────────────────────── */}
+        {/* ── Tab: E-commerce (port visual) ───────────────────────────────── */}
         {tab === "ecommerce" && (
           <>
-            <div className="flex items-center justify-end">
-              <div className="flex items-center gap-1 bg-muted/40 rounded-lg px-2 py-1.5">
-                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setMonth((m) => startOfMonth(subMonths(m, 1)))}>
-                  <ChevronLeft className="h-4 w-4" />
-                </Button>
-                <span className="text-sm font-semibold w-32 text-center capitalize">{format(month, "MMM 'de' yyyy", { locale: ptBR })}</span>
-                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setMonth((m) => startOfMonth(addMonths(m, 1)))} disabled={isCurrentMonth}>
-                  <ChevronRight className="h-4 w-4" />
-                </Button>
-              </div>
-            </div>
-
+            <div className="flex items-center justify-end"><MonthNav /></div>
             <div className="space-y-3">
               {ECOM_PLATFORMS.map((p) => (
                 <CarboCard key={p.id}>
@@ -225,8 +242,6 @@ export default function MetasVendedoresConfig() {
                 </CarboCard>
               ))}
             </div>
-
-            {/* Total geral */}
             <CarboCard className="border-carbo-green/30">
               <CarboCardContent className="p-4 flex items-center justify-between">
                 <div className="flex items-center gap-3">
@@ -236,7 +251,6 @@ export default function MetasVendedoresConfig() {
                 <p className="text-2xl font-bold tabular-nums text-carbo-green">{brl(ecomTotal)}</p>
               </CarboCardContent>
             </CarboCard>
-
             <div className="flex justify-end">
               <Button className="gap-2" onClick={() => toast.success("Metas salvas! (port visual — lógica entra depois)")}><Save className="h-4 w-4" /> Salvar metas</Button>
             </div>
@@ -259,7 +273,7 @@ export default function MetasVendedoresConfig() {
             </DialogTitle>
             <DialogDescription>
               {editScope === "default"
-                ? "Vale para todos os meses, até ser alterada."
+                ? `Passa a valer a partir de ${format(month, "MMMM 'de' yyyy", { locale: ptBR })} (e meses seguintes).`
                 : `Exceção só para ${format(month, "MMMM 'de' yyyy", { locale: ptBR })}.`}
             </DialogDescription>
           </DialogHeader>
@@ -286,12 +300,19 @@ export default function MetasVendedoresConfig() {
             </div>
           </div>
 
-          <div className="flex justify-end gap-2">
-            <Button variant="outline" onClick={handleClose}>Cancelar</Button>
-            <Button onClick={handleSave} disabled={!vendedorId || targetAmountNum === 0 || upsert.isPending}
-              className="bg-carbo-green hover:bg-carbo-green/90 text-white">
-              Salvar
-            </Button>
+          <div className="flex justify-between gap-2">
+            {editScope === "default" && vendedorId && defaultsAt.has(vendedorId) ? (
+              <Button variant="ghost" className="text-destructive hover:text-destructive" onClick={handleRemoveDefault} disabled={saving}>
+                Remover padrão
+              </Button>
+            ) : <span />}
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={handleClose}>Cancelar</Button>
+              <Button onClick={handleSave} disabled={!vendedorId || targetAmountNum === 0 || saving}
+                className="bg-carbo-green hover:bg-carbo-green/90 text-white">
+                Salvar
+              </Button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>
