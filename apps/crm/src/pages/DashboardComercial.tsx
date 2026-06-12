@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useVendas, useVendedorNomes } from "@/hooks/useVendas";
+import { useAuth } from "@/contexts/AuthContext";
 
 // Dashboard Comercial — agrega as VENDAS salvas (crm_vendas, status "pedido").
 const MES_ABBR = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
@@ -49,6 +50,7 @@ const TooltipQty = ({ active, payload, label }: any) => {
 };
 
 export default function DashboardComercial() {
+  const { isGestor } = useAuth();
   const [vendedor, setVendedor] = useState("all");
   const { data: vendas = [] } = useVendas("all");
   const { data: nomes = {} } = useVendedorNomes();
@@ -171,16 +173,18 @@ export default function DashboardComercial() {
                 <Input type="date" className="h-8 w-[130px] text-xs" />
               </div>
             </div>
-            <div className="space-y-1">
-              <Label className="text-[10px] text-muted-foreground flex items-center gap-1"><User className="h-3 w-3" /> Vendedor</Label>
-              <Select value={vendedor} onValueChange={setVendedor}>
-                <SelectTrigger className="h-8 w-[160px] text-xs"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todos vendedores</SelectItem>
-                  {vendedorOpts.map((v) => <SelectItem key={v.id} value={v.id}>{v.name}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
+            {isGestor && (
+              <div className="space-y-1">
+                <Label className="text-[10px] text-muted-foreground flex items-center gap-1"><User className="h-3 w-3" /> Vendedor</Label>
+                <Select value={vendedor} onValueChange={setVendedor}>
+                  <SelectTrigger className="h-8 w-[160px] text-xs"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todos vendedores</SelectItem>
+                    {vendedorOpts.map((v) => <SelectItem key={v.id} value={v.id}>{v.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
           </div>
         </div>
 

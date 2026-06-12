@@ -21,6 +21,7 @@ import { useNavigate } from "react-router-dom";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { useVendas, useVendedorNomes } from "@/hooks/useVendas";
+import { useAuth } from "@/contexts/AuthContext";
 import { VendaDetailsDialog } from "@/components/VendaDetailsDialog";
 
 // Controle de pedidos — lê as vendas salvas (crm_vendas, status "pedido").
@@ -54,7 +55,8 @@ const fmtBRL = (v: number) => new Intl.NumberFormat("pt-BR", { style: "currency"
 
 export default function Pedidos() {
   const navigate = useNavigate();
-  const canManageOrders = true; // gestor (camada de acesso fina entra depois)
+  const { isGestor } = useAuth();        // gestor (head/command/ti) → filtro por vendedor
+  const canManageOrders = true;          // todos podem vender e ver detalhes do próprio
 
   // ── Dados reais: vendas salvas (status "pedido") ──
   const { data: vendas = [], refetch, isFetching } = useVendas("all");
@@ -259,13 +261,15 @@ export default function Pedidos() {
                     {availableLinhas.map((k) => <SelectItem key={k} value={k}>{LINHA_LABELS[k] ?? k}</SelectItem>)}
                   </SelectContent>
                 </Select>
-                <Select value={vendedorFilter} onValueChange={setVendedorFilter}>
-                  <SelectTrigger className="w-44 h-8 rounded-lg text-xs"><Users className="h-3 w-3 mr-1" /><SelectValue placeholder="Vendedor" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Todos Vendedores</SelectItem>
-                    {vendedores.map((v) => <SelectItem key={v} value={v}>{v}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+                {isGestor && (
+                  <Select value={vendedorFilter} onValueChange={setVendedorFilter}>
+                    <SelectTrigger className="w-44 h-8 rounded-lg text-xs"><Users className="h-3 w-3 mr-1" /><SelectValue placeholder="Vendedor" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todos Vendedores</SelectItem>
+                      {vendedores.map((v) => <SelectItem key={v} value={v}>{v}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                )}
                 <Select value={clienteFilter} onValueChange={setClienteFilter}>
                   <SelectTrigger className="w-52 h-8 rounded-lg text-xs"><Users className="h-3 w-3 mr-1" /><SelectValue placeholder="Cliente" /></SelectTrigger>
                   <SelectContent>

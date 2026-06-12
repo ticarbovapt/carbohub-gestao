@@ -9,6 +9,7 @@ import { supabase } from "@/integrations/supabase/client";
 // ─────────────────────────────────────────────────────────────────────────────
 const db = supabase as unknown as {
   from: (t: string) => any;
+  rpc: (fn: string, args?: Record<string, unknown>) => any;
 };
 
 export type VendaStatus = "orcamento" | "pedido" | "cancelado";
@@ -153,19 +154,42 @@ export function useUpdateVenda() {
   });
 }
 
-/** Mapa id→nome dos vendedores (profiles) — usado para exibir o nome nas listas
- *  quando o gestor vê vendas de vários vendedores. */
+/** Vendedor do diretório (RPC crm_list_vendedores). `is_vendedor=false` = avulso
+ *  (não entra no quadro de metas), mas ainda pode receber/registrar vendas. */
+export interface VendedorDir {
+  id: string;
+  full_name: string | null;
+  avatar_url: string | null;
+  department: string | null;
+  secondary_department: string | null;
+  is_vendedor: boolean;
+}
+
+/** Diretório de vendedores via RPC SECURITY DEFINER — contorna a RLS de profiles
+ *  (que limitaria ao próprio departamento). Já vem ordenado: com a flag primeiro,
+ *  depois os avulsos, por nome. */
+export function useVendedoresDir() {
+  return useQuery({
+    queryKey: ["crm_list_vendedores"],
+    queryFn: async (): Promise<VendedorDir[]> => {
+      const { data, error } = await db.rpc("crm_list_vendedores");
+      if (error) throw error;
+      return (data ?? []) as VendedorDir[];
+    },
+  });
+}
+
+/** Mapa id→nome dos vendedores — usado para exibir o nome nas listas quando o
+ *  gestor vê vendas de vários vendedores. Vem do mesmo diretório (RPC). */
 export function useVendedorNomes() {
   return useQuery({
     queryKey: ["crm_vendedor_nomes"],
     queryFn: async (): Promise<Record<string, string>> => {
-      const { data, error } = await db
-        .from("profiles")
-        .select("id, full_name, username");
+      const { data, error } = await db.rpc("crm_list_vendedores");
       if (error) throw error;
       const map: Record<string, string> = {};
-      for (const p of (data ?? []) as { id: string; full_name: string | null; username: string | null }[]) {
-        map[p.id] = p.full_name || p.username || "—";
+      for (const p of (data ?? []) as VendedorDir[]) {
+        map[p.id] = p.full_name || "—";
       }
       return map;
     },

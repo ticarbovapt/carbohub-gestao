@@ -23,7 +23,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { CarboButton } from "@/components/ui/carbo-button";
 import { supabase } from "@/integrations/supabase/client";
-import { useVenda, useUpdateVenda } from "@/hooks/useVendas";
+import { useVenda, useUpdateVenda, useVendedoresDir } from "@/hooks/useVendas";
 import type { VendaStatus } from "@/hooks/useVendas";
 import { CalendarIcon, Repeat, Zap, UserCheck, FileText, Truck, Receipt, CheckCircle2, AlertCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -104,7 +104,6 @@ function buildEndereco(
 const db = supabase as unknown as { from: (t: string) => any };
 
 interface LicenseeRow { id: string; name: string }
-interface VendedorRow { id: string; full_name: string | null }
 
 function useLicensees() {
   return useQuery({
@@ -113,20 +112,6 @@ function useLicensees() {
       const { data, error } = await db.from("licensees").select("id, name");
       if (error) throw error;
       return (data ?? []) as LicenseeRow[];
-    },
-  });
-}
-
-function useVendedores() {
-  return useQuery({
-    queryKey: ["crm_edit_vendedores"],
-    queryFn: async (): Promise<VendedorRow[]> => {
-      const { data, error } = await db
-        .from("profiles")
-        .select("id, full_name")
-        .eq("is_vendedor", true);
-      if (error) throw error;
-      return (data ?? []) as VendedorRow[];
     },
   });
 }
@@ -192,7 +177,7 @@ interface EditPedidoDialogProps {
 export function EditPedidoDialog({ vendaId, open, onOpenChange, canEditSensitive = true }: EditPedidoDialogProps) {
   const { data: venda } = useVenda(vendaId);
   const { data: licensees = [] } = useLicensees();
-  const { data: vendedores = [] } = useVendedores();
+  const { data: vendedores = [] } = useVendedoresDir();
   const [ieUf, setIeUf] = useState("");
   const updateVenda = useUpdateVenda();
 
@@ -550,7 +535,12 @@ export function EditPedidoDialog({ vendaId, open, onOpenChange, canEditSensitive
                             <SelectItem value="none">Sem vendedor</SelectItem>
                             {vendedores.map((v) => (
                               <SelectItem key={v.id} value={v.id}>
-                                {v.full_name || v.id}
+                                <span className="flex items-center gap-2">
+                                  {v.full_name || v.id}
+                                  {!v.is_vendedor && (
+                                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground border">Avulso</span>
+                                  )}
+                                </span>
                               </SelectItem>
                             ))}
                           </SelectContent>
