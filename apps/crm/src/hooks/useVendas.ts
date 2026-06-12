@@ -205,7 +205,7 @@ export function useCreateVenda() {
       const { data: venda, error } = await db
         .from("crm_vendas")
         .insert(header)
-        .select("id")
+        .select("id, numero")
         .single();
       if (error) throw error;
 
@@ -224,7 +224,7 @@ export function useCreateVenda() {
         const { error: itensError } = await db.from("crm_venda_itens").insert(rows);
         if (itensError) throw itensError;
       }
-      return vendaId;
+      return { id: vendaId, numero: (venda as { numero: string | null }).numero ?? null };
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["crm_vendas"] });
