@@ -2,7 +2,7 @@ import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 import logoUrl from "@/assets/logo-grupo-carbo.png";
 
-// Orçamento em PDF com a identidade do Grupo Carbo (logo + dados da empresa).
+// Orçamento em PDF com a identidade do Grupo Carbo.
 // ⚠️ DADOS DA EMPRESA: confirme/ajuste em COMPANY abaixo (CNPJ, endereço, contato).
 const COMPANY = {
   name: "Carbo Soluções LTDA",
@@ -14,6 +14,8 @@ const COMPANY = {
   site: "carboze.com.br",
 };
 
+const GREEN: [number, number, number] = [16, 122, 87];
+
 interface QuoteItem {
   name?: string;
   product_code?: string;
@@ -22,12 +24,16 @@ interface QuoteItem {
   bonus_quantity?: number;
 }
 
+type Endereco = Record<string, unknown> | null | undefined;
+
 export interface QuotePdfData {
   order_number?: string | null;
   customer_name?: string | null;
   legal_name?: string | null;
   cnpj?: string | null;
   ie?: string | null;
+  endereco?: Endereco;               // endereço de entrega
+  endereco_faturamento?: Endereco;   // se diferente da entrega; null = mesmo
   vendedor_name?: string | null;
   items?: unknown;
   subtotal?: number | null;
@@ -41,140 +47,186 @@ const brl = (v: number) => (v || 0).toLocaleString("pt-BR", { style: "currency",
 const dateBR = (iso?: string | null) =>
   iso ? new Date(iso).toLocaleDateString("pt-BR") : new Date().toLocaleDateString("pt-BR");
 
-async function loadImageDataUrl(url: string): Promise<string | null> {
-  try {
-    const res = await fetch(url);
-    const blob = await res.blob();
-    return await new Promise<string>((resolve) => {
-      const r = new FileReader();
-      r.onloadend = () => resolve(r.result as string);
-      r.readAsDataURL(blob);
-    });
-  } catch {
-    return null;
-  }
+// Carrega a imagem preservando as dimensões naturais (para não esticar a logo).
+function loadImage(url: string): Promise<{ dataUrl: string; w: number; h: number } | null> {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => {
+      try {
+        const canvas = document.createElement("canvas");
+        canvas.width = img.naturalWidth;
+        canvas.height = img.naturalHeight;
+        canvas.getContext("2d")?.drawImage(img, 0, 0);
+        resolve({ dataUrl: canvas.toDataURL("image/png"), w: img.naturalWidth, h: img.naturalHeight });
+      } catch { resolve(null); }
+    };
+    img.onerror = () => resolve(null);
+    img.src = url;
+  });
+}
+
+const s = (e: Endereco, k: string) => (e && e[k] != null ? String(e[k]) : "");
+function fmtAddrLines(e: Endereco): string[] {
+  if (!e) return [];
+  const l1 = [s(e, "logradouro"), s(e, "numero")].filter(Boolean).join(", ");
+  const l2 = [s(e, "bairro"), [s(e, "cidade"), s(e, "uf")].filter(Boolean).join("/")].filter(Boolean).join(" · ");
+  const l3 = s(e, "cep") ? `CEP ${s(e, "cep")}` : "";
+  return [l1, l2, l3].filter(Boolean);
 }
 
 export async function generateQuotePdf(order: QuotePdfData) {
   const doc = new jsPDF();
   const pageW = doc.internal.pageSize.getWidth();
-  const marginX = 14;
+  const pageH = doc.internal.pageSize.getHeight();
+  const M = 14;
 
-  // ── Cabeçalho: logo + dados da empresa | "ORÇAMENTO" + nº/data/validade ──────
-  const logo = await loadImageDataUrl(logoUrl);
-  let headerY = 16;
+  // ── Cabeçalho: logo (proporção correta) ────────────────────────────────────
+  const logo = await loadImage(logoUrl);
   if (logo) {
-    // mantém proporção aproximada da logo (largura ~38mm)
-    doc.addImage(logo, "PNG", marginX, 12, 38, 14);
-    headerY = 32;
+    const targetH = 13;
+    let w = targetH * (logo.w / logo.h);
+    let h = targetH;
+    const maxW = 48;
+    if (w > maxW) { w = maxW; h = maxW * (logo.h / logo.w); }
+    doc.addImage(logo.dataUrl, "PNG", M, 12, w, h);
   } else {
-    doc.setFontSize(18);
-    doc.setFont("helvetica", "bold");
-    doc.text(COMPANY.name, marginX, 20);
-    headerY = 28;
+    doc.setFont("helvetica", "bold"); doc.setFontSize(16);
+    doc.text(COMPANY.name, M, 20);
   }
 
-  // Dados da empresa (abaixo da logo)
-  doc.setFontSize(8);
-  doc.setFont("helvetica", "normal");
-  doc.setTextColor(110);
-  [
-    COMPANY.cnpj ? `${COMPANY.name} · CNPJ ${COMPANY.cnpj}` : COMPANY.name,
-    `${COMPANY.endereco} · ${COMPANY.cidade}`,
-    `${COMPANY.telefone} · ${COMPANY.email} · ${COMPANY.site}`,
-  ].forEach((line, i) => doc.text(line, marginX, headerY + i * 4));
-  doc.setTextColor(0);
-
-  // Bloco à direita
-  doc.setFontSize(15);
-  doc.setFont("helvetica", "bold");
-  doc.setTextColor(16, 122, 87);
-  doc.text("ORÇAMENTO", pageW - marginX, 18, { align: "right" });
-  doc.setTextColor(0);
-
-  doc.setFontSize(9);
-  doc.setFont("helvetica", "normal");
+  // Título + meta (direita)
+  doc.setFont("helvetica", "bold"); doc.setFontSize(17); doc.setTextColor(...GREEN);
+  doc.text("ORÇAMENTO", pageW - M, 19, { align: "right" });
+  doc.setFont("helvetica", "normal"); doc.setFontSize(9); doc.setTextColor(120);
   const created = dateBR(order.created_at);
   const validity = order.validityDays ?? 7;
   const validUntil = new Date(order.created_at ? new Date(order.created_at) : new Date());
   validUntil.setDate(validUntil.getDate() + validity);
-  doc.setTextColor(120);
   [
     order.order_number ? `Nº ${order.order_number}` : "",
     `Data: ${created}`,
     `Validade: ${validity} dias (até ${validUntil.toLocaleDateString("pt-BR")})`,
-  ].filter(Boolean).forEach((line, i) => doc.text(line, pageW - marginX, 24 + i * 4, { align: "right" }));
+  ].filter(Boolean).forEach((line, i) => doc.text(line, pageW - M, 26 + i * 4.5, { align: "right" }));
   doc.setTextColor(0);
 
-  const lineY = Math.max(headerY + 14, 44);
-  doc.setDrawColor(220);
-  doc.line(marginX, lineY, pageW - marginX, lineY);
+  // Dados da empresa (abaixo da logo)
+  doc.setFontSize(7.5); doc.setTextColor(120);
+  [
+    `${COMPANY.name} · CNPJ ${COMPANY.cnpj}`,
+    `${COMPANY.endereco} · ${COMPANY.cidade}`,
+    `${COMPANY.telefone} · ${COMPANY.email} · ${COMPANY.site}`,
+  ].forEach((line, i) => doc.text(line, M, 30 + i * 3.6));
+  doc.setTextColor(0);
 
-  // ── Cliente ──────────────────────────────────────────────────────────────────
-  let y = lineY + 9;
-  doc.setFontSize(10);
-  doc.setFont("helvetica", "bold");
-  doc.text("Cliente", marginX, y);
-  doc.setFont("helvetica", "normal");
-  y += 6;
-  const clientLines = [
-    order.customer_name || order.legal_name || "—",
-    order.cnpj ? `CNPJ/CPF: ${order.cnpj}` : "",
-    order.ie ? `Inscrição Estadual: ${order.ie}` : "",
-    order.vendedor_name ? `Vendedor: ${order.vendedor_name}` : "",
-  ].filter(Boolean);
-  doc.setFontSize(9);
-  clientLines.forEach((line) => { doc.text(String(line), marginX, y); y += 5; });
+  // Divisória
+  let y = 45;
+  doc.setDrawColor(225); doc.line(M, y, pageW - M, y);
+  y += 7;
 
-  // ── Itens ────────────────────────────────────────────────────────────────────
+  // ── Blocos do comprador (2 colunas) ────────────────────────────────────────
+  const colGap = 6;
+  const colW = (pageW - M * 2 - colGap) / 2;
+  const leftX = M;
+  const rightX = M + colW + colGap;
+
+  const blockHeader = (x: number, yy: number, title: string) => {
+    doc.setFillColor(...GREEN); doc.rect(x, yy, colW, 6, "F");
+    doc.setTextColor(255); doc.setFont("helvetica", "bold"); doc.setFontSize(8);
+    doc.text(title, x + 3, yy + 4.1);
+    doc.setTextColor(0);
+  };
+
+  // Esquerda: dados do cliente
+  blockHeader(leftX, y, "DADOS DO CLIENTE");
+  let ly = y + 11;
+  const clienteFields: [string, string][] = [
+    ["Nome / Razão Social", order.customer_name || order.legal_name || "—"],
+    ["CNPJ / CPF", order.cnpj || "—"],
+    ["Inscrição Estadual", order.ie || "—"],
+    ["Vendedor", order.vendedor_name || "—"],
+  ];
+  clienteFields.forEach(([label, val]) => {
+    doc.setFont("helvetica", "normal"); doc.setFontSize(7); doc.setTextColor(140);
+    doc.text(label, leftX + 3, ly);
+    doc.setFont("helvetica", "bold"); doc.setFontSize(9.5); doc.setTextColor(20);
+    doc.text(doc.splitTextToSize(String(val), colW - 6), leftX + 3, ly + 4.2);
+    ly += 10.5;
+  });
+
+  // Direita: endereço de entrega (+ faturamento se diferente)
+  blockHeader(rightX, y, "ENDEREÇO DE ENTREGA");
+  let ry = y + 11;
+  const entrega = fmtAddrLines(order.endereco);
+  doc.setFont("helvetica", "normal"); doc.setFontSize(8.5); doc.setTextColor(40);
+  (entrega.length ? entrega : ["—"]).forEach((l) => { doc.text(l, rightX + 3, ry); ry += 4.6; });
+  ry += 3;
+
+  const fat = fmtAddrLines(order.endereco_faturamento);
+  if (order.endereco_faturamento && fat.length) {
+    blockHeader(rightX, ry, "ENDEREÇO DE FATURAMENTO");
+    ry += 11;
+    doc.setFont("helvetica", "normal"); doc.setFontSize(8.5); doc.setTextColor(40);
+    fat.forEach((l) => { doc.text(l, rightX + 3, ry); ry += 4.6; });
+  } else {
+    doc.setFont("helvetica", "italic"); doc.setFontSize(7.5); doc.setTextColor(150);
+    doc.text("Faturamento: mesmo endereço da entrega", rightX + 3, ry);
+    ry += 4;
+  }
+  doc.setTextColor(0); doc.setFont("helvetica", "normal");
+
+  // ── Itens ──────────────────────────────────────────────────────────────────
+  y = Math.max(ly, ry) + 4;
   const items = (Array.isArray(order.items) ? order.items : []) as QuoteItem[];
   const body = items
     .filter((it) => (it.name || it.product_code) && (it.quantity ?? 0) > 0)
     .map((it) => {
       const qty = it.quantity ?? 0;
       const unit = it.unit_price ?? 0;
-      return [it.name || it.product_code || "—", String(qty), brl(unit), brl(qty * unit)];
+      const bonus = it.bonus_quantity ?? 0;
+      const nome = (it.name || it.product_code || "—") + (bonus > 0 ? `  (+${bonus} bonif.)` : "");
+      return [nome, String(qty), brl(unit), brl(qty * unit)];
     });
 
   autoTable(doc, {
-    startY: y + 3,
+    startY: y,
     head: [["Produto", "Qtd", "Valor Unit.", "Total"]],
     body: body.length ? body : [["Nenhum item", "", "", ""]],
     theme: "striped",
-    headStyles: { fillColor: [16, 122, 87], halign: "left" },
+    headStyles: { fillColor: GREEN, halign: "left", fontSize: 9 },
     columnStyles: {
       1: { halign: "center", cellWidth: 20 },
-      2: { halign: "right", cellWidth: 32 },
-      3: { halign: "right", cellWidth: 32 },
+      2: { halign: "right", cellWidth: 34 },
+      3: { halign: "right", cellWidth: 34 },
     },
     styles: { fontSize: 9, cellPadding: 3 },
-    margin: { left: marginX, right: marginX },
+    margin: { left: M, right: M },
   });
 
   // ── Total ──────────────────────────────────────────────────────────────────
   const afterTable = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY;
   const total = order.total ?? order.subtotal ?? 0;
-  let ty = afterTable + 8;
-  doc.setFontSize(11);
-  doc.setFont("helvetica", "bold");
-  doc.text(`Total: ${brl(total)}`, pageW - marginX, ty, { align: "right" });
-  doc.setFont("helvetica", "normal");
+  let ty = afterTable + 6;
+  doc.setFillColor(...GREEN);
+  doc.rect(pageW - M - 70, ty, 70, 9, "F");
+  doc.setTextColor(255); doc.setFont("helvetica", "bold"); doc.setFontSize(11);
+  doc.text(`Total: ${brl(total)}`, pageW - M - 3, ty + 6, { align: "right" });
+  doc.setTextColor(0); doc.setFont("helvetica", "normal");
+  ty += 9;
 
   // ── Observações ──────────────────────────────────────────────────────────────
   if (order.notes) {
     ty += 10;
-    doc.setFontSize(9);
-    doc.setTextColor(90);
-    doc.text("Observações:", marginX, ty);
-    const wrapped = doc.splitTextToSize(order.notes, pageW - marginX * 2);
-    doc.text(wrapped, marginX, ty + 5);
+    doc.setFontSize(9); doc.setTextColor(90); doc.setFont("helvetica", "bold");
+    doc.text("Observações", M, ty);
+    doc.setFont("helvetica", "normal");
+    const wrapped = doc.splitTextToSize(order.notes, pageW - M * 2);
+    doc.text(wrapped, M, ty + 5);
     doc.setTextColor(0);
   }
 
   // ── Rodapé ───────────────────────────────────────────────────────────────────
-  const pageH = doc.internal.pageSize.getHeight();
-  doc.setFontSize(8);
-  doc.setTextColor(150);
+  doc.setFontSize(8); doc.setTextColor(150);
   doc.text(
     "Este documento é um orçamento e não possui valor fiscal. Valores sujeitos a confirmação.",
     pageW / 2, pageH - 10, { align: "center" },

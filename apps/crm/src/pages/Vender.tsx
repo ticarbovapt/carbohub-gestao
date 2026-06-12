@@ -228,6 +228,9 @@ export default function Vender() {
       // 1) Gera o PDF do orçamento (como antes).
       await generateQuotePdf({
         customer_name: customerName || "Cliente", cnpj: doc || undefined,
+        ie: ie || undefined,
+        endereco,
+        endereco_faturamento: fatMesmo ? null : fatEndereco,
         vendedor_name: vendedor || undefined, items, total: subtotal,
         notes: obsPublica || undefined, created_at: new Date().toISOString(), validityDays: 7,
       });
