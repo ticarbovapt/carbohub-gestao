@@ -20,7 +20,7 @@ import { Input } from "@/components/ui/input";
 import { useNavigate } from "react-router-dom";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { useVendas, useVendedorNomes } from "@/hooks/useVendas";
+import { useVendas, useVendedorNomes, useVendedoresDir } from "@/hooks/useVendas";
 import { useAuth } from "@/contexts/AuthContext";
 import { VendaDetailsDialog } from "@/components/VendaDetailsDialog";
 
@@ -42,7 +42,7 @@ const STATUS_ICONS: Record<OrderStatus, React.ComponentType<{ className?: string
 
 interface MockOrder {
   id: string; order_number: string; invoice_number: string | null; linha: string;
-  vendedor_name: string; customer_name: string; customer_email: string | null;
+  vendedor_id: string; vendedor_name: string; customer_name: string; customer_email: string | null;
   created_at: string; qty: number; items: number; total: number; status: OrderStatus;
 }
 
@@ -74,6 +74,7 @@ export default function Pedidos() {
         order_number: v.numero ?? `PED-${v.id.slice(0, 8).toUpperCase()}`,
         invoice_number: null,
         linha: firstProd,
+        vendedor_id: v.vendedor_id,
         vendedor_name: nomes[v.vendedor_id] ?? "—",
         customer_name: v.customer_name ?? "—",
         customer_email: v.customer_email,
@@ -108,7 +109,12 @@ export default function Pedidos() {
 
   const orders = statusFilter === "all" ? allOrders : allOrders.filter((o) => o.status === statusFilter);
 
-  const vendedores = useMemo(() => Array.from(new Set(allOrders.map((o) => o.vendedor_name))).sort(), []);
+  // Diretório completo (todos os perfis): vendedores no topo, avulsos depois.
+  const { data: vendedoresDir = [] } = useVendedoresDir();
+  const vendedores = useMemo(
+    () => vendedoresDir.map((v) => ({ id: v.id, name: v.full_name || "—", avulso: !v.is_vendedor })),
+    [vendedoresDir],
+  );
   const clientes = useMemo(() => Array.from(new Set(orders.map((o) => o.customer_name))).sort(), [orders]);
   const availableLinhas = useMemo(() => Array.from(new Set(orders.map((o) => o.linha))), [orders]);
 
@@ -124,7 +130,7 @@ export default function Pedidos() {
     if (dateFrom && new Date(order.created_at) < new Date(dateFrom)) return false;
     if (dateTo) { const end = new Date(dateTo); end.setDate(end.getDate() + 1); if (new Date(order.created_at) >= end) return false; }
     if (productFilter !== "all" && order.linha !== productFilter) return false;
-    if (vendedorFilter !== "all" && order.vendedor_name !== vendedorFilter) return false;
+    if (vendedorFilter !== "all" && order.vendedor_id !== vendedorFilter) return false;
     if (clienteFilter !== "all" && order.customer_name !== clienteFilter) return false;
     if (!searchQuery) return true;
     const s = searchQuery.toLowerCase();
@@ -266,7 +272,16 @@ export default function Pedidos() {
                     <SelectTrigger className="w-44 h-8 rounded-lg text-xs"><Users className="h-3 w-3 mr-1" /><SelectValue placeholder="Vendedor" /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="all">Todos Vendedores</SelectItem>
-                      {vendedores.map((v) => <SelectItem key={v} value={v}>{v}</SelectItem>)}
+                      {vendedores.map((v) => (
+                        <SelectItem key={v.id} value={v.id}>
+                          <span className="flex items-center gap-2">
+                            {v.name}
+                            {v.avulso
+                              ? <span className="text-[10px] font-semibold text-amber-500 border border-amber-500/30 rounded px-1">Avulso</span>
+                              : <span className="text-[10px] font-semibold text-carbo-green border border-carbo-green/30 rounded px-1">Vendedor</span>}
+                          </span>
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 )}
