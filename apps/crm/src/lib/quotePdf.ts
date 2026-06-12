@@ -35,6 +35,7 @@ export interface QuotePdfData {
   endereco?: Endereco;               // endereço de entrega
   endereco_faturamento?: Endereco;   // se diferente da entrega; null = mesmo
   vendedor_name?: string | null;
+  payment_terms?: string | null;     // forma de pagamento escolhida
   items?: unknown;
   subtotal?: number | null;
   total?: number | null;
@@ -42,6 +43,9 @@ export interface QuotePdfData {
   notes?: string | null;
   validityDays?: number;
 }
+
+// Modalidades de pagamento que a Carbo aceita (lista exibida no PDF).
+const FORMAS_ACEITAS = "PIX · Boleto à vista · Boleto faturado · Cartão de débito · Cartão de crédito (até 12x)";
 
 const brl = (v: number) => (v || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 const dateBR = (iso?: string | null) =>
@@ -83,16 +87,19 @@ export async function generateQuotePdf(order: QuotePdfData) {
 
   // ── Cabeçalho: logo (proporção correta) ────────────────────────────────────
   const logo = await loadImage(logoUrl);
+  let belowLogoY = 28;
   if (logo) {
-    const targetH = 13;
+    const targetH = 20;
     let w = targetH * (logo.w / logo.h);
     let h = targetH;
-    const maxW = 48;
+    const maxW = 70;
     if (w > maxW) { w = maxW; h = maxW * (logo.h / logo.w); }
-    doc.addImage(logo.dataUrl, "PNG", M, 12, w, h);
+    doc.addImage(logo.dataUrl, "PNG", M, 11, w, h);
+    belowLogoY = 11 + h + 4;
   } else {
     doc.setFont("helvetica", "bold"); doc.setFontSize(16);
     doc.text(COMPANY.name, M, 20);
+    belowLogoY = 26;
   }
 
   // Título + meta (direita)
@@ -116,11 +123,11 @@ export async function generateQuotePdf(order: QuotePdfData) {
     `${COMPANY.name} · CNPJ ${COMPANY.cnpj}`,
     `${COMPANY.endereco} · ${COMPANY.cidade}`,
     `${COMPANY.telefone} · ${COMPANY.email} · ${COMPANY.site}`,
-  ].forEach((line, i) => doc.text(line, M, 30 + i * 3.6));
+  ].forEach((line, i) => doc.text(line, M, belowLogoY + i * 3.6));
   doc.setTextColor(0);
 
   // Divisória
-  let y = 45;
+  let y = Math.max(belowLogoY + 12, 40);
   doc.setDrawColor(225); doc.line(M, y, pageW - M, y);
   y += 7;
 
@@ -213,6 +220,22 @@ export async function generateQuotePdf(order: QuotePdfData) {
   doc.text(`Total: ${brl(total)}`, pageW - M - 3, ty + 6, { align: "right" });
   doc.setTextColor(0); doc.setFont("helvetica", "normal");
   ty += 9;
+
+  // ── Pagamento ────────────────────────────────────────────────────────────────
+  ty += 10;
+  doc.setFillColor(...GREEN); doc.rect(M, ty, pageW - M * 2, 6, "F");
+  doc.setTextColor(255); doc.setFont("helvetica", "bold"); doc.setFontSize(8);
+  doc.text("PAGAMENTO", M + 3, ty + 4.1);
+  doc.setTextColor(0); ty += 11;
+  doc.setFont("helvetica", "normal"); doc.setFontSize(8); doc.setTextColor(120);
+  doc.text("Formas aceitas:", M, ty);
+  doc.setTextColor(40);
+  doc.text(doc.splitTextToSize(FORMAS_ACEITAS, pageW - M * 2 - 30), M + 26, ty);
+  ty += 6;
+  doc.setFont("helvetica", "bold"); doc.setFontSize(9.5); doc.setTextColor(20);
+  doc.text(`Forma escolhida: ${order.payment_terms || "—"}`, M, ty);
+  doc.setTextColor(0); doc.setFont("helvetica", "normal");
+  ty += 2;
 
   // ── Observações ──────────────────────────────────────────────────────────────
   if (order.notes) {
