@@ -91,10 +91,10 @@ export async function generateQuotePdf(order: QuotePdfData) {
   const logo = await loadImage(logoUrl);
   let belowLogoY = 28;
   if (logo) {
-    const targetH = 20;
+    const targetH = 28;
     let w = targetH * (logo.w / logo.h);
     let h = targetH;
-    const maxW = 70;
+    const maxW = 95;
     if (w > maxW) { w = maxW; h = maxW * (logo.h / logo.w); }
     doc.addImage(logo.dataUrl, "PNG", M, 11, w, h);
     belowLogoY = 11 + h + 4;
