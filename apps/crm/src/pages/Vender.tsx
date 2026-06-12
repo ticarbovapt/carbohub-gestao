@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import {
   ShoppingCart, Plus, Trash2, Building2, MapPin, Package, Gift, FileText, Search, Target, ChevronDown,
-  Loader2, CheckCircle2, AlertCircle,
+  Loader2, CheckCircle2, AlertCircle, CreditCard,
 } from "lucide-react";
 import { CarboCard, CarboCardContent } from "@/components/ui/carbo-card";
 import { CarboButton } from "@/components/ui/carbo-button";
@@ -91,6 +91,22 @@ export default function Vender() {
   const ieResult = ie && !isIsento ? validateInscricaoEstadual(ie, ieUfEff) : null;
   const { geocodeAddress, isLoading: geoLoading } = useGeocode();
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
+
+  // ── Forma de pagamento (obrigatória) ──
+  const [pagModalidade, setPagModalidade] = useState("");      // pix | boleto_avista | boleto_faturado | debito | credito
+  const [pagParcelas, setPagParcelas] = useState("1");          // 1..12 (crédito)
+  const [pagFaturamento, setPagFaturamento] = useState("");     // ex.: 30/60/90 (boleto faturado)
+  const pagamentoLabel = useMemo(() => {
+    switch (pagModalidade) {
+      case "pix": return "PIX";
+      case "boleto_avista": return "Boleto à vista";
+      case "boleto_faturado": return pagFaturamento.trim() ? `Boleto faturado (${pagFaturamento.trim()})` : "Boleto faturado";
+      case "debito": return "Cartão de débito";
+      case "credito": return `Cartão de crédito ${pagParcelas}x`;
+      default: return "";
+    }
+  }, [pagModalidade, pagParcelas, pagFaturamento]);
+  const pagamentoValido = pagModalidade !== "" && !(pagModalidade === "boleto_faturado" && !pagFaturamento.trim());
   const [mapMsg, setMapMsg] = useState<string | null>(null);
 
   // Localiza a posição aproximada do endereço no mapa (para conferência visual).
@@ -197,6 +213,7 @@ export default function Vender() {
       customer_phone: phone || undefined,
       customer_ie: ie.trim() || undefined,
       is_licenciado: isLicenciado,
+      payment_terms: pagamentoLabel || undefined,
       endereco: (endereco.logradouro || endereco.cidade || endereco.cep) ? endereco : null,
       endereco_faturamento: fatMesmo ? null : ((fatEndereco.logradouro || fatEndereco.cidade || fatEndereco.cep) ? fatEndereco : null),
       total: subtotal,
@@ -218,11 +235,13 @@ export default function Vender() {
     setIe(""); setIeUf(""); setDocFeedback(null);
     setCoords(null); setMapMsg(null);
     setFatMesmo(true); setFatEndereco({ logradouro: "", numero: "", bairro: "", cidade: "", uf: "", cep: "" });
+    setPagModalidade(""); setPagParcelas("1"); setPagFaturamento("");
   }
 
   async function handleQuote() {
     const items = validItems();
     if (items.length === 0) { toast.error("Adicione ao menos um item."); return; }
+    if (!pagamentoValido) { toast.error("Selecione a forma de pagamento."); return; }
     setGenerating(true);
     try {
       // 1) Salva o orçamento primeiro — o banco atribui o número (atômico).
@@ -235,6 +254,7 @@ export default function Vender() {
         endereco,
         endereco_faturamento: fatMesmo ? null : fatEndereco,
         vendedor_name: vendedor || undefined, items, total: subtotal,
+        payment_terms: pagamentoLabel || undefined,
         notes: obsPublica || undefined, created_at: new Date().toISOString(), validityDays: 7,
       });
       toast.success(`Orçamento ${numero ?? ""} gerado e salvo!`);
@@ -246,6 +266,7 @@ export default function Vender() {
 
   async function handleSell() {
     if (validItems().length === 0) { toast.error("Adicione ao menos um item."); return; }
+    if (!pagamentoValido) { toast.error("Selecione a forma de pagamento."); return; }
     try {
       const { numero } = await createVenda.mutateAsync(buildPayload("pedido"));
       toast.success(`Venda ${numero ?? ""} registrada!`);
@@ -510,6 +531,52 @@ export default function Vender() {
         </CarboCardContent>
       </CarboCard>
 
+      {/* Forma de Pagamento (obrigatória) */}
+      <CarboCard>
+        <CarboCardContent className="p-4 space-y-4">
+          <h3 className="font-semibold flex items-center gap-2">
+            <CreditCard className="h-4 w-4 text-carbo-green" /> Forma de Pagamento <span className="text-red-400">*</span>
+          </h3>
+          <div className="grid md:grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label>Modalidade *</Label>
+              <Select value={pagModalidade} onValueChange={setPagModalidade}>
+                <SelectTrigger><SelectValue placeholder="Selecione a forma de pagamento" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="pix">PIX</SelectItem>
+                  <SelectItem value="boleto_avista">Boleto à vista</SelectItem>
+                  <SelectItem value="boleto_faturado">Boleto faturado</SelectItem>
+                  <SelectItem value="debito">Cartão de débito</SelectItem>
+                  <SelectItem value="credito">Cartão de crédito (parcelado)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            {pagModalidade === "credito" && (
+              <div className="space-y-1.5">
+                <Label>Parcelas *</Label>
+                <Select value={pagParcelas} onValueChange={setPagParcelas}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {Array.from({ length: 12 }, (_, i) => String(i + 1)).map((n) => (
+                      <SelectItem key={n} value={n}>{n}x</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+            {pagModalidade === "boleto_faturado" && (
+              <div className="space-y-1.5">
+                <Label>Prazo do faturamento *</Label>
+                <Input value={pagFaturamento} onChange={(e) => setPagFaturamento(e.target.value)} placeholder="ex.: 30/60/90" />
+              </div>
+            )}
+          </div>
+          {pagamentoLabel && (
+            <p className="text-xs text-muted-foreground">Selecionado: <b className="text-foreground">{pagamentoLabel}</b></p>
+          )}
+        </CarboCardContent>
+      </CarboCard>
+
       {/* Dados Estratégicos (opcional, recolhível) */}
       <CollapsibleCard title="Dados Estratégicos" icon={Target} open={showEstrategicos} onToggle={() => setShowEstrategicos((o) => !o)}>
         <div className="grid md:grid-cols-2 gap-3">
@@ -562,10 +629,10 @@ export default function Vender() {
         </div>
         <div className="flex items-center gap-2">
           <Button variant="ghost" onClick={() => navigate("/pedidos")}>Cancelar</Button>
-          <Button variant="outline" onClick={handleQuote} disabled={generating}>
+          <Button variant="outline" onClick={handleQuote} disabled={generating || !pagamentoValido}>
             <FileText className="h-4 w-4 mr-1" /> {generating ? "Gerando..." : "Gerar Orçamento"}
           </Button>
-          <CarboButton onClick={handleSell} className="min-w-[150px]">
+          <CarboButton onClick={handleSell} className="min-w-[150px]" disabled={!pagamentoValido}>
             <ShoppingCart className="h-4 w-4 mr-1" /> Gerar Venda
           </CarboButton>
         </div>
