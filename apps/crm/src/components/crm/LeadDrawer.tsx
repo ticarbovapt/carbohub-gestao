@@ -1,10 +1,13 @@
 import { useState } from "react";
-import { X, Phone, Mail, MapPin, Calendar, Tag, ChevronRight, AlertTriangle } from "lucide-react";
+import { X, Phone, Mail, MapPin, Calendar, Tag, ChevronRight, AlertTriangle, ArrowRightLeft, History } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { ProfileAvatar } from "@/components/ui/profile-avatar";
 import type { CRMLead, FunnelType } from "@/types/crm";
 import { FUNNEL_CONFIG, LOSS_REASONS, getDaysSinceUpdate, getNextStage, isTerminalStage } from "@/types/crm";
-import { useAdvanceLeadStage, useMarkLeadLost } from "@/hooks/useCRMLeads";
+import { useAdvanceLeadStage, useMarkLeadLost, useTransferLead, useLeadOwnerLog } from "@/hooks/useCRMLeads";
+import { useVendedoresDir } from "@/hooks/useVendas";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface LeadDrawerProps {
   lead: CRMLead;
@@ -21,6 +24,23 @@ export function LeadDrawer({ lead, funnelType, onClose }: LeadDrawerProps) {
 
   const advance  = useAdvanceLeadStage();
   const markLost = useMarkLeadLost();
+  const transfer = useTransferLead();
+  const { isGestor } = useAuth();
+  const { data: dir = [] } = useVendedoresDir();
+  const { data: ownerLog = [] } = useLeadOwnerLog(lead.id);
+  const [transferTo, setTransferTo] = useState("");
+  const [showHistory, setShowHistory] = useState(false);
+
+  const nameById = (id: string | null) => (id ? (dir.find((d) => d.id === id)?.full_name ?? "—") : "—");
+  const ownerId = (lead as { assigned_to?: string | null; created_by?: string | null }).assigned_to
+    ?? (lead as { created_by?: string | null }).created_by ?? "";
+  const owner = dir.find((d) => d.id === ownerId);
+
+  async function handleTransfer() {
+    if (!transferTo) return;
+    await transfer.mutateAsync({ leadId: lead.id, toUserId: transferTo });
+    setTransferTo("");
+  }
 
   const funnelCfg = FUNNEL_CONFIG[funnelType];
   const stageCfg  = funnelCfg.stages.find((s) => s.id === lead.stage);
@@ -77,6 +97,31 @@ export function LeadDrawer({ lead, funnelType, onClose }: LeadDrawerProps) {
             )}
           </div>
 
+          {/* Responsável */}
+          <Section title="Responsável">
+            <div className="flex items-center gap-2">
+              <ProfileAvatar userId={ownerId || lead.id} avatarUrl={owner?.avatar_url} fullName={owner?.full_name} size={28} />
+              <span className="text-sm font-medium">{owner?.full_name ?? "—"}</span>
+            </div>
+            {isGestor && (
+              <div className="flex gap-2 mt-2">
+                <select
+                  className="flex-1 h-9 rounded-md border border-input bg-background px-3 py-1 text-sm"
+                  value={transferTo}
+                  onChange={(e) => setTransferTo(e.target.value)}
+                >
+                  <option value="">Transferir para…</option>
+                  {dir.filter((d) => d.id !== ownerId).map((d) => (
+                    <option key={d.id} value={d.id}>{d.full_name || d.id}</option>
+                  ))}
+                </select>
+                <Button size="sm" className="gap-1" onClick={handleTransfer} disabled={!transferTo || transfer.isPending}>
+                  <ArrowRightLeft className="h-3.5 w-3.5" /> Transferir
+                </Button>
+              </div>
+            )}
+          </Section>
+
           {/* Contact info */}
           <Section title="Contato">
             <InfoRow icon={<Phone />} value={lead.contact_phone} />
@@ -114,6 +159,25 @@ export function LeadDrawer({ lead, funnelType, onClose }: LeadDrawerProps) {
                 {new Date(lead.next_follow_up_at).toLocaleDateString("pt-BR", { day: "2-digit", month: "long" })}
               </p>
             </Section>
+          )}
+
+          {/* Histórico de responsáveis (discreto) */}
+          {ownerLog.length > 0 && (
+            <div>
+              <button onClick={() => setShowHistory((s) => !s)} className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1">
+                <History className="h-3 w-3" /> Histórico de responsáveis ({ownerLog.length})
+              </button>
+              {showHistory && (
+                <div className="mt-1.5 space-y-1 border-l-2 border-border pl-2">
+                  {ownerLog.map((l, i) => (
+                    <p key={i} className="text-[11px] text-muted-foreground">
+                      <span className="text-foreground">{nameById(l.from_user)}</span> → <span className="text-foreground">{nameById(l.to_user)}</span>
+                      {" · por "}{nameById(l.changed_by)}{" · "}{new Date(l.changed_at).toLocaleDateString("pt-BR")}
+                    </p>
+                  ))}
+                </div>
+              )}
+            </div>
           )}
 
           {/* Timestamps */}

@@ -111,6 +111,10 @@ export default function Pipelines() {
   const [vendedorFilter, setVendedorFilter] = useState("all");
   const { isGestor } = useAuth();
   const { data: vendedoresDir = [] } = useVendedoresDir();
+  const ownersById = useMemo(
+    () => Object.fromEntries(vendedoresDir.map((v) => [v.id, { id: v.id, name: v.full_name, avatar_url: v.avatar_url }])),
+    [vendedoresDir],
+  );
 
   const isAll = funil === "todos";
   const ft = (isAll ? "f1" : funil) as FunnelType;
@@ -246,6 +250,7 @@ export default function Pipelines() {
             onLeadClick={(lead) => setDrawerLead(lead)}
             onDragMove={handleDragMove}
             onAddLead={(stageId) => { setFormStage(stageId); setIsFormOpen(true); }}
+            ownersById={ownersById}
           />
         ) : (
           <CarboCard>
