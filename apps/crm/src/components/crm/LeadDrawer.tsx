@@ -195,27 +195,26 @@ export function LeadDrawer({ lead, funnelType, onClose }: LeadDrawerProps) {
 
           {/* Atividades / Timeline */}
           <Section title="Atividades">
-            <div className="flex gap-2">
-              <select
-                className="h-9 rounded-md border border-input bg-background px-2 text-sm shrink-0"
-                value={actType} onChange={(e) => setActType(e.target.value)}
-              >
-                <option value="note">📝 Nota</option>
-                <option value="call">📞 Ligação</option>
-                <option value="task">✅ Tarefa</option>
-              </select>
-              <input
-                className="flex-1 h-9 rounded-md border border-input bg-background px-3 text-sm min-w-0"
-                placeholder={actType === "task" ? "O que precisa ser feito?" : "Registrar..."}
-                value={actText} onChange={(e) => setActText(e.target.value)}
-                onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleAddActivity(); } }}
-              />
-            </div>
+            <select
+              className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
+              value={actType} onChange={(e) => setActType(e.target.value)}
+            >
+              <option value="note">📝 Nota</option>
+              <option value="call">📞 Ligação</option>
+              <option value="task">✅ Tarefa</option>
+            </select>
+            <textarea
+              className="w-full mt-2 rounded-md border border-input bg-background px-3 py-2 text-sm resize-y min-h-[90px] focus:outline-none focus:ring-2 focus:ring-ring"
+              placeholder={actType === "task" ? "O que precisa ser feito?" : "Escreva a nota / o que foi conversado..."}
+              value={actText} onChange={(e) => setActText(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); handleAddActivity(); } }}
+            />
             {actType === "task" && (
               <input type="datetime-local" className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm mt-2"
                 value={actDue} onChange={(e) => setActDue(e.target.value)} />
             )}
-            <div className="flex justify-end mt-2">
+            <div className="flex items-center justify-between mt-2">
+              <span className="text-[11px] text-muted-foreground">Ctrl+Enter para registrar</span>
               <Button size="sm" onClick={handleAddActivity} disabled={!actText.trim() || addActivity.isPending}>Registrar</Button>
             </div>
 
@@ -226,7 +225,7 @@ export function LeadDrawer({ lead, funnelType, onClose }: LeadDrawerProps) {
                   const when = new Date(a.created_at).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
                   return (
                     <div key={a.id} className="text-xs">
-                      <p className="text-foreground"><span className="mr-1">{icon}</span>{a.subject || a.body || a.activity_type}</p>
+                      <p className="text-foreground whitespace-pre-wrap break-words"><span className="mr-1">{icon}</span>{a.subject || a.body || a.activity_type}</p>
                       <p className="text-[11px] text-muted-foreground">
                         {a.created_by_name || "—"} · {when}
                         {a.activity_type === "task" && a.status === "pending" && a.due_at && (
