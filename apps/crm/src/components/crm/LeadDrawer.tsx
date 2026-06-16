@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { X, Phone, Mail, MapPin, Calendar, Tag, ChevronRight, AlertTriangle, ArrowRightLeft, History } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { X, Phone, Mail, MapPin, Calendar, Tag, ChevronRight, AlertTriangle, ArrowRightLeft, History, ShoppingCart } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ProfileAvatar } from "@/components/ui/profile-avatar";
@@ -22,9 +23,24 @@ export function LeadDrawer({ lead, funnelType, onClose }: LeadDrawerProps) {
   const [showLostForm, setShowLostForm] = useState(false);
   const [lostReason, setLostReason] = useState(LOSS_REASONS[0] as string);
 
+  const navigate = useNavigate();
   const advance  = useAdvanceLeadStage();
   const markLost = useMarkLeadLost();
   const transfer = useTransferLead();
+
+  // Tunnel → Vendas: atalho que abre o Vender já preenchido. Opcional e one-way —
+  // vender direto (sem lead) continua funcionando normalmente.
+  function handleGerarVenda() {
+    navigate("/vender", { state: { fromLead: {
+      id: lead.id,
+      name: lead.legal_name || lead.trade_name || lead.contact_name || "",
+      cnpj: lead.cnpj || "",
+      phone: lead.contact_phone || "",
+      email: lead.contact_email || "",
+      city: lead.city || "", state: lead.state || "", address: lead.address || "", bairro: lead.bairro || "",
+    } } });
+    onClose();
+  }
   const { isGestor, user, profile } = useAuth();
   const { data: activities = [] } = useLeadActivities(lead.id);
   const addActivity = useAddLeadActivity();
@@ -114,6 +130,13 @@ export function LeadDrawer({ lead, funnelType, onClose }: LeadDrawerProps) {
               </Badge>
             )}
           </div>
+
+          {/* Tunnel → Vendas (lead ganho vira venda; atalho opcional) */}
+          {lead.stage === "ganho" && (
+            <Button className="w-full gap-1.5 bg-carbo-green hover:bg-carbo-green/90 text-white" onClick={handleGerarVenda}>
+              <ShoppingCart className="h-4 w-4" /> Gerar venda deste lead
+            </Button>
+          )}
 
           {/* Responsável */}
           <Section title="Responsável">

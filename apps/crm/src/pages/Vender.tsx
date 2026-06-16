@@ -1,5 +1,5 @@
-import { useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useEffect, useMemo, useState } from "react";
+import { useNavigate, useLocation } from "react-router-dom";
 import { toast } from "sonner";
 import {
   ShoppingCart, Plus, Trash2, Building2, MapPin, Package, Gift, FileText, Search, Target, ChevronDown,
@@ -60,6 +60,7 @@ function CollapsibleCard({
 
 export default function Vender() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { profile } = useAuth();
   const vendedor = profile?.full_name ?? profile?.username ?? "";
   const createVenda = useCreateVenda();
@@ -107,6 +108,18 @@ export default function Vender() {
     }
   }, [pagModalidade, pagParcelas, pagFaturamento]);
   const pagamentoValido = pagModalidade !== "" && !(pagModalidade === "boleto_faturado" && !pagFaturamento.trim());
+
+  // Prefill quando vem de um lead (Tunnel do CRM). Não acopla — venda direta segue normal.
+  useEffect(() => {
+    const fl = (location.state as { fromLead?: { name?: string; cnpj?: string; phone?: string; email?: string; city?: string; state?: string; address?: string; bairro?: string } } | null)?.fromLead;
+    if (!fl) return;
+    if (fl.name) setCustomerName(fl.name);
+    if (fl.cnpj) setDoc(fl.cnpj);
+    if (fl.phone) setPhone(fl.phone);
+    if (fl.email) setEmail(fl.email);
+    setEndereco((e) => ({ ...e, logradouro: fl.address || e.logradouro, bairro: fl.bairro || e.bairro, cidade: fl.city || e.cidade, uf: fl.state || e.uf }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [mapMsg, setMapMsg] = useState<string | null>(null);
 
   // Localiza a posição aproximada do endereço no mapa (para conferência visual).
