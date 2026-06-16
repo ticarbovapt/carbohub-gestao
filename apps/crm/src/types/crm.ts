@@ -112,8 +112,19 @@ const STAGES_PDV: StageConfig[] = [
   { id: "sem_interesse", label: "Sem Interesse",   icon: "❌", color: "#EF4444" },
 ];
 
+// Jornada do cliente — pipeline ÚNICA ativa de Vendas (vendedores começam por aqui).
+const STAGES_VENDAS: StageConfig[] = [
+  { id: "novo",        label: "Novo Lead",        icon: "🆕", color: "#94A3B8" },
+  { id: "contato",     label: "Contato Feito",    icon: "📞", color: "#F59E0B" },
+  { id: "qualificado", label: "Qualificado",      icon: "🎯", color: "#3B82F6" },
+  { id: "proposta",    label: "Proposta Enviada", icon: "📄", color: "#8B5CF6" },
+  { id: "negociacao",  label: "Negociação",       icon: "🤝", color: "#06B6D4" },
+  { id: "ganho",       label: "Ganho",            icon: "✅", color: "#22C55E" },
+  { id: "perdido",     label: "Perdido",          icon: "❌", color: "#EF4444" },
+];
+
 export const FUNNEL_CONFIG: Record<FunnelType, FunnelConfig> = {
-  f1: { id: "f1", name: "B2C CarboZé / CarboPRO",          shortName: "B2C",           description: "Consumidor final",          icon: "🛒", color: "#3BC770", cycleLabel: "1-7 dias",   stages: STAGES_COMMERCIAL },
+  f1: { id: "f1", name: "Vendas",                          shortName: "Vendas",        description: "Jornada do cliente",        icon: "💼", color: "#3BC770", cycleLabel: "1-30 dias",  stages: STAGES_VENDAS },
   f2: { id: "f2", name: "Licenciados CarboVapt",            shortName: "Licenciados",   description: "Licenciamento",             icon: "🏢", color: "#8B5CF6", cycleLabel: "15-60 dias", stages: STAGES_LICENSEE  },
   f3: { id: "f3", name: "Frotistas Diretos",                shortName: "Frotistas",     description: "Clientes com frota",        icon: "🚛", color: "#F59E0B", cycleLabel: "7-30 dias",  stages: STAGES_COMMERCIAL },
   f4: { id: "f4", name: "PDVs CarboZé",                     shortName: "PDVs CarboZé",  description: "Revendas e postos",         icon: "🏪", color: "#3B82F6", cycleLabel: "7-21 dias",  stages: STAGES_PDV       },
@@ -144,12 +155,19 @@ export function getNextStage(funnelType: FunnelType, currentStage: string): stri
   const idx = stages.findIndex((s) => s.id === currentStage);
   if (idx === -1 || idx >= stages.length - 1) return null;
   const next = stages[idx + 1];
-  if (next.id === "sem_interesse" || next.id === "descartado") return null;
+  if (next.id === "sem_interesse" || next.id === "descartado" || next.id === "perdido") return null;
   return next.id;
 }
 
 export function isTerminalStage(stageId: string): boolean {
-  return ["convertido", "sem_interesse", "parceiro", "descartado", "fechamento"].includes(stageId);
+  return ["convertido", "sem_interesse", "parceiro", "descartado", "fechamento", "ganho", "perdido"].includes(stageId);
+}
+
+/** Estágio de "perda" do funil (varia por funil). Vendas usa 'perdido'. */
+export function getLostStage(funnelType: FunnelType): string {
+  const stages = getStagesForFunnel(funnelType);
+  const found = stages.find((s) => ["perdido", "descartado", "sem_interesse"].includes(s.id));
+  return found?.id ?? "sem_interesse";
 }
 
 export function getDaysSinceUpdate(updatedAt: string): number {

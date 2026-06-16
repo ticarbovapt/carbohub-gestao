@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import type { CRMLead, FunnelType } from "@/types/crm";
+import { getStagesForFunnel, getLostStage } from "@/types/crm";
 import { useAuth } from "@/contexts/AuthContext";
 
 // Leads do Carbo Sales = tabelas PRÓPRIAS (crm_sales_leads / crm_sales_lead_activities),
@@ -111,7 +112,7 @@ export function useCreateCRMLead() {
       const { data: { user } } = await supabase.auth.getUser();
       const { data, error } = await db
         .from("crm_sales_leads")
-        .insert({ ...lead, stage: lead.stage || "a_contatar", created_by: user?.id })
+        .insert({ ...lead, stage: lead.stage || getStagesForFunnel(lead.funnel_type)[0]?.id || "a_contatar", created_by: user?.id })
         .select()
         .single();
       if (error) throw error;
@@ -206,7 +207,7 @@ export function useMarkLeadLost() {
     mutationFn: async ({
       id, reason, funnelType, currentStage,
     }: { id: string; reason: string; funnelType: FunnelType; currentStage?: string }) => {
-      const lostStage = funnelType === "f2" ? "descartado" : "sem_interesse";
+      const lostStage = getLostStage(funnelType);
       const { data, error } = await db
         .from("crm_sales_leads")
         .update({ stage: lostStage, lost_reason: reason, lost_at: new Date().toISOString() })
