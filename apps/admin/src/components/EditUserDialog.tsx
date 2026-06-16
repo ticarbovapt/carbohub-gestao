@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Loader2, Save, X, Pencil, KeyRound, Copy } from "lucide-react";
+import { Loader2, Save, X, Pencil, KeyRound, Copy, Trash2, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { SYSTEMS } from "@/lib/interfaces";
-import { useDeptFunctions, useUpdateUser, useSetIsVendedor, useResetPassword, type AdminProfile } from "@/hooks/useAdminUsers";
+import { useDeptFunctions, useUpdateUser, useSetIsVendedor, useResetPassword, useDeleteUser, type AdminProfile } from "@/hooks/useAdminUsers";
 import { useDepartments } from "@/hooks/useStructure";
 
 const DEFAULT_PASSWORD = "Carbo@2026";
@@ -24,9 +24,12 @@ export function EditUserDialog({ user, approved, onClose }: Props) {
   const updateUser = useUpdateUser();
   const setIsVendedor = useSetIsVendedor();
   const resetPwd = useResetPassword();
+  const deleteUser = useDeleteUser();
   const { data: DEPTS = [] } = useDepartments();
   const [confirmReset, setConfirmReset] = useState(false);
   const [resetDone, setResetDone] = useState(false);
+
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   const [fullName, setFullName] = useState("");
   const [department, setDepartment] = useState("");
@@ -52,6 +55,7 @@ export function EditUserDialog({ user, approved, onClose }: Props) {
     setIsVendedorState(!!user.is_vendedor);
     setConfirmReset(false);
     setResetDone(false);
+    setConfirmDelete(false);
   }, [user]);
 
   async function handleReset() {
@@ -99,6 +103,17 @@ export function EditUserDialog({ user, approved, onClose }: Props) {
       onClose();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Erro ao salvar");
+    }
+  }
+
+  async function handleDelete() {
+    if (!user) return;
+    try {
+      await deleteUser.mutateAsync(user.id);
+      toast.success("Usuário apagado e vaga liberada.");
+      onClose();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Erro ao apagar usuário");
     }
   }
 
@@ -246,6 +261,41 @@ export function EditUserDialog({ user, approved, onClose }: Props) {
                 ? <><Loader2 className="h-4 w-4 animate-spin" /> Salvando...</>
                 : <><Save className="h-4 w-4" /> Salvar</>}
             </Button>
+          </div>
+
+          {/* Zona de perigo — apagar usuário e liberar a vaga */}
+          <div className="mt-2 rounded-xl border border-destructive/30 bg-destructive/5 p-3">
+            {!confirmDelete ? (
+              <button
+                type="button"
+                onClick={() => setConfirmDelete(true)}
+                className="flex items-center gap-2 text-sm font-medium text-destructive hover:underline"
+              >
+                <Trash2 className="h-4 w-4" /> Apagar usuário e liberar a vaga
+              </button>
+            ) : (
+              <div className="space-y-2.5">
+                <p className="flex items-start gap-2 text-sm text-destructive">
+                  <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
+                  <span>
+                    Isso apaga <span className="font-semibold">{user.full_name || user.username}</span> de
+                    vez (login, acesso e vínculos). Não dá pra desfazer.
+                  </span>
+                </p>
+                <div className="flex gap-2">
+                  <Button variant="outline" size="sm" className="flex-1"
+                    onClick={() => setConfirmDelete(false)} disabled={deleteUser.isPending}>
+                    Cancelar
+                  </Button>
+                  <Button variant="destructive" size="sm" className="flex-1"
+                    onClick={handleDelete} disabled={deleteUser.isPending}>
+                    {deleteUser.isPending
+                      ? <><Loader2 className="h-4 w-4 animate-spin" /> Apagando...</>
+                      : <><Trash2 className="h-4 w-4" /> Apagar de vez</>}
+                  </Button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>
