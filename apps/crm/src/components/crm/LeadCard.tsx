@@ -28,13 +28,16 @@ const SEG_VARIANT = {
 
 export function LeadCard({ lead, funnelType: _funnelType, onAdvance, onMarkLost, onClick }: LeadCardProps) {
   const daysSince = getDaysSinceUpdate(lead.updated_at);
-  const isStale = daysSince > 3;
+  const aging: "red" | "amber" | null = daysSince > 7 ? "red" : daysSince > 3 ? "amber" : null;
   const displayName = lead.trade_name || lead.legal_name || lead.contact_name || "Sem nome";
+  const waLink = lead.contact_phone ? `https://wa.me/55${lead.contact_phone.replace(/\D/g, "")}` : null;
 
   return (
     <div
       className={`p-3 bg-card rounded-lg border transition-all hover:shadow-md cursor-pointer ${
-        isStale ? "border-destructive/50 bg-destructive/5" : "border-border"
+        aging === "red" ? "border-destructive/50 bg-destructive/5"
+        : aging === "amber" ? "border-amber-500/40 bg-amber-500/5"
+        : "border-border"
       }`}
       onClick={() => onClick?.(lead)}
     >
@@ -56,10 +59,17 @@ export function LeadCard({ lead, funnelType: _funnelType, onAdvance, onMarkLost,
       </div>
 
       {lead.contact_phone && (
-        <div className="flex items-center gap-1 text-xs text-muted-foreground mb-2">
+        <a
+          href={waLink ?? undefined}
+          target="_blank"
+          rel="noreferrer"
+          onClick={(e) => e.stopPropagation()}
+          className="flex items-center gap-1 text-xs text-muted-foreground hover:text-emerald-500 mb-2 w-fit"
+          title="Abrir no WhatsApp"
+        >
           <Phone className="h-3 w-3" />
           <span>{lead.contact_phone}</span>
-        </div>
+        </a>
       )}
 
       <div className="flex flex-wrap gap-1 mb-2">
@@ -73,8 +83,8 @@ export function LeadCard({ lead, funnelType: _funnelType, onAdvance, onMarkLost,
         )}
       </div>
 
-      {isStale && (
-        <div className="flex items-center gap-1 text-xs text-destructive mb-2">
+      {aging && (
+        <div className={`flex items-center gap-1 text-xs mb-2 ${aging === "red" ? "text-destructive" : "text-amber-500"}`}>
           <AlertTriangle className="h-3 w-3" />
           <span>{daysSince} dias sem atividade</span>
         </div>

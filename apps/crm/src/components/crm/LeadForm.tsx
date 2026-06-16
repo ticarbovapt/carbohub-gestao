@@ -8,10 +8,11 @@ import { useCreateCRMLead } from "@/hooks/useCRMLeads";
 
 interface LeadFormProps {
   funnelType: FunnelType;
+  initialStage?: string;
   onClose: () => void;
 }
 
-export function LeadForm({ funnelType, onClose }: LeadFormProps) {
+export function LeadForm({ funnelType, initialStage, onClose }: LeadFormProps) {
   const create = useCreateCRMLead();
   const [form, setForm] = useState({
     contact_name: "",
@@ -20,6 +21,7 @@ export function LeadForm({ funnelType, onClose }: LeadFormProps) {
     city: "",
     state: "",
     source: "Prospecção ativa",
+    temperature: "frio",
     notes: "",
     estimated_revenue: "",
   });
@@ -32,12 +34,14 @@ export function LeadForm({ funnelType, onClose }: LeadFormProps) {
     e.preventDefault();
     await create.mutateAsync({
       funnel_type: funnelType,
+      stage: initialStage,
       contact_name: form.contact_name || null,
       contact_phone: form.contact_phone || null,
       contact_email: form.contact_email || null,
       city: form.city || null,
       state: form.state || null,
       source: form.source || null,
+      temperature: form.temperature as "frio" | "morno" | "quente",
       notes: form.notes || null,
       estimated_revenue: form.estimated_revenue ? parseFloat(form.estimated_revenue) : 0,
     });
@@ -109,6 +113,18 @@ export function LeadForm({ funnelType, onClose }: LeadFormProps) {
               {SOURCE_OPTIONS.map((s) => (
                 <option key={s} value={s}>{s}</option>
               ))}
+            </select>
+          </Field>
+
+          <Field label="Temperatura">
+            <select
+              className="w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-sm"
+              value={form.temperature}
+              onChange={(e) => set("temperature", e.target.value)}
+            >
+              <option value="frio">❄️ Frio</option>
+              <option value="morno">🌡️ Morno</option>
+              <option value="quente">🔥 Quente</option>
             </select>
           </Field>
 
