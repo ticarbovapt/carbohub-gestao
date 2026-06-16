@@ -1,12 +1,16 @@
 import { Phone, ChevronRight, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { ProfileAvatar } from "@/components/ui/profile-avatar";
 import type { CRMLead, FunnelType } from "@/types/crm";
 import { getDaysSinceUpdate } from "@/types/crm";
+
+export interface LeadOwner { id: string; name: string | null; avatar_url: string | null }
 
 interface LeadCardProps {
   lead: CRMLead;
   funnelType: FunnelType;
+  owner?: LeadOwner;
   onAdvance?: (lead: CRMLead) => void;
   onMarkLost?: (lead: CRMLead) => void;
   onClick?: (lead: CRMLead) => void;
@@ -19,14 +23,7 @@ const TEMP_VARIANT = {
 };
 const TEMP_LABEL = { quente: "🔥 Quente", morno: "🌡️ Morno", frio: "❄️ Frio" };
 
-const SEG_VARIANT = {
-  A: "success"   as const,
-  B: "info"      as const,
-  C: "warning"   as const,
-  D: "secondary" as const,
-};
-
-export function LeadCard({ lead, funnelType: _funnelType, onAdvance, onMarkLost, onClick }: LeadCardProps) {
+export function LeadCard({ lead, funnelType: _funnelType, owner, onAdvance, onMarkLost, onClick }: LeadCardProps) {
   const daysSince = getDaysSinceUpdate(lead.updated_at);
   const aging: "red" | "amber" | null = daysSince > 7 ? "red" : daysSince > 3 ? "amber" : null;
   const displayName = lead.trade_name || lead.legal_name || lead.contact_name || "Sem nome";
@@ -51,11 +48,6 @@ export function LeadCard({ lead, funnelType: _funnelType, onAdvance, onMarkLost,
             </p>
           )}
         </div>
-        {lead.segment && (
-          <Badge variant={SEG_VARIANT[lead.segment]} className="ml-1 text-[9px]">
-            {lead.segment}
-          </Badge>
-        )}
       </div>
 
       {lead.contact_phone && (
@@ -98,6 +90,14 @@ export function LeadCard({ lead, funnelType: _funnelType, onAdvance, onMarkLost,
         </span>
         <span>{daysSince}d</span>
       </div>
+
+      {/* Dono do lead (responsável) */}
+      {owner && (
+        <div className="flex items-center gap-1.5 mt-2" title={`Responsável: ${owner.name || "—"}`}>
+          <ProfileAvatar userId={owner.id} avatarUrl={owner.avatar_url} fullName={owner.name} size={18} />
+          <span className="text-[11px] text-muted-foreground truncate">{owner.name || "—"}</span>
+        </div>
+      )}
 
       {(onAdvance || onMarkLost) && (
         <div className="flex gap-1 mt-2 pt-2 border-t border-border">

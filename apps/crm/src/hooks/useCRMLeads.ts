@@ -7,7 +7,49 @@ import { useAuth } from "@/contexts/AuthContext";
 
 // Leads do Carbo Sales = tabelas PRÓPRIAS (crm_sales_leads / crm_sales_lead_activities),
 // isoladas do Controle. Tabelas novas não estão nos tipos gerados → cliente sem tipo.
-const db = supabase as unknown as { from: (t: string) => any };
+const db = supabase as unknown as {
+  from: (t: string) => any;
+  rpc: (fn: string, args?: Record<string, unknown>) => Promise<{ data: any; error: any }>;
+};
+
+export interface OwnerLogEntry {
+  from_user: string | null;
+  to_user: string;
+  changed_by: string;
+  changed_at: string;
+}
+
+/** Transfere o lead para outro vendedor (só gestor — validado no banco). */
+export function useTransferLead() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ leadId, toUserId }: { leadId: string; toUserId: string }) => {
+      const { error } = await db.rpc("crm_sales_lead_transfer", { p_lead: leadId, p_to: toUserId });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["crm-leads"] });
+      qc.invalidateQueries({ queryKey: ["crm-lead-owner-log"] });
+    },
+  });
+}
+
+/** Histórico de posse do lead (quem → quem, quando, por quem). */
+export function useLeadOwnerLog(leadId: string | null) {
+  return useQuery({
+    queryKey: ["crm-lead-owner-log", leadId],
+    enabled: !!leadId,
+    queryFn: async (): Promise<OwnerLogEntry[]> => {
+      const { data, error } = await db
+        .from("crm_sales_lead_owner_log")
+        .select("from_user, to_user, changed_by, changed_at")
+        .eq("lead_id", leadId)
+        .order("changed_at", { ascending: false });
+      if (error) throw error;
+      return (data ?? []) as OwnerLogEntry[];
+    },
+  });
+}
 
 export function useCRMLeads(funnelType: FunnelType, assignedFilter?: string) {
   const { user, scope } = useAuth();

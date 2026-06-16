@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { DndContext, DragEndEvent, DragStartEvent, MouseSensor, TouchSensor, useSensor, useSensors } from "@dnd-kit/core";
 import { Badge } from "@/components/ui/badge";
 import { Plus } from "lucide-react";
-import { LeadCard } from "./LeadCard";
+import { LeadCard, type LeadOwner } from "./LeadCard";
 import type { CRMLead, FunnelType, StageConfig } from "@/types/crm";
 import { getStagesForFunnel } from "@/types/crm";
 import { DraggableCard, DroppableColumn, KanbanDragOverlay } from "@/components/kanban/KanbanDnd";
@@ -15,9 +15,13 @@ interface KanbanBoardProps {
   onLeadClick?: (lead: CRMLead) => void;
   onDragMove?: (lead: CRMLead, toStage: string) => void;
   onAddLead?: (stageId: string) => void;
+  ownersById?: Record<string, LeadOwner>;
 }
 
-export function KanbanBoard({ leads, funnelType, onAdvance, onMarkLost, onLeadClick, onDragMove, onAddLead }: KanbanBoardProps) {
+const leadOwnerId = (l: CRMLead) => ((l as { assigned_to?: string | null; created_by?: string | null }).assigned_to
+  ?? (l as { created_by?: string | null }).created_by ?? "");
+
+export function KanbanBoard({ leads, funnelType, onAdvance, onMarkLost, onLeadClick, onDragMove, onAddLead, ownersById }: KanbanBoardProps) {
   const stages = getStagesForFunnel(funnelType);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [optimisticMoves, setOptimisticMoves] = useState<Record<string, string>>({});
@@ -83,6 +87,7 @@ export function KanbanBoard({ leads, funnelType, onAdvance, onMarkLost, onLeadCl
             onMarkLost={onMarkLost}
             onLeadClick={onLeadClick}
             onAddLead={onAddLead}
+            ownersById={ownersById}
           />
         ))}
       </div>
@@ -97,7 +102,7 @@ export function KanbanBoard({ leads, funnelType, onAdvance, onMarkLost, onLeadCl
 }
 
 function KanbanColumn({
-  stage, leads, funnelType, onAdvance, onMarkLost, onLeadClick, onAddLead,
+  stage, leads, funnelType, onAdvance, onMarkLost, onLeadClick, onAddLead, ownersById,
 }: {
   stage: StageConfig;
   leads: CRMLead[];
@@ -106,6 +111,7 @@ function KanbanColumn({
   onMarkLost?: (lead: CRMLead) => void;
   onLeadClick?: (lead: CRMLead) => void;
   onAddLead?: (stageId: string) => void;
+  ownersById?: Record<string, LeadOwner>;
 }) {
   const totalValor = leads.reduce((s, l) => s + (Number(l.estimated_revenue) || 0), 0);
   const fmtK = (v: number) => v >= 1000 ? `R$ ${(v / 1000).toFixed(v % 1000 === 0 ? 0 : 1)}k` : `R$ ${v}`;
@@ -147,6 +153,7 @@ function KanbanColumn({
                   <LeadCard
                     lead={lead}
                     funnelType={funnelType}
+                    owner={ownersById?.[leadOwnerId(lead)]}
                     onAdvance={onAdvance}
                     onMarkLost={onMarkLost}
                     onClick={onLeadClick}
