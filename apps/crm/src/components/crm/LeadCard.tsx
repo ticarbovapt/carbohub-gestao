@@ -75,12 +75,10 @@ export function LeadCard({ lead, funnelType: _funnelType, owner, onAdvance, onMa
         )}
       </div>
 
-      {aging && (
-        <div className={`flex items-center gap-1 text-xs mb-2 ${aging === "red" ? "text-destructive" : "text-amber-500"}`}>
-          <AlertTriangle className="h-3 w-3" />
-          <span>{daysSince} dias sem atividade</span>
-        </div>
-      )}
+      {/* Linha de aging sempre reservada (mesma altura com ou sem aviso) → cards uniformes */}
+      <div className={`flex items-center gap-1 text-xs mb-2 h-4 ${aging === "red" ? "text-destructive" : aging === "amber" ? "text-amber-500" : ""}`}>
+        {aging && <><AlertTriangle className="h-3 w-3" /><span>{daysSince} dias sem atividade</span></>}
+      </div>
 
       <div className="flex items-center justify-between text-xs text-muted-foreground">
         <span>
