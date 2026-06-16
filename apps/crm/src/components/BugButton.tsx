@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { Bug, Plus, CheckCircle2, Clock, ChevronDown, ChevronUp } from "lucide-react";
-import { useLocation } from "react-router-dom";
+import { Bug, Plus, CheckCircle2, Clock, ChevronDown, ChevronUp, ListChecks } from "lucide-react";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { useMyBugReports, useSubmitBugReport } from "@/hooks/useBugReports";
 import { Button } from "@/components/ui/button";
@@ -33,8 +33,9 @@ function dtFmt(s: string) {
 }
 
 export function BugButton() {
-  const { user, profile } = useAuth();
+  const { user, profile, isGestor } = useAuth();
   const location = useLocation();
+  const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [title, setTitle] = useState("");
@@ -152,6 +153,14 @@ export function BugButton() {
                 ))}
               </div>
             </ScrollArea>
+          )}
+          {isGestor && (
+            <button
+              className="w-full flex items-center justify-center gap-1.5 px-4 py-2.5 border-t text-xs font-medium text-carbo-green hover:bg-muted transition-colors"
+              onClick={() => { setOpen(false); navigate("/bugs"); }}
+            >
+              <ListChecks className="h-3.5 w-3.5" /> Ver todos os reports (gestão)
+            </button>
           )}
         </PopoverContent>
       </Popover>
