@@ -130,9 +130,9 @@ function KanbanColumn({
             )}
           </div>
         </div>
-        {totalValor > 0 && (
-          <p className="text-[11px] text-muted-foreground mt-1 tabular-nums">{fmtK(totalValor)} em pipeline</p>
-        )}
+        <p className="text-[11px] text-muted-foreground mt-1 tabular-nums min-h-[14px]">
+          {totalValor > 0 ? `${fmtK(totalValor)} em pipeline` : " "}
+        </p>
       </div>
 
       {/* Cards */}
