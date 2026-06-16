@@ -2,8 +2,10 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 
-// Notificações COMPARTILHADAS: mesma tabela `notifications` do Controle.
-// Qualquer evento (bug resolvido, menção, ação) chega em todos os apps/subdomínios.
+// Notificações PRÓPRIAS do ecossistema (carbo_notifications) — isoladas do Controle.
+// Tabela nova não está nos tipos gerados → cliente sem tipo.
+const db = supabase as unknown as { from: (t: string) => any };
+
 export interface Notification {
   id: string;
   user_id: string;
@@ -24,8 +26,8 @@ export function useNotifications() {
     queryKey: ["notifications", user?.id],
     queryFn: async () => {
       if (!user) return [];
-      const { data, error } = await supabase
-        .from("notifications")
+      const { data, error } = await db
+        .from("carbo_notifications")
         .select("*")
         .eq("user_id", user.id)
         .order("created_at", { ascending: false })
@@ -39,8 +41,8 @@ export function useNotifications() {
 
   const markAsReadMutation = useMutation({
     mutationFn: async (notificationId: string) => {
-      const { error } = await supabase
-        .from("notifications")
+      const { error } = await db
+        .from("carbo_notifications")
         .update({ is_read: true })
         .eq("id", notificationId);
       if (error) throw error;
@@ -51,8 +53,8 @@ export function useNotifications() {
   const markAllAsReadMutation = useMutation({
     mutationFn: async () => {
       if (!user) return;
-      const { error } = await supabase
-        .from("notifications")
+      const { error } = await db
+        .from("carbo_notifications")
         .update({ is_read: true })
         .eq("user_id", user.id)
         .eq("is_read", false);
@@ -63,7 +65,7 @@ export function useNotifications() {
 
   const deleteNotificationMutation = useMutation({
     mutationFn: async (notificationId: string) => {
-      const { error } = await supabase.from("notifications").delete().eq("id", notificationId);
+      const { error } = await db.from("carbo_notifications").delete().eq("id", notificationId);
       if (error) throw error;
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["notifications", user?.id] }),
