@@ -211,6 +211,26 @@ export function useSetIsVendedor() {
   });
 }
 
+/** Apaga um usuário e libera a vaga (action delete_user na edge function). */
+export function useDeleteUser() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (userId: string): Promise<void> => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error("Sessão expirada. Faça login novamente.");
+
+      const res = await supabase.functions.invoke("create-team-member", {
+        body: { action: "delete_user", userId, platformUrl: window.location.origin },
+      });
+      if (res.error) throw new Error(res.error.message || "Erro ao apagar usuário");
+      if (!res.data?.success) throw new Error(res.data?.error || "Erro ao apagar usuário");
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["admin", "profiles"] });
+    },
+  });
+}
+
 export function useUpdateUser() {
   const qc = useQueryClient();
   return useMutation({

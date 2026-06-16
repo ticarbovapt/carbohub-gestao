@@ -252,6 +252,59 @@ Deno.serve(async (req: Request): Promise<Response> => {
     }
     // ─────────────────────────────────────────────────────────────────────────
 
+    // ── Delete user action — apaga o usuário e libera a vaga (gestão) ─────────
+    // Reusa o gate acima (command/head/TI). Remove auth + profile + vínculos,
+    // soltando as referências (subordinados / org chart) pra não orfanar FKs.
+    if (body.action === "delete_user") {
+      const { userId } = body;
+      if (!userId) {
+        return new Response(
+          JSON.stringify({ success: false, error: "Missing userId" }),
+          { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } }
+        );
+      }
+      // Não deixa o gestor se auto-apagar.
+      if (userId === callingUser.id) {
+        return new Response(
+          JSON.stringify({ success: false, error: "Você não pode apagar o seu próprio usuário." }),
+          { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } }
+        );
+      }
+
+      // 1) Solta referências que apontam pra este usuário (evita FK órfã).
+      await supabaseAdmin.from("profiles").update({ manager_user_id: null }).eq("manager_user_id", userId);
+      await supabaseAdmin.from("org_chart_nodes").update({ reports_to: null }).eq("reports_to", userId);
+
+      // 2) Remove vínculos do próprio usuário.
+      await supabaseAdmin.from("user_roles").delete().eq("user_id", userId);
+      await supabaseAdmin.from("org_chart_nodes").delete().eq("user_id", userId);
+
+      // 3) Remove o profile (libera username/seat). Se houver FK restritiva
+      //    (ex.: pedidos/leads), o erro é devolvido pra gestão tratar os dados.
+      const { error: profDelErr } = await supabaseAdmin.from("profiles").delete().eq("id", userId);
+      if (profDelErr) {
+        return new Response(
+          JSON.stringify({ success: false, error: `Não foi possível apagar: ${profDelErr.message}. Esse usuário ainda tem dados vinculados (pedidos/leads). Remova-os antes.` }),
+          { status: 409, headers: { "Content-Type": "application/json", ...corsHeaders } }
+        );
+      }
+
+      // 4) Remove o usuário de auth (libera o e-mail/login de vez).
+      const { error: authDelErr } = await supabaseAdmin.auth.admin.deleteUser(userId);
+      if (authDelErr) {
+        return new Response(
+          JSON.stringify({ success: false, error: authDelErr.message }),
+          { status: 500, headers: { "Content-Type": "application/json", ...corsHeaders } }
+        );
+      }
+
+      return new Response(
+        JSON.stringify({ success: true }),
+        { status: 200, headers: { "Content-Type": "application/json", ...corsHeaders } }
+      );
+    }
+    // ─────────────────────────────────────────────────────────────────────────
+
     const {
       fullName,
       department,
