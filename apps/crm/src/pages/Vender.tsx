@@ -622,17 +622,17 @@ export default function Vender() {
       </CollapsibleCard>
 
       {/* Rodapé: total + ações */}
-      <div className="sticky bottom-0 bg-background/95 backdrop-blur border-t -mx-4 md:-mx-6 px-4 md:px-6 py-3 flex items-center justify-between gap-3 flex-wrap">
-        <div>
+      <div className="sticky bottom-0 bg-background/95 backdrop-blur border-t -mx-4 md:-mx-6 px-4 md:px-6 py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div className="flex items-center justify-between sm:block">
           <p className="text-xs text-muted-foreground">Total</p>
           <p className="text-xl font-bold">{brl(subtotal)}</p>
         </div>
-        <div className="flex items-center gap-2">
-          <Button variant="ghost" onClick={() => navigate("/pedidos")}>Cancelar</Button>
-          <Button variant="outline" onClick={handleQuote} disabled={generating || !pagamentoValido}>
-            <FileText className="h-4 w-4 mr-1" /> {generating ? "Gerando..." : "Gerar Orçamento"}
+        <div className="flex items-center gap-2 w-full sm:w-auto">
+          <Button variant="ghost" className="hidden sm:inline-flex" onClick={() => navigate("/pedidos")}>Cancelar</Button>
+          <Button variant="outline" className="flex-1 sm:flex-none" onClick={handleQuote} disabled={generating || !pagamentoValido}>
+            <FileText className="h-4 w-4 mr-1" /> {generating ? "Gerando..." : (<><span className="hidden sm:inline">Gerar&nbsp;</span>Orçamento</>)}
           </Button>
-          <CarboButton onClick={handleSell} className="min-w-[150px]" disabled={!pagamentoValido}>
+          <CarboButton onClick={handleSell} className="flex-1 sm:flex-none sm:min-w-[150px]" disabled={!pagamentoValido}>
             <ShoppingCart className="h-4 w-4 mr-1" /> Gerar Venda
           </CarboButton>
         </div>
