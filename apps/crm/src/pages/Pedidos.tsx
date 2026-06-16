@@ -40,7 +40,7 @@ const STATUS_ICONS: Record<OrderStatus, React.ComponentType<{ className?: string
   shipped: Truck, delivered: CheckCircle, cancelled: XCircle,
 };
 
-interface MockOrder {
+interface OrderRow {
   id: string; order_number: string; invoice_number: string | null; linha: string;
   vendedor_id: string; vendedor_name: string; customer_name: string; customer_email: string | null;
   created_at: string; qty: number; items: number; total: number; status: OrderStatus;
@@ -63,7 +63,7 @@ export default function Pedidos() {
   const { data: nomes = {} } = useVendedorNomes();
   const [detailId, setDetailId] = useState<string | null>(null);
 
-  const allOrders: MockOrder[] = useMemo(() => vendas
+  const allOrders: OrderRow[] = useMemo(() => vendas
     .filter((v) => v.status !== "orcamento")
     .map((v) => {
       const itens = v.itens ?? [];
