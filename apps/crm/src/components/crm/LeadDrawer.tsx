@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { X, Phone, Mail, MapPin, Calendar, Tag, ChevronRight, AlertTriangle, ArrowRightLeft, History, ShoppingCart, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { ProfileAvatar } from "@/components/ui/profile-avatar";
 import type { CRMLead, FunnelType } from "@/types/crm";
 import { FUNNEL_CONFIG, LOSS_REASONS, getDaysSinceUpdate, getNextStage, isTerminalStage } from "@/types/crm";
@@ -28,10 +29,11 @@ export function LeadDrawer({ lead, funnelType, onClose }: LeadDrawerProps) {
   const markLost = useMarkLeadLost();
   const transfer = useTransferLead();
   const deleteLead = useDeleteLead();
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   async function handleDelete() {
-    if (!window.confirm("Excluir este lead? Esta ação não pode ser desfeita.")) return;
     await deleteLead.mutateAsync(lead.id);
+    setConfirmDelete(false);
     onClose();
   }
 
@@ -102,6 +104,7 @@ export function LeadDrawer({ lead, funnelType, onClose }: LeadDrawerProps) {
   }
 
   return (
+    <>
     <div className="fixed inset-0 z-50 flex">
       {/* Backdrop */}
       <div className="flex-1 bg-black/40" onClick={onClose} />
@@ -116,7 +119,7 @@ export function LeadDrawer({ lead, funnelType, onClose }: LeadDrawerProps) {
           </div>
           <div className="flex items-center gap-1">
             {isGestor && (
-              <button onClick={handleDelete} disabled={deleteLead.isPending} className="text-muted-foreground hover:text-destructive p-1" title="Excluir lead">
+              <button onClick={() => setConfirmDelete(true)} className="text-muted-foreground hover:text-destructive p-1" title="Excluir lead">
                 <Trash2 className="h-4 w-4" />
               </button>
             )}
@@ -338,6 +341,23 @@ export function LeadDrawer({ lead, funnelType, onClose }: LeadDrawerProps) {
         )}
       </div>
     </div>
+
+    {/* Confirmação de exclusão — diálogo do sistema (não o nativo do navegador) */}
+    <Dialog open={confirmDelete} onOpenChange={setConfirmDelete}>
+      <DialogContent className="sm:max-w-sm">
+        <DialogHeader>
+          <DialogTitle>Excluir lead</DialogTitle>
+          <DialogDescription>Tem certeza que deseja excluir <strong>{displayName}</strong>? Esta ação não pode ser desfeita.</DialogDescription>
+        </DialogHeader>
+        <DialogFooter className="gap-2">
+          <Button variant="outline" onClick={() => setConfirmDelete(false)}>Cancelar</Button>
+          <Button variant="destructive" onClick={handleDelete} disabled={deleteLead.isPending}>
+            {deleteLead.isPending ? "Excluindo..." : "Excluir"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+    </>
   );
 }
 
