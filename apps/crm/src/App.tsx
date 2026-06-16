@@ -10,6 +10,7 @@ import DashboardComercial from "./pages/DashboardComercial";
 import Vendas from "./pages/Vendas";
 import Metas from "./pages/Metas";
 import Profile from "./pages/Profile";
+import BugReports from "./pages/BugReports";
 import DescOrdensServico from "./pages/descarbonizacao/OrdensServico";
 import DescAgendamentos from "./pages/descarbonizacao/Agendamentos";
 import MapaTerritorial from "./pages/territorio/MapaTerritorial";
@@ -51,6 +52,7 @@ export default function App() {
         {/* compatibilidade com rotas antigas (e-commerce migrou para o Carbo Ops) */}
         <Route path="/dashboard-comercial" element={<Navigate to="/comercial" replace />} />
         <Route path="/perfil" element={<Profile />} />
+        <Route path="/bugs" element={<BugReports />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
