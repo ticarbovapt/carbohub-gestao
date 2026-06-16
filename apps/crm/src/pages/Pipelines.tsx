@@ -13,6 +13,8 @@ import {
 } from "@/components/ui/dialog";
 import { Plus, Users, TrendingUp, AlertTriangle, Flame, LayoutGrid, List, KanbanSquare } from "lucide-react";
 import { useCRMLeads, useAllCRMLeads, useCRMStats, useAdvanceLeadStage, useMarkLeadLost } from "@/hooks/useCRMLeads";
+import { useVendedoresDir } from "@/hooks/useVendas";
+import { useAuth } from "@/contexts/AuthContext";
 import { KanbanBoard } from "@/components/crm/KanbanBoard";
 import { LeadForm } from "@/components/crm/LeadForm";
 import { LeadDrawer } from "@/components/crm/LeadDrawer";
@@ -105,6 +107,9 @@ export default function Pipelines() {
   const [lostReason, setLostReason] = useState<string>(LOSS_REASONS[0]);
   const [drawerLead, setDrawerLead] = useState<CRMLead | null>(null);
   const [viewMode, setViewMode] = useState<"kanban" | "list">("kanban");
+  const [vendedorFilter, setVendedorFilter] = useState("all");
+  const { isGestor } = useAuth();
+  const { data: vendedoresDir = [] } = useVendedoresDir();
 
   const isAll = funil === "todos";
   const ft = (isAll ? "f1" : funil) as FunnelType;
@@ -121,6 +126,10 @@ export default function Pipelines() {
 
   const filteredLeads = baseLeads.filter((lead) => {
     if (!isAll && stageFilter !== "all" && lead.stage !== stageFilter) return false;
+    if (vendedorFilter !== "all") {
+      const l = lead as { assigned_to?: string | null; created_by?: string | null };
+      if (l.assigned_to !== vendedorFilter && l.created_by !== vendedorFilter) return false;
+    }
     if (!searchQuery) return true;
     const q = searchQuery.toLowerCase();
     return (
@@ -209,6 +218,22 @@ export default function Pipelines() {
               <SelectContent>
                 <SelectItem value="all">Todos Estágios</SelectItem>
                 {stages.map((s) => <SelectItem key={s.id} value={s.id}>{s.icon} {s.label}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          )}
+          {isGestor && (
+            <Select value={vendedorFilter} onValueChange={setVendedorFilter}>
+              <SelectTrigger className="w-48 h-9 text-xs"><span className="flex items-center gap-1.5"><Users className="h-3.5 w-3.5" /><SelectValue placeholder="Vendedor" /></span></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos os vendedores</SelectItem>
+                {vendedoresDir.map((v) => (
+                  <SelectItem key={v.id} value={v.id}>
+                    <span className="flex items-center gap-2">
+                      {v.full_name || "—"}
+                      {!v.is_vendedor && <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground border">Avulso</span>}
+                    </span>
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           )}
