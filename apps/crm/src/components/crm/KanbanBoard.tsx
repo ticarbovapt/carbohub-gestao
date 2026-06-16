@@ -104,7 +104,7 @@ function KanbanColumn({
   onLeadClick?: (lead: CRMLead) => void;
 }) {
   return (
-    <div className="flex-shrink-0 w-72 bg-muted/30 rounded-xl border border-border flex flex-col">
+    <div className="flex-shrink-0 w-72 bg-muted/30 rounded-xl border border-border flex flex-col min-h-[calc(100vh-260px)]">
       {/* Column header */}
       <div
         className="sticky top-0 p-3 border-b border-border bg-background/80 backdrop-blur-sm rounded-t-xl"
@@ -120,7 +120,7 @@ function KanbanColumn({
       </div>
 
       {/* Cards */}
-      <div className="flex-1 overflow-y-auto max-h-[calc(100vh-320px)]">
+      <div className="flex-1 overflow-y-auto">
         <DroppableColumn id={stage.id}>
           <div className="p-2 space-y-2">
             {leads.length === 0 ? (
