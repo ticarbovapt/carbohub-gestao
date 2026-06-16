@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { ProfileAvatar } from "@/components/ui/profile-avatar";
 import type { CRMLead, FunnelType } from "@/types/crm";
 import { FUNNEL_CONFIG, LOSS_REASONS, getDaysSinceUpdate, getNextStage, isTerminalStage } from "@/types/crm";
-import { useAdvanceLeadStage, useMarkLeadLost, useTransferLead, useLeadOwnerLog } from "@/hooks/useCRMLeads";
+import { useAdvanceLeadStage, useMarkLeadLost, useTransferLead, useLeadOwnerLog, useLeadActivities, useAddLeadActivity } from "@/hooks/useCRMLeads";
 import { useVendedoresDir } from "@/hooks/useVendas";
 import { useAuth } from "@/contexts/AuthContext";
 
@@ -25,7 +25,25 @@ export function LeadDrawer({ lead, funnelType, onClose }: LeadDrawerProps) {
   const advance  = useAdvanceLeadStage();
   const markLost = useMarkLeadLost();
   const transfer = useTransferLead();
-  const { isGestor } = useAuth();
+  const { isGestor, user, profile } = useAuth();
+  const { data: activities = [] } = useLeadActivities(lead.id);
+  const addActivity = useAddLeadActivity();
+  const [actType, setActType] = useState("note");
+  const [actText, setActText] = useState("");
+  const [actDue, setActDue] = useState("");
+
+  async function handleAddActivity() {
+    if (!actText.trim() || !user) return;
+    await addActivity.mutateAsync({
+      lead_id: lead.id,
+      activity_type: actType,
+      subject: actText.trim(),
+      due_at: actType === "task" && actDue ? new Date(actDue).toISOString() : null,
+      created_by: user.id,
+      created_by_name: profile?.full_name ?? null,
+    });
+    setActText(""); setActDue("");
+  }
   const { data: dir = [] } = useVendedoresDir();
   const { data: ownerLog = [] } = useLeadOwnerLog(lead.id);
   const [transferTo, setTransferTo] = useState("");
@@ -151,6 +169,53 @@ export function LeadDrawer({ lead, funnelType, onClose }: LeadDrawerProps) {
               <p className="text-sm text-muted-foreground whitespace-pre-wrap">{lead.notes}</p>
             </Section>
           )}
+
+          {/* Atividades / Timeline */}
+          <Section title="Atividades">
+            <div className="flex gap-2">
+              <select
+                className="h-9 rounded-md border border-input bg-background px-2 text-sm shrink-0"
+                value={actType} onChange={(e) => setActType(e.target.value)}
+              >
+                <option value="note">📝 Nota</option>
+                <option value="call">📞 Ligação</option>
+                <option value="task">✅ Tarefa</option>
+              </select>
+              <input
+                className="flex-1 h-9 rounded-md border border-input bg-background px-3 text-sm min-w-0"
+                placeholder={actType === "task" ? "O que precisa ser feito?" : "Registrar..."}
+                value={actText} onChange={(e) => setActText(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleAddActivity(); } }}
+              />
+            </div>
+            {actType === "task" && (
+              <input type="datetime-local" className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm mt-2"
+                value={actDue} onChange={(e) => setActDue(e.target.value)} />
+            )}
+            <div className="flex justify-end mt-2">
+              <Button size="sm" onClick={handleAddActivity} disabled={!actText.trim() || addActivity.isPending}>Registrar</Button>
+            </div>
+
+            {activities.length > 0 && (
+              <div className="mt-3 space-y-2.5 border-l-2 border-border pl-3">
+                {activities.map((a) => {
+                  const icon = a.activity_type === "call" ? "📞" : a.activity_type === "task" ? (a.status === "pending" ? "⏳" : "✅") : a.activity_type === "stage_change" ? "🔀" : "📝";
+                  const when = new Date(a.created_at).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+                  return (
+                    <div key={a.id} className="text-xs">
+                      <p className="text-foreground"><span className="mr-1">{icon}</span>{a.subject || a.body || a.activity_type}</p>
+                      <p className="text-[11px] text-muted-foreground">
+                        {a.created_by_name || "—"} · {when}
+                        {a.activity_type === "task" && a.status === "pending" && a.due_at && (
+                          <span className="text-amber-500"> · prazo {new Date(a.due_at).toLocaleDateString("pt-BR")}</span>
+                        )}
+                      </p>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </Section>
 
           {/* Next follow-up */}
           {lead.next_follow_up_at && (
