@@ -31,7 +31,7 @@ export function LeadCard({ lead, funnelType: _funnelType, owner, onAdvance, onMa
 
   return (
     <div
-      className={`p-3 bg-card rounded-lg border transition-all hover:shadow-md cursor-pointer ${
+      className={`p-3 bg-card rounded-lg border transition-all hover:shadow-md cursor-pointer flex flex-col min-h-[196px] ${
         aging === "red" ? "border-destructive/50 bg-destructive/5"
         : aging === "amber" ? "border-amber-500/40 bg-amber-500/5"
         : "border-border"
@@ -100,7 +100,7 @@ export function LeadCard({ lead, funnelType: _funnelType, owner, onAdvance, onMa
       )}
 
       {(onAdvance || onMarkLost) && (
-        <div className="flex gap-1 mt-2 pt-2 border-t border-border">
+        <div className="flex gap-1 mt-auto pt-2 border-t border-border">
           {onAdvance && (
             <Button
               variant="outline" size="sm"
