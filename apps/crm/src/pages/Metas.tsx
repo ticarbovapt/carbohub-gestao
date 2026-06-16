@@ -82,20 +82,39 @@ function Top3Card({ entries, label, canSeeValues }: {
     <CarboCard>
       <CarboCardContent className="p-4">
         <p className="text-xs uppercase tracking-wider text-muted-foreground mb-3 font-medium">{label}</p>
-        <div className="flex gap-6 justify-center">
-          {entries.slice(0, 3).map((entry) => (
-            <div key={entry.vendedor_id} className="flex flex-col items-center gap-1.5">
-              <div className="relative">
-                <div className={`border-2 rounded-xl overflow-hidden ${entry.rank === 1 ? "border-yellow-400" : entry.rank === 2 ? "border-gray-400" : "border-amber-600"}`}>
-                  <ProfileAvatar avatarUrl={entry.profile?.avatar_url} fullName={entry.profile?.full_name} userId={entry.vendedor_id} size={64} square />
+        {(() => {
+          // Ordem do pódio: 2º à esquerda, 1º no meio (mais alto), 3º à direita.
+          const order = [
+            { e: entries[1], place: 2 },
+            { e: entries[0], place: 1 },
+            { e: entries[2], place: 3 },
+          ].filter((x) => x.e) as { e: typeof entries[number]; place: number }[];
+          const stepH: Record<number, string> = { 1: "h-20", 2: "h-14", 3: "h-10" };
+          const stepBg: Record<number, string> = {
+            1: "bg-yellow-400/15 border-yellow-400",
+            2: "bg-gray-400/15 border-gray-400",
+            3: "bg-amber-600/15 border-amber-600",
+          };
+          const border: Record<number, string> = { 1: "border-yellow-400", 2: "border-gray-400", 3: "border-amber-600" };
+          const medal: Record<number, string> = { 1: "🥇", 2: "🥈", 3: "🥉" };
+          return (
+            <div className="flex items-end justify-center gap-3 sm:gap-5 pt-4">
+              {order.map(({ e, place }) => (
+                <div key={e.vendedor_id} className="flex flex-col items-center w-24">
+                  <span className="text-xl leading-none mb-1">{medal[place]}</span>
+                  <div className={`border-2 rounded-xl overflow-hidden shadow-md ${border[place]}`}>
+                    <ProfileAvatar avatarUrl={e.profile?.avatar_url} fullName={e.profile?.full_name} userId={e.vendedor_id} size={place === 1 ? 76 : 56} square />
+                  </div>
+                  <p className="text-xs font-semibold text-center max-w-[88px] truncate mt-1.5">{e.profile?.full_name?.split(" ")[0] || "—"}</p>
+                  {canSeeValues && <p className="text-[11px] text-muted-foreground tabular-nums">{fmtBRL(e.total)}</p>}
+                  <div className={`mt-1.5 w-full ${stepH[place]} rounded-t-lg border-t-2 ${stepBg[place]} flex items-start justify-center pt-1`}>
+                    <span className="text-lg font-black text-foreground/60">{place}º</span>
+                  </div>
                 </div>
-                <span className="absolute -bottom-1.5 -right-1.5 text-lg leading-none">{entry.rank === 1 ? "🥇" : entry.rank === 2 ? "🥈" : "🥉"}</span>
-              </div>
-              <p className="text-xs font-semibold text-center max-w-[80px] truncate mt-1">{entry.profile?.full_name?.split(" ")[0] || "—"}</p>
-              {canSeeValues && <p className="text-[11px] text-muted-foreground tabular-nums">{fmtBRL(entry.total)}</p>}
+              ))}
             </div>
-          ))}
-        </div>
+          );
+        })()}
       </CarboCardContent>
     </CarboCard>
   );
