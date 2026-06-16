@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { DndContext, DragEndEvent, DragStartEvent, MouseSensor, TouchSensor, useSensor, useSensors } from "@dnd-kit/core";
 import { Badge } from "@/components/ui/badge";
+import { Plus } from "lucide-react";
 import { LeadCard } from "./LeadCard";
 import type { CRMLead, FunnelType, StageConfig } from "@/types/crm";
 import { getStagesForFunnel } from "@/types/crm";
@@ -13,9 +14,10 @@ interface KanbanBoardProps {
   onMarkLost?: (lead: CRMLead) => void;
   onLeadClick?: (lead: CRMLead) => void;
   onDragMove?: (lead: CRMLead, toStage: string) => void;
+  onAddLead?: (stageId: string) => void;
 }
 
-export function KanbanBoard({ leads, funnelType, onAdvance, onMarkLost, onLeadClick, onDragMove }: KanbanBoardProps) {
+export function KanbanBoard({ leads, funnelType, onAdvance, onMarkLost, onLeadClick, onDragMove, onAddLead }: KanbanBoardProps) {
   const stages = getStagesForFunnel(funnelType);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [optimisticMoves, setOptimisticMoves] = useState<Record<string, string>>({});
@@ -80,6 +82,7 @@ export function KanbanBoard({ leads, funnelType, onAdvance, onMarkLost, onLeadCl
             onAdvance={onAdvance}
             onMarkLost={onMarkLost}
             onLeadClick={onLeadClick}
+            onAddLead={onAddLead}
           />
         ))}
       </div>
@@ -94,7 +97,7 @@ export function KanbanBoard({ leads, funnelType, onAdvance, onMarkLost, onLeadCl
 }
 
 function KanbanColumn({
-  stage, leads, funnelType, onAdvance, onMarkLost, onLeadClick,
+  stage, leads, funnelType, onAdvance, onMarkLost, onLeadClick, onAddLead,
 }: {
   stage: StageConfig;
   leads: CRMLead[];
@@ -102,7 +105,10 @@ function KanbanColumn({
   onAdvance?: (lead: CRMLead) => void;
   onMarkLost?: (lead: CRMLead) => void;
   onLeadClick?: (lead: CRMLead) => void;
+  onAddLead?: (stageId: string) => void;
 }) {
+  const totalValor = leads.reduce((s, l) => s + (Number(l.estimated_revenue) || 0), 0);
+  const fmtK = (v: number) => v >= 1000 ? `R$ ${(v / 1000).toFixed(v % 1000 === 0 ? 0 : 1)}k` : `R$ ${v}`;
   return (
     <div className="flex-shrink-0 w-72 bg-muted/30 rounded-xl border border-border flex flex-col min-h-[calc(100vh-260px)]">
       {/* Column header */}
@@ -115,8 +121,18 @@ function KanbanColumn({
             <span className="text-base">{stage.icon}</span>
             <h3 className="font-semibold text-sm">{stage.label}</h3>
           </div>
-          <Badge variant="secondary" className="text-xs">{leads.length}</Badge>
+          <div className="flex items-center gap-1">
+            <Badge variant="secondary" className="text-xs">{leads.length}</Badge>
+            {onAddLead && (
+              <button onClick={() => onAddLead(stage.id)} className="h-6 w-6 inline-flex items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors" title="Adicionar lead aqui">
+                <Plus className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </div>
         </div>
+        {totalValor > 0 && (
+          <p className="text-[11px] text-muted-foreground mt-1 tabular-nums">{fmtK(totalValor)} em pipeline</p>
+        )}
       </div>
 
       {/* Cards */}

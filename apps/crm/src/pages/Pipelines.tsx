@@ -103,6 +103,7 @@ export default function Pipelines() {
   const [searchQuery, setSearchQuery] = useState("");
   const [stageFilter, setStageFilter] = useState("all");
   const [isFormOpen, setIsFormOpen] = useState(false);
+  const [formStage, setFormStage] = useState<string | undefined>(undefined);
   const [lostDialogLead, setLostDialogLead] = useState<CRMLead | null>(null);
   const [lostReason, setLostReason] = useState<string>(LOSS_REASONS[0]);
   const [drawerLead, setDrawerLead] = useState<CRMLead | null>(null);
@@ -171,7 +172,7 @@ export default function Pipelines() {
           title="Funil de Vendas"
           description="Jornada do cliente — do lead ao fechamento"
           icon={KanbanSquare}
-          actions={<CarboButton onClick={() => setIsFormOpen(true)}><Plus className="h-4 w-4 mr-1" /> Novo Lead</CarboButton>}
+          actions={<CarboButton onClick={() => { setFormStage(undefined); setIsFormOpen(true); }}><Plus className="h-4 w-4 mr-1" /> Novo Lead</CarboButton>}
         />
 
         {/* KPIs */}
@@ -244,6 +245,7 @@ export default function Pipelines() {
             onMarkLost={(lead) => { setLostReason(LOSS_REASONS[0]); setLostDialogLead(lead); }}
             onLeadClick={(lead) => setDrawerLead(lead)}
             onDragMove={handleDragMove}
+            onAddLead={(stageId) => { setFormStage(stageId); setIsFormOpen(true); }}
           />
         ) : (
           <CarboCard>
@@ -267,7 +269,7 @@ export default function Pipelines() {
         )}
       </div>
 
-      {isFormOpen && !isAll && <LeadForm funnelType={ft} onClose={() => setIsFormOpen(false)} />}
+      {isFormOpen && !isAll && <LeadForm funnelType={ft} initialStage={formStage} onClose={() => setIsFormOpen(false)} />}
       {drawerLead && <LeadDrawer lead={drawerLead} funnelType={drawerLead.funnel_type as FunnelType} onClose={() => setDrawerLead(null)} />}
 
       <Dialog open={!!lostDialogLead} onOpenChange={(o) => { if (!o) setLostDialogLead(null); }}>
