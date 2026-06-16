@@ -1,4 +1,4 @@
-// Nova Descarbonização — B2C / B2B / Frota. Cria uma OS real (crm_os).
+// Nova Descarbonização — B2C / B2B / Frota. Cria uma OS real (crm_os) com número próprio.
 import { useState } from "react";
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
@@ -45,24 +45,42 @@ const SERVICE_TYPES: { value: OsTipo; label: string; description: string; icon: 
   },
 ];
 
+const onlyDigits = (s: string) => s.replace(/\D/g, "");
+function fmtCnpj(v: string) {
+  return onlyDigits(v).slice(0, 14)
+    .replace(/^(\d{2})(\d)/, "$1.$2")
+    .replace(/^(\d{2})\.(\d{3})(\d)/, "$1.$2.$3")
+    .replace(/\.(\d{3})(\d)/, ".$1/$2")
+    .replace(/(\d{4})(\d)/, "$1-$2");
+}
+function fmtPhone(v: string) {
+  const d = onlyDigits(v).slice(0, 11);
+  if (d.length <= 10) return d.replace(/^(\d{2})(\d)/, "($1) $2").replace(/(\d{4})(\d)$/, "$1-$2");
+  return d.replace(/^(\d{2})(\d)/, "($1) $2").replace(/(\d{5})(\d)/, "$1-$2");
+}
+
 export function NovaDescarbonizacaoDialog({ open, onOpenChange }: NovaDescarbonizacaoDialogProps) {
   const [step, setStep] = useState<"type" | "form">("type");
   const [selectedType, setSelectedType] = useState<OsTipo | null>(null);
   const [clienteNome, setClienteNome] = useState("");
   const [cnpj, setCnpj] = useState("");
+  const [telefone, setTelefone] = useState("");
+  const [responsavel, setResponsavel] = useState("");
   const [placa, setPlaca] = useState("");
   const [modelo, setModelo] = useState("");
+  const [qtdVeiculos, setQtdVeiculos] = useState("");
+  const [recorrencia, setRecorrencia] = useState("unica");
   const [scheduledAt, setScheduledAt] = useState("");
   const [prioridade, setPrioridade] = useState("3");
-  const [titulo, setTitulo] = useState("");
   const [observacoes, setObservacoes] = useState("");
   const [buscandoCnpj, setBuscandoCnpj] = useState(false);
 
   const createOS = useCreateOS();
+  const isPJ = selectedType === "b2b" || selectedType === "frota";
 
   // Busca o CNPJ na BrasilAPI e auto-preenche a razão social (mesma fonte do Vender).
   async function handleBuscarCnpj() {
-    const digits = cnpj.replace(/\D/g, "");
+    const digits = onlyDigits(cnpj);
     if (digits.length !== 14) { toast.error("Digite um CNPJ com 14 dígitos."); return; }
     setBuscandoCnpj(true);
     try {
@@ -81,8 +99,9 @@ export function NovaDescarbonizacaoDialog({ open, onOpenChange }: NovaDescarboni
 
   const reset = () => {
     setStep("type"); setSelectedType(null);
-    setClienteNome(""); setCnpj(""); setPlaca(""); setModelo("");
-    setScheduledAt(""); setPrioridade("3"); setTitulo(""); setObservacoes("");
+    setClienteNome(""); setCnpj(""); setTelefone(""); setResponsavel("");
+    setPlaca(""); setModelo(""); setQtdVeiculos(""); setRecorrencia("unica");
+    setScheduledAt(""); setPrioridade("3"); setObservacoes("");
   };
 
   const handleOpenChange = (isOpen: boolean) => {
@@ -93,19 +112,41 @@ export function NovaDescarbonizacaoDialog({ open, onOpenChange }: NovaDescarboni
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!selectedType) return;
+
+    // Validação por tipo
+    if (!clienteNome.trim()) {
+      toast.error(selectedType === "frota" ? "Informe a empresa / frota." : "Informe o nome do cliente.");
+      return;
+    }
+    if (selectedType === "b2c" && !telefone.trim()) {
+      toast.error("Informe o telefone / WhatsApp do cliente.");
+      return;
+    }
+    if (isPJ && onlyDigits(cnpj).length !== 14) {
+      toast.error("Informe um CNPJ válido (14 dígitos).");
+      return;
+    }
+    if (selectedType === "frota" && !scheduledAt) {
+      toast.error("Selecione a data do agendamento.");
+      return;
+    }
+
     try {
-      await createOS.mutateAsync({
+      const { numero } = await createOS.mutateAsync({
         tipo: selectedType,
         cliente_nome: clienteNome.trim() || undefined,
-        cnpj: cnpj.trim() || undefined,
-        placa: placa.trim() || undefined,
-        modelo: modelo.trim() || undefined,
+        cnpj: isPJ ? cnpj.trim() || undefined : undefined,
+        telefone: telefone.trim() || undefined,
+        responsavel: isPJ ? responsavel.trim() || undefined : undefined,
+        placa: selectedType !== "frota" ? placa.trim() || undefined : undefined,
+        modelo: selectedType !== "frota" ? modelo.trim() || undefined : undefined,
+        qtd_veiculos: selectedType === "frota" ? (qtdVeiculos ? Number(qtdVeiculos) : null) : undefined,
+        recorrencia: selectedType === "frota" ? recorrencia : undefined,
         data_prevista: scheduledAt || null,
         prioridade: Number(prioridade),
-        titulo: titulo.trim() || undefined,
         observacoes: observacoes.trim() || undefined,
       });
-      toast.success("OS criada com sucesso");
+      toast.success(`OS ${numero ?? ""} criada com sucesso`);
       handleOpenChange(false);
     } catch (err) {
       toast.error("Erro ao criar OS", { description: (err as Error)?.message });
@@ -116,7 +157,7 @@ export function NovaDescarbonizacaoDialog({ open, onOpenChange }: NovaDescarboni
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="w-[calc(100%-2rem)] sm:max-w-lg">
+      <DialogContent className="w-[calc(100%-2rem)] sm:max-w-lg max-h-[90vh] overflow-y-auto">
         {/* ── Step 1: Tipo ── */}
         {step === "type" && (
           <>
@@ -143,21 +184,23 @@ export function NovaDescarbonizacaoDialog({ open, onOpenChange }: NovaDescarboni
           </>
         )}
 
-        {/* ── Step 2: Formulário (B2C / B2B / Frota) ── */}
+        {/* ── Step 2: Formulário ── */}
         {step === "form" && selectedType && (
           <form onSubmit={handleSubmit}>
             <DialogHeader>
               <DialogTitle>{current?.label}</DialogTitle>
-              <DialogDescription>Preencha as informações da Ordem de Serviço</DialogDescription>
+              <DialogDescription>Preencha as informações da Ordem de Serviço · o número é gerado automaticamente</DialogDescription>
             </DialogHeader>
             <div className="space-y-4 py-4">
 
               {/* CNPJ (B2B e Frota) */}
-              {(selectedType === "b2b" || selectedType === "frota") && (
+              {isPJ && (
                 <div className="space-y-1.5">
-                  <Label>CNPJ</Label>
+                  <Label>CNPJ <span className="text-destructive">*</span></Label>
                   <div className="flex gap-2">
-                    <Input value={cnpj} onChange={(e) => setCnpj(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleBuscarCnpj(); } }} placeholder="00.000.000/0000-00" maxLength={18} className="font-mono" />
+                    <Input value={cnpj} onChange={(e) => setCnpj(fmtCnpj(e.target.value))}
+                      onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleBuscarCnpj(); } }}
+                      placeholder="00.000.000/0000-00" className="font-mono" />
                     <Button type="button" variant="outline" size="sm" className="shrink-0 px-3" onClick={handleBuscarCnpj} disabled={buscandoCnpj}>
                       <Search className="h-4 w-4" />
                     </Button>
@@ -165,40 +208,82 @@ export function NovaDescarbonizacaoDialog({ open, onOpenChange }: NovaDescarboni
                 </div>
               )}
 
+              {/* Cliente / Empresa */}
               <div className="space-y-1.5">
-                <Label htmlFor="customer_name">{selectedType === "frota" ? "Empresa / Frota" : "Nome do Cliente"}</Label>
-                <Input
-                  id="customer_name"
-                  value={clienteNome}
-                  onChange={(e) => setClienteNome(e.target.value)}
-                  placeholder={selectedType === "frota" ? "Ex: Transportadora XYZ" : "Nome do cliente"}
-                />
+                <Label htmlFor="customer_name">
+                  {selectedType === "frota" ? "Empresa / Frota" : "Nome do Cliente"} <span className="text-destructive">*</span>
+                </Label>
+                <Input id="customer_name" value={clienteNome} onChange={(e) => setClienteNome(e.target.value)}
+                  placeholder={selectedType === "frota" ? "Ex: Transportadora XYZ" : "Nome do cliente"} />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              {/* Contato — B2C: telefone direto; PJ: responsável + telefone */}
+              {selectedType === "b2c" ? (
                 <div className="space-y-1.5">
-                  <Label htmlFor="vehicle_plate" className="flex items-center gap-1">
-                    Placa <span className="text-[10px] text-muted-foreground font-normal">(preencher depois)</span>
-                  </Label>
-                  <Input id="vehicle_plate" value={placa} onChange={(e) => setPlaca(e.target.value)} placeholder="ABC-1234" className="uppercase" />
+                  <Label htmlFor="telefone">Telefone / WhatsApp <span className="text-destructive">*</span></Label>
+                  <Input id="telefone" value={telefone} onChange={(e) => setTelefone(fmtPhone(e.target.value))} placeholder="(00) 00000-0000" />
                 </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="vehicle_model" className="flex items-center gap-1">
-                    Modelo <span className="text-[10px] text-muted-foreground font-normal">(preencher depois)</span>
-                  </Label>
-                  <Input id="vehicle_model" value={modelo} onChange={(e) => setModelo(e.target.value)} placeholder="Ex: Caminhão, Fiat Uno" />
+              ) : (
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="responsavel">Responsável</Label>
+                    <Input id="responsavel" value={responsavel} onChange={(e) => setResponsavel(e.target.value)} placeholder="Quem acompanha" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="telefone">Telefone / WhatsApp</Label>
+                    <Input id="telefone" value={telefone} onChange={(e) => setTelefone(fmtPhone(e.target.value))} placeholder="(00) 00000-0000" />
+                  </div>
                 </div>
-              </div>
+              )}
 
+              {/* Veículo — B2C/B2B: placa+modelo (1 veículo). Frota: qtd + recorrência */}
+              {selectedType === "frota" ? (
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="qtd">Qtd. de veículos</Label>
+                    <Input id="qtd" type="number" min="1" value={qtdVeiculos} onChange={(e) => setQtdVeiculos(e.target.value)} placeholder="Ex: 12" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Recorrência</Label>
+                    <Select value={recorrencia} onValueChange={setRecorrencia}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="unica">Única</SelectItem>
+                        <SelectItem value="semanal">Semanal</SelectItem>
+                        <SelectItem value="mensal">Mensal</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="vehicle_plate" className="flex items-center gap-1">
+                      Placa <span className="text-[10px] text-muted-foreground font-normal">(opcional)</span>
+                    </Label>
+                    <Input id="vehicle_plate" value={placa} onChange={(e) => setPlaca(e.target.value.toUpperCase())} placeholder="ABC-1234" className="uppercase" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="vehicle_model" className="flex items-center gap-1">
+                      Modelo <span className="text-[10px] text-muted-foreground font-normal">(opcional)</span>
+                    </Label>
+                    <Input id="vehicle_model" value={modelo} onChange={(e) => setModelo(e.target.value)} placeholder="Ex: Caminhão, Fiat Uno" />
+                  </div>
+                </div>
+              )}
+
+              {/* Data — Frota obrigatória, demais opcional */}
               <div className="space-y-1.5">
-                <Label>{selectedType === "frota" ? "Data do Agendamento *" : "Data Prevista (opcional)"}</Label>
-                <DateTimePicker
-                  value={scheduledAt}
-                  onChange={setScheduledAt}
-                  placeholder={selectedType === "frota" ? "Selecione data e hora" : "Opcional — selecione se houver"}
-                />
+                <Label>
+                  {selectedType === "frota"
+                    ? <>Data do Agendamento <span className="text-destructive">*</span></>
+                    : "Data Prevista (opcional)"}
+                </Label>
+                <DateTimePicker value={scheduledAt} onChange={setScheduledAt}
+                  placeholder={selectedType === "frota" ? "Selecione data e hora" : "Opcional — selecione se houver"} />
               </div>
 
+              {/* Prioridade */}
               <div className="space-y-1.5">
                 <Label>Prioridade</Label>
                 <Select value={prioridade} onValueChange={setPrioridade}>
@@ -212,22 +297,7 @@ export function NovaDescarbonizacaoDialog({ open, onOpenChange }: NovaDescarboni
                 </Select>
               </div>
 
-              <div className="space-y-1.5">
-                <Label htmlFor="title" className="flex items-center gap-1">
-                  Título da OS <span className="text-[10px] text-muted-foreground font-normal">(gerado automaticamente se vazio)</span>
-                </Label>
-                <Input
-                  id="title"
-                  value={titulo}
-                  onChange={(e) => setTitulo(e.target.value)}
-                  placeholder={
-                    selectedType === "b2b" ? "Ex: DESC_B2B_00012 — Café Santa Clara" :
-                    selectedType === "b2c" ? "Ex: DESC_B2C_00015 — João Silva" :
-                    "Ex: DESC_FRT_00008 — Transportadora XYZ"
-                  }
-                />
-              </div>
-
+              {/* Observações */}
               <div className="space-y-1.5">
                 <Label htmlFor="description">Observações</Label>
                 <Textarea id="description" value={observacoes} onChange={(e) => setObservacoes(e.target.value)} placeholder="Informações adicionais..." rows={2} />

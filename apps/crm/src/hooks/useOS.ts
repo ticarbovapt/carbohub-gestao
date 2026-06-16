@@ -25,8 +25,12 @@ export interface NovaOSInput {
   tipo: OsTipo;
   cliente_nome?: string;
   cnpj?: string;
+  telefone?: string;
+  responsavel?: string;
   placa?: string;
   modelo?: string;
+  qtd_veiculos?: number | null;
+  recorrencia?: string | null;
   data_prevista?: string | null;
   prioridade?: number;
   titulo?: string;
@@ -35,13 +39,18 @@ export interface NovaOSInput {
 
 export interface OSRow {
   id: string;
+  numero: string | null;
   criado_por: string;
   tipo: OsTipo;
   stage: OsStage;
   cliente_nome: string | null;
   cnpj: string | null;
+  telefone: string | null;
+  responsavel: string | null;
   placa: string | null;
   modelo: string | null;
+  qtd_veiculos: number | null;
+  recorrencia: string | null;
   data_prevista: string | null;
   prioridade: number;
   titulo: string | null;
@@ -73,10 +82,10 @@ export function useCreateOS() {
       const { data, error } = await db
         .from("crm_os")
         .insert({ stage: "nova", ...input })
-        .select("id")
+        .select("id, numero")
         .single();
       if (error) throw error;
-      return (data as { id: string }).id;
+      return data as { id: string; numero: string | null };
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["crm_os"] });
