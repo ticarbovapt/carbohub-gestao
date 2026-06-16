@@ -7,6 +7,7 @@ import {
 import { TopBar } from "@/components/TopBar";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { useAuth } from "@/contexts/AuthContext";
 
 // CRM é uma seção com sub-itens (Funis de Venda = dashboard, Pipelines = kanban).
 const CRM_SUB = [
@@ -41,6 +42,7 @@ const subCls = ({ isActive }: { isActive: boolean }) =>
   }`;
 
 function Nav({ onNavigate }: { onNavigate?: () => void }) {
+  const { isGestor } = useAuth();
   return (
     <nav className="space-y-1 p-3">
       {/* Seção CRM */}
@@ -73,17 +75,21 @@ function Nav({ onNavigate }: { onNavigate?: () => void }) {
         ))}
       </div>
 
-      {/* Seção Território */}
-      <p className="px-3 pt-3 pb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/70 flex items-center gap-1.5">
-        <MapPinned className="h-3 w-3" /> Território
-      </p>
-      <div className="space-y-1 border-l border-border ml-3 pl-1">
-        {TERR_SUB.map((n) => (
-          <NavLink key={n.to} to={n.to} className={subCls} onClick={onNavigate}>
-            <n.icon className="h-4 w-4" /> {n.label}
-          </NavLink>
-        ))}
-      </div>
+      {/* Seção Território — só gestor (rede da empresa, não é dado do vendedor) */}
+      {isGestor && (
+        <>
+          <p className="px-3 pt-3 pb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/70 flex items-center gap-1.5">
+            <MapPinned className="h-3 w-3" /> Território
+          </p>
+          <div className="space-y-1 border-l border-border ml-3 pl-1">
+            {TERR_SUB.map((n) => (
+              <NavLink key={n.to} to={n.to} className={subCls} onClick={onNavigate}>
+                <n.icon className="h-4 w-4" /> {n.label}
+              </NavLink>
+            ))}
+          </div>
+        </>
+      )}
     </nav>
   );
 }
