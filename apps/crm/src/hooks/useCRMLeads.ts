@@ -34,6 +34,67 @@ export function useTransferLead() {
   });
 }
 
+export interface LeadActivity {
+  id: string;
+  activity_type: string;            // note | call | task | stage_change
+  subject: string | null;
+  body: string | null;
+  status: string | null;            // done | pending
+  due_at: string | null;            // próximo passo (data prevista)
+  done_at: string | null;
+  stage_from: string | null;
+  stage_to: string | null;
+  created_by: string | null;
+  created_by_name: string | null;
+  created_at: string;
+}
+
+/** Linha do tempo do lead (atividades: notas, ligações, tarefas, mudanças de etapa). */
+export function useLeadActivities(leadId: string | null) {
+  return useQuery({
+    queryKey: ["crm-lead-activities", leadId],
+    enabled: !!leadId,
+    queryFn: async (): Promise<LeadActivity[]> => {
+      const { data, error } = await db
+        .from("crm_sales_lead_activities")
+        .select("id, activity_type, subject, body, status, due_at, done_at, stage_from, stage_to, created_by, created_by_name, created_at")
+        .eq("lead_id", leadId)
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      return (data ?? []) as LeadActivity[];
+    },
+  });
+}
+
+/** Registra uma atividade no lead (nota/ligação/tarefa). due_at = próximo passo. */
+export function useAddLeadActivity() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (p: {
+      lead_id: string; activity_type: string; subject?: string; body?: string;
+      due_at?: string | null; created_by: string; created_by_name?: string | null;
+    }) => {
+      const isTask = p.activity_type === "task" && !!p.due_at;
+      const { error } = await db.from("crm_sales_lead_activities").insert({
+        lead_id: p.lead_id,
+        activity_type: p.activity_type,
+        subject: p.subject || null,
+        body: p.body || null,
+        due_at: p.due_at || null,
+        status: isTask ? "pending" : "done",
+        done_at: isTask ? null : new Date().toISOString(),
+        created_by: p.created_by,
+        created_by_name: p.created_by_name || null,
+      });
+      if (error) throw error;
+    },
+    onSuccess: (_d, v) => {
+      qc.invalidateQueries({ queryKey: ["crm-lead-activities", v.lead_id] });
+      qc.invalidateQueries({ queryKey: ["crm-leads"] });
+    },
+  });
+}
+
 /** Histórico de posse do lead (quem → quem, quando, por quem). */
 export function useLeadOwnerLog(leadId: string | null) {
   return useQuery({
