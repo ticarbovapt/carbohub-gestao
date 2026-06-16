@@ -1,12 +1,12 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { X, Phone, Mail, MapPin, Calendar, Tag, ChevronRight, AlertTriangle, ArrowRightLeft, History, ShoppingCart } from "lucide-react";
+import { X, Phone, Mail, MapPin, Calendar, Tag, ChevronRight, AlertTriangle, ArrowRightLeft, History, ShoppingCart, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ProfileAvatar } from "@/components/ui/profile-avatar";
 import type { CRMLead, FunnelType } from "@/types/crm";
 import { FUNNEL_CONFIG, LOSS_REASONS, getDaysSinceUpdate, getNextStage, isTerminalStage } from "@/types/crm";
-import { useAdvanceLeadStage, useMarkLeadLost, useTransferLead, useLeadOwnerLog, useLeadActivities, useAddLeadActivity } from "@/hooks/useCRMLeads";
+import { useAdvanceLeadStage, useMarkLeadLost, useTransferLead, useLeadOwnerLog, useLeadActivities, useAddLeadActivity, useDeleteLead } from "@/hooks/useCRMLeads";
 import { useVendedoresDir } from "@/hooks/useVendas";
 import { useAuth } from "@/contexts/AuthContext";
 
@@ -27,6 +27,13 @@ export function LeadDrawer({ lead, funnelType, onClose }: LeadDrawerProps) {
   const advance  = useAdvanceLeadStage();
   const markLost = useMarkLeadLost();
   const transfer = useTransferLead();
+  const deleteLead = useDeleteLead();
+
+  async function handleDelete() {
+    if (!window.confirm("Excluir este lead? Esta ação não pode ser desfeita.")) return;
+    await deleteLead.mutateAsync(lead.id);
+    onClose();
+  }
 
   // Tunnel → Vendas: atalho que abre o Vender já preenchido. Opcional e one-way —
   // vender direto (sem lead) continua funcionando normalmente.
@@ -107,9 +114,16 @@ export function LeadDrawer({ lead, funnelType, onClose }: LeadDrawerProps) {
             <p className="font-semibold text-sm">{displayName}</p>
             <p className="text-xs text-muted-foreground">{funnelCfg.icon} {funnelCfg.shortName}</p>
           </div>
-          <button onClick={onClose} className="text-muted-foreground hover:text-foreground">
-            <X className="h-4 w-4" />
-          </button>
+          <div className="flex items-center gap-1">
+            {isGestor && (
+              <button onClick={handleDelete} disabled={deleteLead.isPending} className="text-muted-foreground hover:text-destructive p-1" title="Excluir lead">
+                <Trash2 className="h-4 w-4" />
+              </button>
+            )}
+            <button onClick={onClose} className="text-muted-foreground hover:text-foreground p-1">
+              <X className="h-4 w-4" />
+            </button>
+          </div>
         </div>
 
         <div className="p-5 space-y-4">

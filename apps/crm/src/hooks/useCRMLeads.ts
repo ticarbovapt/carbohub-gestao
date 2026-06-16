@@ -19,6 +19,18 @@ export interface OwnerLogEntry {
   changed_at: string;
 }
 
+/** Exclui um lead (RLS: dono ou gestor; no front exibimos só para gestor). */
+export function useDeleteLead() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await db.from("crm_sales_leads").delete().eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["crm-leads"] }),
+  });
+}
+
 /** Transfere o lead para outro vendedor (só gestor — validado no banco). */
 export function useTransferLead() {
   const qc = useQueryClient();
