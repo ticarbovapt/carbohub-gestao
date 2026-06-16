@@ -1,5 +1,6 @@
 import { Routes, Route, Navigate } from "react-router-dom";
 import { ProtectedRoute } from "./components/ProtectedRoute";
+import { RequireGestor } from "./components/RequireGestor";
 import { SalesShell } from "./components/SalesShell";
 import Login from "./pages/Login";
 import CRM from "./pages/CRM";
@@ -45,10 +46,10 @@ export default function App() {
         {/* Descarbonização — acompanhamento (pra onde o "+ Nova Descarbonização" leva) */}
         <Route path="/descarbonizacao/os" element={<DescOrdensServico />} />
         <Route path="/descarbonizacao/agendamentos" element={<DescAgendamentos />} />
-        {/* Território — bases/licenciados, rede e expansão (dados reais do CORE) */}
-        <Route path="/territorio/mapa" element={<MapaTerritorial />} />
-        <Route path="/territorio/rede" element={<NetworkMap />} />
-        <Route path="/territorio/expansao" element={<TerritoryExpansion />} />
+        {/* Território — só gestor (rede da empresa); barra a URL direta p/ não-gestor */}
+        <Route path="/territorio/mapa" element={<RequireGestor><MapaTerritorial /></RequireGestor>} />
+        <Route path="/territorio/rede" element={<RequireGestor><NetworkMap /></RequireGestor>} />
+        <Route path="/territorio/expansao" element={<RequireGestor><TerritoryExpansion /></RequireGestor>} />
         {/* compatibilidade com rotas antigas (e-commerce migrou para o Carbo Ops) */}
         <Route path="/dashboard-comercial" element={<Navigate to="/comercial" replace />} />
         <Route path="/perfil" element={<Profile />} />
