@@ -66,7 +66,7 @@ export default function Agendamentos() {
       <div className="space-y-5 max-w-[1500px] mx-auto">
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <CarboPageHeader title="Agendamentos" description="Acompanhe os agendamentos de descarbonização" icon={CalendarIcon} />
-          <Button className="gap-2" onClick={() => setCreateOpen(true)}><Plus className="h-4 w-4" /> Novo Evento</Button>
+          <Button size="sm" className="gap-2 bg-purple-600 hover:bg-purple-700 text-white" onClick={() => setCreateOpen(true)}><Plus className="h-4 w-4" /> Nova Descarbonização</Button>
         </div>
 
         {isLoading ? (
