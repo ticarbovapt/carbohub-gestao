@@ -96,9 +96,9 @@ function AllFunnelsBoard({ leads, onLeadClick }: { leads: CRMLead[]; onLeadClick
 }
 
 export default function Pipelines() {
-  const [params, setParams] = useSearchParams();
-  const funil = (params.get("funil") || "todos") as FunnelType | "todos";
-  const setFunil = (v: string) => setParams(v === "todos" ? {} : { funil: v }, { replace: true });
+  // Pipeline ÚNICA ativa: Vendas (f1 = jornada do cliente). Os demais funis ficam
+  // ocultos por ora — escalamos pros outros depois.
+  const funil = "f1" as FunnelType | "todos";
 
   const [searchQuery, setSearchQuery] = useState("");
   const [stageFilter, setStageFilter] = useState("all");
@@ -168,26 +168,11 @@ export default function Pipelines() {
     <div className="p-4 md:p-6">
       <div className="space-y-4">
         <CarboPageHeader
-          title="Pipelines"
-          description="Kanban de leads — filtre por funil ou veja todos"
+          title="Funil de Vendas"
+          description="Jornada do cliente — do lead ao fechamento"
           icon={KanbanSquare}
-          actions={!isAll ? <CarboButton onClick={() => setIsFormOpen(true)}><Plus className="h-4 w-4 mr-1" /> Novo Lead</CarboButton> : undefined}
+          actions={<CarboButton onClick={() => setIsFormOpen(true)}><Plus className="h-4 w-4 mr-1" /> Novo Lead</CarboButton>}
         />
-
-        {/* Filtro de funil */}
-        <div className="flex flex-wrap gap-1.5">
-          <button onClick={() => setFunil("todos")}
-            className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-colors ${isAll ? "bg-carbo-green text-white" : "bg-muted/40 text-muted-foreground hover:bg-muted"}`}>
-            Todos os funis
-          </button>
-          {FUNNELS.map((f) => (
-            <button key={f.id} onClick={() => setFunil(f.id)}
-              className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-colors inline-flex items-center gap-1.5 ${funil === f.id ? "text-white" : "bg-muted/40 text-muted-foreground hover:bg-muted"}`}
-              style={funil === f.id ? { background: f.color } : undefined}>
-              <span>{f.icon}</span> {f.shortName}
-            </button>
-          ))}
-        </div>
 
         {/* KPIs */}
         {isAll ? (

@@ -34,8 +34,11 @@ export default function App() {
     <Routes>
       <Route path="/login" element={<LoginRoute />} />
       <Route element={<ProtectedRoute><SalesShell /></ProtectedRoute>}>
-        <Route path="/" element={<CRM />} />
+        {/* Landing = Funil de Vendas (pipeline única ativa) */}
+        <Route path="/" element={<Navigate to="/crm/pipelines" replace />} />
         <Route path="/crm/pipelines" element={<Pipelines />} />
+        {/* Dashboard de todos os funis — preservado, sem link no menu (escala depois) */}
+        <Route path="/funis" element={<CRM />} />
         {/* compat: rotas antigas por funil → pipelines com filtro */}
         <Route path="/crm/:funnelType" element={<Navigate to="/crm/pipelines" replace />} />
         <Route path="/vender" element={<Vender />} />
