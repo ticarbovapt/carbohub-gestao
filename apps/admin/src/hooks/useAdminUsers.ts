@@ -179,6 +179,22 @@ export function useCreateUser() {
   });
 }
 
+/** Reseta a senha do usuário para a padrão (Carbo@2026) via edge function. */
+export function useResetPassword() {
+  return useMutation({
+    mutationFn: async (userId: string): Promise<string> => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error("Sessão expirada. Faça login novamente.");
+      const res = await supabase.functions.invoke("create-team-member", {
+        body: { action: "reset_password", userId, platformUrl: window.location.origin },
+      });
+      if (res.error) throw new Error(res.error.message || "Erro ao resetar senha");
+      if (!res.data?.success) throw new Error(res.data?.error || "Erro ao resetar senha");
+      return (res.data.message as string) || "Senha redefinida.";
+    },
+  });
+}
+
 /** Edita um usuário existente (action update_user na mesma edge function). */
 /** Marca/desmarca o usuário como vendedor (RPC dedicada; só gestor). */
 export function useSetIsVendedor() {

@@ -1,11 +1,13 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Loader2, Save, X, Pencil } from "lucide-react";
+import { Loader2, Save, X, Pencil, KeyRound, Copy } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { SYSTEMS } from "@/lib/interfaces";
-import { useDeptFunctions, useUpdateUser, useSetIsVendedor, type AdminProfile } from "@/hooks/useAdminUsers";
+import { useDeptFunctions, useUpdateUser, useSetIsVendedor, useResetPassword, type AdminProfile } from "@/hooks/useAdminUsers";
 import { useDepartments } from "@/hooks/useStructure";
+
+const DEFAULT_PASSWORD = "Carbo@2026";
 
 const selectCls =
   "flex h-10 w-full rounded-lg border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50";
@@ -21,7 +23,10 @@ interface Props {
 export function EditUserDialog({ user, approved, onClose }: Props) {
   const updateUser = useUpdateUser();
   const setIsVendedor = useSetIsVendedor();
+  const resetPwd = useResetPassword();
   const { data: DEPTS = [] } = useDepartments();
+  const [confirmReset, setConfirmReset] = useState(false);
+  const [resetDone, setResetDone] = useState(false);
 
   const [fullName, setFullName] = useState("");
   const [department, setDepartment] = useState("");
@@ -45,7 +50,21 @@ export function EditUserDialog({ user, approved, onClose }: Props) {
     setManagerUserId(user.manager_user_id ?? "");
     setInterfaces(user.allowed_interfaces ?? []);
     setIsVendedorState(!!user.is_vendedor);
+    setConfirmReset(false);
+    setResetDone(false);
   }, [user]);
+
+  async function handleReset() {
+    if (!user) return;
+    try {
+      const msg = await resetPwd.mutateAsync(user.id);
+      setResetDone(true);
+      setConfirmReset(false);
+      toast.success(msg);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Erro ao resetar senha");
+    }
+  }
 
   const { data: deptFunctions = [] } = useDeptFunctions(department || undefined);
   const { data: secFunctions = [] } = useDeptFunctions(secDepartment || undefined);
@@ -94,9 +113,45 @@ export function EditUserDialog({ user, approved, onClose }: Props) {
           <button onClick={onClose} className="p-1 rounded hover:bg-muted"><X className="h-4 w-4" /></button>
         </div>
 
-        <p className="text-xs text-muted-foreground mb-4">
+        <p className="text-xs text-muted-foreground mb-3">
           <span className="font-mono">{user.username}</span> — o username não muda.
         </p>
+
+        {/* Resetar senha — devolve a senha padrão (1º acesso / esqueceu a senha) */}
+        <div className="mb-4 rounded-xl border bg-muted/30 p-3">
+          {resetDone ? (
+            <div className="space-y-2">
+              <p className="text-sm font-medium text-emerald-600">Senha redefinida!</p>
+              <p className="text-xs text-muted-foreground">Passe as credenciais ao colaborador:</p>
+              <div className="flex flex-wrap items-center gap-2 text-sm">
+                <code className="font-mono font-bold text-primary bg-primary/10 px-2 py-1 rounded">{user.username}</code>
+                <code className="font-mono font-bold text-amber-600 bg-amber-500/10 px-2 py-1 rounded">{DEFAULT_PASSWORD}</code>
+                <button type="button"
+                  onClick={() => { navigator.clipboard.writeText(`Usuário: ${user.username}\nSenha: ${DEFAULT_PASSWORD}`); toast.success("Credenciais copiadas!"); }}
+                  className="p-1 rounded hover:bg-muted" title="Copiar">
+                  <Copy className="h-3.5 w-3.5 text-muted-foreground" />
+                </button>
+              </div>
+            </div>
+          ) : confirmReset ? (
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-xs text-muted-foreground">
+                A senha vai voltar para <code className="font-mono">{DEFAULT_PASSWORD}</code>. Confirmar?
+              </p>
+              <div className="flex shrink-0 gap-2">
+                <Button variant="outline" size="sm" onClick={() => setConfirmReset(false)} disabled={resetPwd.isPending}>Cancelar</Button>
+                <Button size="sm" className="bg-amber-600 text-white hover:bg-amber-600/90" onClick={handleReset} disabled={resetPwd.isPending}>
+                  {resetPwd.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Resetar"}
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-sm flex items-center gap-1.5"><KeyRound className="h-4 w-4 text-muted-foreground" /> Resetar senha de acesso</span>
+              <Button variant="outline" size="sm" onClick={() => setConfirmReset(true)}>Resetar</Button>
+            </div>
+          )}
+        </div>
 
         <div className="space-y-3">
           <div className="space-y-1.5">
