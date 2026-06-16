@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { ProfileAvatar } from "@/components/ui/profile-avatar";
 import { useMetasVendedores } from "@/hooks/useMetas";
+import { useAuth } from "@/contexts/AuthContext";
 
 // Visual 1:1 com o Controle (/dashboards/metas/vendedores); lógica nova.
 // No Sales é SÓ ACOMPANHAMENTO (ver quadro + ranking). Configurar metas é no Ops.
@@ -180,7 +181,9 @@ export default function Metas() {
   const [periodView, setPeriodView] = useState<PeriodView>("mensal");
   const [weekStart, setWeekStart] = useState(() => commercialWeekStartOf(new Date()));
 
-  const canSeeValues = true;
+  // Só gestor (head/command/ti) vê valores em R$. Vendedor vê apenas % da própria meta.
+  const { isGestor } = useAuth();
+  const canSeeValues = isGestor;
 
   // ── Dados reais ──
   const { data: metas = [] } = useMetasVendedores(month, weekStart);
@@ -315,11 +318,15 @@ export default function Metas() {
             <CarboCardContent className="p-4">
               <div className="flex items-center justify-between gap-4 mb-3">
                 <div>
-                  <p className="text-xs text-muted-foreground uppercase tracking-wider">Total do Time</p>
-                  <div className="flex items-end gap-2 mt-0.5">
-                    <p className={`text-2xl font-bold tabular-nums ${totalColors.text}`}>{fmtBRL(totalActual)}</p>
-                    <p className="text-muted-foreground mb-0.5">/ {fmtBRL(totalTarget)}</p>
-                  </div>
+                  <p className="text-xs text-muted-foreground uppercase tracking-wider">{canSeeValues ? "Total do Time" : "Sua meta do mês"}</p>
+                  {canSeeValues ? (
+                    <div className="flex items-end gap-2 mt-0.5">
+                      <p className={`text-2xl font-bold tabular-nums ${totalColors.text}`}>{fmtBRL(totalActual)}</p>
+                      <p className="text-muted-foreground mb-0.5">/ {fmtBRL(totalTarget)}</p>
+                    </div>
+                  ) : (
+                    <p className={`text-2xl font-bold tabular-nums mt-0.5 ${totalColors.text}`}>{fmtPct(totalPct)} <span className="text-sm font-normal text-muted-foreground">cumprido</span></p>
+                  )}
                 </div>
                 <div className="flex items-center gap-3">
                   {isCurrentMonth && remainingDays > 0 && (
@@ -328,16 +335,18 @@ export default function Metas() {
                       <p className="text-[10px] text-muted-foreground">restantes</p>
                     </div>
                   )}
-                  {teamDailyNeeded > 0 && (
+                  {canSeeValues && teamDailyNeeded > 0 && (
                     <div className="text-center">
                       <p className="text-sm font-bold tabular-nums text-amber-500 flex items-center gap-0.5"><Zap className="h-3 w-3" /> {fmtBRL(teamDailyNeeded)}</p>
                       <p className="text-[10px] text-muted-foreground">precisa/dia</p>
                     </div>
                   )}
-                  <div className="text-center">
-                    <p className="text-lg font-bold tabular-nums">{hitting}/{targetsData.length}</p>
-                    <p className="text-[10px] text-muted-foreground">na meta</p>
-                  </div>
+                  {canSeeValues && (
+                    <div className="text-center">
+                      <p className="text-lg font-bold tabular-nums">{hitting}/{targetsData.length}</p>
+                      <p className="text-[10px] text-muted-foreground">na meta</p>
+                    </div>
+                  )}
                   <CarboBadge variant={totalColors.badge}>{fmtPct(totalPct)}</CarboBadge>
                 </div>
               </div>
@@ -348,8 +357,8 @@ export default function Metas() {
               {teamProjected !== null && teamProjPct !== null && (
                 <div className="flex items-center gap-1.5 text-xs mt-2 pt-2 border-t border-border/50">
                   <TrendingUp className="h-3 w-3 text-muted-foreground shrink-0" />
-                  <span className="text-muted-foreground">Projeção do time ao fim do mês:</span>
-                  <span className={`font-bold ${teamProjColors.text}`}>{fmtBRL(teamProjected)}</span>
+                  <span className="text-muted-foreground">Projeção {canSeeValues ? "do time " : ""}ao fim do mês:</span>
+                  {canSeeValues && <span className={`font-bold ${teamProjColors.text}`}>{fmtBRL(teamProjected)}</span>}
                   <CarboBadge variant={teamProjColors.badge} size="sm">{fmtPct(teamProjPct)}</CarboBadge>
                 </div>
               )}
@@ -393,7 +402,7 @@ export default function Metas() {
                           <div className="flex items-center justify-between gap-2">
                             <p className="font-semibold text-sm truncate">{t.vendedor?.full_name || "—"}</p>
                             <div className="flex items-center gap-2 shrink-0">
-                              <span className={`text-sm font-bold tabular-nums ${colors.text}`}>{fmtBRL(actual)}<span className="text-[10px] font-normal text-muted-foreground"> /{fmtBRL(target)}</span></span>
+                              {canSeeValues && <span className={`text-sm font-bold tabular-nums ${colors.text}`}>{fmtBRL(actual)}<span className="text-[10px] font-normal text-muted-foreground"> /{fmtBRL(target)}</span></span>}
                               <CarboBadge variant={colors.badge} size="sm">{fmtPct(pctVal)}</CarboBadge>
                             </div>
                           </div>
@@ -402,11 +411,11 @@ export default function Metas() {
                             {expectedPct > 0 && expectedPct < 100 && <div className="absolute top-0 bottom-0 w-0.5 bg-foreground/40" style={{ left: `${expectedPct}%` }} />}
                           </div>
                           <div className="flex items-center gap-x-3 gap-y-0 flex-wrap text-[11px] text-muted-foreground mt-0.5">
-                            {remaining > 0 && <span>Faltam {fmtBRL(remaining)}</span>}
-                            {dailyNeeded > 0 && <span className="inline-flex items-center gap-0.5 text-amber-500 font-medium"><Zap className="h-2.5 w-2.5" /> {fmtBRL(dailyNeeded)}/dia</span>}
+                            {canSeeValues && remaining > 0 && <span>Faltam {fmtBRL(remaining)}</span>}
+                            {canSeeValues && dailyNeeded > 0 && <span className="inline-flex items-center gap-0.5 text-amber-500 font-medium"><Zap className="h-2.5 w-2.5" /> {fmtBRL(dailyNeeded)}/dia</span>}
                             {projPct !== null && <span style={{ color: projColors.bar }} className="font-medium">proj. {fmtPct(projPct)}</span>}
-                            {t.target_qty > 0 && <span>{t.actual_qty || 0}/{t.target_qty} ped.</span>}
-                            <DeltaBadge current={actual} prev={prevActual} />
+                            {canSeeValues && t.target_qty > 0 && <span>{t.actual_qty || 0}/{t.target_qty} ped.</span>}
+                            {canSeeValues && <DeltaBadge current={actual} prev={prevActual} />}
                           </div>
                         </div>
                       </div>
