@@ -4,6 +4,10 @@ import { toast } from "sonner";
 import type { CRMLead, FunnelType } from "@/types/crm";
 import { useAuth } from "@/contexts/AuthContext";
 
+// Leads do Carbo Sales = tabelas PRÓPRIAS (crm_sales_leads / crm_sales_lead_activities),
+// isoladas do Controle. Tabelas novas não estão nos tipos gerados → cliente sem tipo.
+const db = supabase as unknown as { from: (t: string) => any };
+
 export function useCRMLeads(funnelType: FunnelType, assignedFilter?: string) {
   const { user, scope } = useAuth();
   const ownOnly = scope === "proprio" && !!user?.id;
@@ -11,8 +15,8 @@ export function useCRMLeads(funnelType: FunnelType, assignedFilter?: string) {
   return useQuery({
     queryKey: ["crm-leads", funnelType, ownOnly ? user?.id : "all", assignedFilter],
     queryFn: async () => {
-      let query = supabase
-        .from("crm_leads")
+      let query = db
+        .from("crm_sales_leads")
         .select("*")
         .eq("funnel_type", funnelType)
         .order("created_at", { ascending: false });
@@ -38,8 +42,8 @@ export function useAllCRMLeads() {
   return useQuery({
     queryKey: ["crm-leads", "all-funnels", ownOnly ? user?.id : "all"],
     queryFn: async () => {
-      let query = supabase
-        .from("crm_leads")
+      let query = db
+        .from("crm_sales_leads")
         .select("*")
         .order("created_at", { ascending: false });
       if (ownOnly) query = query.or(`created_by.eq.${user!.id},assigned_to.eq.${user!.id}`);
@@ -54,8 +58,8 @@ export function useCRMStats(funnelType: FunnelType) {
   return useQuery({
     queryKey: ["crm-stats", funnelType],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("crm_leads")
+      const { data, error } = await db
+        .from("crm_sales_leads")
         .select("stage, temperature, estimated_revenue, contact_attempts, updated_at")
         .eq("funnel_type", funnelType);
       if (error) throw error;
@@ -82,8 +86,8 @@ export function useCRMAllStats() {
   return useQuery({
     queryKey: ["crm-all-stats"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("crm_leads")
+      const { data, error } = await db
+        .from("crm_sales_leads")
         .select("funnel_type, stage, temperature, updated_at");
       if (error) throw error;
       const leads = data || [];
@@ -105,8 +109,8 @@ export function useCreateCRMLead() {
   return useMutation({
     mutationFn: async (lead: Partial<CRMLead> & { funnel_type: FunnelType }) => {
       const { data: { user } } = await supabase.auth.getUser();
-      const { data, error } = await supabase
-        .from("crm_leads")
+      const { data, error } = await db
+        .from("crm_sales_leads")
         .insert({ ...lead, stage: lead.stage || "a_contatar", created_by: user?.id })
         .select()
         .single();
@@ -126,8 +130,8 @@ export function useUpdateCRMLead() {
 
   return useMutation({
     mutationFn: async ({ id, ...data }: { id: string } & Partial<CRMLead>) => {
-      const { data: result, error } = await supabase
-        .from("crm_leads").update(data).eq("id", id).select().single();
+      const { data: result, error } = await db
+        .from("crm_sales_leads").update(data).eq("id", id).select().single();
       if (error) throw error;
       return result;
     },
@@ -162,8 +166,8 @@ export function useAdvanceLeadStage() {
         updates.won_at = new Date().toISOString();
       }
 
-      const { data, error } = await supabase
-        .from("crm_leads").update(updates).eq("id", id).select().single();
+      const { data, error } = await db
+        .from("crm_sales_leads").update(updates).eq("id", id).select().single();
       if (error) throw error;
 
       // Record stage-change activity
@@ -171,7 +175,7 @@ export function useAdvanceLeadStage() {
       if (user?.id) {
         const { data: profile } = await supabase
           .from("profiles").select("full_name, username").eq("id", user.id).single();
-        await supabase.from("crm_lead_activities").insert({
+        await db.from("crm_sales_lead_activities").insert({
           lead_id: id,
           activity_type: "stage_change",
           subject: `${currentStage || "?"} → ${newStage}`,
@@ -203,8 +207,8 @@ export function useMarkLeadLost() {
       id, reason, funnelType, currentStage,
     }: { id: string; reason: string; funnelType: FunnelType; currentStage?: string }) => {
       const lostStage = funnelType === "f2" ? "descartado" : "sem_interesse";
-      const { data, error } = await supabase
-        .from("crm_leads")
+      const { data, error } = await db
+        .from("crm_sales_leads")
         .update({ stage: lostStage, lost_reason: reason, lost_at: new Date().toISOString() })
         .eq("id", id).select().single();
       if (error) throw error;
@@ -213,7 +217,7 @@ export function useMarkLeadLost() {
       if (user?.id) {
         const { data: profile } = await supabase
           .from("profiles").select("full_name, username").eq("id", user.id).single();
-        await supabase.from("crm_lead_activities").insert({
+        await db.from("crm_sales_lead_activities").insert({
           lead_id: id,
           activity_type: "stage_change",
           subject: `Perdido: ${reason}`,
