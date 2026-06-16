@@ -52,7 +52,7 @@ export function useMetasVendedores(month: Date, weekStart: Date) {
     queryKey: ["crm_metas", ano, mes, iso(weekFrom)],
     queryFn: async (): Promise<MetaVendedor[]> => {
       const [vendsRes, metasRes, monthRes, prevRes, weekRes] = await Promise.all([
-        db.rpc("crm_list_vendedores", {}),
+        db.rpc("crm_vendedores_ranking", {}),
         db.rpc("crm_metas_resolvidas", { p_ano: ano, p_mes: mes }),
         db.rpc("crm_vendas_agregado", { p_from: iso(monthStart), p_to: iso(monthEnd) }),
         db.rpc("crm_vendas_agregado", { p_from: iso(prevStart), p_to: iso(monthStart) }),
@@ -69,9 +69,9 @@ export function useMetasVendedores(month: Date, weekStart: Date) {
       const prevAgg = aggMap(prevRes.data);
       const weekAgg = aggMap(weekRes.data);
 
-      // Só quem tem a flag de vendedor entra no quadro de metas (avulsos ficam de fora).
-      type Prof = { id: string; full_name: string | null; avatar_url: string | null; department: string | null; secondary_department: string | null; is_vendedor: boolean };
-      return ((vendsRes.data ?? []) as Prof[]).filter((p) => p.is_vendedor).map((p) => {
+      // Ranking: TODOS os vendedores (mesmo sem venda/meta) — quadro de competição.
+      type Prof = { id: string; full_name: string | null; avatar_url: string | null; department: string | null; secondary_department: string | null };
+      return ((vendsRes.data ?? []) as Prof[]).map((p) => {
         const meta = metaMap.get(p.id) ?? { target_amount: 0, source: "none" as MetaSource };
         const act = monthAgg.get(p.id) ?? { total: 0, qtd: 0 };
         return {
