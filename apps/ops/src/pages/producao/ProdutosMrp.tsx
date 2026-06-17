@@ -187,6 +187,7 @@ export default function ProdutosMrp() {
       <BomDialog
         open={!!bomProduct}
         onOpenChange={(v) => { if (!v) setBomProduct(null); }}
+        productId={bomProduct?.id ?? null}
         productName={bomProduct?.name ?? ""}
       />
     </div>

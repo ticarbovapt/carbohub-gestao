@@ -1,24 +1,61 @@
+import { useState } from "react";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { CarboBadge } from "@/components/ui/carbo-badge";
 import {
   CarboTable, CarboTableHeader, CarboTableBody, CarboTableRow, CarboTableHead, CarboTableCell,
 } from "@/components/ui/carbo-table";
-import { ClipboardList, Plus, Trash2 } from "lucide-react";
+import { ClipboardList, Plus, Trash2, Loader2, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
-
-interface BomItem { id: string; insumo: string; qty: number; unit: string; }
-// TODO: ligar em bom_items (Supabase)
-const MOCK_BOM: BomItem[] = [];
+import { useBom, useBomMutations } from "@/hooks/useBom";
+import { useMrpProducts } from "@/hooks/useMrpProducts";
 
 interface BomDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  productId: string | null;
   productName: string;
 }
 
-export function BomDialog({ open, onOpenChange, productName }: BomDialogProps) {
+export function BomDialog({ open, onOpenChange, productId, productName }: BomDialogProps) {
+  const { data: items = [], isLoading } = useBom(open ? productId : null);
+  const { data: products = [] } = useMrpProducts();
+  const { add, remove } = useBomMutations();
+
+  const [insumoId, setInsumoId] = useState("");
+  const [qty, setQty] = useState("");
+  const [unit, setUnit] = useState("un");
+  const [critical, setCritical] = useState(false);
+
+  const usedIds = new Set(items.map((i) => i.insumo_id));
+  const options = products.filter((p) => p.id !== productId && !usedIds.has(p.id));
+
+  const handleAdd = async () => {
+    if (!productId) return;
+    try {
+      await add.mutateAsync({ productId, insumoId, quantity: Number(qty), unit, isCritical: critical });
+      toast.success("Insumo adicionado à ficha.");
+      setInsumoId(""); setQty(""); setUnit("un"); setCritical(false);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Não foi possível adicionar.");
+    }
+  };
+
+  const handleRemove = async (id: string) => {
+    if (!productId) return;
+    try {
+      await remove.mutateAsync({ id, productId });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Não foi possível remover.");
+    }
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="w-[calc(100%-2rem)] sm:max-w-2xl max-h-[90vh] overflow-y-auto">
@@ -31,9 +68,35 @@ export function BomDialog({ open, onOpenChange, productName }: BomDialogProps) {
         </DialogHeader>
 
         <div className="space-y-4">
+          {/* Form de adicionar insumo */}
+          <div className="grid grid-cols-1 sm:grid-cols-[1fr,auto,auto,auto] gap-2 items-end rounded-lg border border-dashed border-border p-3">
+            <div className="space-y-1.5">
+              <Label className="text-xs">Insumo</Label>
+              <Select value={insumoId} onValueChange={setInsumoId}>
+                <SelectTrigger className="h-9"><SelectValue placeholder="Selecione o insumo" /></SelectTrigger>
+                <SelectContent>
+                  {options.map((p) => (
+                    <SelectItem key={p.id} value={p.id}>{p.name} <span className="text-muted-foreground text-xs">({p.product_code})</span></SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Qtd / un</Label>
+              <Input type="number" min={0} step="0.0001" placeholder="1" value={qty} onChange={(e) => setQty(e.target.value)} className="h-9 w-24" />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Unidade</Label>
+              <Input value={unit} onChange={(e) => setUnit(e.target.value)} className="h-9 w-20" />
+            </div>
+            <div className="flex flex-col items-center gap-1">
+              <Label className="text-xs">Crítico</Label>
+              <Switch checked={critical} onCheckedChange={setCritical} />
+            </div>
+          </div>
           <div className="flex justify-end">
-            <Button variant="outline" size="sm" className="gap-1.5" onClick={() => toast.info("Disponível na fase de lógica")}>
-              <Plus className="h-3.5 w-3.5" /> Adicionar insumo
+            <Button size="sm" className="gap-1.5" onClick={handleAdd} disabled={add.isPending || !insumoId}>
+              {add.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />} Adicionar insumo
             </Button>
           </div>
 
@@ -44,22 +107,25 @@ export function BomDialog({ open, onOpenChange, productName }: BomDialogProps) {
                   <CarboTableHead>Insumo</CarboTableHead>
                   <CarboTableHead className="text-right">Qtd por unidade</CarboTableHead>
                   <CarboTableHead>Unidade</CarboTableHead>
+                  <CarboTableHead>Crítico</CarboTableHead>
                   <CarboTableHead className="w-10" />
                 </CarboTableRow>
               </CarboTableHeader>
               <CarboTableBody>
-                {MOCK_BOM.length === 0 && (
-                  <CarboTableRow>
-                    <CarboTableCell colSpan={4} className="py-8 text-center text-sm text-muted-foreground">Nenhum insumo</CarboTableCell>
-                  </CarboTableRow>
+                {isLoading && (
+                  <CarboTableRow><CarboTableCell colSpan={5} className="py-8 text-center text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin inline mr-2" /> Carregando…</CarboTableCell></CarboTableRow>
                 )}
-                {MOCK_BOM.map((item) => (
+                {!isLoading && items.length === 0 && (
+                  <CarboTableRow><CarboTableCell colSpan={5} className="py-8 text-center text-sm text-muted-foreground">Nenhum insumo na ficha</CarboTableCell></CarboTableRow>
+                )}
+                {items.map((item) => (
                   <CarboTableRow key={item.id}>
-                    <CarboTableCell className="font-medium">{item.insumo}</CarboTableCell>
+                    <CarboTableCell className="font-medium">{item.insumo}<span className="ml-2 text-xs text-muted-foreground font-mono">{item.code}</span></CarboTableCell>
                     <CarboTableCell className="text-right tabular-nums">{item.qty.toLocaleString("pt-BR")}</CarboTableCell>
                     <CarboTableCell className="text-muted-foreground">{item.unit}</CarboTableCell>
+                    <CarboTableCell>{item.is_critical ? <CarboBadge variant="destructive" className="gap-1"><AlertTriangle className="h-3 w-3" /> Crítico</CarboBadge> : <span className="text-xs text-muted-foreground">—</span>}</CarboTableCell>
                     <CarboTableCell>
-                      <button onClick={() => toast.info("Disponível na fase de lógica")} className="p-1.5 hover:bg-muted rounded-md text-destructive">
+                      <button onClick={() => handleRemove(item.id)} className="p-1.5 hover:bg-muted rounded-md text-destructive disabled:opacity-50" disabled={remove.isPending}>
                         <Trash2 className="h-3.5 w-3.5" />
                       </button>
                     </CarboTableCell>
