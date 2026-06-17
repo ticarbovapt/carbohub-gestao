@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Plane, Plus, Check, X, Eye } from "lucide-react";
+import { CarboEmptyState } from "@/components/ui/carbo-empty-state";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { Textarea } from "@/components/ui/textarea";
@@ -20,7 +21,7 @@ import {
 import { SolicitacaoViagemDialog } from "@/components/logistica/SolicitacaoViagemDialog";
 import { ViagemDetailsDialog, type ViagemDetail } from "@/components/logistica/ViagemDetailsDialog";
 
-// ⚠️ PORT VISUAL FIEL ao Controle (/viagens → ViagensPage "Viagens & Prestação de Contas") — dados MOCK.
+// TODO: ligar em viagens (Supabase)
 
 type ViagemStatus = "rascunho" | "pendente_gestor" | "pendente_financeiro" | "pendente_ceo" | "aprovado" | "reprovado" | "em_andamento" | "concluido" | "cancelado";
 const STATUS_LABEL: Record<ViagemStatus, string> = {
@@ -51,12 +52,8 @@ const PC_STATUS_COLOR: Record<PCStatus, string> = {
 const brl = (v: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
 
 interface Viagem { id: string; destino: string; objetivo: string; solicitante: string; data: string; valor: number; status: ViagemStatus; pc: PCStatus | null; }
-const VIAGENS: Viagem[] = [
-  { id: "1", destino: "São Paulo/SP", objetivo: "Visita ao CD LogHouse", solicitante: "Lucas Padilha", data: "2026-06-18", valor: 2400, status: "pendente_financeiro", pc: null },
-  { id: "2", destino: "Recife/PE", objetivo: "Prospecção licenciados", solicitante: "Marcio Vannucci", data: "2026-06-12", valor: 1800, status: "aprovado", pc: "aberta" },
-  { id: "3", destino: "Fortaleza/CE", objetivo: "Treinamento PDV", solicitante: "Marcius D'Ávila", data: "2026-06-05", valor: 1500, status: "concluido", pc: "aprovada" },
-  { id: "4", destino: "Mossoró/RN", objetivo: "Manutenção máquina", solicitante: "João Silva", data: "2026-06-20", valor: 600, status: "pendente_gestor", pc: null },
-];
+// TODO: ligar em viagens (Supabase)
+const VIAGENS: Viagem[] = [];
 
 const dt = (s: string) => new Date(s + "T00:00:00").toLocaleDateString("pt-BR");
 
@@ -115,6 +112,13 @@ export default function Viagens() {
                   <TableHead className="text-right">Valor</TableHead><TableHead>Status</TableHead><TableHead>PC</TableHead><TableHead className="w-[110px]">Ações</TableHead>
                 </TableRow></TableHeader>
                 <TableBody>
+                  {rows.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={7} className="p-0">
+                        <CarboEmptyState icon={Plane} title="Nenhuma viagem" description="Nenhuma viagem registrada." />
+                      </TableCell>
+                    </TableRow>
+                  )}
                   {rows.map((v) => (
                     <TableRow key={v.id}>
                       <TableCell><p className="font-medium">{v.destino}</p><p className="text-xs text-muted-foreground truncate max-w-[220px]">{v.objetivo}</p></TableCell>
@@ -141,7 +145,7 @@ export default function Viagens() {
             </div>
           </TabsContent>
         </Tabs>
-        <p className="text-xs text-muted-foreground text-center">Tela em port visual — dados de exemplo. Aprovações e prestação de contas entram na fase de lógica.</p>
+        <p className="text-xs text-muted-foreground text-center">Conexão com dados reais entra na fase de lógica. Aprovações e prestação de contas entram na fase de lógica.</p>
       </div>
 
       <SolicitacaoViagemDialog open={novaOpen} onOpenChange={setNovaOpen} />

@@ -1,4 +1,3 @@
-// ⚠️ Form em port visual — campos MOCK; submit liga na fase de lógica.
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from "@/components/ui/dialog";
@@ -10,12 +9,8 @@ import { ClipboardList, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 interface BomItem { id: string; insumo: string; qty: number; unit: string; }
-const MOCK_BOM: BomItem[] = [
-  { id: "1", insumo: "Reagente base", qty: 0.25, unit: "L" },
-  { id: "2", insumo: "Garrafa PET 1L", qty: 1, unit: "un" },
-  { id: "3", insumo: "Rótulo CarboPRO", qty: 1, unit: "un" },
-  { id: "4", insumo: "Aditivo X", qty: 0.05, unit: "L" },
-];
+// TODO: ligar em bom_items (Supabase)
+const MOCK_BOM: BomItem[] = [];
 
 interface BomDialogProps {
   open: boolean;
@@ -53,6 +48,11 @@ export function BomDialog({ open, onOpenChange, productName }: BomDialogProps) {
                 </CarboTableRow>
               </CarboTableHeader>
               <CarboTableBody>
+                {MOCK_BOM.length === 0 && (
+                  <CarboTableRow>
+                    <CarboTableCell colSpan={4} className="py-8 text-center text-sm text-muted-foreground">Nenhum insumo</CarboTableCell>
+                  </CarboTableRow>
+                )}
                 {MOCK_BOM.map((item) => (
                   <CarboTableRow key={item.id}>
                     <CarboTableCell className="font-medium">{item.insumo}</CarboTableCell>

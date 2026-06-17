@@ -1,6 +1,6 @@
 import { Clock, Truck, CheckCircle2, AlertTriangle } from "lucide-react";
 
-// ⚠️ MOCK compartilhado da Logística (fiel ao Controle: types/shipment + LogisticsKanban/KPIs).
+// Componentes compartilhados da Logística (types/shipment + LogisticsKanban/KPIs).
 
 export type ShipmentStatus = "separacao_pendente" | "separando" | "separado" | "em_transporte" | "entregue" | "cancelado";
 
@@ -20,14 +20,8 @@ export interface Shipment {
   carrier_name: string | null; tracking_code: string | null; status: ShipmentStatus; items: number;
 }
 
-export const MOCK_SHIPMENTS: Shipment[] = [
-  { id: "1", order_number: "VND-2042", destination: "Natal/RN", customer: "Posto Shell Centro", carrier_name: null, tracking_code: null, status: "separacao_pendente", items: 2 },
-  { id: "2", order_number: "VND-2041", destination: "São Paulo/SP", customer: "Auto Posto Bandeirantes", carrier_name: "Jadlog", tracking_code: null, status: "separando", items: 3 },
-  { id: "3", order_number: "VND-2040", destination: "Recife/PE", customer: "Rede ABC", carrier_name: "Correios", tracking_code: "BR123456789", status: "separado", items: 1 },
-  { id: "4", order_number: "VND-2039", destination: "Curitiba/PR", customer: "Posto Ipiranga Sul", carrier_name: "Braspress", tracking_code: "BP998877", status: "em_transporte", items: 1 },
-  { id: "5", order_number: "VND-2038", destination: "Natal/RN", customer: "Oficina do Zé", carrier_name: "Correios", tracking_code: "BR555444", status: "entregue", items: 2 },
-  { id: "6", order_number: "VND-2037", destination: "Fortaleza/CE", customer: "Transportadora Veloz", carrier_name: "Jadlog", tracking_code: null, status: "separacao_pendente", items: 4 },
-];
+// TODO: ligar em shipments (Supabase)
+export const MOCK_SHIPMENTS: Shipment[] = [];
 
 export function ShipmentsKanban({ shipments, onView }: { shipments: Shipment[]; onView?: (s: Shipment) => void }) {
   return (
@@ -66,7 +60,7 @@ export function LogisticsKpis({ shipments }: { shipments: Shipment[] }) {
   const pending = shipments.filter((s) => s.status === "separacao_pendente" || s.status === "separando").length;
   const inTransit = shipments.filter((s) => s.status === "em_transporte").length;
   const delivered = shipments.filter((s) => s.status === "entregue").length;
-  const overdue = 1;
+  const overdue = 0;
   const kpis = [
     { label: "Pendentes", value: pending, icon: Clock, color: "text-warning" },
     { label: "Em Transporte", value: inTransit, icon: Truck, color: "text-carbo-blue" },

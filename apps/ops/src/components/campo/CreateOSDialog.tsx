@@ -1,4 +1,4 @@
-// ⚠️ Form em port visual — campos MOCK; submit liga na fase de lógica.
+// TODO: ligar em <tabela de OS> (Supabase) na fase de lógica.
 // Cópia fiel do CreateOSDialog do Controle (Nova Descarbonização) — B2C / B2B / Frota.
 import { useState } from "react";
 import {

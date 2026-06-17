@@ -1,4 +1,4 @@
-// ⚠️ Form em port visual — campos MOCK; submit liga na fase de lógica.
+// TODO: ligar em fretes/cotacoes (Supabase)
 import { useState } from "react";
 import {
   Dialog,
@@ -30,16 +30,11 @@ interface CarrierResult {
   price: number;
 }
 
-// Resultado MOCK — valores ilustrativos, não são reais.
-const MOCK_RESULTS: CarrierResult[] = [
-  { name: "Correios", service: "PAC", days: "6–8 dias úteis", price: 38.9 },
-  { name: "Jadlog", service: "Package", days: "4–5 dias úteis", price: 52.4 },
-  { name: "Braspress", service: "Rodoviário", days: "3–4 dias úteis", price: 67.0 },
-  { name: "Correios", service: "Sedex", days: "2–3 dias úteis", price: 94.5 },
-];
+// TODO: ligar em fretes/cotacoes (Supabase)
+const MOCK_RESULTS: CarrierResult[] = [];
 
 export function FreightCalculatorDialog({ open, onOpenChange }: FreightCalculatorDialogProps) {
-  const [origem, setOrigem] = useState("Natal / RN — 59000-000");
+  const [origem, setOrigem] = useState("");
   const [cep, setCep] = useState("");
   const [peso, setPeso] = useState("");
   const [altura, setAltura] = useState("");
@@ -138,6 +133,9 @@ export function FreightCalculatorDialog({ open, onOpenChange }: FreightCalculato
                   </span>
                 </div>
                 <div className="divide-y">
+                  {MOCK_RESULTS.length === 0 && (
+                    <p className="px-3 py-6 text-center text-sm text-muted-foreground">Nenhum resultado de cotação.</p>
+                  )}
                   {MOCK_RESULTS.map((r, i) => (
                     <div key={i} className="flex items-center justify-between px-3 py-2.5">
                       <div className="min-w-0">

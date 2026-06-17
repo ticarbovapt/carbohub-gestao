@@ -12,8 +12,8 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-// ⚠️ PORT VISUAL FIEL ao Controle (/dashboards/ecommerce/vendas-online → DashEcommerceVendas) — dados MOCK.
-// Finanças internas (Vindi, reconciliação, editor de comissão) entram na fase de lógica.
+// PORT VISUAL FIEL ao Controle (/dashboards/ecommerce/vendas-online → DashEcommerceVendas).
+// TODO: ligar em <integrações de e-commerce ML/Amazon/Nuvemshop> (Supabase) na fase de lógica.
 
 type Platform = "mercadolivre" | "amazon" | "nuvemshop" | "tiktok" | "shopee";
 type Period = "today" | "7d" | "30d" | "month";
@@ -50,47 +50,18 @@ interface Metrics {
   dailySales: { label: string; orders: number; units: number }[];
   products: ProductRow[];
 }
-const DAILY = (base: number) => ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"].map((label, i) => ({ label, orders: base + ((i * 7) % 13), units: (base + ((i * 7) % 13)) * 3 }));
-
-const MOCK_METRICS: Record<Platform, Metrics> = {
-  mercadolivre: {
-    isConnected: true, totalOrders: 420, totalRevenue: 86400, netRevenue: 78200, commissionTotal: 8200,
-    totalUnitsSold: 1260, avgTicket: 206, shippedOrders: 38, deliveredOrders: 360, cancelledOrders: 22,
-    cancellationRate: 5.2, pendingOrders: 12, paidOrders: 28,
-    topProduct: { name: "CarboZé 100ml", sku: "SKU-ZE-100", revenue: 41200, orders: 210, units_sold: 630 },
-    dailySales: DAILY(48),
-    products: [
-      { id: "1", name: "CarboZé 100ml", sku: "SKU-ZE-100", orders: 210, units_per_pack: 3, units_sold: 630, revenue: 41200 },
-      { id: "2", name: "CarboPRO", sku: "SKU-PRO", orders: 120, units_per_pack: 1, units_sold: 120, revenue: 28600 },
-      { id: "3", name: "CarboZé Sachê", sku: "SKU-ZE-SCH", orders: 90, units_per_pack: 10, units_sold: 900, revenue: 16600 },
-    ],
-  },
-  amazon: {
-    isConnected: true, totalOrders: 260, totalRevenue: 61200, netRevenue: 54800, commissionTotal: 6400,
-    totalUnitsSold: 740, avgTicket: 235, shippedOrders: 26, deliveredOrders: 215, cancelledOrders: 11,
-    cancellationRate: 4.2, pendingOrders: 5, paidOrders: 14,
-    topProduct: { name: "CarboZé 1L", sku: "SKU-ZE-1L", revenue: 33000, orders: 130, units_sold: 130 },
-    dailySales: DAILY(31),
-    products: [
-      { id: "1", name: "CarboZé 1L", sku: "SKU-ZE-1L", orders: 130, units_per_pack: 1, units_sold: 130, revenue: 33000 },
-      { id: "2", name: "CarboPRO", sku: "SKU-PRO", orders: 80, units_per_pack: 1, units_sold: 80, revenue: 19200 },
-      { id: "3", name: "CarboZé 100ml", sku: "SKU-ZE-100", orders: 50, units_per_pack: 3, units_sold: 150, revenue: 9000 },
-    ],
-  },
-  nuvemshop: {
-    isConnected: true, totalOrders: 180, totalRevenue: 39800, netRevenue: 36900, commissionTotal: 2900,
-    totalUnitsSold: 520, avgTicket: 221, shippedOrders: 18, deliveredOrders: 150, cancelledOrders: 6,
-    cancellationRate: 3.3, pendingOrders: 4, paidOrders: 8,
-    topProduct: { name: "CarboPRO", sku: "SKU-PRO", revenue: 19800, orders: 82, units_sold: 82 },
-    dailySales: DAILY(21),
-    products: [
-      { id: "1", name: "CarboPRO", sku: "SKU-PRO", orders: 82, units_per_pack: 1, units_sold: 82, revenue: 19800 },
-      { id: "2", name: "CarboZé 100ml", sku: "SKU-ZE-100", orders: 60, units_per_pack: 3, units_sold: 180, revenue: 13200 },
-      { id: "3", name: "CarboVapt", sku: "SKU-VAPT", orders: 38, units_per_pack: 1, units_sold: 38, revenue: 6800 },
-    ],
-  },
-  tiktok: { isConnected: false, totalOrders: 0, totalRevenue: 0, netRevenue: 0, commissionTotal: 0, totalUnitsSold: 0, avgTicket: 0, shippedOrders: 0, deliveredOrders: 0, cancelledOrders: 0, cancellationRate: 0, pendingOrders: 0, paidOrders: 0, topProduct: null, dailySales: [], products: [] },
-  shopee: { isConnected: false, totalOrders: 0, totalRevenue: 0, netRevenue: 0, commissionTotal: 0, totalUnitsSold: 0, avgTicket: 0, shippedOrders: 0, deliveredOrders: 0, cancelledOrders: 0, cancellationRate: 0, pendingOrders: 0, paidOrders: 0, topProduct: null, dailySales: [], products: [] },
+// TODO: ligar em <integrações de e-commerce> (Supabase) — métricas vazias até a fase de lógica.
+const emptyMetrics = (): Metrics => ({
+  isConnected: false, totalOrders: 0, totalRevenue: 0, netRevenue: 0, commissionTotal: 0,
+  totalUnitsSold: 0, avgTicket: 0, shippedOrders: 0, deliveredOrders: 0, cancelledOrders: 0,
+  cancellationRate: 0, pendingOrders: 0, paidOrders: 0, topProduct: null, dailySales: [], products: [],
+});
+const METRICS: Record<Platform, Metrics> = {
+  mercadolivre: emptyMetrics(),
+  amazon: emptyMetrics(),
+  nuvemshop: emptyMetrics(),
+  tiktok: emptyMetrics(),
+  shopee: emptyMetrics(),
 };
 
 function MetricCard({ label, value, sub, icon, accent }: { label: string; value: string; sub?: string; icon: React.ReactNode; accent: string }) {
@@ -108,7 +79,7 @@ function MetricCard({ label, value, sub, icon, accent }: { label: string; value:
 
 function PlatformView({ platform }: { platform: Platform }) {
   const cfg = PMAP[platform];
-  const m = MOCK_METRICS[platform];
+  const m = METRICS[platform];
   return (
     <div className="space-y-5">
       <div className={cn("rounded-2xl border p-4 flex items-center justify-between", cfg.bgClass, cfg.borderClass)}>
@@ -236,7 +207,7 @@ function PlatformView({ platform }: { platform: Platform }) {
 function ComparativoView() {
   const [selected, setSelected] = useState<Platform[]>(["mercadolivre", "amazon", "nuvemshop"]);
   const toggle = (id: Platform) => setSelected((prev) => prev.includes(id) ? prev.filter((p) => p !== id) : [...prev, id]);
-  const data = selected.map((p) => ({ platform: p, ...MOCK_METRICS[p] }));
+  const data = selected.map((p) => ({ platform: p, ...METRICS[p] }));
 
   const totalRevenue = data.reduce((s, c) => s + c.totalRevenue, 0);
   const totalOrders = data.reduce((s, c) => s + c.totalOrders, 0);
@@ -247,11 +218,8 @@ function ComparativoView() {
   const leaderTicket = [...data].sort((a, b) => b.avgTicket - a.avgTicket)[0];
   const leaderLowCancel = [...data].filter((c) => c.totalOrders > 0).sort((a, b) => a.cancellationRate - b.cancellationRate)[0];
   const pieData = data.map((c) => ({ name: PMAP[c.platform].label, value: c.totalRevenue, color: PMAP[c.platform].color }));
-  const evo = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"].map((label, i) => {
-    const row: Record<string, number | string> = { label };
-    selected.forEach((p) => { row[p] = Math.round(MOCK_METRICS[p].totalRevenue / 7 * (0.7 + (i % 4) * 0.15)); });
-    return row;
-  });
+  // TODO: ligar evolução de receita em <integrações de e-commerce> (Supabase).
+  const evo: Record<string, number | string>[] = [];
 
   return (
     <div className="space-y-5">
@@ -375,17 +343,16 @@ function ComparativoView() {
   );
 }
 
-const MESES = ["jan/26", "fev/26", "mar/26", "abr/26", "mai/26", "jun/26"];
 function HistoricoMensalView() {
-  const data = MESES.map((mes, i) => ({ mes, mercadolivre: 60000 + i * 4500, amazon: 42000 + i * 3200, nuvemshop: 28000 + i * 2100 }));
-  const last = data[data.length - 1];
+  // TODO: ligar histórico mensal em <integrações de e-commerce> (Supabase).
+  const data: { mes: string; mercadolivre: number; amazon: number; nuvemshop: number }[] = [];
   const totalReceita = data.reduce((s, d) => s + d.mercadolivre + d.amazon + d.nuvemshop, 0);
   return (
     <div className="space-y-5">
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
         <MetricCard label="Receita Total (6 meses)" value={fmtBRL(totalReceita)} icon={<Wallet className="h-4 w-4" />} accent="#22c55e" />
-        <MetricCard label="Melhor mês" value="jun/26" sub={fmtBRL(last.mercadolivre + last.amazon + last.nuvemshop)} icon={<TrendingUp className="h-4 w-4" />} accent="#3b82f6" />
-        <MetricCard label="Plataformas ativas" value="3" sub="ML · Amazon · Nuvemshop" icon={<BarChart3 className="h-4 w-4" />} accent="#a78bfa" />
+        <MetricCard label="Melhor mês" value="—" icon={<TrendingUp className="h-4 w-4" />} accent="#3b82f6" />
+        <MetricCard label="Plataformas ativas" value={String(ACTIVE_PLATFORMS.length)} sub="ML · Amazon · Nuvemshop" icon={<BarChart3 className="h-4 w-4" />} accent="#a78bfa" />
       </div>
       <Card className="rounded-2xl border-0 shadow-sm">
         <CardHeader className="pb-1 pt-5 px-5"><CardTitle className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Receita Mensal por Plataforma</CardTitle></CardHeader>
@@ -458,10 +425,6 @@ export default function Ecommerce() {
 
         {/* Conteúdo */}
         {active === "historico" ? <HistoricoMensalView /> : active === "comparativo" ? <ComparativoView /> : <PlatformView platform={active as Platform} />}
-
-        <p className="text-xs text-muted-foreground text-center">
-          Tela em port visual — dados de exemplo. Integrações reais (ML, Amazon, Nuvemshop) e finanças entram na fase de lógica.
-        </p>
       </div>
     </div>
   );

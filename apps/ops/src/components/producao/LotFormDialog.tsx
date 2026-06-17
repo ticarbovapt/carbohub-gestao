@@ -1,4 +1,3 @@
-// ⚠️ Form em port visual — campos MOCK; submit liga na fase de lógica.
 import { useState } from "react";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
@@ -11,17 +10,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { DatePickerInput } from "@/components/ui/date-picker-input";
 import { toast } from "sonner";
 
-const MOCK_PRODUCTS = [
-  { id: "p1", name: "Reagente CarboZé" },
-  { id: "p2", name: "Reagente CarboPRO" },
-  { id: "p3", name: "Aditivo X" },
-  { id: "p4", name: "Base concentrada" },
-];
-const MOCK_SUPPLIERS = [
-  { id: "s1", name: "QuímicaSul" },
-  { id: "s2", name: "BioReagentes" },
-  { id: "s3", name: "InsumosBR" },
-];
+// TODO: ligar em mrp_products (Supabase)
+const MOCK_PRODUCTS: { id: string; name: string }[] = [];
+// TODO: ligar em mrp_suppliers (Supabase)
+const MOCK_SUPPLIERS: { id: string; name: string }[] = [];
 
 export interface LotFormInitial {
   product_id?: string;
@@ -42,8 +34,8 @@ interface LotFormDialogProps {
 
 export function LotFormDialog({ open, onOpenChange, mode, initial }: LotFormDialogProps) {
   const [productId, setProductId] = useState(initial?.product_id ?? "");
-  const [volume, setVolume] = useState(String(initial?.initial_volume_ml ?? 200000));
-  const [expectedSamples, setExpectedSamples] = useState(String(initial?.expected_samples ?? 3));
+  const [volume, setVolume] = useState(initial?.initial_volume_ml != null ? String(initial.initial_volume_ml) : "");
+  const [expectedSamples, setExpectedSamples] = useState(initial?.expected_samples != null ? String(initial.expected_samples) : "");
   const [supplierId, setSupplierId] = useState(initial?.supplier_id ?? "");
   const [receivedAt, setReceivedAt] = useState(initial?.received_at ?? "");
   const [expiredAt, setExpiredAt] = useState(initial?.expired_at ?? "");

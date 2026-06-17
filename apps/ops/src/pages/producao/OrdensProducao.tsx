@@ -14,8 +14,7 @@ import { OPFormDialog } from "@/components/producao/OPFormDialog";
 import { ConfirmOPDialog } from "@/components/producao/ConfirmOPDialog";
 import { DeleteConfirmDialog } from "@/components/producao/DeleteConfirmDialog";
 
-// ⚠️ PORT VISUAL FIEL ao Controle (/production-orders → ProductionOrdersOP) — dados MOCK.
-// TODO: ligar em production_orders (Supabase) na fase de lógica.
+// TODO: ligar em production_orders (Supabase)
 
 type OpStatus =
   | "rascunho" | "planejada" | "aguardando_separacao" | "separada" | "aguardando_liberacao"
@@ -58,16 +57,8 @@ interface OP {
   priority: number; op_status: OpStatus; demand_source: string; need_date: string | null;
 }
 
-const MOCK: OP[] = [
-  { id: "1", op_number: "OP-2042", sku_code: "SKU-ZE-100", sku_name: "CarboZé 100ml", planned_quantity: 1200, good_quantity: null, rejected_quantity: null, priority: 1, op_status: "em_producao", demand_source: "venda", need_date: "2026-06-14" },
-  { id: "2", op_number: "OP-2041", sku_code: "SKU-ZE-1L", sku_name: "CarboZé 1L", planned_quantity: 600, good_quantity: null, rejected_quantity: null, priority: 2, op_status: "aguardando_separacao", demand_source: "recorrencia", need_date: "2026-06-16" },
-  { id: "3", op_number: "OP-2040", sku_code: "SKU-PRO", sku_name: "CarboPRO", planned_quantity: 300, good_quantity: 295, rejected_quantity: 5, priority: 3, op_status: "concluida", demand_source: "venda", need_date: "2026-06-09" },
-  { id: "4", op_number: "OP-2039", sku_code: "SKU-VAPT", sku_name: "CarboVapt", planned_quantity: 450, good_quantity: null, rejected_quantity: null, priority: 2, op_status: "planejada", demand_source: "safety_stock", need_date: "2026-06-20" },
-  { id: "5", op_number: "OP-2038", sku_code: "SKU-ZE-SCH", sku_name: "CarboZé Sachê", planned_quantity: 5000, good_quantity: null, rejected_quantity: null, priority: 4, op_status: "aguardando_confirmacao", demand_source: "pcp_manual", need_date: "2026-06-12" },
-  { id: "6", op_number: "OP-2037", sku_code: "SKU-ZE-100", sku_name: "CarboZé 100ml", planned_quantity: 800, good_quantity: null, rejected_quantity: null, priority: 1, op_status: "bloqueada", demand_source: "venda", need_date: "2026-06-11" },
-  { id: "7", op_number: "OP-2036", sku_code: "SKU-PRO", sku_name: "CarboPRO", planned_quantity: 200, good_quantity: 200, rejected_quantity: 0, priority: 3, op_status: "liberada", demand_source: "recorrencia", need_date: "2026-06-08" },
-  { id: "8", op_number: "OP-2035", sku_code: "SKU-ZE-1L", sku_name: "CarboZé 1L", planned_quantity: 1000, good_quantity: null, rejected_quantity: null, priority: 5, op_status: "rascunho", demand_source: "pcp_manual", need_date: null },
-];
+// TODO: ligar em production_orders (Supabase)
+const MOCK: OP[] = [];
 
 function KpiCard({ icon: Icon, label, value, sub, color }: { icon: typeof TrendingUp; label: string; value: string; sub: string; color: string }) {
   return (
@@ -129,10 +120,10 @@ export default function OrdensProducao() {
 
         {/* KPIs */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <KpiCard icon={TrendingUp} label="Rendimento Médio" value="94,2%" sub="Últimos 30 dias" color="text-green-500" />
-          <KpiCard icon={Target} label="Aderência BOM" value="88,5%" sub="Últimos 30 dias" color="text-yellow-500" />
-          <KpiCard icon={CheckCircle} label="OPs Confirmadas" value="37" sub="Últimos 30 dias" color="text-green-500" />
-          <KpiCard icon={XCircle} label="Perdas Totais" value="142" sub="Unidades rejeitadas" color="text-red-500" />
+          <KpiCard icon={TrendingUp} label="Rendimento Médio" value="—" sub="Últimos 30 dias" color="text-green-500" />
+          <KpiCard icon={Target} label="Aderência BOM" value="—" sub="Últimos 30 dias" color="text-yellow-500" />
+          <KpiCard icon={CheckCircle} label="OPs Confirmadas" value="0" sub="Últimos 30 dias" color="text-green-500" />
+          <KpiCard icon={XCircle} label="Perdas Totais" value="0" sub="Unidades rejeitadas" color="text-red-500" />
         </div>
 
         {/* Filtros */}
@@ -242,9 +233,6 @@ export default function OrdensProducao() {
           </div>
         )}
 
-        <p className="text-xs text-muted-foreground text-center">
-          Tela em port visual — dados de exemplo. OPs reais, criação/edição e confirmação entram na fase de lógica.
-        </p>
       </div>
 
       {/* Dialogs */}

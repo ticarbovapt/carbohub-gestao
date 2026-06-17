@@ -10,20 +10,16 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Cog, Plus, Wrench, Power, PowerOff, AlertTriangle, Pencil } from "lucide-react";
 import { MachineDialog, type MachineDialogValues } from "@/components/campo/MachineDialog";
+import { CarboEmptyState } from "@/components/ui/carbo-empty-state";
 
-// ⚠️ PORT VISUAL FIEL ao Controle (/machines → Machines "Gestão de Máquinas") — dados MOCK.
+// TODO: ligar em <tabela de máquinas> (Supabase) na fase de lógica.
 
 type MachineStatus = "operational" | "maintenance" | "offline" | "retired";
 const STATUS_LABELS: Record<MachineStatus, string> = { operational: "Operacional", maintenance: "Manutenção", offline: "Offline", retired: "Aposentada" };
 const STATUS_VARIANT: Record<MachineStatus, "success" | "warning" | "secondary" | "destructive"> = { operational: "success", maintenance: "warning", offline: "secondary", retired: "destructive" };
 
 interface Machine { id: string; codigo: string; modelo: string; licenciado: string; status: MachineStatus; ultimaManut: string | null; proximaManut: string | null; creditos: number; }
-const MOCK: Machine[] = [
-  { id: "1", codigo: "MAQ-014", modelo: "CarboVAPT Pro", licenciado: "Licenciado Natal", status: "operational", ultimaManut: "2026-05-10", proximaManut: "2026-08-10", creditos: 1200 },
-  { id: "2", codigo: "MAQ-013", modelo: "CarboVAPT Pro", licenciado: "Licenciado Recife", status: "maintenance", ultimaManut: "2026-06-01", proximaManut: "2026-06-15", creditos: 80 },
-  { id: "3", codigo: "MAQ-012", modelo: "CarboVAPT Lite", licenciado: "Licenciado Fortaleza", status: "operational", ultimaManut: "2026-04-20", proximaManut: "2026-07-20", creditos: 640 },
-  { id: "4", codigo: "MAQ-011", modelo: "CarboVAPT Lite", licenciado: "Licenciado SP", status: "offline", ultimaManut: "2026-03-15", proximaManut: null, creditos: 0 },
-];
+const MACHINES: Machine[] = [];
 
 const dt = (s: string | null) => (s ? new Date(s + "T00:00:00").toLocaleDateString("pt-BR") : "—");
 
@@ -34,13 +30,13 @@ export default function Maquinas() {
   const [editValues, setEditValues] = useState<MachineDialogValues | null>(null);
 
   const stats = useMemo(() => ({
-    total: MOCK.length,
-    operational: MOCK.filter((m) => m.status === "operational").length,
-    maintenance: MOCK.filter((m) => m.status === "maintenance").length,
-    lowStock: MOCK.filter((m) => m.creditos < 100).length,
-    creditos: MOCK.reduce((s, m) => s + m.creditos, 0),
+    total: MACHINES.length,
+    operational: MACHINES.filter((m) => m.status === "operational").length,
+    maintenance: MACHINES.filter((m) => m.status === "maintenance").length,
+    lowStock: MACHINES.filter((m) => m.creditos < 100).length,
+    creditos: MACHINES.reduce((s, m) => s + m.creditos, 0),
   }), []);
-  const filtered = MOCK.filter((m) => {
+  const filtered = MACHINES.filter((m) => {
     if (statusFilter !== "all" && m.status !== statusFilter) return false;
     if (!search) return true;
     const q = search.toLowerCase();
@@ -96,10 +92,16 @@ export default function Maquinas() {
                   <CarboTableCell><button onClick={() => setEditValues({ modelo: m.modelo, serie: m.codigo, licenciado: m.licenciado, instalacao: m.ultimaManut ?? "", status: m.status })} className="p-1.5 hover:bg-muted rounded-md"><Pencil className="h-3.5 w-3.5 text-muted-foreground" /></button></CarboTableCell>
                 </CarboTableRow>
               ))}
+              {filtered.length === 0 && (
+                <CarboTableRow>
+                  <CarboTableCell colSpan={8}>
+                    <CarboEmptyState icon={Cog} title="Nenhuma máquina" description="Nenhuma máquina cadastrada." />
+                  </CarboTableCell>
+                </CarboTableRow>
+              )}
             </CarboTableBody>
           </CarboTable>
         </div>
-        <p className="text-xs text-muted-foreground text-center">Tela em port visual — dados de exemplo. Consumo, alertas e manutenção entram na fase de lógica.</p>
       </div>
 
       <MachineDialog mode="create" open={createOpen} onOpenChange={setCreateOpen} />

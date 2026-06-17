@@ -1,4 +1,3 @@
-// ⚠️ Form em port visual — campos MOCK; submit liga na fase de lógica.
 import { useState } from "react";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
@@ -36,7 +35,7 @@ export function SkuFormDialog({ open, onOpenChange, mode, initial }: SkuFormDial
   const [description, setDescription] = useState(initial?.description ?? "");
   const [category, setCategory] = useState(initial?.category ?? "produto_final");
   const [unit, setUnit] = useState(initial?.unit ?? "un");
-  const [packagingMl, setPackagingMl] = useState(String(initial?.packaging_ml ?? 100));
+  const [packagingMl, setPackagingMl] = useState(initial?.packaging_ml != null ? String(initial.packaging_ml) : "");
   const [safetyStock, setSafetyStock] = useState(String(initial?.safety_stock_qty ?? 0));
   const [coverageDays, setCoverageDays] = useState(String(initial?.target_coverage_days ?? 30));
   const [isActive, setIsActive] = useState(initial?.is_active ?? true);

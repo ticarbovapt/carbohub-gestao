@@ -12,31 +12,22 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
-// ⚠️ PORT VISUAL FIEL ao Controle (/dashboards/comercial) — dados MOCK.
-// TODO: ligar em carboze_orders (Supabase) na fase de lógica.
+// PORT VISUAL FIEL ao Controle (/dashboards/comercial).
+// TODO: ligar em carboze_orders (Supabase)
 
-const VENDEDORES = ["Lucas Padilha", "Marcio Vannucci", "Marcius D'Ávila"];
+const VENDEDORES: string[] = [];
 
-// Mock mensal no formato real: faturado (R$) + pedidos (qtd) + ticket médio
-const MESES = ["set/25", "out/25", "nov/25", "dez/25", "jan/26", "fev/26", "mar/26", "abr/26", "mai/26"];
-const FATURADO = [2000, 18000, 4000, 53000, 33000, 46000, 40000, 86000, 101000];
-const PEDIDOS = [7, 6, 4, 23, 18, 20, 20, 25, 20];
-const monthlyData = MESES.map((mes, i) => ({
-  mes,
-  faturado: FATURADO[i],
-  pedidos: PEDIDOS[i],
-  ticketMedio: PEDIDOS[i] > 0 ? Math.round(FATURADO[i] / PEDIDOS[i]) : 0,
-}));
+interface MonthlyRow { mes: string; faturado: number; pedidos: number; ticketMedio: number; }
+const monthlyData: MonthlyRow[] = [];
 
-// KPIs mock
 const kpis = {
-  totalVendas: 143,
-  totalBRL: 382740.5,
-  maiorVenda: 55000,
-  maiorCliente: "BRISANET SERVICOS DE TELECOMUNICACOES S.A.",
-  topCliente: "M CONSTRUÇÕES & SERVIÇOS LTDA",
-  topQtd: 11,
-  ticketMedio: 382740.5 / 143,
+  totalVendas: 0,
+  totalBRL: 0,
+  maiorVenda: 0,
+  maiorCliente: "—",
+  topCliente: "—",
+  topQtd: 0,
+  ticketMedio: 0,
 };
 
 const formatCurrency = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -46,11 +37,12 @@ const fmtK = (v: number) =>
   : formatCurrency(v);
 const pct = (cur: number, prev: number) => (prev > 0 ? ((cur - prev) / prev) * 100 : null);
 
-// Crescimento M/M e vs Janeiro (derivado do mock)
+// Crescimento M/M e vs Janeiro (derivado dos dados reais — vazio até ligar Supabase)
+const emptyRow: MonthlyRow = { mes: "—", faturado: 0, pedidos: 0, ticketMedio: 0 };
 const lastIdx = monthlyData.length - 1;
-const cur = monthlyData[lastIdx];
-const prev = monthlyData[lastIdx - 1];
-const jan = monthlyData.find((m) => m.mes === "jan/26")!;
+const cur = monthlyData[lastIdx] ?? emptyRow;
+const prev = monthlyData[lastIdx - 1] ?? emptyRow;
+const jan = monthlyData.find((m) => m.mes === "jan/26") ?? emptyRow;
 const growth = {
   mom: {
     brl: pct(cur.faturado, prev.faturado), qty: pct(cur.pedidos, prev.pedidos),
@@ -62,14 +54,8 @@ const growth = {
   },
 };
 
-// Crescimento anual: real vs projeção +15%/mês desde R$30k
-const BASE_JAN = 30_000, RATE = 0.15;
-const annualGrowthData = Array.from({ length: 12 }, (_, i) => {
-  const label = ["jan/26","fev/26","mar/26","abr/26","mai/26","jun/26","jul/26","ago/26","set/26","out/26","nov/26","dez/26"][i];
-  const projecao = Math.round(BASE_JAN * Math.pow(1 + RATE, i));
-  const realMatch = monthlyData.find((m) => m.mes === label);
-  return { label, projecao, real: realMatch ? realMatch.faturado : null };
-});
+// Crescimento anual: real vs projeção (vazio até ligar Supabase)
+const annualGrowthData: { label: string; projecao: number | null; real: number | null }[] = [];
 
 const TooltipBRL = ({ active, payload, label }: any) => {
   if (!active || !payload?.length) return null;
@@ -348,9 +334,6 @@ export default function DashboardComercial() {
           </div>
         </div>
 
-        <p className="text-xs text-muted-foreground text-center pt-1">
-          Tela em port visual — números de exemplo. Os dados reais (carboze_orders / Bling) entram na fase de lógica.
-        </p>
       </div>
     </div>
   );

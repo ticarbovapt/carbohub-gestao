@@ -7,11 +7,12 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Warehouse, Search, Tag, Download, Activity, Shield, Calendar, Package, Eye } from "lucide-react";
 import { StockProgressBar } from "@/components/estoque/StockProgressBar";
+import { CarboEmptyState } from "@/components/ui/carbo-empty-state";
 import { addDays, format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { toast } from "sonner";
 
-// ⚠️ PORT VISUAL FIEL ao Controle (warehouse_stock → StockOverview, dentro de Suprimentos) — dados MOCK.
+// TODO: ligar em warehouse_stock (Supabase) → StockOverview (Controle, dentro de Suprimentos).
 // Saldos por Hub: HUB-RN (Natal), HUB-SP (CD SP LogHouse), HUB-SP-VENDAS (CD SP Vendas).
 
 const HUBS = [
@@ -24,14 +25,8 @@ interface ProdEstoque {
   id: string; product_code: string; name: string; category: string; stock_unit: string;
   safety_stock_qty: number; hubs: Record<string, number>; giroMedio: number;
 }
-const MOCK: ProdEstoque[] = [
-  { id: "1", product_code: "ESTA-100ML", name: "CarboZé 100ml", category: "Produto Final", stock_unit: "un", safety_stock_qty: 500, hubs: { rn: 3200, sp: 900, spv: 400 }, giroMedio: 140 },
-  { id: "2", product_code: "ESTA-1L", name: "CarboZé 1L", category: "Produto Final", stock_unit: "un", safety_stock_qty: 200, hubs: { rn: 140, sp: 60, spv: 0 }, giroMedio: 30 },
-  { id: "3", product_code: "GARR-1L", name: "Garrafa PET 1L", category: "Embalagem", stock_unit: "un", safety_stock_qty: 800, hubs: { rn: 320, sp: 0, spv: 0 }, giroMedio: 50 },
-  { id: "4", product_code: "REAG-BASE", name: "Reagente base", category: "Carbonatação", stock_unit: "L", safety_stock_qty: 400, hubs: { rn: 1500, sp: 0, spv: 0 }, giroMedio: 12 },
-  { id: "5", product_code: "PRO-500", name: "CarboPRO", category: "Produto Final", stock_unit: "un", safety_stock_qty: 150, hubs: { rn: 280, sp: 120, spv: 80 }, giroMedio: 0 },
-  { id: "6", product_code: "ROT-PRO", name: "Rótulo CarboPRO", category: "Insumo", stock_unit: "un", safety_stock_qty: 2000, hubs: { rn: 4000, sp: 2000, spv: 0 }, giroMedio: 90 },
-];
+// TODO: ligar em warehouse_stock (Supabase)
+const MOCK: ProdEstoque[] = [];
 
 function coverageStatus(days: number | null): { label: string; variant: "destructive" | "warning" | "success" | "info" | "secondary" } {
   if (days === null) return { label: "Sem consumo", variant: "secondary" };
@@ -98,7 +93,7 @@ export default function SaldosPorHub() {
 
         {/* Cards */}
         {filtered.length === 0 ? (
-          <CarboCard><CarboCardContent className="py-12 text-center"><Package className="h-12 w-12 mx-auto mb-3 text-muted-foreground/30" /><p className="text-muted-foreground">Nenhum produto encontrado</p></CarboCardContent></CarboCard>
+          <CarboCard><CarboCardContent><CarboEmptyState icon={Package} title="Sem dados" description="Nenhum produto em estoque." /></CarboCardContent></CarboCard>
         ) : (
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
             {filtered.map((p) => {
@@ -154,7 +149,7 @@ export default function SaldosPorHub() {
             })}
           </div>
         )}
-        <p className="text-xs text-muted-foreground text-center">Tela em port visual — dados de exemplo. Saldo real (warehouse_stock), movimentações e entradas entram na fase de lógica.</p>
+        <p className="text-xs text-muted-foreground text-center">Saldo real (warehouse_stock), movimentações e entradas entram na fase de lógica.</p>
       </div>
     </div>
   );

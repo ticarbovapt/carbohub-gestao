@@ -1,11 +1,11 @@
-// ⚠️ PORT VISUAL FIEL ao Controle (/admin/nfse → NFSeImportPage) — dados MOCK.
-// Sem supabase, sem @tanstack/react-query, sem JSZip, sem hooks reais.
+// TODO: ligar em <tabela financeira/bling> (Supabase)
 // Importação e parsing de NFSe entram na fase de lógica (botões → toast).
 
 import React, { useMemo, useState } from "react";
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
 import { CarboCard, CarboCardContent } from "@/components/ui/carbo-card";
 import { CarboBadge } from "@/components/ui/carbo-badge";
+import { CarboEmptyState } from "@/components/ui/carbo-empty-state";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,7 +17,7 @@ import {
   Hash, CalendarDays, MapPin,
 } from "lucide-react";
 
-// ─── Shape MOCK equivalente a NFSeRecord (sem importar o real) ──────────────────
+// ─── Shape equivalente a NFSeRecord (sem importar o real) ──────────────────
 interface NFSeMock {
   id: string;
   numero: number;
@@ -37,16 +37,9 @@ interface NFSeMock {
   qtd_veiculos: number | null;
 }
 
-const MOCK_NFSE: NFSeMock[] = [
-  { id: "1", numero: 2048, data_emissao: "2026-06-09", competencia: "2026-06-01", item_lista_servico: "14.01", discriminacao: "Descarbonização de motor — caminhão Scania | 1 # Pedido 8841", outras_informacoes: "Pedido: 8841", valor_servicos: 1850, iss_retido: false, tomador_cpf_cnpj: "12.345.678/0001-90", tomador_razao_social: "Transportes Bandeirante Ltda", tomador_uf: "SP", tomador_cep: "01310-100", pedido_refs: ["8841"], veiculo_descricao: "Scania R450", qtd_veiculos: 1 },
-  { id: "2", numero: 2047, data_emissao: "2026-06-07", competencia: "2026-06-01", item_lista_servico: "14.01", discriminacao: "Limpeza de bicos injetores — frota | 3 # Pedido 8832", outras_informacoes: "Pedido: 8832", valor_servicos: 4320, iss_retido: true, tomador_cpf_cnpj: "98.765.432/0001-10", tomador_razao_social: "Rede ABC Combustíveis S.A.", tomador_uf: "RJ", tomador_cep: "20040-020", pedido_refs: ["8832"], veiculo_descricao: "Volvo FH540", qtd_veiculos: 3 },
-  { id: "3", numero: 2046, data_emissao: "2026-06-05", competencia: "2026-06-01", item_lista_servico: "14.01", discriminacao: "Descarbonização preventiva | 1 # Pedido 8820", outras_informacoes: "Pedido: 8820", valor_servicos: 1290, iss_retido: false, tomador_cpf_cnpj: "45.678.912/0001-33", tomador_razao_social: "Auto Posto Central de Natal", tomador_uf: "RN", tomador_cep: "59020-000", pedido_refs: ["8820"], veiculo_descricao: "Mercedes Actros", qtd_veiculos: 1 },
-  { id: "4", numero: 2045, data_emissao: "2026-05-29", competencia: "2026-05-01", item_lista_servico: "14.01", discriminacao: "Pacote manutenção descarbonização | 5 # Pedido 8801", outras_informacoes: "Pedido: 8801", valor_servicos: 7800, iss_retido: true, tomador_cpf_cnpj: "33.111.222/0001-55", tomador_razao_social: "Logística Sul Cargas Ltda", tomador_uf: "RS", tomador_cep: "90010-150", pedido_refs: ["8801"], veiculo_descricao: "DAF XF", qtd_veiculos: 5 },
-  { id: "5", numero: 2044, data_emissao: "2026-05-22", competencia: "2026-05-01", item_lista_servico: "14.01", discriminacao: "Descarbonização de motor diesel | 2 # Pedido 8790", outras_informacoes: "Pedido: 8790", valor_servicos: 3100, iss_retido: false, tomador_cpf_cnpj: "77.888.999/0001-22", tomador_razao_social: "Frota Minas Transportes", tomador_uf: "MG", tomador_cep: "30140-071", pedido_refs: ["8790"], veiculo_descricao: "Iveco Stralis", qtd_veiculos: 2 },
-  { id: "6", numero: 2043, data_emissao: "2026-05-15", competencia: "2026-05-01", item_lista_servico: "14.01", discriminacao: "Serviço avulso de descarbonização | 1", outras_informacoes: "", valor_servicos: 980, iss_retido: false, tomador_cpf_cnpj: "123.456.789-00", tomador_razao_social: "Carlos Eduardo Souza", tomador_uf: "SP", tomador_cep: "04567-000", pedido_refs: [], veiculo_descricao: null, qtd_veiculos: null },
-];
+const MOCK_NFSE: NFSeMock[] = [];
 
-// ─── Stats MOCK equivalente a calcNFSeStats ─────────────────────────────────────
+// ─── Stats equivalente a calcNFSeStats ─────────────────────────────────────
 function calcStats(records: NFSeMock[]) {
   const total = records.reduce((s, r) => s + r.valor_servicos, 0);
   const count = records.length;
@@ -317,6 +310,7 @@ export default function NFSe() {
                   ))}
                 </tbody>
               </table>
+              {records.length === 0 && <CarboEmptyState icon={FileText} title="Nenhuma NFS-e importada" />}
             </div>
 
             {/* Resumo por UF */}
@@ -336,10 +330,6 @@ export default function NFSe() {
             </CarboCardContent></CarboCard>
           </TabsContent>
         </Tabs>
-
-        <p className="text-xs text-muted-foreground text-center">
-          Tela em port visual — dados de exemplo. Importação e parsing de NFSe entram na fase de lógica.
-        </p>
       </div>
     </div>
   );

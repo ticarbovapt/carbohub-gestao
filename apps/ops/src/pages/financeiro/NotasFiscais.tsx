@@ -4,8 +4,9 @@ import { CarboCard, CarboCardContent } from "@/components/ui/carbo-card";
 import { CarboBadge } from "@/components/ui/carbo-badge";
 import { Input } from "@/components/ui/input";
 import { FileText, Search, Link2, AlertTriangle, XCircle, Archive, CheckCircle2 } from "lucide-react";
+import { CarboEmptyState } from "@/components/ui/carbo-empty-state";
 
-// ⚠️ PORT VISUAL FIEL ao Controle (/integrations/bling/nfs → BlingNFsPage) — dados MOCK.
+// TODO: ligar em <tabela financeira/bling> (Supabase)
 
 const brl = (v: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
 
@@ -14,13 +15,7 @@ const MATCH_LABEL: Record<Match, string> = { matched: "Vínculo automático", ma
 const MATCH_VARIANT: Record<Match, "success" | "info" | "warning" | "destructive" | "secondary"> = { matched: "success", manual: "info", no_code: "warning", invalid_code: "destructive", ignored: "secondary" };
 
 interface NFe { id: string; data: string; numero: string; serie: string; cliente: string; cnpj: string; valor: number; situacao: string; match: Match; }
-const NFES: NFe[] = [
-  { id: "1", data: "10/06/2026", numero: "123455", serie: "1", cliente: "Posto Shell Centro", cnpj: "12.345.678/0001-90", valor: 4850, situacao: "Autorizada", match: "matched" },
-  { id: "2", data: "09/06/2026", numero: "123454", serie: "1", cliente: "Auto Posto Bandeirantes", cnpj: "98.765.432/0001-10", valor: 12300, situacao: "Autorizada", match: "manual" },
-  { id: "3", data: "08/06/2026", numero: "123453", serie: "1", cliente: "Cliente Avulso", cnpj: "—", valor: 980, situacao: "Autorizada", match: "no_code" },
-  { id: "4", data: "07/06/2026", numero: "123452", serie: "1", cliente: "Rede ABC", cnpj: "45.678.912/0001-33", valor: 7600, situacao: "Autorizada", match: "invalid_code" },
-  { id: "5", data: "05/06/2026", numero: "123450", serie: "1", cliente: "Teste interno", cnpj: "—", valor: 0, situacao: "Cancelada", match: "ignored" },
-];
+const NFES: NFe[] = [];
 
 function Kpi({ icon: Icon, label, value, color }: { icon: typeof Link2; label: string; value: string; color: string }) {
   return (
@@ -98,8 +93,8 @@ export default function NotasFiscais() {
               ))}
             </tbody>
           </table>
+          {filtered.length === 0 && <CarboEmptyState icon={FileText} title="Nenhuma nota fiscal" />}
         </div>
-        <p className="text-xs text-muted-foreground text-center">Tela em port visual — dados de exemplo. Importação do Bling e vínculo automático entram na fase de lógica.</p>
       </div>
     </div>
   );

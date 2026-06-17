@@ -9,6 +9,7 @@ import { Search, Tag, Activity, Shield, Calendar, Package, Pencil, Plus } from "
 import { addDays, format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { MOCK_ESTOQUE, coverageStatus, type Hub } from "@/components/estoque/stockData";
+import { CarboEmptyState } from "@/components/ui/carbo-empty-state";
 import { NovaEntradaDialog } from "@/components/estoque/NovaEntradaDialog";
 import { AjustarEstoqueDialog, type AjusteTarget } from "@/components/estoque/AjustarEstoqueDialog";
 
@@ -87,7 +88,7 @@ export function StockView({ hub, editable }: { hub: Hub; editable: boolean }) {
             </CarboCard>
           );
         })}
-        {filtered.length === 0 && <CarboCard className="sm:col-span-2 xl:col-span-3"><CarboCardContent className="py-12 text-center"><Package className="h-12 w-12 mx-auto mb-3 text-muted-foreground/30" /><p className="text-muted-foreground">Nenhum produto encontrado</p></CarboCardContent></CarboCard>}
+        {filtered.length === 0 && <CarboCard className="sm:col-span-2 xl:col-span-3"><CarboCardContent><CarboEmptyState icon={Package} title="Sem dados" description="Nenhum produto em estoque para este hub." /></CarboCardContent></CarboCard>}
       </div>
 
       {editable && (

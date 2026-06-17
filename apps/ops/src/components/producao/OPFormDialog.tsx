@@ -1,4 +1,3 @@
-// ⚠️ Form em port visual — campos MOCK; submit liga na fase de lógica.
 import { useState } from "react";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
@@ -14,13 +13,8 @@ import { toast } from "sonner";
 const PRIORITY_LABELS: Record<string, string> = { "1": "Urgente", "2": "Alta", "3": "Normal", "4": "Baixa", "5": "Planejado" };
 const DEMAND_SOURCE_LABELS: Record<string, string> = { venda: "Venda", recorrencia: "Recorrência", safety_stock: "Safety Stock", pcp_manual: "PCP Manual" };
 
-// SKUs mock para o select de produto
-const MOCK_SKUS = [
-  { id: "1", code: "SKU-ZE-100", name: "CarboZé 100ml" },
-  { id: "2", code: "SKU-ZE-1L", name: "CarboZé 1L" },
-  { id: "3", code: "SKU-PRO", name: "CarboPRO" },
-  { id: "4", code: "SKU-VAPT", name: "CarboVapt" },
-];
+// TODO: ligar em sku (Supabase)
+const MOCK_SKUS: { id: string; code: string; name: string }[] = [];
 
 function currentPeriod(): string {
   const now = new Date();
@@ -45,7 +39,7 @@ interface OPFormDialogProps {
 
 export function OPFormDialog({ open, onOpenChange, mode, initial }: OPFormDialogProps) {
   const [skuId, setSkuId] = useState(initial?.sku_id ?? "");
-  const [plannedQty, setPlannedQty] = useState(String(initial?.planned_quantity ?? 100));
+  const [plannedQty, setPlannedQty] = useState(initial?.planned_quantity != null ? String(initial.planned_quantity) : "");
   const [priority, setPriority] = useState(initial?.priority ?? "3");
   const [demandSource, setDemandSource] = useState(initial?.demand_source ?? "");
   const [needDate, setNeedDate] = useState(initial?.need_date ?? "");

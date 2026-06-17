@@ -1,5 +1,5 @@
-// ⚠️ Form em port visual — campos MOCK; submit liga na fase de lógica.
-import { Brain, CheckCircle2, XCircle, Star } from "lucide-react";
+// TODO: ligar em <tabela de compras> (Supabase).
+import { Brain, Star } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { CarboCard, CarboCardContent, CarboCardHeader, CarboCardTitle } from "@/components/ui/carbo-card";
 import { CarboBadge } from "@/components/ui/carbo-badge";
@@ -15,20 +15,15 @@ export interface RCLite {
   statusVariant: "secondary" | "warning" | "success" | "destructive";
 }
 
-// Itens / cotações / análise MOCK (mesmos campos do RCDetailsPanel do Controle).
-const ITEMS_MOCK = [
-  { descricao: "Reagente base 25L", quantidade: 4, unidade: "un", valor_unitario: 2400 },
-  { descricao: "Frete dedicado", quantidade: 1, unidade: "serviço", valor_unitario: 2800 },
-];
-const QUOTATIONS_MOCK = [
-  { fornecedor_nome: "QuímicaSul", preco: 12400, prazo_entrega_dias: 7, condicao_pagamento: "30/60", recomendado: true },
-  { fornecedor_nome: "InsumosBR", preco: 13100, prazo_entrega_dias: 5, condicao_pagamento: "à vista", recomendado: false },
-  { fornecedor_nome: "ReagBrasil", preco: 12950, prazo_entrega_dias: 10, condicao_pagamento: "28 ddl", recomendado: false },
-];
+interface RCItem { descricao: string; quantidade: number; unidade: string; valor_unitario: number; }
+interface RCQuotation { fornecedor_nome: string; preco: number; prazo_entrega_dias: number; condicao_pagamento: string; recomendado: boolean; }
+// TODO: ligar em <tabela de compras> (Supabase).
+const ITEMS: RCItem[] = [];
+const QUOTATIONS: RCQuotation[] = [];
 
 export function RCDetailsDialog({ rc, open, onOpenChange }: { rc: RCLite | null; open: boolean; onOpenChange: (v: boolean) => void }) {
   if (!rc) return null;
-  const totalQtd = ITEMS_MOCK.reduce((s, i) => s + i.quantidade, 0);
+  const totalQtd = ITEMS.reduce((s, i) => s + i.quantidade, 0);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -61,17 +56,21 @@ export function RCDetailsDialog({ rc, open, onOpenChange }: { rc: RCLite | null;
           <CarboCard>
             <CarboCardHeader><CarboCardTitle className="text-sm">Itens da Requisição</CarboCardTitle></CarboCardHeader>
             <CarboCardContent>
-              <div className="divide-y divide-border">
-                {ITEMS_MOCK.map((it, i) => (
-                  <div key={i} className="py-2.5 flex items-center justify-between gap-4">
-                    <div className="flex-1 min-w-0">
-                      <p className="font-medium text-sm">{it.descricao}</p>
-                      <p className="text-xs text-muted-foreground mt-0.5">{it.quantidade} {it.unidade} × {brl(it.valor_unitario)}</p>
+              {ITEMS.length === 0 ? (
+                <p className="text-sm text-muted-foreground py-2">Nenhum item</p>
+              ) : (
+                <div className="divide-y divide-border">
+                  {ITEMS.map((it, i) => (
+                    <div key={i} className="py-2.5 flex items-center justify-between gap-4">
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-sm">{it.descricao}</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">{it.quantidade} {it.unidade} × {brl(it.valor_unitario)}</p>
+                      </div>
+                      <p className="font-bold text-sm">{brl(it.quantidade * it.valor_unitario)}</p>
                     </div>
-                    <p className="font-bold text-sm">{brl(it.quantidade * it.valor_unitario)}</p>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )}
             </CarboCardContent>
           </CarboCard>
 
@@ -79,30 +78,33 @@ export function RCDetailsDialog({ rc, open, onOpenChange }: { rc: RCLite | null;
           <CarboCard>
             <CarboCardHeader>
               <CarboCardTitle className="text-sm">
-                Cotações ({QUOTATIONS_MOCK.length}/3 mínimas)
-                <span className="text-carbo-green ml-2 text-xs">✓ Mínimo atingido</span>
+                Cotações ({QUOTATIONS.length}/3 mínimas)
               </CarboCardTitle>
             </CarboCardHeader>
             <CarboCardContent>
-              <div className="divide-y divide-border">
-                {QUOTATIONS_MOCK.map((q, i) => (
-                  <div key={i} className="py-3 flex items-center justify-between gap-4">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <p className="font-medium text-sm">{q.fornecedor_nome}</p>
-                        {q.recomendado && (
-                          <CarboBadge variant="success" className="gap-1"><Star className="h-3 w-3" /> IA Recomendado</CarboBadge>
-                        )}
+              {QUOTATIONS.length === 0 ? (
+                <p className="text-sm text-muted-foreground py-2">Nenhuma cotação</p>
+              ) : (
+                <div className="divide-y divide-border">
+                  {QUOTATIONS.map((q, i) => (
+                    <div key={i} className="py-3 flex items-center justify-between gap-4">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <p className="font-medium text-sm">{q.fornecedor_nome}</p>
+                          {q.recomendado && (
+                            <CarboBadge variant="success" className="gap-1"><Star className="h-3 w-3" /> IA Recomendado</CarboBadge>
+                          )}
+                        </div>
+                        <div className="flex gap-3 text-xs text-muted-foreground mt-0.5">
+                          <span>Prazo: {q.prazo_entrega_dias}d</span>
+                          <span>{q.condicao_pagamento}</span>
+                        </div>
                       </div>
-                      <div className="flex gap-3 text-xs text-muted-foreground mt-0.5">
-                        <span>Prazo: {q.prazo_entrega_dias}d</span>
-                        <span>{q.condicao_pagamento}</span>
-                      </div>
+                      <p className="font-bold text-sm">{brl(q.preco)}</p>
                     </div>
-                    <p className="font-bold text-sm">{brl(q.preco)}</p>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )}
             </CarboCardContent>
           </CarboCard>
 
@@ -112,14 +114,7 @@ export function RCDetailsDialog({ rc, open, onOpenChange }: { rc: RCLite | null;
               <CarboCardTitle className="text-sm flex items-center gap-2"><Brain className="h-4 w-4 text-primary" /> Análise IA</CarboCardTitle>
             </CarboCardHeader>
             <CarboCardContent>
-              <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <Star className="h-4 w-4 text-warning" />
-                  <p className="font-medium text-sm">Recomendação: QuímicaSul</p>
-                  <CarboBadge variant="success">Score: 8.7</CarboBadge>
-                </div>
-                <p className="text-sm text-muted-foreground">Melhor relação custo/prazo com condição de pagamento favorável.</p>
-              </div>
+              <p className="text-sm text-muted-foreground">Sem análise disponível.</p>
             </CarboCardContent>
           </CarboCard>
 
@@ -127,18 +122,7 @@ export function RCDetailsDialog({ rc, open, onOpenChange }: { rc: RCLite | null;
           <CarboCard>
             <CarboCardHeader><CarboCardTitle className="text-sm">Histórico de Aprovações</CarboCardTitle></CarboCardHeader>
             <CarboCardContent>
-              <div className="space-y-2">
-                <div className="flex items-center gap-2 text-sm">
-                  <CheckCircle2 className="h-4 w-4 text-carbo-green" />
-                  <span className="font-medium">Aprovado</span>
-                  <span className="text-muted-foreground">Nível 1</span>
-                  <span className="text-muted-foreground ml-auto text-xs">08/06/2026 14:20</span>
-                </div>
-                <div className="flex items-center gap-2 text-sm">
-                  <XCircle className="h-4 w-4 text-muted-foreground" />
-                  <span className="text-muted-foreground">Aguardando Nível 2 (&gt; R$ 10k)</span>
-                </div>
-              </div>
+              <p className="text-sm text-muted-foreground">Sem histórico.</p>
             </CarboCardContent>
           </CarboCard>
         </div>

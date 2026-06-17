@@ -14,7 +14,7 @@ import { toast } from "sonner";
 import { LotFormDialog } from "@/components/producao/LotFormDialog";
 import { DeleteConfirmDialog } from "@/components/producao/DeleteConfirmDialog";
 
-// ⚠️ PORT VISUAL FIEL ao Controle (/lots → Lots "Gestão de Lotes") — dados MOCK.
+// TODO: ligar em lots (Supabase)
 
 type LotStatus = "criado" | "recebido" | "em_quarentena" | "amostrado" | "aprovado" | "bloqueado" | "reprovado" | "encerrado";
 const LOT_STATUS_LABELS: Record<LotStatus, string> = {
@@ -30,13 +30,8 @@ interface Lot {
   id: string; lot_code: string; product_name: string; available_volume_ml: number; initial_volume_ml: number;
   status: LotStatus; collected_samples: number; expected_samples: number; supplier_name: string | null; received_at: string | null;
 }
-const MOCK: Lot[] = [
-  { id: "1", lot_code: "LOT-2042", product_name: "Reagente CarboZé", available_volume_ml: 42000, initial_volume_ml: 50000, status: "aprovado", collected_samples: 3, expected_samples: 3, supplier_name: "QuímicaSul", received_at: "2026-06-02" },
-  { id: "2", lot_code: "LOT-2041", product_name: "Reagente CarboPRO", available_volume_ml: 18000, initial_volume_ml: 60000, status: "em_quarentena", collected_samples: 1, expected_samples: 3, supplier_name: "BioReagentes", received_at: "2026-06-08" },
-  { id: "3", lot_code: "LOT-2040", product_name: "Aditivo X", available_volume_ml: 5000, initial_volume_ml: 40000, status: "amostrado", collected_samples: 2, expected_samples: 2, supplier_name: "QuímicaSul", received_at: "2026-06-05" },
-  { id: "4", lot_code: "LOT-2039", product_name: "Reagente VAPT", available_volume_ml: 0, initial_volume_ml: 30000, status: "reprovado", collected_samples: 3, expected_samples: 3, supplier_name: "InsumosBR", received_at: "2026-05-28" },
-  { id: "5", lot_code: "LOT-2038", product_name: "Base concentrada", available_volume_ml: 22000, initial_volume_ml: 25000, status: "recebido", collected_samples: 0, expected_samples: 2, supplier_name: null, received_at: "2026-06-09" },
-];
+// TODO: ligar em lots (Supabase)
+const MOCK: Lot[] = [];
 
 const formatVolume = (ml: number) => (ml >= 1000 ? `${(ml / 1000).toLocaleString("pt-BR")} L` : `${ml} ml`);
 const volumePercent = (a: number, i: number) => (i > 0 ? Math.round((a / i) * 100) : 0);
@@ -143,7 +138,6 @@ export default function Lotes() {
             </Table>
           </div>
         )}
-        <p className="text-xs text-muted-foreground text-center">Tela em port visual — dados de exemplo. Lotes reais e qualidade entram na fase de lógica.</p>
       </div>
 
       {/* Dialogs */}

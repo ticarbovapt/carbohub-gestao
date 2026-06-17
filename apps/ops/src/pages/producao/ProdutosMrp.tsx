@@ -13,7 +13,7 @@ import { cn } from "@/lib/utils";
 import { MrpProductFormDialog } from "@/components/producao/MrpProductFormDialog";
 import { BomDialog } from "@/components/producao/BomDialog";
 
-// ⚠️ PORT VISUAL FIEL ao Controle (/mrp/products → MrpProducts "Catálogo MRP") — dados MOCK.
+// TODO: ligar em mrp_products (Supabase)
 
 const CATEGORY_FILTER_TABS = [
   { key: "all", label: "Todos" },
@@ -36,13 +36,8 @@ function CategoryBadge({ category }: { category: string | null }) {
 
 interface HubStock { warehouse_name: string; quantity: number; }
 interface MrpProduct { id: string; name: string; product_code: string; category: string; current_stock_qty: number; safety_stock_qty: number; stock_unit: string; hubs: HubStock[]; }
-const MOCK: MrpProduct[] = [
-  { id: "1", name: "CarboZé 100ml", product_code: "ESTA-100ML", category: "Produto Final", current_stock_qty: 4200, safety_stock_qty: 500, stock_unit: "un", hubs: [{ warehouse_name: "HUB-RN", quantity: 3200 }, { warehouse_name: "HUB-SP", quantity: 1000 }] },
-  { id: "2", name: "Garrafa PET 1L", product_code: "GARR-1L", category: "Embalagem", current_stock_qty: 320, safety_stock_qty: 800, stock_unit: "un", hubs: [{ warehouse_name: "HUB-RN", quantity: 320 }, { warehouse_name: "HUB-SP", quantity: 0 }] },
-  { id: "3", name: "Reagente base", product_code: "REAG-BASE", category: "Carbonatação", current_stock_qty: 1500, safety_stock_qty: 400, stock_unit: "L", hubs: [{ warehouse_name: "HUB-RN", quantity: 1500 }] },
-  { id: "4", name: "Rótulo CarboPRO", product_code: "ROT-PRO", category: "Insumo", current_stock_qty: 6000, safety_stock_qty: 2000, stock_unit: "un", hubs: [{ warehouse_name: "HUB-RN", quantity: 4000 }, { warehouse_name: "HUB-SP", quantity: 2000 }] },
-  { id: "5", name: "CarboVapt", product_code: "VAPT-500", category: "Produto Final", current_stock_qty: 90, safety_stock_qty: 120, stock_unit: "un", hubs: [{ warehouse_name: "HUB-RN", quantity: 90 }] },
-];
+// TODO: ligar em mrp_products (Supabase)
+const MOCK: MrpProduct[] = [];
 
 function StockRiskBadge({ p }: { p: MrpProduct }) {
   const total = p.hubs.length ? p.hubs.reduce((s, h) => s + h.quantity, 0) : p.current_stock_qty;
@@ -94,6 +89,9 @@ export default function ProdutosMrp() {
             <div className="space-y-4">
               <p className="text-sm text-muted-foreground">Selecione um <strong>Produto Final</strong> para visualizar ou editar sua lista de insumos (BOM).</p>
               <div className="divide-y divide-border">
+                {produtosFinais.length === 0 && (
+                  <p className="py-8 text-center text-sm text-muted-foreground">Nenhum produto final</p>
+                )}
                 {produtosFinais.map((p) => (
                   <div key={p.id} className="flex items-center justify-between py-3 px-1">
                     <div className="flex items-center gap-3 min-w-0">
@@ -166,7 +164,6 @@ export default function ProdutosMrp() {
             )}
           </>
         )}
-        <p className="text-xs text-muted-foreground text-center">Tela em port visual — dados de exemplo. Catálogo, BOM e estoque por hub entram na fase de lógica.</p>
       </div>
 
       {/* Dialogs */}

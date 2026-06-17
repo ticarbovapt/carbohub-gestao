@@ -7,7 +7,7 @@ import { CreateOSDialog } from "@/components/campo/CreateOSDialog";
 import { NovaVendaDialog } from "@/components/NovaVendaDialog";
 
 // Botão "+" do topo (speed-dial). No ecossistema novo só expõe as duas ações
-// universais: Nova Descarbonização e Nova Venda — ambas abrem dialog (mock).
+// universais: Nova Descarbonização e Nova Venda — ambas abrem dialog.
 export function QuickAddMenu() {
   const [open, setOpen] = useState(false);
   const [descOpen, setDescOpen] = useState(false);

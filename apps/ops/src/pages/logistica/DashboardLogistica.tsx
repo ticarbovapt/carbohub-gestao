@@ -8,7 +8,7 @@ import { useState } from "react";
 import { MOCK_SHIPMENTS, ShipmentsKanban, LogisticsKpis, type Shipment } from "@/components/logistica/shipments";
 import { ShipmentDetailsDialog } from "@/components/logistica/ShipmentDetailsDialog";
 
-// ⚠️ PORT VISUAL FIEL ao Controle (/dashboards/logistica → DashboardLogistica) — dados MOCK.
+// TODO: ligar em shipments (Supabase)
 
 export default function DashboardLogistica() {
   const [shipment, setShipment] = useState<Shipment | null>(null);
@@ -37,7 +37,7 @@ export default function DashboardLogistica() {
             <CarboCard><CarboCardContent className="py-12 text-center text-muted-foreground"><BarChart3 className="h-10 w-10 mx-auto mb-2 opacity-30" /><p>Visão estratégica de logística — entra na fase de lógica.</p></CarboCardContent></CarboCard>
           </TabsContent>
         </Tabs>
-        <p className="text-xs text-muted-foreground text-center">Tela em port visual — dados de exemplo. Os dados reais entram na fase de lógica.</p>
+        <p className="text-xs text-muted-foreground text-center">Conexão com dados reais entra na fase de lógica. Os dados reais entram na fase de lógica.</p>
       </div>
 
       <ShipmentDetailsDialog

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
 import { CarboCard, CarboCardContent } from "@/components/ui/carbo-card";
 import { CarboBadge } from "@/components/ui/carbo-badge";
+import { CarboEmptyState } from "@/components/ui/carbo-empty-state";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
@@ -21,7 +22,7 @@ import { HUBS } from "@/components/estoque/stockData";
 import { CDSPRegistrarEnvioDialog } from "@/components/estoque/CDSPRegistrarEnvioDialog";
 import { RemessaConfirmDialog } from "@/components/estoque/RemessaConfirmDialog";
 
-// ⚠️ PORT VISUAL FIEL ao Controle (/suprimentos → Suprimentos) — dados MOCK.
+// TODO: ligar em <tabela de compras> (Supabase).
 // É a versão EDITÁVEL do estoque (gestores). A versão somente leitura vive em Estoque.
 
 type Hub = "rn" | "sp" | "sp-vendas" | "bling";
@@ -29,77 +30,48 @@ type Hub = "rn" | "sp" | "sp-vendas" | "bling";
 const STOCK_HUB_ID: Record<Hub, string> = { rn: "rn", sp: "sp", "sp-vendas": "spv", bling: "bling" };
 
 interface Mov { id: string; data: string; produto: string; tipo: "entrada" | "saida"; qtd: number; unidade: string; hub: string; }
-const MOVS: Mov[] = [
-  { id: "1", data: "2026-06-10", produto: "CarboZé 100ml", tipo: "entrada", qtd: 1200, unidade: "un", hub: "Hub Natal" },
-  { id: "2", data: "2026-06-09", produto: "Garrafa PET 1L", tipo: "saida", qtd: 480, unidade: "un", hub: "Hub Natal" },
-  { id: "3", data: "2026-06-09", produto: "CarboPRO", tipo: "entrada", qtd: 300, unidade: "un", hub: "CD SP LogHouse" },
-  { id: "4", data: "2026-06-08", produto: "Reagente base", tipo: "saida", qtd: 120, unidade: "L", hub: "Hub Natal" },
-];
+// TODO: ligar em <tabela de compras> (Supabase).
+const MOVS: Mov[] = [];
 
 interface Politica { id: string; produto: string; politica: string; seguranca: number; leadTime: number; }
-const POLITICAS: Politica[] = [
-  { id: "1", produto: "CarboZé 100ml", politica: "Ponto de pedido", seguranca: 500, leadTime: 7 },
-  { id: "2", produto: "Garrafa PET 1L", politica: "Min/Máx", seguranca: 800, leadTime: 12 },
-  { id: "3", produto: "Reagente base", politica: "Lote econômico", seguranca: 400, leadTime: 15 },
-];
+// TODO: ligar em <tabela de compras> (Supabase).
+const POLITICAS: Politica[] = [];
 
-const LOW_STOCK = [{ name: "Garrafa PET 1L", qty: 0 }, { name: "CarboVapt", qty: 30 }];
+const LOW_STOCK: { name: string; qty: number }[] = [];
 
-// Transferências CD-SP em trânsito (mock)
+// Transferências CD-SP em trânsito
 interface Transito { id: string; produto: string; qtd: number; unidade: string; origem: string; destino: string; enviado: string; status: "em_transito" | "recebido"; }
-const TRANSITO: Transito[] = [
-  { id: "1", produto: "CarboZé 100ml", qtd: 600, unidade: "un", origem: "Hub Natal", destino: "CD SP LogHouse", enviado: "2026-06-07", status: "em_transito" },
-  { id: "2", produto: "CarboPRO", qtd: 150, unidade: "un", origem: "Hub Natal", destino: "CD SP LogHouse", enviado: "2026-06-05", status: "recebido" },
-  { id: "3", produto: "Garrafa PET 1L", qtd: 1000, unidade: "un", origem: "Hub Natal", destino: "CD SP LogHouse", enviado: "2026-06-09", status: "em_transito" },
-];
+// TODO: ligar em <tabela de compras> (Supabase).
+const TRANSITO: Transito[] = [];
 
-// Mapeamento SKU plataforma → produto interno (auto-match por código), mock
-const SKU_MAP: { sku: string; produto: string }[] = [
-  { sku: "SKU-CP100", produto: "CarboPRO 100ml" }, { sku: "SKU-CZ1L", produto: "CarboZé 1 Litro" },
-  { sku: "SKU-CZ100", produto: "CarboZé 100ml" }, { sku: "CARB-SACH-10ML", produto: "CARBOZE SACHÊ 10ML" },
-  { sku: "INS-GARR-100ML", produto: "Garrafa 100ml Boca 24" }, { sku: "INS-GARR-1L", produto: "Garrafa 1L com Tampa" },
-  { sku: "KIT-CARB-SACH-10ML", produto: "KIT 10und CARBOZE SACHÊ 10ML" }, { sku: "KIT-5UN-CARB-100ML", produto: "KIT 5un CARBOZE 100ML" },
-  { sku: "INS-LIQ-CARBO", produto: "Líquido CARBO (ml)" }, { sku: "SKU-VAPT70", produto: "Reagente CarboVapt 70ml" },
-  { sku: "INS-ROT-CP", produto: "Rótulo CarboPRO" }, { sku: "INS-ROT-CZ", produto: "Rótulo CarboZé" },
-];
+// Mapeamento SKU plataforma → produto interno (auto-match por código)
+// TODO: ligar em <tabela de compras> (Supabase).
+const SKU_MAP: { sku: string; produto: string }[] = [];
 
-// Envios do Hub Natal → CD SP (stock_transfers from_hub = RN), mock
+// Envios do Hub Natal → CD SP (stock_transfers from_hub = RN)
 interface Envio { id: string; produto: string; qtd: number; unidade: string; enviado: string; nota?: string; status: "em_transito" | "entregue" | "estornado"; }
-const ENVIOS_SP: Envio[] = [
-  { id: "1", produto: "CarboZé 100ml", qtd: 600, unidade: "un", enviado: "2026-06-07 09:14", nota: "Remessa semanal CD SP", status: "em_transito" },
-  { id: "2", produto: "CarboPRO", qtd: 150, unidade: "un", enviado: "2026-06-05 16:40", status: "entregue" },
-  { id: "3", produto: "Garrafa PET 1L", qtd: 1000, unidade: "un", enviado: "2026-06-02 11:05", nota: "Reposição embalagem", status: "entregue" },
-  { id: "4", produto: "Rótulo CarboPRO", qtd: 2000, unidade: "un", enviado: "2026-05-29 08:20", status: "estornado" },
-];
+// TODO: ligar em <tabela de compras> (Supabase).
+const ENVIOS_SP: Envio[] = [];
 
-// Remessas Hub Natal → CD SP Vendas (licenciados), mock
+// Remessas Hub Natal → CD SP Vendas (licenciados)
 interface Remessa { id: string; produto: string; qtd: number; unidade: string; enviado: string; nota?: string; status: "em_transito" | "entregue"; }
-const REMESSAS_VENDAS: Remessa[] = [
-  { id: "1", produto: "CarboZé 100ml", qtd: 400, unidade: "un", enviado: "2026-06-08 10:30", nota: "Licenciado SP-Centro", status: "em_transito" },
-  { id: "2", produto: "CarboPRO", qtd: 80, unidade: "un", enviado: "2026-06-06 14:00", nota: "Licenciado Campinas", status: "em_transito" },
-  { id: "3", produto: "CarboZé 1L", qtd: 120, unidade: "un", enviado: "2026-06-03 09:00", status: "entregue" },
-];
+// TODO: ligar em <tabela de compras> (Supabase).
+const REMESSAS_VENDAS: Remessa[] = [];
 
-// Recebimentos de OC (purchase_receivings), mock
+// Recebimentos de OC (purchase_receivings)
 interface Recebimento { id: string; oc: string; recebidoEm: string; itens: number; status: "pendente" | "conferido_ok" | "conferido_divergencia"; divergencia?: string; }
-const RECEBIMENTOS: Recebimento[] = [
-  { id: "a1b2c3d4", oc: "a1b2c3d4", recebidoEm: "2026-06-09 15:20", itens: 4, status: "conferido_ok" },
-  { id: "e5f6g7h8", oc: "e5f6g7h8", recebidoEm: "2026-06-07 10:05", itens: 7, status: "conferido_divergencia", divergencia: "2 un a menos no item Garrafa PET 1L" },
-  { id: "i9j0k1l2", oc: "i9j0k1l2", recebidoEm: "2026-06-04 08:45", itens: 3, status: "pendente" },
-];
+// TODO: ligar em <tabela de compras> (Supabase).
+const RECEBIMENTOS: Recebimento[] = [];
 const RECEB_STATUS: Record<Recebimento["status"], { label: string; variant: "warning" | "success" | "destructive" }> = {
   pendente: { label: "Pendente", variant: "warning" },
   conferido_ok: { label: "Conferido", variant: "success" },
   conferido_divergencia: { label: "Divergência", variant: "destructive" },
 };
 
-// Notas fiscais de entrada (purchase_invoices), mock
+// Notas fiscais de entrada (purchase_invoices)
 interface Nota { id: string; numero: string; data: string; valor: number; ocMatch: boolean; recebMatch: boolean; valorMatch: boolean; }
-const NOTAS: Nota[] = [
-  { id: "1", numero: "000.123.456", data: "2026-06-09", valor: 12450.0, ocMatch: true, recebMatch: true, valorMatch: true },
-  { id: "2", numero: "000.123.401", data: "2026-06-06", valor: 8320.5, ocMatch: true, recebMatch: false, valorMatch: true },
-  { id: "3", numero: "000.122.998", data: "2026-06-02", valor: 3990.0, ocMatch: true, recebMatch: true, valorMatch: false },
-];
+// TODO: ligar em <tabela de compras> (Supabase).
+const NOTAS: Nota[] = [];
 const brl = (v: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
 
 const PERIODOS = [{ v: "7d", label: "Últimos 7 dias" }, { v: "30d", label: "Últimos 30 dias" }, { v: "mes", label: "Este mês" }];
@@ -152,7 +124,7 @@ export default function Suprimentos() {
         </div>
 
         {/* Alerta reposição — SP */}
-        {isSP && (
+        {isSP && LOW_STOCK.length > 0 && (
           <div className="flex items-start gap-3 px-4 py-3 rounded-lg bg-destructive/10 border border-destructive/30">
             <AlertCircle className="h-5 w-5 text-destructive shrink-0 mt-0.5" />
             <div className="flex-1 min-w-0">
@@ -175,11 +147,11 @@ export default function Suprimentos() {
               </Select>
             </div>
             <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-              <CarboCard variant="kpi" padding="sm"><CarboCardContent><div className="flex items-center gap-2 mb-1"><Layers className="h-4 w-4 text-carbo-blue" /><span className="text-xs text-muted-foreground">Total Produtos</span></div><p className="text-2xl font-bold">3</p></CarboCardContent></CarboCard>
-              <CarboCard variant="kpi" padding="sm"><CarboCardContent><div className="flex items-center gap-2 mb-1"><AlertTriangle className="h-4 w-4 text-destructive" /><span className="text-xs text-muted-foreground">Em Baixa</span></div><p className="text-2xl font-bold text-destructive">1</p></CarboCardContent></CarboCard>
-              <CarboCard variant="kpi" padding="sm"><CarboCardContent><div className="flex items-center gap-2 mb-1"><ArrowDownToLine className="h-4 w-4 text-carbo-green" /><span className="text-xs text-muted-foreground">Entradas ({periodLabel})</span></div><p className="text-2xl font-bold">11.146</p></CarboCardContent></CarboCard>
-              <CarboCard variant="kpi" padding="sm"><CarboCardContent><div className="flex items-center gap-2 mb-1"><ArrowUpFromLine className="h-4 w-4 text-warning" /><span className="text-xs text-muted-foreground">Saídas ({periodLabel})</span></div><p className="text-2xl font-bold">9.450</p></CarboCardContent></CarboCard>
-              <CarboCard variant="kpi" padding="sm"><CarboCardContent><div className="flex items-center gap-2 mb-1"><Activity className="h-4 w-4 text-muted-foreground" /><span className="text-xs text-muted-foreground">Movimentações ({periodLabel})</span></div><p className="text-2xl font-bold">4</p></CarboCardContent></CarboCard>
+              <CarboCard variant="kpi" padding="sm"><CarboCardContent><div className="flex items-center gap-2 mb-1"><Layers className="h-4 w-4 text-carbo-blue" /><span className="text-xs text-muted-foreground">Total Produtos</span></div><p className="text-2xl font-bold">0</p></CarboCardContent></CarboCard>
+              <CarboCard variant="kpi" padding="sm"><CarboCardContent><div className="flex items-center gap-2 mb-1"><AlertTriangle className="h-4 w-4 text-destructive" /><span className="text-xs text-muted-foreground">Em Baixa</span></div><p className="text-2xl font-bold text-destructive">0</p></CarboCardContent></CarboCard>
+              <CarboCard variant="kpi" padding="sm"><CarboCardContent><div className="flex items-center gap-2 mb-1"><ArrowDownToLine className="h-4 w-4 text-carbo-green" /><span className="text-xs text-muted-foreground">Entradas ({periodLabel})</span></div><p className="text-2xl font-bold">0</p></CarboCardContent></CarboCard>
+              <CarboCard variant="kpi" padding="sm"><CarboCardContent><div className="flex items-center gap-2 mb-1"><ArrowUpFromLine className="h-4 w-4 text-warning" /><span className="text-xs text-muted-foreground">Saídas ({periodLabel})</span></div><p className="text-2xl font-bold">0</p></CarboCardContent></CarboCard>
+              <CarboCard variant="kpi" padding="sm"><CarboCardContent><div className="flex items-center gap-2 mb-1"><Activity className="h-4 w-4 text-muted-foreground" /><span className="text-xs text-muted-foreground">Movimentações ({periodLabel})</span></div><p className="text-2xl font-bold">0</p></CarboCardContent></CarboCard>
             </div>
           </div>
         )}
@@ -209,6 +181,7 @@ export default function Suprimentos() {
           </TabsContent>
 
           <TabsContent value="movimentacoes" className="mt-4">
+            {MOVS.length === 0 ? <CarboEmptyState title="Nenhum registro" /> : (
             <div className="rounded-lg border bg-card overflow-x-auto">
               <Table>
                 <TableHeader><TableRow><TableHead>Data</TableHead><TableHead>Produto</TableHead><TableHead>Tipo</TableHead><TableHead className="text-right">Qtd</TableHead><TableHead>Hub</TableHead></TableRow></TableHeader>
@@ -229,10 +202,12 @@ export default function Suprimentos() {
                 </TableBody>
               </Table>
             </div>
+            )}
           </TabsContent>
 
           {/* Em Trânsito (SP) */}
           <TabsContent value="transito" className="mt-4">
+            {TRANSITO.length === 0 ? <CarboEmptyState title="Nenhum registro" /> : (
             <div className="rounded-lg border bg-card overflow-x-auto">
               <Table>
                 <TableHeader><TableRow><TableHead>Produto</TableHead><TableHead className="text-right">Qtd</TableHead><TableHead>Origem → Destino</TableHead><TableHead>Enviado em</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
@@ -249,6 +224,7 @@ export default function Suprimentos() {
                 </TableBody>
               </Table>
             </div>
+            )}
           </TabsContent>
 
           {/* Mapeamento SKU (SP) */}
@@ -266,6 +242,7 @@ export default function Suprimentos() {
             </div>
             <div>
               <p className="text-sm font-medium mb-2">Auto-match por código interno <span className="text-xs text-muted-foreground">(sem configuração necessária)</span></p>
+              {SKU_MAP.length === 0 ? <CarboEmptyState title="Nenhum registro" /> : (
               <div className="grid gap-2 md:grid-cols-2">
                 {SKU_MAP.map((m) => (
                   <div key={m.sku} className="flex items-center gap-2 rounded-lg border bg-card px-3 py-2">
@@ -276,6 +253,7 @@ export default function Suprimentos() {
                   </div>
                 ))}
               </div>
+              )}
             </div>
           </TabsContent>
 
@@ -313,6 +291,8 @@ export default function Suprimentos() {
 
           {/* Envios para SP — Hub Natal */}
           <TabsContent value="envios-sp" className="mt-4 space-y-4">
+            {ENVIOS_SP.length === 0 ? <CarboEmptyState title="Nenhum registro" /> : (
+            <>
             <div className="flex items-center gap-5 px-1 flex-wrap text-sm">
               <span className="flex items-center gap-1.5 text-blue-400 font-medium"><Truck className="h-4 w-4" /> {ENVIOS_SP.filter((e) => e.status === "em_transito").length} em trânsito</span>
               <span className="flex items-center gap-1.5 text-muted-foreground font-medium"><CheckCircle className="h-4 w-4 text-carbo-green" /> {ENVIOS_SP.filter((e) => e.status === "entregue").length} entregues no CD SP</span>
@@ -330,10 +310,13 @@ export default function Suprimentos() {
                 </CarboCardContent></CarboCard>
               );
             })}
+            </>
+            )}
           </TabsContent>
 
           {/* Recebimento — Hub Natal (conferência de OC) */}
           <TabsContent value="recebimento" className="mt-4">
+            {RECEBIMENTOS.length === 0 ? <CarboEmptyState title="Nenhum registro" /> : (
             <div className="rounded-lg border bg-card overflow-x-auto">
               <Table>
                 <TableHeader><TableRow><TableHead>OC</TableHead><TableHead>Data Recebimento</TableHead><TableHead>Itens</TableHead><TableHead>Status</TableHead><TableHead>Divergência</TableHead></TableRow></TableHeader>
@@ -356,10 +339,12 @@ export default function Suprimentos() {
                 </TableBody>
               </Table>
             </div>
+            )}
           </TabsContent>
 
           {/* Notas Fiscais de entrada — Hub Natal (3-way match) */}
           <TabsContent value="notas" className="mt-4">
+            {NOTAS.length === 0 ? <CarboEmptyState title="Nenhum registro" /> : (
             <div className="rounded-lg border bg-card overflow-x-auto">
               <Table>
                 <TableHeader><TableRow><TableHead>Nº NF</TableHead><TableHead>Data NF</TableHead><TableHead>Valor</TableHead><TableHead>OC ✓</TableHead><TableHead>Receb. ✓</TableHead><TableHead>Valor ✓</TableHead><TableHead>Verificação</TableHead></TableRow></TableHeader>
@@ -382,9 +367,11 @@ export default function Suprimentos() {
                 </TableBody>
               </Table>
             </div>
+            )}
           </TabsContent>
 
           <TabsContent value="politica" className="mt-4">
+            {POLITICAS.length === 0 ? <CarboEmptyState title="Nenhum registro" /> : (
             <div className="rounded-lg border bg-card overflow-x-auto">
               <Table>
                 <TableHeader><TableRow><TableHead>Produto</TableHead><TableHead>Política</TableHead><TableHead className="text-right">Estoque Seg.</TableHead><TableHead className="text-right">Lead time</TableHead></TableRow></TableHeader>
@@ -400,9 +387,10 @@ export default function Suprimentos() {
                 </TableBody>
               </Table>
             </div>
+            )}
           </TabsContent>
         </Tabs>
-        <p className="text-xs text-muted-foreground text-center">Tela em port visual — dados de exemplo. Movimentações, transferências CD-SP e política entram na fase de lógica.</p>
+        <p className="text-xs text-muted-foreground text-center">Movimentações, transferências CD-SP e política entram na fase de lógica.</p>
       </div>
 
       <CDSPRegistrarEnvioDialog open={envioOpen} onOpenChange={setEnvioOpen} />

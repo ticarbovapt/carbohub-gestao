@@ -8,7 +8,7 @@ import {
 import { toast } from "sonner";
 import { BlingPreviewDialog, type BlingOrder } from "@/components/financeiro/BlingPreviewDialog";
 
-// ⚠️ PORT VISUAL FIEL ao Controle (/financeiro/faturamento → FaturamentoPage) — dados MOCK.
+// TODO: ligar em <tabela financeira/bling> (Supabase)
 
 const brl = (v: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
 
@@ -20,11 +20,7 @@ interface Order {
   id: string; order_number: string; customer_name: string; cnpj: string; ie: string;
   payment_terms: string; freight_type: "CIF" | "FOB"; total: number; status: Status; has_nf: boolean; bling: boolean;
 }
-const ORDERS: Order[] = [
-  { id: "1", order_number: "VND-2042", customer_name: "Posto Shell Centro", cnpj: "12.345.678/0001-90", ie: "1234567", payment_terms: "30 dias", freight_type: "CIF", total: 4850, status: "confirmed", has_nf: false, bling: false },
-  { id: "2", order_number: "VND-2041", customer_name: "Auto Posto Bandeirantes", cnpj: "98.765.432/0001-10", ie: "ISENTO", payment_terms: "À vista", freight_type: "FOB", total: 12300, status: "confirmed", has_nf: false, bling: true },
-  { id: "3", order_number: "VND-2039", customer_name: "Posto Ipiranga Sul", cnpj: "45.678.912/0001-33", ie: "7654321", payment_terms: "28/56 dias", freight_type: "CIF", total: 2200, status: "invoiced", has_nf: true, bling: true },
-];
+const ORDERS: Order[] = [];
 
 export default function Faturamento() {
   const [showAll, setShowAll] = useState(false);
@@ -83,7 +79,7 @@ export default function Faturamento() {
                   </div>
                 </div>
                 <div className="flex items-center gap-2 mt-3 flex-wrap">
-                  <Button variant="outline" size="sm" className="gap-1.5 h-8 text-xs" onClick={() => toast("Número copiado (mock)")}><Copy className="h-3.5 w-3.5" /> Copiar Nº</Button>
+                  <Button variant="outline" size="sm" className="gap-1.5 h-8 text-xs" onClick={() => toast("Número copiado")}><Copy className="h-3.5 w-3.5" /> Copiar Nº</Button>
                   {!o.has_nf && !o.bling && <Button size="sm" className="gap-1.5 h-8 text-xs" onClick={() => setPreviewOrder(o)}><Link2 className="h-3.5 w-3.5" /> Criar no Bling</Button>}
                   {!o.has_nf && <Button variant="outline" size="sm" className="gap-1.5 h-8 text-xs" onClick={() => setPreviewOrder(o)}><Eye className="h-3.5 w-3.5" /> Pré-visualizar</Button>}
                   {(o.bling || o.has_nf) && <Button variant="outline" size="sm" className="gap-1.5 h-8 text-xs" onClick={() => toast("Abrir no Bling (em breve)")}><ExternalLink className="h-3.5 w-3.5" /> Abrir no Bling</Button>}
@@ -93,7 +89,6 @@ export default function Faturamento() {
           ))}
           {visible.length === 0 && <CarboCard><CarboCardContent className="py-12 text-center text-muted-foreground"><Receipt className="h-10 w-10 mx-auto mb-2 opacity-30" /><p>Nenhum pedido na fila</p></CarboCardContent></CarboCard>}
         </div>
-        <p className="text-xs text-muted-foreground text-center">Tela em port visual — dados de exemplo. Integração Bling e emissão de NF entram na fase de lógica.</p>
       </div>
       <BlingPreviewDialog order={previewOrder} open={!!previewOrder} onOpenChange={(o) => !o && setPreviewOrder(null)} />
     </div>
