@@ -6,6 +6,7 @@ import Users from "./pages/Users";
 import Structure from "./pages/Structure";
 import Profile from "./pages/Profile";
 import BugReports from "./pages/BugReports";
+import MinhaEquipe from "./pages/MinhaEquipe";
 import { isCarbohubDomain, goToHubLogin } from "@/lib/sso";
 
 // Login é ÚNICO no Hub: /login direto em produção é redirecionado pra lá.
@@ -27,6 +28,7 @@ export default function App() {
         <Route path="/estrutura" element={<Structure />} />
         <Route path="/perfil" element={<Profile />} />
         <Route path="/bugs" element={<BugReports />} />
+        <Route path="/equipe" element={<MinhaEquipe />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
