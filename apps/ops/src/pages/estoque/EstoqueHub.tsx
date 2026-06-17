@@ -21,7 +21,7 @@ export default function EstoqueHub() {
 
         <StockView hub={hub} editable={false} />
 
-        <p className="text-xs text-muted-foreground text-center">Saldo real por hub (warehouse_stock). Giro/cobertura dependem do histórico de consumo (fase futura).</p>
+        <p className="text-xs text-muted-foreground text-center">Saldo real por hub (warehouse_stock). Status pelo estoque mínimo (segurança).</p>
       </div>
     </div>
   );

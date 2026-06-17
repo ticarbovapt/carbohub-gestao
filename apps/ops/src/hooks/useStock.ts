@@ -6,8 +6,7 @@ import type { ProdEstoque } from "@/components/estoque/stockData";
 // Estoque por hub (Carbo Ops) — LEITURA do banco compartilhado.
 //  • Produtos = mrp_products (ativos).
 //  • Saldo por hub = warehouse_stock ⋈ warehouses (fonte de verdade).
-//  • giroMedio = 0 por ora: depende do histórico de consumo (lógica futura),
-//    então cobertura/ruptura aparecem como "Sem consumo".
+//  • Status do card = estoque mínimo (safety_stock_qty); sem giro/cobertura.
 //  RLS: warehouse_stock/warehouses liberam SELECT p/ autenticado; mrp_products
 //  p/ admin/CEO/gestor.
 // ─────────────────────────────────────────────────────────────────────────────
@@ -58,7 +57,6 @@ export function useStock() {
         stock_unit: (p.stock_unit as string) ?? "un",
         safety_stock_qty: Number(p.safety_stock_qty) || 0,
         hubs: hubsByProduct.get(p.id as string) ?? {},
-        giroMedio: 0,
       }));
     },
   });
