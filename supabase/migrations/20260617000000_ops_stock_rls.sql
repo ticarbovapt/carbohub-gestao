@@ -31,8 +31,8 @@ LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
         ON f.is_active
        AND f.access_level = 'gestor'
        AND (
-            (f.department = p.department           AND f.function_key = p.funcao)
-         OR (f.department = p.secondary_department AND f.function_key = p.secondary_funcao)
+            (f.department = p.department::text           AND f.function_key = p.funcao::text)
+         OR (f.department = p.secondary_department::text AND f.function_key = p.secondary_funcao::text)
        )
       WHERE p.id = _uid
     );
