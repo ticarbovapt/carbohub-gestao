@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
 import { CarboCard, CarboCardContent } from "@/components/ui/carbo-card";
 import { CarboBadge } from "@/components/ui/carbo-badge";
@@ -14,7 +14,7 @@ import {
 import {
   Package, Lightbulb, MapPin, Users, Cloud, Send, AlertCircle, ArrowLeftRight, Settings2,
   ArrowDownToLine, ArrowUpFromLine, Boxes, Layers, AlertTriangle, Activity, Info, Link2, Truck,
-  CheckCircle, XCircle, FileText, Loader2,
+  CheckCircle, XCircle, FileText, Loader2, Search,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
@@ -26,7 +26,7 @@ import { RemessaConfirmDialog } from "@/components/estoque/RemessaConfirmDialog"
 import { useStock } from "@/hooks/useStock";
 import { useStockMovements } from "@/hooks/useStockMovements";
 import { useStockTransfers, type Transfer } from "@/hooks/useStockTransfers";
-import { useSetStockMin } from "@/hooks/useStockMin";
+import { MinStockDialog } from "@/components/estoque/MinStockDialog";
 
 
 // É a versão EDITÁVEL do estoque (gestores). A versão somente leitura vive em Estoque.
@@ -70,7 +70,6 @@ export default function Suprimentos() {
       .map((p) => ({ name: p.name, qty: p.hubs[stockId] ?? 0 })),
     [products, stockId],
   );
-  const setMin = useSetStockMin();
   const cutoff = useMemo(() => {
     const d = new Date();
     if (periodo === "7d") d.setDate(d.getDate() - 7);
@@ -130,36 +129,16 @@ export default function Suprimentos() {
     );
   };
 
-  // Mínimos do CD ATUAL (cada CD gerencia só o dele). Chave = productId.
+  // Política de Estoque do CD ATUAL (cada CD gerencia só o dele).
   const currentCode = HUB_CODE[hub];
   const currentHubId = STOCK_HUB_ID[hub];
-  const [minEdits, setMinEdits] = useState<Record<string, string>>({});
-  const [minDirty, setMinDirty] = useState(false);
-
-  // Semeia com o mínimo do CD atual sempre que muda de CD ou recarrega.
-  useEffect(() => {
-    setMinEdits(Object.fromEntries(products.map((p) => [p.id, String(p.mins[currentHubId] ?? 0)])));
-    setMinDirty(false);
-  }, [products, currentHubId]);
-
-  const setCell = (productId: string, val: string) => {
-    setMinEdits((e) => ({ ...e, [productId]: val }));
-    setMinDirty(true);
-  };
-
-  const saveMins = async () => {
-    const changes = products
-      .filter((p) => { const v = Number(minEdits[p.id]); return Number.isFinite(v) && v >= 0 && v !== (p.mins[currentHubId] ?? 0); })
-      .map((p) => ({ productId: p.id, warehouseCode: currentCode, minQty: Number(minEdits[p.id]) }));
-    if (changes.length === 0) { toast.info("Nenhuma alteração para salvar."); return; }
-    try {
-      for (const c of changes) await setMin.mutateAsync(c);
-      toast.success(`${changes.length} mínimo(s) salvo(s) em ${stockHub.label}.`);
-      setMinDirty(false);
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Erro ao salvar os mínimos.");
-    }
-  };
+  const [politicaSearch, setPoliticaSearch] = useState("");
+  const [minTarget, setMinTarget] = useState<{ id: string; name: string; current: number } | null>(null);
+  const politicaProducts = useMemo(() => products.filter((p) => {
+    if (!politicaSearch) return true;
+    const q = politicaSearch.toLowerCase();
+    return p.name.toLowerCase().includes(q) || p.product_code.toLowerCase().includes(q);
+  }), [products, politicaSearch]);
 
   return (
     <div className="p-4 md:p-6">
@@ -347,43 +326,40 @@ export default function Suprimentos() {
               <CarboEmptyState title="Não se aplica ao CD Bling" description="O saldo do Bling vem da integração; não há política de mínimo manual aqui." />
             ) : (
             <>
-            <div className="flex items-center justify-between gap-3 flex-wrap">
-              <div className="flex items-start gap-2 px-3 py-2 rounded-md bg-blue-500/10 border border-blue-500/20 text-sm text-blue-500 flex-1 min-w-[260px]">
-                <Info className="h-4 w-4 shrink-0 mt-0.5" />
-                <span>Mínimo dos produtos <strong>neste CD ({stockHub.label})</strong>. Cada CD tem a sua política, independente. Abaixo do mínimo, o produto entra no alerta de reposição <strong>deste CD</strong>.</span>
-              </div>
-              <Button onClick={saveMins} disabled={!minDirty || setMin.isPending} className="carbo-gradient text-white gap-1.5 shrink-0">
-                {setMin.isPending ? <><Loader2 className="h-4 w-4 animate-spin" /> Salvando…</> : "Salvar alterações"}
-              </Button>
+            <div className="relative max-w-md">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input placeholder="Buscar produto por nome ou código..." value={politicaSearch} onChange={(e) => setPoliticaSearch(e.target.value)} className="pl-9" />
             </div>
-            {products.length === 0 ? <CarboEmptyState title="Nenhum produto" /> : (
-            <div className="rounded-lg border bg-card overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Produto</TableHead>
-                    <TableHead className="text-right">Mínimo em {stockHub.label}</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {products.map((p) => (
-                    <TableRow key={p.id}>
-                      <TableCell className="font-medium">{p.name}<span className="ml-2 text-xs text-muted-foreground font-mono">{p.product_code}</span></TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex justify-end">
-                          <Input
-                            type="number" min={0}
-                            value={minEdits[p.id] ?? ""}
-                            onChange={(e) => setCell(p.id, e.target.value)}
-                            className="h-8 w-28 text-right tabular-nums"
-                          />
+            {politicaProducts.length === 0 ? <CarboEmptyState icon={Package} title="Nenhum produto" /> : (
+              <div className="space-y-3">
+                {politicaProducts.map((p) => {
+                  const min = p.mins[currentHubId] ?? 0;
+                  return (
+                    <CarboCard key={p.id}><CarboCardContent className="p-4 space-y-3">
+                      <div className="flex items-center gap-3">
+                        <div className="p-2 rounded-lg bg-carbo-green/10"><Package className="h-5 w-5 text-carbo-green" /></div>
+                        <div className="min-w-0">
+                          <p className="font-semibold text-sm leading-tight truncate">{p.name}</p>
+                          <p className="text-[11px] text-muted-foreground font-mono">{p.product_code}<span className="font-sans"> · {p.category}</span></p>
                         </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
+                      </div>
+                      <div className="flex items-center justify-between gap-3 rounded-lg border border-dashed border-border px-4 py-3">
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium">{stockHub.label}</p>
+                          <p className="text-xs text-muted-foreground">{stockHub.city}/{stockHub.state}</p>
+                        </div>
+                        <div className="flex items-center gap-4 shrink-0">
+                          <div className="text-right">
+                            <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Mínimo</p>
+                            <p className="text-sm font-bold tabular-nums">{min > 0 ? `${min.toLocaleString("pt-BR")} ${p.stock_unit}` : "—"}</p>
+                          </div>
+                          <Button variant="outline" size="sm" onClick={() => setMinTarget({ id: p.id, name: p.name, current: min })}>Configurar</Button>
+                        </div>
+                      </div>
+                    </CarboCardContent></CarboCard>
+                  );
+                })}
+              </div>
             )}
             </>
             )}
@@ -391,6 +367,15 @@ export default function Suprimentos() {
         </Tabs>
       </div>
 
+      <MinStockDialog
+        open={minTarget !== null}
+        onOpenChange={(v) => { if (!v) setMinTarget(null); }}
+        productId={minTarget?.id ?? null}
+        productName={minTarget?.name ?? ""}
+        hubCode={currentCode}
+        hubLabel={stockHub.label}
+        currentMin={minTarget?.current ?? 0}
+      />
       <CDSPRegistrarEnvioDialog open={envioOpen} onOpenChange={setEnvioOpen} />
       <RemessaConfirmDialog
         action={remessaConfirm?.action ?? null}
