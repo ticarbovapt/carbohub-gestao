@@ -4,6 +4,8 @@ import { supabase } from "@/integrations/supabase/client";
 export interface AdminProfile {
   id: string;
   full_name: string | null;
+  avatar_url: string | null;
+  email: string | null;
   username: string | null;
   department: string | null;
   funcao: string | null;
@@ -62,7 +64,7 @@ export function useProfiles() {
     queryFn: async (): Promise<AdminProfile[]> => {
       const { data, error } = await supabase
         .from("profiles")
-        .select("id, full_name, username, department, funcao, secondary_department, secondary_funcao, escopo, manager_user_id, status, allowed_interfaces, is_vendedor, created_at")
+        .select("id, full_name, avatar_url, email, username, department, funcao, secondary_department, secondary_funcao, escopo, manager_user_id, status, allowed_interfaces, is_vendedor, created_at")
         .order("created_at", { ascending: false })
         .limit(200);
       if (error) throw error;

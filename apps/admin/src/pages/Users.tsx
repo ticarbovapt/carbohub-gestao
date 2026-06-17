@@ -1,11 +1,14 @@
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
-  UserPlus, Loader2, Copy, CheckCircle2, KeyRound, Users as UsersIcon, Pencil, Search,
+  UserPlus, Loader2, Copy, CheckCircle2, KeyRound, Users as UsersIcon, Pencil, Search, Crown,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { SYSTEMS, DEFAULT_INTERFACES } from "@/lib/interfaces";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
+import { ProfileAvatar } from "@/components/ui/profile-avatar";
+import { SYSTEMS, DEFAULT_INTERFACES, brandOf } from "@/lib/interfaces";
 import { useProfiles, useCreateUser, useDeptFunctions, useAllDeptFunctions, type AdminProfile } from "@/hooks/useAdminUsers";
 import { useDepartments } from "@/hooks/useStructure";
 import { EditUserDialog } from "@/components/EditUserDialog";
@@ -15,6 +18,31 @@ const DEFAULT_PASSWORD = "Carbo@2026";
 
 const selectCls =
   "flex h-10 w-full rounded-lg border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50";
+
+/** Bolinhas coloridas dos apps liberados — detalhe completo abre no cartão. */
+function SystemsDots({ ifaces }: { ifaces: string[] }) {
+  if (!ifaces.length) return <span className="text-xs text-muted-foreground">—</span>;
+  return (
+    <div className="flex items-center gap-1.5" title={ifaces.map((i) => brandOf(i).short).join(" · ")}>
+      {ifaces.map((i) => (
+        <span key={i} className={`h-2.5 w-2.5 rounded-full ${brandOf(i).dot} ring-2 ring-card`} />
+      ))}
+    </div>
+  );
+}
+
+/** Selo de nível (Gestor / Membro). */
+function NivelBadge({ gestor }: { gestor: boolean }) {
+  return gestor ? (
+    <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full font-medium bg-amber-500/15 text-amber-600">
+      <Crown className="h-3 w-3" /> Gestor
+    </span>
+  ) : (
+    <span className="inline-flex items-center text-[10px] px-1.5 py-0.5 rounded-full font-medium bg-muted text-muted-foreground">
+      Membro
+    </span>
+  );
+}
 
 export default function Users() {
   const { data: profiles = [], isLoading: loadingList } = useProfiles();
@@ -31,6 +59,7 @@ export default function Users() {
   const [interfaces, setInterfaces] = useState<string[]>(DEFAULT_INTERFACES);
   const [credentials, setCredentials] = useState<{ username: string; password: string } | null>(null);
   const [editing, setEditing] = useState<AdminProfile | null>(null);
+  const [createOpen, setCreateOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [deptFilter, setDeptFilter] = useState("");
 
@@ -62,11 +91,29 @@ export default function Users() {
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return profiles.filter((p) => {
-      if (deptFilter && p.department !== deptFilter) return false;
+      // Filtro por departamento considera o 1º E o 2º departamento.
+      if (deptFilter && p.department !== deptFilter && p.secondary_department !== deptFilter) return false;
       if (!q) return true;
       return (p.full_name ?? "").toLowerCase().includes(q) || (p.username ?? "").toLowerCase().includes(q);
     });
   }, [profiles, search, deptFilter]);
+
+  // Linhas enriquecidas (reaproveitadas pela tabela e pelos cartões do mobile).
+  const rows = useMemo(() => filtered.map((p) => ({
+    p,
+    gestor: isManager(p, fnMap),
+    funcLabel: fnLabel[fnKey(p.department, p.funcao)] ?? p.funcao,
+    secLabel: p.secondary_funcao
+      ? fnLabel[fnKey(p.secondary_department, p.secondary_funcao)] ?? p.secondary_funcao
+      : null,
+  })), [filtered, fnMap, fnLabel]);
+
+  const gestoresCount = useMemo(() => rows.filter((r) => r.gestor).length, [rows]);
+  const appCounts = useMemo(() => {
+    const m: Record<string, number> = {};
+    for (const p of filtered) for (const i of (p.allowed_interfaces ?? [])) m[i] = (m[i] ?? 0) + 1;
+    return m;
+  }, [filtered]);
 
   const selectedFn = deptFunctions.find((f) => f.function_key === funcao);
   const canSubmit = fullName.trim().length > 0 && department !== "" && interfaces.length > 0;
@@ -97,6 +144,7 @@ export default function Users() {
       });
       setCredentials({ username: result.username, password: DEFAULT_PASSWORD });
       resetForm();
+      setCreateOpen(false);
       toast.success("Usuário criado com sucesso!");
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Erro ao criar usuário");
@@ -110,14 +158,173 @@ export default function Users() {
 
   return (
     <>
-      <main className="mx-auto max-w-6xl px-6 py-8 grid gap-6 lg:grid-cols-[420px_1fr]">
-        {/* ── Criar usuário ── */}
-        <section className="rounded-2xl border bg-card p-5 h-fit">
-          <h2 className="flex items-center gap-2 font-semibold text-lg mb-4">
-            <UserPlus className="h-5 w-5 text-primary" /> Criar usuário
-          </h2>
+      <main className="mx-auto max-w-6xl px-4 sm:px-6 py-8 space-y-6">
+        {/* ── Cabeçalho ── */}
+        <div className="flex flex-wrap items-end justify-between gap-4">
+          <div>
+            <h1 className="flex items-center gap-2 text-2xl font-bold">
+              <UsersIcon className="h-6 w-6 text-primary" /> Usuários
+            </h1>
+            <p className="text-sm text-muted-foreground mt-0.5">
+              Gerencie acessos, departamentos e funções da equipe.
+            </p>
+          </div>
+          <Button className="carbo-gradient text-white shadow-sm" onClick={() => setCreateOpen(true)}>
+            <UserPlus className="h-4 w-4" /> Criar usuário
+          </Button>
+        </div>
 
-          <div className="space-y-3">
+        {/* ── Resumo (chips) ── */}
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full bg-card border">
+            <UsersIcon className="h-3.5 w-3.5 text-muted-foreground" /> {filtered.length} usuários
+          </span>
+          <span className="inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full bg-amber-500/10 text-amber-600 border border-amber-500/20">
+            <Crown className="h-3.5 w-3.5" /> {gestoresCount} gestores
+          </span>
+          <span className="h-4 w-px bg-border mx-1 hidden sm:block" />
+          {SYSTEMS.filter((s) => appCounts[s.iface]).map((s) => {
+            const b = brandOf(s.iface);
+            return (
+              <span key={s.iface} className={`inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full ${b.chip}`}>
+                <span className={`h-1.5 w-1.5 rounded-full ${b.dot}`} /> {b.short} · {appCounts[s.iface]}
+              </span>
+            );
+          })}
+        </div>
+
+        {/* ── Lista de usuários ── */}
+        <section className="rounded-2xl border bg-card overflow-hidden">
+          {/* Busca + filtro por departamento */}
+          <div className="px-4 sm:px-5 py-3 border-b flex flex-col sm:flex-row gap-2">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input className="pl-9" placeholder="Buscar por nome ou usuário..."
+                value={search} onChange={(e) => setSearch(e.target.value)} />
+            </div>
+            <select className={`${selectCls} sm:w-52`} value={deptFilter} onChange={(e) => setDeptFilter(e.target.value)}>
+              <option value="">Todos os departamentos</option>
+              {departments.map((d) => <option key={d.key} value={d.key}>{d.label}</option>)}
+            </select>
+          </div>
+
+          {loadingList ? (
+            <div className="divide-y">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <div key={i} className="flex items-center gap-3 px-4 sm:px-5 py-3.5">
+                  <Skeleton className="h-10 w-10 rounded-full" />
+                  <div className="flex-1 space-y-2">
+                    <Skeleton className="h-3.5 w-40" />
+                    <Skeleton className="h-3 w-24" />
+                  </div>
+                  <Skeleton className="h-5 w-16 rounded-full" />
+                  <Skeleton className="h-5 w-24 rounded-md hidden sm:block" />
+                </div>
+              ))}
+            </div>
+          ) : rows.length === 0 ? (
+            <div className="px-6 py-16 text-center">
+              <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-muted">
+                <Search className="h-6 w-6 text-muted-foreground" />
+              </div>
+              <p className="font-medium">Nenhum usuário encontrado</p>
+              <p className="text-sm text-muted-foreground mt-0.5">Ajuste a busca ou o filtro de departamento.</p>
+            </div>
+          ) : (
+            <>
+              {/* Desktop: tabela refinada */}
+              <div className="hidden md:block overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="text-left text-[11px] uppercase tracking-wide text-muted-foreground bg-muted/40">
+                    <tr>
+                      <th className="px-5 py-3 font-semibold">Usuário</th>
+                      <th className="px-4 py-3 font-semibold">Departamento</th>
+                      <th className="px-4 py-3 font-semibold">Função</th>
+                      <th className="px-4 py-3 font-semibold">Nível</th>
+                      <th className="px-4 py-3 font-semibold">Sistemas</th>
+                      <th className="px-5 py-3 font-semibold text-right">Editar</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rows.map(({ p, gestor, funcLabel, secLabel }) => (
+                      <tr key={p.id}
+                        className="border-t border-border/60 odd:bg-muted/[0.12] hover:bg-muted/50 cursor-pointer transition-colors group"
+                        onClick={() => setEditing(p)}>
+                        <td className="px-5 py-3">
+                          <div className="flex items-center gap-3">
+                            <ProfileAvatar userId={p.id} avatarUrl={p.avatar_url} fullName={p.full_name} size={40}
+                              className={gestor ? "ring-2 ring-amber-400/70" : "ring-1 ring-border"} />
+                            <div className="min-w-0">
+                              <p className="font-medium truncate">{p.full_name ?? "—"}</p>
+                              <p className="font-mono text-xs text-muted-foreground">{p.username ?? "—"}</p>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-1.5">
+                            <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/40 shrink-0" />
+                            <span>{getDept(p.department)}</span>
+                          </div>
+                          {p.secondary_department && (
+                            <span className="text-xs text-muted-foreground pl-3">+ {getDept(p.secondary_department)}</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3">
+                          <span>{funcLabel ?? "—"}</span>
+                          {secLabel && <span className="block text-xs text-muted-foreground">+ {secLabel}</span>}
+                        </td>
+                        <td className="px-4 py-3"><NivelBadge gestor={gestor} /></td>
+                        <td className="px-4 py-3"><SystemsDots ifaces={p.allowed_interfaces ?? []} /></td>
+                        <td className="px-5 py-3 text-right">
+                          <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground group-hover:bg-background group-hover:text-primary transition-colors">
+                            <Pencil className="h-4 w-4" />
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Mobile: cartões */}
+              <div className="md:hidden divide-y">
+                {rows.map(({ p, gestor, funcLabel, secLabel }) => (
+                  <button key={p.id} onClick={() => setEditing(p)}
+                    className="w-full text-left p-4 flex items-start gap-3 hover:bg-muted/40 transition-colors">
+                    <ProfileAvatar userId={p.id} avatarUrl={p.avatar_url} fullName={p.full_name} size={44}
+                      className={gestor ? "ring-2 ring-amber-400/70" : "ring-1 ring-border"} />
+                    <div className="flex-1 min-w-0 space-y-1.5">
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="font-medium truncate">{p.full_name ?? "—"}</p>
+                        <NivelBadge gestor={gestor} />
+                      </div>
+                      <p className="font-mono text-xs text-muted-foreground">{p.username ?? "—"}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {getDept(p.department)} · {funcLabel ?? "—"}
+                      </p>
+                      <SystemsDots ifaces={p.allowed_interfaces ?? []} />
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+        </section>
+      </main>
+
+      {/* ── Criar usuário (painel deslizante) ── */}
+      <Sheet open={createOpen} onOpenChange={setCreateOpen}>
+        <SheetContent side="right" className="w-full sm:max-w-md overflow-y-auto">
+          <SheetHeader>
+            <SheetTitle className="flex items-center gap-2">
+              <UserPlus className="h-5 w-5 text-primary" /> Criar usuário
+            </SheetTitle>
+            <SheetDescription>
+              Username e senha são gerados automaticamente. O colaborador troca no 1º acesso.
+            </SheetDescription>
+          </SheetHeader>
+
+          <div className="space-y-3 mt-5">
             <div className="space-y-1.5">
               <label className="text-sm font-medium">Nome completo *</label>
               <Input value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder="Ex: João Silva" />
@@ -219,91 +426,8 @@ export default function Users() {
               No 1º acesso o colaborador troca a senha e informa o e-mail real.
             </p>
           </div>
-        </section>
-
-        {/* ── Lista de usuários ── */}
-        <section className="rounded-2xl border bg-card overflow-hidden h-fit">
-          <div className="px-5 py-4 border-b flex items-center gap-2">
-            <UsersIcon className="h-5 w-5 text-muted-foreground" />
-            <h2 className="font-semibold">Usuários ({filtered.length})</h2>
-          </div>
-
-          {/* Busca + filtro por departamento */}
-          <div className="px-5 py-3 border-b flex flex-col sm:flex-row gap-2">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input className="pl-9" placeholder="Buscar por nome ou usuário..."
-                value={search} onChange={(e) => setSearch(e.target.value)} />
-            </div>
-            <select className={`${selectCls} sm:w-52`} value={deptFilter} onChange={(e) => setDeptFilter(e.target.value)}>
-              <option value="">Todos os departamentos</option>
-              {departments.map((d) => <option key={d.key} value={d.key}>{d.label}</option>)}
-            </select>
-          </div>
-          {loadingList ? (
-            <div className="p-10 flex justify-center"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead className="text-left text-xs uppercase text-muted-foreground bg-muted/40">
-                  <tr>
-                    <th className="px-4 py-2.5 font-semibold">Nome</th>
-                    <th className="px-4 py-2.5 font-semibold">Usuário</th>
-                    <th className="px-4 py-2.5 font-semibold">Departamento</th>
-                    <th className="px-4 py-2.5 font-semibold">Função</th>
-                    <th className="px-4 py-2.5 font-semibold">Nível</th>
-                    <th className="px-4 py-2.5 font-semibold">Sistemas</th>
-                    <th className="px-4 py-2.5 font-semibold text-right">Editar</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filtered.map((p) => {
-                    const gestor = isManager(p, fnMap);
-                    const funcLabel = fnLabel[fnKey(p.department, p.funcao)] ?? p.funcao;
-                    const secLabel = p.secondary_funcao
-                      ? fnLabel[fnKey(p.secondary_department, p.secondary_funcao)] ?? p.secondary_funcao
-                      : null;
-                    return (
-                    <tr key={p.id} className="border-t hover:bg-muted/30 cursor-pointer"
-                      onClick={() => setEditing(p)}>
-                      <td className="px-4 py-2.5 font-medium">{p.full_name ?? "—"}</td>
-                      <td className="px-4 py-2.5 font-mono text-xs">{p.username ?? "—"}</td>
-                      <td className="px-4 py-2.5">
-                        {getDept(p.department)}
-                        {p.secondary_department && (
-                          <span className="text-xs text-muted-foreground"> + {getDept(p.secondary_department)}</span>
-                        )}
-                      </td>
-                      <td className="px-4 py-2.5">
-                        {funcLabel ?? "—"}
-                        {secLabel && <span className="text-xs text-muted-foreground"> + {secLabel}</span>}
-                      </td>
-                      <td className="px-4 py-2.5">
-                        <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${
-                          gestor ? "bg-amber-500/15 text-amber-600" : "bg-muted text-muted-foreground"}`}>
-                          {gestor ? "Gestor" : "Membro"}
-                        </span>
-                      </td>
-                      <td className="px-4 py-2.5">
-                        <div className="flex flex-wrap gap-1">
-                          {(p.allowed_interfaces ?? []).map((i) => (
-                            <span key={i} className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">
-                              {SYSTEMS.find((s) => s.iface === i)?.label ?? i}
-                            </span>
-                          ))}
-                        </div>
-                      </td>
-                      <td className="px-4 py-2.5 text-right">
-                        <Pencil className="h-4 w-4 text-muted-foreground inline-block" />
-                      </td>
-                    </tr>
-                  );})}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </section>
-      </main>
+        </SheetContent>
+      </Sheet>
 
       {/* ── Editar usuário ── */}
       <EditUserDialog user={editing} approved={approved} onClose={() => setEditing(null)} />
