@@ -15,8 +15,15 @@ export const hubBySlug = (slug?: string) => HUBS.find((h) => h.slug === slug);
 export interface ProdEstoque {
   id: string; product_code: string; name: string; category: string; stock_unit: string;
   safety_stock_qty: number; hubs: Record<string, number>;
+  // mínimo por hub (override); cai no safety_stock_qty quando não definido.
+  mins: Record<string, number>;
 }
 export const MOCK_ESTOQUE: ProdEstoque[] = [];
+
+// Mínimo efetivo do produto num hub: override por hub > mínimo do produto.
+export function minForHub(p: ProdEstoque, hubId: string): number {
+  return p.mins[hubId] ?? p.safety_stock_qty ?? 0;
+}
 
 export type StockVariant = "destructive" | "warning" | "success" | "secondary";
 // Status pelo ESTOQUE MÍNIMO (segurança) — sem chute de giro/cobertura.

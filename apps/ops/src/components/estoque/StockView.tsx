@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { StockProgressBar } from "@/components/estoque/StockProgressBar";
 import { Search, Tag, Package, Pencil, Plus, Loader2 } from "lucide-react";
-import { minStockStatus, type Hub } from "@/components/estoque/stockData";
+import { minStockStatus, minForHub, type Hub } from "@/components/estoque/stockData";
 import { useStock } from "@/hooks/useStock";
 import { CarboEmptyState } from "@/components/ui/carbo-empty-state";
 import { NovaEntradaDialog } from "@/components/estoque/NovaEntradaDialog";
@@ -59,7 +59,8 @@ export function StockView({ hub, editable }: { hub: Hub; editable: boolean }) {
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
         {filtered.map((p) => {
           const qty = p.hubs[hub.id] ?? 0;
-          const status = minStockStatus(qty, p.safety_stock_qty);
+          const min = minForHub(p, hub.id);
+          const status = minStockStatus(qty, min);
           return (
             <CarboCard key={p.id} variant="default" padding="none">
               <CarboCardContent>
@@ -76,11 +77,11 @@ export function StockView({ hub, editable }: { hub: Hub; editable: boolean }) {
 
                 <div className="text-center px-5 pb-3">
                   <p className="text-3xl font-bold tabular-nums text-foreground leading-none">{qty.toLocaleString("pt-BR")}</p>
-                  <p className="text-[11px] text-muted-foreground mt-1">{p.stock_unit} em {hub.label} · Segurança: {p.safety_stock_qty.toLocaleString("pt-BR")} {p.stock_unit}</p>
+                  <p className="text-[11px] text-muted-foreground mt-1">{p.stock_unit} em {hub.label} · Mínimo: {min.toLocaleString("pt-BR")} {p.stock_unit}</p>
                 </div>
 
                 <div className="border-t border-border px-5 py-4">
-                  <StockProgressBar current={qty} safety={p.safety_stock_qty} hubName={hub.label} unit={p.stock_unit} onClick={editable ? () => setAjuste({ id: p.id, name: p.name, product_code: p.product_code, current: qty, unit: p.stock_unit }) : undefined} />
+                  <StockProgressBar current={qty} safety={min} hubName={hub.label} unit={p.stock_unit} onClick={editable ? () => setAjuste({ id: p.id, name: p.name, product_code: p.product_code, current: qty, unit: p.stock_unit }) : undefined} />
                 </div>
               </CarboCardContent>
             </CarboCard>
