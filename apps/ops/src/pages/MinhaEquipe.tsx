@@ -79,7 +79,6 @@ export default function MinhaEquipe() {
                     ) : (
                       <span className="text-[11px] text-muted-foreground">sem e-mail</span>
                     )}
-                    <p className="font-mono text-[11px] text-muted-foreground mt-0.5">{m.username ?? "—"}</p>
                   </div>
                 </div>
               );
