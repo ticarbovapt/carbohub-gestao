@@ -91,7 +91,8 @@ export default function Users() {
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return profiles.filter((p) => {
-      if (deptFilter && p.department !== deptFilter) return false;
+      // Filtro por departamento considera o 1º E o 2º departamento.
+      if (deptFilter && p.department !== deptFilter && p.secondary_department !== deptFilter) return false;
       if (!q) return true;
       return (p.full_name ?? "").toLowerCase().includes(q) || (p.username ?? "").toLowerCase().includes(q);
     });
