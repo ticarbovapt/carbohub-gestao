@@ -11,12 +11,15 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   Wallet, Plus, FileText, Package, Receipt, CreditCard, BarChart3, Clock, AlertTriangle,
-  CheckCircle2, Building2, Check, X, Eye,
+  CheckCircle2, Building2, Check, X, Eye, Loader2,
 } from "lucide-react";
+import { toast } from "sonner";
 import { NovaRequisicaoDialog } from "@/components/compras/NovaRequisicaoDialog";
 import { RCDetailsDialog, type RCLite } from "@/components/compras/RCDetailsDialog";
 import { RCAprovarDialog } from "@/components/compras/RCAprovarDialog";
 import { RCRejeitarDialog } from "@/components/compras/RCRejeitarDialog";
+import { useRcRequests, useRcMutations } from "@/hooks/useRcRequests";
+import { useSuppliers } from "@/hooks/useSuppliers";
 
 // TODO: ligar em <tabela de compras> (Supabase).
 // No Carbo Ops esta é a tela de COMPRAS (requisições aprovadas pelo financeiro).
@@ -32,17 +35,12 @@ const RC_STATUS_LABELS: Record<RcStatus, string> = {
 const RC_STATUS_VARIANT: Record<RcStatus, "secondary" | "warning" | "success" | "destructive"> = {
   rascunho: "secondary", aguardando_aprovacao: "warning", aprovada: "success", rejeitada: "destructive", cancelada: "secondary",
 };
-interface RC { id: string; rc_number: string; cost_center: string; tipo: string; valor: number; status: RcStatus; data: string; }
-// TODO: ligar em <tabela de compras> (Supabase).
-const RCS: RC[] = [];
-
 interface SimpleRow { id: string; col1: string; col2: string; col3: string; valor: number; status: string; statusVariant: "secondary" | "warning" | "success" | "destructive" | "info"; }
-// TODO: ligar em <tabela de compras> (Supabase).
+// Abas downstream (OC/Recebimento/NF/Contas a pagar) entram numa próxima fase.
 const OCS: SimpleRow[] = [];
 const RECEB: SimpleRow[] = [];
 const NOTAS: SimpleRow[] = [];
 const PAGAR: SimpleRow[] = [];
-const FORN: SimpleRow[] = [];
 
 function KpiCard({ icon: Icon, label, value, color }: { icon: typeof Clock; label: string; value: string; color: string }) {
   return (
@@ -88,8 +86,20 @@ export default function Compras() {
   const [activeTab, setActiveTab] = useState("requisicoes");
   const [novaOpen, setNovaOpen] = useState(false);
   const [detailRc, setDetailRc] = useState<RCLite | null>(null);
-  const [aprovarRc, setAprovarRc] = useState<string | null>(null);
-  const [rejeitarRc, setRejeitarRc] = useState<string | null>(null);
+  const [aprovarRc, setAprovarRc] = useState<{ id: string; number: string } | null>(null);
+  const [rejeitarRc, setRejeitarRc] = useState<{ id: string; number: string } | null>(null);
+  const [statusFilter, setStatusFilter] = useState<string>("all");
+
+  const { data: rcs = [], isLoading: rcLoading } = useRcRequests();
+  const { approve, reject } = useRcMutations();
+  const { data: suppliers = [] } = useSuppliers();
+
+  const filteredRcs = rcs.filter((rc) => statusFilter === "all" || rc.status === statusFilter);
+  const rcPendentes = rcs.filter((rc) => rc.status === "aguardando_aprovacao").length;
+  const fornRows: SimpleRow[] = suppliers.map((s) => ({
+    id: s.id, col1: s.legal_name || "—", col2: s.cnpj, col3: s.category || "—", valor: 0,
+    status: s.status === "active" ? "Ativo" : "Inativo", statusVariant: s.status === "active" ? "success" : "secondary",
+  }));
 
   return (
     <div className="p-4 md:p-6">
@@ -103,7 +113,7 @@ export default function Compras() {
 
         {/* KPIs */}
         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
-          <KpiCard icon={Clock} label="RC Pendentes" value="0" color="text-warning" />
+          <KpiCard icon={Clock} label="RC Pendentes" value={String(rcPendentes)} color="text-warning" />
           <KpiCard icon={Package} label="OC Abertas" value="0" color="text-carbo-blue" />
           <KpiCard icon={AlertTriangle} label="Pgtos Atrasados" value="0" color="text-destructive" />
           <KpiCard icon={BarChart3} label="Comprometido" value={brl(0)} color="text-carbo-green" />
@@ -125,7 +135,7 @@ export default function Compras() {
           {/* Requisições — núcleo: aprovação do financeiro */}
           <TabsContent value="requisicoes" className="mt-4">
             <div className="flex items-center gap-3 mb-3">
-              <Select defaultValue="all">
+              <Select value={statusFilter} onValueChange={setStatusFilter}>
                 <SelectTrigger className="w-[220px]"><SelectValue placeholder="Filtrar por status" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Todos os status</SelectItem>
@@ -133,7 +143,9 @@ export default function Compras() {
                 </SelectContent>
               </Select>
             </div>
-            {RCS.length === 0 ? <CarboEmptyState title="Nenhum registro" /> : (
+            {rcLoading ? (
+              <div className="flex items-center justify-center gap-2 py-16 text-muted-foreground"><Loader2 className="h-5 w-5 animate-spin" /> Carregando…</div>
+            ) : filteredRcs.length === 0 ? <CarboEmptyState title="Nenhuma requisição" description={rcs.length === 0 ? 'Crie a primeira em "Nova Requisição".' : "Ajuste o filtro de status."} /> : (
             <div className="overflow-x-auto">
               <CarboTable>
                 <CarboTableHeader>
@@ -143,7 +155,7 @@ export default function Compras() {
                   </CarboTableRow>
                 </CarboTableHeader>
                 <CarboTableBody>
-                  {RCS.map((rc) => (
+                  {filteredRcs.map((rc) => (
                     <CarboTableRow key={rc.id}>
                       <CarboTableCell className="font-mono font-medium">{rc.rc_number}</CarboTableCell>
                       <CarboTableCell>{rc.cost_center}</CarboTableCell>
@@ -156,8 +168,8 @@ export default function Compras() {
                           <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setDetailRc({ rc_number: rc.rc_number, cost_center: rc.cost_center, tipo: rc.tipo, valor: rc.valor, statusLabel: RC_STATUS_LABELS[rc.status], statusVariant: RC_STATUS_VARIANT[rc.status] })}><Eye className="h-4 w-4" /></Button>
                           {rc.status === "aguardando_aprovacao" && (
                             <>
-                              <Button variant="ghost" size="icon" className="h-8 w-8 text-success" onClick={() => setAprovarRc(rc.rc_number)} title="Aprovar"><Check className="h-4 w-4" /></Button>
-                              <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => setRejeitarRc(rc.rc_number)} title="Rejeitar"><X className="h-4 w-4" /></Button>
+                              <Button variant="ghost" size="icon" className="h-8 w-8 text-success" onClick={() => setAprovarRc({ id: rc.id, number: rc.rc_number })} title="Aprovar"><Check className="h-4 w-4" /></Button>
+                              <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => setRejeitarRc({ id: rc.id, number: rc.rc_number })} title="Rejeitar"><X className="h-4 w-4" /></Button>
                             </>
                           )}
                         </div>
@@ -174,20 +186,30 @@ export default function Compras() {
           <TabsContent value="recebimento" className="mt-4"><SimpleTable headers={["Recebimento", "OC", "Fornecedor"]} rows={RECEB} /></TabsContent>
           <TabsContent value="notas" className="mt-4"><SimpleTable headers={["Nota Fiscal", "Fornecedor", "Emissão"]} rows={NOTAS} /></TabsContent>
           <TabsContent value="pagar" className="mt-4"><SimpleTable headers={["Fornecedor", "Documento", "Vencimento"]} rows={PAGAR} /></TabsContent>
-          <TabsContent value="fornecedores" className="mt-4"><SimpleTable headers={["Fornecedor", "CNPJ", "Categoria"]} rows={FORN} showValor={false} /></TabsContent>
+          <TabsContent value="fornecedores" className="mt-4"><SimpleTable headers={["Fornecedor", "CNPJ", "Categoria"]} rows={fornRows} showValor={false} /></TabsContent>
           {canSeeDashboard && (
             <TabsContent value="dashboard" className="mt-4">
               <CarboCard><CarboCardContent className="py-12 text-center text-muted-foreground"><BarChart3 className="h-10 w-10 mx-auto mb-2 opacity-30" /><p>Dashboard de compras — gráficos entram na fase de lógica.</p></CarboCardContent></CarboCard>
             </TabsContent>
           )}
         </Tabs>
-        <p className="text-xs text-muted-foreground text-center">Aprovação do financeiro e dados reais entram na fase de lógica.</p>
+        <p className="text-xs text-muted-foreground text-center">OC, recebimento, notas fiscais e contas a pagar entram na próxima fase.</p>
       </div>
 
       <NovaRequisicaoDialog open={novaOpen} onOpenChange={setNovaOpen} />
       <RCDetailsDialog rc={detailRc} open={detailRc !== null} onOpenChange={(v) => !v && setDetailRc(null)} />
-      <RCAprovarDialog rcNumber={aprovarRc} open={aprovarRc !== null} onOpenChange={(v) => !v && setAprovarRc(null)} />
-      <RCRejeitarDialog rcNumber={rejeitarRc} open={rejeitarRc !== null} onOpenChange={(v) => !v && setRejeitarRc(null)} />
+      <RCAprovarDialog
+        rcNumber={aprovarRc?.number ?? null}
+        open={aprovarRc !== null}
+        onOpenChange={(v) => !v && setAprovarRc(null)}
+        onConfirm={aprovarRc ? async () => { await approve.mutateAsync(aprovarRc.id); toast.success(`Requisição ${aprovarRc.number} aprovada.`); setAprovarRc(null); } : undefined}
+      />
+      <RCRejeitarDialog
+        rcNumber={rejeitarRc?.number ?? null}
+        open={rejeitarRc !== null}
+        onOpenChange={(v) => !v && setRejeitarRc(null)}
+        onConfirm={rejeitarRc ? async () => { await reject.mutateAsync(rejeitarRc.id); toast.success(`Requisição ${rejeitarRc.number} rejeitada.`); setRejeitarRc(null); } : undefined}
+      />
     </div>
   );
 }

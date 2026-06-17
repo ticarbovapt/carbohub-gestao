@@ -1,6 +1,6 @@
 // TODO: ligar em <tabela de compras> (Supabase).
 import { useState } from "react";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2, Loader2 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
+import { useRcMutations } from "@/hooks/useRcRequests";
 
 const COST_CENTERS = [
   "Operações", "Manutenção", "Logística", "Administrativo", "Comercial", "TI",
@@ -23,7 +24,10 @@ const newRow = (): ItemRow => ({ id: nextId++, descricao: "", quantidade: 1, uni
 const brl = (v: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
 
 export function NovaRequisicaoDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v: boolean) => void }) {
+  const { create } = useRcMutations();
   const [items, setItems] = useState<ItemRow[]>([newRow()]);
+  const [costCenter, setCostCenter] = useState("");
+  const [justificativa, setJustificativa] = useState("");
 
   const estimated = items.reduce((s, i) => s + i.quantidade * i.valor_unitario, 0);
   const addItem = () => setItems((r) => [...r, newRow()]);
@@ -31,13 +35,22 @@ export function NovaRequisicaoDialog({ open, onOpenChange }: { open: boolean; on
   const updateItem = (id: number, field: keyof ItemRow, value: string | number) =>
     setItems((r) => r.map((x) => (x.id === id ? { ...x, [field]: value } : x)));
 
-  const submit = () => {
-    toast.info("Disponível na fase de lógica");
-    onOpenChange(false);
+  const reset = () => { setItems([newRow()]); setCostCenter(""); setJustificativa(""); };
+  const close = (v: boolean) => { if (!v) reset(); onOpenChange(v); };
+
+  const submit = async (status: "rascunho" | "aguardando_aprovacao") => {
+    try {
+      await create.mutateAsync({ centroCusto: costCenter, justificativa, items, status });
+      toast.success(status === "rascunho" ? "Rascunho salvo." : "Requisição enviada para aprovação.");
+      reset();
+      onOpenChange(false);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Não foi possível salvar a requisição.");
+    }
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={close}>
       <DialogContent className="sm:max-w-3xl">
         <DialogHeader>
           <DialogTitle>Nova Requisição de Compra</DialogTitle>
@@ -47,7 +60,7 @@ export function NovaRequisicaoDialog({ open, onOpenChange }: { open: boolean; on
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="grid gap-1.5">
               <Label>Centro de Custo *</Label>
-              <Select defaultValue="">
+              <Select value={costCenter} onValueChange={setCostCenter}>
                 <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
                 <SelectContent>
                   {COST_CENTERS.map((cc) => <SelectItem key={cc} value={cc}>{cc}</SelectItem>)}
@@ -78,7 +91,7 @@ export function NovaRequisicaoDialog({ open, onOpenChange }: { open: boolean; on
 
           <div className="grid gap-1.5">
             <Label>Justificativa *</Label>
-            <Textarea placeholder="Descreva a necessidade..." />
+            <Textarea placeholder="Descreva a necessidade..." value={justificativa} onChange={(e) => setJustificativa(e.target.value)} />
           </div>
 
           <div className="grid gap-1.5">
@@ -138,9 +151,11 @@ export function NovaRequisicaoDialog({ open, onOpenChange }: { open: boolean; on
         </div>
 
         <DialogFooter className="gap-2">
-          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
-          <Button variant="secondary" onClick={submit}>Salvar Rascunho</Button>
-          <Button onClick={submit} className="carbo-gradient text-white">Enviar para Aprovação</Button>
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={create.isPending}>Cancelar</Button>
+          <Button variant="secondary" onClick={() => submit("rascunho")} disabled={create.isPending}>Salvar Rascunho</Button>
+          <Button onClick={() => submit("aguardando_aprovacao")} disabled={create.isPending} className="carbo-gradient text-white">
+            {create.isPending ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Salvando…</> : "Enviar para Aprovação"}
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
