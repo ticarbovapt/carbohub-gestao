@@ -1,0 +1,71 @@
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Catálogo MRP (Carbo Ops) — LEITURA do banco compartilhado do ecossistema.
+//  • Produtos = mrp_products (mesma tabela do "controle"; nada é recadastrado).
+//  • Estoque por hub = warehouse_stock ⋈ warehouses (fonte de verdade; nunca usar
+//    mrp_products.current_stock_qty como fallback de exibição — ver CLAUDE.md).
+//  RLS: mrp_products libera SELECT p/ admin/CEO/gestor; warehouse_stock p/ qualquer
+//  autenticado. Se a lista vier vazia p/ um perfil, é trava de RLS em mrp_products.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const db = supabase as unknown as { from: (t: string) => any };
+
+export interface HubStock {
+  warehouse_name: string;
+  quantity: number;
+}
+
+export interface MrpProduct {
+  id: string;
+  name: string;
+  product_code: string;
+  category: string;
+  current_stock_qty: number;
+  safety_stock_qty: number;
+  stock_unit: string;
+  hubs: HubStock[];
+}
+
+export function useMrpProducts() {
+  return useQuery({
+    queryKey: ["ops", "mrp-products"],
+    queryFn: async (): Promise<MrpProduct[]> => {
+      const [products, stock] = await Promise.all([
+        db
+          .from("mrp_products")
+          .select("id, name, product_code, category, current_stock_qty, safety_stock_qty, stock_unit")
+          .eq("is_active", true)
+          .order("product_code"),
+        db
+          .from("warehouse_stock")
+          .select("product_id, quantity, warehouse:warehouses(code, name, is_active)"),
+      ]);
+
+      if (products.error) throw products.error;
+      if (stock.error) throw stock.error;
+
+      // Estoque por produto → lista de hubs (ignora hubs inativos).
+      const byProduct = new Map<string, HubStock[]>();
+      for (const row of stock.data ?? []) {
+        const wh = row.warehouse;
+        if (wh?.is_active === false) continue;
+        const arr = byProduct.get(row.product_id) ?? [];
+        arr.push({ warehouse_name: wh?.code ?? wh?.name ?? "—", quantity: Number(row.quantity) || 0 });
+        byProduct.set(row.product_id, arr);
+      }
+
+      return (products.data ?? []).map((p: Record<string, unknown>) => ({
+        id: p.id as string,
+        name: (p.name as string) ?? "",
+        product_code: (p.product_code as string) ?? "",
+        category: (p.category as string) ?? "Outro",
+        current_stock_qty: Number(p.current_stock_qty) || 0,
+        safety_stock_qty: Number(p.safety_stock_qty) || 0,
+        stock_unit: (p.stock_unit as string) ?? "un",
+        hubs: byProduct.get(p.id as string) ?? [],
+      }));
+    },
+  });
+}

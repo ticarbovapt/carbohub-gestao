@@ -8,12 +8,11 @@ import { CarboSearchInput } from "@/components/ui/carbo-input";
 import {
   CarboTable, CarboTableHeader, CarboTableBody, CarboTableRow, CarboTableHead, CarboTableCell,
 } from "@/components/ui/carbo-table";
-import { Package, Plus, ClipboardList, Pencil, AlertTriangle, AlertCircle, CheckCircle } from "lucide-react";
+import { Package, Plus, ClipboardList, Pencil, AlertTriangle, AlertCircle, CheckCircle, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { MrpProductFormDialog } from "@/components/producao/MrpProductFormDialog";
 import { BomDialog } from "@/components/producao/BomDialog";
-
-// TODO: ligar em mrp_products (Supabase)
+import { useMrpProducts, type MrpProduct } from "@/hooks/useMrpProducts";
 
 const CATEGORY_FILTER_TABS = [
   { key: "all", label: "Todos" },
@@ -34,11 +33,6 @@ function CategoryBadge({ category }: { category: string | null }) {
   return <span className={cn("inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium", CATEGORY_CLS[category] ?? CATEGORY_CLS["Outro"])}>{category}</span>;
 }
 
-interface HubStock { warehouse_name: string; quantity: number; }
-interface MrpProduct { id: string; name: string; product_code: string; category: string; current_stock_qty: number; safety_stock_qty: number; stock_unit: string; hubs: HubStock[]; }
-// TODO: ligar em mrp_products (Supabase)
-const MOCK: MrpProduct[] = [];
-
 function StockRiskBadge({ p }: { p: MrpProduct }) {
   const total = p.hubs.length ? p.hubs.reduce((s, h) => s + h.quantity, 0) : p.current_stock_qty;
   const hasZero = p.hubs.some((h) => h.quantity === 0);
@@ -56,13 +50,15 @@ export default function ProdutosMrp() {
   const [editProduct, setEditProduct] = useState<MrpProduct | null>(null);
   const [bomProduct, setBomProduct] = useState<MrpProduct | null>(null);
 
-  const filtered = MOCK.filter((p) => {
+  const { data: products = [], isLoading, error } = useMrpProducts();
+
+  const filtered = products.filter((p) => {
     if (categoryFilter !== "all" && p.category !== categoryFilter) return false;
     if (!search) return true;
     const s = search.toLowerCase();
     return p.product_code.toLowerCase().includes(s) || p.name.toLowerCase().includes(s);
   });
-  const produtosFinais = MOCK.filter((p) => p.category === "Produto Final");
+  const produtosFinais = products.filter((p) => p.category === "Produto Final");
 
   return (
     <div className="p-4 md:p-6">
@@ -115,8 +111,12 @@ export default function ProdutosMrp() {
               </div>
             </div>
 
-            {filtered.length === 0 ? (
-              <CarboCard><CarboEmptyState icon={Package} title="Nenhum produto encontrado" description="Ajuste os filtros de busca." /></CarboCard>
+            {isLoading ? (
+              <CarboCard><div className="flex items-center justify-center gap-2 py-16 text-muted-foreground"><Loader2 className="h-5 w-5 animate-spin" /> Carregando catálogo…</div></CarboCard>
+            ) : error ? (
+              <CarboCard><CarboEmptyState icon={AlertTriangle} title="Erro ao carregar" description="Não foi possível buscar os produtos. Tente novamente." /></CarboCard>
+            ) : filtered.length === 0 ? (
+              <CarboCard><CarboEmptyState icon={Package} title="Nenhum produto encontrado" description={products.length === 0 ? "Nenhum produto ativo no catálogo MRP." : "Ajuste os filtros de busca."} /></CarboCard>
             ) : (
               <CarboCard padding="none">
                 <div className="overflow-x-auto">
