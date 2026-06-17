@@ -13,6 +13,8 @@ import { Package, Plus, RefreshCw, PackageCheck, PackageX, Pencil, Trash2, Loade
 import { SkuFormDialog } from "@/components/producao/SkuFormDialog";
 import { DeleteConfirmDialog } from "@/components/producao/DeleteConfirmDialog";
 import { useSkus, type Sku } from "@/hooks/useSkus";
+import { useSkuMutations } from "@/hooks/useSkuMutations";
+import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
 export default function Skus() {
@@ -24,6 +26,7 @@ export default function Skus() {
   const [deleteSku, setDeleteSku] = useState<Sku | null>(null);
 
   const { data: skus = [], isLoading, isFetching, error, refetch } = useSkus();
+  const { remove } = useSkuMutations();
 
   const stats = useMemo(() => ({ total: skus.length, active: skus.filter((s) => s.is_active).length, inactive: skus.filter((s) => !s.is_active).length }), [skus]);
   const filtered = useMemo(() => skus.filter((sku) => {
@@ -121,6 +124,7 @@ export default function Skus() {
           open={!!editSku}
           onOpenChange={(v) => { if (!v) setEditSku(null); }}
           mode="edit"
+          id={editSku.id}
           initial={{
             code: editSku.code,
             name: editSku.name,
@@ -137,6 +141,11 @@ export default function Skus() {
         onOpenChange={(v) => { if (!v) setDeleteSku(null); }}
         title="Excluir SKU?"
         description={`Esta ação não pode ser desfeita. O SKU ${deleteSku?.code ?? ""} será excluído permanentemente.`}
+        onConfirm={deleteSku ? async () => {
+          await remove.mutateAsync(deleteSku.id);
+          toast.success(`SKU ${deleteSku.code} excluído.`);
+          setDeleteSku(null);
+        } : undefined}
       />
     </div>
   );
