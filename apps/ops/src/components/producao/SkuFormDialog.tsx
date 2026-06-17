@@ -8,7 +8,9 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import { useSkuMutations } from "@/hooks/useSkuMutations";
 
 export interface SkuFormInitial {
   code?: string;
@@ -26,10 +28,12 @@ interface SkuFormDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   mode: "create" | "edit";
+  id?: string;
   initial?: SkuFormInitial;
 }
 
-export function SkuFormDialog({ open, onOpenChange, mode, initial }: SkuFormDialogProps) {
+export function SkuFormDialog({ open, onOpenChange, mode, id, initial }: SkuFormDialogProps) {
+  const { create, update } = useSkuMutations();
   const [code, setCode] = useState(initial?.code ?? "");
   const [name, setName] = useState(initial?.name ?? "");
   const [description, setDescription] = useState(initial?.description ?? "");
@@ -40,9 +44,24 @@ export function SkuFormDialog({ open, onOpenChange, mode, initial }: SkuFormDial
   const [coverageDays, setCoverageDays] = useState(String(initial?.target_coverage_days ?? 30));
   const [isActive, setIsActive] = useState(initial?.is_active ?? true);
 
-  const handleSubmit = () => {
-    toast.info("Disponível na fase de lógica");
-    onOpenChange(false);
+  const pending = create.isPending || update.isPending;
+
+  const handleSubmit = async () => {
+    const payload = {
+      code, name, description, category, unit,
+      packaging_ml: packagingMl === "" ? null : Number(packagingMl),
+      safety_stock_qty: Number(safetyStock) || 0,
+      target_coverage_days: Number(coverageDays) || 0,
+      is_active: isActive,
+    };
+    try {
+      if (mode === "edit" && id) await update.mutateAsync({ id, ...payload });
+      else await create.mutateAsync(payload);
+      toast.success(mode === "create" ? "SKU criado." : "SKU atualizado.");
+      onOpenChange(false);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Não foi possível salvar o SKU.");
+    }
   };
 
   return (
@@ -126,8 +145,10 @@ export function SkuFormDialog({ open, onOpenChange, mode, initial }: SkuFormDial
         </div>
 
         <DialogFooter>
-          <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
-          <Button type="button" onClick={handleSubmit}>{mode === "create" ? "Criar SKU" : "Salvar"}</Button>
+          <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={pending}>Cancelar</Button>
+          <Button type="button" onClick={handleSubmit} disabled={pending}>
+            {pending ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Salvando…</> : (mode === "create" ? "Criar SKU" : "Salvar")}
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

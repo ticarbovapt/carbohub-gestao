@@ -174,6 +174,7 @@ export default function ProdutosMrp() {
           open={!!editProduct}
           onOpenChange={(v) => { if (!v) setEditProduct(null); }}
           mode="edit"
+          id={editProduct.id}
           initial={{
             name: editProduct.name,
             product_code: editProduct.product_code,

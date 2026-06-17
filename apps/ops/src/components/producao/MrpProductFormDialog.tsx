@@ -7,7 +7,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import { useMrpProductMutations } from "@/hooks/useMrpProductMutations";
 
 const CATEGORIES = ["Produto Final", "Insumo", "Embalagem", "Carbonatação", "Outro"];
 const UNITS = ["un", "L", "ml", "kg", "g", "cx"];
@@ -26,10 +28,12 @@ interface MrpProductFormDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   mode: "create" | "edit";
+  id?: string;
   initial?: MrpProductFormInitial;
 }
 
-export function MrpProductFormDialog({ open, onOpenChange, mode, initial }: MrpProductFormDialogProps) {
+export function MrpProductFormDialog({ open, onOpenChange, mode, id, initial }: MrpProductFormDialogProps) {
+  const { create, update } = useMrpProductMutations();
   const [name, setName] = useState(initial?.name ?? "");
   const [code, setCode] = useState(initial?.product_code ?? "");
   const [category, setCategory] = useState(initial?.category ?? "Insumo");
@@ -38,9 +42,21 @@ export function MrpProductFormDialog({ open, onOpenChange, mode, initial }: MrpP
   const [leadTime, setLeadTime] = useState(String(initial?.lead_time_days ?? 7));
   const [notes, setNotes] = useState(initial?.notes ?? "");
 
-  const handleSubmit = () => {
-    toast.info("Disponível na fase de lógica");
-    onOpenChange(false);
+  const pending = create.isPending || update.isPending;
+
+  const handleSubmit = async () => {
+    const payload = {
+      name, product_code: code, category, stock_unit: unit,
+      safety_stock_qty: Number(safetyStock) || 0, notes,
+    };
+    try {
+      if (mode === "edit" && id) await update.mutateAsync({ id, ...payload });
+      else await create.mutateAsync(payload);
+      toast.success(mode === "create" ? "Produto criado." : "Produto atualizado.");
+      onOpenChange(false);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Não foi possível salvar o produto.");
+    }
   };
 
   return (
@@ -104,8 +120,10 @@ export function MrpProductFormDialog({ open, onOpenChange, mode, initial }: MrpP
         </div>
 
         <DialogFooter>
-          <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
-          <Button type="button" onClick={handleSubmit}>{mode === "create" ? "Criar Produto" : "Salvar"}</Button>
+          <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={pending}>Cancelar</Button>
+          <Button type="button" onClick={handleSubmit} disabled={pending}>
+            {pending ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Salvando…</> : (mode === "create" ? "Criar Produto" : "Salvar")}
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
