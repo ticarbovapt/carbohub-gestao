@@ -75,7 +75,7 @@ export function StockView({ hub, editable }: { hub: Hub; editable: boolean }) {
                     </div>
                     <p className="text-[11px] text-muted-foreground font-mono tracking-wide">{p.product_code}<span className="ml-2 font-sans">· {p.category}</span></p>
                   </div>
-                  {editable && <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" onClick={() => setAjuste({ name: p.name, product_code: p.product_code, current: qty, unit: p.stock_unit })}><Pencil className="h-3.5 w-3.5" /></Button>}
+                  {editable && <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" onClick={() => setAjuste({ id: p.id, name: p.name, product_code: p.product_code, current: qty, unit: p.stock_unit })}><Pencil className="h-3.5 w-3.5" /></Button>}
                 </div>
 
                 <div className="text-center px-5 pb-3">
@@ -90,7 +90,7 @@ export function StockView({ hub, editable }: { hub: Hub; editable: boolean }) {
                 </div>
 
                 <div className="border-t border-border px-5 py-4">
-                  <StockProgressBar current={qty} safety={p.safety_stock_qty} hubName={hub.label} unit={p.stock_unit} onClick={editable ? () => setAjuste({ name: p.name, product_code: p.product_code, current: qty, unit: p.stock_unit }) : undefined} />
+                  <StockProgressBar current={qty} safety={p.safety_stock_qty} hubName={hub.label} unit={p.stock_unit} onClick={editable ? () => setAjuste({ id: p.id, name: p.name, product_code: p.product_code, current: qty, unit: p.stock_unit }) : undefined} />
                 </div>
               </CarboCardContent>
             </CarboCard>
