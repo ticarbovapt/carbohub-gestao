@@ -5,22 +5,19 @@ import { Button } from "@/components/ui/button";
 import { Target, ChevronLeft, ChevronRight } from "lucide-react";
 import { ECOM_PLATFORMS, brl } from "./platforms";
 
-// ⚠️ PORT VISUAL — dados MOCK. Mostra faturamento/pedidos por plataforma + geral,
-// e o andamento vs a meta (sem detalhes técnicos).
+// TODO: ligar em <tabela de metas/faturamento de e-commerce> (Supabase) na fase de lógica.
+// Mostra faturamento/pedidos por plataforma + geral, e o andamento vs a meta.
 
 interface Linha { id: string; meta: number; realizado: number; pedidos: number; }
-const DADOS: Record<string, Linha> = {
-  mercadolivre: { id: "mercadolivre", meta: 90000, realizado: 86400, pedidos: 420 },
-  amazon: { id: "amazon", meta: 65000, realizado: 61200, pedidos: 260 },
-  nuvemshop: { id: "nuvemshop", meta: 40000, realizado: 39800, pedidos: 180 },
-};
+const DADOS: Record<string, Linha> = {};
+const emptyLinha = (id: string): Linha => ({ id, meta: 0, realizado: 0, pedidos: 0 });
 
 const pct = (real: number, meta: number) => (meta > 0 ? Math.round((real / meta) * 100) : 0);
 const variant = (p: number): "success" | "warning" | "destructive" => (p >= 100 ? "success" : p >= 70 ? "warning" : "destructive");
 const barColor = (p: number) => (p >= 100 ? "bg-success" : p >= 70 ? "bg-warning" : "bg-destructive");
 
 export default function AcompanhamentoMetas() {
-  const linhas = ECOM_PLATFORMS.map((p) => ({ plat: p, d: DADOS[p.id] }));
+  const linhas = ECOM_PLATFORMS.map((p) => ({ plat: p, d: DADOS[p.id] ?? emptyLinha(p.id) }));
   const metaTotal = linhas.reduce((s, l) => s + l.d.meta, 0);
   const realTotal = linhas.reduce((s, l) => s + l.d.realizado, 0);
   const pedTotal = linhas.reduce((s, l) => s + l.d.pedidos, 0);
@@ -88,7 +85,6 @@ export default function AcompanhamentoMetas() {
             );
           })}
         </div>
-        <p className="text-xs text-muted-foreground text-center">Tela em port visual — dados de exemplo. Faturamento real dos canais entra na fase de lógica.</p>
       </div>
     </div>
   );

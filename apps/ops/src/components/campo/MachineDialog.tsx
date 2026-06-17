@@ -1,4 +1,4 @@
-// ⚠️ Form em port visual — campos MOCK; submit liga na fase de lógica.
+// TODO: ligar em <tabela de máquinas> (Supabase) na fase de lógica.
 import { useState } from "react";
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
@@ -12,8 +12,8 @@ import {
 import { DatePickerInput } from "@/components/ui/date-picker-input";
 import { toast } from "sonner";
 
-// Selects MOCK
-const LICENCIADOS = ["Licenciado Natal", "Licenciado Recife", "Licenciado Fortaleza", "Licenciado SP"];
+// TODO: carregar licenciados reais (Supabase) na fase de lógica.
+const LICENCIADOS: string[] = [];
 const STATUS = [
   { value: "operational", label: "Operacional" },
   { value: "maintenance", label: "Manutenção" },

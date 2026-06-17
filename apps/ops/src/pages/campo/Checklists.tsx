@@ -6,7 +6,7 @@ import { UserCheck, CheckCircle2, Circle, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ChecklistDialog } from "@/components/campo/ChecklistDialog";
 
-// ⚠️ PORT VISUAL FIEL ao Controle (/checklist → Checklist "Carbo Check") — dados MOCK.
+// TODO: ligar em <tabela de checklists> (Supabase) na fase de lógica.
 
 const DEPARTAMENTOS = [
   { key: "preparacao", label: "Preparação" },
@@ -17,17 +17,12 @@ const DEPARTAMENTOS = [
 
 interface Etapa { nome: string; concluida: boolean; }
 interface Checklist { id: string; nome: string; departamento: string; etapas: Etapa[]; }
-const MOCK: Checklist[] = [
-  { id: "1", nome: "Preparação de lote", departamento: "preparacao", etapas: [{ nome: "Conferir reagente", concluida: true }, { nome: "Higienizar tanque", concluida: true }, { nome: "Registrar lote", concluida: false }] },
-  { id: "2", nome: "Envase 1L", departamento: "operacao", etapas: [{ nome: "Calibrar envasadora", concluida: true }, { nome: "Teste de vazão", concluida: false }, { nome: "Amostragem", concluida: false }] },
-  { id: "3", nome: "Expedição pedido", departamento: "expedicao", etapas: [{ nome: "Conferir itens", concluida: true }, { nome: "Embalar", concluida: true }, { nome: "Etiquetar", concluida: true }, { nome: "Liberar transporte", concluida: true }] },
-  { id: "4", nome: "Acompanhamento cliente", departamento: "pos_venda", etapas: [{ nome: "Ligar pós-entrega", concluida: false }, { nome: "Registrar feedback", concluida: false }] },
-];
+const CHECKLISTS: Checklist[] = [];
 
 export default function Checklists() {
   const [dep, setDep] = useState("preparacao");
   const [openChecklist, setOpenChecklist] = useState<Checklist | null>(null);
-  const lists = MOCK.filter((c) => c.departamento === dep);
+  const lists = CHECKLISTS.filter((c) => c.departamento === dep);
 
   return (
     <div className="p-4 md:p-6">
@@ -73,7 +68,6 @@ export default function Checklists() {
           })}
           {lists.length === 0 && <CarboCard><CarboCardContent className="py-12 text-center text-muted-foreground"><UserCheck className="h-10 w-10 mx-auto mb-2 opacity-30" /><p>Nenhum checklist neste departamento</p></CarboCardContent></CarboCard>}
         </div>
-        <p className="text-xs text-muted-foreground text-center">Tela em port visual — dados de exemplo. Fluxo de execução (Carbo Check) entra na fase de lógica.</p>
       </div>
 
       <ChecklistDialog

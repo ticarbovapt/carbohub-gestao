@@ -1,4 +1,4 @@
-// ⚠️ Form em port visual — campos MOCK; submit liga na fase de lógica.
+// TODO: ligar em viagens (Supabase)
 import { useState } from "react";
 import {
   Dialog,
@@ -38,7 +38,7 @@ const CENTROS_CUSTO = [
 ];
 
 export function SolicitacaoViagemDialog({ open, onOpenChange }: SolicitacaoViagemDialogProps) {
-  const [solicitante, setSolicitante] = useState("Lucas Padilha");
+  const [solicitante, setSolicitante] = useState("");
   const [destino, setDestino] = useState("");
   const [ida, setIda] = useState("");
   const [volta, setVolta] = useState("");

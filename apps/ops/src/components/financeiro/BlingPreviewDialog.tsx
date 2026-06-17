@@ -1,4 +1,4 @@
-// ⚠️ Form em port visual — campos MOCK; submit liga na fase de lógica.
+// TODO: ligar em <tabela financeira/bling> (Supabase)
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from "@/components/ui/dialog";
@@ -14,11 +14,9 @@ export interface BlingOrder {
   payment_terms: string; freight_type: "CIF" | "FOB"; total: number;
 }
 
-// Itens mock — na lógica virão dos itens reais do pedido.
-const MOCK_ITENS = [
-  { produto: "CarboZé 100ml", qtd: 24, unitario: 0 },
-  { produto: "CarboPRO", qtd: 6, unitario: 0 },
-];
+// TODO: ligar em <tabela financeira/bling> (Supabase) — itens reais do pedido.
+interface BlingItem { produto: string; qtd: number; unitario: number; }
+const MOCK_ITENS: BlingItem[] = [];
 
 interface Props {
   order: BlingOrder | null;
@@ -28,7 +26,7 @@ interface Props {
 
 export function BlingPreviewDialog({ order, open, onOpenChange }: Props) {
   if (!order) return null;
-  const itens = MOCK_ITENS.map((i) => ({ ...i, subtotal: order.total / MOCK_ITENS.length }));
+  const itens = MOCK_ITENS.map((i) => ({ ...i, subtotal: MOCK_ITENS.length ? order.total / MOCK_ITENS.length : 0 }));
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -68,13 +66,15 @@ export function BlingPreviewDialog({ order, open, onOpenChange }: Props) {
                     <td className="p-2 text-right tabular-nums">{brl(i.subtotal)}</td>
                   </tr>
                 ))}
+                {itens.length === 0 && (
+                  <tr className="border-t"><td className="p-3 text-center text-muted-foreground" colSpan={3}>Nenhum item</td></tr>
+                )}
               </tbody>
               <tfoot>
                 <tr className="border-t bg-muted/20 font-semibold"><td className="p-2" colSpan={2}>Total</td><td className="p-2 text-right tabular-nums">{brl(order.total)}</td></tr>
               </tfoot>
             </table>
           </div>
-          <p className="text-xs text-muted-foreground">Itens e valores unitários são exemplo — na fase de lógica virão do pedido real.</p>
         </div>
 
         <DialogFooter>

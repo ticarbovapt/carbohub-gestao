@@ -2,7 +2,7 @@ import { useState } from "react";
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
 import { CarboCard, CarboCardContent } from "@/components/ui/carbo-card";
 import { CarboBadge } from "@/components/ui/carbo-badge";
-import { CarboButton } from "@/components/ui/carbo-button";
+import { CarboEmptyState } from "@/components/ui/carbo-empty-state";
 import {
   CarboTable, CarboTableHeader, CarboTableBody, CarboTableRow, CarboTableHead, CarboTableCell,
 } from "@/components/ui/carbo-table";
@@ -18,7 +18,7 @@ import { RCDetailsDialog, type RCLite } from "@/components/compras/RCDetailsDial
 import { RCAprovarDialog } from "@/components/compras/RCAprovarDialog";
 import { RCRejeitarDialog } from "@/components/compras/RCRejeitarDialog";
 
-// ⚠️ PORT VISUAL FIEL ao Controle (/purchasing → Purchasing "Financeiro & Suprimentos") — dados MOCK.
+// TODO: ligar em <tabela de compras> (Supabase).
 // No Carbo Ops esta é a tela de COMPRAS (requisições aprovadas pelo financeiro).
 
 const brl = (v: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
@@ -33,36 +33,16 @@ const RC_STATUS_VARIANT: Record<RcStatus, "secondary" | "warning" | "success" | 
   rascunho: "secondary", aguardando_aprovacao: "warning", aprovada: "success", rejeitada: "destructive", cancelada: "secondary",
 };
 interface RC { id: string; rc_number: string; cost_center: string; tipo: string; valor: number; status: RcStatus; data: string; }
-const RCS: RC[] = [
-  { id: "1", rc_number: "RC-2042", cost_center: "Produção RN", tipo: "Insumo", valor: 12400, status: "aguardando_aprovacao", data: "2026-06-09" },
-  { id: "2", rc_number: "RC-2041", cost_center: "Logística SP", tipo: "Embalagem", valor: 5300, status: "aprovada", data: "2026-06-08" },
-  { id: "3", rc_number: "RC-2040", cost_center: "Manutenção", tipo: "Serviço", valor: 2800, status: "rejeitada", data: "2026-06-07" },
-  { id: "4", rc_number: "RC-2039", cost_center: "Produção RN", tipo: "Reagente", valor: 18900, status: "aguardando_aprovacao", data: "2026-06-07" },
-  { id: "5", rc_number: "RC-2038", cost_center: "Comercial", tipo: "Material", valor: 940, status: "rascunho", data: "2026-06-06" },
-];
+// TODO: ligar em <tabela de compras> (Supabase).
+const RCS: RC[] = [];
 
 interface SimpleRow { id: string; col1: string; col2: string; col3: string; valor: number; status: string; statusVariant: "secondary" | "warning" | "success" | "destructive" | "info"; }
-const OCS: SimpleRow[] = [
-  { id: "1", col1: "OC-1042", col2: "QuímicaSul", col3: "5 itens", valor: 18900, status: "Em aberto", statusVariant: "info" },
-  { id: "2", col1: "OC-1041", col2: "EmbaNorte", col3: "2 itens", valor: 5300, status: "Recebida", statusVariant: "success" },
-  { id: "3", col1: "OC-1040", col2: "InsumosBR", col3: "8 itens", valor: 9400, status: "Parcial", statusVariant: "warning" },
-];
-const RECEB: SimpleRow[] = [
-  { id: "1", col1: "REC-512", col2: "OC-1041", col3: "EmbaNorte", valor: 5300, status: "Conferido", statusVariant: "success" },
-  { id: "2", col1: "REC-511", col2: "OC-1040", col3: "InsumosBR", valor: 4700, status: "Pendente", statusVariant: "warning" },
-];
-const NOTAS: SimpleRow[] = [
-  { id: "1", col1: "NF 123455", col2: "QuímicaSul", col3: "12/06/2026", valor: 18900, status: "Lançada", statusVariant: "success" },
-  { id: "2", col1: "NF 123450", col2: "EmbaNorte", col3: "08/06/2026", valor: 5300, status: "Lançada", statusVariant: "success" },
-];
-const PAGAR: SimpleRow[] = [
-  { id: "1", col1: "QuímicaSul", col2: "NF 123455", col3: "Vence 20/06", valor: 18900, status: "A pagar", statusVariant: "warning" },
-  { id: "2", col1: "InsumosBR", col2: "NF 123440", col3: "Venceu 05/06", valor: 4700, status: "Atrasado", statusVariant: "destructive" },
-];
-const FORN: SimpleRow[] = [
-  { id: "1", col1: "QuímicaSul", col2: "12.345.678/0001-90", col3: "Reagentes", valor: 0, status: "Ativo", statusVariant: "success" },
-  { id: "2", col1: "EmbaNorte", col2: "45.678.912/0001-33", col3: "Embalagem", valor: 0, status: "Ativo", statusVariant: "success" },
-];
+// TODO: ligar em <tabela de compras> (Supabase).
+const OCS: SimpleRow[] = [];
+const RECEB: SimpleRow[] = [];
+const NOTAS: SimpleRow[] = [];
+const PAGAR: SimpleRow[] = [];
+const FORN: SimpleRow[] = [];
 
 function KpiCard({ icon: Icon, label, value, color }: { icon: typeof Clock; label: string; value: string; color: string }) {
   return (
@@ -76,6 +56,7 @@ function KpiCard({ icon: Icon, label, value, color }: { icon: typeof Clock; labe
 }
 
 function SimpleTable({ headers, rows, showValor = true }: { headers: string[]; rows: SimpleRow[]; showValor?: boolean }) {
+  if (rows.length === 0) return <CarboEmptyState title="Nenhum registro" />;
   return (
     <div className="overflow-x-auto">
       <CarboTable>
@@ -122,11 +103,11 @@ export default function Compras() {
 
         {/* KPIs */}
         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
-          <KpiCard icon={Clock} label="RC Pendentes" value="2" color="text-warning" />
-          <KpiCard icon={Package} label="OC Abertas" value="3" color="text-carbo-blue" />
-          <KpiCard icon={AlertTriangle} label="Pgtos Atrasados" value="1" color="text-destructive" />
-          <KpiCard icon={BarChart3} label="Comprometido" value={brl(33600)} color="text-carbo-green" />
-          <KpiCard icon={CreditCard} label="A Pagar" value={brl(23600)} color="text-warning" />
+          <KpiCard icon={Clock} label="RC Pendentes" value="0" color="text-warning" />
+          <KpiCard icon={Package} label="OC Abertas" value="0" color="text-carbo-blue" />
+          <KpiCard icon={AlertTriangle} label="Pgtos Atrasados" value="0" color="text-destructive" />
+          <KpiCard icon={BarChart3} label="Comprometido" value={brl(0)} color="text-carbo-green" />
+          <KpiCard icon={CreditCard} label="A Pagar" value={brl(0)} color="text-warning" />
         </div>
 
         {/* Tabs */}
@@ -152,6 +133,7 @@ export default function Compras() {
                 </SelectContent>
               </Select>
             </div>
+            {RCS.length === 0 ? <CarboEmptyState title="Nenhum registro" /> : (
             <div className="overflow-x-auto">
               <CarboTable>
                 <CarboTableHeader>
@@ -185,6 +167,7 @@ export default function Compras() {
                 </CarboTableBody>
               </CarboTable>
             </div>
+            )}
           </TabsContent>
 
           <TabsContent value="ordens" className="mt-4"><SimpleTable headers={["Nº OC", "Fornecedor", "Itens"]} rows={OCS} /></TabsContent>
@@ -198,7 +181,7 @@ export default function Compras() {
             </TabsContent>
           )}
         </Tabs>
-        <p className="text-xs text-muted-foreground text-center">Tela em port visual — dados de exemplo. Aprovação do financeiro e dados reais entram na fase de lógica.</p>
+        <p className="text-xs text-muted-foreground text-center">Aprovação do financeiro e dados reais entram na fase de lógica.</p>
       </div>
 
       <NovaRequisicaoDialog open={novaOpen} onOpenChange={setNovaOpen} />

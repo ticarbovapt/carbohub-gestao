@@ -1,4 +1,4 @@
-// ⚠️ Form em port visual — campos MOCK; submit liga na fase de lógica.
+// TODO: ligar em <tabela de compras> (Supabase).
 import { useState } from "react";
 import { Plus, Trash2 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -14,7 +14,8 @@ const COST_CENTERS = [
   "Marketing", "Qualidade", "Financeiro", "RH", "Jurídico", "P&D", "Compras", "Produção",
 ];
 const UNITS_OF_MEASURE = ["un", "kg", "g", "L", "mL", "m", "cm", "m²", "m³", "pç", "cx", "pct", "par", "h", "km"];
-const FORNECEDORES_MOCK = ["QuímicaSul", "EmbaNorte", "InsumosBR", "LogHouse SP"];
+// TODO: ligar em <tabela de compras> (Supabase).
+const FORNECEDORES: string[] = [];
 
 interface ItemRow { id: number; descricao: string; quantidade: number; unidade: string; valor_unitario: number; }
 let nextId = 1;
@@ -69,7 +70,7 @@ export function NovaRequisicaoDialog({ open, onOpenChange }: { open: boolean; on
               <Select defaultValue="">
                 <SelectTrigger><SelectValue placeholder="Selecione o fornecedor..." /></SelectTrigger>
                 <SelectContent>
-                  {FORNECEDORES_MOCK.map((f) => <SelectItem key={f} value={f}>{f}</SelectItem>)}
+                  {FORNECEDORES.map((f) => <SelectItem key={f} value={f}>{f}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>

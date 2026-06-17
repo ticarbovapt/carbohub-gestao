@@ -1,4 +1,3 @@
-// ⚠️ Form em port visual — campos MOCK; submit liga na fase de lógica.
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,

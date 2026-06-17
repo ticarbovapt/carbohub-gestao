@@ -1,4 +1,3 @@
-// ⚠️ Form em port visual — campos MOCK; submit liga na fase de lógica.
 import { useState } from "react";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,

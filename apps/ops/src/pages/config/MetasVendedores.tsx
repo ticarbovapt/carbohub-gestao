@@ -110,7 +110,7 @@ export default function MetasVendedoresConfig() {
   // Metas de e-commerce (port visual)
   const onlyDigits = (s: string) => s.replace(/\D/g, "");
   const fmtEcom = (raw: string) => { const d = onlyDigits(raw); return d ? Number(d).toLocaleString("pt-BR") : ""; };
-  const [ecom, setEcom] = useState<Record<string, string>>({ mercadolivre: "90000", amazon: "65000", nuvemshop: "40000" });
+  const [ecom, setEcom] = useState<Record<string, string>>({});
   const ecomTotal = ECOM_PLATFORMS.reduce((s, p) => s + Number(onlyDigits(ecom[p.id] || "0")), 0);
 
   const MonthNav = () => (
@@ -254,7 +254,7 @@ export default function MetasVendedoresConfig() {
             <div className="flex justify-end">
               <Button className="gap-2" onClick={() => toast.success("Metas salvas! (port visual — lógica entra depois)")}><Save className="h-4 w-4" /> Salvar metas</Button>
             </div>
-            <p className="text-xs text-muted-foreground text-center">Aba de e-commerce em port visual — dados de exemplo. A gravação real entra na fase de lógica.</p>
+            <p className="text-xs text-muted-foreground text-center">Aba de e-commerce: a gravação real entra na fase de lógica.</p>
           </>
         )}
 

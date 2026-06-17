@@ -1,4 +1,4 @@
-// ⚠️ Form em port visual — campos MOCK; submit liga na fase de lógica.
+// TODO: ligar em <tabela de vendas/produtos> (Supabase) na fase de lógica.
 // Reproduz a tela "Vender" do Carbo Sales dentro de um popup (Ops não tem a
 // página Vender; aqui a venda é registrada por este dialog).
 import { useMemo, useState } from "react";
@@ -19,13 +19,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 
-const PRODUTOS = [
-  { id: "p1", name: "CarboZé 100ml", price: 28.0 },
-  { id: "p2", name: "CarboZé 1L", price: 190.0 },
-  { id: "p3", name: "CarboZé Sachê 10ml", price: 4.5 },
-  { id: "p4", name: "CarboPRO", price: 320.0 },
-  { id: "p5", name: "CarboVapt", price: 150.0 },
-];
+// TODO: carregar produtos reais do estoque (Supabase) na fase de lógica.
+const PRODUTOS: { id: string; name: string; price: number }[] = [];
 const TIPOS_PONTO = ["Posto", "Oficina", "Frota", "PDV", "Licenciado"];
 const CLASSIFICACOES = ["Estratégico", "Potencial", "Regular"];
 const UFS = ["SP", "RJ", "MG", "RN", "BA", "PR", "RS", "SC"];

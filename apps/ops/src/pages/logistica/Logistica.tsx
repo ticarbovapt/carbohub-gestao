@@ -10,7 +10,7 @@ import { MOCK_SHIPMENTS, ShipmentsKanban, LogisticsKpis, type Shipment } from "@
 import { FreightCalculatorDialog } from "@/components/logistica/FreightCalculatorDialog";
 import { ShipmentDetailsDialog } from "@/components/logistica/ShipmentDetailsDialog";
 
-// ⚠️ PORT VISUAL FIEL ao Controle (/logistics → Logistics "Controle Logístico") — dados MOCK.
+// TODO: ligar em shipments (Supabase)
 
 export default function Logistica() {
   const [cep, setCep] = useState("");
@@ -69,7 +69,7 @@ export default function Logistica() {
             <CarboCard><CarboCardContent className="py-12 text-center text-muted-foreground"><BarChart3 className="h-10 w-10 mx-auto mb-2 opacity-30" /><p>Visão estratégica de logística (custo por rota, performance de transportadoras) — entra na fase de lógica.</p></CarboCardContent></CarboCard>
           </TabsContent>
         </Tabs>
-        <p className="text-xs text-muted-foreground text-center">Tela em port visual — dados de exemplo. Rastreio, cotação de frete e estratégico entram na fase de lógica.</p>
+        <p className="text-xs text-muted-foreground text-center">Conexão com dados reais entra na fase de lógica. Rastreio, cotação de frete e estratégico entram na fase de lógica.</p>
       </div>
 
       <FreightCalculatorDialog open={freteOpen} onOpenChange={setFreteOpen} />

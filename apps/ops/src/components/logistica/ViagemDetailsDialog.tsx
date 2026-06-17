@@ -1,4 +1,4 @@
-// ⚠️ Form em port visual — campos MOCK; submit liga na fase de lógica.
+// TODO: ligar em viagens (Supabase)
 import {
   Dialog,
   DialogContent,
@@ -35,13 +35,6 @@ const dt = (s: string) => new Date(s + "T00:00:00").toLocaleDateString("pt-BR");
 export function ViagemDetailsDialog({ viagem, open, onOpenChange }: ViagemDetailsDialogProps) {
   if (!viagem) return null;
 
-  // Datas de volta e prestação de contas MOCK derivadas para exibição
-  const voltaMock = (() => {
-    const d = new Date(viagem.data + "T00:00:00");
-    d.setDate(d.getDate() + 2);
-    return d.toLocaleDateString("pt-BR");
-  })();
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
@@ -73,7 +66,7 @@ export function ViagemDetailsDialog({ viagem, open, onOpenChange }: ViagemDetail
             <div className="flex items-center gap-2">
               <Calendar className="h-4 w-4 text-muted-foreground" />
               <span className="text-muted-foreground">Período:</span>
-              <span className="font-medium">{dt(viagem.data)} a {voltaMock}</span>
+              <span className="font-medium">{dt(viagem.data)}</span>
             </div>
           </div>
 
@@ -94,7 +87,7 @@ export function ViagemDetailsDialog({ viagem, open, onOpenChange }: ViagemDetail
             </div>
             <div className="flex items-center justify-between text-sm">
               <span className="text-muted-foreground">Adiantamento</span>
-              <span className="font-semibold tabular-nums">{brl(viagem.valor * 0.5)}</span>
+              <span className="font-semibold tabular-nums">—</span>
             </div>
           </div>
 
@@ -110,13 +103,11 @@ export function ViagemDetailsDialog({ viagem, open, onOpenChange }: ViagemDetail
                 </div>
                 <div className="flex items-center justify-between">
                   <span>Total comprovado</span>
-                  <span className="font-medium text-foreground tabular-nums">
-                    {brl(viagem.valor * 0.9)}
-                  </span>
+                  <span className="font-medium text-foreground tabular-nums">—</span>
                 </div>
                 <div className="flex items-center justify-between">
                   <span>Comprovantes</span>
-                  <span className="font-medium text-foreground">4 anexos</span>
+                  <span className="font-medium text-foreground">—</span>
                 </div>
               </div>
             ) : (

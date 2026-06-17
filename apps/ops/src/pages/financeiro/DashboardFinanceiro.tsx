@@ -6,22 +6,16 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend,
 } from "recharts";
 import { Wallet, CalendarRange } from "lucide-react";
+import { CarboEmptyState } from "@/components/ui/carbo-empty-state";
 
-// ⚠️ PORT VISUAL FIEL ao Controle (/dashboards/financeiro → PurchasingDashboard) — dados MOCK.
+// TODO: ligar em <tabela financeira/bling> (Supabase)
 
 const brl = (v: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 }).format(v);
 
-const statusData = [
-  { name: "A pagar", value: 23600, color: "#f59e0b" },
-  { name: "Pago", value: 41200, color: "#22c55e" },
-  { name: "Atrasado", value: 4700, color: "#ef4444" },
-];
-const costBySupplier = [
-  { name: "QuímicaSul", valor: 38900 },
-  { name: "EmbaNorte", valor: 15300 },
-  { name: "InsumosBR", valor: 9400 },
-  { name: "BioReagentes", valor: 6100 },
-].sort((a, b) => b.valor - a.valor);
+interface StatusDatum { name: string; value: number; color: string; }
+const statusData: StatusDatum[] = [];
+interface SupplierDatum { name: string; valor: number; }
+const costBySupplier: SupplierDatum[] = [];
 
 export default function DashboardFinanceiro() {
   return (
@@ -43,6 +37,9 @@ export default function DashboardFinanceiro() {
           <CarboCard>
             <CarboCardHeader><CarboCardTitle>Contas a Pagar por Status</CarboCardTitle></CarboCardHeader>
             <CarboCardContent>
+              {statusData.length === 0 ? (
+                <CarboEmptyState icon={Wallet} title="Sem dados" />
+              ) : (
               <ResponsiveContainer width="100%" height={300}>
                 <PieChart>
                   <Pie data={statusData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={100} label={({ name, value }) => `${name}: ${brl(value as number)}`}>
@@ -52,12 +49,16 @@ export default function DashboardFinanceiro() {
                   <Legend />
                 </PieChart>
               </ResponsiveContainer>
+              )}
             </CarboCardContent>
           </CarboCard>
 
           <CarboCard>
             <CarboCardHeader><CarboCardTitle>Custo por Fornecedor (Top 8)</CarboCardTitle></CarboCardHeader>
             <CarboCardContent>
+              {costBySupplier.length === 0 ? (
+                <CarboEmptyState icon={Wallet} title="Sem dados" />
+              ) : (
               <ResponsiveContainer width="100%" height={300}>
                 <BarChart data={costBySupplier} layout="vertical" margin={{ left: 10 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" horizontal={false} />
@@ -67,10 +68,10 @@ export default function DashboardFinanceiro() {
                   <Bar dataKey="valor" name="Custo" fill="hsl(var(--carbo-green))" radius={[0, 6, 6, 0]} maxBarSize={26} />
                 </BarChart>
               </ResponsiveContainer>
+              )}
             </CarboCardContent>
           </CarboCard>
         </div>
-        <p className="text-xs text-muted-foreground text-center">Tela em port visual — dados de exemplo. Fluxo financeiro real entra na fase de lógica.</p>
       </div>
     </div>
   );

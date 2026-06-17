@@ -14,16 +14,10 @@ import { toast } from "sonner";
 import { SkuFormDialog } from "@/components/producao/SkuFormDialog";
 import { DeleteConfirmDialog } from "@/components/producao/DeleteConfirmDialog";
 
-// ⚠️ PORT VISUAL FIEL ao Controle (/skus → Skus "Gestão de SKUs") — dados MOCK.
+// TODO: ligar em sku (Supabase)
 
 interface Sku { id: string; code: string; name: string; description: string | null; category: string; packaging_ml: number | null; safety_stock_qty: number; is_active: boolean; bom_version: number | null; }
-const MOCK: Sku[] = [
-  { id: "1", code: "SKU-ZE-100", name: "CarboZé 100ml", description: "Estabilizador 100ml", category: "produto_final", packaging_ml: 100, safety_stock_qty: 500, is_active: true, bom_version: 3 },
-  { id: "2", code: "SKU-ZE-1L", name: "CarboZé 1L", description: "Estabilizador 1 litro", category: "produto_final", packaging_ml: 1000, safety_stock_qty: 200, is_active: true, bom_version: 2 },
-  { id: "3", code: "SKU-PRO", name: "CarboPRO", description: "Linha premium", category: "produto_final", packaging_ml: 500, safety_stock_qty: 150, is_active: true, bom_version: 1 },
-  { id: "4", code: "SKU-ZE-SCH", name: "CarboZé Sachê", description: "Sachê 10ml", category: "produto_final", packaging_ml: 10, safety_stock_qty: 3000, is_active: true, bom_version: null },
-  { id: "5", code: "SKU-VAPT", name: "CarboVapt", description: "Reagente VAPT", category: "reagente", packaging_ml: null, safety_stock_qty: 80, is_active: false, bom_version: null },
-];
+const MOCK: Sku[] = [];
 
 export default function Skus() {
   const canManage = true;
@@ -115,7 +109,6 @@ export default function Skus() {
             </CarboTable>
           </div>
         )}
-        <p className="text-xs text-muted-foreground text-center">Tela em port visual — dados de exemplo. SKUs reais e BOM entram na fase de lógica.</p>
       </div>
 
       {/* Dialogs */}

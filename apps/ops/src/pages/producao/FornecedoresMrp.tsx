@@ -10,17 +10,13 @@ import {
 import { Building2, Plus, Pencil } from "lucide-react";
 import { SupplierFormDialog } from "@/components/producao/SupplierFormDialog";
 
-// ⚠️ PORT VISUAL FIEL ao Controle (/mrp/suppliers → MrpSuppliers "Fornecedores (MRP)") — dados MOCK.
+// TODO: ligar em mrp_suppliers (Supabase)
 
 const formatCnpj = (v: string) => v.replace(/\D/g, "").replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2}).*/, "$1.$2.$3/$4-$5");
 
 interface Supplier { id: string; cnpj: string; legal_name: string; trade_name: string; category: string; status: "active" | "inactive"; }
-const MOCK: Supplier[] = [
-  { id: "1", cnpj: "12345678000190", legal_name: "Química Sul Indústria LTDA", trade_name: "QuímicaSul", category: "Reagentes", status: "active" },
-  { id: "2", cnpj: "98765432000110", legal_name: "BioReagentes Comércio S.A.", trade_name: "BioReagentes", category: "Reagentes", status: "active" },
-  { id: "3", cnpj: "45678912000133", legal_name: "Embalagens Norte LTDA", trade_name: "EmbaNorte", category: "Embalagem", status: "active" },
-  { id: "4", cnpj: "32165498000177", legal_name: "Insumos Brasil EIRELI", trade_name: "InsumosBR", category: "Insumos", status: "inactive" },
-];
+// TODO: ligar em mrp_suppliers (Supabase)
+const MOCK: Supplier[] = [];
 
 export default function FornecedoresMrp() {
   const canEdit = true;
@@ -72,7 +68,6 @@ export default function FornecedoresMrp() {
             </CarboTable>
           </div>
         )}
-        <p className="text-xs text-muted-foreground text-center">Tela em port visual — dados de exemplo. Cadastro real e consulta CNPJ entram na fase de lógica.</p>
       </div>
 
       {/* Dialogs */}

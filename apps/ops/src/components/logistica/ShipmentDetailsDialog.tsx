@@ -1,4 +1,4 @@
-// ⚠️ Form em port visual — campos MOCK; submit liga na fase de lógica.
+// TODO: ligar em shipment_items (Supabase)
 import {
   Dialog,
   DialogContent,
@@ -18,13 +18,8 @@ interface ShipmentDetailsDialogProps {
   onOpenChange: (open: boolean) => void;
 }
 
-// Itens MOCK derivados do nº de itens do embarque
-const MOCK_ITEMS = [
-  { nome: "CarboZé 100ml", lote: "L-2406", validade: "06/2027" },
-  { nome: "CarboZé 250ml", lote: "L-2405", validade: "05/2027" },
-  { nome: "Aditivo Premium 500ml", lote: "L-2404", validade: "04/2027" },
-  { nome: "Kit Aplicador", lote: "L-2403", validade: "—" },
-];
+// TODO: ligar em shipment_items (Supabase)
+const MOCK_ITEMS: { nome: string; lote: string; validade: string }[] = [];
 
 export function ShipmentDetailsDialog({ shipment, open, onOpenChange }: ShipmentDetailsDialogProps) {
   if (!shipment) return null;
@@ -81,6 +76,9 @@ export function ShipmentDetailsDialog({ shipment, open, onOpenChange }: Shipment
               <Package className="h-4 w-4" /> Itens ({shipment.items})
             </h4>
             <div className="space-y-1">
+              {items.length === 0 && (
+                <p className="text-sm text-muted-foreground py-2">Nenhum item.</p>
+              )}
               {items.map((item, i) => (
                 <div
                   key={i}

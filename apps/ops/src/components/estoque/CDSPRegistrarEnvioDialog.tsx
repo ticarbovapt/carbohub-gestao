@@ -1,4 +1,4 @@
-// ⚠️ Form em port visual — campos MOCK; submit liga na fase de lógica.
+// TODO: ligar em warehouse_stock (Supabase) — submit liga na fase de lógica.
 import { useState } from "react";
 import { Send, Plus, Trash2 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -12,12 +12,8 @@ const DESTINOS = [
   { id: "sp", label: "CD SP LogHouse", desc: "E-commerce / estoque principal" },
   { id: "sp-vendas", label: "CD SP Vendas", desc: "Licenciados / lojas físicas" },
 ];
-const PRODUTOS_MOCK = [
-  { id: "1", name: "CarboZé 100ml", code: "ESTA-100ML" },
-  { id: "2", name: "CarboZé 1L", code: "ESTA-1L" },
-  { id: "5", name: "CarboPRO", code: "PRO-500" },
-  { id: "6", name: "Rótulo CarboPRO", code: "ROT-PRO" },
-];
+// TODO: ligar em warehouse_stock (Supabase)
+const PRODUTOS: { id: string; name: string; code: string }[] = [];
 
 interface EnvioRow { id: number; productId: string; destinoId: string; quantity: string; notes: string; }
 let nextId = 1;
@@ -80,7 +76,7 @@ export function CDSPRegistrarEnvioDialog({ open, onOpenChange }: { open: boolean
                 <Select value={row.productId} onValueChange={(v) => updateRow(row.id, "productId", v)}>
                   <SelectTrigger className="h-9"><SelectValue placeholder="Selecione o produto" /></SelectTrigger>
                   <SelectContent>
-                    {PRODUTOS_MOCK.map((p) => (
+                    {PRODUTOS.map((p) => (
                       <SelectItem key={p.id} value={p.id}>
                         {p.name} <span className="text-muted-foreground text-xs">({p.code})</span>
                       </SelectItem>

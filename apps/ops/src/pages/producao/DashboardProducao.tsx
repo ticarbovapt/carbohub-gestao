@@ -13,30 +13,19 @@ import {
   AreaChart, Area, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
 } from "recharts";
 
-// ⚠️ PORT VISUAL FIEL ao Controle (/dashboards/producao → DashboardProducao) — dados MOCK.
+// TODO: ligar em production_orders / checklists (Supabase)
 
 const DAYS = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"];
-const checklistTrend = DAYS.map((label, i) => ({ label, completed: 8 + ((i * 3) % 6), pending: 2 + (i % 3) }));
-const osTrend = DAYS.map((label, i) => ({ label, completed: 4 + ((i * 2) % 5), pending: 1 + (i % 2) }));
-const deptDistribution = [
-  { label: "Preparação", count: 18, color: "#3b82f6" },
-  { label: "Operação", count: 14, color: "#8b5cf6" },
-  { label: "Expedição", count: 9, color: "#22c55e" },
-  { label: "Pós-Venda", count: 5, color: "#f59e0b" },
-];
+const checklistTrend = DAYS.map((label) => ({ label, completed: 0, pending: 0 }));
+const osTrend = DAYS.map((label) => ({ label, completed: 0, pending: 0 }));
+const deptDistribution: { label: string; count: number; color: string }[] = [];
 
 const DEPARTMENT_LABELS: Record<string, string> = {
   venda: "Venda", preparacao: "Preparação", expedicao: "Expedição", operacao: "Operação", pos_venda: "Pós-Venda",
 };
 
 interface ChecklistRow { id: string; department: string; os_number: string; os_title: string; completed_by_name: string | null; completed_at: string | null; is_completed: boolean; }
-const recentChecklists: ChecklistRow[] = [
-  { id: "1", department: "preparacao", os_number: "OS-1042", os_title: "Preparação lote CarboZé 100ml", completed_by_name: "João Silva", completed_at: "2026-06-10T09:12:00", is_completed: true },
-  { id: "2", department: "operacao", os_number: "OS-1041", os_title: "Operação envase 1L", completed_by_name: "Maria Souza", completed_at: "2026-06-10T08:40:00", is_completed: true },
-  { id: "3", department: "expedicao", os_number: "OS-1040", os_title: "Expedição pedido #2041", completed_by_name: null, completed_at: null, is_completed: false },
-  { id: "4", department: "pos_venda", os_number: "OS-1039", os_title: "Pós-venda acompanhamento", completed_by_name: "Carlos Lima", completed_at: "2026-06-09T17:05:00", is_completed: true },
-  { id: "5", department: "preparacao", os_number: "OS-1038", os_title: "Preparação CarboPRO", completed_by_name: null, completed_at: null, is_completed: false },
-];
+const recentChecklists: ChecklistRow[] = [];
 
 const TREND_TOOLTIP = { backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "8px" } as const;
 
@@ -70,7 +59,6 @@ function TrendChart({ title, description, data, variant }: { title: string; desc
   );
 }
 
-const formatTime = (m: number) => (m < 60 ? `${m}min` : `${Math.floor(m / 60)}h ${m % 60}min`);
 const fmtHora = (s: string | null) => (s ? new Date(s).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) : "—");
 
 export default function DashboardProducao() {
@@ -104,10 +92,10 @@ export default function DashboardProducao() {
 
         {/* KPIs */}
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-          <KPICard title="Taxa de Conclusão" value="92%" subtitle="46 de 50 checklists" icon={<ClipboardCheck className="h-6 w-6" />} variant="success" />
-          <KPICard title="Alertas Pendentes" value="4" subtitle="Checklists pendentes" icon={<AlertTriangle className="h-6 w-6" />} />
-          <KPICard title="Tempo Médio" value={formatTime(38)} subtitle="Por checklist" icon={<Clock className="h-6 w-6" />} />
-          <KPICard title="OP Ativas" value="12" subtitle="37 concluídas de 49" icon={<TrendingUp className="h-6 w-6" />} variant="success" />
+          <KPICard title="Taxa de Conclusão" value="—" subtitle="0 de 0 checklists" icon={<ClipboardCheck className="h-6 w-6" />} variant="success" />
+          <KPICard title="Alertas Pendentes" value="0" subtitle="Checklists pendentes" icon={<AlertTriangle className="h-6 w-6" />} />
+          <KPICard title="Tempo Médio" value="—" subtitle="Por checklist" icon={<Clock className="h-6 w-6" />} />
+          <KPICard title="OP Ativas" value="0" subtitle="0 concluídas de 0" icon={<TrendingUp className="h-6 w-6" />} variant="success" />
         </div>
 
         {/* Gráficos */}
@@ -152,6 +140,9 @@ export default function DashboardProducao() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
+                {recentChecklists.length === 0 && (
+                  <tr><td colSpan={6} className="px-6 py-8 text-center text-sm text-board-muted">Nenhum registro</td></tr>
+                )}
                 {recentChecklists.map((item) => (
                   <tr key={item.id} className="hover:bg-secondary/20 transition-colors">
                     <td className="px-6 py-4 text-sm font-medium text-board-text">{DEPARTMENT_LABELS[item.department] || item.department}</td>
@@ -182,7 +173,7 @@ export default function DashboardProducao() {
             <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-board-blue/10 text-board-blue"><span className="text-2xl">🤖</span></div>
             <div>
               <h3 className="font-semibold text-board-text">Assistente de Anomalias</h3>
-              <p className="mt-1 text-sm text-board-muted">Existem 4 checklists pendentes que precisam de atenção.</p>
+              <p className="mt-1 text-sm text-board-muted">Nenhuma anomalia detectada no momento.</p>
               <div className="mt-3 flex gap-2">
                 <Button variant="outline" size="sm">Ver detalhes</Button>
                 <Button variant="ghost" size="sm">Dispensar</Button>
@@ -191,9 +182,6 @@ export default function DashboardProducao() {
           </div>
         </div>
 
-        <p className="text-xs text-muted-foreground text-center">
-          Tela em port visual — dados de exemplo. Os dados reais entram na fase de lógica.
-        </p>
       </div>
     </div>
   );
