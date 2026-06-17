@@ -9,15 +9,11 @@ import {
   CarboTable, CarboTableHeader, CarboTableBody, CarboTableRow, CarboTableHead, CarboTableCell,
 } from "@/components/ui/carbo-table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Package, Plus, RefreshCw, PackageCheck, PackageX, Pencil, Trash2 } from "lucide-react";
-import { toast } from "sonner";
+import { Package, Plus, RefreshCw, PackageCheck, PackageX, Pencil, Trash2, Loader2 } from "lucide-react";
 import { SkuFormDialog } from "@/components/producao/SkuFormDialog";
 import { DeleteConfirmDialog } from "@/components/producao/DeleteConfirmDialog";
-
-// TODO: ligar em sku (Supabase)
-
-interface Sku { id: string; code: string; name: string; description: string | null; category: string; packaging_ml: number | null; safety_stock_qty: number; is_active: boolean; bom_version: number | null; }
-const MOCK: Sku[] = [];
+import { useSkus, type Sku } from "@/hooks/useSkus";
+import { cn } from "@/lib/utils";
 
 export default function Skus() {
   const canManage = true;
@@ -27,15 +23,17 @@ export default function Skus() {
   const [editSku, setEditSku] = useState<Sku | null>(null);
   const [deleteSku, setDeleteSku] = useState<Sku | null>(null);
 
-  const stats = useMemo(() => ({ total: MOCK.length, active: MOCK.filter((s) => s.is_active).length, inactive: MOCK.filter((s) => !s.is_active).length }), []);
-  const filtered = useMemo(() => MOCK.filter((sku) => {
+  const { data: skus = [], isLoading, isFetching, error, refetch } = useSkus();
+
+  const stats = useMemo(() => ({ total: skus.length, active: skus.filter((s) => s.is_active).length, inactive: skus.filter((s) => !s.is_active).length }), [skus]);
+  const filtered = useMemo(() => skus.filter((sku) => {
     if (categoryFilter !== "all" && sku.category !== categoryFilter) return false;
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
       if (!sku.name.toLowerCase().includes(q) && !sku.code.toLowerCase().includes(q)) return false;
     }
     return true;
-  }), [searchQuery, categoryFilter]);
+  }), [skus, searchQuery, categoryFilter]);
 
   return (
     <div className="p-4 md:p-6">
@@ -46,7 +44,7 @@ export default function Skus() {
           icon={Package}
           actions={
             <div className="flex items-center gap-3">
-              <CarboButton variant="outline" size="sm" onClick={() => toast("Atualizar (em breve)")}><RefreshCw className="h-4 w-4 mr-2" /> Atualizar</CarboButton>
+              <CarboButton variant="outline" size="sm" onClick={() => refetch()} disabled={isFetching}><RefreshCw className={cn("h-4 w-4 mr-2", isFetching && "animate-spin")} /> Atualizar</CarboButton>
               {canManage && <CarboButton size="sm" onClick={() => setCreateOpen(true)}><Plus className="h-4 w-4 mr-2" /> Novo SKU</CarboButton>}
             </div>
           }
@@ -70,8 +68,12 @@ export default function Skus() {
           </Select>
         </div>
 
-        {filtered.length === 0 ? (
-          <CarboEmptyState title="Nenhum SKU encontrado" description="Tente ajustar os filtros de busca." icon={Package} />
+        {isLoading ? (
+          <div className="flex items-center justify-center gap-2 py-16 text-muted-foreground"><Loader2 className="h-5 w-5 animate-spin" /> Carregando SKUs…</div>
+        ) : error ? (
+          <CarboEmptyState title="Erro ao carregar" description="Não foi possível buscar os SKUs. Tente novamente." icon={Package} />
+        ) : filtered.length === 0 ? (
+          <CarboEmptyState title="Nenhum SKU encontrado" description={skus.length === 0 ? "Nenhum SKU cadastrado." : "Tente ajustar os filtros de busca."} icon={Package} />
         ) : (
           <div className="overflow-x-auto">
             <CarboTable>

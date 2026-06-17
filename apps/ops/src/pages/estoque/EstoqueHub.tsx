@@ -5,7 +5,6 @@ import { StockView } from "@/components/estoque/StockView";
 import { hubBySlug, HUBS } from "@/components/estoque/stockData";
 
 // Estoque por hub — somente leitura (espelho). Edição vive em Suprimentos.
-// TODO: ligar em warehouse_stock (Supabase).
 export default function EstoqueHub() {
   const { hub: slug } = useParams<{ hub: string }>();
   const hub = hubBySlug(slug) ?? HUBS[0];
@@ -22,7 +21,7 @@ export default function EstoqueHub() {
 
         <StockView hub={hub} editable={false} />
 
-        <p className="text-xs text-muted-foreground text-center">Saldo real (warehouse_stock) entra na fase de lógica.</p>
+        <p className="text-xs text-muted-foreground text-center">Saldo real por hub (warehouse_stock). Giro/cobertura dependem do histórico de consumo (fase futura).</p>
       </div>
     </div>
   );

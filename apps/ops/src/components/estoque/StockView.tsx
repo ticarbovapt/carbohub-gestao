@@ -5,10 +5,11 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { StockProgressBar } from "@/components/estoque/StockProgressBar";
-import { Search, Tag, Activity, Shield, Calendar, Package, Pencil, Plus } from "lucide-react";
+import { Search, Tag, Activity, Shield, Calendar, Package, Pencil, Plus, Loader2 } from "lucide-react";
 import { addDays, format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { MOCK_ESTOQUE, coverageStatus, type Hub } from "@/components/estoque/stockData";
+import { coverageStatus, type Hub } from "@/components/estoque/stockData";
+import { useStock } from "@/hooks/useStock";
 import { CarboEmptyState } from "@/components/ui/carbo-empty-state";
 import { NovaEntradaDialog } from "@/components/estoque/NovaEntradaDialog";
 import { AjustarEstoqueDialog, type AjusteTarget } from "@/components/estoque/AjustarEstoqueDialog";
@@ -21,14 +22,16 @@ export function StockView({ hub, editable }: { hub: Hub; editable: boolean }) {
   const [novaEntradaOpen, setNovaEntradaOpen] = useState(false);
   const [ajuste, setAjuste] = useState<AjusteTarget | null>(null);
 
-  const filtered = useMemo(() => MOCK_ESTOQUE.filter((p) => {
+  const { data: products = [], isLoading, error } = useStock();
+
+  const filtered = useMemo(() => products.filter((p) => {
     if (category !== "all" && p.category !== category) return false;
     if (search) {
       const q = search.toLowerCase();
       if (!p.name.toLowerCase().includes(q) && !p.product_code.toLowerCase().includes(q)) return false;
     }
     return true;
-  }), [search, category]);
+  }), [products, search, category]);
 
   return (
     <div className="space-y-4">
@@ -50,6 +53,11 @@ export function StockView({ hub, editable }: { hub: Hub; editable: boolean }) {
         {editable && <Button size="sm" className="gap-1.5 ml-auto bg-carbo-green hover:bg-carbo-green/90 text-white" onClick={() => setNovaEntradaOpen(true)}><Plus className="h-4 w-4" /> Nova Entrada</Button>}
       </div>
 
+      {isLoading ? (
+        <div className="flex items-center justify-center gap-2 py-16 text-muted-foreground"><Loader2 className="h-5 w-5 animate-spin" /> Carregando estoque…</div>
+      ) : error ? (
+        <CarboCard><CarboCardContent><CarboEmptyState icon={Package} title="Erro ao carregar" description="Não foi possível buscar o estoque." /></CarboCardContent></CarboCard>
+      ) : (
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
         {filtered.map((p) => {
           const qty = p.hubs[hub.id] ?? 0;
@@ -90,6 +98,7 @@ export function StockView({ hub, editable }: { hub: Hub; editable: boolean }) {
         })}
         {filtered.length === 0 && <CarboCard className="sm:col-span-2 xl:col-span-3"><CarboCardContent><CarboEmptyState icon={Package} title="Sem dados" description="Nenhum produto em estoque para este hub." /></CarboCardContent></CarboCard>}
       </div>
+      )}
 
       {editable && (
         <>
