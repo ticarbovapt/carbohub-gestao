@@ -28,12 +28,6 @@ import { useStockMovements } from "@/hooks/useStockMovements";
 import { useStockTransfers, type Transfer } from "@/hooks/useStockTransfers";
 import { useSetStockMin } from "@/hooks/useStockMin";
 
-// Hubs reais (CDs) onde se define mínimo. code → id do hub (stockData)
-const POLICY_HUBS: { code: string; hubId: string; label: string }[] = [
-  { code: "HUB-RN", hubId: "rn", label: "Hub Natal" },
-  { code: "HUB-SP", hubId: "sp", label: "CD SP LogHouse" },
-  { code: "HUB-SP-VENDAS", hubId: "spv", label: "CD SP Vendas" },
-];
 
 // É a versão EDITÁVEL do estoque (gestores). A versão somente leitura vive em Estoque.
 
@@ -136,36 +130,32 @@ export default function Suprimentos() {
     );
   };
 
-  // Mínimos por produto×hub (estado controlado; salva no botão).
+  // Mínimos do CD ATUAL (cada CD gerencia só o dele). Chave = productId.
+  const currentCode = HUB_CODE[hub];
+  const currentHubId = STOCK_HUB_ID[hub];
   const [minEdits, setMinEdits] = useState<Record<string, string>>({});
   const [minDirty, setMinDirty] = useState(false);
-  const minKey = (productId: string, code: string) => `${productId}:${code}`;
 
-  // Semeia os campos a partir do banco (só quando não há edição pendente).
+  // Semeia com o mínimo do CD atual sempre que muda de CD ou recarrega.
   useEffect(() => {
-    if (minDirty) return;
-    const seed: Record<string, string> = {};
-    for (const p of products) for (const h of POLICY_HUBS) seed[minKey(p.id, h.code)] = String(p.mins[h.hubId] ?? 0);
-    setMinEdits(seed);
-  }, [products, minDirty]);
+    setMinEdits(Object.fromEntries(products.map((p) => [p.id, String(p.mins[currentHubId] ?? 0)])));
+    setMinDirty(false);
+  }, [products, currentHubId]);
 
-  const setCell = (productId: string, code: string, val: string) => {
-    setMinEdits((e) => ({ ...e, [minKey(productId, code)]: val }));
+  const setCell = (productId: string, val: string) => {
+    setMinEdits((e) => ({ ...e, [productId]: val }));
     setMinDirty(true);
   };
 
   const saveMins = async () => {
-    const changes: { productId: string; warehouseCode: string; minQty: number }[] = [];
-    for (const p of products) for (const h of POLICY_HUBS) {
-      const v = Number(minEdits[minKey(p.id, h.code)]);
-      const orig = p.mins[h.hubId] ?? 0;
-      if (Number.isFinite(v) && v >= 0 && v !== orig) changes.push({ productId: p.id, warehouseCode: h.code, minQty: v });
-    }
+    const changes = products
+      .filter((p) => { const v = Number(minEdits[p.id]); return Number.isFinite(v) && v >= 0 && v !== (p.mins[currentHubId] ?? 0); })
+      .map((p) => ({ productId: p.id, warehouseCode: currentCode, minQty: Number(minEdits[p.id]) }));
     if (changes.length === 0) { toast.info("Nenhuma alteração para salvar."); return; }
     try {
       for (const c of changes) await setMin.mutateAsync(c);
-      toast.success(`${changes.length} mínimo(s) salvo(s).`);
-      setMinDirty(false); // re-semeia a partir do banco atualizado
+      toast.success(`${changes.length} mínimo(s) salvo(s) em ${stockHub.label}.`);
+      setMinDirty(false);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Erro ao salvar os mínimos.");
     }
@@ -351,12 +341,16 @@ export default function Suprimentos() {
             <CarboEmptyState title="Nenhum registro" description="Notas fiscais de entrada (3-way match) entram na próxima fase." />
           </TabsContent>
 
-          {/* Política de Estoque — mínimo por produto × hub */}
+          {/* Política de Estoque — mínimo do CD atual (cada CD só o dele) */}
           <TabsContent value="politica" className="mt-4 space-y-3">
+            {isBling ? (
+              <CarboEmptyState title="Não se aplica ao CD Bling" description="O saldo do Bling vem da integração; não há política de mínimo manual aqui." />
+            ) : (
+            <>
             <div className="flex items-center justify-between gap-3 flex-wrap">
               <div className="flex items-start gap-2 px-3 py-2 rounded-md bg-blue-500/10 border border-blue-500/20 text-sm text-blue-500 flex-1 min-w-[260px]">
                 <Info className="h-4 w-4 shrink-0 mt-0.5" />
-                <span>Mínimo de cada produto <strong>por CD</strong> (independente). Abaixo dele, o produto fica <strong>"Abaixo do mínimo"</strong> e entra no alerta de reposição.</span>
+                <span>Mínimo dos produtos <strong>neste CD ({stockHub.label})</strong>. Cada CD tem a sua política, independente. Abaixo do mínimo, o produto entra no alerta de reposição <strong>deste CD</strong>.</span>
               </div>
               <Button onClick={saveMins} disabled={!minDirty || setMin.isPending} className="carbo-gradient text-white gap-1.5 shrink-0">
                 {setMin.isPending ? <><Loader2 className="h-4 w-4 animate-spin" /> Salvando…</> : "Salvar alterações"}
@@ -368,30 +362,30 @@ export default function Suprimentos() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Produto</TableHead>
-                    {POLICY_HUBS.map((h) => <TableHead key={h.code} className="text-right">{h.label}</TableHead>)}
+                    <TableHead className="text-right">Mínimo em {stockHub.label}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {products.map((p) => (
                     <TableRow key={p.id}>
                       <TableCell className="font-medium">{p.name}<span className="ml-2 text-xs text-muted-foreground font-mono">{p.product_code}</span></TableCell>
-                      {POLICY_HUBS.map((h) => (
-                        <TableCell key={h.code} className="text-right">
-                          <div className="flex justify-end">
-                            <Input
-                              type="number" min={0}
-                              value={minEdits[minKey(p.id, h.code)] ?? ""}
-                              onChange={(e) => setCell(p.id, h.code, e.target.value)}
-                              className="h-8 w-24 text-right tabular-nums"
-                            />
-                          </div>
-                        </TableCell>
-                      ))}
+                      <TableCell className="text-right">
+                        <div className="flex justify-end">
+                          <Input
+                            type="number" min={0}
+                            value={minEdits[p.id] ?? ""}
+                            onChange={(e) => setCell(p.id, e.target.value)}
+                            className="h-8 w-28 text-right tabular-nums"
+                          />
+                        </div>
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
               </Table>
             </div>
+            )}
+            </>
             )}
           </TabsContent>
         </Tabs>
