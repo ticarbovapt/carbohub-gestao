@@ -19,27 +19,14 @@ const DEFAULT_PASSWORD = "Carbo@2026";
 const selectCls =
   "flex h-10 w-full rounded-lg border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50";
 
-/** Chips dos apps liberados — padronizados por cor, com overflow "+N". */
-function SystemsChips({ ifaces }: { ifaces: string[] }) {
+/** Bolinhas coloridas dos apps liberados — detalhe completo abre no cartão. */
+function SystemsDots({ ifaces }: { ifaces: string[] }) {
   if (!ifaces.length) return <span className="text-xs text-muted-foreground">—</span>;
-  const shown = ifaces.slice(0, 3);
-  const rest = ifaces.slice(3);
   return (
-    <div className="flex flex-wrap items-center gap-1">
-      {shown.map((i) => {
-        const b = brandOf(i);
-        return (
-          <span key={i} className={`inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded-md ${b.chip}`}>
-            <span className={`h-1.5 w-1.5 rounded-full ${b.dot}`} /> {b.short}
-          </span>
-        );
-      })}
-      {rest.length > 0 && (
-        <span title={rest.map((i) => brandOf(i).short).join(", ")}
-          className="text-[10px] font-medium px-1.5 py-0.5 rounded-md bg-muted text-muted-foreground ring-1 ring-inset ring-border">
-          +{rest.length}
-        </span>
-      )}
+    <div className="flex items-center gap-1.5" title={ifaces.map((i) => brandOf(i).short).join(" · ")}>
+      {ifaces.map((i) => (
+        <span key={i} className={`h-2.5 w-2.5 rounded-full ${brandOf(i).dot} ring-2 ring-card`} />
+      ))}
     </div>
   );
 }
@@ -286,7 +273,7 @@ export default function Users() {
                           {secLabel && <span className="block text-xs text-muted-foreground">+ {secLabel}</span>}
                         </td>
                         <td className="px-4 py-3"><NivelBadge gestor={gestor} /></td>
-                        <td className="px-4 py-3"><SystemsChips ifaces={p.allowed_interfaces ?? []} /></td>
+                        <td className="px-4 py-3"><SystemsDots ifaces={p.allowed_interfaces ?? []} /></td>
                         <td className="px-5 py-3 text-right">
                           <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground group-hover:bg-background group-hover:text-primary transition-colors">
                             <Pencil className="h-4 w-4" />
@@ -312,9 +299,9 @@ export default function Users() {
                       </div>
                       <p className="font-mono text-xs text-muted-foreground">{p.username ?? "—"}</p>
                       <p className="text-xs text-muted-foreground">
-                        {getDept(p.department)}{secLabel ? "" : ""} · {funcLabel ?? "—"}
+                        {getDept(p.department)} · {funcLabel ?? "—"}
                       </p>
-                      <SystemsChips ifaces={p.allowed_interfaces ?? []} />
+                      <SystemsDots ifaces={p.allowed_interfaces ?? []} />
                     </div>
                   </button>
                 ))}
