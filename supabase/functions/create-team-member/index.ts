@@ -200,6 +200,12 @@ Deno.serve(async (req: Request): Promise<Response> => {
           { status: 500, headers: { "Content-Type": "application/json", ...corsHeaders } }
         );
       }
+      // Força o usuário a refazer o primeiro login (trocar a senha no próximo acesso).
+      // Mesma flag usada na criação — temp_password_expires_at=null pra não "expirar".
+      await supabaseAdmin
+        .from("profiles")
+        .update({ password_must_change: true, temp_password_expires_at: null })
+        .eq("id", userId);
       return new Response(
         JSON.stringify({ success: true, message: `Senha redefinida para ${DEFAULT_PASSWORD}` }),
         { status: 200, headers: { "Content-Type": "application/json", ...corsHeaders } }
