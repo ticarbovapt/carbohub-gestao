@@ -5,28 +5,19 @@ import { CarboBadge } from "@/components/ui/carbo-badge";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Warehouse, Search, Tag, Download, Activity, Shield, Calendar, Package, Eye } from "lucide-react";
+import { Warehouse, Search, Tag, Download, Activity, Shield, Calendar, Package, Eye, Loader2 } from "lucide-react";
 import { StockProgressBar } from "@/components/estoque/StockProgressBar";
 import { CarboEmptyState } from "@/components/ui/carbo-empty-state";
+import { useStock } from "@/hooks/useStock";
 import { addDays, format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { toast } from "sonner";
-
-// TODO: ligar em warehouse_stock (Supabase) → StockOverview (Controle, dentro de Suprimentos).
-// Saldos por Hub: HUB-RN (Natal), HUB-SP (CD SP LogHouse), HUB-SP-VENDAS (CD SP Vendas).
 
 const HUBS = [
   { id: "rn", code: "HUB-RN", name: "Hub Natal", city: "Natal", state: "RN" },
   { id: "sp", code: "HUB-SP", name: "CD SP LogHouse", city: "São Paulo", state: "SP" },
   { id: "spv", code: "HUB-SP-VENDAS", name: "CD SP Vendas", city: "São Paulo", state: "SP" },
 ];
-
-interface ProdEstoque {
-  id: string; product_code: string; name: string; category: string; stock_unit: string;
-  safety_stock_qty: number; hubs: Record<string, number>; giroMedio: number;
-}
-// TODO: ligar em warehouse_stock (Supabase)
-const MOCK: ProdEstoque[] = [];
 
 function coverageStatus(days: number | null): { label: string; variant: "destructive" | "warning" | "success" | "info" | "secondary" } {
   if (days === null) return { label: "Sem consumo", variant: "secondary" };
@@ -42,14 +33,16 @@ export default function SaldosPorHub() {
   const [selectedWarehouse, setSelectedWarehouse] = useState("all");
   const [selectedCategory, setSelectedCategory] = useState("all");
 
-  const filtered = useMemo(() => MOCK.filter((p) => {
+  const { data: products = [], isLoading, error } = useStock();
+
+  const filtered = useMemo(() => products.filter((p) => {
     if (selectedCategory !== "all" && p.category !== selectedCategory) return false;
     if (search) {
       const q = search.toLowerCase();
       if (!p.name.toLowerCase().includes(q) && !p.product_code.toLowerCase().includes(q)) return false;
     }
     return true;
-  }), [search, selectedCategory]);
+  }), [products, search, selectedCategory]);
 
   const visibleHubs = selectedWarehouse === "all" ? HUBS : HUBS.filter((h) => h.id === selectedWarehouse);
 
@@ -92,7 +85,11 @@ export default function SaldosPorHub() {
         </div>
 
         {/* Cards */}
-        {filtered.length === 0 ? (
+        {isLoading ? (
+          <div className="flex items-center justify-center gap-2 py-16 text-muted-foreground"><Loader2 className="h-5 w-5 animate-spin" /> Carregando estoque…</div>
+        ) : error ? (
+          <CarboCard><CarboCardContent><CarboEmptyState icon={Package} title="Erro ao carregar" description="Não foi possível buscar o estoque." /></CarboCardContent></CarboCard>
+        ) : filtered.length === 0 ? (
           <CarboCard><CarboCardContent><CarboEmptyState icon={Package} title="Sem dados" description="Nenhum produto em estoque." /></CarboCardContent></CarboCard>
         ) : (
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
@@ -149,7 +146,7 @@ export default function SaldosPorHub() {
             })}
           </div>
         )}
-        <p className="text-xs text-muted-foreground text-center">Saldo real (warehouse_stock), movimentações e entradas entram na fase de lógica.</p>
+        <p className="text-xs text-muted-foreground text-center">Saldo real por hub (warehouse_stock). Giro/cobertura dependem do histórico de consumo (fase futura); movimentações e entradas são feitas em Suprimentos.</p>
       </div>
     </div>
   );
