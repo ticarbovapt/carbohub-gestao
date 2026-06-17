@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
 import { CarboCard, CarboCardContent } from "@/components/ui/carbo-card";
 import { CarboBadge } from "@/components/ui/carbo-badge";
@@ -20,7 +20,7 @@ import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { StockView } from "@/components/estoque/StockView";
-import { HUBS, minForHub, type ProdEstoque } from "@/components/estoque/stockData";
+import { HUBS, minForHub } from "@/components/estoque/stockData";
 import { CDSPRegistrarEnvioDialog } from "@/components/estoque/CDSPRegistrarEnvioDialog";
 import { RemessaConfirmDialog } from "@/components/estoque/RemessaConfirmDialog";
 import { useStock } from "@/hooks/useStock";
@@ -136,23 +136,39 @@ export default function Suprimentos() {
     );
   };
 
-  // Célula editável de mínimo por produto×hub (grava em ops_stock_min no blur).
-  const MinCell = ({ product, code, hubId }: { product: ProdEstoque; code: string; hubId: string }) => {
-    const current = minForHub(product, hubId);
-    return (
-      <Input
-        key={`${product.id}-${code}-${current}`}
-        type="number" min={0} defaultValue={current}
-        className="h-8 w-24 text-right tabular-nums"
-        onBlur={(e) => {
-          const v = Number(e.target.value);
-          if (!Number.isFinite(v) || v < 0 || v === current) return;
-          setMin.mutateAsync({ productId: product.id, warehouseCode: code, minQty: v })
-            .then(() => toast.success(`Mínimo de ${product.name} em ${code} = ${v}`))
-            .catch((err) => toast.error(err instanceof Error ? err.message : "Erro ao salvar mínimo."));
-        }}
-      />
-    );
+  // Mínimos por produto×hub (estado controlado; salva no botão).
+  const [minEdits, setMinEdits] = useState<Record<string, string>>({});
+  const [minDirty, setMinDirty] = useState(false);
+  const minKey = (productId: string, code: string) => `${productId}:${code}`;
+
+  // Semeia os campos a partir do banco (só quando não há edição pendente).
+  useEffect(() => {
+    if (minDirty) return;
+    const seed: Record<string, string> = {};
+    for (const p of products) for (const h of POLICY_HUBS) seed[minKey(p.id, h.code)] = String(p.mins[h.hubId] ?? 0);
+    setMinEdits(seed);
+  }, [products, minDirty]);
+
+  const setCell = (productId: string, code: string, val: string) => {
+    setMinEdits((e) => ({ ...e, [minKey(productId, code)]: val }));
+    setMinDirty(true);
+  };
+
+  const saveMins = async () => {
+    const changes: { productId: string; warehouseCode: string; minQty: number }[] = [];
+    for (const p of products) for (const h of POLICY_HUBS) {
+      const v = Number(minEdits[minKey(p.id, h.code)]);
+      const orig = p.mins[h.hubId] ?? 0;
+      if (Number.isFinite(v) && v >= 0 && v !== orig) changes.push({ productId: p.id, warehouseCode: h.code, minQty: v });
+    }
+    if (changes.length === 0) { toast.info("Nenhuma alteração para salvar."); return; }
+    try {
+      for (const c of changes) await setMin.mutateAsync(c);
+      toast.success(`${changes.length} mínimo(s) salvo(s).`);
+      setMinDirty(false); // re-semeia a partir do banco atualizado
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Erro ao salvar os mínimos.");
+    }
   };
 
   return (
@@ -337,9 +353,14 @@ export default function Suprimentos() {
 
           {/* Política de Estoque — mínimo por produto × hub */}
           <TabsContent value="politica" className="mt-4 space-y-3">
-            <div className="flex items-start gap-2 px-3 py-2 rounded-md bg-blue-500/10 border border-blue-500/20 text-sm text-blue-500">
-              <Info className="h-4 w-4 shrink-0 mt-0.5" />
-              <span>Defina o <strong>estoque mínimo</strong> de cada produto por CD. Abaixo desse valor, o produto entra como <strong>"Abaixo do mínimo"</strong> e no alerta de reposição. Edite e clique fora pra salvar.</span>
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+              <div className="flex items-start gap-2 px-3 py-2 rounded-md bg-blue-500/10 border border-blue-500/20 text-sm text-blue-500 flex-1 min-w-[260px]">
+                <Info className="h-4 w-4 shrink-0 mt-0.5" />
+                <span>Mínimo de cada produto <strong>por CD</strong> (independente). Abaixo dele, o produto fica <strong>"Abaixo do mínimo"</strong> e entra no alerta de reposição.</span>
+              </div>
+              <Button onClick={saveMins} disabled={!minDirty || setMin.isPending} className="carbo-gradient text-white gap-1.5 shrink-0">
+                {setMin.isPending ? <><Loader2 className="h-4 w-4 animate-spin" /> Salvando…</> : "Salvar alterações"}
+              </Button>
             </div>
             {products.length === 0 ? <CarboEmptyState title="Nenhum produto" /> : (
             <div className="rounded-lg border bg-card overflow-x-auto">
@@ -356,7 +377,14 @@ export default function Suprimentos() {
                       <TableCell className="font-medium">{p.name}<span className="ml-2 text-xs text-muted-foreground font-mono">{p.product_code}</span></TableCell>
                       {POLICY_HUBS.map((h) => (
                         <TableCell key={h.code} className="text-right">
-                          <div className="flex justify-end"><MinCell product={p} code={h.code} hubId={h.hubId} /></div>
+                          <div className="flex justify-end">
+                            <Input
+                              type="number" min={0}
+                              value={minEdits[minKey(p.id, h.code)] ?? ""}
+                              onChange={(e) => setCell(p.id, h.code, e.target.value)}
+                              className="h-8 w-24 text-right tabular-nums"
+                            />
+                          </div>
                         </TableCell>
                       ))}
                     </TableRow>

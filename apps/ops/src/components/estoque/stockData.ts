@@ -20,9 +20,9 @@ export interface ProdEstoque {
 }
 export const MOCK_ESTOQUE: ProdEstoque[] = [];
 
-// Mínimo efetivo do produto num hub: override por hub > mínimo do produto.
+// Mínimo do produto NAQUELE hub (individual; 0 quando não definido).
 export function minForHub(p: ProdEstoque, hubId: string): number {
-  return p.mins[hubId] ?? p.safety_stock_qty ?? 0;
+  return p.mins[hubId] ?? 0;
 }
 
 export type StockVariant = "destructive" | "warning" | "success" | "secondary";
