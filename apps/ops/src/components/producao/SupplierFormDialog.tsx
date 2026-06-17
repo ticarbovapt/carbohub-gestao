@@ -6,7 +6,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import { useSupplierMutations } from "@/hooks/useSuppliers";
 
 export interface SupplierFormInitial {
   legal_name?: string;
@@ -21,10 +23,12 @@ interface SupplierFormDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   mode: "create" | "edit";
+  id?: string;
   initial?: SupplierFormInitial;
 }
 
-export function SupplierFormDialog({ open, onOpenChange, mode, initial }: SupplierFormDialogProps) {
+export function SupplierFormDialog({ open, onOpenChange, mode, id, initial }: SupplierFormDialogProps) {
+  const { create, update } = useSupplierMutations();
   const [name, setName] = useState(initial?.legal_name ?? "");
   const [cnpj, setCnpj] = useState(initial?.cnpj ?? "");
   const [contact, setContact] = useState(initial?.contact ?? "");
@@ -32,9 +36,18 @@ export function SupplierFormDialog({ open, onOpenChange, mode, initial }: Suppli
   const [phone, setPhone] = useState(initial?.phone ?? "");
   const [notes, setNotes] = useState(initial?.notes ?? "");
 
-  const handleSubmit = () => {
-    toast.info("Disponível na fase de lógica");
-    onOpenChange(false);
+  const pending = create.isPending || update.isPending;
+
+  const handleSubmit = async () => {
+    const payload = { legal_name: name, cnpj, contact, email, phone, notes };
+    try {
+      if (mode === "edit" && id) await update.mutateAsync({ id, ...payload });
+      else await create.mutateAsync(payload);
+      toast.success(mode === "create" ? "Fornecedor criado." : "Fornecedor atualizado.");
+      onOpenChange(false);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Não foi possível salvar o fornecedor.");
+    }
   };
 
   return (
@@ -77,8 +90,10 @@ export function SupplierFormDialog({ open, onOpenChange, mode, initial }: Suppli
         </div>
 
         <DialogFooter>
-          <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
-          <Button type="button" onClick={handleSubmit}>{mode === "create" ? "Criar Fornecedor" : "Salvar"}</Button>
+          <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={pending}>Cancelar</Button>
+          <Button type="button" onClick={handleSubmit} disabled={pending}>
+            {pending ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Salvando…</> : (mode === "create" ? "Criar Fornecedor" : "Salvar")}
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

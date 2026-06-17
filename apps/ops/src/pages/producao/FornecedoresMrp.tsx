@@ -7,16 +7,11 @@ import { CarboEmptyState } from "@/components/ui/carbo-empty-state";
 import {
   CarboTable, CarboTableHeader, CarboTableBody, CarboTableRow, CarboTableHead, CarboTableCell,
 } from "@/components/ui/carbo-table";
-import { Building2, Plus, Pencil } from "lucide-react";
+import { Building2, Plus, Pencil, Loader2 } from "lucide-react";
 import { SupplierFormDialog } from "@/components/producao/SupplierFormDialog";
-
-// TODO: ligar em mrp_suppliers (Supabase)
+import { useSuppliers, type Supplier } from "@/hooks/useSuppliers";
 
 const formatCnpj = (v: string) => v.replace(/\D/g, "").replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2}).*/, "$1.$2.$3/$4-$5");
-
-interface Supplier { id: string; cnpj: string; legal_name: string; trade_name: string; category: string; status: "active" | "inactive"; }
-// TODO: ligar em mrp_suppliers (Supabase)
-const MOCK: Supplier[] = [];
 
 export default function FornecedoresMrp() {
   const canEdit = true;
@@ -24,7 +19,9 @@ export default function FornecedoresMrp() {
   const [createOpen, setCreateOpen] = useState(false);
   const [editSupplier, setEditSupplier] = useState<Supplier | null>(null);
 
-  const filtered = MOCK.filter((s) => {
+  const { data: suppliers = [], isLoading, error } = useSuppliers();
+
+  const filtered = suppliers.filter((s) => {
     if (!search) return true;
     const q = search.toLowerCase();
     return s.cnpj.includes(q) || s.legal_name.toLowerCase().includes(q) || s.trade_name.toLowerCase().includes(q);
@@ -42,8 +39,12 @@ export default function FornecedoresMrp() {
 
         <div className="max-w-md"><CarboSearchInput placeholder="Buscar por CNPJ, razão social ou nome fantasia..." value={search} onChange={(e) => setSearch(e.target.value)} /></div>
 
-        {filtered.length === 0 ? (
-          <CarboEmptyState icon={Building2} title="Nenhum fornecedor" description="Ajuste a busca." />
+        {isLoading ? (
+          <div className="flex items-center justify-center gap-2 py-16 text-muted-foreground"><Loader2 className="h-5 w-5 animate-spin" /> Carregando fornecedores…</div>
+        ) : error ? (
+          <CarboEmptyState icon={Building2} title="Erro ao carregar" description="Não foi possível buscar os fornecedores." />
+        ) : filtered.length === 0 ? (
+          <CarboEmptyState icon={Building2} title="Nenhum fornecedor" description={suppliers.length === 0 ? "Cadastre o primeiro fornecedor." : "Ajuste a busca."} />
         ) : (
           <div className="overflow-x-auto">
             <CarboTable>
@@ -78,9 +79,14 @@ export default function FornecedoresMrp() {
           open={!!editSupplier}
           onOpenChange={(v) => { if (!v) setEditSupplier(null); }}
           mode="edit"
+          id={editSupplier.id}
           initial={{
             legal_name: editSupplier.legal_name,
             cnpj: editSupplier.cnpj,
+            contact: editSupplier.contact,
+            email: editSupplier.email,
+            phone: editSupplier.phone,
+            notes: editSupplier.notes,
           }}
         />
       )}
