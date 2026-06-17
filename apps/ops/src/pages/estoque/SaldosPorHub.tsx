@@ -5,12 +5,11 @@ import { CarboBadge } from "@/components/ui/carbo-badge";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Warehouse, Search, Tag, Download, Activity, Shield, Calendar, Package, Eye, Loader2 } from "lucide-react";
+import { Warehouse, Search, Tag, Download, Package, Eye, Loader2 } from "lucide-react";
 import { StockProgressBar } from "@/components/estoque/StockProgressBar";
 import { CarboEmptyState } from "@/components/ui/carbo-empty-state";
 import { useStock } from "@/hooks/useStock";
-import { addDays, format } from "date-fns";
-import { ptBR } from "date-fns/locale";
+import { minStockStatus } from "@/components/estoque/stockData";
 import { toast } from "sonner";
 
 const HUBS = [
@@ -18,15 +17,6 @@ const HUBS = [
   { id: "sp", code: "HUB-SP", name: "CD SP LogHouse", city: "São Paulo", state: "SP" },
   { id: "spv", code: "HUB-SP-VENDAS", name: "CD SP Vendas", city: "São Paulo", state: "SP" },
 ];
-
-function coverageStatus(days: number | null): { label: string; variant: "destructive" | "warning" | "success" | "info" | "secondary" } {
-  if (days === null) return { label: "Sem consumo", variant: "secondary" };
-  if (days < 7) return { label: "Ruptura iminente", variant: "destructive" };
-  if (days < 15) return { label: "Atenção", variant: "warning" };
-  if (days < 30) return { label: "Estável", variant: "warning" };
-  if (days < 60) return { label: "Saudável", variant: "success" };
-  return { label: "Excedente", variant: "info" };
-}
 
 export default function SaldosPorHub() {
   const [search, setSearch] = useState("");
@@ -96,9 +86,7 @@ export default function SaldosPorHub() {
             {filtered.map((p) => {
               const hubStocks = visibleHubs.map((h) => ({ id: h.id, name: h.name, qty: p.hubs[h.id] ?? 0 }));
               const totalQty = hubStocks.reduce((s, h) => s + h.qty, 0);
-              const cobertura = p.giroMedio > 0 ? Math.round(totalQty / p.giroMedio) : null;
-              const ruptura = p.giroMedio > 0 && cobertura !== null ? addDays(new Date(), cobertura) : null;
-              const cov = coverageStatus(cobertura);
+              const status = minStockStatus(totalQty, p.safety_stock_qty);
               return (
                 <CarboCard key={p.id} variant="default" padding="none">
                   <CarboCardContent>
@@ -106,7 +94,7 @@ export default function SaldosPorHub() {
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2 mb-0.5 flex-wrap">
                           <h3 className="font-semibold text-sm text-foreground leading-tight truncate">{p.name}</h3>
-                          <CarboBadge variant={cov.variant} size="sm">{cov.label}</CarboBadge>
+                          <CarboBadge variant={status.variant} size="sm">{status.label}</CarboBadge>
                         </div>
                         <p className="text-[11px] text-muted-foreground font-mono tracking-wide">{p.product_code}<span className="ml-2 font-sans">· {p.category}</span></p>
                       </div>
@@ -115,24 +103,6 @@ export default function SaldosPorHub() {
                     <div className="text-center px-5 pb-3">
                       <p className="text-3xl font-bold tabular-nums text-foreground leading-none">{totalQty.toLocaleString("pt-BR")}</p>
                       <p className="text-[11px] text-muted-foreground mt-1">{p.stock_unit} total · Segurança: {p.safety_stock_qty.toLocaleString("pt-BR")} {p.stock_unit}</p>
-                    </div>
-
-                    <div className="grid grid-cols-3 gap-px bg-border mx-5 rounded-lg overflow-hidden mb-4">
-                      <div className="bg-card px-3 py-2.5 text-center">
-                        <div className="flex items-center justify-center gap-1 mb-0.5"><Activity className="h-3 w-3 text-muted-foreground" /></div>
-                        <p className="text-sm font-bold tabular-nums text-foreground">{p.giroMedio > 0 ? p.giroMedio.toFixed(1) : "—"}</p>
-                        <p className="text-[9px] text-muted-foreground leading-tight">un/dia</p>
-                      </div>
-                      <div className="bg-card px-3 py-2.5 text-center">
-                        <div className="flex items-center justify-center gap-1 mb-0.5"><Shield className="h-3 w-3 text-muted-foreground" /></div>
-                        <p className="text-sm font-bold tabular-nums text-foreground">{cobertura !== null ? `${cobertura}d` : "—"}</p>
-                        <p className="text-[9px] text-muted-foreground leading-tight">cobertura</p>
-                      </div>
-                      <div className="bg-card px-3 py-2.5 text-center">
-                        <div className="flex items-center justify-center gap-1 mb-0.5"><Calendar className="h-3 w-3 text-muted-foreground" /></div>
-                        <p className="text-sm font-bold tabular-nums text-foreground">{ruptura ? format(ruptura, "dd/MM", { locale: ptBR }) : "—"}</p>
-                        <p className="text-[9px] text-muted-foreground leading-tight">ruptura</p>
-                      </div>
                     </div>
 
                     <div className="border-t border-border px-5 py-4 space-y-3">
@@ -146,7 +116,7 @@ export default function SaldosPorHub() {
             })}
           </div>
         )}
-        <p className="text-xs text-muted-foreground text-center">Saldo real por hub (warehouse_stock). Giro/cobertura dependem do histórico de consumo (fase futura); movimentações e entradas são feitas em Suprimentos.</p>
+        <p className="text-xs text-muted-foreground text-center">Saldo real por hub (warehouse_stock). Status pelo estoque mínimo (segurança); movimentações e entradas são feitas em Suprimentos.</p>
       </div>
     </div>
   );
