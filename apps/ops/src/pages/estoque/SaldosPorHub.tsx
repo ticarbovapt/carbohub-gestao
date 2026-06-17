@@ -9,7 +9,7 @@ import { Warehouse, Search, Tag, Download, Package, Eye, Loader2 } from "lucide-
 import { StockProgressBar } from "@/components/estoque/StockProgressBar";
 import { CarboEmptyState } from "@/components/ui/carbo-empty-state";
 import { useStock } from "@/hooks/useStock";
-import { minStockStatus } from "@/components/estoque/stockData";
+import { minStockStatus, minForHub } from "@/components/estoque/stockData";
 import { toast } from "sonner";
 
 const HUBS = [
@@ -86,7 +86,8 @@ export default function SaldosPorHub() {
             {filtered.map((p) => {
               const hubStocks = visibleHubs.map((h) => ({ id: h.id, name: h.name, qty: p.hubs[h.id] ?? 0 }));
               const totalQty = hubStocks.reduce((s, h) => s + h.qty, 0);
-              const status = minStockStatus(totalQty, p.safety_stock_qty);
+              const totalMin = visibleHubs.reduce((s, h) => s + minForHub(p, h.id), 0);
+              const status = minStockStatus(totalQty, totalMin);
               return (
                 <CarboCard key={p.id} variant="default" padding="none">
                   <CarboCardContent>
@@ -102,12 +103,12 @@ export default function SaldosPorHub() {
 
                     <div className="text-center px-5 pb-3">
                       <p className="text-3xl font-bold tabular-nums text-foreground leading-none">{totalQty.toLocaleString("pt-BR")}</p>
-                      <p className="text-[11px] text-muted-foreground mt-1">{p.stock_unit} total · Segurança: {p.safety_stock_qty.toLocaleString("pt-BR")} {p.stock_unit}</p>
+                      <p className="text-[11px] text-muted-foreground mt-1">{p.stock_unit} total · Mínimo: {totalMin.toLocaleString("pt-BR")} {p.stock_unit}</p>
                     </div>
 
                     <div className="border-t border-border px-5 py-4 space-y-3">
                       {hubStocks.map((h) => (
-                        <StockProgressBar key={h.id} current={h.qty} safety={p.safety_stock_qty} hubName={h.name} unit={p.stock_unit} />
+                        <StockProgressBar key={h.id} current={h.qty} safety={minForHub(p, h.id)} hubName={h.name} unit={p.stock_unit} />
                       ))}
                     </div>
                   </CarboCardContent>

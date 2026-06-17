@@ -17,13 +17,23 @@ import {
   CheckCircle, XCircle, FileText, Loader2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Input } from "@/components/ui/input";
+import { toast } from "sonner";
 import { StockView } from "@/components/estoque/StockView";
-import { HUBS } from "@/components/estoque/stockData";
+import { HUBS, minForHub, type ProdEstoque } from "@/components/estoque/stockData";
 import { CDSPRegistrarEnvioDialog } from "@/components/estoque/CDSPRegistrarEnvioDialog";
 import { RemessaConfirmDialog } from "@/components/estoque/RemessaConfirmDialog";
 import { useStock } from "@/hooks/useStock";
 import { useStockMovements } from "@/hooks/useStockMovements";
 import { useStockTransfers, type Transfer } from "@/hooks/useStockTransfers";
+import { useSetStockMin } from "@/hooks/useStockMin";
+
+// Hubs reais (CDs) onde se define mínimo. code → id do hub (stockData)
+const POLICY_HUBS: { code: string; hubId: string; label: string }[] = [
+  { code: "HUB-RN", hubId: "rn", label: "Hub Natal" },
+  { code: "HUB-SP", hubId: "sp", label: "CD SP LogHouse" },
+  { code: "HUB-SP-VENDAS", hubId: "spv", label: "CD SP Vendas" },
+];
 
 // É a versão EDITÁVEL do estoque (gestores). A versão somente leitura vive em Estoque.
 
@@ -62,10 +72,11 @@ export default function Suprimentos() {
   // KPIs do hub selecionado
   const stockId = STOCK_HUB_ID[hub];
   const lowStock = useMemo(
-    () => products.filter((p) => p.safety_stock_qty > 0 && (p.hubs[stockId] ?? 0) < p.safety_stock_qty)
+    () => products.filter((p) => { const min = minForHub(p, stockId); return min > 0 && (p.hubs[stockId] ?? 0) < min; })
       .map((p) => ({ name: p.name, qty: p.hubs[stockId] ?? 0 })),
     [products, stockId],
   );
+  const setMin = useSetStockMin();
   const cutoff = useMemo(() => {
     const d = new Date();
     if (periodo === "7d") d.setDate(d.getDate() - 7);
@@ -122,6 +133,25 @@ export default function Suprimentos() {
           )}
         </div>
       </CarboCardContent></CarboCard>
+    );
+  };
+
+  // Célula editável de mínimo por produto×hub (grava em ops_stock_min no blur).
+  const MinCell = ({ product, code, hubId }: { product: ProdEstoque; code: string; hubId: string }) => {
+    const current = minForHub(product, hubId);
+    return (
+      <Input
+        key={`${product.id}-${code}-${current}`}
+        type="number" min={0} defaultValue={current}
+        className="h-8 w-24 text-right tabular-nums"
+        onBlur={(e) => {
+          const v = Number(e.target.value);
+          if (!Number.isFinite(v) || v < 0 || v === current) return;
+          setMin.mutateAsync({ productId: product.id, warehouseCode: code, minQty: v })
+            .then(() => toast.success(`Mínimo de ${product.name} em ${code} = ${v}`))
+            .catch((err) => toast.error(err instanceof Error ? err.message : "Erro ao salvar mínimo."));
+        }}
+      />
     );
   };
 
@@ -305,9 +335,36 @@ export default function Suprimentos() {
             <CarboEmptyState title="Nenhum registro" description="Notas fiscais de entrada (3-way match) entram na próxima fase." />
           </TabsContent>
 
-          {/* Política de Estoque (próxima fase) */}
-          <TabsContent value="politica" className="mt-4">
-            <CarboEmptyState title="Nenhum registro" description="Política de estoque mínimo por produto/hub entra na próxima fase." />
+          {/* Política de Estoque — mínimo por produto × hub */}
+          <TabsContent value="politica" className="mt-4 space-y-3">
+            <div className="flex items-start gap-2 px-3 py-2 rounded-md bg-blue-500/10 border border-blue-500/20 text-sm text-blue-500">
+              <Info className="h-4 w-4 shrink-0 mt-0.5" />
+              <span>Defina o <strong>estoque mínimo</strong> de cada produto por CD. Abaixo desse valor, o produto entra como <strong>"Abaixo do mínimo"</strong> e no alerta de reposição. Edite e clique fora pra salvar.</span>
+            </div>
+            {products.length === 0 ? <CarboEmptyState title="Nenhum produto" /> : (
+            <div className="rounded-lg border bg-card overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Produto</TableHead>
+                    {POLICY_HUBS.map((h) => <TableHead key={h.code} className="text-right">{h.label}</TableHead>)}
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {products.map((p) => (
+                    <TableRow key={p.id}>
+                      <TableCell className="font-medium">{p.name}<span className="ml-2 text-xs text-muted-foreground font-mono">{p.product_code}</span></TableCell>
+                      {POLICY_HUBS.map((h) => (
+                        <TableCell key={h.code} className="text-right">
+                          <div className="flex justify-end"><MinCell product={p} code={h.code} hubId={h.hubId} /></div>
+                        </TableCell>
+                      ))}
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+            )}
           </TabsContent>
         </Tabs>
       </div>
