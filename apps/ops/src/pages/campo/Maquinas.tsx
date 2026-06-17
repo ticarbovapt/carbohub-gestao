@@ -8,18 +8,13 @@ import {
   CarboTable, CarboTableHeader, CarboTableBody, CarboTableRow, CarboTableHead, CarboTableCell,
 } from "@/components/ui/carbo-table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Cog, Plus, Wrench, Power, PowerOff, AlertTriangle, Pencil } from "lucide-react";
+import { Cog, Plus, Wrench, Power, PowerOff, AlertTriangle, Pencil, Loader2 } from "lucide-react";
 import { MachineDialog, type MachineDialogValues } from "@/components/campo/MachineDialog";
 import { CarboEmptyState } from "@/components/ui/carbo-empty-state";
+import { useMachines, type MachineStatus } from "@/hooks/useMachines";
 
-// TODO: ligar em <tabela de máquinas> (Supabase) na fase de lógica.
-
-type MachineStatus = "operational" | "maintenance" | "offline" | "retired";
 const STATUS_LABELS: Record<MachineStatus, string> = { operational: "Operacional", maintenance: "Manutenção", offline: "Offline", retired: "Aposentada" };
 const STATUS_VARIANT: Record<MachineStatus, "success" | "warning" | "secondary" | "destructive"> = { operational: "success", maintenance: "warning", offline: "secondary", retired: "destructive" };
-
-interface Machine { id: string; codigo: string; modelo: string; licenciado: string; status: MachineStatus; ultimaManut: string | null; proximaManut: string | null; creditos: number; }
-const MACHINES: Machine[] = [];
 
 const dt = (s: string | null) => (s ? new Date(s + "T00:00:00").toLocaleDateString("pt-BR") : "—");
 
@@ -29,14 +24,16 @@ export default function Maquinas() {
   const [createOpen, setCreateOpen] = useState(false);
   const [editValues, setEditValues] = useState<MachineDialogValues | null>(null);
 
+  const { data: machines = [], isLoading } = useMachines();
+
   const stats = useMemo(() => ({
-    total: MACHINES.length,
-    operational: MACHINES.filter((m) => m.status === "operational").length,
-    maintenance: MACHINES.filter((m) => m.status === "maintenance").length,
-    lowStock: MACHINES.filter((m) => m.creditos < 100).length,
-    creditos: MACHINES.reduce((s, m) => s + m.creditos, 0),
-  }), []);
-  const filtered = MACHINES.filter((m) => {
+    total: machines.length,
+    operational: machines.filter((m) => m.status === "operational").length,
+    maintenance: machines.filter((m) => m.status === "maintenance").length,
+    lowStock: machines.filter((m) => m.creditos < 100).length,
+    creditos: machines.reduce((s, m) => s + m.creditos, 0),
+  }), [machines]);
+  const filtered = machines.filter((m) => {
     if (statusFilter !== "all" && m.status !== statusFilter) return false;
     if (!search) return true;
     const q = search.toLowerCase();
@@ -89,10 +86,13 @@ export default function Maquinas() {
                   <CarboTableCell className="text-sm text-muted-foreground">{dt(m.ultimaManut)}</CarboTableCell>
                   <CarboTableCell className="text-sm text-muted-foreground">{dt(m.proximaManut)}</CarboTableCell>
                   <CarboTableCell className={`text-right font-semibold tabular-nums ${m.creditos < 100 ? "text-destructive" : ""}`}>{m.creditos.toLocaleString("pt-BR")}</CarboTableCell>
-                  <CarboTableCell><button onClick={() => setEditValues({ modelo: m.modelo, serie: m.codigo, licenciado: m.licenciado, instalacao: m.ultimaManut ?? "", status: m.status })} className="p-1.5 hover:bg-muted rounded-md"><Pencil className="h-3.5 w-3.5 text-muted-foreground" /></button></CarboTableCell>
+                  <CarboTableCell><button onClick={() => setEditValues({ id: m.id, codigo: m.codigo, modelo: m.modelo, serie: m.serie, licenseeId: m.licenseeId, instalacao: m.instalacao ?? "", status: m.status })} className="p-1.5 hover:bg-muted rounded-md"><Pencil className="h-3.5 w-3.5 text-muted-foreground" /></button></CarboTableCell>
                 </CarboTableRow>
               ))}
-              {filtered.length === 0 && (
+              {isLoading && (
+                <CarboTableRow><CarboTableCell colSpan={8} className="py-10 text-center text-sm text-muted-foreground"><Loader2 className="h-5 w-5 animate-spin inline mr-2" /> Carregando máquinas…</CarboTableCell></CarboTableRow>
+              )}
+              {!isLoading && filtered.length === 0 && (
                 <CarboTableRow>
                   <CarboTableCell colSpan={8}>
                     <CarboEmptyState icon={Cog} title="Nenhuma máquina" description="Nenhuma máquina cadastrada." />
