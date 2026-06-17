@@ -62,6 +62,7 @@ export function useSetStockQty() {
         const { data: auth } = await db.auth.getUser();
         const mov = await db.from("stock_movements").insert({
           product_id: productId,
+          warehouse_id: warehouseId,
           tipo: delta > 0 ? "entrada" : "saida",
           quantidade: Math.abs(delta),
           origem: "ajuste",
