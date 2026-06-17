@@ -1,25 +1,27 @@
-// TODO: ligar em warehouse_stock (Supabase) — submit liga na fase de lógica.
 import { useState } from "react";
-import { Send, Plus, Trash2 } from "lucide-react";
+import { Send, Plus, Trash2, Loader2 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
+import { useStock } from "@/hooks/useStock";
+import { useRegisterEnvio } from "@/hooks/useStockTransfers";
 
+// destino (UI) → código do warehouse no banco
 const DESTINOS = [
-  { id: "sp", label: "CD SP LogHouse", desc: "E-commerce / estoque principal" },
-  { id: "sp-vendas", label: "CD SP Vendas", desc: "Licenciados / lojas físicas" },
+  { id: "HUB-SP", label: "CD SP LogHouse", desc: "E-commerce / estoque principal" },
+  { id: "HUB-SP-VENDAS", label: "CD SP Vendas", desc: "Licenciados / lojas físicas" },
 ];
-// TODO: ligar em warehouse_stock (Supabase)
-const PRODUTOS: { id: string; name: string; code: string }[] = [];
 
 interface EnvioRow { id: number; productId: string; destinoId: string; quantity: string; notes: string; }
 let nextId = 1;
-const newRow = (): EnvioRow => ({ id: nextId++, productId: "", destinoId: "sp", quantity: "", notes: "" });
+const newRow = (): EnvioRow => ({ id: nextId++, productId: "", destinoId: "HUB-SP", quantity: "", notes: "" });
 
 export function CDSPRegistrarEnvioDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v: boolean) => void }) {
+  const { data: products = [] } = useStock();
+  const registerEnvio = useRegisterEnvio();
   const [rows, setRows] = useState<EnvioRow[]>([newRow()]);
 
   const addRow = () => setRows((r) => [...r, newRow()]);
@@ -27,13 +29,34 @@ export function CDSPRegistrarEnvioDialog({ open, onOpenChange }: { open: boolean
   const updateRow = (id: number, field: keyof EnvioRow, value: string) =>
     setRows((r) => r.map((x) => (x.id === id ? { ...x, [field]: value } : x)));
 
-  const submit = () => {
-    toast.info("Disponível na fase de lógica");
-    onOpenChange(false);
+  const reset = () => { setRows([newRow()]); };
+  const close = (v: boolean) => { if (!v) reset(); onOpenChange(v); };
+
+  const submit = async () => {
+    const valid = rows.filter((r) => r.productId && Number(r.quantity) > 0);
+    if (valid.length === 0) { toast.error("Adicione ao menos um envio com produto e quantidade."); return; }
+    try {
+      for (const row of valid) {
+        const product = products.find((p) => p.id === row.productId);
+        if (!product) continue;
+        await registerEnvio.mutateAsync({
+          productId: product.id,
+          productCode: product.product_code,
+          toCode: row.destinoId,
+          quantity: Number(row.quantity),
+          notes: row.notes.trim() || undefined,
+        });
+      }
+      toast.success(`${valid.length} envio(s) registrado(s) — saldo debitado do Hub Natal.`);
+      reset();
+      onOpenChange(false);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Não foi possível registrar o envio.");
+    }
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={close}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
@@ -76,9 +99,9 @@ export function CDSPRegistrarEnvioDialog({ open, onOpenChange }: { open: boolean
                 <Select value={row.productId} onValueChange={(v) => updateRow(row.id, "productId", v)}>
                   <SelectTrigger className="h-9"><SelectValue placeholder="Selecione o produto" /></SelectTrigger>
                   <SelectContent>
-                    {PRODUTOS.map((p) => (
+                    {products.map((p) => (
                       <SelectItem key={p.id} value={p.id}>
-                        {p.name} <span className="text-muted-foreground text-xs">({p.code})</span>
+                        {p.name} <span className="text-muted-foreground text-xs">({p.product_code})</span>
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -106,9 +129,9 @@ export function CDSPRegistrarEnvioDialog({ open, onOpenChange }: { open: boolean
         </div>
 
         <DialogFooter className="gap-2">
-          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
-          <Button onClick={submit} className="carbo-gradient text-white gap-1.5">
-            <Send className="h-4 w-4" /> Registrar Envio
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={registerEnvio.isPending}>Cancelar</Button>
+          <Button onClick={submit} disabled={registerEnvio.isPending} className="carbo-gradient text-white gap-1.5">
+            {registerEnvio.isPending ? <><Loader2 className="h-4 w-4 animate-spin" /> Registrando…</> : <><Send className="h-4 w-4" /> Registrar Envio</>}
           </Button>
         </DialogFooter>
       </DialogContent>

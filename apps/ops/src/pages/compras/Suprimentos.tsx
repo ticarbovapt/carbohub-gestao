@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
 import { CarboCard, CarboCardContent } from "@/components/ui/carbo-card";
 import { CarboBadge } from "@/components/ui/carbo-badge";
@@ -14,68 +14,28 @@ import {
 import {
   Package, Lightbulb, MapPin, Users, Cloud, Send, AlertCircle, ArrowLeftRight, Settings2,
   ArrowDownToLine, ArrowUpFromLine, Boxes, Layers, AlertTriangle, Activity, Info, Link2, Truck,
-  CheckCircle, XCircle, CheckCircle2, FileText,
+  CheckCircle, XCircle, FileText, Loader2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { StockView } from "@/components/estoque/StockView";
 import { HUBS } from "@/components/estoque/stockData";
 import { CDSPRegistrarEnvioDialog } from "@/components/estoque/CDSPRegistrarEnvioDialog";
 import { RemessaConfirmDialog } from "@/components/estoque/RemessaConfirmDialog";
+import { useStock } from "@/hooks/useStock";
+import { useStockMovements } from "@/hooks/useStockMovements";
+import { useStockTransfers, type Transfer } from "@/hooks/useStockTransfers";
 
-// TODO: ligar em <tabela de compras> (Supabase).
 // É a versão EDITÁVEL do estoque (gestores). A versão somente leitura vive em Estoque.
 
 type Hub = "rn" | "sp" | "sp-vendas" | "bling";
 // Suprimentos usa "sp-vendas"; o módulo de estoque usa "spv".
 const STOCK_HUB_ID: Record<Hub, string> = { rn: "rn", sp: "sp", "sp-vendas": "spv", bling: "bling" };
 
-interface Mov { id: string; data: string; produto: string; tipo: "entrada" | "saida"; qtd: number; unidade: string; hub: string; }
-// TODO: ligar em <tabela de compras> (Supabase).
-const MOVS: Mov[] = [];
-
-interface Politica { id: string; produto: string; politica: string; seguranca: number; leadTime: number; }
-// TODO: ligar em <tabela de compras> (Supabase).
-const POLITICAS: Politica[] = [];
-
-const LOW_STOCK: { name: string; qty: number }[] = [];
-
-// Transferências CD-SP em trânsito
-interface Transito { id: string; produto: string; qtd: number; unidade: string; origem: string; destino: string; enviado: string; status: "em_transito" | "recebido"; }
-// TODO: ligar em <tabela de compras> (Supabase).
-const TRANSITO: Transito[] = [];
-
-// Mapeamento SKU plataforma → produto interno (auto-match por código)
-// TODO: ligar em <tabela de compras> (Supabase).
-const SKU_MAP: { sku: string; produto: string }[] = [];
-
-// Envios do Hub Natal → CD SP (stock_transfers from_hub = RN)
-interface Envio { id: string; produto: string; qtd: number; unidade: string; enviado: string; nota?: string; status: "em_transito" | "entregue" | "estornado"; }
-// TODO: ligar em <tabela de compras> (Supabase).
-const ENVIOS_SP: Envio[] = [];
-
-// Remessas Hub Natal → CD SP Vendas (licenciados)
-interface Remessa { id: string; produto: string; qtd: number; unidade: string; enviado: string; nota?: string; status: "em_transito" | "entregue"; }
-// TODO: ligar em <tabela de compras> (Supabase).
-const REMESSAS_VENDAS: Remessa[] = [];
-
-// Recebimentos de OC (purchase_receivings)
-interface Recebimento { id: string; oc: string; recebidoEm: string; itens: number; status: "pendente" | "conferido_ok" | "conferido_divergencia"; divergencia?: string; }
-// TODO: ligar em <tabela de compras> (Supabase).
-const RECEBIMENTOS: Recebimento[] = [];
-const RECEB_STATUS: Record<Recebimento["status"], { label: string; variant: "warning" | "success" | "destructive" }> = {
-  pendente: { label: "Pendente", variant: "warning" },
-  conferido_ok: { label: "Conferido", variant: "success" },
-  conferido_divergencia: { label: "Divergência", variant: "destructive" },
-};
-
-// Notas fiscais de entrada (purchase_invoices)
-interface Nota { id: string; numero: string; data: string; valor: number; ocMatch: boolean; recebMatch: boolean; valorMatch: boolean; }
-// TODO: ligar em <tabela de compras> (Supabase).
-const NOTAS: Nota[] = [];
-const brl = (v: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
-
 const PERIODOS = [{ v: "7d", label: "Últimos 7 dias" }, { v: "30d", label: "Últimos 30 dias" }, { v: "mes", label: "Este mês" }];
-const dt = (s: string) => new Date(s + "T00:00:00").toLocaleDateString("pt-BR");
+const fmtDate = (iso: string) => (iso ? new Date(iso).toLocaleDateString("pt-BR") : "—");
+
+// Mapeamento SKU plataforma → produto interno. // TODO: ligar em sku_product_mappings (fase futura)
+const SKU_MAP: { sku: string; produto: string }[] = [];
 
 export default function Suprimentos() {
   const [hub, setHub] = useState<Hub>("rn");
@@ -83,10 +43,42 @@ export default function Suprimentos() {
   const [activeTab, setActiveTab] = useState("estoque");
   const [periodo, setPeriodo] = useState("7d");
   const [envioOpen, setEnvioOpen] = useState(false);
-  const [remessaConfirm, setRemessaConfirm] = useState<{ action: "confirmar" | "estornar"; produto: string } | null>(null);
+  const [remessaConfirm, setRemessaConfirm] = useState<{ action: "confirmar" | "estornar"; id: string; produto: string } | null>(null);
   const periodLabel = periodo === "7d" ? "7 dias" : periodo === "30d" ? "30 dias" : "mês";
   const isRN = hub === "rn", isSP = hub === "sp", isVendas = hub === "sp-vendas", isBling = hub === "bling";
   const stockHub = HUBS.find((h) => h.id === STOCK_HUB_ID[hub]) ?? HUBS[0];
+
+  const { data: products = [] } = useStock();
+  const { data: movimentacoes = [], isLoading: movLoading } = useStockMovements();
+  const { data: transfers = [] } = useStockTransfers();
+
+  // Transferências por direção
+  const enviosSP = useMemo(() => transfers.filter((t) => t.fromCode === "HUB-RN"), [transfers]);
+  const transitoSP = useMemo(() => transfers.filter((t) => t.toCode === "HUB-SP"), [transfers]);
+  const remessasVendas = useMemo(() => transfers.filter((t) => t.toCode === "HUB-SP-VENDAS"), [transfers]);
+
+  // KPIs do hub selecionado
+  const stockId = STOCK_HUB_ID[hub];
+  const lowStock = useMemo(
+    () => products.filter((p) => p.safety_stock_qty > 0 && (p.hubs[stockId] ?? 0) < p.safety_stock_qty)
+      .map((p) => ({ name: p.name, qty: p.hubs[stockId] ?? 0 })),
+    [products, stockId],
+  );
+  const cutoff = useMemo(() => {
+    const d = new Date();
+    if (periodo === "7d") d.setDate(d.getDate() - 7);
+    else if (periodo === "30d") d.setDate(d.getDate() - 30);
+    else { d.setDate(1); d.setHours(0, 0, 0, 0); }
+    return d;
+  }, [periodo]);
+  const movsPeriodo = useMemo(() => movimentacoes.filter((m) => new Date(m.data) >= cutoff), [movimentacoes, cutoff]);
+  const kpis = {
+    total: products.length,
+    emBaixa: lowStock.length,
+    entradas: movsPeriodo.filter((m) => m.tipo === "entrada").length,
+    saidas: movsPeriodo.filter((m) => m.tipo === "saida").length,
+    movimentacoes: movsPeriodo.length,
+  };
 
   // Ao trocar de hub, volta para "estoque" se a aba ativa não existir no novo hub.
   const changeHub = (next: Hub) => {
@@ -99,6 +91,34 @@ export default function Suprimentos() {
       (next !== "rn" && rnOnly.includes(activeTab));
     if (invalid) setActiveTab("estoque");
     setHub(next);
+  };
+
+  // Card de transferência (envio/remessa) com ações opcionais de chegada/estorno.
+  const TransferCard = ({ t, withActions }: { t: Transfer; withActions: boolean }) => {
+    const done = t.status === "entregue", cancelled = t.status === "estornado";
+    return (
+      <CarboCard key={t.id}><CarboCardContent className="py-4">
+        <div className="flex items-center gap-4 flex-wrap">
+          <div className={cn("p-2 rounded-lg", done ? "bg-green-500/10" : cancelled ? "bg-destructive/10" : "bg-blue-500/10")}>
+            {done ? <CheckCircle className="h-5 w-5 text-carbo-green" /> : cancelled ? <XCircle className="h-5 w-5 text-destructive" /> : <Truck className="h-5 w-5 text-blue-400" />}
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="font-semibold text-sm">{t.produto}</p>
+            <p className="text-xs text-muted-foreground mt-0.5">Enviado em {fmtDate(t.enviado)}{t.nota ? ` · ${t.nota}` : ""}</p>
+          </div>
+          <div className="text-right shrink-0">
+            <p className="font-bold text-xl">{t.qtd.toLocaleString("pt-BR")} <span className="text-xs font-normal text-muted-foreground">{t.unidade}</span></p>
+            <CarboBadge variant={done ? "success" : cancelled ? "cancelled" : "info"}>{done ? "Entregue" : cancelled ? "Estornado" : "Em trânsito"}</CarboBadge>
+          </div>
+          {withActions && t.status === "em_transito" && (
+            <div className="flex flex-col gap-1.5 shrink-0">
+              <Button size="sm" variant="outline" className="gap-1.5 border-green-500/30 text-carbo-green hover:bg-green-500/10" onClick={() => setRemessaConfirm({ action: "confirmar", id: t.id, produto: t.produto })}><CheckCircle className="h-4 w-4" /> Confirmar chegada</Button>
+              <Button size="sm" variant="outline" className="gap-1.5 border-destructive/40 text-destructive hover:bg-destructive/10" onClick={() => setRemessaConfirm({ action: "estornar", id: t.id, produto: t.produto })}><XCircle className="h-4 w-4" /> Não chegou / Estornar</Button>
+            </div>
+          )}
+        </div>
+      </CarboCardContent></CarboCard>
+    );
   };
 
   return (
@@ -124,13 +144,13 @@ export default function Suprimentos() {
         </div>
 
         {/* Alerta reposição — SP */}
-        {isSP && LOW_STOCK.length > 0 && (
+        {isSP && lowStock.length > 0 && (
           <div className="flex items-start gap-3 px-4 py-3 rounded-lg bg-destructive/10 border border-destructive/30">
             <AlertCircle className="h-5 w-5 text-destructive shrink-0 mt-0.5" />
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold text-destructive">{LOW_STOCK.length} produtos abaixo do nível de segurança — enviar reposição ao CD</p>
+              <p className="text-sm font-semibold text-destructive">{lowStock.length} produtos abaixo do nível de segurança — enviar reposição ao CD</p>
               <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1">
-                {LOW_STOCK.map((s) => <span key={s.name} className="text-xs text-muted-foreground">{s.name} ({s.qty} un)</span>)}
+                {lowStock.map((s) => <span key={s.name} className="text-xs text-muted-foreground">{s.name} ({s.qty} un)</span>)}
               </div>
             </div>
           </div>
@@ -147,11 +167,11 @@ export default function Suprimentos() {
               </Select>
             </div>
             <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-              <CarboCard variant="kpi" padding="sm"><CarboCardContent><div className="flex items-center gap-2 mb-1"><Layers className="h-4 w-4 text-carbo-blue" /><span className="text-xs text-muted-foreground">Total Produtos</span></div><p className="text-2xl font-bold">0</p></CarboCardContent></CarboCard>
-              <CarboCard variant="kpi" padding="sm"><CarboCardContent><div className="flex items-center gap-2 mb-1"><AlertTriangle className="h-4 w-4 text-destructive" /><span className="text-xs text-muted-foreground">Em Baixa</span></div><p className="text-2xl font-bold text-destructive">0</p></CarboCardContent></CarboCard>
-              <CarboCard variant="kpi" padding="sm"><CarboCardContent><div className="flex items-center gap-2 mb-1"><ArrowDownToLine className="h-4 w-4 text-carbo-green" /><span className="text-xs text-muted-foreground">Entradas ({periodLabel})</span></div><p className="text-2xl font-bold">0</p></CarboCardContent></CarboCard>
-              <CarboCard variant="kpi" padding="sm"><CarboCardContent><div className="flex items-center gap-2 mb-1"><ArrowUpFromLine className="h-4 w-4 text-warning" /><span className="text-xs text-muted-foreground">Saídas ({periodLabel})</span></div><p className="text-2xl font-bold">0</p></CarboCardContent></CarboCard>
-              <CarboCard variant="kpi" padding="sm"><CarboCardContent><div className="flex items-center gap-2 mb-1"><Activity className="h-4 w-4 text-muted-foreground" /><span className="text-xs text-muted-foreground">Movimentações ({periodLabel})</span></div><p className="text-2xl font-bold">0</p></CarboCardContent></CarboCard>
+              <CarboCard variant="kpi" padding="sm"><CarboCardContent><div className="flex items-center gap-2 mb-1"><Layers className="h-4 w-4 text-carbo-blue" /><span className="text-xs text-muted-foreground">Total Produtos</span></div><p className="text-2xl font-bold">{kpis.total}</p></CarboCardContent></CarboCard>
+              <CarboCard variant="kpi" padding="sm"><CarboCardContent><div className="flex items-center gap-2 mb-1"><AlertTriangle className="h-4 w-4 text-destructive" /><span className="text-xs text-muted-foreground">Em Baixa</span></div><p className="text-2xl font-bold text-destructive">{kpis.emBaixa}</p></CarboCardContent></CarboCard>
+              <CarboCard variant="kpi" padding="sm"><CarboCardContent><div className="flex items-center gap-2 mb-1"><ArrowDownToLine className="h-4 w-4 text-carbo-green" /><span className="text-xs text-muted-foreground">Entradas ({periodLabel})</span></div><p className="text-2xl font-bold">{kpis.entradas}</p></CarboCardContent></CarboCard>
+              <CarboCard variant="kpi" padding="sm"><CarboCardContent><div className="flex items-center gap-2 mb-1"><ArrowUpFromLine className="h-4 w-4 text-warning" /><span className="text-xs text-muted-foreground">Saídas ({periodLabel})</span></div><p className="text-2xl font-bold">{kpis.saidas}</p></CarboCardContent></CarboCard>
+              <CarboCard variant="kpi" padding="sm"><CarboCardContent><div className="flex items-center gap-2 mb-1"><Activity className="h-4 w-4 text-muted-foreground" /><span className="text-xs text-muted-foreground">Movimentações ({periodLabel})</span></div><p className="text-2xl font-bold">{kpis.movimentacoes}</p></CarboCardContent></CarboCard>
             </div>
           </div>
         )}
@@ -180,23 +200,26 @@ export default function Suprimentos() {
             <StockView hub={stockHub} editable />
           </TabsContent>
 
+          {/* Movimentações */}
           <TabsContent value="movimentacoes" className="mt-4">
-            {MOVS.length === 0 ? <CarboEmptyState title="Nenhum registro" /> : (
+            {movLoading ? (
+              <div className="flex items-center justify-center gap-2 py-16 text-muted-foreground"><Loader2 className="h-5 w-5 animate-spin" /> Carregando…</div>
+            ) : movimentacoes.length === 0 ? <CarboEmptyState title="Nenhum registro" description="Entradas, saídas e ajustes aparecem aqui." /> : (
             <div className="rounded-lg border bg-card overflow-x-auto">
               <Table>
-                <TableHeader><TableRow><TableHead>Data</TableHead><TableHead>Produto</TableHead><TableHead>Tipo</TableHead><TableHead className="text-right">Qtd</TableHead><TableHead>Hub</TableHead></TableRow></TableHeader>
+                <TableHeader><TableRow><TableHead>Data</TableHead><TableHead>Produto</TableHead><TableHead>Tipo</TableHead><TableHead className="text-right">Qtd</TableHead><TableHead>Origem</TableHead></TableRow></TableHeader>
                 <TableBody>
-                  {MOVS.map((m) => (
+                  {movimentacoes.map((m) => (
                     <TableRow key={m.id}>
-                      <TableCell className="text-sm text-muted-foreground">{dt(m.data)}</TableCell>
-                      <TableCell className="font-medium">{m.produto}</TableCell>
+                      <TableCell className="text-sm text-muted-foreground">{fmtDate(m.data)}</TableCell>
+                      <TableCell className="font-medium">{m.produto}<span className="ml-2 text-xs text-muted-foreground font-mono">{m.product_code}</span></TableCell>
                       <TableCell>
                         <CarboBadge variant={m.tipo === "entrada" ? "success" : "warning"} dot>
                           <span className="inline-flex items-center gap-1">{m.tipo === "entrada" ? <ArrowDownToLine className="h-3 w-3" /> : <ArrowUpFromLine className="h-3 w-3" />}{m.tipo === "entrada" ? "Entrada" : "Saída"}</span>
                         </CarboBadge>
                       </TableCell>
                       <TableCell className="text-right font-semibold tabular-nums">{m.qtd.toLocaleString("pt-BR")} {m.unidade}</TableCell>
-                      <TableCell className="text-sm text-muted-foreground">{m.hub}</TableCell>
+                      <TableCell className="text-sm text-muted-foreground capitalize">{m.origem}{m.observacoes ? <span className="ml-1 text-xs">· {m.observacoes}</span> : ""}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -205,25 +228,10 @@ export default function Suprimentos() {
             )}
           </TabsContent>
 
-          {/* Em Trânsito (SP) */}
-          <TabsContent value="transito" className="mt-4">
-            {TRANSITO.length === 0 ? <CarboEmptyState title="Nenhum registro" /> : (
-            <div className="rounded-lg border bg-card overflow-x-auto">
-              <Table>
-                <TableHeader><TableRow><TableHead>Produto</TableHead><TableHead className="text-right">Qtd</TableHead><TableHead>Origem → Destino</TableHead><TableHead>Enviado em</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
-                <TableBody>
-                  {TRANSITO.map((t) => (
-                    <TableRow key={t.id}>
-                      <TableCell className="font-medium">{t.produto}</TableCell>
-                      <TableCell className="text-right tabular-nums">{t.qtd.toLocaleString("pt-BR")} {t.unidade}</TableCell>
-                      <TableCell className="text-sm text-muted-foreground">{t.origem} → {t.destino}</TableCell>
-                      <TableCell className="text-sm text-muted-foreground">{dt(t.enviado)}</TableCell>
-                      <TableCell><CarboBadge variant={t.status === "recebido" ? "success" : "warning"} dot>{t.status === "recebido" ? "Recebido" : "Em trânsito"}</CarboBadge></TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
+          {/* Em Trânsito (SP) — confirmar chegada / estornar */}
+          <TabsContent value="transito" className="mt-4 space-y-4">
+            {transitoSP.length === 0 ? <CarboEmptyState title="Nenhum envio em trânsito" /> : (
+              transitoSP.map((t) => <TransferCard key={t.id} t={t} withActions />)
             )}
           </TabsContent>
 
@@ -234,15 +242,12 @@ export default function Suprimentos() {
               <div className="text-sm">
                 <p className="font-medium mb-0.5">Como funciona o mapeamento</p>
                 <p className="text-xs text-muted-foreground">
-                  O sistema deduz o estoque CD SP em duas etapas: primeiro busca um mapeamento configurado; se não encontrar,
-                  combina o SKU da plataforma com o <strong className="text-foreground">código interno do produto</strong> (1 vendido = 1 deduzido).
+                  O sistema deduz o estoque CD SP combinando o SKU da plataforma com o <strong className="text-foreground">código interno do produto</strong> (1 vendido = 1 deduzido).
                   Use mapeamentos explícitos para kits ou quando o SKU da plataforma for diferente do código interno.
                 </p>
               </div>
             </div>
-            <div>
-              <p className="text-sm font-medium mb-2">Auto-match por código interno <span className="text-xs text-muted-foreground">(sem configuração necessária)</span></p>
-              {SKU_MAP.length === 0 ? <CarboEmptyState title="Nenhum registro" /> : (
+            {SKU_MAP.length === 0 ? <CarboEmptyState title="Nenhum mapeamento" description="Mapeamentos de SKU entram na próxima fase." /> : (
               <div className="grid gap-2 md:grid-cols-2">
                 {SKU_MAP.map((m) => (
                   <div key={m.sku} className="flex items-center gap-2 rounded-lg border bg-card px-3 py-2">
@@ -253,149 +258,59 @@ export default function Suprimentos() {
                   </div>
                 ))}
               </div>
-              )}
-            </div>
+            )}
           </TabsContent>
 
-          {/* Remessas — CD SP Vendas (licenciados) */}
+          {/* Remessas — CD SP Vendas */}
           <TabsContent value="vendas-transito" className="mt-4 space-y-4">
-            {REMESSAS_VENDAS.length === 0 ? (
+            {remessasVendas.length === 0 ? (
               <CarboCard><CarboCardContent className="py-12 text-center"><Users className="h-12 w-12 mx-auto mb-3 text-muted-foreground/30" /><p className="text-muted-foreground font-medium">Nenhuma remessa registrada</p></CarboCardContent></CarboCard>
             ) : (
               <>
                 <div className="flex items-center gap-5 px-1 flex-wrap text-sm">
-                  <span className="flex items-center gap-1.5 text-blue-400 font-medium"><Truck className="h-4 w-4" /> {REMESSAS_VENDAS.filter((r) => r.status === "em_transito").length} em trânsito</span>
-                  <span className="flex items-center gap-1.5 text-muted-foreground font-medium"><CheckCircle className="h-4 w-4 text-carbo-green" /> {REMESSAS_VENDAS.filter((r) => r.status === "entregue").length} entregues</span>
+                  <span className="flex items-center gap-1.5 text-blue-400 font-medium"><Truck className="h-4 w-4" /> {remessasVendas.filter((r) => r.status === "em_transito").length} em trânsito</span>
+                  <span className="flex items-center gap-1.5 text-muted-foreground font-medium"><CheckCircle className="h-4 w-4 text-carbo-green" /> {remessasVendas.filter((r) => r.status === "entregue").length} entregues</span>
                 </div>
-                {REMESSAS_VENDAS.map((r) => {
-                  const done = r.status === "entregue";
-                  return (
-                    <CarboCard key={r.id}><CarboCardContent className="py-4">
-                      <div className="flex items-center gap-4 flex-wrap">
-                        <div className={cn("p-2 rounded-lg", done ? "bg-green-500/10" : "bg-blue-500/10")}>{done ? <CheckCircle className="h-5 w-5 text-carbo-green" /> : <Package className="h-5 w-5 text-blue-400" />}</div>
-                        <div className="flex-1 min-w-0"><p className="font-semibold text-sm">{r.produto}</p><p className="text-xs text-muted-foreground mt-0.5">{r.enviado}{r.nota ? ` · ${r.nota}` : ""}</p></div>
-                        <div className="text-right shrink-0"><p className="font-bold text-xl">{r.qtd.toLocaleString("pt-BR")} <span className="text-xs font-normal text-muted-foreground">{r.unidade}</span></p><CarboBadge variant={done ? "success" : "info"}>{done ? "Entregue" : "Em trânsito"}</CarboBadge></div>
-                        {!done && (
-                          <div className="flex flex-col gap-1.5 shrink-0">
-                            <Button size="sm" variant="outline" className="gap-1.5 border-green-500/30 text-carbo-green hover:bg-green-500/10" onClick={() => setRemessaConfirm({ action: "confirmar", produto: r.produto })}><CheckCircle className="h-4 w-4" /> Confirmar chegada</Button>
-                            <Button size="sm" variant="outline" className="gap-1.5 border-destructive/40 text-destructive hover:bg-destructive/10" onClick={() => setRemessaConfirm({ action: "estornar", produto: r.produto })}><XCircle className="h-4 w-4" /> Não chegou / Estornar</Button>
-                          </div>
-                        )}
-                      </div>
-                    </CarboCardContent></CarboCard>
-                  );
-                })}
+                {remessasVendas.map((r) => <TransferCard key={r.id} t={r} withActions />)}
               </>
             )}
           </TabsContent>
 
-          {/* Envios para SP — Hub Natal */}
+          {/* Envios para SP — Hub Natal (lista; ação acontece no destino) */}
           <TabsContent value="envios-sp" className="mt-4 space-y-4">
-            {ENVIOS_SP.length === 0 ? <CarboEmptyState title="Nenhum registro" /> : (
+            {enviosSP.length === 0 ? <CarboEmptyState title="Nenhum envio registrado" description='Use "Registrar Envio para CD SP".' /> : (
             <>
             <div className="flex items-center gap-5 px-1 flex-wrap text-sm">
-              <span className="flex items-center gap-1.5 text-blue-400 font-medium"><Truck className="h-4 w-4" /> {ENVIOS_SP.filter((e) => e.status === "em_transito").length} em trânsito</span>
-              <span className="flex items-center gap-1.5 text-muted-foreground font-medium"><CheckCircle className="h-4 w-4 text-carbo-green" /> {ENVIOS_SP.filter((e) => e.status === "entregue").length} entregues no CD SP</span>
-              <span className="flex items-center gap-1.5 text-muted-foreground font-medium"><XCircle className="h-4 w-4 text-destructive" /> {ENVIOS_SP.filter((e) => e.status === "estornado").length} estornados</span>
+              <span className="flex items-center gap-1.5 text-blue-400 font-medium"><Truck className="h-4 w-4" /> {enviosSP.filter((e) => e.status === "em_transito").length} em trânsito</span>
+              <span className="flex items-center gap-1.5 text-muted-foreground font-medium"><CheckCircle className="h-4 w-4 text-carbo-green" /> {enviosSP.filter((e) => e.status === "entregue").length} entregues no CD SP</span>
+              <span className="flex items-center gap-1.5 text-muted-foreground font-medium"><XCircle className="h-4 w-4 text-destructive" /> {enviosSP.filter((e) => e.status === "estornado").length} estornados</span>
             </div>
-            {ENVIOS_SP.map((e) => {
-              const done = e.status === "entregue", cancelled = e.status === "estornado";
-              return (
-                <CarboCard key={e.id}><CarboCardContent className="py-4">
-                  <div className="flex items-center gap-4 flex-wrap">
-                    <div className={cn("p-2 rounded-lg", done ? "bg-green-500/10" : cancelled ? "bg-destructive/10" : "bg-blue-500/10")}>{done ? <CheckCircle className="h-5 w-5 text-carbo-green" /> : cancelled ? <XCircle className="h-5 w-5 text-destructive" /> : <Truck className="h-5 w-5 text-blue-400" />}</div>
-                    <div className="flex-1 min-w-0"><p className="font-semibold text-sm">{e.produto}</p><p className="text-xs text-muted-foreground mt-0.5">Enviado em {e.enviado}{e.nota ? ` · ${e.nota}` : ""}</p></div>
-                    <div className="text-right shrink-0"><p className="font-bold text-xl">{e.qtd.toLocaleString("pt-BR")} <span className="text-xs font-normal text-muted-foreground">{e.unidade}</span></p><CarboBadge variant={done ? "success" : cancelled ? "cancelled" : "info"}>{done ? "Chegou no CD SP" : cancelled ? "Estornado" : "Em trânsito"}</CarboBadge></div>
-                  </div>
-                </CarboCardContent></CarboCard>
-              );
-            })}
+            {enviosSP.map((e) => <TransferCard key={e.id} t={e} withActions={false} />)}
             </>
             )}
           </TabsContent>
 
-          {/* Recebimento — Hub Natal (conferência de OC) */}
+          {/* Recebimento — Hub Natal (próxima fase) */}
           <TabsContent value="recebimento" className="mt-4">
-            {RECEBIMENTOS.length === 0 ? <CarboEmptyState title="Nenhum registro" /> : (
-            <div className="rounded-lg border bg-card overflow-x-auto">
-              <Table>
-                <TableHeader><TableRow><TableHead>OC</TableHead><TableHead>Data Recebimento</TableHead><TableHead>Itens</TableHead><TableHead>Status</TableHead><TableHead>Divergência</TableHead></TableRow></TableHeader>
-                <TableBody>
-                  {RECEBIMENTOS.map((r) => (
-                    <TableRow key={r.id}>
-                      <TableCell className="font-mono text-sm">{r.oc.slice(0, 8)}...</TableCell>
-                      <TableCell className="text-sm text-muted-foreground">{r.recebidoEm}</TableCell>
-                      <TableCell>{r.itens} itens</TableCell>
-                      <TableCell><CarboBadge variant={RECEB_STATUS[r.status].variant} dot>{RECEB_STATUS[r.status].label}</CarboBadge></TableCell>
-                      <TableCell>
-                        {r.divergencia ? (
-                          <span className="inline-flex items-center gap-1.5 text-destructive text-sm"><AlertTriangle className="h-3.5 w-3.5" /> {r.divergencia}</span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1.5 text-carbo-green text-sm"><CheckCircle2 className="h-3.5 w-3.5" /> Sem divergências</span>
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-            )}
+            <CarboEmptyState title="Nenhum registro" description="Conferência de recebimento de OC entra na próxima fase." />
           </TabsContent>
 
-          {/* Notas Fiscais de entrada — Hub Natal (3-way match) */}
+          {/* Notas Fiscais de entrada — Hub Natal (próxima fase) */}
           <TabsContent value="notas" className="mt-4">
-            {NOTAS.length === 0 ? <CarboEmptyState title="Nenhum registro" /> : (
-            <div className="rounded-lg border bg-card overflow-x-auto">
-              <Table>
-                <TableHeader><TableRow><TableHead>Nº NF</TableHead><TableHead>Data NF</TableHead><TableHead>Valor</TableHead><TableHead>OC ✓</TableHead><TableHead>Receb. ✓</TableHead><TableHead>Valor ✓</TableHead><TableHead>Verificação</TableHead></TableRow></TableHeader>
-                <TableBody>
-                  {NOTAS.map((n) => {
-                    const allMatch = n.ocMatch && n.recebMatch && n.valorMatch;
-                    const mark = (ok: boolean) => ok ? <CheckCircle2 className="h-4 w-4 text-carbo-green" /> : <XCircle className="h-4 w-4 text-destructive" />;
-                    return (
-                      <TableRow key={n.id}>
-                        <TableCell className="font-mono font-medium">{n.numero}</TableCell>
-                        <TableCell className="text-sm text-muted-foreground">{dt(n.data)}</TableCell>
-                        <TableCell className="font-mono">{brl(n.valor)}</TableCell>
-                        <TableCell>{mark(n.ocMatch)}</TableCell>
-                        <TableCell>{mark(n.recebMatch)}</TableCell>
-                        <TableCell>{mark(n.valorMatch)}</TableCell>
-                        <TableCell><CarboBadge variant={allMatch ? "success" : "warning"} dot>{allMatch ? "Conferida" : "Pendente"}</CarboBadge></TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-            </div>
-            )}
+            <CarboEmptyState title="Nenhum registro" description="Notas fiscais de entrada (3-way match) entram na próxima fase." />
           </TabsContent>
 
+          {/* Política de Estoque (próxima fase) */}
           <TabsContent value="politica" className="mt-4">
-            {POLITICAS.length === 0 ? <CarboEmptyState title="Nenhum registro" /> : (
-            <div className="rounded-lg border bg-card overflow-x-auto">
-              <Table>
-                <TableHeader><TableRow><TableHead>Produto</TableHead><TableHead>Política</TableHead><TableHead className="text-right">Estoque Seg.</TableHead><TableHead className="text-right">Lead time</TableHead></TableRow></TableHeader>
-                <TableBody>
-                  {POLITICAS.map((p) => (
-                    <TableRow key={p.id}>
-                      <TableCell className="font-medium">{p.produto}</TableCell>
-                      <TableCell><CarboBadge variant="outline">{p.politica}</CarboBadge></TableCell>
-                      <TableCell className="text-right tabular-nums">{p.seguranca.toLocaleString("pt-BR")}</TableCell>
-                      <TableCell className="text-right tabular-nums">{p.leadTime} dias</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-            )}
+            <CarboEmptyState title="Nenhum registro" description="Política de estoque mínimo por produto/hub entra na próxima fase." />
           </TabsContent>
         </Tabs>
-        <p className="text-xs text-muted-foreground text-center">Movimentações, transferências CD-SP e política entram na fase de lógica.</p>
       </div>
 
       <CDSPRegistrarEnvioDialog open={envioOpen} onOpenChange={setEnvioOpen} />
       <RemessaConfirmDialog
         action={remessaConfirm?.action ?? null}
+        transferId={remessaConfirm?.id ?? null}
         produto={remessaConfirm?.produto ?? null}
         open={remessaConfirm !== null}
         onOpenChange={(v) => !v && setRemessaConfirm(null)}
