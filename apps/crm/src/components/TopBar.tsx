@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { LogOut, UserCircle, Moon, Sun, Menu } from "lucide-react";
+import { LogOut, UserCircle, Moon, Sun, Menu, Users, Bug } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import { supabase } from "@/integrations/supabase/client";
@@ -123,6 +123,12 @@ export function TopBar({ appName, onMenu }: { appName: string; onMenu?: () => vo
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={() => navigate("/perfil")}>
                 <UserCircle className="h-4 w-4 mr-2" /> Meu Perfil
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => navigate("/equipe")}>
+                <Users className="h-4 w-4 mr-2" /> Minha equipe
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => navigate("/bugs")}>
+                <Bug className="h-4 w-4 mr-2" /> Bugs e sugestões
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={signOut} className="text-destructive focus:text-destructive">

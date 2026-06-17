@@ -234,7 +234,7 @@ export function EditUserDialog({ user, approved, onClose }: Props) {
                 {resetDone ? (
                   <div className="space-y-2">
                     <p className="text-sm font-medium text-emerald-600">Senha redefinida!</p>
-                    <p className="text-xs text-muted-foreground">Passe as credenciais ao colaborador:</p>
+                    <p className="text-xs text-muted-foreground">No próximo acesso ele refaz o primeiro login (define uma nova senha). Passe as credenciais:</p>
                     <div className="flex flex-wrap items-center gap-2 text-sm">
                       <code className="font-mono font-bold text-primary bg-primary/10 px-2 py-1 rounded">{user.username}</code>
                       <code className="font-mono font-bold text-amber-600 bg-amber-500/10 px-2 py-1 rounded">{DEFAULT_PASSWORD}</code>
