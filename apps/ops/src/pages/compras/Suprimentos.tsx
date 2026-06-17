@@ -30,6 +30,8 @@ import { useStockTransfers, type Transfer } from "@/hooks/useStockTransfers";
 type Hub = "rn" | "sp" | "sp-vendas" | "bling";
 // Suprimentos usa "sp-vendas"; o módulo de estoque usa "spv".
 const STOCK_HUB_ID: Record<Hub, string> = { rn: "rn", sp: "sp", "sp-vendas": "spv", bling: "bling" };
+// hub (UI) → código do warehouse no banco (pra filtrar movimentações por hub)
+const HUB_CODE: Record<Hub, string> = { rn: "HUB-RN", sp: "HUB-SP", "sp-vendas": "HUB-SP-VENDAS", bling: "CD-BLING" };
 
 const PERIODOS = [{ v: "7d", label: "Últimos 7 dias" }, { v: "30d", label: "Últimos 30 dias" }, { v: "mes", label: "Este mês" }];
 const fmtDate = (iso: string) => (iso ? new Date(iso).toLocaleDateString("pt-BR") : "—");
@@ -71,7 +73,9 @@ export default function Suprimentos() {
     else { d.setDate(1); d.setHours(0, 0, 0, 0); }
     return d;
   }, [periodo]);
-  const movsPeriodo = useMemo(() => movimentacoes.filter((m) => new Date(m.data) >= cutoff), [movimentacoes, cutoff]);
+  // Movimentações do hub atual (cada tela é independente)
+  const movimentacoesHub = useMemo(() => movimentacoes.filter((m) => m.warehouseCode === HUB_CODE[hub]), [movimentacoes, hub]);
+  const movsPeriodo = useMemo(() => movimentacoesHub.filter((m) => new Date(m.data) >= cutoff), [movimentacoesHub, cutoff]);
   const kpis = {
     total: products.length,
     emBaixa: lowStock.length,
@@ -204,12 +208,12 @@ export default function Suprimentos() {
           <TabsContent value="movimentacoes" className="mt-4">
             {movLoading ? (
               <div className="flex items-center justify-center gap-2 py-16 text-muted-foreground"><Loader2 className="h-5 w-5 animate-spin" /> Carregando…</div>
-            ) : movimentacoes.length === 0 ? <CarboEmptyState title="Nenhum registro" description="Entradas, saídas e ajustes aparecem aqui." /> : (
+            ) : movimentacoesHub.length === 0 ? <CarboEmptyState title="Nenhuma movimentação neste hub" description="Entradas, saídas e ajustes deste hub aparecem aqui." /> : (
             <div className="rounded-lg border bg-card overflow-x-auto">
               <Table>
-                <TableHeader><TableRow><TableHead>Data</TableHead><TableHead>Produto</TableHead><TableHead>Tipo</TableHead><TableHead className="text-right">Qtd</TableHead><TableHead>Origem</TableHead></TableRow></TableHeader>
+                <TableHeader><TableRow><TableHead>Data</TableHead><TableHead>Produto</TableHead><TableHead>Tipo</TableHead><TableHead className="text-right">Qtd</TableHead><TableHead>Por</TableHead><TableHead>Origem</TableHead></TableRow></TableHeader>
                 <TableBody>
-                  {movimentacoes.map((m) => (
+                  {movimentacoesHub.map((m) => (
                     <TableRow key={m.id}>
                       <TableCell className="text-sm text-muted-foreground">{fmtDate(m.data)}</TableCell>
                       <TableCell className="font-medium">{m.produto}<span className="ml-2 text-xs text-muted-foreground font-mono">{m.product_code}</span></TableCell>
@@ -219,6 +223,7 @@ export default function Suprimentos() {
                         </CarboBadge>
                       </TableCell>
                       <TableCell className="text-right font-semibold tabular-nums">{m.qtd.toLocaleString("pt-BR")} {m.unidade}</TableCell>
+                      <TableCell className="text-sm text-muted-foreground">{m.por ?? "—"}</TableCell>
                       <TableCell className="text-sm text-muted-foreground capitalize">{m.origem}{m.observacoes ? <span className="ml-1 text-xs">· {m.observacoes}</span> : ""}</TableCell>
                     </TableRow>
                   ))}
