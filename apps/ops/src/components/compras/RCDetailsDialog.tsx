@@ -1,10 +1,11 @@
-// TODO: ligar em <tabela de compras> (Supabase).
-import { Brain, Star } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { CarboCard, CarboCardContent, CarboCardHeader, CarboCardTitle } from "@/components/ui/carbo-card";
 import { CarboBadge } from "@/components/ui/carbo-badge";
 
 const brl = (v: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
+const dt = (s?: string) => (s ? new Date(s + "T00:00:00").toLocaleDateString("pt-BR") : "—");
+
+export interface RCItem { descricao: string; quantidade: number; unidade: string; valor_unitario: number; }
 
 export interface RCLite {
   rc_number: string;
@@ -13,17 +14,15 @@ export interface RCLite {
   valor: number;
   statusLabel: string;
   statusVariant: "secondary" | "warning" | "success" | "destructive";
+  items: RCItem[];
+  suggested_supplier?: string | null;
+  data?: string;
 }
-
-interface RCItem { descricao: string; quantidade: number; unidade: string; valor_unitario: number; }
-interface RCQuotation { fornecedor_nome: string; preco: number; prazo_entrega_dias: number; condicao_pagamento: string; recomendado: boolean; }
-// TODO: ligar em <tabela de compras> (Supabase).
-const ITEMS: RCItem[] = [];
-const QUOTATIONS: RCQuotation[] = [];
 
 export function RCDetailsDialog({ rc, open, onOpenChange }: { rc: RCLite | null; open: boolean; onOpenChange: (v: boolean) => void }) {
   if (!rc) return null;
-  const totalQtd = ITEMS.reduce((s, i) => s + i.quantidade, 0);
+  const items = rc.items ?? [];
+  const totalQtd = items.reduce((s, i) => s + (Number(i.quantidade) || 0), 0);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -44,7 +43,7 @@ export function RCDetailsDialog({ rc, open, onOpenChange }: { rc: RCLite | null;
             </CarboCardContent></CarboCard>
             <CarboCard padding="sm"><CarboCardContent>
               <p className="text-xs text-muted-foreground mb-1">Quantidade total</p>
-              <p className="text-lg font-bold">{totalQtd} itens</p>
+              <p className="text-lg font-bold">{totalQtd}</p>
             </CarboCardContent></CarboCard>
             <CarboCard padding="sm"><CarboCardContent>
               <p className="text-xs text-muted-foreground mb-1">Centro de Custo</p>
@@ -52,77 +51,32 @@ export function RCDetailsDialog({ rc, open, onOpenChange }: { rc: RCLite | null;
             </CarboCardContent></CarboCard>
           </div>
 
+          {/* Meta */}
+          <div className="grid md:grid-cols-3 gap-4 text-sm">
+            <div><span className="text-muted-foreground">Tipo de compra: </span><span className="font-medium">{rc.tipo}</span></div>
+            <div><span className="text-muted-foreground">Fornecedor sugerido: </span><span className="font-medium">{rc.suggested_supplier || "—"}</span></div>
+            <div><span className="text-muted-foreground">Data: </span><span className="font-medium">{dt(rc.data)}</span></div>
+          </div>
+
           {/* Itens */}
           <CarboCard>
             <CarboCardHeader><CarboCardTitle className="text-sm">Itens da Requisição</CarboCardTitle></CarboCardHeader>
             <CarboCardContent>
-              {ITEMS.length === 0 ? (
+              {items.length === 0 ? (
                 <p className="text-sm text-muted-foreground py-2">Nenhum item</p>
               ) : (
                 <div className="divide-y divide-border">
-                  {ITEMS.map((it, i) => (
+                  {items.map((it, i) => (
                     <div key={i} className="py-2.5 flex items-center justify-between gap-4">
                       <div className="flex-1 min-w-0">
                         <p className="font-medium text-sm">{it.descricao}</p>
-                        <p className="text-xs text-muted-foreground mt-0.5">{it.quantidade} {it.unidade} × {brl(it.valor_unitario)}</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">{it.quantidade} {it.unidade} × {brl(Number(it.valor_unitario) || 0)}</p>
                       </div>
-                      <p className="font-bold text-sm">{brl(it.quantidade * it.valor_unitario)}</p>
+                      <p className="font-bold text-sm">{brl((Number(it.quantidade) || 0) * (Number(it.valor_unitario) || 0))}</p>
                     </div>
                   ))}
                 </div>
               )}
-            </CarboCardContent>
-          </CarboCard>
-
-          {/* Cotações */}
-          <CarboCard>
-            <CarboCardHeader>
-              <CarboCardTitle className="text-sm">
-                Cotações ({QUOTATIONS.length}/3 mínimas)
-              </CarboCardTitle>
-            </CarboCardHeader>
-            <CarboCardContent>
-              {QUOTATIONS.length === 0 ? (
-                <p className="text-sm text-muted-foreground py-2">Nenhuma cotação</p>
-              ) : (
-                <div className="divide-y divide-border">
-                  {QUOTATIONS.map((q, i) => (
-                    <div key={i} className="py-3 flex items-center justify-between gap-4">
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <p className="font-medium text-sm">{q.fornecedor_nome}</p>
-                          {q.recomendado && (
-                            <CarboBadge variant="success" className="gap-1"><Star className="h-3 w-3" /> IA Recomendado</CarboBadge>
-                          )}
-                        </div>
-                        <div className="flex gap-3 text-xs text-muted-foreground mt-0.5">
-                          <span>Prazo: {q.prazo_entrega_dias}d</span>
-                          <span>{q.condicao_pagamento}</span>
-                        </div>
-                      </div>
-                      <p className="font-bold text-sm">{brl(q.preco)}</p>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </CarboCardContent>
-          </CarboCard>
-
-          {/* Análise IA */}
-          <CarboCard className="border-primary/20 bg-primary/5">
-            <CarboCardHeader>
-              <CarboCardTitle className="text-sm flex items-center gap-2"><Brain className="h-4 w-4 text-primary" /> Análise IA</CarboCardTitle>
-            </CarboCardHeader>
-            <CarboCardContent>
-              <p className="text-sm text-muted-foreground">Sem análise disponível.</p>
-            </CarboCardContent>
-          </CarboCard>
-
-          {/* Histórico de aprovações */}
-          <CarboCard>
-            <CarboCardHeader><CarboCardTitle className="text-sm">Histórico de Aprovações</CarboCardTitle></CarboCardHeader>
-            <CarboCardContent>
-              <p className="text-sm text-muted-foreground">Sem histórico.</p>
             </CarboCardContent>
           </CarboCard>
         </div>
