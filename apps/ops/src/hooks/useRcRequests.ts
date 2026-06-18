@@ -2,9 +2,10 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Requisições de Compra (rc_requests) — ler + criar + aprovar/rejeitar.
-//  rc_requests é 1 linha por item; uma requisição com vários itens vira N linhas.
-//  RLS: rc_requests aberto a autenticado (migration do Ops).
+// Compras — Requisições (purchase_requests), o pipeline oficial:
+//   purchase_requests → purchase_orders → recebimento → NF → contas a pagar.
+//   Uma requisição = 1 linha com `items` (JSONB). rc_number é gerado por trigger.
+//   RLS aberto a autenticado (migration do Ops).
 // ─────────────────────────────────────────────────────────────────────────────
 
 const db = supabase as unknown as {
@@ -14,14 +15,12 @@ const db = supabase as unknown as {
 
 export type RcStatus = "rascunho" | "aguardando_aprovacao" | "aprovada" | "rejeitada" | "cancelada";
 
-const toPageStatus = (raw: string): RcStatus => {
-  switch (raw) {
-    case "rascunho": return "rascunho";
-    case "aprovada": case "convertida_pc": return "aprovada";
-    case "rejeitada": return "rejeitada";
-    default: return "aguardando_aprovacao"; // em_cotacao / em_analise_ia / aguardando_aprovacao
-  }
+export type PurchaseType = "estoque" | "uso_direto" | "investimento";
+const PURCHASE_TYPE_LABELS: Record<PurchaseType, string> = {
+  estoque: "Estoque", uso_direto: "Uso Direto", investimento: "Investimento",
 };
+
+export interface RcItem { descricao: string; quantidade: number; unidade: string; valor_unitario: number; }
 
 export interface RcRow {
   id: string;
@@ -31,25 +30,31 @@ export interface RcRow {
   valor: number;
   status: RcStatus;
   data: string; // YYYY-MM-DD
+  items: RcItem[];
+  suggested_supplier: string | null;
+  has_oc: boolean;
 }
 
 export function useRcRequests() {
   return useQuery({
-    queryKey: ["ops", "rc-requests"],
+    queryKey: ["ops", "purchase-requests"],
     queryFn: async (): Promise<RcRow[]> => {
       const res = await db
-        .from("rc_requests")
-        .select("id, produto_nome, centro_custo, valor_estimado, status, created_at")
+        .from("purchase_requests")
+        .select("id, rc_number, cost_center, purchase_type, estimated_value, status, created_at, items, suggested_supplier, purchase_orders(id)")
         .order("created_at", { ascending: false });
       if (res.error) throw res.error;
       return (res.data ?? []).map((r: Record<string, unknown>) => ({
         id: r.id as string,
-        rc_number: "RC-" + String(r.id).slice(0, 8).toUpperCase(),
-        cost_center: (r.centro_custo as string) ?? "—",
-        tipo: (r.produto_nome as string) ?? "—",
-        valor: Number(r.valor_estimado) || 0,
-        status: toPageStatus((r.status as string) ?? "aguardando_aprovacao"),
+        rc_number: (r.rc_number as string) ?? "—",
+        cost_center: (r.cost_center as string) ?? "—",
+        tipo: PURCHASE_TYPE_LABELS[(r.purchase_type as PurchaseType)] ?? String(r.purchase_type ?? "—"),
+        valor: Number(r.estimated_value) || 0,
+        status: ((r.status as string) ?? "rascunho") as RcStatus,
         data: String(r.created_at ?? "").slice(0, 10),
+        items: Array.isArray(r.items) ? (r.items as RcItem[]) : [],
+        suggested_supplier: (r.suggested_supplier as string) ?? null,
+        has_oc: Array.isArray(r.purchase_orders) && r.purchase_orders.length > 0,
       }));
     },
   });
@@ -62,29 +67,42 @@ export interface RcItemInput {
   valor_unitario: number;
 }
 
+export interface CreateRcInput {
+  costCenter: string;
+  purchaseType: PurchaseType;
+  suggestedSupplier: string;
+  justificativa: string;
+  operationalImpact: string;
+  items: RcItemInput[];
+  status: "rascunho" | "aguardando_aprovacao";
+}
+
 export function useRcMutations() {
   const qc = useQueryClient();
-  const invalidate = () => qc.invalidateQueries({ queryKey: ["ops", "rc-requests"] });
+  const invalidate = () => {
+    qc.invalidateQueries({ queryKey: ["ops", "purchase-requests"] });
+    qc.invalidateQueries({ queryKey: ["ops", "purchase-orders"] });
+  };
 
-  // Cria 1 rc_requests por item preenchido.
   const create = useMutation({
-    mutationFn: async (p: { centroCusto: string; justificativa: string; items: RcItemInput[]; status: "rascunho" | "aguardando_aprovacao" }) => {
-      if (!p.centroCusto.trim()) throw new Error("Selecione o centro de custo.");
+    mutationFn: async (p: CreateRcInput) => {
+      if (!p.costCenter.trim()) throw new Error("Selecione o centro de custo.");
       if (!p.justificativa.trim()) throw new Error("Justificativa é obrigatória.");
       const items = p.items.filter((i) => i.descricao.trim() && i.quantidade > 0);
       if (items.length === 0) throw new Error("Adicione ao menos um item.");
       const { data: auth } = await db.auth.getUser();
-      const rows = items.map((i) => ({
-        solicitante_id: auth?.user?.id ?? null,
-        produto_nome: i.descricao.trim(),
-        quantidade: i.quantidade,
-        unidade: i.unidade || "un",
-        valor_estimado: (Number(i.quantidade) || 0) * (Number(i.valor_unitario) || 0),
-        justificativa: p.justificativa.trim(),
-        centro_custo: p.centroCusto,
+      const estimated = items.reduce((s, i) => s + (Number(i.quantidade) || 0) * (Number(i.valor_unitario) || 0), 0);
+      const res = await db.from("purchase_requests").insert({
+        requested_by: auth?.user?.id ?? null,
+        cost_center: p.costCenter,
+        purchase_type: p.purchaseType,
+        suggested_supplier: p.suggestedSupplier || null,
+        justification: p.justificativa.trim(),
+        operational_impact: p.operationalImpact.trim() || null,
+        items: items.map((i) => ({ descricao: i.descricao.trim(), quantidade: i.quantidade, unidade: i.unidade || "un", valor_unitario: Number(i.valor_unitario) || 0 })),
+        estimated_value: estimated,
         status: p.status,
-      }));
-      const res = await db.from("rc_requests").insert(rows);
+      });
       if (res.error) throw res.error;
     },
     onSuccess: invalidate,
@@ -92,7 +110,10 @@ export function useRcMutations() {
 
   const approve = useMutation({
     mutationFn: async (id: string) => {
-      const res = await db.from("rc_requests").update({ status: "aprovada", updated_at: new Date().toISOString() }).eq("id", id);
+      const { data: auth } = await db.auth.getUser();
+      const res = await db.from("purchase_requests")
+        .update({ status: "aprovada", approved_by: auth?.user?.id ?? null, approved_at: new Date().toISOString() })
+        .eq("id", id);
       if (res.error) throw res.error;
     },
     onSuccess: invalidate,
@@ -100,7 +121,9 @@ export function useRcMutations() {
 
   const reject = useMutation({
     mutationFn: async (id: string) => {
-      const res = await db.from("rc_requests").update({ status: "rejeitada", updated_at: new Date().toISOString() }).eq("id", id);
+      const res = await db.from("purchase_requests")
+        .update({ status: "rejeitada" })
+        .eq("id", id);
       if (res.error) throw res.error;
     },
     onSuccess: invalidate,
