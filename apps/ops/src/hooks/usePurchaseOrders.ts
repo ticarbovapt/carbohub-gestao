@@ -20,6 +20,8 @@ export const OC_STATUS_VARIANT: Record<OcStatus, "secondary" | "warning" | "succ
   gerada: "info", enviada_fornecedor: "warning", parcialmente_recebida: "warning", recebida: "success", cancelada: "destructive",
 };
 
+export interface OcItem { descricao: string; quantidade: number; unidade: string; valor_unitario: number; }
+
 export interface OcRow {
   id: string;
   oc_number: string;
@@ -27,6 +29,7 @@ export interface OcRow {
   itens_count: number;
   total_value: number;
   status: OcStatus;
+  items: OcItem[];
 }
 
 export function usePurchaseOrders() {
@@ -45,6 +48,7 @@ export function usePurchaseOrders() {
         itens_count: Array.isArray(r.items) ? r.items.length : 0,
         total_value: Number(r.total_value) || 0,
         status: ((r.status as string) ?? "gerada") as OcStatus,
+        items: Array.isArray(r.items) ? (r.items as OcItem[]) : [],
       }));
     },
   });
