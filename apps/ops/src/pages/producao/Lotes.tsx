@@ -8,15 +8,13 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { FlaskConical, Plus, RefreshCw, ShieldCheck, ShieldAlert, ShieldX, Pencil, Trash2 } from "lucide-react";
+import { FlaskConical, Plus, RefreshCw, ShieldCheck, ShieldAlert, ShieldX, Pencil, Trash2, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { LotFormDialog } from "@/components/producao/LotFormDialog";
 import { DeleteConfirmDialog } from "@/components/producao/DeleteConfirmDialog";
+import { useLots, useLotMutations, type LotRow, type LotStatus } from "@/hooks/useLots";
 
-// TODO: ligar em lots (Supabase)
-
-type LotStatus = "criado" | "recebido" | "em_quarentena" | "amostrado" | "aprovado" | "bloqueado" | "reprovado" | "encerrado";
 const LOT_STATUS_LABELS: Record<LotStatus, string> = {
   criado: "Criado", recebido: "Recebido", em_quarentena: "Em Quarentena", amostrado: "Amostrado",
   aprovado: "Aprovado", bloqueado: "Bloqueado", reprovado: "Reprovado", encerrado: "Encerrado",
@@ -26,18 +24,15 @@ const LOT_STATUS_COLORS: Record<LotStatus, string> = {
   aprovado: "bg-green-500", bloqueado: "bg-orange-500", reprovado: "bg-red-500", encerrado: "bg-slate-400",
 };
 
-interface Lot {
-  id: string; lot_code: string; product_name: string; available_volume_ml: number; initial_volume_ml: number;
-  status: LotStatus; collected_samples: number; expected_samples: number; supplier_name: string | null; received_at: string | null;
-}
-// TODO: ligar em lots (Supabase)
-const MOCK: Lot[] = [];
+type Lot = LotRow;
 
 const formatVolume = (ml: number) => (ml >= 1000 ? `${(ml / 1000).toLocaleString("pt-BR")} L` : `${ml} ml`);
 const volumePercent = (a: number, i: number) => (i > 0 ? Math.round((a / i) * 100) : 0);
 
 export default function Lotes() {
-  const canManage = true;
+  const canManage = true; // acesso (gestor vs membro) entra na fase de permissões
+  const { data: lots = [], isLoading, isFetching, refetch } = useLots();
+  const { remove } = useLotMutations();
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [createOpen, setCreateOpen] = useState(false);
@@ -45,19 +40,19 @@ export default function Lotes() {
   const [deleteLot, setDeleteLot] = useState<Lot | null>(null);
 
   const stats = useMemo(() => ({
-    total: MOCK.length,
-    quarentena: MOCK.filter((l) => l.status === "em_quarentena").length,
-    aprovados: MOCK.filter((l) => l.status === "aprovado").length,
-    bloqueados: MOCK.filter((l) => l.status === "bloqueado" || l.status === "reprovado").length,
-  }), []);
-  const filtered = useMemo(() => MOCK.filter((lot) => {
+    total: lots.length,
+    quarentena: lots.filter((l) => l.status === "em_quarentena").length,
+    aprovados: lots.filter((l) => l.status === "aprovado").length,
+    bloqueados: lots.filter((l) => l.status === "bloqueado" || l.status === "reprovado").length,
+  }), [lots]);
+  const filtered = useMemo(() => lots.filter((lot) => {
     if (statusFilter !== "all" && lot.status !== statusFilter) return false;
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
       if (!lot.lot_code.toLowerCase().includes(q) && !lot.product_name.toLowerCase().includes(q)) return false;
     }
     return true;
-  }), [searchQuery, statusFilter]);
+  }), [lots, searchQuery, statusFilter]);
 
   return (
     <div className="p-4 md:p-6">
@@ -68,7 +63,7 @@ export default function Lotes() {
           icon={FlaskConical}
           actions={
             <div className="flex items-center gap-3">
-              <CarboButton variant="outline" size="sm" onClick={() => toast("Atualizar (em breve)")}><RefreshCw className="h-4 w-4 mr-2" /> Atualizar</CarboButton>
+              <CarboButton variant="outline" size="sm" onClick={() => refetch()} disabled={isFetching}><RefreshCw className={cn("h-4 w-4 mr-2", isFetching && "animate-spin")} /> Atualizar</CarboButton>
               {canManage && <CarboButton size="sm" onClick={() => setCreateOpen(true)}><Plus className="h-4 w-4 mr-2" /> Novo Lote</CarboButton>}
             </div>
           }
@@ -92,8 +87,10 @@ export default function Lotes() {
           </Select>
         </div>
 
-        {filtered.length === 0 ? (
-          <CarboEmptyState title="Nenhum lote encontrado" description="Tente ajustar os filtros de busca." icon={FlaskConical} />
+        {isLoading ? (
+          <div className="flex items-center justify-center gap-2 py-16 text-muted-foreground"><Loader2 className="h-5 w-5 animate-spin" /> Carregando…</div>
+        ) : filtered.length === 0 ? (
+          <CarboEmptyState title="Nenhum lote encontrado" description={lots.length === 0 ? "Crie o primeiro em “Novo Lote”." : "Tente ajustar os filtros de busca."} icon={FlaskConical} />
         ) : (
           <div className="rounded-lg border bg-card overflow-x-auto">
             <Table>
@@ -148,10 +145,15 @@ export default function Lotes() {
           open={!!editLot}
           onOpenChange={(v) => { if (!v) setEditLot(null); }}
           mode="edit"
+          id={editLot.id}
           initial={{
+            product_id: editLot.product_id,
             initial_volume_ml: editLot.initial_volume_ml,
             expected_samples: editLot.expected_samples,
+            supplier_id: editLot.supplier_id ?? "",
             received_at: editLot.received_at ?? "",
+            expired_at: editLot.expired_at ?? "",
+            notes: editLot.notes ?? "",
           }}
         />
       )}
@@ -160,6 +162,10 @@ export default function Lotes() {
         onOpenChange={(v) => { if (!v) setDeleteLot(null); }}
         title="Excluir lote?"
         description={`Esta ação não pode ser desfeita. O lote ${deleteLot?.lot_code ?? ""} será excluído permanentemente.`}
+        onConfirm={deleteLot ? async () => {
+          try { await remove.mutateAsync(deleteLot.id); toast.success("Lote excluído."); setDeleteLot(null); }
+          catch (e) { toast.error(e instanceof Error ? e.message : "Não foi possível excluir o lote."); }
+        } : undefined}
       />
     </div>
   );
