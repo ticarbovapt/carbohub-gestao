@@ -18,8 +18,10 @@ import { NovaRequisicaoDialog } from "@/components/compras/NovaRequisicaoDialog"
 import { RCDetailsDialog, type RCLite } from "@/components/compras/RCDetailsDialog";
 import { RCAprovarDialog } from "@/components/compras/RCAprovarDialog";
 import { RCRejeitarDialog } from "@/components/compras/RCRejeitarDialog";
+import { RecebimentoDialog } from "@/components/compras/RecebimentoDialog";
 import { useRcRequests, useRcMutations } from "@/hooks/useRcRequests";
 import { usePurchaseOrders, useGenerateOc, OC_STATUS_LABELS, OC_STATUS_VARIANT } from "@/hooks/usePurchaseOrders";
+import { usePurchaseReceivings, RECV_STATUS_LABELS, RECV_STATUS_VARIANT } from "@/hooks/usePurchaseReceivings";
 import { useSuppliers } from "@/hooks/useSuppliers";
 
 // TODO: ligar em <tabela de compras> (Supabase).
@@ -37,8 +39,7 @@ const RC_STATUS_VARIANT: Record<RcStatus, "secondary" | "warning" | "success" | 
   rascunho: "secondary", aguardando_aprovacao: "warning", aprovada: "success", rejeitada: "destructive", cancelada: "secondary",
 };
 interface SimpleRow { id: string; col1: string; col2: string; col3: string; valor: number; status: string; statusVariant: "secondary" | "warning" | "success" | "destructive" | "info"; }
-// Recebimento/NF/Contas a pagar entram numa próxima fase.
-const RECEB: SimpleRow[] = [];
+// NF/Contas a pagar entram numa próxima fase.
 const NOTAS: SimpleRow[] = [];
 const PAGAR: SimpleRow[] = [];
 
@@ -89,11 +90,13 @@ export default function Compras() {
   const [aprovarRc, setAprovarRc] = useState<{ id: string; number: string } | null>(null);
   const [rejeitarRc, setRejeitarRc] = useState<{ id: string; number: string } | null>(null);
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [recebOpen, setRecebOpen] = useState(false);
 
   const { data: rcs = [], isLoading: rcLoading } = useRcRequests();
   const { approve, reject } = useRcMutations();
   const { data: orders = [] } = usePurchaseOrders();
   const generateOc = useGenerateOc();
+  const { data: receivings = [] } = usePurchaseReceivings();
   const { data: suppliers = [] } = useSuppliers();
 
   const filteredRcs = rcs.filter((rc) => statusFilter === "all" || rc.status === statusFilter);
@@ -102,6 +105,10 @@ export default function Compras() {
   const ocRows: SimpleRow[] = orders.map((o) => ({
     id: o.id, col1: o.oc_number, col2: o.supplier_name, col3: `${o.itens_count} ${o.itens_count === 1 ? "item" : "itens"}`,
     valor: o.total_value, status: OC_STATUS_LABELS[o.status], statusVariant: OC_STATUS_VARIANT[o.status],
+  }));
+  const recebRows: SimpleRow[] = receivings.map((r) => ({
+    id: r.id, col1: r.received_at ? dt(r.received_at) : "—", col2: r.oc_number, col3: r.supplier_name,
+    valor: 0, status: RECV_STATUS_LABELS[r.status], statusVariant: RECV_STATUS_VARIANT[r.status],
   }));
 
   const handleGerarOc = async (rc: { id: string; rc_number: string }) => {
@@ -206,7 +213,12 @@ export default function Compras() {
           </TabsContent>
 
           <TabsContent value="ordens" className="mt-4"><SimpleTable headers={["Nº OC", "Fornecedor", "Itens"]} rows={ocRows} /></TabsContent>
-          <TabsContent value="recebimento" className="mt-4"><SimpleTable headers={["Recebimento", "OC", "Fornecedor"]} rows={RECEB} /></TabsContent>
+          <TabsContent value="recebimento" className="mt-4">
+            <div className="flex justify-end mb-3">
+              <Button size="sm" onClick={() => setRecebOpen(true)} className="gap-1.5"><CheckCircle2 className="h-4 w-4" /> Conferir Recebimento</Button>
+            </div>
+            <SimpleTable headers={["Data", "OC", "Fornecedor"]} rows={recebRows} showValor={false} />
+          </TabsContent>
           <TabsContent value="notas" className="mt-4"><SimpleTable headers={["Nota Fiscal", "Fornecedor", "Emissão"]} rows={NOTAS} /></TabsContent>
           <TabsContent value="pagar" className="mt-4"><SimpleTable headers={["Fornecedor", "Documento", "Vencimento"]} rows={PAGAR} /></TabsContent>
           <TabsContent value="fornecedores" className="mt-4"><SimpleTable headers={["Fornecedor", "CNPJ", "Categoria"]} rows={fornRows} showValor={false} /></TabsContent>
@@ -216,7 +228,7 @@ export default function Compras() {
             </TabsContent>
           )}
         </Tabs>
-        <p className="text-xs text-muted-foreground text-center">Recebimento, notas fiscais e contas a pagar entram na próxima fase.</p>
+        <p className="text-xs text-muted-foreground text-center">Notas fiscais e contas a pagar entram na próxima fase.</p>
       </div>
 
       <NovaRequisicaoDialog open={novaOpen} onOpenChange={setNovaOpen} />
@@ -233,6 +245,7 @@ export default function Compras() {
         onOpenChange={(v) => !v && setRejeitarRc(null)}
         onConfirm={rejeitarRc ? async () => { await reject.mutateAsync(rejeitarRc.id); toast.success(`Requisição ${rejeitarRc.number} rejeitada.`); setRejeitarRc(null); } : undefined}
       />
+      <RecebimentoDialog open={recebOpen} onOpenChange={setRecebOpen} />
     </div>
   );
 }
