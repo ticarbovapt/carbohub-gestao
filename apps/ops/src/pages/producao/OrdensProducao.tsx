@@ -7,14 +7,14 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   Factory, Plus, LayoutGrid, List, Search, TrendingUp, Target, CheckCircle, XCircle,
-  Pencil, Trash2, ClipboardCheck,
+  Pencil, Trash2, ClipboardCheck, Loader2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { OPFormDialog } from "@/components/producao/OPFormDialog";
 import { ConfirmOPDialog } from "@/components/producao/ConfirmOPDialog";
 import { DeleteConfirmDialog } from "@/components/producao/DeleteConfirmDialog";
-
-// TODO: ligar em production_orders (Supabase)
+import { toast } from "sonner";
+import { useProductionOrders, useProductionOrderMutations, type OpRow } from "@/hooks/useProductionOrders";
 
 type OpStatus =
   | "rascunho" | "planejada" | "aguardando_separacao" | "separada" | "aguardando_liberacao"
@@ -51,14 +51,7 @@ const KANBAN_COLUMNS: { id: string; label: string; emoji: string; color: string;
   { id: "bloqueada", label: "Bloqueada", emoji: "🚫", color: "#ef4444", statuses: ["bloqueada", "cancelada"] },
 ];
 
-interface OP {
-  id: string; op_number: string; sku_code: string; sku_name: string;
-  planned_quantity: number; good_quantity: number | null; rejected_quantity: number | null;
-  priority: number; op_status: OpStatus; demand_source: string; need_date: string | null;
-}
-
-// TODO: ligar em production_orders (Supabase)
-const MOCK: OP[] = [];
+type OP = OpRow;
 
 function KpiCard({ icon: Icon, label, value, sub, color }: { icon: typeof TrendingUp; label: string; value: string; sub: string; color: string }) {
   return (
@@ -75,7 +68,9 @@ function KpiCard({ icon: Icon, label, value, sub, color }: { icon: typeof Trendi
 const dt = (s: string | null) => (s ? new Date(s + "T00:00:00").toLocaleDateString("pt-BR") : "—");
 
 export default function OrdensProducao() {
-  const canManage = true; // mock: gestor
+  const canManage = true; // acesso (gestor vs membro) entra na fase de permissões
+  const { data: orders = [], isLoading } = useProductionOrders();
+  const { remove } = useProductionOrderMutations();
   const [viewMode, setViewMode] = useState<"list" | "kanban">("list");
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -86,7 +81,10 @@ export default function OrdensProducao() {
   const [confirmOp, setConfirmOp] = useState<OP | null>(null);
   const [deleteOp, setDeleteOp] = useState<OP | null>(null);
 
-  const filtered = useMemo(() => MOCK.filter((o) => {
+  const confirmadas = orders.filter((o) => o.op_status === "confirmada" || o.op_status === "concluida").length;
+  const perdasTotais = orders.reduce((s, o) => s + (o.rejected_quantity ?? 0), 0);
+
+  const filtered = useMemo(() => orders.filter((o) => {
     if (statusFilter !== "all" && o.op_status !== statusFilter) return false;
     if (priorityFilter !== "all" && String(o.priority) !== priorityFilter) return false;
     if (searchQuery) {
@@ -94,7 +92,7 @@ export default function OrdensProducao() {
       if (!o.op_number.toLowerCase().includes(q) && !o.sku_code.toLowerCase().includes(q) && !o.sku_name.toLowerCase().includes(q)) return false;
     }
     return true;
-  }), [searchQuery, statusFilter, priorityFilter]);
+  }), [orders, searchQuery, statusFilter, priorityFilter]);
 
   return (
     <div className="p-4 md:p-6">
@@ -122,8 +120,8 @@ export default function OrdensProducao() {
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           <KpiCard icon={TrendingUp} label="Rendimento Médio" value="—" sub="Últimos 30 dias" color="text-green-500" />
           <KpiCard icon={Target} label="Aderência BOM" value="—" sub="Últimos 30 dias" color="text-yellow-500" />
-          <KpiCard icon={CheckCircle} label="OPs Confirmadas" value="0" sub="Últimos 30 dias" color="text-green-500" />
-          <KpiCard icon={XCircle} label="Perdas Totais" value="0" sub="Unidades rejeitadas" color="text-red-500" />
+          <KpiCard icon={CheckCircle} label="OPs Confirmadas" value={String(confirmadas)} sub="Confirmadas / concluídas" color="text-green-500" />
+          <KpiCard icon={XCircle} label="Perdas Totais" value={String(perdasTotais)} sub="Unidades rejeitadas" color="text-red-500" />
         </div>
 
         {/* Filtros */}
@@ -149,7 +147,9 @@ export default function OrdensProducao() {
         </div>
 
         {/* Kanban ou Lista */}
-        {viewMode === "kanban" ? (
+        {isLoading ? (
+          <div className="flex items-center justify-center gap-2 py-16 text-muted-foreground"><Loader2 className="h-5 w-5 animate-spin" /> Carregando…</div>
+        ) : viewMode === "kanban" ? (
           <div className="flex gap-3 overflow-x-auto pb-3">
             {KANBAN_COLUMNS.map((col) => {
               const items = filtered.filter((o) => col.statuses.includes(o.op_status));
@@ -243,7 +243,9 @@ export default function OrdensProducao() {
           open={!!editOp}
           onOpenChange={(v) => { if (!v) setEditOp(null); }}
           mode="edit"
+          id={editOp.id}
           initial={{
+            sku_id: editOp.sku_id ?? "",
             planned_quantity: editOp.planned_quantity,
             priority: String(editOp.priority),
             demand_source: editOp.demand_source,
@@ -254,13 +256,17 @@ export default function OrdensProducao() {
       <ConfirmOPDialog
         open={!!confirmOp}
         onOpenChange={(v) => { if (!v) setConfirmOp(null); }}
-        order={confirmOp ? { op_number: confirmOp.op_number, sku_code: confirmOp.sku_code, sku_name: confirmOp.sku_name, planned_quantity: confirmOp.planned_quantity } : null}
+        order={confirmOp ? { id: confirmOp.id, op_number: confirmOp.op_number, sku_code: confirmOp.sku_code, sku_name: confirmOp.sku_name, planned_quantity: confirmOp.planned_quantity } : null}
       />
       <DeleteConfirmDialog
         open={!!deleteOp}
         onOpenChange={(v) => { if (!v) setDeleteOp(null); }}
         title="Excluir OP?"
         description={`Esta ação não pode ser desfeita. A ordem de produção ${deleteOp?.op_number ?? ""} será excluída permanentemente.`}
+        onConfirm={deleteOp ? async () => {
+          try { await remove.mutateAsync(deleteOp.id); toast.success("Ordem de produção excluída."); setDeleteOp(null); }
+          catch (e) { toast.error(e instanceof Error ? e.message : "Não foi possível excluir a OP."); }
+        } : undefined}
       />
     </div>
   );
