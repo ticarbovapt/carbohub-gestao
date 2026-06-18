@@ -20,8 +20,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { DatePickerInput } from "@/components/ui/date-picker-input";
-import { Plane } from "lucide-react";
+import { Plane, Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import { useViagemMutations } from "@/hooks/useViagens";
 
 interface SolicitacaoViagemDialogProps {
   open: boolean;
@@ -38,6 +39,7 @@ const CENTROS_CUSTO = [
 ];
 
 export function SolicitacaoViagemDialog({ open, onOpenChange }: SolicitacaoViagemDialogProps) {
+  const { create } = useViagemMutations();
   const [solicitante, setSolicitante] = useState("");
   const [destino, setDestino] = useState("");
   const [ida, setIda] = useState("");
@@ -46,9 +48,20 @@ export function SolicitacaoViagemDialog({ open, onOpenChange }: SolicitacaoViage
   const [valor, setValor] = useState("");
   const [motivo, setMotivo] = useState("");
 
-  const handleSubmit = () => {
-    toast.info("Disponível na fase de lógica");
-    onOpenChange(false);
+  const reset = () => { setSolicitante(""); setDestino(""); setIda(""); setVolta(""); setCentroCusto(""); setValor(""); setMotivo(""); };
+
+  const handleSubmit = async () => {
+    try {
+      await create.mutateAsync({
+        solicitante, destino, objetivo: motivo, centroCusto,
+        dataIda: ida, dataVolta: volta, valorEstimado: Number(valor) || 0,
+      });
+      toast.success("Solicitação de viagem enviada.");
+      reset();
+      onOpenChange(false);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Não foi possível enviar a solicitação.");
+    }
   };
 
   return (
@@ -129,10 +142,12 @@ export function SolicitacaoViagemDialog({ open, onOpenChange }: SolicitacaoViage
         </div>
 
         <DialogFooter className="gap-2 sm:gap-0">
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={create.isPending}>
             Cancelar
           </Button>
-          <Button onClick={handleSubmit}>Enviar Solicitação</Button>
+          <Button onClick={handleSubmit} disabled={create.isPending}>
+            {create.isPending ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Enviando…</> : "Enviar Solicitação"}
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
