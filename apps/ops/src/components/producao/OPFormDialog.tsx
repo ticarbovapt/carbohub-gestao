@@ -8,18 +8,13 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DatePickerInput } from "@/components/ui/date-picker-input";
+import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import { useSkus } from "@/hooks/useSkus";
+import { useProductionOrderMutations } from "@/hooks/useProductionOrders";
 
 const PRIORITY_LABELS: Record<string, string> = { "1": "Urgente", "2": "Alta", "3": "Normal", "4": "Baixa", "5": "Planejado" };
 const DEMAND_SOURCE_LABELS: Record<string, string> = { venda: "Venda", recorrencia: "Recorrência", safety_stock: "Safety Stock", pcp_manual: "PCP Manual" };
-
-// TODO: ligar em sku (Supabase)
-const MOCK_SKUS: { id: string; code: string; name: string }[] = [];
-
-function currentPeriod(): string {
-  const now = new Date();
-  return `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}`;
-}
 
 export interface OPFormInitial {
   sku_id?: string;
@@ -34,10 +29,13 @@ interface OPFormDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   mode: "create" | "edit";
+  id?: string;
   initial?: OPFormInitial;
 }
 
-export function OPFormDialog({ open, onOpenChange, mode, initial }: OPFormDialogProps) {
+export function OPFormDialog({ open, onOpenChange, mode, id, initial }: OPFormDialogProps) {
+  const { data: skus = [] } = useSkus();
+  const { create, update } = useProductionOrderMutations();
   const [skuId, setSkuId] = useState(initial?.sku_id ?? "");
   const [plannedQty, setPlannedQty] = useState(initial?.planned_quantity != null ? String(initial.planned_quantity) : "");
   const [priority, setPriority] = useState(initial?.priority ?? "3");
@@ -45,14 +43,31 @@ export function OPFormDialog({ open, onOpenChange, mode, initial }: OPFormDialog
   const [needDate, setNeedDate] = useState(initial?.need_date ?? "");
   const [notes, setNotes] = useState(initial?.deviation_notes ?? "");
 
-  const selectedSku = MOCK_SKUS.find((s) => s.id === skuId);
-  const opPreview = selectedSku
-    ? `OP-${selectedSku.code.replace(/^SKU-/i, "")}-${currentPeriod()}-XXXX`
-    : null;
+  const activeSkus = skus.filter((s) => s.is_active);
+  const selectedSku = skus.find((s) => s.id === skuId);
+  const pending = create.isPending || update.isPending;
 
-  const handleSubmit = () => {
-    toast.info("Disponível na fase de lógica");
-    onOpenChange(false);
+  const handleSubmit = async () => {
+    try {
+      if (mode === "create") {
+        if (!selectedSku) throw new Error("Selecione o produto.");
+        await create.mutateAsync({
+          skuId, skuCode: selectedSku.code, plannedQuantity: Number(plannedQty),
+          priority: Number(priority), demandSource, needDate, notes,
+        });
+        toast.success("Ordem de Produção criada.");
+      } else {
+        if (!id) throw new Error("OP inválida.");
+        await update.mutateAsync({
+          id, plannedQuantity: plannedQty ? Number(plannedQty) : undefined,
+          priority: Number(priority), demandSource, needDate: needDate || null, notes,
+        });
+        toast.success("Ordem de Produção atualizada.");
+      }
+      onOpenChange(false);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Não foi possível salvar a OP.");
+    }
   };
 
   return (
@@ -68,30 +83,21 @@ export function OPFormDialog({ open, onOpenChange, mode, initial }: OPFormDialog
           {/* Produto */}
           <div className="space-y-2">
             <Label>Produto *</Label>
-            <Select value={skuId} onValueChange={setSkuId}>
+            <Select value={skuId} onValueChange={setSkuId} disabled={mode === "edit"}>
               <SelectTrigger><SelectValue placeholder="Selecione o produto" /></SelectTrigger>
               <SelectContent>
-                {MOCK_SKUS.map((s) => (
+                {activeSkus.length === 0 && <div className="px-2 py-1.5 text-sm text-muted-foreground">Nenhum SKU ativo</div>}
+                {activeSkus.map((s) => (
                   <SelectItem key={s.id} value={s.id}>{s.code} — {s.name}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </div>
 
-          {/* Preview do número de OP */}
-          {opPreview && (
-            <div className="space-y-1">
-              <Label className="text-muted-foreground text-xs uppercase tracking-wide">Número da OP (gerado)</Label>
-              <div className="rounded-md border border-border bg-muted/50 px-3 py-2 text-sm font-mono text-muted-foreground">
-                {opPreview}
-              </div>
-            </div>
-          )}
-
           {/* Quantidade Planejada */}
           <div className="space-y-2">
             <Label>Quantidade Planejada *</Label>
-            <Input type="number" value={plannedQty} onChange={(e) => setPlannedQty(e.target.value)} />
+            <Input type="number" min={1} value={plannedQty} onChange={(e) => setPlannedQty(e.target.value)} />
           </div>
 
           {/* Prioridade + Fonte de Demanda */}
@@ -134,8 +140,10 @@ export function OPFormDialog({ open, onOpenChange, mode, initial }: OPFormDialog
         </div>
 
         <DialogFooter>
-          <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
-          <Button type="button" onClick={handleSubmit}>{mode === "create" ? "Criar OP" : "Salvar"}</Button>
+          <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={pending}>Cancelar</Button>
+          <Button type="button" onClick={handleSubmit} disabled={pending}>
+            {pending ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Salvando…</> : (mode === "create" ? "Criar OP" : "Salvar")}
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

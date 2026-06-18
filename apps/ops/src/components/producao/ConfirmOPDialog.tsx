@@ -6,11 +6,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { ClipboardCheck, CheckCircle, XCircle, Package, AlertTriangle } from "lucide-react";
+import { ClipboardCheck, CheckCircle, XCircle, Package, AlertTriangle, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { useProductionOrderMutations } from "@/hooks/useProductionOrders";
 
 export interface ConfirmOPTarget {
+  id: string;
   op_number: string;
   sku_code: string;
   sku_name: string;
@@ -29,6 +31,7 @@ function YieldBadge({ pct }: { pct: number }) {
 }
 
 export function ConfirmOPDialog({ open, onOpenChange, order }: ConfirmOPDialogProps) {
+  const { confirm } = useProductionOrderMutations();
   const [goodQty, setGoodQty] = useState("");
   const [rejectedQty, setRejectedQty] = useState("0");
   const [rejectionReason, setRejectionReason] = useState("");
@@ -51,9 +54,16 @@ export function ConfirmOPDialog({ open, onOpenChange, order }: ConfirmOPDialogPr
   const rejected = Number(rejectedQty) || 0;
   const yieldPct = planned > 0 ? Math.min(100, Math.max(0, (good / planned) * 100)) : 0;
 
-  const handleSubmit = () => {
-    toast.info("Disponível na fase de lógica");
-    onOpenChange(false);
+  const handleSubmit = async () => {
+    if (!order) return;
+    const notes = [rejected > 0 && rejectionReason.trim() ? `Rejeição: ${rejectionReason.trim()}` : "", deviationNotes.trim()].filter(Boolean).join(" · ");
+    try {
+      await confirm.mutateAsync({ id: order.id, goodQuantity: good, rejectedQuantity: rejected, deviationNotes: notes });
+      toast.success("Produção confirmada.");
+      onOpenChange(false);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Não foi possível confirmar a produção.");
+    }
   };
 
   return (
@@ -117,18 +127,18 @@ export function ConfirmOPDialog({ open, onOpenChange, order }: ConfirmOPDialogPr
               placeholder="Notas sobre desvios no processo..." rows={2} />
           </div>
 
-          <div className="bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-800 rounded-lg p-3 flex items-start gap-2">
-            <AlertTriangle className="h-4 w-4 text-red-500 mt-0.5 flex-shrink-0" />
-            <p className="text-sm text-red-700 dark:text-red-400">
-              Esta ação é <strong>irreversível</strong>. Ao confirmar, o estoque será ajustado e o status da OP mudará para "Confirmada".
+          <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-lg p-3 flex items-start gap-2">
+            <AlertTriangle className="h-4 w-4 text-amber-500 mt-0.5 flex-shrink-0" />
+            <p className="text-sm text-amber-700 dark:text-amber-400">
+              Registra o resultado (aprovadas/rejeitadas) e move a OP para <strong>"Confirmada"</strong>. A baixa de insumos e a entrada do produto no estoque entram numa fase futura.
             </p>
           </div>
         </div>
 
         <DialogFooter>
-          <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
-          <Button type="button" onClick={handleSubmit} className="bg-purple-600 hover:bg-purple-700 text-white">
-            <ClipboardCheck className="h-4 w-4 mr-2" /> Confirmar Produção
+          <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={confirm.isPending}>Cancelar</Button>
+          <Button type="button" onClick={handleSubmit} disabled={confirm.isPending} className="bg-purple-600 hover:bg-purple-700 text-white">
+            {confirm.isPending ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Confirmando…</> : <><ClipboardCheck className="h-4 w-4 mr-2" /> Confirmar Produção</>}
           </Button>
         </DialogFooter>
       </DialogContent>
