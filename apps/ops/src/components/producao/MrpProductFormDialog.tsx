@@ -14,10 +14,15 @@ import { useMrpProductMutations } from "@/hooks/useMrpProductMutations";
 const CATEGORIES = ["Produto Final", "Insumo", "Embalagem", "Carbonatação", "Outro"];
 const UNITS = ["un", "L", "ml", "kg", "g", "cx"];
 
-// Gera o código a partir do nome: maiúsculas, sem acento, espaços → hífen.
+// Gera o código a partir do nome: maiúsculas, sem acento, cada palavra abreviada
+// em até 3 caracteres, unidas por hífen. Ex.: "Reagente base" → "REA-BAS".
 const toCode = (s: string) =>
   s.normalize("NFD").replace(/\p{M}/gu, "")
-    .toUpperCase().replace(/[^A-Z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+    .toUpperCase()
+    .split(/[^A-Z0-9]+/)
+    .filter(Boolean)
+    .map((w) => w.slice(0, 3))
+    .join("-");
 
 export interface MrpProductFormInitial {
   name?: string;
@@ -93,7 +98,7 @@ export function MrpProductFormDialog({ open, onOpenChange, mode, id, initial }: 
             </div>
             <div className="space-y-2">
               <Label>Código *</Label>
-              <Input placeholder="REAGENTE-BASE" value={code} onChange={(e) => onCodeChange(e.target.value)} />
+              <Input placeholder="REA-BAS" value={code} onChange={(e) => onCodeChange(e.target.value)} />
             </div>
           </div>
 
