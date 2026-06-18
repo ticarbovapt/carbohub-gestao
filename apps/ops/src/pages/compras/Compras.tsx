@@ -19,13 +19,14 @@ import { RCDetailsDialog, type RCLite } from "@/components/compras/RCDetailsDial
 import { RCAprovarDialog } from "@/components/compras/RCAprovarDialog";
 import { RCRejeitarDialog } from "@/components/compras/RCRejeitarDialog";
 import { RecebimentoDialog } from "@/components/compras/RecebimentoDialog";
+import { SupplierFormDialog } from "@/components/producao/SupplierFormDialog";
 import { useRcRequests, useRcMutations } from "@/hooks/useRcRequests";
 import { usePurchaseOrders, useGenerateOc, OC_STATUS_LABELS, OC_STATUS_VARIANT } from "@/hooks/usePurchaseOrders";
 import { usePurchaseReceivings, RECV_STATUS_LABELS, RECV_STATUS_VARIANT } from "@/hooks/usePurchaseReceivings";
 import { useSuppliers } from "@/hooks/useSuppliers";
 
-// TODO: ligar em <tabela de compras> (Supabase).
-// No Carbo Ops esta é a tela de COMPRAS (requisições aprovadas pelo financeiro).
+// Tela de COMPRAS: pipeline Requisição → OC → Recebimento (ligado a purchase_*).
+// Abas Notas Fiscais e Contas a Pagar dependem do financeiro (próxima fase).
 
 const brl = (v: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
 const dt = (s: string) => new Date(s + "T00:00:00").toLocaleDateString("pt-BR");
@@ -91,6 +92,7 @@ export default function Compras() {
   const [rejeitarRc, setRejeitarRc] = useState<{ id: string; number: string } | null>(null);
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [recebOpen, setRecebOpen] = useState(false);
+  const [fornecedorOpen, setFornecedorOpen] = useState(false);
 
   const { data: rcs = [], isLoading: rcLoading } = useRcRequests();
   const { approve, reject } = useRcMutations();
@@ -101,7 +103,9 @@ export default function Compras() {
 
   const filteredRcs = rcs.filter((rc) => statusFilter === "all" || rc.status === statusFilter);
   const rcPendentes = rcs.filter((rc) => rc.status === "aguardando_aprovacao").length;
-  const ocAbertas = orders.filter((o) => o.status !== "recebida" && o.status !== "cancelada").length;
+  const openOrders = orders.filter((o) => o.status !== "recebida" && o.status !== "cancelada");
+  const ocAbertas = openOrders.length;
+  const comprometido = openOrders.reduce((s, o) => s + (o.total_value || 0), 0);
   const ocRows: SimpleRow[] = orders.map((o) => ({
     id: o.id, col1: o.oc_number, col2: o.supplier_name, col3: `${o.itens_count} ${o.itens_count === 1 ? "item" : "itens"}`,
     valor: o.total_value, status: OC_STATUS_LABELS[o.status], statusVariant: OC_STATUS_VARIANT[o.status],
@@ -140,7 +144,7 @@ export default function Compras() {
           <KpiCard icon={Clock} label="RC Pendentes" value={String(rcPendentes)} color="text-warning" />
           <KpiCard icon={Package} label="OC Abertas" value={String(ocAbertas)} color="text-carbo-blue" />
           <KpiCard icon={AlertTriangle} label="Pgtos Atrasados" value="0" color="text-destructive" />
-          <KpiCard icon={BarChart3} label="Comprometido" value={brl(0)} color="text-carbo-green" />
+          <KpiCard icon={BarChart3} label="Comprometido (OCs)" value={brl(comprometido)} color="text-carbo-green" />
           <KpiCard icon={CreditCard} label="A Pagar" value={brl(0)} color="text-warning" />
         </div>
 
@@ -189,7 +193,7 @@ export default function Compras() {
                       <CarboTableCell className="text-sm text-muted-foreground">{dt(rc.data)}</CarboTableCell>
                       <CarboTableCell>
                         <div className="flex items-center gap-1">
-                          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setDetailRc({ rc_number: rc.rc_number, cost_center: rc.cost_center, tipo: rc.tipo, valor: rc.valor, statusLabel: RC_STATUS_LABELS[rc.status], statusVariant: RC_STATUS_VARIANT[rc.status] })}><Eye className="h-4 w-4" /></Button>
+                          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setDetailRc({ rc_number: rc.rc_number, cost_center: rc.cost_center, tipo: rc.tipo, valor: rc.valor, statusLabel: RC_STATUS_LABELS[rc.status], statusVariant: RC_STATUS_VARIANT[rc.status], items: rc.items, suggested_supplier: rc.suggested_supplier, data: rc.data })}><Eye className="h-4 w-4" /></Button>
                           {rc.status === "aguardando_aprovacao" && (
                             <>
                               <Button variant="ghost" size="icon" className="h-8 w-8 text-success" onClick={() => setAprovarRc({ id: rc.id, number: rc.rc_number })} title="Aprovar"><Check className="h-4 w-4" /></Button>
@@ -221,7 +225,12 @@ export default function Compras() {
           </TabsContent>
           <TabsContent value="notas" className="mt-4"><SimpleTable headers={["Nota Fiscal", "Fornecedor", "Emissão"]} rows={NOTAS} /></TabsContent>
           <TabsContent value="pagar" className="mt-4"><SimpleTable headers={["Fornecedor", "Documento", "Vencimento"]} rows={PAGAR} /></TabsContent>
-          <TabsContent value="fornecedores" className="mt-4"><SimpleTable headers={["Fornecedor", "CNPJ", "Categoria"]} rows={fornRows} showValor={false} /></TabsContent>
+          <TabsContent value="fornecedores" className="mt-4">
+            <div className="flex justify-end mb-3">
+              <Button size="sm" onClick={() => setFornecedorOpen(true)} className="gap-1.5"><Plus className="h-4 w-4" /> Novo Fornecedor</Button>
+            </div>
+            <SimpleTable headers={["Fornecedor", "CNPJ", "Categoria"]} rows={fornRows} showValor={false} />
+          </TabsContent>
           {canSeeDashboard && (
             <TabsContent value="dashboard" className="mt-4">
               <CarboCard><CarboCardContent className="py-12 text-center text-muted-foreground"><BarChart3 className="h-10 w-10 mx-auto mb-2 opacity-30" /><p>Dashboard de compras — gráficos entram na fase de lógica.</p></CarboCardContent></CarboCard>
@@ -246,6 +255,7 @@ export default function Compras() {
         onConfirm={rejeitarRc ? async () => { await reject.mutateAsync(rejeitarRc.id); toast.success(`Requisição ${rejeitarRc.number} rejeitada.`); setRejeitarRc(null); } : undefined}
       />
       <RecebimentoDialog open={recebOpen} onOpenChange={setRecebOpen} />
+      <SupplierFormDialog open={fornecedorOpen} onOpenChange={setFornecedorOpen} mode="create" />
     </div>
   );
 }
