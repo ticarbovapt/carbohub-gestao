@@ -1,46 +1,70 @@
 import { useMemo, useState } from "react";
-import { CarboPageHeader } from "@/components/ui/carbo-page-header";
+import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Bell, RefreshCw, AlertTriangle, Clock, CheckCircle2, Cog, Package, Wrench } from "lucide-react";
+import { Bell, RefreshCw, AlertTriangle, Clock, CheckCircle2, Package, Loader2, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { format } from "date-fns";
-import { ptBR } from "date-fns/locale";
-import { toast } from "sonner";
-import { ResolveAlertDialog } from "@/components/campo/ResolveAlertDialog";
 import { CarboEmptyState } from "@/components/ui/carbo-empty-state";
+import { useStock } from "@/hooks/useStock";
+import { HUBS } from "@/components/estoque/stockData";
 
-// TODO: ligar em <tabela de alertas> (Supabase) na fase de lógica.
+// ─────────────────────────────────────────────────────────────────────────────
+// Central de Alertas — derivada de dados reais do app (sem integração).
+//  Fonte atual: estoque abaixo do mínimo (warehouse_stock + política de mínimo).
+//  Alertas são vivos: somem sozinhos quando o saldo é reposto. Por isso a ação é
+//  "Ver no estoque" (leva ao hub) — não há "resolver" manual.
+// ─────────────────────────────────────────────────────────────────────────────
 
 type Prioridade = "critical" | "high" | "medium" | "low";
 const PRIORIDADE_CONFIG: Record<Prioridade, { label: string; color: string }> = {
   critical: { label: "Crítico", color: "#ef4444" }, high: { label: "Alta", color: "#f97316" },
   medium: { label: "Média", color: "#f59e0b" }, low: { label: "Baixa", color: "#22c55e" },
 };
-type AlertStatus = "open" | "in_progress" | "resolved";
+const PRIO_ORDER: Record<Prioridade, number> = { critical: 0, high: 1, medium: 2, low: 3 };
 
-interface Alert { id: string; titulo: string; descricao: string; tipo: "maquina" | "estoque" | "manutencao"; prioridade: Prioridade; status: AlertStatus; licenciado: string | null; created_at: string; }
-const ALERTS: Alert[] = [];
-
-const TIPO_ICON = { maquina: Cog, estoque: Package, manutencao: Wrench };
+interface StockAlert {
+  id: string; titulo: string; descricao: string; prioridade: Prioridade; hubSlug: string;
+}
 
 export default function Alertas() {
+  const navigate = useNavigate();
+  const { data: stock = [], isLoading, isFetching, refetch } = useStock();
   const [prioFilter, setPrioFilter] = useState<Prioridade | "all">("all");
-  const [resolveAlert, setResolveAlert] = useState<Alert | null>(null);
 
+  const alerts = useMemo<StockAlert[]>(() => {
+    const out: StockAlert[] = [];
+    for (const p of stock) {
+      for (const hub of HUBS) {
+        if (hub.id === "bling") continue; // Bling não controla mínimo
+        const qty = p.hubs[hub.id] ?? 0;
+        const min = p.mins[hub.id] ?? p.safety_stock_qty;
+        if (!min || min <= 0 || qty >= min) continue;
+        const prioridade: Prioridade = qty <= 0 ? "critical" : qty < min * 0.5 ? "high" : "medium";
+        out.push({
+          id: `${p.id}-${hub.id}`,
+          titulo: `${p.name} — ${hub.label}`,
+          descricao: `Saldo ${qty} ${p.stock_unit} • mínimo ${min} (${p.product_code})`,
+          prioridade,
+          hubSlug: hub.slug,
+        });
+      }
+    }
+    return out.sort((a, b) => PRIO_ORDER[a.prioridade] - PRIO_ORDER[b.prioridade]);
+  }, [stock]);
+
+  const filtered = alerts.filter((a) => prioFilter === "all" || a.prioridade === prioFilter);
   const stats = useMemo(() => ({
-    open: ALERTS.filter((a) => a.status === "open").length,
-    inProg: ALERTS.filter((a) => a.status === "in_progress").length,
-    critical: ALERTS.filter((a) => a.prioridade === "critical" && a.status !== "resolved").length,
-    resolvedToday: ALERTS.filter((a) => a.status === "resolved").length,
-  }), []);
-  const filtered = ALERTS.filter((a) => prioFilter === "all" || a.prioridade === prioFilter);
+    total: alerts.length,
+    critical: alerts.filter((a) => a.prioridade === "critical").length,
+    high: alerts.filter((a) => a.prioridade === "high").length,
+    medium: alerts.filter((a) => a.prioridade === "medium").length,
+  }), [alerts]);
 
   const KPIS = [
-    { label: "Abertos", value: stats.open, icon: AlertTriangle, color: "text-destructive" },
-    { label: "Em Andamento", value: stats.inProg, icon: Clock, color: "text-amber-500" },
-    { label: "Críticos", value: stats.critical, icon: AlertTriangle, color: "text-red-500" },
-    { label: "Resolvidos Hoje", value: stats.resolvedToday, icon: CheckCircle2, color: "text-green-600" },
+    { label: "Alertas", value: stats.total, icon: Bell, color: "text-foreground" },
+    { label: "Críticos (zerado)", value: stats.critical, icon: AlertTriangle, color: "text-red-500" },
+    { label: "Alta", value: stats.high, icon: AlertTriangle, color: "text-orange-500" },
+    { label: "Média", value: stats.medium, icon: Clock, color: "text-amber-500" },
   ];
 
   return (
@@ -49,9 +73,9 @@ export default function Alertas() {
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
             <h1 className="text-2xl font-bold text-foreground flex items-center gap-2"><Bell className="h-6 w-6" /> Central de Alertas</h1>
-            <p className="text-sm text-muted-foreground mt-0.5">Monitoramento da rede CarboOPS</p>
+            <p className="text-sm text-muted-foreground mt-0.5">Estoque abaixo do mínimo na rede</p>
           </div>
-          <Button variant="outline" size="sm" onClick={() => toast("Atualizar (em breve)")} className="gap-2"><RefreshCw className="h-4 w-4" /> Atualizar</Button>
+          <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isFetching} className="gap-2"><RefreshCw className={cn("h-4 w-4", isFetching && "animate-spin")} /> Atualizar</Button>
         </div>
 
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
@@ -71,49 +95,38 @@ export default function Alertas() {
               <SelectItem value="critical">Crítico</SelectItem>
               <SelectItem value="high">Alta</SelectItem>
               <SelectItem value="medium">Média</SelectItem>
-              <SelectItem value="low">Baixa</SelectItem>
             </SelectContent>
           </Select>
         </div>
 
+        {isLoading ? (
+          <div className="flex items-center justify-center gap-2 py-16 text-muted-foreground"><Loader2 className="h-5 w-5 animate-spin" /> Carregando…</div>
+        ) : (
         <div className="space-y-2">
           {filtered.map((a) => {
             const cfg = PRIORIDADE_CONFIG[a.prioridade];
-            const TipoIcon = TIPO_ICON[a.tipo];
             return (
-              <div key={a.id} className={cn("flex items-start gap-3 rounded-xl border bg-card p-3", a.prioridade === "critical" && "border-red-300 dark:border-red-800", a.status === "resolved" && "opacity-50")}>
-                <div className="h-9 w-9 rounded-lg flex items-center justify-center shrink-0" style={{ background: cfg.color + "20", color: cfg.color }}><TipoIcon className="h-4 w-4" /></div>
+              <div key={a.id} className={cn("flex items-start gap-3 rounded-xl border bg-card p-3", a.prioridade === "critical" && "border-red-300 dark:border-red-800")}>
+                <div className="h-9 w-9 rounded-lg flex items-center justify-center shrink-0" style={{ background: cfg.color + "20", color: cfg.color }}><Package className="h-4 w-4" /></div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
                     <p className="font-semibold text-sm text-foreground truncate">{a.titulo}</p>
                     <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full" style={{ background: cfg.color + "20", color: cfg.color }}><span className="h-1.5 w-1.5 rounded-full" style={{ background: cfg.color }} />{cfg.label}</span>
                   </div>
-                  <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">{a.descricao}</p>
-                  <div className="flex items-center gap-3 mt-1 text-[11px] text-muted-foreground">
-                    {a.licenciado && <span>{a.licenciado}</span>}
-                    <span>{format(new Date(a.created_at), "dd/MM/yyyy HH:mm", { locale: ptBR })}</span>
-                    <span className="capitalize">{a.tipo}</span>
-                  </div>
+                  <p className="text-xs text-muted-foreground mt-0.5">{a.descricao}</p>
                 </div>
-                {a.status !== "resolved" && (
-                  <Button variant="ghost" size="sm" className="h-8 text-xs shrink-0" onClick={() => setResolveAlert(a)}>Resolver</Button>
-                )}
+                <Button variant="ghost" size="sm" className="h-8 text-xs shrink-0 gap-1" onClick={() => navigate(`/estoque/${a.hubSlug}`)}>Ver no estoque <ChevronRight className="h-3.5 w-3.5" /></Button>
               </div>
             );
           })}
           {filtered.length === 0 && (
             <div className="rounded-xl border bg-card">
-              <CarboEmptyState icon={Bell} title="Nenhum alerta" description="Nenhum alerta registrado." />
+              <CarboEmptyState icon={CheckCircle2} title="Tudo certo" description="Nenhum item abaixo do mínimo." />
             </div>
           )}
         </div>
+        )}
       </div>
-
-      <ResolveAlertDialog
-        open={resolveAlert !== null}
-        onOpenChange={(o) => { if (!o) setResolveAlert(null); }}
-        titulo={resolveAlert?.titulo}
-      />
     </div>
   );
 }
