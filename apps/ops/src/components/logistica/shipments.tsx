@@ -20,9 +20,6 @@ export interface Shipment {
   carrier_name: string | null; tracking_code: string | null; status: ShipmentStatus; items: number;
 }
 
-// TODO: ligar em shipments (Supabase)
-export const MOCK_SHIPMENTS: Shipment[] = [];
-
 export function ShipmentsKanban({ shipments, onView }: { shipments: Shipment[]; onView?: (s: Shipment) => void }) {
   return (
     <div className="flex gap-3 overflow-x-auto pb-3">
