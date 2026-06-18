@@ -2,11 +2,14 @@ import { useState } from "react";
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
 import { CarboCard, CarboCardContent } from "@/components/ui/carbo-card";
 import { CarboBadge } from "@/components/ui/carbo-badge";
-import { UserCheck, CheckCircle2, Circle, ChevronRight } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { UserCheck, CheckCircle2, Circle, ChevronRight, Plus, Trash2, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 import { ChecklistDialog } from "@/components/campo/ChecklistDialog";
-
-// TODO: ligar em <tabela de checklists> (Supabase) na fase de lógica.
+import { ChecklistFormDialog } from "@/components/campo/ChecklistFormDialog";
+import { DeleteConfirmDialog } from "@/components/producao/DeleteConfirmDialog";
+import { useChecklists, useChecklistMutations, type Checklist } from "@/hooks/useChecklists";
 
 const DEPARTAMENTOS = [
   { key: "preparacao", label: "Preparação" },
@@ -15,19 +18,24 @@ const DEPARTAMENTOS = [
   { key: "pos_venda", label: "Pós-Venda" },
 ];
 
-interface Etapa { nome: string; concluida: boolean; }
-interface Checklist { id: string; nome: string; departamento: string; etapas: Etapa[]; }
-const CHECKLISTS: Checklist[] = [];
-
 export default function Checklists() {
+  const { data: checklists = [], isLoading } = useChecklists();
+  const { remove } = useChecklistMutations();
   const [dep, setDep] = useState("preparacao");
   const [openChecklist, setOpenChecklist] = useState<Checklist | null>(null);
-  const lists = CHECKLISTS.filter((c) => c.departamento === dep);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [deleteChecklist, setDeleteChecklist] = useState<Checklist | null>(null);
+  const lists = checklists.filter((c) => c.departamento === dep);
 
   return (
     <div className="p-4 md:p-6">
       <div className="space-y-5 max-w-[1200px] mx-auto">
-        <CarboPageHeader title="Checklists" description="Carbo Check — checklists operacionais por departamento" icon={UserCheck} />
+        <CarboPageHeader
+          title="Checklists"
+          description="Carbo Check — checklists operacionais por departamento"
+          icon={UserCheck}
+          actions={<Button onClick={() => setCreateOpen(true)} className="gap-2"><Plus className="h-4 w-4" /> Novo Checklist</Button>}
+        />
 
         {/* Seletor de departamento */}
         <div className="flex gap-1.5 flex-wrap">
@@ -36,17 +44,24 @@ export default function Checklists() {
           ))}
         </div>
 
+        {isLoading ? (
+          <div className="flex items-center justify-center gap-2 py-16 text-muted-foreground"><Loader2 className="h-5 w-5 animate-spin" /> Carregando…</div>
+        ) : (
         <div className="grid gap-4 sm:grid-cols-2">
           {lists.map((c) => {
             const done = c.etapas.filter((e) => e.concluida).length;
-            const pct = Math.round((done / c.etapas.length) * 100);
-            const completo = done === c.etapas.length;
+            const total = c.etapas.length;
+            const pct = total ? Math.round((done / total) * 100) : 0;
+            const completo = total > 0 && done === total;
             return (
               <CarboCard key={c.id}>
                 <CarboCardContent className="p-4">
-                  <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center justify-between mb-2 gap-2">
                     <h3 className="font-semibold text-sm">{c.nome}</h3>
-                    <CarboBadge variant={completo ? "success" : "warning"} size="sm">{done}/{c.etapas.length}</CarboBadge>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <CarboBadge variant={completo ? "success" : "warning"} size="sm">{done}/{total}</CarboBadge>
+                      <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => setDeleteChecklist(c)}><Trash2 className="h-3.5 w-3.5" /></Button>
+                    </div>
                   </div>
                   <div className="h-1.5 rounded-full bg-muted overflow-hidden mb-3">
                     <div className={cn("h-full rounded-full transition-all", completo ? "bg-success" : "bg-carbo-green")} style={{ width: `${pct}%` }} />
@@ -68,13 +83,24 @@ export default function Checklists() {
           })}
           {lists.length === 0 && <CarboCard><CarboCardContent className="py-12 text-center text-muted-foreground"><UserCheck className="h-10 w-10 mx-auto mb-2 opacity-30" /><p>Nenhum checklist neste departamento</p></CarboCardContent></CarboCard>}
         </div>
+        )}
       </div>
 
       <ChecklistDialog
         open={openChecklist !== null}
         onOpenChange={(o) => { if (!o) setOpenChecklist(null); }}
-        nome={openChecklist?.nome ?? ""}
-        etapas={openChecklist?.etapas ?? []}
+        checklist={openChecklist}
+      />
+      <ChecklistFormDialog open={createOpen} onOpenChange={setCreateOpen} defaultDepartamento={dep} />
+      <DeleteConfirmDialog
+        open={deleteChecklist !== null}
+        onOpenChange={(v) => { if (!v) setDeleteChecklist(null); }}
+        title="Excluir checklist?"
+        description={`O checklist "${deleteChecklist?.nome ?? ""}" será excluído permanentemente.`}
+        onConfirm={deleteChecklist ? async () => {
+          try { await remove.mutateAsync(deleteChecklist.id); toast.success("Checklist excluído."); setDeleteChecklist(null); }
+          catch (e) { toast.error(e instanceof Error ? e.message : "Não foi possível excluir."); }
+        } : undefined}
       />
     </div>
   );
