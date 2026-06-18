@@ -14,6 +14,11 @@ import { useMrpProductMutations } from "@/hooks/useMrpProductMutations";
 const CATEGORIES = ["Produto Final", "Insumo", "Embalagem", "Carbonatação", "Outro"];
 const UNITS = ["un", "L", "ml", "kg", "g", "cx"];
 
+// Gera o código a partir do nome: maiúsculas, sem acento, espaços → hífen.
+const toCode = (s: string) =>
+  s.normalize("NFD").replace(/\p{M}/gu, "")
+    .toUpperCase().replace(/[^A-Z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+
 export interface MrpProductFormInitial {
   name?: string;
   product_code?: string;
@@ -36,6 +41,17 @@ export function MrpProductFormDialog({ open, onOpenChange, mode, id, initial }: 
   const { create, update } = useMrpProductMutations();
   const [name, setName] = useState(initial?.name ?? "");
   const [code, setCode] = useState(initial?.product_code ?? "");
+  // No modo criar, o código segue o nome até o usuário editá-lo manualmente.
+  const [codeTouched, setCodeTouched] = useState(mode === "edit");
+
+  const onNameChange = (v: string) => {
+    setName(v);
+    if (!codeTouched) setCode(toCode(v));
+  };
+  const onCodeChange = (v: string) => {
+    setCodeTouched(true);
+    setCode(v);
+  };
   const [category, setCategory] = useState(initial?.category ?? "Insumo");
   const [unit, setUnit] = useState(initial?.stock_unit ?? "un");
   const [safetyStock, setSafetyStock] = useState(String(initial?.safety_stock_qty ?? 0));
@@ -73,11 +89,11 @@ export function MrpProductFormDialog({ open, onOpenChange, mode, id, initial }: 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label>Nome *</Label>
-              <Input placeholder="Reagente base" value={name} onChange={(e) => setName(e.target.value)} />
+              <Input placeholder="Reagente base" value={name} onChange={(e) => onNameChange(e.target.value)} />
             </div>
             <div className="space-y-2">
               <Label>Código *</Label>
-              <Input placeholder="REAG-BASE" value={code} onChange={(e) => setCode(e.target.value)} />
+              <Input placeholder="REAGENTE-BASE" value={code} onChange={(e) => onCodeChange(e.target.value)} />
             </div>
           </div>
 
