@@ -19,6 +19,7 @@ import { RCDetailsDialog, type RCLite } from "@/components/compras/RCDetailsDial
 import { RCAprovarDialog } from "@/components/compras/RCAprovarDialog";
 import { RCRejeitarDialog } from "@/components/compras/RCRejeitarDialog";
 import { useRcRequests, useRcMutations } from "@/hooks/useRcRequests";
+import { usePurchaseOrders, useGenerateOc, OC_STATUS_LABELS, OC_STATUS_VARIANT } from "@/hooks/usePurchaseOrders";
 import { useSuppliers } from "@/hooks/useSuppliers";
 
 // TODO: ligar em <tabela de compras> (Supabase).
@@ -36,8 +37,7 @@ const RC_STATUS_VARIANT: Record<RcStatus, "secondary" | "warning" | "success" | 
   rascunho: "secondary", aguardando_aprovacao: "warning", aprovada: "success", rejeitada: "destructive", cancelada: "secondary",
 };
 interface SimpleRow { id: string; col1: string; col2: string; col3: string; valor: number; status: string; statusVariant: "secondary" | "warning" | "success" | "destructive" | "info"; }
-// Abas downstream (OC/Recebimento/NF/Contas a pagar) entram numa próxima fase.
-const OCS: SimpleRow[] = [];
+// Recebimento/NF/Contas a pagar entram numa próxima fase.
 const RECEB: SimpleRow[] = [];
 const NOTAS: SimpleRow[] = [];
 const PAGAR: SimpleRow[] = [];
@@ -92,10 +92,27 @@ export default function Compras() {
 
   const { data: rcs = [], isLoading: rcLoading } = useRcRequests();
   const { approve, reject } = useRcMutations();
+  const { data: orders = [] } = usePurchaseOrders();
+  const generateOc = useGenerateOc();
   const { data: suppliers = [] } = useSuppliers();
 
   const filteredRcs = rcs.filter((rc) => statusFilter === "all" || rc.status === statusFilter);
   const rcPendentes = rcs.filter((rc) => rc.status === "aguardando_aprovacao").length;
+  const ocAbertas = orders.filter((o) => o.status !== "recebida" && o.status !== "cancelada").length;
+  const ocRows: SimpleRow[] = orders.map((o) => ({
+    id: o.id, col1: o.oc_number, col2: o.supplier_name, col3: `${o.itens_count} ${o.itens_count === 1 ? "item" : "itens"}`,
+    valor: o.total_value, status: OC_STATUS_LABELS[o.status], statusVariant: OC_STATUS_VARIANT[o.status],
+  }));
+
+  const handleGerarOc = async (rc: { id: string; rc_number: string }) => {
+    try {
+      await generateOc.mutateAsync(rc.id);
+      toast.success(`OC gerada a partir da ${rc.rc_number}.`);
+      setActiveTab("ordens");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Não foi possível gerar a OC.");
+    }
+  };
   const fornRows: SimpleRow[] = suppliers.map((s) => ({
     id: s.id, col1: s.legal_name || "—", col2: s.cnpj, col3: s.category || "—", valor: 0,
     status: s.status === "active" ? "Ativo" : "Inativo", statusVariant: s.status === "active" ? "success" : "secondary",
@@ -114,7 +131,7 @@ export default function Compras() {
         {/* KPIs */}
         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
           <KpiCard icon={Clock} label="RC Pendentes" value={String(rcPendentes)} color="text-warning" />
-          <KpiCard icon={Package} label="OC Abertas" value="0" color="text-carbo-blue" />
+          <KpiCard icon={Package} label="OC Abertas" value={String(ocAbertas)} color="text-carbo-blue" />
           <KpiCard icon={AlertTriangle} label="Pgtos Atrasados" value="0" color="text-destructive" />
           <KpiCard icon={BarChart3} label="Comprometido" value={brl(0)} color="text-carbo-green" />
           <KpiCard icon={CreditCard} label="A Pagar" value={brl(0)} color="text-warning" />
@@ -172,6 +189,12 @@ export default function Compras() {
                               <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => setRejeitarRc({ id: rc.id, number: rc.rc_number })} title="Rejeitar"><X className="h-4 w-4" /></Button>
                             </>
                           )}
+                          {rc.status === "aprovada" && !rc.has_oc && (
+                            <Button variant="outline" size="sm" className="h-8 gap-1" disabled={generateOc.isPending} onClick={() => handleGerarOc(rc)} title="Gerar Ordem de Compra"><Package className="h-3.5 w-3.5" /> Gerar OC</Button>
+                          )}
+                          {rc.status === "aprovada" && rc.has_oc && (
+                            <CarboBadge variant="success" dot>OC gerada</CarboBadge>
+                          )}
                         </div>
                       </CarboTableCell>
                     </CarboTableRow>
@@ -182,7 +205,7 @@ export default function Compras() {
             )}
           </TabsContent>
 
-          <TabsContent value="ordens" className="mt-4"><SimpleTable headers={["Nº OC", "Fornecedor", "Itens"]} rows={OCS} /></TabsContent>
+          <TabsContent value="ordens" className="mt-4"><SimpleTable headers={["Nº OC", "Fornecedor", "Itens"]} rows={ocRows} /></TabsContent>
           <TabsContent value="recebimento" className="mt-4"><SimpleTable headers={["Recebimento", "OC", "Fornecedor"]} rows={RECEB} /></TabsContent>
           <TabsContent value="notas" className="mt-4"><SimpleTable headers={["Nota Fiscal", "Fornecedor", "Emissão"]} rows={NOTAS} /></TabsContent>
           <TabsContent value="pagar" className="mt-4"><SimpleTable headers={["Fornecedor", "Documento", "Vencimento"]} rows={PAGAR} /></TabsContent>
@@ -193,7 +216,7 @@ export default function Compras() {
             </TabsContent>
           )}
         </Tabs>
-        <p className="text-xs text-muted-foreground text-center">OC, recebimento, notas fiscais e contas a pagar entram na próxima fase.</p>
+        <p className="text-xs text-muted-foreground text-center">Recebimento, notas fiscais e contas a pagar entram na próxima fase.</p>
       </div>
 
       <NovaRequisicaoDialog open={novaOpen} onOpenChange={setNovaOpen} />

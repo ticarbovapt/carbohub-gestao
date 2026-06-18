@@ -8,15 +8,14 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { useRcMutations } from "@/hooks/useRcRequests";
+import { useRcMutations, type PurchaseType } from "@/hooks/useRcRequests";
+import { useSuppliers } from "@/hooks/useSuppliers";
 
 const COST_CENTERS = [
   "Operações", "Manutenção", "Logística", "Administrativo", "Comercial", "TI",
   "Marketing", "Qualidade", "Financeiro", "RH", "Jurídico", "P&D", "Compras", "Produção",
 ];
 const UNITS_OF_MEASURE = ["un", "kg", "g", "L", "mL", "m", "cm", "m²", "m³", "pç", "cx", "pct", "par", "h", "km"];
-// TODO: ligar em <tabela de compras> (Supabase).
-const FORNECEDORES: string[] = [];
 
 interface ItemRow { id: number; descricao: string; quantidade: number; unidade: string; valor_unitario: number; }
 let nextId = 1;
@@ -25,9 +24,13 @@ const brl = (v: number) => new Intl.NumberFormat("pt-BR", { style: "currency", c
 
 export function NovaRequisicaoDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v: boolean) => void }) {
   const { create } = useRcMutations();
+  const { data: suppliers = [] } = useSuppliers();
   const [items, setItems] = useState<ItemRow[]>([newRow()]);
   const [costCenter, setCostCenter] = useState("");
+  const [purchaseType, setPurchaseType] = useState<PurchaseType>("uso_direto");
+  const [suggestedSupplier, setSuggestedSupplier] = useState("");
   const [justificativa, setJustificativa] = useState("");
+  const [operationalImpact, setOperationalImpact] = useState("");
 
   const estimated = items.reduce((s, i) => s + i.quantidade * i.valor_unitario, 0);
   const addItem = () => setItems((r) => [...r, newRow()]);
@@ -35,12 +38,15 @@ export function NovaRequisicaoDialog({ open, onOpenChange }: { open: boolean; on
   const updateItem = (id: number, field: keyof ItemRow, value: string | number) =>
     setItems((r) => r.map((x) => (x.id === id ? { ...x, [field]: value } : x)));
 
-  const reset = () => { setItems([newRow()]); setCostCenter(""); setJustificativa(""); };
+  const reset = () => {
+    setItems([newRow()]); setCostCenter(""); setPurchaseType("uso_direto");
+    setSuggestedSupplier(""); setJustificativa(""); setOperationalImpact("");
+  };
   const close = (v: boolean) => { if (!v) reset(); onOpenChange(v); };
 
   const submit = async (status: "rascunho" | "aguardando_aprovacao") => {
     try {
-      await create.mutateAsync({ centroCusto: costCenter, justificativa, items, status });
+      await create.mutateAsync({ centroCusto: costCenter, purchaseType, suggestedSupplier, justificativa, operationalImpact, items, status });
       toast.success(status === "rascunho" ? "Rascunho salvo." : "Requisição enviada para aprovação.");
       reset();
       onOpenChange(false);
@@ -69,7 +75,7 @@ export function NovaRequisicaoDialog({ open, onOpenChange }: { open: boolean; on
             </div>
             <div className="grid gap-1.5">
               <Label>Tipo de Compra</Label>
-              <Select defaultValue="uso_direto">
+              <Select value={purchaseType} onValueChange={(v) => setPurchaseType(v as PurchaseType)}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="estoque">Estoque</SelectItem>
@@ -80,10 +86,11 @@ export function NovaRequisicaoDialog({ open, onOpenChange }: { open: boolean; on
             </div>
             <div className="grid gap-1.5">
               <Label>Fornecedor Sugerido</Label>
-              <Select defaultValue="">
+              <Select value={suggestedSupplier} onValueChange={setSuggestedSupplier}>
                 <SelectTrigger><SelectValue placeholder="Selecione o fornecedor..." /></SelectTrigger>
                 <SelectContent>
-                  {FORNECEDORES.map((f) => <SelectItem key={f} value={f}>{f}</SelectItem>)}
+                  {suppliers.length === 0 && <div className="px-2 py-1.5 text-sm text-muted-foreground">Nenhum fornecedor cadastrado</div>}
+                  {suppliers.map((f) => <SelectItem key={f.id} value={f.legal_name}>{f.legal_name}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
@@ -96,7 +103,7 @@ export function NovaRequisicaoDialog({ open, onOpenChange }: { open: boolean; on
 
           <div className="grid gap-1.5">
             <Label>Impacto Operacional</Label>
-            <Textarea placeholder="Descreva o impacto se não aprovado..." />
+            <Textarea placeholder="Descreva o impacto se não aprovado..." value={operationalImpact} onChange={(e) => setOperationalImpact(e.target.value)} />
           </div>
 
           <div>
