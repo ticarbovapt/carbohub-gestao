@@ -5,22 +5,27 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import { Truck, Calculator, BarChart3 } from "lucide-react";
-import { MOCK_SHIPMENTS, ShipmentsKanban, LogisticsKpis, type Shipment } from "@/components/logistica/shipments";
+import { Truck, Calculator, BarChart3, Plus, Loader2 } from "lucide-react";
+import { ShipmentsKanban, LogisticsKpis, type Shipment } from "@/components/logistica/shipments";
 import { FreightCalculatorDialog } from "@/components/logistica/FreightCalculatorDialog";
 import { ShipmentDetailsDialog } from "@/components/logistica/ShipmentDetailsDialog";
-
-// TODO: ligar em shipments (Supabase)
+import { NovaRemessaDialog } from "@/components/logistica/NovaRemessaDialog";
+import { useShipments } from "@/hooks/useShipments";
 
 export default function Logistica() {
+  const { data: shipments = [], isLoading } = useShipments();
   const [cep, setCep] = useState("");
   const [freteOpen, setFreteOpen] = useState(false);
+  const [novaOpen, setNovaOpen] = useState(false);
   const [shipment, setShipment] = useState<Shipment | null>(null);
 
   return (
     <div className="p-4 md:p-6">
       <div className="space-y-6 max-w-[1500px] mx-auto">
-        <CarboPageHeader title="Controle Logístico" description="Rastreie separação, envio e entrega vinculados às Ordens de Produção" icon={Truck} />
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <CarboPageHeader title="Controle Logístico" description="Rastreie separação, envio e entrega das remessas" icon={Truck} />
+          <Button className="gap-2 shrink-0" onClick={() => setNovaOpen(true)}><Plus className="h-4 w-4" /> Nova Remessa</Button>
+        </div>
 
         <Tabs defaultValue="operacional" className="w-full">
           <TabsList>
@@ -31,11 +36,11 @@ export default function Logistica() {
           </TabsList>
 
           <TabsContent value="operacional" className="space-y-4 mt-4">
-            <ShipmentsKanban shipments={MOCK_SHIPMENTS} onView={setShipment} />
+            {isLoading ? <div className="flex items-center justify-center gap-2 py-16 text-muted-foreground"><Loader2 className="h-5 w-5 animate-spin" /> Carregando…</div> : <ShipmentsKanban shipments={shipments} onView={setShipment} />}
           </TabsContent>
 
           <TabsContent value="gestao" className="space-y-4 mt-4">
-            <LogisticsKpis shipments={MOCK_SHIPMENTS} />
+            <LogisticsKpis shipments={shipments} />
           </TabsContent>
 
           <TabsContent value="frete" className="space-y-6 mt-4">
@@ -69,9 +74,10 @@ export default function Logistica() {
             <CarboCard><CarboCardContent className="py-12 text-center text-muted-foreground"><BarChart3 className="h-10 w-10 mx-auto mb-2 opacity-30" /><p>Visão estratégica de logística (custo por rota, performance de transportadoras) — entra na fase de lógica.</p></CarboCardContent></CarboCard>
           </TabsContent>
         </Tabs>
-        <p className="text-xs text-muted-foreground text-center">Conexão com dados reais entra na fase de lógica. Rastreio, cotação de frete e estratégico entram na fase de lógica.</p>
+        <p className="text-xs text-muted-foreground text-center">Cotação de frete (transportadoras) e visão estratégica dependem de integração — entram numa fase futura.</p>
       </div>
 
+      <NovaRemessaDialog open={novaOpen} onOpenChange={setNovaOpen} />
       <FreightCalculatorDialog open={freteOpen} onOpenChange={setFreteOpen} />
       <ShipmentDetailsDialog
         shipment={shipment}
