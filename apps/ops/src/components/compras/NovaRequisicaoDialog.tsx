@@ -46,7 +46,7 @@ export function NovaRequisicaoDialog({ open, onOpenChange }: { open: boolean; on
 
   const submit = async (status: "rascunho" | "aguardando_aprovacao") => {
     try {
-      await create.mutateAsync({ centroCusto: costCenter, purchaseType, suggestedSupplier, justificativa, operationalImpact, items, status });
+      await create.mutateAsync({ costCenter, purchaseType, suggestedSupplier, justificativa, operationalImpact, items, status });
       toast.success(status === "rascunho" ? "Rascunho salvo." : "Requisição enviada para aprovação.");
       reset();
       onOpenChange(false);
