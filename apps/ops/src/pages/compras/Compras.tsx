@@ -143,9 +143,9 @@ export default function Compras() {
         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
           <KpiCard icon={Clock} label="RC Pendentes" value={String(rcPendentes)} color="text-warning" />
           <KpiCard icon={Package} label="OC Abertas" value={String(ocAbertas)} color="text-carbo-blue" />
-          <KpiCard icon={AlertTriangle} label="Pgtos Atrasados" value="0" color="text-destructive" />
+          <KpiCard icon={AlertTriangle} label="Pgtos Atrasados" value="—" color="text-muted-foreground" />
           <KpiCard icon={BarChart3} label="Comprometido (OCs)" value={brl(comprometido)} color="text-carbo-green" />
-          <KpiCard icon={CreditCard} label="A Pagar" value={brl(0)} color="text-warning" />
+          <KpiCard icon={CreditCard} label="A Pagar" value="—" color="text-muted-foreground" />
         </div>
 
         {/* Tabs */}

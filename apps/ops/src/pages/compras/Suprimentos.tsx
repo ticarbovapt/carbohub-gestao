@@ -4,15 +4,13 @@ import { CarboCard, CarboCardContent } from "@/components/ui/carbo-card";
 import { CarboBadge } from "@/components/ui/carbo-badge";
 import { CarboEmptyState } from "@/components/ui/carbo-empty-state";
 import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 import {
-  Package, Lightbulb, MapPin, Users, Cloud, Send, AlertCircle, ArrowLeftRight, Settings2,
+  Package, MapPin, Users, Cloud, Send, AlertCircle, ArrowLeftRight, Settings2,
   ArrowDownToLine, ArrowUpFromLine, Boxes, Layers, AlertTriangle, Activity, Info, Link2, Truck,
   CheckCircle, XCircle, FileText, Loader2, Search,
 } from "lucide-react";
@@ -45,7 +43,6 @@ const SKU_MAP: { sku: string; produto: string }[] = [];
 
 export default function Suprimentos() {
   const [hub, setHub] = useState<Hub>("rn");
-  const [planningMode, setPlanningMode] = useState(false);
   const [activeTab, setActiveTab] = useState("estoque");
   const [periodo, setPeriodo] = useState("7d");
   const [envioOpen, setEnvioOpen] = useState(false);
@@ -146,11 +143,6 @@ export default function Suprimentos() {
         {/* Header */}
         <div className="flex items-start justify-between gap-4 flex-wrap">
           <CarboPageHeader title="Suprimentos" description="Estoque, Movimentações e Recebimento" icon={Package} />
-          <div className="flex items-center gap-3 shrink-0 pt-1">
-            <Lightbulb className={cn("h-4 w-4 transition-colors", planningMode ? "text-warning" : "text-muted-foreground")} />
-            <Label htmlFor="planning-mode" className="text-xs font-medium cursor-pointer select-none">Modo Planejamento</Label>
-            <Switch id="planning-mode" checked={planningMode} onCheckedChange={setPlanningMode} />
-          </div>
         </div>
 
         {/* Hub selector */}

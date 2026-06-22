@@ -412,7 +412,7 @@ export default function Metas() {
       )}
 
       <p className="text-xs text-muted-foreground text-center pt-1">
-        Tela em port visual — dados de exemplo. Metas reais e configuração entram na fase de lógica.
+        Espelho de visualização — metas e realizado dos vendedores (dados reais).
       </p>
     </div>
   );
