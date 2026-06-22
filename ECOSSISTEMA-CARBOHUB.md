@@ -26,6 +26,12 @@
 
 > ℹ️ Veja sempre o `CLAUDE.md` deste repo — ele tem as regras anti-confusão obrigatórias.
 
+> **🚫 Não importe lógica do `carbohub-controle` (legado).** Dos apps novos só foram
+> aproveitadas as **telas (UI)** do controle; a lógica de lá estava quebrada/cheia de
+> gambiarras (motivo da migração). Toda lógica nos `apps/` é **escrita do zero** — quando
+> parecer semelhante, é por convergência da proposta, não cópia. Ao criar/ajustar features,
+> **não traga hooks/queries/padrões legados** do controle.
+
 ### Regras de ouro (do CLAUDE.md)
 1. **Todo pedido nomeia o alvo:** "no CRM"→`apps/crm`; "no controle/atual"→raiz (`src/`).
    Na dúvida, **pergunte**.
@@ -89,6 +95,13 @@
   **CRM**, **OPS** (produção/financeiro/logística) e **Admin**.
 - Banco: mantém-se **1 Supabase** agora; separação por sistema é faseada (ver
   `carbohub-gestao/docs/ARQUITETURA-SEPARACAO.md`).
+- **⚠️ Do `controle` herdamos SÓ as TELAS (UI) — NUNCA a lógica.** A lógica do monólito
+  estava quebrada e cheia de gambiarras; foi exatamente por isso que ele foi aposentado.
+  Os apps/portais novos **reescrevem toda a lógica do zero**. Quando uma lógica parece
+  semelhante, é por **convergência da proposta**, não por cópia. **Nunca puxe código,
+  lógica, hooks, queries ou padrões legados de `carbohub-controle` para os sistemas novos** —
+  o objetivo de sair de lá foi justamente abandonar essas gambiarras. Use o `controle`
+  apenas como referência **visual** de tela quando útil.
 
 ### Costuras de integração (onde os sistemas se tocam)
 - **`profiles.allowed_interfaces`** (array) → quais apps aparecem no Hub e na topbar interna.
