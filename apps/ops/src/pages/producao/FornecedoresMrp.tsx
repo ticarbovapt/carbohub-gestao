@@ -32,7 +32,7 @@ export default function FornecedoresMrp() {
       <div className="space-y-6 max-w-[1500px] mx-auto">
         <CarboPageHeader
           title="Fornecedores (MRP)"
-          description="Cadastro mestre de fornecedores — consulta automática por CNPJ"
+          description="Cadastro mestre de fornecedores"
           icon={Building2}
           actions={canEdit ? <CarboButton onClick={() => setCreateOpen(true)}><Plus className="h-4 w-4 mr-1" /> Novo Fornecedor</CarboButton> : undefined}
         />
