@@ -7,7 +7,7 @@
 //   carbo_crm         → Carbo Sales
 //   carbo_ops_app     → Carbo Ops (em breve)
 //   portal_licenciado → Carbo Licenciados
-//   portal_pdv        → Carbo Loja
+//   portal_pdv        → Portal de Vendas (ex-"Carbo Loja")
 //
 // IMPORTANTE: esta lista espelha 1:1 os apps do Hub — assim dá pra liberar
 // qualquer sistema, antecipando (mesmo os "em breve"). Carbo Admin NÃO entra
@@ -26,7 +26,7 @@ export const SYSTEMS: SystemOption[] = [
   { iface: "carbo_crm",         label: "Carbo Sales",       hint: "Comercial · funis, leads e vendas" },
   { iface: "carbo_ops_app",     label: "Carbo Ops",         hint: "Operação, logística e estoque", comingSoon: true },
   { iface: "portal_licenciado", label: "Carbo Licenciados", hint: "Portal do licenciado" },
-  { iface: "portal_pdv",        label: "Carbo Loja",        hint: "Portal das lojas (PDV)" },
+  { iface: "portal_pdv",        label: "Portal de Vendas",  hint: "Portal de Vendas (lojas/PDV)" },
 ];
 
 export const DEFAULT_INTERFACES = ["carbo_ops"];
@@ -39,7 +39,7 @@ export const SYSTEM_BRAND: Record<string, SystemBrand> = {
   carbo_crm:         { short: "Sales",       chip: "bg-emerald-500/10 text-emerald-600 ring-1 ring-inset ring-emerald-500/20", dot: "bg-emerald-500" },
   carbo_ops_app:     { short: "Ops",         chip: "bg-blue-500/10 text-blue-600 ring-1 ring-inset ring-blue-500/20 border border-dashed border-blue-500/30", dot: "bg-blue-500" },
   portal_licenciado: { short: "Licenciados", chip: "bg-violet-500/10 text-violet-600 ring-1 ring-inset ring-violet-500/20", dot: "bg-violet-500" },
-  portal_pdv:        { short: "Loja",        chip: "bg-amber-500/10 text-amber-600 ring-1 ring-inset ring-amber-500/20",     dot: "bg-amber-500" },
+  portal_pdv:        { short: "Vendas",      chip: "bg-amber-500/10 text-amber-600 ring-1 ring-inset ring-amber-500/20",     dot: "bg-amber-500" },
 };
 export const brandOf = (iface: string): SystemBrand =>
   SYSTEM_BRAND[iface] ?? { short: iface, chip: "bg-muted text-muted-foreground ring-1 ring-inset ring-border", dot: "bg-muted-foreground" };
