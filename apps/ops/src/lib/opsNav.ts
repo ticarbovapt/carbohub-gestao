@@ -1,7 +1,7 @@
 import {
   LayoutDashboard, Factory, BarChart3, Package, Boxes, Layers, Building2,
   Warehouse, ShoppingCart, PackagePlus, Wallet, Receipt, FileText, Truck,
-  Plane, ClipboardList, Calendar, Cog, UserCheck, Bell, TrendingUp, Globe, Target, Link2,
+  Plane, ClipboardList, Calendar, Cog, UserCheck, Bell, TrendingUp, Globe, Target,
   type LucideIcon,
 } from "lucide-react";
 
@@ -104,12 +104,6 @@ export const OPS_GROUPS: OpsNavGroup[] = [
     label: "Configuração de Metas",
     items: [
       { path: "/config/metas-vendedores", label: "Configurar Metas", icon: Target, from: "/dashboards/metas/config", ready: true },
-    ],
-  },
-  {
-    label: "Integrações",
-    items: [
-      { path: "/integracoes/bling", label: "Bling ERP", icon: Link2, from: "/integrations/bling", ready: true },
     ],
   },
 ];
