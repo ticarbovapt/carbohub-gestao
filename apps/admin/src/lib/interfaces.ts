@@ -27,6 +27,7 @@ export const SYSTEMS: SystemOption[] = [
   { iface: "carbo_ops_app",     label: "Carbo Ops",         hint: "Operação, logística e estoque", comingSoon: true },
   { iface: "portal_licenciado", label: "Carbo Licenciados", hint: "Portal do licenciado" },
   { iface: "portal_pdv",        label: "Portal de Vendas",  hint: "Portal de Vendas (lojas/PDV)" },
+  { iface: "carbo_financas",    label: "Carbo Finanças",    hint: "Financeiro — contas a pagar, NF, faturamento" },
 ];
 
 export const DEFAULT_INTERFACES = ["carbo_ops"];
@@ -40,6 +41,7 @@ export const SYSTEM_BRAND: Record<string, SystemBrand> = {
   carbo_ops_app:     { short: "Ops",         chip: "bg-blue-500/10 text-blue-600 ring-1 ring-inset ring-blue-500/20 border border-dashed border-blue-500/30", dot: "bg-blue-500" },
   portal_licenciado: { short: "Licenciados", chip: "bg-violet-500/10 text-violet-600 ring-1 ring-inset ring-violet-500/20", dot: "bg-violet-500" },
   portal_pdv:        { short: "Vendas",      chip: "bg-amber-500/10 text-amber-600 ring-1 ring-inset ring-amber-500/20",     dot: "bg-amber-500" },
+  carbo_financas:    { short: "Finanças",    chip: "bg-teal-500/10 text-teal-600 ring-1 ring-inset ring-teal-500/20",       dot: "bg-teal-500" },
 };
 export const brandOf = (iface: string): SystemBrand =>
   SYSTEM_BRAND[iface] ?? { short: iface, chip: "bg-muted text-muted-foreground ring-1 ring-inset ring-border", dot: "bg-muted-foreground" };
