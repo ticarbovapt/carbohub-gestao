@@ -23,6 +23,8 @@ import { SupplierFormDialog } from "@/components/producao/SupplierFormDialog";
 import { useRcRequests, useRcMutations } from "@/hooks/useRcRequests";
 import { usePurchaseOrders, useGenerateOc, OC_STATUS_LABELS, OC_STATUS_VARIANT } from "@/hooks/usePurchaseOrders";
 import { usePurchaseReceivings, RECV_STATUS_LABELS, RECV_STATUS_VARIANT } from "@/hooks/usePurchaseReceivings";
+import { usePayables, usePayableMutations } from "@/hooks/usePayables";
+import { NovaContaPagarDialog } from "@/components/compras/NovaContaPagarDialog";
 import { useSuppliers } from "@/hooks/useSuppliers";
 
 // Tela de COMPRAS: pipeline Requisição → OC → Recebimento (ligado a purchase_*).
@@ -90,12 +92,15 @@ export default function Compras() {
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [recebOpen, setRecebOpen] = useState(false);
   const [fornecedorOpen, setFornecedorOpen] = useState(false);
+  const [contaOpen, setContaOpen] = useState(false);
 
   const { data: rcs = [], isLoading: rcLoading } = useRcRequests();
   const { approve, reject } = useRcMutations();
   const { data: orders = [] } = usePurchaseOrders();
   const generateOc = useGenerateOc();
   const { data: receivings = [] } = usePurchaseReceivings();
+  const { data: payables = [] } = usePayables();
+  const { markPaid } = usePayableMutations();
   const { data: suppliers = [] } = useSuppliers();
 
   const filteredRcs = rcs.filter((rc) => statusFilter === "all" || rc.status === statusFilter);
@@ -103,6 +108,9 @@ export default function Compras() {
   const openOrders = orders.filter((o) => o.status !== "recebida" && o.status !== "cancelada");
   const ocAbertas = openOrders.length;
   const comprometido = openOrders.reduce((s, o) => s + (o.total_value || 0), 0);
+  const abertas = payables.filter((p) => p.status !== "pago" && p.status !== "cancelado");
+  const aPagar = abertas.reduce((s, p) => s + p.amount, 0);
+  const atrasados = abertas.filter((p) => p.overdue).length;
   const ocRows: SimpleRow[] = orders.map((o) => ({
     id: o.id, col1: o.oc_number, col2: o.supplier_name, col3: `${o.itens_count} ${o.itens_count === 1 ? "item" : "itens"}`,
     valor: o.total_value, status: OC_STATUS_LABELS[o.status], statusVariant: OC_STATUS_VARIANT[o.status],
@@ -140,9 +148,9 @@ export default function Compras() {
         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
           <KpiCard icon={Clock} label="RC Pendentes" value={String(rcPendentes)} color="text-warning" />
           <KpiCard icon={Package} label="OC Abertas" value={String(ocAbertas)} color="text-carbo-blue" />
-          <KpiCard icon={AlertTriangle} label="Pgtos Atrasados" value="—" color="text-muted-foreground" />
+          <KpiCard icon={AlertTriangle} label="Pgtos Atrasados" value={String(atrasados)} color={atrasados > 0 ? "text-destructive" : "text-muted-foreground"} />
           <KpiCard icon={BarChart3} label="Comprometido (OCs)" value={brl(comprometido)} color="text-carbo-green" />
-          <KpiCard icon={CreditCard} label="A Pagar" value="—" color="text-muted-foreground" />
+          <KpiCard icon={CreditCard} label="A Pagar" value={brl(aPagar)} color="text-warning" />
         </div>
 
         {/* Tabs */}
@@ -152,6 +160,7 @@ export default function Compras() {
             <TabsTrigger value="ordens" className="gap-1.5"><Package className="h-3.5 w-3.5" /> Ordens de Compra</TabsTrigger>
             <TabsTrigger value="recebimento" className="gap-1.5"><CheckCircle2 className="h-3.5 w-3.5" /> Recebimento</TabsTrigger>
             <TabsTrigger value="notas" className="gap-1.5"><Receipt className="h-3.5 w-3.5" /> Notas Fiscais</TabsTrigger>
+            <TabsTrigger value="pagar" className="gap-1.5"><CreditCard className="h-3.5 w-3.5" /> Contas a Pagar</TabsTrigger>
             <TabsTrigger value="fornecedores" className="gap-1.5"><Building2 className="h-3.5 w-3.5" /> Fornecedores</TabsTrigger>
             {canSeeDashboard && <TabsTrigger value="dashboard" className="gap-1.5"><BarChart3 className="h-3.5 w-3.5" /> Dashboard</TabsTrigger>}
           </TabsList>
@@ -225,6 +234,46 @@ export default function Compras() {
               <p>Notas Fiscais dependem da integração com o Bling — entram numa fase futura.</p>
             </CarboCardContent></CarboCard>
           </TabsContent>
+          <TabsContent value="pagar" className="mt-4">
+            <div className="flex justify-end mb-3">
+              <Button size="sm" onClick={() => setContaOpen(true)} className="gap-1.5"><Plus className="h-4 w-4" /> Lançar Conta</Button>
+            </div>
+            {payables.length === 0 ? <CarboEmptyState title="Nenhuma conta a pagar" description='Lance a primeira em "Lançar Conta".' /> : (
+              <div className="overflow-x-auto">
+                <CarboTable>
+                  <CarboTableHeader><CarboTableRow>
+                    <CarboTableHead>Fornecedor</CarboTableHead><CarboTableHead>OC</CarboTableHead>
+                    <CarboTableHead>Vencimento</CarboTableHead><CarboTableHead className="text-right">Valor</CarboTableHead>
+                    <CarboTableHead>Status</CarboTableHead><CarboTableHead>Ações</CarboTableHead>
+                  </CarboTableRow></CarboTableHeader>
+                  <CarboTableBody>
+                    {payables.map((p) => {
+                      const label = p.status === "pago" ? "Pago" : p.status === "cancelado" ? "Cancelado" : p.overdue ? "Atrasado" : "Programado";
+                      const variant = p.status === "pago" ? "success" : p.status === "cancelado" ? "secondary" : p.overdue ? "destructive" : "warning";
+                      return (
+                        <CarboTableRow key={p.id}>
+                          <CarboTableCell className="font-medium">{p.supplier_name}</CarboTableCell>
+                          <CarboTableCell className="font-mono text-sm text-muted-foreground">{p.oc_number ?? "—"}</CarboTableCell>
+                          <CarboTableCell className="text-sm text-muted-foreground">{p.due_date ? dt(p.due_date) : "—"}</CarboTableCell>
+                          <CarboTableCell className="text-right font-semibold">{brl(p.amount)}</CarboTableCell>
+                          <CarboTableCell><CarboBadge variant={variant} dot>{label}</CarboBadge></CarboTableCell>
+                          <CarboTableCell>
+                            {p.status !== "pago" && p.status !== "cancelado" && (
+                              <Button variant="ghost" size="sm" className="h-8 text-xs text-success" disabled={markPaid.isPending}
+                                onClick={async () => {
+                                  try { await markPaid.mutateAsync(p.id); toast.success("Conta marcada como paga."); }
+                                  catch (e) { toast.error(e instanceof Error ? e.message : "Erro ao marcar pago."); }
+                                }}>Marcar pago</Button>
+                            )}
+                          </CarboTableCell>
+                        </CarboTableRow>
+                      );
+                    })}
+                  </CarboTableBody>
+                </CarboTable>
+              </div>
+            )}
+          </TabsContent>
           <TabsContent value="fornecedores" className="mt-4">
             <div className="flex justify-end mb-3">
               <Button size="sm" onClick={() => setFornecedorOpen(true)} className="gap-1.5"><Plus className="h-4 w-4" /> Novo Fornecedor</Button>
@@ -256,6 +305,7 @@ export default function Compras() {
       />
       <RecebimentoDialog open={recebOpen} onOpenChange={setRecebOpen} />
       <SupplierFormDialog open={fornecedorOpen} onOpenChange={setFornecedorOpen} mode="create" />
+      <NovaContaPagarDialog open={contaOpen} onOpenChange={setContaOpen} />
     </div>
   );
 }
