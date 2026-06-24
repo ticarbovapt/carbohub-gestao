@@ -16,6 +16,7 @@ import SaldosPorHub from "./pages/estoque/SaldosPorHub";
 import EstoqueHub from "./pages/estoque/EstoqueHub";
 import Compras from "./pages/compras/Compras";
 import Suprimentos from "./pages/compras/Suprimentos";
+import BlingIntegracao from "./pages/integracoes/Bling";
 import Financeiro from "./pages/financeiro/Financeiro";
 import Faturamento from "./pages/financeiro/Faturamento";
 import NotasFiscais from "./pages/financeiro/NotasFiscais";
@@ -62,6 +63,7 @@ export default function App() {
         {/* Compras & Suprimentos */}
         <Route path="/compras" element={<Compras />} />
         <Route path="/suprimentos" element={<Suprimentos />} />
+        <Route path="/integracoes/bling" element={<BlingIntegracao />} />
 
         {/* Financeiro */}
         <Route path="/financeiro" element={<Financeiro />} />
