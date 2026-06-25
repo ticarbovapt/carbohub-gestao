@@ -5,6 +5,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { CarboBadge } from "@/components/ui/carbo-badge";
 import { Truck, Calculator, BarChart3, Plus, Loader2, Clock, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
@@ -12,7 +13,7 @@ import { ShipmentsKanban, LogisticsKpis, type Shipment } from "@/components/logi
 import { ShipmentDetailsDialog } from "@/components/logistica/ShipmentDetailsDialog";
 import { NovaRemessaDialog } from "@/components/logistica/NovaRemessaDialog";
 import { useShipments } from "@/hooks/useShipments";
-import { useCalculateFreight, localEstimate, ORIGIN_LABEL, type FreightCarrier } from "@/hooks/useFreightQuote";
+import { useCalculateFreight, localEstimate, FREIGHT_ORIGINS, type FreightCarrier } from "@/hooks/useFreightQuote";
 
 const brlFrete = (v: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v || 0);
 const prazoFrete = (min: number | null, max: number | null) => {
@@ -24,6 +25,8 @@ const prazoFrete = (min: number | null, max: number | null) => {
 export default function Logistica() {
   const { data: shipments = [], isLoading } = useShipments();
   const calc = useCalculateFreight();
+  const [originId, setOriginId] = useState(FREIGHT_ORIGINS[0].id); // Natal por padrão
+  const [originCepCustom, setOriginCepCustom] = useState("");
   const [cep, setCep] = useState("");
   const [peso, setPeso] = useState("");
   const [altura, setAltura] = useState("");
@@ -35,18 +38,24 @@ export default function Logistica() {
   const [novaOpen, setNovaOpen] = useState(false);
   const [shipment, setShipment] = useState<Shipment | null>(null);
 
+  const originCep = originId === "custom"
+    ? originCepCustom
+    : (FREIGHT_ORIGINS.find((o) => o.id === originId)?.cep ?? FREIGHT_ORIGINS[0].cep);
+
   const handleCalcularFrete = async () => {
     const pesoNum = Number(peso) || 0;
     if (pesoNum <= 0) { toast.error("Informe o peso (kg)."); return; }
+    if (originCep.replace(/\D/g, "").length !== 8) { toast.error("Informe um CEP de origem válido (8 dígitos)."); return; }
     if (cep.replace(/\D/g, "").length !== 8) { toast.error("Informe um CEP de destino válido (8 dígitos)."); return; }
     const alt = Number(altura) || 1, larg = Number(largura) || 1, comp = Number(comprimento) || 1;
     try {
       const res = await calc.mutateAsync({
         to_cep: cep,
+        from_cep: originCep,
         products: [{ id: "1", weight: pesoNum, height: alt, width: larg, length: comp, insurance_value: Number(valorMerc) || 0, quantity: 1 }],
       });
       if (res.env === "mock") {
-        setFreightResults(localEstimate(pesoNum, alt, larg, comp, cep));
+        setFreightResults(localEstimate(pesoNum, alt, larg, comp, originCep, cep));
         setFreightEstimated(true);
       } else {
         setFreightResults(res.carriers);
@@ -87,6 +96,19 @@ export default function Logistica() {
               <CarboCard>
                 <CarboCardHeader><CarboCardTitle className="flex items-center gap-2"><Calculator className="h-4 w-4" /> Calculadora de Frete</CarboCardTitle></CarboCardHeader>
                 <CarboCardContent className="space-y-3">
+                  <div className="space-y-1.5">
+                    <Label>Origem</Label>
+                    <Select value={originId} onValueChange={setOriginId}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {FREIGHT_ORIGINS.map((o) => <SelectItem key={o.id} value={o.id}>{o.label}</SelectItem>)}
+                        <SelectItem value="custom">Outro CEP…</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    {originId === "custom" && (
+                      <Input className="mt-2" placeholder="CEP de origem" maxLength={9} value={originCepCustom} onChange={(e) => setOriginCepCustom(e.target.value)} />
+                    )}
+                  </div>
                   <div className="space-y-1.5"><Label>CEP de destino</Label><Input placeholder="00000-000" maxLength={9} value={cep} onChange={(e) => setCep(e.target.value)} /></div>
                   <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-1.5"><Label>Peso (kg)</Label><Input type="number" min={0.1} step={0.1} placeholder="ex: 12.5" value={peso} onChange={(e) => setPeso(e.target.value)} /></div>
@@ -103,7 +125,6 @@ export default function Logistica() {
                   <Button className="w-full gap-1.5" onClick={handleCalcularFrete} disabled={calc.isPending}>
                     {calc.isPending ? <><Loader2 className="h-4 w-4 animate-spin" /> Calculando…</> : <><Calculator className="h-4 w-4" /> Calcular Frete</>}
                   </Button>
-                  <p className="text-[11px] text-muted-foreground">Origem: {ORIGIN_LABEL}.</p>
                 </CarboCardContent>
               </CarboCard>
               <CarboCard>

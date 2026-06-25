@@ -36,26 +36,31 @@ export interface FreightQuoteResult {
   note?: string;
 }
 
-export const ORIGIN_CEP = "07100010";
-export const ORIGIN_LABEL = "Guarulhos / SP";
+// Matriz Carbo em Natal/RN (Lagoa Nova) — origem padrão das expedições.
+export const ORIGIN_CEP = "59054795";
+export const ORIGIN_LABEL = "Natal / RN (matriz)";
 
-// Estimativa LOCAL (sem API/token): peso real vs peso cúbico ((A*L*C)/6000) e
-// fator por região do CEP. Aproximação para quando o Melhor Envio não está ligado.
-export function localEstimate(peso: number, alt: number, larg: number, comp: number, cep: string): FreightCarrier[] {
+// Origens pré-cadastradas (selecionáveis na calculadora). "Outro CEP" é manual.
+export const FREIGHT_ORIGINS: { id: string; label: string; cep: string }[] = [
+  { id: "rn", label: "Natal / RN (matriz)", cep: "59054795" },
+  { id: "sp", label: "CD SP LogHouse (Guarulhos)", cep: "07100010" },
+];
+
+const cepZone = (cep: string) => {
+  const d = (cep || "").replace(/\D/g, "");
+  return d ? parseInt(d[0], 10) : 0;
+};
+
+// Estimativa LOCAL (sem API/token): peso real vs peso cúbico ((A*L*C)/6000) e um
+// fator de DISTÂNCIA aproximado pela diferença de região do CEP origem→destino.
+// Aproximação para quando o Melhor Envio/SuperFrete não está ligado.
+export function localEstimate(peso: number, alt: number, larg: number, comp: number, fromCep: string, toCep: string): FreightCarrier[] {
   const cubico = (alt * larg * comp) / 6000;
   const taxavel = Math.max(peso, cubico, 0.3);
-  const cepNum = parseInt((cep || "").replace(/\D/g, "").slice(0, 5) || "0", 10);
-  const regiao =
-    cepNum >= 1000 && cepNum <= 19999 ? 1.0 :   // SP
-    cepNum >= 20000 && cepNum <= 28999 ? 1.15 : // RJ
-    cepNum >= 29000 && cepNum <= 29999 ? 1.2 :  // ES
-    cepNum >= 30000 && cepNum <= 39999 ? 1.2 :  // MG
-    cepNum >= 40000 && cepNum <= 65999 ? 1.6 :  // BA/NE
-    cepNum >= 66000 && cepNum <= 69999 ? 1.9 :  // Norte
-    cepNum >= 80000 && cepNum <= 99999 ? 1.35 : // Sul
-    1.5;
+  const dist = Math.min(Math.abs(cepZone(fromCep) - cepZone(toCep)), 9);
+  const distanceFactor = 1 + dist * 0.14; // mesma região ≈ 1.0; ponta a ponta ≈ +126%
   const base = 18, perKg = 2.4;
-  const v = (m: number) => Math.round((base + perKg * taxavel) * regiao * m * 100) / 100;
+  const v = (m: number) => Math.round((base + perKg * taxavel) * distanceFactor * m * 100) / 100;
   return [
     { id: "est-rod", company: "Transportadora", name: "Rodoviário", price: v(0.85), custom_price: v(0.85), discount: 0, currency: "BRL", delivery_min: 4, delivery_max: 8, logo: null },
     { id: "est-pac", company: "Correios", name: "PAC", price: v(1.0), custom_price: v(1.0), discount: 0, currency: "BRL", delivery_min: 5, delivery_max: 9, logo: null },
@@ -78,10 +83,10 @@ function mockFreightResult(): FreightQuoteResult {
 
 export function useCalculateFreight() {
   return useMutation({
-    mutationFn: async (payload: { to_cep: string; products: FreightProduct[] }): Promise<FreightQuoteResult> => {
+    mutationFn: async (payload: { to_cep: string; from_cep?: string; products: FreightProduct[] }): Promise<FreightQuoteResult> => {
       try {
         const { data, error } = await supabase.functions.invoke("melhor-envio-quote", {
-          body: { to_cep: payload.to_cep, products: payload.products },
+          body: { to_cep: payload.to_cep, from_cep: payload.from_cep, products: payload.products },
         });
         if (error) return mockFreightResult();
         if (data?.error) throw new Error(data.error);
