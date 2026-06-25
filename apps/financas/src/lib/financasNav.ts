@@ -1,4 +1,4 @@
-import { LayoutDashboard, Wallet, Package, ShoppingCart, ClipboardList, BarChart3, Link2, type LucideIcon } from "lucide-react";
+import { LayoutDashboard, Wallet, Package, ShoppingCart, ClipboardList, BarChart3, Link2, Receipt, type LucideIcon } from "lucide-react";
 
 export interface FinNavItem { path: string; label: string; icon: LucideIcon; }
 
@@ -9,6 +9,7 @@ export const FIN_NAV: FinNavItem[] = [
   { path: "/compras", label: "Compras & Suprimentos", icon: ShoppingCart },
   { path: "/suprimentos", label: "Suprimentos", icon: Package },
   { path: "/pedidos", label: "Pedidos (RV)", icon: ClipboardList },
+  { path: "/faturamento", label: "Faturamento", icon: Receipt },
   { path: "/dashboard-financeiro", label: "Dashboard Financeiro", icon: BarChart3 },
   { path: "/integracoes/bling", label: "Integração Bling", icon: Link2 },
 ];

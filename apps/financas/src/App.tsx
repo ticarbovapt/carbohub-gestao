@@ -6,6 +6,7 @@ import Financeiro from "./pages/Financeiro";
 import Purchasing from "./pages/Purchasing";
 import Suprimentos from "./pages/Suprimentos";
 import Orders from "./pages/Orders";
+import Faturamento from "./pages/Faturamento";
 import DashboardFinanceiro from "./pages/dashboards/DashboardFinanceiro";
 import BlingIntegracao from "./pages/integracoes/Bling";
 
@@ -20,6 +21,7 @@ export default function App() {
         <Route path="/compras" element={<Purchasing />} />
         <Route path="/suprimentos" element={<Suprimentos />} />
         <Route path="/pedidos" element={<Orders />} />
+        <Route path="/faturamento" element={<Faturamento />} />
         <Route path="/dashboard-financeiro" element={<DashboardFinanceiro />} />
         <Route path="/integracoes/bling" element={<BlingIntegracao />} />
         <Route path="*" element={<Navigate to="/" replace />} />
