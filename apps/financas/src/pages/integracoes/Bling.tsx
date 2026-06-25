@@ -281,19 +281,31 @@ export default function BlingIntegration() {
     throw new Error(response.data?.error || `Erro ao sincronizar ${entity}`);
   };
 
-  // "Sincronizar Tudo" — runs 3 entities individually (no "all" → avoids old bridge bug)
-  // then runs bridge client-side
+  // "Sincronizar Tudo" — puxa TODAS as entidades possíveis do Bling de uma vez
+  // (produtos, variações, estoque, contatos, pedidos, detalhes, vendedores,
+  // NFe, contas a pagar e pedidos de compra). Cada uma vira tabela bling_* no
+  // banco; a visualização fica a cargo das telas do app.
   const handleSyncAll = useCallback(async () => {
     setSyncing("all");
-    let totalSynced = 0;
     try {
-      for (const entity of ["products", "contacts", "orders"] as const) {
-        setSyncing(entity);
-        totalSynced += await syncEntity(entity);
-        loadCounts();
+      const response = await supabase.functions.invoke("bling-sync", { body: { entity: "all" } });
+      if (!response.data?.success) {
+        throw new Error(response.data?.error || response.error?.message || "Erro na sincronização");
       }
-      toast.success(`Sincronização concluída! ${totalSynced} registros atualizados.`);
+      const data = (response.data.data || {}) as Record<string, { synced?: number; failed?: number; error?: string }>;
+      let totalSynced = 0;
+      const failed: string[] = [];
+      for (const [entity, res] of Object.entries(data)) {
+        if (res?.error) failed.push(entity);
+        else totalSynced += res?.synced || 0;
+      }
+      loadCounts();
       loadSyncLogs();
+      if (failed.length) {
+        toast.error(`Sincronizado ${totalSynced} registros. Entidades com falha: ${failed.join(", ")} (veja o histórico).`);
+      } else {
+        toast.success(`Sincronização completa! ${totalSynced} registros de todas as entidades do Bling.`);
+      }
     } catch (error: any) {
       toast.error(error.message || "Erro na sincronização");
     } finally {
@@ -332,7 +344,8 @@ export default function BlingIntegration() {
           Integração Bling ERP
         </h1>
         <p className="text-muted-foreground mt-1">
-          Sincronize pedidos, produtos, clientes e fornecedores
+          Sincronize tudo do Bling: pedidos, produtos, variações, estoque, clientes,
+          fornecedores, vendedores, notas fiscais, contas a pagar e pedidos de compra
         </p>
       </div>
 

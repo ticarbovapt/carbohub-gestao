@@ -8,15 +8,30 @@ const ALLOWED_ORIGINS = [
   "https://admin.carbohub.com.br",
   "https://sales.carbohub.com.br",
   "https://ops.carbohub.com.br",
+  "https://financas.carbohub.com.br",  // Carbo Finanças (subdomínio)
+  "https://carbohub-fin.vercel.app",   // Carbo Finanças (deploy Vercel)
   "http://localhost:8080",
   "http://localhost:8082",
   "http://localhost:5173",
   "http://localhost:3000",
 ];
 
+// Aceita a lista fixa OU qualquer subdomínio carbohub.com.br / *.vercel.app
+// (cobre previews da Vercel e novos apps sem precisar redeploy a cada domínio).
+function isAllowedOrigin(origin: string): boolean {
+  if (ALLOWED_ORIGINS.includes(origin)) return true;
+  try {
+    const { protocol, hostname } = new URL(origin);
+    if (protocol !== "https:") return false;
+    return hostname.endsWith(".carbohub.com.br") || hostname.endsWith(".vercel.app");
+  } catch {
+    return false;
+  }
+}
+
 function getCorsHeaders(req: Request) {
   const origin = req.headers.get("origin") || "";
-  const allowedOrigin = ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0];
+  const allowedOrigin = isAllowedOrigin(origin) ? origin : ALLOWED_ORIGINS[0];
   return {
     "Access-Control-Allow-Origin": allowedOrigin,
     "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
