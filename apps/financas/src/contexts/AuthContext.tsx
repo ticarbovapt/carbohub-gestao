@@ -31,6 +31,14 @@ interface AuthContextType {
   canAdmin: boolean;
   /** Tem o Finanças liberado (Admin via allowed_interfaces, ou gestão/TI). */
   canAccess: boolean;
+  // Compat com telas portadas do controle. SEM legado de papel: quem tem acesso
+  // ao app (flag carbo_financas) vê tudo. O gating gestor/membro entra depois.
+  isCeo: boolean;
+  isAnyGestor: boolean;
+  isMasterAdmin: boolean;
+  isAdmin: boolean;
+  isGestorCompras: boolean;
+  isManager: boolean;
   isLoading: boolean;
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
@@ -90,6 +98,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       user, session, profile,
       canAdmin: seesEverything(profile),
       canAccess: canAccess(profile),
+      // Tudo aberto por ora (sem legado de papel) — gating entra na fase de permissões.
+      isCeo: true, isAnyGestor: true, isMasterAdmin: true, isAdmin: true, isGestorCompras: true, isManager: true,
       isLoading, signIn, signOut,
     }}>
       {children}
