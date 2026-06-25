@@ -19,9 +19,9 @@ export default function Suprimentos() {
   const [activeTab, setActiveTab] = useState("estoque");
   const [planningMode, setPlanningMode] = useState(false);
   const { data: kpis } = useSuprimentosKPIs();
-  const { isMasterAdmin, isAdmin, isGestorCompras } = useAuth();
+  const { gestor } = useAuth();
 
-  const canApprove = isMasterAdmin || isAdmin || isGestorCompras;
+  const canApprove = gestor;
 
   return (
     <>

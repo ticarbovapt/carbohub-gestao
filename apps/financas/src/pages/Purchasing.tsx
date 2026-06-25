@@ -24,13 +24,13 @@ import { PurchasingDashboard } from "@/components/purchasing/PurchasingDashboard
 import { SuppliersList } from "@/components/purchasing/SuppliersList";
 
 export default function Purchasing() {
-  const { isCeo, isAnyGestor } = useAuth();
+  const { gestor } = useAuth();
   const [showNewRC, setShowNewRC] = useState(false);
   const [activeTab, setActiveTab] = useState("requisicoes");
 
   const { data: kpis } = usePurchasingKPIs();
 
-  const canSeeDashboard = isCeo || isAnyGestor;
+  const canSeeDashboard = gestor;
 
   const formatCurrency = (val: number) =>
     new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(val);

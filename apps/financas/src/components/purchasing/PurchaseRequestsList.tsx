@@ -46,14 +46,14 @@ export function PurchaseRequestsList({ showNewForm, onCloseForm }: PurchaseReque
     statusFilter !== "all" ? { status: statusFilter } : undefined
   );
   const approveRC = useApprovePurchaseRequest();
-  const { isCeo, isAnyGestor } = useAuth();
+  const { gestor } = useAuth();
 
   const [selectedRC, setSelectedRC] = useState<PurchaseRequest | null>(null);
   const [rejectReason, setRejectReason] = useState("");
   const [showRejectDialog, setShowRejectDialog] = useState(false);
   const [rejectingId, setRejectingId] = useState<string | null>(null);
 
-  const canApprove = isCeo || isAnyGestor;
+  const canApprove = gestor;
 
   const formatCurrency = (val: number) =>
     new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(val);

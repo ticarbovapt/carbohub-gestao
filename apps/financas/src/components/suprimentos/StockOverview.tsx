@@ -55,7 +55,7 @@ export function StockOverview() {
   const [reason, setReason] = useState("");
   const createMovement = useCreateStockMovement();
   const qc = useQueryClient();
-  const { user, isMasterAdmin } = useAuth();
+  const { user, gestor } = useAuth();
 
   const { data: warehouses } = useQuery({
     queryKey: ["warehouses"],
@@ -325,7 +325,7 @@ export function StockOverview() {
                         {p.category && <span className="ml-2 font-sans">· {p.category}</span>}
                       </p>
                     </div>
-                    {isMasterAdmin && (
+                    {gestor && (
                       <Button
                         variant="ghost"
                         size="icon"

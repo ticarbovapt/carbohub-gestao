@@ -13,12 +13,12 @@ import { PurchaseOrdersList } from "@/components/purchasing/PurchaseOrdersList";
 import { PurchasingDashboard } from "@/components/purchasing/PurchasingDashboard";
 
 export default function Financeiro() {
-  const { isCeo, isAnyGestor } = useAuth();
+  const { gestor } = useAuth();
   const [activeTab, setActiveTab] = useState("requisicoes");
   const [selectedRCId, setSelectedRCId] = useState<string | null>(null);
   const { data: kpis } = useFinanceiroKPIs();
 
-  const canSeeDashboard = isCeo || isAnyGestor;
+  const canSeeDashboard = gestor;
 
   const formatCurrency = (val: number) =>
     new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(val);

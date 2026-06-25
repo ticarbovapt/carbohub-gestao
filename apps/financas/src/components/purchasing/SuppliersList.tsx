@@ -11,7 +11,7 @@ import { useSuppliers, useCreateSupplier, useUpdateSupplier, useDeleteSupplier, 
 import { useAuth } from "@/contexts/AuthContext";
 
 export function SuppliersList() {
-  const { isAdmin, isCeo, isAnyGestor } = useAuth();
+  const { gestor } = useAuth();
   const [search, setSearch] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [editSupplier, setEditSupplier] = useState<Supplier | null>(null);
@@ -22,7 +22,7 @@ export function SuppliersList() {
   const updateSupplier = useUpdateSupplier();
   const deleteSupplier = useDeleteSupplier();
 
-  const canManage = isAdmin || isCeo || isAnyGestor;
+  const canManage = gestor;
 
   const filtered = suppliers.filter((s) =>
     s.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -143,7 +143,7 @@ export function SuppliersList() {
                           <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(s)}>
                             <Edit2 className="h-3.5 w-3.5" />
                           </Button>
-                          {isAdmin && (
+                          {gestor && (
                             <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => setDeleteId(s.id)}>
                               <Trash2 className="h-3.5 w-3.5" />
                             </Button>

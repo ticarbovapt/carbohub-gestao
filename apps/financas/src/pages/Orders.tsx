@@ -72,7 +72,7 @@ const STATUS_ICONS: Record<OrderStatus, React.ComponentType<{ className?: string
 
 export default function Orders() {
   const navigate = useNavigate();
-  const { isManager, isAdmin } = useAuth();
+  const { gestor } = useAuth();
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<OrderStatus | "all">("all");
   const [typeFilter, setTypeFilter] = useState<"all" | "spot" | "recorrente">("all");
@@ -230,7 +230,7 @@ export default function Orders() {
                 </DropdownMenuContent>
               </DropdownMenu>
 
-              {isManager && (
+              {gestor && (
                 <CarboButton onClick={() => navigate("/orders/new")}>
                   <Plus className="h-4 w-4 mr-1" />
                   Novo Pedido
@@ -461,7 +461,7 @@ export default function Orders() {
               title="Nenhum pedido encontrado"
               description={searchQuery ? "Tente ajustar os filtros de busca" : "Comece criando seu primeiro pedido"}
               action={
-                isManager
+                gestor
                   ? {
                       label: "Novo Pedido",
                       onClick: () => navigate("/orders/new"),
@@ -484,7 +484,7 @@ export default function Orders() {
                 <CarboTableHead className="text-center">Qtd</CarboTableHead>
                 <CarboTableHead>Total</CarboTableHead>
                 <CarboTableHead>Status</CarboTableHead>
-                {isAdmin && <CarboTableHead className="w-10">Editar</CarboTableHead>}
+                {gestor && <CarboTableHead className="w-10">Editar</CarboTableHead>}
                 <CarboTableHead className="w-10"></CarboTableHead>
               </CarboTableRow>
             </CarboTableHeader>
@@ -568,7 +568,7 @@ export default function Orders() {
                         {ORDER_STATUS_LABELS[order.status]}
                       </CarboBadge>
                     </CarboTableCell>
-                    {isAdmin && (
+                    {gestor && (
                       <CarboTableCell>
                         <button
                           onClick={(e) => {
