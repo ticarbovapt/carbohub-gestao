@@ -5,7 +5,8 @@ import { CarboBadge } from "@/components/ui/carbo-badge";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Warehouse, Search, Tag, Download, Package, Eye, Loader2 } from "lucide-react";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Warehouse, Search, Tag, Download, Package, Eye, Loader2, ChevronDown } from "lucide-react";
 import { StockProgressBar } from "@/components/estoque/StockProgressBar";
 import { CarboEmptyState } from "@/components/ui/carbo-empty-state";
 import { useStock } from "@/hooks/useStock";
@@ -17,6 +18,22 @@ const HUBS = [
   { id: "sp", code: "HUB-SP", name: "CD SP LogHouse", city: "São Paulo", state: "SP" },
   { id: "spv", code: "HUB-SP-VENDAS", name: "CD SP Vendas", city: "São Paulo", state: "SP" },
 ];
+
+// Export CSV (separador ';' + BOM → abre direto no Excel pt-BR).
+function csvEscape(v: string | number): string {
+  const s = String(v ?? "");
+  return /[;"\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+}
+function downloadCSV(filename: string, header: string[], rows: (string | number)[][]) {
+  const lines = [header, ...rows].map((r) => r.map(csvEscape).join(";"));
+  const BOM = "﻿";
+  const blob = new Blob([BOM + lines.join("\r\n")], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = filename; a.click();
+  URL.revokeObjectURL(url);
+}
+const dateTag = () => new Date().toISOString().slice(0, 10);
 
 export default function SaldosPorHub() {
   const [search, setSearch] = useState("");
@@ -35,6 +52,30 @@ export default function SaldosPorHub() {
   }), [products, search, selectedCategory]);
 
   const visibleHubs = selectedWarehouse === "all" ? HUBS : HUBS.filter((h) => h.id === selectedWarehouse);
+
+  const exportGeral = () => {
+    if (filtered.length === 0) { toast.info("Nada para exportar."); return; }
+    const header = ["Código", "Produto", "Categoria", "Unidade", ...HUBS.map((h) => h.name), "Total", "Mínimo", "Status"];
+    const rows = filtered.map((p) => {
+      const qs = HUBS.map((h) => p.hubs[h.id] ?? 0);
+      const total = qs.reduce((s, q) => s + q, 0);
+      const min = HUBS.reduce((s, h) => s + minForHub(p, h.id), 0);
+      return [p.product_code, p.name, p.category, p.stock_unit, ...qs, total, min, minStockStatus(total, min).label];
+    });
+    downloadCSV(`estoque_geral_${dateTag()}.csv`, header, rows);
+    toast.success(`Exportado: ${rows.length} produto(s) — geral.`);
+  };
+  const exportHub = (hub: typeof HUBS[number]) => {
+    if (filtered.length === 0) { toast.info("Nada para exportar."); return; }
+    const header = ["Código", "Produto", "Categoria", "Unidade", "Saldo", "Mínimo", "Status"];
+    const rows = filtered.map((p) => {
+      const q = p.hubs[hub.id] ?? 0;
+      const min = minForHub(p, hub.id);
+      return [p.product_code, p.name, p.category, p.stock_unit, q, min, minStockStatus(q, min).label];
+    });
+    downloadCSV(`estoque_${hub.code}_${dateTag()}.csv`, header, rows);
+    toast.success(`Exportado: ${rows.length} produto(s) — ${hub.name}.`);
+  };
 
   return (
     <div className="p-4 md:p-6">
@@ -71,7 +112,19 @@ export default function SaldosPorHub() {
               <SelectItem value="Outro">Outro</SelectItem>
             </SelectContent>
           </Select>
-          <Button variant="outline" size="sm" className="gap-1.5 ml-auto" onClick={() => toast("Exportar Excel (em breve)")}><Download className="h-4 w-4" /> Exportar Excel</Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm" className="gap-1.5 ml-auto"><Download className="h-4 w-4" /> Exportar <ChevronDown className="h-3.5 w-3.5" /></Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuLabel>Exportar saldos (CSV)</DropdownMenuLabel>
+              <DropdownMenuItem onClick={exportGeral}>Geral — todos os hubs</DropdownMenuItem>
+              <DropdownMenuSeparator />
+              {HUBS.map((h) => (
+                <DropdownMenuItem key={h.id} onClick={() => exportHub(h)}>{h.name}</DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
 
         {/* Cards */}

@@ -56,6 +56,7 @@ export const OPS_GROUPS: OpsNavGroup[] = [
       { path: "/estoque/cd-sp-loghouse", label: "CD SP LogHouse", icon: Warehouse, from: "warehouse_stock", ready: true },
       { path: "/estoque/cd-sp-vendas", label: "CD SP Vendas", icon: Warehouse, from: "warehouse_stock", ready: true },
       { path: "/estoque/cd-bling", label: "CD Bling", icon: Warehouse, from: "warehouse_stock", ready: true },
+      { path: "/suprimentos", label: "Suprimentos", icon: PackagePlus, from: "/suprimentos", ready: true },
     ],
   },
   {
@@ -102,11 +103,10 @@ export const OPS_GROUPS: OpsNavGroup[] = [
   // Finanças assumir 100% destas telas.
   // ───────────────────────────────────────────────────────────────────────────
   {
-    label: "Compras & Suprimentos",
+    label: "Compras",
     locked: true,
     items: [
       { path: "/compras", label: "Compras", icon: ShoppingCart, from: "/purchasing", ready: true, locked: true },
-      { path: "/suprimentos", label: "Suprimentos", icon: PackagePlus, from: "/suprimentos", ready: true, locked: true },
     ],
   },
   {
