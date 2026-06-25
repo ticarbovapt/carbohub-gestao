@@ -70,18 +70,20 @@ export default function BlingIntegration() {
   const [syncLogs, setSyncLogs] = useState<SyncLog[]>([]);
   const [counts, setCounts] = useState({ products: 0, contacts: 0, orders: 0 });
 
+  // Status vem DIRETO da tabela compartilhada bling_integration (mesma do
+  // Controle). Assim a conexão que o Controle já fez aparece aqui sem depender
+  // da edge function autenticada. Não lemos tokens — só is_active/expires_at.
   const checkStatus = async () => {
     try {
-      const timeout = new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error("timeout")), 8000)
-      );
-      const response = await Promise.race([
-        supabase.functions.invoke("bling-auth", { body: { action: "status" } }),
-        timeout,
-      ]);
-      if (response.data?.success) {
-        setIsConnected(response.data.data.connected);
-        setIsExpired(response.data.data.expired);
+      const { data, error } = await (supabase as any)
+        .from("bling_integration")
+        .select("expires_at, is_active")
+        .eq("is_active", true)
+        .maybeSingle();
+      if (error) throw error;
+      if (data) {
+        setIsConnected(true);
+        setIsExpired(data.expires_at ? new Date(data.expires_at) < new Date() : false);
       } else {
         setIsConnected(false);
       }
