@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, Lock } from "lucide-react";
 import { TopBar } from "@/components/TopBar";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -20,7 +20,7 @@ function Nav({ onNavigate }: { onNavigate?: () => void }) {
   // Grupo que contém a rota atual começa aberto; os demais fechados.
   const activeGroup = OPS_GROUPS.find((g) => g.items.some((i) => pathname.startsWith(i.path) && i.path !== "/"))?.label;
   const [open, setOpen] = useState<Record<string, boolean>>(
-    () => Object.fromEntries(OPS_GROUPS.map((g) => [g.label, g.label === activeGroup]))
+    () => Object.fromEntries(OPS_GROUPS.map((g) => [g.label, g.label === activeGroup && !g.locked]))
   );
   const toggle = (label: string) => setOpen((o) => ({ ...o, [label]: !o[label] }));
 
@@ -32,21 +32,37 @@ function Nav({ onNavigate }: { onNavigate?: () => void }) {
       </NavLink>
 
       {OPS_GROUPS.map((group) => (
-        <div key={group.label} className="pt-2">
+        <div key={group.label} className={`pt-2 ${group.locked ? "opacity-70" : ""}`}>
           <button
             onClick={() => toggle(group.label)}
             className="w-full flex items-center justify-between px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/70 hover:text-muted-foreground"
           >
-            <span>{group.label}</span>
+            <span className="flex items-center gap-1.5">
+              {group.locked && <Lock className="h-2.5 w-2.5" />} {group.label}
+              {group.locked && <span className="normal-case font-normal text-muted-foreground/50">· no Finanças</span>}
+            </span>
             <ChevronDown className={`h-3 w-3 transition-transform ${open[group.label] ? "" : "-rotate-90"}`} />
           </button>
           {open[group.label] && (
             <div className="mt-1 space-y-1 border-l border-border ml-3 pl-1">
-              {group.items.map((item) => (
-                <NavLink key={item.path} to={item.path} className={subCls} onClick={onNavigate}>
-                  <item.icon className="h-4 w-4 shrink-0" /> <span className="truncate">{item.label}</span>
-                </NavLink>
-              ))}
+              {group.items.map((item) =>
+                item.locked ? (
+                  <div
+                    key={item.path}
+                    title="Tela movida para o Carbo Finanças"
+                    aria-disabled="true"
+                    className="flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-sm text-muted-foreground/50 cursor-not-allowed select-none"
+                  >
+                    <item.icon className="h-4 w-4 shrink-0" />
+                    <span className="truncate">{item.label}</span>
+                    <Lock className="h-3 w-3 ml-auto shrink-0" />
+                  </div>
+                ) : (
+                  <NavLink key={item.path} to={item.path} className={subCls} onClick={onNavigate}>
+                    <item.icon className="h-4 w-4 shrink-0" /> <span className="truncate">{item.label}</span>
+                  </NavLink>
+                )
+              )}
             </div>
           )}
         </div>

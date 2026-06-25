@@ -21,10 +21,17 @@ export interface OpsNavItem {
   from?: string;
   /** Tela espelhada do Sales (só visualização). */
   mirror?: boolean;
+  /**
+   * Tela migrada para o Carbo Finanças. Permanece listada (não apagada),
+   * porém travada: cadeado, não clicável e jogada para o fim da sidebar.
+   */
+  locked?: boolean;
 }
 export interface OpsNavGroup {
   label: string;
   items: OpsNavItem[];
+  /** Grupo inteiro travado (domínio migrado para o Carbo Finanças). */
+  locked?: boolean;
 }
 
 export const OPS_HOME: OpsNavItem = { path: "/", label: "Início", icon: LayoutDashboard, ready: true };
@@ -49,23 +56,6 @@ export const OPS_GROUPS: OpsNavGroup[] = [
       { path: "/estoque/cd-sp-loghouse", label: "CD SP LogHouse", icon: Warehouse, from: "warehouse_stock", ready: true },
       { path: "/estoque/cd-sp-vendas", label: "CD SP Vendas", icon: Warehouse, from: "warehouse_stock", ready: true },
       { path: "/estoque/cd-bling", label: "CD Bling", icon: Warehouse, from: "warehouse_stock", ready: true },
-    ],
-  },
-  {
-    label: "Compras & Suprimentos",
-    items: [
-      { path: "/compras", label: "Compras", icon: ShoppingCart, from: "/purchasing", ready: true },
-      { path: "/suprimentos", label: "Suprimentos", icon: PackagePlus, from: "/suprimentos", ready: true },
-    ],
-  },
-  {
-    label: "Financeiro",
-    items: [
-      { path: "/financeiro", label: "Financeiro", icon: Wallet, from: "/financeiro", ready: true },
-      { path: "/financeiro/faturamento", label: "Fila de Faturamento", icon: Receipt, from: "/financeiro/faturamento", ready: true },
-      { path: "/financeiro/notas-fiscais", label: "Notas Fiscais", icon: FileText, from: "/integrations/bling/nfs", ready: true },
-      { path: "/financeiro/nfse", label: "NFSe", icon: FileText, from: "/admin/nfse", ready: true },
-      { path: "/financeiro/dashboard", label: "Dashboard Financeiro", icon: BarChart3, from: "/dashboards/financeiro", ready: true },
     ],
   },
   {
@@ -106,10 +96,35 @@ export const OPS_GROUPS: OpsNavGroup[] = [
       { path: "/config/metas-vendedores", label: "Configurar Metas", icon: Target, from: "/dashboards/metas/config", ready: true },
     ],
   },
+  // ───────────────────────────────────────────────────────────────────────────
+  // Domínio migrado para o Carbo Finanças. Mantido aqui (não apagado), porém
+  // TRAVADO: cadeado, não clicável e no fim da sidebar. Remover quando o
+  // Finanças assumir 100% destas telas.
+  // ───────────────────────────────────────────────────────────────────────────
+  {
+    label: "Compras & Suprimentos",
+    locked: true,
+    items: [
+      { path: "/compras", label: "Compras", icon: ShoppingCart, from: "/purchasing", ready: true, locked: true },
+      { path: "/suprimentos", label: "Suprimentos", icon: PackagePlus, from: "/suprimentos", ready: true, locked: true },
+    ],
+  },
+  {
+    label: "Financeiro",
+    locked: true,
+    items: [
+      { path: "/financeiro", label: "Financeiro", icon: Wallet, from: "/financeiro", ready: true, locked: true },
+      { path: "/financeiro/faturamento", label: "Fila de Faturamento", icon: Receipt, from: "/financeiro/faturamento", ready: true, locked: true },
+      { path: "/financeiro/notas-fiscais", label: "Notas Fiscais", icon: FileText, from: "/integrations/bling/nfs", ready: true, locked: true },
+      { path: "/financeiro/nfse", label: "NFSe", icon: FileText, from: "/admin/nfse", ready: true, locked: true },
+      { path: "/financeiro/dashboard", label: "Dashboard Financeiro", icon: BarChart3, from: "/dashboards/financeiro", ready: true, locked: true },
+    ],
+  },
   {
     label: "Integrações",
+    locked: true,
     items: [
-      { path: "/integracoes/bling", label: "Bling ERP", icon: Link2, from: "/integrations/bling", ready: true },
+      { path: "/integracoes/bling", label: "Bling ERP", icon: Link2, from: "/integrations/bling", ready: true, locked: true },
     ],
   },
 ];
