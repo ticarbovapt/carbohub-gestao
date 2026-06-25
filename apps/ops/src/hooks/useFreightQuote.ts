@@ -39,6 +39,30 @@ export interface FreightQuoteResult {
 export const ORIGIN_CEP = "07100010";
 export const ORIGIN_LABEL = "Guarulhos / SP";
 
+// Estimativa LOCAL (sem API/token): peso real vs peso cúbico ((A*L*C)/6000) e
+// fator por região do CEP. Aproximação para quando o Melhor Envio não está ligado.
+export function localEstimate(peso: number, alt: number, larg: number, comp: number, cep: string): FreightCarrier[] {
+  const cubico = (alt * larg * comp) / 6000;
+  const taxavel = Math.max(peso, cubico, 0.3);
+  const cepNum = parseInt((cep || "").replace(/\D/g, "").slice(0, 5) || "0", 10);
+  const regiao =
+    cepNum >= 1000 && cepNum <= 19999 ? 1.0 :   // SP
+    cepNum >= 20000 && cepNum <= 28999 ? 1.15 : // RJ
+    cepNum >= 29000 && cepNum <= 29999 ? 1.2 :  // ES
+    cepNum >= 30000 && cepNum <= 39999 ? 1.2 :  // MG
+    cepNum >= 40000 && cepNum <= 65999 ? 1.6 :  // BA/NE
+    cepNum >= 66000 && cepNum <= 69999 ? 1.9 :  // Norte
+    cepNum >= 80000 && cepNum <= 99999 ? 1.35 : // Sul
+    1.5;
+  const base = 18, perKg = 2.4;
+  const v = (m: number) => Math.round((base + perKg * taxavel) * regiao * m * 100) / 100;
+  return [
+    { id: "est-rod", company: "Transportadora", name: "Rodoviário", price: v(0.85), custom_price: v(0.85), discount: 0, currency: "BRL", delivery_min: 4, delivery_max: 8, logo: null },
+    { id: "est-pac", company: "Correios", name: "PAC", price: v(1.0), custom_price: v(1.0), discount: 0, currency: "BRL", delivery_min: 5, delivery_max: 9, logo: null },
+    { id: "est-sedex", company: "Correios", name: "SEDEX", price: v(1.5), custom_price: v(1.5), discount: 0, currency: "BRL", delivery_min: 1, delivery_max: 3, logo: null },
+  ].sort((a, b) => a.price - b.price);
+}
+
 function mockFreightResult(): FreightQuoteResult {
   return {
     env: "mock",

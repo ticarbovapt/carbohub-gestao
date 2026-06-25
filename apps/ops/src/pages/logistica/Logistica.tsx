@@ -5,19 +5,58 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import { Truck, Calculator, BarChart3, Plus, Loader2 } from "lucide-react";
+import { CarboBadge } from "@/components/ui/carbo-badge";
+import { Truck, Calculator, BarChart3, Plus, Loader2, Clock, AlertCircle } from "lucide-react";
+import { toast } from "sonner";
 import { ShipmentsKanban, LogisticsKpis, type Shipment } from "@/components/logistica/shipments";
-import { FreightCalculatorDialog } from "@/components/logistica/FreightCalculatorDialog";
 import { ShipmentDetailsDialog } from "@/components/logistica/ShipmentDetailsDialog";
 import { NovaRemessaDialog } from "@/components/logistica/NovaRemessaDialog";
 import { useShipments } from "@/hooks/useShipments";
+import { useCalculateFreight, localEstimate, ORIGIN_LABEL, type FreightCarrier } from "@/hooks/useFreightQuote";
+
+const brlFrete = (v: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v || 0);
+const prazoFrete = (min: number | null, max: number | null) => {
+  if (min == null && max == null) return "—";
+  if (min != null && max != null && min !== max) return `${min}–${max} dias úteis`;
+  return `${max ?? min} dia(s) úteis`;
+};
 
 export default function Logistica() {
   const { data: shipments = [], isLoading } = useShipments();
+  const calc = useCalculateFreight();
   const [cep, setCep] = useState("");
-  const [freteOpen, setFreteOpen] = useState(false);
+  const [peso, setPeso] = useState("");
+  const [altura, setAltura] = useState("");
+  const [largura, setLargura] = useState("");
+  const [comprimento, setComprimento] = useState("");
+  const [valorMerc, setValorMerc] = useState("");
+  const [freightResults, setFreightResults] = useState<FreightCarrier[] | null>(null);
+  const [freightEstimated, setFreightEstimated] = useState(false);
   const [novaOpen, setNovaOpen] = useState(false);
   const [shipment, setShipment] = useState<Shipment | null>(null);
+
+  const handleCalcularFrete = async () => {
+    const pesoNum = Number(peso) || 0;
+    if (pesoNum <= 0) { toast.error("Informe o peso (kg)."); return; }
+    if (cep.replace(/\D/g, "").length !== 8) { toast.error("Informe um CEP de destino válido (8 dígitos)."); return; }
+    const alt = Number(altura) || 1, larg = Number(largura) || 1, comp = Number(comprimento) || 1;
+    try {
+      const res = await calc.mutateAsync({
+        to_cep: cep,
+        products: [{ id: "1", weight: pesoNum, height: alt, width: larg, length: comp, insurance_value: Number(valorMerc) || 0, quantity: 1 }],
+      });
+      if (res.env === "mock") {
+        setFreightResults(localEstimate(pesoNum, alt, larg, comp, cep));
+        setFreightEstimated(true);
+      } else {
+        setFreightResults(res.carriers);
+        setFreightEstimated(false);
+      }
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Erro ao calcular frete.");
+    }
+  };
+  const freightCheapest = freightResults?.length ? Math.min(...freightResults.map((r) => r.price)) : 0;
 
   return (
     <div className="p-4 md:p-6">
@@ -48,37 +87,71 @@ export default function Logistica() {
               <CarboCard>
                 <CarboCardHeader><CarboCardTitle className="flex items-center gap-2"><Calculator className="h-4 w-4" /> Calculadora de Frete</CarboCardTitle></CarboCardHeader>
                 <CarboCardContent className="space-y-3">
-                  <div className="space-y-1.5"><Label>CEP de destino</Label><Input placeholder="00000-000" value={cep} onChange={(e) => setCep(e.target.value)} /></div>
+                  <div className="space-y-1.5"><Label>CEP de destino</Label><Input placeholder="00000-000" maxLength={9} value={cep} onChange={(e) => setCep(e.target.value)} /></div>
                   <div className="grid grid-cols-2 gap-3">
-                    <div className="space-y-1.5"><Label>Produto</Label><Input placeholder="CarboZé 100ml" /></div>
-                    <div className="space-y-1.5"><Label>Quantidade</Label><Input type="number" placeholder="100" /></div>
+                    <div className="space-y-1.5"><Label>Peso (kg)</Label><Input type="number" min={0.1} step={0.1} placeholder="ex: 12.5" value={peso} onChange={(e) => setPeso(e.target.value)} /></div>
+                    <div className="space-y-1.5"><Label>Valor da mercadoria (R$)</Label><Input type="number" min={0} step={0.01} placeholder="seguro (opcional)" value={valorMerc} onChange={(e) => setValorMerc(e.target.value)} /></div>
                   </div>
-                  <Button className="w-full gap-1.5" onClick={() => setFreteOpen(true)}><Calculator className="h-4 w-4" /> Calcular Frete</Button>
+                  <div className="space-y-1.5">
+                    <Label>Dimensões da caixa (cm)</Label>
+                    <div className="grid grid-cols-3 gap-2">
+                      <Input type="number" min={1} placeholder="Altura" value={altura} onChange={(e) => setAltura(e.target.value)} />
+                      <Input type="number" min={1} placeholder="Largura" value={largura} onChange={(e) => setLargura(e.target.value)} />
+                      <Input type="number" min={1} placeholder="Compr." value={comprimento} onChange={(e) => setComprimento(e.target.value)} />
+                    </div>
+                  </div>
+                  <Button className="w-full gap-1.5" onClick={handleCalcularFrete} disabled={calc.isPending}>
+                    {calc.isPending ? <><Loader2 className="h-4 w-4 animate-spin" /> Calculando…</> : <><Calculator className="h-4 w-4" /> Calcular Frete</>}
+                  </Button>
+                  <p className="text-[11px] text-muted-foreground">Origem: {ORIGIN_LABEL}.</p>
                 </CarboCardContent>
               </CarboCard>
               <CarboCard>
                 <CarboCardHeader><CarboCardTitle>Resultado</CarboCardTitle></CarboCardHeader>
-                <CarboCardContent className="py-12 text-center text-muted-foreground">
-                  <Truck className="h-10 w-10 mx-auto mb-2 opacity-30" />
-                  <p className="text-sm">Informe o CEP e calcule para ver as transportadoras e prazos.</p>
+                <CarboCardContent className="space-y-2">
+                  {!freightResults ? (
+                    <div className="py-12 text-center text-muted-foreground">
+                      <Truck className="h-10 w-10 mx-auto mb-2 opacity-30" />
+                      <p className="text-sm">Informe CEP, peso e dimensões e calcule para ver as transportadoras e prazos.</p>
+                    </div>
+                  ) : freightResults.length === 0 ? (
+                    <p className="py-10 text-center text-sm text-muted-foreground">Nenhuma transportadora retornou cotação para este destino/pacote.</p>
+                  ) : (
+                    <>
+                      {freightEstimated && (
+                        <div className="flex items-start gap-1.5 rounded-md bg-amber-500/10 border border-amber-500/20 px-3 py-2 text-[11px] text-amber-600 dark:text-amber-400">
+                          <AlertCircle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+                          <span><strong>Estimativa aproximada</strong> (Melhor Envio não configurado). Configure o token para cotações reais.</span>
+                        </div>
+                      )}
+                      {freightResults.map((r) => (
+                        <div key={r.id} className="flex items-center justify-between rounded-lg border px-3 py-2.5">
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <Truck className="h-3.5 w-3.5 text-muted-foreground" />
+                              <span className="text-sm font-medium">{r.company}</span>
+                              <span className="text-xs text-muted-foreground">· {r.name}</span>
+                              {r.price === freightCheapest && <CarboBadge variant="success" size="sm">Mais barato</CarboBadge>}
+                            </div>
+                            <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5"><Clock className="h-3 w-3" /> {prazoFrete(r.delivery_min, r.delivery_max)}</p>
+                          </div>
+                          <span className="text-sm font-semibold tabular-nums">{brlFrete(r.price)}</span>
+                        </div>
+                      ))}
+                    </>
+                  )}
                 </CarboCardContent>
               </CarboCard>
             </div>
-            <CarboCard>
-              <CarboCardHeader><CarboCardTitle>Relatórios de Frete</CarboCardTitle></CarboCardHeader>
-              <CarboCardContent className="py-8 text-center text-muted-foreground"><BarChart3 className="h-8 w-8 mx-auto mb-2 opacity-30" /><p className="text-sm">Histórico de cotações e custos de frete — entra na fase de lógica.</p></CarboCardContent>
-            </CarboCard>
           </TabsContent>
 
           <TabsContent value="estrategico" className="space-y-4 mt-4">
-            <CarboCard><CarboCardContent className="py-12 text-center text-muted-foreground"><BarChart3 className="h-10 w-10 mx-auto mb-2 opacity-30" /><p>Visão estratégica de logística (custo por rota, performance de transportadoras) — entra na fase de lógica.</p></CarboCardContent></CarboCard>
+            <CarboCard><CarboCardContent className="py-12 text-center text-muted-foreground"><BarChart3 className="h-10 w-10 mx-auto mb-2 opacity-30" /><p>Visão estratégica de logística (custo por rota, performance de transportadoras) — em breve.</p></CarboCardContent></CarboCard>
           </TabsContent>
         </Tabs>
-        <p className="text-xs text-muted-foreground text-center">Cotação de frete (transportadoras) e visão estratégica dependem de integração — entram numa fase futura.</p>
       </div>
 
       <NovaRemessaDialog open={novaOpen} onOpenChange={setNovaOpen} />
-      <FreightCalculatorDialog open={freteOpen} onOpenChange={setFreteOpen} />
       <ShipmentDetailsDialog
         shipment={shipment}
         open={shipment !== null}
