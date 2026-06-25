@@ -85,7 +85,7 @@ export function useCalculateFreight() {
   return useMutation({
     mutationFn: async (payload: { to_cep: string; from_cep?: string; products: FreightProduct[] }): Promise<FreightQuoteResult> => {
       try {
-        const { data, error } = await supabase.functions.invoke("melhor-envio-quote", {
+        const { data, error } = await supabase.functions.invoke("superfrete-quote", {
           body: { to_cep: payload.to_cep, from_cep: payload.from_cep, products: payload.products },
         });
         if (error) return mockFreightResult();
