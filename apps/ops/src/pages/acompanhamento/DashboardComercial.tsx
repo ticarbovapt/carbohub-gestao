@@ -11,24 +11,9 @@ import { CarboPageHeader } from "@/components/ui/carbo-page-header";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useComercialDashboard, type MonthlyRow } from "@/hooks/useCarbozeOrders";
 
-// PORT VISUAL FIEL ao Controle (/dashboards/comercial).
-// TODO: ligar em carboze_orders (Supabase)
-
-const VENDEDORES: string[] = [];
-
-interface MonthlyRow { mes: string; faturado: number; pedidos: number; ticketMedio: number; }
-const monthlyData: MonthlyRow[] = [];
-
-const kpis = {
-  totalVendas: 0,
-  totalBRL: 0,
-  maiorVenda: 0,
-  maiorCliente: "—",
-  topCliente: "—",
-  topQtd: 0,
-  ticketMedio: 0,
-};
+// PORT VISUAL FIEL ao Controle (/dashboards/comercial). Dados reais de carboze_orders.
 
 const formatCurrency = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 const fmtK = (v: number) =>
@@ -36,26 +21,6 @@ const fmtK = (v: number) =>
   : v >= 1000 ? `R$${(v / 1000).toFixed(0)}k`
   : formatCurrency(v);
 const pct = (cur: number, prev: number) => (prev > 0 ? ((cur - prev) / prev) * 100 : null);
-
-// Crescimento M/M e vs Janeiro (derivado dos dados reais — vazio até ligar Supabase)
-const emptyRow: MonthlyRow = { mes: "—", faturado: 0, pedidos: 0, ticketMedio: 0 };
-const lastIdx = monthlyData.length - 1;
-const cur = monthlyData[lastIdx] ?? emptyRow;
-const prev = monthlyData[lastIdx - 1] ?? emptyRow;
-const jan = monthlyData.find((m) => m.mes === "jan/26") ?? emptyRow;
-const growth = {
-  mom: {
-    brl: pct(cur.faturado, prev.faturado), qty: pct(cur.pedidos, prev.pedidos),
-    curLabel: cur.mes, prevLabel: prev.mes, cur, prev,
-  },
-  vsJan: {
-    brl: pct(cur.faturado, jan.faturado), qty: pct(cur.pedidos, jan.pedidos),
-    curLabel: cur.mes, janLabel: jan.mes, cur, jan,
-  },
-};
-
-// Crescimento anual: real vs projeção (vazio até ligar Supabase)
-const annualGrowthData: { label: string; projecao: number | null; real: number | null }[] = [];
 
 const TooltipBRL = ({ active, payload, label }: any) => {
   if (!active || !payload?.length) return null;
@@ -80,8 +45,31 @@ const TooltipQty = ({ active, payload, label }: any) => {
 
 export default function DashboardComercial() {
   const [vendedor, setVendedor] = useState("all");
+  const { data } = useComercialDashboard(vendedor);
+
+  const monthlyData: MonthlyRow[] = data?.monthlyData ?? [];
+  const kpis = data?.kpis ?? { totalVendas: 0, totalBRL: 0, maiorVenda: 0, maiorCliente: "—", topCliente: "—", topQtd: 0, ticketMedio: 0 };
+  const annualGrowthData = data?.annualGrowthData ?? [];
+  const VENDEDORES = data?.vendedores ?? [];
+
   const totalCarboze = kpis.totalBRL;
   const totalCarbozeOrders = kpis.totalVendas;
+
+  // Crescimento M/M e vs Janeiro (derivado dos dados reais)
+  const emptyRow: MonthlyRow = { mes: "—", faturado: 0, pedidos: 0, ticketMedio: 0 };
+  const cur = monthlyData[monthlyData.length - 1] ?? emptyRow;
+  const prev = monthlyData[monthlyData.length - 2] ?? emptyRow;
+  const jan = monthlyData.find((m) => m.mes.startsWith("jan/")) ?? monthlyData[0] ?? emptyRow;
+  const growth = {
+    mom: {
+      brl: pct(cur.faturado, prev.faturado), qty: pct(cur.pedidos, prev.pedidos),
+      curLabel: cur.mes, prevLabel: prev.mes, cur, prev,
+    },
+    vsJan: {
+      brl: pct(cur.faturado, jan.faturado), qty: pct(cur.pedidos, jan.pedidos),
+      curLabel: cur.mes, janLabel: jan.mes, cur, jan,
+    },
+  };
 
   const kpiCards = useMemo(() => [
     { title: "Total de Vendas", value: kpis.totalVendas.toLocaleString("pt-BR"), sub: "Pedidos ativos (excl. cancelados)", icon: ShoppingCart, accent: "border-l-green-500", iconBg: "bg-green-500/10 text-green-600" },
@@ -89,7 +77,7 @@ export default function DashboardComercial() {
     { title: "Maior Venda", value: fmtK(kpis.maiorVenda), sub: kpis.maiorCliente, icon: Trophy, accent: "border-l-amber-400", iconBg: "bg-amber-400/10 text-amber-500" },
     { title: "Top Recorrência", value: kpis.topCliente, sub: `${kpis.topQtd} pedidos · mais frequente`, icon: Repeat2, accent: "border-l-blue-400", iconBg: "bg-blue-400/10 text-blue-500" },
     { title: "Ticket Médio", value: fmtK(kpis.ticketMedio), sub: "Por pedido (período)", icon: TrendingUp, accent: "border-l-violet-400", iconBg: "bg-violet-400/10 text-violet-500" },
-  ], []);
+  ], [kpis]);
 
   const growthGroups = [
     {

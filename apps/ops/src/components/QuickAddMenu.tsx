@@ -1,21 +1,19 @@
 import { useState } from "react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
-import { Plus, ClipboardList, ShoppingCart } from "lucide-react";
+import { Plus, ShoppingCart } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { CreateOSDialog } from "@/components/campo/CreateOSDialog";
 import { NovaVendaDialog } from "@/components/NovaVendaDialog";
 
-// Botão "+" do topo (speed-dial). No ecossistema novo só expõe as duas ações
-// universais: Nova Descarbonização e Nova Venda — ambas abrem dialog.
+// Botão "+" do topo (speed-dial). Expõe a ação universal "Nova Venda" (grava em
+// carboze_orders). "Nova Descarbonização" (OS) sai daqui até ter fluxo de
+// criação próprio — OS hoje chegam como espelho do Sales (somente leitura).
 export function QuickAddMenu() {
   const [open, setOpen] = useState(false);
-  const [descOpen, setDescOpen] = useState(false);
   const [vendaOpen, setVendaOpen] = useState(false);
 
   const actions = [
-    { key: "desc", icon: ClipboardList, label: "+ Nova Descarbonização", primary: true, onClick: () => setDescOpen(true) },
-    { key: "venda", icon: ShoppingCart, label: "+ Nova Venda", onClick: () => setVendaOpen(true) },
+    { key: "venda", icon: ShoppingCart, label: "+ Nova Venda", primary: true, onClick: () => setVendaOpen(true) },
   ];
 
   return (
@@ -51,7 +49,6 @@ export function QuickAddMenu() {
         </PopoverContent>
       </Popover>
 
-      <CreateOSDialog open={descOpen} onOpenChange={setDescOpen} />
       <NovaVendaDialog open={vendaOpen} onOpenChange={setVendaOpen} />
     </>
   );

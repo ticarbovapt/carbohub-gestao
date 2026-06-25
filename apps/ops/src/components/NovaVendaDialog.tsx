@@ -1,6 +1,5 @@
-// TODO: ligar em <tabela de vendas/produtos> (Supabase) na fase de lógica.
 // Reproduz a tela "Vender" do Carbo Sales dentro de um popup (Ops não tem a
-// página Vender; aqui a venda é registrada por este dialog).
+// página Vender; aqui a venda é registrada por este dialog) e grava em carboze_orders.
 import { useMemo, useState } from "react";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
@@ -17,10 +16,11 @@ import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useAuth } from "@/contexts/AuthContext";
+import { useSkus } from "@/hooks/useSkus";
+import { useCreateVenda } from "@/hooks/useCarbozeOrders";
+import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
-// TODO: carregar produtos reais do estoque (Supabase) na fase de lógica.
-const PRODUTOS: { id: string; name: string; price: number }[] = [];
 const TIPOS_PONTO = ["Posto", "Oficina", "Frota", "PDV", "Licenciado"];
 const CLASSIFICACOES = ["Estratégico", "Potencial", "Regular"];
 const UFS = ["SP", "RJ", "MG", "RN", "BA", "PR", "RS", "SC"];
@@ -59,6 +59,8 @@ interface NovaVendaDialogProps {
 export function NovaVendaDialog({ open, onOpenChange }: NovaVendaDialogProps) {
   const { profile } = useAuth();
   const vendedor = profile?.full_name ?? profile?.username ?? "";
+  const { data: skus = [] } = useSkus();
+  const createVenda = useCreateVenda();
 
   const [mode, setMode] = useState<"venda" | "promo">("venda");
   const [doc, setDoc] = useState("");
@@ -70,6 +72,13 @@ export function NovaVendaDialog({ open, onOpenChange }: NovaVendaDialogProps) {
   const [obsPublica, setObsPublica] = useState("");
   const [showEstrategicos, setShowEstrategicos] = useState(false);
   const [showObs, setShowObs] = useState(false);
+  // Endereço de entrega
+  const [logradouro, setLogradouro] = useState("");
+  const [numero, setNumero] = useState("");
+  const [bairro, setBairro] = useState("");
+  const [cidade, setCidade] = useState("");
+  const [estado, setEstado] = useState("");
+  const [cep, setCep] = useState("");
 
   const subtotal = useMemo(() => rows.reduce((s, r) => s + r.qty * r.unitPrice, 0), [rows]);
 
@@ -77,19 +86,49 @@ export function NovaVendaDialog({ open, onOpenChange }: NovaVendaDialogProps) {
     setRows((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch } : r)));
   }
   function onProduct(id: string, productId: string) {
-    const p = PRODUTOS.find((x) => x.id === productId);
-    updateRow(id, { productId, unitPrice: p ? p.price : 0 });
+    updateRow(id, { productId });
   }
   const hasItems = () => rows.some((r) => r.productId && r.qty > 0);
 
-  function handleQuote() {
-    if (!hasItems()) { toast.error("Adicione ao menos um item."); return; }
-    toast.info("Disponível na fase de lógica");
+  function resetForm() {
+    setDoc(""); setCustomerName(""); setEmail(""); setPhone(""); setIsLicenciado(false);
+    setRows([emptyRow()]); setObsPublica("");
+    setLogradouro(""); setNumero(""); setBairro(""); setCidade(""); setEstado(""); setCep("");
   }
-  function handleSell() {
+
+  async function handleSell() {
+    if (!customerName.trim()) { toast.error("Informe o nome/razão social do cliente."); return; }
     if (!hasItems()) { toast.error("Adicione ao menos um item."); return; }
-    toast.info("Disponível na fase de lógica");
-    onOpenChange(false);
+    const items = rows
+      .filter((r) => r.productId && r.qty > 0)
+      .map((r) => ({
+        product_id: r.productId,
+        name: skus.find((s) => s.id === r.productId)?.name ?? "Item",
+        quantity: r.qty,
+        unit_price: r.unitPrice,
+        total: r.qty * r.unitPrice,
+      }));
+    const addr = ([logradouro, numero].filter(Boolean).join(", ") + (bairro ? ` - ${bairro}` : "")).trim();
+    try {
+      await createVenda.mutateAsync({
+        customer_name: customerName.trim(),
+        customer_email: email || null,
+        customer_phone: phone || null,
+        is_licensee: isLicenciado,
+        delivery_address: addr || null,
+        delivery_city: cidade || null,
+        delivery_state: estado || null,
+        delivery_zip: cep || null,
+        items,
+        subtotal,
+        total: subtotal,
+        notes: obsPublica || null,
+        vendedor_id: profile?.id ?? null,
+        vendedor_name: vendedor || null,
+      });
+      resetForm();
+      onOpenChange(false);
+    } catch { /* erro tratado no hook */ }
   }
 
   return (
@@ -126,12 +165,7 @@ export function NovaVendaDialog({ open, onOpenChange }: NovaVendaDialogProps) {
               <p className="text-xs text-muted-foreground">
                 CNPJ busca os dados automaticamente. CPF (pessoa física) é validado e segue com preenchimento manual.
               </p>
-              <div className="flex flex-col sm:flex-row gap-2">
-                <Input value={doc} onChange={(e) => setDoc(e.target.value)} placeholder="CNPJ ou CPF" />
-                <CarboButton type="button" onClick={() => toast.info("Disponível na fase de lógica")}>
-                  <Search className="h-4 w-4 mr-1" /> Buscar dados
-                </CarboButton>
-              </div>
+              <Input value={doc} onChange={(e) => setDoc(e.target.value)} placeholder="CNPJ ou CPF" />
             </CarboCardContent>
           </CarboCard>
 
@@ -166,28 +200,23 @@ export function NovaVendaDialog({ open, onOpenChange }: NovaVendaDialogProps) {
           {/* Endereço de Entrega */}
           <CarboCard>
             <CarboCardContent className="p-4 space-y-3">
-              <div className="flex items-center justify-between">
-                <h3 className="font-semibold flex items-center gap-2"><MapPin className="h-4 w-4 text-carbo-green" /> Endereço de Entrega</h3>
-                <Button variant="outline" size="sm" type="button" onClick={() => toast.info("Disponível na fase de lógica")}>
-                  <MapPin className="h-4 w-4 mr-1" /> Localizar no mapa
-                </Button>
-              </div>
+              <h3 className="font-semibold flex items-center gap-2"><MapPin className="h-4 w-4 text-carbo-green" /> Endereço de Entrega</h3>
               <div className="grid md:grid-cols-3 gap-3">
-                <div className="space-y-1.5 md:col-span-2"><Label>Logradouro</Label><Input placeholder="Rua, Avenida, etc." /></div>
+                <div className="space-y-1.5 md:col-span-2"><Label>Logradouro</Label><Input value={logradouro} onChange={(e) => setLogradouro(e.target.value)} placeholder="Rua, Avenida, etc." /></div>
                 <div className="space-y-1.5">
                   <Label>Número</Label>
-                  <div className="flex gap-2"><Input placeholder="Nº" /><Button variant="outline" type="button" className="shrink-0">S/N</Button></div>
+                  <div className="flex gap-2"><Input value={numero} onChange={(e) => setNumero(e.target.value)} placeholder="Nº" /><Button variant="outline" type="button" className="shrink-0" onClick={() => setNumero("S/N")}>S/N</Button></div>
                 </div>
-                <div className="space-y-1.5"><Label>Bairro</Label><Input placeholder="Bairro" /></div>
-                <div className="space-y-1.5"><Label>Cidade</Label><Input placeholder="Cidade" /></div>
+                <div className="space-y-1.5"><Label>Bairro</Label><Input value={bairro} onChange={(e) => setBairro(e.target.value)} placeholder="Bairro" /></div>
+                <div className="space-y-1.5"><Label>Cidade</Label><Input value={cidade} onChange={(e) => setCidade(e.target.value)} placeholder="Cidade" /></div>
                 <div className="space-y-1.5">
                   <Label>Estado</Label>
-                  <Select>
+                  <Select value={estado} onValueChange={setEstado}>
                     <SelectTrigger><SelectValue placeholder="UF" /></SelectTrigger>
                     <SelectContent>{UFS.map((u) => <SelectItem key={u} value={u}>{u}</SelectItem>)}</SelectContent>
                   </Select>
                 </div>
-                <div className="space-y-1.5"><Label>CEP</Label><Input placeholder="00000-000" /></div>
+                <div className="space-y-1.5"><Label>CEP</Label><Input value={cep} onChange={(e) => setCep(e.target.value)} placeholder="00000-000" /></div>
               </div>
             </CarboCardContent>
           </CarboCard>
@@ -211,7 +240,7 @@ export function NovaVendaDialog({ open, onOpenChange }: NovaVendaDialogProps) {
                         <Label>Produto</Label>
                         <Select value={r.productId} onValueChange={(v) => onProduct(r.id, v)}>
                           <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
-                          <SelectContent>{PRODUTOS.map((p) => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}</SelectContent>
+                          <SelectContent>{skus.map((p) => <SelectItem key={p.id} value={p.id}>{p.code} — {p.name}</SelectItem>)}</SelectContent>
                         </Select>
                       </div>
                       <div className="space-y-1.5">
@@ -310,18 +339,17 @@ export function NovaVendaDialog({ open, onOpenChange }: NovaVendaDialogProps) {
             <p className="text-xl font-bold">{brl(subtotal)}</p>
           </div>
           <div className="flex items-center gap-2">
-            <Button variant="ghost" type="button" onClick={() => onOpenChange(false)}>Cancelar</Button>
-            <Button variant="outline" type="button" onClick={handleQuote}>
-              <FileText className="h-4 w-4 mr-1" /> Gerar Orçamento
-            </Button>
-            <CarboButton onClick={handleSell} className="min-w-[150px]">
-              <ShoppingCart className="h-4 w-4 mr-1" /> Gerar Venda
+            <Button variant="ghost" type="button" onClick={() => onOpenChange(false)} disabled={createVenda.isPending}>Cancelar</Button>
+            <CarboButton onClick={handleSell} className="min-w-[150px]" disabled={createVenda.isPending}>
+              {createVenda.isPending
+                ? <><Loader2 className="h-4 w-4 mr-1 animate-spin" /> Salvando…</>
+                : <><ShoppingCart className="h-4 w-4 mr-1" /> Gerar Venda</>}
             </CarboButton>
           </div>
         </div>
 
         <p className="text-xs text-muted-foreground text-center">
-          Vendedor: <b>{vendedor || "—"}</b> (usuário logado) · Tela em port visual — CNPJ, mapa, produtos do estoque e gravação real entram na próxima fase.
+          Vendedor: <b>{vendedor || "—"}</b> (usuário logado) · grava em <code>carboze_orders</code> como pedido pendente.
         </p>
       </DialogContent>
     </Dialog>

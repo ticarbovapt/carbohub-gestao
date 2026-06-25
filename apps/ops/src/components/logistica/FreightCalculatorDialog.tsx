@@ -1,4 +1,5 @@
-// TODO: ligar em fretes/cotacoes (Supabase)
+// Cálculo de frete LOCAL/estimado (sem API externa): peso real vs peso cúbico
+// e fator por região do CEP. Resultados rotulados como simulados na UI.
 import { useState } from "react";
 import {
   Dialog,
@@ -13,7 +14,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { CarboBadge } from "@/components/ui/carbo-badge";
 import { Separator } from "@/components/ui/separator";
-import { Calculator, MapPin, Truck, Clock, AlertCircle } from "lucide-react";
+import { Calculator, Truck, Clock, AlertCircle } from "lucide-react";
+import { toast } from "sonner";
 
 interface FreightCalculatorDialogProps {
   open: boolean;
@@ -30,8 +32,29 @@ interface CarrierResult {
   price: number;
 }
 
-// TODO: ligar em fretes/cotacoes (Supabase)
-const MOCK_RESULTS: CarrierResult[] = [];
+// Estimativa local: frete = (base + perKg * pesoTaxável) * fatorRegião * multiplicadorServiço.
+// pesoTaxável = max(peso real, peso cúbico) onde cúbico = (A*L*C)/6000.
+function estimateFreight(peso: number, alt: number, larg: number, comp: number, cep: string): CarrierResult[] {
+  const cubico = (alt * larg * comp) / 6000; // kg
+  const taxavel = Math.max(peso, cubico, 0.3);
+  const cepNum = parseInt((cep || "").replace(/\D/g, "").slice(0, 5) || "0", 10);
+  const regiao =
+    cepNum >= 1000 && cepNum <= 19999 ? 1.0 :   // SP
+    cepNum >= 20000 && cepNum <= 28999 ? 1.15 :  // RJ/ES
+    cepNum >= 29000 && cepNum <= 29999 ? 1.2 :   // ES
+    cepNum >= 30000 && cepNum <= 39999 ? 1.2 :   // MG
+    cepNum >= 40000 && cepNum <= 65999 ? 1.6 :   // BA/NE
+    cepNum >= 66000 && cepNum <= 69999 ? 1.9 :   // Norte
+    cepNum >= 80000 && cepNum <= 99999 ? 1.35 :  // Sul
+    1.5;
+  const base = 18, perKg = 2.4;
+  const valor = (mult: number) => Math.round((base + perKg * taxavel) * regiao * mult * 100) / 100;
+  return [
+    { name: "Transportadora", service: "Rodoviário", days: "4–8 dias úteis", price: valor(0.85) },
+    { name: "Correios", service: "PAC", days: "5–9 dias úteis", price: valor(1.0) },
+    { name: "Correios", service: "SEDEX", days: "1–3 dias úteis", price: valor(1.5) },
+  ];
+}
 
 export function FreightCalculatorDialog({ open, onOpenChange }: FreightCalculatorDialogProps) {
   const [origem, setOrigem] = useState("");
@@ -41,13 +64,22 @@ export function FreightCalculatorDialog({ open, onOpenChange }: FreightCalculato
   const [largura, setLargura] = useState("");
   const [comprimento, setComprimento] = useState("");
   const [showResult, setShowResult] = useState(false);
+  const [results, setResults] = useState<CarrierResult[]>([]);
 
   const handleClose = (o: boolean) => {
-    if (!o) setShowResult(false);
+    if (!o) { setShowResult(false); setResults([]); }
     onOpenChange(o);
   };
 
-  const cheapest = Math.min(...MOCK_RESULTS.map((r) => r.price));
+  const handleCalcular = () => {
+    const pesoNum = Number(peso) || 0;
+    if (pesoNum <= 0) { toast.error("Informe o peso (kg)."); return; }
+    if (!cep.trim()) { toast.error("Informe o CEP de destino."); return; }
+    setResults(estimateFreight(pesoNum, Number(altura) || 0, Number(largura) || 0, Number(comprimento) || 0, cep));
+    setShowResult(true);
+  };
+
+  const cheapest = results.length ? Math.min(...results.map((r) => r.price)) : 0;
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
@@ -118,7 +150,7 @@ export function FreightCalculatorDialog({ open, onOpenChange }: FreightCalculato
             </div>
           </div>
 
-          <Button className="w-full gap-2" onClick={() => setShowResult(true)}>
+          <Button className="w-full gap-2" onClick={handleCalcular}>
             <Calculator className="h-4 w-4" /> Calcular
           </Button>
 
@@ -133,10 +165,10 @@ export function FreightCalculatorDialog({ open, onOpenChange }: FreightCalculato
                   </span>
                 </div>
                 <div className="divide-y">
-                  {MOCK_RESULTS.length === 0 && (
+                  {results.length === 0 && (
                     <p className="px-3 py-6 text-center text-sm text-muted-foreground">Nenhum resultado de cotação.</p>
                   )}
-                  {MOCK_RESULTS.map((r, i) => (
+                  {results.map((r, i) => (
                     <div key={i} className="flex items-center justify-between px-3 py-2.5">
                       <div className="min-w-0">
                         <div className="flex items-center gap-1.5">
