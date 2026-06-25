@@ -19,16 +19,26 @@ export function PurchasingDashboard() {
     return Object.entries(byStatus).map(([name, value]) => ({ name, value }));
   })();
 
-  // Cost by cost center (bar chart) - from orders
+  // Custo por fornecedor. Fonte preferencial: purchase_orders. Como o Bling
+  // costuma trazer poucos/nenhum pedido de compra, caímos para purchase_payables
+  // (contas a pagar) agrupado por fornecedor — que vem populado do sync.
   const costCenterData = (() => {
-    if (!orders) return [];
-    // We don't have cost_center on purchase_orders directly, so we show by supplier
     const bySupplier: Record<string, number> = {};
-    orders.forEach((o) => {
-      if (o.status !== "cancelada") {
-        bySupplier[o.supplier_name] = (bySupplier[o.supplier_name] || 0) + Number(o.total_value);
-      }
-    });
+
+    if (orders && orders.length > 0) {
+      orders.forEach((o) => {
+        if (o.status !== "cancelada" && o.supplier_name) {
+          bySupplier[o.supplier_name] = (bySupplier[o.supplier_name] || 0) + Number(o.total_value);
+        }
+      });
+    } else if (payables && payables.length > 0) {
+      payables.forEach((p) => {
+        if (p.status !== "cancelado" && p.supplier_name) {
+          bySupplier[p.supplier_name] = (bySupplier[p.supplier_name] || 0) + Number(p.amount);
+        }
+      });
+    }
+
     return Object.entries(bySupplier)
       .map(([name, valor]) => ({ name: name.length > 15 ? name.slice(0, 15) + "…" : name, valor }))
       .sort((a, b) => b.valor - a.valor)

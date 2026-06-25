@@ -146,13 +146,13 @@ export function useOrders(statusFilter?: OrderStatus | "all") {
   return useQuery({
     queryKey: ["carboze-orders", statusFilter],
     queryFn: async () => {
+      // NÃO usar join embutido aqui: carboze_orders_secure é uma VIEW sem FK
+      // declarada, e o PostgREST quebra ao tentar embutir licensees/sku
+      // (deixava a lista vazia mesmo com pedidos). Usamos as colunas
+      // denormalizadas (vendedor_name, customer_name, linha) já presentes.
       let query = supabase
         .from("carboze_orders_secure")
-        .select(`
-          *,
-          licensee:licensees(id, name, code),
-          sku:sku(id, code, name)
-        `)
+        .select("*")
         .order("created_at", { ascending: false });
 
       if (statusFilter && statusFilter !== "all") {
@@ -173,11 +173,7 @@ export function useOrder(id: string | undefined) {
       if (!id) return null;
       const { data, error } = await supabase
         .from("carboze_orders_secure")
-        .select(`
-          *,
-          licensee:licensees(id, name, code),
-          sku:sku(id, code, name)
-        `)
+        .select("*")
         .eq("id", id)
         .single();
       if (error) throw error;
