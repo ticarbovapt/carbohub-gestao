@@ -21,17 +21,32 @@ const ALLOWED_ORIGINS = [
   "https://admin.carbohub.com.br",
   "https://sales.carbohub.com.br",
   "https://ops.carbohub.com.br",
+  "https://finance.carbohub.com.br",
+  "https://financas.carbohub.com.br",
+  "https://carbohub-fin.vercel.app",
   "http://localhost:8080",
   "http://localhost:8082",
   "http://localhost:5173",
   "http://localhost:3000",
 ];
 
+function isAllowedOrigin(origin: string): boolean {
+  if (ALLOWED_ORIGINS.includes(origin)) return true;
+  try {
+    const { protocol, hostname } = new URL(origin);
+    if (protocol !== "https:") return false;
+    return hostname.endsWith(".carbohub.com.br") || hostname.endsWith(".vercel.app");
+  } catch {
+    return false;
+  }
+}
+
 function getCorsHeaders(req: Request) {
   const origin = req.headers.get("origin") || "";
-  const allowedOrigin = ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0];
+  const allowedOrigin = isAllowedOrigin(origin) ? origin : ALLOWED_ORIGINS[0];
   return {
     "Access-Control-Allow-Origin": allowedOrigin,
+    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
     "Access-Control-Allow-Headers":
       "authorization, x-client-info, apikey, content-type",
     "Vary": "Origin",
@@ -60,6 +75,11 @@ interface QuoteRequest {
 
 Deno.serve(async (req) => {
   const corsHeaders = getCorsHeaders(req);
+  const json = (data: unknown, status = 200) =>
+    new Response(JSON.stringify(data), {
+      status,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
 
   // CORS preflight
   if (req.method === "OPTIONS") {
@@ -180,13 +200,6 @@ Deno.serve(async (req) => {
 });
 
 // ── Helpers ────────────────────────────────────────────────────────────────
-
-function json(data: unknown, status = 200) {
-  return new Response(JSON.stringify(data), {
-    status,
-    headers: { ...corsHeaders, "Content-Type": "application/json" },
-  });
-}
 
 /** Dados mock para quando o token ainda não foi configurado (demonstração) */
 function mockResponse(toCep: string) {
