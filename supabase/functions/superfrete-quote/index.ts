@@ -150,6 +150,11 @@ Deno.serve(async (req) => {
 
     // SuperFrete retorna um array de serviços (alguns com .error quando indisponível)
     const list = Array.isArray(data) ? data : (data?.services ?? []);
+
+    // Log de diagnóstico: o que o SuperFrete devolveu (aparece nos Logs da function).
+    console.log("[superfrete-quote] servicos:", JSON.stringify(
+      list.map((c: any) => ({ id: c.id, name: c.name, company: c.company?.name, price: c.price, error: c.error })),
+    ));
     const carriers = list
       .filter((c: any) => !c.error && c.price != null)
       .map((c: any) => ({

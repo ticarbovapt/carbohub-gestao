@@ -152,7 +152,7 @@ export default function Logistica() {
                         </div>
                       )}
                       {freightResults.map((r) => (
-                        <div key={r.id} className="flex items-center justify-between rounded-lg border px-3 py-2.5">
+                        <div key={r.id} className="flex items-center justify-between rounded-lg border border-green-500/40 bg-green-500/[0.06] px-3 py-2.5">
                           <div className="min-w-0">
                             <div className="flex items-center gap-1.5 flex-wrap">
                               <Truck className="h-3.5 w-3.5 text-muted-foreground" />
@@ -166,11 +166,11 @@ export default function Logistica() {
                         </div>
                       ))}
                       {freightUnavailable.length > 0 && (
-                        <div className="pt-2 mt-1 border-t border-border/50">
-                          <p className="text-[11px] font-medium text-muted-foreground mb-1">Indisponíveis para este pacote/destino:</p>
+                        <div className="pt-2 mt-1 border-t border-border/50 space-y-1">
+                          <p className="text-[11px] font-medium text-muted-foreground mb-1">Não atendem este pacote/destino:</p>
                           {freightUnavailable.map((u, i) => (
-                            <div key={i} className="flex items-start gap-1.5 px-1 py-1 text-[11px] text-muted-foreground">
-                              <AlertCircle className="h-3 w-3 shrink-0 mt-0.5 opacity-60" />
+                            <div key={i} className="flex items-start gap-1.5 rounded-lg border border-amber-500/30 bg-amber-500/[0.06] px-3 py-2 text-[11px] text-amber-700 dark:text-amber-400">
+                              <AlertCircle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
                               <span><strong>{u.company}{u.name ? ` · ${u.name}` : ""}</strong> — {u.error}</span>
                             </div>
                           ))}
