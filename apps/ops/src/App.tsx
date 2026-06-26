@@ -30,11 +30,8 @@ import Agendamentos from "./pages/campo/Agendamentos";
 import Maquinas from "./pages/campo/Maquinas";
 import Checklists from "./pages/campo/Checklists";
 import Alertas from "./pages/campo/Alertas";
-import VendasOnline from "./pages/ecommerce/VendasOnline";
-import AcompanhamentoMetas from "./pages/ecommerce/AcompanhamentoMetas";
 import AcompDashboardComercial from "./pages/acompanhamento/DashboardComercial";
 import AcompMetasVendedores from "./pages/acompanhamento/MetasVendedores";
-import MetasVendedoresConfig from "./pages/config/MetasVendedores";
 import { OPS_ALL_ITEMS } from "@/lib/opsNav";
 
 // Login é ÚNICO no Hub (carbohub.com.br). O ProtectedRoute cuida do acesso.
@@ -84,17 +81,9 @@ export default function App() {
         <Route path="/campo/checklists" element={<Checklists />} />
         <Route path="/campo/alertas" element={<Alertas />} />
 
-        {/* E-commerce — área de operação online */}
-        <Route path="/ecommerce/vendas-online" element={<VendasOnline />} />
-        <Route path="/ecommerce/acompanhamento" element={<AcompanhamentoMetas />} />
-        <Route path="/ecommerce/metas" element={<Navigate to="/config/metas-vendedores" replace />} />
-
         {/* Acompanhamento (Vendas) — espelho do Sales, visualização */}
         <Route path="/acompanhamento/comercial" element={<AcompDashboardComercial />} />
         <Route path="/acompanhamento/metas" element={<AcompMetasVendedores />} />
-
-        {/* Configuração de Metas — gestor define (o acompanhamento fica no Sales) */}
-        <Route path="/config/metas-vendedores" element={<MetasVendedoresConfig />} />
 
         {/* Demais áreas: placeholder até o port (telas com ready=false) */}
         {OPS_ALL_ITEMS.filter((i) => !i.ready).map((i) => (

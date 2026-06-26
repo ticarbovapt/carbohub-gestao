@@ -1,7 +1,7 @@
 import {
   LayoutDashboard, Factory, BarChart3, Package, Boxes, Layers, Building2,
   Warehouse, ShoppingCart, PackagePlus, Wallet, Receipt, FileText, Truck,
-  Plane, ClipboardList, Calendar, Cog, UserCheck, Bell, TrendingUp, Globe, Target, Link2,
+  Plane, ClipboardList, Calendar, Cog, UserCheck, Bell, TrendingUp, Target, Link2,
   type LucideIcon,
 } from "lucide-react";
 
@@ -78,23 +78,10 @@ export const OPS_GROUPS: OpsNavGroup[] = [
     ],
   },
   {
-    label: "E-commerce",
-    items: [
-      { path: "/ecommerce/vendas-online", label: "Vendas Online", icon: Globe, from: "/dashboards/ecommerce/vendas-online", ready: true },
-      { path: "/ecommerce/acompanhamento", label: "Acompanhamento de Metas", icon: Target, from: "/dashboards/metas/ecommerce", ready: true },
-    ],
-  },
-  {
     label: "Acompanhamento (Vendas)",
     items: [
       { path: "/acompanhamento/comercial", label: "Dashboard Comercial", icon: TrendingUp, from: "/dashboards/comercial", mirror: true, ready: true },
       { path: "/acompanhamento/metas", label: "Metas de Vendedores", icon: Target, from: "/dashboards/metas/vendedores", mirror: true, ready: true },
-    ],
-  },
-  {
-    label: "Configuração de Metas",
-    items: [
-      { path: "/config/metas-vendedores", label: "Configurar Metas", icon: Target, from: "/dashboards/metas/config", ready: true },
     ],
   },
   // ───────────────────────────────────────────────────────────────────────────

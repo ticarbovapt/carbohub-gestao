@@ -1,13 +1,30 @@
 import { useState } from "react";
 import { NavLink, Outlet } from "react-router-dom";
-import { Users as UsersIcon, ListTree } from "lucide-react";
+import { Users as UsersIcon, ListTree, Globe, Target } from "lucide-react";
 import { TopBar } from "@/components/TopBar";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { useIsMobile } from "@/hooks/use-mobile";
 
-const NAV = [
+// Itens de topo (acesso/estrutura) + grupos recém-trazidos do Ops.
+const NAV_TOP = [
   { to: "/", end: true, label: "Usuários", icon: UsersIcon },
   { to: "/estrutura", end: false, label: "Departamentos e funções", icon: ListTree },
+];
+
+const NAV_GROUPS = [
+  {
+    label: "E-commerce",
+    items: [
+      { to: "/ecommerce/vendas-online", label: "Vendas Online", icon: Globe },
+      { to: "/ecommerce/metas", label: "Acompanhamento de Metas", icon: Target },
+    ],
+  },
+  {
+    label: "Configuração de Metas",
+    items: [
+      { to: "/metas/configurar", label: "Configurar Metas", icon: Target },
+    ],
+  },
 ];
 
 const navCls = ({ isActive }: { isActive: boolean }) =>
@@ -18,10 +35,23 @@ const navCls = ({ isActive }: { isActive: boolean }) =>
 function Nav({ onNavigate }: { onNavigate?: () => void }) {
   return (
     <nav className="space-y-1 p-3">
-      {NAV.map((n) => (
+      {NAV_TOP.map((n) => (
         <NavLink key={n.to} to={n.to} end={n.end} className={navCls} onClick={onNavigate}>
           <n.icon className="h-4 w-4" /> {n.label}
         </NavLink>
+      ))}
+
+      {NAV_GROUPS.map((g) => (
+        <div key={g.label} className="pt-3">
+          <p className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/70">{g.label}</p>
+          <div className="space-y-1">
+            {g.items.map((i) => (
+              <NavLink key={i.to} to={i.to} className={navCls} onClick={onNavigate}>
+                <i.icon className="h-4 w-4" /> {i.label}
+              </NavLink>
+            ))}
+          </div>
+        </div>
       ))}
     </nav>
   );
