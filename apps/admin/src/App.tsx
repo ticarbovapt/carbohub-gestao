@@ -8,6 +8,8 @@ import Profile from "./pages/Profile";
 import BugReports from "./pages/BugReports";
 import MinhaEquipe from "./pages/MinhaEquipe";
 import Placeholder from "./pages/Placeholder";
+import EcommerceVendas from "./pages/EcommerceVendas";
+import EcommerceMetas from "./pages/EcommerceMetas";
 import { isCarbohubDomain, goToHubLogin } from "@/lib/sso";
 
 // Login é ÚNICO no Hub: /login direto em produção é redirecionado pra lá.
@@ -32,8 +34,8 @@ export default function App() {
         <Route path="/equipe" element={<MinhaEquipe />} />
 
         {/* Grupos trazidos do Ops — em organização (conteúdo aos poucos) */}
-        <Route path="/ecommerce/vendas-online" element={<Placeholder title="Vendas Online" />} />
-        <Route path="/ecommerce/metas" element={<Placeholder title="Acompanhamento de Metas" />} />
+        <Route path="/ecommerce/vendas-online" element={<EcommerceVendas />} />
+        <Route path="/ecommerce/metas" element={<EcommerceMetas />} />
         <Route path="/metas/configurar" element={<Placeholder title="Configurar Metas" />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
