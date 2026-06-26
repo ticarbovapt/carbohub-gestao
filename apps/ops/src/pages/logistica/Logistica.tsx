@@ -142,7 +142,7 @@ export default function Logistica() {
                       {freightEstimated && (
                         <div className="flex items-start gap-1.5 rounded-md bg-amber-500/10 border border-amber-500/20 px-3 py-2 text-[11px] text-amber-600 dark:text-amber-400">
                           <AlertCircle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
-                          <span><strong>Estimativa aproximada</strong> (Melhor Envio não configurado). Configure o token para cotações reais.</span>
+                          <span><strong>Estimativa aproximada</strong> (SuperFrete não configurado no Supabase). Configure o token <code>SUPERFRETE_TOKEN</code> para cotações reais.</span>
                         </div>
                       )}
                       {freightResults.map((r) => (
