@@ -14,7 +14,7 @@ import Lotes from "./pages/producao/Lotes";
 import FornecedoresMrp from "./pages/producao/FornecedoresMrp";
 import SaldosPorHub from "./pages/estoque/SaldosPorHub";
 import EstoqueHub from "./pages/estoque/EstoqueHub";
-import Compras from "./pages/compras/Compras";
+import RequisicaoCompra from "./pages/compras/RequisicaoCompra";
 import Suprimentos from "./pages/compras/Suprimentos";
 import BlingIntegracao from "./pages/integracoes/Bling";
 import Financeiro from "./pages/financeiro/Financeiro";
@@ -58,7 +58,7 @@ export default function App() {
         <Route path="/estoque/:hub" element={<EstoqueHub />} />
 
         {/* Compras & Suprimentos */}
-        <Route path="/compras" element={<Compras />} />
+        <Route path="/compras" element={<RequisicaoCompra />} />
         <Route path="/suprimentos" element={<Suprimentos />} />
         <Route path="/integracoes/bling" element={<BlingIntegracao />} />
 

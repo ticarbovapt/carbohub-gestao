@@ -60,6 +60,13 @@ export const OPS_GROUPS: OpsNavGroup[] = [
     ],
   },
   {
+    label: "Compras",
+    items: [
+      // Só a Requisição de Compra fica no Ops; o resto do fluxo está no Finanças.
+      { path: "/compras", label: "Requisição de Compra", icon: ShoppingCart, from: "/purchasing", ready: true },
+    ],
+  },
+  {
     label: "Logística",
     items: [
       { path: "/logistica", label: "Logística", icon: Truck, from: "/logistics", ready: true },
@@ -89,13 +96,6 @@ export const OPS_GROUPS: OpsNavGroup[] = [
   // TRAVADO: cadeado, não clicável e no fim da sidebar. Remover quando o
   // Finanças assumir 100% destas telas.
   // ───────────────────────────────────────────────────────────────────────────
-  {
-    label: "Compras",
-    locked: true,
-    items: [
-      { path: "/compras", label: "Compras", icon: ShoppingCart, from: "/purchasing", ready: true, locked: true },
-    ],
-  },
   {
     label: "Financeiro",
     locked: true,
