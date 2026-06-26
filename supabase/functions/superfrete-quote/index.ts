@@ -112,9 +112,15 @@ Deno.serve(async (req) => {
     const maxL = Math.max(...body.products.map((p) => Math.ceil(p.length || 1)), 1);
     const insurance = body.products.reduce((s, p) => s + (p.insurance_value || 0) * (p.quantity || 1), 0);
 
+    // Sem "services" o SuperFrete retorna só o padrão (Loggi). Listamos os IDs
+    // para receber todas as transportadoras: 1=PAC, 2=SEDEX, 3=Mini Envios,
+    // 17=Jadlog, 31=Loggi. Ajustável por env SUPERFRETE_SERVICES.
+    const services = Deno.env.get("SUPERFRETE_SERVICES") ?? "1,2,3,17,31";
+
     const payload = {
       from: { postal_code: fromCep },
       to: { postal_code: toCep },
+      services,
       options: {
         own_hand: false,
         receipt: false,
