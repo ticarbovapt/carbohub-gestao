@@ -13,6 +13,7 @@ import Metas from "./pages/Metas";
 import Profile from "./pages/Profile";
 import BugReports from "./pages/BugReports";
 import MinhaEquipe from "./pages/MinhaEquipe";
+import RequisicaoCompra from "./pages/RequisicaoCompra";
 import DescOrdensServico from "./pages/descarbonizacao/OrdensServico";
 import DescAgendamentos from "./pages/descarbonizacao/Agendamentos";
 import MapaTerritorial from "./pages/territorio/MapaTerritorial";
@@ -44,6 +45,7 @@ export default function App() {
         <Route path="/crm/:funnelType" element={<Navigate to="/crm/pipelines" replace />} />
         <Route path="/vender" element={<Vender />} />
         <Route path="/pedidos" element={<Pedidos />} />
+        <Route path="/compras" element={<RequisicaoCompra />} />
         <Route path="/vendas" element={<Vendas />} />
         <Route path="/metas" element={<Metas />} />
         <Route path="/comercial" element={<DashboardComercial />} />
