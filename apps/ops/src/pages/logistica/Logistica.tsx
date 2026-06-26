@@ -25,6 +25,9 @@ const prazoFrete = (min: number | null, max: number | null) => {
 export default function Logistica() {
   const { data: shipments = [], isLoading } = useShipments();
   const calc = useCalculateFreight();
+  // Lembra a aba ativa entre recarregamentos (não volta sempre pra "Operacional").
+  const [tab, setTab] = useState(() => localStorage.getItem("ops-logistica-tab") || "operacional");
+  const changeTab = (v: string) => { setTab(v); localStorage.setItem("ops-logistica-tab", v); };
   const [originId, setOriginId] = useState(FREIGHT_ORIGINS[0].id); // Natal por padrão
   const [originCepCustom, setOriginCepCustom] = useState("");
   const [cep, setCep] = useState("");
@@ -75,7 +78,7 @@ export default function Logistica() {
           <Button className="gap-2 shrink-0" onClick={() => setNovaOpen(true)}><Plus className="h-4 w-4" /> Nova Remessa</Button>
         </div>
 
-        <Tabs defaultValue="operacional" className="w-full">
+        <Tabs value={tab} onValueChange={changeTab} className="w-full">
           <TabsList>
             <TabsTrigger value="operacional">Operacional</TabsTrigger>
             <TabsTrigger value="gestao">Gestão</TabsTrigger>
