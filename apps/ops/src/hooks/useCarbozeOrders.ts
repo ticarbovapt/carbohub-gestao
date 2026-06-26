@@ -34,6 +34,13 @@ export interface CreateVendaInput {
   notes?: string | null;
   vendedor_id?: string | null;
   vendedor_name?: string | null;
+  // Dados fiscais / estratégicos (opcionais)
+  cnpj?: string | null;
+  point_type?: string | null;
+  internal_classification?: string | null;
+  avg_monthly_vehicles?: number | null;
+  works_with_diesel?: boolean | null;
+  works_with_fleets?: boolean | null;
 }
 
 export function useCreateVenda() {
@@ -60,6 +67,12 @@ export function useCreateVenda() {
           notes: data.notes || null,
           vendedor_id: data.vendedor_id || null,
           vendedor_name: data.vendedor_name || null,
+          cnpj: data.cnpj || null,
+          point_type: data.point_type || null,
+          internal_classification: data.internal_classification || null,
+          avg_monthly_vehicles: data.avg_monthly_vehicles ?? null,
+          works_with_diesel: data.works_with_diesel ?? null,
+          works_with_fleets: data.works_with_fleets ?? null,
         })
         .select("id")
         .single();

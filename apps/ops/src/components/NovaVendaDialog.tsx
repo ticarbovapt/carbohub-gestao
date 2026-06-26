@@ -79,6 +79,12 @@ export function NovaVendaDialog({ open, onOpenChange }: NovaVendaDialogProps) {
   const [cidade, setCidade] = useState("");
   const [estado, setEstado] = useState("");
   const [cep, setCep] = useState("");
+  // Dados estratégicos (opcionais)
+  const [tipoPonto, setTipoPonto] = useState("");
+  const [classificacao, setClassificacao] = useState("");
+  const [volumeMensal, setVolumeMensal] = useState("");
+  const [diesel, setDiesel] = useState(false);
+  const [frotas, setFrotas] = useState(false);
 
   const subtotal = useMemo(() => rows.reduce((s, r) => s + r.qty * r.unitPrice, 0), [rows]);
 
@@ -94,6 +100,7 @@ export function NovaVendaDialog({ open, onOpenChange }: NovaVendaDialogProps) {
     setDoc(""); setCustomerName(""); setEmail(""); setPhone(""); setIsLicenciado(false);
     setRows([emptyRow()]); setObsPublica("");
     setLogradouro(""); setNumero(""); setBairro(""); setCidade(""); setEstado(""); setCep("");
+    setTipoPonto(""); setClassificacao(""); setVolumeMensal(""); setDiesel(false); setFrotas(false);
   }
 
   async function handleSell() {
@@ -125,6 +132,12 @@ export function NovaVendaDialog({ open, onOpenChange }: NovaVendaDialogProps) {
         notes: obsPublica || null,
         vendedor_id: profile?.id ?? null,
         vendedor_name: vendedor || null,
+        cnpj: doc || null,
+        point_type: tipoPonto || null,
+        internal_classification: classificacao || null,
+        avg_monthly_vehicles: volumeMensal ? Number(volumeMensal) : null,
+        works_with_diesel: diesel,
+        works_with_fleets: frotas,
       });
       resetForm();
       onOpenChange(false);
@@ -292,14 +305,14 @@ export function NovaVendaDialog({ open, onOpenChange }: NovaVendaDialogProps) {
             <div className="grid md:grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label>Tipo de Ponto</Label>
-                <Select>
+                <Select value={tipoPonto} onValueChange={setTipoPonto}>
                   <SelectTrigger><SelectValue placeholder="Selecione o tipo" /></SelectTrigger>
                   <SelectContent>{TIPOS_PONTO.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
               <div className="space-y-1.5">
                 <Label>Classificação Interna</Label>
-                <Select>
+                <Select value={classificacao} onValueChange={setClassificacao}>
                   <SelectTrigger><SelectValue placeholder="Classificar como" /></SelectTrigger>
                   <SelectContent>{CLASSIFICACOES.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
                 </Select>
@@ -307,14 +320,14 @@ export function NovaVendaDialog({ open, onOpenChange }: NovaVendaDialogProps) {
             </div>
             <div className="space-y-1.5">
               <Label>Volume Médio Mensal (veículos)</Label>
-              <Input type="number" placeholder="Ex: 500" />
+              <Input type="number" placeholder="Ex: 500" value={volumeMensal} onChange={(e) => setVolumeMensal(e.target.value)} />
             </div>
             <div className="grid md:grid-cols-2 gap-3">
               <label className="flex items-center justify-between gap-3 rounded-xl border p-3">
-                <span className="text-sm font-medium">Atua com Diesel?</span><Switch />
+                <span className="text-sm font-medium">Atua com Diesel?</span><Switch checked={diesel} onCheckedChange={setDiesel} />
               </label>
               <label className="flex items-center justify-between gap-3 rounded-xl border p-3">
-                <span className="text-sm font-medium">Atua com Frotas?</span><Switch />
+                <span className="text-sm font-medium">Atua com Frotas?</span><Switch checked={frotas} onCheckedChange={setFrotas} />
               </label>
             </div>
           </CollapsibleCard>
