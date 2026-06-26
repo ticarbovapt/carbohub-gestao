@@ -166,7 +166,17 @@ Deno.serve(async (req) => {
       }))
       .sort((a: any, b: any) => a.price - b.price);
 
-    return json({ carriers, env }, 200);
+    // Serviços que voltaram com erro (ex.: Correios abaixo da dimensão mínima) —
+    // expostos para a UI mostrar o motivo em vez de simplesmente sumir.
+    const unavailable = list
+      .filter((c: any) => c.error)
+      .map((c: any) => ({
+        company: c.company?.name ?? c.name ?? "—",
+        name: c.name ?? "",
+        error: typeof c.error === "string" ? c.error : (c.error?.message ?? "indisponível para este pacote/destino"),
+      }));
+
+    return json({ carriers, unavailable, env }, 200);
   } catch (err) {
     console.error("superfrete-quote error:", err);
     return json({ error: "Erro interno do servidor." }, 500);
@@ -180,6 +190,7 @@ function mockResponse(toCep: string) {
       { id: 2, name: "SEDEX", company: "Correios", price: 36.2, custom_price: 36.2, discount: 0, currency: "R$", delivery_min: 1, delivery_max: 3, logo: null },
       { id: 17, name: ".Package", company: "Jadlog", price: 22.0, custom_price: 22.0, discount: 0, currency: "R$", delivery_min: 3, delivery_max: 5, logo: null },
     ],
+    unavailable: [],
     env: "mock",
     note: `Token SuperFrete não configurado. Configure SUPERFRETE_TOKEN nos Secrets. CEP destino: ${toCep}`,
   };

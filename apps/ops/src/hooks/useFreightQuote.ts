@@ -31,8 +31,15 @@ export interface FreightCarrier {
   logo: string | null;
 }
 
+export interface FreightUnavailable {
+  company: string;
+  name: string;
+  error: string;
+}
+
 export interface FreightQuoteResult {
   carriers: FreightCarrier[];
+  unavailable?: FreightUnavailable[];
   env: "sandbox" | "production" | "mock";
   note?: string;
 }

@@ -13,7 +13,7 @@ import { ShipmentsKanban, LogisticsKpis, type Shipment } from "@/components/logi
 import { ShipmentDetailsDialog } from "@/components/logistica/ShipmentDetailsDialog";
 import { NovaRemessaDialog } from "@/components/logistica/NovaRemessaDialog";
 import { useShipments } from "@/hooks/useShipments";
-import { useCalculateFreight, localEstimate, FREIGHT_ORIGINS, type FreightCarrier } from "@/hooks/useFreightQuote";
+import { useCalculateFreight, localEstimate, FREIGHT_ORIGINS, type FreightCarrier, type FreightUnavailable } from "@/hooks/useFreightQuote";
 
 const brlFrete = (v: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v || 0);
 const prazoFrete = (min: number | null, max: number | null) => {
@@ -38,6 +38,7 @@ export default function Logistica() {
   const [valorMerc, setValorMerc] = useState("");
   const [freightResults, setFreightResults] = useState<FreightCarrier[] | null>(null);
   const [freightEstimated, setFreightEstimated] = useState(false);
+  const [freightUnavailable, setFreightUnavailable] = useState<FreightUnavailable[]>([]);
   const [novaOpen, setNovaOpen] = useState(false);
   const [shipment, setShipment] = useState<Shipment | null>(null);
 
@@ -60,9 +61,11 @@ export default function Logistica() {
       if (res.env === "mock") {
         setFreightResults(localEstimate(pesoNum, alt, larg, comp, originCep, cep));
         setFreightEstimated(true);
+        setFreightUnavailable([]);
       } else {
         setFreightResults(res.carriers);
         setFreightEstimated(false);
+        setFreightUnavailable(res.unavailable ?? []);
       }
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Erro ao calcular frete.");
@@ -162,6 +165,17 @@ export default function Logistica() {
                           <span className="text-sm font-semibold tabular-nums">{brlFrete(r.price)}</span>
                         </div>
                       ))}
+                      {freightUnavailable.length > 0 && (
+                        <div className="pt-2 mt-1 border-t border-border/50">
+                          <p className="text-[11px] font-medium text-muted-foreground mb-1">Indisponíveis para este pacote/destino:</p>
+                          {freightUnavailable.map((u, i) => (
+                            <div key={i} className="flex items-start gap-1.5 px-1 py-1 text-[11px] text-muted-foreground">
+                              <AlertCircle className="h-3 w-3 shrink-0 mt-0.5 opacity-60" />
+                              <span><strong>{u.company}{u.name ? ` · ${u.name}` : ""}</strong> — {u.error}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </>
                   )}
                 </CarboCardContent>
