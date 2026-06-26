@@ -141,15 +141,16 @@ export default function Logistica() {
                       <Truck className="h-10 w-10 mx-auto mb-2 opacity-30" />
                       <p className="text-sm">Informe CEP, peso e dimensões e calcule para ver as transportadoras e prazos.</p>
                     </div>
-                  ) : freightResults.length === 0 ? (
-                    <p className="py-10 text-center text-sm text-muted-foreground">Nenhuma transportadora retornou cotação para este destino/pacote.</p>
                   ) : (
                     <>
                       {freightEstimated && (
                         <div className="flex items-start gap-1.5 rounded-md bg-amber-500/10 border border-amber-500/20 px-3 py-2 text-[11px] text-amber-600 dark:text-amber-400">
                           <AlertCircle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
-                          <span><strong>Estimativa aproximada</strong> (SuperFrete não configurado no Supabase). Configure o token <code>SUPERFRETE_TOKEN</code> para cotações reais.</span>
+                          <span><strong>Estimativa aproximada</strong> — cotação em tempo real indisponível no momento.</span>
                         </div>
+                      )}
+                      {freightResults.length === 0 && (
+                        <p className="py-2 text-center text-sm text-muted-foreground">Nenhuma transportadora disponível para este pacote/destino.</p>
                       )}
                       {freightResults.map((r) => (
                         <div key={r.id} className="flex items-center justify-between rounded-lg border border-green-500/40 bg-green-500/[0.06] px-3 py-2.5">

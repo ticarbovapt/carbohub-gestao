@@ -64,6 +64,16 @@ interface QuoteRequest {
   products: FreightProduct[];
 }
 
+// IDs de serviço do SuperFrete → nome amigável (para listar quem não atendeu).
+const SERVICE_NAMES: Record<string, { company: string; name: string }> = {
+  "1": { company: "Correios", name: "PAC" },
+  "2": { company: "Correios", name: "SEDEX" },
+  "3": { company: "Correios", name: "Mini Envios" },
+  "17": { company: "Jadlog", name: ".Package" },
+  "31": { company: "Loggi", name: "Loggi" },
+};
+const errMsg = (e: any) => (typeof e === "string" ? e : (e?.message ?? "não atende este pacote/destino"));
+
 Deno.serve(async (req) => {
   const corsHeaders = getCorsHeaders(req);
   const json = (data: unknown, status = 200) =>
@@ -149,7 +159,17 @@ Deno.serve(async (req) => {
     if (!apiRes.ok) {
       const errText = await apiRes.text();
       console.error("SuperFrete API error:", apiRes.status, errText);
-      return json({ error: `Erro na API SuperFrete: ${apiRes.status}`, detail: errText }, 502);
+      if (apiRes.status === 401 || apiRes.status === 403) {
+        return json({ carriers: [], unavailable: [], error: "Token do SuperFrete inválido ou ambiente incorreto.", env }, 200);
+      }
+      // Pacote/destino rejeitado: lista todas as transportadoras solicitadas como "não atende".
+      const reason = "não atende este pacote/destino (confira peso/dimensões — Correios vai até 30 kg)";
+      const unavailable = services.split(",").map((s) => s.trim()).filter(Boolean).map((id) => ({
+        company: SERVICE_NAMES[id]?.company ?? `Serviço ${id}`,
+        name: SERVICE_NAMES[id]?.name ?? "",
+        error: reason,
+      }));
+      return json({ carriers: [], unavailable, error: "Nenhuma transportadora atende este pacote/destino.", env }, 200);
     }
 
     const data = await apiRes.json();
@@ -177,15 +197,24 @@ Deno.serve(async (req) => {
       }))
       .sort((a: any, b: any) => a.price - b.price);
 
-    // Serviços que voltaram com erro (ex.: Correios abaixo da dimensão mínima) —
-    // expostos para a UI mostrar o motivo em vez de simplesmente sumir.
-    const unavailable = list
+    // "Não atende": (a) serviços que voltaram com erro + (b) serviços que pedimos
+    // mas o SuperFrete OMITIU da resposta (ele simplesmente não devolve quem não cobre).
+    const returnedIds = new Set(list.map((c: any) => String(c.id)));
+    const erroredUnavail = list
       .filter((c: any) => c.error)
       .map((c: any) => ({
-        company: c.company?.name ?? c.name ?? "—",
-        name: c.name ?? "",
-        error: typeof c.error === "string" ? c.error : (c.error?.message ?? "indisponível para este pacote/destino"),
+        company: c.company?.name ?? SERVICE_NAMES[String(c.id)]?.company ?? c.name ?? "—",
+        name: c.name ?? SERVICE_NAMES[String(c.id)]?.name ?? "",
+        error: errMsg(c.error),
       }));
+    const missingUnavail = services.split(",").map((s) => s.trim()).filter(Boolean)
+      .filter((id) => !returnedIds.has(id))
+      .map((id) => ({
+        company: SERVICE_NAMES[id]?.company ?? `Serviço ${id}`,
+        name: SERVICE_NAMES[id]?.name ?? "",
+        error: "não atende este pacote/destino",
+      }));
+    const unavailable = [...erroredUnavail, ...missingUnavail];
 
     return json({ carriers, unavailable, env }, 200);
   } catch (err) {

@@ -97,16 +97,17 @@ export function useCalculateFreight() {
           body: { to_cep: payload.to_cep, from_cep: payload.from_cep, products: payload.products },
         });
         if (error) {
-          toast.error("Cotação SuperFrete falhou — usando estimativa. Confira o token e o ambiente (produção × sandbox).");
+          toast.error("Cotação em tempo real indisponível — mostrando estimativa.");
           return mockFreightResult();
         }
         if (data?.error) {
-          toast.error(`SuperFrete: ${data.error}`);
-          return mockFreightResult();
+          // Erro de negócio (ex.: pacote acima do limite) — mostra o motivo real, sem estimativa.
+          toast.error(data.error);
+          return { carriers: [], unavailable: data.unavailable ?? [], env: data.env ?? "production" } as FreightQuoteResult;
         }
         return data as FreightQuoteResult;
       } catch {
-        toast.error("Não foi possível cotar no SuperFrete — usando estimativa.");
+        toast.error("Cotação em tempo real indisponível — mostrando estimativa.");
         return mockFreightResult();
       }
     },
