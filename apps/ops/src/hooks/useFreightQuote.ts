@@ -1,5 +1,6 @@
 import { useMutation } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Cotação de frete via Melhor Envio (edge function melhor-envio-quote).
@@ -88,10 +89,17 @@ export function useCalculateFreight() {
         const { data, error } = await supabase.functions.invoke("superfrete-quote", {
           body: { to_cep: payload.to_cep, from_cep: payload.from_cep, products: payload.products },
         });
-        if (error) return mockFreightResult();
-        if (data?.error) throw new Error(data.error);
+        if (error) {
+          toast.error("Cotação SuperFrete falhou — usando estimativa. Confira o token e o ambiente (produção × sandbox).");
+          return mockFreightResult();
+        }
+        if (data?.error) {
+          toast.error(`SuperFrete: ${data.error}`);
+          return mockFreightResult();
+        }
         return data as FreightQuoteResult;
       } catch {
+        toast.error("Não foi possível cotar no SuperFrete — usando estimativa.");
         return mockFreightResult();
       }
     },
