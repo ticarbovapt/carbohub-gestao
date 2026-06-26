@@ -68,8 +68,7 @@ interface QuoteRequest {
 const SERVICE_NAMES: Record<string, { company: string; name: string }> = {
   "1": { company: "Correios", name: "PAC" },
   "2": { company: "Correios", name: "SEDEX" },
-  "3": { company: "Correios", name: "Mini Envios" },
-  "17": { company: "Jadlog", name: ".Package" },
+  "3": { company: "Jadlog", name: ".Package" },
   "31": { company: "Loggi", name: "Loggi" },
 };
 const errMsg = (e: any) => (typeof e === "string" ? e : (e?.message ?? "não atende este pacote/destino"));
@@ -123,9 +122,9 @@ Deno.serve(async (req) => {
     const insurance = body.products.reduce((s, p) => s + (p.insurance_value || 0) * (p.quantity || 1), 0);
 
     // Sem "services" o SuperFrete retorna só o padrão (Loggi). Listamos os IDs
-    // para receber todas as transportadoras: 1=PAC, 2=SEDEX, 3=Mini Envios,
-    // 17=Jadlog, 31=Loggi. Ajustável por env SUPERFRETE_SERVICES.
-    const services = Deno.env.get("SUPERFRETE_SERVICES") ?? "1,2,3,17,31";
+    // reais (confirmados via log): 1=PAC, 2=SEDEX, 3=Jadlog, 31=Loggi.
+    // Ajustável por env SUPERFRETE_SERVICES (ex.: incluir Mini Envios quando souber o id).
+    const services = Deno.env.get("SUPERFRETE_SERVICES") ?? "1,2,3,31";
 
     const payload = {
       from: { postal_code: fromCep },
