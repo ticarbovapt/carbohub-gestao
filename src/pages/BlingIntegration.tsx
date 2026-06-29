@@ -170,26 +170,30 @@ export default function BlingIntegration() {
     setSyncing("pipeline");
     setPipelineStep("syncing");
     try {
-      // ── Fase 1: BUSCA + TRATAMENTO ────────────────────────────────────────
-      // entity="all" faz a busca no Bling e o tratamento. Pode estourar o tempo
-      // do edge function antes da etapa final (order_details/nfe fazem 1 chamada
-      // por registro) — tudo bem: o que foi buscado fica persistido em bling_orders
-      // e a importação roda em invocação própria abaixo. Por isso é tolerante a erro.
-      try {
-        const fetchResp = await supabase.functions.invoke("bling-sync", {
-          body: { entity: "all" },
-        });
-        if (fetchResp.error) {
-          console.warn("[pipeline] fase de busca retornou erro (provável timeout); seguindo para importação:", fetchResp.error);
+      // ── Fase 1: BUSCA (somente etapas rápidas e confiáveis) ───────────────
+      // NÃO usamos "all": as etapas order_details/nfe fazem 1 chamada à API do
+      // Bling por registro e podem TRAVAR a função (fetch sem timeout), matando-a
+      // antes do bridge. Sincronizamos as entidades rápidas em invocações próprias;
+      // detalhes de item e NF-e têm seus próprios botões/ações.
+      for (const ent of ["products", "contacts", "orders"]) {
+        try {
+          await supabase.functions.invoke("bling-sync", { body: { entity: ent } });
+        } catch (e) {
+          console.warn(`[pipeline] busca '${ent}' falhou; seguindo:`, e);
         }
-      } catch (e) {
-        console.warn("[pipeline] fase de busca falhou (provável timeout); seguindo para importação:", e);
       }
 
-      // ── Fase 2: IMPORTAÇÃO (bridge → carboze_orders) — invocação dedicada ──
-      // DB→DB, rápida e com orçamento de tempo próprio. É a que realmente popula
-      // os pedidos no sistema (inclui os meses recém-sincronizados), então
-      // qualquer falha aqui é erro real do pipeline.
+      // ── Fase 2: TRATAMENTO (validação) — invocação dedicada ───────────────
+      setPipelineStep("treating");
+      try {
+        await supabase.functions.invoke("bling-sync", { body: { entity: "treatment" } });
+      } catch (e) {
+        console.warn("[pipeline] tratamento falhou; seguindo para importação:", e);
+      }
+
+      // ── Fase 3: IMPORTAÇÃO (bridge → carboze_orders) — invocação dedicada ──
+      // DB→DB, rápida. É a que realmente popula os pedidos no sistema (inclui os
+      // meses recém-sincronizados); qualquer falha aqui é erro real do pipeline.
       setPipelineStep("importing");
       const bridgeResp = await supabase.functions.invoke("bling-sync", { body: { entity: "bridge" } });
       if (bridgeResp.error || !bridgeResp.data?.success) {
@@ -198,7 +202,7 @@ export default function BlingIntegration() {
 
       setPipelineStep("done");
       await Promise.all([loadCounts(), loadNFStatus(), loadSyncLogs(), loadTreatmentSummary(), loadLastCronRun()]);
-      toast.success("Pipeline completo! Dados sincronizados, tratados e importados.");
+      toast.success("Pipeline completo! Dados sincronizados, validados e importados.");
     } catch (error: any) {
       toast.error(error.message || "Erro no pipeline");
       setPipelineStep("idle");

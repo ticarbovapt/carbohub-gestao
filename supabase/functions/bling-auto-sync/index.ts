@@ -46,14 +46,18 @@ Deno.serve(async (req: Request): Promise<Response> => {
       return { ok: resp.ok && data?.success !== false, status: resp.status, data };
     };
 
-    // ── Fase 1: BUSCA + TRATAMENTO (entity=all) ──────────────────────────────
-    // Pode estourar o tempo (order_details/nfe = 1 chamada por registro). Tolerante:
-    // o que foi buscado fica persistido e a importação roda em invocação própria.
-    try {
-      const fetchRes = await runPhase("all");
-      console.log(`[bling-auto-sync] sync phase (all): ok=${fetchRes.ok} status=${fetchRes.status}`);
-    } catch (e) {
-      console.warn("[bling-auto-sync] sync phase failed (likely timeout), continuing to bridge:", e instanceof Error ? e.message : e);
+    // ── Fase 1: BUSCA (somente etapas rápidas) + TRATAMENTO ──────────────────
+    // NÃO usamos "all": order_details/nfe fazem 1 chamada à API do Bling por
+    // registro e podem TRAVAR a função (fetch sem timeout), matando-a antes do
+    // bridge. Rodamos as entidades rápidas em invocações próprias; detalhes de
+    // item e NF-e devem ter rotina própria. Cada fase é tolerante a erro.
+    for (const ent of ["products", "variacoes", "stock", "contacts", "orders", "vendedores", "treatment"]) {
+      try {
+        const res = await runPhase(ent);
+        console.log(`[bling-auto-sync] phase ${ent}: ok=${res.ok} status=${res.status}`);
+      } catch (e) {
+        console.warn(`[bling-auto-sync] phase ${ent} failed, continuing:`, e instanceof Error ? e.message : e);
+      }
     }
 
     // ── Fase 2: IMPORTAÇÃO (bridge) — a que popula carboze_orders ────────────
