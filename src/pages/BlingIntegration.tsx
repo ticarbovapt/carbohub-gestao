@@ -51,7 +51,7 @@ export default function BlingIntegration() {
   const [syncLogs, setSyncLogs] = useState<SyncLog[]>([]);
   const [counts, setCounts] = useState({ products: 0, contacts: 0, orders: 0, nfe: 0 });
   const [exporting, setExporting] = useState<string | null>(null);
-  const [pipelineStep, setPipelineStep] = useState<"idle" | "syncing" | "done">("idle");
+  const [pipelineStep, setPipelineStep] = useState<"idle" | "syncing" | "treating" | "importing" | "done">("idle");
   const [treatmentSummary, setTreatmentSummary] = useState<{ ok: number; warnings: number; errors: number; runId: string } | null>(null);
   const [lastCronRun, setLastCronRun] = useState<string | null>(null);
   const [nfStatus, setNfStatus] = useState<{
@@ -170,12 +170,38 @@ export default function BlingIntegration() {
     setSyncing("pipeline");
     setPipelineStep("syncing");
     try {
-      const response = await supabase.functions.invoke("bling-sync", {
-        body: { entity: "all" },
-      });
-      if (!response.data?.success) {
-        throw new Error(response.data?.error || "Pipeline falhou");
+      // ── Fase 1: BUSCA no Bling ────────────────────────────────────────────
+      // Pode estourar o tempo do edge function (order_details/nfe fazem 1 chamada
+      // por registro). Tudo bem: o que foi buscado fica persistido em bling_orders,
+      // e as fases seguintes rodam em invocações próprias. Por isso é tolerante a erro.
+      try {
+        const fetchResp = await supabase.functions.invoke("bling-sync", {
+          body: { entity: "fetch" },
+        });
+        if (fetchResp.error) {
+          console.warn("[pipeline] fase de busca retornou erro (provável timeout); seguindo:", fetchResp.error);
+        }
+      } catch (e) {
+        console.warn("[pipeline] fase de busca falhou (provável timeout); seguindo para tratamento/importação:", e);
       }
+
+      // ── Fase 2: TRATAMENTO (validação) — invocação dedicada ───────────────
+      setPipelineStep("treating");
+      try {
+        await supabase.functions.invoke("bling-sync", { body: { entity: "treatment" } });
+      } catch (e) {
+        console.warn("[pipeline] tratamento falhou; seguindo para importação:", e);
+      }
+
+      // ── Fase 3: IMPORTAÇÃO (bridge → carboze_orders) — invocação dedicada ──
+      // DB→DB, rápida. É a que realmente popula os pedidos no sistema, então
+      // qualquer falha aqui é erro real do pipeline.
+      setPipelineStep("importing");
+      const bridgeResp = await supabase.functions.invoke("bling-sync", { body: { entity: "bridge" } });
+      if (bridgeResp.error || !bridgeResp.data?.success) {
+        throw new Error(bridgeResp.error?.message || bridgeResp.data?.error || "Importação (bridge) falhou");
+      }
+
       setPipelineStep("done");
       await Promise.all([loadCounts(), loadNFStatus(), loadSyncLogs(), loadTreatmentSummary(), loadLastCronRun()]);
       toast.success("Pipeline completo! Dados sincronizados, tratados e importados.");
@@ -185,7 +211,7 @@ export default function BlingIntegration() {
     } finally {
       setSyncing(null);
     }
-  }, [loadNFStatus, loadTreatmentSummary, loadLastCronRun]);
+  }, [loadCounts, loadNFStatus, loadSyncLogs, loadTreatmentSummary, loadLastCronRun]);
 
   // ── Export helpers ─────────────────────────────────────────────────────────
   const exportToXlsx = (rows: Record<string, any>[], filename: string, sheetName: string) => {
@@ -544,9 +570,9 @@ export default function BlingIntegration() {
               <div className="grid grid-cols-3 gap-3">
                 {/* Step 1 — Sync */}
                 <div className={`rounded-lg border p-3 text-center transition-colors ${
-                  syncing === "pipeline" && pipelineStep === "syncing"
+                  pipelineStep === "syncing"
                     ? "border-blue-400 bg-blue-50 dark:bg-blue-950/20"
-                    : pipelineStep === "done"
+                    : ["treating", "importing", "done"].includes(pipelineStep)
                     ? "border-green-400 bg-green-50 dark:bg-green-950/20"
                     : "border-border bg-muted/30"
                 }`}>
@@ -555,10 +581,12 @@ export default function BlingIntegration() {
                   <div className="text-xs text-muted-foreground mt-1">
                     {counts.products}p · {counts.contacts}c · {counts.orders}o
                   </div>
-                  {syncing === "pipeline" && pipelineStep === "syncing" && (
+                  {pipelineStep === "syncing" && (
                     <Loader2 className="h-4 w-4 mx-auto mt-2 animate-spin text-blue-500" />
                   )}
-                  {pipelineStep === "done" && <CheckCircle2 className="h-4 w-4 mx-auto mt-2 text-green-500" />}
+                  {["treating", "importing", "done"].includes(pipelineStep) && (
+                    <CheckCircle2 className="h-4 w-4 mx-auto mt-2 text-green-500" />
+                  )}
                 </div>
 
                 {/* Step 2 — Treatment */}
@@ -573,7 +601,9 @@ export default function BlingIntegration() {
                 }`}>
                   <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">2. Tratamento</div>
                   <div className="text-sm font-medium">Validação</div>
-                  {treatmentSummary ? (
+                  {pipelineStep === "treating" ? (
+                    <Loader2 className="h-4 w-4 mx-auto mt-2 animate-spin text-blue-500" />
+                  ) : treatmentSummary ? (
                     <div className="text-xs mt-1 space-y-0.5">
                       <div className="text-green-600">✅ {treatmentSummary.ok} OK</div>
                       {treatmentSummary.warnings > 0 && (
@@ -590,13 +620,18 @@ export default function BlingIntegration() {
 
                 {/* Step 3 — Import */}
                 <div className={`rounded-lg border p-3 text-center transition-colors ${
-                  pipelineStep === "done"
+                  pipelineStep === "importing"
+                    ? "border-blue-400 bg-blue-50 dark:bg-blue-950/20"
+                    : pipelineStep === "done"
                     ? "border-green-400 bg-green-50 dark:bg-green-950/20"
                     : "border-border bg-muted/30"
                 }`}>
                   <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">3. Importar</div>
                   <div className="text-sm font-medium">Bridge → CarboHub</div>
                   <div className="text-xs text-muted-foreground mt-1">Pedidos convertidos</div>
+                  {pipelineStep === "importing" && (
+                    <Loader2 className="h-4 w-4 mx-auto mt-2 animate-spin text-blue-500" />
+                  )}
                   {pipelineStep === "done" && <CheckCircle2 className="h-4 w-4 mx-auto mt-2 text-green-500" />}
                 </div>
               </div>

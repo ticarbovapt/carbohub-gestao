@@ -28,36 +28,56 @@ Deno.serve(async (req: Request): Promise<Response> => {
     const body = await req.json().catch(() => ({}));
     const source = (body as any).source || "cron";
 
-    console.log(`[bling-auto-sync] Starting full pipeline. Source: ${source}, Time: ${new Date().toISOString()}`);
+    console.log(`[bling-auto-sync] Starting phased pipeline. Source: ${source}, Time: ${new Date().toISOString()}`);
 
-    // Call bling-sync with entity=all, passing X-Cron-Secret so it skips user JWT validation
-    const syncResponse = await fetch(
-      `${supabaseUrl}/functions/v1/bling-sync`,
-      {
+    // Roda uma fase do bling-sync em invocação dedicada (cada uma com seu próprio
+    // orçamento de tempo). X-Cron-Secret pula a validação de JWT do usuário.
+    const runPhase = async (entity: string) => {
+      const resp = await fetch(`${supabaseUrl}/functions/v1/bling-sync`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           "Authorization": `Bearer ${supabaseServiceKey}`,
           "X-Cron-Secret": cronSecret,
         },
-        body: JSON.stringify({ entity: "all", source }),
-      }
-    );
+        body: JSON.stringify({ entity, source }),
+      });
+      const data = await resp.json().catch(() => ({}));
+      return { ok: resp.ok && data?.success !== false, status: resp.status, data };
+    };
 
-    const syncData = await syncResponse.json();
+    // ── Fase 1: BUSCA no Bling ──────────────────────────────────────────────
+    // Pode estourar o tempo (order_details/nfe = 1 chamada por registro). Tolerante:
+    // o que foi buscado fica persistido e as fases seguintes rodam de qualquer forma.
+    try {
+      const fetchRes = await runPhase("fetch");
+      console.log(`[bling-auto-sync] fetch phase: ok=${fetchRes.ok} status=${fetchRes.status}`);
+    } catch (e) {
+      console.warn("[bling-auto-sync] fetch phase failed (likely timeout), continuing:", e instanceof Error ? e.message : e);
+    }
 
-    if (!syncResponse.ok || !syncData.success) {
-      const errMsg = syncData.error || `HTTP ${syncResponse.status}`;
-      console.error("[bling-auto-sync] Pipeline failed:", errMsg);
-      return new Response(JSON.stringify({ success: false, error: errMsg }), {
+    // ── Fase 2: TRATAMENTO ──────────────────────────────────────────────────
+    try {
+      const treatRes = await runPhase("treatment");
+      console.log(`[bling-auto-sync] treatment phase: ok=${treatRes.ok}`);
+    } catch (e) {
+      console.warn("[bling-auto-sync] treatment phase failed, continuing:", e instanceof Error ? e.message : e);
+    }
+
+    // ── Fase 3: IMPORTAÇÃO (bridge) — a que popula carboze_orders ────────────
+    const bridgeRes = await runPhase("bridge");
+    if (!bridgeRes.ok) {
+      const errMsg = bridgeRes.data?.error || `HTTP ${bridgeRes.status}`;
+      console.error("[bling-auto-sync] bridge phase failed:", errMsg);
+      return new Response(JSON.stringify({ success: false, error: errMsg, phase: "bridge" }), {
         status: 500,
         headers: { "Content-Type": "application/json" },
       });
     }
 
-    console.log(`[bling-auto-sync] Pipeline completed successfully. Source: ${source}`);
+    console.log(`[bling-auto-sync] Phased pipeline completed. Source: ${source}`);
 
-    return new Response(JSON.stringify({ success: true, source, data: syncData.data }), {
+    return new Response(JSON.stringify({ success: true, source, bridge: bridgeRes.data?.data ?? null }), {
       status: 200,
       headers: { "Content-Type": "application/json" },
     });

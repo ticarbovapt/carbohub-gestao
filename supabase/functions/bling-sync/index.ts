@@ -1623,8 +1623,16 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
     const results: Record<string, any> = {};
 
-    const entitiesToSync = entity === "all"
-      ? ["products", "variacoes", "stock", "contacts", "orders", "order_details", "treatment", "vendedores", "nfe", "contas_pagar", "pedidos_compra", "bridge"]
+    // Etapas de BUSCA no Bling (chamadas externas, lentas). NÃO inclui treatment/bridge.
+    const FETCH_ENTITIES = ["products", "variacoes", "stock", "contacts", "orders", "order_details", "vendedores", "nfe", "contas_pagar", "pedidos_compra"];
+
+    // "all"  = pipeline completo numa só invocação (legado — pode estourar o tempo antes do bridge)
+    // "fetch" = apenas busca no Bling (sem treatment/bridge) — usado em pipeline por fases
+    // O frontend e o cron rodam fetch → treatment → bridge em invocações SEPARADAS,
+    // garantindo que o bridge (DB→DB, rápido) sempre execute com orçamento de tempo próprio.
+    const entitiesToSync =
+        entity === "all"   ? [...FETCH_ENTITIES, "treatment", "bridge"]
+      : entity === "fetch" ? FETCH_ENTITIES
       : [entity];
 
     // Helper to run a sync function with automatic 401 retry

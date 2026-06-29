@@ -28,8 +28,8 @@ export default function DashboardComercial() {
         .from("carboze_orders")
         .select("id, total, status, created_at, order_number, vendedor_name, customer_name")
         .order("created_at", { ascending: true });
-      if (filters.from)               q = q.gte("created_at", filters.from);
-      if (filters.to)                 q = q.lte("created_at", filters.to + "T23:59:59");
+      if (filters.from)               q = q.gte("created_at", filters.from + "T00:00:00.000Z");
+      if (filters.to)                 q = q.lte("created_at", filters.to + "T23:59:59.999Z");
       if (filters.vendedor !== "all") q = q.eq("vendedor_name", filters.vendedor);
       const { data, error } = await q;
       if (error) throw error;
