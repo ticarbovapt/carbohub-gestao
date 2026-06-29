@@ -46,25 +46,17 @@ Deno.serve(async (req: Request): Promise<Response> => {
       return { ok: resp.ok && data?.success !== false, status: resp.status, data };
     };
 
-    // ── Fase 1: BUSCA no Bling ──────────────────────────────────────────────
+    // ── Fase 1: BUSCA + TRATAMENTO (entity=all) ──────────────────────────────
     // Pode estourar o tempo (order_details/nfe = 1 chamada por registro). Tolerante:
-    // o que foi buscado fica persistido e as fases seguintes rodam de qualquer forma.
+    // o que foi buscado fica persistido e a importação roda em invocação própria.
     try {
-      const fetchRes = await runPhase("fetch");
-      console.log(`[bling-auto-sync] fetch phase: ok=${fetchRes.ok} status=${fetchRes.status}`);
+      const fetchRes = await runPhase("all");
+      console.log(`[bling-auto-sync] sync phase (all): ok=${fetchRes.ok} status=${fetchRes.status}`);
     } catch (e) {
-      console.warn("[bling-auto-sync] fetch phase failed (likely timeout), continuing:", e instanceof Error ? e.message : e);
+      console.warn("[bling-auto-sync] sync phase failed (likely timeout), continuing to bridge:", e instanceof Error ? e.message : e);
     }
 
-    // ── Fase 2: TRATAMENTO ──────────────────────────────────────────────────
-    try {
-      const treatRes = await runPhase("treatment");
-      console.log(`[bling-auto-sync] treatment phase: ok=${treatRes.ok}`);
-    } catch (e) {
-      console.warn("[bling-auto-sync] treatment phase failed, continuing:", e instanceof Error ? e.message : e);
-    }
-
-    // ── Fase 3: IMPORTAÇÃO (bridge) — a que popula carboze_orders ────────────
+    // ── Fase 2: IMPORTAÇÃO (bridge) — a que popula carboze_orders ────────────
     const bridgeRes = await runPhase("bridge");
     if (!bridgeRes.ok) {
       const errMsg = bridgeRes.data?.error || `HTTP ${bridgeRes.status}`;

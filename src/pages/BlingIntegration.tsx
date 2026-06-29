@@ -170,31 +170,25 @@ export default function BlingIntegration() {
     setSyncing("pipeline");
     setPipelineStep("syncing");
     try {
-      // ── Fase 1: BUSCA no Bling ────────────────────────────────────────────
-      // Pode estourar o tempo do edge function (order_details/nfe fazem 1 chamada
-      // por registro). Tudo bem: o que foi buscado fica persistido em bling_orders,
-      // e as fases seguintes rodam em invocações próprias. Por isso é tolerante a erro.
+      // ── Fase 1: BUSCA + TRATAMENTO ────────────────────────────────────────
+      // entity="all" faz a busca no Bling e o tratamento. Pode estourar o tempo
+      // do edge function antes da etapa final (order_details/nfe fazem 1 chamada
+      // por registro) — tudo bem: o que foi buscado fica persistido em bling_orders
+      // e a importação roda em invocação própria abaixo. Por isso é tolerante a erro.
       try {
         const fetchResp = await supabase.functions.invoke("bling-sync", {
-          body: { entity: "fetch" },
+          body: { entity: "all" },
         });
         if (fetchResp.error) {
-          console.warn("[pipeline] fase de busca retornou erro (provável timeout); seguindo:", fetchResp.error);
+          console.warn("[pipeline] fase de busca retornou erro (provável timeout); seguindo para importação:", fetchResp.error);
         }
       } catch (e) {
-        console.warn("[pipeline] fase de busca falhou (provável timeout); seguindo para tratamento/importação:", e);
+        console.warn("[pipeline] fase de busca falhou (provável timeout); seguindo para importação:", e);
       }
 
-      // ── Fase 2: TRATAMENTO (validação) — invocação dedicada ───────────────
-      setPipelineStep("treating");
-      try {
-        await supabase.functions.invoke("bling-sync", { body: { entity: "treatment" } });
-      } catch (e) {
-        console.warn("[pipeline] tratamento falhou; seguindo para importação:", e);
-      }
-
-      // ── Fase 3: IMPORTAÇÃO (bridge → carboze_orders) — invocação dedicada ──
-      // DB→DB, rápida. É a que realmente popula os pedidos no sistema, então
+      // ── Fase 2: IMPORTAÇÃO (bridge → carboze_orders) — invocação dedicada ──
+      // DB→DB, rápida e com orçamento de tempo próprio. É a que realmente popula
+      // os pedidos no sistema (inclui os meses recém-sincronizados), então
       // qualquer falha aqui é erro real do pipeline.
       setPipelineStep("importing");
       const bridgeResp = await supabase.functions.invoke("bling-sync", { body: { entity: "bridge" } });
