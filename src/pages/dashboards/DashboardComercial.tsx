@@ -94,6 +94,34 @@ export default function DashboardComercial() {
     return { ...acc, totalBRL, pct };
   }, [carbozeOrders]);
 
+  // ── Faturamento por Canal, mês a mês (para gráfico de barras empilhadas) ────
+  const monthlySegmentData = useMemo(() => {
+    const map: Record<string, { consumo: number; revenda: number; online: number; nc: number }> = {};
+    for (const o of carbozeOrders) {
+      if (!o.created_at) continue;
+      if (o.status === "cancelled" || o.status === "cancelado") continue;
+      const key = o.created_at.slice(0, 7);
+      if (!map[key]) map[key] = { consumo: 0, revenda: 0, online: 0, nc: 0 };
+      const v = Number(o.total ?? 0);
+      if (o.segmento === "consumo") map[key].consumo += v;
+      else if (o.segmento === "revenda") map[key].revenda += v;
+      else if (o.segmento === "online") map[key].online += v;
+      else map[key].nc += v;
+    }
+    return Object.entries(map)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .slice(-12)
+      .map(([key, v]) => {
+        try {
+          const [y, m] = key.split("-");
+          const mes = format(new Date(parseInt(y), parseInt(m) - 1, 1), "MMM/yy", { locale: ptBR });
+          return { mes, ...v };
+        } catch {
+          return { mes: key, ...v };
+        }
+      });
+  }, [carbozeOrders]);
+
   // Agrupar carboze_orders por mês
   const monthlyData = useMemo(() => {
     const map: Record<string, { faturado: number; pedidos: number; concluidos: number }> = {};
@@ -478,6 +506,76 @@ export default function DashboardComercial() {
                   </div>
                 );
               })}
+            </div>
+          </div>
+        )}
+
+        {/* ── Faturamento por Canal (mês a mês) — barras empilhadas ─────── */}
+        {!carbozeLoading && monthlySegmentData.length > 0 && (
+          <div className="rounded-2xl border border-border bg-board-surface overflow-hidden">
+            <div className="flex items-center justify-between border-b border-border px-6 py-3">
+              <div>
+                <h2 className="text-base font-bold text-board-text flex items-center gap-2">
+                  <BarChart3 className="h-4 w-4 text-blue-400" />
+                  Faturamento por Canal (mês a mês)
+                </h2>
+                <p className="text-xs text-board-muted mt-0.5">
+                  Composição mensal entre Consumo, Revenda, On-line e Não classificado
+                </p>
+              </div>
+              {/* Legenda */}
+              <div className="hidden sm:flex items-center gap-3 text-[10px] text-board-muted">
+                {[
+                  { label: "Consumo", color: "#3b82f6" },
+                  { label: "Revenda", color: "#f59e0b" },
+                  { label: "On-line", color: "#22c55e" },
+                  { label: "Não class.", color: "#94a3b8" },
+                ].map((l) => (
+                  <span key={l.label} className="flex items-center gap-1">
+                    <span className="inline-block w-3 h-3 rounded-sm" style={{ background: l.color }} />
+                    {l.label}
+                  </span>
+                ))}
+              </div>
+            </div>
+            <div className="px-4 pt-4 pb-4">
+              <ResponsiveContainer width="100%" height={230}>
+                <ComposedChart data={monthlySegmentData} margin={{ top: 12, right: 8, bottom: 0, left: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.08)" vertical={false} />
+                  <XAxis dataKey="mes" tick={{ fontSize: 11, fill: "#94a3b8" }} axisLine={false} tickLine={false} dy={4} />
+                  <YAxis tick={{ fontSize: 10, fill: "#94a3b8" }} axisLine={false} tickLine={false} width={44}
+                    tickFormatter={v => v >= 1000 ? `${(v / 1000).toFixed(0)}k` : String(v)} />
+                  <Tooltip
+                    cursor={{ fill: "rgba(148,163,184,0.08)" }}
+                    content={({ active, payload, label }: any) => {
+                      if (!active || !payload?.length) return null;
+                      const rows = [
+                        { k: "consumo", label: "Consumo", color: "#60a5fa" },
+                        { k: "revenda", label: "Revenda", color: "#fbbf24" },
+                        { k: "online",  label: "On-line", color: "#4ade80" },
+                        { k: "nc",      label: "Não classificado", color: "#cbd5e1" },
+                      ];
+                      const get = (k: string) => Number(payload.find((p: any) => p.dataKey === k)?.value ?? 0);
+                      const total = rows.reduce((s, r) => s + get(r.k), 0);
+                      return (
+                        <div style={{ background: "#1a2234", border: "1px solid rgba(255,255,255,0.14)", boxShadow: "0 8px 28px rgba(0,0,0,0.45)", borderRadius: 10, padding: "8px 14px", fontSize: 12 }}>
+                          <p style={{ color: "#fff", fontWeight: 700, marginBottom: 6, fontSize: 13 }}>{label}</p>
+                          {rows.filter(r => get(r.k) > 0).map(r => (
+                            <p key={r.k} style={{ color: r.color }}>{r.label}: {fmtK(get(r.k))}</p>
+                          ))}
+                          <p style={{ color: "#fff", fontWeight: 600, marginTop: 4, borderTop: "1px solid rgba(255,255,255,0.1)", paddingTop: 4 }}>
+                            Total: {fmtK(total)}
+                          </p>
+                        </div>
+                      );
+                    }}
+                  />
+                  <Bar dataKey="consumo" stackId="canal" fill="#3b82f6" maxBarSize={48} isAnimationActive={false} name="Consumo" />
+                  <Bar dataKey="revenda" stackId="canal" fill="#f59e0b" maxBarSize={48} isAnimationActive={false} name="Revenda" />
+                  <Bar dataKey="online"  stackId="canal" fill="#22c55e" maxBarSize={48} isAnimationActive={false} name="On-line" />
+                  <Bar dataKey="nc"      stackId="canal" fill="#94a3b8" maxBarSize={48} radius={[4, 4, 0, 0]} isAnimationActive={false} name="Não classificado" />
+                </ComposedChart>
+              </ResponsiveContainer>
             </div>
           </div>
         )}
