@@ -23,11 +23,24 @@ export const POSVENDA_STAGES: { key: FulfillmentStage; label: string; color: str
   { key: "cancelado",           label: "Cancelado",             color: "#ef4444" },
 ];
 
+export interface PosVendaItem { name?: string; quantity?: number; unit_price?: number; total?: number; }
+
 export interface PosVendaOrder {
   id: string;
   order_number: string;
   customer_name: string;
+  customer_email: string | null;
+  customer_phone: string | null;
+  delivery_address: string | null;
+  delivery_city: string | null;
+  delivery_state: string | null;
+  delivery_zip: string | null;
+  subtotal: number;
+  shipping_cost: number;
+  discount: number;
   total: number;
+  notes: string | null;
+  items: PosVendaItem[];
   created_at: string;
   fulfillment_stage: FulfillmentStage;
   linha: string | null;
@@ -42,7 +55,11 @@ export function useMyPosVenda() {
       const uid = u?.user?.id;
       let q = db
         .from("carboze_orders")
-        .select("id, order_number, customer_name, total, created_at, fulfillment_stage, linha")
+        .select(
+          "id, order_number, customer_name, customer_email, customer_phone, delivery_address, " +
+          "delivery_city, delivery_state, delivery_zip, subtotal, shipping_cost, discount, total, " +
+          "notes, items, created_at, fulfillment_stage, linha"
+        )
         .is("external_ref", null)
         .order("created_at", { ascending: false })
         .limit(500);

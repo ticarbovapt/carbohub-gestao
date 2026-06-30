@@ -24,20 +24,35 @@ export const POSVENDA_STAGES: { key: FulfillmentStage; label: string; color: str
   { key: "cancelado",           label: "Cancelado",             color: "#ef4444" },
 ];
 
+export interface PosVendaItem { name?: string; quantity?: number; unit_price?: number; total?: number; }
+
 export interface PosVendaOrder {
   id: string;
   order_number: string;
   customer_name: string;
+  customer_email: string | null;
+  customer_phone: string | null;
+  delivery_address: string | null;
+  delivery_city: string | null;
+  delivery_state: string | null;
+  delivery_zip: string | null;
   vendedor_name: string | null;
   vendedor_id: string | null;
+  subtotal: number;
+  shipping_cost: number;
+  discount: number;
   total: number;
+  notes: string | null;
+  items: PosVendaItem[];
   created_at: string;
   fulfillment_stage: FulfillmentStage;
   linha: string | null;
 }
 
 const SELECT_COLS =
-  "id, order_number, customer_name, vendedor_name, vendedor_id, total, created_at, fulfillment_stage, linha";
+  "id, order_number, customer_name, customer_email, customer_phone, delivery_address, delivery_city, " +
+  "delivery_state, delivery_zip, vendedor_name, vendedor_id, subtotal, shipping_cost, discount, total, " +
+  "notes, items, created_at, fulfillment_stage, linha";
 
 /** Todas as vendas manuais (visão de operações). */
 export function usePosVendaOrders() {
