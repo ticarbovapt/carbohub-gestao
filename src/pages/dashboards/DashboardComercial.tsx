@@ -505,7 +505,7 @@ export default function DashboardComercial() {
           };
 
           return (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
               {groups.map(group => (
                 <div key={group.groupLabel} className={`rounded-xl border overflow-hidden bg-board-surface ${colorMap[group.color].border}`}>
                   <div className={`h-1 w-full ${colorMap[group.color].stripe}`} />
@@ -551,200 +551,6 @@ export default function DashboardComercial() {
             </div>
           );
         })()}
-
-        {/* ── Segmentação: Consumo (B2B) vs Revenda (PDV) ───────────────── */}
-        {!carbozeLoading && carbozeOrders.length > 0 && (
-          <div className="rounded-2xl border border-border bg-board-surface overflow-hidden">
-            <div className="flex items-center justify-between border-b border-border px-6 py-3">
-              <div>
-                <h2 className="text-base font-bold text-board-text flex items-center gap-2">
-                  <BarChart3 className="h-4 w-4 text-blue-400" />
-                  Vendas por Canal
-                </h2>
-                <p className="text-xs text-board-muted mt-0.5">
-                  Consumo (B2B) vs Revenda (Ponto de Venda) · classifique cada pedido em{" "}
-                  <Link to="/orders" className="font-semibold text-primary hover:underline">Pedidos</Link>
-                </p>
-              </div>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 p-4">
-              {[
-                { key: "consumo", label: "Consumo (B2B)", data: segmentacao.consumo,
-                  accent: "border-l-blue-500", bar: "bg-blue-500", text: "text-blue-400" },
-                { key: "revenda", label: "Revenda (PDV)", data: segmentacao.revenda,
-                  accent: "border-l-amber-400", bar: "bg-amber-400", text: "text-amber-500" },
-                { key: "online", label: "On-line", data: segmentacao.online,
-                  accent: "border-l-green-500", bar: "bg-green-500", text: "text-green-500" },
-                { key: "naoClassificado", label: "Não classificado", data: segmentacao.naoClassificado,
-                  accent: "border-l-slate-400", bar: "bg-slate-400", text: "text-board-muted" },
-              ].map(({ key, label, data, accent, bar, text }) => {
-                const pct = segmentacao.pct(data.brl);
-                return (
-                  <div key={key} className={`rounded-xl bg-board-surface/60 border-l-4 ${accent} p-4`}>
-                    <div className="flex items-center justify-between">
-                      <p className="text-xs font-semibold text-board-muted uppercase tracking-wider">{label}</p>
-                      <span className={`text-xs font-bold ${text}`}>{pct.toFixed(0)}%</span>
-                    </div>
-                    <p className="mt-1.5 text-2xl font-bold text-board-text tabular-nums leading-none">
-                      {fmtK(data.brl)}
-                    </p>
-                    <p className="mt-1 text-xs text-board-muted">
-                      {data.qtd} pedido{data.qtd !== 1 ? "s" : ""}
-                    </p>
-                    <div className="mt-2 h-1.5 w-full rounded-full bg-muted overflow-hidden">
-                      <div className={`h-full ${bar} rounded-full`} style={{ width: `${pct}%` }} />
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
-        {/* ── Crescimento de clientes por canal (PDV vs B2B) ─────────────── */}
-        {!carbozeLoading && clientesPorCanal.length > 0 && (
-          <div className="rounded-2xl border border-border bg-board-surface overflow-hidden">
-            <div className="flex items-center justify-between border-b border-border px-6 py-3">
-              <div>
-                <h2 className="text-base font-bold text-board-text flex items-center gap-2">
-                  <Repeat2 className="h-4 w-4 text-blue-400" />
-                  Crescimento de Clientes por Canal
-                </h2>
-                <p className="text-xs text-board-muted mt-0.5">
-                  Nº de clientes distintos por mês — B2B (Consumo) vs PDV (Revenda) vs On-line
-                </p>
-              </div>
-              <div className="hidden sm:flex items-center gap-3 text-[10px] text-board-muted">
-                {[
-                  { label: "B2B (Consumo)", color: "#3b82f6" },
-                  { label: "PDV (Revenda)", color: "#f59e0b" },
-                  { label: "On-line", color: "#22c55e" },
-                ].map((l) => (
-                  <span key={l.label} className="flex items-center gap-1">
-                    <span className="inline-block w-4 border-t-2" style={{ borderColor: l.color }} /> {l.label}
-                  </span>
-                ))}
-              </div>
-            </div>
-            <div className="px-4 pt-4 pb-4">
-              <ExpandableChart title="Crescimento de Clientes por Canal (PDV vs B2B)"
-                subtitle="Nº de clientes distintos por mês em cada canal"
-                filters={<DashboardFilterBar filters={filters} onChange={setFilters} showVendedor showSegmento />}>
-              <ResponsiveContainer width="100%" height={220}>
-                <ComposedChart data={clientesPorCanal} margin={{ top: 22, right: 8, bottom: 0, left: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.08)" vertical={false} />
-                  <XAxis dataKey="mes" tick={{ fontSize: 11, fill: "#94a3b8" }} axisLine={false} tickLine={false} dy={4} />
-                  <YAxis allowDecimals={false} tick={{ fontSize: 10, fill: "#94a3b8" }} axisLine={false} tickLine={false} width={28} />
-                  <Tooltip
-                    cursor={{ stroke: "rgba(148,163,184,0.2)" }}
-                    content={({ active, payload, label }: any) => {
-                      if (!active || !payload?.length) return null;
-                      const get = (k: string) => Number(payload.find((p: any) => p.dataKey === k)?.value ?? 0);
-                      return (
-                        <div style={{ background: "#1a2234", border: "1px solid rgba(255,255,255,0.14)", borderRadius: 10, padding: "8px 14px", fontSize: 12 }}>
-                          <p style={{ color: "#fff", fontWeight: 700, marginBottom: 4 }}>{label}</p>
-                          <p style={{ color: "#60a5fa" }}>B2B (Consumo): {get("b2b")} clientes</p>
-                          <p style={{ color: "#fbbf24" }}>PDV (Revenda): {get("pdv")} clientes</p>
-                          <p style={{ color: "#4ade80" }}>On-line: {get("online")} clientes</p>
-                        </div>
-                      );
-                    }}
-                  />
-                  <Line type="monotone" dataKey="b2b" name="B2B" stroke="#3b82f6" strokeWidth={2.5}
-                    dot={{ r: 3, fill: "#3b82f6", stroke: "#fff", strokeWidth: 1.5 }} activeDot={{ r: 5 }} isAnimationActive={false}>
-                    <LabelList dataKey="b2b" position="top" style={{ fontSize: 10, fill: "#60a5fa", fontWeight: 700 }} />
-                  </Line>
-                  <Line type="monotone" dataKey="pdv" name="PDV" stroke="#f59e0b" strokeWidth={2.5}
-                    dot={{ r: 3, fill: "#f59e0b", stroke: "#fff", strokeWidth: 1.5 }} activeDot={{ r: 5 }} isAnimationActive={false}>
-                    <LabelList dataKey="pdv" position="bottom" style={{ fontSize: 10, fill: "#fbbf24", fontWeight: 700 }} />
-                  </Line>
-                  <Line type="monotone" dataKey="online" name="On-line" stroke="#22c55e" strokeWidth={2}
-                    strokeDasharray="4 3" dot={{ r: 2.5, fill: "#22c55e" }} isAnimationActive={false} />
-                </ComposedChart>
-              </ResponsiveContainer>
-              </ExpandableChart>
-            </div>
-          </div>
-        )}
-
-        {/* ── Metas por Canal — real (barras) x meta (linha), 3 mini-gráficos ── */}
-        {!carbozeLoading && carbozeOrders.length > 0 && (
-          <div className="rounded-2xl border border-border bg-board-surface overflow-hidden">
-            <div className="flex items-center justify-between border-b border-border px-6 py-3">
-              <div>
-                <h2 className="text-base font-bold text-board-text flex items-center gap-2">
-                  <BarChart3 className="h-4 w-4 text-blue-400" />
-                  Metas por Canal · {currentYear}
-                </h2>
-                <p className="text-xs text-board-muted mt-0.5">
-                  Real (barras) vs meta (linha) de cada canal · a meta geral está na curva S acima
-                </p>
-              </div>
-              <button
-                onClick={() => setMetasDialogOpen(true)}
-                className="text-xs font-semibold text-primary hover:underline shrink-0 flex items-center gap-1"
-              >
-                <Pencil className="h-3.5 w-3.5" /> Editar metas
-              </button>
-            </div>
-
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 p-4">
-              {[
-                { key: "consumo", title: "Consumo (B2B)", data: canalSeries.consumo, color: "#3b82f6", note: "Meta = real do mês anterior + 15%" },
-                { key: "revenda", title: "Revenda (PDV)", data: canalSeries.revenda, color: "#f59e0b", note: "Meta R$75k/mês (NE 25k + SE 50k)" },
-                { key: "online",  title: "On-line",       data: canalSeries.online,  color: "#22c55e", note: "Meta R$27k/mês a partir de jul/26" },
-              ].map((c) => (
-                <div key={c.key} className="rounded-xl border border-border bg-board-surface/40 p-3">
-                  <div className="flex items-center justify-between mb-0.5">
-                    <span className="text-sm font-semibold text-board-text">{c.title}</span>
-                    <div className="flex items-center gap-2 text-[9px] text-board-muted">
-                      <span className="flex items-center gap-1"><span className="inline-block w-2.5 h-2.5 rounded-sm" style={{ background: c.color }} />Real</span>
-                      <span className="flex items-center gap-1"><span className="inline-block w-4 border-t-2 border-dashed border-orange-400" />Meta</span>
-                    </div>
-                  </div>
-                  <p className="text-[10px] text-board-muted mb-1.5">{c.note}</p>
-                  <ExpandableChart title={`Meta — ${c.title}`} subtitle={c.note}
-                    filters={<DashboardFilterBar filters={filters} onChange={setFilters} showVendedor showSegmento />}>
-                  <ResponsiveContainer width="100%" height={160}>
-                    <ComposedChart data={c.data} margin={{ top: 16, right: 6, left: 0, bottom: 0 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.08)" vertical={false} />
-                      <XAxis dataKey="mes" tick={{ fontSize: 9, fill: "#94a3b8" }} axisLine={false} tickLine={false} interval={1} />
-                      <YAxis tick={{ fontSize: 9, fill: "#94a3b8" }} axisLine={false} tickLine={false} width={34}
-                        tickFormatter={v => v >= 1000 ? `${(v / 1000).toFixed(0)}k` : String(v)} />
-                      <Tooltip
-                        cursor={{ fill: "rgba(148,163,184,0.08)" }}
-                        content={({ active, payload, label }: any) => {
-                          if (!active || !payload?.length) return null;
-                          const real = Number(payload.find((p: any) => p.dataKey === "real")?.value ?? 0);
-                          const metaRaw = payload.find((p: any) => p.dataKey === "meta")?.value;
-                          const meta = metaRaw != null ? Number(metaRaw) : null;
-                          const atg = meta != null && meta > 0 ? (real / meta) * 100 : null;
-                          return (
-                            <div style={{ background: "#1a2234", border: "1px solid rgba(255,255,255,0.14)", borderRadius: 10, padding: "8px 14px", fontSize: 12 }}>
-                              <p style={{ color: "#fff", fontWeight: 700, marginBottom: 4 }}>{label}</p>
-                              <p style={{ color: c.color }}>Real: {fmtK(real)}</p>
-                              {meta != null && <p style={{ color: "#fb923c" }}>Meta: {fmtK(meta)}</p>}
-                              {atg != null && (
-                                <p style={{ color: atg >= 100 ? "#86efac" : "#f87171", marginTop: 2, fontWeight: 600 }}>
-                                  {atg.toFixed(0)}% da meta
-                                </p>
-                              )}
-                            </div>
-                          );
-                        }}
-                      />
-                      <Bar dataKey="real" fill={c.color} fillOpacity={0.75} radius={[3, 3, 0, 0]} maxBarSize={26} isAnimationActive={false} />
-                      <Line dataKey="meta" type="monotone" stroke="#fb923c" strokeWidth={2} strokeDasharray="5 3" dot={false} connectNulls isAnimationActive={false} />
-                    </ComposedChart>
-                  </ResponsiveContainer>
-                  </ExpandableChart>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        <CanalMetasDialog open={metasDialogOpen} onOpenChange={setMetasDialogOpen} ano={currentYear} />
 
         {/* ── Evolução Mensal de Vendas ────────────────────────────────── */}
         <div className="rounded-2xl border border-border bg-board-surface overflow-hidden">
@@ -978,6 +784,207 @@ export default function DashboardComercial() {
               </div>
             </div>
 
+          </div>
+        )}
+
+        {/* ── Cabeçalho de grupo: Análise por Canal ────────────────────── */}
+        <div className="flex items-center gap-2 pt-2">
+          <div className="h-px flex-1 bg-border" />
+          <span className="text-xs font-semibold uppercase tracking-wider text-board-muted">Análise por Canal</span>
+          <div className="h-px flex-1 bg-border" />
+        </div>
+
+        {/* ── Segmentação: Consumo (B2B) vs Revenda (PDV) ───────────────── */}
+        {!carbozeLoading && carbozeOrders.length > 0 && (
+          <div className="rounded-2xl border border-border bg-board-surface overflow-hidden">
+            <div className="flex items-center justify-between border-b border-border px-6 py-3">
+              <div>
+                <h2 className="text-base font-bold text-board-text flex items-center gap-2">
+                  <BarChart3 className="h-4 w-4 text-blue-400" />
+                  Vendas por Canal
+                </h2>
+                <p className="text-xs text-board-muted mt-0.5">
+                  Consumo (B2B) vs Revenda (Ponto de Venda) · classifique cada pedido em{" "}
+                  <Link to="/orders" className="font-semibold text-primary hover:underline">Pedidos</Link>
+                </p>
+              </div>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 p-4">
+              {[
+                { key: "consumo", label: "Consumo (B2B)", data: segmentacao.consumo,
+                  accent: "border-l-blue-500", bar: "bg-blue-500", text: "text-blue-400" },
+                { key: "revenda", label: "Revenda (PDV)", data: segmentacao.revenda,
+                  accent: "border-l-amber-400", bar: "bg-amber-400", text: "text-amber-500" },
+                { key: "online", label: "On-line", data: segmentacao.online,
+                  accent: "border-l-green-500", bar: "bg-green-500", text: "text-green-500" },
+                { key: "naoClassificado", label: "Não classificado", data: segmentacao.naoClassificado,
+                  accent: "border-l-slate-400", bar: "bg-slate-400", text: "text-board-muted" },
+              ].map(({ key, label, data, accent, bar, text }) => {
+                const pct = segmentacao.pct(data.brl);
+                return (
+                  <div key={key} className={`rounded-xl bg-board-surface/60 border-l-4 ${accent} p-4`}>
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs font-semibold text-board-muted uppercase tracking-wider">{label}</p>
+                      <span className={`text-xs font-bold ${text}`}>{pct.toFixed(0)}%</span>
+                    </div>
+                    <p className="mt-1.5 text-2xl font-bold text-board-text tabular-nums leading-none">
+                      {fmtK(data.brl)}
+                    </p>
+                    <p className="mt-1 text-xs text-board-muted">
+                      {data.qtd} pedido{data.qtd !== 1 ? "s" : ""}
+                    </p>
+                    <div className="mt-2 h-1.5 w-full rounded-full bg-muted overflow-hidden">
+                      <div className={`h-full ${bar} rounded-full`} style={{ width: `${pct}%` }} />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* ── Metas por Canal — real (barras) x meta (linha), 3 mini-gráficos ── */}
+        {!carbozeLoading && carbozeOrders.length > 0 && (
+          <div className="rounded-2xl border border-border bg-board-surface overflow-hidden">
+            <div className="flex items-center justify-between border-b border-border px-6 py-3">
+              <div>
+                <h2 className="text-base font-bold text-board-text flex items-center gap-2">
+                  <BarChart3 className="h-4 w-4 text-blue-400" />
+                  Metas por Canal · {currentYear}
+                </h2>
+                <p className="text-xs text-board-muted mt-0.5">
+                  Real (barras) vs meta (linha) de cada canal · a meta geral está na curva S acima
+                </p>
+              </div>
+              <button
+                onClick={() => setMetasDialogOpen(true)}
+                className="text-xs font-semibold text-primary hover:underline shrink-0 flex items-center gap-1"
+              >
+                <Pencil className="h-3.5 w-3.5" /> Editar metas
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 p-4">
+              {[
+                { key: "consumo", title: "Consumo (B2B)", data: canalSeries.consumo, color: "#3b82f6", note: "Meta = real do mês anterior + 15%" },
+                { key: "revenda", title: "Revenda (PDV)", data: canalSeries.revenda, color: "#f59e0b", note: "Meta R$75k/mês (NE 25k + SE 50k)" },
+                { key: "online",  title: "On-line",       data: canalSeries.online,  color: "#22c55e", note: "Meta R$27k/mês a partir de jul/26" },
+              ].map((c) => (
+                <div key={c.key} className="rounded-xl border border-border bg-board-surface/40 p-3">
+                  <div className="flex items-center justify-between mb-0.5">
+                    <span className="text-sm font-semibold text-board-text">{c.title}</span>
+                    <div className="flex items-center gap-2 text-[9px] text-board-muted">
+                      <span className="flex items-center gap-1"><span className="inline-block w-2.5 h-2.5 rounded-sm" style={{ background: c.color }} />Real</span>
+                      <span className="flex items-center gap-1"><span className="inline-block w-4 border-t-2 border-dashed border-orange-400" />Meta</span>
+                    </div>
+                  </div>
+                  <p className="text-[10px] text-board-muted mb-1.5">{c.note}</p>
+                  <ExpandableChart title={`Meta — ${c.title}`} subtitle={c.note}
+                    filters={<DashboardFilterBar filters={filters} onChange={setFilters} showVendedor showSegmento />}>
+                  <ResponsiveContainer width="100%" height={160}>
+                    <ComposedChart data={c.data} margin={{ top: 16, right: 6, left: 0, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.08)" vertical={false} />
+                      <XAxis dataKey="mes" tick={{ fontSize: 9, fill: "#94a3b8" }} axisLine={false} tickLine={false} interval={1} />
+                      <YAxis tick={{ fontSize: 9, fill: "#94a3b8" }} axisLine={false} tickLine={false} width={34}
+                        tickFormatter={v => v >= 1000 ? `${(v / 1000).toFixed(0)}k` : String(v)} />
+                      <Tooltip
+                        cursor={{ fill: "rgba(148,163,184,0.08)" }}
+                        content={({ active, payload, label }: any) => {
+                          if (!active || !payload?.length) return null;
+                          const real = Number(payload.find((p: any) => p.dataKey === "real")?.value ?? 0);
+                          const metaRaw = payload.find((p: any) => p.dataKey === "meta")?.value;
+                          const meta = metaRaw != null ? Number(metaRaw) : null;
+                          const atg = meta != null && meta > 0 ? (real / meta) * 100 : null;
+                          return (
+                            <div style={{ background: "#1a2234", border: "1px solid rgba(255,255,255,0.14)", borderRadius: 10, padding: "8px 14px", fontSize: 12 }}>
+                              <p style={{ color: "#fff", fontWeight: 700, marginBottom: 4 }}>{label}</p>
+                              <p style={{ color: c.color }}>Real: {fmtK(real)}</p>
+                              {meta != null && <p style={{ color: "#fb923c" }}>Meta: {fmtK(meta)}</p>}
+                              {atg != null && (
+                                <p style={{ color: atg >= 100 ? "#86efac" : "#f87171", marginTop: 2, fontWeight: 600 }}>
+                                  {atg.toFixed(0)}% da meta
+                                </p>
+                              )}
+                            </div>
+                          );
+                        }}
+                      />
+                      <Bar dataKey="real" fill={c.color} fillOpacity={0.75} radius={[3, 3, 0, 0]} maxBarSize={26} isAnimationActive={false} />
+                      <Line dataKey="meta" type="monotone" stroke="#fb923c" strokeWidth={2} strokeDasharray="5 3" dot={false} connectNulls isAnimationActive={false} />
+                    </ComposedChart>
+                  </ResponsiveContainer>
+                  </ExpandableChart>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <CanalMetasDialog open={metasDialogOpen} onOpenChange={setMetasDialogOpen} ano={currentYear} />
+
+        {/* ── Crescimento de clientes por canal (PDV vs B2B) ─────────────── */}
+        {!carbozeLoading && clientesPorCanal.length > 0 && (
+          <div className="rounded-2xl border border-border bg-board-surface overflow-hidden">
+            <div className="flex items-center justify-between border-b border-border px-6 py-3">
+              <div>
+                <h2 className="text-base font-bold text-board-text flex items-center gap-2">
+                  <Repeat2 className="h-4 w-4 text-blue-400" />
+                  Crescimento de Clientes por Canal
+                </h2>
+                <p className="text-xs text-board-muted mt-0.5">
+                  Nº de clientes distintos por mês — B2B (Consumo) vs PDV (Revenda) vs On-line
+                </p>
+              </div>
+              <div className="hidden sm:flex items-center gap-3 text-[10px] text-board-muted">
+                {[
+                  { label: "B2B (Consumo)", color: "#3b82f6" },
+                  { label: "PDV (Revenda)", color: "#f59e0b" },
+                  { label: "On-line", color: "#22c55e" },
+                ].map((l) => (
+                  <span key={l.label} className="flex items-center gap-1">
+                    <span className="inline-block w-4 border-t-2" style={{ borderColor: l.color }} /> {l.label}
+                  </span>
+                ))}
+              </div>
+            </div>
+            <div className="px-4 pt-4 pb-4">
+              <ExpandableChart title="Crescimento de Clientes por Canal (PDV vs B2B)"
+                subtitle="Nº de clientes distintos por mês em cada canal"
+                filters={<DashboardFilterBar filters={filters} onChange={setFilters} showVendedor showSegmento />}>
+              <ResponsiveContainer width="100%" height={220}>
+                <ComposedChart data={clientesPorCanal} margin={{ top: 22, right: 8, bottom: 0, left: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.08)" vertical={false} />
+                  <XAxis dataKey="mes" tick={{ fontSize: 11, fill: "#94a3b8" }} axisLine={false} tickLine={false} dy={4} />
+                  <YAxis allowDecimals={false} tick={{ fontSize: 10, fill: "#94a3b8" }} axisLine={false} tickLine={false} width={28} />
+                  <Tooltip
+                    cursor={{ stroke: "rgba(148,163,184,0.2)" }}
+                    content={({ active, payload, label }: any) => {
+                      if (!active || !payload?.length) return null;
+                      const get = (k: string) => Number(payload.find((p: any) => p.dataKey === k)?.value ?? 0);
+                      return (
+                        <div style={{ background: "#1a2234", border: "1px solid rgba(255,255,255,0.14)", borderRadius: 10, padding: "8px 14px", fontSize: 12 }}>
+                          <p style={{ color: "#fff", fontWeight: 700, marginBottom: 4 }}>{label}</p>
+                          <p style={{ color: "#60a5fa" }}>B2B (Consumo): {get("b2b")} clientes</p>
+                          <p style={{ color: "#fbbf24" }}>PDV (Revenda): {get("pdv")} clientes</p>
+                          <p style={{ color: "#4ade80" }}>On-line: {get("online")} clientes</p>
+                        </div>
+                      );
+                    }}
+                  />
+                  <Line type="monotone" dataKey="b2b" name="B2B" stroke="#3b82f6" strokeWidth={2.5}
+                    dot={{ r: 3, fill: "#3b82f6", stroke: "#fff", strokeWidth: 1.5 }} activeDot={{ r: 5 }} isAnimationActive={false}>
+                    <LabelList dataKey="b2b" position="top" style={{ fontSize: 10, fill: "#60a5fa", fontWeight: 700 }} />
+                  </Line>
+                  <Line type="monotone" dataKey="pdv" name="PDV" stroke="#f59e0b" strokeWidth={2.5}
+                    dot={{ r: 3, fill: "#f59e0b", stroke: "#fff", strokeWidth: 1.5 }} activeDot={{ r: 5 }} isAnimationActive={false}>
+                    <LabelList dataKey="pdv" position="bottom" style={{ fontSize: 10, fill: "#fbbf24", fontWeight: 700 }} />
+                  </Line>
+                  <Line type="monotone" dataKey="online" name="On-line" stroke="#22c55e" strokeWidth={2}
+                    strokeDasharray="4 3" dot={{ r: 2.5, fill: "#22c55e" }} isAnimationActive={false} />
+                </ComposedChart>
+              </ResponsiveContainer>
+              </ExpandableChart>
+            </div>
           </div>
         )}
 
