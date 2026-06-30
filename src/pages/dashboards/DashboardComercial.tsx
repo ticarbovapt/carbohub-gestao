@@ -185,33 +185,66 @@ export default function DashboardComercial() {
     return { consumo: build("consumo"), revenda: build("revenda"), online: build("online") };
   }, [carbozeOrders, canalMetas, currentYear]);
 
-  // ── Crescimento do nº de clientes por canal (PDV vs B2B), mês a mês ─────────
+  // ── Clientes por canal, mês a mês — 3 métricas: ativos / novos / acumulado ──
   const clientesPorCanal = useMemo(() => {
-    const map: Record<string, { consumo: Set<string>; revenda: Set<string>; online: Set<string> }> = {};
+    const channels = ["consumo", "revenda", "online"] as const;
+    const active: Record<string, Record<string, Set<string>>> = { consumo: {}, revenda: {}, online: {} };
+    const firstMonth: Record<string, Record<string, string>> = { consumo: {}, revenda: {}, online: {} };
     for (const o of carbozeOrders) {
-      if (!o.created_at) continue;
-      if (o.status === "cancelled" || o.status === "cancelado") continue;
-      if (!o.segmento) continue; // só pedidos com canal classificado
+      if (!o.created_at || !o.segmento) continue;
+      if (o.status === "cancelled") continue;
+      const ch = o.segmento as "consumo" | "revenda" | "online";
+      if (!active[ch]) continue;
       const name = (o.customer_name || "").trim().toLowerCase();
       if (!name) continue;
       const key = o.created_at.slice(0, 7);
-      if (!map[key]) map[key] = { consumo: new Set(), revenda: new Set(), online: new Set() };
-      if (o.segmento === "consumo") map[key].consumo.add(name);
-      else if (o.segmento === "revenda") map[key].revenda.add(name);
-      else if (o.segmento === "online") map[key].online.add(name);
+      (active[ch][key] ??= new Set()).add(name);
+      const fm = firstMonth[ch][name];
+      if (!fm || key < fm) firstMonth[ch][name] = key;
     }
-    return Object.entries(map)
-      .sort(([a], [b]) => a.localeCompare(b))
-      .slice(-12)
-      .map(([key, v]) => {
-        let mes = key;
-        try {
-          const [y, m] = key.split("-");
-          mes = format(new Date(parseInt(y), parseInt(m) - 1, 1), "MMM/yy", { locale: ptBR });
-        } catch { /* keep key */ }
-        return { mes, b2b: v.consumo.size, pdv: v.revenda.size, online: v.online.size };
-      });
+    // novos por mês (primeira aparição na base do canal)
+    const novos: Record<string, Record<string, number>> = { consumo: {}, revenda: {}, online: {} };
+    for (const ch of channels)
+      for (const fm of Object.values(firstMonth[ch])) novos[ch][fm] = (novos[ch][fm] ?? 0) + 1;
+
+    const allKeys = Array.from(new Set([
+      ...Object.keys(active.consumo), ...Object.keys(active.revenda), ...Object.keys(active.online),
+    ])).sort();
+
+    const cumul: Record<string, number> = { consumo: 0, revenda: 0, online: 0 };
+    const rows = allKeys.map((key) => {
+      const r: any = { key };
+      for (const ch of channels) {
+        cumul[ch] += novos[ch][key] ?? 0; // acumulado cresce pelos novos
+        r[`${ch}_ativos`] = active[ch][key]?.size ?? 0;
+        r[`${ch}_novos`]  = novos[ch][key] ?? 0;
+        r[`${ch}_acum`]   = cumul[ch];
+      }
+      return r;
+    });
+    return rows.slice(-12).map((r) => {
+      let mes = r.key;
+      try { const [y, m] = r.key.split("-"); mes = format(new Date(parseInt(y), parseInt(m) - 1, 1), "MMM/yy", { locale: ptBR }); } catch { /* keep */ }
+      return { ...r, mes };
+    });
   }, [carbozeOrders]);
+
+  // Modo do gráfico de clientes (padrão: total acumulado = "quantos PDVs temos")
+  const [modoClientes, setModoClientes] = useState<"acum" | "ativos" | "novos">("acum");
+  const clientesChart = useMemo(
+    () => clientesPorCanal.map((r) => ({
+      mes: r.mes,
+      b2b: r[`consumo_${modoClientes}`],
+      pdv: r[`revenda_${modoClientes}`],
+      online: r[`online_${modoClientes}`],
+    })),
+    [clientesPorCanal, modoClientes],
+  );
+  const MODO_LABEL: Record<string, string> = {
+    acum: "Total acumulado (tamanho da base)",
+    ativos: "Ativos no mês (compraram no mês)",
+    novos: "Novos no mês (1ª compra)",
+  };
 
   // Agrupar carboze_orders por mês
   const monthlyData = useMemo(() => {
@@ -932,27 +965,42 @@ export default function DashboardComercial() {
                   Crescimento de Clientes por Canal
                 </h2>
                 <p className="text-xs text-board-muted mt-0.5">
-                  Nº de clientes distintos por mês — B2B (Consumo) vs PDV (Revenda) vs On-line
+                  {MODO_LABEL[modoClientes]} — B2B (Consumo) vs PDV (Revenda) vs On-line
                 </p>
               </div>
-              <div className="hidden sm:flex items-center gap-3 text-[10px] text-board-muted">
-                {[
-                  { label: "B2B (Consumo)", color: "#3b82f6" },
-                  { label: "PDV (Revenda)", color: "#f59e0b" },
-                  { label: "On-line", color: "#22c55e" },
-                ].map((l) => (
-                  <span key={l.label} className="flex items-center gap-1">
-                    <span className="inline-block w-4 border-t-2" style={{ borderColor: l.color }} /> {l.label}
-                  </span>
-                ))}
+              <div className="flex flex-col items-end gap-1.5">
+                {/* Seletor de métrica */}
+                <div className="inline-flex rounded-lg border border-border overflow-hidden text-[11px]">
+                  {([
+                    { v: "acum", label: "Acumulado" },
+                    { v: "ativos", label: "Ativos/mês" },
+                    { v: "novos", label: "Novos/mês" },
+                  ] as const).map((m) => (
+                    <button key={m.v} onClick={() => setModoClientes(m.v)}
+                      className={`px-2.5 py-1 font-medium transition-colors ${modoClientes === m.v ? "bg-primary text-primary-foreground" : "text-board-muted hover:bg-muted/50"}`}>
+                      {m.label}
+                    </button>
+                  ))}
+                </div>
+                <div className="hidden sm:flex items-center gap-3 text-[10px] text-board-muted">
+                  {[
+                    { label: "B2B (Consumo)", color: "#3b82f6" },
+                    { label: "PDV (Revenda)", color: "#f59e0b" },
+                    { label: "On-line", color: "#22c55e" },
+                  ].map((l) => (
+                    <span key={l.label} className="flex items-center gap-1">
+                      <span className="inline-block w-4 border-t-2" style={{ borderColor: l.color }} /> {l.label}
+                    </span>
+                  ))}
+                </div>
               </div>
             </div>
             <div className="px-4 pt-4 pb-4">
-              <ExpandableChart title="Crescimento de Clientes por Canal (PDV vs B2B)"
-                subtitle="Nº de clientes distintos por mês em cada canal"
+              <ExpandableChart title={`Crescimento de Clientes por Canal — ${MODO_LABEL[modoClientes]}`}
+                subtitle="B2B (Consumo) vs PDV (Revenda) vs On-line"
                 filters={<DashboardFilterBar filters={filters} onChange={setFilters} showVendedor showSegmento />}>
               <ResponsiveContainer width="100%" height={220}>
-                <ComposedChart data={clientesPorCanal} margin={{ top: 22, right: 8, bottom: 0, left: 0 }}>
+                <ComposedChart data={clientesChart} margin={{ top: 22, right: 8, bottom: 0, left: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.08)" vertical={false} />
                   <XAxis dataKey="mes" tick={{ fontSize: 11, fill: "#94a3b8" }} axisLine={false} tickLine={false} dy={4} />
                   <YAxis allowDecimals={false} tick={{ fontSize: 10, fill: "#94a3b8" }} axisLine={false} tickLine={false} width={28} />
