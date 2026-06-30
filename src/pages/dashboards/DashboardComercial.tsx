@@ -245,6 +245,20 @@ export default function DashboardComercial() {
     ativos: "Ativos no mês (compraram no mês)",
     novos: "Novos no mês (1ª compra)",
   };
+  // Delta % do PDV (Revenda): último mês vs anterior, na métrica selecionada
+  const pdvDelta = useMemo(() => {
+    const n = clientesChart.length;
+    if (n < 2) return null;
+    const cur = Number(clientesChart[n - 1].pdv ?? 0);
+    const prev = Number(clientesChart[n - 2].pdv ?? 0);
+    if (prev <= 0) return null;
+    return {
+      pct: ((cur - prev) / prev) * 100,
+      cur, prev,
+      curLabel: clientesChart[n - 1].mes,
+      prevLabel: clientesChart[n - 2].mes,
+    };
+  }, [clientesChart]);
 
   // Agrupar carboze_orders por mês
   const monthlyData = useMemo(() => {
@@ -891,6 +905,16 @@ export default function DashboardComercial() {
                   <p className="text-xs text-board-muted mt-0.5">
                     {MODO_LABEL[modoClientes]} — B2B (Consumo) vs PDV (Revenda) vs On-line
                   </p>
+                  {pdvDelta && (
+                    <div className="mt-1.5 inline-flex items-center gap-1.5 rounded-md bg-amber-400/10 px-2 py-1">
+                      <span className="text-[10px] font-semibold uppercase tracking-wider text-amber-500">PDV {pdvDelta.curLabel} vs {pdvDelta.prevLabel}</span>
+                      <span className={`flex items-center gap-0.5 text-xs font-bold ${pdvDelta.pct >= 0 ? "text-green-500" : "text-red-400"}`}>
+                        {pdvDelta.pct >= 0 ? <ArrowUpRight className="h-3.5 w-3.5" /> : <ArrowDownRight className="h-3.5 w-3.5" />}
+                        {pdvDelta.pct >= 0 ? "+" : ""}{pdvDelta.pct.toFixed(1)}%
+                      </span>
+                      <span className="text-[10px] text-board-muted">({pdvDelta.prev} → {pdvDelta.cur})</span>
+                    </div>
+                  )}
                 </div>
                 <div className="flex flex-col items-end gap-1.5">
                   {/* Seletor de métrica */}
