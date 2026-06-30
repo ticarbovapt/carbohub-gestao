@@ -12,22 +12,24 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { CalendarDays, User, X } from "lucide-react";
+import { CalendarDays, User, X, Tag } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 
 export interface DashboardFilters {
   from: string;
   to: string;
-  vendedor: string; // "all" or full_name
+  vendedor: string;  // "all" or full_name
+  segmento: string;  // "all" | "consumo" | "revenda" | "online" | "none"
 }
 
-export const EMPTY_FILTERS: DashboardFilters = { from: "", to: "", vendedor: "all" };
+export const EMPTY_FILTERS: DashboardFilters = { from: "", to: "", vendedor: "all", segmento: "all" };
 
 interface DashboardFilterBarProps {
   filters: DashboardFilters;
   onChange: (filters: DashboardFilters) => void;
   showVendedor?: boolean;
+  showSegmento?: boolean;
   className?: string;
 }
 
@@ -35,6 +37,7 @@ export function DashboardFilterBar({
   filters,
   onChange,
   showVendedor = false,
+  showSegmento = false,
   className,
 }: DashboardFilterBarProps) {
   const { data: collaborators = [] } = useQuery({
@@ -51,7 +54,9 @@ export function DashboardFilterBar({
   });
 
   const hasActiveFilters =
-    filters.from || filters.to || (showVendedor && filters.vendedor !== "all");
+    filters.from || filters.to ||
+    (showVendedor && filters.vendedor !== "all") ||
+    (showSegmento && filters.segmento !== "all");
 
   const set = (key: keyof DashboardFilters, value: string) =>
     onChange({ ...filters, [key]: value });
@@ -98,6 +103,27 @@ export function DashboardFilterBar({
                   {c.full_name}
                 </SelectItem>
               ))}
+            </SelectContent>
+          </Select>
+        </>
+      )}
+
+      {showSegmento && (
+        <>
+          <div className="flex items-center gap-1 text-xs text-muted-foreground font-medium ml-2">
+            <Tag className="h-3.5 w-3.5" />
+            Segmentação:
+          </div>
+          <Select value={filters.segmento} onValueChange={v => set("segmento", v)}>
+            <SelectTrigger className="h-8 w-44 text-xs">
+              <SelectValue placeholder="Toda segmentação" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Toda segmentação</SelectItem>
+              <SelectItem value="consumo">Consumo (B2B)</SelectItem>
+              <SelectItem value="revenda">Revenda (PDV)</SelectItem>
+              <SelectItem value="online">On-line</SelectItem>
+              <SelectItem value="none">Não classificado</SelectItem>
             </SelectContent>
           </Select>
         </>

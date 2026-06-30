@@ -22,7 +22,7 @@ export default function DashboardComercial() {
 
   // Vendas Bling — fonte principal (KPIs + gráfico)
   const { data: carbozeOrders = [], isLoading: carbozeLoading } = useQuery({
-    queryKey: ["carboze-orders-monthly", filters.from, filters.to, filters.vendedor],
+    queryKey: ["carboze-orders-monthly", filters.from, filters.to, filters.vendedor, filters.segmento],
     queryFn: async () => {
       let q = (supabase as any)
         .from("carboze_orders")
@@ -31,6 +31,9 @@ export default function DashboardComercial() {
       if (filters.from)               q = q.gte("created_at", filters.from + "T00:00:00.000Z");
       if (filters.to)                 q = q.lte("created_at", filters.to + "T23:59:59.999Z");
       if (filters.vendedor !== "all") q = q.eq("vendedor_name", filters.vendedor);
+      if (filters.segmento && filters.segmento !== "all") {
+        q = filters.segmento === "none" ? q.is("segmento", null) : q.eq("segmento", filters.segmento);
+      }
       const { data, error } = await q;
       if (error) throw error;
       return (data ?? []) as {
@@ -243,6 +246,7 @@ export default function DashboardComercial() {
             filters={filters}
             onChange={setFilters}
             showVendedor
+            showSegmento
             className="sm:pt-1 shrink-0"
           />
         </div>
