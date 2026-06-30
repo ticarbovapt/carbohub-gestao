@@ -609,6 +609,8 @@ export default function DashboardComercial() {
                     </div>
                   </div>
                   <p className="text-[10px] text-board-muted mb-1.5">{c.note}</p>
+                  <ExpandableChart title={`Meta — ${c.title}`} subtitle={c.note}
+                    filters={<DashboardFilterBar filters={filters} onChange={setFilters} showVendedor showSegmento />}>
                   <ResponsiveContainer width="100%" height={160}>
                     <ComposedChart data={c.data} margin={{ top: 16, right: 6, left: 0, bottom: 0 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.08)" vertical={false} />
@@ -641,6 +643,7 @@ export default function DashboardComercial() {
                       <Line dataKey="meta" type="monotone" stroke="#fb923c" strokeWidth={2} strokeDasharray="5 3" dot={false} connectNulls isAnimationActive={false} />
                     </ComposedChart>
                   </ResponsiveContainer>
+                  </ExpandableChart>
                 </div>
               ))}
             </div>
