@@ -34,14 +34,15 @@ export function ExpandableChart({ title, subtitle, filters, children, className 
       </div>
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-w-[96vw] w-[1100px] max-h-[94vh] overflow-y-auto">
+        <DialogContent className="max-w-[98vw] w-[1400px] max-h-[95vh] overflow-y-auto">
+          {/* CSS real (não depende do JIT do Tailwind) para forçar o gráfico a crescer no popup */}
+          <style>{`.cc-expanded .recharts-responsive-container{height:68vh !important;min-height:440px !important;}`}</style>
           <DialogHeader>
             <DialogTitle>{title}</DialogTitle>
             {subtitle && <DialogDescription>{subtitle}</DialogDescription>}
           </DialogHeader>
           {filters && <div className="mb-3 flex flex-wrap gap-2">{filters}</div>}
-          {/* Força o gráfico do popup a ocupar bastante altura. */}
-          <div className="[&_.recharts-responsive-container]:!h-[60vh] [&_.recharts-responsive-container]:!min-h-[380px]">
+          <div className="cc-expanded">
             {children}
           </div>
         </DialogContent>
