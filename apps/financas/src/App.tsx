@@ -9,6 +9,7 @@ import Orders from "./pages/Orders";
 import Faturamento from "./pages/Faturamento";
 import DashboardFinanceiro from "./pages/dashboards/DashboardFinanceiro";
 import BlingIntegracao from "./pages/integracoes/Bling";
+import BlingCallback from "./pages/integracoes/BlingCallback";
 
 // Carbo Finanças. Acesso liberado pelo Admin via flag carbo_financas
 // (ProtectedRoute). Telas portadas 1:1 do Carbo Controle.
@@ -24,6 +25,7 @@ export default function App() {
         <Route path="/faturamento" element={<Faturamento />} />
         <Route path="/dashboard-financeiro" element={<DashboardFinanceiro />} />
         <Route path="/integracoes/bling" element={<BlingIntegracao />} />
+        <Route path="/integracoes/bling/callback" element={<BlingCallback />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>
