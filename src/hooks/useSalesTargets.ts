@@ -9,6 +9,7 @@ export interface SalesTarget {
   target_amount: number;
   target_qty: number;
   linha: string | null;
+  canal: string | null; // consumo | revenda | online (cascata Canal → Vendedor)
   created_at: string;
   updated_at: string;
   // Joined
@@ -79,10 +80,10 @@ export function useSalesTargetsWithProgress(month: string) {
       // Metas padrão (recorrentes) por vendedor
       const { data: defaults } = await supabase
         .from("sales_target_defaults")
-        .select("vendedor_id, target_amount, target_qty");
-      const defaultMap: Record<string, { amount: number; qty: number }> = {};
+        .select("vendedor_id, target_amount, target_qty, canal");
+      const defaultMap: Record<string, { amount: number; qty: number; canal: string | null }> = {};
       for (const d of defaults || []) {
-        defaultMap[d.vendedor_id] = { amount: Number(d.target_amount || 0), qty: Number(d.target_qty || 0) };
+        defaultMap[d.vendedor_id] = { amount: Number(d.target_amount || 0), qty: Number(d.target_qty || 0), canal: (d as any).canal ?? null };
       }
 
       // Todos os vendedores ativos — aparecem no dashboard mesmo zerados
@@ -174,6 +175,7 @@ export function useSalesTargetsWithProgress(month: string) {
           target_amount: targetAmount,
           target_qty: targetQty,
           linha: override?.linha ?? null,
+          canal: override?.canal ?? def?.canal ?? null,
           created_at: override?.created_at ?? "",
           updated_at: override?.updated_at ?? "",
           vendedor: vendedorMap[vid],
@@ -200,6 +202,7 @@ export function useUpsertSalesTarget() {
       target_amount: number;
       target_qty: number;
       linha?: string | null;
+      canal?: string | null;
     }) => {
       // Manual upsert: functional unique index on COALESCE(linha,'') is not
       // resolvable via PostgREST onConflict column names.
