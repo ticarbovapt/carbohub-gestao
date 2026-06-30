@@ -48,8 +48,8 @@ export default function PosVenda() {
   };
 
   return (
-    <div className="p-4 md:p-6">
-      <div className="space-y-4 max-w-[1700px] mx-auto">
+    <div className="p-4 md:p-6 h-[calc(100dvh-3.5rem)] flex flex-col overflow-hidden">
+      <div className="max-w-[1700px] mx-auto w-full flex flex-col flex-1 min-h-0 gap-4">
         <CarboPageHeader
           title="Pós-venda"
           description="Jornada das vendas manuais (Carbo Sales) — operações controlam da Nova Venda à Entrega"
@@ -61,7 +61,7 @@ export default function PosVenda() {
             <Loader2 className="h-5 w-5 animate-spin" /> Carregando…
           </div>
         ) : (
-          <div className="flex gap-3 overflow-x-auto pb-3">
+          <div className="flex gap-3 overflow-x-auto flex-1 min-h-0">
             {POSVENDA_STAGES.map((stage) => {
               const items = byStage[stage.key] ?? [];
               const isOver = overStage === stage.key;
@@ -71,18 +71,18 @@ export default function PosVenda() {
                   onDragOver={(e) => { e.preventDefault(); setOverStage(stage.key); }}
                   onDragLeave={() => setOverStage((s) => (s === stage.key ? null : s))}
                   onDrop={() => drop(stage.key)}
-                  className={`flex-1 min-w-[230px] rounded-2xl border flex flex-col transition-colors ${
+                  className={`flex-1 min-w-[230px] h-full rounded-2xl border flex flex-col transition-colors ${
                     isOver ? "border-carbo-green bg-carbo-green/5" : "border-border bg-board-surface/40"
                   }`}
                 >
-                  <div className="px-3 py-2.5 border-b border-border flex items-center justify-between">
+                  <div className="px-3 py-2.5 border-b border-border flex items-center justify-between shrink-0">
                     <span className="flex items-center gap-2 text-sm font-semibold">
                       <span className="h-2.5 w-2.5 rounded-full" style={{ background: stage.color }} />
                       {stage.label}
                     </span>
                     <span className="text-xs text-muted-foreground tabular-nums">{items.length}</span>
                   </div>
-                  <div className="p-2 space-y-2 min-h-[120px]">
+                  <div className="p-2 space-y-2 overflow-y-auto flex-1 min-h-0">
                     {items.length === 0 ? (
                       <p className="text-xs text-muted-foreground/60 text-center py-6">Vazio</p>
                     ) : (
