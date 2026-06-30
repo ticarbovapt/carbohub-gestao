@@ -15,6 +15,7 @@ import {
 import { DashboardFilterBar, DashboardFilters, EMPTY_FILTERS } from "@/components/dashboard/DashboardFilterBar";
 import { useCanalMetas } from "@/hooks/useCanalMetas";
 import { CanalMetasDialog } from "@/components/dashboard/CanalMetasDialog";
+import { ExpandableChart } from "@/components/dashboard/ExpandableChart";
 import { Pencil } from "lucide-react";
 
 export default function DashboardComercial() {
@@ -694,6 +695,8 @@ export default function DashboardComercial() {
                   </div>
                   <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold bg-green-500/10 text-green-500">R$</span>
                 </div>
+                <ExpandableChart title="Total Faturado por Mês" subtitle="Faturamento mês a mês (via Bling)"
+                  filters={<DashboardFilterBar filters={filters} onChange={setFilters} showVendedor showSegmento />}>
                 <ResponsiveContainer width="100%" height={190}>
                   <ComposedChart data={monthlyData} margin={{ top: 22, right: 8, bottom: 0, left: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.08)" vertical={false} />
@@ -710,6 +713,7 @@ export default function DashboardComercial() {
                       dot={{ r: 3, fill: "#1a7a4a", stroke: "#fff", strokeWidth: 2 }} activeDot={{ r: 5 }} isAnimationActive={false} />
                   </ComposedChart>
                 </ResponsiveContainer>
+                </ExpandableChart>
               </div>
 
               {/* ── Gráfico 2: Total de Vendas (qtd) por mês ─────────── */}
@@ -724,6 +728,8 @@ export default function DashboardComercial() {
                   </div>
                   <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold bg-blue-500/10 text-blue-400">Qtd</span>
                 </div>
+                <ExpandableChart title="Total de Vendas por Mês" subtitle="Quantidade de pedidos mês a mês"
+                  filters={<DashboardFilterBar filters={filters} onChange={setFilters} showVendedor showSegmento />}>
                 <ResponsiveContainer width="100%" height={190}>
                   <ComposedChart data={monthlyData} margin={{ top: 22, right: 8, bottom: 0, left: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.08)" vertical={false} />
@@ -738,6 +744,7 @@ export default function DashboardComercial() {
                       dot={{ r: 3, fill: "#3b6ea5", stroke: "#fff", strokeWidth: 2 }} activeDot={{ r: 5 }} isAnimationActive={false} />
                   </ComposedChart>
                 </ResponsiveContainer>
+                </ExpandableChart>
               </div>
 
             </div>
@@ -774,6 +781,8 @@ export default function DashboardComercial() {
                 </div>
               </div>
               <div className="px-4 pt-4 pb-4">
+                <ExpandableChart title="Crescimento Anual" subtitle="Real vs projeção +15%/mês (curva S)"
+                  filters={<DashboardFilterBar filters={filters} onChange={setFilters} showVendedor showSegmento />}>
                 <ResponsiveContainer width="100%" height={175}>
                   <ComposedChart data={annualGrowthData} margin={{ top: 20, right: 8, bottom: 0, left: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.08)" vertical={false} />
@@ -820,6 +829,7 @@ export default function DashboardComercial() {
                           strokeDasharray="5 3" dot={false} isAnimationActive={false} />
                   </ComposedChart>
                 </ResponsiveContainer>
+                </ExpandableChart>
               </div>
             </div>
 
@@ -838,6 +848,8 @@ export default function DashboardComercial() {
                 </div>
               </div>
               <div className="px-4 pt-4 pb-4">
+                <ExpandableChart title="Evolução do Ticket Médio" subtitle="Valor médio por pedido mês a mês"
+                  filters={<DashboardFilterBar filters={filters} onChange={setFilters} showVendedor showSegmento />}>
                 <ResponsiveContainer width="100%" height={175}>
                   <ComposedChart data={monthlyData} margin={{ top: 22, right: 8, bottom: 0, left: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.08)" vertical={false} />
@@ -865,6 +877,7 @@ export default function DashboardComercial() {
                       dot={{ r: 3, fill: "#8b5cf6", stroke: "#fff", strokeWidth: 2 }} activeDot={{ r: 5 }} isAnimationActive={false} />
                   </ComposedChart>
                 </ResponsiveContainer>
+                </ExpandableChart>
               </div>
             </div>
 
