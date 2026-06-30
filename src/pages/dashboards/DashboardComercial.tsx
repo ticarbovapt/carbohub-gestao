@@ -827,54 +827,140 @@ export default function DashboardComercial() {
           <div className="h-px flex-1 bg-border" />
         </div>
 
-        {/* ── Segmentação: Consumo (B2B) vs Revenda (PDV) ───────────────── */}
-        {!carbozeLoading && carbozeOrders.length > 0 && (
-          <div className="rounded-2xl border border-border bg-board-surface overflow-hidden">
-            <div className="flex items-center justify-between border-b border-border px-6 py-3">
-              <div>
-                <h2 className="text-base font-bold text-board-text flex items-center gap-2">
-                  <BarChart3 className="h-4 w-4 text-blue-400" />
-                  Vendas por Canal
-                </h2>
-                <p className="text-xs text-board-muted mt-0.5">
-                  Consumo (B2B) vs Revenda (Ponto de Venda) · classifique cada pedido em{" "}
-                  <Link to="/orders" className="font-semibold text-primary hover:underline">Pedidos</Link>
-                </p>
+        {/* ── Linha combinada: Vendas por Canal (2x2) | Crescimento de Clientes ── */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 items-start">
+
+          {/* ESQUERDA: Segmentação — Consumo (B2B) vs Revenda (PDV) — 4 cards 2x2 */}
+          {!carbozeLoading && carbozeOrders.length > 0 && (
+            <div className="rounded-2xl border border-border bg-board-surface overflow-hidden">
+              <div className="flex items-center justify-between border-b border-border px-6 py-3">
+                <div>
+                  <h2 className="text-base font-bold text-board-text flex items-center gap-2">
+                    <BarChart3 className="h-4 w-4 text-blue-400" />
+                    Vendas por Canal
+                  </h2>
+                  <p className="text-xs text-board-muted mt-0.5">
+                    Consumo (B2B) vs Revenda (Ponto de Venda) · classifique cada pedido em{" "}
+                    <Link to="/orders" className="font-semibold text-primary hover:underline">Pedidos</Link>
+                  </p>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3 p-4">
+                {[
+                  { key: "consumo", label: "Consumo (B2B)", data: segmentacao.consumo,
+                    accent: "border-l-blue-500", bar: "bg-blue-500", text: "text-blue-400" },
+                  { key: "revenda", label: "Revenda (PDV)", data: segmentacao.revenda,
+                    accent: "border-l-amber-400", bar: "bg-amber-400", text: "text-amber-500" },
+                  { key: "online", label: "On-line", data: segmentacao.online,
+                    accent: "border-l-green-500", bar: "bg-green-500", text: "text-green-500" },
+                  { key: "naoClassificado", label: "Não classificado", data: segmentacao.naoClassificado,
+                    accent: "border-l-slate-400", bar: "bg-slate-400", text: "text-board-muted" },
+                ].map(({ key, label, data, accent, bar, text }) => {
+                  const pct = segmentacao.pct(data.brl);
+                  return (
+                    <div key={key} className={`rounded-xl bg-board-surface/60 border-l-4 ${accent} p-4`}>
+                      <div className="flex items-center justify-between">
+                        <p className="text-xs font-semibold text-board-muted uppercase tracking-wider">{label}</p>
+                        <span className={`text-xs font-bold ${text}`}>{pct.toFixed(0)}%</span>
+                      </div>
+                      <p className="mt-1.5 text-2xl font-bold text-board-text tabular-nums leading-none">
+                        {fmtK(data.brl)}
+                      </p>
+                      <p className="mt-1 text-xs text-board-muted">
+                        {data.qtd} pedido{data.qtd !== 1 ? "s" : ""}
+                      </p>
+                      <div className="mt-2 h-1.5 w-full rounded-full bg-muted overflow-hidden">
+                        <div className={`h-full ${bar} rounded-full`} style={{ width: `${pct}%` }} />
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 p-4">
-              {[
-                { key: "consumo", label: "Consumo (B2B)", data: segmentacao.consumo,
-                  accent: "border-l-blue-500", bar: "bg-blue-500", text: "text-blue-400" },
-                { key: "revenda", label: "Revenda (PDV)", data: segmentacao.revenda,
-                  accent: "border-l-amber-400", bar: "bg-amber-400", text: "text-amber-500" },
-                { key: "online", label: "On-line", data: segmentacao.online,
-                  accent: "border-l-green-500", bar: "bg-green-500", text: "text-green-500" },
-                { key: "naoClassificado", label: "Não classificado", data: segmentacao.naoClassificado,
-                  accent: "border-l-slate-400", bar: "bg-slate-400", text: "text-board-muted" },
-              ].map(({ key, label, data, accent, bar, text }) => {
-                const pct = segmentacao.pct(data.brl);
-                return (
-                  <div key={key} className={`rounded-xl bg-board-surface/60 border-l-4 ${accent} p-4`}>
-                    <div className="flex items-center justify-between">
-                      <p className="text-xs font-semibold text-board-muted uppercase tracking-wider">{label}</p>
-                      <span className={`text-xs font-bold ${text}`}>{pct.toFixed(0)}%</span>
-                    </div>
-                    <p className="mt-1.5 text-2xl font-bold text-board-text tabular-nums leading-none">
-                      {fmtK(data.brl)}
-                    </p>
-                    <p className="mt-1 text-xs text-board-muted">
-                      {data.qtd} pedido{data.qtd !== 1 ? "s" : ""}
-                    </p>
-                    <div className="mt-2 h-1.5 w-full rounded-full bg-muted overflow-hidden">
-                      <div className={`h-full ${bar} rounded-full`} style={{ width: `${pct}%` }} />
-                    </div>
+          )}
+
+          {/* DIREITA: Crescimento de clientes por canal (PDV vs B2B vs On-line) */}
+          {!carbozeLoading && clientesPorCanal.length > 0 && (
+            <div className="rounded-2xl border border-border bg-board-surface overflow-hidden">
+              <div className="flex items-center justify-between border-b border-border px-6 py-3">
+                <div>
+                  <h2 className="text-base font-bold text-board-text flex items-center gap-2">
+                    <Repeat2 className="h-4 w-4 text-blue-400" />
+                    Crescimento de Clientes por Canal
+                  </h2>
+                  <p className="text-xs text-board-muted mt-0.5">
+                    {MODO_LABEL[modoClientes]} — B2B (Consumo) vs PDV (Revenda) vs On-line
+                  </p>
+                </div>
+                <div className="flex flex-col items-end gap-1.5">
+                  {/* Seletor de métrica */}
+                  <div className="inline-flex rounded-lg border border-border overflow-hidden text-[11px]">
+                    {([
+                      { v: "acum", label: "Acumulado" },
+                      { v: "ativos", label: "Ativos/mês" },
+                      { v: "novos", label: "Novos/mês" },
+                    ] as const).map((m) => (
+                      <button key={m.v} onClick={() => setModoClientes(m.v)}
+                        className={`px-2.5 py-1 font-medium transition-colors ${modoClientes === m.v ? "bg-primary text-primary-foreground" : "text-board-muted hover:bg-muted/50"}`}>
+                        {m.label}
+                      </button>
+                    ))}
                   </div>
-                );
-              })}
+                  <div className="hidden sm:flex items-center gap-3 text-[10px] text-board-muted">
+                    {[
+                      { label: "B2B (Consumo)", color: "#3b82f6" },
+                      { label: "PDV (Revenda)", color: "#f59e0b" },
+                      { label: "On-line", color: "#22c55e" },
+                    ].map((l) => (
+                      <span key={l.label} className="flex items-center gap-1">
+                        <span className="inline-block w-4 border-t-2" style={{ borderColor: l.color }} /> {l.label}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              </div>
+              <div className="px-4 pt-4 pb-4">
+                <ExpandableChart title={`Crescimento de Clientes por Canal — ${MODO_LABEL[modoClientes]}`}
+                  subtitle="B2B (Consumo) vs PDV (Revenda) vs On-line"
+                  filters={<DashboardFilterBar filters={filters} onChange={setFilters} showVendedor showSegmento />}>
+                <ResponsiveContainer width="100%" height={200}>
+                  <ComposedChart data={clientesChart} margin={{ top: 22, right: 8, bottom: 0, left: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.08)" vertical={false} />
+                    <XAxis dataKey="mes" tick={{ fontSize: 11, fill: "#94a3b8" }} axisLine={false} tickLine={false} dy={4} />
+                    <YAxis allowDecimals={false} tick={{ fontSize: 10, fill: "#94a3b8" }} axisLine={false} tickLine={false} width={28} />
+                    <Tooltip
+                      cursor={{ stroke: "rgba(148,163,184,0.2)" }}
+                      content={({ active, payload, label }: any) => {
+                        if (!active || !payload?.length) return null;
+                        const get = (k: string) => Number(payload.find((p: any) => p.dataKey === k)?.value ?? 0);
+                        return (
+                          <div style={{ background: "#1a2234", border: "1px solid rgba(255,255,255,0.14)", borderRadius: 10, padding: "8px 14px", fontSize: 12 }}>
+                            <p style={{ color: "#fff", fontWeight: 700, marginBottom: 4 }}>{label}</p>
+                            <p style={{ color: "#60a5fa" }}>B2B (Consumo): {get("b2b")} clientes</p>
+                            <p style={{ color: "#fbbf24" }}>PDV (Revenda): {get("pdv")} clientes</p>
+                            <p style={{ color: "#4ade80" }}>On-line: {get("online")} clientes</p>
+                          </div>
+                        );
+                      }}
+                    />
+                    <Line type="monotone" dataKey="b2b" name="B2B" stroke="#3b82f6" strokeWidth={2.5}
+                      dot={{ r: 3, fill: "#3b82f6", stroke: "#fff", strokeWidth: 1.5 }} activeDot={{ r: 5 }} isAnimationActive={false}>
+                      <LabelList dataKey="b2b" position="top" style={{ fontSize: 10, fill: "#60a5fa", fontWeight: 700 }} />
+                    </Line>
+                    <Line type="monotone" dataKey="pdv" name="PDV" stroke="#f59e0b" strokeWidth={2.5}
+                      dot={{ r: 3, fill: "#f59e0b", stroke: "#fff", strokeWidth: 1.5 }} activeDot={{ r: 5 }} isAnimationActive={false}>
+                      <LabelList dataKey="pdv" position="bottom" style={{ fontSize: 10, fill: "#fbbf24", fontWeight: 700 }} />
+                    </Line>
+                    <Line type="monotone" dataKey="online" name="On-line" stroke="#22c55e" strokeWidth={2}
+                      strokeDasharray="4 3" dot={{ r: 2.5, fill: "#22c55e" }} isAnimationActive={false} />
+                  </ComposedChart>
+                </ResponsiveContainer>
+                </ExpandableChart>
+              </div>
             </div>
-          </div>
-        )}
+          )}
+
+        </div>
 
         {/* ── Metas por Canal — real (barras) x meta (linha), 3 mini-gráficos ── */}
         {!carbozeLoading && carbozeOrders.length > 0 && (
@@ -954,87 +1040,6 @@ export default function DashboardComercial() {
         )}
 
         <CanalMetasDialog open={metasDialogOpen} onOpenChange={setMetasDialogOpen} ano={currentYear} />
-
-        {/* ── Crescimento de clientes por canal (PDV vs B2B) ─────────────── */}
-        {!carbozeLoading && clientesPorCanal.length > 0 && (
-          <div className="rounded-2xl border border-border bg-board-surface overflow-hidden">
-            <div className="flex items-center justify-between border-b border-border px-6 py-3">
-              <div>
-                <h2 className="text-base font-bold text-board-text flex items-center gap-2">
-                  <Repeat2 className="h-4 w-4 text-blue-400" />
-                  Crescimento de Clientes por Canal
-                </h2>
-                <p className="text-xs text-board-muted mt-0.5">
-                  {MODO_LABEL[modoClientes]} — B2B (Consumo) vs PDV (Revenda) vs On-line
-                </p>
-              </div>
-              <div className="flex flex-col items-end gap-1.5">
-                {/* Seletor de métrica */}
-                <div className="inline-flex rounded-lg border border-border overflow-hidden text-[11px]">
-                  {([
-                    { v: "acum", label: "Acumulado" },
-                    { v: "ativos", label: "Ativos/mês" },
-                    { v: "novos", label: "Novos/mês" },
-                  ] as const).map((m) => (
-                    <button key={m.v} onClick={() => setModoClientes(m.v)}
-                      className={`px-2.5 py-1 font-medium transition-colors ${modoClientes === m.v ? "bg-primary text-primary-foreground" : "text-board-muted hover:bg-muted/50"}`}>
-                      {m.label}
-                    </button>
-                  ))}
-                </div>
-                <div className="hidden sm:flex items-center gap-3 text-[10px] text-board-muted">
-                  {[
-                    { label: "B2B (Consumo)", color: "#3b82f6" },
-                    { label: "PDV (Revenda)", color: "#f59e0b" },
-                    { label: "On-line", color: "#22c55e" },
-                  ].map((l) => (
-                    <span key={l.label} className="flex items-center gap-1">
-                      <span className="inline-block w-4 border-t-2" style={{ borderColor: l.color }} /> {l.label}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            </div>
-            <div className="px-4 pt-4 pb-4">
-              <ExpandableChart title={`Crescimento de Clientes por Canal — ${MODO_LABEL[modoClientes]}`}
-                subtitle="B2B (Consumo) vs PDV (Revenda) vs On-line"
-                filters={<DashboardFilterBar filters={filters} onChange={setFilters} showVendedor showSegmento />}>
-              <ResponsiveContainer width="100%" height={220}>
-                <ComposedChart data={clientesChart} margin={{ top: 22, right: 8, bottom: 0, left: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.08)" vertical={false} />
-                  <XAxis dataKey="mes" tick={{ fontSize: 11, fill: "#94a3b8" }} axisLine={false} tickLine={false} dy={4} />
-                  <YAxis allowDecimals={false} tick={{ fontSize: 10, fill: "#94a3b8" }} axisLine={false} tickLine={false} width={28} />
-                  <Tooltip
-                    cursor={{ stroke: "rgba(148,163,184,0.2)" }}
-                    content={({ active, payload, label }: any) => {
-                      if (!active || !payload?.length) return null;
-                      const get = (k: string) => Number(payload.find((p: any) => p.dataKey === k)?.value ?? 0);
-                      return (
-                        <div style={{ background: "#1a2234", border: "1px solid rgba(255,255,255,0.14)", borderRadius: 10, padding: "8px 14px", fontSize: 12 }}>
-                          <p style={{ color: "#fff", fontWeight: 700, marginBottom: 4 }}>{label}</p>
-                          <p style={{ color: "#60a5fa" }}>B2B (Consumo): {get("b2b")} clientes</p>
-                          <p style={{ color: "#fbbf24" }}>PDV (Revenda): {get("pdv")} clientes</p>
-                          <p style={{ color: "#4ade80" }}>On-line: {get("online")} clientes</p>
-                        </div>
-                      );
-                    }}
-                  />
-                  <Line type="monotone" dataKey="b2b" name="B2B" stroke="#3b82f6" strokeWidth={2.5}
-                    dot={{ r: 3, fill: "#3b82f6", stroke: "#fff", strokeWidth: 1.5 }} activeDot={{ r: 5 }} isAnimationActive={false}>
-                    <LabelList dataKey="b2b" position="top" style={{ fontSize: 10, fill: "#60a5fa", fontWeight: 700 }} />
-                  </Line>
-                  <Line type="monotone" dataKey="pdv" name="PDV" stroke="#f59e0b" strokeWidth={2.5}
-                    dot={{ r: 3, fill: "#f59e0b", stroke: "#fff", strokeWidth: 1.5 }} activeDot={{ r: 5 }} isAnimationActive={false}>
-                    <LabelList dataKey="pdv" position="bottom" style={{ fontSize: 10, fill: "#fbbf24", fontWeight: 700 }} />
-                  </Line>
-                  <Line type="monotone" dataKey="online" name="On-line" stroke="#22c55e" strokeWidth={2}
-                    strokeDasharray="4 3" dot={{ r: 2.5, fill: "#22c55e" }} isAnimationActive={false} />
-                </ComposedChart>
-              </ResponsiveContainer>
-              </ExpandableChart>
-            </div>
-          </div>
-        )}
 
         {/* Atalhos para páginas detalhadas */}
         <div className="flex items-center justify-end gap-4 pb-1">
