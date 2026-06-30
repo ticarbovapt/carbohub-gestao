@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from "@/components/ui/dialog";
+import { ExpandableChart } from "@/components/dashboard/ExpandableChart";
 import {
   AreaChart, Area, BarChart, Bar, LineChart, Line, Cell,
   PieChart, Pie,
@@ -497,6 +498,7 @@ function PlatformView({ platform, period }: { platform: EcommercePlatform; perio
             </CardTitle>
           </CardHeader>
           <CardContent className="px-2 pb-4">
+            <ExpandableChart title="Evolução de Vendas">
             <ResponsiveContainer width="100%" height={220}>
               <BarChart data={m.dailySales} margin={{ top: 4, right: 12, left: -10, bottom: 0 }} barCategoryGap="25%" barGap={2}>
                 <CartesianGrid strokeDasharray="3 3" className="stroke-border/50" vertical={false} />
@@ -512,6 +514,7 @@ function PlatformView({ platform, period }: { platform: EcommercePlatform; perio
                 <Bar dataKey="units"  name="units"  fill="#818cf8"  radius={[4, 4, 0, 0]} maxBarSize={28} />
               </BarChart>
             </ResponsiveContainer>
+            </ExpandableChart>
           </CardContent>
         </Card>
       )}
@@ -774,6 +777,7 @@ function ComparativoView({ period }: { period: EcommercePeriod }) {
               </CardTitle>
             </CardHeader>
             <CardContent className="px-4 pb-5">
+              <ExpandableChart title="Mix de Receita">
               <ResponsiveContainer width="100%" height={240}>
                 <PieChart>
                   <Pie
@@ -790,6 +794,7 @@ function ComparativoView({ period }: { period: EcommercePeriod }) {
                   <Legend iconType="circle" iconSize={9} />
                 </PieChart>
               </ResponsiveContainer>
+              </ExpandableChart>
             </CardContent>
           </Card>
 
@@ -817,6 +822,7 @@ function ComparativoView({ period }: { period: EcommercePeriod }) {
               </div>
             </CardHeader>
             <CardContent className="px-2 pb-4">
+              <ExpandableChart title="Evolução Comparativa">
               <ResponsiveContainer width="100%" height={240}>
                 <AreaChart data={lineData} margin={{ top: 8, right: 16, left: 8, bottom: 0 }}>
                   <defs>
@@ -848,6 +854,7 @@ function ComparativoView({ period }: { period: EcommercePeriod }) {
                   ))}
                 </AreaChart>
               </ResponsiveContainer>
+              </ExpandableChart>
             </CardContent>
           </Card>
         </div>
@@ -1141,6 +1148,7 @@ function HistoricoMensalView() {
               <CardTitle className="text-sm font-semibold">Receita Mensal por Plataforma</CardTitle>
             </CardHeader>
             <CardContent className="px-2 pb-4">
+              <ExpandableChart title="Receita Mensal por Plataforma">
               <ResponsiveContainer width="100%" height={300}>
                 <BarChart data={barData} margin={{ top: 20, right: 16, left: 8, bottom: 0 }} barCategoryGap="28%" barGap={3}>
                   <CartesianGrid strokeDasharray="3 3" className="stroke-border/40" vertical={false} />
@@ -1160,6 +1168,7 @@ function HistoricoMensalView() {
                   ))}
                 </BarChart>
               </ResponsiveContainer>
+              </ExpandableChart>
             </CardContent>
           </Card>
 
@@ -1169,6 +1178,7 @@ function HistoricoMensalView() {
               <CardTitle className="text-sm font-semibold">Pedidos Mensais por Plataforma</CardTitle>
             </CardHeader>
             <CardContent className="px-2 pb-4">
+              <ExpandableChart title="Pedidos Mensais por Plataforma">
               <ResponsiveContainer width="100%" height={250}>
                 <BarChart data={barData} margin={{ top: 20, right: 16, left: 8, bottom: 0 }} barCategoryGap="28%" barGap={3}>
                   <CartesianGrid strokeDasharray="3 3" className="stroke-border/40" vertical={false} />
@@ -1187,6 +1197,7 @@ function HistoricoMensalView() {
                   ))}
                 </BarChart>
               </ResponsiveContainer>
+              </ExpandableChart>
             </CardContent>
           </Card>
 
@@ -1197,6 +1208,7 @@ function HistoricoMensalView() {
                 <CardTitle className="text-sm font-semibold">Ticket Médio por Mês</CardTitle>
               </CardHeader>
               <CardContent className="px-2 pb-4">
+                <ExpandableChart title="Ticket Médio por Mês">
                 <ResponsiveContainer width="100%" height={210}>
                   <BarChart data={barData} margin={{ top: 20, right: 16, left: 8, bottom: 0 }} barCategoryGap="28%" barGap={3}>
                     <CartesianGrid strokeDasharray="3 3" className="stroke-border/40" vertical={false} />
@@ -1216,6 +1228,7 @@ function HistoricoMensalView() {
                     ))}
                   </BarChart>
                 </ResponsiveContainer>
+                </ExpandableChart>
               </CardContent>
             </Card>
 
@@ -1224,6 +1237,7 @@ function HistoricoMensalView() {
                 <CardTitle className="text-sm font-semibold">Taxa de Cancelamento por Mês</CardTitle>
               </CardHeader>
               <CardContent className="px-2 pb-4">
+                <ExpandableChart title="Taxa de Cancelamento por Mês">
                 <ResponsiveContainer width="100%" height={210}>
                   <BarChart data={barData} margin={{ top: 20, right: 16, left: 8, bottom: 0 }} barCategoryGap="28%" barGap={3}>
                     <CartesianGrid strokeDasharray="3 3" className="stroke-border/40" vertical={false} />
@@ -1243,6 +1257,7 @@ function HistoricoMensalView() {
                     ))}
                   </BarChart>
                 </ResponsiveContainer>
+                </ExpandableChart>
               </CardContent>
             </Card>
           </div>
@@ -1513,6 +1528,7 @@ function VindiLPsView() {
               <CardTitle className="text-sm font-semibold">Receita por Dia (pedidos pagos)</CardTitle>
             </CardHeader>
             <CardContent className="px-2 pb-4">
+              <ExpandableChart title="Receita por Dia (pedidos pagos)">
               <ResponsiveContainer width="100%" height={260}>
                 <BarChart data={m.dailySales} margin={{ top: 18, right: 16, left: 8, bottom: 0 }} barCategoryGap="30%">
                   <CartesianGrid strokeDasharray="3 3" className="stroke-border/40" vertical={false} />
@@ -1527,6 +1543,7 @@ function VindiLPsView() {
                   <Bar dataKey="revenue" name="revenue" fill="#22c55e" radius={[4,4,0,0]} maxBarSize={40} />
                 </BarChart>
               </ResponsiveContainer>
+              </ExpandableChart>
             </CardContent>
           </Card>
 
@@ -1536,6 +1553,7 @@ function VindiLPsView() {
               <CardTitle className="text-sm font-semibold">Tentativas de Pagamento por Dia</CardTitle>
             </CardHeader>
             <CardContent className="px-2 pb-4">
+              <ExpandableChart title="Tentativas de Pagamento por Dia">
               <ResponsiveContainer width="100%" height={220}>
                 <BarChart data={m.dailySales} margin={{ top: 18, right: 16, left: 8, bottom: 0 }} barCategoryGap="30%">
                   <CartesianGrid strokeDasharray="3 3" className="stroke-border/40" vertical={false} />
@@ -1549,6 +1567,7 @@ function VindiLPsView() {
                   <Bar dataKey="orders" name="orders" fill="#3b82f6" radius={[4,4,0,0]} maxBarSize={40} />
                 </BarChart>
               </ResponsiveContainer>
+              </ExpandableChart>
             </CardContent>
           </Card>
 

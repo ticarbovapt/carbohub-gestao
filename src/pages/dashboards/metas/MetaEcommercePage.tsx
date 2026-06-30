@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { CarboBadge } from "@/components/ui/carbo-badge";
+import { ExpandableChart } from "@/components/dashboard/ExpandableChart";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, ReferenceLine, Cell, LabelList,
@@ -224,6 +225,7 @@ function DailyBarsChart({ month, activeTarget, hookPlatform }: {
 
   return (
     <div className="w-full h-72">
+      <ExpandableChart title="Faturamento Diário">
       <ResponsiveContainer width="100%" height="100%">
         <BarChart data={data} margin={{ top: 22, right: 4, left: 0, bottom: 0 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
@@ -242,6 +244,7 @@ function DailyBarsChart({ month, activeTarget, hookPlatform }: {
           </Bar>
         </BarChart>
       </ResponsiveContainer>
+      </ExpandableChart>
     </div>
   );
 }
@@ -281,6 +284,7 @@ function CumulativeLineChart({ month, activeTarget, hookPlatform }: {
 
   return (
     <div className="w-full h-72">
+      <ExpandableChart title="Faturamento Acumulado">
       <ResponsiveContainer width="100%" height="100%">
         <LineChart data={data} margin={{ top: 28, right: 16, left: 0, bottom: 0 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
@@ -321,6 +325,7 @@ function CumulativeLineChart({ month, activeTarget, hookPlatform }: {
           )}
         </LineChart>
       </ResponsiveContainer>
+      </ExpandableChart>
     </div>
   );
 }
@@ -384,6 +389,7 @@ function HistoryBarChart({ hookPlatform }: { hookPlatform: MetaPlatform }) {
       </div>
 
       <div className="w-full h-72">
+        <ExpandableChart title="Histórico de Faturamento">
         <ResponsiveContainer width="100%" height="100%">
           <ComposedChart data={data} margin={{ top: 8, right: 4, left: 0, bottom: 0 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
@@ -408,6 +414,7 @@ function HistoryBarChart({ hookPlatform }: { hookPlatform: MetaPlatform }) {
             )}
           </ComposedChart>
         </ResponsiveContainer>
+        </ExpandableChart>
       </div>
     </div>
   );
