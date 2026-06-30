@@ -46,7 +46,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { DatePickerInput } from "@/components/ui/date-picker-input";
-import { useOrders, useOrderStats, OrderStatus, ORDER_STATUS_LABELS, ORDER_TYPE_LABELS, CarbozeOrder, OrderItem } from "@/hooks/useCarbozeOrders";
+import { useOrders, useOrderStats, useUpdateOrderSegmento, OrderStatus, ORDER_STATUS_LABELS, ORDER_TYPE_LABELS, CarbozeOrder, OrderItem, type SegmentoVenda } from "@/hooks/useCarbozeOrders";
 import { useQueryClient, useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useCanManageOrders } from "@/hooks/useActionPermissions";
@@ -55,7 +55,7 @@ import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { OrdersAnalytics } from "@/components/orders/OrdersAnalytics";
 import { EditOrderDialog } from "@/components/orders/EditOrderDialog";
-import { Pencil } from "lucide-react";
+import { Pencil, Check, Tag } from "lucide-react";
 
 const STATUS_VARIANTS: Record<OrderStatus, "secondary" | "info" | "warning" | "success" | "destructive"> = {
   quote: "secondary",
@@ -93,6 +93,8 @@ export default function Orders() {
   const tableRef = useRef<HTMLDivElement>(null);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<CarbozeOrder | null>(null);
+  const [segmentoEditMode, setSegmentoEditMode] = useState(false);
+  const updateSegmento = useUpdateOrderSegmento();
 
   // Sorting
   type SortCol = "order_number" | "created_at" | "customer_name" | "vendedor_name" | "total" | "status";
@@ -553,6 +555,22 @@ export default function Orders() {
               </SelectContent>
             </Select>
 
+            {/* Botão de edição em massa da segmentação (inline na coluna) */}
+            {canManageOrders && (
+              <Button
+                variant={segmentoEditMode ? "default" : "outline"}
+                size="sm"
+                className="h-8 rounded-lg text-xs"
+                onClick={() => setSegmentoEditMode((v) => !v)}
+              >
+                {segmentoEditMode ? (
+                  <><Check className="h-3.5 w-3.5 mr-1" /> Concluir edição</>
+                ) : (
+                  <><Tag className="h-3.5 w-3.5 mr-1" /> Editar segmentação</>
+                )}
+              </Button>
+            )}
+
             <span className="ml-auto text-xs text-muted-foreground">
               Mostrando <strong>{filteredOrders.length}</strong> pedidos
             </span>
@@ -670,8 +688,31 @@ export default function Orders() {
                         {ORDER_TYPE_LABELS[orderType]}
                       </CarboBadge>
                     </CarboTableCell>
-                    <CarboTableCell>
-                      {order.segmento === "consumo" ? (
+                    <CarboTableCell onClick={segmentoEditMode ? (e) => e.stopPropagation() : undefined}>
+                      {segmentoEditMode && canManageOrders ? (
+                        <Select
+                          value={order.segmento ?? "none"}
+                          onValueChange={(v) =>
+                            updateSegmento.mutate({
+                              id: order.id,
+                              segmento: v === "none" ? null : (v as SegmentoVenda),
+                            })
+                          }
+                        >
+                          <SelectTrigger
+                            className="h-7 w-[140px] text-xs"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="none">Não classificado</SelectItem>
+                            <SelectItem value="consumo">Consumo (B2B)</SelectItem>
+                            <SelectItem value="revenda">Revenda (PDV)</SelectItem>
+                            <SelectItem value="online">On-line</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      ) : order.segmento === "consumo" ? (
                         <CarboBadge variant="info" className="text-[10px]">Consumo</CarboBadge>
                       ) : order.segmento === "revenda" ? (
                         <CarboBadge variant="warning" className="text-[10px]">Revenda</CarboBadge>

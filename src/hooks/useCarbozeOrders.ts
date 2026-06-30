@@ -627,6 +627,24 @@ export function useUpdateOrder() {
   });
 }
 
+/** Atualiza apenas a segmentação de um pedido (edição inline rápida, sem toast). */
+export function useUpdateOrderSegmento() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, segmento }: { id: string; segmento: SegmentoVenda | null }) => {
+      const { error } = await supabase
+        .from("carboze_orders")
+        .update({ segmento })
+        .eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["carboze-orders"] });
+    },
+    onError: (e: Error) => toast.error("Erro ao salvar segmentação: " + e.message),
+  });
+}
+
 export function useOrderStats() {
   return useQuery({
     queryKey: ["order-stats"],
