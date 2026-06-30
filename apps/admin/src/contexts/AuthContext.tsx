@@ -7,14 +7,17 @@ export interface Profile extends Identity {
   id: string;
   full_name: string | null;
   username: string | null;
+  allowed_interfaces: string[] | null;
 }
 
 interface AuthContextType {
   user: User | null;
   session: Session | null;
   profile: Profile | null;
-  /** Quem "manda" (command / head / TI) opera o Admin. Sem is_admin legado. */
+  /** Quem "manda" (command / head / TI) — usado em telas de gestão (ex: bugs). */
   canAdmin: boolean;
+  /** Gate de ENTRADA no Admin: precisa da flag carbo_admin liberada no próprio Admin. */
+  hasAdminInterface: boolean;
   isLoading: boolean;
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
@@ -31,7 +34,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const loadIdentity = async (userId: string) => {
     const { data: prof } = await supabase
       .from("profiles")
-      .select("id, full_name, username, department, funcao, secondary_department, secondary_funcao")
+      .select("id, full_name, username, department, funcao, secondary_department, secondary_funcao, allowed_interfaces")
       .eq("id", userId)
       .maybeSingle();
     setProfile((prof as Profile) ?? null);
@@ -73,6 +76,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     <AuthContext.Provider value={{
       user, session, profile,
       canAdmin: seesEverything(profile),
+      hasAdminInterface: (profile?.allowed_interfaces ?? []).includes("carbo_admin"),
       isLoading, signIn, signOut,
     }}>
       {children}
