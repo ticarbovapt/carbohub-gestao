@@ -5,7 +5,7 @@
 // (carbohub.com.br) lê essa MESMA coluna e mapeia cada interface para o azulejo:
 //   carbo_ops         → Carbo Controle
 //   carbo_crm         → Carbo Sales
-//   carbo_ops_app     → Carbo Ops (em breve)
+//   carbo_ops_app     → Carbo Ops
 //   portal_licenciado → Carbo Licenciados
 //   portal_pdv        → Portal de Vendas (ex-"Carbo Loja")
 //
@@ -24,7 +24,7 @@ export interface SystemOption {
 export const SYSTEMS: SystemOption[] = [
   { iface: "carbo_ops",         label: "Carbo Controle",    hint: "Gestão interna, operação e estratégia" },
   { iface: "carbo_crm",         label: "Carbo Sales",       hint: "Comercial · funis, leads e vendas" },
-  { iface: "carbo_ops_app",     label: "Carbo Ops",         hint: "Operação, logística e estoque", comingSoon: true },
+  { iface: "carbo_ops_app",     label: "Carbo Ops",         hint: "Operação, logística e estoque" },
   { iface: "portal_licenciado", label: "Carbo Licenciados", hint: "Portal do licenciado" },
   { iface: "portal_pdv",        label: "Portal de Vendas",  hint: "Portal de Vendas (lojas/PDV)" },
   { iface: "carbo_financas",    label: "Carbo Finanças",    hint: "Financeiro — contas a pagar, NF, faturamento" },
