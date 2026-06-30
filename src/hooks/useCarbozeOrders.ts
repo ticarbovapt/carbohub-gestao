@@ -94,6 +94,7 @@ export interface CarbozeOrder {
   sku_id: string | null;
   // Import/governance fields
   is_test: boolean;
+  excluir_metricas: boolean; // aparece na lista, mas fora de dashboard/vendas/metas (transferência/interno)
   source_file: string | null;
   external_ref: string | null;
   // Campos PO padrão SAP

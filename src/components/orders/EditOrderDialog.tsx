@@ -47,6 +47,7 @@ const formSchema = z.object({
   delivery_zip: z.string().optional(),
   status: z.enum(["quote", "pending", "confirmed", "invoiced", "shipped", "delivered", "cancelled"]),
   segmento: z.enum(["consumo", "revenda", "online"]).optional().nullable(),  // Consumo=B2B, Revenda=PDV, On-line
+  excluir_metricas: z.boolean().optional(),  // transferência/uso interno: fora dos números
   tracking_code: z.string().optional(),
   tracking_url: z.string().optional(),
   vendedor_id: z.string().optional(),
@@ -110,6 +111,7 @@ export function EditOrderDialog({ open, onOpenChange, order, canEditSensitive = 
       delivery_zip: "",
       status: "pending",
       segmento: null,
+      excluir_metricas: false,
       tracking_code: "",
       tracking_url: "",
       notes: "",
@@ -156,6 +158,7 @@ export function EditOrderDialog({ open, onOpenChange, order, canEditSensitive = 
         delivery_zip: order.delivery_zip || "",
         status: order.status,
         segmento: order.segmento ?? null,
+        excluir_metricas: order.excluir_metricas ?? false,
         tracking_code: order.tracking_code || "",
         tracking_url: order.tracking_url || "",
         notes: order.notes || "",
@@ -197,6 +200,7 @@ export function EditOrderDialog({ open, onOpenChange, order, canEditSensitive = 
         id: order.id,
         ...data,
         segmento: data.segmento ?? null,
+        excluir_metricas: data.excluir_metricas ?? false,
         sale_date: data.sale_date ? format(data.sale_date, "yyyy-MM-dd") : null,
         customer_email: data.customer_email || undefined,
         licensee_id: data.licensee_id === "none" ? null : data.licensee_id || null,
@@ -437,6 +441,25 @@ export function EditOrderDialog({ open, onOpenChange, order, canEditSensitive = 
                         Consumo = venda para empresa (B2B). Revenda = ponto de venda (PDV). On-line = venda online.
                       </FormDescription>
                       <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                {/* Não contabilizar — transferência / uso interno */}
+                <FormField
+                  control={form.control}
+                  name="excluir_metricas"
+                  render={({ field }) => (
+                    <FormItem className="flex items-center justify-between rounded-lg border border-border p-3">
+                      <div className="space-y-0.5">
+                        <FormLabel>Não contabilizar nos números</FormLabel>
+                        <FormDescription className="text-[11px]">
+                          Transferência matriz↔filial / uso interno. Aparece na lista, mas fica fora de dashboards, vendas e metas.
+                        </FormDescription>
+                      </div>
+                      <FormControl>
+                        <Switch checked={!!field.value} onCheckedChange={field.onChange} />
+                      </FormControl>
                     </FormItem>
                   )}
                 />

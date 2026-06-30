@@ -35,6 +35,7 @@ export default function DashboardComercial() {
       let q = (supabase as any)
         .from("carboze_orders")
         .select("id, total, status, created_at, order_number, vendedor_name, customer_name, segmento")
+        .neq("excluir_metricas", true)
         .order("created_at", { ascending: true });
       if (filters.from)               q = q.gte("created_at", filters.from + "T00:00:00.000Z");
       if (filters.to)                 q = q.lte("created_at", filters.to + "T23:59:59.999Z");

@@ -107,6 +107,7 @@ export function useSalesTargetsWithProgress(month: string) {
       const { data: ordersRaw } = await supabase
         .from("carboze_orders")
         .select("vendedor_id, total, items, status, created_at, sale_date")
+        .neq("excluir_metricas", true)
         .gte("created_at", expandedStart)
         .lte("created_at", expandedEnd);
 
@@ -378,6 +379,7 @@ export function useWeeklyTopVendedores() {
       const { data: ordersRaw } = await supabase
         .from("carboze_orders")
         .select("vendedor_id, total, status, created_at, sale_date")
+        .neq("excluir_metricas", true)
         .gte("created_at", expandedStart.toISOString());
 
       const orders = (ordersRaw || []).filter(o => {
@@ -464,6 +466,7 @@ export function useWeeklyVendedoresData(teamFilter?: "todos" | "cgc" | "expansao
       const { data: ordersRaw } = await supabase
         .from("carboze_orders")
         .select("vendedor_id, total, status, created_at, sale_date")
+        .neq("excluir_metricas", true)
         .gte("created_at", expandedStart.toISOString())
         .lte("created_at", expandedEnd.toISOString());
 

@@ -241,6 +241,38 @@ export default function Orders() {
     });
   }, [orders, searchQuery, statusFilter, typeFilter, productFilter, vendedorFilter, clienteFilter, segmentoFilter, dateFrom, dateTo]);
 
+  // Base dos cards do topo (TIPs): respeita TODOS os filtros exceto status,
+  // e EXCLUI transferências/uso interno (excluir_metricas) dos números.
+  const cardsBase = useMemo(() => {
+    return allOrders.filter((order) => {
+      if (order.excluir_metricas) return false;
+      if (dateFrom && new Date(order.created_at) < new Date(dateFrom)) return false;
+      if (dateTo) { const end = new Date(dateTo); end.setDate(end.getDate() + 1); if (new Date(order.created_at) >= end) return false; }
+      if (typeFilter !== "all" && order.order_type !== typeFilter) return false;
+      if (productFilter !== "all" && !getOrderLinhas(order).includes(productFilter)) return false;
+      if (vendedorFilter !== "all" && order.vendedor_name !== vendedorFilter) return false;
+      if (clienteFilter !== "all" && order.customer_name !== clienteFilter) return false;
+      if (segmentoFilter !== "all") {
+        if (segmentoFilter === "none") { if (order.segmento) return false; }
+        else if (order.segmento !== segmentoFilter) return false;
+      }
+      if (searchQuery) {
+        const s = searchQuery.toLowerCase();
+        if (!(order.order_number.toLowerCase().includes(s) || order.customer_name.toLowerCase().includes(s) ||
+              order.customer_email?.toLowerCase().includes(s) || (order.invoice_number ?? "").toLowerCase().includes(s))) return false;
+      }
+      return true;
+    });
+  }, [allOrders, dateFrom, dateTo, typeFilter, productFilter, vendedorFilter, clienteFilter, segmentoFilter, searchQuery]);
+
+  const cardStats = useMemo(() => ({
+    total: cardsBase.length,
+    pending: cardsBase.filter((o) => o.status === "pending").length,
+    shipped: cardsBase.filter((o) => o.status === "shipped").length,
+    delivered: cardsBase.filter((o) => o.status === "delivered").length,
+    totalRevenue: cardsBase.filter((o) => o.status !== "cancelled").reduce((s, o) => s + Number(o.total || 0), 0),
+  }), [cardsBase]);
+
   // ── Sorted orders ────────────────────────────────────────────────────────
   const sortedOrders = useMemo(() => {
     return [...filteredOrders].sort((a, b) => {
@@ -403,7 +435,7 @@ export default function Orders() {
           </TabsList>
 
           <TabsContent value="analytics" className="mt-6">
-            <OrdersAnalytics orders={allOrders} isLoading={isLoading} />
+            <OrdersAnalytics orders={allOrders.filter((o) => !o.excluir_metricas)} isLoading={isLoading} />
           </TabsContent>
 
           <TabsContent value="list" className="mt-6 space-y-6">
@@ -411,42 +443,42 @@ export default function Orders() {
             <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
               <CarboKPI
                 title="Total Pedidos"
-                value={stats?.total || 0}
+                value={cardStats.total}
                 icon={ShoppingBag}
                 iconColor="blue"
-                loading={statsLoading}
+                loading={isLoading}
                 delay={50}
               />
               <CarboKPI
                 title="Pendentes"
-                value={stats?.pending || 0}
+                value={cardStats.pending}
                 icon={Clock}
                 iconColor="warning"
-                loading={statsLoading}
+                loading={isLoading}
                 delay={100}
               />
               <CarboKPI
                 title="Enviados"
-                value={stats?.shipped || 0}
+                value={cardStats.shipped}
                 icon={Truck}
                 iconColor="blue"
-                loading={statsLoading}
+                loading={isLoading}
                 delay={150}
               />
               <CarboKPI
                 title="Entregues"
-                value={stats?.delivered || 0}
+                value={cardStats.delivered}
                 icon={CheckCircle}
                 iconColor="success"
-                loading={statsLoading}
+                loading={isLoading}
                 delay={200}
               />
               <CarboKPI
                 title="Faturamento"
-                value={formatCurrency(stats?.totalRevenue || 0)}
+                value={formatCurrency(cardStats.totalRevenue)}
                 icon={DollarSign}
                 iconColor="green"
-                loading={statsLoading}
+                loading={isLoading}
                 delay={250}
               />
             </div>
@@ -454,7 +486,7 @@ export default function Orders() {
         {/* Pipeline Visual */}
         <div className="grid grid-cols-6 gap-2">
           {(["pending", "confirmed", "invoiced", "shipped", "delivered", "cancelled"] as OrderStatus[]).map((status) => {
-            const count = orders.filter((o) => o.status === status).length;
+            const count = cardsBase.filter((o) => o.status === status).length;
             const Icon = STATUS_ICONS[status];
             return (
               <div
@@ -788,6 +820,11 @@ export default function Orders() {
                       <span className="font-mono text-sm font-medium text-carbo-green">
                         {order.order_number}
                       </span>
+                      {order.excluir_metricas && (
+                        <CarboBadge variant="secondary" className="text-[9px] mt-0.5 block w-fit">
+                          Transferência · fora dos números
+                        </CarboBadge>
+                      )}
                     </CarboTableCell>
                     <CarboTableCell>
                       {order.invoice_number ? (

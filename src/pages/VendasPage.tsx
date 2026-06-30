@@ -121,6 +121,7 @@ function useVendas(
       let query = supabase
         .from("carboze_orders")
         .select("*")
+        .neq("excluir_metricas", true)
         .gte("created_at", queryStart)
         .lte("created_at", queryEnd)
         .order("created_at", { ascending: false });
