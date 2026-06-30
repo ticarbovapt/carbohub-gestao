@@ -2,7 +2,7 @@ import { useState } from "react";
 import { NavLink, Outlet } from "react-router-dom";
 import {
   KanbanSquare, ClipboardList, TrendingUp, Target, BarChart3, LayoutDashboard,
-  Wind, CalendarDays, MapPinned, Map, Share2, ShoppingCart,
+  Wind, CalendarDays, MapPinned, Map, Share2, ShoppingCart, ShoppingBag,
 } from "lucide-react";
 import { TopBar } from "@/components/TopBar";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
@@ -16,6 +16,7 @@ const CRM_SUB = [
 ];
 const NAV = [
   { to: "/pedidos", label: "Pedidos", icon: ClipboardList },
+  { to: "/pos-venda", label: "Pós-venda (meus pedidos)", icon: ShoppingBag },
   { to: "/compras", label: "Requisição de Compra", icon: ShoppingCart },
   { to: "/vendas", label: "Vendas", icon: TrendingUp },
   { to: "/metas", label: "Metas de Vendedores", icon: Target },

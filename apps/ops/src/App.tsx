@@ -23,6 +23,7 @@ import NotasFiscais from "./pages/financeiro/NotasFiscais";
 import NFSe from "./pages/financeiro/NFSe";
 import DashboardFinanceiro from "./pages/financeiro/DashboardFinanceiro";
 import Logistica from "./pages/logistica/Logistica";
+import PosVenda from "./pages/logistica/PosVenda";
 import ViagensLog from "./pages/logistica/Viagens";
 import DashboardLogistica from "./pages/logistica/DashboardLogistica";
 import OrdensServico from "./pages/campo/OrdensServico";
@@ -70,6 +71,7 @@ export default function App() {
         <Route path="/financeiro/dashboard" element={<DashboardFinanceiro />} />
 
         {/* Logística */}
+        <Route path="/logistica/pos-venda" element={<PosVenda />} />
         <Route path="/logistica" element={<Logistica />} />
         <Route path="/logistica/viagens" element={<ViagensLog />} />
         <Route path="/logistica/dashboard" element={<DashboardLogistica />} />

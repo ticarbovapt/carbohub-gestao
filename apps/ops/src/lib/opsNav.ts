@@ -1,7 +1,7 @@
 import {
   LayoutDashboard, Factory, BarChart3, Package, Boxes, Layers, Building2,
   Warehouse, ShoppingCart, PackagePlus, Wallet, Receipt, FileText, Truck,
-  Plane, ClipboardList, Calendar, Cog, UserCheck, Bell, TrendingUp, Target, Link2,
+  Plane, ClipboardList, Calendar, Cog, UserCheck, Bell, TrendingUp, Target, Link2, ShoppingBag,
   type LucideIcon,
 } from "lucide-react";
 
@@ -69,6 +69,7 @@ export const OPS_GROUPS: OpsNavGroup[] = [
   {
     label: "Logística",
     items: [
+      { path: "/logistica/pos-venda", label: "Pós-venda", icon: ShoppingBag, from: "carboze_orders", ready: true },
       { path: "/logistica", label: "Logística", icon: Truck, from: "/logistics", ready: true },
       { path: "/logistica/viagens", label: "Viagens & PC", icon: Plane, from: "/viagens", ready: true },
       { path: "/logistica/dashboard", label: "Dashboard de Logística", icon: BarChart3, from: "/dashboards/logistica", ready: true },

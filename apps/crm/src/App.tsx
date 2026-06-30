@@ -14,6 +14,7 @@ import Profile from "./pages/Profile";
 import BugReports from "./pages/BugReports";
 import MinhaEquipe from "./pages/MinhaEquipe";
 import RequisicaoCompra from "./pages/RequisicaoCompra";
+import PosVenda from "./pages/PosVenda";
 import DescOrdensServico from "./pages/descarbonizacao/OrdensServico";
 import DescAgendamentos from "./pages/descarbonizacao/Agendamentos";
 import MapaTerritorial from "./pages/territorio/MapaTerritorial";
@@ -46,6 +47,7 @@ export default function App() {
         <Route path="/vender" element={<Vender />} />
         <Route path="/pedidos" element={<Pedidos />} />
         <Route path="/compras" element={<RequisicaoCompra />} />
+        <Route path="/pos-venda" element={<PosVenda />} />
         <Route path="/vendas" element={<Vendas />} />
         <Route path="/metas" element={<Metas />} />
         <Route path="/comercial" element={<DashboardComercial />} />
