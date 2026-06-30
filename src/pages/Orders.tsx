@@ -86,6 +86,7 @@ export default function Orders() {
   const [productFilter, setProductFilter] = useState<string>("all");
   const [vendedorFilter, setVendedorFilter] = useState<string>("all");
   const [clienteFilter, setClienteFilter] = useState<string>("all");
+  const [segmentoFilter, setSegmentoFilter] = useState<"all" | "consumo" | "revenda" | "none">("all");
   const [dateFrom, setDateFrom] = useState<string>("");
   const [dateTo, setDateTo]     = useState<string>("");
   const [activeTab, setActiveTab] = useState<"list" | "analytics">("list");
@@ -199,6 +200,14 @@ export default function Orders() {
       if (vendedorFilter !== "all" && order.vendedor_name !== vendedorFilter) return false;
       // Cliente filter
       if (clienteFilter !== "all" && order.customer_name !== clienteFilter) return false;
+      // Segmentação filter (Consumo/Revenda/Não classificado)
+      if (segmentoFilter !== "all") {
+        if (segmentoFilter === "none") {
+          if (order.segmento) return false;
+        } else if (order.segmento !== segmentoFilter) {
+          return false;
+        }
+      }
       // Search filter
       if (!searchQuery) return true;
       const search = searchQuery.toLowerCase();
@@ -209,7 +218,7 @@ export default function Orders() {
         (order.invoice_number ?? "").toLowerCase().includes(search)
       );
     });
-  }, [orders, searchQuery, statusFilter, typeFilter, productFilter, vendedorFilter, clienteFilter, dateFrom, dateTo]);
+  }, [orders, searchQuery, statusFilter, typeFilter, productFilter, vendedorFilter, clienteFilter, segmentoFilter, dateFrom, dateTo]);
 
   // ── Sorted orders ────────────────────────────────────────────────────────
   const sortedOrders = useMemo(() => {
@@ -529,6 +538,20 @@ export default function Orders() {
               </SelectContent>
             </Select>
 
+            {/* Segmentação filter */}
+            <Select value={segmentoFilter} onValueChange={(v) => setSegmentoFilter(v as typeof segmentoFilter)}>
+              <SelectTrigger className="w-44 h-8 rounded-lg text-xs">
+                <Filter className="h-3 w-3 mr-1" />
+                <SelectValue placeholder="Segmentação" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Toda Segmentação</SelectItem>
+                <SelectItem value="consumo">Consumo (B2B)</SelectItem>
+                <SelectItem value="revenda">Revenda (PDV)</SelectItem>
+                <SelectItem value="none">Não classificado</SelectItem>
+              </SelectContent>
+            </Select>
+
             <span className="ml-auto text-xs text-muted-foreground">
               Mostrando <strong>{filteredOrders.length}</strong> pedidos
             </span>
@@ -572,6 +595,7 @@ export default function Orders() {
                 <CarboTableHead>NF</CarboTableHead>
                 <CarboTableHead>Produto</CarboTableHead>
                 <CarboTableHead>Tipo</CarboTableHead>
+                <CarboTableHead>Segmentação</CarboTableHead>
                 <CarboTableHead>
                   <button onClick={() => handleSort("vendedor_name")} className="flex items-center hover:text-foreground transition-colors">
                     Vendedor <SortIcon col="vendedor_name" />
@@ -644,6 +668,15 @@ export default function Orders() {
                         )}
                         {ORDER_TYPE_LABELS[orderType]}
                       </CarboBadge>
+                    </CarboTableCell>
+                    <CarboTableCell>
+                      {order.segmento === "consumo" ? (
+                        <CarboBadge variant="info" className="text-[10px]">Consumo</CarboBadge>
+                      ) : order.segmento === "revenda" ? (
+                        <CarboBadge variant="warning" className="text-[10px]">Revenda</CarboBadge>
+                      ) : (
+                        <span className="text-muted-foreground text-xs">—</span>
+                      )}
                     </CarboTableCell>
                     <CarboTableCell>
                       <span className="text-sm">

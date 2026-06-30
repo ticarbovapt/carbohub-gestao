@@ -46,6 +46,7 @@ const formSchema = z.object({
   delivery_state: z.string().optional(),
   delivery_zip: z.string().optional(),
   status: z.enum(["quote", "pending", "confirmed", "invoiced", "shipped", "delivered", "cancelled"]),
+  segmento: z.enum(["consumo", "revenda"]).optional().nullable(),  // Consumo=B2B, Revenda=PDV
   tracking_code: z.string().optional(),
   tracking_url: z.string().optional(),
   vendedor_id: z.string().optional(),
@@ -108,6 +109,7 @@ export function EditOrderDialog({ open, onOpenChange, order, canEditSensitive = 
       delivery_state: "",
       delivery_zip: "",
       status: "pending",
+      segmento: null,
       tracking_code: "",
       tracking_url: "",
       notes: "",
@@ -153,6 +155,7 @@ export function EditOrderDialog({ open, onOpenChange, order, canEditSensitive = 
         delivery_state: order.delivery_state || "",
         delivery_zip: order.delivery_zip || "",
         status: order.status,
+        segmento: order.segmento ?? null,
         tracking_code: order.tracking_code || "",
         tracking_url: order.tracking_url || "",
         notes: order.notes || "",
@@ -193,6 +196,7 @@ export function EditOrderDialog({ open, onOpenChange, order, canEditSensitive = 
       await updateOrder.mutateAsync({
         id: order.id,
         ...data,
+        segmento: data.segmento ?? null,
         sale_date: data.sale_date ? format(data.sale_date, "yyyy-MM-dd") : null,
         customer_email: data.customer_email || undefined,
         licensee_id: data.licensee_id === "none" ? null : data.licensee_id || null,
@@ -401,6 +405,36 @@ export function EditOrderDialog({ open, onOpenChange, order, canEditSensitive = 
                           ))}
                         </SelectContent>
                       </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                {/* Segmentação — Consumo (B2B) vs Revenda (PDV) */}
+                <FormField
+                  control={form.control}
+                  name="segmento"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Segmentação</FormLabel>
+                      <Select
+                        onValueChange={(v) => field.onChange(v === "none" ? null : v)}
+                        value={field.value ?? "none"}
+                      >
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Selecione a segmentação" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="none">Não classificado</SelectItem>
+                          <SelectItem value="consumo">Consumo (B2B)</SelectItem>
+                          <SelectItem value="revenda">Revenda (Ponto de Venda)</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormDescription className="text-[11px]">
+                        Consumo = venda para empresa (B2B). Revenda = venda para ponto de venda (PDV).
+                      </FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}

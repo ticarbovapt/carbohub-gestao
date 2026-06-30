@@ -43,6 +43,7 @@ interface VendaRow {
   invoice_number: string | null;
   nf_pdf_url: string | null;
   bling_nf_id: number | null;
+  segmento: "consumo" | "revenda" | null;
   _raw?: CarbozeOrder;
 }
 
@@ -169,6 +170,7 @@ function useVendas(
         invoice_number: row.invoice_number ?? null,
         nf_pdf_url: row.bling_nf_id != null ? (pdfByBlingId[row.bling_nf_id] ?? null) : null,
         bling_nf_id: row.bling_nf_id ?? null,
+        segmento: row.segmento ?? null,
         _raw: row as unknown as CarbozeOrder,
       }));
     },
@@ -185,6 +187,7 @@ export default function VendasPage() {
   const [customTo, setCustomTo]       = useState("");
   const [search, setSearch]           = useState("");
   const [vendedorFilter, setVendedor] = useState("__all__");
+  const [segmentoFilter, setSegmentoFilter] = useState<"all" | "consumo" | "revenda" | "none">("all");
 
   const hasCustomRange = !!(customFrom || customTo);
   const clearCustomRange = () => { setCustomFrom(""); setCustomTo(""); };
@@ -241,12 +244,20 @@ export default function VendasPage() {
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
-    if (!q) return vendas;
-    return vendas.filter(v =>
-      v.customer_name?.toLowerCase().includes(q) ||
-      v.order_number?.toLowerCase().includes(q)
-    );
-  }, [vendas, search]);
+    return vendas.filter(v => {
+      // Segmentação
+      if (segmentoFilter !== "all") {
+        if (segmentoFilter === "none") { if (v.segmento) return false; }
+        else if (v.segmento !== segmentoFilter) return false;
+      }
+      // Busca
+      if (!q) return true;
+      return (
+        v.customer_name?.toLowerCase().includes(q) ||
+        v.order_number?.toLowerCase().includes(q)
+      );
+    });
+  }, [vendas, search, segmentoFilter]);
 
   // KPIs separados: orçamentos vs vendas confirmadas
   const quotes     = filtered.filter(v => v.status === "quote");
@@ -399,6 +410,18 @@ export default function VendasPage() {
               </SelectContent>
             </Select>
           )}
+          {/* Segmentação */}
+          <Select value={segmentoFilter} onValueChange={(v) => setSegmentoFilter(v as typeof segmentoFilter)}>
+            <SelectTrigger className="w-[190px]">
+              <SelectValue placeholder="Segmentação" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Toda Segmentação</SelectItem>
+              <SelectItem value="consumo">Consumo (B2B)</SelectItem>
+              <SelectItem value="revenda">Revenda (PDV)</SelectItem>
+              <SelectItem value="none">Não classificado</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
 
         {/* Table */}

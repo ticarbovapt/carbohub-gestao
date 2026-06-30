@@ -26,7 +26,7 @@ export default function DashboardComercial() {
     queryFn: async () => {
       let q = (supabase as any)
         .from("carboze_orders")
-        .select("id, total, status, created_at, order_number, vendedor_name, customer_name")
+        .select("id, total, status, created_at, order_number, vendedor_name, customer_name, segmento")
         .order("created_at", { ascending: true });
       if (filters.from)               q = q.gte("created_at", filters.from + "T00:00:00.000Z");
       if (filters.to)                 q = q.lte("created_at", filters.to + "T23:59:59.999Z");
@@ -37,6 +37,7 @@ export default function DashboardComercial() {
         id: string; total: number; status: string;
         created_at: string; order_number: string;
         vendedor_name: string; customer_name: string;
+        segmento: "consumo" | "revenda" | null;
       }[];
     },
   });
@@ -66,6 +67,26 @@ export default function DashboardComercial() {
 
     const ticketMedio = totalVendas > 0 ? totalBRL / totalVendas : 0;
     return { totalVendas, totalBRL, maiorVenda, maiorCliente, topCliente, topQtd, ticketMedio };
+  }, [carbozeOrders]);
+
+  // ── Segmentação: Consumo (B2B) vs Revenda (PDV) ─────────────────────────────
+  const segmentacao = useMemo(() => {
+    const active = carbozeOrders.filter(o => o.status !== "cancelled" && o.status !== "cancelado");
+    const acc = {
+      consumo: { qtd: 0, brl: 0 },
+      revenda: { qtd: 0, brl: 0 },
+      naoClassificado: { qtd: 0, brl: 0 },
+    };
+    for (const o of active) {
+      const bucket = o.segmento === "consumo" ? acc.consumo
+                   : o.segmento === "revenda" ? acc.revenda
+                   : acc.naoClassificado;
+      bucket.qtd++;
+      bucket.brl += Number(o.total ?? 0);
+    }
+    const totalBRL = acc.consumo.brl + acc.revenda.brl + acc.naoClassificado.brl;
+    const pct = (v: number) => totalBRL > 0 ? (v / totalBRL) * 100 : 0;
+    return { ...acc, totalBRL, pct };
   }, [carbozeOrders]);
 
   // Agrupar carboze_orders por mês
@@ -405,6 +426,53 @@ export default function DashboardComercial() {
             </div>
           );
         })()}
+
+        {/* ── Segmentação: Consumo (B2B) vs Revenda (PDV) ───────────────── */}
+        {!carbozeLoading && carbozeOrders.length > 0 && (
+          <div className="rounded-2xl border border-border bg-board-surface overflow-hidden">
+            <div className="flex items-center justify-between border-b border-border px-6 py-3">
+              <div>
+                <h2 className="text-base font-bold text-board-text flex items-center gap-2">
+                  <BarChart3 className="h-4 w-4 text-blue-400" />
+                  Segmentação de Vendas
+                </h2>
+                <p className="text-xs text-board-muted mt-0.5">
+                  Consumo (B2B) vs Revenda (Ponto de Venda) · classifique cada pedido em{" "}
+                  <Link to="/orders" className="font-semibold text-primary hover:underline">Pedidos</Link>
+                </p>
+              </div>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 p-4">
+              {[
+                { key: "consumo", label: "Consumo (B2B)", data: segmentacao.consumo,
+                  accent: "border-l-blue-500", bar: "bg-blue-500", text: "text-blue-400" },
+                { key: "revenda", label: "Revenda (PDV)", data: segmentacao.revenda,
+                  accent: "border-l-amber-400", bar: "bg-amber-400", text: "text-amber-500" },
+                { key: "naoClassificado", label: "Não classificado", data: segmentacao.naoClassificado,
+                  accent: "border-l-slate-400", bar: "bg-slate-400", text: "text-board-muted" },
+              ].map(({ key, label, data, accent, bar, text }) => {
+                const pct = segmentacao.pct(data.brl);
+                return (
+                  <div key={key} className={`rounded-xl bg-board-surface/60 border-l-4 ${accent} p-4`}>
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs font-semibold text-board-muted uppercase tracking-wider">{label}</p>
+                      <span className={`text-xs font-bold ${text}`}>{pct.toFixed(0)}%</span>
+                    </div>
+                    <p className="mt-1.5 text-2xl font-bold text-board-text tabular-nums leading-none">
+                      {fmtK(data.brl)}
+                    </p>
+                    <p className="mt-1 text-xs text-board-muted">
+                      {data.qtd} pedido{data.qtd !== 1 ? "s" : ""}
+                    </p>
+                    <div className="mt-2 h-1.5 w-full rounded-full bg-muted overflow-hidden">
+                      <div className={`h-full ${bar} rounded-full`} style={{ width: `${pct}%` }} />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         {/* ── Evolução Mensal de Vendas ────────────────────────────────── */}
         <div className="rounded-2xl border border-border bg-board-surface overflow-hidden">

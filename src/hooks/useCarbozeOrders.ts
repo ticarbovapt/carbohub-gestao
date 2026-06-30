@@ -8,6 +8,13 @@ import { useFunctionAccess, ENFORCEMENT_ACTIVE } from "@/hooks/useFunctionAccess
 export type OrderStatus = "quote" | "pending" | "confirmed" | "invoiced" | "shipped" | "delivered" | "cancelled";
 export type OrderType = "spot" | "recorrente";
 
+// Segmentação da venda: consumo = B2B, revenda = Ponto de Venda (PDV)
+export type SegmentoVenda = "consumo" | "revenda";
+export const SEGMENTO_LABELS: Record<SegmentoVenda, string> = {
+  consumo: "Consumo (B2B)",
+  revenda: "Revenda (PDV)",
+};
+
 export interface OrderItem {
   product_id?: string;
   name: string;
@@ -48,6 +55,7 @@ export interface CarbozeOrder {
   discount: number;
   total: number;
   status: OrderStatus;
+  segmento: SegmentoVenda | null;       // Consumo (B2B) vs Revenda (PDV); null = não classificado
   confirmed_at: string | null;
   invoiced_at: string | null;
   invoice_number: string | null;
