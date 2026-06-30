@@ -13,6 +13,17 @@ const brl = (v: number) => new Intl.NumberFormat("pt-BR", { style: "currency", c
 const fmtDate = (s: string) => new Date(s).toLocaleDateString("pt-BR");
 const stageLabel = (k: FulfillmentStage) => POSVENDA_STAGES.find((s) => s.key === k)?.label ?? k;
 
+function VendedorTag({ name, avatar }: { name: string; avatar: string | null }) {
+  return (
+    <span className="flex items-center gap-1 truncate">
+      {avatar
+        ? <img src={avatar} alt="" className="h-4 w-4 rounded-full object-cover shrink-0" />
+        : <User className="h-3 w-3 shrink-0" />}
+      {name}
+    </span>
+  );
+}
+
 export default function PosVenda() {
   const { data: orders = [], isLoading } = usePosVendaOrders();
   const updateStage = useUpdateFulfillmentStage();
@@ -60,7 +71,7 @@ export default function PosVenda() {
                   onDragOver={(e) => { e.preventDefault(); setOverStage(stage.key); }}
                   onDragLeave={() => setOverStage((s) => (s === stage.key ? null : s))}
                   onDrop={() => drop(stage.key)}
-                  className={`w-72 shrink-0 rounded-2xl border flex flex-col transition-colors ${
+                  className={`flex-1 min-w-[230px] rounded-2xl border flex flex-col transition-colors ${
                     isOver ? "border-carbo-green bg-carbo-green/5" : "border-border bg-board-surface/40"
                   }`}
                 >
@@ -92,7 +103,7 @@ export default function PosVenda() {
                           </div>
                           <p className="text-[11px] text-muted-foreground font-mono">{o.order_number || "—"}</p>
                           <div className="flex items-center gap-3 text-[11px] text-muted-foreground">
-                            {o.vendedor_name && <span className="flex items-center gap-1 truncate"><User className="h-3 w-3" /> {o.vendedor_name}</span>}
+                            {o.vendedor_name && <VendedorTag name={o.vendedor_name} avatar={o.vendedor_avatar} />}
                             <span className="flex items-center gap-1 shrink-0"><Calendar className="h-3 w-3" /> {fmtDate(o.created_at)}</span>
                           </div>
                           {/* Mudar etapa sem precisar arrastar (não abre o detalhe) */}
@@ -138,7 +149,7 @@ export default function PosVenda() {
               <div className="space-y-4 text-sm">
                 <div className="flex flex-wrap gap-x-6 gap-y-1 text-xs text-muted-foreground">
                   <span className="font-mono">{detail.order_number || "—"}</span>
-                  {detail.vendedor_name && <span className="flex items-center gap-1"><User className="h-3 w-3" /> {detail.vendedor_name}</span>}
+                  {detail.vendedor_name && <VendedorTag name={detail.vendedor_name} avatar={detail.vendedor_avatar} />}
                   <span className="flex items-center gap-1"><Calendar className="h-3 w-3" /> {fmtDate(detail.created_at)}</span>
                 </div>
 

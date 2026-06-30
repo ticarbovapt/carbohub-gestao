@@ -45,7 +45,7 @@ export default function PosVenda() {
             {POSVENDA_STAGES.map((stage) => {
               const items = byStage[stage.key] ?? [];
               return (
-                <div key={stage.key} className="w-72 shrink-0 rounded-2xl border border-border bg-board-surface/40 flex flex-col">
+                <div key={stage.key} className="flex-1 min-w-[230px] rounded-2xl border border-border bg-board-surface/40 flex flex-col">
                   <div className="px-3 py-2.5 border-b border-border flex items-center justify-between">
                     <span className="flex items-center gap-2 text-sm font-semibold">
                       <span className="h-2.5 w-2.5 rounded-full" style={{ background: stage.color }} />

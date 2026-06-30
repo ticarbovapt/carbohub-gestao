@@ -38,6 +38,7 @@ export interface PosVendaOrder {
   delivery_zip: string | null;
   vendedor_name: string | null;
   vendedor_id: string | null;
+  vendedor_avatar: string | null;
   subtotal: number;
   shipping_cost: number;
   discount: number;
@@ -66,7 +67,16 @@ export function usePosVendaOrders() {
         .order("created_at", { ascending: false })
         .limit(500);
       if (error) throw error;
-      return (data || []) as PosVendaOrder[];
+      const list = (data || []) as PosVendaOrder[];
+
+      // Enriquece com a foto do vendedor (profiles.avatar_url).
+      const ids = [...new Set(list.map((o) => o.vendedor_id).filter(Boolean))] as string[];
+      if (ids.length) {
+        const { data: profs } = await db.from("profiles").select("id, avatar_url").in("id", ids);
+        const map = new Map((profs || []).map((p: any) => [p.id, p.avatar_url]));
+        for (const o of list) o.vendedor_avatar = (o.vendedor_id && map.get(o.vendedor_id)) || null;
+      }
+      return list;
     },
     refetchInterval: 60_000,
   });
