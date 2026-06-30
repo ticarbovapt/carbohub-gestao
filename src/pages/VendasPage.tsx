@@ -43,7 +43,7 @@ interface VendaRow {
   invoice_number: string | null;
   nf_pdf_url: string | null;
   bling_nf_id: number | null;
-  segmento: "consumo" | "revenda" | null;
+  segmento: "consumo" | "revenda" | "online" | null;
   _raw?: CarbozeOrder;
 }
 
@@ -187,7 +187,7 @@ export default function VendasPage() {
   const [customTo, setCustomTo]       = useState("");
   const [search, setSearch]           = useState("");
   const [vendedorFilter, setVendedor] = useState("__all__");
-  const [segmentoFilter, setSegmentoFilter] = useState<"all" | "consumo" | "revenda" | "none">("all");
+  const [segmentoFilter, setSegmentoFilter] = useState<"all" | "consumo" | "revenda" | "online" | "none">("all");
 
   const hasCustomRange = !!(customFrom || customTo);
   const clearCustomRange = () => { setCustomFrom(""); setCustomTo(""); };
@@ -419,6 +419,7 @@ export default function VendasPage() {
               <SelectItem value="all">Toda Segmentação</SelectItem>
               <SelectItem value="consumo">Consumo (B2B)</SelectItem>
               <SelectItem value="revenda">Revenda (PDV)</SelectItem>
+              <SelectItem value="online">On-line</SelectItem>
               <SelectItem value="none">Não classificado</SelectItem>
             </SelectContent>
           </Select>

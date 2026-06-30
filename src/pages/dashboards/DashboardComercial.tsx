@@ -37,7 +37,7 @@ export default function DashboardComercial() {
         id: string; total: number; status: string;
         created_at: string; order_number: string;
         vendedor_name: string; customer_name: string;
-        segmento: "consumo" | "revenda" | null;
+        segmento: "consumo" | "revenda" | "online" | null;
       }[];
     },
   });
@@ -75,16 +75,18 @@ export default function DashboardComercial() {
     const acc = {
       consumo: { qtd: 0, brl: 0 },
       revenda: { qtd: 0, brl: 0 },
+      online: { qtd: 0, brl: 0 },
       naoClassificado: { qtd: 0, brl: 0 },
     };
     for (const o of active) {
       const bucket = o.segmento === "consumo" ? acc.consumo
                    : o.segmento === "revenda" ? acc.revenda
+                   : o.segmento === "online" ? acc.online
                    : acc.naoClassificado;
       bucket.qtd++;
       bucket.brl += Number(o.total ?? 0);
     }
-    const totalBRL = acc.consumo.brl + acc.revenda.brl + acc.naoClassificado.brl;
+    const totalBRL = acc.consumo.brl + acc.revenda.brl + acc.online.brl + acc.naoClassificado.brl;
     const pct = (v: number) => totalBRL > 0 ? (v / totalBRL) * 100 : 0;
     return { ...acc, totalBRL, pct };
   }, [carbozeOrders]);
@@ -442,12 +444,14 @@ export default function DashboardComercial() {
                 </p>
               </div>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 p-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 p-4">
               {[
                 { key: "consumo", label: "Consumo (B2B)", data: segmentacao.consumo,
                   accent: "border-l-blue-500", bar: "bg-blue-500", text: "text-blue-400" },
                 { key: "revenda", label: "Revenda (PDV)", data: segmentacao.revenda,
                   accent: "border-l-amber-400", bar: "bg-amber-400", text: "text-amber-500" },
+                { key: "online", label: "On-line", data: segmentacao.online,
+                  accent: "border-l-green-500", bar: "bg-green-500", text: "text-green-500" },
                 { key: "naoClassificado", label: "Não classificado", data: segmentacao.naoClassificado,
                   accent: "border-l-slate-400", bar: "bg-slate-400", text: "text-board-muted" },
               ].map(({ key, label, data, accent, bar, text }) => {

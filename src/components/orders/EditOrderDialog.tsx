@@ -46,7 +46,7 @@ const formSchema = z.object({
   delivery_state: z.string().optional(),
   delivery_zip: z.string().optional(),
   status: z.enum(["quote", "pending", "confirmed", "invoiced", "shipped", "delivered", "cancelled"]),
-  segmento: z.enum(["consumo", "revenda"]).optional().nullable(),  // Consumo=B2B, Revenda=PDV
+  segmento: z.enum(["consumo", "revenda", "online"]).optional().nullable(),  // Consumo=B2B, Revenda=PDV, On-line
   tracking_code: z.string().optional(),
   tracking_url: z.string().optional(),
   vendedor_id: z.string().optional(),
@@ -430,10 +430,11 @@ export function EditOrderDialog({ open, onOpenChange, order, canEditSensitive = 
                           <SelectItem value="none">Não classificado</SelectItem>
                           <SelectItem value="consumo">Consumo (B2B)</SelectItem>
                           <SelectItem value="revenda">Revenda (Ponto de Venda)</SelectItem>
+                          <SelectItem value="online">On-line</SelectItem>
                         </SelectContent>
                       </Select>
                       <FormDescription className="text-[11px]">
-                        Consumo = venda para empresa (B2B). Revenda = venda para ponto de venda (PDV).
+                        Consumo = venda para empresa (B2B). Revenda = ponto de venda (PDV). On-line = venda online.
                       </FormDescription>
                       <FormMessage />
                     </FormItem>

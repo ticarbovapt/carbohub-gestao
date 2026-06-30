@@ -8,11 +8,12 @@ import { useFunctionAccess, ENFORCEMENT_ACTIVE } from "@/hooks/useFunctionAccess
 export type OrderStatus = "quote" | "pending" | "confirmed" | "invoiced" | "shipped" | "delivered" | "cancelled";
 export type OrderType = "spot" | "recorrente";
 
-// Segmentação da venda: consumo = B2B, revenda = Ponto de Venda (PDV)
-export type SegmentoVenda = "consumo" | "revenda";
+// Segmentação da venda: consumo = B2B, revenda = Ponto de Venda (PDV), online = On-line
+export type SegmentoVenda = "consumo" | "revenda" | "online";
 export const SEGMENTO_LABELS: Record<SegmentoVenda, string> = {
   consumo: "Consumo (B2B)",
   revenda: "Revenda (PDV)",
+  online: "On-line",
 };
 
 export interface OrderItem {

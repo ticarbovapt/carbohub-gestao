@@ -86,7 +86,7 @@ export default function Orders() {
   const [productFilter, setProductFilter] = useState<string>("all");
   const [vendedorFilter, setVendedorFilter] = useState<string>("all");
   const [clienteFilter, setClienteFilter] = useState<string>("all");
-  const [segmentoFilter, setSegmentoFilter] = useState<"all" | "consumo" | "revenda" | "none">("all");
+  const [segmentoFilter, setSegmentoFilter] = useState<"all" | "consumo" | "revenda" | "online" | "none">("all");
   const [dateFrom, setDateFrom] = useState<string>("");
   const [dateTo, setDateTo]     = useState<string>("");
   const [activeTab, setActiveTab] = useState<"list" | "analytics">("list");
@@ -548,6 +548,7 @@ export default function Orders() {
                 <SelectItem value="all">Toda Segmentação</SelectItem>
                 <SelectItem value="consumo">Consumo (B2B)</SelectItem>
                 <SelectItem value="revenda">Revenda (PDV)</SelectItem>
+                <SelectItem value="online">On-line</SelectItem>
                 <SelectItem value="none">Não classificado</SelectItem>
               </SelectContent>
             </Select>
@@ -674,6 +675,8 @@ export default function Orders() {
                         <CarboBadge variant="info" className="text-[10px]">Consumo</CarboBadge>
                       ) : order.segmento === "revenda" ? (
                         <CarboBadge variant="warning" className="text-[10px]">Revenda</CarboBadge>
+                      ) : order.segmento === "online" ? (
+                        <CarboBadge variant="success" className="text-[10px]">On-line</CarboBadge>
                       ) : (
                         <span className="text-muted-foreground text-xs">—</span>
                       )}
