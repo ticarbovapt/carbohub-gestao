@@ -10,12 +10,14 @@ import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import {
   ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid,
-  Tooltip, ResponsiveContainer, LabelList,
+  Tooltip, ResponsiveContainer, LabelList, PieChart, Pie, Cell,
 } from "recharts";
 import { DashboardFilterBar, DashboardFilters, EMPTY_FILTERS } from "@/components/dashboard/DashboardFilterBar";
 
 export default function DashboardComercial() {
   const [filters, setFilters] = useState<DashboardFilters>(EMPTY_FILTERS);
+  // Mês selecionado no gráfico de canais (null = todos os meses) — liga barras ↔ rosquinha
+  const [selChannelMonth, setSelChannelMonth] = useState<string | null>(null);
 
   // Últimos pedidos — tabela no rodapé
   // orders table removed — use /orders page via link
@@ -121,6 +123,24 @@ export default function DashboardComercial() {
         }
       });
   }, [carbozeOrders]);
+
+  // Dados da rosquinha de Canal — reflete o mês selecionado (ou todos os meses)
+  const channelDonut = useMemo(() => {
+    const src = selChannelMonth ? monthlySegmentData.find(m => m.mes === selChannelMonth) : null;
+    const sum = (k: "consumo" | "revenda" | "online" | "nc") =>
+      src ? (src as any)[k] : monthlySegmentData.reduce((s, m) => s + (m as any)[k], 0);
+    const rows = [
+      { key: "consumo", name: "Consumo (B2B)",    value: sum("consumo"), color: "#3b82f6" },
+      { key: "revenda", name: "Revenda (PDV)",    value: sum("revenda"), color: "#f59e0b" },
+      { key: "online",  name: "On-line",          value: sum("online"),  color: "#22c55e" },
+      { key: "nc",      name: "Não classificado", value: sum("nc"),      color: "#94a3b8" },
+    ];
+    const total = rows.reduce((s, r) => s + r.value, 0);
+    return { rows, total };
+  }, [monthlySegmentData, selChannelMonth]);
+
+  // Se o mês selecionado sair da lista (mudança de filtro), volta para "todos"
+  const selMonthValid = selChannelMonth && monthlySegmentData.some(m => m.mes === selChannelMonth);
 
   // Agrupar carboze_orders por mês
   const monthlyData = useMemo(() => {
@@ -513,69 +533,151 @@ export default function DashboardComercial() {
         {/* ── Faturamento por Canal (mês a mês) — barras empilhadas ─────── */}
         {!carbozeLoading && monthlySegmentData.length > 0 && (
           <div className="rounded-2xl border border-border bg-board-surface overflow-hidden">
+            {/* Header */}
             <div className="flex items-center justify-between border-b border-border px-6 py-3">
               <div>
                 <h2 className="text-base font-bold text-board-text flex items-center gap-2">
                   <BarChart3 className="h-4 w-4 text-blue-400" />
-                  Faturamento por Canal (mês a mês)
+                  Vendas por Canal
+                  <span className="text-xs font-medium text-blue-400">
+                    · {selMonthValid ? selChannelMonth : "Todos os meses"}
+                  </span>
                 </h2>
                 <p className="text-xs text-board-muted mt-0.5">
-                  Composição mensal entre Consumo, Revenda, On-line e Não classificado
+                  Clique em um mês nas barras para a rosquinha mostrar só aquele mês
                 </p>
               </div>
-              {/* Legenda */}
-              <div className="hidden sm:flex items-center gap-3 text-[10px] text-board-muted">
-                {[
-                  { label: "Consumo", color: "#3b82f6" },
-                  { label: "Revenda", color: "#f59e0b" },
-                  { label: "On-line", color: "#22c55e" },
-                  { label: "Não class.", color: "#94a3b8" },
-                ].map((l) => (
-                  <span key={l.label} className="flex items-center gap-1">
-                    <span className="inline-block w-3 h-3 rounded-sm" style={{ background: l.color }} />
-                    {l.label}
-                  </span>
-                ))}
-              </div>
+              {selMonthValid && (
+                <button
+                  onClick={() => setSelChannelMonth(null)}
+                  className="text-xs font-semibold text-primary hover:underline shrink-0"
+                >
+                  ✕ Todos os meses
+                </button>
+              )}
             </div>
-            <div className="px-4 pt-4 pb-4">
-              <ResponsiveContainer width="100%" height={230}>
-                <ComposedChart data={monthlySegmentData} margin={{ top: 12, right: 8, bottom: 0, left: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.08)" vertical={false} />
-                  <XAxis dataKey="mes" tick={{ fontSize: 11, fill: "#94a3b8" }} axisLine={false} tickLine={false} dy={4} />
-                  <YAxis tick={{ fontSize: 10, fill: "#94a3b8" }} axisLine={false} tickLine={false} width={44}
-                    tickFormatter={v => v >= 1000 ? `${(v / 1000).toFixed(0)}k` : String(v)} />
-                  <Tooltip
-                    cursor={{ fill: "rgba(148,163,184,0.08)" }}
-                    content={({ active, payload, label }: any) => {
-                      if (!active || !payload?.length) return null;
-                      const rows = [
-                        { k: "consumo", label: "Consumo", color: "#60a5fa" },
-                        { k: "revenda", label: "Revenda", color: "#fbbf24" },
-                        { k: "online",  label: "On-line", color: "#4ade80" },
-                        { k: "nc",      label: "Não classificado", color: "#cbd5e1" },
-                      ];
-                      const get = (k: string) => Number(payload.find((p: any) => p.dataKey === k)?.value ?? 0);
-                      const total = rows.reduce((s, r) => s + get(r.k), 0);
-                      return (
-                        <div style={{ background: "#1a2234", border: "1px solid rgba(255,255,255,0.14)", boxShadow: "0 8px 28px rgba(0,0,0,0.45)", borderRadius: 10, padding: "8px 14px", fontSize: 12 }}>
-                          <p style={{ color: "#fff", fontWeight: 700, marginBottom: 6, fontSize: 13 }}>{label}</p>
-                          {rows.filter(r => get(r.k) > 0).map(r => (
-                            <p key={r.k} style={{ color: r.color }}>{r.label}: {fmtK(get(r.k))}</p>
-                          ))}
-                          <p style={{ color: "#fff", fontWeight: 600, marginTop: 4, borderTop: "1px solid rgba(255,255,255,0.1)", paddingTop: 4 }}>
-                            Total: {fmtK(total)}
-                          </p>
-                        </div>
-                      );
+
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 p-4">
+              {/* Barras empilhadas (clicáveis) */}
+              <div className="lg:col-span-2">
+                <ResponsiveContainer width="100%" height={250}>
+                  <ComposedChart
+                    data={monthlySegmentData}
+                    margin={{ top: 12, right: 8, bottom: 0, left: 0 }}
+                    onClick={(state: any) => {
+                      const lbl = state?.activeLabel;
+                      if (lbl) setSelChannelMonth((prev) => (prev === lbl ? null : lbl));
                     }}
-                  />
-                  <Bar dataKey="consumo" stackId="canal" fill="#3b82f6" maxBarSize={48} isAnimationActive={false} name="Consumo" />
-                  <Bar dataKey="revenda" stackId="canal" fill="#f59e0b" maxBarSize={48} isAnimationActive={false} name="Revenda" />
-                  <Bar dataKey="online"  stackId="canal" fill="#22c55e" maxBarSize={48} isAnimationActive={false} name="On-line" />
-                  <Bar dataKey="nc"      stackId="canal" fill="#94a3b8" maxBarSize={48} radius={[4, 4, 0, 0]} isAnimationActive={false} name="Não classificado" />
-                </ComposedChart>
-              </ResponsiveContainer>
+                    style={{ cursor: "pointer" }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.08)" vertical={false} />
+                    <XAxis dataKey="mes" tick={{ fontSize: 11, fill: "#94a3b8" }} axisLine={false} tickLine={false} dy={4} />
+                    <YAxis tick={{ fontSize: 10, fill: "#94a3b8" }} axisLine={false} tickLine={false} width={44}
+                      tickFormatter={v => v >= 1000 ? `${(v / 1000).toFixed(0)}k` : String(v)} />
+                    <Tooltip
+                      cursor={{ fill: "rgba(148,163,184,0.08)" }}
+                      content={({ active, payload, label }: any) => {
+                        if (!active || !payload?.length) return null;
+                        const rows = [
+                          { k: "consumo", label: "Consumo", color: "#60a5fa" },
+                          { k: "revenda", label: "Revenda", color: "#fbbf24" },
+                          { k: "online",  label: "On-line", color: "#4ade80" },
+                          { k: "nc",      label: "Não classificado", color: "#cbd5e1" },
+                        ];
+                        const get = (k: string) => Number(payload.find((p: any) => p.dataKey === k)?.value ?? 0);
+                        const total = rows.reduce((s, r) => s + get(r.k), 0);
+                        return (
+                          <div style={{ background: "#1a2234", border: "1px solid rgba(255,255,255,0.14)", boxShadow: "0 8px 28px rgba(0,0,0,0.45)", borderRadius: 10, padding: "8px 14px", fontSize: 12 }}>
+                            <p style={{ color: "#fff", fontWeight: 700, marginBottom: 6, fontSize: 13 }}>{label} · clique p/ detalhar</p>
+                            {rows.filter(r => get(r.k) > 0).map(r => (
+                              <p key={r.k} style={{ color: r.color }}>{r.label}: {fmtK(get(r.k))}</p>
+                            ))}
+                            <p style={{ color: "#fff", fontWeight: 600, marginTop: 4, borderTop: "1px solid rgba(255,255,255,0.1)", paddingTop: 4 }}>
+                              Total: {fmtK(total)}
+                            </p>
+                          </div>
+                        );
+                      }}
+                    />
+                    {[
+                      { k: "consumo", color: "#3b82f6" },
+                      { k: "revenda", color: "#f59e0b" },
+                      { k: "online",  color: "#22c55e" },
+                      { k: "nc",      color: "#94a3b8", radius: [4, 4, 0, 0] as [number, number, number, number] },
+                    ].map(({ k, color, radius }) => (
+                      <Bar key={k} dataKey={k} stackId="canal" fill={color} maxBarSize={48}
+                        radius={radius} isAnimationActive={false}>
+                        {monthlySegmentData.map((d) => (
+                          <Cell key={d.mes} fillOpacity={selMonthValid && d.mes !== selChannelMonth ? 0.28 : 1} />
+                        ))}
+                      </Bar>
+                    ))}
+                  </ComposedChart>
+                </ResponsiveContainer>
+              </div>
+
+              {/* Rosquinha (proporção do mês selecionado ou de todos) */}
+              <div className="flex flex-col">
+                {channelDonut.total > 0 ? (
+                  <>
+                    <div className="relative">
+                      <ResponsiveContainer width="100%" height={170}>
+                        <PieChart>
+                          <Pie
+                            data={channelDonut.rows.filter(r => r.value > 0)}
+                            dataKey="value" nameKey="name"
+                            cx="50%" cy="50%" innerRadius={52} outerRadius={80}
+                            paddingAngle={2} stroke="none" isAnimationActive={false}
+                          >
+                            {channelDonut.rows.filter(r => r.value > 0).map(r => (
+                              <Cell key={r.key} fill={r.color} />
+                            ))}
+                          </Pie>
+                          <Tooltip
+                            content={({ active, payload }: any) => {
+                              if (!active || !payload?.length) return null;
+                              const p = payload[0];
+                              const pctv = channelDonut.total > 0 ? (Number(p.value) / channelDonut.total) * 100 : 0;
+                              return (
+                                <div style={{ background: "#1a2234", border: "1px solid rgba(255,255,255,0.14)", borderRadius: 10, padding: "6px 12px", fontSize: 12 }}>
+                                  <p style={{ color: "#fff", fontWeight: 700 }}>{p.name}</p>
+                                  <p style={{ color: p.payload.color }}>{fmtK(Number(p.value))} · {pctv.toFixed(0)}%</p>
+                                </div>
+                              );
+                            }}
+                          />
+                        </PieChart>
+                      </ResponsiveContainer>
+                      {/* Total no centro */}
+                      <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                        <span className="text-[10px] text-board-muted uppercase tracking-wider">Total</span>
+                        <span className="text-lg font-bold text-board-text tabular-nums">{fmtK(channelDonut.total)}</span>
+                      </div>
+                    </div>
+                    {/* Legenda com valores e % */}
+                    <div className="mt-2 space-y-1">
+                      {channelDonut.rows.map(r => {
+                        const pctv = channelDonut.total > 0 ? (r.value / channelDonut.total) * 100 : 0;
+                        return (
+                          <div key={r.key} className="flex items-center justify-between text-xs">
+                            <span className="flex items-center gap-1.5 text-board-muted">
+                              <span className="inline-block w-2.5 h-2.5 rounded-sm" style={{ background: r.color }} />
+                              {r.name}
+                            </span>
+                            <span className="tabular-nums text-board-text font-medium">
+                              {fmtK(r.value)} <span className="text-board-muted">· {pctv.toFixed(0)}%</span>
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </>
+                ) : (
+                  <div className="flex items-center justify-center h-[200px] text-xs text-board-muted">
+                    Sem dados para {selMonthValid ? selChannelMonth : "o período"}.
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         )}
