@@ -8,10 +8,15 @@
 //   carbo_ops_app     → Carbo Ops
 //   portal_licenciado → Carbo Licenciados
 //   portal_pdv        → Portal de Vendas (ex-"Carbo Loja")
+//   carbo_admin       → Carbo Admin
 //
-// IMPORTANTE: esta lista espelha 1:1 os apps do Hub — assim dá pra liberar
-// qualquer sistema, antecipando (mesmo os "em breve"). Carbo Admin NÃO entra
-// aqui: o acesso ao Admin é derivado do perfil (command / head / TI).
+// IMPORTANTE: esta lista espelha 1:1 os azulejos do Hub — assim dá pra liberar
+// qualquer sistema, antecipando (mesmo os "em breve").
+//
+// Carbo Admin: a flag `carbo_admin` controla APENAS a exibição do card de Admin
+// na tela inicial (carbohub.com.br). O ACESSO ao app Admin continua derivado do
+// perfil (command / head / TI) no ProtectedRoute — marcar/desmarcar aqui não
+// concede nem revoga entrada no Admin, só mostra/esconde o atalho no Hub.
 // ─────────────────────────────────────────────────────────────────────────────
 
 export interface SystemOption {
@@ -28,6 +33,7 @@ export const SYSTEMS: SystemOption[] = [
   { iface: "portal_licenciado", label: "Carbo Licenciados", hint: "Portal do licenciado" },
   { iface: "portal_pdv",        label: "Portal de Vendas",  hint: "Portal de Vendas (lojas/PDV)" },
   { iface: "carbo_financas",    label: "Carbo Finanças",    hint: "Financeiro — contas a pagar, NF, faturamento" },
+  { iface: "carbo_admin",       label: "Carbo Admin",       hint: "Identidades e acessos — só mostra o card no Hub (entrada é por perfil)" },
 ];
 
 export const DEFAULT_INTERFACES = ["carbo_ops"];
@@ -42,6 +48,7 @@ export const SYSTEM_BRAND: Record<string, SystemBrand> = {
   portal_licenciado: { short: "Licenciados", chip: "bg-violet-500/10 text-violet-600 ring-1 ring-inset ring-violet-500/20", dot: "bg-violet-500" },
   portal_pdv:        { short: "Vendas",      chip: "bg-amber-500/10 text-amber-600 ring-1 ring-inset ring-amber-500/20",     dot: "bg-amber-500" },
   carbo_financas:    { short: "Finanças",    chip: "bg-teal-500/10 text-teal-600 ring-1 ring-inset ring-teal-500/20",       dot: "bg-teal-500" },
+  carbo_admin:       { short: "Admin",       chip: "bg-slate-500/10 text-slate-600 ring-1 ring-inset ring-slate-500/20",   dot: "bg-slate-500" },
 };
 export const brandOf = (iface: string): SystemBrand =>
   SYSTEM_BRAND[iface] ?? { short: iface, chip: "bg-muted text-muted-foreground ring-1 ring-inset ring-border", dot: "bg-muted-foreground" };
