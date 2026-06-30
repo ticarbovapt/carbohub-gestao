@@ -13,11 +13,17 @@ import {
   Tooltip, ResponsiveContainer, LabelList, PieChart, Pie, Cell,
 } from "recharts";
 import { DashboardFilterBar, DashboardFilters, EMPTY_FILTERS } from "@/components/dashboard/DashboardFilterBar";
+import { useCanalMetas } from "@/hooks/useCanalMetas";
+import { CanalMetasDialog } from "@/components/dashboard/CanalMetasDialog";
+import { Pencil } from "lucide-react";
 
 export default function DashboardComercial() {
   const [filters, setFilters] = useState<DashboardFilters>(EMPTY_FILTERS);
   // Mês selecionado no gráfico de canais (null = todos os meses) — liga barras ↔ rosquinha
   const [selChannelMonth, setSelChannelMonth] = useState<string | null>(null);
+  const [metasDialogOpen, setMetasDialogOpen] = useState(false);
+  const currentYear = new Date().getFullYear();
+  const { data: canalMetas } = useCanalMetas(currentYear);
 
   // Últimos pedidos — tabela no rodapé
   // orders table removed — use /orders page via link
@@ -141,6 +147,41 @@ export default function DashboardComercial() {
 
   // Se o mês selecionado sair da lista (mudança de filtro), volta para "todos"
   const selMonthValid = selChannelMonth && monthlySegmentData.some(m => m.mes === selChannelMonth);
+
+  // ── Real x Meta por canal (3 mini-gráficos) ────────────────────────────────
+  const canalSeries = useMemo(() => {
+    const year = currentYear;
+    const real = {
+      consumo: Array(13).fill(0) as number[],
+      revenda: Array(13).fill(0) as number[],
+      online:  Array(13).fill(0) as number[],
+    };
+    for (const o of carbozeOrders) {
+      if (!o.created_at) continue;
+      if (o.status === "cancelled" || o.status === "cancelado") continue;
+      const [y, m] = o.created_at.slice(0, 7).split("-").map(Number);
+      if (y !== year || !m) continue;
+      const v = Number(o.total ?? 0);
+      if (o.segmento === "consumo") real.consumo[m] += v;
+      else if (o.segmento === "revenda") real.revenda[m] += v;
+      else if (o.segmento === "online") real.online[m] += v;
+    }
+    const lbl = (m: number) => format(new Date(year, m - 1, 1), "MMM/yy", { locale: ptBR });
+    const m = canalMetas ?? { consumo: {}, revenda: {}, online: {} };
+    const build = (canal: "consumo" | "revenda" | "online") =>
+      Array.from({ length: 12 }, (_, i) => {
+        const mes = i + 1;
+        const stored = (m as any)[canal]?.[mes];
+        let meta: number | null = stored != null ? Number(stored) : null;
+        // Consumo: regra rolante = real do mês anterior × 1,15 (quando não há valor definido)
+        if (meta == null && canal === "consumo") {
+          const prev = real.consumo[mes - 1];
+          meta = mes > 1 && prev > 0 ? Math.round(prev * 1.15) : null;
+        }
+        return { mes: lbl(mes), real: real[canal][mes], meta };
+      });
+    return { consumo: build("consumo"), revenda: build("revenda"), online: build("online") };
+  }, [carbozeOrders, canalMetas, currentYear]);
 
   // Agrupar carboze_orders por mês
   const monthlyData = useMemo(() => {
@@ -530,157 +571,81 @@ export default function DashboardComercial() {
           </div>
         )}
 
-        {/* ── Faturamento por Canal (mês a mês) — barras empilhadas ─────── */}
-        {!carbozeLoading && monthlySegmentData.length > 0 && (
+        {/* ── Metas por Canal — real (barras) x meta (linha), 3 mini-gráficos ── */}
+        {!carbozeLoading && carbozeOrders.length > 0 && (
           <div className="rounded-2xl border border-border bg-board-surface overflow-hidden">
-            {/* Header */}
             <div className="flex items-center justify-between border-b border-border px-6 py-3">
               <div>
                 <h2 className="text-base font-bold text-board-text flex items-center gap-2">
                   <BarChart3 className="h-4 w-4 text-blue-400" />
-                  Vendas por Canal
-                  <span className="text-xs font-medium text-blue-400">
-                    · {selMonthValid ? selChannelMonth : "Todos os meses"}
-                  </span>
+                  Metas por Canal · {currentYear}
                 </h2>
                 <p className="text-xs text-board-muted mt-0.5">
-                  Clique em um mês nas barras para a rosquinha mostrar só aquele mês
+                  Real (barras) vs meta (linha) de cada canal · a meta geral está na curva S acima
                 </p>
               </div>
-              {selMonthValid && (
-                <button
-                  onClick={() => setSelChannelMonth(null)}
-                  className="text-xs font-semibold text-primary hover:underline shrink-0"
-                >
-                  ✕ Todos os meses
-                </button>
-              )}
+              <button
+                onClick={() => setMetasDialogOpen(true)}
+                className="text-xs font-semibold text-primary hover:underline shrink-0 flex items-center gap-1"
+              >
+                <Pencil className="h-3.5 w-3.5" /> Editar metas
+              </button>
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 p-4">
-              {/* Barras empilhadas (clicáveis) */}
-              <div className="lg:col-span-2">
-                <ResponsiveContainer width="100%" height={250}>
-                  <ComposedChart
-                    data={monthlySegmentData}
-                    margin={{ top: 12, right: 8, bottom: 0, left: 0 }}
-                    onClick={(state: any) => {
-                      const lbl = state?.activeLabel;
-                      if (lbl) setSelChannelMonth((prev) => (prev === lbl ? null : lbl));
-                    }}
-                    style={{ cursor: "pointer" }}
-                  >
-                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.08)" vertical={false} />
-                    <XAxis dataKey="mes" tick={{ fontSize: 11, fill: "#94a3b8" }} axisLine={false} tickLine={false} dy={4} />
-                    <YAxis tick={{ fontSize: 10, fill: "#94a3b8" }} axisLine={false} tickLine={false} width={44}
-                      tickFormatter={v => v >= 1000 ? `${(v / 1000).toFixed(0)}k` : String(v)} />
-                    <Tooltip
-                      cursor={{ fill: "rgba(148,163,184,0.08)" }}
-                      content={({ active, payload, label }: any) => {
-                        if (!active || !payload?.length) return null;
-                        const rows = [
-                          { k: "consumo", label: "Consumo", color: "#60a5fa" },
-                          { k: "revenda", label: "Revenda", color: "#fbbf24" },
-                          { k: "online",  label: "On-line", color: "#4ade80" },
-                          { k: "nc",      label: "Não classificado", color: "#cbd5e1" },
-                        ];
-                        const get = (k: string) => Number(payload.find((p: any) => p.dataKey === k)?.value ?? 0);
-                        const total = rows.reduce((s, r) => s + get(r.k), 0);
-                        return (
-                          <div style={{ background: "#1a2234", border: "1px solid rgba(255,255,255,0.14)", boxShadow: "0 8px 28px rgba(0,0,0,0.45)", borderRadius: 10, padding: "8px 14px", fontSize: 12 }}>
-                            <p style={{ color: "#fff", fontWeight: 700, marginBottom: 6, fontSize: 13 }}>{label} · clique p/ detalhar</p>
-                            {rows.filter(r => get(r.k) > 0).map(r => (
-                              <p key={r.k} style={{ color: r.color }}>{r.label}: {fmtK(get(r.k))}</p>
-                            ))}
-                            <p style={{ color: "#fff", fontWeight: 600, marginTop: 4, borderTop: "1px solid rgba(255,255,255,0.1)", paddingTop: 4 }}>
-                              Total: {fmtK(total)}
-                            </p>
-                          </div>
-                        );
-                      }}
-                    />
-                    {[
-                      { k: "consumo", color: "#3b82f6" },
-                      { k: "revenda", color: "#f59e0b" },
-                      { k: "online",  color: "#22c55e" },
-                      { k: "nc",      color: "#94a3b8", radius: [4, 4, 0, 0] as [number, number, number, number] },
-                    ].map(({ k, color, radius }) => (
-                      <Bar key={k} dataKey={k} stackId="canal" fill={color} maxBarSize={48}
-                        radius={radius} isAnimationActive={false}>
-                        {monthlySegmentData.map((d) => (
-                          <Cell key={d.mes} fillOpacity={selMonthValid && d.mes !== selChannelMonth ? 0.28 : 1} />
-                        ))}
-                      </Bar>
-                    ))}
-                  </ComposedChart>
-                </ResponsiveContainer>
-              </div>
-
-              {/* Rosquinha (proporção do mês selecionado ou de todos) */}
-              <div className="flex flex-col">
-                {channelDonut.total > 0 ? (
-                  <>
-                    <div className="relative">
-                      <ResponsiveContainer width="100%" height={170}>
-                        <PieChart>
-                          <Pie
-                            data={channelDonut.rows.filter(r => r.value > 0)}
-                            dataKey="value" nameKey="name"
-                            cx="50%" cy="50%" innerRadius={52} outerRadius={80}
-                            paddingAngle={2} stroke="none" isAnimationActive={false}
-                          >
-                            {channelDonut.rows.filter(r => r.value > 0).map(r => (
-                              <Cell key={r.key} fill={r.color} />
-                            ))}
-                          </Pie>
-                          <Tooltip
-                            content={({ active, payload }: any) => {
-                              if (!active || !payload?.length) return null;
-                              const p = payload[0];
-                              const pctv = channelDonut.total > 0 ? (Number(p.value) / channelDonut.total) * 100 : 0;
-                              return (
-                                <div style={{ background: "#1a2234", border: "1px solid rgba(255,255,255,0.14)", borderRadius: 10, padding: "6px 12px", fontSize: 12 }}>
-                                  <p style={{ color: "#fff", fontWeight: 700 }}>{p.name}</p>
-                                  <p style={{ color: p.payload.color }}>{fmtK(Number(p.value))} · {pctv.toFixed(0)}%</p>
-                                </div>
-                              );
-                            }}
-                          />
-                        </PieChart>
-                      </ResponsiveContainer>
-                      {/* Total no centro */}
-                      <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                        <span className="text-[10px] text-board-muted uppercase tracking-wider">Total</span>
-                        <span className="text-lg font-bold text-board-text tabular-nums">{fmtK(channelDonut.total)}</span>
-                      </div>
+              {[
+                { key: "consumo", title: "Consumo (B2B)", data: canalSeries.consumo, color: "#3b82f6", note: "Meta = real do mês anterior + 15%" },
+                { key: "revenda", title: "Revenda (PDV)", data: canalSeries.revenda, color: "#f59e0b", note: "Meta R$75k/mês (NE 25k + SE 50k)" },
+                { key: "online",  title: "On-line",       data: canalSeries.online,  color: "#22c55e", note: "Meta R$27k/mês a partir de jul/26" },
+              ].map((c) => (
+                <div key={c.key} className="rounded-xl border border-border bg-board-surface/40 p-3">
+                  <div className="flex items-center justify-between mb-0.5">
+                    <span className="text-sm font-semibold text-board-text">{c.title}</span>
+                    <div className="flex items-center gap-2 text-[9px] text-board-muted">
+                      <span className="flex items-center gap-1"><span className="inline-block w-2.5 h-2.5 rounded-sm" style={{ background: c.color }} />Real</span>
+                      <span className="flex items-center gap-1"><span className="inline-block w-4 border-t-2 border-dashed border-orange-400" />Meta</span>
                     </div>
-                    {/* Legenda com valores e % */}
-                    <div className="mt-2 space-y-1">
-                      {channelDonut.rows.map(r => {
-                        const pctv = channelDonut.total > 0 ? (r.value / channelDonut.total) * 100 : 0;
-                        return (
-                          <div key={r.key} className="flex items-center justify-between text-xs">
-                            <span className="flex items-center gap-1.5 text-board-muted">
-                              <span className="inline-block w-2.5 h-2.5 rounded-sm" style={{ background: r.color }} />
-                              {r.name}
-                            </span>
-                            <span className="tabular-nums text-board-text font-medium">
-                              {fmtK(r.value)} <span className="text-board-muted">· {pctv.toFixed(0)}%</span>
-                            </span>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </>
-                ) : (
-                  <div className="flex items-center justify-center h-[200px] text-xs text-board-muted">
-                    Sem dados para {selMonthValid ? selChannelMonth : "o período"}.
                   </div>
-                )}
-              </div>
+                  <p className="text-[10px] text-board-muted mb-1.5">{c.note}</p>
+                  <ResponsiveContainer width="100%" height={160}>
+                    <ComposedChart data={c.data} margin={{ top: 16, right: 6, left: 0, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.08)" vertical={false} />
+                      <XAxis dataKey="mes" tick={{ fontSize: 9, fill: "#94a3b8" }} axisLine={false} tickLine={false} interval={1} />
+                      <YAxis tick={{ fontSize: 9, fill: "#94a3b8" }} axisLine={false} tickLine={false} width={34}
+                        tickFormatter={v => v >= 1000 ? `${(v / 1000).toFixed(0)}k` : String(v)} />
+                      <Tooltip
+                        cursor={{ fill: "rgba(148,163,184,0.08)" }}
+                        content={({ active, payload, label }: any) => {
+                          if (!active || !payload?.length) return null;
+                          const real = Number(payload.find((p: any) => p.dataKey === "real")?.value ?? 0);
+                          const metaRaw = payload.find((p: any) => p.dataKey === "meta")?.value;
+                          const meta = metaRaw != null ? Number(metaRaw) : null;
+                          const atg = meta != null && meta > 0 ? (real / meta) * 100 : null;
+                          return (
+                            <div style={{ background: "#1a2234", border: "1px solid rgba(255,255,255,0.14)", borderRadius: 10, padding: "8px 14px", fontSize: 12 }}>
+                              <p style={{ color: "#fff", fontWeight: 700, marginBottom: 4 }}>{label}</p>
+                              <p style={{ color: c.color }}>Real: {fmtK(real)}</p>
+                              {meta != null && <p style={{ color: "#fb923c" }}>Meta: {fmtK(meta)}</p>}
+                              {atg != null && (
+                                <p style={{ color: atg >= 100 ? "#86efac" : "#f87171", marginTop: 2, fontWeight: 600 }}>
+                                  {atg.toFixed(0)}% da meta
+                                </p>
+                              )}
+                            </div>
+                          );
+                        }}
+                      />
+                      <Bar dataKey="real" fill={c.color} fillOpacity={0.75} radius={[3, 3, 0, 0]} maxBarSize={26} isAnimationActive={false} />
+                      <Line dataKey="meta" type="monotone" stroke="#fb923c" strokeWidth={2} strokeDasharray="5 3" dot={false} connectNulls isAnimationActive={false} />
+                    </ComposedChart>
+                  </ResponsiveContainer>
+                </div>
+              ))}
             </div>
           </div>
         )}
+
+        <CanalMetasDialog open={metasDialogOpen} onOpenChange={setMetasDialogOpen} ano={currentYear} />
 
         {/* ── Evolução Mensal de Vendas ────────────────────────────────── */}
         <div className="rounded-2xl border border-border bg-board-surface overflow-hidden">
