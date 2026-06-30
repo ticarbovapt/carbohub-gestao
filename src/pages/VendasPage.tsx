@@ -413,10 +413,10 @@ export default function VendasPage() {
           {/* Segmentação */}
           <Select value={segmentoFilter} onValueChange={(v) => setSegmentoFilter(v as typeof segmentoFilter)}>
             <SelectTrigger className="w-[190px]">
-              <SelectValue placeholder="Segmentação" />
+              <SelectValue placeholder="Canal de Venda" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">Toda Segmentação</SelectItem>
+              <SelectItem value="all">Todo Canal</SelectItem>
               <SelectItem value="consumo">Consumo (B2B)</SelectItem>
               <SelectItem value="revenda">Revenda (PDV)</SelectItem>
               <SelectItem value="online">On-line</SelectItem>

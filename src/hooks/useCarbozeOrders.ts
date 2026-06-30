@@ -627,6 +627,26 @@ export function useUpdateOrder() {
   });
 }
 
+/** Edição em massa: aplica um patch (produto/tipo/segmento/vendedor) a vários pedidos. */
+export function useBulkUpdateOrders() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ ids, patch }: { ids: string[]; patch: Record<string, unknown> }) => {
+      if (!ids.length) return;
+      const { error } = await supabase
+        .from("carboze_orders")
+        .update(patch as never)
+        .in("id", ids);
+      if (error) throw error;
+    },
+    onSuccess: (_, vars) => {
+      queryClient.invalidateQueries({ queryKey: ["carboze-orders"] });
+      toast.success(`${vars.ids.length} pedido(s) atualizado(s)!`);
+    },
+    onError: (e: Error) => toast.error("Erro na edição em massa: " + e.message),
+  });
+}
+
 /** Atualiza apenas a segmentação de um pedido (edição inline rápida, sem toast). */
 export function useUpdateOrderSegmento() {
   const queryClient = useQueryClient();

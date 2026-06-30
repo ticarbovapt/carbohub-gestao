@@ -112,7 +112,7 @@ export function DashboardFilterBar({
         <>
           <div className="flex items-center gap-1 text-xs text-muted-foreground font-medium ml-2">
             <Tag className="h-3.5 w-3.5" />
-            Segmentação:
+            Canal:
           </div>
           <Select value={filters.segmento} onValueChange={v => set("segmento", v)}>
             <SelectTrigger className="h-8 w-44 text-xs">

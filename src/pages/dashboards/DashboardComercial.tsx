@@ -440,7 +440,7 @@ export default function DashboardComercial() {
               <div>
                 <h2 className="text-base font-bold text-board-text flex items-center gap-2">
                   <BarChart3 className="h-4 w-4 text-blue-400" />
-                  Segmentação de Vendas
+                  Vendas por Canal
                 </h2>
                 <p className="text-xs text-board-muted mt-0.5">
                   Consumo (B2B) vs Revenda (Ponto de Venda) · classifique cada pedido em{" "}

@@ -416,7 +416,7 @@ export function EditOrderDialog({ open, onOpenChange, order, canEditSensitive = 
                   name="segmento"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Segmentação</FormLabel>
+                      <FormLabel>Canal de Venda</FormLabel>
                       <Select
                         onValueChange={(v) => field.onChange(v === "none" ? null : v)}
                         value={field.value ?? "none"}

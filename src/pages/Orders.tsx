@@ -46,7 +46,9 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { DatePickerInput } from "@/components/ui/date-picker-input";
-import { useOrders, useOrderStats, useUpdateOrderSegmento, OrderStatus, ORDER_STATUS_LABELS, ORDER_TYPE_LABELS, CarbozeOrder, OrderItem, type SegmentoVenda } from "@/hooks/useCarbozeOrders";
+import { useOrders, useOrderStats, useBulkUpdateOrders, OrderStatus, ORDER_STATUS_LABELS, ORDER_TYPE_LABELS, CarbozeOrder, OrderItem } from "@/hooks/useCarbozeOrders";
+import { Checkbox } from "@/components/ui/checkbox";
+import { toast } from "sonner";
 import { useQueryClient, useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useCanManageOrders } from "@/hooks/useActionPermissions";
@@ -55,7 +57,7 @@ import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { OrdersAnalytics } from "@/components/orders/OrdersAnalytics";
 import { EditOrderDialog } from "@/components/orders/EditOrderDialog";
-import { Pencil, Check, Tag } from "lucide-react";
+import { Pencil, Check, Tag, Loader2 } from "lucide-react";
 
 const STATUS_VARIANTS: Record<OrderStatus, "secondary" | "info" | "warning" | "success" | "destructive"> = {
   quote: "secondary",
@@ -93,8 +95,25 @@ export default function Orders() {
   const tableRef = useRef<HTMLDivElement>(null);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<CarbozeOrder | null>(null);
-  const [segmentoEditMode, setSegmentoEditMode] = useState(false);
-  const updateSegmento = useUpdateOrderSegmento();
+  // Seleção + edição em massa
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkProduto, setBulkProduto]   = useState<string>("__keep__");
+  const [bulkTipo, setBulkTipo]         = useState<string>("__keep__");
+  const [bulkSegmento, setBulkSegmento] = useState<string>("__keep__");
+  const [bulkVendedor, setBulkVendedor] = useState<string>("__keep__");
+  const bulkUpdate = useBulkUpdateOrders();
+
+  const toggleSelect = (id: string) =>
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  const clearSelection = () => {
+    setSelectedIds(new Set());
+    setBulkProduto("__keep__"); setBulkTipo("__keep__");
+    setBulkSegmento("__keep__"); setBulkVendedor("__keep__");
+  };
 
   // Sorting
   type SortCol = "order_number" | "created_at" | "customer_name" | "vendedor_name" | "total" | "status";
@@ -240,6 +259,36 @@ export default function Orders() {
       return 0;
     });
   }, [filteredOrders, sortCol, sortDir]);
+
+  // ── Seleção "todos os visíveis" + aplicação da edição em massa ─────────────
+  const allVisibleSelected = sortedOrders.length > 0 && sortedOrders.every((o) => selectedIds.has(o.id));
+  const someVisibleSelected = sortedOrders.some((o) => selectedIds.has(o.id));
+  const toggleSelectAll = () =>
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (allVisibleSelected) sortedOrders.forEach((o) => next.delete(o.id));
+      else sortedOrders.forEach((o) => next.add(o.id));
+      return next;
+    });
+
+  const applyBulk = () => {
+    const ids = Array.from(selectedIds);
+    if (!ids.length) return;
+    const patch: Record<string, unknown> = {};
+    if (bulkProduto  !== "__keep__") patch.linha = bulkProduto;
+    if (bulkTipo     !== "__keep__") patch.order_type = bulkTipo;
+    if (bulkSegmento !== "__keep__") patch.segmento = bulkSegmento === "none" ? null : bulkSegmento;
+    if (bulkVendedor !== "__keep__") {
+      if (bulkVendedor === "none") { patch.vendedor_id = null; patch.vendedor_name = null; }
+      else {
+        const c = allCollaborators.find((x) => x.id === bulkVendedor);
+        patch.vendedor_id = bulkVendedor;
+        patch.vendedor_name = c?.full_name ?? null;
+      }
+    }
+    if (Object.keys(patch).length === 0) { toast.info("Escolha ao menos um campo para alterar."); return; }
+    bulkUpdate.mutate({ ids, patch }, { onSuccess: clearSelection });
+  };
 
   // ── Export helpers ────────────────────────────────────────────────────────
   const buildExportRows = () =>
@@ -540,14 +589,14 @@ export default function Orders() {
               </SelectContent>
             </Select>
 
-            {/* Segmentação filter */}
+            {/* Canal de Venda filter */}
             <Select value={segmentoFilter} onValueChange={(v) => setSegmentoFilter(v as typeof segmentoFilter)}>
               <SelectTrigger className="w-44 h-8 rounded-lg text-xs">
-                <Filter className="h-3 w-3 mr-1" />
-                <SelectValue placeholder="Segmentação" />
+                <Tag className="h-3 w-3 mr-1" />
+                <SelectValue placeholder="Canal de Venda" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Toda Segmentação</SelectItem>
+                <SelectItem value="all">Todo Canal</SelectItem>
                 <SelectItem value="consumo">Consumo (B2B)</SelectItem>
                 <SelectItem value="revenda">Revenda (PDV)</SelectItem>
                 <SelectItem value="online">On-line</SelectItem>
@@ -555,26 +604,87 @@ export default function Orders() {
               </SelectContent>
             </Select>
 
-            {/* Botão de edição em massa da segmentação (inline na coluna) */}
-            {canManageOrders && (
-              <Button
-                variant={segmentoEditMode ? "default" : "outline"}
-                size="sm"
-                className="h-8 rounded-lg text-xs"
-                onClick={() => setSegmentoEditMode((v) => !v)}
-              >
-                {segmentoEditMode ? (
-                  <><Check className="h-3.5 w-3.5 mr-1" /> Concluir edição</>
-                ) : (
-                  <><Tag className="h-3.5 w-3.5 mr-1" /> Editar segmentação</>
-                )}
-              </Button>
-            )}
-
             <span className="ml-auto text-xs text-muted-foreground">
-              Mostrando <strong>{filteredOrders.length}</strong> pedidos
+              {selectedIds.size > 0
+                ? <><strong>{selectedIds.size}</strong> selecionado{selectedIds.size !== 1 ? "s" : ""}</>
+                : <>Mostrando <strong>{filteredOrders.length}</strong> pedidos</>}
             </span>
           </div>
+
+          {/* ── Barra de edição em massa (aparece com pedidos selecionados) ── */}
+          {canManageOrders && selectedIds.size > 0 && (
+            <div className="flex flex-wrap items-center gap-2 rounded-xl border border-primary/30 bg-primary/5 p-3">
+              <span className="text-xs font-semibold text-primary mr-1">
+                Editar {selectedIds.size} pedido{selectedIds.size !== 1 ? "s" : ""}:
+              </span>
+
+              {/* Produto */}
+              <Select value={bulkProduto} onValueChange={setBulkProduto}>
+                <SelectTrigger className="w-40 h-8 rounded-lg text-xs">
+                  <Package className="h-3 w-3 mr-1" />
+                  <SelectValue placeholder="Produto" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__keep__">Produto (manter)</SelectItem>
+                  {Object.entries(LINHA_LABELS).filter(([k]) => k !== "outros").map(([k, label]) => (
+                    <SelectItem key={k} value={k}>{label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              {/* Tipo */}
+              <Select value={bulkTipo} onValueChange={setBulkTipo}>
+                <SelectTrigger className="w-36 h-8 rounded-lg text-xs">
+                  <Zap className="h-3 w-3 mr-1" />
+                  <SelectValue placeholder="Tipo" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__keep__">Tipo (manter)</SelectItem>
+                  <SelectItem value="spot">Spot</SelectItem>
+                  <SelectItem value="recorrente">Recorrente</SelectItem>
+                </SelectContent>
+              </Select>
+
+              {/* Canal de Venda */}
+              <Select value={bulkSegmento} onValueChange={setBulkSegmento}>
+                <SelectTrigger className="w-44 h-8 rounded-lg text-xs">
+                  <Tag className="h-3 w-3 mr-1" />
+                  <SelectValue placeholder="Canal de Venda" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__keep__">Canal de Venda (manter)</SelectItem>
+                  <SelectItem value="consumo">Consumo (B2B)</SelectItem>
+                  <SelectItem value="revenda">Revenda (PDV)</SelectItem>
+                  <SelectItem value="online">On-line</SelectItem>
+                  <SelectItem value="none">Não classificado</SelectItem>
+                </SelectContent>
+              </Select>
+
+              {/* Vendedor */}
+              <Select value={bulkVendedor} onValueChange={setBulkVendedor}>
+                <SelectTrigger className="w-44 h-8 rounded-lg text-xs">
+                  <Users className="h-3 w-3 mr-1" />
+                  <SelectValue placeholder="Vendedor" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__keep__">Vendedor (manter)</SelectItem>
+                  <SelectItem value="none">Sem vendedor</SelectItem>
+                  {allCollaborators.map((c) => (
+                    <SelectItem key={c.id} value={c.id}>{c.full_name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              <Button size="sm" className="h-8 rounded-lg text-xs" onClick={applyBulk} disabled={bulkUpdate.isPending}>
+                {bulkUpdate.isPending
+                  ? <><Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> Aplicando…</>
+                  : <><Check className="h-3.5 w-3.5 mr-1" /> Aplicar</>}
+              </Button>
+              <Button size="sm" variant="ghost" className="h-8 rounded-lg text-xs text-muted-foreground" onClick={clearSelection}>
+                Cancelar
+              </Button>
+            </div>
+          )}
         </div>
 
         {/* Table */}
@@ -606,6 +716,15 @@ export default function Orders() {
           <CarboTable>
             <CarboTableHeader>
               <CarboTableRow>
+                {canManageOrders && (
+                  <CarboTableHead className="w-10">
+                    <Checkbox
+                      checked={allVisibleSelected ? true : someVisibleSelected ? "indeterminate" : false}
+                      onCheckedChange={toggleSelectAll}
+                      aria-label="Selecionar todos"
+                    />
+                  </CarboTableHead>
+                )}
                 <CarboTableHead>
                   <button onClick={() => handleSort("order_number")} className="flex items-center hover:text-foreground transition-colors">
                     Pedido <SortIcon col="order_number" />
@@ -614,7 +733,7 @@ export default function Orders() {
                 <CarboTableHead>NF</CarboTableHead>
                 <CarboTableHead>Produto</CarboTableHead>
                 <CarboTableHead>Tipo</CarboTableHead>
-                <CarboTableHead>Segmentação</CarboTableHead>
+                <CarboTableHead>Canal de Venda</CarboTableHead>
                 <CarboTableHead>
                   <button onClick={() => handleSort("vendedor_name")} className="flex items-center hover:text-foreground transition-colors">
                     Vendedor <SortIcon col="vendedor_name" />
@@ -656,6 +775,15 @@ export default function Orders() {
                     interactive
                     onClick={() => navigate(`/orders/${order.id}`)}
                   >
+                    {canManageOrders && (
+                      <CarboTableCell onClick={(e) => e.stopPropagation()} className="w-10">
+                        <Checkbox
+                          checked={selectedIds.has(order.id)}
+                          onCheckedChange={() => toggleSelect(order.id)}
+                          aria-label={`Selecionar ${order.order_number}`}
+                        />
+                      </CarboTableCell>
+                    )}
                     <CarboTableCell>
                       <span className="font-mono text-sm font-medium text-carbo-green">
                         {order.order_number}
@@ -688,31 +816,8 @@ export default function Orders() {
                         {ORDER_TYPE_LABELS[orderType]}
                       </CarboBadge>
                     </CarboTableCell>
-                    <CarboTableCell onClick={segmentoEditMode ? (e) => e.stopPropagation() : undefined}>
-                      {segmentoEditMode && canManageOrders ? (
-                        <Select
-                          value={order.segmento ?? "none"}
-                          onValueChange={(v) =>
-                            updateSegmento.mutate({
-                              id: order.id,
-                              segmento: v === "none" ? null : (v as SegmentoVenda),
-                            })
-                          }
-                        >
-                          <SelectTrigger
-                            className="h-7 w-[140px] text-xs"
-                            onClick={(e) => e.stopPropagation()}
-                          >
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="none">Não classificado</SelectItem>
-                            <SelectItem value="consumo">Consumo (B2B)</SelectItem>
-                            <SelectItem value="revenda">Revenda (PDV)</SelectItem>
-                            <SelectItem value="online">On-line</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      ) : order.segmento === "consumo" ? (
+                    <CarboTableCell>
+                      {order.segmento === "consumo" ? (
                         <CarboBadge variant="info" className="text-[10px]">Consumo</CarboBadge>
                       ) : order.segmento === "revenda" ? (
                         <CarboBadge variant="warning" className="text-[10px]">Revenda</CarboBadge>
