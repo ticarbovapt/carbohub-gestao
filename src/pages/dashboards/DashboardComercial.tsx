@@ -185,6 +185,34 @@ export default function DashboardComercial() {
     return { consumo: build("consumo"), revenda: build("revenda"), online: build("online") };
   }, [carbozeOrders, canalMetas, currentYear]);
 
+  // ── Crescimento do nº de clientes por canal (PDV vs B2B), mês a mês ─────────
+  const clientesPorCanal = useMemo(() => {
+    const map: Record<string, { consumo: Set<string>; revenda: Set<string>; online: Set<string> }> = {};
+    for (const o of carbozeOrders) {
+      if (!o.created_at) continue;
+      if (o.status === "cancelled" || o.status === "cancelado") continue;
+      if (!o.segmento) continue; // só pedidos com canal classificado
+      const name = (o.customer_name || "").trim().toLowerCase();
+      if (!name) continue;
+      const key = o.created_at.slice(0, 7);
+      if (!map[key]) map[key] = { consumo: new Set(), revenda: new Set(), online: new Set() };
+      if (o.segmento === "consumo") map[key].consumo.add(name);
+      else if (o.segmento === "revenda") map[key].revenda.add(name);
+      else if (o.segmento === "online") map[key].online.add(name);
+    }
+    return Object.entries(map)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .slice(-12)
+      .map(([key, v]) => {
+        let mes = key;
+        try {
+          const [y, m] = key.split("-");
+          mes = format(new Date(parseInt(y), parseInt(m) - 1, 1), "MMM/yy", { locale: ptBR });
+        } catch { /* keep key */ }
+        return { mes, b2b: v.consumo.size, pdv: v.revenda.size, online: v.online.size };
+      });
+  }, [carbozeOrders]);
+
   // Agrupar carboze_orders por mês
   const monthlyData = useMemo(() => {
     const map: Record<string, { faturado: number; pedidos: number; concluidos: number }> = {};
@@ -569,6 +597,72 @@ export default function DashboardComercial() {
                   </div>
                 );
               })}
+            </div>
+          </div>
+        )}
+
+        {/* ── Crescimento de clientes por canal (PDV vs B2B) ─────────────── */}
+        {!carbozeLoading && clientesPorCanal.length > 0 && (
+          <div className="rounded-2xl border border-border bg-board-surface overflow-hidden">
+            <div className="flex items-center justify-between border-b border-border px-6 py-3">
+              <div>
+                <h2 className="text-base font-bold text-board-text flex items-center gap-2">
+                  <Repeat2 className="h-4 w-4 text-blue-400" />
+                  Crescimento de Clientes por Canal
+                </h2>
+                <p className="text-xs text-board-muted mt-0.5">
+                  Nº de clientes distintos por mês — B2B (Consumo) vs PDV (Revenda) vs On-line
+                </p>
+              </div>
+              <div className="hidden sm:flex items-center gap-3 text-[10px] text-board-muted">
+                {[
+                  { label: "B2B (Consumo)", color: "#3b82f6" },
+                  { label: "PDV (Revenda)", color: "#f59e0b" },
+                  { label: "On-line", color: "#22c55e" },
+                ].map((l) => (
+                  <span key={l.label} className="flex items-center gap-1">
+                    <span className="inline-block w-4 border-t-2" style={{ borderColor: l.color }} /> {l.label}
+                  </span>
+                ))}
+              </div>
+            </div>
+            <div className="px-4 pt-4 pb-4">
+              <ExpandableChart title="Crescimento de Clientes por Canal (PDV vs B2B)"
+                subtitle="Nº de clientes distintos por mês em cada canal"
+                filters={<DashboardFilterBar filters={filters} onChange={setFilters} showVendedor showSegmento />}>
+              <ResponsiveContainer width="100%" height={220}>
+                <ComposedChart data={clientesPorCanal} margin={{ top: 22, right: 8, bottom: 0, left: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.08)" vertical={false} />
+                  <XAxis dataKey="mes" tick={{ fontSize: 11, fill: "#94a3b8" }} axisLine={false} tickLine={false} dy={4} />
+                  <YAxis allowDecimals={false} tick={{ fontSize: 10, fill: "#94a3b8" }} axisLine={false} tickLine={false} width={28} />
+                  <Tooltip
+                    cursor={{ stroke: "rgba(148,163,184,0.2)" }}
+                    content={({ active, payload, label }: any) => {
+                      if (!active || !payload?.length) return null;
+                      const get = (k: string) => Number(payload.find((p: any) => p.dataKey === k)?.value ?? 0);
+                      return (
+                        <div style={{ background: "#1a2234", border: "1px solid rgba(255,255,255,0.14)", borderRadius: 10, padding: "8px 14px", fontSize: 12 }}>
+                          <p style={{ color: "#fff", fontWeight: 700, marginBottom: 4 }}>{label}</p>
+                          <p style={{ color: "#60a5fa" }}>B2B (Consumo): {get("b2b")} clientes</p>
+                          <p style={{ color: "#fbbf24" }}>PDV (Revenda): {get("pdv")} clientes</p>
+                          <p style={{ color: "#4ade80" }}>On-line: {get("online")} clientes</p>
+                        </div>
+                      );
+                    }}
+                  />
+                  <Line type="monotone" dataKey="b2b" name="B2B" stroke="#3b82f6" strokeWidth={2.5}
+                    dot={{ r: 3, fill: "#3b82f6", stroke: "#fff", strokeWidth: 1.5 }} activeDot={{ r: 5 }} isAnimationActive={false}>
+                    <LabelList dataKey="b2b" position="top" style={{ fontSize: 10, fill: "#60a5fa", fontWeight: 700 }} />
+                  </Line>
+                  <Line type="monotone" dataKey="pdv" name="PDV" stroke="#f59e0b" strokeWidth={2.5}
+                    dot={{ r: 3, fill: "#f59e0b", stroke: "#fff", strokeWidth: 1.5 }} activeDot={{ r: 5 }} isAnimationActive={false}>
+                    <LabelList dataKey="pdv" position="bottom" style={{ fontSize: 10, fill: "#fbbf24", fontWeight: 700 }} />
+                  </Line>
+                  <Line type="monotone" dataKey="online" name="On-line" stroke="#22c55e" strokeWidth={2}
+                    strokeDasharray="4 3" dot={{ r: 2.5, fill: "#22c55e" }} isAnimationActive={false} />
+                </ComposedChart>
+              </ResponsiveContainer>
+              </ExpandableChart>
             </div>
           </div>
         )}
