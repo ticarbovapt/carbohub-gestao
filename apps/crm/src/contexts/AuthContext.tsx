@@ -2,8 +2,8 @@ import { createContext, useContext, useEffect, useState, ReactNode } from "react
 import { User, Session } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import {
-  levelFromIdentity, scopeFromLevel,
-  type AccessLevel, type DataScope, type Identity,
+  isManager, fnKey, scopeFromLevel,
+  type AccessLevel, type DataScope, type Identity, type FnAccessMap,
 } from "@/lib/access";
 
 // Interface deste app em profiles.allowed_interfaces (Camada 1).
@@ -40,6 +40,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser]       = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
+  const [fnMap, setFnMap] = useState<FnAccessMap>({});
   const [isLoading, setLoading] = useState(true);
 
   const fetchProfile = async (userId: string): Promise<Profile | null> => {
@@ -51,6 +52,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (error) { console.error("[CRM] perfil:", error.message); return null; }
     return data as unknown as Profile;
   };
+
+  // Mapa de níveis por função (a flag "gestor" que o Admin controla na Estrutura).
+  // Carregado uma vez; `carbo_functions` é legível por autenticado.
+  useEffect(() => {
+    supabase
+      .from("carbo_functions")
+      .select("department, function_key, access_level")
+      .eq("is_active", true)
+      .then(({ data }) => {
+        const m: FnAccessMap = {};
+        for (const f of (data ?? []) as { department: string; function_key: string; access_level: "gestor" | "colaborador" }[]) {
+          m[fnKey(f.department, f.function_key)] = f.access_level;
+        }
+        setFnMap(m);
+      });
+  }, []);
 
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, s) => {
@@ -84,14 +101,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null); setSession(null); setProfile(null);
   };
 
-  const level = levelFromIdentity(profile);
+  // Fonte da verdade do gestor = flag do Admin (access_level da função), igual ao
+  // banco (public.carbo_is_gestor). Antes usava só command/head/TI e ignorava a flag.
+  const isGestor = isManager(profile, fnMap);
+  const level: AccessLevel = isGestor ? "gestor" : "membro";
   const scope = scopeFromLevel(level);
   const hasAppAccess = !!profile?.allowed_interfaces?.includes(APP_INTERFACE);
 
   return (
     <AuthContext.Provider value={{
       user, session, profile,
-      level, scope, isGestor: level === "gestor",
+      level, scope, isGestor,
       hasAppAccess,
       isLoading, signIn, signOut,
     }}>

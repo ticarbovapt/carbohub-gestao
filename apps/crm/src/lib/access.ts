@@ -71,6 +71,28 @@ export function scopeFromLevel(level: AccessLevel): DataScope {
   return level === "gestor" ? "global" : "proprio";
 }
 
+// ── Nível CIENTE da função (carbo_functions.access_level) — a flag do Admin ──
+// Mapa `${department}:${function_key}` → 'gestor' | 'colaborador'. É o que o
+// Admin controla na tela Estrutura. Espelha public.carbo_is_gestor no banco:
+// gestor = command/ti_suporte OU access_level='gestor' (papel primário/secundário).
+export type FnAccessMap = Record<string, "gestor" | "colaborador">;
+
+export function fnKey(dept?: string | null, fn?: string | null): string {
+  return `${dept ?? ""}:${fn ?? ""}`;
+}
+
+/** A pessoa é gestor? Fonte da verdade = a flag do Admin (access_level da função).
+ *  Sem o mapa, cai no fallback por command/head/TI (nunca trava). */
+export function isManager(id: Identity | null | undefined, fnMap?: FnAccessMap): boolean {
+  if (!id) return false;
+  if (GESTOR_DEPARTAMENTOS.has(id.department ?? "") || GESTOR_DEPARTAMENTOS.has(id.secondary_department ?? "")) return true;
+  if (fnMap) {
+    if (fnMap[fnKey(id.department, id.funcao)] === "gestor") return true;
+    if (fnMap[fnKey(id.secondary_department, id.secondary_funcao)] === "gestor") return true;
+  }
+  return GESTOR_FUNCOES.has(id.funcao ?? "") || GESTOR_FUNCOES.has(id.secondary_funcao ?? "");
+}
+
 /** A pessoa (por nível) tem a capability? */
 export function can(level: AccessLevel, capability: Capability): boolean {
   return (CAPABILITIES[capability] as readonly AccessLevel[]).includes(level);
