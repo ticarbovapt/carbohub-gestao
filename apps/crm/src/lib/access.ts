@@ -81,16 +81,16 @@ export function fnKey(dept?: string | null, fn?: string | null): string {
   return `${dept ?? ""}:${fn ?? ""}`;
 }
 
-/** A pessoa é gestor? Fonte da verdade = a flag do Admin (access_level da função).
- *  Sem o mapa, cai no fallback por command/head/TI (nunca trava). */
+/** A pessoa é gestor? Fonte ÚNICA = a flag do Admin (access_level da função,
+ *  papel primário OU secundário). SEM hardcode de cargo: command/head/TI são
+ *  gestor porque estão marcados gestor no Admin, não por regra fixa no código.
+ *  Espelha public.carbo_is_gestor no banco. */
 export function isManager(id: Identity | null | undefined, fnMap?: FnAccessMap): boolean {
-  if (!id) return false;
-  if (GESTOR_DEPARTAMENTOS.has(id.department ?? "") || GESTOR_DEPARTAMENTOS.has(id.secondary_department ?? "")) return true;
-  if (fnMap) {
-    if (fnMap[fnKey(id.department, id.funcao)] === "gestor") return true;
-    if (fnMap[fnKey(id.secondary_department, id.secondary_funcao)] === "gestor") return true;
-  }
-  return GESTOR_FUNCOES.has(id.funcao ?? "") || GESTOR_FUNCOES.has(id.secondary_funcao ?? "");
+  if (!id || !fnMap) return false;
+  return (
+    fnMap[fnKey(id.department, id.funcao)] === "gestor" ||
+    fnMap[fnKey(id.secondary_department, id.secondary_funcao)] === "gestor"
+  );
 }
 
 /** A pessoa (por nível) tem a capability? */
