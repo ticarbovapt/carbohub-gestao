@@ -6,6 +6,7 @@ import Profile from "./pages/Profile";
 import BugReports from "./pages/BugReports";
 import MinhaEquipe from "./pages/MinhaEquipe";
 import EmBreve from "./pages/EmBreve";
+import Vender from "./pages/Vender";
 import OrdensProducao from "./pages/producao/OrdensProducao";
 import DashboardProducao from "./pages/producao/DashboardProducao";
 import ProdutosMrp from "./pages/producao/ProdutosMrp";
@@ -45,6 +46,7 @@ export default function App() {
         <Route path="/perfil" element={<Profile />} />
         <Route path="/bugs" element={<BugReports />} />
         <Route path="/equipe" element={<MinhaEquipe />} />
+        <Route path="/vender" element={<Vender />} />
 
         {/* Produção */}
         <Route path="/producao/ordens" element={<OrdensProducao />} />
