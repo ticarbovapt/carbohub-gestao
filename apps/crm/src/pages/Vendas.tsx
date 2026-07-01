@@ -9,36 +9,17 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   ChevronLeft, ChevronRight, Search, ShoppingBag, TrendingUp,
-  Package, Pencil, Users, ArrowRightCircle, FileDown, CalendarDays, X,
+  Package, Users, ArrowRightCircle, CalendarDays, X,
 } from "lucide-react";
 import { toast } from "sonner";
-import { useVendas, useVendedorNomes, useUpdateVendaStatus, useUpdateVenda, useVendedoresDir } from "@/hooks/useVendas";
 import { useAuth } from "@/contexts/AuthContext";
-import { EditPedidoDialog } from "@/components/EditPedidoDialog";
+import { useVendedoresDir } from "@/hooks/useVendas";
+import {
+  useCarbozeVendas, useConvertQuote, useBulkAssignVendedor, type CarbozeVendaRow,
+} from "@/hooks/useCarbozeVendas";
 
-// Vendas e Orçamentos — lê de crm_vendas (orçamentos + vendas salvas).
-
-interface Item { name: string; quantity: number; unit_price: number; total: number; }
-type Endereco = Record<string, unknown> | null;
-interface VendaRow {
-  id: string; order_number: string; created_at: string; sale_date: string | null;
-  customer_name: string; customer_doc: string | null; customer_ie: string | null;
-  customer_email: string | null; customer_phone: string | null;
-  delivery_city: string | null; delivery_state: string | null;
-  endereco: Endereco; endereco_faturamento: Endereco; notes: string | null;
-  items: Item[]; total: number; status: string; vendedor_id: string; vendedor_name: string;
-  invoice_number: string | null; has_nf: boolean; is_avulso?: boolean;
-}
-
-// Formata um endereço (jsonb) para uma linha legível.
-function fmtEndereco(e: Endereco): string | null {
-  if (!e) return null;
-  const s = (k: string) => (e[k] != null ? String(e[k]) : "");
-  const l1 = [s("logradouro"), s("numero")].filter(Boolean).join(", ");
-  const l2 = [s("bairro"), [s("cidade"), s("uf")].filter(Boolean).join("/")].filter(Boolean).join(" · ");
-  const cep = s("cep") ? `CEP ${s("cep")}` : "";
-  return [l1, l2, cep].filter(Boolean).join(" — ") || null;
-}
+// Vendas e Orçamentos — FONTE ÚNICA: carboze_orders (mesma da VendasPage do Controle).
+// Traz Bling + legado + vendas nativas. Orçamento = status 'quote'.
 
 const STATUS_LABEL: Record<string, string> = {
   quote: "Orçamento", pending: "Pendente", confirmed: "Confirmado", invoiced: "Faturado",
@@ -51,87 +32,27 @@ const STATUS_VARIANT: Record<string, "success" | "warning" | "destructive" | "se
 
 const fmtBRL = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", minimumFractionDigits: 0, maximumFractionDigits: 0 });
 const fmtDate = (s: string) => format(parseISO(s.length === 10 ? s + "T00:00:00" : s), "dd/MM/yyyy", { locale: ptBR });
-const effectiveDate = (r: VendaRow) => r.sale_date ?? r.created_at.substring(0, 10);
+const effectiveDate = (r: CarbozeVendaRow) => r.sale_date ?? r.created_at.substring(0, 10);
 
-const toDisplayStatus = (s: string) => (s === "orcamento" ? "quote" : s === "cancelado" ? "cancelled" : "confirmed");
+// Endereço de entrega (colunas texto) → linha legível.
+function fmtEntrega(r: CarbozeVendaRow): string | null {
+  const cityUf = [r.delivery_city, r.delivery_state].filter(Boolean).join("/");
+  const cep = r.delivery_zip ? `CEP ${r.delivery_zip}` : "";
+  return [r.delivery_address, cityUf, cep].filter(Boolean).join(" — ") || null;
+}
+// Endereço de faturamento (jsonb) → linha legível.
+function fmtFaturamento(e: Record<string, unknown> | null): string | null {
+  if (!e) return null;
+  const s = (k: string) => (e[k] != null ? String(e[k]) : "");
+  const l1 = [s("logradouro"), s("numero")].filter(Boolean).join(", ");
+  const l2 = [s("bairro"), [s("cidade"), s("uf")].filter(Boolean).join("/")].filter(Boolean).join(" · ");
+  const cep = s("cep") ? `CEP ${s("cep")}` : "";
+  return [l1, l2, cep].filter(Boolean).join(" — ") || null;
+}
 
 export default function Vendas() {
-  // Gestor (head/command/ti) vê tudo: coluna/filtro de vendedor, edição, atribuição
-  // em massa. Colaborador comum só vê as próprias vendas (RLS) e sem esses controles.
-  const { isGestor } = useAuth();
+  const { user, isGestor } = useAuth();
   const isHead = isGestor;
-
-  // ── Dados reais (crm_vendas: orçamentos + vendas) ──
-  const { data: vendasRaw = [] } = useVendas("all");
-  const { data: nomes = {} } = useVendedorNomes();
-  const { data: dir = [] } = useVendedoresDir();
-  const updateStatus = useUpdateVendaStatus();
-  const updateVenda = useUpdateVenda();
-  const [assigning, setAssigning] = useState(false);
-
-  async function atribuirVendedor(vendedorId: string) {
-    if (!vendedorId) return;
-    setAssigning(true);
-    const ids = Array.from(selectedIds);
-    try {
-      await Promise.all(ids.map((id) => updateVenda.mutateAsync({ id, vendedor_id: vendedorId })));
-      const nome = dir.find((d) => d.id === vendedorId)?.full_name ?? "vendedor";
-      toast.success(`${ids.length} pedido(s) atribuído(s) a ${nome}`);
-      setSelectedIds(new Set());
-    } catch (e) {
-      toast.error("Erro ao atribuir: " + (e instanceof Error ? e.message : "tente de novo"));
-    } finally {
-      setAssigning(false);
-    }
-  }
-
-  async function converterEmVenda(id: string) {
-    try {
-      await updateStatus.mutateAsync({ id, status: "pedido" });
-      toast.success("Orçamento convertido em venda!");
-    } catch (e) {
-      toast.error("Erro ao converter: " + (e instanceof Error ? e.message : "tente de novo"));
-    }
-  }
-
-  const rows: VendaRow[] = useMemo(() => vendasRaw.map((v) => {
-    const items: Item[] = (v.itens ?? []).map((i) => ({
-      name: i.produto ?? "—",
-      quantity: i.quantidade || 0,
-      unit_price: Number(i.preco_unitario) || 0,
-      total: (i.quantidade || 0) * (Number(i.preco_unitario) || 0),
-    }));
-    const end = (v.endereco ?? null) as Endereco;
-    return {
-      id: v.id,
-      order_number: v.numero ?? `${v.status === "orcamento" ? "ORC" : "VND"}-${v.id.slice(0, 8).toUpperCase()}`,
-      created_at: v.created_at,
-      sale_date: null,
-      customer_name: v.customer_name ?? "—",
-      customer_doc: v.customer_doc ?? null,
-      customer_ie: v.customer_ie ?? null,
-      customer_email: v.customer_email ?? null,
-      customer_phone: v.customer_phone ?? null,
-      delivery_city: end && end.cidade != null ? String(end.cidade) : null,
-      delivery_state: end && end.uf != null ? String(end.uf) : null,
-      endereco: end,
-      endereco_faturamento: (v.endereco_faturamento ?? null) as Endereco,
-      notes: v.notes ?? null,
-      items,
-      total: Number(v.total) || 0,
-      status: toDisplayStatus(v.status),
-      vendedor_id: v.vendedor_id,
-      vendedor_name: nomes[v.vendedor_id] ?? "—",
-      invoice_number: null,
-      has_nf: false,
-    };
-  }), [vendasRaw, nomes]);
-
-  // Lista de vendedores para o filtro — diretório completo (vendedores no topo).
-  const VENDEDORES = useMemo(
-    () => dir.map((v) => ({ id: v.id, name: v.full_name || "—", avulso: !v.is_vendedor })),
-    [dir],
-  );
 
   const [month, setMonth] = useState(() => startOfMonth(new Date()));
   const [customFrom, setCustomFrom] = useState("");
@@ -139,7 +60,6 @@ export default function Vendas() {
   const [search, setSearch] = useState("");
   const [vendedorFilter, setVendedor] = useState("__all__");
   const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [editId, setEditId] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   const hasCustomRange = !!(customFrom || customTo);
@@ -147,12 +67,47 @@ export default function Vendas() {
   const today = new Date();
   const isCurrentMonth = month.getFullYear() === today.getFullYear() && month.getMonth() === today.getMonth();
 
+  // Dados reais — carboze_orders no período (o hook já aplica o filtro de data).
+  const { data: rows = [], isLoading } = useCarbozeVendas({
+    month, customFrom, customTo, vendedorFilter, isGestor, userId: user?.id,
+  });
+  const { data: dir = [] } = useVendedoresDir();
+  const convert = useConvertQuote();
+  const bulkAssign = useBulkAssignVendedor();
+  const [assigning, setAssigning] = useState(false);
+
+  const VENDEDORES = useMemo(
+    () => dir.map((v) => ({ id: v.id, name: v.full_name || "—", avulso: !v.is_vendedor })),
+    [dir],
+  );
+
+  async function atribuirVendedor(vendedorId: string) {
+    if (!vendedorId) return;
+    setAssigning(true);
+    try {
+      const vendedorName = dir.find((d) => d.id === vendedorId)?.full_name ?? "vendedor";
+      await bulkAssign.mutateAsync({ orderIds: Array.from(selectedIds), vendedorId, vendedorName });
+      setSelectedIds(new Set());
+    } catch { /* toast no hook */ } finally {
+      setAssigning(false);
+    }
+  }
+
+  async function converterEmVenda(id: string) {
+    try {
+      await convert.mutateAsync(id);
+      toast.success("Orçamento convertido em venda!");
+    } catch (e) {
+      toast.error("Erro ao converter: " + (e instanceof Error ? e.message : "tente de novo"));
+    }
+  }
+
   const filtered = useMemo(() => {
     return rows.filter((v) => {
       if (vendedorFilter !== "__all__" && v.vendedor_id !== vendedorFilter) return false;
       if (!search) return true;
       const q = search.toLowerCase();
-      return v.customer_name.toLowerCase().includes(q) || v.order_number.toLowerCase().includes(q);
+      return v.customer_name.toLowerCase().includes(q) || (v.order_number ?? "").toLowerCase().includes(q);
     });
   }, [rows, search, vendedorFilter]);
 
@@ -224,7 +179,9 @@ export default function Vendas() {
         </div>
 
         {/* Tabela */}
-        {filtered.length === 0 ? (
+        {isLoading ? (
+          <CarboCard><CarboCardContent className="py-16 text-center text-muted-foreground">Carregando…</CarboCardContent></CarboCard>
+        ) : filtered.length === 0 ? (
           <CarboCard><CarboCardContent className="py-16 text-center space-y-3"><TrendingUp className="h-12 w-12 mx-auto text-muted-foreground/30" /><p className="text-muted-foreground">Nenhum registro encontrado neste período.</p></CarboCardContent></CarboCard>
         ) : (
           <CarboCard padding="none">
@@ -273,25 +230,14 @@ export default function Vendas() {
                           {isHead && (
                             <td className="p-3 text-muted-foreground">
                               <span>{venda.vendedor_name || "—"}</span>
-                              {venda.is_avulso && <span className="ml-1.5 text-[9px] font-semibold text-amber-500 border border-amber-500/30 rounded px-1">Avulso</span>}
                             </td>
                           )}
                           <td className="p-3 text-right font-bold tabular-nums">{fmtBRL(venda.total)}</td>
                           <td className="p-3 text-right" onClick={(e) => e.stopPropagation()}>
                             <div className="flex items-center justify-end gap-1">
-                              {venda.has_nf && (
-                                <button onClick={() => toast.info("Baixar NF — disponível em breve")} className="h-7 px-2 inline-flex items-center gap-1 rounded-md text-xs font-medium bg-green-500/10 text-green-600 hover:bg-green-500/20 border border-green-500/30 transition-colors whitespace-nowrap" title="Baixar PDF da NF">
-                                  <FileDown className="h-3 w-3" /><span className="hidden sm:inline">Baixar NF</span>
-                                </button>
-                              )}
                               {isQuote && (
                                 <button onClick={() => converterEmVenda(venda.id)} className="h-7 px-2 inline-flex items-center gap-1 rounded-md text-xs font-medium bg-carbo-green/10 text-carbo-green hover:bg-carbo-green/20 border border-carbo-green/30 transition-colors" title="Converter orçamento em venda">
                                   <ArrowRightCircle className="h-3 w-3" /><span className="hidden sm:inline">Converter</span>
-                                </button>
-                              )}
-                              {isHead && !isQuote && (
-                                <button onClick={(e) => { e.stopPropagation(); setEditId(venda.id); }} className="h-7 w-7 inline-flex items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors" title="Editar pedido">
-                                  <Pencil className="h-3.5 w-3.5" />
                                 </button>
                               )}
                             </div>
@@ -315,13 +261,21 @@ export default function Vendas() {
                               <div className="grid sm:grid-cols-2 gap-4">
                                 <div>
                                   <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">Endereço de Entrega</p>
-                                  <p className="text-xs">{fmtEndereco(venda.endereco) || <span className="text-muted-foreground">—</span>}</p>
+                                  <p className="text-xs">{fmtEntrega(venda) || <span className="text-muted-foreground">—</span>}</p>
                                 </div>
                                 <div>
                                   <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">Endereço de Faturamento (NF)</p>
-                                  <p className="text-xs">{venda.endereco_faturamento ? fmtEndereco(venda.endereco_faturamento) : <span className="text-muted-foreground">Mesmo da entrega</span>}</p>
+                                  <p className="text-xs">{venda.billing_address ? fmtFaturamento(venda.billing_address) : <span className="text-muted-foreground">Mesmo da entrega</span>}</p>
                                 </div>
                               </div>
+
+                              {/* NF */}
+                              {(venda.invoice_number || venda.bling_nf_id) && (
+                                <div className="text-xs">
+                                  <span className="text-muted-foreground">Nota Fiscal: </span>
+                                  <span className="font-medium">{venda.invoice_number || `#${venda.bling_nf_id}`}</span>
+                                </div>
+                              )}
 
                               {/* Produtos */}
                               <div>
@@ -361,7 +315,7 @@ export default function Vendas() {
         )}
 
         <p className="text-xs text-muted-foreground text-center">
-          Vendas e orçamentos salvos. Conversão de orçamento, NF-e e atribuição em massa entram nas próximas etapas.
+          Vendas e orçamentos de <code>carboze_orders</code> (Bling + legado + nativas). Selecione pedidos para atribuir vendedor em massa.
         </p>
       </div>
 
@@ -382,8 +336,6 @@ export default function Vendas() {
           <button className="h-8 px-3 rounded-lg text-sm text-muted-foreground hover:text-foreground border border-border transition-colors" onClick={() => setSelectedIds(new Set())}>Cancelar</button>
         </div>
       )}
-
-      <EditPedidoDialog vendaId={editId} open={!!editId} onOpenChange={(o) => !o && setEditId(null)} canEditSensitive={isGestor} />
     </div>
   );
 }
