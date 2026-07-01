@@ -10,6 +10,7 @@ import MinhaEquipe from "./pages/MinhaEquipe";
 import EcommerceVendas from "./pages/EcommerceVendas";
 import EcommerceMetas from "./pages/EcommerceMetas";
 import MetaConfig from "./pages/MetaConfig";
+import Vender from "./pages/Vender";
 import { isCarbohubDomain, goToHubLogin } from "@/lib/sso";
 
 // Login é ÚNICO no Hub: /login direto em produção é redirecionado pra lá.
@@ -37,6 +38,7 @@ export default function App() {
         <Route path="/ecommerce/vendas-online" element={<EcommerceVendas />} />
         <Route path="/ecommerce/metas" element={<EcommerceMetas />} />
         <Route path="/metas/configurar" element={<MetaConfig />} />
+        <Route path="/vender" element={<Vender />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

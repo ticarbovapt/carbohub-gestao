@@ -13,6 +13,7 @@ import BlingCallback from "./pages/integracoes/BlingCallback";
 import Profile from "./pages/Profile";
 import MinhaEquipe from "./pages/MinhaEquipe";
 import BugReports from "./pages/BugReports";
+import Vender from "./pages/Vender";
 
 // Carbo Finanças. Acesso liberado pelo Admin via flag carbo_financas
 // (ProtectedRoute). Telas portadas 1:1 do Carbo Controle.
@@ -32,6 +33,7 @@ export default function App() {
         <Route path="/perfil" element={<Profile />} />
         <Route path="/equipe" element={<MinhaEquipe />} />
         <Route path="/bugs" element={<BugReports />} />
+        <Route path="/vender" element={<Vender />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>

@@ -14,6 +14,7 @@ import {
 import { HUB_URL } from "@/lib/sso";
 import { BugButton } from "@/components/BugButton";
 import { NotificationBell } from "@/components/NotificationBell";
+import { QuickAddMenu } from "@/components/QuickAddMenu";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Barra de topo COMPARTILHADA do ecossistema (replicada em cada app: admin/sales).
@@ -94,6 +95,7 @@ export function TopBar({ appName, onMenu }: { appName: string; onMenu?: () => vo
         </div>
 
         <div className="flex items-center gap-1">
+          <QuickAddMenu />
           <NotificationBell />
           <BugButton />
           <Button variant="ghost" size="icon" className="h-9 w-9" onClick={toggleTheme}
