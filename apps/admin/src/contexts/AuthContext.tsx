@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
 import { User, Session } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
-import { seesEverything, type Identity } from "@/lib/access";
+import { isManager, fnKey, type Identity, type FnAccessMap } from "@/lib/access";
 
 export interface Profile extends Identity {
   id: string;
@@ -14,7 +14,7 @@ interface AuthContextType {
   user: User | null;
   session: Session | null;
   profile: Profile | null;
-  /** Quem "manda" (command / head / TI) — usado em telas de gestão (ex: bugs). */
+  /** Gestor pela flag do Admin (access_level='gestor') — telas de gestão (ex: bugs). */
   canAdmin: boolean;
   /** Gate de ENTRADA no Admin: precisa da flag carbo_admin liberada no próprio Admin. */
   hasAdminInterface: boolean;
@@ -29,7 +29,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
+  const [fnMap, setFnMap] = useState<FnAccessMap>({});
   const [isLoading, setLoading] = useState(true);
+
+  // Mapa de níveis por função (a flag "gestor" que o Admin controla na Estrutura).
+  useEffect(() => {
+    supabase
+      .from("carbo_functions")
+      .select("department, function_key, access_level")
+      .eq("is_active", true)
+      .then(({ data }) => {
+        const m: FnAccessMap = {};
+        for (const f of (data ?? []) as { department: string; function_key: string; access_level: "gestor" | "colaborador" }[]) {
+          m[fnKey(f.department, f.function_key)] = f.access_level;
+        }
+        setFnMap(m);
+      });
+  }, []);
 
   const loadIdentity = async (userId: string) => {
     const { data: prof } = await supabase
@@ -75,7 +91,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   return (
     <AuthContext.Provider value={{
       user, session, profile,
-      canAdmin: seesEverything(profile),
+      canAdmin: isManager(profile, fnMap),
       hasAdminInterface: (profile?.allowed_interfaces ?? []).includes("carbo_admin"),
       isLoading, signIn, signOut,
     }}>

@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
 import { User, Session } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
-import { seesEverything, type Identity } from "@/lib/access";
+import { seesEverything, isManager, fnKey, type Identity, type FnAccessMap } from "@/lib/access";
 
 export interface Profile extends Identity {
   id: string;
@@ -27,7 +27,7 @@ interface AuthContextType {
   user: User | null;
   session: Session | null;
   profile: Profile | null;
-  /** Quem "manda" (command / head / TI). */
+  /** Gestor pela flag do Admin (access_level='gestor'). */
   canAdmin: boolean;
   /** Tem o Ops liberado (Admin via allowed_interfaces, ou gestão/TI). */
   canAccessOps: boolean;
@@ -42,7 +42,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
+  const [fnMap, setFnMap] = useState<FnAccessMap>({});
   const [isLoading, setLoading] = useState(true);
+
+  // Mapa de níveis por função (a flag "gestor" que o Admin controla na Estrutura).
+  useEffect(() => {
+    supabase
+      .from("carbo_functions")
+      .select("department, function_key, access_level")
+      .eq("is_active", true)
+      .then(({ data }) => {
+        const m: FnAccessMap = {};
+        for (const f of (data ?? []) as { department: string; function_key: string; access_level: "gestor" | "colaborador" }[]) {
+          m[fnKey(f.department, f.function_key)] = f.access_level;
+        }
+        setFnMap(m);
+      });
+  }, []);
 
   const loadIdentity = async (userId: string) => {
     const { data: prof } = await supabase
@@ -88,7 +104,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   return (
     <AuthContext.Provider value={{
       user, session, profile,
-      canAdmin: seesEverything(profile),
+      canAdmin: isManager(profile, fnMap),
       canAccessOps: canAccessOps(profile),
       isLoading, signIn, signOut,
     }}>

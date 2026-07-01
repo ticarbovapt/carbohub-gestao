@@ -59,15 +59,11 @@ export function fnKey(dept?: string | null, fn?: string | null): string {
 }
 
 export function isManager(id: Identity | null | undefined, fnMap?: FnAccessMap): boolean {
-  if (!id) return false;
-  if (
-    MANDA_DEPARTAMENTOS.has(id.department ?? "") ||
-    MANDA_DEPARTAMENTOS.has(id.secondary_department ?? "")
-  ) return true;
-  if (fnMap) {
-    if (fnMap[fnKey(id.department, id.funcao)] === "gestor") return true;
-    if (fnMap[fnKey(id.secondary_department, id.secondary_funcao)] === "gestor") return true;
-  }
-  // fallback por nome (caso o mapa não esteja carregado)
-  return MANDA_FUNCOES.has(id.funcao ?? "") || MANDA_FUNCOES.has(id.secondary_funcao ?? "");
+  if (!id || !fnMap) return false;
+  // Gestor = SÓ a flag do Admin (access_level='gestor'), papel primário OU
+  // secundário. Sem hardcode de cargo — espelha public.carbo_is_gestor no banco.
+  return (
+    fnMap[fnKey(id.department, id.funcao)] === "gestor" ||
+    fnMap[fnKey(id.secondary_department, id.secondary_funcao)] === "gestor"
+  );
 }
