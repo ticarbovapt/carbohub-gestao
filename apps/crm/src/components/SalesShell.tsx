@@ -7,6 +7,7 @@ import {
 import { TopBar } from "@/components/TopBar";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { useAccessPing } from "@/hooks/useAccessPing";
 import { useAuth } from "@/contexts/AuthContext";
 
 // CRM é uma seção com sub-itens (Funis de Venda = dashboard, Pipelines = kanban).
@@ -106,6 +107,7 @@ export function SalesShell() {
   const isMobile = useIsMobile();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [deskOpen, setDeskOpen] = useState(true);
+  useAccessPing("carbo_crm");
 
   const handleMenu = () => {
     if (isMobile) setMobileOpen(true);

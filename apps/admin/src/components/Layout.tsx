@@ -4,6 +4,7 @@ import { Users as UsersIcon, ListTree, Globe, Target, Activity } from "lucide-re
 import { TopBar } from "@/components/TopBar";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { useAccessPing } from "@/hooks/useAccessPing";
 
 // Itens de topo (acesso/estrutura) + grupos recém-trazidos do Ops.
 const NAV_TOP = [
@@ -67,6 +68,7 @@ export function Layout() {
   const isMobile = useIsMobile();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [deskOpen, setDeskOpen] = useState(true);
+  useAccessPing("carbo_admin");
 
   const handleMenu = () => {
     if (isMobile) setMobileOpen(true);

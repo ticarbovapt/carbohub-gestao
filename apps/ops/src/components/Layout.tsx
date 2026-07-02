@@ -4,6 +4,7 @@ import { ChevronDown, Lock } from "lucide-react";
 import { TopBar } from "@/components/TopBar";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { useAccessPing } from "@/hooks/useAccessPing";
 import { OPS_HOME, OPS_GROUPS } from "@/lib/opsNav";
 
 const navCls = ({ isActive }: { isActive: boolean }) =>
@@ -75,6 +76,7 @@ export function Layout() {
   const isMobile = useIsMobile();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [deskOpen, setDeskOpen] = useState(true);
+  useAccessPing("carbo_ops_app");
 
   const handleMenu = () => {
     if (isMobile) setMobileOpen(true);
