@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { NavLink, Outlet } from "react-router-dom";
-import { Users as UsersIcon, ListTree, Globe, Target, Activity, Link2 } from "lucide-react";
+import { Users as UsersIcon, ListTree, Globe, Target, Activity } from "lucide-react";
 import { TopBar } from "@/components/TopBar";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -17,12 +17,6 @@ const NAV_GROUPS = [
     label: "Acessos",
     items: [
       { to: "/ultimo-acesso", label: "Último acesso", icon: Activity },
-    ],
-  },
-  {
-    label: "Integrações",
-    items: [
-      { to: "/vendedores-bling", label: "Vendedores do Bling", icon: Link2 },
     ],
   },
   {
