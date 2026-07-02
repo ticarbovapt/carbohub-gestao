@@ -897,8 +897,10 @@ async function matchNFesToOrders(
     .not("informacoes_adicionais", "is", null);
 
   let matched = 0, invalid = 0;
-  // Regex tolerante: encontra PED-AAAA-NNNNN em qualquer posição, case-insensitive
-  const PED_REGEX = /PED-\d{4}-\d{5}/i;
+  // Regex tolerante (case-insensitive), em qualquer posição da observação:
+  //  • V AAAA MM XXXX  (novo formato nativo, ex.: V2026070001)
+  //  • PED-AAAA-NNNNN  (formato legado — mantido para casar NFs antigas)
+  const PED_REGEX = /(V\d{6}\d{4}|PED-\d{4}-\d{5})/i;
 
   for (const nf of (nfes || [])) {
     const obs = nf.informacoes_adicionais || "";
