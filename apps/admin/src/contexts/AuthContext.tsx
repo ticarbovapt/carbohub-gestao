@@ -64,6 +64,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setTimeout(async () => {
           await loadIdentity(s.user.id);
           setLoading(false);
+          // Registra o acesso a ESTE sistema (para a tela "Último acesso").
+          supabase.rpc("record_app_access", { _app: "carbo_admin" });
         }, 0);
       } else {
         setProfile(null);

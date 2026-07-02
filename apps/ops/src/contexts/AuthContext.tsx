@@ -77,6 +77,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setTimeout(async () => {
           await loadIdentity(s.user.id);
           setLoading(false);
+          supabase.rpc("record_app_access", { _app: "carbo_ops_app" });
         }, 0);
       } else {
         setProfile(null);
