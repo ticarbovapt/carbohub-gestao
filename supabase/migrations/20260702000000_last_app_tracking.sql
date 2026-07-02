@@ -80,15 +80,16 @@ BEGIN
 
   UNION ALL
 
-  -- Lojas (PDV)
+  -- Lojas (PDV) — segmentadas por REDE (assigned_licensee_id = licenciado dono da loja)
   SELECT
-    p.id, pdv.name, COALESCE(pdv.address_state, 'N/A'),
+    p.id, pdv.name, COALESCE(l.name, 'Sem rede'),
     NULL::text, NULL::text, NULL::text,
-    p.last_login_at, 'produtos'::text, COALESCE(pdv.address_state, 'N/A'),
+    p.last_login_at, 'produtos'::text, COALESCE(l.name, pdv.address_state, 'Sem rede'),
     0::bigint, pdv.last_replenishment_at, p.last_app, p.last_app_at
   FROM pdv_users pu
   JOIN profiles p ON p.id = pu.user_id
   JOIN pdvs pdv ON pdv.id = pu.pdv_id
+  LEFT JOIN licensees l ON l.id = pdv.assigned_licensee_id
 
   ORDER BY last_login_at DESC NULLS LAST;
 END;

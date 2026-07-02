@@ -245,9 +245,9 @@ function LojasSection({ rows }: { rows: LoginRow[] }) {
           <Input placeholder="Buscar loja..." className="pl-9" value={search} onChange={(e) => setSearch(e.target.value)} />
         </div>
         <Select value={filterRegion} onValueChange={setFilterRegion}>
-          <SelectTrigger className="w-40"><SelectValue placeholder="Região" /></SelectTrigger>
+          <SelectTrigger className="w-48"><SelectValue placeholder="Rede" /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">Todas regiões</SelectItem>
+            <SelectItem value="all">Todas as redes</SelectItem>
             {regions.map((r) => <SelectItem key={r} value={r}>{r}</SelectItem>)}
           </SelectContent>
         </Select>
@@ -256,7 +256,7 @@ function LojasSection({ rows }: { rows: LoginRow[] }) {
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead><tr className="border-b border-border bg-secondary/30">
-              <th className={th}>Loja</th><th className={th}>Região</th><th className={th}>Último acesso</th>
+              <th className={th}>Loja</th><th className={th}>Rede</th><th className={th}>Último acesso</th>
               <th className={th}>Última reposição</th><th className={th}>Status</th>
             </tr></thead>
             <tbody className="divide-y divide-border">
