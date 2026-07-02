@@ -20,7 +20,9 @@ export function useAccessPing(app: string) {
       const now = Date.now();
       if (now - lastSent < THROTTLE_MS) return;
       lastSent = now;
-      supabase.rpc("record_app_access", { _app: app });
+      // .then() é OBRIGATÓRIO: supabase.rpc é lazy — sem .then()/await a
+      // requisição NUNCA é enviada. (foi o bug do "último acesso" não gravar.)
+      supabase.rpc("record_app_access", { _app: app }).then(() => {}, () => {});
     };
 
     ping(true); // montou ou trocou de rota → é atividade, registra já
