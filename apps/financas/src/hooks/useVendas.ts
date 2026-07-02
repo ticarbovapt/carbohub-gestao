@@ -59,6 +59,11 @@ export function useCreateVenda() {
         }));
 
       const { data: u } = await supabase.auth.getUser();
+      let vendedorName: string | null = null;
+      if (u?.user?.id) {
+        const { data: prof } = await db.from("profiles").select("full_name").eq("id", u.user.id).maybeSingle();
+        vendedorName = (prof as { full_name?: string } | null)?.full_name ?? null;
+      }
 
       const { data: result, error } = await db
         .from("carboze_orders")
@@ -84,6 +89,7 @@ export function useCreateVenda() {
           status: input.status === "orcamento" ? "quote" : "pending",
           notes: input.notes || null,
           vendedor_id: u?.user?.id ?? null,
+          vendedor_name: vendedorName,
         })
         .select("id, order_number")
         .single();

@@ -198,6 +198,11 @@ export function useCreateVenda() {
         .filter((i) => i.produto && i.quantidade > 0)
         .map((i) => ({ name: i.produto, quantity: i.quantidade, unit_price: i.preco_unitario, bonificacao: i.bonificacao ?? 0, total: i.quantidade * i.preco_unitario }));
       const { data: u } = await supabase.auth.getUser();
+      let vendedorName: string | null = null;
+      if (u?.user?.id) {
+        const { data: prof } = await db.from("profiles").select("full_name").eq("id", u.user.id).maybeSingle();
+        vendedorName = (prof as { full_name?: string } | null)?.full_name ?? null;
+      }
       const { data: result, error } = await db
         .from("carboze_orders")
         .insert({
@@ -216,7 +221,7 @@ export function useCreateVenda() {
           payment_terms: input.payment_terms || null,
           freight_type: input.freight_type || null,
           items, subtotal: input.total, shipping_cost: 0, discount: 0, total: input.total,
-          notes: input.notes || null, vendedor_id: u?.user?.id ?? null,
+          notes: input.notes || null, vendedor_id: u?.user?.id ?? null, vendedor_name: vendedorName,
         })
         .select("id, order_number")
         .single();

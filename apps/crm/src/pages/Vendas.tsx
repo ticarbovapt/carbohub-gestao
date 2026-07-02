@@ -80,6 +80,12 @@ export default function Vendas() {
     () => dir.map((v) => ({ id: v.id, name: v.full_name || "—", avulso: !v.is_vendedor })),
     [dir],
   );
+  // Nome do vendedor: resolve pelo diretório (vendedor_id) e cai no vendedor_name gravado.
+  const nomeById = useMemo(() => {
+    const m: Record<string, string> = {};
+    for (const v of dir) m[v.id] = v.full_name || "—";
+    return m;
+  }, [dir]);
 
   async function atribuirVendedor(vendedorId: string) {
     if (!vendedorId) return;
@@ -229,7 +235,7 @@ export default function Vendas() {
                           <td className="p-3 text-muted-foreground whitespace-nowrap">{[venda.delivery_city, venda.delivery_state].filter(Boolean).join("/") || "—"}</td>
                           {isHead && (
                             <td className="p-3 text-muted-foreground">
-                              <span>{venda.vendedor_name || "—"}</span>
+                              <span>{(venda.vendedor_id && nomeById[venda.vendedor_id]) || venda.vendedor_name || "—"}</span>
                             </td>
                           )}
                           <td className="p-3 text-right font-bold tabular-nums">{fmtBRL(venda.total)}</td>
