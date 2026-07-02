@@ -16,7 +16,9 @@ export function useAccessPing(app: string) {
       const now = Date.now();
       if (now - lastSent < THROTTLE_MS) return;
       lastSent = now;
-      supabase.rpc("record_app_access", { _app: app });
+      supabase.rpc("record_app_access", { _app: app }).then(({ error }) => {
+        if (error) console.error("[record_app_access] falhou:", error.message, error);
+      });
     };
 
     ping(); // monta / troca de rota
