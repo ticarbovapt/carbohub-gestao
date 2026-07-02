@@ -61,7 +61,9 @@ function toVenda(row: any): VendaRow {
     customer_email: row.customer_email ?? null, customer_phone: row.customer_phone ?? null, customer_ie: row.customer_ie ?? null,
     is_licenciado: false, endereco: e, endereco_faturamento: (row.billing_address ?? null),
     payment_terms: row.payment_terms ?? null, freight_type: row.freight_type ?? null,
-    total: Number(row.total || 0), notes: row.notes ?? null, sale_date: row.sale_date ?? null, extra: null,
+    total: Number(row.total || 0), notes: row.notes ?? null, sale_date: row.sale_date ?? null,
+    // Preserva o status carboze CRU (7 estados) p/ o EditPedido exibir/gravar sem rebaixar.
+    extra: { status_detalhado: row.status },
     created_at: row.created_at, updated_at: row.updated_at,
     itens: items.map((i: any) => ({
       produto: i.name ?? i.produto ?? null,
@@ -121,7 +123,11 @@ export function useUpdateVenda() {
   return useMutation({
     mutationFn: async ({ id, ...patch }: UpdateVendaInput) => {
       const upd: Record<string, unknown> = {};
-      if (patch.status !== undefined) upd.status = toCarbozeStatus(patch.status);
+      // Se veio o status carboze cru (EditPedido: extra.status_detalhado), grava ele
+      // direto (7 estados, sem rebaixar). Senão, mapeia o 3-estados → carboze.
+      const detalhado = (patch.extra as Record<string, unknown> | null | undefined)?.status_detalhado as string | undefined;
+      if (detalhado) upd.status = detalhado;
+      else if (patch.status !== undefined) upd.status = toCarbozeStatus(patch.status);
       if (patch.vendedor_id !== undefined) upd.vendedor_id = patch.vendedor_id;
       if (patch.customer_name !== undefined) upd.customer_name = patch.customer_name;
       if (patch.customer_email !== undefined) upd.customer_email = patch.customer_email;
