@@ -38,22 +38,11 @@ export interface NovaVendaInput {
   itens: VendaItemInput[];
 }
 
-function quoteRef(): string {
-  const n = new Date();
-  const p = (x: number) => String(x).padStart(2, "0");
-  return `ORC-${n.getFullYear()}${p(n.getMonth() + 1)}${p(n.getDate())}-${p(n.getHours())}${p(n.getMinutes())}${p(n.getSeconds())}`;
-}
-
-/** Cria a venda como PEDIDO em carboze_orders. Orçamento não persiste. */
+/** Cria a venda em carboze_orders. Orçamento persiste como 'quote'; pedido como 'pending'. */
 export function useCreateVenda() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (input: NovaVendaInput): Promise<{ id: string | null; numero: string | null }> => {
-      // Orçamento: só cotação/PDF — não cria pedido no pipeline.
-      if (input.status === "orcamento") {
-        return { id: null, numero: quoteRef() };
-      }
-
       const e = (input.endereco ?? {}) as Record<string, string>;
       const deliveryAddr = (
         [e.logradouro, e.numero].filter(Boolean).join(", ") + (e.bairro ? ` - ${e.bairro}` : "")
@@ -92,7 +81,7 @@ export function useCreateVenda() {
           shipping_cost: 0,
           discount: 0,
           total: input.total,
-          status: "pending",
+          status: input.status === "orcamento" ? "quote" : "pending",
           notes: input.notes || null,
           vendedor_id: u?.user?.id ?? null,
         })
