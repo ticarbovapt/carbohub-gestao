@@ -16,8 +16,10 @@ export function useAccessPing(app: string) {
       const now = Date.now();
       if (now - lastSent < THROTTLE_MS) return;
       lastSent = now;
+      console.log("[record_app_access] chamando…", app);
       supabase.rpc("record_app_access", { _app: app }).then(({ error }) => {
-        if (error) console.error("[record_app_access] falhou:", error.message, error);
+        if (error) console.error("[record_app_access] ERRO:", error.message, error);
+        else console.log("[record_app_access] OK →", app);
       });
     };
 
