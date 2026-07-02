@@ -12,6 +12,7 @@ import EcommerceMetas from "./pages/EcommerceMetas";
 import MetaConfig from "./pages/MetaConfig";
 import Vender from "./pages/Vender";
 import UltimoAcesso from "./pages/UltimoAcesso";
+import VendedoresBling from "./pages/VendedoresBling";
 import { isCarbohubDomain, goToHubLogin } from "@/lib/sso";
 
 // Login é ÚNICO no Hub: /login direto em produção é redirecionado pra lá.
@@ -41,6 +42,7 @@ export default function App() {
         <Route path="/metas/configurar" element={<MetaConfig />} />
         <Route path="/vender" element={<Vender />} />
         <Route path="/ultimo-acesso" element={<UltimoAcesso />} />
+        <Route path="/vendedores-bling" element={<VendedoresBling />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
