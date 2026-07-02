@@ -49,14 +49,15 @@ BEGIN
   END IF;
 
   RETURN QUERY
-  -- Internos (logam pelo Hub e acessam um dos sistemas)
+  -- Internos (logam pelo Hub e acessam um dos sistemas). TODOS os perfis internos
+  -- (exceto rejeitados) — para que todo usuário criado apareça, mesmo sem 1º acesso.
   SELECT
     p.id, p.full_name, p.department::text, p.funcao,
     p.secondary_department::text, p.secondary_funcao,
     p.last_login_at, 'internal'::text, NULL::text, 0::bigint, NULL::timestamptz,
     p.last_app, p.last_app_at
   FROM profiles p
-  WHERE p.status = 'approved'
+  WHERE COALESCE(p.status, 'approved') <> 'rejected'
     AND NOT EXISTS (SELECT 1 FROM licensee_users lu WHERE lu.user_id = p.id)
     AND NOT EXISTS (SELECT 1 FROM pdv_users pu WHERE pu.user_id = p.id)
 
