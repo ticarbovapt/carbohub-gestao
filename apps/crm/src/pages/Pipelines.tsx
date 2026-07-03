@@ -95,10 +95,19 @@ function AllFunnelsBoard({ leads, onLeadClick }: { leads: CRMLead[]; onLeadClick
   );
 }
 
+const FUNNEL_IDS = FUNNELS.map((f) => f.id as string);
+
 export default function Pipelines() {
-  // Pipeline ÚNICA ativa: Vendas (f1 = jornada do cliente). Os demais funis ficam
-  // ocultos por ora — escalamos pros outros depois.
-  const funil = "f1" as FunnelType | "todos";
+  // Funil ativo vem da URL (?funil=…): "todos" mostra o consolidado, ou um funil
+  // específico (f1 = jornada do cliente, etc.). Default: f1.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const funilParam = searchParams.get("funil");
+  const funil = (funilParam === "todos" || (funilParam && FUNNEL_IDS.includes(funilParam))
+    ? funilParam
+    : "f1") as FunnelType | "todos";
+  const setFunil = (v: string) => {
+    setSearchParams((prev) => { prev.set("funil", v); return prev; }, { replace: true });
+  };
 
   const [searchQuery, setSearchQuery] = useState("");
   const [stageFilter, setStageFilter] = useState("all");
@@ -173,8 +182,8 @@ export default function Pipelines() {
     <div className="p-4 md:p-6">
       <div className="space-y-4">
         <CarboPageHeader
-          title="Funil de Vendas"
-          description="Jornada do cliente — do lead ao fechamento"
+          title={isAll ? "Todos os funis" : (FUNNEL_CONFIG[ft]?.name ?? "Funil de Vendas")}
+          description={isAll ? "Visão consolidada de todos os funis" : (FUNNEL_CONFIG[ft]?.description ?? "Jornada do cliente — do lead ao fechamento")}
           icon={KanbanSquare}
           actions={<CarboButton onClick={() => { setFormStage(undefined); setIsFormOpen(true); }}><Plus className="h-4 w-4 mr-1" /> Novo Lead</CarboButton>}
         />
@@ -199,6 +208,16 @@ export default function Pipelines() {
 
         {/* Filtros */}
         <div className="flex flex-wrap items-center gap-3">
+          {/* Seletor de funil — "Todos" (consolidado) ou um funil específico */}
+          <Select value={funil} onValueChange={setFunil}>
+            <SelectTrigger className="w-56 h-9 text-xs"><span className="flex items-center gap-1.5"><KanbanSquare className="h-3.5 w-3.5" /><SelectValue placeholder="Funil" /></span></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="todos">🗂️ Todos os funis</SelectItem>
+              {FUNNELS.map((f) => (
+                <SelectItem key={f.id} value={f.id}>{f.icon} {f.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           <div className="flex-1 max-w-sm">
             <CarboSearchInput placeholder="Buscar por nome, CNPJ, cidade..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
           </div>

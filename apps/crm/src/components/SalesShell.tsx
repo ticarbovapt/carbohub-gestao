@@ -12,7 +12,7 @@ import { useAuth } from "@/contexts/AuthContext";
 
 // CRM é uma seção com sub-itens (Funis de Venda = dashboard, Pipelines = kanban).
 const CRM_SUB = [
-  { to: "/funis", end: true, label: "Funis de Venda", icon: LayoutDashboard, disabled: true },
+  { to: "/funis", end: true, label: "Funis de Venda", icon: LayoutDashboard },
   { to: "/crm/pipelines", label: "Pipelines", icon: KanbanSquare },
 ];
 const NAV = [
@@ -52,15 +52,9 @@ function Nav({ onNavigate }: { onNavigate?: () => void }) {
       <p className="px-3 pt-1 pb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/70">CRM</p>
       <div className="space-y-1 border-l border-border ml-3 pl-1">
         {CRM_SUB.map((n) => (
-          n.disabled ? (
-            <div key={n.to} className="flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-sm text-muted-foreground/40 cursor-not-allowed select-none" title="Em breve">
-              <n.icon className="h-4 w-4" /> {n.label}
-            </div>
-          ) : (
-            <NavLink key={n.to} to={n.to} end={n.end} className={subCls} onClick={onNavigate}>
-              <n.icon className="h-4 w-4" /> {n.label}
-            </NavLink>
-          )
+          <NavLink key={n.to} to={n.to} end={n.end} className={subCls} onClick={onNavigate}>
+            <n.icon className="h-4 w-4" /> {n.label}
+          </NavLink>
         ))}
       </div>
 
