@@ -3,8 +3,10 @@ import { X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { FunnelType } from "@/types/crm";
-import { SOURCE_OPTIONS } from "@/types/crm";
+import { SOURCE_OPTIONS, FUNNEL_CONFIG } from "@/types/crm";
 import { useCreateCRMLead } from "@/hooks/useCRMLeads";
+
+const FUNNELS = Object.values(FUNNEL_CONFIG);
 
 interface LeadFormProps {
   funnelType: FunnelType;
@@ -25,6 +27,10 @@ function fmtMoney(v: string) {
 
 export function LeadForm({ funnelType, initialStage, onClose }: LeadFormProps) {
   const create = useCreateCRMLead();
+  // Funil de destino: escolhível no form. Se trocar de funil, o estágio pré-selecionado
+  // (vindo do "+" de uma coluna) não vale mais → cai pro estágio inicial do funil.
+  const [funnel, setFunnel] = useState<FunnelType>(funnelType);
+  const stage = funnel === funnelType ? initialStage : undefined;
   const [form, setForm] = useState({
     contact_name: "",
     contact_phone: "",
@@ -47,8 +53,8 @@ export function LeadForm({ funnelType, initialStage, onClose }: LeadFormProps) {
     e.preventDefault();
     if (!canSave) return;
     await create.mutateAsync({
-      funnel_type: funnelType,
-      stage: initialStage,
+      funnel_type: funnel,
+      stage,
       contact_name: form.contact_name.trim() || null,
       contact_phone: form.contact_phone || null,
       contact_email: form.contact_email || null,
@@ -73,6 +79,14 @@ export function LeadForm({ funnelType, initialStage, onClose }: LeadFormProps) {
         </div>
 
         <form onSubmit={handleSubmit} className="p-5 space-y-4">
+          {/* Funil de destino */}
+          <Field label="Pipeline (funil)" required>
+            <select className="w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-sm"
+              value={funnel} onChange={(e) => setFunnel(e.target.value as FunnelType)}>
+              {FUNNELS.map((f) => <option key={f.id} value={f.id}>{f.icon} {f.name}</option>)}
+            </select>
+          </Field>
+
           {/* Contato */}
           <SectionLabel>Contato</SectionLabel>
           <Field label="Nome / Empresa" required>

@@ -233,8 +233,9 @@ export function useCreateCRMLead() {
       if (error) throw error;
       return data;
     },
-    onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: ["crm-leads", variables.funnel_type] });
+    onSuccess: () => {
+      // Invalida todos os funis (inclui a visão "Todos") — o lead pode ir pra qualquer um.
+      queryClient.invalidateQueries({ queryKey: ["crm-leads"] });
       toast.success("Lead criado!");
     },
     onError: (error: Error) => toast.error("Erro ao criar lead: " + error.message),

@@ -293,7 +293,7 @@ export default function Pipelines() {
         )}
       </div>
 
-      {isFormOpen && !isAll && <LeadForm funnelType={ft} initialStage={formStage} onClose={() => setIsFormOpen(false)} />}
+      {isFormOpen && <LeadForm funnelType={ft} initialStage={isAll ? undefined : formStage} onClose={() => setIsFormOpen(false)} />}
       {drawerLead && <LeadDrawer lead={drawerLead} funnelType={drawerLead.funnel_type as FunnelType} onClose={() => setDrawerLead(null)} />}
 
       <Dialog open={!!lostDialogLead} onOpenChange={(o) => { if (!o) setLostDialogLead(null); }}>
