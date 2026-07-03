@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { StockProgressBar } from "@/components/estoque/StockProgressBar";
-import { Search, Tag, Package, Pencil, Plus, Loader2 } from "lucide-react";
+import { Search, Tag, Package, Pencil, Plus, Loader2, ChevronDown } from "lucide-react";
 import { minStockStatus, minForHub, type Hub } from "@/components/estoque/stockData";
 import { useStock } from "@/hooks/useStock";
 import { CarboEmptyState } from "@/components/ui/carbo-empty-state";
@@ -31,6 +31,38 @@ export function StockView({ hub, editable }: { hub: Hub; editable: boolean }) {
     return true;
   }), [products, search, category]);
 
+  // ── Agrupamento por categoria (Insumo, Produto Final, …) ───────────────────
+  const CAT_ORDER = ["Insumo", "Matéria-Prima", "Produto Final", "Embalagem"];
+  const grupos = useMemo(() => {
+    const m = new Map<string, typeof filtered>();
+    for (const p of filtered) {
+      const cat = p.category || "Sem categoria";
+      if (!m.has(cat)) m.set(cat, []);
+      m.get(cat)!.push(p);
+    }
+    return Array.from(m.keys())
+      .sort((a, b) => {
+        const ia = CAT_ORDER.indexOf(a), ib = CAT_ORDER.indexOf(b);
+        if (ia !== -1 || ib !== -1) return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
+        return a.localeCompare(b);
+      })
+      .map((cat) => {
+        const items = m.get(cat)!;
+        const low = items.filter((p) => (p.hubs[hub.id] ?? 0) < minForHub(p, hub.id)).length;
+        return { category: cat, items, low };
+      });
+  }, [filtered, hub.id]);
+
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>(() => {
+    try { return JSON.parse(localStorage.getItem("ops_estoque_cats_collapsed") || "{}"); } catch { return {}; }
+  });
+  const persistCollapsed = (next: Record<string, boolean>) => {
+    setCollapsed(next);
+    try { localStorage.setItem("ops_estoque_cats_collapsed", JSON.stringify(next)); } catch { /* ignore */ }
+  };
+  const toggleCat = (cat: string) => persistCollapsed({ ...collapsed, [cat]: !collapsed[cat] });
+  const setAllCats = (val: boolean) => persistCollapsed(Object.fromEntries(grupos.map((g) => [g.category, val])));
+
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-3 flex-wrap">
@@ -55,9 +87,28 @@ export function StockView({ hub, editable }: { hub: Hub; editable: boolean }) {
         <div className="flex items-center justify-center gap-2 py-16 text-muted-foreground"><Loader2 className="h-5 w-5 animate-spin" /> Carregando estoque…</div>
       ) : error ? (
         <CarboCard><CarboCardContent><CarboEmptyState icon={Package} title="Erro ao carregar" description="Não foi possível buscar o estoque." /></CarboCardContent></CarboCard>
+      ) : filtered.length === 0 ? (
+        <CarboCard className="sm:col-span-2 xl:col-span-3"><CarboCardContent><CarboEmptyState icon={Package} title="Sem dados" description="Nenhum produto em estoque para este hub." /></CarboCardContent></CarboCard>
       ) : (
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-        {filtered.map((p) => {
+      <div className="space-y-5">
+        <div className="flex justify-end gap-3 text-xs">
+          <button onClick={() => setAllCats(false)} className="text-muted-foreground hover:text-foreground transition-colors">Expandir tudo</button>
+          <span className="text-muted-foreground/40">·</span>
+          <button onClick={() => setAllCats(true)} className="text-muted-foreground hover:text-foreground transition-colors">Recolher tudo</button>
+        </div>
+        {grupos.map((g) => (
+          <div key={g.category}>
+            <button onClick={() => toggleCat(g.category)} className="w-full flex items-center gap-2 py-2 border-b border-border text-left">
+              <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${collapsed[g.category] ? "-rotate-90" : ""}`} />
+              <span className="font-semibold text-sm text-foreground">{g.category}</span>
+              <span className="text-xs text-muted-foreground">
+                {g.items.length} {g.items.length === 1 ? "item" : "itens"}
+                {g.low > 0 && <span className="text-destructive font-medium"> · {g.low} em baixa</span>}
+              </span>
+            </button>
+            {!collapsed[g.category] && (
+              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 mt-3">
+                {g.items.map((p) => {
           const qty = p.hubs[hub.id] ?? 0;
           const min = minForHub(p, hub.id);
           const status = minStockStatus(qty, min);
@@ -86,8 +137,11 @@ export function StockView({ hub, editable }: { hub: Hub; editable: boolean }) {
               </CarboCardContent>
             </CarboCard>
           );
-        })}
-        {filtered.length === 0 && <CarboCard className="sm:col-span-2 xl:col-span-3"><CarboCardContent><CarboEmptyState icon={Package} title="Sem dados" description="Nenhum produto em estoque para este hub." /></CarboCardContent></CarboCard>}
+                })}
+              </div>
+            )}
+          </div>
+        ))}
       </div>
       )}
 
