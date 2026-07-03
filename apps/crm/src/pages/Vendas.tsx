@@ -9,14 +9,18 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   ChevronLeft, ChevronRight, Search, ShoppingBag, TrendingUp,
-  Package, Users, ArrowRightCircle, CalendarDays, X,
+  Package, Users, ArrowRightCircle, CalendarDays, X, Trash2, Loader2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
 import { useVendedoresDir } from "@/hooks/useVendas";
 import {
-  useCarbozeVendas, useConvertQuote, useBulkAssignVendedor, type CarbozeVendaRow,
+  useCarbozeVendas, useConvertQuote, useBulkAssignVendedor, useDeleteVenda, type CarbozeVendaRow,
 } from "@/hooks/useCarbozeVendas";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 // Vendas e Orçamentos — FONTE ÚNICA: carboze_orders (mesma da VendasPage do Controle).
 // Traz Bling + legado + vendas nativas. Orçamento = status 'quote'.
@@ -74,7 +78,18 @@ export default function Vendas() {
   const { data: dir = [] } = useVendedoresDir();
   const convert = useConvertQuote();
   const bulkAssign = useBulkAssignVendedor();
+  const deleteVenda = useDeleteVenda();
   const [assigning, setAssigning] = useState(false);
+  const [toDelete, setToDelete] = useState<CarbozeVendaRow | null>(null);
+
+  async function excluirVenda() {
+    if (!toDelete) return;
+    try {
+      await deleteVenda.mutateAsync({ id: toDelete.id });
+      if (expandedId === toDelete.id) setExpandedId(null);
+      setToDelete(null);
+    } catch { /* toast no hook */ }
+  }
 
   const VENDEDORES = useMemo(
     () => dir.map((v) => ({ id: v.id, name: v.full_name || "—", avulso: !v.is_vendedor })),
@@ -308,6 +323,19 @@ export default function Vendas() {
                                   <p className="text-xs">{venda.notes}</p>
                                 </div>
                               )}
+
+                              {/* Exclusão — só gestor. Registra log auditável e libera o número. */}
+                              {isHead && (
+                                <div className="flex justify-end pt-2 border-t border-border/60">
+                                  <Button
+                                    variant="ghost" size="sm"
+                                    className="h-8 text-xs text-destructive hover:text-destructive hover:bg-destructive/10"
+                                    onClick={() => setToDelete(venda)}
+                                  >
+                                    <Trash2 className="h-3.5 w-3.5 mr-1.5" /> Excluir venda
+                                  </Button>
+                                </div>
+                              )}
                             </td>
                           </tr>
                         )}
@@ -342,6 +370,35 @@ export default function Vendas() {
           <button className="h-8 px-3 rounded-lg text-sm text-muted-foreground hover:text-foreground border border-border transition-colors" onClick={() => setSelectedIds(new Set())}>Cancelar</button>
         </div>
       )}
+
+      {/* Confirmação de exclusão (gestor) */}
+      <AlertDialog open={!!toDelete} onOpenChange={(o) => { if (!o) setToDelete(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir esta venda?</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-2 text-sm">
+                <p>
+                  A venda <strong className="font-mono">{toDelete?.order_number}</strong> de{" "}
+                  <strong>{toDelete?.customer_name}</strong> ({toDelete ? fmtBRL(toDelete.total) : ""}) será
+                  removida do sistema. O número volta a ficar livre e as próximas vendas seguem a sequência.
+                </p>
+                <p className="text-muted-foreground">Esta ação não pode ser desfeita.</p>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleteVenda.isPending}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => { e.preventDefault(); excluirVenda(); }}
+              disabled={deleteVenda.isPending}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deleteVenda.isPending ? <><Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> Excluindo…</> : <><Trash2 className="h-3.5 w-3.5 mr-1.5" /> Excluir</>}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

@@ -8,7 +8,10 @@ import { toast } from "sonner";
 // refino client-side pela data efetiva (sale_date ?? created_at) dentro do
 // período. Orçamento = status 'quote'; pedido = demais status.
 // ─────────────────────────────────────────────────────────────────────────────
-const db = supabase as unknown as { from: (t: string) => any };
+const db = supabase as unknown as {
+  from: (t: string) => any;
+  rpc: (fn: string, args?: Record<string, unknown>) => Promise<{ data: any; error: any }>;
+};
 
 export interface VendaItem { name: string; quantity: number; unit_price: number; total: number; }
 
@@ -142,6 +145,23 @@ export function useConvertQuote() {
       } catch { /* ignore */ }
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["carboze_vendas"] }),
+  });
+}
+
+/** Exclui uma venda (só gestor — validado no banco). Grava log auditável
+ *  (carboze_order_deletions) antes de apagar e libera o número da venda. */
+export function useDeleteVenda() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, reason }: { id: string; reason?: string }) => {
+      const { error } = await db.rpc("carboze_order_delete", { p_id: id, p_reason: reason ?? null });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["carboze_vendas"] });
+      toast.success("Venda excluída.");
+    },
+    onError: (e: Error) => toast.error("Erro ao excluir venda: " + e.message),
   });
 }
 
