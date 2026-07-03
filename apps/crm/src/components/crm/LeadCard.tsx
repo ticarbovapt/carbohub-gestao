@@ -14,6 +14,8 @@ interface LeadCardProps {
   onAdvance?: (lead: CRMLead) => void;
   onMarkLost?: (lead: CRMLead) => void;
   onClick?: (lead: CRMLead) => void;
+  // Na visão "Todos os funis": mostra de qual pipeline o card veio.
+  originFunnel?: { icon?: string; name: string; color: string };
 }
 
 const TEMP_VARIANT = {
@@ -23,7 +25,7 @@ const TEMP_VARIANT = {
 };
 const TEMP_LABEL = { quente: "🔥 Quente", morno: "🌡️ Morno", frio: "❄️ Frio" };
 
-export function LeadCard({ lead, funnelType: _funnelType, owner, onAdvance, onMarkLost, onClick }: LeadCardProps) {
+export function LeadCard({ lead, funnelType: _funnelType, owner, onAdvance, onMarkLost, onClick, originFunnel }: LeadCardProps) {
   const daysSince = getDaysSinceUpdate(lead.updated_at);
   const aging: "red" | "amber" | null = daysSince > 7 ? "red" : daysSince > 3 ? "amber" : null;
   const displayName = lead.trade_name || lead.legal_name || lead.contact_name || "Sem nome";
@@ -38,6 +40,18 @@ export function LeadCard({ lead, funnelType: _funnelType, owner, onAdvance, onMa
       }`}
       onClick={() => onClick?.(lead)}
     >
+      {/* Origem (visão "Todos os funis") — de qual pipeline o card veio */}
+      {originFunnel && (
+        <div className="mb-2">
+          <span
+            className="inline-flex items-center gap-1 text-[10px] font-medium rounded-full px-1.5 py-0.5"
+            style={{ background: originFunnel.color + "1a", color: originFunnel.color }}
+          >
+            {originFunnel.icon && <span>{originFunnel.icon}</span>} {originFunnel.name}
+          </span>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex items-start justify-between mb-2">
         <div className="flex-1 min-w-0">

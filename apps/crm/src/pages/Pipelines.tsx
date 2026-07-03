@@ -16,6 +16,7 @@ import { useCRMLeads, useAllCRMLeads, useCRMStats, useAdvanceLeadStage, useMarkL
 import { useVendedoresDir } from "@/hooks/useVendas";
 import { useAuth } from "@/contexts/AuthContext";
 import { KanbanBoard } from "@/components/crm/KanbanBoard";
+import { LeadCard, type LeadOwner } from "@/components/crm/LeadCard";
 import { LeadForm } from "@/components/crm/LeadForm";
 import { LeadDrawer } from "@/components/crm/LeadDrawer";
 import { FUNNEL_CONFIG, getStagesForFunnel, getNextStage, LOSS_REASONS } from "@/types/crm";
@@ -33,12 +34,18 @@ const NORMALIZED = [
 ];
 const normalizeStage = (stage: string) => NORMALIZED.find((n) => n.match.includes(stage))?.id ?? "andamento";
 
-// ── Visão "Todos os funis": kanban read-only por estágio normalizado ───────
-function tempColor(t?: string) {
-  return t === "quente" ? "#ef4444" : t === "morno" ? "#f59e0b" : t === "frio" ? "#3b82f6" : "#94a3b8";
-}
+// ── Visão "Todos os funis": mesmo card do pipeline + linha de origem ───────
+const leadOwnerId = (l: CRMLead) =>
+  (l as { assigned_to?: string | null; created_by?: string | null }).assigned_to ??
+  (l as { created_by?: string | null }).created_by ?? "";
 
-function AllFunnelsBoard({ leads, onLeadClick }: { leads: CRMLead[]; onLeadClick: (l: CRMLead) => void }) {
+function AllFunnelsBoard({ leads, ownersById, onLeadClick, onAdvance, onMarkLost }: {
+  leads: CRMLead[];
+  ownersById: Record<string, LeadOwner>;
+  onLeadClick: (l: CRMLead) => void;
+  onAdvance: (l: CRMLead) => void;
+  onMarkLost: (l: CRMLead) => void;
+}) {
   const byCol = useMemo(() => {
     const map: Record<string, CRMLead[]> = {};
     for (const n of NORMALIZED) map[n.id] = [];
@@ -47,11 +54,12 @@ function AllFunnelsBoard({ leads, onLeadClick }: { leads: CRMLead[]; onLeadClick
   }, [leads]);
 
   return (
-    <div className="flex gap-3 overflow-x-auto pb-3 -mx-1 px-1">
+    // Colunas se adaptam à largura da tela (5 estágios normalizados).
+    <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
       {NORMALIZED.map((col) => {
         const items = byCol[col.id] ?? [];
         return (
-          <div key={col.id} className="w-[300px] shrink-0 rounded-2xl border border-border bg-board-surface/40 flex flex-col max-h-[calc(100vh-300px)]">
+          <div key={col.id} className="rounded-2xl border border-border bg-board-surface/40 flex flex-col min-h-[200px] max-h-[calc(100vh-280px)]">
             {/* Header da coluna com faixa de cor */}
             <div className="rounded-t-2xl px-3 py-2.5 border-b border-border" style={{ background: col.color + "12" }}>
               <div className="flex items-center justify-between">
@@ -61,24 +69,21 @@ function AllFunnelsBoard({ leads, onLeadClick }: { leads: CRMLead[]; onLeadClick
                 <span className="text-xs font-bold tabular-nums rounded-full px-2 py-0.5" style={{ background: col.color + "20", color: col.color }}>{items.length}</span>
               </div>
             </div>
-            {/* Cards */}
+            {/* Cards — idênticos aos do pipeline, com a linha de origem do funil */}
             <div className="flex-1 overflow-y-auto p-2 space-y-2">
               {items.map((lead) => {
                 const cfg = FUNNEL_CONFIG[lead.funnel_type as FunnelType];
-                const t = (lead as { temperature?: string }).temperature;
                 return (
-                  <button key={lead.id} onClick={() => onLeadClick(lead)}
-                    className="w-full text-left rounded-xl border border-border bg-card p-3 hover:shadow-md hover:border-muted-foreground/30 transition-all relative overflow-hidden">
-                    <div className="absolute left-0 top-0 bottom-0 w-1" style={{ background: cfg?.color ?? "#94A3B8" }} />
-                    <div className="flex items-start justify-between gap-2 mb-1 pl-1.5">
-                      <p className="font-semibold text-sm truncate leading-tight">{lead.trade_name || lead.legal_name || lead.contact_name || "Sem nome"}</p>
-                      {t && <span className="shrink-0 h-2 w-2 rounded-full mt-1" style={{ background: tempColor(t) }} title={`Lead ${t}`} />}
-                    </div>
-                    <p className="text-xs text-muted-foreground truncate pl-1.5">{[lead.city, lead.contact_phone].filter(Boolean).join(" · ") || "—"}</p>
-                    <span className="ml-1.5 inline-flex items-center gap-1 mt-2 text-[10px] font-medium rounded-full px-1.5 py-0.5" style={{ background: (cfg?.color ?? "#94A3B8") + "1a", color: cfg?.color ?? "#94A3B8" }}>
-                      <span>{cfg?.icon}</span> {cfg?.shortName}
-                    </span>
-                  </button>
+                  <LeadCard
+                    key={lead.id}
+                    lead={lead}
+                    funnelType={lead.funnel_type as FunnelType}
+                    owner={ownersById[leadOwnerId(lead)]}
+                    originFunnel={cfg ? { icon: cfg.icon, name: cfg.shortName, color: cfg.color } : undefined}
+                    onClick={onLeadClick}
+                    onAdvance={onAdvance}
+                    onMarkLost={onMarkLost}
+                  />
                 );
               })}
               {items.length === 0 && (
@@ -187,6 +192,12 @@ export default function Pipelines() {
     const next = getNextStage(ft, lead.stage);
     if (next) advanceLead.mutate({ id: lead.id, newStage: next, funnelType: ft, currentStage: lead.stage });
   };
+  // Na visão "Todos", cada card avança no SEU próprio funil (não no `ft` ativo).
+  const handleAdvanceAny = (lead: CRMLead) => {
+    const lf = lead.funnel_type as FunnelType;
+    const next = getNextStage(lf, lead.stage);
+    if (next) advanceLead.mutate({ id: lead.id, newStage: next, funnelType: lf, currentStage: lead.stage });
+  };
   const handleDragMove = (lead: CRMLead, toStage: string) => {
     advanceLead.mutate({ id: lead.id, newStage: toStage, funnelType: ft, currentStage: lead.stage });
   };
@@ -293,7 +304,13 @@ export default function Pipelines() {
         {isLoading ? (
           <div className="space-y-3">{[1, 2, 3].map((i) => <CarboSkeleton key={i} className="h-20 w-full" />)}</div>
         ) : isAll ? (
-          <AllFunnelsBoard leads={filteredLeads} onLeadClick={(lead) => setDrawerLead(lead)} />
+          <AllFunnelsBoard
+            leads={filteredLeads}
+            ownersById={ownersById}
+            onLeadClick={(lead) => setDrawerLead(lead)}
+            onAdvance={handleAdvanceAny}
+            onMarkLost={(lead) => { setLostReason(LOSS_REASONS[0]); setLostDialogLead(lead); }}
+          />
         ) : viewMode === "kanban" ? (
           <KanbanBoard
             leads={filteredLeads}
