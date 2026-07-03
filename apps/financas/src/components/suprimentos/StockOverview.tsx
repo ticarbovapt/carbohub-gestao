@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { Package, Search, Pencil, Save, X, Warehouse, TrendingUp, TrendingDown, Calendar, BarChart3, Shield, Activity, Download } from "lucide-react";
+import { Package, Search, Pencil, Save, X, Warehouse, TrendingUp, TrendingDown, Calendar, BarChart3, Shield, Activity, Download, ChevronDown } from "lucide-react";
 import * as XLSX from "xlsx";
 import { Input } from "@/components/ui/input";
 import { CarboCard, CarboCardContent } from "@/components/ui/carbo-card";
@@ -238,6 +238,44 @@ export function StockOverview() {
     }
   };
 
+  // ── Agrupamento por categoria (Insumo, Produto Final, …) ───────────────────
+  const totalDe = (p: any) => {
+    const hs = (warehouses || []).map((w: any) =>
+      warehouseStock?.find((s: any) => s.product_id === p.id && s.warehouse_id === w.id)?.quantity || 0);
+    return hs.length ? hs.reduce((a: number, b: number) => a + b, 0) : p.current_stock_qty;
+  };
+  const CAT_ORDER = ["Insumo", "Matéria-Prima", "Produto Final", "Embalagem"];
+  const grupos = useMemo(() => {
+    const m = new Map<string, typeof filtered>();
+    for (const p of filtered) {
+      const cat = p.category || "Sem categoria";
+      if (!m.has(cat)) m.set(cat, []);
+      m.get(cat)!.push(p);
+    }
+    return Array.from(m.keys())
+      .sort((a, b) => {
+        const ia = CAT_ORDER.indexOf(a), ib = CAT_ORDER.indexOf(b);
+        if (ia !== -1 || ib !== -1) return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
+        return a.localeCompare(b);
+      })
+      .map((cat) => {
+        const items = m.get(cat)!;
+        const low = items.filter((p) => totalDe(p) < (p.safety_stock_qty || p.min_order_qty || 1)).length;
+        return { category: cat, items, low };
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filtered, warehouses, warehouseStock]);
+
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>(() => {
+    try { return JSON.parse(localStorage.getItem("supr_cats_collapsed") || "{}"); } catch { return {}; }
+  });
+  const persistCollapsed = (next: Record<string, boolean>) => {
+    setCollapsed(next);
+    try { localStorage.setItem("supr_cats_collapsed", JSON.stringify(next)); } catch { /* ignore */ }
+  };
+  const toggleCat = (cat: string) => persistCollapsed({ ...collapsed, [cat]: !collapsed[cat] });
+  const setAllCats = (val: boolean) => persistCollapsed(Object.fromEntries(grupos.map((g) => [g.category, val])));
+
   return (
     <div className="space-y-4">
       {/* Filters */}
@@ -277,8 +315,32 @@ export function StockOverview() {
           </CarboCardContent>
         </CarboCard>
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-          {filtered.map(p => {
+        <div className="space-y-5">
+          {/* Expandir / recolher todas as categorias */}
+          <div className="flex justify-end gap-3 text-xs">
+            <button onClick={() => setAllCats(false)} className="text-muted-foreground hover:text-foreground transition-colors">Expandir tudo</button>
+            <span className="text-muted-foreground/40">·</span>
+            <button onClick={() => setAllCats(true)} className="text-muted-foreground hover:text-foreground transition-colors">Recolher tudo</button>
+          </div>
+
+          {grupos.map((g) => (
+            <div key={g.category}>
+              {/* Cabeçalho da categoria (recolhível) */}
+              <button
+                onClick={() => toggleCat(g.category)}
+                className="w-full flex items-center gap-2 py-2 border-b border-border text-left"
+              >
+                <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${collapsed[g.category] ? "-rotate-90" : ""}`} />
+                <span className="font-semibold text-sm text-foreground">{g.category}</span>
+                <span className="text-xs text-muted-foreground">
+                  {g.items.length} {g.items.length === 1 ? "item" : "itens"}
+                  {g.low > 0 && <span className="text-destructive font-medium"> · {g.low} em baixa</span>}
+                </span>
+              </button>
+
+              {!collapsed[g.category] && (
+                <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 mt-3">
+                  {g.items.map(p => {
             const safetyQty = p.safety_stock_qty || p.min_order_qty || 1;
 
             const hubStocks = (warehouses || []).map(w => {
@@ -424,8 +486,12 @@ export function StockOverview() {
                   </div>
                 </CarboCardContent>
               </CarboCard>
-            );
-          })}
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          ))}
         </div>
       )}
 
