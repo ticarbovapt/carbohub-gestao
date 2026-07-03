@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect, useRef } from "react";
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
 import { CarboButton } from "@/components/ui/carbo-button";
 import { CarboKPI } from "@/components/ui/carbo-kpi";
@@ -8,7 +8,7 @@ import { CarboTable, CarboTableHeader, CarboTableBody, CarboTableRow, CarboTable
 import { CarboCard } from "@/components/ui/carbo-card";
 import { CarboEmptyState } from "@/components/ui/carbo-empty-state";
 import {
-  ShoppingBag, Plus, RefreshCw, Filter, ChevronRight, Clock, CheckCircle, Truck,
+  ShoppingBag, Plus, RefreshCw, Filter, ChevronRight, ChevronLeft, Clock, CheckCircle, Truck,
   Package, XCircle, DollarSign, Calendar, Users, Download,
   FileText, Printer, ArrowUpDown, ArrowUp, ArrowDown, Pencil,
 } from "lucide-react";
@@ -17,7 +17,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { useVendas, useVendedorNomes, useVendedoresDir } from "@/hooks/useVendas";
@@ -152,6 +152,31 @@ export default function Pedidos() {
     if (va > vb) return sortDir === "asc" ? 1 : -1;
     return 0;
   }), [filteredOrders, sortCol, sortDir]);
+
+  // ── Paginação (client-side, renderiza só 10 → tela leve) com página na URL
+  //    (?page=N) para persistir no F5. Reseta p/ pág. 1 só quando um filtro muda.
+  const PAGE_SIZE = 10;
+  const [searchParams, setSearchParams] = useSearchParams();
+  const page = Math.max(1, parseInt(searchParams.get("page") || "1", 10) || 1);
+  const totalPages = Math.max(1, Math.ceil(sortedOrders.length / PAGE_SIZE));
+  const safePage = Math.min(page, totalPages);
+  const pagedOrders = useMemo(
+    () => sortedOrders.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE),
+    [sortedOrders, safePage],
+  );
+  const setPage = (p: number) => {
+    setSearchParams((prev) => {
+      const sp = new URLSearchParams(prev);
+      sp.set("page", String(Math.min(Math.max(1, p), totalPages)));
+      return sp;
+    });
+  };
+  const didMount = useRef(false);
+  useEffect(() => {
+    if (!didMount.current) { didMount.current = true; return; }
+    setPage(1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchQuery, statusFilter, productFilter, vendedorFilter, clienteFilter, dateFrom, dateTo]);
 
   const handleExportCsv = () => {
     const rows = filteredOrders.map((o) => ({
@@ -313,7 +338,7 @@ export default function Pedidos() {
                     </CarboTableRow>
                   </CarboTableHeader>
                   <CarboTableBody>
-                    {sortedOrders.map((order) => (
+                    {pagedOrders.map((order) => (
                       <CarboTableRow key={order.id} interactive onClick={() => setDetailId(order.id)} className="cursor-pointer">
                         <CarboTableCell><span className="font-mono text-sm font-medium text-carbo-green">{order.order_number}</span></CarboTableCell>
                         <CarboTableCell>{order.invoice_number ? <span className="font-mono text-xs text-muted-foreground">{order.invoice_number}</span> : <span className="text-muted-foreground">—</span>}</CarboTableCell>
@@ -330,6 +355,22 @@ export default function Pedidos() {
                     ))}
                   </CarboTableBody>
                 </CarboTable>
+
+                {/* Paginação — 10 por página, página na URL (persiste no F5) */}
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-2 py-3 border-t border-border text-sm">
+                  <span className="text-muted-foreground">
+                    {(safePage - 1) * PAGE_SIZE + 1}–{Math.min(safePage * PAGE_SIZE, sortedOrders.length)} de {sortedOrders.length}
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <CarboButton variant="outline" size="sm" disabled={safePage <= 1} onClick={() => setPage(safePage - 1)}>
+                      <ChevronLeft className="h-4 w-4 mr-1" /> Anterior
+                    </CarboButton>
+                    <span className="text-muted-foreground whitespace-nowrap">Página {safePage} de {totalPages}</span>
+                    <CarboButton variant="outline" size="sm" disabled={safePage >= totalPages} onClick={() => setPage(safePage + 1)}>
+                      Próximo <ChevronRight className="h-4 w-4 ml-1" />
+                    </CarboButton>
+                  </div>
+                </div>
               </div>
             )}
           </TabsContent>
