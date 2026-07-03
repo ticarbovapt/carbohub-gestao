@@ -17,8 +17,8 @@ function VendedorTag({ name, avatar }: { name: string; avatar: string | null }) 
   return (
     <span className="flex items-center gap-1 truncate">
       {avatar
-        ? <img src={avatar} alt="" className="h-4 w-4 rounded-full object-cover shrink-0" />
-        : <User className="h-3 w-3 shrink-0" />}
+        ? <img src={avatar} alt="" className="h-5 w-5 rounded-full object-cover shrink-0" />
+        : <User className="h-3.5 w-3.5 shrink-0" />}
       {name}
     </span>
   );
@@ -71,7 +71,7 @@ export default function PosVenda() {
                   onDragOver={(e) => { e.preventDefault(); setOverStage(stage.key); }}
                   onDragLeave={() => setOverStage((s) => (s === stage.key ? null : s))}
                   onDrop={() => drop(stage.key)}
-                  className={`flex-1 min-w-[230px] h-full rounded-2xl border flex flex-col transition-colors ${
+                  className={`flex-1 min-w-[280px] h-full rounded-2xl border flex flex-col transition-colors ${
                     isOver ? "border-carbo-green bg-carbo-green/5" : "border-border bg-board-surface/40"
                   }`}
                 >
@@ -93,18 +93,18 @@ export default function PosVenda() {
                           onDragStart={(e) => { e.dataTransfer.setData("text/plain", o.id); setDragId(o.id); }}
                           onDragEnd={() => { setDragId(null); setOverStage(null); }}
                           onClick={() => setDetail(o)}
-                          className={`rounded-xl border border-border bg-card p-3 space-y-2 cursor-pointer hover:border-carbo-green/40 transition ${
+                          className={`rounded-xl border border-border bg-card p-4 space-y-3 cursor-pointer hover:border-carbo-green/40 transition ${
                             dragId === o.id ? "opacity-50" : ""
                           }`}
                         >
                           <div className="flex items-start justify-between gap-2">
-                            <span className="font-medium text-sm truncate">{o.customer_name}</span>
-                            <span className="text-xs font-semibold tabular-nums shrink-0">{brl(Number(o.total))}</span>
+                            <span className="font-semibold text-[15px] leading-snug line-clamp-2">{o.customer_name}</span>
+                            <span className="text-sm font-semibold tabular-nums shrink-0">{brl(Number(o.total))}</span>
                           </div>
-                          <p className="text-[11px] text-muted-foreground font-mono">{o.order_number || "—"}</p>
-                          <div className="flex items-center gap-3 text-[11px] text-muted-foreground">
+                          <p className="text-xs text-muted-foreground font-mono">{o.order_number || "—"}</p>
+                          <div className="flex items-center gap-3 text-xs text-muted-foreground">
                             {o.vendedor_name && <VendedorTag name={o.vendedor_name} avatar={o.vendedor_avatar} />}
-                            <span className="flex items-center gap-1 shrink-0"><Calendar className="h-3 w-3" /> {fmtDate(o.created_at)}</span>
+                            <span className="flex items-center gap-1 shrink-0"><Calendar className="h-3.5 w-3.5" /> {fmtDate(o.created_at)}</span>
                           </div>
                           {/* Mudar etapa sem precisar arrastar (não abre o detalhe) */}
                           <div onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>
@@ -112,7 +112,7 @@ export default function PosVenda() {
                               value={o.fulfillment_stage}
                               onValueChange={(v) => updateStage.mutate({ id: o.id, stage: v as FulfillmentStage })}
                             >
-                              <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                              <SelectTrigger className="h-9 text-xs mt-0.5"><SelectValue /></SelectTrigger>
                               <SelectContent>
                                 {POSVENDA_STAGES.map((s) => (
                                   <SelectItem key={s.key} value={s.key} className="text-xs">{s.label}</SelectItem>
