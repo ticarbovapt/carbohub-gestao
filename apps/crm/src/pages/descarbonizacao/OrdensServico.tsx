@@ -27,7 +27,8 @@ function toView(o: OSRow): OSView {
   const veiculo = [o.placa, o.modelo].filter(Boolean).join(" · ") || "—";
   return {
     id: o.id,
-    numero: o.titulo?.trim() || `OS-${o.id.slice(0, 8)}`,
+    // Número padronizado da OS (DESCAAAAMMXXXX). Cai no título/id só se ainda não tiver.
+    numero: o.numero?.trim() || o.titulo?.trim() || `OS-${o.id.slice(0, 8)}`,
     cliente: o.cliente_nome || "—",
     tipo: TIPO_LABEL[o.tipo] ?? o.tipo,
     veiculo,
