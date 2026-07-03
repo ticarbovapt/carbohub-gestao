@@ -17,7 +17,7 @@ export default function Home() {
   const nome = profile?.full_name?.split(" ")[0] ?? "";
 
   return (
-    <div className="p-4 md:p-6">
+    <div>
       <div className="max-w-5xl mx-auto space-y-6">
         <div className="flex items-center gap-3">
           <div className="h-12 w-12 rounded-xl bg-carbo-green/10 flex items-center justify-center">

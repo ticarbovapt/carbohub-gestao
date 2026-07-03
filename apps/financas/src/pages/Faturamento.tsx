@@ -131,7 +131,7 @@ export default function Faturamento() {
   }
 
   return (
-    <div className="p-4 md:p-6">
+    <div>
       <div className="space-y-6">
         <CarboPageHeader
           title="Faturamento"

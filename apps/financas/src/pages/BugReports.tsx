@@ -63,7 +63,7 @@ export default function BugReports() {
   const resolveLabel = kind === "sugestao" ? "Marcar como feita" : "Marcar como resolvido";
 
   return (
-    <div className="p-4 md:p-6">
+    <div>
       <div className="space-y-5 max-w-5xl mx-auto">
         <CarboPageHeader
           title="Reporte de Bugs e Sugestões"

@@ -338,7 +338,7 @@ export default function BlingIntegration() {
   }
 
   return (
-    <div className="p-4 md:p-6">
+    <div>
     <div className="space-y-6 max-w-5xl mx-auto">
       <div>
         <h1 className="text-2xl font-bold flex items-center gap-3">
