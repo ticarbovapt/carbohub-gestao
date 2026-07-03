@@ -5,17 +5,24 @@ import { ClipboardList, Calendar, Zap, CheckCircle2, Search, LayoutGrid, List, P
 import { NovaDescarbonizacaoDialog } from "@/components/NovaDescarbonizacaoDialog";
 import { useOS, type OSRow } from "@/hooks/useOS";
 
-// Acompanhamento das descarbonizações vendidas (B2C · B2B · Frota) — dados reais (crm_os).
+// Acompanhamento das descarbonizações (B2C · B2B · Frota). ESPELHO ao vivo da
+// OS do Carbox/Licenciados (fonte de verdade). O Sales cria e acompanha; a
+// EXECUÇÃO (avançar estágio, fotos) é feita no portal Licenciados.
 
+// Estágios do kanban = os do licenciados: Nova OS → Em Execução → Concluída.
 const OS_STAGES = [
   { id: "nova", label: "Nova OS", emoji: "📥", color: "#64748b" },
-  { id: "qualificacao", label: "Qualificação", emoji: "📋", color: "#3b82f6" },
-  { id: "agendamento", label: "Agendamento", emoji: "📅", color: "#f59e0b" },
-  { id: "confirmada", label: "Confirmada", emoji: "✅", color: "#6366f1" },
   { id: "em_execucao", label: "Em Execução", emoji: "⚙️", color: "#8b5cf6" },
-  { id: "pos_servico", label: "Pós-Serviço", emoji: "📝", color: "#f97316" },
   { id: "concluida", label: "Concluída", emoji: "✔️", color: "#22c55e" },
 ];
+
+// Metadados por estágio (inclui 'cancelada', que fica fora do kanban).
+const STAGE_META: Record<string, { label: string; emoji: string; color: string }> = {
+  nova: { label: "Nova OS", emoji: "📥", color: "#64748b" },
+  em_execucao: { label: "Em Execução", emoji: "⚙️", color: "#8b5cf6" },
+  concluida: { label: "Concluída", emoji: "✔️", color: "#22c55e" },
+  cancelada: { label: "Cancelada", emoji: "🚫", color: "#ef4444" },
+};
 
 const TIPO_LABEL: Record<string, string> = { b2c: "B2C", b2b: "B2B", frota: "Frota" };
 
@@ -56,7 +63,7 @@ export default function OrdensServico() {
     const today = now.toDateString();
     const isSameMonth = (d: Date) => d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
     return {
-      total: all.filter((o) => o.stage !== "concluida").length,
+      total: all.filter((o) => o.stage !== "concluida" && o.stage !== "cancelada").length,
       agendadasHoje: all.filter((o) => o.agendamento && new Date(o.agendamento).toDateString() === today).length,
       emExecucao: all.filter((o) => o.stage === "em_execucao").length,
       concluidasMes: all.filter((o) => o.stage === "concluida" && o.agendamento && isSameMonth(new Date(o.agendamento))).length,
@@ -141,7 +148,7 @@ export default function OrdensServico() {
               </tr></thead>
               <tbody className="divide-y">
                 {filtered.map((o) => {
-                  const st = OS_STAGES.find((s) => s.id === o.stage)!;
+                  const st = STAGE_META[o.stage] ?? { label: o.stage, emoji: "•", color: "#64748b" };
                   return (
                     <tr key={o.id} className="hover:bg-muted/30">
                       <td className="px-4 py-3 font-mono text-purple-500 font-medium">{o.numero}</td>
