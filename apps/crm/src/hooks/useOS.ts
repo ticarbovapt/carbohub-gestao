@@ -15,23 +15,41 @@ import { supabase } from "@/integrations/supabase/client";
 const lic = () => (supabase as unknown as { schema: (s: string) => any }).schema("licenciados");
 
 export type OsTipo = "b2c" | "b2b" | "frota";
+export type OsPersonType = "pf" | "pj";
 // Estágios efetivos do kanban (licenciados): nova → em_execucao → concluida (+cancelada).
 export type OsStage = "nova" | "em_execucao" | "concluida" | "cancelada";
 
+// Espelha 1:1 o formulário de "Nova OS" do Licenciados (mesma tela nos dois).
 export interface NovaOSInput {
-  tipo: OsTipo;
-  cliente_nome?: string;
-  cnpj?: string;
-  telefone?: string;
-  responsavel?: string;
-  placa?: string;
-  modelo?: string;
-  qtd_veiculos?: number | null;
-  recorrencia?: string | null;
-  data_prevista?: string | null;
-  prioridade?: number;
-  titulo?: string;
-  observacoes?: string;
+  service_type: OsTipo;
+  person_type: OsPersonType;
+  customer_name: string;
+  phone?: string | null;
+  federal_code?: string | null; // CNPJ (PJ)
+  company?: string | null;      // nome fantasia (PJ)
+  email?: string | null;
+  scheduled_at?: string | null; // ISO; obrigatório p/ frota
+}
+
+// Cliente recorrente (autofill por telefone/CNPJ) — mesma UX do Licenciados.
+export interface OsCustomerLite {
+  name: string | null;
+  company: string | null;
+  email: string | null;
+  phone: string | null;
+  federal_code: string | null;
+}
+
+/** Busca cliente recorrente da OS (PF por telefone, PJ por CNPJ). */
+export async function findOsCustomer(
+  personType: OsPersonType, key: string,
+): Promise<OsCustomerLite | null> {
+  const { data, error } = await lic().rpc("os_find_customer", {
+    p_person_type: personType, p_key: key.trim(),
+  });
+  if (error) return null;
+  const row = Array.isArray(data) ? data[0] : data;
+  return (row as OsCustomerLite) ?? null;
 }
 
 export interface OSRow {
@@ -51,8 +69,6 @@ export interface OSRow {
   created_at: string;
   updated_at: string;
 }
-
-const onlyDigits = (s?: string | null) => (s ?? "").replace(/\D/g, "") || null;
 
 /** Mapeia a linha do schema licenciados para o formato usado pelas telas. */
 function mapRow(o: any): OSRow {
@@ -121,30 +137,16 @@ export function useCreateOS() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (input: NovaOSInput) => {
-      const isPJ = input.tipo === "b2b" || input.tipo === "frota";
-
-      // Campos que a OS não guarda em coluna própria (placa/modelo/frota/
-      // responsável) vão para a descrição — assim o Carbox os vê no detalhe.
-      const extras: string[] = [];
-      if (input.placa) extras.push(`Placa: ${input.placa}`);
-      if (input.modelo) extras.push(`Modelo: ${input.modelo}`);
-      if (input.qtd_veiculos) extras.push(`Veículos: ${input.qtd_veiculos}`);
-      if (input.recorrencia && input.recorrencia !== "unica") extras.push(`Recorrência: ${input.recorrencia}`);
-      if (input.responsavel) extras.push(`Responsável: ${input.responsavel}`);
-      const description =
-        [input.observacoes?.trim(), extras.join(" · ")].filter(Boolean).join("\n") || null;
-
       const { data: id, error } = await lic().rpc("os_create", {
-        p_person_type: isPJ ? "pj" : "pf",
-        p_customer_name: (input.cliente_nome ?? "").trim(),
-        p_phone: onlyDigits(input.telefone),
-        p_federal_code: isPJ ? onlyDigits(input.cnpj) : null,
-        p_company: isPJ ? (input.cliente_nome ?? "").trim() || null : null,
-        p_email: null,
-        p_service_type: input.tipo,
-        p_scheduled_at: input.data_prevista ?? null,
-        p_priority: input.prioridade ?? 3,
-        p_description: description,
+        p_person_type: input.person_type,
+        p_customer_name: input.customer_name.trim(),
+        p_phone: input.phone?.trim() || null,
+        p_federal_code: input.federal_code?.trim() || null,
+        p_company: input.company?.trim() || null,
+        p_email: input.email?.trim() || null,
+        p_service_type: input.service_type,
+        p_scheduled_at: input.scheduled_at ?? null,
+        p_priority: 3,
       });
       if (error) throw error;
 
