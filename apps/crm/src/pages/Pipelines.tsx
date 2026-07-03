@@ -97,6 +97,34 @@ function AllFunnelsBoard({ leads, onLeadClick }: { leads: CRMLead[]; onLeadClick
 
 const FUNNEL_IDS = FUNNELS.map((f) => f.id as string);
 
+// Botão-aba de um funil, com contagem de leads (escopo já resolvido no query).
+function FunnelTab({ active, onClick, icon, label, count, color, loading }: {
+  active: boolean; onClick: () => void; icon?: string; label: string; count: number; color?: string; loading?: boolean;
+}) {
+  const accent = color ?? "#22C55E";
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`group inline-flex items-center gap-2 rounded-lg border px-3 h-9 text-sm font-medium transition-colors ${
+        active ? "text-foreground" : "border-border text-muted-foreground hover:bg-muted hover:text-foreground"
+      }`}
+      style={active ? { borderColor: accent, background: accent + "14" } : undefined}
+    >
+      {icon && <span className="text-[15px] leading-none">{icon}</span>}
+      <span className="truncate max-w-[140px]">{label}</span>
+      <span
+        className={`ml-0.5 inline-flex min-w-[1.25rem] items-center justify-center rounded-full px-1.5 text-xs font-bold tabular-nums ${
+          active ? "" : "bg-muted text-muted-foreground group-hover:bg-background"
+        }`}
+        style={active ? { background: accent + "26", color: accent } : undefined}
+      >
+        {loading ? "…" : count}
+      </span>
+    </button>
+  );
+}
+
 export default function Pipelines() {
   // Funil ativo vem da URL (?funil=…): "todos" mostra o consolidado, ou um funil
   // específico (f1 = jornada do cliente, etc.). Default: f1.
@@ -169,6 +197,13 @@ export default function Pipelines() {
     }
   };
 
+  // Contagem de leads por funil (respeita o escopo: membro vê os seus, gestor vê todos).
+  const countByFunnel = useMemo(() => {
+    const m: Record<string, number> = {};
+    for (const l of allLeads) m[l.funnel_type] = (m[l.funnel_type] ?? 0) + 1;
+    return m;
+  }, [allLeads]);
+
   const allKpis = useMemo(() => {
     const now = Date.now(); const day3 = 3 * 24 * 60 * 60 * 1000;
     return {
@@ -206,18 +241,17 @@ export default function Pipelines() {
           </div>
         )}
 
+        {/* Seletor de funil — botões, um por pipeline, com contagem de leads */}
+        <div className="flex flex-wrap items-center gap-2">
+          <FunnelTab active={isAll} onClick={() => setFunil("todos")} icon="🗂️" label="Todos" count={allLeads.length} loading={l2} />
+          {FUNNELS.map((f) => (
+            <FunnelTab key={f.id} active={funil === f.id} onClick={() => setFunil(f.id)}
+              icon={f.icon} label={f.shortName} count={countByFunnel[f.id] ?? 0} color={f.color} loading={l2} />
+          ))}
+        </div>
+
         {/* Filtros */}
         <div className="flex flex-wrap items-center gap-3">
-          {/* Seletor de funil — "Todos" (consolidado) ou um funil específico */}
-          <Select value={funil} onValueChange={setFunil}>
-            <SelectTrigger className="w-56 h-9 text-xs"><span className="flex items-center gap-1.5"><KanbanSquare className="h-3.5 w-3.5" /><SelectValue placeholder="Funil" /></span></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="todos">🗂️ Todos os funis</SelectItem>
-              {FUNNELS.map((f) => (
-                <SelectItem key={f.id} value={f.id}>{f.icon} {f.name}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
           <div className="flex-1 max-w-sm">
             <CarboSearchInput placeholder="Buscar por nome, CNPJ, cidade..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
           </div>
