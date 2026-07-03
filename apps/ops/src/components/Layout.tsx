@@ -84,7 +84,7 @@ export function Layout() {
   };
 
   return (
-    <div className="min-h-screen bg-background flex flex-col">
+    <div className="h-screen overflow-hidden bg-background flex flex-col">
       <TopBar appName="Carbo Ops" onMenu={handleMenu} />
 
       <div className="flex flex-1 min-h-0">
@@ -100,7 +100,7 @@ export function Layout() {
           </SheetContent>
         </Sheet>
 
-        <main className="flex-1 min-w-0">
+        <main className="flex-1 min-w-0 overflow-y-auto">
           <Outlet />
         </main>
       </div>

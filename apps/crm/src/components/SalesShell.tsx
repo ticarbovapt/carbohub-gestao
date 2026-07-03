@@ -109,13 +109,13 @@ export function SalesShell() {
   };
 
   return (
-    <div className="min-h-screen bg-background text-foreground flex flex-col">
+    <div className="h-screen overflow-hidden bg-background text-foreground flex flex-col">
       <TopBar appName="Carbo Sales" onMenu={handleMenu} />
 
       <div className="flex flex-1 min-h-0">
-        {/* Desktop: sidebar fixa (toggle pelo botão) */}
+        {/* Desktop: sidebar fixa (rola por dentro se for maior que a tela) */}
         {deskOpen && (
-          <aside className="hidden md:block w-52 shrink-0 border-r bg-card">
+          <aside className="hidden md:block w-52 shrink-0 border-r bg-card overflow-y-auto">
             <Nav />
           </aside>
         )}
@@ -127,7 +127,7 @@ export function SalesShell() {
           </SheetContent>
         </Sheet>
 
-        <main className="flex-1 min-w-0 flex flex-col">
+        <main className="flex-1 min-w-0 flex flex-col overflow-y-auto">
           <Outlet />
         </main>
       </div>

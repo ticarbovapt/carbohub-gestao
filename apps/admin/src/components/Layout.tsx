@@ -76,13 +76,13 @@ export function Layout() {
   };
 
   return (
-    <div className="min-h-screen bg-background flex flex-col">
+    <div className="h-screen overflow-hidden bg-background flex flex-col">
       <TopBar appName="Carbo Admin" onMenu={handleMenu} />
 
       <div className="flex flex-1 min-h-0">
-        {/* Desktop: sidebar fixa (toggle pelo botão) */}
+        {/* Desktop: sidebar fixa (rola por dentro se for maior que a tela) */}
         {deskOpen && (
-          <aside className="hidden md:block w-56 shrink-0 border-r bg-card">
+          <aside className="hidden md:block w-56 shrink-0 border-r bg-card overflow-y-auto">
             <Nav />
           </aside>
         )}
@@ -94,7 +94,7 @@ export function Layout() {
           </SheetContent>
         </Sheet>
 
-        <main className="flex-1 min-w-0">
+        <main className="flex-1 min-w-0 overflow-y-auto">
           <Outlet />
         </main>
       </div>
