@@ -26,7 +26,8 @@ const SERVICE_LABELS: Record<OsTipo, string> = {
 
 export function NovaDescarbonizacaoDialog({ open, onOpenChange }: NovaDescarbonizacaoDialogProps) {
   const [serviceType, setServiceType] = useState<OsTipo>("b2c");
-  const [personType, setPersonType] = useState<OsPersonType>("pf");
+  // PF/PJ é DERIVADO do tipo: B2C = pessoa física; B2B/Frota = empresa (CNPJ).
+  const personType: OsPersonType = serviceType === "b2c" ? "pf" : "pj";
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [federalCode, setFederalCode] = useState("");
@@ -110,7 +111,7 @@ export function NovaDescarbonizacaoDialog({ open, onOpenChange }: NovaDescarboni
               <Label className="text-xs uppercase tracking-wide text-muted-foreground">Tipo de serviço</Label>
               <div className="flex flex-wrap gap-2">
                 {(Object.keys(SERVICE_LABELS) as OsTipo[]).map((t) => (
-                  <button key={t} type="button" onClick={() => setServiceType(t)}
+                  <button key={t} type="button" onClick={() => { setServiceType(t); setRecurring(false); }}
                     className={cn(
                       "flex-1 min-w-[130px] rounded-lg border px-3 py-2 text-sm font-medium transition-colors",
                       serviceType === t
@@ -125,21 +126,9 @@ export function NovaDescarbonizacaoDialog({ open, onOpenChange }: NovaDescarboni
 
             {/* Cliente PF/PJ */}
             <div className="space-y-3">
-              <div className="space-y-1.5">
-                <Label className="text-xs uppercase tracking-wide text-muted-foreground">Cliente</Label>
-                <div className="flex gap-2">
-                  <button type="button" onClick={() => { setPersonType("pf"); setRecurring(false); }}
-                    className={cn("flex-1 rounded-lg border px-3 py-2 text-sm font-medium transition-colors",
-                      personType === "pf" ? "bg-purple-600 border-purple-600 text-white" : "bg-background hover:bg-muted")}>
-                    Pessoa física
-                  </button>
-                  <button type="button" onClick={() => { setPersonType("pj"); setRecurring(false); }}
-                    className={cn("flex-1 rounded-lg border px-3 py-2 text-sm font-medium transition-colors",
-                      personType === "pj" ? "bg-purple-600 border-purple-600 text-white" : "bg-background hover:bg-muted")}>
-                    Empresa (CNPJ)
-                  </button>
-                </div>
-              </div>
+              <Label className="text-xs uppercase tracking-wide text-muted-foreground">
+                Cliente {serviceType === "b2c" ? "(pessoa física)" : "(empresa · CNPJ)"}
+              </Label>
 
               {personType === "pf" ? (
                 <div className="space-y-1.5">
