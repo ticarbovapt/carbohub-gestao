@@ -203,12 +203,34 @@ async function createBlingPedido(
     if (blingContactId) contactSource = "pedido original do Bling";
   }
 
-  // Prioridade B: busca por nome no bling_contacts
-  if (!blingContactId) {
+  // Prioridade B: casa pelo DOCUMENTO (CNPJ/CPF) — é o mais confiável e evita
+  // pegar o contato errado. Tenta o valor como está e só os dígitos (o Bling
+  // pode ter salvo formatado ou não).
+  if (!blingContactId && order.cnpj) {
+    const docDigits = String(order.cnpj).replace(/\D/g, "");
+    if (docDigits.length >= 11) {
+      const { data: byDoc } = await supabaseAdmin
+        .from("bling_contacts")
+        .select("bling_id, nome, cpf_cnpj")
+        .in("cpf_cnpj", [order.cnpj, docDigits])
+        .limit(1);
+      blingContactId = byDoc?.[0]?.bling_id || null;
+      if (blingContactId) contactSource = `CNPJ/CPF ${order.cnpj}`;
+    }
+  }
+
+  // Prioridade C: busca por NOME, ignorando sufixos entre parênteses/colchetes
+  // (ex.: "A G AUTO PECAS (Eletro peças)" → casa com "A G AUTO PECAS" no Bling).
+  if (!blingContactId && order.customer_name) {
+    const baseName = String(order.customer_name)
+      .replace(/\s*[([][^)\]]*[)\]]\s*/g, " ") // remove "(...)" e "[...]"
+      .replace(/\s+/g, " ")
+      .trim();
+    const term = baseName || order.customer_name;
     const { data: contacts } = await supabaseAdmin
       .from("bling_contacts")
       .select("bling_id, nome")
-      .ilike("nome", `%${order.customer_name}%`)
+      .ilike("nome", `%${term}%`)
       .limit(1);
     blingContactId = contacts?.[0]?.bling_id || null;
     if (blingContactId) contactSource = `nome "${contacts?.[0]?.nome}"`;
@@ -216,8 +238,9 @@ async function createBlingPedido(
 
   if (!blingContactId) {
     const msg =
-      `Cliente "${order.customer_name}" não encontrado no Bling. ` +
-      `Cadastre o cliente no Bling ou rode "Sincronizar Contatos" antes de tentar novamente.`;
+      `Cliente "${order.customer_name}" não encontrado no Bling ` +
+      `(procuramos por CNPJ/CPF e por nome). Cadastre o cliente no Bling ou rode ` +
+      `"Sincronizar Contatos" antes de tentar novamente.`;
     // Em dry-run não interrompe: registra o aviso para o usuário ver na tela.
     if (!dryRun) throw new Error(msg);
     warnings.push(msg);
