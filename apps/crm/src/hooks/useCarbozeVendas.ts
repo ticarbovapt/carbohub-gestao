@@ -167,34 +167,25 @@ export function useDeleteVenda() {
   });
 }
 
-/** Envia o pedido do sistema ao Bling como Pedido de Venda (mesmo fluxo do
- *  Faturamento/Finanças). A observação já leva o nº do pedido + vendedor, para o
- *  cruzamento automático com a NF e o fallback de rastreio. Um humano confere e
- *  gera a NF-e no Bling; o sync casa a NF de volta pelo nº do pedido. */
-export function useCreateBlingPedido() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async (orderId: string) => {
-      const { data, error } = await supabase.functions.invoke("bling-sync", {
-        body: { entity: "create_order", order_id: orderId },
-      });
-      if (error) throw new Error(error.message || "Erro ao enviar pedido ao Bling");
-      if (data && data.success === false) throw new Error(data.error || "Erro ao enviar pedido ao Bling");
-      return data;
-    },
-    onSuccess: (data: any) => {
-      qc.invalidateQueries({ queryKey: ["carboze_vendas"] });
-      const num = data?.data?.numero || data?.data?.id || "";
-      toast.success(
-        `Pedido enviado ao Bling${num ? ` (nº ${num})` : ""}! Confira no Bling e gere a NF-e.`,
-        {
-          duration: 8000,
-          action: { label: "Abrir Bling →", onClick: () => window.open("https://bling.com.br/", "_blank") },
-        },
-      );
-    },
-    onError: (e: Error) => toast.error(e.message),
-  });
+// Arquivos da NF já vinculada (o faturamento/emissão acontece no Finanças; aqui
+// o Sales só BAIXA a NF que já casou com o pedido). O pedido guarda
+// `bling_nf_id` (= bling_nfe.bling_id); a bling_nfe tem os links de PDF/XML.
+export interface NfFiles {
+  pdf_url: string | null;
+  xml_url: string | null;
+  chave_acesso: string | null;
+  numero: string | null;
+}
+
+/** Busca os arquivos (PDF/XML) da NF vinculada a um pedido, pelo bling_nf_id. */
+export async function fetchNfFiles(blingNfId: number): Promise<NfFiles | null> {
+  const { data, error } = await db
+    .from("bling_nfe")
+    .select("pdf_url, xml_url, chave_acesso, numero")
+    .eq("bling_id", blingNfId)
+    .maybeSingle();
+  if (error) throw error;
+  return (data as NfFiles) ?? null;
 }
 
 /** Atribui vendedor (perfil) a vários pedidos de uma vez — grava vendedor_id/name. */
