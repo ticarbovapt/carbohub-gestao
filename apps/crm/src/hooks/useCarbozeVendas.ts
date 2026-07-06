@@ -38,6 +38,7 @@ export interface CarbozeVendaRow {
   vendedor_name: string | null;
   invoice_number: string | null;
   bling_nf_id: number | null;
+  external_ref: string | null;    // "bling-<id>" quando o pedido já foi enviado ao Bling
 }
 
 interface Params {
@@ -117,6 +118,7 @@ export function useCarbozeVendas({ month, customFrom, customTo, vendedorFilter, 
           vendedor_name: row.vendedor_name ?? null,
           invoice_number: row.invoice_number ?? null,
           bling_nf_id: row.bling_nf_id ?? null,
+          external_ref: row.external_ref ?? null,
         }));
     },
   });
@@ -162,6 +164,36 @@ export function useDeleteVenda() {
       toast.success("Venda excluída.");
     },
     onError: (e: Error) => toast.error("Erro ao excluir venda: " + e.message),
+  });
+}
+
+/** Envia o pedido do sistema ao Bling como Pedido de Venda (mesmo fluxo do
+ *  Faturamento/Finanças). A observação já leva o nº do pedido + vendedor, para o
+ *  cruzamento automático com a NF e o fallback de rastreio. Um humano confere e
+ *  gera a NF-e no Bling; o sync casa a NF de volta pelo nº do pedido. */
+export function useCreateBlingPedido() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (orderId: string) => {
+      const { data, error } = await supabase.functions.invoke("bling-sync", {
+        body: { entity: "create_order", order_id: orderId },
+      });
+      if (error) throw new Error(error.message || "Erro ao enviar pedido ao Bling");
+      if (data && data.success === false) throw new Error(data.error || "Erro ao enviar pedido ao Bling");
+      return data;
+    },
+    onSuccess: (data: any) => {
+      qc.invalidateQueries({ queryKey: ["carboze_vendas"] });
+      const num = data?.data?.numero || data?.data?.id || "";
+      toast.success(
+        `Pedido enviado ao Bling${num ? ` (nº ${num})` : ""}! Confira no Bling e gere a NF-e.`,
+        {
+          duration: 8000,
+          action: { label: "Abrir Bling →", onClick: () => window.open("https://bling.com.br/", "_blank") },
+        },
+      );
+    },
+    onError: (e: Error) => toast.error(e.message),
   });
 }
 
