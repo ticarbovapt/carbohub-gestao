@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import {
-  Receipt, FileText, ChevronLeft, ChevronRight, Loader2, Eye, CheckCircle2, Clock, DollarSign, Store, Building2,
+  Receipt, FileText, ChevronLeft, ChevronRight, CheckCircle2, DollarSign, Store, Building2,
 } from "lucide-react";
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
 import { CarboButton } from "@/components/ui/carbo-button";
@@ -13,13 +13,11 @@ import { CarboEmptyState } from "@/components/ui/carbo-empty-state";
 import { CarboSkeleton } from "@/components/ui/CarboSkeleton";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { toast } from "sonner";
 import {
   useFaturamento,
-  useCreateBlingPedido,
-  usePreviewBlingPedido,
   type FaturamentoOrder,
 } from "@/hooks/useFaturamento";
+import { BlingConfirmDialog } from "@/components/faturamento/BlingConfirmDialog";
 
 const MONTHS = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
 
@@ -38,8 +36,9 @@ export default function Faturamento() {
   const [showAll, setShowAll] = useState(false);
 
   const { data: orders, isLoading } = useFaturamento({ month, search, showAll });
-  const createBling = useCreateBlingPedido();
-  const preview = usePreviewBlingPedido();
+  // Pedido em confirmação: abre o diálogo que mostra o que vai pro Bling (inclui
+  // o pré-cadastro do cliente, se for novo) para o financeiro conferir e confirmar.
+  const [toBling, setToBling] = useState<FaturamentoOrder | null>(null);
 
   const list = orders ?? [];
   const sistema = useMemo(() => list.filter((o) => !isBling(o)), [list]);
@@ -48,18 +47,6 @@ export default function Faturamento() {
 
   const changeMonth = (delta: number) =>
     setMonth((m) => new Date(m.getFullYear(), m.getMonth() + delta, 1));
-
-  const handlePreview = async (o: FaturamentoOrder) => {
-    try {
-      const p = await preview.mutateAsync(o.id);
-      const itens = (p.items_summary || []).map((i) => `${i.matched ? "✓" : "⚠"} ${i.name}`).join("\n");
-      const warns = (p.warnings || []).length ? `\n\n⚠ ${p.warnings.join("\n⚠ ")}` : "";
-      toast.message(`Pré-visualização — ${p.order_number}`, {
-        description: `Contato no Bling: ${p.contact_found ? "encontrado" : "NÃO encontrado"}\nItens:\n${itens}${warns}`,
-        duration: 10000,
-      });
-    } catch { /* erro tratado no hook */ }
-  };
 
   function Tabela({ rows, showAction }: { rows: FaturamentoOrder[]; showAction: boolean }) {
     if (isLoading) {
@@ -92,8 +79,6 @@ export default function Faturamento() {
         <CarboTableBody>
           {rows.map((o) => {
             const hasNF = !!o.bling_nf_id;
-            const creating = createBling.isPending && createBling.variables === o.id;
-            const previewing = preview.isPending && preview.variables === o.id;
             return (
               <CarboTableRow key={o.id}>
                 <CarboTableCell className="font-medium">{o.order_number}</CarboTableCell>
@@ -111,12 +96,9 @@ export default function Faturamento() {
                     {hasNF ? (
                       <span className="text-muted-foreground text-sm">Faturado</span>
                     ) : (
-                      <div className="flex justify-end gap-2">
-                        <CarboButton variant="ghost" size="sm" disabled={previewing || creating} onClick={() => handlePreview(o)}>
-                          {previewing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Eye className="h-3.5 w-3.5" />}
-                        </CarboButton>
-                        <CarboButton size="sm" disabled={creating} onClick={() => createBling.mutate(o.id)}>
-                          {creating ? <><Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> Enviando…</> : <><Receipt className="h-3.5 w-3.5 mr-1" /> Criar no Bling</>}
+                      <div className="flex justify-end">
+                        <CarboButton size="sm" onClick={() => setToBling(o)}>
+                          <Receipt className="h-3.5 w-3.5 mr-1" /> Criar no Bling
                         </CarboButton>
                       </div>
                     )}
@@ -189,6 +171,8 @@ export default function Faturamento() {
           </TabsContent>
         </Tabs>
       </div>
+
+      <BlingConfirmDialog order={toBling} onOpenChange={(open) => { if (!open) setToBling(null); }} />
     </div>
   );
 }

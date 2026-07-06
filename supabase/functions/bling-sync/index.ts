@@ -163,6 +163,69 @@ async function blingPost(token: string, endpoint: string, body: unknown, _retrie
   return response.json();
 }
 
+// ── buildContactPayload: monta o cadastro de cliente (POST /contatos, API v3)
+// a partir dos dados do próprio pedido. NÃO cria nada — só monta o corpo, que é
+// mostrado na tela de confirmação e só enviado ao Bling quando um humano confirma.
+// Schema v3: tipo 'F'|'J'|'E', indicadorIe 1|2|9, situacao 'A', endereco.geral{...}.
+function onlyDigits(s: unknown): string {
+  return String(s ?? "").replace(/\D/g, "");
+}
+
+function buildContactPayload(order: any): { payload: Record<string, any> | null; error?: string } {
+  const doc = onlyDigits(order.cnpj);
+  if (doc.length !== 11 && doc.length !== 14) {
+    return {
+      payload: null,
+      error:
+        `Pedido sem CNPJ/CPF válido — preencha o documento do cliente no pedido ` +
+        `para poder cadastrá-lo no Bling.`,
+    };
+  }
+  const tipo = doc.length === 14 ? "J" : "F";
+  const ie = String(order.customer_ie ?? "").trim();
+
+  // Endereço de faturamento: billing_address pode ser jsonb (objeto) ou texto;
+  // cai nas colunas billing_* e, por fim, no endereço de entrega.
+  const b = order.billing_address;
+  const bObj = b && typeof b === "object" ? b : null;
+  const bStr = typeof b === "string" ? b : null;
+  const endereco = {
+    endereco: bObj?.logradouro || bObj?.endereco || bStr || order.billing_address_line || order.delivery_address || "",
+    numero: String(bObj?.numero ?? "").trim(),
+    complemento: bObj?.complemento || "",
+    bairro: bObj?.bairro || order.delivery_neighborhood || "",
+    municipio: bObj?.cidade || bObj?.municipio || order.billing_city || order.delivery_city || "",
+    uf: String(bObj?.uf || order.billing_state || order.delivery_state || "").toUpperCase().slice(0, 2),
+    cep: onlyDigits(bObj?.cep || order.billing_zip || order.delivery_zip || ""),
+  };
+
+  const payload: Record<string, any> = {
+    nome: order.customer_name || "",
+    tipo,
+    numeroDocumento: doc,
+    situacao: "A",
+    indicadorIe: ie ? 1 : 9, // tem IE → contribuinte; senão não contribuinte (padrão do Bling)
+    ...(ie ? { ie } : {}),
+    ...(order.customer_email ? { email: String(order.customer_email) } : {}),
+    ...(order.customer_phone ? { telefone: String(order.customer_phone) } : {}),
+  };
+
+  // Só inclui endereço se houver algo útil (evita objeto vazio).
+  if (endereco.endereco || endereco.municipio || endereco.uf || endereco.cep) {
+    const geral: Record<string, any> = {};
+    if (endereco.endereco) geral.endereco = endereco.endereco;
+    if (endereco.numero) geral.numero = endereco.numero;
+    if (endereco.complemento) geral.complemento = endereco.complemento;
+    if (endereco.bairro) geral.bairro = endereco.bairro;
+    if (endereco.cep) geral.cep = endereco.cep;
+    if (endereco.municipio) geral.municipio = endereco.municipio;
+    if (endereco.uf) geral.uf = endereco.uf;
+    payload.endereco = { geral };
+  }
+
+  return { payload };
+}
+
 // ── createBlingPedido: cria um pedido de venda no Bling a partir de um carboze_order
 // O financeiro converte o pedido em NF no Bling. A NF será vinculada automaticamente
 // quando o sync detectar o número do pedido (PED-XXXX) na observação.
@@ -236,14 +299,23 @@ async function createBlingPedido(
     if (blingContactId) contactSource = `nome "${contacts?.[0]?.nome}"`;
   }
 
+  // Cliente não existe no Bling → monta o cadastro pré-preenchido a partir do
+  // pedido. Aqui NÃO cria — só prepara. A criação real acontece só depois que o
+  // humano confere na tela e confirma (logo antes de criar o pedido, mais abaixo).
+  let contactToCreate: Record<string, any> | null = null;
   if (!blingContactId) {
-    const msg =
-      `Cliente "${order.customer_name}" não encontrado no Bling ` +
-      `(procuramos por CNPJ/CPF e por nome). Cadastre o cliente no Bling ou rode ` +
-      `"Sincronizar Contatos" antes de tentar novamente.`;
-    // Em dry-run não interrompe: registra o aviso para o usuário ver na tela.
-    if (!dryRun) throw new Error(msg);
-    warnings.push(msg);
+    const { payload: cPayload, error: cErr } = buildContactPayload(order);
+    if (cErr) {
+      // Sem documento não dá para cadastrar — erro claro (comportamento antigo).
+      if (!dryRun) throw new Error(cErr);
+      warnings.push(cErr);
+    } else {
+      contactToCreate = cPayload;
+      warnings.push(
+        `Cliente "${order.customer_name}" não encontrado no Bling — será CADASTRADO ` +
+        `com os dados do pedido ao confirmar.`,
+      );
+    }
   }
 
   // 3. Montar itens — tenta encontrar o produto no Bling pelo código
@@ -358,10 +430,44 @@ async function createBlingPedido(
       contact_found: !!blingContactId,
       contact_id: blingContactId,
       contact_source: contactSource,
+      // Quando o cliente não existe, devolve o cadastro que SERÁ criado ao
+      // confirmar — a tela mostra tudo para o humano conferir antes.
+      will_create_contact: !!contactToCreate,
+      contact_to_create: contactToCreate,
       items_summary: itemsSummary,
       warnings,
       payload: pedidoPayload,
     };
+  }
+
+  // ── Cliente novo: humano já confirmou na tela → cadastra no Bling agora ───
+  // Feito só aqui (após todas as validações) para não deixar contato órfão se
+  // algo acima falhar. O pedido logo abaixo passa a apontar para este contato.
+  if (!blingContactId && contactToCreate) {
+    console.log(`[bling-sync] Creating Bling contact for order ${order.order_number}`);
+    const createdContact = await blingPost(token, "/contatos", contactToCreate);
+    blingContactId = createdContact?.data?.id || null;
+    if (!blingContactId) throw new Error("Falha ao cadastrar o cliente no Bling (sem id de retorno).");
+    contactSource = "cadastrado agora a partir do sistema";
+    pedidoPayload.contato = { id: blingContactId };
+    // Cache local (best-effort) para casar próximos pedidos sem recriar.
+    try {
+      await supabaseAdmin.from("bling_contacts").upsert({
+        bling_id: blingContactId,
+        nome: contactToCreate.nome || order.customer_name || "",
+        tipo_pessoa: contactToCreate.tipo || null,
+        cpf_cnpj: contactToCreate.numeroDocumento || null,
+        ie: contactToCreate.ie || null,
+        email: contactToCreate.email || null,
+        telefone: contactToCreate.telefone || null,
+        is_client: true,
+        raw_data: createdContact?.data || null,
+        synced_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      }, { onConflict: "bling_id" });
+    } catch (e) {
+      console.error("[bling-sync] contact cache upsert failed:", e);
+    }
   }
 
   // 5. POST /pedidos/vendas no Bling

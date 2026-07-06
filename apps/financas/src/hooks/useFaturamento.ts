@@ -112,6 +112,16 @@ async function extractFnError(error: any, fallback: string): Promise<string> {
   return error?.message || fallback;
 }
 
+export interface BlingContactToCreate {
+  nome: string;
+  tipo: "F" | "J" | "E";
+  numeroDocumento: string;
+  ie?: string;
+  email?: string;
+  telefone?: string;
+  endereco?: { geral?: Record<string, string> };
+}
+
 export interface BlingPreview {
   dry_run: true;
   order_number: string;
@@ -119,6 +129,9 @@ export interface BlingPreview {
   contact_found: boolean;
   contact_id: number | null;
   contact_source: string;
+  // Quando o cliente não existe no Bling, o pré-cadastro que será criado ao confirmar.
+  will_create_contact?: boolean;
+  contact_to_create?: BlingContactToCreate | null;
   items_summary: Array<{ name: string; matched: boolean; codigo: string }>;
   warnings: string[];
   payload: Record<string, any>;
