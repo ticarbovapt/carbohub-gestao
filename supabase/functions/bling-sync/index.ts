@@ -230,7 +230,19 @@ function buildContactPayload(order: any): { payload: Record<string, any> | null;
     };
   }
   const tipo = doc.length === 14 ? "J" : "F";
-  const ie = String(order.customer_ie ?? "").trim();
+
+  // IE / contribuinte: COM IE → contribuinte (1). SEM IE → empresa (PJ) vira
+  // ISENTO (indicadorIe 2, ie="ISENTO"); pessoa física/consumidor vira não
+  // contribuinte (9). Assim não precisa pedir a IE quando não existe — já vai isento.
+  const ieRaw = String(order.customer_ie ?? "").trim();
+  let ie = ieRaw;
+  let indicadorIe: 1 | 2 | 9;
+  if (ieRaw) { indicadorIe = 1; }
+  else if (tipo === "J") { ie = "ISENTO"; indicadorIe = 2; }
+  else { ie = ""; indicadorIe = 9; }
+
+  // E-mail: usa o do cliente e cai no e-mail do contato de faturamento.
+  const email = String(order.customer_email || order.billing_contact_email || "").trim();
 
   // Endereço em campos separados (faturamento estruturado ou entrega revertida).
   const endereco = extractOrderAddress(order);
@@ -240,9 +252,9 @@ function buildContactPayload(order: any): { payload: Record<string, any> | null;
     tipo,
     numeroDocumento: doc,
     situacao: "A",
-    indicadorIe: ie ? 1 : 9, // tem IE → contribuinte; senão não contribuinte (padrão do Bling)
+    indicadorIe,
     ...(ie ? { ie } : {}),
-    ...(order.customer_email ? { email: String(order.customer_email) } : {}),
+    ...(email ? { email } : {}),
     ...(order.customer_phone ? { telefone: String(order.customer_phone) } : {}),
   };
 
