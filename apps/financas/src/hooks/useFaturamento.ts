@@ -97,6 +97,21 @@ export function useFaturamento({ month, search = "", showAll = false }: Faturame
   });
 }
 
+// O supabase-js, quando a Edge Function responde 4xx/5xx, empacota tudo num
+// FunctionsHttpError genérico ("non-2xx status code") e NÃO expõe o corpo — que
+// é onde a função devolve o motivo real ({ success:false, error:"..." }).
+// Aqui abrimos o Response guardado em error.context e extraímos essa mensagem.
+async function extractFnError(error: any, fallback: string): Promise<string> {
+  const ctx = error?.context;
+  if (ctx && typeof ctx.json === "function") {
+    try {
+      const body = await ctx.clone().json();
+      if (body?.error) return String(body.error);
+    } catch { /* corpo não-JSON — ignora */ }
+  }
+  return error?.message || fallback;
+}
+
 export interface BlingPreview {
   dry_run: true;
   order_number: string;
@@ -118,7 +133,7 @@ export function useCreateBlingPedido() {
       const { data, error } = await supabase.functions.invoke("bling-sync", {
         body: { entity: "create_order", order_id: orderId },
       });
-      if (error) throw new Error(error.message || "Erro ao criar pedido no Bling");
+      if (error) throw new Error(await extractFnError(error, "Erro ao criar pedido no Bling"));
       if (data && data.success === false) throw new Error(data.error || "Erro ao criar pedido no Bling");
       return data;
     },
@@ -134,7 +149,7 @@ export function useCreateBlingPedido() {
         }
       );
     },
-    onError: (err: Error) => toast.error(err.message),
+    onError: (err: Error) => toast.error(err.message, { duration: 12000 }),
   });
 }
 
@@ -145,7 +160,7 @@ export function usePreviewBlingPedido() {
       const { data, error } = await supabase.functions.invoke("bling-sync", {
         body: { entity: "create_order", order_id: orderId, dry_run: true },
       });
-      if (error) throw new Error(error.message || "Erro ao gerar pré-visualização");
+      if (error) throw new Error(await extractFnError(error, "Erro ao gerar pré-visualização"));
       if (data && data.success === false) throw new Error(data.error || "Erro ao gerar pré-visualização");
       return data as BlingPreview;
     },
