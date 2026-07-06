@@ -80,7 +80,6 @@ export default function Vendas() {
   const convert = useConvertQuote();
   const bulkAssign = useBulkAssignVendedor();
   const deleteVenda = useDeleteVenda();
-  const createBling = useCreateBlingPedido();
   const [assigning, setAssigning] = useState(false);
   const [toDelete, setToDelete] = useState<CarbozeVendaRow | null>(null);
   const [nfLoadingId, setNfLoadingId] = useState<string | null>(null);
@@ -432,46 +431,6 @@ export default function Vendas() {
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
               {deleteVenda.isPending ? <><Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> Excluindo…</> : <><Trash2 className="h-3.5 w-3.5 mr-1.5" /> Excluir</>}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      {/* Confirmação de envio ao Bling (faturamento). Cria o Pedido de Venda no
-          Bling com nº do pedido + vendedor na observação; a NF-e é conferida e
-          emitida por um humano no Bling. */}
-      <AlertDialog open={!!toBling} onOpenChange={(o) => { if (!o) setToBling(null); }}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>
-              {toBling?.external_ref?.startsWith("bling-") ? "Reenviar pedido ao Bling?" : "Enviar pedido ao Bling?"}
-            </AlertDialogTitle>
-            <AlertDialogDescription asChild>
-              <div className="space-y-2 text-sm">
-                <p>
-                  O pedido <strong className="font-mono">{toBling?.order_number}</strong> de{" "}
-                  <strong>{toBling?.customer_name}</strong> ({toBling ? fmtBRL(toBling.total) : ""}) será
-                  criado como <strong>Pedido de Venda</strong> no Bling.
-                </p>
-                <p className="text-muted-foreground">
-                  A observação vai com o nº do pedido{" "}
-                  {(() => {
-                    const nome = (toBling?.vendedor_id && nomeById[toBling.vendedor_id]) || toBling?.vendedor_name;
-                    return nome ? <>e o vendedor <strong>{nome}</strong> </> : null;
-                  })()}
-                  para o cruzamento automático com a NF. Um humano confere e emite a NF-e no Bling.
-                </p>
-              </div>
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={createBling.isPending}>Cancelar</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={(e) => { e.preventDefault(); enviarAoBling(); }}
-              disabled={createBling.isPending}
-              className="bg-blue-600 text-white hover:bg-blue-700"
-            >
-              {createBling.isPending ? <><Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> Enviando…</> : <><FileText className="h-3.5 w-3.5 mr-1.5" /> Enviar ao Bling</>}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
