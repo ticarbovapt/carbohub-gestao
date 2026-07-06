@@ -39,6 +39,13 @@ export function NovaDescarbonizacaoDialog({ open, onOpenChange }: NovaDescarboni
   const [vehicleYear, setVehicleYear] = useState("");
   const [scheduledAt, setScheduledAt] = useState("");
   const [recurring, setRecurring] = useState(false);
+  // Frota: responsáveis da empresa que acompanham a descarbonização (0..N).
+  const [responsibles, setResponsibles] = useState<{ name: string; phone: string }[]>([]);
+
+  const addResponsible = () => setResponsibles((r) => [...r, { name: "", phone: "" }]);
+  const removeResponsible = (i: number) => setResponsibles((r) => r.filter((_, idx) => idx !== i));
+  const updateResponsible = (i: number, field: "name" | "phone", val: string) =>
+    setResponsibles((r) => r.map((x, idx) => (idx === i ? { ...x, [field]: val } : x)));
 
   const createOS = useCreateOS();
 
@@ -63,6 +70,7 @@ export function NovaDescarbonizacaoDialog({ open, onOpenChange }: NovaDescarboni
     setServiceType("b2c");
     setName(""); setPhone(""); setFederalCode(""); setCompany(""); setEmail("");
     setPlate(""); setModel(""); setVehicleYear(""); setScheduledAt(""); setRecurring(false);
+    setResponsibles([]);
   }
 
   function handleOpenChange(isOpen: boolean) {
@@ -91,6 +99,9 @@ export function NovaDescarbonizacaoDialog({ open, onOpenChange }: NovaDescarboni
         plate: plate.trim() || null,
         model: model.trim() || null,
         vehicle_year: vehicleYear.trim() ? Number(vehicleYear) : null,
+        responsibles: serviceType === "frota"
+          ? responsibles.filter((r) => r.name.trim()).map((r) => ({ name: r.name.trim(), phone: r.phone.trim() || null }))
+          : [],
         // Data só (sem hora): meia-noite LOCAL, evita "dia anterior" por fuso.
         scheduled_at: scheduledAt ? new Date(`${scheduledAt}T00:00:00`).toISOString() : null,
       });
@@ -215,6 +226,34 @@ export function NovaDescarbonizacaoDialog({ open, onOpenChange }: NovaDescarboni
                 <p className="text-xs text-muted-foreground">Na frota você pode adicionar mais veículos na mesma OS depois, no Carbox.</p>
               )}
             </div>
+
+            {/* Frota: responsáveis que acompanham a descarbonização (pode ter vários) */}
+            {serviceType === "frota" && (
+              <div className="space-y-2">
+                <Label className="text-xs uppercase tracking-wide text-muted-foreground">
+                  Responsáveis pela empresa (acompanham a descarbonização)
+                </Label>
+                {responsibles.length === 0 && (
+                  <p className="text-xs text-muted-foreground">Nenhum responsável adicionado. Você pode adicionar um ou mais.</p>
+                )}
+                {responsibles.map((r, i) => (
+                  <div key={i} className="flex items-end gap-2">
+                    <div className="flex-[2] space-y-1">
+                      <Label className="text-[11px]">Nome</Label>
+                      <Input value={r.name} onChange={(e) => updateResponsible(i, "name", e.target.value)} placeholder="Nome do responsável" />
+                    </div>
+                    <div className="flex-1 space-y-1">
+                      <Label className="text-[11px]">Telefone / WhatsApp</Label>
+                      <Input value={r.phone} onChange={(e) => updateResponsible(i, "phone", e.target.value)} placeholder="(11) 99999-9999" inputMode="tel" />
+                    </div>
+                    <Button type="button" variant="outline" size="sm" onClick={() => removeResponsible(i)}>Remover</Button>
+                  </div>
+                ))}
+                <Button type="button" variant="outline" size="sm" onClick={addResponsible} className="gap-1">
+                  + Adicionar responsável
+                </Button>
+              </div>
+            )}
           </div>
 
           <DialogFooter>
