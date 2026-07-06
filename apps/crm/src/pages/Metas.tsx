@@ -21,7 +21,7 @@ interface MetaTarget {
   id: string; vendedor_id: string; target_amount: number; actual_amount: number;
   pct_amount: number; target_qty: number; actual_qty: number; vendedor: VendedorProfile;
 }
-interface WeeklyEntry { vendedor_id: string; total: number; profile: VendedorProfile; }
+interface WeeklyEntry { vendedor_id: string; total: number; pct: number | null; profile: VendedorProfile; }
 
 // ── Helpers ───────────────────────────────────────────────────────────────
 function getProgressColor(actual: number, target: number, dayOfMonth: number, daysInMonth: number): "green" | "yellow" | "red" | "gray" {
@@ -39,12 +39,6 @@ function commercialWeekStartOf(d: Date): Date {
   n.setDate(n.getDate() - diff);
   n.setHours(0, 0, 0, 0);
   return n;
-}
-function countCommercialWeeks(year: number, month: number): number {
-  const lastDay = new Date(year, month + 1, 0).getDate();
-  let fridays = 0;
-  for (let d = 1; d <= lastDay; d++) if (new Date(year, month, d).getDay() === 5) fridays++;
-  return Math.max(1, fridays);
 }
 function fmtBRL(v: number) { return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", minimumFractionDigits: 0, maximumFractionDigits: 0 }); }
 function fmtPct(v: number) { return `${v.toFixed(1)}%`; }
@@ -127,8 +121,8 @@ function weeklyBarColor(projPct: number | null): string {
   if (projPct >= 70) return "#f59e0b";
   return "#ef4444";
 }
-function WeeklyPanel({ entries, targetMap, elapsedDays, canSeeValues }: {
-  entries: WeeklyEntry[]; targetMap: Record<string, number>; elapsedDays: number; canSeeValues: boolean;
+function WeeklyPanel({ entries, elapsedDays, canSeeValues }: {
+  entries: WeeklyEntry[]; elapsedDays: number; canSeeValues: boolean;
 }) {
   if (entries.length === 0) return null;
   const top3 = entries.slice(0, 3);
@@ -151,7 +145,9 @@ function WeeklyPanel({ entries, targetMap, elapsedDays, canSeeValues }: {
                   </div>
                   <div className="min-w-0">
                     <p className="text-sm font-bold truncate">{entry.profile?.full_name?.split(" ")[0] || "—"}</p>
-                    {canSeeValues && <p className="text-xs text-muted-foreground tabular-nums">{entry.total >= 1000 ? `R$${(entry.total / 1000).toFixed(1)}k` : fmtBRL(entry.total)}</p>}
+                    {canSeeValues
+                      ? <p className="text-xs text-muted-foreground tabular-nums">{entry.total >= 1000 ? `R$${(entry.total / 1000).toFixed(1)}k` : fmtBRL(entry.total)}</p>
+                      : entry.pct != null && <p className="text-xs text-muted-foreground tabular-nums">{entry.pct.toFixed(0)}%</p>}
                   </div>
                 </div>
               ))}
@@ -163,19 +159,17 @@ function WeeklyPanel({ entries, targetMap, elapsedDays, canSeeValues }: {
             <div className="overflow-x-auto pb-1">
               <div className="flex gap-3 items-end px-1">
                 {alphabetical.map((entry) => {
-                  const weeklyTarget = targetMap[entry.vendedor_id] || 0;
-                  const attainPct = weeklyTarget > 0 ? Math.round((entry.total / weeklyTarget) * 100) : null;
-                  const projected = elapsedDays > 0 ? (entry.total / elapsedDays) * 7 : entry.total;
-                  const projPct = weeklyTarget > 0 ? Math.round((projected / weeklyTarget) * 100) : null;
+                  const attainPct = entry.pct;
+                  const projPct = attainPct != null && elapsedDays > 0 ? Math.round((attainPct / elapsedDays) * 7) : null;
                   const barFill = weeklyBarColor(projPct);
-                  const fillRatio = weeklyTarget > 0 ? Math.min(1, entry.total / weeklyTarget) : entry.total / maxTotal;
+                  const fillRatio = attainPct != null ? Math.min(1, attainPct / 100) : entry.total / maxTotal;
                   const barH = Math.max(6, Math.round(fillRatio * MAX_BAR_H));
                   const perfRank = entries.findIndex((e) => e.vendedor_id === entry.vendedor_id) + 1;
                   const medal = perfRank === 1 ? "🥇" : perfRank === 2 ? "🥈" : perfRank === 3 ? "🥉" : null;
                   return (
                     <div key={entry.vendedor_id} className="flex flex-col items-center gap-1 w-14 shrink-0">
                       <div className="flex flex-col items-center justify-end gap-1" style={{ height: `${MAX_BAR_H + 70}px` }}>
-                        <p className="text-[11px] font-bold leading-none" style={{ color: attainPct === null ? "#64748b" : barFill }}>{attainPct === null ? "—" : `${attainPct}%`}</p>
+                        <p className="text-[11px] font-bold leading-none" style={{ color: attainPct == null ? "#64748b" : barFill }}>{attainPct == null ? "—" : `${Math.round(attainPct)}%`}</p>
                         <ProfileAvatar avatarUrl={entry.profile?.avatar_url} fullName={entry.profile?.full_name} userId={entry.vendedor_id} size={34} />
                         <div className="w-9 rounded-t-lg transition-[height] duration-1000 ease-out" style={{ height: `${barH}px`, backgroundColor: barFill }} />
                       </div>
@@ -221,10 +215,11 @@ export default function Metas() {
   })), [metas]);
   const prevMap: Record<string, number> = useMemo(
     () => Object.fromEntries(metas.map((m) => [m.vendedor_id, m.prev_amount])), [metas]);
+  // Ranking semanal por % de meta (nulls por último); R$ só existe para gestor.
   const weeklyData: WeeklyEntry[] = useMemo(() => metas
-    .filter((m) => m.week_amount > 0)
-    .map((m) => ({ vendedor_id: m.vendedor_id, total: m.week_amount, profile: { full_name: m.full_name, avatar_url: m.avatar_url } }))
-    .sort((a, b) => b.total - a.total), [metas]);
+    .filter((m) => m.pct_week != null || m.week_amount > 0)
+    .map((m) => ({ vendedor_id: m.vendedor_id, total: m.week_amount, pct: m.pct_week, profile: { full_name: m.full_name, avatar_url: m.avatar_url } }))
+    .sort((a, b) => (b.pct ?? -1) - (a.pct ?? -1) || b.total - a.total), [metas]);
 
   const currentWeekStart = commercialWeekStartOf(new Date());
   const isCurrentWeek = weekStart.toISOString().slice(0, 10) === currentWeekStart.toISOString().slice(0, 10);
@@ -237,11 +232,6 @@ export default function Metas() {
   const remainingDays = isCurrentMonth ? daysInMonth - dayOfMonth : 0;
   const expectedPct = (dayOfMonth / daysInMonth) * 100;
 
-  // Meta semanal = meta mensal ÷ nº de semanas comerciais
-  const numWeeks = countCommercialWeeks(weekStart.getFullYear(), weekStart.getMonth());
-  const weeklyTargetMap: Record<string, number> = {};
-  for (const t of targetsData) weeklyTargetMap[t.vendedor_id] = t.target_amount / numWeeks;
-
   // Dias decorridos da semana (semana atual)
   const elapsedDays = isCurrentWeek ? Math.min(7, Math.max(1, Math.ceil((today.getTime() - weekStart.getTime()) / 86400000))) : 7;
 
@@ -250,15 +240,18 @@ export default function Metas() {
 
   const totalTarget = targetsData.reduce((s, t) => s + t.target_amount, 0);
   const totalActual = targetsData.reduce((s, t) => s + (t.actual_amount || 0), 0);
-  const totalPct = totalTarget > 0 ? (totalActual / totalTarget) * 100 : 0;
+  // % do time vem do servidor — funciona mesmo sem os R$ (não-gestor).
+  const teamPct = metas[0]?.team_pct ?? 0;
   const hitting = targetsData.filter((t) => (t.pct_amount || 0) >= 100).length;
-  const totalColor = getProgressColor(totalActual, totalTarget, dayOfMonth, daysInMonth);
+  const totalColor = canSeeValues
+    ? getProgressColor(totalActual, totalTarget, dayOfMonth, daysInMonth)
+    : (teamPct > 0 ? getProgressColor(teamPct, 100, dayOfMonth, daysInMonth) : "gray");
   const totalColors = COLOR_MAP[totalColor];
 
   const teamRemaining = Math.max(0, totalTarget - totalActual);
   const teamDailyNeeded = isCurrentMonth && remainingDays > 0 && teamRemaining > 0 ? Math.ceil(teamRemaining / remainingDays) : 0;
-  const teamProjected = isCurrentMonth && dayOfMonth > 2 && totalActual > 0 && totalTarget > 0 ? Math.round((totalActual / dayOfMonth) * daysInMonth) : null;
-  const teamProjPct = teamProjected !== null ? (teamProjected / totalTarget) * 100 : null;
+  const teamProjPct = isCurrentMonth && dayOfMonth > 2 && teamPct > 0 ? (teamPct * daysInMonth) / dayOfMonth : null;
+  const teamProjected = canSeeValues && teamProjPct !== null && totalActual > 0 ? Math.round((totalActual / dayOfMonth) * daysInMonth) : null;
   const teamProjKey = (teamProjPct === null ? "gray" : teamProjPct >= 100 ? "green" : teamProjPct >= 85 ? "yellow" : "red") as keyof typeof COLOR_MAP;
   const teamProjColors = COLOR_MAP[teamProjKey];
 
@@ -326,7 +319,7 @@ export default function Metas() {
 
       {/* SEMANAL */}
       {periodView === "semanal" && (
-        <WeeklyPanel entries={weeklyData} targetMap={weeklyTargetMap} elapsedDays={elapsedDays} canSeeValues={canSeeValues} />
+        <WeeklyPanel entries={weeklyData} elapsedDays={elapsedDays} canSeeValues={canSeeValues} />
       )}
 
       {/* MENSAL */}
@@ -344,7 +337,7 @@ export default function Metas() {
                       <p className="text-muted-foreground mb-0.5">/ {fmtBRL(totalTarget)}</p>
                     </div>
                   ) : (
-                    <p className={`text-2xl font-bold tabular-nums mt-0.5 ${totalColors.text}`}>{fmtPct(totalPct)} <span className="text-sm font-normal text-muted-foreground">cumprido</span></p>
+                    <p className={`text-2xl font-bold tabular-nums mt-0.5 ${totalColors.text}`}>{fmtPct(teamPct)} <span className="text-sm font-normal text-muted-foreground">cumprido</span></p>
                   )}
                 </div>
                 <div className="flex items-center gap-3">
@@ -366,14 +359,14 @@ export default function Metas() {
                       <p className="text-[10px] text-muted-foreground">na meta</p>
                     </div>
                   )}
-                  <CarboBadge variant={totalColors.badge}>{fmtPct(totalPct)}</CarboBadge>
+                  <CarboBadge variant={totalColors.badge}>{fmtPct(teamPct)}</CarboBadge>
                 </div>
               </div>
               <div className="relative h-2.5 bg-muted rounded-full overflow-hidden">
-                <div className="h-full rounded-full transition-all duration-700" style={{ width: `${Math.min(100, totalPct)}%`, backgroundColor: totalColors.bar }} />
+                <div className="h-full rounded-full transition-all duration-700" style={{ width: `${Math.min(100, teamPct)}%`, backgroundColor: totalColors.bar }} />
                 {expectedPct > 0 && expectedPct < 100 && <div className="absolute top-0 bottom-0 w-0.5 bg-foreground/40" style={{ left: `${expectedPct}%` }} />}
               </div>
-              {teamProjected !== null && teamProjPct !== null && (
+              {teamProjPct !== null && (
                 <div className="flex items-center gap-1.5 text-xs mt-2 pt-2 border-t border-border/50">
                   <TrendingUp className="h-3 w-3 text-muted-foreground shrink-0" />
                   <span className="text-muted-foreground">Projeção {canSeeValues ? "do time " : ""}ao fim do mês:</span>
@@ -406,8 +399,8 @@ export default function Metas() {
                 const remaining = Math.max(0, target - actual);
                 const dailyNeeded = isCurrentMonth && remainingDays > 0 && remaining > 0 ? Math.ceil(remaining / remainingDays) : 0;
                 const prevActual = prevMap[t.vendedor_id] ?? 0;
-                const projected = isCurrentMonth && dayOfMonth > 2 && actual > 0 && target > 0 ? Math.round((actual / dayOfMonth) * daysInMonth) : null;
-                const projPct = projected !== null && target > 0 ? (projected / target) * 100 : null;
+                // Projeção a partir do % (server) — mostra para todos, sem depender do R$.
+                const projPct = isCurrentMonth && dayOfMonth > 2 && pctVal > 0 ? (pctVal * daysInMonth) / dayOfMonth : null;
                 const projKey = (projPct === null ? "gray" : projPct >= 100 ? "green" : projPct >= 85 ? "yellow" : "red") as keyof typeof COLOR_MAP;
                 const projColors = COLOR_MAP[projKey];
                 const rankBadge = idx === 0 ? "🥇" : idx === 1 ? "🥈" : idx === 2 ? "🥉" : `${idx + 1}º`;
