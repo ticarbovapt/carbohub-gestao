@@ -1,7 +1,8 @@
 // Nova Ordem de Serviço — ESPELHO da tela do portal Licenciados (mesma UX nos
 // dois sistemas): tipo (B2C/B2B/Frota) → cliente PF/PJ (autofill de recorrente
-// por telefone/CNPJ) → nome/razão, nome fantasia (PJ), e-mail → agendamento
-// (frota). Cria na fonte de verdade (licenciados.service_orders via os_create).
+// por telefone/CNPJ) → nome/razão, nome fantasia (PJ), telefone (WhatsApp),
+// e-mail → veículo (placa/ano/modelo) → data prevista. Cria na fonte de verdade
+// (licenciados.service_orders via os_create).
 import { useState } from "react";
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
@@ -33,6 +34,9 @@ export function NovaDescarbonizacaoDialog({ open, onOpenChange }: NovaDescarboni
   const [federalCode, setFederalCode] = useState("");
   const [company, setCompany] = useState("");
   const [email, setEmail] = useState("");
+  const [plate, setPlate] = useState("");
+  const [model, setModel] = useState("");
+  const [vehicleYear, setVehicleYear] = useState("");
   const [scheduledAt, setScheduledAt] = useState("");
   const [recurring, setRecurring] = useState(false);
 
@@ -56,9 +60,9 @@ export function NovaDescarbonizacaoDialog({ open, onOpenChange }: NovaDescarboni
   }
 
   function reset() {
-    setServiceType("b2c"); setPersonType("pf");
+    setServiceType("b2c");
     setName(""); setPhone(""); setFederalCode(""); setCompany(""); setEmail("");
-    setScheduledAt(""); setRecurring(false);
+    setPlate(""); setModel(""); setVehicleYear(""); setScheduledAt(""); setRecurring(false);
   }
 
   function handleOpenChange(isOpen: boolean) {
@@ -84,6 +88,9 @@ export function NovaDescarbonizacaoDialog({ open, onOpenChange }: NovaDescarboni
         federal_code: federalCode.trim() || null,
         company: company.trim() || null,
         email: email.trim() || null,
+        plate: plate.trim() || null,
+        model: model.trim() || null,
+        vehicle_year: vehicleYear.trim() ? Number(vehicleYear) : null,
         // Data só (sem hora): meia-noite LOCAL, evita "dia anterior" por fuso.
         scheduled_at: scheduledAt ? new Date(`${scheduledAt}T00:00:00`).toISOString() : null,
       });
@@ -101,7 +108,7 @@ export function NovaDescarbonizacaoDialog({ open, onOpenChange }: NovaDescarboni
           <DialogHeader>
             <DialogTitle>Nova Ordem de Serviço</DialogTitle>
             <DialogDescription>
-              Cadastre o cliente e o serviço. As fotos e veículos são feitos no Carbox · o número é gerado automaticamente.
+              Cadastre o cliente, o veículo e a data. As fotos são feitas no Carbox · o número é gerado automaticamente.
             </DialogDescription>
           </DialogHeader>
 
@@ -124,7 +131,7 @@ export function NovaDescarbonizacaoDialog({ open, onOpenChange }: NovaDescarboni
               </div>
             </div>
 
-            {/* Cliente PF/PJ */}
+            {/* Cliente */}
             <div className="space-y-3">
               <Label className="text-xs uppercase tracking-wide text-muted-foreground">
                 Cliente {serviceType === "b2c" ? "(pessoa física)" : "(empresa · CNPJ)"}
@@ -132,7 +139,7 @@ export function NovaDescarbonizacaoDialog({ open, onOpenChange }: NovaDescarboni
 
               {personType === "pf" ? (
                 <div className="space-y-1.5">
-                  <Label htmlFor="phone">Telefone <span className="text-destructive">*</span></Label>
+                  <Label htmlFor="phone">Telefone / WhatsApp <span className="text-destructive">*</span></Label>
                   <Input id="phone" value={phone} onChange={(e) => setPhone(e.target.value)} onBlur={lookup}
                     placeholder="(11) 99999-9999" inputMode="tel" />
                 </div>
@@ -156,10 +163,17 @@ export function NovaDescarbonizacaoDialog({ open, onOpenChange }: NovaDescarboni
               </div>
 
               {personType === "pj" && (
-                <div className="space-y-1.5">
-                  <Label htmlFor="company">Nome fantasia</Label>
-                  <Input id="company" value={company} onChange={(e) => setCompany(e.target.value)} placeholder="Opcional" />
-                </div>
+                <>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="company">Nome fantasia</Label>
+                    <Input id="company" value={company} onChange={(e) => setCompany(e.target.value)} placeholder="Opcional" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="phone-pj">Telefone / WhatsApp</Label>
+                    <Input id="phone-pj" value={phone} onChange={(e) => setPhone(e.target.value)}
+                      placeholder="(11) 99999-9999" inputMode="tel" />
+                  </div>
+                </>
               )}
 
               <div className="space-y-1.5">
@@ -168,17 +182,37 @@ export function NovaDescarbonizacaoDialog({ open, onOpenChange }: NovaDescarboni
               </div>
             </div>
 
-            {/* Agendamento (obrigatório para frota) */}
+            {/* Veículo */}
+            <div className="space-y-3">
+              <Label className="text-xs uppercase tracking-wide text-muted-foreground">Veículo</Label>
+              <div className="grid grid-cols-3 gap-3">
+                <div className="col-span-2 space-y-1.5">
+                  <Label htmlFor="plate">Placa</Label>
+                  <Input id="plate" value={plate} onChange={(e) => setPlate(e.target.value.toUpperCase())}
+                    placeholder="ABC-1234" className="uppercase" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="year">Ano</Label>
+                  <Input id="year" type="number" value={vehicleYear} onChange={(e) => setVehicleYear(e.target.value)}
+                    placeholder="2020" inputMode="numeric" />
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="model">Modelo</Label>
+                <Input id="model" value={model} onChange={(e) => setModel(e.target.value)} placeholder="Ex: Fiat Uno / Caminhão" />
+              </div>
+            </div>
+
+            {/* Data prevista (obrigatória para frota) */}
             <div className="space-y-1.5">
-              <p className="text-xs text-muted-foreground">
-                Os veículos (ano, placa/modelo e fotos) são cadastrados no Carbox.
-                {serviceType === "frota" ? " Na frota você pode adicionar vários veículos na mesma OS." : ""}
-              </p>
+              <Label htmlFor="sched">
+                Data prevista {serviceType === "frota"
+                  ? <><span className="text-destructive">*</span> (obrigatório para frota)</>
+                  : <span className="text-muted-foreground font-normal">(opcional)</span>}
+              </Label>
+              <Input id="sched" type="date" value={scheduledAt} onChange={(e) => setScheduledAt(e.target.value)} />
               {serviceType === "frota" && (
-                <>
-                  <Label htmlFor="sched">Data de agendamento <span className="text-destructive">*</span> (obrigatório para frota)</Label>
-                  <Input id="sched" type="date" value={scheduledAt} onChange={(e) => setScheduledAt(e.target.value)} />
-                </>
+                <p className="text-xs text-muted-foreground">Na frota você pode adicionar mais veículos na mesma OS depois, no Carbox.</p>
               )}
             </div>
           </div>
