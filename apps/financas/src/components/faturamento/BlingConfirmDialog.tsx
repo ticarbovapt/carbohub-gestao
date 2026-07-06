@@ -48,10 +48,20 @@ export function BlingConfirmDialog({
 
   async function confirmar() {
     if (!order) return;
+    // Abre a aba do Bling JÁ no clique (gesto do usuário) — se abrisse só depois
+    // do await, o navegador bloquearia como popup. Começa em branco e, ao criar,
+    // aponta pra lista de pedidos de venda (o recém-criado fica no topo).
+    const win = window.open("about:blank", "_blank");
     try {
       await createBling.mutateAsync(order.id);
+      const url = "https://www.bling.com.br/vendas.php";
+      if (win && !win.closed) win.location.href = url;
+      else window.open(url, "_blank", "noopener");
       onOpenChange(false);
-    } catch { /* toast no hook mostra o erro real */ }
+    } catch {
+      // Falhou: fecha a aba em branco (o toast do hook mostra o erro real).
+      if (win && !win.closed) win.close();
+    }
   }
 
   return (

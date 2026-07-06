@@ -155,10 +155,12 @@ export function useCreateBlingPedido() {
       queryClient.invalidateQueries({ queryKey: ["carboze-orders"] });
       const num = data?.data?.numero || data?.data?.id || "";
       toast.success(
-        `Pedido criado no Bling${num ? ` (nº ${num})` : ""}! Acesse o Bling para conferir e gerar a NF-e.`,
+        `Pedido criado no Bling${num ? ` (nº ${num})` : ""}! Abrindo o Bling — confira e emita a NF-e (o pedido está no topo da lista).`,
         {
-          duration: 8000,
-          action: { label: "Abrir Bling →", onClick: () => window.open("https://bling.com.br/", "_blank") },
+          duration: 9000,
+          // Aba já abre sozinha no clique de confirmar; este botão é só um reforço
+          // caso o navegador tenha bloqueado a aba.
+          action: { label: "Abrir Bling →", onClick: () => window.open("https://www.bling.com.br/vendas.php", "_blank", "noopener") },
         }
       );
     },
