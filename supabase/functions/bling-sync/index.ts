@@ -281,10 +281,13 @@ async function createBlingPedido(
     contato: { id: blingContactId },
     itens: blingItems,
     data: order.sale_date || order.created_at.substring(0, 10),
-    // Número do pedido (PED-XXXX) na observação = chave do vínculo automático com a NF.
+    // Número do pedido (PED-XXXX / V…) na observação = chave do vínculo automático com a NF.
     // NÃO confundir com numeroPedidoCompra abaixo (que é o PO do cliente).
+    // Vendedor vai junto: (a) cruzamento observação-da-NF ↔ pedido+vendedor e
+    // (b) fallback de rastreio caso o banco se perca (fica gravado na própria NF).
     observacoes: [
       order.order_number,
+      order.vendedor_name ? `Vendedor: ${order.vendedor_name}` : "",
       order.buyer_notes || "",
       order.general_notes || "",
     ].filter(Boolean).join(" — "),

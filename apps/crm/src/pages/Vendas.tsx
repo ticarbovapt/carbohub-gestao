@@ -9,13 +9,14 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   ChevronLeft, ChevronRight, Search, ShoppingBag, TrendingUp,
-  Package, Users, ArrowRightCircle, CalendarDays, X, Trash2, Loader2,
+  Package, Users, ArrowRightCircle, CalendarDays, X, Trash2, Loader2, FileText,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
 import { useVendedoresDir } from "@/hooks/useVendas";
 import {
-  useCarbozeVendas, useConvertQuote, useBulkAssignVendedor, useDeleteVenda, type CarbozeVendaRow,
+  useCarbozeVendas, useConvertQuote, useBulkAssignVendedor, useDeleteVenda,
+  useCreateBlingPedido, type CarbozeVendaRow,
 } from "@/hooks/useCarbozeVendas";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
@@ -79,8 +80,18 @@ export default function Vendas() {
   const convert = useConvertQuote();
   const bulkAssign = useBulkAssignVendedor();
   const deleteVenda = useDeleteVenda();
+  const createBling = useCreateBlingPedido();
   const [assigning, setAssigning] = useState(false);
   const [toDelete, setToDelete] = useState<CarbozeVendaRow | null>(null);
+  const [toBling, setToBling] = useState<CarbozeVendaRow | null>(null);
+
+  async function enviarAoBling() {
+    if (!toBling) return;
+    try {
+      await createBling.mutateAsync(toBling.id);
+      setToBling(null);
+    } catch { /* toast no hook */ }
+  }
 
   async function excluirVenda() {
     if (!toDelete) return;
@@ -256,11 +267,21 @@ export default function Vendas() {
                           <td className="p-3 text-right font-bold tabular-nums">{fmtBRL(venda.total)}</td>
                           <td className="p-3 text-right" onClick={(e) => e.stopPropagation()}>
                             <div className="flex items-center justify-end gap-1">
-                              {isQuote && (
+                              {isQuote ? (
                                 <button onClick={() => converterEmVenda(venda.id)} className="h-7 px-2 inline-flex items-center gap-1 rounded-md text-xs font-medium bg-carbo-green/10 text-carbo-green hover:bg-carbo-green/20 border border-carbo-green/30 transition-colors" title="Converter orçamento em venda">
                                   <ArrowRightCircle className="h-3 w-3" /><span className="hidden sm:inline">Converter</span>
                                 </button>
-                              )}
+                              ) : venda.status !== "cancelled" && !venda.bling_nf_id ? (
+                                <button
+                                  onClick={() => setToBling(venda)}
+                                  disabled={createBling.isPending}
+                                  className="h-7 px-2 inline-flex items-center gap-1 rounded-md text-xs font-medium bg-blue-500/10 text-blue-500 hover:bg-blue-500/20 border border-blue-500/30 transition-colors disabled:opacity-50"
+                                  title={venda.external_ref?.startsWith("bling-") ? "Reenviar pedido ao Bling" : "Enviar pedido ao Bling para faturar a NF"}
+                                >
+                                  <FileText className="h-3 w-3" />
+                                  <span className="hidden sm:inline">{venda.external_ref?.startsWith("bling-") ? "Reenviar" : "Faturar"}</span>
+                                </button>
+                              ) : null}
                             </div>
                           </td>
                         </tr>
@@ -395,6 +416,46 @@ export default function Vendas() {
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
               {deleteVenda.isPending ? <><Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> Excluindo…</> : <><Trash2 className="h-3.5 w-3.5 mr-1.5" /> Excluir</>}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Confirmação de envio ao Bling (faturamento). Cria o Pedido de Venda no
+          Bling com nº do pedido + vendedor na observação; a NF-e é conferida e
+          emitida por um humano no Bling. */}
+      <AlertDialog open={!!toBling} onOpenChange={(o) => { if (!o) setToBling(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {toBling?.external_ref?.startsWith("bling-") ? "Reenviar pedido ao Bling?" : "Enviar pedido ao Bling?"}
+            </AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-2 text-sm">
+                <p>
+                  O pedido <strong className="font-mono">{toBling?.order_number}</strong> de{" "}
+                  <strong>{toBling?.customer_name}</strong> ({toBling ? fmtBRL(toBling.total) : ""}) será
+                  criado como <strong>Pedido de Venda</strong> no Bling.
+                </p>
+                <p className="text-muted-foreground">
+                  A observação vai com o nº do pedido{" "}
+                  {(() => {
+                    const nome = (toBling?.vendedor_id && nomeById[toBling.vendedor_id]) || toBling?.vendedor_name;
+                    return nome ? <>e o vendedor <strong>{nome}</strong> </> : null;
+                  })()}
+                  para o cruzamento automático com a NF. Um humano confere e emite a NF-e no Bling.
+                </p>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={createBling.isPending}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => { e.preventDefault(); enviarAoBling(); }}
+              disabled={createBling.isPending}
+              className="bg-blue-600 text-white hover:bg-blue-700"
+            >
+              {createBling.isPending ? <><Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> Enviando…</> : <><FileText className="h-3.5 w-3.5 mr-1.5" /> Enviar ao Bling</>}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
