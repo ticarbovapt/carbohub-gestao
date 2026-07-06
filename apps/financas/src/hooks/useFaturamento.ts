@@ -112,14 +112,25 @@ async function extractFnError(error: any, fallback: string): Promise<string> {
   return error?.message || fallback;
 }
 
+export interface BlingEndereco {
+  endereco?: string;
+  numero?: string;
+  complemento?: string;
+  bairro?: string;
+  cep?: string;
+  municipio?: string;
+  uf?: string;
+}
+
 export interface BlingContactToCreate {
   nome: string;
   tipo: "F" | "J" | "E";
   numeroDocumento: string;
   ie?: string;
+  indicadorIe?: 1 | 2 | 9;
   email?: string;
   telefone?: string;
-  endereco?: { geral?: Record<string, string> };
+  endereco?: { geral?: BlingEndereco };
 }
 
 export interface BlingPreview {
@@ -142,9 +153,11 @@ export function useCreateBlingPedido() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (orderId: string) => {
+    // `contact` = cadastro conferido/editado na tela de confirmação (só usado
+    // quando o cliente não existe no Bling). Se ausente, o servidor monta do pedido.
+    mutationFn: async ({ orderId, contact }: { orderId: string; contact?: BlingContactToCreate | null }) => {
       const { data, error } = await supabase.functions.invoke("bling-sync", {
-        body: { entity: "create_order", order_id: orderId },
+        body: { entity: "create_order", order_id: orderId, ...(contact ? { contact } : {}) },
       });
       if (error) throw new Error(await extractFnError(error, "Erro ao criar pedido no Bling"));
       if (data && data.success === false) throw new Error(data.error || "Erro ao criar pedido no Bling");
