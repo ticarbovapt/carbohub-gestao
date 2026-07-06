@@ -174,17 +174,20 @@ export function NovaDescarbonizacaoDialog({ open, onOpenChange }: NovaDescarboni
               </div>
 
               {personType === "pj" && (
-                <>
-                  <div className="space-y-1.5">
-                    <Label htmlFor="company">Nome fantasia</Label>
-                    <Input id="company" value={company} onChange={(e) => setCompany(e.target.value)} placeholder="Opcional" />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label htmlFor="phone-pj">Telefone / WhatsApp</Label>
-                    <Input id="phone-pj" value={phone} onChange={(e) => setPhone(e.target.value)}
-                      placeholder="(11) 99999-9999" inputMode="tel" />
-                  </div>
-                </>
+                <div className="space-y-1.5">
+                  <Label htmlFor="company">Nome fantasia</Label>
+                  <Input id="company" value={company} onChange={(e) => setCompany(e.target.value)} placeholder="Opcional" />
+                </div>
+              )}
+
+              {/* Na frota os contatos são os responsáveis (abaixo); telefone da
+                  empresa só no B2B, para não duplicar. */}
+              {serviceType === "b2b" && (
+                <div className="space-y-1.5">
+                  <Label htmlFor="phone-pj">Telefone / WhatsApp</Label>
+                  <Input id="phone-pj" value={phone} onChange={(e) => setPhone(e.target.value)}
+                    placeholder="(11) 99999-9999" inputMode="tel" />
+                </div>
               )}
 
               <div className="space-y-1.5">
