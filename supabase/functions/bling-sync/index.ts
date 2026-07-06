@@ -171,6 +171,54 @@ function onlyDigits(s: unknown): string {
   return String(s ?? "").replace(/\D/g, "");
 }
 
+// ── extractOrderAddress: devolve o endereço em CAMPOS SEPARADOS (logradouro,
+// número, bairro, cidade, uf, cep) a partir do pedido. Prioriza o endereço de
+// faturamento estruturado (billing_address jsonb); senão, reverte a NOSSA própria
+// concatenação da entrega ("logradouro, numero - bairro") de volta em campos —
+// assim o Bling recebe organizado em vez de tudo grudado numa linha.
+function extractOrderAddress(order: any): {
+  endereco: string; numero: string; complemento: string;
+  bairro: string; municipio: string; uf: string; cep: string;
+} {
+  const b = order.billing_address;
+  const bObj = b && typeof b === "object" ? b : null;
+  if (bObj && (bObj.logradouro || bObj.endereco || bObj.cidade || bObj.municipio)) {
+    return {
+      endereco: bObj.logradouro || bObj.endereco || "",
+      numero: String(bObj.numero ?? "").trim(),
+      complemento: bObj.complemento || "",
+      bairro: bObj.bairro || "",
+      municipio: bObj.cidade || bObj.municipio || "",
+      uf: String(bObj.uf || bObj.estado || "").toUpperCase().slice(0, 2),
+      cep: onlyDigits(bObj.cep || ""),
+    };
+  }
+
+  // Entrega concatenada: "logradouro, numero - bairro". Reverte com segurança.
+  let endereco = String((typeof b === "string" ? b : "") || order.delivery_address || "").trim();
+  let bairro = String(order.delivery_neighborhood || "").trim();
+  let numero = "";
+  if (!bairro) {
+    const dash = endereco.lastIndexOf(" - ");
+    if (dash >= 0) { bairro = endereco.slice(dash + 3).trim(); endereco = endereco.slice(0, dash).trim(); }
+  }
+  // Número = último trecho após ", " SÓ se parecer número (145, 145A, S/N) —
+  // evita fatiar o logradouro por engano (ex.: "EDIF 145/147" não vira número).
+  const comma = endereco.lastIndexOf(", ");
+  if (comma >= 0) {
+    const tail = endereco.slice(comma + 2).trim();
+    if (/^(s\/?n|\d{1,6}[a-z]?)$/i.test(tail)) { numero = tail; endereco = endereco.slice(0, comma).trim(); }
+  }
+
+  return {
+    endereco, numero, complemento: "",
+    bairro,
+    municipio: String(order.billing_city || order.delivery_city || "").trim(),
+    uf: String(order.billing_state || order.delivery_state || "").toUpperCase().slice(0, 2),
+    cep: onlyDigits(order.billing_zip || order.delivery_zip || ""),
+  };
+}
+
 function buildContactPayload(order: any): { payload: Record<string, any> | null; error?: string } {
   const doc = onlyDigits(order.cnpj);
   if (doc.length !== 11 && doc.length !== 14) {
@@ -184,20 +232,8 @@ function buildContactPayload(order: any): { payload: Record<string, any> | null;
   const tipo = doc.length === 14 ? "J" : "F";
   const ie = String(order.customer_ie ?? "").trim();
 
-  // Endereço de faturamento: billing_address pode ser jsonb (objeto) ou texto;
-  // cai nas colunas billing_* e, por fim, no endereço de entrega.
-  const b = order.billing_address;
-  const bObj = b && typeof b === "object" ? b : null;
-  const bStr = typeof b === "string" ? b : null;
-  const endereco = {
-    endereco: bObj?.logradouro || bObj?.endereco || bStr || order.billing_address_line || order.delivery_address || "",
-    numero: String(bObj?.numero ?? "").trim(),
-    complemento: bObj?.complemento || "",
-    bairro: bObj?.bairro || order.delivery_neighborhood || "",
-    municipio: bObj?.cidade || bObj?.municipio || order.billing_city || order.delivery_city || "",
-    uf: String(bObj?.uf || order.billing_state || order.delivery_state || "").toUpperCase().slice(0, 2),
-    cep: onlyDigits(bObj?.cep || order.billing_zip || order.delivery_zip || ""),
-  };
+  // Endereço em campos separados (faturamento estruturado ou entrega revertida).
+  const endereco = extractOrderAddress(order);
 
   const payload: Record<string, any> = {
     nome: order.customer_name || "",
@@ -441,9 +477,10 @@ async function createBlingPedido(
     pedidoPayload.numeroPedidoCompra = String(order.po_number);
   }
 
-  // Transporte: frete + endereço de entrega (etiqueta).
-  // ATENÇÃO: endereço deve ser conferido no Bling — vem como texto livre do nosso sistema.
-  const hasDelivery = order.delivery_address || order.delivery_city || order.delivery_zip;
+  // Transporte: frete + endereço de entrega (etiqueta), em campos separados
+  // (logradouro/número/bairro), revertendo a concatenação do nosso banco.
+  const ship = extractOrderAddress(order);
+  const hasDelivery = ship.endereco || ship.municipio || ship.cep;
   if (order.freight_type || hasDelivery) {
     pedidoPayload.transporte = {
       ...(order.freight_type ? { fretePorConta: order.freight_type === "CIF" ? 0 : 1 } : {}),
@@ -452,16 +489,17 @@ async function createBlingPedido(
         ? {
             etiqueta: {
               nome: order.customer_name || "",
-              endereco: order.delivery_address || "",
-              bairro: order.delivery_neighborhood || "",
-              municipio: order.delivery_city || "",
-              uf: order.delivery_state || "",
-              cep: order.delivery_zip ? String(order.delivery_zip).replace(/\D/g, "") : "",
+              endereco: ship.endereco,
+              numero: ship.numero,
+              complemento: ship.complemento,
+              bairro: ship.bairro,
+              municipio: ship.municipio,
+              uf: ship.uf,
+              cep: ship.cep,
             },
           }
         : {}),
     };
-    if (hasDelivery) warnings.push("Endereço de entrega vai como texto livre — confira/corrija no Bling após criar.");
   }
 
   if (order.discount) {
