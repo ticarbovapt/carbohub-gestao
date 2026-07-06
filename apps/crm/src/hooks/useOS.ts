@@ -32,6 +32,7 @@ export interface NovaOSInput {
   model?: string | null;        // modelo do veículo
   vehicle_year?: number | null; // ano do veículo
   scheduled_at?: string | null; // ISO; obrigatório p/ frota
+  responsibles?: { name: string; phone?: string | null }[]; // frota: quem acompanha
 }
 
 // Cliente recorrente (autofill por telefone/CNPJ) — mesma UX do Licenciados.
@@ -151,6 +152,7 @@ export function useCreateOS() {
         p_vehicle_year: input.vehicle_year ?? null,
         p_plate: input.plate?.trim() || null,
         p_model: input.model?.trim() || null,
+        p_responsibles: input.responsibles ?? [],
         p_scheduled_at: input.scheduled_at ?? null,
         p_priority: 3,
       });
