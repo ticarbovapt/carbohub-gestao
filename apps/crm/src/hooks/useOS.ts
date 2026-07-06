@@ -28,6 +28,9 @@ export interface NovaOSInput {
   federal_code?: string | null; // CNPJ (PJ)
   company?: string | null;      // nome fantasia (PJ)
   email?: string | null;
+  plate?: string | null;        // placa do veículo
+  model?: string | null;        // modelo do veículo
+  vehicle_year?: number | null; // ano do veículo
   scheduled_at?: string | null; // ISO; obrigatório p/ frota
 }
 
@@ -145,6 +148,9 @@ export function useCreateOS() {
         p_company: input.company?.trim() || null,
         p_email: input.email?.trim() || null,
         p_service_type: input.service_type,
+        p_vehicle_year: input.vehicle_year ?? null,
+        p_plate: input.plate?.trim() || null,
+        p_model: input.model?.trim() || null,
         p_scheduled_at: input.scheduled_at ?? null,
         p_priority: 3,
       });
