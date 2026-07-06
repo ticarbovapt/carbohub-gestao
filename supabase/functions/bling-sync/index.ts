@@ -226,6 +226,48 @@ function buildContactPayload(order: any): { payload: Record<string, any> | null;
   return { payload };
 }
 
+// ── sanitizeContactPayload: valida/normaliza o contato EDITADO na tela antes de
+// mandar ao Bling. Whitelist de campos + coerção de tipos (nunca confia no que
+// chega do cliente). Retorna erro se o documento for inválido.
+function sanitizeContactPayload(input: any): { payload: Record<string, any> | null; error?: string } {
+  if (!input || typeof input !== "object") return { payload: null, error: "Dados do cliente ausentes." };
+  const doc = onlyDigits(input.numeroDocumento);
+  if (doc.length !== 11 && doc.length !== 14) {
+    return { payload: null, error: "CNPJ/CPF do cliente inválido — confira o documento antes de criar." };
+  }
+  const tipo = doc.length === 14 ? "J" : "F";
+  const ie = String(input.ie ?? "").trim();
+  const indRaw = Number(input.indicadorIe);
+  const indicadorIe = [1, 2, 9].includes(indRaw) ? indRaw : (ie ? 1 : 9);
+
+  const payload: Record<string, any> = {
+    nome: String(input.nome ?? "").trim(),
+    tipo,
+    numeroDocumento: doc,
+    situacao: "A",
+    indicadorIe,
+    ...(ie ? { ie } : {}),
+    ...(input.email ? { email: String(input.email).trim() } : {}),
+    ...(input.telefone ? { telefone: String(input.telefone).trim() } : {}),
+  };
+
+  const g = input?.endereco?.geral;
+  if (g && typeof g === "object") {
+    const geral: Record<string, any> = {};
+    if (g.endereco) geral.endereco = String(g.endereco).trim();
+    if (g.numero) geral.numero = String(g.numero).trim();
+    if (g.complemento) geral.complemento = String(g.complemento).trim();
+    if (g.bairro) geral.bairro = String(g.bairro).trim();
+    if (g.cep) geral.cep = onlyDigits(g.cep);
+    if (g.municipio) geral.municipio = String(g.municipio).trim();
+    if (g.uf) geral.uf = String(g.uf).toUpperCase().slice(0, 2);
+    if (Object.keys(geral).length) payload.endereco = { geral };
+  }
+
+  if (!payload.nome) return { payload: null, error: "Nome do cliente é obrigatório." };
+  return { payload };
+}
+
 // ── createBlingPedido: cria um pedido de venda no Bling a partir de um carboze_order
 // O financeiro converte o pedido em NF no Bling. A NF será vinculada automaticamente
 // quando o sync detectar o número do pedido (PED-XXXX) na observação.
@@ -237,7 +279,8 @@ async function createBlingPedido(
   supabaseAdmin: ReturnType<typeof createClient>,
   token: string,
   orderId: string,
-  dryRun = false
+  dryRun = false,
+  contactOverride: Record<string, any> | null = null
 ): Promise<any> {
   const warnings: string[] = [];
 
@@ -304,16 +347,20 @@ async function createBlingPedido(
   // humano confere na tela e confirma (logo antes de criar o pedido, mais abaixo).
   let contactToCreate: Record<string, any> | null = null;
   if (!blingContactId) {
-    const { payload: cPayload, error: cErr } = buildContactPayload(order);
+    // Se o financeiro editou o cadastro na tela de confirmação, usa o que ele
+    // conferiu/ajustou (sanitizado); senão monta a partir do pedido.
+    const { payload: cPayload, error: cErr } = contactOverride
+      ? sanitizeContactPayload(contactOverride)
+      : buildContactPayload(order);
     if (cErr) {
-      // Sem documento não dá para cadastrar — erro claro (comportamento antigo).
+      // Sem documento válido não dá para cadastrar — erro claro.
       if (!dryRun) throw new Error(cErr);
       warnings.push(cErr);
     } else {
       contactToCreate = cPayload;
       warnings.push(
         `Cliente "${order.customer_name}" não encontrado no Bling — será CADASTRADO ` +
-        `com os dados do pedido ao confirmar.`,
+        `com os dados${contactOverride ? " conferidos" : " do pedido"} ao confirmar.`,
       );
     }
   }
@@ -1695,8 +1742,10 @@ Deno.serve(async (req: Request): Promise<Response> => {
         );
       }
       const dryRun = body.dry_run === true;
+      // Contato conferido/editado na tela (opcional) — sanitizado dentro do createBlingPedido.
+      const contactOverride = (body.contact && typeof body.contact === "object") ? body.contact : null;
       try {
-        const result = await createBlingPedido(supabaseAdmin, token, orderId, dryRun);
+        const result = await createBlingPedido(supabaseAdmin, token, orderId, dryRun, contactOverride);
         return new Response(
           JSON.stringify(dryRun ? { success: true, ...result } : { success: true, data: result?.data || result }),
           { status: 200, headers: { "Content-Type": "application/json", ...corsHeaders } }
