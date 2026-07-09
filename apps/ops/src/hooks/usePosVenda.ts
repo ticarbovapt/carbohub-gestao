@@ -73,23 +73,32 @@ export interface PosVendaOrder {
   linha: string | null;
 }
 
-const SELECT_COLS =
+const SELECT_BASE =
   "id, order_number, customer_name, customer_email, customer_phone, delivery_address, delivery_city, " +
   "delivery_state, delivery_zip, vendedor_name, vendedor_id, subtotal, shipping_cost, discount, total, " +
-  "notes, items, created_at, fulfillment_stage, production_done, linha";
+  "notes, items, created_at, fulfillment_stage, linha";
+const SELECT_COLS = SELECT_BASE + ", production_done";
 
 /** Todas as vendas manuais (visão de operações). */
 export function usePosVendaOrders() {
   return useQuery({
     queryKey: ["ops", "pos-venda"],
     queryFn: async (): Promise<PosVendaOrder[]> => {
-      const { data, error } = await db
+      const run = (cols: string) => db
         .from("carboze_orders")
-        .select(SELECT_COLS)
+        .select(cols)
         .is("external_ref", null)
         .order("created_at", { ascending: false })
         .limit(500);
-      if (error) throw error;
+
+      let { data, error } = await run(SELECT_COLS);
+      // Resiliência: se a coluna production_done ainda não existir no banco
+      // (migração não rodada), não quebra o quadro — tenta sem ela.
+      if (error) {
+        const fb = await run(SELECT_BASE);
+        if (fb.error) throw fb.error;
+        data = (fb.data || []).map((r: any) => ({ ...r, production_done: false }));
+      }
       const list = (data || []) as PosVendaOrder[];
 
       // Enriquece com a foto do vendedor (profiles.avatar_url).
