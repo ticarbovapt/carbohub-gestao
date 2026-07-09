@@ -42,7 +42,7 @@ export function useProductionOrders() {
     queryFn: async (): Promise<OpRow[]> => {
       const res = await db
         .from("production_orders")
-        .select("id, op_number, sku_id, planned_quantity, good_quantity, rejected_quantity, priority, op_status, demand_source, need_date")
+        .select("id, op_number, sku_id, planned_quantity, good_quantity, rejected_quantity, priority, op_status, demand_source, need_date, product_code, source_order_id")
         .order("created_at", { ascending: false });
       if (res.error) throw res.error;
       const rows = res.data ?? [];
@@ -55,12 +55,14 @@ export function useProductionOrders() {
 
       return rows.map((r: any) => {
         const sku = skuMap.get(r.sku_id) as { code: string; name: string } | undefined;
+        // Sem SKU vinculado (ex.: OP nascida do pós-venda), mostra o product_code
+        // (nome do item / rótulo do pedido) para o card não ficar "—".
         return {
           id: r.id,
           op_number: r.op_number ?? "—",
           sku_id: r.sku_id ?? null,
-          sku_code: sku?.code ?? "—",
-          sku_name: sku?.name ?? "—",
+          sku_code: sku?.code ?? (r.product_code || "—"),
+          sku_name: sku?.name ?? (r.product_code || "—"),
           planned_quantity: Number(r.planned_quantity) || 0,
           good_quantity: r.good_quantity ?? null,
           rejected_quantity: r.rejected_quantity ?? null,
@@ -135,7 +137,9 @@ export function useProductionOrderMutations() {
     onSuccess: invalidate,
   });
 
-  // Registra o resultado da produção (sem baixa de estoque).
+  // Registra o resultado da produção (sem baixa de estoque). Se a OP veio do
+  // pós-venda (source_order_id), a produção "conversa" de volta: o pedido que
+  // estava em "Criar Ordem de Produção" avança para "Em Separação" (separando).
   const confirm = useMutation({
     mutationFn: async (p: { id: string; goodQuantity: number; rejectedQuantity: number; deviationNotes: string }) => {
       const res = await db.from("production_orders").update({
@@ -146,8 +150,23 @@ export function useProductionOrderMutations() {
         finished_at: new Date().toISOString(),
       }).eq("id", p.id);
       if (res.error) throw res.error;
+
+      // Volta pro pós-venda: avança o pedido de origem para "Em Separação".
+      try {
+        const op = await db.from("production_orders").select("source_order_id").eq("id", p.id).single();
+        const orderId = op.data?.source_order_id;
+        if (orderId) {
+          await db.from("carboze_orders")
+            .update({ fulfillment_stage: "separando", updated_at: new Date().toISOString() })
+            .eq("id", orderId)
+            .eq("fulfillment_stage", "criar_op"); // só se ainda estiver esperando produção
+        }
+      } catch (e) { console.error("[op-confirm] falha ao avançar o pós-venda:", e); }
     },
-    onSuccess: invalidate,
+    onSuccess: () => {
+      invalidate();
+      qc.invalidateQueries({ queryKey: ["ops", "pos-venda"] });
+    },
   });
 
   const remove = useMutation({

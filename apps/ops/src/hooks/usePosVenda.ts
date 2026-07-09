@@ -83,6 +83,49 @@ export function usePosVendaOrders() {
   });
 }
 
+// Garante uma OP (production_orders) para o pedido que entrou em "Criar Ordem de
+// Produção". Não duplica: se já existe OP vinculada ao pedido, não cria de novo.
+// A OP nasce em "rascunho" (coluna Backlog do kanban de produção), vinculada ao
+// pedido via source_order_id. sku_id fica nulo (o item da venda é texto livre; o
+// PCP escolhe o SKU/BOM depois). Os campos legados (product_code/quantity/status)
+// são exigidos pelo schema antigo.
+async function ensureProductionOrderForOrder(orderId: string): Promise<boolean> {
+  const existing = await db
+    .from("production_orders").select("id").eq("source_order_id", orderId).limit(1);
+  if (existing.data && existing.data.length) return false; // já tem OP → não duplica
+
+  const ord = await db
+    .from("carboze_orders")
+    .select("order_number, customer_name, items")
+    .eq("id", orderId).single();
+  if (ord.error || !ord.data) throw ord.error ?? new Error("Pedido não encontrado");
+
+  const items: any[] = Array.isArray(ord.data.items) ? ord.data.items : [];
+  const totalQty = items.reduce((s, it) => s + (Number(it.quantity) || 0), 0) || 1;
+  const label = items.length === 0
+    ? `Pedido ${ord.data.order_number ?? ""}`.trim()
+    : items.length === 1
+      ? String(items[0].name ?? "Produto")
+      : `${items.length} itens · pedido ${ord.data.order_number ?? ""}`.trim();
+
+  const ins = await db.from("production_orders").insert({
+    sku_id: null,
+    planned_quantity: totalQty,
+    op_status: "rascunho",           // → coluna Backlog
+    demand_source: "pos_venda",
+    priority: 3,
+    quality_result: "pendente",
+    source_order_id: orderId,
+    deviation_notes: `Gerada do pós-venda · pedido ${ord.data.order_number ?? ""} · ${ord.data.customer_name ?? ""}`.trim(),
+    // legados exigidos pelo schema original
+    product_code: label,
+    quantity: totalQty,
+    status: "pending",
+  });
+  if (ins.error) throw ins.error;
+  return true;
+}
+
 export function useUpdateFulfillmentStage() {
   const qc = useQueryClient();
   return useMutation({
@@ -92,10 +135,19 @@ export function useUpdateFulfillmentStage() {
         .update({ fulfillment_stage: stage, updated_at: new Date().toISOString() })
         .eq("id", id);
       if (error) throw error;
+      // Ao entrar em "Criar Ordem de Produção", nasce a OP no Backlog (sem duplicar).
+      let opCreated = false;
+      if (stage === "criar_op") {
+        try { opCreated = await ensureProductionOrderForOrder(id); }
+        catch (e) { console.error("[pos-venda] falha ao criar OP:", e); } // não bloqueia a etapa
+      }
+      return { stage, opCreated };
     },
-    onSuccess: () => {
+    onSuccess: (res) => {
       qc.invalidateQueries({ queryKey: ["ops", "pos-venda"] });
-      toast.success("Etapa atualizada.");
+      qc.invalidateQueries({ queryKey: ["ops", "production-orders"] });
+      if (res?.opCreated) toast.success("Etapa atualizada · OP criada no Backlog.");
+      else toast.success("Etapa atualizada.");
     },
     onError: (e: Error) => toast.error("Erro ao atualizar etapa: " + e.message),
   });
