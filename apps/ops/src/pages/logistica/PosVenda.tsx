@@ -53,6 +53,25 @@ export default function PosVenda() {
   const allInStock = stockLines.length > 0 && stockLines.every((l) => l.linked && l.ok);
   const anyUnlinked = stockLines.some((l) => !l.linked);
 
+  // Estoque HUB-RN dos itens do pedido em confirmação (checagem real).
+  const pendingItems = useMemo(
+    () => (Array.isArray(pendingSep?.items) ? pendingSep!.items : []),
+    [pendingSep],
+  );
+  const pendingProductIds = useMemo(
+    () => pendingItems.map((i) => i.product_id).filter(Boolean) as string[],
+    [pendingItems],
+  );
+  const { data: stockMap = {}, isLoading: stockLoading } = useHubRnStock(pendingProductIds, !!pendingSep);
+  const stockLines = pendingItems.map((it) => {
+    const needed = Number(it.quantity) || 0;
+    const pid = it.product_id ?? null;
+    const available = pid ? (stockMap[pid] ?? 0) : null; // null = item sem vínculo de produto
+    return { name: it.name ?? "Item", needed, available, linked: !!pid, ok: available != null && available >= needed };
+  });
+  const allInStock = stockLines.length > 0 && stockLines.every((l) => l.linked && l.ok);
+  const anyUnlinked = stockLines.some((l) => !l.linked);
+
   const byStage = useMemo(() => {
     const map: Record<string, PosVendaOrder[]> = {};
     for (const s of POSVENDA_STAGES) map[s.key] = [];
