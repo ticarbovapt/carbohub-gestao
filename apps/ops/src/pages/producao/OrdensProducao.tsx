@@ -70,7 +70,9 @@ const dt = (s: string | null) => (s ? new Date(s + "T00:00:00").toLocaleDateStri
 export default function OrdensProducao() {
   const canManage = true; // acesso (gestor vs membro) entra na fase de permissões
   const { data: orders = [], isLoading } = useProductionOrders();
-  const { remove } = useProductionOrderMutations();
+  const { remove, setStatus } = useProductionOrderMutations();
+  const [dragId, setDragId] = useState<string | null>(null);
+  const [overCol, setOverCol] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<"list" | "kanban">("list");
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -153,15 +155,36 @@ export default function OrdensProducao() {
           <div className="flex gap-3 overflow-x-auto pb-3">
             {KANBAN_COLUMNS.map((col) => {
               const items = filtered.filter((o) => col.statuses.includes(o.op_status));
+              const isOver = overCol === col.id;
+              const dropHere = () => {
+                if (dragId) {
+                  const cur = orders.find((o) => o.id === dragId);
+                  const target = col.statuses[0];
+                  if (cur && cur.op_status !== target) setStatus.mutate({ id: dragId, op_status: target });
+                }
+                setDragId(null); setOverCol(null);
+              };
               return (
-                <div key={col.id} className="w-64 shrink-0 rounded-2xl border border-border bg-board-surface/40 flex flex-col">
+                <div
+                  key={col.id}
+                  onDragOver={(e) => { e.preventDefault(); setOverCol(col.id); }}
+                  onDragLeave={() => setOverCol((c) => (c === col.id ? null : c))}
+                  onDrop={dropHere}
+                  className={`w-64 shrink-0 rounded-2xl border bg-board-surface/40 flex flex-col transition-colors ${isOver ? "border-primary" : "border-border"}`}
+                >
                   <div className="rounded-t-2xl px-3 py-2.5 border-b border-border flex items-center justify-between" style={{ background: col.color + "12" }}>
                     <span className="text-sm font-semibold flex items-center gap-1.5">{col.emoji} {col.label}</span>
                     <span className="text-xs font-bold rounded-full px-2 py-0.5" style={{ background: col.color + "20", color: col.color }}>{items.length}</span>
                   </div>
                   <div className="p-2 space-y-2 min-h-[80px]">
                     {items.map((o) => (
-                      <div key={o.id} className="rounded-xl border border-border bg-card p-3 relative overflow-hidden">
+                      <div
+                        key={o.id}
+                        draggable
+                        onDragStart={(e) => { e.dataTransfer.setData("text/plain", o.id); setDragId(o.id); }}
+                        onDragEnd={() => { setDragId(null); setOverCol(null); }}
+                        className={`rounded-xl border border-border bg-card p-3 relative overflow-hidden cursor-grab active:cursor-grabbing ${dragId === o.id ? "opacity-50" : ""}`}
+                      >
                         <div className="absolute left-0 top-0 bottom-0 w-1" style={{ background: col.color }} />
                         <div className="flex items-center justify-between gap-2 pl-1.5">
                           <span className="font-mono text-xs font-medium text-blue-500">{o.op_number}</span>

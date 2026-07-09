@@ -69,13 +69,14 @@ export interface PosVendaOrder {
   items: PosVendaItem[];
   created_at: string;
   fulfillment_stage: FulfillmentStage;
+  production_done: boolean;   // OP concluída → aguardando alguém mover p/ Em Separação
   linha: string | null;
 }
 
 const SELECT_COLS =
   "id, order_number, customer_name, customer_email, customer_phone, delivery_address, delivery_city, " +
   "delivery_state, delivery_zip, vendedor_name, vendedor_id, subtotal, shipping_cost, discount, total, " +
-  "notes, items, created_at, fulfillment_stage, linha";
+  "notes, items, created_at, fulfillment_stage, production_done, linha";
 
 /** Todas as vendas manuais (visão de operações). */
 export function usePosVendaOrders() {

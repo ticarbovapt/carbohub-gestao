@@ -137,9 +137,8 @@ export function useProductionOrderMutations() {
     onSuccess: invalidate,
   });
 
-  // Registra o resultado da produção (sem baixa de estoque). Se a OP veio do
-  // pós-venda (source_order_id), a produção "conversa" de volta: o pedido que
-  // estava em "Criar Ordem de Produção" avança para "Em Separação" (separando).
+  // Registra o resultado da produção (sem baixa de estoque). NÃO mexe no pós-venda
+  // aqui — a sinalização acontece quando a OP é CONCLUÍDA (setStatus abaixo).
   const confirm = useMutation({
     mutationFn: async (p: { id: string; goodQuantity: number; rejectedQuantity: number; deviationNotes: string }) => {
       const res = await db.from("production_orders").update({
@@ -150,18 +149,28 @@ export function useProductionOrderMutations() {
         finished_at: new Date().toISOString(),
       }).eq("id", p.id);
       if (res.error) throw res.error;
+    },
+    onSuccess: invalidate,
+  });
 
-      // Volta pro pós-venda: avança o pedido de origem para "Em Separação".
-      try {
-        const op = await db.from("production_orders").select("source_order_id").eq("id", p.id).single();
-        const orderId = op.data?.source_order_id;
-        if (orderId) {
-          await db.from("carboze_orders")
-            .update({ fulfillment_stage: "separando", updated_at: new Date().toISOString() })
-            .eq("id", orderId)
-            .eq("fulfillment_stage", "criar_op"); // só se ainda estiver esperando produção
-        }
-      } catch (e) { console.error("[op-confirm] falha ao avançar o pós-venda:", e); }
+  // Muda o status da OP (mover no kanban). Ao chegar em "concluida", se a OP veio
+  // do pós-venda (source_order_id), marca o pedido como PRODUZIDO (flag) — o card
+  // não se move sozinho; alguém confere e move para "Em Separação".
+  const setStatus = useMutation({
+    mutationFn: async (p: { id: string; op_status: OpStatus }) => {
+      const res = await db.from("production_orders").update({ op_status: p.op_status }).eq("id", p.id);
+      if (res.error) throw res.error;
+      if (p.op_status === "concluida") {
+        try {
+          const op = await db.from("production_orders").select("source_order_id").eq("id", p.id).single();
+          const orderId = op.data?.source_order_id;
+          if (orderId) {
+            await db.from("carboze_orders")
+              .update({ production_done: true, updated_at: new Date().toISOString() })
+              .eq("id", orderId);
+          }
+        } catch (e) { console.error("[op-status] falha ao sinalizar o pós-venda:", e); }
+      }
     },
     onSuccess: () => {
       invalidate();
@@ -177,5 +186,5 @@ export function useProductionOrderMutations() {
     onSuccess: invalidate,
   });
 
-  return { create, update, confirm, remove };
+  return { create, update, confirm, setStatus, remove };
 }
