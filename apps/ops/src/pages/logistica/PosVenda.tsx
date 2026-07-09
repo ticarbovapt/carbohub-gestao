@@ -206,18 +206,31 @@ export default function PosVenda() {
                 <p className="px-3 py-3 text-xs text-muted-foreground">Pedido sem itens.</p>
               ) : (
                 stockLines.map((l, i) => (
-                  <div key={i} className="flex items-center justify-between gap-2 px-3 py-2 text-xs">
-                    <span className="truncate">{l.name}</span>
-                    <span className="flex items-center gap-2 shrink-0 tabular-nums">
-                      <span className="text-muted-foreground">precisa {l.needed}</span>
+                  <div key={i} className="px-3 py-2.5 space-y-1.5">
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="font-medium truncate">{l.name}</span>
                       {!l.linked ? (
-                        <CarboBadge variant="warning">sem vínculo</CarboBadge>
+                        <CarboBadge variant="warning">Sem vínculo</CarboBadge>
                       ) : l.ok ? (
-                        <CarboBadge variant="success">estoque {l.available} ✓</CarboBadge>
+                        <CarboBadge variant="success">Em estoque</CarboBadge>
                       ) : (
-                        <CarboBadge variant="destructive">estoque {l.available} ✗</CarboBadge>
+                        <CarboBadge variant="destructive">Sem estoque</CarboBadge>
                       )}
-                    </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="inline-flex items-baseline gap-1.5 rounded-md bg-muted/50 px-2 py-1">
+                        <span className="text-[10px] uppercase tracking-wide text-muted-foreground">Pedido</span>
+                        <span className="text-sm font-semibold tabular-nums">{l.needed}</span>
+                      </span>
+                      <span className="inline-flex items-baseline gap-1.5 rounded-md bg-muted/50 px-2 py-1">
+                        <span className="text-[10px] uppercase tracking-wide text-muted-foreground">Estoque</span>
+                        <span className={`text-sm font-semibold tabular-nums ${
+                          !l.linked ? "text-muted-foreground" : l.ok ? "text-emerald-500" : "text-destructive"
+                        }`}>
+                          {l.linked ? l.available : "—"}
+                        </span>
+                      </span>
+                    </div>
                   </div>
                 ))
               )}
