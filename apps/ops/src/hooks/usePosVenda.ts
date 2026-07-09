@@ -114,6 +114,44 @@ export function usePosVendaOrders() {
   });
 }
 
+// Setor atual da OP no kanban de produção (para acompanhar no pós-venda).
+const OP_SECTOR: Record<string, string> = {
+  rascunho: "Backlog", planejada: "Planejada",
+  aguardando_separacao: "Materiais", separada: "Materiais",
+  aguardando_liberacao: "Lib. Produção", liberada_producao: "Lib. Produção",
+  em_producao: "Em Produção",
+  aguardando_confirmacao: "Qualidade", confirmada: "Qualidade",
+  aguardando_qualidade: "Qualidade", qualidade_aprovada: "Qualidade",
+  liberada: "Liberada", concluida: "Concluída",
+  bloqueada: "Bloqueada", cancelada: "Cancelada",
+};
+export const opSector = (status?: string | null) => (status && OP_SECTOR[status]) || "Backlog";
+
+export interface OpBrief { op_status: string; op_number: string | null; }
+
+/** OP vinculada a cada pedido (source_order_id) — para mostrar em que setor da
+ *  produção o pedido está enquanto não é concluído. */
+export function useOpsBySource(orderIds: string[], enabled: boolean) {
+  const ids = [...new Set(orderIds.filter(Boolean))] as string[];
+  return useQuery({
+    queryKey: ["ops", "op-by-order", [...ids].sort()],
+    enabled: enabled && ids.length > 0,
+    queryFn: async (): Promise<Record<string, OpBrief>> => {
+      const res = await db
+        .from("production_orders").select("source_order_id, op_status, op_number")
+        .in("source_order_id", ids);
+      const map: Record<string, OpBrief> = {};
+      for (const r of (res.data ?? [])) {
+        if (r.source_order_id && !map[r.source_order_id]) {
+          map[r.source_order_id] = { op_status: r.op_status, op_number: r.op_number };
+        }
+      }
+      return map;
+    },
+    refetchInterval: 30_000,
+  });
+}
+
 // Garante uma OP (production_orders) para o pedido que entrou em "Criar Ordem de
 // Produção". Não duplica: se já existe OP vinculada ao pedido, não cria de novo.
 // A OP nasce em "rascunho" (coluna Backlog do kanban de produção), vinculada ao

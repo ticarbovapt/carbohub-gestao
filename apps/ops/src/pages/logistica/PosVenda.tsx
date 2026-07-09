@@ -6,8 +6,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Button } from "@/components/ui/button";
 import { CarboBadge } from "@/components/ui/carbo-badge";
 import {
-  usePosVendaOrders, useUpdateFulfillmentStage, useHubRnStock, POSVENDA_STAGES,
-  type FulfillmentStage, type PosVendaOrder,
+  usePosVendaOrders, useUpdateFulfillmentStage, useHubRnStock, useOpsBySource, opSector,
+  POSVENDA_STAGES, type FulfillmentStage, type PosVendaOrder,
 } from "@/hooks/usePosVenda";
 
 const brl = (v: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v || 0);
@@ -52,6 +52,15 @@ export default function PosVenda() {
   });
   const allInStock = stockLines.length > 0 && stockLines.every((l) => l.linked && l.ok);
   const anyUnlinked = stockLines.some((l) => !l.linked);
+  const stockKnown = stockLines.length > 0 && !anyUnlinked;
+  const hasStock = stockKnown && allInStock;
+
+  // Acompanhamento: em que setor da produção está cada pedido de "Criar OP".
+  const criarOpIds = useMemo(
+    () => orders.filter((o) => o.fulfillment_stage === "criar_op").map((o) => o.id),
+    [orders],
+  );
+  const { data: opByOrder = {} } = useOpsBySource(criarOpIds, criarOpIds.length > 0);
 
   const byStage = useMemo(() => {
     const map: Record<string, PosVendaOrder[]> = {};
@@ -138,8 +147,12 @@ export default function PosVenda() {
                             <span className="text-sm font-semibold tabular-nums shrink-0">{brl(Number(o.total))}</span>
                           </div>
                           <p className="text-xs text-muted-foreground font-mono">{o.order_number || "—"}</p>
-                          {o.production_done && o.fulfillment_stage === "criar_op" && (
-                            <CarboBadge variant="success" className="gap-1">✅ Produzido — mover p/ Em Separação</CarboBadge>
+                          {o.fulfillment_stage === "criar_op" && (
+                            o.production_done ? (
+                              <CarboBadge variant="success" className="gap-1">✅ Produzido — mover p/ Em Separação</CarboBadge>
+                            ) : opByOrder[o.id] ? (
+                              <CarboBadge variant="default" className="gap-1">🏭 Produção: {opSector(opByOrder[o.id].op_status)}</CarboBadge>
+                            ) : null
                           )}
                           <div className="flex items-center gap-3 text-xs text-muted-foreground">
                             {o.vendedor_name && <VendedorTag name={o.vendedor_name} avatar={o.vendedor_avatar} />}
@@ -179,22 +192,15 @@ export default function PosVenda() {
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>
-              {pending?.target === "criar_op"
-                ? (allInStock ? "Produto tem estoque" : "Abrir Ordem de Produção")
-                : (allInStock ? "Confirmar separação" : "Sem estoque para separar")}
+              {stockLoading ? "Conferindo estoque…" : hasStock ? "Produto em estoque" : "Sem estoque"}
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-3 text-sm">
-            <p className="text-xs text-muted-foreground">
-              Pedido <span className="font-mono">{pending?.order.order_number}</span> ·{" "}
-              <strong>{pending?.order.customer_name}</strong> · estoque conferido no <strong>HUB-RN (Natal)</strong>.
-            </p>
-
-            {/* Itens: quantidade pedida × disponível no estoque */}
+            {/* Itens: quantidade pedida × disponível no HUB-RN */}
             <div className="rounded-lg border border-border divide-y">
               {stockLoading ? (
                 <div className="flex items-center gap-2 px-3 py-3 text-xs text-muted-foreground">
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" /> Conferindo estoque…
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" /> Conferindo estoque no HUB-RN…
                 </div>
               ) : stockLines.length === 0 ? (
                 <p className="px-3 py-3 text-xs text-muted-foreground">Pedido sem itens.</p>
@@ -217,51 +223,48 @@ export default function PosVenda() {
               )}
             </div>
 
-            {/* Mensagem ciente do destino + estoque */}
-            {!stockLoading && stockLines.length > 0 && (
-              <p className={`text-xs ${allInStock ? "text-emerald-500" : "text-amber-500"}`}>
-                {anyUnlinked
-                  ? "⚠ Há item sem produto vinculado (venda antiga). Confira o estoque manualmente."
-                  : pending?.target === "criar_op"
-                    ? (allInStock
-                        ? "Este produto TEM estoque. Deseja abrir uma Ordem de Produção mesmo assim?"
-                        : "Sem estoque — a OP será aberta para produzir a quantidade.")
-                    : (allInStock
-                        ? "✓ Tem estoque para todos os itens — pode separar."
-                        : "✗ Falta estoque — é preciso abrir uma Ordem de Produção.")}
-              </p>
+            {!stockLoading && (
+              <>
+                {/* Mensagem curta + ações, por caso */}
+                {!stockKnown ? (
+                  /* Não deu para conferir (item sem vínculo de produto). */
+                  <>
+                    <p className="text-xs text-amber-500">Não deu para conferir o estoque (item sem produto vinculado). Escolha:</p>
+                    <div className="flex flex-col gap-2 pt-1">
+                      <Button className="w-full" onClick={() => commitStage("criar_op")}>Produzir → Criar Ordem de Produção</Button>
+                      <Button className="w-full" variant="outline" onClick={() => commitStage("separando")}>Tem estoque → Em Separação</Button>
+                    </div>
+                  </>
+                ) : hasStock ? (
+                  pending?.target === "criar_op" ? (
+                    /* Tem estoque, mas o operador mandou produzir. */
+                    <>
+                      <p className="text-xs text-muted-foreground">Este produto <strong>tem estoque</strong>. Deseja produzir mesmo assim?</p>
+                      <div className="flex flex-col gap-2 pt-1">
+                        <Button className="w-full" onClick={() => commitStage("criar_op")}>Sim, produzir</Button>
+                        <Button className="w-full" variant="outline" onClick={() => commitStage("separando")}>Não, usar o estoque → Em Separação</Button>
+                      </div>
+                    </>
+                  ) : (
+                    /* Tem estoque e vai separar. */
+                    <>
+                      <p className="text-xs text-emerald-500">Tem estoque para separar.</p>
+                      <div className="flex flex-col gap-2 pt-1">
+                        <Button className="w-full" onClick={() => commitStage("separando")}>Confirmar → Em Separação</Button>
+                      </div>
+                    </>
+                  )
+                ) : (
+                  /* Sem estoque → obrigatório produzir. */
+                  <>
+                    <p className="text-xs text-amber-500">Produto sem estoque — é necessário produzir.</p>
+                    <div className="flex flex-col gap-2 pt-1">
+                      <Button className="w-full" onClick={() => commitStage("criar_op")}>OK, produzir → Criar Ordem de Produção</Button>
+                    </div>
+                  </>
+                )}
+              </>
             )}
-
-            {/* Ações conforme destino + estoque */}
-            <div className="flex flex-col gap-2 pt-1">
-              {pending?.target === "criar_op" ? (
-                <>
-                  <Button className="w-full" onClick={() => commitStage("criar_op")}>
-                    {allInStock ? "Sim, abrir OP → Criar Ordem de Produção" : "Abrir Ordem de Produção"}
-                  </Button>
-                  {allInStock && (
-                    <Button className="w-full" variant="outline" onClick={() => commitStage("separando")}>
-                      Não, tem estoque → Em Separação
-                    </Button>
-                  )}
-                </>
-              ) : (
-                <>
-                  <Button
-                    className="w-full"
-                    variant={allInStock ? "default" : "outline"}
-                    onClick={() => commitStage("separando")}
-                  >
-                    {allInStock ? "Tem estoque → Em Separação" : "Separar mesmo assim → Em Separação"}
-                  </Button>
-                  {!allInStock && (
-                    <Button className="w-full" onClick={() => commitStage("criar_op")}>
-                      Abrir Ordem de Produção
-                    </Button>
-                  )}
-                </>
-              )}
-            </div>
           </div>
         </DialogContent>
       </Dialog>
