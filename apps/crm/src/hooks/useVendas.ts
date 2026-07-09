@@ -15,7 +15,7 @@ const db = supabase as unknown as {
 export type VendaStatus = "orcamento" | "pedido" | "cancelado";
 export type VendaTipo = "venda" | "promo";
 
-export interface VendaItemInput { produto: string; quantidade: number; preco_unitario: number; bonificacao?: number; }
+export interface VendaItemInput { produto: string; quantidade: number; preco_unitario: number; bonificacao?: number; product_id?: string | null; product_code?: string | null; }
 
 export interface NovaVendaInput {
   tipo: VendaTipo; status: VendaStatus;
@@ -196,7 +196,13 @@ export function useCreateVenda() {
       const deliveryAddr = ([e.logradouro, e.numero].filter(Boolean).join(", ") + (e.bairro ? ` - ${e.bairro}` : "")).trim();
       const items = (input.itens ?? [])
         .filter((i) => i.produto && i.quantidade > 0)
-        .map((i) => ({ name: i.produto, quantity: i.quantidade, unit_price: i.preco_unitario, bonificacao: i.bonificacao ?? 0, total: i.quantidade * i.preco_unitario }));
+        .map((i) => ({
+          name: i.produto, quantity: i.quantidade, unit_price: i.preco_unitario,
+          bonificacao: i.bonificacao ?? 0, total: i.quantidade * i.preco_unitario,
+          // Vínculo com o catálogo (mrp_products) → habilita checagem de estoque
+          // no pós-venda e casamento de produto no Bling.
+          product_id: i.product_id ?? null, product_code: i.product_code ?? null,
+        }));
       const { data: u } = await supabase.auth.getUser();
       let vendedorName: string | null = null;
       if (u?.user?.id) {
