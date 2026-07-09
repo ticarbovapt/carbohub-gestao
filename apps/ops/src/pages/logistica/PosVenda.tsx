@@ -31,19 +31,19 @@ export default function PosVenda() {
   const [dragId, setDragId] = useState<string | null>(null);
   const [overStage, setOverStage] = useState<FulfillmentStage | null>(null);
   const [detail, setDetail] = useState<PosVendaOrder | null>(null);
-  // Pedido aguardando a confirmação de estoque para ir a "Em Separação".
-  const [pendingSep, setPendingSep] = useState<PosVendaOrder | null>(null);
+  // Pedido + destino aguardando confirmação (Em Separação OU Criar Ordem de Produção).
+  const [pending, setPending] = useState<{ order: PosVendaOrder; target: FulfillmentStage } | null>(null);
 
   // Estoque HUB-RN dos itens do pedido em confirmação (checagem real).
   const pendingItems = useMemo(
-    () => (Array.isArray(pendingSep?.items) ? pendingSep!.items : []),
-    [pendingSep],
+    () => (Array.isArray(pending?.order.items) ? pending!.order.items : []),
+    [pending],
   );
   const pendingProductIds = useMemo(
     () => pendingItems.map((i) => i.product_id).filter(Boolean) as string[],
     [pendingItems],
   );
-  const { data: stockMap = {}, isLoading: stockLoading } = useHubRnStock(pendingProductIds, !!pendingSep);
+  const { data: stockMap = {}, isLoading: stockLoading } = useHubRnStock(pendingProductIds, !!pending);
   const stockLines = pendingItems.map((it) => {
     const needed = Number(it.quantity) || 0;
     const pid = it.product_id ?? null;
@@ -60,12 +60,18 @@ export default function PosVenda() {
     return map;
   }, [orders]);
 
-  // Portão: "Em Separação" exige estoque. Sem SKU vinculado no item não dá pra
-  // checar automático, então pede confirmação — e oferece mandar pra produção.
+  // Portão: mover para "Em Separação" ou "Criar Ordem de Produção" abre a caixa de
+  // confirmação ciente do estoque (a decisão final é do operador).
   function requestStage(order: PosVendaOrder, stage: FulfillmentStage) {
     if (order.fulfillment_stage === stage) return;
-    if (stage === "separando") { setPendingSep(order); return; }
+    if (stage === "separando" || stage === "criar_op") { setPending({ order, target: stage }); return; }
     updateStage.mutate({ id: order.id, stage });
+  }
+
+  // Aplica a etapa escolhida na caixa e fecha.
+  function commitStage(stage: FulfillmentStage) {
+    if (pending) updateStage.mutate({ id: pending.order.id, stage });
+    setPending(null);
   }
 
   const drop = (stage: FulfillmentStage) => {
@@ -132,6 +138,9 @@ export default function PosVenda() {
                             <span className="text-sm font-semibold tabular-nums shrink-0">{brl(Number(o.total))}</span>
                           </div>
                           <p className="text-xs text-muted-foreground font-mono">{o.order_number || "—"}</p>
+                          {o.production_done && o.fulfillment_stage === "criar_op" && (
+                            <CarboBadge variant="success" className="gap-1">✅ Produzido — mover p/ Em Separação</CarboBadge>
+                          )}
                           <div className="flex items-center gap-3 text-xs text-muted-foreground">
                             {o.vendedor_name && <VendedorTag name={o.vendedor_name} avatar={o.vendedor_avatar} />}
                             <span className="flex items-center gap-1 shrink-0"><Calendar className="h-3.5 w-3.5" /> {fmtDate(o.created_at)}</span>
@@ -165,16 +174,20 @@ export default function PosVenda() {
         </p>
       </div>
 
-      {/* Portão de estoque para "Em Separação" */}
-      <Dialog open={!!pendingSep} onOpenChange={(o) => !o && setPendingSep(null)}>
+      {/* Portão de estoque — vale para Em Separação e Criar Ordem de Produção */}
+      <Dialog open={!!pending} onOpenChange={(o) => !o && setPending(null)}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Tem estoque para separar?</DialogTitle>
+            <DialogTitle>
+              {pending?.target === "criar_op"
+                ? (allInStock ? "Produto tem estoque" : "Abrir Ordem de Produção")
+                : (allInStock ? "Confirmar separação" : "Sem estoque para separar")}
+            </DialogTitle>
           </DialogHeader>
           <div className="space-y-3 text-sm">
             <p className="text-xs text-muted-foreground">
-              Pedido <span className="font-mono">{pendingSep?.order_number}</span> ·{" "}
-              <strong>{pendingSep?.customer_name}</strong> · estoque conferido no <strong>HUB-RN (Natal)</strong>.
+              Pedido <span className="font-mono">{pending?.order.order_number}</span> ·{" "}
+              <strong>{pending?.order.customer_name}</strong> · estoque conferido no <strong>HUB-RN (Natal)</strong>.
             </p>
 
             {/* Itens: quantidade pedida × disponível no estoque */}
@@ -204,31 +217,50 @@ export default function PosVenda() {
               )}
             </div>
 
+            {/* Mensagem ciente do destino + estoque */}
             {!stockLoading && stockLines.length > 0 && (
               <p className={`text-xs ${allInStock ? "text-emerald-500" : "text-amber-500"}`}>
-                {allInStock
-                  ? "✓ Tem estoque para todos os itens — pode separar."
-                  : anyUnlinked
-                    ? "⚠ Há item sem produto vinculado (venda antiga). Confira o estoque manualmente."
-                    : "✗ Falta estoque — recomendado Criar Ordem de Produção."}
+                {anyUnlinked
+                  ? "⚠ Há item sem produto vinculado (venda antiga). Confira o estoque manualmente."
+                  : pending?.target === "criar_op"
+                    ? (allInStock
+                        ? "Este produto TEM estoque. Deseja abrir uma Ordem de Produção mesmo assim?"
+                        : "Sem estoque — a OP será aberta para produzir a quantidade.")
+                    : (allInStock
+                        ? "✓ Tem estoque para todos os itens — pode separar."
+                        : "✗ Falta estoque — é preciso abrir uma Ordem de Produção.")}
               </p>
             )}
 
+            {/* Ações conforme destino + estoque */}
             <div className="flex flex-col gap-2 pt-1">
-              <Button
-                className="w-full"
-                variant={allInStock ? "default" : "outline"}
-                onClick={() => { if (pendingSep) updateStage.mutate({ id: pendingSep.id, stage: "separando" }); setPendingSep(null); }}
-              >
-                {allInStock ? "Tem estoque → Em Separação" : "Separar mesmo assim → Em Separação"}
-              </Button>
-              <Button
-                className="w-full"
-                variant={allInStock ? "outline" : "default"}
-                onClick={() => { if (pendingSep) requestStage(pendingSep, "criar_op"); setPendingSep(null); }}
-              >
-                Sem estoque → Criar Ordem de Produção
-              </Button>
+              {pending?.target === "criar_op" ? (
+                <>
+                  <Button className="w-full" onClick={() => commitStage("criar_op")}>
+                    {allInStock ? "Sim, abrir OP → Criar Ordem de Produção" : "Abrir Ordem de Produção"}
+                  </Button>
+                  {allInStock && (
+                    <Button className="w-full" variant="outline" onClick={() => commitStage("separando")}>
+                      Não, tem estoque → Em Separação
+                    </Button>
+                  )}
+                </>
+              ) : (
+                <>
+                  <Button
+                    className="w-full"
+                    variant={allInStock ? "default" : "outline"}
+                    onClick={() => commitStage("separando")}
+                  >
+                    {allInStock ? "Tem estoque → Em Separação" : "Separar mesmo assim → Em Separação"}
+                  </Button>
+                  {!allInStock && (
+                    <Button className="w-full" onClick={() => commitStage("criar_op")}>
+                      Abrir Ordem de Produção
+                    </Button>
+                  )}
+                </>
+              )}
             </div>
           </div>
         </DialogContent>
