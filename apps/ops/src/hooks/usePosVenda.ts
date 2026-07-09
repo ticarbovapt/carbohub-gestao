@@ -11,17 +11,18 @@ import { toast } from "sonner";
 const db = supabase as unknown as { from: (t: string) => any };
 
 export type FulfillmentStage =
-  | "nova_venda" | "separacao_pendente" | "separando" | "separado"
+  | "nova_venda" | "separacao_pendente" | "criar_op" | "separando" | "separado"
   | "em_transporte" | "entregue" | "cancelado";
 
 export const POSVENDA_STAGES: { key: FulfillmentStage; label: string; color: string }[] = [
-  { key: "nova_venda",          label: "Nova Venda",            color: "#9333ea" },
-  { key: "separacao_pendente",  label: "Aguardando Separação",  color: "#f59e0b" },
-  { key: "separando",           label: "Em Separação",          color: "#3b82f6" },
-  { key: "separado",            label: "Separado",              color: "#8b5cf6" },
-  { key: "em_transporte",       label: "Em Transporte",         color: "#06b6d4" },
-  { key: "entregue",            label: "Entregue",              color: "#10b981" },
-  { key: "cancelado",           label: "Cancelado",             color: "#ef4444" },
+  { key: "nova_venda",          label: "Nova Venda",              color: "#9333ea" },
+  { key: "separacao_pendente",  label: "Pedido Recebido",         color: "#f59e0b" },
+  { key: "criar_op",            label: "Criar Ordem de Produção", color: "#ec4899" },
+  { key: "separando",           label: "Em Separação",            color: "#3b82f6" },
+  { key: "separado",            label: "Separado",                color: "#8b5cf6" },
+  { key: "em_transporte",       label: "Em Transporte",           color: "#06b6d4" },
+  { key: "entregue",            label: "Entregue",                color: "#10b981" },
+  { key: "cancelado",           label: "Cancelado",               color: "#ef4444" },
 ];
 
 export interface PosVendaItem { name?: string; quantity?: number; unit_price?: number; total?: number; }
