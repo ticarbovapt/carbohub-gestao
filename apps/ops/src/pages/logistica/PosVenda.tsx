@@ -230,6 +230,16 @@ export default function PosVenda() {
                           {l.linked ? l.available : "—"}
                         </span>
                       </span>
+                      {l.linked && (
+                        <span className="inline-flex items-baseline gap-1.5 rounded-md bg-muted/50 px-2 py-1">
+                          <span className="text-[10px] uppercase tracking-wide text-muted-foreground">Sobra</span>
+                          <span className={`text-sm font-semibold tabular-nums ${
+                            (l.available! - l.needed) < 0 ? "text-destructive" : "text-foreground"
+                          }`}>
+                            {l.available! - l.needed}
+                          </span>
+                        </span>
+                      )}
                     </div>
                   </div>
                 ))

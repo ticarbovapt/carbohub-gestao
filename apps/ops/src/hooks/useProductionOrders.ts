@@ -14,6 +14,7 @@ import { supabase } from "@/integrations/supabase/client";
 const db = supabase as unknown as {
   from: (t: string) => any;
   auth: { getUser: () => Promise<{ data: { user: { id: string } | null } }> };
+  rpc: (fn: string, args?: Record<string, unknown>) => Promise<{ data: any; error: any }>;
 };
 
 export type OpStatus =
@@ -165,16 +166,16 @@ export function useProductionOrderMutations() {
           const op = await db.from("production_orders").select("source_order_id").eq("id", p.id).single();
           const orderId = op.data?.source_order_id;
           if (orderId) {
-            await db.from("carboze_orders")
-              .update({ production_done: true, updated_at: new Date().toISOString() })
-              .eq("id", orderId);
+            // Credita o estoque do HUB-RN + marca production_done (idempotente no banco).
+            await db.rpc("pos_venda_credit_stock", { p_order_id: orderId });
           }
-        } catch (e) { console.error("[op-status] falha ao sinalizar o pós-venda:", e); }
+        } catch (e) { console.error("[op-status] falha ao creditar estoque/sinalizar o pós-venda:", e); }
       }
     },
     onSuccess: () => {
       invalidate();
       qc.invalidateQueries({ queryKey: ["ops", "pos-venda"] });
+      qc.invalidateQueries({ queryKey: ["ops", "hubrn-stock"] });
     },
   });
 

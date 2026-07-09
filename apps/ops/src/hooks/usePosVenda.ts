@@ -8,7 +8,10 @@ import { toast } from "sonner";
 // não entram aqui. O Ops controla a etapa; o Sales só visualiza.
 // ─────────────────────────────────────────────────────────────────────────────
 
-const db = supabase as unknown as { from: (t: string) => any };
+const db = supabase as unknown as {
+  from: (t: string) => any;
+  rpc: (fn: string, args?: Record<string, unknown>) => Promise<{ data: any; error: any }>;
+};
 
 export type FulfillmentStage =
   | "nova_venda" | "separacao_pendente" | "criar_op" | "separando" | "separado"
@@ -211,13 +214,20 @@ export function useUpdateFulfillmentStage() {
         try { opCreated = await ensureProductionOrderForOrder(id); }
         catch (e) { opError = e instanceof Error ? e.message : String(e); console.error("[pos-venda] falha ao criar OP:", e); }
       }
+      // Ao SEPARAR, deduz o estoque real do HUB-RN (idempotente no banco).
+      if (stage === "separado") {
+        try { await db.rpc("pos_venda_deduct_stock", { p_order_id: id }); }
+        catch (e) { console.error("[pos-venda] falha ao deduzir estoque:", e); }
+      }
       return { stage, opCreated, opError };
     },
     onSuccess: (res) => {
       qc.invalidateQueries({ queryKey: ["ops", "pos-venda"] });
       qc.invalidateQueries({ queryKey: ["ops", "production-orders"] });
+      qc.invalidateQueries({ queryKey: ["ops", "hubrn-stock"] });
       if (res?.opError) toast.error("Etapa mudou, mas falhou ao criar a OP: " + res.opError, { duration: 10000 });
       else if (res?.opCreated) toast.success("Etapa atualizada · OP criada no Backlog.");
+      else if (res?.stage === "separado") toast.success("Separado · estoque deduzido do HUB-RN.");
       else toast.success("Etapa atualizada.");
     },
     onError: (e: Error) => toast.error("Erro ao atualizar etapa: " + e.message),
