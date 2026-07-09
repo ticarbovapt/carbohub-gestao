@@ -37,7 +37,7 @@ const OP_STATUS_COLORS: Record<OpStatus, string> = {
 };
 const PRIORITY_LABELS: Record<number, string> = { 1: "Urgente", 2: "Alta", 3: "Normal", 4: "Baixa", 5: "Planejado" };
 const PRIORITY_BADGE_COLORS: Record<number, string> = { 1: "bg-red-500", 2: "bg-orange-500", 3: "bg-blue-500", 4: "bg-gray-400", 5: "bg-gray-300" };
-const DEMAND_SOURCE_LABELS: Record<string, string> = { venda: "Venda", recorrencia: "Recorrência", safety_stock: "Safety Stock", pcp_manual: "PCP Manual" };
+const DEMAND_SOURCE_LABELS: Record<string, string> = { venda: "Venda", recorrencia: "Recorrência", safety_stock: "Safety Stock", pcp_manual: "PCP Manual", pos_venda: "Pós-venda" };
 
 const KANBAN_COLUMNS: { id: string; label: string; emoji: string; color: string; statuses: OpStatus[] }[] = [
   { id: "backlog", label: "Backlog", emoji: "📋", color: "#64748b", statuses: ["rascunho"] },
