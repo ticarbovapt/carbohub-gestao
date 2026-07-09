@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
-  Factory, Plus, LayoutGrid, List, Search, TrendingUp, Target, CheckCircle, XCircle,
+  Factory, Plus, LayoutGrid, List, Search, TrendingUp, Target, XCircle,
   Pencil, Trash2, ClipboardCheck, Loader2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -73,7 +73,14 @@ export default function OrdensProducao() {
   const { remove, setStatus } = useProductionOrderMutations();
   const [dragId, setDragId] = useState<string | null>(null);
   const [overCol, setOverCol] = useState<string | null>(null);
-  const [viewMode, setViewMode] = useState<"list" | "kanban">("list");
+  // Abre no Kanban por padrão e LEMBRA a última escolha (persiste no F5).
+  const [viewMode, setViewMode] = useState<"list" | "kanban">(() => {
+    const saved = typeof localStorage !== "undefined" ? localStorage.getItem("ops:op-view") : null;
+    return saved === "list" || saved === "kanban" ? saved : "kanban";
+  });
+  useEffect(() => {
+    try { localStorage.setItem("ops:op-view", viewMode); } catch { /* ignora */ }
+  }, [viewMode]);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [priorityFilter, setPriorityFilter] = useState("all");
@@ -83,7 +90,17 @@ export default function OrdensProducao() {
   const [confirmOp, setConfirmOp] = useState<OP | null>(null);
   const [deleteOp, setDeleteOp] = useState<OP | null>(null);
 
-  const confirmadas = orders.filter((o) => o.op_status === "confirmada" || o.op_status === "concluida").length;
+  // ── Indicadores (todos calculados a partir das OPs reais) ──────────────────
+  const abertas = orders.filter((o) => o.op_status !== "concluida" && o.op_status !== "cancelada");
+  const aProduzir = abertas.reduce((s, o) => s + (o.planned_quantity || 0), 0);
+  // Rendimento = aprovado / (aprovado + rejeitado), média das OPs com produção registrada.
+  const finished = orders.filter((o) => (o.good_quantity ?? 0) + (o.rejected_quantity ?? 0) > 0);
+  const rendimento = finished.length
+    ? Math.round((finished.reduce((s, o) => {
+        const g = o.good_quantity ?? 0, r = o.rejected_quantity ?? 0;
+        return s + g / (g + r);
+      }, 0) / finished.length) * 100)
+    : null;
   const perdasTotais = orders.reduce((s, o) => s + (o.rejected_quantity ?? 0), 0);
 
   const filtered = useMemo(() => orders.filter((o) => {
@@ -107,11 +124,11 @@ export default function OrdensProducao() {
           </div>
           <div className="flex items-center gap-2">
             <div className="flex rounded-lg border overflow-hidden">
-              <button onClick={() => setViewMode("list")} className={`px-3 py-2 text-xs flex items-center gap-1.5 transition-colors ${viewMode === "list" ? "bg-primary text-primary-foreground" : "hover:bg-muted text-muted-foreground"}`}>
-                <List className="h-3.5 w-3.5" /> Lista
-              </button>
-              <button onClick={() => setViewMode("kanban")} className={`px-3 py-2 text-xs flex items-center gap-1.5 border-l transition-colors ${viewMode === "kanban" ? "bg-primary text-primary-foreground" : "hover:bg-muted text-muted-foreground"}`}>
+              <button onClick={() => setViewMode("kanban")} className={`px-3 py-2 text-xs flex items-center gap-1.5 transition-colors ${viewMode === "kanban" ? "bg-primary text-primary-foreground" : "hover:bg-muted text-muted-foreground"}`}>
                 <LayoutGrid className="h-3.5 w-3.5" /> Kanban
+              </button>
+              <button onClick={() => setViewMode("list")} className={`px-3 py-2 text-xs flex items-center gap-1.5 border-l transition-colors ${viewMode === "list" ? "bg-primary text-primary-foreground" : "hover:bg-muted text-muted-foreground"}`}>
+                <List className="h-3.5 w-3.5" /> Lista
               </button>
             </div>
             {canManage && <Button onClick={() => setCreateOpen(true)} className="gap-2"><Plus className="h-4 w-4" /> Nova OP</Button>}
@@ -120,10 +137,10 @@ export default function OrdensProducao() {
 
         {/* KPIs */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <KpiCard icon={TrendingUp} label="Rendimento Médio" value="—" sub="Últimos 30 dias" color="text-green-500" />
-          <KpiCard icon={Target} label="Aderência BOM" value="—" sub="Últimos 30 dias" color="text-yellow-500" />
-          <KpiCard icon={CheckCircle} label="OPs Confirmadas" value={String(confirmadas)} sub="Confirmadas / concluídas" color="text-green-500" />
-          <KpiCard icon={XCircle} label="Perdas Totais" value={String(perdasTotais)} sub="Unidades rejeitadas" color="text-red-500" />
+          <KpiCard icon={Factory} label="OPs Abertas" value={String(abertas.length)} sub="em andamento" color="text-orange-500" />
+          <KpiCard icon={Target} label="A Produzir" value={`${aProduzir} un`} sub="planejado nas OPs abertas" color="text-blue-500" />
+          <KpiCard icon={TrendingUp} label="Rendimento Médio" value={rendimento != null ? `${rendimento}%` : "—"} sub="aprovado / produzido" color="text-green-500" />
+          <KpiCard icon={XCircle} label="Perdas Totais" value={String(perdasTotais)} sub="unidades rejeitadas" color="text-red-500" />
         </div>
 
         {/* Filtros */}
