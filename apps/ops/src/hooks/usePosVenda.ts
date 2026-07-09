@@ -25,7 +25,28 @@ export const POSVENDA_STAGES: { key: FulfillmentStage; label: string; color: str
   { key: "cancelado",           label: "Cancelado",               color: "#ef4444" },
 ];
 
-export interface PosVendaItem { name?: string; quantity?: number; unit_price?: number; total?: number; }
+export interface PosVendaItem { name?: string; quantity?: number; unit_price?: number; total?: number; product_id?: string | null; product_code?: string | null; }
+
+// Estoque do HUB-RN (Natal) por produto — fonte de verdade warehouse_stock.
+// Usado no portão do pós-venda: compara a quantidade do item com o disponível.
+export function useHubRnStock(productIds: string[], enabled: boolean) {
+  const ids = [...new Set(productIds.filter(Boolean))] as string[];
+  return useQuery({
+    queryKey: ["ops", "hubrn-stock", [...ids].sort()],
+    enabled: enabled && ids.length > 0,
+    queryFn: async (): Promise<Record<string, number>> => {
+      const wh = await db.from("warehouses").select("id").eq("code", "HUB-RN").maybeSingle();
+      const whId = wh.data?.id;
+      if (!whId) return {};
+      const st = await db
+        .from("warehouse_stock").select("product_id, quantity")
+        .eq("warehouse_id", whId).in("product_id", ids);
+      const map: Record<string, number> = {};
+      for (const r of (st.data ?? [])) map[r.product_id] = Number(r.quantity) || 0;
+      return map;
+    },
+  });
+}
 
 export interface PosVendaOrder {
   id: string;

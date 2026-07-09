@@ -6,7 +6,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Button } from "@/components/ui/button";
 import { CarboBadge } from "@/components/ui/carbo-badge";
 import {
-  usePosVendaOrders, useUpdateFulfillmentStage, POSVENDA_STAGES,
+  usePosVendaOrders, useUpdateFulfillmentStage, useHubRnStock, POSVENDA_STAGES,
   type FulfillmentStage, type PosVendaOrder,
 } from "@/hooks/usePosVenda";
 
@@ -33,6 +33,25 @@ export default function PosVenda() {
   const [detail, setDetail] = useState<PosVendaOrder | null>(null);
   // Pedido aguardando a confirmação de estoque para ir a "Em Separação".
   const [pendingSep, setPendingSep] = useState<PosVendaOrder | null>(null);
+
+  // Estoque HUB-RN dos itens do pedido em confirmação (checagem real).
+  const pendingItems = useMemo(
+    () => (Array.isArray(pendingSep?.items) ? pendingSep!.items : []),
+    [pendingSep],
+  );
+  const pendingProductIds = useMemo(
+    () => pendingItems.map((i) => i.product_id).filter(Boolean) as string[],
+    [pendingItems],
+  );
+  const { data: stockMap = {}, isLoading: stockLoading } = useHubRnStock(pendingProductIds, !!pendingSep);
+  const stockLines = pendingItems.map((it) => {
+    const needed = Number(it.quantity) || 0;
+    const pid = it.product_id ?? null;
+    const available = pid ? (stockMap[pid] ?? 0) : null; // null = item sem vínculo de produto
+    return { name: it.name ?? "Item", needed, available, linked: !!pid, ok: available != null && available >= needed };
+  });
+  const allInStock = stockLines.length > 0 && stockLines.every((l) => l.linked && l.ok);
+  const anyUnlinked = stockLines.some((l) => !l.linked);
 
   const byStage = useMemo(() => {
     const map: Record<string, PosVendaOrder[]> = {};
@@ -153,26 +172,62 @@ export default function PosVenda() {
             <DialogTitle>Tem estoque para separar?</DialogTitle>
           </DialogHeader>
           <div className="space-y-3 text-sm">
-            <p>
-              O pedido <span className="font-mono">{pendingSep?.order_number}</span> de{" "}
-              <strong>{pendingSep?.customer_name}</strong> só vai para <strong>Em Separação</strong> se houver estoque.
-            </p>
             <p className="text-xs text-muted-foreground">
-              Sem estoque, mande para <strong>Criar Ordem de Produção</strong> — a OP nasce no Backlog para produzir a quantidade.
+              Pedido <span className="font-mono">{pendingSep?.order_number}</span> ·{" "}
+              <strong>{pendingSep?.customer_name}</strong> · estoque conferido no <strong>HUB-RN (Natal)</strong>.
             </p>
+
+            {/* Itens: quantidade pedida × disponível no estoque */}
+            <div className="rounded-lg border border-border divide-y">
+              {stockLoading ? (
+                <div className="flex items-center gap-2 px-3 py-3 text-xs text-muted-foreground">
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" /> Conferindo estoque…
+                </div>
+              ) : stockLines.length === 0 ? (
+                <p className="px-3 py-3 text-xs text-muted-foreground">Pedido sem itens.</p>
+              ) : (
+                stockLines.map((l, i) => (
+                  <div key={i} className="flex items-center justify-between gap-2 px-3 py-2 text-xs">
+                    <span className="truncate">{l.name}</span>
+                    <span className="flex items-center gap-2 shrink-0 tabular-nums">
+                      <span className="text-muted-foreground">precisa {l.needed}</span>
+                      {!l.linked ? (
+                        <CarboBadge variant="warning">sem vínculo</CarboBadge>
+                      ) : l.ok ? (
+                        <CarboBadge variant="success">estoque {l.available} ✓</CarboBadge>
+                      ) : (
+                        <CarboBadge variant="destructive">estoque {l.available} ✗</CarboBadge>
+                      )}
+                    </span>
+                  </div>
+                ))
+              )}
+            </div>
+
+            {!stockLoading && stockLines.length > 0 && (
+              <p className={`text-xs ${allInStock ? "text-emerald-500" : "text-amber-500"}`}>
+                {allInStock
+                  ? "✓ Tem estoque para todos os itens — pode separar."
+                  : anyUnlinked
+                    ? "⚠ Há item sem produto vinculado (venda antiga). Confira o estoque manualmente."
+                    : "✗ Falta estoque — recomendado Criar Ordem de Produção."}
+              </p>
+            )}
+
             <div className="flex flex-col gap-2 pt-1">
               <Button
                 className="w-full"
+                variant={allInStock ? "default" : "outline"}
                 onClick={() => { if (pendingSep) updateStage.mutate({ id: pendingSep.id, stage: "separando" }); setPendingSep(null); }}
               >
-                Sim, tem estoque → Em Separação
+                {allInStock ? "Tem estoque → Em Separação" : "Separar mesmo assim → Em Separação"}
               </Button>
               <Button
-                variant="outline"
                 className="w-full"
+                variant={allInStock ? "outline" : "default"}
                 onClick={() => { if (pendingSep) requestStage(pendingSep, "criar_op"); setPendingSep(null); }}
               >
-                Não tem → Criar Ordem de Produção
+                Sem estoque → Criar Ordem de Produção
               </Button>
             </div>
           </div>

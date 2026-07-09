@@ -210,10 +210,15 @@ export default function Vender() {
     updateRow(id, { productId });
   }
   const validItems = () =>
-    rows.filter((r) => r.productId && r.qty > 0).map((r) => ({
-      name: produtos.find((p) => p.id === r.productId)?.name ?? "Produto",
-      quantity: r.qty, unit_price: r.unitPrice, bonus_quantity: r.hasBonus ? r.bonusQty : 0,
-    }));
+    rows.filter((r) => r.productId && r.qty > 0).map((r) => {
+      const prod = produtos.find((p) => p.id === r.productId);
+      return {
+        name: prod?.name ?? "Produto",
+        product_id: r.productId,
+        product_code: prod?.product_code ?? null,
+        quantity: r.qty, unit_price: r.unitPrice, bonus_quantity: r.hasBonus ? r.bonusQty : 0,
+      };
+    });
 
   // Monta o payload de gravação (cabeçalho + itens) a partir do estado da tela.
   function buildPayload(status: "orcamento" | "pedido") {
@@ -233,6 +238,8 @@ export default function Vender() {
       notes: obsPublica || undefined,
       itens: validItems().map((i) => ({
         produto: i.name,
+        product_id: i.product_id,
+        product_code: i.product_code,
         quantidade: i.quantity,
         preco_unitario: i.unit_price,
         bonificacao: i.bonus_quantity,
