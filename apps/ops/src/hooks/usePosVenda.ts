@@ -112,7 +112,7 @@ async function ensureProductionOrderForOrder(orderId: string): Promise<boolean> 
     sku_id: null,
     planned_quantity: totalQty,
     op_status: "rascunho",           // → coluna Backlog
-    demand_source: "pos_venda",
+    demand_source: "venda",          // enum fixo; a origem pós-venda fica em deviation_notes + source_order_id
     priority: 3,
     quality_result: "pendente",
     source_order_id: orderId,
@@ -137,16 +137,18 @@ export function useUpdateFulfillmentStage() {
       if (error) throw error;
       // Ao entrar em "Criar Ordem de Produção", nasce a OP no Backlog (sem duplicar).
       let opCreated = false;
+      let opError: string | null = null;
       if (stage === "criar_op") {
         try { opCreated = await ensureProductionOrderForOrder(id); }
-        catch (e) { console.error("[pos-venda] falha ao criar OP:", e); } // não bloqueia a etapa
+        catch (e) { opError = e instanceof Error ? e.message : String(e); console.error("[pos-venda] falha ao criar OP:", e); }
       }
-      return { stage, opCreated };
+      return { stage, opCreated, opError };
     },
     onSuccess: (res) => {
       qc.invalidateQueries({ queryKey: ["ops", "pos-venda"] });
       qc.invalidateQueries({ queryKey: ["ops", "production-orders"] });
-      if (res?.opCreated) toast.success("Etapa atualizada · OP criada no Backlog.");
+      if (res?.opError) toast.error("Etapa mudou, mas falhou ao criar a OP: " + res.opError, { duration: 10000 });
+      else if (res?.opCreated) toast.success("Etapa atualizada · OP criada no Backlog.");
       else toast.success("Etapa atualizada.");
     },
     onError: (e: Error) => toast.error("Erro ao atualizar etapa: " + e.message),

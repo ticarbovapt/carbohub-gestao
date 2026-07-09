@@ -3,6 +3,7 @@ import { ShoppingBag, Loader2, User, Calendar, MapPin, Phone, Mail, Package } fr
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
 import { CarboBadge } from "@/components/ui/carbo-badge";
 import {
   usePosVendaOrders, useUpdateFulfillmentStage, POSVENDA_STAGES,
@@ -30,6 +31,8 @@ export default function PosVenda() {
   const [dragId, setDragId] = useState<string | null>(null);
   const [overStage, setOverStage] = useState<FulfillmentStage | null>(null);
   const [detail, setDetail] = useState<PosVendaOrder | null>(null);
+  // Pedido aguardando a confirmação de estoque para ir a "Em Separação".
+  const [pendingSep, setPendingSep] = useState<PosVendaOrder | null>(null);
 
   const byStage = useMemo(() => {
     const map: Record<string, PosVendaOrder[]> = {};
@@ -38,10 +41,18 @@ export default function PosVenda() {
     return map;
   }, [orders]);
 
+  // Portão: "Em Separação" exige estoque. Sem SKU vinculado no item não dá pra
+  // checar automático, então pede confirmação — e oferece mandar pra produção.
+  function requestStage(order: PosVendaOrder, stage: FulfillmentStage) {
+    if (order.fulfillment_stage === stage) return;
+    if (stage === "separando") { setPendingSep(order); return; }
+    updateStage.mutate({ id: order.id, stage });
+  }
+
   const drop = (stage: FulfillmentStage) => {
     if (dragId) {
       const cur = orders.find((o) => o.id === dragId);
-      if (cur && cur.fulfillment_stage !== stage) updateStage.mutate({ id: dragId, stage });
+      if (cur) requestStage(cur, stage);
     }
     setDragId(null);
     setOverStage(null);
@@ -110,7 +121,7 @@ export default function PosVenda() {
                           <div onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>
                             <Select
                               value={o.fulfillment_stage}
-                              onValueChange={(v) => updateStage.mutate({ id: o.id, stage: v as FulfillmentStage })}
+                              onValueChange={(v) => requestStage(o, v as FulfillmentStage)}
                             >
                               <SelectTrigger className="h-9 text-xs mt-0.5"><SelectValue /></SelectTrigger>
                               <SelectContent>
@@ -134,6 +145,39 @@ export default function PosVenda() {
           <strong>Arraste</strong> o card entre as colunas ou use o seletor para mudar a etapa. <strong>Clique</strong> no card para ver os detalhes.
         </p>
       </div>
+
+      {/* Portão de estoque para "Em Separação" */}
+      <Dialog open={!!pendingSep} onOpenChange={(o) => !o && setPendingSep(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Tem estoque para separar?</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 text-sm">
+            <p>
+              O pedido <span className="font-mono">{pendingSep?.order_number}</span> de{" "}
+              <strong>{pendingSep?.customer_name}</strong> só vai para <strong>Em Separação</strong> se houver estoque.
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Sem estoque, mande para <strong>Criar Ordem de Produção</strong> — a OP nasce no Backlog para produzir a quantidade.
+            </p>
+            <div className="flex flex-col gap-2 pt-1">
+              <Button
+                className="w-full"
+                onClick={() => { if (pendingSep) updateStage.mutate({ id: pendingSep.id, stage: "separando" }); setPendingSep(null); }}
+              >
+                Sim, tem estoque → Em Separação
+              </Button>
+              <Button
+                variant="outline"
+                className="w-full"
+                onClick={() => { if (pendingSep) requestStage(pendingSep, "criar_op"); setPendingSep(null); }}
+              >
+                Não tem → Criar Ordem de Produção
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Detalhes do pedido */}
       <Dialog open={!!detail} onOpenChange={(o) => !o && setDetail(null)}>
