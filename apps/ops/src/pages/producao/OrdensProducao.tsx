@@ -285,7 +285,8 @@ export default function OrdensProducao() {
           mode="edit"
           id={editOp.id}
           initial={{
-            sku_id: editOp.sku_id ?? "",
+            product_id: editOp.product_id ?? "",
+            product_label: editOp.sku_name,
             planned_quantity: editOp.planned_quantity,
             priority: String(editOp.priority),
             demand_source: editOp.demand_source,

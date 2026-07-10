@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from "@/components/ui/dialog";
@@ -8,16 +8,23 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DatePickerInput } from "@/components/ui/date-picker-input";
-import { Loader2 } from "lucide-react";
+import { CarboBadge } from "@/components/ui/carbo-badge";
+import { Loader2, CheckCircle2, AlertTriangle, PackageX } from "lucide-react";
 import { toast } from "sonner";
-import { useSkus } from "@/hooks/useSkus";
+import { useMrpProducts } from "@/hooks/useMrpProducts";
+import { useBom } from "@/hooks/useBom";
 import { useProductionOrderMutations } from "@/hooks/useProductionOrders";
+import { convertUnit, unitLabel } from "@/lib/units";
 
 const PRIORITY_LABELS: Record<string, string> = { "1": "Urgente", "2": "Alta", "3": "Normal", "4": "Baixa", "5": "Planejado" };
 const DEMAND_SOURCE_LABELS: Record<string, string> = { venda: "Venda", recorrencia: "Recorrência", safety_stock: "Safety Stock", pcp_manual: "PCP Manual" };
 
+const HUB_RN = "HUB-RN";
+const fmt = (n: number) => n.toLocaleString("pt-BR", { maximumFractionDigits: 3 });
+
 export interface OPFormInitial {
-  sku_id?: string;
+  product_id?: string;
+  product_label?: string;
   planned_quantity?: number;
   priority?: string;
   demand_source?: string;
@@ -33,26 +40,69 @@ interface OPFormDialogProps {
   initial?: OPFormInitial;
 }
 
+interface MaterialLine {
+  insumoId: string;
+  name: string;
+  code: string;
+  needed: number;        // na unidade de estoque do insumo
+  unit: string;          // unidade de estoque do insumo
+  available: number;     // estoque HUB-RN
+  incompatible: boolean; // BOM em unidade de outra dimensão que o estoque
+  critical: boolean;
+}
+
 export function OPFormDialog({ open, onOpenChange, mode, id, initial }: OPFormDialogProps) {
-  const { data: skus = [] } = useSkus();
+  const { data: products = [] } = useMrpProducts();
   const { create, update } = useProductionOrderMutations();
-  const [skuId, setSkuId] = useState(initial?.sku_id ?? "");
+  const [productId, setProductId] = useState(initial?.product_id ?? "");
   const [plannedQty, setPlannedQty] = useState(initial?.planned_quantity != null ? String(initial.planned_quantity) : "");
   const [priority, setPriority] = useState(initial?.priority ?? "3");
   const [demandSource, setDemandSource] = useState(initial?.demand_source ?? "");
   const [needDate, setNeedDate] = useState(initial?.need_date ?? "");
   const [notes, setNotes] = useState(initial?.deviation_notes ?? "");
 
-  const activeSkus = skus.filter((s) => s.is_active);
-  const selectedSku = skus.find((s) => s.id === skuId);
+  const finalProducts = products.filter((p) => p.category === "Produto Final");
+  const selectedProduct = products.find((p) => p.id === productId);
   const pending = create.isPending || update.isPending;
+
+  // Ficha técnica do produto escolhido → checagem de materiais (só no create).
+  const { data: bom = [], isLoading: bomLoading } = useBom(mode === "create" && productId ? productId : null);
+  const qtyNum = Number(plannedQty) || 0;
+  const productById = useMemo(() => new Map(products.map((p) => [p.id, p])), [products]);
+
+  const materials = useMemo<MaterialLine[]>(() => {
+    if (!productId || qtyNum <= 0) return [];
+    return bom.map((b) => {
+      const insumo = productById.get(b.insumo_id);
+      const stockUnit = insumo?.stock_unit || b.unit || "un";
+      const rawNeeded = b.qty * qtyNum; // na unidade da BOM
+      const converted = convertUnit(rawNeeded, b.unit || stockUnit, stockUnit);
+      const incompatible = converted === null;
+      const needed = converted ?? rawNeeded;
+      const available = insumo?.hubs.find((h) => h.warehouse_name === HUB_RN)?.quantity ?? 0;
+      return {
+        insumoId: b.insumo_id,
+        name: insumo?.name || b.insumo || "—",
+        code: insumo?.product_code || b.code || "",
+        needed,
+        unit: stockUnit,
+        available,
+        incompatible,
+        critical: b.is_critical,
+      };
+    });
+  }, [bom, productById, productId, qtyNum]);
+
+  const missing = materials.filter((m) => m.incompatible || m.available < m.needed);
+  const canProduce = materials.length > 0 && missing.length === 0;
+  const showCheck = mode === "create" && !!productId && qtyNum > 0;
 
   const handleSubmit = async () => {
     try {
       if (mode === "create") {
-        if (!selectedSku) throw new Error("Selecione o produto.");
+        if (!selectedProduct) throw new Error("Selecione o produto.");
         await create.mutateAsync({
-          skuId, skuCode: selectedSku.code, plannedQuantity: Number(plannedQty),
+          productId, productName: selectedProduct.name, plannedQuantity: qtyNum,
           priority: Number(priority), demandSource, needDate, notes,
         });
         toast.success("Ordem de Produção criada.");
@@ -72,26 +122,34 @@ export function OPFormDialog({ open, onOpenChange, mode, id, initial }: OPFormDi
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{mode === "create" ? "Nova Ordem de Produção" : "Editar Ordem de Produção"}</DialogTitle>
           <DialogDescription>
-            {mode === "create" ? "Crie uma nova OP a partir de um produto." : "Atualize os dados da ordem de produção."}
+            {mode === "create" ? "Crie uma OP a partir de um Produto Final — checamos os insumos no HUB Natal." : "Atualize os dados da ordem de produção."}
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
-          {/* Produto */}
+          {/* Produto Final */}
           <div className="space-y-2">
-            <Label>Produto *</Label>
-            <Select value={skuId} onValueChange={setSkuId} disabled={mode === "edit"}>
-              <SelectTrigger><SelectValue placeholder="Selecione o produto" /></SelectTrigger>
-              <SelectContent>
-                {activeSkus.length === 0 && <div className="px-2 py-1.5 text-sm text-muted-foreground">Nenhum SKU ativo</div>}
-                {activeSkus.map((s) => (
-                  <SelectItem key={s.id} value={s.id}>{s.code} — {s.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <Label>Produto Final *</Label>
+            {mode === "edit" ? (
+              <div className="h-10 flex items-center px-3 rounded-md border border-input bg-muted/40 text-sm truncate">
+                {initial?.product_label ?? selectedProduct?.name ?? "—"}
+              </div>
+            ) : (
+              <Select value={productId} onValueChange={setProductId}>
+                <SelectTrigger><SelectValue placeholder="Selecione o produto final" /></SelectTrigger>
+                <SelectContent>
+                  {finalProducts.length === 0 && <div className="px-2 py-1.5 text-sm text-muted-foreground">Nenhum Produto Final ativo</div>}
+                  {finalProducts.map((p) => (
+                    <SelectItem key={p.id} value={p.id}>
+                      {p.product_code} — {p.name}{!p.has_bom && <span className="text-amber-600"> (sem ficha)</span>}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
           </div>
 
           {/* Quantidade Planejada */}
@@ -99,6 +157,55 @@ export function OPFormDialog({ open, onOpenChange, mode, id, initial }: OPFormDi
             <Label>Quantidade Planejada *</Label>
             <Input type="number" min={1} value={plannedQty} onChange={(e) => setPlannedQty(e.target.value)} />
           </div>
+
+          {/* Checagem de materiais (HUB-RN) */}
+          {showCheck && (
+            <div className="rounded-lg border border-border overflow-hidden">
+              <div className={`flex items-center gap-2 px-3 py-2 text-sm font-medium ${
+                bomLoading ? "bg-muted/40 text-muted-foreground"
+                : materials.length === 0 ? "bg-amber-500/10 text-amber-700 dark:text-amber-400"
+                : canProduce ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
+                : "bg-destructive/10 text-destructive"
+              }`}>
+                {bomLoading ? <Loader2 className="h-4 w-4 animate-spin" />
+                  : materials.length === 0 ? <PackageX className="h-4 w-4" />
+                  : canProduce ? <CheckCircle2 className="h-4 w-4" />
+                  : <AlertTriangle className="h-4 w-4" />}
+                {bomLoading ? "Verificando insumos…"
+                  : materials.length === 0 ? "Produto sem ficha técnica (BOM) — cadastre os insumos para checar o estoque."
+                  : canProduce ? `Dá pra produzir ${fmt(qtyNum)} un — todos os insumos disponíveis no HUB Natal.`
+                  : `Faltam ${missing.length} ${missing.length === 1 ? "insumo" : "insumos"} no HUB Natal para produzir ${fmt(qtyNum)} un.`}
+              </div>
+              {materials.length > 0 && (
+                <div className="divide-y divide-border">
+                  {materials.map((m) => {
+                    const ok = !m.incompatible && m.available >= m.needed;
+                    const short = m.needed - m.available;
+                    return (
+                      <div key={m.insumoId} className="flex items-center gap-3 px-3 py-2 text-sm">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-1.5 font-medium truncate">
+                            {m.name}
+                            {m.critical && <AlertTriangle className="h-3 w-3 text-destructive shrink-0" />}
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            Precisa <strong>{fmt(m.needed)} {unitLabel(m.unit)}</strong> · Estoque <strong>{fmt(m.available)} {unitLabel(m.unit)}</strong>
+                          </div>
+                        </div>
+                        {m.incompatible ? (
+                          <CarboBadge variant="destructive" className="shrink-0">unidade incompatível</CarboBadge>
+                        ) : ok ? (
+                          <CarboBadge variant="success" className="shrink-0 gap-1"><CheckCircle2 className="h-3 w-3" /> ok</CarboBadge>
+                        ) : (
+                          <CarboBadge variant="destructive" className="shrink-0">falta {fmt(short)} {unitLabel(m.unit)}</CarboBadge>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Prioridade + Fonte de Demanda */}
           <div className="grid grid-cols-2 gap-4">
