@@ -22,13 +22,14 @@ interface MoveOPDialogProps {
   fromLabel: string;
   toLabel: string;
   toStatus: OpStatus;
+  skipWarning?: boolean;
   pending: boolean;
   onConfirm: (result: { route: ProductionRoute; good?: number; rejected?: number }) => void;
 }
 
 interface Line { id: string; name: string; needed: number; unit: string; available: number; incompatible: boolean; critical: boolean; }
 
-export function MoveOPDialog({ open, onOpenChange, op, fromLabel, toLabel, toStatus, pending, onConfirm }: MoveOPDialogProps) {
+export function MoveOPDialog({ open, onOpenChange, op, fromLabel, toLabel, toStatus, skipWarning, pending, onConfirm }: MoveOPDialogProps) {
   const isSeparacao = toStatus === "separada";
   const isConclusao = toStatus === "concluida";
 
@@ -117,6 +118,13 @@ export function MoveOPDialog({ open, onOpenChange, op, fromLabel, toLabel, toSta
             <ArrowRight className="h-3.5 w-3.5 text-muted-foreground" />
             <span className="rounded-md bg-primary/10 px-2 py-1 font-semibold text-primary">{toLabel}</span>
           </div>
+
+          {skipWarning && (
+            <div className="flex items-start gap-2 rounded-lg border border-amber-500/20 bg-amber-500/10 px-3 py-2.5 text-sm text-amber-700 dark:text-amber-400">
+              <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+              <span>Esta OP normalmente <strong>não passa por {toLabel}</strong> (pela rota escolhida). Mover mesmo assim?</span>
+            </div>
+          )}
 
           {isSeparacao && bomLoading && (
             <div className="flex items-center gap-2 py-6 justify-center text-sm text-muted-foreground">

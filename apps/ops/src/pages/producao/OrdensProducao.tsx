@@ -10,6 +10,7 @@ import {
   Pencil, Trash2, ClipboardCheck, Loader2, CalendarClock, Clock, CheckCircle2, AlertTriangle,
 } from "lucide-react";
 import { useProducibility } from "@/hooks/useProducibility";
+import { useMrpProducts } from "@/hooks/useMrpProducts";
 import { cn } from "@/lib/utils";
 import { OPFormDialog } from "@/components/producao/OPFormDialog";
 import { ConfirmOPDialog } from "@/components/producao/ConfirmOPDialog";
@@ -81,6 +82,17 @@ export default function OrdensProducao() {
   const { data: orders = [], isLoading } = useProductionOrders();
   const { remove, setStatus } = useProductionOrderMutations();
   const checkProducible = useProducibility();
+  const { data: mrpProducts = [] } = useMrpProducts();
+  const categoryById = useMemo(() => new Map(mrpProducts.map((p) => [p.id, p.category])), [mrpProducts]);
+
+  // Etapa do kanban que a OP NÃO percorre, pela sua natureza/rota:
+  //  • Semi-acabado (Envasado) → não passa por Rotulagem.
+  //  • Produto Final "só rotular" → não passa por Envase (já vem envasado).
+  const skippedColFor = (o: OP): string | null => {
+    if (o.product_id && categoryById.get(o.product_id) === "Semi-acabado") return "rotulagem";
+    if (o.production_route === "rotular") return "envase";
+    return null;
+  };
   const [dragId, setDragId] = useState<string | null>(null);
   const [overCol, setOverCol] = useState<string | null>(null);
   // Abre no Kanban por padrão e LEMBRA a última escolha (persiste no F5).
@@ -99,7 +111,7 @@ export default function OrdensProducao() {
   const [editOp, setEditOp] = useState<OP | null>(null);
   const [confirmOp, setConfirmOp] = useState<OP | null>(null);
   const [deleteOp, setDeleteOp] = useState<OP | null>(null);
-  const [pendingMove, setPendingMove] = useState<{ op: OP; toStatus: OpStatusT; fromLabel: string; toLabel: string } | null>(null);
+  const [pendingMove, setPendingMove] = useState<{ op: OP; toStatus: OpStatusT; fromLabel: string; toLabel: string; skipWarning: boolean } | null>(null);
 
   const colLabel = (status: OpStatus) => KANBAN_COLUMNS.find((c) => c.statuses.includes(status))?.label ?? OP_STATUS_LABELS[status];
 
@@ -199,13 +211,16 @@ export default function OrdensProducao() {
               const items = capped ? allItems.slice(0, CAP) : allItems;
               const hiddenCount = allItems.length - items.length;
               const isOver = overCol === col.id;
+              // Durante o arraste, apaga a coluna que a OP arrastada não percorre.
+              const draggedOp = dragId ? orders.find((o) => o.id === dragId) : null;
+              const isSkipped = !!draggedOp && skippedColFor(draggedOp) === col.id;
               const dropHere = () => {
                 if (dragId) {
                   const cur = orders.find((o) => o.id === dragId);
                   const target = col.statuses[0];
                   // Não muda direto: abre a confirmação (ciente do estoque na Separação).
                   if (cur && cur.op_status !== target) {
-                    setPendingMove({ op: cur, toStatus: target, fromLabel: colLabel(cur.op_status), toLabel: col.label });
+                    setPendingMove({ op: cur, toStatus: target, fromLabel: colLabel(cur.op_status), toLabel: col.label, skipWarning: skippedColFor(cur) === col.id });
                   }
                 }
                 setDragId(null); setOverCol(null);
@@ -216,10 +231,17 @@ export default function OrdensProducao() {
                   onDragOver={(e) => { e.preventDefault(); setOverCol(col.id); }}
                   onDragLeave={() => setOverCol((c) => (c === col.id ? null : c))}
                   onDrop={dropHere}
-                  className={`w-64 shrink-0 rounded-2xl border bg-board-surface/40 flex flex-col transition-colors ${isOver ? "border-primary" : "border-border"}`}
+                  className={cn(
+                    "w-64 shrink-0 rounded-2xl border bg-board-surface/40 flex flex-col transition-all",
+                    isOver ? "border-primary" : "border-border",
+                    isSkipped ? "opacity-40" : "",
+                  )}
                 >
                   <div className="rounded-t-2xl px-3 py-2.5 border-b border-border flex items-center justify-between" style={{ background: col.color + "12" }}>
-                    <span className="text-sm font-semibold flex items-center gap-1.5">{col.emoji} {col.label}</span>
+                    <span className="text-sm font-semibold flex items-center gap-1.5">
+                      {col.emoji} {col.label}
+                      {isSkipped && <span className="text-[9px] font-normal text-muted-foreground">(pula)</span>}
+                    </span>
                     <span className="text-xs font-bold rounded-full px-2 py-0.5" style={{ background: col.color + "20", color: col.color }}>{allItems.length}</span>
                   </div>
                   <div className="p-2 space-y-2 min-h-[80px]">
@@ -383,6 +405,7 @@ export default function OrdensProducao() {
         fromLabel={pendingMove?.fromLabel ?? ""}
         toLabel={pendingMove?.toLabel ?? ""}
         toStatus={pendingMove?.toStatus ?? "planejada"}
+        skipWarning={pendingMove?.skipWarning ?? false}
         pending={setStatus.isPending}
         onConfirm={({ route, good, rejected }) => {
           if (!pendingMove) return;
