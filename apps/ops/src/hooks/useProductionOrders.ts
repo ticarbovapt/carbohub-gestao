@@ -52,7 +52,7 @@ export function useProductionOrders() {
     queryFn: async (): Promise<OpRow[]> => {
       const res = await db
         .from("production_orders")
-        .select("id, op_number, sku_id, product_id, planned_quantity, good_quantity, rejected_quantity, priority, op_status, demand_source, need_date, product_code, source_order_id, production_route, created_at")
+        .select("id, op_number, sku_id, product_id, planned_quantity, good_quantity, rejected_quantity, priority, op_status, demand_source, need_date, product_code, source_order_id, production_route, created_at, customer_name")
         .order("created_at", { ascending: false });
       if (res.error) throw res.error;
       const rows = res.data ?? [];
@@ -91,7 +91,7 @@ export function useProductionOrders() {
           need_date: r.need_date ? String(r.need_date).slice(0, 10) : null,
           production_route: (r.production_route ?? null) as ProductionRoute,
           created_at: r.created_at ?? null,
-          customer_name: (custMap.get(r.source_order_id) ?? null) as string | null,
+          customer_name: (r.customer_name || custMap.get(r.source_order_id) || null) as string | null,
         };
       });
     },
@@ -106,6 +106,7 @@ export interface CreateOpInput {
   demandSource: string;
   needDate: string;
   notes: string;
+  customerName?: string;
 }
 
 export interface UpdateOpInput {
@@ -139,6 +140,7 @@ export function useProductionOrderMutations() {
         priority: p.priority ?? 3,
         deviation_notes: p.notes.trim() || null,
         quality_result: "pendente",
+        customer_name: p.customerName?.trim() || null,
         // campos legados exigidos pelo schema original
         product_code: p.productName,
         quantity: qty,

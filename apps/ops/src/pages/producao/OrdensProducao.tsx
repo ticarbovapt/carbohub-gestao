@@ -450,11 +450,11 @@ export default function OrdensProducao() {
                             <Badge variant="outline" className={cn("text-white border-0 text-[10px] shrink-0", PRIORITY_BADGE_COLORS[o.priority])}>{PRIORITY_LABELS[o.priority]}</Badge>
                           </div>
                           <p className="text-sm font-semibold mt-1 leading-tight line-clamp-2">{o.sku_name}</p>
-                          {o.customer_name && (
-                            <p className="flex items-center gap-1 text-xs font-medium text-foreground/90 mt-0.5 truncate">
-                              <User className="h-3 w-3 shrink-0 text-muted-foreground" /> {o.customer_name}
-                            </p>
-                          )}
+                          {/* Identificação: cliente (venda) ou fonte interna + data de criação */}
+                          <p className="flex items-center gap-1 text-xs font-medium text-foreground/90 mt-0.5 truncate">
+                            <User className="h-3 w-3 shrink-0 text-muted-foreground" />
+                            {o.customer_name || `${DEMAND_SOURCE_LABELS[o.demand_source] || "Interno"} · ${o.created_at ? new Date(o.created_at).toLocaleDateString("pt-BR") : "—"}`}
+                          </p>
                           <p className="text-xs text-muted-foreground mt-0.5">{o.planned_quantity} un · {DEMAND_SOURCE_LABELS[o.demand_source]}</p>
                           <p className={cn("flex items-center gap-1 text-[11px] font-medium mt-1", o.need_date ? (overdue ? "text-red-500" : "text-muted-foreground") : "text-muted-foreground/50")}>
                             <CalendarClock className="h-3 w-3 shrink-0" /> {o.need_date ? <>Prazo: {dt(o.need_date)}{overdue && " · vencido"}</> : "Sem prazo"}

@@ -30,6 +30,7 @@ export interface OPFormInitial {
   demand_source?: string;
   need_date?: string;
   deviation_notes?: string;
+  customer_name?: string;
 }
 
 interface OPFormDialogProps {
@@ -61,6 +62,9 @@ export function OPFormDialog({ open, onOpenChange, mode, id, initial, lockQuanti
   const [demandSource, setDemandSource] = useState(initial?.demand_source ?? "");
   const [needDate, setNeedDate] = useState(initial?.need_date ?? "");
   const [notes, setNotes] = useState(initial?.deviation_notes ?? "");
+  const [customerName, setCustomerName] = useState(initial?.customer_name ?? "");
+  // Cliente é obrigatório quando a OP é de venda/recorrência (identifica o card).
+  const needsCustomer = demandSource === "venda" || demandSource === "recorrencia";
 
   // Produzíveis: Produto Final e Semi-acabado (ex.: OP de envasar sem rótulo p/ estoque).
   const finalProducts = products.filter((p) => p.category === "Produto Final" || p.category === "Semi-acabado");
@@ -103,9 +107,10 @@ export function OPFormDialog({ open, onOpenChange, mode, id, initial, lockQuanti
     try {
       if (mode === "create") {
         if (!selectedProduct) throw new Error("Selecione o produto.");
+        if (needsCustomer && !customerName.trim()) throw new Error("Informe o cliente/empresa da venda.");
         await create.mutateAsync({
           productId, productName: selectedProduct.name, plannedQuantity: qtyNum,
-          priority: Number(priority), demandSource, needDate, notes,
+          priority: Number(priority), demandSource, needDate, notes, customerName,
         });
         toast.success("Ordem de Produção criada.");
       } else {
@@ -235,6 +240,20 @@ export function OPFormDialog({ open, onOpenChange, mode, id, initial, lockQuanti
                 </SelectContent>
               </Select>
             </div>
+          </div>
+
+          {/* Cliente / Empresa — obrigatório em venda/recorrência (identifica o card) */}
+          <div className="space-y-2">
+            <Label>Cliente / Empresa {needsCustomer && <span className="text-destructive">*</span>}</Label>
+            <Input
+              value={customerName}
+              onChange={(e) => setCustomerName(e.target.value)}
+              placeholder={needsCustomer ? "Ex.: Lucas teste / Nome da empresa" : "Opcional (interno mostra a fonte + data)"}
+              disabled={lockQuantity}
+            />
+            {!needsCustomer && (
+              <p className="text-[11px] text-muted-foreground">Para Safety Stock / PCP Manual, o card mostra a fonte e a data de criação.</p>
+            )}
           </div>
 
           {/* Data de Necessidade */}
