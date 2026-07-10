@@ -11,7 +11,9 @@ import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { useMrpProductMutations } from "@/hooks/useMrpProductMutations";
 
-const CATEGORIES = ["Produto Final", "Insumo", "Embalagem", "Carbonatação", "Outro"];
+// "Semi-acabado" = etapa intermediária (ex.: garrafa envasada sem rótulo). Tem BOM
+// própria (garrafa+líquido+tampa) e é consumida pelo Produto Final na hora de rotular.
+const CATEGORIES = ["Produto Final", "Semi-acabado", "Insumo", "Embalagem", "Carbonatação", "Outro"];
 const UNITS = ["un", "L", "ml", "kg", "g", "cx"];
 
 // Gera o código a partir do nome: maiúsculas, sem acento, cada palavra abreviada
