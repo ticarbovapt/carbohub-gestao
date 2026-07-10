@@ -65,8 +65,8 @@ export function OPFormDialog({ open, onOpenChange, mode, id, initial }: OPFormDi
   const selectedProduct = products.find((p) => p.id === productId);
   const pending = create.isPending || update.isPending;
 
-  // Ficha técnica do produto escolhido → checagem de materiais (só no create).
-  const { data: bom = [], isLoading: bomLoading } = useBom(mode === "create" && productId ? productId : null);
+  // Ficha técnica do produto escolhido → checagem de materiais (create e edit).
+  const { data: bom = [], isLoading: bomLoading } = useBom(productId || null);
   const qtyNum = Number(plannedQty) || 0;
   const productById = useMemo(() => new Map(products.map((p) => [p.id, p])), [products]);
 
@@ -95,7 +95,7 @@ export function OPFormDialog({ open, onOpenChange, mode, id, initial }: OPFormDi
 
   const missing = materials.filter((m) => m.incompatible || m.available < m.needed);
   const canProduce = materials.length > 0 && missing.length === 0;
-  const showCheck = mode === "create" && !!productId && qtyNum > 0;
+  const showCheck = !!productId && qtyNum > 0;
 
   const handleSubmit = async () => {
     try {
@@ -109,7 +109,10 @@ export function OPFormDialog({ open, onOpenChange, mode, id, initial }: OPFormDi
       } else {
         if (!id) throw new Error("OP inválida.");
         await update.mutateAsync({
-          id, plannedQuantity: plannedQty ? Number(plannedQty) : undefined,
+          id,
+          productId: productId || undefined,
+          productName: selectedProduct?.name,
+          plannedQuantity: plannedQty ? Number(plannedQty) : undefined,
           priority: Number(priority), demandSource, needDate: needDate || null, notes,
         });
         toast.success("Ordem de Produção atualizada.");
@@ -130,25 +133,23 @@ export function OPFormDialog({ open, onOpenChange, mode, id, initial }: OPFormDi
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
-          {/* Produto Final */}
+          {/* Produto Final — editável também no modo edição, p/ vincular OPs que
+              nasceram sem produto (ex.: venda em texto livre do pós-venda). */}
           <div className="space-y-2">
             <Label>Produto Final *</Label>
-            {mode === "edit" ? (
-              <div className="h-10 flex items-center px-3 rounded-md border border-input bg-muted/40 text-sm truncate">
-                {initial?.product_label ?? selectedProduct?.name ?? "—"}
-              </div>
-            ) : (
-              <Select value={productId} onValueChange={setProductId}>
-                <SelectTrigger><SelectValue placeholder="Selecione o produto final" /></SelectTrigger>
-                <SelectContent>
-                  {finalProducts.length === 0 && <div className="px-2 py-1.5 text-sm text-muted-foreground">Nenhum Produto Final ativo</div>}
-                  {finalProducts.map((p) => (
-                    <SelectItem key={p.id} value={p.id}>
-                      {p.product_code} — {p.name}{!p.has_bom && <span className="text-amber-600"> (sem ficha)</span>}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+            <Select value={productId} onValueChange={setProductId}>
+              <SelectTrigger><SelectValue placeholder="Selecione o produto final" /></SelectTrigger>
+              <SelectContent>
+                {finalProducts.length === 0 && <div className="px-2 py-1.5 text-sm text-muted-foreground">Nenhum Produto Final ativo</div>}
+                {finalProducts.map((p) => (
+                  <SelectItem key={p.id} value={p.id}>
+                    {p.product_code} — {p.name}{!p.has_bom && <span className="text-amber-600"> (sem ficha)</span>}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {mode === "edit" && !productId && initial?.product_label && (
+              <p className="text-[11px] text-amber-600">Esta OP veio como “{initial.product_label}” (texto livre). Escolha o Produto Final para habilitar a checagem de estoque.</p>
             )}
           </div>
 
