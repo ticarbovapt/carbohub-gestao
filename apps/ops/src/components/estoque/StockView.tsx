@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { StockProgressBar } from "@/components/estoque/StockProgressBar";
-import { Search, Tag, Package, Pencil, Plus, Loader2, ChevronDown } from "lucide-react";
+import { Search, Tag, Package, Pencil, Plus, Loader2, ChevronDown, AlertTriangle } from "lucide-react";
 import { minStockStatus, minForHub, type Hub } from "@/components/estoque/stockData";
 import { useStock } from "@/hooks/useStock";
 import { CarboEmptyState } from "@/components/ui/carbo-empty-state";
@@ -17,6 +17,7 @@ import { AjustarEstoqueDialog, type AjusteTarget } from "@/components/estoque/Aj
 export function StockView({ hub, editable }: { hub: Hub; editable: boolean }) {
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("all");
+  const [onlyLow, setOnlyLow] = useState(false);
   const [novaEntradaOpen, setNovaEntradaOpen] = useState(false);
   const [ajuste, setAjuste] = useState<AjusteTarget | null>(null);
 
@@ -24,12 +25,14 @@ export function StockView({ hub, editable }: { hub: Hub; editable: boolean }) {
 
   const filtered = useMemo(() => products.filter((p) => {
     if (category !== "all" && p.category !== category) return false;
+    if (onlyLow && (p.hubs[hub.id] ?? 0) >= minForHub(p, hub.id)) return false;
     if (search) {
       const q = search.toLowerCase();
       if (!p.name.toLowerCase().includes(q) && !p.product_code.toLowerCase().includes(q)) return false;
     }
     return true;
-  }), [products, search, category]);
+  }), [products, search, category, onlyLow, hub.id]);
+  const lowTotal = useMemo(() => products.filter((p) => (p.hubs[hub.id] ?? 0) < minForHub(p, hub.id)).length, [products, hub.id]);
 
   // ── Agrupamento por categoria (Insumo, Produto Final, …) ───────────────────
   const CAT_ORDER = ["Insumo", "Matéria-Prima", "Produto Final", "Embalagem"];
@@ -47,7 +50,8 @@ export function StockView({ hub, editable }: { hub: Hub; editable: boolean }) {
         return a.localeCompare(b);
       })
       .map((cat) => {
-        const items = m.get(cat)!;
+        // Cards em ordem alfabética dentro de cada categoria.
+        const items = m.get(cat)!.slice().sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
         const low = items.filter((p) => (p.hubs[hub.id] ?? 0) < minForHub(p, hub.id)).length;
         return { category: cat, items, low };
       });
@@ -75,11 +79,20 @@ export function StockView({ hub, editable }: { hub: Hub; editable: boolean }) {
           <SelectContent>
             <SelectItem value="all">Todas as categorias</SelectItem>
             <SelectItem value="Produto Final">Produto Final</SelectItem>
+            <SelectItem value="Semi-acabado">Semi-acabado</SelectItem>
             <SelectItem value="Insumo">Insumo</SelectItem>
             <SelectItem value="Embalagem">Embalagem</SelectItem>
             <SelectItem value="Carbonatação">Carbonatação</SelectItem>
           </SelectContent>
         </Select>
+        <Button
+          size="sm"
+          variant={onlyLow ? "destructive" : "outline"}
+          className="gap-1.5"
+          onClick={() => setOnlyLow((v) => !v)}
+        >
+          <AlertTriangle className="h-3.5 w-3.5" /> Só em baixa{lowTotal > 0 && ` (${lowTotal})`}
+        </Button>
         {editable && <Button size="sm" className="gap-1.5 ml-auto bg-carbo-green hover:bg-carbo-green/90 text-white" onClick={() => setNovaEntradaOpen(true)}><Plus className="h-4 w-4" /> Nova Entrada</Button>}
       </div>
 

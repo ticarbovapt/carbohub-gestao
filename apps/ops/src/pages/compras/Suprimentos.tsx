@@ -1,11 +1,11 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
 import { CarboCard, CarboCardContent } from "@/components/ui/carbo-card";
 import { CarboBadge } from "@/components/ui/carbo-badge";
 import { CarboEmptyState } from "@/components/ui/carbo-empty-state";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
@@ -44,10 +44,26 @@ const SKU_MAP: { sku: string; produto: string }[] = [];
 export default function Suprimentos() {
   const [hub, setHub] = useState<Hub>("rn");
   const [activeTab, setActiveTab] = useState("estoque");
-  const [periodo, setPeriodo] = useState("7d");
+  // Período dos KPIs — persiste (vira dashboard). Valores: 7d | 30d | mes | custom | "YYYY-MM".
+  const [periodo, setPeriodo] = useState(() => { try { return localStorage.getItem("ops_sup_periodo") || "7d"; } catch { return "7d"; } });
+  const [customFrom, setCustomFrom] = useState(() => { try { return localStorage.getItem("ops_sup_from") || ""; } catch { return ""; } });
+  const [customTo, setCustomTo] = useState(() => { try { return localStorage.getItem("ops_sup_to") || ""; } catch { return ""; } });
+  useEffect(() => { try { localStorage.setItem("ops_sup_periodo", periodo); localStorage.setItem("ops_sup_from", customFrom); localStorage.setItem("ops_sup_to", customTo); } catch { /* ignora */ } }, [periodo, customFrom, customTo]);
   const [envioOpen, setEnvioOpen] = useState(false);
   const [remessaConfirm, setRemessaConfirm] = useState<{ action: "confirmar" | "estornar"; id: string; produto: string } | null>(null);
-  const periodLabel = periodo === "7d" ? "7 dias" : periodo === "30d" ? "30 dias" : "mês";
+
+  // Últimos 12 meses para o seletor por mês.
+  const monthOptions = useMemo(() => {
+    const now = new Date();
+    return Array.from({ length: 12 }, (_, i) => {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const v = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+      const label = d.toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
+      return { v, label: label.charAt(0).toUpperCase() + label.slice(1) };
+    });
+  }, []);
+  const periodLabel = periodo === "7d" ? "7 dias" : periodo === "30d" ? "30 dias" : periodo === "mes" ? "este mês"
+    : periodo === "custom" ? "período" : (monthOptions.find((m) => m.v === periodo)?.label ?? "período");
   const isRN = hub === "rn", isSP = hub === "sp", isVendas = hub === "sp-vendas", isBling = hub === "bling";
   const stockHub = HUBS.find((h) => h.id === STOCK_HUB_ID[hub]) ?? HUBS[0];
 
@@ -67,16 +83,24 @@ export default function Suprimentos() {
       .map((p) => ({ name: p.name, qty: p.hubs[stockId] ?? 0 })),
     [products, stockId],
   );
-  const cutoff = useMemo(() => {
-    const d = new Date();
-    if (periodo === "7d") d.setDate(d.getDate() - 7);
-    else if (periodo === "30d") d.setDate(d.getDate() - 30);
-    else { d.setDate(1); d.setHours(0, 0, 0, 0); }
-    return d;
-  }, [periodo]);
+  // Intervalo [from, to] do período escolhido (rápido, mês específico ou custom).
+  const range = useMemo(() => {
+    const now = new Date();
+    if (periodo === "7d") { const f = new Date(); f.setDate(f.getDate() - 7); return { from: f, to: now }; }
+    if (periodo === "30d") { const f = new Date(); f.setDate(f.getDate() - 30); return { from: f, to: now }; }
+    if (periodo === "mes") { return { from: new Date(now.getFullYear(), now.getMonth(), 1), to: now }; }
+    if (periodo === "custom") {
+      const f = customFrom ? new Date(customFrom + "T00:00:00") : new Date(0);
+      const t = customTo ? new Date(customTo + "T23:59:59") : now;
+      return { from: f, to: t };
+    }
+    const [y, mth] = periodo.split("-").map(Number);
+    if (y && mth) return { from: new Date(y, mth - 1, 1), to: new Date(y, mth, 0, 23, 59, 59) };
+    const f = new Date(); f.setDate(f.getDate() - 7); return { from: f, to: now };
+  }, [periodo, customFrom, customTo]);
   // Movimentações do hub atual (cada tela é independente)
   const movimentacoesHub = useMemo(() => movimentacoes.filter((m) => m.warehouseCode === HUB_CODE[hub]), [movimentacoes, hub]);
-  const movsPeriodo = useMemo(() => movimentacoesHub.filter((m) => new Date(m.data) >= cutoff), [movimentacoesHub, cutoff]);
+  const movsPeriodo = useMemo(() => movimentacoesHub.filter((m) => { const d = new Date(m.data); return d >= range.from && d <= range.to; }), [movimentacoesHub, range]);
   const kpis = {
     total: products.length,
     emBaixa: lowStock.length,
@@ -170,11 +194,28 @@ export default function Suprimentos() {
         {/* KPIs + período */}
         {!isBling && (
           <div className="space-y-2">
-            <div className="flex items-center gap-2 justify-end">
+            <div className="flex items-center gap-2 justify-end flex-wrap">
               <span className="text-xs text-muted-foreground">Período dos KPIs:</span>
+              {periodo === "custom" && (
+                <div className="flex items-center gap-1.5">
+                  <Input type="date" value={customFrom} onChange={(e) => setCustomFrom(e.target.value)} className="h-7 w-[140px] text-xs" />
+                  <span className="text-xs text-muted-foreground">até</span>
+                  <Input type="date" value={customTo} onChange={(e) => setCustomTo(e.target.value)} className="h-7 w-[140px] text-xs" />
+                </div>
+              )}
               <Select value={periodo} onValueChange={setPeriodo}>
-                <SelectTrigger className="w-[160px] h-7 text-xs"><SelectValue /></SelectTrigger>
-                <SelectContent>{PERIODOS.map((p) => <SelectItem key={p.v} value={p.v}>{p.label}</SelectItem>)}</SelectContent>
+                <SelectTrigger className="w-[170px] h-7 text-xs"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectGroup>
+                    <SelectLabel>Rápido</SelectLabel>
+                    {PERIODOS.map((p) => <SelectItem key={p.v} value={p.v}>{p.label}</SelectItem>)}
+                    <SelectItem value="custom">Personalizado…</SelectItem>
+                  </SelectGroup>
+                  <SelectGroup>
+                    <SelectLabel>Por mês</SelectLabel>
+                    {monthOptions.map((m) => <SelectItem key={m.v} value={m.v}>{m.label}</SelectItem>)}
+                  </SelectGroup>
+                </SelectContent>
               </Select>
             </div>
             <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
