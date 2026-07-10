@@ -110,7 +110,9 @@ export default function OrdensProducao() {
   const [createOpen, setCreateOpen] = useState(false);
   const [createInitial, setCreateInitial] = useState<{ product_id: string; planned_quantity?: number; demand_source?: string } | null>(null);
   const [onlyCritical, setOnlyCritical] = useState(false);
-  const [repoCollapsed, setRepoCollapsed] = useState(false);
+  // Reposição começa FECHADA (não ocupa a tela no load) e lembra a escolha.
+  const [repoCollapsed, setRepoCollapsed] = useState(() => { try { return localStorage.getItem("ops:repo-collapsed") !== "false"; } catch { return true; } });
+  useEffect(() => { try { localStorage.setItem("ops:repo-collapsed", String(repoCollapsed)); } catch { /* ignora */ } }, [repoCollapsed]);
   const [repoShowAll, setRepoShowAll] = useState(false);
   const [editOp, setEditOp] = useState<OP | null>(null);
   const [confirmOp, setConfirmOp] = useState<OP | null>(null);
@@ -395,7 +397,7 @@ export default function OrdensProducao() {
                   onDragLeave={() => setOverCol((c) => (c === col.id ? null : c))}
                   onDrop={dropHere}
                   className={cn(
-                    "flex-1 min-w-[180px] rounded-2xl border bg-board-surface/40 flex flex-col transition-all",
+                    "w-72 shrink-0 rounded-2xl border bg-board-surface/40 flex flex-col transition-all",
                     isOver ? "border-primary" : "border-border",
                     isSkipped ? "opacity-40" : "",
                   )}
