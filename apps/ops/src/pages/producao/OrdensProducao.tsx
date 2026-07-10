@@ -11,10 +11,6 @@ import {
 } from "lucide-react";
 import { useProducibility } from "@/hooks/useProducibility";
 import { useMrpProducts } from "@/hooks/useMrpProducts";
-import {
-  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
-  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
 import { OPFormDialog } from "@/components/producao/OPFormDialog";
 import { ConfirmOPDialog } from "@/components/producao/ConfirmOPDialog";
@@ -84,8 +80,7 @@ const EARLY_STAGES = new Set(["rascunho", "planejada", "aguardando_separacao"]);
 export default function OrdensProducao() {
   const canManage = true; // acesso (gestor vs membro) entra na fase de permissões
   const { data: orders = [], isLoading } = useProductionOrders();
-  const { create, remove, setStatus } = useProductionOrderMutations();
-  const [bulkCreating, setBulkCreating] = useState(false);
+  const { remove, setStatus } = useProductionOrderMutations();
   const producible = useProducibility();
   const { data: mrpProducts = [] } = useMrpProducts();
   const categoryById = useMemo(() => new Map(mrpProducts.map((p) => [p.id, p.category])), [mrpProducts]);
@@ -113,11 +108,10 @@ export default function OrdensProducao() {
   const [priorityFilter, setPriorityFilter] = useState("all");
 
   const [createOpen, setCreateOpen] = useState(false);
-  const [createInitial, setCreateInitial] = useState<{ product_id: string; planned_quantity: number; demand_source?: string } | null>(null);
+  const [createInitial, setCreateInitial] = useState<{ product_id: string; planned_quantity?: number; demand_source?: string } | null>(null);
   const [onlyCritical, setOnlyCritical] = useState(false);
   const [repoCollapsed, setRepoCollapsed] = useState(false);
   const [repoShowAll, setRepoShowAll] = useState(false);
-  const [bulkConfirm, setBulkConfirm] = useState(false);
   const [editOp, setEditOp] = useState<OP | null>(null);
   const [confirmOp, setConfirmOp] = useState<OP | null>(null);
   const [deleteOp, setDeleteOp] = useState<OP | null>(null);
@@ -142,9 +136,9 @@ export default function OrdensProducao() {
   const prontas = abertas.filter((o) => EARLY_STAGES.has(o.op_status) && producible.check(o.product_id, o.planned_quantity, o.production_route) === "ok").length;
 
   // Reposição sugerida: produzíveis no PONTO DE REPOSIÇÃO (perto do mínimo, não só
-  // abaixo) e sem OP aberta. Repõe até 2× o mínimo. Crítico = já abaixo do mínimo.
+  // abaixo) e sem OP aberta. Só avisa que está baixo e QUANTO falta — a fábrica
+  // decide a quantidade da OP (não sugerimos número de produção).
   const REORDER_AT = 1.25; // dispara quando estoque ≤ 125% do mínimo
-  const REPLENISH_TO = 2;  // sugere produzir até 2× o mínimo
   const openProductIds = useMemo(() => new Set(abertas.map((o) => o.product_id).filter(Boolean)), [abertas]);
   const suggestionsAll = useMemo(() => mrpProducts
     .filter((p) => (p.category === "Produto Final" || p.category === "Semi-acabado") && p.min_rn > 0)
@@ -154,7 +148,7 @@ export default function OrdensProducao() {
     .map((x) => ({
       ...x,
       critico: x.current < x.p.min_rn,
-      deficit: Math.max(1, Math.ceil(x.p.min_rn * REPLENISH_TO - x.current)),
+      below: Math.max(0, x.p.min_rn - x.current), // quanto falta pro mínimo
       hasOpenOp: openProductIds.has(x.p.id),
       // nível de estoque relativo ao mínimo (0–100%), pra barrinha.
       level: Math.min(100, Math.round((x.current / x.p.min_rn) * 100)),
@@ -166,22 +160,6 @@ export default function OrdensProducao() {
   const suggestions = onlyCritical ? suggestionsAll.filter((s) => s.critico) : suggestionsAll;
   // LB: ids que estão na fila de reposição — usado pra avisar dependência (semi baixo).
   const suggestedIds = useMemo(() => new Set(suggestionsAll.map((s) => s.p.id)), [suggestionsAll]);
-
-  // LC: cria de uma vez as OPs de reposição das críticas (abaixo do mínimo, sem OP).
-  const createAllCritical = async () => {
-    const targets = suggestionsAll.filter((s) => s.critico && !s.hasOpenOp);
-    if (!targets.length) return;
-    setBulkCreating(true);
-    let ok = 0;
-    for (const t of targets) {
-      try {
-        await create.mutateAsync({ productId: t.p.id, productName: t.p.name, plannedQuantity: t.deficit, priority: 3, demandSource: "safety_stock", needDate: "", notes: "Reposição automática (estoque mínimo)" });
-        ok++;
-      } catch { /* segue as demais */ }
-    }
-    setBulkCreating(false);
-    toast[ok ? "success" : "error"](ok ? `${ok} OP(s) de reposição criadas.` : "Não foi possível criar as OPs.");
-  };
 
   const filtered = useMemo(() => orders.filter((o) => {
     if (statusFilter !== "all" && o.op_status !== statusFilter) return false;
@@ -279,31 +257,23 @@ export default function OrdensProducao() {
                 {suggestionsAll.length} no ponto de reposição{criticos > 0 && <> · <span className="text-red-500 font-medium">{criticos} abaixo do mínimo</span></>}
               </span>
               {criticos > 0 && (
-                <div className="ml-auto flex items-center gap-2">
-                  <button
-                    onClick={() => setOnlyCritical((v) => !v)}
-                    className={cn(
-                      "text-xs rounded-md px-2.5 py-1.5 font-medium border transition-colors",
-                      onlyCritical ? "bg-red-500 text-white border-red-500" : "border-border text-muted-foreground hover:text-foreground hover:bg-muted",
-                    )}
-                  >
-                    só críticos
-                  </button>
-                  {suggestionsAll.some((s) => s.critico && !s.hasOpenOp) && (
-                    <Button size="sm" variant="destructive" className="h-8 gap-1.5" disabled={bulkCreating} onClick={() => setBulkConfirm(true)}>
-                      {bulkCreating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
-                      Criar {suggestionsAll.filter((s) => s.critico && !s.hasOpenOp).length} OPs
-                    </Button>
+                <button
+                  onClick={() => setOnlyCritical((v) => !v)}
+                  className={cn(
+                    "ml-auto text-xs rounded-md px-2.5 py-1.5 font-medium border transition-colors",
+                    onlyCritical ? "bg-red-500 text-white border-red-500" : "border-border text-muted-foreground hover:text-foreground hover:bg-muted",
                   )}
-                </div>
+                >
+                  só críticos
+                </button>
               )}
             </div>
             {!repoCollapsed && (
             <div className="grid gap-3 p-4 [grid-template-columns:repeat(auto-fill,minmax(260px,1fr))]">
-              {(repoShowAll ? suggestions : suggestions.slice(0, 16)).map(({ p, current, deficit, critico, hasOpenOp, level }) => {
+              {(repoShowAll ? suggestions : suggestions.slice(0, 16)).map(({ p, current, below, critico, hasOpenOp, level }) => {
                 // LA: rota recomendada — se tem envasado em estoque, dá pra só rotular.
                 const semiId = producible.semiOf(p.id);
-                const routeHint = semiId ? (producible.check(p.id, deficit, "rotular") === "ok" ? "rotular" : "zero") : null;
+                const routeHint = semiId ? (producible.check(p.id, Math.max(1, below), "rotular") === "ok" ? "rotular" : "zero") : null;
                 const cascade = routeHint === "zero" && semiId && suggestedIds.has(semiId);
                 return (
                 <div
@@ -342,6 +312,9 @@ export default function OrdensProducao() {
                     <div className="h-2 w-full rounded-full bg-muted overflow-hidden">
                       <div className={cn("h-full rounded-full", critico ? "bg-red-500" : "bg-amber-500")} style={{ width: `${Math.max(4, level)}%` }} />
                     </div>
+                    <p className={cn("text-[11px] font-medium", critico ? "text-red-600 dark:text-red-400" : "text-amber-600 dark:text-amber-400")}>
+                      {critico ? `Abaixo do mínimo · faltam ${below.toLocaleString("pt-BR")} ${p.stock_unit}` : "No ponto de reposição"}
+                    </p>
                   </div>
 
                   {/* Rota recomendada / dependência */}
@@ -365,9 +338,9 @@ export default function OrdensProducao() {
                         size="sm"
                         variant="outline"
                         className="w-full h-8 gap-1.5"
-                        onClick={() => { setCreateInitial({ product_id: p.id, planned_quantity: deficit, demand_source: "safety_stock" }); setCreateOpen(true); }}
+                        onClick={() => { setCreateInitial({ product_id: p.id, demand_source: "safety_stock" }); setCreateOpen(true); }}
                       >
-                        <Plus className="h-3.5 w-3.5" /> Criar OP · {deficit} {p.stock_unit}
+                        <Plus className="h-3.5 w-3.5" /> Criar OP
                       </Button>
                     )}
                   </div>
@@ -383,24 +356,6 @@ export default function OrdensProducao() {
             )}
           </div>
         )}
-
-        {/* Confirmação da criação em lote (LC) */}
-        <AlertDialog open={bulkConfirm} onOpenChange={setBulkConfirm}>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Criar OPs de reposição?</AlertDialogTitle>
-              <AlertDialogDescription>
-                Isso vai gerar <strong>{suggestionsAll.filter((s) => s.critico && !s.hasOpenOp).length} ordens de produção</strong> para os produtos abaixo do estoque mínimo (fonte “Safety Stock”). Você pode ajustar ou excluir cada uma depois.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel disabled={bulkCreating}>Cancelar</AlertDialogCancel>
-              <AlertDialogAction onClick={(e) => { e.preventDefault(); createAllCritical().then(() => setBulkConfirm(false)); }} disabled={bulkCreating}>
-                {bulkCreating ? "Criando…" : "Criar OPs"}
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
 
         {/* Kanban ou Lista */}
         {isLoading ? (
