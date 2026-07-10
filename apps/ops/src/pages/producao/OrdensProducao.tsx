@@ -321,13 +321,14 @@ export default function OrdensProducao() {
         toLabel={pendingMove?.toLabel ?? ""}
         toStatus={pendingMove?.toStatus ?? "planejada"}
         pending={setStatus.isPending}
-        onConfirm={(route) => {
+        onConfirm={({ route, good, rejected }) => {
           if (!pendingMove) return;
           const { op, toStatus, toLabel } = pendingMove;
           // Só grava a rota quando ela é decidida na separação (evita sobrescrever).
           const routeArg = toStatus === "separada" ? { route } : {};
+          const qualArg = toStatus === "concluida" ? { good, rejected } : {};
           setStatus.mutate(
-            { id: op.id, op_status: toStatus, ...routeArg },
+            { id: op.id, op_status: toStatus, ...routeArg, ...qualArg },
             {
               onSuccess: () => { toast.success(`OP movida para ${toLabel}.`); setPendingMove(null); },
               onError: (e) => toast.error(e instanceof Error ? e.message : "Não foi possível mover a OP."),

@@ -3,6 +3,8 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { CheckCircle2, AlertTriangle, PackageX, ArrowRight, Loader2, Tag, Factory, Beaker } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useMrpProducts } from "@/hooks/useMrpProducts";
@@ -21,7 +23,7 @@ interface MoveOPDialogProps {
   toLabel: string;
   toStatus: OpStatus;
   pending: boolean;
-  onConfirm: (route: ProductionRoute) => void;
+  onConfirm: (result: { route: ProductionRoute; good?: number; rejected?: number }) => void;
 }
 
 interface Line { id: string; name: string; needed: number; unit: string; available: number; incompatible: boolean; critical: boolean; }
@@ -49,6 +51,16 @@ export function MoveOPDialog({ open, onOpenChange, op, fromLabel, toLabel, toSta
   // Rota escolhida: para produtos com semi-acabado é obrigatória; senão é direta.
   const [route, setRoute] = useState<ProductionRoute>(null);
   useEffect(() => { setRoute((op?.production_route as ProductionRoute) ?? null); }, [op?.id, op?.production_route]);
+
+  // Conclusão: boas + refugo (o crédito usa as boas).
+  const [good, setGood] = useState<string>("");
+  const [rejected, setRejected] = useState<string>("");
+  useEffect(() => {
+    setGood(op?.good_quantity != null ? String(op.good_quantity) : String(op?.planned_quantity ?? ""));
+    setRejected(op?.rejected_quantity != null ? String(op.rejected_quantity) : "0");
+  }, [op?.id, op?.good_quantity, op?.rejected_quantity, op?.planned_quantity]);
+  const goodNum = Math.max(0, Number(good) || 0);
+  const rejectedNum = Math.max(0, Number(rejected) || 0);
 
   const lineFrom = (insumoId: string, qtyInBomUnit: number, bomUnit: string, critical: boolean): Line => {
     const insumo = productById.get(insumoId);
@@ -191,11 +203,26 @@ export function MoveOPDialog({ open, onOpenChange, op, fromLabel, toLabel, toSta
             </div>
           )}
 
-          {/* Conclusão → crédito do produto */}
+          {/* Conclusão → registra boas/refugo e credita as BOAS no estoque */}
           {isConclusao && (
-            <div className="flex items-center gap-2 rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-3 py-2.5 text-sm text-emerald-700 dark:text-emerald-400">
-              <CheckCircle2 className="h-4 w-4 shrink-0" />
-              <span>Credita <strong>{fmt(qty)} un de {op.sku_name}</strong> no estoque do HUB Natal.</span>
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Boas (aprovadas)</Label>
+                  <Input type="number" min={0} value={good} onChange={(e) => setGood(e.target.value)} className="h-9" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Refugo (perdas)</Label>
+                  <Input type="number" min={0} value={rejected} onChange={(e) => setRejected(e.target.value)} className="h-9" />
+                </div>
+              </div>
+              <div className="flex items-center gap-2 rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-3 py-2.5 text-sm text-emerald-700 dark:text-emerald-400">
+                <CheckCircle2 className="h-4 w-4 shrink-0" />
+                <span>Credita <strong>{fmt(goodNum)} un de {op.sku_name}</strong> no HUB Natal.{rejectedNum > 0 && <> Refugo de {fmt(rejectedNum)} un registrado.</>}</span>
+              </div>
+              {goodNum + rejectedNum !== qty && (
+                <p className="text-xs text-amber-600 dark:text-amber-400">Boas + refugo ({fmt(goodNum + rejectedNum)}) diferente do planejado ({fmt(qty)} un).</p>
+              )}
             </div>
           )}
 
@@ -209,7 +236,11 @@ export function MoveOPDialog({ open, onOpenChange, op, fromLabel, toLabel, toSta
           <Button
             type="button"
             variant={isSeparacao && routeChosen && !canSeparate && lines.length > 0 ? "destructive" : "default"}
-            onClick={() => onConfirm(hasChoice ? route : null)}
+            onClick={() => onConfirm(
+              isConclusao
+                ? { route: op.production_route ?? null, good: goodNum, rejected: rejectedNum }
+                : { route: hasChoice ? route : null },
+            )}
             disabled={pending || (isSeparacao && hasChoice && !routeChosen)}
           >
             {pending ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Movendo…</>
