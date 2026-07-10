@@ -44,18 +44,10 @@ function getCorsHeaders(req: Request) {
 const BLING_AUTH_URL = "https://www.bling.com.br/Api/v3/oauth/authorize";
 const BLING_TOKEN_URL = "https://www.bling.com.br/Api/v3/oauth/token";
 
-// Fallback só se a origem do chamador não for reconhecida.
-const REDIRECT_URI_FALLBACK = Deno.env.get("BLING_REDIRECT_URI") || "https://finance.carbohub.com.br/integracoes/bling/callback";
-
-// Devolve o OAuth pro app que INICIOU a conexão (deriva da origem do chamador,
-// validada), em vez de um domínio fixo. Assim o Finanças reconecta sozinho, sem
-// depender do Controle (aposentado). O caminho do callback é o mesmo nos apps
-// novos: /integracoes/bling/callback.
-function resolveRedirectUri(req: Request): string {
-  const origin = req.headers.get("origin") || "";
-  if (isAllowedOrigin(origin)) return `${origin}/integracoes/bling/callback`;
-  return REDIRECT_URI_FALLBACK;
-}
+// URL de retorno do OAuth — FIXA no Finanças (o Controle está aposentado).
+// TEM que estar cadastrada, idêntica a esta, nas URLs de redirecionamento do
+// app no painel do Bling — senão o Bling recusa com redirect_uri_mismatch.
+const REDIRECT_URI = "https://finance.carbohub.com.br/integracoes/bling/callback";
 
 Deno.serve(async (req: Request): Promise<Response> => {
   const corsHeaders = getCorsHeaders(req);
@@ -106,9 +98,8 @@ Deno.serve(async (req: Request): Promise<Response> => {
     // ACTION: Get authorization URL
     if (action === "authorize") {
       const state = crypto.randomUUID();
-      const redirectUri = resolveRedirectUri(req);
-      const authUrl = `${BLING_AUTH_URL}?response_type=code&client_id=${blingClientId}&redirect_uri=${encodeURIComponent(redirectUri)}&state=${state}`;
-      console.log("[bling-auth] Generated auth URL, redirect_uri:", redirectUri);
+      const authUrl = `${BLING_AUTH_URL}?response_type=code&client_id=${blingClientId}&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&state=${state}`;
+      console.log("[bling-auth] Generated auth URL, redirecting user to Bling");
       return new Response(
         JSON.stringify({ success: true, data: { authUrl, state } }),
         { status: 200, headers: { "Content-Type": "application/json", ...corsHeaders } }
