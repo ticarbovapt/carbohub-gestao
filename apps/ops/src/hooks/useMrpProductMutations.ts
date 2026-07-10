@@ -63,5 +63,39 @@ export function useMrpProductMutations() {
     onSuccess: invalidate,
   });
 
-  return { create, update };
+  // Exclui um produto do catálogo — só se não tiver movimentação:
+  //  • sem estoque (soma warehouse_stock = 0)
+  //  • não é insumo de nenhuma BOM
+  //  • não é usado em nenhuma OP (production_orders)
+  // Se tiver vínculo, oriente a DESATIVAR (preserva histórico).
+  const remove = useMutation({
+    mutationFn: async ({ id, name }: { id: string; name: string }) => {
+      const st = await db.from("warehouse_stock").select("quantity").eq("product_id", id);
+      const total = (st.data ?? []).reduce((s: number, r: any) => s + (Number(r.quantity) || 0), 0);
+      if (total > 0) throw new Error(`"${name}" tem ${total} em estoque. Zere o estoque ou desative em vez de excluir.`);
+
+      const asInsumo = await db.from("mrp_bom").select("id").eq("insumo_id", id).limit(1);
+      if (asInsumo.data?.length) throw new Error(`"${name}" é insumo de uma BOM. Remova da BOM ou desative.`);
+
+      const inOp = await db.from("production_orders").select("id").eq("product_id", id).limit(1);
+      if (inOp.data?.length) throw new Error(`"${name}" está vinculado a uma OP. Não é possível excluir — desative.`);
+
+      // Apaga a própria BOM do produto (mrp_bom.product_id) e o produto.
+      await db.from("mrp_bom").delete().eq("product_id", id);
+      const res = await db.from("mrp_products").delete().eq("id", id);
+      if (res.error) throw res.error;
+    },
+    onSuccess: invalidate,
+  });
+
+  // Desativa (some do catálogo ativo, mantém histórico).
+  const deactivate = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await db.from("mrp_products").update({ is_active: false, updated_at: new Date().toISOString() }).eq("id", id);
+      if (res.error) throw res.error;
+    },
+    onSuccess: invalidate,
+  });
+
+  return { create, update, remove, deactivate };
 }
