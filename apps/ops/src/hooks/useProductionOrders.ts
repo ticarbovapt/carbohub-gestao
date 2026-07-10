@@ -24,6 +24,9 @@ export type OpStatus =
 
 export type ProductionRoute = "rotular" | "zero" | null;
 
+// Etapas "antes da separação" (ou cancelamento) → disparam estorno dos insumos.
+const BACKWARD_STATUSES = new Set<OpStatus>(["rascunho", "planejada", "aguardando_separacao", "cancelada"]);
+
 export interface OpRow {
   id: string;
   op_number: string;
@@ -176,11 +179,14 @@ export function useProductionOrderMutations() {
   //     credita pelos itens do pedido + marca PRODUZIDO; senão credita o Produto
   //     Final da OP. O card do pós-venda não se move sozinho — alguém confere.
   const setStatus = useMutation({
-    mutationFn: async (p: { id: string; op_status: OpStatus; route?: ProductionRoute }) => {
+    mutationFn: async (p: { id: string; op_status: OpStatus; route?: ProductionRoute; good?: number; rejected?: number }) => {
       const patch: Record<string, unknown> = { op_status: p.op_status };
       // Grava a rota escolhida (só rotular / do zero) ANTES da baixa — a função de
       // dedução no banco lê production_route pra saber se explode o semi-acabado.
       if (p.route !== undefined) patch.production_route = p.route;
+      // Boas/refugo registrados na conclusão → crédito usa good_quantity (grava ANTES).
+      if (p.good != null) patch.good_quantity = p.good;
+      if (p.rejected != null) patch.rejected_quantity = p.rejected;
       const res = await db.from("production_orders").update(patch).eq("id", p.id);
       if (res.error) throw res.error;
       try {
@@ -194,6 +200,9 @@ export function useProductionOrderMutations() {
           } else {
             await db.rpc("op_credit_product", { p_op_id: p.id });
           }
+        } else if (BACKWARD_STATUSES.has(p.op_status)) {
+          // Voltou pra antes da separação (ou cancelou) → estorna os insumos.
+          await db.rpc("op_restore_materials", { p_op_id: p.id });
         }
       } catch (e) { console.error("[op-status] falha na movimentação de estoque:", e); }
     },
