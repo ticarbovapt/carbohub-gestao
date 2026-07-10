@@ -21,8 +21,10 @@ const norm = (u: string) => (u || "").trim().toLowerCase();
 export const ALL_UNITS: string[] = ["un", "ml", "l", "g", "kg"];
 
 /** Converte `qty` de `from` para `to`. Retorna null se as unidades forem de
- *  dimensões diferentes ou desconhecidas (ex.: ml → un). */
+ *  dimensões diferentes ou desconhecidas (ex.: ml → un). Mesma unidade = 1:1
+ *  (inclusive desconhecidas, ex.: cx → cx). */
 export function convertUnit(qty: number, from: string, to: string): number | null {
+  if (norm(from) === norm(to)) return qty;
   const a = UNITS[norm(from)], b = UNITS[norm(to)];
   if (!a || !b || a.dim !== b.dim) return null;
   return (qty * a.toBase) / b.toBase;

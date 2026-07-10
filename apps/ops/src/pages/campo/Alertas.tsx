@@ -37,7 +37,9 @@ export default function Alertas() {
       for (const hub of HUBS) {
         if (hub.id === "bling") continue; // Bling não controla mínimo
         const qty = p.hubs[hub.id] ?? 0;
-        const min = p.mins[hub.id] ?? p.safety_stock_qty;
+        // Mínimo POR HUB (ops_stock_min) — mesma fonte do resto do sistema.
+        // Não usa safety_stock_qty legado (senão diverge da tela de estoque/reposição).
+        const min = p.mins[hub.id] ?? 0;
         if (!min || min <= 0 || qty >= min) continue;
         const prioridade: Prioridade = qty <= 0 ? "critical" : qty < min * 0.5 ? "high" : "medium";
         out.push({

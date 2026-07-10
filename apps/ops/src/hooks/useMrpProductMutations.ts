@@ -70,14 +70,19 @@ export function useMrpProductMutations() {
   // Se tiver vínculo, oriente a DESATIVAR (preserva histórico).
   const remove = useMutation({
     mutationFn: async ({ id, name }: { id: string; name: string }) => {
+      // Falha na consulta NÃO pode liberar a exclusão (senão erro de RLS/rede
+      // vira "sem vínculo" e apaga produto com estoque/BOM/OP).
       const st = await db.from("warehouse_stock").select("quantity").eq("product_id", id);
+      if (st.error) throw st.error;
       const total = (st.data ?? []).reduce((s: number, r: any) => s + (Number(r.quantity) || 0), 0);
       if (total > 0) throw new Error(`"${name}" tem ${total} em estoque. Zere o estoque ou desative em vez de excluir.`);
 
       const asInsumo = await db.from("mrp_bom").select("id").eq("insumo_id", id).limit(1);
+      if (asInsumo.error) throw asInsumo.error;
       if (asInsumo.data?.length) throw new Error(`"${name}" é insumo de uma BOM. Remova da BOM ou desative.`);
 
       const inOp = await db.from("production_orders").select("id").eq("product_id", id).limit(1);
+      if (inOp.error) throw inOp.error;
       if (inOp.data?.length) throw new Error(`"${name}" está vinculado a uma OP. Não é possível excluir — desative.`);
 
       // Apaga a própria BOM do produto (mrp_bom.product_id) e o produto.

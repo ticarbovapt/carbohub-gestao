@@ -150,7 +150,9 @@ export default function OrdensProducao() {
   // abaixo) e sem OP aberta. Só avisa que está baixo e QUANTO falta — a fábrica
   // decide a quantidade da OP (não sugerimos número de produção).
   const REORDER_AT = 1.25; // dispara quando estoque ≤ 125% do mínimo
-  const openProductIds = useMemo(() => new Set(abertas.map((o) => o.product_id).filter(Boolean)), [abertas]);
+  // OP "em andamento" p/ reposição = aberta e NÃO bloqueada (bloqueada está travada,
+  // não deve esconder o produto da sugestão pra sempre).
+  const openProductIds = useMemo(() => new Set(abertas.filter((o) => o.op_status !== "bloqueada").map((o) => o.product_id).filter(Boolean)), [abertas]);
   const suggestionsAll = useMemo(() => mrpProducts
     .filter((p) => (p.category === "Produto Final" || p.category === "Semi-acabado") && p.min_rn > 0)
     // Produção olha SÓ o HUB Natal (HUB-RN) — SP/LogHouse não contam pra reposição.
@@ -603,8 +605,10 @@ export default function OrdensProducao() {
       <Dialog open={lossOpen} onOpenChange={setLossOpen}>
         <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2"><XCircle className="h-5 w-5 text-red-500" /> Perdas de insumo</DialogTitle>
-            <DialogDescription>Quanto de cada insumo se perdeu na produção (usado além do previsto). Base do acompanhamento de perdas.</DialogDescription>
+            <DialogTitle className="flex items-center gap-2"><XCircle className="h-5 w-5 text-red-500" /> Perdas</DialogTitle>
+            <DialogDescription>
+              Refugo de produto: <strong className="text-red-500">{perdasTotais} un</strong> · perdas de insumo abaixo (usado além do previsto).
+            </DialogDescription>
           </DialogHeader>
           {materialLosses.length === 0 ? (
             <div className="py-10 text-center text-sm text-muted-foreground">Nenhuma perda de insumo registrada ainda.</div>
