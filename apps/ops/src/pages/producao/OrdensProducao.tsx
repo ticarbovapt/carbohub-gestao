@@ -13,8 +13,9 @@ import { cn } from "@/lib/utils";
 import { OPFormDialog } from "@/components/producao/OPFormDialog";
 import { ConfirmOPDialog } from "@/components/producao/ConfirmOPDialog";
 import { DeleteConfirmDialog } from "@/components/producao/DeleteConfirmDialog";
+import { MoveOPDialog } from "@/components/producao/MoveOPDialog";
 import { toast } from "sonner";
-import { useProductionOrders, useProductionOrderMutations, type OpRow } from "@/hooks/useProductionOrders";
+import { useProductionOrders, useProductionOrderMutations, type OpRow, type OpStatus as OpStatusT } from "@/hooks/useProductionOrders";
 
 type OpStatus =
   | "rascunho" | "planejada" | "aguardando_separacao" | "separada" | "aguardando_liberacao"
@@ -92,6 +93,9 @@ export default function OrdensProducao() {
   const [editOp, setEditOp] = useState<OP | null>(null);
   const [confirmOp, setConfirmOp] = useState<OP | null>(null);
   const [deleteOp, setDeleteOp] = useState<OP | null>(null);
+  const [pendingMove, setPendingMove] = useState<{ op: OP; toStatus: OpStatusT; fromLabel: string; toLabel: string } | null>(null);
+
+  const colLabel = (status: OpStatus) => KANBAN_COLUMNS.find((c) => c.statuses.includes(status))?.label ?? OP_STATUS_LABELS[status];
 
   // ── Indicadores (todos calculados a partir das OPs reais) ──────────────────
   const abertas = orders.filter((o) => o.op_status !== "concluida" && o.op_status !== "cancelada");
@@ -180,7 +184,10 @@ export default function OrdensProducao() {
                 if (dragId) {
                   const cur = orders.find((o) => o.id === dragId);
                   const target = col.statuses[0];
-                  if (cur && cur.op_status !== target) setStatus.mutate({ id: dragId, op_status: target });
+                  // Não muda direto: abre a confirmação (ciente do estoque na Separação).
+                  if (cur && cur.op_status !== target) {
+                    setPendingMove({ op: cur, toStatus: target, fromLabel: colLabel(cur.op_status), toLabel: col.label });
+                  }
                 }
                 setDragId(null); setOverCol(null);
               };
@@ -297,6 +304,26 @@ export default function OrdensProducao() {
           }}
         />
       )}
+      <MoveOPDialog
+        open={!!pendingMove}
+        onOpenChange={(v) => { if (!v) setPendingMove(null); }}
+        op={pendingMove?.op ?? null}
+        fromLabel={pendingMove?.fromLabel ?? ""}
+        toLabel={pendingMove?.toLabel ?? ""}
+        toStatus={pendingMove?.toStatus ?? "planejada"}
+        pending={setStatus.isPending}
+        onConfirm={() => {
+          if (!pendingMove) return;
+          const { op, toStatus, toLabel } = pendingMove;
+          setStatus.mutate(
+            { id: op.id, op_status: toStatus },
+            {
+              onSuccess: () => { toast.success(`OP movida para ${toLabel}.`); setPendingMove(null); },
+              onError: (e) => toast.error(e instanceof Error ? e.message : "Não foi possível mover a OP."),
+            },
+          );
+        }}
+      />
       <ConfirmOPDialog
         open={!!confirmOp}
         onOpenChange={(v) => { if (!v) setConfirmOp(null); }}
