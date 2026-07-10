@@ -19,6 +19,7 @@ import {
 } from "@/hooks/useFaturamento";
 import { BlingConfirmDialog } from "@/components/faturamento/BlingConfirmDialog";
 import { BaixarNFButton } from "@/components/faturamento/BaixarNFButton";
+import { NfeLinkSuggestions } from "@/components/faturamento/NfeLinkSuggestions";
 
 const MONTHS = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
 
@@ -181,6 +182,10 @@ export default function Faturamento() {
             </label>
           </CarboCardContent>
         </CarboCard>
+
+        {/* Sugestões de vínculo NF ↔ pedido (nativos do Bling e vendas do sistema
+            que não casaram pela observação). Só aparece quando há recomendação. */}
+        <NfeLinkSuggestions />
 
         {/* Abas: sistema vs Bling */}
         <Tabs defaultValue="sistema">
