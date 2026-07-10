@@ -109,6 +109,7 @@ export default function OrdensProducao() {
 
   const [createOpen, setCreateOpen] = useState(false);
   const [createInitial, setCreateInitial] = useState<{ product_id: string; planned_quantity: number; demand_source?: string } | null>(null);
+  const [onlyCritical, setOnlyCritical] = useState(false);
   const [editOp, setEditOp] = useState<OP | null>(null);
   const [confirmOp, setConfirmOp] = useState<OP | null>(null);
   const [deleteOp, setDeleteOp] = useState<OP | null>(null);
@@ -137,18 +138,23 @@ export default function OrdensProducao() {
   const REORDER_AT = 1.25; // dispara quando estoque ≤ 125% do mínimo
   const REPLENISH_TO = 2;  // sugere produzir até 2× o mínimo
   const openProductIds = useMemo(() => new Set(abertas.map((o) => o.product_id).filter(Boolean)), [abertas]);
-  const suggestions = useMemo(() => mrpProducts
-    .filter((p) => (p.category === "Produto Final" || p.category === "Semi-acabado") && p.safety_stock_qty > 0 && !openProductIds.has(p.id))
+  const suggestionsAll = useMemo(() => mrpProducts
+    .filter((p) => (p.category === "Produto Final" || p.category === "Semi-acabado") && p.safety_stock_qty > 0)
     .map((p) => ({ p, current: p.hubs.reduce((s, h) => s + h.quantity, 0) }))
     .filter((x) => x.current <= x.p.safety_stock_qty * REORDER_AT)
     .map((x) => ({
       ...x,
       critico: x.current < x.p.safety_stock_qty,
       deficit: Math.max(1, Math.ceil(x.p.safety_stock_qty * REPLENISH_TO - x.current)),
+      hasOpenOp: openProductIds.has(x.p.id),
+      // nível de estoque relativo ao mínimo (0–100%), pra barrinha.
+      level: Math.min(100, Math.round((x.current / x.p.safety_stock_qty) * 100)),
     }))
-    .sort((a, b) => Number(b.critico) - Number(a.critico) || (b.p.safety_stock_qty - b.current) - (a.p.safety_stock_qty - a.current)),
+    // Acionáveis primeiro (sem OP), depois críticos, depois quem está mais baixo.
+    .sort((a, b) => Number(a.hasOpenOp) - Number(b.hasOpenOp) || Number(b.critico) - Number(a.critico) || a.level - b.level),
     [mrpProducts, openProductIds]);
-  const criticos = suggestions.filter((s) => s.critico).length;
+  const criticos = suggestionsAll.filter((s) => s.critico).length;
+  const suggestions = onlyCritical ? suggestionsAll.filter((s) => s.critico) : suggestionsAll;
 
   const filtered = useMemo(() => orders.filter((o) => {
     if (statusFilter !== "all" && o.op_status !== statusFilter) return false;
@@ -214,43 +220,64 @@ export default function OrdensProducao() {
           </Select>
         </div>
 
-        {/* Reposição sugerida (no ponto de reposição, sem OP aberta) */}
-        {canManage && suggestions.length > 0 && (
+        {/* Reposição sugerida (no ponto de reposição) */}
+        {canManage && suggestionsAll.length > 0 && (
           <div className="rounded-xl border border-amber-500/25 bg-amber-500/5 p-3">
-            <div className="flex items-center gap-2 mb-2 text-sm font-semibold text-amber-700 dark:text-amber-400">
+            <div className="flex items-center gap-2 mb-2.5 text-sm font-semibold text-amber-700 dark:text-amber-400">
               <AlertTriangle className="h-4 w-4" /> Reposição sugerida
               <span className="text-xs font-normal text-muted-foreground">
-                {suggestions.length} produto(s) no ponto de reposição{criticos > 0 && <> · <span className="text-red-500 font-medium">{criticos} abaixo do mínimo</span></>}
+                {suggestionsAll.length} no ponto de reposição{criticos > 0 && <> · <span className="text-red-500 font-medium">{criticos} abaixo do mínimo</span></>}
               </span>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {suggestions.slice(0, 12).map(({ p, current, deficit, critico }) => (
+              {criticos > 0 && (
                 <button
-                  key={p.id}
-                  onClick={() => { setCreateInitial({ product_id: p.id, planned_quantity: deficit, demand_source: "safety_stock" }); setCreateOpen(true); }}
+                  onClick={() => setOnlyCritical((v) => !v)}
                   className={cn(
-                    "group flex items-center gap-2.5 rounded-lg border bg-card px-3 py-1.5 text-left transition-colors",
-                    critico ? "border-red-500/40 hover:border-red-500" : "border-amber-500/30 hover:border-amber-500",
+                    "ml-auto text-[11px] rounded-md px-2 py-1 font-medium transition-colors",
+                    onlyCritical ? "bg-red-500 text-white" : "bg-muted text-muted-foreground hover:text-foreground",
                   )}
                 >
-                  <span className={cn("h-2 w-2 rounded-full shrink-0", critico ? "bg-red-500" : "bg-amber-500")} />
-                  <div>
-                    <div className="flex items-center gap-1.5">
-                      <p className="text-xs font-medium">{p.name}</p>
-                      <span className={cn(
-                        "text-[9px] px-1 py-0.5 rounded font-medium",
-                        p.category === "Semi-acabado" ? "bg-teal-600/15 text-teal-600 dark:text-teal-400" : "bg-emerald-700/15 text-emerald-600 dark:text-emerald-400",
-                      )}>
-                        {p.category === "Semi-acabado" ? "semi" : "final"}
-                      </span>
-                    </div>
-                    <p className="text-[11px] text-muted-foreground tabular-nums">
-                      estoque {current.toLocaleString("pt-BR")} / mín {p.safety_stock_qty.toLocaleString("pt-BR")} {p.stock_unit}
-                    </p>
+                  só críticos
+                </button>
+              )}
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {suggestions.slice(0, 16).map(({ p, current, deficit, critico, hasOpenOp, level }) => (
+                <button
+                  key={p.id}
+                  disabled={hasOpenOp}
+                  onClick={() => { if (!hasOpenOp) { setCreateInitial({ product_id: p.id, planned_quantity: deficit, demand_source: "safety_stock" }); setCreateOpen(true); } }}
+                  className={cn(
+                    "group flex flex-col gap-1.5 rounded-lg border bg-card px-3 py-2 text-left transition-colors w-[210px]",
+                    hasOpenOp ? "border-border opacity-50 cursor-default"
+                      : critico ? "border-red-500/40 hover:border-red-500" : "border-amber-500/30 hover:border-amber-500",
+                  )}
+                >
+                  <div className="flex items-center gap-2 w-full">
+                    <span className={cn("h-2 w-2 rounded-full shrink-0", critico ? "bg-red-500" : "bg-amber-500")} />
+                    <p className="text-xs font-medium truncate flex-1">{p.name}</p>
+                    <span className={cn(
+                      "text-[9px] px-1 py-0.5 rounded font-medium shrink-0",
+                      p.category === "Semi-acabado" ? "bg-teal-600/15 text-teal-600 dark:text-teal-400" : "bg-emerald-700/15 text-emerald-600 dark:text-emerald-400",
+                    )}>
+                      {p.category === "Semi-acabado" ? "semi" : "final"}
+                    </span>
                   </div>
-                  <span className="inline-flex items-center gap-1 rounded-md bg-primary/10 text-primary px-2 py-1 text-[11px] font-medium group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
-                    <Plus className="h-3 w-3" /> OP {deficit}
-                  </span>
+                  {/* FA: barra de nível de estoque vs mínimo */}
+                  <div className="h-1.5 w-full rounded-full bg-muted overflow-hidden">
+                    <div className={cn("h-full rounded-full", critico ? "bg-red-500" : "bg-amber-500")} style={{ width: `${Math.max(4, level)}%` }} />
+                  </div>
+                  <div className="flex items-center justify-between w-full">
+                    <span className="text-[11px] text-muted-foreground tabular-nums">
+                      {current.toLocaleString("pt-BR")} / mín {p.safety_stock_qty.toLocaleString("pt-BR")}
+                    </span>
+                    {hasOpenOp ? (
+                      <span className="text-[10px] text-muted-foreground font-medium">OP em andamento</span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 rounded-md bg-primary/10 text-primary px-2 py-0.5 text-[11px] font-medium group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
+                        <Plus className="h-3 w-3" /> OP {deficit}
+                      </span>
+                    )}
+                  </div>
                 </button>
               ))}
             </div>
