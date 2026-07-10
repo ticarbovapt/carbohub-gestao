@@ -13,6 +13,7 @@ const db = supabase as unknown as { from: (t: string) => any };
 
 export interface VendaItemInput {
   product_id: string | null;
+  product_code?: string | null;
   name: string;
   quantity: number;
   unit_price: number;

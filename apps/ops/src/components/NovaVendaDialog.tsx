@@ -16,7 +16,7 @@ import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useAuth } from "@/contexts/AuthContext";
-import { useSkus } from "@/hooks/useSkus";
+import { useMrpProducts } from "@/hooks/useMrpProducts";
 import { useCreateVenda } from "@/hooks/useCarbozeOrders";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
@@ -59,7 +59,11 @@ interface NovaVendaDialogProps {
 export function NovaVendaDialog({ open, onOpenChange }: NovaVendaDialogProps) {
   const { profile } = useAuth();
   const vendedor = profile?.full_name ?? profile?.username ?? "";
-  const { data: skus = [] } = useSkus();
+  // Catálogo = mrp_products (Produto Final) — MESMO id usado pelo estoque
+  // (warehouse_stock) e pela produção (OP/BOM). Nunca usar sku aqui, senão a
+  // venda nasce com product_id de outro catálogo e fica órfã pro estoque.
+  const { data: allProducts = [] } = useMrpProducts();
+  const skus = useMemo(() => allProducts.filter((p) => p.category === "Produto Final"), [allProducts]);
   const createVenda = useCreateVenda();
 
   const [mode, setMode] = useState<"venda" | "promo">("venda");
@@ -108,13 +112,17 @@ export function NovaVendaDialog({ open, onOpenChange }: NovaVendaDialogProps) {
     if (!hasItems()) { toast.error("Adicione ao menos um item."); return; }
     const items = rows
       .filter((r) => r.productId && r.qty > 0)
-      .map((r) => ({
-        product_id: r.productId,
-        name: skus.find((s) => s.id === r.productId)?.name ?? "Item",
-        quantity: r.qty,
-        unit_price: r.unitPrice,
-        total: r.qty * r.unitPrice,
-      }));
+      .map((r) => {
+        const prod = skus.find((s) => s.id === r.productId);
+        return {
+          product_id: r.productId,
+          product_code: prod?.product_code ?? null,
+          name: prod?.name ?? "Item",
+          quantity: r.qty,
+          unit_price: r.unitPrice,
+          total: r.qty * r.unitPrice,
+        };
+      });
     const addr = ([logradouro, numero].filter(Boolean).join(", ") + (bairro ? ` - ${bairro}` : "")).trim();
     try {
       await createVenda.mutateAsync({
@@ -253,7 +261,7 @@ export function NovaVendaDialog({ open, onOpenChange }: NovaVendaDialogProps) {
                         <Label>Produto</Label>
                         <Select value={r.productId} onValueChange={(v) => onProduct(r.id, v)}>
                           <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
-                          <SelectContent>{skus.map((p) => <SelectItem key={p.id} value={p.id}>{p.code} — {p.name}</SelectItem>)}</SelectContent>
+                          <SelectContent>{skus.map((p) => <SelectItem key={p.id} value={p.id}>{p.product_code} — {p.name}</SelectItem>)}</SelectContent>
                         </Select>
                       </div>
                       <div className="space-y-1.5">
