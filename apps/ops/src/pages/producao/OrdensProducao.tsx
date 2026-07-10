@@ -11,6 +11,9 @@ import {
 } from "lucide-react";
 import { useProducibility } from "@/hooks/useProducibility";
 import { useMrpProducts } from "@/hooks/useMrpProducts";
+import { useMaterialLosses } from "@/hooks/useMaterialLosses";
+import { unitLabel } from "@/lib/units";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { OPFormDialog } from "@/components/producao/OPFormDialog";
 import { ConfirmOPDialog } from "@/components/producao/ConfirmOPDialog";
@@ -59,14 +62,18 @@ const KANBAN_COLUMNS: { id: string; label: string; emoji: string; color: string;
 
 type OP = OpRow;
 
-function KpiCard({ icon: Icon, label, value, sub, color }: { icon: typeof TrendingUp; label: string; value: string; sub: string; color: string }) {
+function KpiCard({ icon: Icon, label, value, sub, color, onClick }: { icon: typeof TrendingUp; label: string; value: string; sub: string; color: string; onClick?: () => void }) {
   return (
-    <div className="rounded-xl border bg-card p-4 space-y-1">
+    <div
+      className={cn("rounded-xl border bg-card p-4 space-y-1 text-left", onClick && "cursor-pointer hover:border-primary/50 transition-colors")}
+      onClick={onClick}
+      role={onClick ? "button" : undefined}
+    >
       <div className={cn("flex items-center gap-2 text-sm", color)}>
         <Icon className="h-4 w-4" /><span>{label}</span>
       </div>
       <p className={cn("text-2xl font-bold", color)}>{value}</p>
-      <p className="text-xs text-muted-foreground">{sub}</p>
+      <p className="text-xs text-muted-foreground">{sub}{onClick && " · ver detalhes"}</p>
     </div>
   );
 }
@@ -110,6 +117,8 @@ export default function OrdensProducao() {
   const [createOpen, setCreateOpen] = useState(false);
   const [createInitial, setCreateInitial] = useState<{ product_id: string; planned_quantity?: number; demand_source?: string } | null>(null);
   const [onlyCritical, setOnlyCritical] = useState(false);
+  const [lossOpen, setLossOpen] = useState(false);
+  const { data: materialLosses = [] } = useMaterialLosses();
   // Reposição começa FECHADA (não ocupa a tela no load) e lembra a escolha.
   const [repoCollapsed, setRepoCollapsed] = useState(() => { try { return localStorage.getItem("ops:repo-collapsed") !== "false"; } catch { return true; } });
   useEffect(() => { try { localStorage.setItem("ops:repo-collapsed", String(repoCollapsed)); } catch { /* ignora */ } }, [repoCollapsed]);
@@ -203,7 +212,7 @@ export default function OrdensProducao() {
           <KpiCard icon={CalendarClock} label="Atrasadas" value={String(atrasadas)} sub="prazo vencido" color={atrasadas > 0 ? "text-red-500" : "text-muted-foreground"} />
           <KpiCard icon={Target} label="A Produzir" value={`${aProduzir} un`} sub="planejado nas abertas" color="text-blue-500" />
           <KpiCard icon={TrendingUp} label="Rendimento Médio" value={rendimento != null ? `${rendimento}%` : "—"} sub="aprovado / produzido" color="text-green-500" />
-          <KpiCard icon={XCircle} label="Perdas Totais" value={String(perdasTotais)} sub="unidades rejeitadas" color="text-red-500" />
+          <KpiCard icon={XCircle} label="Perdas Totais" value={String(perdasTotais)} sub="refugo do produto" color="text-red-500" onClick={() => setLossOpen(true)} />
         </div>
 
         {/* Filtros */}
@@ -589,6 +598,38 @@ export default function OrdensProducao() {
           }}
         />
       )}
+      {/* Perdas de insumo — ranking (Perdas Totais → clique) */}
+      <Dialog open={lossOpen} onOpenChange={setLossOpen}>
+        <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><XCircle className="h-5 w-5 text-red-500" /> Perdas de insumo</DialogTitle>
+            <DialogDescription>Quanto de cada insumo se perdeu na produção (usado além do previsto). Base do acompanhamento de perdas.</DialogDescription>
+          </DialogHeader>
+          {materialLosses.length === 0 ? (
+            <div className="py-10 text-center text-sm text-muted-foreground">Nenhuma perda de insumo registrada ainda.</div>
+          ) : (
+            <div className="rounded-lg border border-border overflow-hidden">
+              <div className="divide-y divide-border">
+                {materialLosses.map((m) => (
+                  <div key={m.insumo_id} className="flex items-center gap-3 px-3 py-2.5">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium truncate">{m.name} <span className="text-xs text-muted-foreground font-mono">{m.code}</span></p>
+                      <p className="text-xs text-muted-foreground tabular-nums">
+                        {m.occurrences} {m.occurrences === 1 ? "OP" : "OPs"} · usado {m.total_used.toLocaleString("pt-BR")} de {m.total_theoretical.toLocaleString("pt-BR")} {unitLabel(m.unit)}
+                      </p>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <p className="text-sm font-bold text-red-500 tabular-nums">-{m.total_loss.toLocaleString("pt-BR")} {unitLabel(m.unit)}</p>
+                      <p className="text-[11px] text-muted-foreground">{m.loss_pct.toFixed(1)}% de perda</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
       <MoveOPDialog
         key={pendingMove?.op.id ?? "none"}
         open={!!pendingMove}
