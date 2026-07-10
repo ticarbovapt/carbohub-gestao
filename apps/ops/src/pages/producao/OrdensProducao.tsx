@@ -108,6 +108,7 @@ export default function OrdensProducao() {
   const [priorityFilter, setPriorityFilter] = useState("all");
 
   const [createOpen, setCreateOpen] = useState(false);
+  const [createInitial, setCreateInitial] = useState<{ product_id: string; planned_quantity: number; demand_source?: string } | null>(null);
   const [editOp, setEditOp] = useState<OP | null>(null);
   const [confirmOp, setConfirmOp] = useState<OP | null>(null);
   const [deleteOp, setDeleteOp] = useState<OP | null>(null);
@@ -130,6 +131,15 @@ export default function OrdensProducao() {
   // Atrasadas: prazo vencido e ainda abertas. Prontas: dá pra separar agora.
   const atrasadas = abertas.filter((o) => o.need_date && o.need_date < todayISO()).length;
   const prontas = abertas.filter((o) => EARLY_STAGES.has(o.op_status) && checkProducible(o.product_id, o.planned_quantity, o.production_route) === "ok").length;
+
+  // Reposição sugerida: produzíveis abaixo do estoque mínimo e SEM OP aberta ainda.
+  const openProductIds = useMemo(() => new Set(abertas.map((o) => o.product_id).filter(Boolean)), [abertas]);
+  const suggestions = useMemo(() => mrpProducts
+    .filter((p) => (p.category === "Produto Final" || p.category === "Semi-acabado") && p.safety_stock_qty > 0 && !openProductIds.has(p.id))
+    .map((p) => ({ p, current: p.hubs.reduce((s, h) => s + h.quantity, 0) }))
+    .filter((x) => x.current < x.p.safety_stock_qty)
+    .map((x) => ({ ...x, deficit: Math.max(1, Math.ceil(x.p.safety_stock_qty - x.current)) }))
+    .sort((a, b) => (b.deficit) - (a.deficit)), [mrpProducts, openProductIds]);
 
   const filtered = useMemo(() => orders.filter((o) => {
     if (statusFilter !== "all" && o.op_status !== statusFilter) return false;
@@ -194,6 +204,33 @@ export default function OrdensProducao() {
             </SelectContent>
           </Select>
         </div>
+
+        {/* Reposição sugerida (abaixo do mínimo, sem OP aberta) */}
+        {canManage && suggestions.length > 0 && (
+          <div className="rounded-xl border border-amber-500/25 bg-amber-500/5 p-3">
+            <div className="flex items-center gap-2 mb-2 text-sm font-semibold text-amber-700 dark:text-amber-400">
+              <AlertTriangle className="h-4 w-4" /> Reposição sugerida
+              <span className="text-xs font-normal text-muted-foreground">{suggestions.length} produto(s) abaixo do estoque mínimo</span>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {suggestions.slice(0, 8).map(({ p, current, deficit }) => (
+                <button
+                  key={p.id}
+                  onClick={() => { setCreateInitial({ product_id: p.id, planned_quantity: deficit, demand_source: "safety_stock" }); setCreateOpen(true); }}
+                  className="group flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-1.5 text-left hover:border-primary transition-colors"
+                >
+                  <div>
+                    <p className="text-xs font-medium">{p.name}</p>
+                    <p className="text-[11px] text-muted-foreground tabular-nums">estoque {current.toLocaleString("pt-BR")} / mín {p.safety_stock_qty.toLocaleString("pt-BR")}</p>
+                  </div>
+                  <span className="inline-flex items-center gap-1 rounded-md bg-primary/10 text-primary px-2 py-1 text-[11px] font-medium group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
+                    <Plus className="h-3 w-3" /> OP {deficit}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Kanban ou Lista */}
         {isLoading ? (
@@ -379,7 +416,13 @@ export default function OrdensProducao() {
       </div>
 
       {/* Dialogs */}
-      <OPFormDialog open={createOpen} onOpenChange={setCreateOpen} mode="create" />
+      <OPFormDialog
+        key={createInitial?.product_id ?? "new"}
+        open={createOpen}
+        onOpenChange={(v) => { setCreateOpen(v); if (!v) setCreateInitial(null); }}
+        mode="create"
+        initial={createInitial ?? undefined}
+      />
       {editOp && (
         <OPFormDialog
           key={editOp.id}
