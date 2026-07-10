@@ -42,6 +42,7 @@ export interface OpRow {
   demand_source: string;
   need_date: string | null;
   production_route: ProductionRoute;
+  created_at: string | null;
 }
 
 export function useProductionOrders() {
@@ -50,7 +51,7 @@ export function useProductionOrders() {
     queryFn: async (): Promise<OpRow[]> => {
       const res = await db
         .from("production_orders")
-        .select("id, op_number, sku_id, product_id, planned_quantity, good_quantity, rejected_quantity, priority, op_status, demand_source, need_date, product_code, source_order_id, production_route")
+        .select("id, op_number, sku_id, product_id, planned_quantity, good_quantity, rejected_quantity, priority, op_status, demand_source, need_date, product_code, source_order_id, production_route, created_at")
         .order("created_at", { ascending: false });
       if (res.error) throw res.error;
       const rows = res.data ?? [];
@@ -85,6 +86,7 @@ export function useProductionOrders() {
           demand_source: r.demand_source ?? "",
           need_date: r.need_date ? String(r.need_date).slice(0, 10) : null,
           production_route: (r.production_route ?? null) as ProductionRoute,
+          created_at: r.created_at ?? null,
         };
       });
     },
