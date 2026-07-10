@@ -3,18 +3,21 @@ import { supabase } from "@/integrations/supabase/client";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Transferências entre hubs (Carbo Ops) — Envios RN→SP / RN→SP-Vendas.
-//  Lógica NOVA, toda em warehouse_stock (sem mrp_products.current_stock_qty nem
-//  o trigger de sugestão do controle):
-//   • REGISTRAR: valida saldo no RN, DEBITA o RN na hora, cria stock_transfers
-//     status='approved' (pre_debited=true).
-//   • CONFIRMAR CHEGADA: status approved→executed (condicional = anti-duplo) e
-//     CREDITA o destino.
-//   • ESTORNAR: status approved→cancelled e devolve a qtd ao RN.
+//  Toda a MUTAÇÃO de estoque roda em RPCs ATÔMICAS no banco (migration
+//  20260710310000_ops_transfer_atomic), uma função = uma transação:
+//   • REGISTRAR  → ops_transfer_register: valida saldo (FOR UPDATE), DEBITA o RN
+//     por delta, cria stock_transfers (approved, pre_debited) e grava o
+//     stock_movements — tudo junto (A9: sem débito órfão; A10: sem lost update).
+//   • CONFIRMAR  → ops_transfer_confirm: flip approved→executed (anti-duplo) +
+//     crédito relativo no destino + movimento de entrada.
+//   • ESTORNAR   → ops_transfer_estorno: flip approved→cancelled + devolução ao RN.
+//  Transferências agora aparecem no histórico/KPIs (C10).
 //  RLS: stock_transfers/warehouse_stock abertos a autenticado (migrations Ops).
 // ─────────────────────────────────────────────────────────────────────────────
 
 const db = supabase as unknown as {
   from: (t: string) => any;
+  rpc: (fn: string, args?: Record<string, unknown>) => Promise<{ data: any; error: any }>;
   auth: { getUser: () => Promise<{ data: { user: { id: string } | null } }> };
 };
 
@@ -36,32 +39,6 @@ export interface Transfer {
 
 const RAW_TO_STATUS = (raw: string): TransferStatus =>
   raw === "executed" ? "entregue" : raw === "cancelled" || raw === "rejected" ? "estornado" : "em_transito";
-
-async function resolveWarehouseId(code: string): Promise<string> {
-  const wh = await db.from("warehouses").select("id").eq("code", code).maybeSingle();
-  if (wh.error) throw wh.error;
-  if (!wh.data?.id) throw new Error(`Centro de distribuição não encontrado (${code}).`);
-  return wh.data.id as string;
-}
-
-async function getQty(warehouseId: string, productId: string): Promise<number> {
-  const row = await db
-    .from("warehouse_stock")
-    .select("quantity")
-    .eq("warehouse_id", warehouseId)
-    .eq("product_id", productId)
-    .maybeSingle();
-  if (row.error) throw row.error;
-  return Number(row.data?.quantity) || 0;
-}
-
-async function setQty(warehouseId: string, productId: string, quantity: number) {
-  const up = await db.from("warehouse_stock").upsert(
-    { warehouse_id: warehouseId, product_id: productId, quantity, updated_at: new Date().toISOString() },
-    { onConflict: "warehouse_id,product_id" },
-  );
-  if (up.error) throw up.error;
-}
 
 export function useStockTransfers() {
   return useQuery({
@@ -112,34 +89,22 @@ export interface RegisterEnvioArgs {
   notes?: string;
 }
 
-const FROM_CODE = "HUB-RN"; // origem dos envios = Hub Natal
-
 export function useRegisterEnvio() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ productId, productCode, toCode, quantity, notes }: RegisterEnvioArgs) => {
       if (!Number.isFinite(quantity) || quantity <= 0) throw new Error("Quantidade inválida.");
-      const [fromId, toId] = await Promise.all([resolveWarehouseId(FROM_CODE), resolveWarehouseId(toCode)]);
-
-      // Valida e debita o RN na hora (pre_debited).
-      const current = await getQty(fromId, productId);
-      if (quantity > current) throw new Error(`Saldo insuficiente no Hub Natal (disponível: ${current}).`);
-      await setQty(fromId, productId, current - quantity);
-
       const { data: auth } = await db.auth.getUser();
-      const ins = await db.from("stock_transfers").insert({
-        product_id: productId,
-        product_code: productCode,
-        from_hub: fromId,
-        to_hub: toId,
-        quantity,
-        status: "approved",
-        pre_debited: true,
-        approved_by: auth?.user?.id ?? null,
-        approved_at: new Date().toISOString(),
-        notes: notes || null,
+      // Débito do RN + registro + movimento numa transação única no banco.
+      const rr = await db.rpc("ops_transfer_register", {
+        p_product_id: productId,
+        p_product_code: productCode,
+        p_to_code: toCode,
+        p_qty: quantity,
+        p_notes: notes || null,
+        p_user: auth?.user?.id ?? null,
       });
-      if (ins.error) throw ins.error;
+      if (rr.error) throw rr.error;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["ops", "stock-transfers"] });
@@ -153,19 +118,9 @@ export function useConfirmChegada() {
   return useMutation({
     mutationFn: async (transferId: string) => {
       const { data: auth } = await db.auth.getUser();
-      // Condicional a status='approved' → anti-duplo-crédito.
-      const upd = await db
-        .from("stock_transfers")
-        .update({ status: "executed", executed_by: auth?.user?.id ?? null, executed_at: new Date().toISOString() })
-        .eq("id", transferId)
-        .eq("status", "approved")
-        .select("to_hub, product_id, quantity");
-      if (upd.error) throw upd.error;
-      const row = upd.data?.[0];
-      if (!row) throw new Error("Envio já confirmado ou cancelado.");
-      // Credita o destino.
-      const current = await getQty(row.to_hub, row.product_id);
-      await setQty(row.to_hub, row.product_id, current + (Number(row.quantity) || 0));
+      // Flip approved→executed + crédito no destino + movimento, atômico no banco.
+      const rr = await db.rpc("ops_transfer_confirm", { p_transfer_id: transferId, p_user: auth?.user?.id ?? null });
+      if (rr.error) throw rr.error;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["ops", "stock-transfers"] });
@@ -178,20 +133,10 @@ export function useEstornarEnvio() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (transferId: string) => {
-      const upd = await db
-        .from("stock_transfers")
-        .update({ status: "cancelled" })
-        .eq("id", transferId)
-        .eq("status", "approved")
-        .select("from_hub, product_id, quantity, pre_debited");
-      if (upd.error) throw upd.error;
-      const row = upd.data?.[0];
-      if (!row) throw new Error("Envio já confirmado ou cancelado.");
-      // Devolve ao RN se o saldo foi debitado na criação.
-      if (row.pre_debited) {
-        const current = await getQty(row.from_hub, row.product_id);
-        await setQty(row.from_hub, row.product_id, current + (Number(row.quantity) || 0));
-      }
+      const { data: auth } = await db.auth.getUser();
+      // Flip approved→cancelled + devolução ao RN, atômico no banco.
+      const rr = await db.rpc("ops_transfer_estorno", { p_transfer_id: transferId, p_user: auth?.user?.id ?? null });
+      if (rr.error) throw rr.error;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["ops", "stock-transfers"] });
