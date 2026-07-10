@@ -44,6 +44,7 @@ export interface OpRow {
   production_route: ProductionRoute;
   created_at: string | null;
   customer_name: string | null; // cliente do pedido de venda (OP vinda do pós-venda)
+  source_order_id: string | null; // pedido de origem (pós-venda) → trava a quantidade
 }
 
 export function useProductionOrders() {
@@ -92,6 +93,7 @@ export function useProductionOrders() {
           production_route: (r.production_route ?? null) as ProductionRoute,
           created_at: r.created_at ?? null,
           customer_name: (r.customer_name || custMap.get(r.source_order_id) || null) as string | null,
+          source_order_id: r.source_order_id ?? null,
         };
       });
     },
@@ -118,6 +120,7 @@ export interface UpdateOpInput {
   demandSource?: string;
   needDate?: string | null;
   notes?: string;
+  customerName?: string;
 }
 
 export function useProductionOrderMutations() {
@@ -155,11 +158,15 @@ export function useProductionOrderMutations() {
     mutationFn: async (p: UpdateOpInput) => {
       const updates: Record<string, unknown> = {};
       if (p.productId) { updates.product_id = p.productId; updates.sku_id = null; if (p.productName) updates.product_code = p.productName; }
-      if (p.plannedQuantity != null) { updates.planned_quantity = p.plannedQuantity; updates.quantity = p.plannedQuantity; }
+      if (p.plannedQuantity != null) {
+        if (!Number.isFinite(p.plannedQuantity) || p.plannedQuantity <= 0) throw new Error("Quantidade planejada deve ser maior que zero.");
+        updates.planned_quantity = p.plannedQuantity; updates.quantity = p.plannedQuantity;
+      }
       if (p.priority != null) updates.priority = p.priority;
       if (p.demandSource != null) updates.demand_source = p.demandSource || null;
       if (p.needDate !== undefined) updates.need_date = p.needDate || null;
       if (p.notes !== undefined) updates.deviation_notes = p.notes.trim() || null;
+      if (p.customerName !== undefined) updates.customer_name = p.customerName.trim() || null;
       const res = await db.from("production_orders").update(updates).eq("id", p.id);
       if (res.error) throw res.error;
     },

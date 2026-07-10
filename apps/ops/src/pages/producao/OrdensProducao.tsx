@@ -587,7 +587,7 @@ export default function OrdensProducao() {
           onOpenChange={(v) => { if (!v) setEditOp(null); }}
           mode="edit"
           id={editOp.id}
-          lockQuantity={editOp.demand_source === "venda"}
+          lockQuantity={!!editOp.source_order_id}
           initial={{
             product_id: editOp.product_id ?? "",
             product_label: editOp.sku_name,
@@ -595,6 +595,7 @@ export default function OrdensProducao() {
             priority: String(editOp.priority),
             demand_source: editOp.demand_source,
             need_date: editOp.need_date ?? "",
+            customer_name: editOp.customer_name ?? "",
           }}
         />
       )}

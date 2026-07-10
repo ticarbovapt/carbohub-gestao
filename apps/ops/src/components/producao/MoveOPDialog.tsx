@@ -94,13 +94,14 @@ export function MoveOPDialog({ open, onOpenChange, op, fromLabel, toLabel, toSta
 
   // ── Conclusão: consumo real dos insumos → perdas ────────────────────────────
   const concRoute = (op?.production_route ?? (hasChoice ? route : "rotular")) as ProductionRoute;
-  // teórico p/ as BOAS produzidas; e o que foi deduzido no separado (planejado).
-  const theoLines = useMemo(() => (isConclusao ? buildLinesFor(concRoute, goodNum) : []), [isConclusao, concRoute, goodNum, finalBom, semiBom, semiLine, productById]); // eslint-disable-line react-hooks/exhaustive-deps
-  const dedById = useMemo(() => new Map(buildLinesFor(concRoute, qty).map((l) => [l.id, l.needed])), [isConclusao, concRoute, qty, finalBom, semiBom, semiLine, productById]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Lista base (por 1 unidade) — SEMPRE presente, mesmo com boas=0, pra registrar
+  // as perdas do refugo. Teórico = base × boas.
+  const baseLines = useMemo(() => (isConclusao ? buildLinesFor(concRoute, 1) : []), [isConclusao, concRoute, finalBom, semiBom, semiLine, productById]); // eslint-disable-line react-hooks/exhaustive-deps
+  const theoLines = useMemo(() => baseLines.map((l) => ({ ...l, needed: roundForUnit(l.needed * goodNum, l.unit) })), [baseLines, goodNum]);
   const [consumo, setConsumo] = useState<Record<string, string>>({});
   useEffect(() => { setConsumo({}); }, [op?.id]);
-  // Teórico/usado respeitam a unidade: contável (un) é inteiro; vol/massa aceita decimal.
-  const theoOf = (l: Line) => roundForUnit(l.needed, l.unit);
+  // Usado respeita a unidade: contável (un) é inteiro; vol/massa aceita decimal.
+  const theoOf = (l: Line) => l.needed;
   const actualOf = (l: Line) => {
     const v = consumo[l.id];
     const raw = v === undefined || v === "" ? l.needed : Math.max(0, Number(v) || 0);
@@ -108,9 +109,15 @@ export function MoveOPDialog({ open, onOpenChange, op, fromLabel, toLabel, toSta
   };
   const consumption = theoLines.map((l) => ({
     insumo_id: l.id, unit: l.unit, theoretical_qty: theoOf(l),
-    deducted_qty: roundForUnit(dedById.get(l.id) ?? 0, l.unit), actual_qty: actualOf(l),
+    deducted_qty: 0, actual_qty: actualOf(l), // deducted é lido do ledger no banco
   }));
   const totalLoss = consumption.filter((c) => c.actual_qty > c.theoretical_qty).length;
+
+  // Unidade do PRODUTO produzido (p/ boas/refugo inteiros quando contável).
+  const productUnit = (op?.product_id && productById.get(op.product_id)?.stock_unit) || "un";
+  const countProduct = isCountUnit(productUnit);
+  const setGoodQty = (v: string) => setGood(countProduct ? v.replace(/[.,]\d*$/, "") : v);
+  const setRejectedQty = (v: string) => setRejected(countProduct ? v.replace(/[.,]\d*$/, "") : v);
 
   // Disponibilidade do envasado p/ a rota "só rotular".
   const semiAvail = semiProduct?.hubs.find((h) => h.warehouse_name === HUB_RN)?.quantity ?? 0;
@@ -241,11 +248,11 @@ export function MoveOPDialog({ open, onOpenChange, op, fromLabel, toLabel, toSta
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
                   <Label className="text-xs">Boas (aprovadas)</Label>
-                  <Input type="number" min={0} value={good} onChange={(e) => setGood(e.target.value)} className="h-9" />
+                  <Input type="number" min={0} step={countProduct ? 1 : "0.001"} value={good} onChange={(e) => setGoodQty(e.target.value)} className="h-9" />
                 </div>
                 <div className="space-y-1.5">
                   <Label className="text-xs">Refugo (perdas)</Label>
-                  <Input type="number" min={0} value={rejected} onChange={(e) => setRejected(e.target.value)} className="h-9" />
+                  <Input type="number" min={0} step={countProduct ? 1 : "0.001"} value={rejected} onChange={(e) => setRejectedQty(e.target.value)} className="h-9" />
                 </div>
               </div>
               <div className="flex items-center gap-2 rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-3 py-2.5 text-sm text-emerald-700 dark:text-emerald-400">
@@ -317,11 +324,11 @@ export function MoveOPDialog({ open, onOpenChange, op, fromLabel, toLabel, toSta
                 ? { route: op.production_route ?? null, good: goodNum, rejected: rejectedNum, consumption }
                 : { route: hasChoice ? route : null },
             )}
-            disabled={pending || (isSeparacao && hasChoice && !routeChosen)}
+            disabled={pending || (isSeparacao && hasChoice && !routeChosen) || (isConclusao && bomLoading)}
           >
             {pending ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Movendo…</>
               : isSeparacao ? (canSeparate || lines.length === 0 ? "Separar" : "Separar mesmo assim")
-              : isConclusao ? "Concluir" : "Mover"}
+              : isConclusao ? (bomLoading ? "Carregando ficha…" : "Concluir") : "Mover"}
           </Button>
         </DialogFooter>
       </DialogContent>
