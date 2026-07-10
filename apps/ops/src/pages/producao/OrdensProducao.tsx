@@ -133,15 +133,16 @@ export default function OrdensProducao() {
   // ── Indicadores (todos calculados a partir das OPs reais) ──────────────────
   const abertas = orders.filter((o) => o.op_status !== "concluida" && o.op_status !== "cancelada");
   const aProduzir = abertas.reduce((s, o) => s + (o.planned_quantity || 0), 0);
-  // Rendimento = aprovado / (aprovado + rejeitado), média das OPs com produção registrada.
-  const finished = orders.filter((o) => (o.good_quantity ?? 0) + (o.rejected_quantity ?? 0) > 0);
-  const rendimento = finished.length
-    ? Math.round((finished.reduce((s, o) => {
-        const g = o.good_quantity ?? 0, r = o.rejected_quantity ?? 0;
-        return s + g / (g + r);
-      }, 0) / finished.length) * 100)
-    : null;
-  const perdasTotais = orders.reduce((s, o) => s + (o.rejected_quantity ?? 0), 0);
+  // Rendimento = aprovado / (aprovado + rejeitado), PONDERADO pelo volume produzido
+  // (não a média simples das razões — 1 OP grande pesa mais que 1 pequena) e
+  // ignorando canceladas (não representam produção real).
+  const finished = orders.filter((o) => o.op_status !== "cancelada" && (o.good_quantity ?? 0) + (o.rejected_quantity ?? 0) > 0);
+  const rendTotals = finished.reduce(
+    (acc, o) => ({ good: acc.good + (o.good_quantity ?? 0), total: acc.total + (o.good_quantity ?? 0) + (o.rejected_quantity ?? 0) }),
+    { good: 0, total: 0 },
+  );
+  const rendimento = rendTotals.total > 0 ? Math.round((rendTotals.good / rendTotals.total) * 100) : null;
+  const perdasTotais = orders.reduce((s, o) => s + (o.op_status !== "cancelada" ? (o.rejected_quantity ?? 0) : 0), 0);
   // Atrasadas: prazo vencido e ainda abertas. Prontas: dá pra separar agora.
   const atrasadas = abertas.filter((o) => o.need_date && o.need_date < todayISO()).length;
   const prontas = abertas.filter((o) => EARLY_STAGES.has(o.op_status) && producible.check(o.product_id, o.planned_quantity, o.production_route) === "ok").length;
@@ -379,14 +380,18 @@ export default function OrdensProducao() {
         ) : viewMode === "kanban" ? (
           <div className="flex gap-3 overflow-x-auto flex-1 min-h-0 pb-3">
             {KANBAN_COLUMNS.map((col) => {
-              // Ordena por prioridade (1 = urgente primeiro), depois prazo mais próximo.
-              const allItems = filtered
-                .filter((o) => col.statuses.includes(o.op_status))
-                // Data de conclusão mais próxima primeiro (sem data vai pro fim); depois prioridade.
-                .sort((a, b) => (a.need_date ?? "9999-12-31").localeCompare(b.need_date ?? "9999-12-31") || (a.priority - b.priority));
               // Concluída/Bloqueada acumulam — mostra as recentes e resume o resto.
               const CAP = 12;
               const capped = col.id === "concluida" || col.id === "bloqueada";
+              const allItems = filtered
+                .filter((o) => col.statuses.includes(o.op_status))
+                // Colunas acumuladoras: mais RECENTE primeiro (o cap mostra as recém-mexidas,
+                // não as de prazo antigo). Demais: prazo mais próximo, depois prioridade.
+                .sort((a, b) =>
+                  capped
+                    ? (b.updated_at ?? b.created_at ?? "").localeCompare(a.updated_at ?? a.created_at ?? "")
+                    : (a.need_date ?? "9999-12-31").localeCompare(b.need_date ?? "9999-12-31") || (a.priority - b.priority),
+                );
               const items = capped ? allItems.slice(0, CAP) : allItems;
               const hiddenCount = allItems.length - items.length;
               const isOver = overCol === col.id;

@@ -67,6 +67,25 @@ export function useBomMutations() {
       if (!p.insumoId) throw new Error("Selecione um insumo.");
       if (p.insumoId === p.productId) throw new Error("O insumo não pode ser o próprio produto.");
       if (!Number.isFinite(p.quantity) || p.quantity <= 0) throw new Error("Quantidade inválida.");
+      // Anti-ciclo: adicionar insumo B ao produto A não pode fechar um laço (ex.:
+      // B já consome A, direta ou indiretamente). Caminha o grafo mrp_bom a partir
+      // de B; se alcançar A, a explosão da BOM seria infinita — bloqueia.
+      const edges = await db.from("mrp_bom").select("product_id, insumo_id");
+      if (!edges.error) {
+        const children = new Map<string, string[]>();
+        for (const e of (edges.data ?? []) as { product_id: string; insumo_id: string }[]) {
+          (children.get(e.product_id) ?? children.set(e.product_id, []).get(e.product_id)!).push(e.insumo_id);
+        }
+        const seen = new Set<string>();
+        const stack = [p.insumoId];
+        while (stack.length) {
+          const cur = stack.pop()!;
+          if (cur === p.productId) throw new Error("Isso criaria um ciclo na ficha (o insumo depende deste produto).");
+          if (seen.has(cur)) continue;
+          seen.add(cur);
+          for (const c of children.get(cur) ?? []) stack.push(c);
+        }
+      }
       const { data: auth } = await db.auth.getUser();
       const res = await db.from("mrp_bom").insert({
         product_id: p.productId,

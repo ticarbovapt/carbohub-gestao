@@ -40,12 +40,17 @@ export default function Alertas() {
         // Mínimo POR HUB (ops_stock_min) — mesma fonte do resto do sistema.
         // Não usa safety_stock_qty legado (senão diverge da tela de estoque/reposição).
         const min = p.mins[hub.id] ?? 0;
-        if (!min || min <= 0 || qty >= min) continue;
+        // Estoque NEGATIVO é sempre crítico — mesmo sem mínimo configurado (indica
+        // dedução além do disponível). Fora isso, só alerta abaixo do mínimo.
+        const negativo = qty < 0;
+        if (!negativo && (!min || min <= 0 || qty >= min)) continue;
         const prioridade: Prioridade = qty <= 0 ? "critical" : qty < min * 0.5 ? "high" : "medium";
         out.push({
           id: `${p.id}-${hub.id}`,
           titulo: `${p.name} — ${hub.label}`,
-          descricao: `Saldo ${qty} ${p.stock_unit} • mínimo ${min} (${p.product_code})`,
+          descricao: negativo
+            ? `Saldo NEGATIVO ${qty} ${p.stock_unit} (${p.product_code})`
+            : `Saldo ${qty} ${p.stock_unit} • mínimo ${min} (${p.product_code})`,
           prioridade,
           hubSlug: hub.slug,
         });
