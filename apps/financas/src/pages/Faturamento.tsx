@@ -18,6 +18,7 @@ import {
   type FaturamentoOrder,
 } from "@/hooks/useFaturamento";
 import { BlingConfirmDialog } from "@/components/faturamento/BlingConfirmDialog";
+import { BaixarNFButton } from "@/components/faturamento/BaixarNFButton";
 
 const MONTHS = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
 
@@ -109,9 +110,14 @@ export default function Faturamento() {
                 <CarboTableCell>{o.vendedor_name || <span className="text-muted-foreground">—</span>}</CarboTableCell>
                 <CarboTableCell className="text-right font-medium">{fmtCurrency(Number(o.total))}</CarboTableCell>
                 <CarboTableCell>
-                  {hasNF
-                    ? <CarboBadge variant="success" className="gap-1"><FileText className="h-3 w-3" /> NF {o.invoice_number || o.bling_nf_id}</CarboBadge>
-                    : <CarboBadge variant="warning">Sem NF</CarboBadge>}
+                  {hasNF ? (
+                    <div className="flex items-center gap-2">
+                      <CarboBadge variant="success" className="gap-1"><FileText className="h-3 w-3" /> NF {o.invoice_number || o.bling_nf_id}</CarboBadge>
+                      <BaixarNFButton blingNfId={o.bling_nf_id as number} label="Baixar" />
+                    </div>
+                  ) : (
+                    <CarboBadge variant="warning">Sem NF</CarboBadge>
+                  )}
                 </CarboTableCell>
                 {showAction && (
                   <CarboTableCell className="text-right">
