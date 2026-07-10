@@ -20,9 +20,11 @@ export function BaixarNFButton({
   const links = useNfeLinks();
   const handle = () =>
     links.mutate(blingNfId, {
-      onSuccess: ({ pdf }) => {
-        if (pdf) window.open(pdf, "_blank", "noopener");
-        else toast.error("Esta NF ainda não tem PDF (DANFE) disponível no Bling.");
+      onSuccess: ({ pdf, keys, situacao }) => {
+        if (pdf) { window.open(pdf, "_blank", "noopener"); return; }
+        // Sem PDF: mostra os campos que o Bling devolveu (diagnóstico do nome do link).
+        const campos = Array.isArray(keys) ? keys.join(", ") : "—";
+        toast.error(`Bling não devolveu link de PDF. situacao=${JSON.stringify(situacao)} · campos: ${campos}`, { duration: 15000 });
       },
       onError: (e: Error) => toast.error("Erro ao buscar a NF: " + e.message),
     });
