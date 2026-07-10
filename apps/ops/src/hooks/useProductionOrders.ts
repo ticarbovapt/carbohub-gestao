@@ -96,6 +96,8 @@ export interface CreateOpInput {
 
 export interface UpdateOpInput {
   id: string;
+  productId?: string;
+  productName?: string;
   plannedQuantity?: number;
   priority?: number;
   demandSource?: string;
@@ -136,6 +138,7 @@ export function useProductionOrderMutations() {
   const update = useMutation({
     mutationFn: async (p: UpdateOpInput) => {
       const updates: Record<string, unknown> = {};
+      if (p.productId) { updates.product_id = p.productId; updates.sku_id = null; if (p.productName) updates.product_code = p.productName; }
       if (p.plannedQuantity != null) { updates.planned_quantity = p.plannedQuantity; updates.quantity = p.plannedQuantity; }
       if (p.priority != null) updates.priority = p.priority;
       if (p.demandSource != null) updates.demand_source = p.demandSource || null;
