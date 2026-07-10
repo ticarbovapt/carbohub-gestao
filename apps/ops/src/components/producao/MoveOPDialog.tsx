@@ -9,7 +9,7 @@ import { CheckCircle2, AlertTriangle, PackageX, ArrowRight, Loader2, Tag, Factor
 import { cn } from "@/lib/utils";
 import { useMrpProducts } from "@/hooks/useMrpProducts";
 import { useBom } from "@/hooks/useBom";
-import { convertUnit, unitLabel } from "@/lib/units";
+import { convertUnit, unitLabel, isCountUnit, roundForUnit } from "@/lib/units";
 import type { OpRow, OpStatus, ProductionRoute } from "@/hooks/useProductionOrders";
 
 const HUB_RN = "HUB-RN";
@@ -99,10 +99,16 @@ export function MoveOPDialog({ open, onOpenChange, op, fromLabel, toLabel, toSta
   const dedById = useMemo(() => new Map(buildLinesFor(concRoute, qty).map((l) => [l.id, l.needed])), [isConclusao, concRoute, qty, finalBom, semiBom, semiLine, productById]); // eslint-disable-line react-hooks/exhaustive-deps
   const [consumo, setConsumo] = useState<Record<string, string>>({});
   useEffect(() => { setConsumo({}); }, [op?.id]);
-  const actualOf = (l: Line) => { const v = consumo[l.id]; return v === undefined || v === "" ? l.needed : Math.max(0, Number(v) || 0); };
+  // Teórico/usado respeitam a unidade: contável (un) é inteiro; vol/massa aceita decimal.
+  const theoOf = (l: Line) => roundForUnit(l.needed, l.unit);
+  const actualOf = (l: Line) => {
+    const v = consumo[l.id];
+    const raw = v === undefined || v === "" ? l.needed : Math.max(0, Number(v) || 0);
+    return roundForUnit(raw, l.unit);
+  };
   const consumption = theoLines.map((l) => ({
-    insumo_id: l.id, unit: l.unit, theoretical_qty: l.needed,
-    deducted_qty: dedById.get(l.id) ?? 0, actual_qty: actualOf(l),
+    insumo_id: l.id, unit: l.unit, theoretical_qty: theoOf(l),
+    deducted_qty: roundForUnit(dedById.get(l.id) ?? 0, l.unit), actual_qty: actualOf(l),
   }));
   const totalLoss = consumption.filter((c) => c.actual_qty > c.theoretical_qty).length;
 
@@ -260,22 +266,24 @@ export function MoveOPDialog({ open, onOpenChange, op, fromLabel, toLabel, toSta
                   </div>
                   <div className="divide-y divide-border">
                     {theoLines.map((l) => {
+                      const theo = theoOf(l);
                       const actual = actualOf(l);
-                      const loss = actual - l.needed;
+                      const loss = actual - theo;
+                      const count = isCountUnit(l.unit);
                       return (
                         <div key={l.id} className="flex items-center gap-3 px-3 py-2">
                           <div className="min-w-0 flex-1">
                             <p className="text-sm font-medium truncate">{l.name}</p>
-                            <p className="text-xs text-muted-foreground tabular-nums">Previsto {fmt(l.needed)} {unitLabel(l.unit)}
+                            <p className="text-xs text-muted-foreground tabular-nums">Previsto {fmt(theo)} {unitLabel(l.unit)}
                               {loss > 0 && <span className="text-red-500 font-medium"> · perda {fmt(loss)} {unitLabel(l.unit)}</span>}
                               {loss < 0 && <span className="text-emerald-600 dark:text-emerald-400"> · sobra {fmt(-loss)} {unitLabel(l.unit)}</span>}
                             </p>
                           </div>
                           <div className="flex items-center gap-1 shrink-0">
                             <Input
-                              type="number" min={0} step="0.001"
-                              value={consumo[l.id] ?? String(l.needed)}
-                              onChange={(e) => setConsumo((c) => ({ ...c, [l.id]: e.target.value }))}
+                              type="number" min={0} step={count ? 1 : "0.001"}
+                              value={consumo[l.id] ?? String(theo)}
+                              onChange={(e) => setConsumo((c) => ({ ...c, [l.id]: count ? e.target.value.replace(/[.,]\d*$/, "") : e.target.value }))}
                               className={cn("h-8 w-24 text-right", loss > 0 ? "border-red-500/50" : undefined)}
                             />
                             <span className="text-xs text-muted-foreground w-6">{unitLabel(l.unit)}</span>
