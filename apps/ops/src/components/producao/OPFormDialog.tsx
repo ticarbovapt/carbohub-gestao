@@ -105,9 +105,10 @@ export function OPFormDialog({ open, onOpenChange, mode, id, initial, lockQuanti
 
   const handleSubmit = async () => {
     try {
+      // Cliente obrigatório p/ venda/recorrência — vale em CREATE e EDIT.
+      if (needsCustomer && !customerName.trim()) throw new Error("Informe o cliente/empresa da venda.");
       if (mode === "create") {
         if (!selectedProduct) throw new Error("Selecione o produto.");
-        if (needsCustomer && !customerName.trim()) throw new Error("Informe o cliente/empresa da venda.");
         await create.mutateAsync({
           productId, productName: selectedProduct.name, plannedQuantity: qtyNum,
           priority: Number(priority), demandSource, needDate, notes, customerName,
@@ -119,8 +120,10 @@ export function OPFormDialog({ open, onOpenChange, mode, id, initial, lockQuanti
           id,
           productId: productId || undefined,
           productName: selectedProduct?.name,
-          plannedQuantity: plannedQty ? Number(plannedQty) : undefined,
+          // Não envia quantidade quando travada (OP de pedido de venda).
+          plannedQuantity: !lockQuantity && plannedQty ? Number(plannedQty) : undefined,
           priority: Number(priority), demandSource, needDate: needDate || null, notes,
+          customerName,
         });
         toast.success("Ordem de Produção atualizada.");
       }
@@ -274,7 +277,7 @@ export function OPFormDialog({ open, onOpenChange, mode, id, initial, lockQuanti
 
         <DialogFooter>
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={pending}>Cancelar</Button>
-          <Button type="button" onClick={handleSubmit} disabled={pending || (mode === "create" && needsCustomer && !customerName.trim())}>
+          <Button type="button" onClick={handleSubmit} disabled={pending || (needsCustomer && !customerName.trim())}>
             {pending ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Salvando…</> : (mode === "create" ? "Criar OP" : "Salvar")}
           </Button>
         </DialogFooter>
