@@ -15,7 +15,7 @@ import { ClipboardList, Plus, Pencil, Trash2, Loader2, AlertTriangle } from "luc
 import { toast } from "sonner";
 import { useBom, useBomMutations } from "@/hooks/useBom";
 import { useMrpProducts } from "@/hooks/useMrpProducts";
-import { ALL_UNITS, unitLabel } from "@/lib/units";
+import { ALL_UNITS, unitLabel, convertUnit } from "@/lib/units";
 
 interface BomDialogProps {
   open: boolean;
@@ -55,6 +55,12 @@ export function BomDialog({ open, onOpenChange, productId, productName }: BomDia
 
   const handleSave = async () => {
     if (!productId) return;
+    // A unidade da BOM tem que ser conversível para a unidade de estoque do insumo
+    // (ex.: ml↔L). Bloqueia dimensão incompatível (ml num insumo contado em un).
+    if (convertUnit(1, unit, stockUnit) === null) {
+      toast.error(`Unidade incompatível: o insumo é estocado em ${unitLabel(stockUnit)}. Use uma unidade da mesma grandeza.`);
+      return;
+    }
     try {
       if (editingId) {
         await update.mutateAsync({ id: editingId, productId, quantity: Number(qty), unit, isCritical: critical });

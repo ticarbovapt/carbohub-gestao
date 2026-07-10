@@ -32,7 +32,6 @@ export interface MrpProductFormInitial {
   category?: string;
   stock_unit?: string;
   safety_stock_qty?: number;
-  lead_time_days?: number;
   notes?: string;
 }
 
@@ -62,7 +61,6 @@ export function MrpProductFormDialog({ open, onOpenChange, mode, id, initial }: 
   const [category, setCategory] = useState(initial?.category ?? "Insumo");
   const [unit, setUnit] = useState(initial?.stock_unit ?? "un");
   const [safetyStock, setSafetyStock] = useState(String(initial?.safety_stock_qty ?? 0));
-  const [leadTime, setLeadTime] = useState(String(initial?.lead_time_days ?? 7));
   const [notes, setNotes] = useState(initial?.notes ?? "");
 
   const pending = create.isPending || update.isPending;
@@ -125,15 +123,10 @@ export function MrpProductFormDialog({ open, onOpenChange, mode, id, initial }: 
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label>Estoque de Segurança</Label>
-              <Input type="number" placeholder="0" value={safetyStock} onChange={(e) => setSafetyStock(e.target.value)} />
-            </div>
-            <div className="space-y-2">
-              <Label>Lead Time (dias)</Label>
-              <Input type="number" placeholder="7" value={leadTime} onChange={(e) => setLeadTime(e.target.value)} />
-            </div>
+          <div className="space-y-2">
+            <Label>Estoque de Segurança (referência)</Label>
+            <Input type="number" placeholder="0" value={safetyStock} onChange={(e) => setSafetyStock(e.target.value)} />
+            <p className="text-[11px] text-muted-foreground">O mínimo por hub que aciona a reposição é configurado em Suprimentos → Política de Estoque.</p>
           </div>
 
           <div className="space-y-2">

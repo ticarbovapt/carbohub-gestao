@@ -26,6 +26,7 @@ export interface MrpProduct {
   safety_stock_qty: number;   // legado (global) — NÃO usar p/ produção
   min_rn: number;             // estoque mínimo do HUB-RN (ops_stock_min) — fonte p/ produção
   stock_unit: string;
+  notes: string | null;
   hubs: HubStock[];
   has_bom: boolean;   // tem ficha (mrp_bom) cadastrada — relevante p/ Produto Final
 }
@@ -37,7 +38,7 @@ export function useMrpProducts() {
       const [products, stock, bom, mins] = await Promise.all([
         db
           .from("mrp_products")
-          .select("id, name, product_code, category, current_stock_qty, safety_stock_qty, stock_unit")
+          .select("id, name, product_code, category, current_stock_qty, safety_stock_qty, stock_unit, notes")
           .eq("is_active", true)
           .order("product_code"),
         db
@@ -79,6 +80,7 @@ export function useMrpProducts() {
         safety_stock_qty: Number(p.safety_stock_qty) || 0,
         min_rn: minRnByProduct.get(p.id as string) ?? 0,
         stock_unit: (p.stock_unit as string) ?? "un",
+        notes: (p.notes as string) ?? null,
         hubs: byProduct.get(p.id as string) ?? [],
         has_bom: withBom.has(p.id as string),
       }));

@@ -39,6 +39,10 @@ export function useSetStockMin() {
       );
       if (up.error) throw up.error;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["ops", "stock"] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["ops", "stock"] });
+      // A reposição da tela de OP lê min_rn de ops_stock_min (via mrp-products).
+      qc.invalidateQueries({ queryKey: ["ops", "mrp-products"] });
+    },
   });
 }
