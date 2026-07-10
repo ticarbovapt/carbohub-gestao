@@ -80,7 +80,8 @@ const EARLY_STAGES = new Set(["rascunho", "planejada", "aguardando_separacao"]);
 export default function OrdensProducao() {
   const canManage = true; // acesso (gestor vs membro) entra na fase de permissões
   const { data: orders = [], isLoading } = useProductionOrders();
-  const { remove, setStatus } = useProductionOrderMutations();
+  const { create, remove, setStatus } = useProductionOrderMutations();
+  const [bulkCreating, setBulkCreating] = useState(false);
   const producible = useProducibility();
   const { data: mrpProducts = [] } = useMrpProducts();
   const categoryById = useMemo(() => new Map(mrpProducts.map((p) => [p.id, p.category])), [mrpProducts]);
@@ -156,6 +157,22 @@ export default function OrdensProducao() {
   const criticos = suggestionsAll.filter((s) => s.critico).length;
   const suggestions = onlyCritical ? suggestionsAll.filter((s) => s.critico) : suggestionsAll;
 
+  // LC: cria de uma vez as OPs de reposição das críticas (abaixo do mínimo, sem OP).
+  const createAllCritical = async () => {
+    const targets = suggestionsAll.filter((s) => s.critico && !s.hasOpenOp);
+    if (!targets.length) return;
+    setBulkCreating(true);
+    let ok = 0;
+    for (const t of targets) {
+      try {
+        await create.mutateAsync({ productId: t.p.id, productName: t.p.name, plannedQuantity: t.deficit, priority: 3, demandSource: "safety_stock", needDate: "", notes: "Reposição automática (estoque mínimo)" });
+        ok++;
+      } catch { /* segue as demais */ }
+    }
+    setBulkCreating(false);
+    toast[ok ? "success" : "error"](ok ? `${ok} OP(s) de reposição criadas.` : "Não foi possível criar as OPs.");
+  };
+
   const filtered = useMemo(() => orders.filter((o) => {
     if (statusFilter !== "all" && o.op_status !== statusFilter) return false;
     if (priorityFilter !== "all" && String(o.priority) !== priorityFilter) return false;
@@ -229,15 +246,27 @@ export default function OrdensProducao() {
                 {suggestionsAll.length} no ponto de reposição{criticos > 0 && <> · <span className="text-red-500 font-medium">{criticos} abaixo do mínimo</span></>}
               </span>
               {criticos > 0 && (
-                <button
-                  onClick={() => setOnlyCritical((v) => !v)}
-                  className={cn(
-                    "ml-auto text-[11px] rounded-md px-2 py-1 font-medium transition-colors",
-                    onlyCritical ? "bg-red-500 text-white" : "bg-muted text-muted-foreground hover:text-foreground",
+                <div className="ml-auto flex items-center gap-2">
+                  <button
+                    onClick={() => setOnlyCritical((v) => !v)}
+                    className={cn(
+                      "text-[11px] rounded-md px-2 py-1 font-medium transition-colors",
+                      onlyCritical ? "bg-red-500 text-white" : "bg-muted text-muted-foreground hover:text-foreground",
+                    )}
+                  >
+                    só críticos
+                  </button>
+                  {suggestionsAll.some((s) => s.critico && !s.hasOpenOp) && (
+                    <button
+                      onClick={createAllCritical}
+                      disabled={bulkCreating}
+                      className="inline-flex items-center gap-1 text-[11px] rounded-md px-2 py-1 font-medium bg-red-500 text-white hover:bg-red-600 disabled:opacity-60 transition-colors"
+                    >
+                      {bulkCreating ? <Loader2 className="h-3 w-3 animate-spin" /> : <Plus className="h-3 w-3" />}
+                      Criar {suggestionsAll.filter((s) => s.critico && !s.hasOpenOp).length} OPs críticas
+                    </button>
                   )}
-                >
-                  só críticos
-                </button>
+                </div>
               )}
             </div>
             <div className="flex flex-wrap gap-2">
