@@ -45,6 +45,9 @@ export interface FaturamentoOrder {
   bling_nf_id: number | null;
   nf_access_key: string | null;
   invoice_number: string | null;
+  // Etapa no funil de Pós-venda (Carbo Ops). O botão "Criar no Bling" só libera
+  // quando o card chega em "gerar_nf"; antes disso mostramos onde ele está.
+  fulfillment_stage: string | null;
 }
 
 export interface FaturamentoParams {

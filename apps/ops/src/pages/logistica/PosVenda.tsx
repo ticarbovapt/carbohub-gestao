@@ -160,6 +160,12 @@ export default function PosVenda() {
                               <CarboBadge variant="default" className="gap-1">🏭 Produção: {opSector(opByOrder[o.id].op_status)}</CarboBadge>
                             ) : null
                           )}
+                          {o.fulfillment_stage === "gerar_nf" && (
+                            <CarboBadge variant="warning" className="gap-1">🧾 Liberado no Faturamento — aguardando NF</CarboBadge>
+                          )}
+                          {o.fulfillment_stage === "nf_finalizada" && (
+                            <CarboBadge variant="success" className="gap-1">🧾 NF {o.invoice_number || o.bling_nf_id || "emitida"}</CarboBadge>
+                          )}
                           <div className="flex items-center gap-3 text-xs text-muted-foreground">
                             {o.vendedor_name && <VendedorTag name={o.vendedor_name} avatar={o.vendedor_avatar} />}
                             <span className="flex items-center gap-1 shrink-0"><Calendar className="h-3.5 w-3.5" /> {fmtDate(o.created_at)}</span>

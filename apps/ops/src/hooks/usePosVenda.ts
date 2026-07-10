@@ -15,6 +15,7 @@ const db = supabase as unknown as {
 
 export type FulfillmentStage =
   | "nova_venda" | "separacao_pendente" | "criar_op" | "separando" | "separado"
+  | "gerar_nf" | "nf_finalizada"
   | "em_transporte" | "entregue" | "cancelado";
 
 export const POSVENDA_STAGES: { key: FulfillmentStage; label: string; color: string }[] = [
@@ -23,6 +24,8 @@ export const POSVENDA_STAGES: { key: FulfillmentStage; label: string; color: str
   { key: "criar_op",            label: "Criar Ordem de Produção", color: "#ec4899" },
   { key: "separando",           label: "Em Separação",            color: "#3b82f6" },
   { key: "separado",            label: "Separado",                color: "#8b5cf6" },
+  { key: "gerar_nf",            label: "Gerar Nota Fiscal",       color: "#f43f5e" },
+  { key: "nf_finalizada",       label: "NF Finalizada",           color: "#14b8a6" },
   { key: "em_transporte",       label: "Em Transporte",           color: "#06b6d4" },
   { key: "entregue",            label: "Entregue",                color: "#10b981" },
   { key: "cancelado",           label: "Cancelado",               color: "#ef4444" },
@@ -74,12 +77,14 @@ export interface PosVendaOrder {
   fulfillment_stage: FulfillmentStage;
   production_done: boolean;   // OP concluída → aguardando alguém mover p/ Em Separação
   linha: string | null;
+  bling_nf_id: number | null;      // NF vinculada (Faturamento/Bling) → NF finalizada
+  invoice_number: string | null;   // nº da NF-e, quando emitida
 }
 
 const SELECT_BASE =
   "id, order_number, customer_name, customer_email, customer_phone, delivery_address, delivery_city, " +
   "delivery_state, delivery_zip, vendedor_name, vendedor_id, subtotal, shipping_cost, discount, total, " +
-  "notes, items, created_at, fulfillment_stage, linha";
+  "notes, items, created_at, fulfillment_stage, linha, bling_nf_id, invoice_number";
 const SELECT_COLS = SELECT_BASE + ", production_done";
 
 /** Todas as vendas manuais (visão de operações). */

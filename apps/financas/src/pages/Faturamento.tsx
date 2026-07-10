@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import {
-  Receipt, FileText, ChevronLeft, ChevronRight, CheckCircle2, DollarSign, Store, Building2,
+  Receipt, FileText, ChevronLeft, ChevronRight, CheckCircle2, DollarSign, Store, Building2, Lock,
 } from "lucide-react";
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
 import { CarboButton } from "@/components/ui/carbo-button";
@@ -29,6 +29,28 @@ const fmtDate = (s: string | null) => (s ? new Date(s).toLocaleDateString("pt-BR
 const isBling = (o: FaturamentoOrder) =>
   (o.external_ref ?? "").toLowerCase().startsWith("bling") ||
   (o.order_number ?? "").toUpperCase().startsWith("BLING-");
+
+// Funil do Pós-venda (Carbo Ops). O Faturamento só libera a emissão da NF quando
+// o card chega em "gerar_nf" (ou além). Antes disso o pedido aparece na lista,
+// mas o botão fica travado mostrando em que etapa do pós-venda ele está.
+const STAGE_ORDER = [
+  "nova_venda", "separacao_pendente", "criar_op", "separando", "separado",
+  "gerar_nf", "nf_finalizada", "em_transporte", "entregue",
+];
+const STAGE_LABELS: Record<string, string> = {
+  nova_venda: "Nova Venda", separacao_pendente: "Pedido Recebido", criar_op: "Criar OP",
+  separando: "Em Separação", separado: "Separado", gerar_nf: "Gerar NF",
+  nf_finalizada: "NF Finalizada", em_transporte: "Em Transporte", entregue: "Entregue",
+  cancelado: "Cancelado",
+};
+const stageLabel = (s: string | null) => (s && STAGE_LABELS[s]) || "Pós-venda";
+// Liberado quando chegou em "gerar_nf" no funil. Sem etapa (pedido antigo) libera
+// por compatibilidade — não trava o que já existia antes desta regra.
+const nfUnlocked = (o: FaturamentoOrder) => {
+  if (!o.fulfillment_stage) return true;
+  const i = STAGE_ORDER.indexOf(o.fulfillment_stage);
+  return i < 0 ? false : i >= STAGE_ORDER.indexOf("gerar_nf");
+};
 
 export default function Faturamento() {
   const [month, setMonth] = useState(() => new Date());
@@ -95,12 +117,20 @@ export default function Faturamento() {
                   <CarboTableCell className="text-right">
                     {hasNF ? (
                       <span className="text-muted-foreground text-sm">Faturado</span>
-                    ) : (
+                    ) : nfUnlocked(o) ? (
                       <div className="flex justify-end">
                         <CarboButton size="sm" onClick={() => setToBling(o)}>
                           <Receipt className="h-3.5 w-3.5 mr-1" /> Criar no Bling
                         </CarboButton>
                       </div>
+                    ) : (
+                      // Travado: o pedido ainda não chegou em "Gerar NF" no Pós-venda.
+                      <span
+                        className="inline-flex items-center gap-1.5 text-xs text-muted-foreground"
+                        title="Libera quando o pedido chegar em 'Gerar Nota Fiscal' no Pós-venda (Carbo Ops)."
+                      >
+                        <Lock className="h-3 w-3" /> {stageLabel(o.fulfillment_stage)}
+                      </span>
                     )}
                   </CarboTableCell>
                 )}
