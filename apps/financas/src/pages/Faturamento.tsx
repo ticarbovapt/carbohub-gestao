@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import {
-  Receipt, FileText, ChevronLeft, ChevronRight, CheckCircle2, DollarSign, Store, Building2, Lock,
+  Receipt, FileText, ChevronLeft, ChevronRight, CheckCircle2, DollarSign, Store, Building2, Lock, Link2,
 } from "lucide-react";
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
 import { CarboButton } from "@/components/ui/carbo-button";
@@ -19,7 +19,7 @@ import {
 } from "@/hooks/useFaturamento";
 import { BlingConfirmDialog } from "@/components/faturamento/BlingConfirmDialog";
 import { BaixarNFButton } from "@/components/faturamento/BaixarNFButton";
-import { NfeLinkSuggestions } from "@/components/faturamento/NfeLinkSuggestions";
+import { VincularNFsTab } from "@/components/faturamento/VincularNFsTab";
 
 const MONTHS = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
 
@@ -183,15 +183,12 @@ export default function Faturamento() {
           </CarboCardContent>
         </CarboCard>
 
-        {/* Sugestões de vínculo NF ↔ pedido (nativos do Bling e vendas do sistema
-            que não casaram pela observação). Só aparece quando há recomendação. */}
-        <NfeLinkSuggestions />
-
-        {/* Abas: sistema vs Bling */}
+        {/* Abas: sistema vs Bling vs vínculo de NFs */}
         <Tabs defaultValue="sistema">
           <TabsList>
             <TabsTrigger value="sistema" className="gap-2"><Building2 className="h-4 w-4" /> Vendas do sistema ({sistema.length})</TabsTrigger>
             <TabsTrigger value="bling" className="gap-2"><Store className="h-4 w-4" /> Do Bling ({bling.length})</TabsTrigger>
+            <TabsTrigger value="vincular" className="gap-2"><Link2 className="h-4 w-4" /> Vincular NFs</TabsTrigger>
           </TabsList>
 
           <TabsContent value="sistema" className="mt-4">
@@ -209,6 +206,10 @@ export default function Faturamento() {
               de valores. Quando a NF de uma venda do sistema é emitida com o <code>V…</code> na observação, ela casa automaticamente e
               deixa de aparecer aqui. Os que sobram foram feitos por fora — o que é normal.
             </p>
+          </TabsContent>
+
+          <TabsContent value="vincular" className="mt-4">
+            <VincularNFsTab />
           </TabsContent>
         </Tabs>
       </div>
