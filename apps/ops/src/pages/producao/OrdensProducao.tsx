@@ -175,7 +175,7 @@ export default function OrdensProducao() {
 
   return (
     <div className="p-4 md:p-6">
-      <div className="space-y-6 max-w-[1500px] mx-auto">
+      <div className="space-y-6">
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
@@ -397,7 +397,7 @@ export default function OrdensProducao() {
                   onDragLeave={() => setOverCol((c) => (c === col.id ? null : c))}
                   onDrop={dropHere}
                   className={cn(
-                    "w-72 shrink-0 rounded-2xl border bg-board-surface/40 flex flex-col transition-all",
+                    "flex-1 min-w-[200px] rounded-2xl border bg-board-surface/40 flex flex-col transition-all",
                     isOver ? "border-primary" : "border-border",
                     isSkipped ? "opacity-40" : "",
                   )}
@@ -429,17 +429,17 @@ export default function OrdensProducao() {
                         onDragStart={(e) => { e.dataTransfer.setData("text/plain", o.id); setDragId(o.id); }}
                         onDragEnd={() => { setDragId(null); setOverCol(null); }}
                         className={cn(
-                          "rounded-xl border bg-card relative overflow-hidden flex flex-col min-h-[148px]",
+                          "rounded-xl border bg-card relative overflow-hidden flex flex-col h-[176px]",
                           dragId === o.id ? "opacity-50" : "",
                           o.priority <= 2 && !isDone ? "border-red-500/40 ring-1 ring-red-500/20" : "border-border",
                         )}
                       >
                         <div className="absolute left-0 top-0 bottom-0 w-1" style={{ background: col.color }} />
-                        {/* Corpo clicável → abre detalhes/edição */}
+                        {/* Corpo clicável → abre detalhes/edição (altura fixa: excedente é cortado) */}
                         <button
                           type="button"
                           onClick={() => setEditOp(o)}
-                          className="text-left p-3 pl-4 flex-1 cursor-pointer hover:bg-muted/30 transition-colors"
+                          className="text-left p-3 pl-4 flex-1 min-h-0 overflow-hidden cursor-pointer hover:bg-muted/30 transition-colors"
                           title="Ver detalhes da OP"
                         >
                           <div className="flex items-center justify-between gap-2">
