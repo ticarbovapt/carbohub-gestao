@@ -204,6 +204,12 @@ async function ensureProductionOrderForOrder(orderId: string): Promise<boolean> 
   return true;
 }
 
+// Etapas ANTERIORES à separação (estoque ainda não deveria estar deduzido).
+// Voltar o card para uma delas — ou cancelar — precisa ESTORNAR a dedução.
+const PRE_SEPARADO_STAGES = new Set<FulfillmentStage>([
+  "nova_venda", "separacao_pendente", "criar_op", "separando", "cancelado",
+]);
+
 export function useUpdateFulfillmentStage() {
   const qc = useQueryClient();
   return useMutation({
@@ -221,11 +227,23 @@ export function useUpdateFulfillmentStage() {
         catch (e) { opError = e instanceof Error ? e.message : String(e); console.error("[pos-venda] falha ao criar OP:", e); }
       }
       // Ao SEPARAR, deduz o estoque real do HUB-RN (idempotente no banco).
+      // B8: o erro NÃO é mais engolido — propaga e mostra toast de falha; e a RPC
+      // retorna quantas linhas deduziu, para avisar quando deduz ZERO (pedido sem
+      // produto vinculado) em vez de mentir "estoque deduzido".
+      let deductedLines: number | null = null;
       if (stage === "separado") {
-        try { await db.rpc("pos_venda_deduct_stock", { p_order_id: id }); }
-        catch (e) { console.error("[pos-venda] falha ao deduzir estoque:", e); }
+        const rr = await db.rpc("pos_venda_deduct_stock", { p_order_id: id });
+        if (rr.error) throw rr.error;
+        deductedLines = typeof rr.data === "number" ? rr.data : null;
       }
-      return { stage, opCreated, opError };
+      // B9: voltar de "Separado" (ou cancelar) ESTORNA a dedução (idempotente).
+      let restoredLines: number | null = null;
+      if (PRE_SEPARADO_STAGES.has(stage)) {
+        const rr = await db.rpc("pos_venda_restore_stock", { p_order_id: id });
+        if (rr.error) throw rr.error;
+        restoredLines = typeof rr.data === "number" ? rr.data : null;
+      }
+      return { stage, opCreated, opError, deductedLines, restoredLines };
     },
     onSuccess: (res) => {
       qc.invalidateQueries({ queryKey: ["ops", "pos-venda"] });
@@ -233,7 +251,11 @@ export function useUpdateFulfillmentStage() {
       qc.invalidateQueries({ queryKey: ["ops", "hubrn-stock"] });
       if (res?.opError) toast.error("Etapa mudou, mas falhou ao criar a OP: " + res.opError, { duration: 10000 });
       else if (res?.opCreated) toast.success("Etapa atualizada · OP criada no Backlog.");
-      else if (res?.stage === "separado") toast.success("Separado · estoque deduzido do HUB-RN.");
+      else if (res?.stage === "separado") {
+        if (res.deductedLines === 0) toast.warning("Separado, mas NADA foi deduzido do estoque — o pedido não tem produto vinculado.", { duration: 8000 });
+        else toast.success("Separado · estoque deduzido do HUB-RN.");
+      }
+      else if (res?.restoredLines && res.restoredLines > 0) toast.success("Etapa atualizada · estoque estornado para o HUB-RN.");
       else toast.success("Etapa atualizada.");
     },
     onError: (e: Error) => toast.error("Erro ao atualizar etapa: " + e.message),

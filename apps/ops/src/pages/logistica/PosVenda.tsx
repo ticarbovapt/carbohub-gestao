@@ -54,6 +54,10 @@ export default function PosVenda() {
   const anyUnlinked = stockLines.some((l) => !l.linked);
   const stockKnown = stockLines.length > 0 && !anyUnlinked;
   const hasStock = stockKnown && allInStock;
+  // Alvo de separação da caixa: se o operador mandou direto pra "Separado",
+  // confirma pra "Separado" (deduz o estoque); senão, "Em Separação".
+  const sepTarget: FulfillmentStage = pending?.target === "separado" ? "separado" : "separando";
+  const sepLabel = sepTarget === "separado" ? "Separado" : "Em Separação";
 
   // Acompanhamento: em que setor da produção está cada pedido de "Criar OP".
   const criarOpIds = useMemo(
@@ -69,11 +73,13 @@ export default function PosVenda() {
     return map;
   }, [orders]);
 
-  // Portão: mover para "Em Separação" ou "Criar Ordem de Produção" abre a caixa de
-  // confirmação ciente do estoque (a decisão final é do operador).
+  // Portão: mover para "Em Separação", "Separado" ou "Criar Ordem de Produção" abre
+  // a caixa de confirmação ciente do estoque (a decisão final é do operador).
+  // "Separado" é o ponto em que o estoque é REALMENTE deduzido — por isso também
+  // passa pelo portão (B10: mover direto pra Separado não pode pular a conferência).
   function requestStage(order: PosVendaOrder, stage: FulfillmentStage) {
     if (order.fulfillment_stage === stage) return;
-    if (stage === "separando" || stage === "criar_op") { setPending({ order, target: stage }); return; }
+    if (stage === "separando" || stage === "criar_op" || stage === "separado") { setPending({ order, target: stage }); return; }
     updateStage.mutate({ id: order.id, stage });
   }
 
@@ -255,7 +261,7 @@ export default function PosVenda() {
                     <p className="text-xs text-amber-500">Não deu para conferir o estoque (item sem produto vinculado). Escolha:</p>
                     <div className="flex flex-col gap-2 pt-1">
                       <Button className="w-full" onClick={() => commitStage("criar_op")}>Produzir → Criar Ordem de Produção</Button>
-                      <Button className="w-full" variant="outline" onClick={() => commitStage("separando")}>Tem estoque → Em Separação</Button>
+                      <Button className="w-full" variant="outline" onClick={() => commitStage(sepTarget)}>Tem estoque → {sepLabel}</Button>
                     </div>
                   </>
                 ) : hasStock ? (
@@ -265,7 +271,7 @@ export default function PosVenda() {
                       <p className="text-xs text-muted-foreground">Este produto <strong>tem estoque</strong>. Deseja produzir mesmo assim?</p>
                       <div className="flex flex-col gap-2 pt-1">
                         <Button className="w-full" onClick={() => commitStage("criar_op")}>Sim, produzir</Button>
-                        <Button className="w-full" variant="outline" onClick={() => commitStage("separando")}>Não, usar o estoque → Em Separação</Button>
+                        <Button className="w-full" variant="outline" onClick={() => commitStage(sepTarget)}>Não, usar o estoque → {sepLabel}</Button>
                       </div>
                     </>
                   ) : (
@@ -273,7 +279,7 @@ export default function PosVenda() {
                     <>
                       <p className="text-xs text-emerald-500">Tem estoque para separar.</p>
                       <div className="flex flex-col gap-2 pt-1">
-                        <Button className="w-full" onClick={() => commitStage("separando")}>Confirmar → Em Separação</Button>
+                        <Button className="w-full" onClick={() => commitStage(sepTarget)}>Confirmar → {sepLabel}</Button>
                       </div>
                     </>
                   )
