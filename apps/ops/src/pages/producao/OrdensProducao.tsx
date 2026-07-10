@@ -366,7 +366,8 @@ export default function OrdensProducao() {
               // Ordena por prioridade (1 = urgente primeiro), depois prazo mais próximo.
               const allItems = filtered
                 .filter((o) => col.statuses.includes(o.op_status))
-                .sort((a, b) => (a.priority - b.priority) || (a.need_date ?? "9999").localeCompare(b.need_date ?? "9999"));
+                // Data de conclusão mais próxima primeiro (sem data vai pro fim); depois prioridade.
+                .sort((a, b) => (a.need_date ?? "9999-12-31").localeCompare(b.need_date ?? "9999-12-31") || (a.priority - b.priority));
               // Concluída/Bloqueada acumulam — mostra as recentes e resume o resto.
               const CAP = 12;
               const capped = col.id === "concluida" || col.id === "bloqueada";
@@ -394,7 +395,7 @@ export default function OrdensProducao() {
                   onDragLeave={() => setOverCol((c) => (c === col.id ? null : c))}
                   onDrop={dropHere}
                   className={cn(
-                    "w-64 shrink-0 rounded-2xl border bg-board-surface/40 flex flex-col transition-all",
+                    "flex-1 min-w-[180px] rounded-2xl border bg-board-surface/40 flex flex-col transition-all",
                     isOver ? "border-primary" : "border-border",
                     isSkipped ? "opacity-40" : "",
                   )}
@@ -418,6 +419,7 @@ export default function OrdensProducao() {
                       const prod = EARLY_STAGES.has(o.op_status) ? producible.check(o.product_id, o.planned_quantity, o.production_route) : null;
                       const overdue = !!o.need_date && o.op_status !== "concluida" && o.op_status !== "cancelada" && o.need_date < todayISO();
                       const age = daysSince(o.created_at);
+                      const isDone = o.op_status === "concluida" || o.op_status === "cancelada";
                       return (
                       <div
                         key={o.id}
@@ -425,56 +427,62 @@ export default function OrdensProducao() {
                         onDragStart={(e) => { e.dataTransfer.setData("text/plain", o.id); setDragId(o.id); }}
                         onDragEnd={() => { setDragId(null); setOverCol(null); }}
                         className={cn(
-                          "rounded-xl border bg-card p-3 relative overflow-hidden cursor-grab active:cursor-grabbing",
+                          "rounded-xl border bg-card relative overflow-hidden flex flex-col min-h-[148px]",
                           dragId === o.id ? "opacity-50" : "",
-                          o.priority <= 2 && o.op_status !== "concluida" && o.op_status !== "cancelada" ? "border-red-500/40 ring-1 ring-red-500/20" : "border-border",
+                          o.priority <= 2 && !isDone ? "border-red-500/40 ring-1 ring-red-500/20" : "border-border",
                         )}
                       >
                         <div className="absolute left-0 top-0 bottom-0 w-1" style={{ background: col.color }} />
-                        <div className="flex items-center justify-between gap-2 pl-1.5">
-                          <span className="font-mono text-xs font-medium text-blue-500">{o.op_number}</span>
-                          <Badge variant="outline" className={cn("text-white border-0 text-[10px]", PRIORITY_BADGE_COLORS[o.priority])}>{PRIORITY_LABELS[o.priority]}</Badge>
-                        </div>
-                        <p className="text-sm font-semibold mt-1 pl-1.5">{o.sku_name}</p>
-                        <p className="text-xs text-muted-foreground pl-1.5">{o.planned_quantity} un · {DEMAND_SOURCE_LABELS[o.demand_source]}</p>
-                        <div className="flex flex-wrap items-center gap-1.5 mt-1.5 pl-1.5">
-                          {o.production_route && (
-                            <span className={cn(
-                              "inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-medium",
-                              o.production_route === "rotular" ? "bg-pink-500/15 text-pink-600 dark:text-pink-400" : "bg-orange-500/15 text-orange-600 dark:text-orange-400",
-                            )}>
-                              {o.production_route === "rotular" ? "🏷️ Só rotular" : "⚙️ Do zero"}
-                            </span>
-                          )}
-                          {prod === "ok" && (
-                            <span className="inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-medium bg-emerald-500/15 text-emerald-600 dark:text-emerald-400">
-                              <CheckCircle2 className="h-3 w-3" /> pronto p/ separar
-                            </span>
-                          )}
-                          {prod === "falta" && (
-                            <span className="inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-medium bg-destructive/15 text-destructive">
-                              <AlertTriangle className="h-3 w-3" /> falta insumo
-                            </span>
-                          )}
-                          {prod === "sem_ficha" && (
-                            <span className="inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-medium bg-amber-500/15 text-amber-600 dark:text-amber-400">
-                              sem ficha
-                            </span>
-                          )}
+                        {/* Corpo clicável → abre detalhes/edição */}
+                        <button
+                          type="button"
+                          onClick={() => setEditOp(o)}
+                          className="text-left p-3 pl-4 flex-1 cursor-pointer hover:bg-muted/30 transition-colors"
+                          title="Ver detalhes da OP"
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="font-mono text-xs font-medium text-blue-500">{o.op_number}</span>
+                            <Badge variant="outline" className={cn("text-white border-0 text-[10px]", PRIORITY_BADGE_COLORS[o.priority])}>{PRIORITY_LABELS[o.priority]}</Badge>
+                          </div>
+                          <p className="text-sm font-semibold mt-1 leading-tight">{o.sku_name}</p>
+                          <p className="text-xs text-muted-foreground">{o.planned_quantity} un · {DEMAND_SOURCE_LABELS[o.demand_source]}</p>
                           {o.need_date && (
-                            <span className={cn(
-                              "inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-medium",
-                              overdue ? "bg-destructive/15 text-destructive" : "bg-muted text-muted-foreground",
-                            )}>
-                              <CalendarClock className="h-3 w-3" /> {dt(o.need_date)}
-                            </span>
+                            <p className={cn("flex items-center gap-1 text-[11px] font-medium mt-1.5", overdue ? "text-red-500" : "text-muted-foreground")}>
+                              <CalendarClock className="h-3 w-3" /> Prazo: {dt(o.need_date)}{overdue && " · vencido"}
+                            </p>
                           )}
-                          {age != null && age > 0 && (
-                            <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground/70">
-                              <Clock className="h-3 w-3" /> {age}d
-                            </span>
-                          )}
-                        </div>
+                          <div className="flex flex-wrap items-center gap-1 mt-1.5">
+                            {o.production_route && (
+                              <span className={cn("inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-medium", o.production_route === "rotular" ? "bg-pink-500/15 text-pink-600 dark:text-pink-400" : "bg-orange-500/15 text-orange-600 dark:text-orange-400")}>
+                                {o.production_route === "rotular" ? "🏷️ Só rotular" : "⚙️ Do zero"}
+                              </span>
+                            )}
+                            {prod === "ok" && <span className="inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-medium bg-emerald-500/15 text-emerald-600 dark:text-emerald-400"><CheckCircle2 className="h-3 w-3" /> pronto p/ separar</span>}
+                            {prod === "falta" && <span className="inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-medium bg-destructive/15 text-destructive"><AlertTriangle className="h-3 w-3" /> falta insumo</span>}
+                            {prod === "sem_ficha" && <span className="inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-medium bg-amber-500/15 text-amber-600 dark:text-amber-400">sem ficha</span>}
+                            {age != null && age > 0 && <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground/70"><Clock className="h-3 w-3" /> {age}d</span>}
+                          </div>
+                        </button>
+                        {/* Seletor de etapa — mover pra frente/trás (trava a etapa que a rota pula) */}
+                        {canManage && (
+                          <div className="px-2 pb-2 pl-4" onPointerDownCapture={(e) => e.stopPropagation()}>
+                            <Select value={col.id} onValueChange={(target) => {
+                              if (target === col.id) return;
+                              const tc = KANBAN_COLUMNS.find((c) => c.id === target);
+                              if (!tc) return;
+                              setPendingMove({ op: o, toStatus: tc.statuses[0], fromLabel: col.label, toLabel: tc.label, skipWarning: skippedColFor(o) === tc.id });
+                            }}>
+                              <SelectTrigger className="h-7 text-xs"><SelectValue /></SelectTrigger>
+                              <SelectContent>
+                                {KANBAN_COLUMNS.map((c) => (
+                                  <SelectItem key={c.id} value={c.id} disabled={skippedColFor(o) === c.id}>
+                                    {c.emoji} {c.label}{skippedColFor(o) === c.id ? " (pula)" : ""}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        )}
                       </div>
                       );
                     })}
