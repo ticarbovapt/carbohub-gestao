@@ -132,14 +132,23 @@ export default function OrdensProducao() {
   const atrasadas = abertas.filter((o) => o.need_date && o.need_date < todayISO()).length;
   const prontas = abertas.filter((o) => EARLY_STAGES.has(o.op_status) && checkProducible(o.product_id, o.planned_quantity, o.production_route) === "ok").length;
 
-  // Reposição sugerida: produzíveis abaixo do estoque mínimo e SEM OP aberta ainda.
+  // Reposição sugerida: produzíveis no PONTO DE REPOSIÇÃO (perto do mínimo, não só
+  // abaixo) e sem OP aberta. Repõe até 2× o mínimo. Crítico = já abaixo do mínimo.
+  const REORDER_AT = 1.25; // dispara quando estoque ≤ 125% do mínimo
+  const REPLENISH_TO = 2;  // sugere produzir até 2× o mínimo
   const openProductIds = useMemo(() => new Set(abertas.map((o) => o.product_id).filter(Boolean)), [abertas]);
   const suggestions = useMemo(() => mrpProducts
     .filter((p) => (p.category === "Produto Final" || p.category === "Semi-acabado") && p.safety_stock_qty > 0 && !openProductIds.has(p.id))
     .map((p) => ({ p, current: p.hubs.reduce((s, h) => s + h.quantity, 0) }))
-    .filter((x) => x.current < x.p.safety_stock_qty)
-    .map((x) => ({ ...x, deficit: Math.max(1, Math.ceil(x.p.safety_stock_qty - x.current)) }))
-    .sort((a, b) => (b.deficit) - (a.deficit)), [mrpProducts, openProductIds]);
+    .filter((x) => x.current <= x.p.safety_stock_qty * REORDER_AT)
+    .map((x) => ({
+      ...x,
+      critico: x.current < x.p.safety_stock_qty,
+      deficit: Math.max(1, Math.ceil(x.p.safety_stock_qty * REPLENISH_TO - x.current)),
+    }))
+    .sort((a, b) => Number(b.critico) - Number(a.critico) || (b.p.safety_stock_qty - b.current) - (a.p.safety_stock_qty - a.current)),
+    [mrpProducts, openProductIds]);
+  const criticos = suggestions.filter((s) => s.critico).length;
 
   const filtered = useMemo(() => orders.filter((o) => {
     if (statusFilter !== "all" && o.op_status !== statusFilter) return false;
@@ -205,23 +214,39 @@ export default function OrdensProducao() {
           </Select>
         </div>
 
-        {/* Reposição sugerida (abaixo do mínimo, sem OP aberta) */}
+        {/* Reposição sugerida (no ponto de reposição, sem OP aberta) */}
         {canManage && suggestions.length > 0 && (
           <div className="rounded-xl border border-amber-500/25 bg-amber-500/5 p-3">
             <div className="flex items-center gap-2 mb-2 text-sm font-semibold text-amber-700 dark:text-amber-400">
               <AlertTriangle className="h-4 w-4" /> Reposição sugerida
-              <span className="text-xs font-normal text-muted-foreground">{suggestions.length} produto(s) abaixo do estoque mínimo</span>
+              <span className="text-xs font-normal text-muted-foreground">
+                {suggestions.length} produto(s) no ponto de reposição{criticos > 0 && <> · <span className="text-red-500 font-medium">{criticos} abaixo do mínimo</span></>}
+              </span>
             </div>
             <div className="flex flex-wrap gap-2">
-              {suggestions.slice(0, 8).map(({ p, current, deficit }) => (
+              {suggestions.slice(0, 12).map(({ p, current, deficit, critico }) => (
                 <button
                   key={p.id}
                   onClick={() => { setCreateInitial({ product_id: p.id, planned_quantity: deficit, demand_source: "safety_stock" }); setCreateOpen(true); }}
-                  className="group flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-1.5 text-left hover:border-primary transition-colors"
+                  className={cn(
+                    "group flex items-center gap-2.5 rounded-lg border bg-card px-3 py-1.5 text-left transition-colors",
+                    critico ? "border-red-500/40 hover:border-red-500" : "border-amber-500/30 hover:border-amber-500",
+                  )}
                 >
+                  <span className={cn("h-2 w-2 rounded-full shrink-0", critico ? "bg-red-500" : "bg-amber-500")} />
                   <div>
-                    <p className="text-xs font-medium">{p.name}</p>
-                    <p className="text-[11px] text-muted-foreground tabular-nums">estoque {current.toLocaleString("pt-BR")} / mín {p.safety_stock_qty.toLocaleString("pt-BR")}</p>
+                    <div className="flex items-center gap-1.5">
+                      <p className="text-xs font-medium">{p.name}</p>
+                      <span className={cn(
+                        "text-[9px] px-1 py-0.5 rounded font-medium",
+                        p.category === "Semi-acabado" ? "bg-teal-600/15 text-teal-600 dark:text-teal-400" : "bg-emerald-700/15 text-emerald-600 dark:text-emerald-400",
+                      )}>
+                        {p.category === "Semi-acabado" ? "semi" : "final"}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-muted-foreground tabular-nums">
+                      estoque {current.toLocaleString("pt-BR")} / mín {p.safety_stock_qty.toLocaleString("pt-BR")} {p.stock_unit}
+                    </p>
                   </div>
                   <span className="inline-flex items-center gap-1 rounded-md bg-primary/10 text-primary px-2 py-1 text-[11px] font-medium group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
                     <Plus className="h-3 w-3" /> OP {deficit}
