@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   Factory, Plus, LayoutGrid, List, Search, TrendingUp, Target, XCircle,
-  Pencil, Trash2, ClipboardCheck, Loader2, CalendarClock, Clock, CheckCircle2, AlertTriangle,
+  Pencil, Trash2, ClipboardCheck, Loader2, CalendarClock, Clock, CheckCircle2, AlertTriangle, ChevronDown,
 } from "lucide-react";
 import { useProducibility } from "@/hooks/useProducibility";
 import { useMrpProducts } from "@/hooks/useMrpProducts";
@@ -111,6 +111,8 @@ export default function OrdensProducao() {
   const [createOpen, setCreateOpen] = useState(false);
   const [createInitial, setCreateInitial] = useState<{ product_id: string; planned_quantity: number; demand_source?: string } | null>(null);
   const [onlyCritical, setOnlyCritical] = useState(false);
+  const [repoCollapsed, setRepoCollapsed] = useState(false);
+  const [repoShowAll, setRepoShowAll] = useState(false);
   const [editOp, setEditOp] = useState<OP | null>(null);
   const [confirmOp, setConfirmOp] = useState<OP | null>(null);
   const [deleteOp, setDeleteOp] = useState<OP | null>(null);
@@ -260,7 +262,10 @@ export default function OrdensProducao() {
         {canManage && suggestionsAll.length > 0 && (
           <div className="rounded-xl border border-amber-500/25 bg-amber-500/5 p-3">
             <div className="flex items-center gap-2 mb-2.5 text-sm font-semibold text-amber-700 dark:text-amber-400">
-              <AlertTriangle className="h-4 w-4" /> Reposição sugerida
+              <button onClick={() => setRepoCollapsed((v) => !v)} className="flex items-center gap-2 hover:opacity-80">
+                <ChevronDown className={cn("h-4 w-4 transition-transform", repoCollapsed ? "-rotate-90" : "")} />
+                <AlertTriangle className="h-4 w-4" /> Reposição sugerida
+              </button>
               <span className="text-xs font-normal text-muted-foreground">
                 {suggestionsAll.length} no ponto de reposição{criticos > 0 && <> · <span className="text-red-500 font-medium">{criticos} abaixo do mínimo</span></>}
               </span>
@@ -288,8 +293,9 @@ export default function OrdensProducao() {
                 </div>
               )}
             </div>
-            <div className="flex flex-wrap gap-2">
-              {suggestions.slice(0, 16).map(({ p, current, deficit, critico, hasOpenOp, level }) => {
+            {!repoCollapsed && (
+            <div className="flex flex-wrap gap-2 items-center">
+              {(repoShowAll ? suggestions : suggestions.slice(0, 16)).map(({ p, current, deficit, critico, hasOpenOp, level }) => {
                 // LA: rota recomendada — se tem envasado em estoque, dá pra só rotular.
                 const semiId = producible.semiOf(p.id);
                 const routeHint = semiId ? (producible.check(p.id, deficit, "rotular") === "ok" ? "rotular" : "zero") : null;
@@ -346,7 +352,13 @@ export default function OrdensProducao() {
                 </button>
                 );
               })}
+              {suggestions.length > 16 && (
+                <button onClick={() => setRepoShowAll((v) => !v)} className="text-xs text-muted-foreground hover:text-foreground font-medium px-2 py-1">
+                  {repoShowAll ? "ver menos" : `+${suggestions.length - 16} mais`}
+                </button>
+              )}
             </div>
+            )}
           </div>
         )}
 
