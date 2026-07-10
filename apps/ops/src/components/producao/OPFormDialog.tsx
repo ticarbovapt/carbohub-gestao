@@ -61,7 +61,8 @@ export function OPFormDialog({ open, onOpenChange, mode, id, initial }: OPFormDi
   const [needDate, setNeedDate] = useState(initial?.need_date ?? "");
   const [notes, setNotes] = useState(initial?.deviation_notes ?? "");
 
-  const finalProducts = products.filter((p) => p.category === "Produto Final");
+  // Produzíveis: Produto Final e Semi-acabado (ex.: OP de envasar sem rótulo p/ estoque).
+  const finalProducts = products.filter((p) => p.category === "Produto Final" || p.category === "Semi-acabado");
   const selectedProduct = products.find((p) => p.id === productId);
   const pending = create.isPending || update.isPending;
 

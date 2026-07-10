@@ -20,17 +20,21 @@ import { toast } from "sonner";
 const CATEGORY_FILTER_TABS = [
   { key: "all", label: "Todos" },
   { key: "Produto Final", label: "Produto Final" },
+  { key: "Semi-acabado", label: "Semi-acabado" },
   { key: "Insumo", label: "Insumos" },
   { key: "Embalagem", label: "Embalagem" },
   { key: "Carbonatação", label: "Carbonatação" },
 ];
 const CATEGORY_CLS: Record<string, string> = {
   "Produto Final": "bg-emerald-700 text-white border-0",
+  "Semi-acabado": "bg-teal-600 text-white border-0",
   "Insumo": "bg-blue-600 text-white border-0",
   "Embalagem": "bg-amber-500 text-white border-0",
   "Carbonatação": "bg-purple-600 text-white border-0",
   "Outro": "bg-gray-500 text-white border-0",
 };
+// Categorias que têm ficha técnica (BOM) própria — Produto Final e Semi-acabado.
+const HAS_BOM_CATEGORIES = new Set(["Produto Final", "Semi-acabado"]);
 function CategoryBadge({ category }: { category: string | null }) {
   if (!category) return <span className="text-muted-foreground text-sm">—</span>;
   return <span className={cn("inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium", CATEGORY_CLS[category] ?? CATEGORY_CLS["Outro"])}>{category}</span>;
@@ -67,7 +71,8 @@ export default function ProdutosMrp() {
     const s = search.toLowerCase();
     return p.product_code.toLowerCase().includes(s) || p.name.toLowerCase().includes(s);
   });
-  const produtosFinais = products.filter((p) => p.category === "Produto Final");
+  // Produtos com ficha (BOM): Produto Final + Semi-acabado (ex.: Envasado).
+  const produtosFinais = products.filter((p) => HAS_BOM_CATEGORIES.has(p.category));
 
   return (
     <div className="p-4 md:p-6">
@@ -92,7 +97,7 @@ export default function ProdutosMrp() {
         {view === "bom" ? (
           <CarboCard>
             <div className="space-y-4">
-              <p className="text-sm text-muted-foreground">Selecione um <strong>Produto Final</strong> para visualizar ou editar sua lista de insumos (BOM).</p>
+              <p className="text-sm text-muted-foreground">Selecione um <strong>Produto Final</strong> ou <strong>Semi-acabado</strong> para visualizar ou editar sua lista de insumos (BOM).</p>
               <div className="divide-y divide-border">
                 {produtosFinais.length === 0 && (
                   <p className="py-8 text-center text-sm text-muted-foreground">Nenhum produto final</p>
@@ -143,7 +148,7 @@ export default function ProdutosMrp() {
                         return (
                           <CarboTableRow key={p.id}>
                             <CarboTableCell className="font-medium text-foreground">
-                              {p.category === "Produto Final" ? (
+                              {HAS_BOM_CATEGORIES.has(p.category) ? (
                                 <div className="flex items-center gap-2 flex-wrap">
                                   <button className="flex items-center gap-1.5 text-left hover:underline text-primary font-semibold" onClick={() => setBomProduct(p)}>{p.name}<ClipboardList className="h-3.5 w-3.5 shrink-0 opacity-60" /></button>
                                   {!p.has_bom && <CarboBadge variant="warning" className="gap-1"><AlertTriangle className="h-3 w-3" /> sem BOM</CarboBadge>}
