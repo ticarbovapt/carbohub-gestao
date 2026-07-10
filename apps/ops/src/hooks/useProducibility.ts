@@ -76,7 +76,7 @@ export function useProducibility() {
     const hasSemi = (productId: string) =>
       (boms.get(productId) ?? []).some((b) => byId.get(b.insumo_id)?.category === "Semi-acabado");
 
-    return (productId: string | null, qty: number, route?: ProductionRoute): Producible => {
+    const check = (productId: string | null, qty: number, route?: ProductionRoute): Producible => {
       if (!productId || !boms.get(productId)?.length) return "sem_ficha";
       if (route === "zero") return linesOk(zeroLines(productId, qty)) ? "ok" : "falta";
       if (route === "rotular") return linesOk(directLines(productId, qty)) ? "ok" : "falta";
@@ -85,5 +85,14 @@ export function useProducibility() {
       if (hasSemi(productId) && linesOk(zeroLines(productId, qty))) return "ok";
       return "falta";
     };
+
+    // id do semi-acabado (Envasado) que compõe o produto, ou null.
+    const semiOf = (productId: string | null): string | null => {
+      if (!productId) return null;
+      const line = (boms.get(productId) ?? []).find((b) => byId.get(b.insumo_id)?.category === "Semi-acabado");
+      return line?.insumo_id ?? null;
+    };
+
+    return { check, semiOf };
   }, [products, bomByProduct]);
 }

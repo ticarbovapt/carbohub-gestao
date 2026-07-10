@@ -81,7 +81,7 @@ export default function OrdensProducao() {
   const canManage = true; // acesso (gestor vs membro) entra na fase de permissões
   const { data: orders = [], isLoading } = useProductionOrders();
   const { remove, setStatus } = useProductionOrderMutations();
-  const checkProducible = useProducibility();
+  const producible = useProducibility();
   const { data: mrpProducts = [] } = useMrpProducts();
   const categoryById = useMemo(() => new Map(mrpProducts.map((p) => [p.id, p.category])), [mrpProducts]);
 
@@ -131,7 +131,7 @@ export default function OrdensProducao() {
   const perdasTotais = orders.reduce((s, o) => s + (o.rejected_quantity ?? 0), 0);
   // Atrasadas: prazo vencido e ainda abertas. Prontas: dá pra separar agora.
   const atrasadas = abertas.filter((o) => o.need_date && o.need_date < todayISO()).length;
-  const prontas = abertas.filter((o) => EARLY_STAGES.has(o.op_status) && checkProducible(o.product_id, o.planned_quantity, o.production_route) === "ok").length;
+  const prontas = abertas.filter((o) => EARLY_STAGES.has(o.op_status) && producible.check(o.product_id, o.planned_quantity, o.production_route) === "ok").length;
 
   // Reposição sugerida: produzíveis no PONTO DE REPOSIÇÃO (perto do mínimo, não só
   // abaixo) e sem OP aberta. Repõe até 2× o mínimo. Crítico = já abaixo do mínimo.
@@ -241,7 +241,11 @@ export default function OrdensProducao() {
               )}
             </div>
             <div className="flex flex-wrap gap-2">
-              {suggestions.slice(0, 16).map(({ p, current, deficit, critico, hasOpenOp, level }) => (
+              {suggestions.slice(0, 16).map(({ p, current, deficit, critico, hasOpenOp, level }) => {
+                // LA: rota recomendada — se tem envasado em estoque, dá pra só rotular.
+                const semiId = producible.semiOf(p.id);
+                const routeHint = semiId ? (producible.check(p.id, deficit, "rotular") === "ok" ? "rotular" : "zero") : null;
+                return (
                 <button
                   key={p.id}
                   disabled={hasOpenOp}
@@ -278,8 +282,18 @@ export default function OrdensProducao() {
                       </span>
                     )}
                   </div>
+                  {/* LA: rota recomendada quando há semi-acabado */}
+                  {!hasOpenOp && routeHint && (
+                    <span className={cn(
+                      "text-[10px] font-medium",
+                      routeHint === "rotular" ? "text-pink-600 dark:text-pink-400" : "text-orange-600 dark:text-orange-400",
+                    )}>
+                      {routeHint === "rotular" ? "🏷️ dá pra só rotular (tem envasado)" : "⚙️ produzir do zero (sem envasado)"}
+                    </span>
+                  )}
                 </button>
-              ))}
+                );
+              })}
             </div>
           </div>
         )}
@@ -342,7 +356,7 @@ export default function OrdensProducao() {
                   </div>
                   <div className="p-2 space-y-2 min-h-[80px]">
                     {items.map((o) => {
-                      const prod = EARLY_STAGES.has(o.op_status) ? checkProducible(o.product_id, o.planned_quantity, o.production_route) : null;
+                      const prod = EARLY_STAGES.has(o.op_status) ? producible.check(o.product_id, o.planned_quantity, o.production_route) : null;
                       const overdue = !!o.need_date && o.op_status !== "concluida" && o.op_status !== "cancelada" && o.need_date < todayISO();
                       const age = daysSince(o.created_at);
                       return (
