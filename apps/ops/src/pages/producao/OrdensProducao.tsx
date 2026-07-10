@@ -18,20 +18,22 @@ import { useProductionOrders, useProductionOrderMutations, type OpRow } from "@/
 
 type OpStatus =
   | "rascunho" | "planejada" | "aguardando_separacao" | "separada" | "aguardando_liberacao"
-  | "liberada_producao" | "em_producao" | "aguardando_confirmacao" | "confirmada"
+  | "liberada_producao" | "em_producao" | "envase" | "rotulagem" | "aguardando_confirmacao" | "confirmada"
   | "aguardando_qualidade" | "qualidade_aprovada" | "liberada" | "concluida" | "bloqueada" | "cancelada";
 
 const OP_STATUS_LABELS: Record<OpStatus, string> = {
-  rascunho: "Rascunho", planejada: "Planejada", aguardando_separacao: "Aguard. Separação",
+  rascunho: "Pedido", planejada: "Planejada", aguardando_separacao: "Aguard. Separação",
   separada: "Separada", aguardando_liberacao: "Aguard. Liberação", liberada_producao: "Liberada p/ Produção",
-  em_producao: "Em Produção", aguardando_confirmacao: "Aguard. Confirmação", confirmada: "Confirmada",
+  em_producao: "Em Produção", envase: "Envase", rotulagem: "Rotulagem",
+  aguardando_confirmacao: "Aguard. Confirmação", confirmada: "Confirmada",
   aguardando_qualidade: "Aguard. Qualidade", qualidade_aprovada: "QA Aprovado", liberada: "Liberada",
   concluida: "Concluída", bloqueada: "Bloqueada", cancelada: "Cancelada",
 };
 const OP_STATUS_COLORS: Record<OpStatus, string> = {
   rascunho: "bg-gray-500", planejada: "bg-blue-500", aguardando_separacao: "bg-amber-500",
   separada: "bg-cyan-500", aguardando_liberacao: "bg-indigo-500", liberada_producao: "bg-teal-500",
-  em_producao: "bg-orange-500", aguardando_confirmacao: "bg-purple-500", confirmada: "bg-violet-500",
+  em_producao: "bg-orange-500", envase: "bg-orange-500", rotulagem: "bg-pink-500",
+  aguardando_confirmacao: "bg-purple-500", confirmada: "bg-violet-500",
   aguardando_qualidade: "bg-yellow-500", qualidade_aprovada: "bg-green-500", liberada: "bg-emerald-500",
   concluida: "bg-green-600", bloqueada: "bg-red-500", cancelada: "bg-gray-400",
 };
@@ -39,14 +41,15 @@ const PRIORITY_LABELS: Record<number, string> = { 1: "Urgente", 2: "Alta", 3: "N
 const PRIORITY_BADGE_COLORS: Record<number, string> = { 1: "bg-red-500", 2: "bg-orange-500", 3: "bg-blue-500", 4: "bg-gray-400", 5: "bg-gray-300" };
 const DEMAND_SOURCE_LABELS: Record<string, string> = { venda: "Venda", recorrencia: "Recorrência", safety_stock: "Safety Stock", pcp_manual: "PCP Manual", pos_venda: "Pós-venda" };
 
+// Ao soltar o card numa coluna, aplica statuses[0] (o status "canônico" da coluna).
+// Soltar em "Separação" → separada → deduz os insumos do HUB-RN (ver useProductionOrders).
 const KANBAN_COLUMNS: { id: string; label: string; emoji: string; color: string; statuses: OpStatus[] }[] = [
-  { id: "backlog", label: "Backlog", emoji: "📋", color: "#64748b", statuses: ["rascunho"] },
+  { id: "pedidos", label: "Pedidos", emoji: "📋", color: "#64748b", statuses: ["rascunho"] },
   { id: "planejada", label: "Planejada", emoji: "📅", color: "#3b82f6", statuses: ["planejada"] },
-  { id: "materiais", label: "Materiais", emoji: "🔧", color: "#f59e0b", statuses: ["aguardando_separacao", "separada"] },
-  { id: "lib_prod", label: "Lib. Produção", emoji: "✅", color: "#6366f1", statuses: ["aguardando_liberacao", "liberada_producao"] },
-  { id: "em_producao", label: "Em Produção", emoji: "⚙️", color: "#8b5cf6", statuses: ["em_producao"] },
-  { id: "qualidade", label: "Qualidade", emoji: "🔍", color: "#f97316", statuses: ["aguardando_confirmacao", "confirmada", "aguardando_qualidade", "qualidade_aprovada"] },
-  { id: "liberada", label: "Liberada", emoji: "🚀", color: "#22c55e", statuses: ["liberada"] },
+  { id: "separacao", label: "Separação", emoji: "🔧", color: "#f59e0b", statuses: ["separada", "aguardando_separacao"] },
+  { id: "envase", label: "Envase", emoji: "🧪", color: "#f97316", statuses: ["envase", "aguardando_liberacao", "liberada_producao", "em_producao"] },
+  { id: "rotulagem", label: "Rotulagem", emoji: "🏷️", color: "#ec4899", statuses: ["rotulagem"] },
+  { id: "qualidade", label: "Qualidade", emoji: "🔍", color: "#8b5cf6", statuses: ["aguardando_confirmacao", "confirmada", "aguardando_qualidade", "qualidade_aprovada", "liberada"] },
   { id: "concluida", label: "Concluída", emoji: "📦", color: "#16a34a", statuses: ["concluida"] },
   { id: "bloqueada", label: "Bloqueada", emoji: "🚫", color: "#ef4444", statuses: ["bloqueada", "cancelada"] },
 ];
@@ -285,7 +288,8 @@ export default function OrdensProducao() {
           mode="edit"
           id={editOp.id}
           initial={{
-            sku_id: editOp.sku_id ?? "",
+            product_id: editOp.product_id ?? "",
+            product_label: editOp.sku_name,
             planned_quantity: editOp.planned_quantity,
             priority: String(editOp.priority),
             demand_source: editOp.demand_source,

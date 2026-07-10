@@ -19,13 +19,14 @@ const db = supabase as unknown as {
 
 export type OpStatus =
   | "rascunho" | "planejada" | "aguardando_separacao" | "separada" | "aguardando_liberacao"
-  | "liberada_producao" | "em_producao" | "aguardando_confirmacao" | "confirmada"
+  | "liberada_producao" | "em_producao" | "envase" | "rotulagem" | "aguardando_confirmacao" | "confirmada"
   | "aguardando_qualidade" | "qualidade_aprovada" | "liberada" | "concluida" | "bloqueada" | "cancelada";
 
 export interface OpRow {
   id: string;
   op_number: string;
   sku_id: string | null;
+  product_id: string | null;
   sku_code: string;
   sku_name: string;
   planned_quantity: number;
@@ -43,27 +44,33 @@ export function useProductionOrders() {
     queryFn: async (): Promise<OpRow[]> => {
       const res = await db
         .from("production_orders")
-        .select("id, op_number, sku_id, planned_quantity, good_quantity, rejected_quantity, priority, op_status, demand_source, need_date, product_code, source_order_id")
+        .select("id, op_number, sku_id, product_id, planned_quantity, good_quantity, rejected_quantity, priority, op_status, demand_source, need_date, product_code, source_order_id")
         .order("created_at", { ascending: false });
       if (res.error) throw res.error;
       const rows = res.data ?? [];
 
+      // Produção é ancorada em mrp_products; mantemos o fallback de sku por compat
+      // com OPs antigas. Resolve os dois catálogos para exibir código/nome no card.
       const skuIds = [...new Set(rows.map((r: any) => r.sku_id).filter(Boolean))];
-      const skuRes = skuIds.length
-        ? await db.from("sku").select("id, code, name").in("id", skuIds)
-        : { data: [] };
+      const prodIds = [...new Set(rows.map((r: any) => r.product_id).filter(Boolean))];
+      const [skuRes, prodRes] = await Promise.all([
+        skuIds.length ? db.from("sku").select("id, code, name").in("id", skuIds) : Promise.resolve({ data: [] }),
+        prodIds.length ? db.from("mrp_products").select("id, product_code, name").in("id", prodIds) : Promise.resolve({ data: [] }),
+      ]);
       const skuMap = new Map((skuRes.data ?? []).map((s: any) => [s.id, { code: s.code, name: s.name }]));
+      const prodMap = new Map((prodRes.data ?? []).map((p: any) => [p.id, { code: p.product_code, name: p.name }]));
 
       return rows.map((r: any) => {
-        const sku = skuMap.get(r.sku_id) as { code: string; name: string } | undefined;
-        // Sem SKU vinculado (ex.: OP nascida do pós-venda), mostra o product_code
+        const ref = prodMap.get(r.product_id) ?? skuMap.get(r.sku_id) as { code: string; name: string } | undefined;
+        // Sem produto/SKU vinculado (ex.: OP legada), mostra o product_code
         // (nome do item / rótulo do pedido) para o card não ficar "—".
         return {
           id: r.id,
           op_number: r.op_number ?? "—",
           sku_id: r.sku_id ?? null,
-          sku_code: sku?.code ?? (r.product_code || "—"),
-          sku_name: sku?.name ?? (r.product_code || "—"),
+          product_id: r.product_id ?? null,
+          sku_code: ref?.code ?? (r.product_code || "—"),
+          sku_name: ref?.name ?? (r.product_code || "—"),
           planned_quantity: Number(r.planned_quantity) || 0,
           good_quantity: r.good_quantity ?? null,
           rejected_quantity: r.rejected_quantity ?? null,
@@ -78,8 +85,8 @@ export function useProductionOrders() {
 }
 
 export interface CreateOpInput {
-  skuId: string;
-  skuCode: string;
+  productId: string;
+  productName: string;
   plannedQuantity: number;
   priority: number;
   demandSource: string;
@@ -102,11 +109,13 @@ export function useProductionOrderMutations() {
 
   const create = useMutation({
     mutationFn: async (p: CreateOpInput) => {
-      if (!p.skuId) throw new Error("Selecione o produto.");
+      if (!p.productId) throw new Error("Selecione o produto.");
       const qty = Number(p.plannedQuantity) || 0;
       if (qty <= 0) throw new Error("Quantidade planejada deve ser maior que zero.");
       const res = await db.from("production_orders").insert({
-        sku_id: p.skuId,
+        // Ancoragem em mrp_products (sku_id fica nulo — ver CLAUDE.md/produção).
+        product_id: p.productId,
+        sku_id: null,
         planned_quantity: qty,
         op_status: "planejada",
         demand_source: p.demandSource || "pcp_manual",
@@ -115,7 +124,7 @@ export function useProductionOrderMutations() {
         deviation_notes: p.notes.trim() || null,
         quality_result: "pendente",
         // campos legados exigidos pelo schema original
-        product_code: p.skuCode,
+        product_code: p.productName,
         quantity: qty,
         status: "pending",
       });
@@ -154,28 +163,34 @@ export function useProductionOrderMutations() {
     onSuccess: invalidate,
   });
 
-  // Muda o status da OP (mover no kanban). Ao chegar em "concluida", se a OP veio
-  // do pós-venda (source_order_id), marca o pedido como PRODUZIDO (flag) — o card
-  // não se move sozinho; alguém confere e move para "Em Separação".
+  // Muda o status da OP (mover no kanban) e dispara a movimentação de estoque:
+  //   • "separada"  → DEDUZ os insumos do HUB-RN (mrp_bom × qtd). Idempotente.
+  //   • "concluida" → CREDITA o produto: se veio do pós-venda (source_order_id),
+  //     credita pelos itens do pedido + marca PRODUZIDO; senão credita o Produto
+  //     Final da OP. O card do pós-venda não se move sozinho — alguém confere.
   const setStatus = useMutation({
     mutationFn: async (p: { id: string; op_status: OpStatus }) => {
       const res = await db.from("production_orders").update({ op_status: p.op_status }).eq("id", p.id);
       if (res.error) throw res.error;
-      if (p.op_status === "concluida") {
-        try {
+      try {
+        if (p.op_status === "separada") {
+          await db.rpc("op_deduct_materials", { p_op_id: p.id });
+        } else if (p.op_status === "concluida") {
           const op = await db.from("production_orders").select("source_order_id").eq("id", p.id).single();
           const orderId = op.data?.source_order_id;
           if (orderId) {
-            // Credita o estoque do HUB-RN + marca production_done (idempotente no banco).
             await db.rpc("pos_venda_credit_stock", { p_order_id: orderId });
+          } else {
+            await db.rpc("op_credit_product", { p_op_id: p.id });
           }
-        } catch (e) { console.error("[op-status] falha ao creditar estoque/sinalizar o pós-venda:", e); }
-      }
+        }
+      } catch (e) { console.error("[op-status] falha na movimentação de estoque:", e); }
     },
     onSuccess: () => {
       invalidate();
       qc.invalidateQueries({ queryKey: ["ops", "pos-venda"] });
       qc.invalidateQueries({ queryKey: ["ops", "hubrn-stock"] });
+      qc.invalidateQueries({ queryKey: ["ops", "mrp-products"] });
     },
   });
 

@@ -119,16 +119,16 @@ export function usePosVendaOrders() {
 
 // Setor atual da OP no kanban de produção (para acompanhar no pós-venda).
 const OP_SECTOR: Record<string, string> = {
-  rascunho: "Backlog", planejada: "Planejada",
-  aguardando_separacao: "Materiais", separada: "Materiais",
-  aguardando_liberacao: "Lib. Produção", liberada_producao: "Lib. Produção",
-  em_producao: "Em Produção",
+  rascunho: "Pedidos", planejada: "Planejada",
+  aguardando_separacao: "Separação", separada: "Separação",
+  aguardando_liberacao: "Envase", liberada_producao: "Envase",
+  em_producao: "Envase", envase: "Envase", rotulagem: "Rotulagem",
   aguardando_confirmacao: "Qualidade", confirmada: "Qualidade",
   aguardando_qualidade: "Qualidade", qualidade_aprovada: "Qualidade",
-  liberada: "Liberada", concluida: "Concluída",
+  liberada: "Qualidade", concluida: "Concluída",
   bloqueada: "Bloqueada", cancelada: "Cancelada",
 };
-export const opSector = (status?: string | null) => (status && OP_SECTOR[status]) || "Backlog";
+export const opSector = (status?: string | null) => (status && OP_SECTOR[status]) || "Pedidos";
 
 export interface OpBrief { op_status: string; op_number: string | null; }
 
