@@ -143,6 +143,70 @@ export function useNfeLinkSuggestions() {
   });
 }
 
+export interface OrphanNFe {
+  id: string;
+  bling_id: number;
+  numero: string | null;
+  serie: string | null;
+  contato_nome: string | null;
+  valor_total: number | null;
+  data_emissao: string | null;
+}
+
+/** NFs do Bling ainda SEM pedido vinculado (para baixar o PDF ou vincular na mão). */
+export function useOrphanNFes(search = "") {
+  return useQuery({
+    queryKey: ["orphan-nfes", search.trim()],
+    staleTime: 30_000,
+    queryFn: async (): Promise<OrphanNFe[]> => {
+      const { data, error } = await supabase
+        .from("bling_nfe")
+        .select("id, bling_id, numero, serie, contato_nome, valor_total, data_emissao")
+        .is("order_id", null)
+        .neq("match_status", "ignored")
+        .order("data_emissao", { ascending: false })
+        .limit(500);
+      if (error) throw error;
+      let rows = (data || []) as OrphanNFe[];
+      const q = search.trim().toLowerCase();
+      if (q) rows = rows.filter((n) => (n.contato_nome || "").toLowerCase().includes(q) || (n.numero || "").includes(q));
+      return rows;
+    },
+  });
+}
+
+export interface LinkableOrder {
+  id: string;
+  order_number: string;
+  customer_name: string | null;
+  total: number | null;
+  status: string;
+  created_at: string;
+}
+
+/** Pedidos sem NF vinculada — candidatos para o vínculo manual por busca. */
+export function useLinkableOrders(search: string, enabled = true) {
+  return useQuery({
+    queryKey: ["linkable-orders", search.trim()],
+    enabled,
+    staleTime: 30_000,
+    queryFn: async (): Promise<LinkableOrder[]> => {
+      let q = supabase
+        .from("carboze_orders")
+        .select("id, order_number, customer_name, total, status, created_at")
+        .is("bling_nf_id", null)
+        .in("status", ["confirmed", "invoiced", "shipped", "delivered"])
+        .order("created_at", { ascending: false })
+        .limit(50);
+      const term = search.trim();
+      if (term) q = q.or(`customer_name.ilike.%${term}%,order_number.ilike.%${term}%`);
+      const { data, error } = await q;
+      if (error) throw error;
+      return (data || []) as LinkableOrder[];
+    },
+  });
+}
+
 /** Vincula manualmente a NF ao pedido (o humano confirmou a sugestão). */
 export function useLinkNFeToOrder() {
   const qc = useQueryClient();
@@ -182,6 +246,8 @@ export function useLinkNFeToOrder() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["faturamento"] });
       qc.invalidateQueries({ queryKey: ["nfe-link-suggestions"] });
+      qc.invalidateQueries({ queryKey: ["orphan-nfes"] });
+      qc.invalidateQueries({ queryKey: ["linkable-orders"] });
       toast.success("NF vinculada ao pedido!");
     },
     onError: (err: Error) => toast.error("Erro ao vincular NF: " + err.message),
