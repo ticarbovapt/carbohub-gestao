@@ -36,8 +36,12 @@ function CategoryBadge({ category }: { category: string | null }) {
   return <span className={cn("inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium", CATEGORY_CLS[category] ?? CATEGORY_CLS["Outro"])}>{category}</span>;
 }
 
+// Estoque = SEMPRE a soma dos hubs (warehouse_stock é a fonte de verdade;
+// nunca cair no current_stock_qty legado — ver CLAUDE.md).
+const hubTotal = (p: MrpProduct) => p.hubs.reduce((s, h) => s + h.quantity, 0);
+
 function StockRiskBadge({ p }: { p: MrpProduct }) {
-  const total = p.hubs.length ? p.hubs.reduce((s, h) => s + h.quantity, 0) : p.current_stock_qty;
+  const total = hubTotal(p);
   const hasZero = p.hubs.some((h) => h.quantity === 0);
   if (p.safety_stock_qty > 0 && total < p.safety_stock_qty) return <CarboBadge variant="destructive" className="flex items-center gap-1"><AlertTriangle className="h-3 w-3" /> Baixo</CarboBadge>;
   if (hasZero) return <CarboBadge variant="warning" className="flex items-center gap-1"><AlertCircle className="h-3 w-3" /> Risco em HUB</CarboBadge>;
@@ -135,12 +139,15 @@ export default function ProdutosMrp() {
                     </CarboTableHeader>
                     <CarboTableBody>
                       {filtered.map((p) => {
-                        const total = p.hubs.length ? p.hubs.reduce((s, h) => s + h.quantity, 0) : p.current_stock_qty;
+                        const total = hubTotal(p);
                         return (
                           <CarboTableRow key={p.id}>
                             <CarboTableCell className="font-medium text-foreground">
                               {p.category === "Produto Final" ? (
-                                <button className="flex items-center gap-1.5 text-left hover:underline text-primary font-semibold" onClick={() => setBomProduct(p)}>{p.name}<ClipboardList className="h-3.5 w-3.5 shrink-0 opacity-60" /></button>
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <button className="flex items-center gap-1.5 text-left hover:underline text-primary font-semibold" onClick={() => setBomProduct(p)}>{p.name}<ClipboardList className="h-3.5 w-3.5 shrink-0 opacity-60" /></button>
+                                  {!p.has_bom && <CarboBadge variant="warning" className="gap-1"><AlertTriangle className="h-3 w-3" /> sem BOM</CarboBadge>}
+                                </div>
                               ) : p.name}
                             </CarboTableCell>
                             <CarboTableCell className="font-mono text-xs text-muted-foreground">{p.product_code}</CarboTableCell>

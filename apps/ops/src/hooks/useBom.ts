@@ -84,6 +84,20 @@ export function useBomMutations() {
     onSuccess: (_d, p) => invalidate(p.productId),
   });
 
+  const update = useMutation({
+    mutationFn: async (p: { id: string; productId: string; quantity: number; unit: string; isCritical: boolean }) => {
+      if (!Number.isFinite(p.quantity) || p.quantity <= 0) throw new Error("Quantidade inválida.");
+      const res = await db.from("mrp_bom").update({
+        quantity_per_unit: p.quantity,
+        unit: p.unit || "un",
+        is_critical: p.isCritical,
+        updated_at: new Date().toISOString(),
+      }).eq("id", p.id);
+      if (res.error) throw res.error;
+    },
+    onSuccess: (_d, p) => invalidate(p.productId),
+  });
+
   const remove = useMutation({
     mutationFn: async ({ id }: { id: string; productId: string }) => {
       const res = await db.from("mrp_bom").delete().eq("id", id);
@@ -92,5 +106,5 @@ export function useBomMutations() {
     onSuccess: (_d, v) => invalidate(v.productId),
   });
 
-  return { add, remove };
+  return { add, update, remove };
 }

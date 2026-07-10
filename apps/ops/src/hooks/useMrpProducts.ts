@@ -26,13 +26,14 @@ export interface MrpProduct {
   safety_stock_qty: number;
   stock_unit: string;
   hubs: HubStock[];
+  has_bom: boolean;   // tem ficha (mrp_bom) cadastrada — relevante p/ Produto Final
 }
 
 export function useMrpProducts() {
   return useQuery({
     queryKey: ["ops", "mrp-products"],
     queryFn: async (): Promise<MrpProduct[]> => {
-      const [products, stock] = await Promise.all([
+      const [products, stock, bom] = await Promise.all([
         db
           .from("mrp_products")
           .select("id, name, product_code, category, current_stock_qty, safety_stock_qty, stock_unit")
@@ -41,10 +42,14 @@ export function useMrpProducts() {
         db
           .from("warehouse_stock")
           .select("product_id, quantity, warehouse:warehouses(code, name, is_active)"),
+        db.from("mrp_bom").select("product_id"),
       ]);
 
       if (products.error) throw products.error;
       if (stock.error) throw stock.error;
+      if (bom.error) throw bom.error;
+
+      const withBom = new Set<string>((bom.data ?? []).map((b: { product_id: string }) => b.product_id));
 
       // Estoque por produto → lista de hubs (ignora hubs inativos).
       const byProduct = new Map<string, HubStock[]>();
@@ -65,6 +70,7 @@ export function useMrpProducts() {
         safety_stock_qty: Number(p.safety_stock_qty) || 0,
         stock_unit: (p.stock_unit as string) ?? "un",
         hubs: byProduct.get(p.id as string) ?? [],
+        has_bom: withBom.has(p.id as string),
       }));
     },
   });

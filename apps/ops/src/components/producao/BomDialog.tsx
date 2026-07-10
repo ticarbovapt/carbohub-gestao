@@ -11,7 +11,7 @@ import { CarboBadge } from "@/components/ui/carbo-badge";
 import {
   CarboTable, CarboTableHeader, CarboTableBody, CarboTableRow, CarboTableHead, CarboTableCell,
 } from "@/components/ui/carbo-table";
-import { ClipboardList, Plus, Trash2, Loader2, AlertTriangle } from "lucide-react";
+import { ClipboardList, Plus, Pencil, Trash2, Loader2, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import { useBom, useBomMutations } from "@/hooks/useBom";
 import { useMrpProducts } from "@/hooks/useMrpProducts";
@@ -27,8 +27,9 @@ interface BomDialogProps {
 export function BomDialog({ open, onOpenChange, productId, productName }: BomDialogProps) {
   const { data: items = [], isLoading } = useBom(open ? productId : null);
   const { data: products = [] } = useMrpProducts();
-  const { add, remove } = useBomMutations();
+  const { add, update, remove } = useBomMutations();
 
+  const [editingId, setEditingId] = useState<string | null>(null); // null = adicionando
   const [insumoId, setInsumoId] = useState("");
   const [qty, setQty] = useState("");
   const [unit, setUnit] = useState("un");
@@ -37,25 +38,40 @@ export function BomDialog({ open, onOpenChange, productId, productName }: BomDia
   const usedIds = new Set(items.map((i) => i.insumo_id));
   const options = products.filter((p) => p.id !== productId && !usedIds.has(p.id));
 
-  // Unidade do insumo no estoque → oferece unidades compatíveis (ex.: L → ml/L).
+  // Unidade do insumo no estoque → oferece o dropdown completo.
   const selectedInsumo = products.find((p) => p.id === insumoId);
   const stockUnit = selectedInsumo?.stock_unit || "un";
-  // Dropdown completo (un, ml, L, g, kg) + preserva unidade atual se for custom.
   const unitOptions = [...new Set([...ALL_UNITS, unit].filter(Boolean))];
 
-  const handleAdd = async () => {
+  const resetForm = () => { setEditingId(null); setInsumoId(""); setQty(""); setUnit("un"); setCritical(false); };
+
+  const startEdit = (item: { id: string; insumo_id: string; qty: number; unit: string; is_critical: boolean }) => {
+    setEditingId(item.id);
+    setInsumoId(item.insumo_id);
+    setQty(String(item.qty));
+    setUnit(item.unit || "un");
+    setCritical(item.is_critical);
+  };
+
+  const handleSave = async () => {
     if (!productId) return;
     try {
-      await add.mutateAsync({ productId, insumoId, quantity: Number(qty), unit, isCritical: critical });
-      toast.success("Insumo adicionado à ficha.");
-      setInsumoId(""); setQty(""); setUnit("un"); setCritical(false);
+      if (editingId) {
+        await update.mutateAsync({ id: editingId, productId, quantity: Number(qty), unit, isCritical: critical });
+        toast.success("Linha da ficha atualizada.");
+      } else {
+        await add.mutateAsync({ productId, insumoId, quantity: Number(qty), unit, isCritical: critical });
+        toast.success("Insumo adicionado à ficha.");
+      }
+      resetForm();
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Não foi possível adicionar.");
+      toast.error(e instanceof Error ? e.message : "Não foi possível salvar.");
     }
   };
 
   const handleRemove = async (id: string) => {
     if (!productId) return;
+    if (editingId === id) resetForm();
     try {
       await remove.mutateAsync({ id, productId });
     } catch (e) {
@@ -78,15 +94,21 @@ export function BomDialog({ open, onOpenChange, productId, productName }: BomDia
           {/* Form de adicionar insumo */}
           <div className="grid grid-cols-1 sm:grid-cols-[1fr,auto,auto,auto] gap-2 items-end rounded-lg border border-dashed border-border p-3">
             <div className="space-y-1.5">
-              <Label className="text-xs">Insumo</Label>
-              <Select value={insumoId} onValueChange={(v) => { setInsumoId(v); const p = products.find((x) => x.id === v); if (p?.stock_unit) setUnit(p.stock_unit); }}>
-                <SelectTrigger className="h-9"><SelectValue placeholder="Selecione o insumo" /></SelectTrigger>
-                <SelectContent>
-                  {options.map((p) => (
-                    <SelectItem key={p.id} value={p.id}>{p.name} <span className="text-muted-foreground text-xs">({p.product_code})</span></SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Label className="text-xs">Insumo {editingId && <span className="text-muted-foreground">(editando)</span>}</Label>
+              {editingId ? (
+                <div className="h-9 flex items-center px-3 rounded-md border border-input bg-muted/40 text-sm truncate">
+                  {selectedInsumo?.name ?? "—"}
+                </div>
+              ) : (
+                <Select value={insumoId} onValueChange={(v) => { setInsumoId(v); const p = products.find((x) => x.id === v); if (p?.stock_unit) setUnit(p.stock_unit); }}>
+                  <SelectTrigger className="h-9"><SelectValue placeholder="Selecione o insumo" /></SelectTrigger>
+                  <SelectContent>
+                    {options.map((p) => (
+                      <SelectItem key={p.id} value={p.id}>{p.name} <span className="text-muted-foreground text-xs">({p.product_code})</span></SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
               {selectedInsumo && (
                 <p className="text-[11px] text-muted-foreground">Estoque em <strong>{unitLabel(stockUnit)}</strong> — pode cadastrar em outra unidade (converte na produção).</p>
               )}
@@ -109,9 +131,13 @@ export function BomDialog({ open, onOpenChange, productId, productName }: BomDia
               <Switch checked={critical} onCheckedChange={setCritical} />
             </div>
           </div>
-          <div className="flex justify-end">
-            <Button size="sm" className="gap-1.5" onClick={handleAdd} disabled={add.isPending || !insumoId}>
-              {add.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />} Adicionar insumo
+          <div className="flex justify-end gap-2">
+            {editingId && (
+              <Button size="sm" variant="outline" onClick={resetForm} disabled={update.isPending}>Cancelar</Button>
+            )}
+            <Button size="sm" className="gap-1.5" onClick={handleSave} disabled={add.isPending || update.isPending || !insumoId || !qty}>
+              {(add.isPending || update.isPending) ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
+              {editingId ? "Salvar alteração" : "Adicionar insumo"}
             </Button>
           </div>
 
@@ -134,15 +160,16 @@ export function BomDialog({ open, onOpenChange, productId, productName }: BomDia
                   <CarboTableRow><CarboTableCell colSpan={5} className="py-8 text-center text-sm text-muted-foreground">Nenhum insumo na ficha</CarboTableCell></CarboTableRow>
                 )}
                 {items.map((item) => (
-                  <CarboTableRow key={item.id}>
+                  <CarboTableRow key={item.id} className={editingId === item.id ? "bg-primary/5" : undefined}>
                     <CarboTableCell className="font-medium">{item.insumo}<span className="ml-2 text-xs text-muted-foreground font-mono">{item.code}</span></CarboTableCell>
                     <CarboTableCell className="text-right tabular-nums">{item.qty.toLocaleString("pt-BR")}</CarboTableCell>
-                    <CarboTableCell className="text-muted-foreground">{item.unit}</CarboTableCell>
+                    <CarboTableCell className="text-muted-foreground">{unitLabel(item.unit)}</CarboTableCell>
                     <CarboTableCell>{item.is_critical ? <CarboBadge variant="destructive" className="gap-1"><AlertTriangle className="h-3 w-3" /> Crítico</CarboBadge> : <span className="text-xs text-muted-foreground">—</span>}</CarboTableCell>
                     <CarboTableCell>
-                      <button onClick={() => handleRemove(item.id)} className="p-1.5 hover:bg-muted rounded-md text-destructive disabled:opacity-50" disabled={remove.isPending}>
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </button>
+                      <div className="flex items-center gap-0.5">
+                        <button onClick={() => startEdit(item)} className="p-1.5 hover:bg-muted rounded-md" title="Editar linha"><Pencil className="h-3.5 w-3.5 text-muted-foreground" /></button>
+                        <button onClick={() => handleRemove(item.id)} className="p-1.5 hover:bg-muted rounded-md text-destructive disabled:opacity-50" disabled={remove.isPending} title="Remover"><Trash2 className="h-3.5 w-3.5" /></button>
+                      </div>
                     </CarboTableCell>
                   </CarboTableRow>
                 ))}
