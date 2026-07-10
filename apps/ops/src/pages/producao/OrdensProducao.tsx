@@ -7,8 +7,9 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   Factory, Plus, LayoutGrid, List, Search, TrendingUp, Target, XCircle,
-  Pencil, Trash2, ClipboardCheck, Loader2,
+  Pencil, Trash2, ClipboardCheck, Loader2, CalendarClock, Clock, CheckCircle2, AlertTriangle,
 } from "lucide-react";
+import { useProducibility } from "@/hooks/useProducibility";
 import { cn } from "@/lib/utils";
 import { OPFormDialog } from "@/components/producao/OPFormDialog";
 import { ConfirmOPDialog } from "@/components/producao/ConfirmOPDialog";
@@ -70,11 +71,16 @@ function KpiCard({ icon: Icon, label, value, sub, color }: { icon: typeof Trendi
 }
 
 const dt = (s: string | null) => (s ? new Date(s + "T00:00:00").toLocaleDateString("pt-BR") : "—");
+const todayISO = () => new Date().toISOString().slice(0, 10);
+const daysSince = (iso: string | null) => (iso ? Math.floor((Date.now() - new Date(iso).getTime()) / 86_400_000) : null);
+// Só faz sentido cobrar "produzível" nas etapas antes da separação.
+const EARLY_STAGES = new Set(["rascunho", "planejada", "aguardando_separacao"]);
 
 export default function OrdensProducao() {
   const canManage = true; // acesso (gestor vs membro) entra na fase de permissões
   const { data: orders = [], isLoading } = useProductionOrders();
   const { remove, setStatus } = useProductionOrderMutations();
+  const checkProducible = useProducibility();
   const [dragId, setDragId] = useState<string | null>(null);
   const [overCol, setOverCol] = useState<string | null>(null);
   // Abre no Kanban por padrão e LEMBRA a última escolha (persiste no F5).
@@ -204,7 +210,11 @@ export default function OrdensProducao() {
                     <span className="text-xs font-bold rounded-full px-2 py-0.5" style={{ background: col.color + "20", color: col.color }}>{items.length}</span>
                   </div>
                   <div className="p-2 space-y-2 min-h-[80px]">
-                    {items.map((o) => (
+                    {items.map((o) => {
+                      const prod = EARLY_STAGES.has(o.op_status) ? checkProducible(o.product_id, o.planned_quantity, o.production_route) : null;
+                      const overdue = !!o.need_date && o.op_status !== "concluida" && o.op_status !== "cancelada" && o.need_date < todayISO();
+                      const age = daysSince(o.created_at);
+                      return (
                       <div
                         key={o.id}
                         draggable
@@ -219,16 +229,47 @@ export default function OrdensProducao() {
                         </div>
                         <p className="text-sm font-semibold mt-1 pl-1.5">{o.sku_name}</p>
                         <p className="text-xs text-muted-foreground pl-1.5">{o.planned_quantity} un · {DEMAND_SOURCE_LABELS[o.demand_source]}</p>
-                        {o.production_route && (
-                          <span className={cn(
-                            "ml-1.5 mt-1 inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-medium",
-                            o.production_route === "rotular" ? "bg-pink-500/15 text-pink-600 dark:text-pink-400" : "bg-orange-500/15 text-orange-600 dark:text-orange-400",
-                          )}>
-                            {o.production_route === "rotular" ? "🏷️ Só rotular" : "⚙️ Do zero"}
-                          </span>
-                        )}
+                        <div className="flex flex-wrap items-center gap-1.5 mt-1.5 pl-1.5">
+                          {o.production_route && (
+                            <span className={cn(
+                              "inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-medium",
+                              o.production_route === "rotular" ? "bg-pink-500/15 text-pink-600 dark:text-pink-400" : "bg-orange-500/15 text-orange-600 dark:text-orange-400",
+                            )}>
+                              {o.production_route === "rotular" ? "🏷️ Só rotular" : "⚙️ Do zero"}
+                            </span>
+                          )}
+                          {prod === "ok" && (
+                            <span className="inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-medium bg-emerald-500/15 text-emerald-600 dark:text-emerald-400">
+                              <CheckCircle2 className="h-3 w-3" /> pronto p/ separar
+                            </span>
+                          )}
+                          {prod === "falta" && (
+                            <span className="inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-medium bg-destructive/15 text-destructive">
+                              <AlertTriangle className="h-3 w-3" /> falta insumo
+                            </span>
+                          )}
+                          {prod === "sem_ficha" && (
+                            <span className="inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-medium bg-amber-500/15 text-amber-600 dark:text-amber-400">
+                              sem ficha
+                            </span>
+                          )}
+                          {o.need_date && (
+                            <span className={cn(
+                              "inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-medium",
+                              overdue ? "bg-destructive/15 text-destructive" : "bg-muted text-muted-foreground",
+                            )}>
+                              <CalendarClock className="h-3 w-3" /> {dt(o.need_date)}
+                            </span>
+                          )}
+                          {age != null && age > 0 && (
+                            <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground/70">
+                              <Clock className="h-3 w-3" /> {age}d
+                            </span>
+                          )}
+                        </div>
                       </div>
-                    ))}
+                      );
+                    })}
                     {items.length === 0 && <p className="text-[11px] text-muted-foreground/50 text-center py-4">Vazio</p>}
                   </div>
                 </div>
