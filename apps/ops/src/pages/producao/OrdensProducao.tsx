@@ -219,6 +219,14 @@ export default function OrdensProducao() {
                         </div>
                         <p className="text-sm font-semibold mt-1 pl-1.5">{o.sku_name}</p>
                         <p className="text-xs text-muted-foreground pl-1.5">{o.planned_quantity} un · {DEMAND_SOURCE_LABELS[o.demand_source]}</p>
+                        {o.production_route && (
+                          <span className={cn(
+                            "ml-1.5 mt-1 inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-medium",
+                            o.production_route === "rotular" ? "bg-pink-500/15 text-pink-600 dark:text-pink-400" : "bg-orange-500/15 text-orange-600 dark:text-orange-400",
+                          )}>
+                            {o.production_route === "rotular" ? "🏷️ Só rotular" : "⚙️ Do zero"}
+                          </span>
+                        )}
                       </div>
                     ))}
                     {items.length === 0 && <p className="text-[11px] text-muted-foreground/50 text-center py-4">Vazio</p>}
@@ -305,6 +313,7 @@ export default function OrdensProducao() {
         />
       )}
       <MoveOPDialog
+        key={pendingMove?.op.id ?? "none"}
         open={!!pendingMove}
         onOpenChange={(v) => { if (!v) setPendingMove(null); }}
         op={pendingMove?.op ?? null}
@@ -312,11 +321,13 @@ export default function OrdensProducao() {
         toLabel={pendingMove?.toLabel ?? ""}
         toStatus={pendingMove?.toStatus ?? "planejada"}
         pending={setStatus.isPending}
-        onConfirm={() => {
+        onConfirm={(route) => {
           if (!pendingMove) return;
           const { op, toStatus, toLabel } = pendingMove;
+          // Só grava a rota quando ela é decidida na separação (evita sobrescrever).
+          const routeArg = toStatus === "separada" ? { route } : {};
           setStatus.mutate(
-            { id: op.id, op_status: toStatus },
+            { id: op.id, op_status: toStatus, ...routeArg },
             {
               onSuccess: () => { toast.success(`OP movida para ${toLabel}.`); setPendingMove(null); },
               onError: (e) => toast.error(e instanceof Error ? e.message : "Não foi possível mover a OP."),
