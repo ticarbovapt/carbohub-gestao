@@ -156,6 +156,8 @@ export default function OrdensProducao() {
     [mrpProducts, openProductIds]);
   const criticos = suggestionsAll.filter((s) => s.critico).length;
   const suggestions = onlyCritical ? suggestionsAll.filter((s) => s.critico) : suggestionsAll;
+  // LB: ids que estão na fila de reposição — usado pra avisar dependência (semi baixo).
+  const suggestedIds = useMemo(() => new Set(suggestionsAll.map((s) => s.p.id)), [suggestionsAll]);
 
   // LC: cria de uma vez as OPs de reposição das críticas (abaixo do mínimo, sem OP).
   const createAllCritical = async () => {
@@ -319,6 +321,10 @@ export default function OrdensProducao() {
                     )}>
                       {routeHint === "rotular" ? "🏷️ dá pra só rotular (tem envasado)" : "⚙️ produzir do zero (sem envasado)"}
                     </span>
+                  )}
+                  {/* LB: cascata — envasado dependente também está baixo */}
+                  {!hasOpenOp && routeHint === "zero" && semiId && suggestedIds.has(semiId) && (
+                    <span className="text-[10px] font-medium text-red-600 dark:text-red-400">⤷ Envasado também baixo — produza ele antes</span>
                   )}
                 </button>
                 );
