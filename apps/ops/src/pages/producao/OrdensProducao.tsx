@@ -11,6 +11,10 @@ import {
 } from "lucide-react";
 import { useProducibility } from "@/hooks/useProducibility";
 import { useMrpProducts } from "@/hooks/useMrpProducts";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
 import { OPFormDialog } from "@/components/producao/OPFormDialog";
 import { ConfirmOPDialog } from "@/components/producao/ConfirmOPDialog";
@@ -113,6 +117,7 @@ export default function OrdensProducao() {
   const [onlyCritical, setOnlyCritical] = useState(false);
   const [repoCollapsed, setRepoCollapsed] = useState(false);
   const [repoShowAll, setRepoShowAll] = useState(false);
+  const [bulkConfirm, setBulkConfirm] = useState(false);
   const [editOp, setEditOp] = useState<OP | null>(null);
   const [confirmOp, setConfirmOp] = useState<OP | null>(null);
   const [deleteOp, setDeleteOp] = useState<OP | null>(null);
@@ -260,13 +265,16 @@ export default function OrdensProducao() {
 
         {/* Reposição sugerida (no ponto de reposição) */}
         {canManage && suggestionsAll.length > 0 && (
-          <div className="rounded-xl border border-amber-500/25 bg-amber-500/5 p-3">
-            <div className="flex items-center gap-2 mb-2.5 text-sm font-semibold text-amber-700 dark:text-amber-400">
-              <button onClick={() => setRepoCollapsed((v) => !v)} className="flex items-center gap-2 hover:opacity-80">
-                <ChevronDown className={cn("h-4 w-4 transition-transform", repoCollapsed ? "-rotate-90" : "")} />
-                <AlertTriangle className="h-4 w-4" /> Reposição sugerida
+          <div className="rounded-xl border border-border bg-card">
+            <div className="flex items-center gap-3 px-4 py-3 border-b border-border">
+              <button onClick={() => setRepoCollapsed((v) => !v)} className="flex items-center gap-2 min-w-0">
+                <ChevronDown className={cn("h-4 w-4 text-muted-foreground transition-transform", repoCollapsed ? "-rotate-90" : "")} />
+                <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-amber-500/15 text-amber-600 dark:text-amber-400 shrink-0">
+                  <AlertTriangle className="h-4 w-4" />
+                </span>
+                <span className="text-sm font-semibold">Reposição sugerida</span>
               </button>
-              <span className="text-xs font-normal text-muted-foreground">
+              <span className="text-xs text-muted-foreground">
                 {suggestionsAll.length} no ponto de reposição{criticos > 0 && <> · <span className="text-red-500 font-medium">{criticos} abaixo do mínimo</span></>}
               </span>
               {criticos > 0 && (
@@ -274,86 +282,99 @@ export default function OrdensProducao() {
                   <button
                     onClick={() => setOnlyCritical((v) => !v)}
                     className={cn(
-                      "text-[11px] rounded-md px-2 py-1 font-medium transition-colors",
-                      onlyCritical ? "bg-red-500 text-white" : "bg-muted text-muted-foreground hover:text-foreground",
+                      "text-xs rounded-md px-2.5 py-1.5 font-medium border transition-colors",
+                      onlyCritical ? "bg-red-500 text-white border-red-500" : "border-border text-muted-foreground hover:text-foreground hover:bg-muted",
                     )}
                   >
                     só críticos
                   </button>
                   {suggestionsAll.some((s) => s.critico && !s.hasOpenOp) && (
-                    <button
-                      onClick={createAllCritical}
-                      disabled={bulkCreating}
-                      className="inline-flex items-center gap-1 text-[11px] rounded-md px-2 py-1 font-medium bg-red-500 text-white hover:bg-red-600 disabled:opacity-60 transition-colors"
-                    >
-                      {bulkCreating ? <Loader2 className="h-3 w-3 animate-spin" /> : <Plus className="h-3 w-3" />}
-                      Criar {suggestionsAll.filter((s) => s.critico && !s.hasOpenOp).length} OPs críticas
-                    </button>
+                    <Button size="sm" variant="destructive" className="h-8 gap-1.5" disabled={bulkCreating} onClick={() => setBulkConfirm(true)}>
+                      {bulkCreating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
+                      Criar {suggestionsAll.filter((s) => s.critico && !s.hasOpenOp).length} OPs
+                    </Button>
                   )}
                 </div>
               )}
             </div>
             {!repoCollapsed && (
-            <div className="flex flex-wrap gap-2 items-center">
+            <div className="grid gap-3 p-4 [grid-template-columns:repeat(auto-fill,minmax(260px,1fr))]">
               {(repoShowAll ? suggestions : suggestions.slice(0, 16)).map(({ p, current, deficit, critico, hasOpenOp, level }) => {
                 // LA: rota recomendada — se tem envasado em estoque, dá pra só rotular.
                 const semiId = producible.semiOf(p.id);
                 const routeHint = semiId ? (producible.check(p.id, deficit, "rotular") === "ok" ? "rotular" : "zero") : null;
+                const cascade = routeHint === "zero" && semiId && suggestedIds.has(semiId);
                 return (
-                <button
+                <div
                   key={p.id}
-                  disabled={hasOpenOp}
-                  onClick={() => { if (!hasOpenOp) { setCreateInitial({ product_id: p.id, planned_quantity: deficit, demand_source: "safety_stock" }); setCreateOpen(true); } }}
                   className={cn(
-                    "group flex flex-col gap-1.5 rounded-lg border bg-card px-3 py-2 text-left transition-colors w-[210px]",
-                    hasOpenOp ? "border-border opacity-50 cursor-default"
-                      : critico ? "border-red-500/40 hover:border-red-500" : "border-amber-500/30 hover:border-amber-500",
+                    "flex flex-col rounded-xl border p-3 transition-colors",
+                    hasOpenOp ? "border-border bg-muted/30"
+                      : critico ? "border-red-500/30 bg-red-500/[0.03]" : "border-amber-500/25 bg-amber-500/[0.03]",
                   )}
                 >
-                  <div className="flex items-center gap-2 w-full">
-                    <span className={cn("h-2 w-2 rounded-full shrink-0", critico ? "bg-red-500" : "bg-amber-500")} />
-                    <p className="text-xs font-medium truncate flex-1">{p.name}</p>
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-1.5">
+                        <span className={cn("h-2 w-2 rounded-full shrink-0", hasOpenOp ? "bg-muted-foreground/40" : critico ? "bg-red-500" : "bg-amber-500")} />
+                        <p className="text-sm font-semibold truncate">{p.name}</p>
+                      </div>
+                      <p className="text-[11px] text-muted-foreground mt-0.5">{p.product_code}</p>
+                    </div>
                     <span className={cn(
-                      "text-[9px] px-1 py-0.5 rounded font-medium shrink-0",
+                      "text-[10px] px-1.5 py-0.5 rounded font-medium shrink-0",
                       p.category === "Semi-acabado" ? "bg-teal-600/15 text-teal-600 dark:text-teal-400" : "bg-emerald-700/15 text-emerald-600 dark:text-emerald-400",
                     )}>
-                      {p.category === "Semi-acabado" ? "semi" : "final"}
+                      {p.category === "Semi-acabado" ? "Semi-acabado" : "Produto Final"}
                     </span>
                   </div>
-                  {/* FA: barra de nível de estoque vs mínimo */}
-                  <div className="h-1.5 w-full rounded-full bg-muted overflow-hidden">
-                    <div className={cn("h-full rounded-full", critico ? "bg-red-500" : "bg-amber-500")} style={{ width: `${Math.max(4, level)}%` }} />
-                  </div>
-                  <div className="flex items-center justify-between w-full">
-                    <span className="text-[11px] text-muted-foreground tabular-nums">
-                      {current.toLocaleString("pt-BR")} / mín {p.safety_stock_qty.toLocaleString("pt-BR")}
-                    </span>
-                    {hasOpenOp ? (
-                      <span className="text-[10px] text-muted-foreground font-medium">OP em andamento</span>
-                    ) : (
-                      <span className="inline-flex items-center gap-1 rounded-md bg-primary/10 text-primary px-2 py-0.5 text-[11px] font-medium group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
-                        <Plus className="h-3 w-3" /> OP {deficit}
+
+                  {/* Nível de estoque vs mínimo */}
+                  <div className="mt-3 space-y-1">
+                    <div className="flex items-center justify-between text-[11px]">
+                      <span className="text-muted-foreground">Estoque</span>
+                      <span className="tabular-nums font-medium">
+                        <span className={critico ? "text-red-500" : ""}>{current.toLocaleString("pt-BR")}</span>
+                        <span className="text-muted-foreground"> / mín {p.safety_stock_qty.toLocaleString("pt-BR")} {p.stock_unit}</span>
                       </span>
+                    </div>
+                    <div className="h-2 w-full rounded-full bg-muted overflow-hidden">
+                      <div className={cn("h-full rounded-full", critico ? "bg-red-500" : "bg-amber-500")} style={{ width: `${Math.max(4, level)}%` }} />
+                    </div>
+                  </div>
+
+                  {/* Rota recomendada / dependência */}
+                  {!hasOpenOp && routeHint && (
+                    <p className={cn("text-[11px] font-medium mt-2", routeHint === "rotular" ? "text-pink-600 dark:text-pink-400" : "text-orange-600 dark:text-orange-400")}>
+                      {routeHint === "rotular" ? "🏷️ dá pra só rotular (tem envasado)" : "⚙️ produzir do zero (sem envasado)"}
+                    </p>
+                  )}
+                  {!hasOpenOp && cascade && (
+                    <p className="text-[11px] font-medium text-red-600 dark:text-red-400 mt-0.5">⤷ Envasado também baixo — produza ele antes</p>
+                  )}
+
+                  {/* Ação */}
+                  <div className="mt-3 pt-2 border-t border-border/60">
+                    {hasOpenOp ? (
+                      <span className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground font-medium">
+                        <Clock className="h-3 w-3" /> OP em andamento
+                      </span>
+                    ) : (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="w-full h-8 gap-1.5"
+                        onClick={() => { setCreateInitial({ product_id: p.id, planned_quantity: deficit, demand_source: "safety_stock" }); setCreateOpen(true); }}
+                      >
+                        <Plus className="h-3.5 w-3.5" /> Criar OP · {deficit} {p.stock_unit}
+                      </Button>
                     )}
                   </div>
-                  {/* LA: rota recomendada quando há semi-acabado */}
-                  {!hasOpenOp && routeHint && (
-                    <span className={cn(
-                      "text-[10px] font-medium",
-                      routeHint === "rotular" ? "text-pink-600 dark:text-pink-400" : "text-orange-600 dark:text-orange-400",
-                    )}>
-                      {routeHint === "rotular" ? "🏷️ dá pra só rotular (tem envasado)" : "⚙️ produzir do zero (sem envasado)"}
-                    </span>
-                  )}
-                  {/* LB: cascata — envasado dependente também está baixo */}
-                  {!hasOpenOp && routeHint === "zero" && semiId && suggestedIds.has(semiId) && (
-                    <span className="text-[10px] font-medium text-red-600 dark:text-red-400">⤷ Envasado também baixo — produza ele antes</span>
-                  )}
-                </button>
+                </div>
                 );
               })}
               {suggestions.length > 16 && (
-                <button onClick={() => setRepoShowAll((v) => !v)} className="text-xs text-muted-foreground hover:text-foreground font-medium px-2 py-1">
+                <button onClick={() => setRepoShowAll((v) => !v)} className="flex items-center justify-center rounded-xl border border-dashed border-border text-xs text-muted-foreground hover:text-foreground hover:border-primary/40 font-medium p-3 transition-colors">
                   {repoShowAll ? "ver menos" : `+${suggestions.length - 16} mais`}
                 </button>
               )}
@@ -361,6 +382,24 @@ export default function OrdensProducao() {
             )}
           </div>
         )}
+
+        {/* Confirmação da criação em lote (LC) */}
+        <AlertDialog open={bulkConfirm} onOpenChange={setBulkConfirm}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Criar OPs de reposição?</AlertDialogTitle>
+              <AlertDialogDescription>
+                Isso vai gerar <strong>{suggestionsAll.filter((s) => s.critico && !s.hasOpenOp).length} ordens de produção</strong> para os produtos abaixo do estoque mínimo (fonte “Safety Stock”). Você pode ajustar ou excluir cada uma depois.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={bulkCreating}>Cancelar</AlertDialogCancel>
+              <AlertDialogAction onClick={(e) => { e.preventDefault(); createAllCritical().then(() => setBulkConfirm(false)); }} disabled={bulkCreating}>
+                {bulkCreating ? "Criando…" : "Criar OPs"}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
 
         {/* Kanban ou Lista */}
         {isLoading ? (
