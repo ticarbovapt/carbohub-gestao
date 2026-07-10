@@ -24,7 +24,10 @@ interface MoveOPDialogProps {
   toStatus: OpStatus;
   skipWarning?: boolean;
   pending: boolean;
-  onConfirm: (result: { route: ProductionRoute; good?: number; rejected?: number }) => void;
+  onConfirm: (result: {
+    route: ProductionRoute; good?: number; rejected?: number;
+    consumption?: { insumo_id: string; actual_qty: number; theoretical_qty: number; deducted_qty: number; unit: string }[];
+  }) => void;
 }
 
 interface Line { id: string; name: string; needed: number; unit: string; available: number; incompatible: boolean; critical: boolean; }
@@ -37,7 +40,7 @@ export function MoveOPDialog({ open, onOpenChange, op, fromLabel, toLabel, toSta
   const productById = useMemo(() => new Map(products.map((p) => [p.id, p])), [products]);
   const qty = op?.planned_quantity ?? 0;
 
-  const { data: finalBom = [], isLoading: bomLoading } = useBom(open && isSeparacao && op?.product_id ? op.product_id : null);
+  const { data: finalBom = [], isLoading: bomLoading } = useBom(open && (isSeparacao || isConclusao) && op?.product_id ? op.product_id : null);
 
   // Componente semi-acabado na ficha (ex.: Envasado) → habilita a escolha de rota.
   const semiLine = useMemo(
@@ -71,22 +74,37 @@ export function MoveOPDialog({ open, onOpenChange, op, fromLabel, toLabel, toSta
     return { id: insumoId, name: insumo?.name || "—", needed: converted ?? qtyInBomUnit, unit: stockUnit, available, incompatible: converted === null, critical };
   };
 
-  // Consumo por rota. "rotular"/direto = ficha do produto. "zero" = explode o semi.
-  const buildLines = (r: ProductionRoute): Line[] => {
-    if (!op?.product_id || qty <= 0) return [];
+  // Consumo por rota, para uma dada quantidade. "rotular"/direto = ficha do produto;
+  // "zero" = explode o semi-acabado.
+  const buildLinesFor = (r: ProductionRoute, quantity: number): Line[] => {
+    if (!op?.product_id || quantity <= 0) return [];
     if (r === "zero" && semiLine) {
-      const others = finalBom.filter((b) => b.insumo_id !== semiLine.insumo_id).map((b) => lineFrom(b.insumo_id, b.qty * qty, b.unit, b.is_critical));
-      const semiQty = semiLine.qty * qty; // nº de envasados
+      const others = finalBom.filter((b) => b.insumo_id !== semiLine.insumo_id).map((b) => lineFrom(b.insumo_id, b.qty * quantity, b.unit, b.is_critical));
+      const semiQty = semiLine.qty * quantity;
       const exploded = semiBom.map((s) => lineFrom(s.insumo_id, s.qty * semiQty, s.unit, s.is_critical));
       return [...others, ...exploded];
     }
-    return finalBom.map((b) => lineFrom(b.insumo_id, b.qty * qty, b.unit, b.is_critical));
+    return finalBom.map((b) => lineFrom(b.insumo_id, b.qty * quantity, b.unit, b.is_critical));
   };
 
   const effectiveRoute: ProductionRoute = hasChoice ? route : "rotular";
-  const lines = useMemo(() => buildLines(effectiveRoute), [finalBom, semiBom, semiLine, effectiveRoute, productById, qty]); // eslint-disable-line react-hooks/exhaustive-deps
+  const lines = useMemo(() => buildLinesFor(effectiveRoute, qty), [finalBom, semiBom, semiLine, effectiveRoute, productById, qty]); // eslint-disable-line react-hooks/exhaustive-deps
   const missing = lines.filter((l) => l.incompatible || l.available < l.needed);
   const canSeparate = lines.length > 0 && missing.length === 0;
+
+  // ── Conclusão: consumo real dos insumos → perdas ────────────────────────────
+  const concRoute = (op?.production_route ?? (hasChoice ? route : "rotular")) as ProductionRoute;
+  // teórico p/ as BOAS produzidas; e o que foi deduzido no separado (planejado).
+  const theoLines = useMemo(() => (isConclusao ? buildLinesFor(concRoute, goodNum) : []), [isConclusao, concRoute, goodNum, finalBom, semiBom, semiLine, productById]); // eslint-disable-line react-hooks/exhaustive-deps
+  const dedById = useMemo(() => new Map(buildLinesFor(concRoute, qty).map((l) => [l.id, l.needed])), [isConclusao, concRoute, qty, finalBom, semiBom, semiLine, productById]); // eslint-disable-line react-hooks/exhaustive-deps
+  const [consumo, setConsumo] = useState<Record<string, string>>({});
+  useEffect(() => { setConsumo({}); }, [op?.id]);
+  const actualOf = (l: Line) => { const v = consumo[l.id]; return v === undefined || v === "" ? l.needed : Math.max(0, Number(v) || 0); };
+  const consumption = theoLines.map((l) => ({
+    insumo_id: l.id, unit: l.unit, theoretical_qty: l.needed,
+    deducted_qty: dedById.get(l.id) ?? 0, actual_qty: actualOf(l),
+  }));
+  const totalLoss = consumption.filter((c) => c.actual_qty > c.theoretical_qty).length;
 
   // Disponibilidade do envasado p/ a rota "só rotular".
   const semiAvail = semiProduct?.hubs.find((h) => h.warehouse_name === HUB_RN)?.quantity ?? 0;
@@ -231,6 +249,48 @@ export function MoveOPDialog({ open, onOpenChange, op, fromLabel, toLabel, toSta
               {goodNum + rejectedNum !== qty && (
                 <p className="text-xs text-amber-600 dark:text-amber-400">Boas + refugo ({fmt(goodNum + rejectedNum)}) diferente do planejado ({fmt(qty)} un).</p>
               )}
+
+              {/* Consumo real de insumos → perda por item */}
+              {bomLoading ? (
+                <div className="flex items-center gap-2 py-3 justify-center text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Carregando a ficha…</div>
+              ) : theoLines.length > 0 && (
+                <div className="rounded-lg border border-border overflow-hidden">
+                  <div className="px-3 py-2 text-sm font-medium bg-muted/40">
+                    Insumos usados <span className="text-xs font-normal text-muted-foreground">(informe o total usado; o previsto é BOM × boas)</span>
+                  </div>
+                  <div className="divide-y divide-border">
+                    {theoLines.map((l) => {
+                      const actual = actualOf(l);
+                      const loss = actual - l.needed;
+                      return (
+                        <div key={l.id} className="flex items-center gap-3 px-3 py-2">
+                          <div className="min-w-0 flex-1">
+                            <p className="text-sm font-medium truncate">{l.name}</p>
+                            <p className="text-xs text-muted-foreground tabular-nums">Previsto {fmt(l.needed)} {unitLabel(l.unit)}
+                              {loss > 0 && <span className="text-red-500 font-medium"> · perda {fmt(loss)} {unitLabel(l.unit)}</span>}
+                              {loss < 0 && <span className="text-emerald-600 dark:text-emerald-400"> · sobra {fmt(-loss)} {unitLabel(l.unit)}</span>}
+                            </p>
+                          </div>
+                          <div className="flex items-center gap-1 shrink-0">
+                            <Input
+                              type="number" min={0} step="0.001"
+                              value={consumo[l.id] ?? String(l.needed)}
+                              onChange={(e) => setConsumo((c) => ({ ...c, [l.id]: e.target.value }))}
+                              className={cn("h-8 w-24 text-right", loss > 0 ? "border-red-500/50" : undefined)}
+                            />
+                            <span className="text-xs text-muted-foreground w-6">{unitLabel(l.unit)}</span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  {totalLoss > 0 && (
+                    <div className="px-3 py-2 text-xs text-red-600 dark:text-red-400 bg-red-500/5 border-t border-border">
+                      {totalLoss} {totalLoss === 1 ? "insumo com perda" : "insumos com perda"} — vão para Perdas Totais.
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
 
@@ -246,7 +306,7 @@ export function MoveOPDialog({ open, onOpenChange, op, fromLabel, toLabel, toSta
             variant={isSeparacao && routeChosen && !canSeparate && lines.length > 0 ? "destructive" : "default"}
             onClick={() => onConfirm(
               isConclusao
-                ? { route: op.production_route ?? null, good: goodNum, rejected: rejectedNum }
+                ? { route: op.production_route ?? null, good: goodNum, rejected: rejectedNum, consumption }
                 : { route: hasChoice ? route : null },
             )}
             disabled={pending || (isSeparacao && hasChoice && !routeChosen)}
