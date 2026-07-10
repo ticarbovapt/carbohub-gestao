@@ -188,32 +188,23 @@ export function useProductionOrderMutations() {
   //     credita pelos itens do pedido + marca PRODUZIDO; senão credita o Produto
   //     Final da OP. O card do pós-venda não se move sozinho — alguém confere.
   const setStatus = useMutation({
-    mutationFn: async (p: { id: string; op_status: OpStatus; route?: ProductionRoute; good?: number; rejected?: number }) => {
+    mutationFn: async (p: { id: string; op_status: OpStatus; route?: ProductionRoute }) => {
       const patch: Record<string, unknown> = { op_status: p.op_status };
       // Grava a rota escolhida (só rotular / do zero) ANTES da baixa — a função de
       // dedução no banco lê production_route pra saber se explode o semi-acabado.
       if (p.route !== undefined) patch.production_route = p.route;
-      // Boas/refugo registrados na conclusão → crédito usa good_quantity (grava ANTES).
-      if (p.good != null) patch.good_quantity = p.good;
-      if (p.rejected != null) patch.rejected_quantity = p.rejected;
       const res = await db.from("production_orders").update(patch).eq("id", p.id);
       if (res.error) throw res.error;
-      try {
-        if (p.op_status === "separada") {
-          await db.rpc("op_deduct_materials", { p_op_id: p.id });
-        } else if (p.op_status === "concluida") {
-          const op = await db.from("production_orders").select("source_order_id").eq("id", p.id).single();
-          const orderId = op.data?.source_order_id;
-          if (orderId) {
-            await db.rpc("pos_venda_credit_stock", { p_order_id: orderId });
-          } else {
-            await db.rpc("op_credit_product", { p_op_id: p.id });
-          }
-        } else if (BACKWARD_STATUSES.has(p.op_status)) {
-          // Voltou pra antes da separação (ou cancelou) → estorna os insumos.
-          await db.rpc("op_restore_materials", { p_op_id: p.id });
-        }
-      } catch (e) { console.error("[op-status] falha na movimentação de estoque:", e); }
+      // Movimentação de estoque — erros PROPAGAM (nada de toast de sucesso falso).
+      // Conclusão NÃO passa por aqui (vai pela mutation `conclude` → op_conclude).
+      if (p.op_status === "separada") {
+        const rr = await db.rpc("op_deduct_materials", { p_op_id: p.id });
+        if (rr.error) throw rr.error;
+      } else if (BACKWARD_STATUSES.has(p.op_status)) {
+        // Voltou/cancelou → estorna EXATAMENTE o que foi movido (ledger).
+        const rr = await db.rpc("op_reverse_all", { p_op_id: p.id });
+        if (rr.error) throw rr.error;
+      }
     },
     onSuccess: () => {
       invalidate();
@@ -246,10 +237,18 @@ export function useProductionOrderMutations() {
 
   const remove = useMutation({
     mutationFn: async (id: string) => {
+      // Estorna o estoque movido pela OP ANTES de excluir (senão os insumos
+      // deduzidos na separação sumiriam do HUB-RN pra sempre).
+      const rr = await db.rpc("op_reverse_all", { p_op_id: id });
+      if (rr.error) throw rr.error;
       const res = await db.from("production_orders").delete().eq("id", id);
       if (res.error) throw res.error;
     },
-    onSuccess: invalidate,
+    onSuccess: () => {
+      invalidate();
+      qc.invalidateQueries({ queryKey: ["ops", "hubrn-stock"] });
+      qc.invalidateQueries({ queryKey: ["ops", "mrp-products"] });
+    },
   });
 
   return { create, update, confirm, setStatus, conclude, remove };
