@@ -15,6 +15,7 @@ import { ClipboardList, Plus, Trash2, Loader2, AlertTriangle } from "lucide-reac
 import { toast } from "sonner";
 import { useBom, useBomMutations } from "@/hooks/useBom";
 import { useMrpProducts } from "@/hooks/useMrpProducts";
+import { compatibleUnits, unitLabel } from "@/lib/units";
 
 interface BomDialogProps {
   open: boolean;
@@ -35,6 +36,11 @@ export function BomDialog({ open, onOpenChange, productId, productName }: BomDia
 
   const usedIds = new Set(items.map((i) => i.insumo_id));
   const options = products.filter((p) => p.id !== productId && !usedIds.has(p.id));
+
+  // Unidade do insumo no estoque → oferece unidades compatíveis (ex.: L → ml/L).
+  const selectedInsumo = products.find((p) => p.id === insumoId);
+  const stockUnit = selectedInsumo?.stock_unit || "un";
+  const unitOptions = [...new Set([...compatibleUnits(stockUnit), unit].filter(Boolean))];
 
   const handleAdd = async () => {
     if (!productId) return;
@@ -72,7 +78,7 @@ export function BomDialog({ open, onOpenChange, productId, productName }: BomDia
           <div className="grid grid-cols-1 sm:grid-cols-[1fr,auto,auto,auto] gap-2 items-end rounded-lg border border-dashed border-border p-3">
             <div className="space-y-1.5">
               <Label className="text-xs">Insumo</Label>
-              <Select value={insumoId} onValueChange={setInsumoId}>
+              <Select value={insumoId} onValueChange={(v) => { setInsumoId(v); const p = products.find((x) => x.id === v); if (p?.stock_unit) setUnit(p.stock_unit); }}>
                 <SelectTrigger className="h-9"><SelectValue placeholder="Selecione o insumo" /></SelectTrigger>
                 <SelectContent>
                   {options.map((p) => (
@@ -80,6 +86,9 @@ export function BomDialog({ open, onOpenChange, productId, productName }: BomDia
                   ))}
                 </SelectContent>
               </Select>
+              {selectedInsumo && (
+                <p className="text-[11px] text-muted-foreground">Estoque em <strong>{unitLabel(stockUnit)}</strong> — pode cadastrar em outra unidade (converte na produção).</p>
+              )}
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs">Qtd / un</Label>
@@ -87,7 +96,12 @@ export function BomDialog({ open, onOpenChange, productId, productName }: BomDia
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs">Unidade</Label>
-              <Input value={unit} onChange={(e) => setUnit(e.target.value)} className="h-9 w-20" />
+              <Select value={unit} onValueChange={setUnit}>
+                <SelectTrigger className="h-9 w-20"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {unitOptions.map((u) => <SelectItem key={u} value={u}>{unitLabel(u)}</SelectItem>)}
+                </SelectContent>
+              </Select>
             </div>
             <div className="flex flex-col items-center gap-1">
               <Label className="text-xs">Crítico</Label>
