@@ -115,6 +115,9 @@ export default function OrdensProducao() {
       }, 0) / finished.length) * 100)
     : null;
   const perdasTotais = orders.reduce((s, o) => s + (o.rejected_quantity ?? 0), 0);
+  // Atrasadas: prazo vencido e ainda abertas. Prontas: dá pra separar agora.
+  const atrasadas = abertas.filter((o) => o.need_date && o.need_date < todayISO()).length;
+  const prontas = abertas.filter((o) => EARLY_STAGES.has(o.op_status) && checkProducible(o.product_id, o.planned_quantity, o.production_route) === "ok").length;
 
   const filtered = useMemo(() => orders.filter((o) => {
     if (statusFilter !== "all" && o.op_status !== statusFilter) return false;
@@ -149,9 +152,11 @@ export default function OrdensProducao() {
         </div>
 
         {/* KPIs */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
           <KpiCard icon={Factory} label="OPs Abertas" value={String(abertas.length)} sub="em andamento" color="text-orange-500" />
-          <KpiCard icon={Target} label="A Produzir" value={`${aProduzir} un`} sub="planejado nas OPs abertas" color="text-blue-500" />
+          <KpiCard icon={CheckCircle2} label="Prontas p/ Separar" value={String(prontas)} sub="com insumo em estoque" color="text-emerald-500" />
+          <KpiCard icon={CalendarClock} label="Atrasadas" value={String(atrasadas)} sub="prazo vencido" color={atrasadas > 0 ? "text-red-500" : "text-muted-foreground"} />
+          <KpiCard icon={Target} label="A Produzir" value={`${aProduzir} un`} sub="planejado nas abertas" color="text-blue-500" />
           <KpiCard icon={TrendingUp} label="Rendimento Médio" value={rendimento != null ? `${rendimento}%` : "—"} sub="aprovado / produzido" color="text-green-500" />
           <KpiCard icon={XCircle} label="Perdas Totais" value={String(perdasTotais)} sub="unidades rejeitadas" color="text-red-500" />
         </div>
@@ -184,7 +189,15 @@ export default function OrdensProducao() {
         ) : viewMode === "kanban" ? (
           <div className="flex gap-3 overflow-x-auto pb-3">
             {KANBAN_COLUMNS.map((col) => {
-              const items = filtered.filter((o) => col.statuses.includes(o.op_status));
+              // Ordena por prioridade (1 = urgente primeiro), depois prazo mais próximo.
+              const allItems = filtered
+                .filter((o) => col.statuses.includes(o.op_status))
+                .sort((a, b) => (a.priority - b.priority) || (a.need_date ?? "9999").localeCompare(b.need_date ?? "9999"));
+              // Concluída/Bloqueada acumulam — mostra as recentes e resume o resto.
+              const CAP = 12;
+              const capped = col.id === "concluida" || col.id === "bloqueada";
+              const items = capped ? allItems.slice(0, CAP) : allItems;
+              const hiddenCount = allItems.length - items.length;
               const isOver = overCol === col.id;
               const dropHere = () => {
                 if (dragId) {
@@ -207,7 +220,7 @@ export default function OrdensProducao() {
                 >
                   <div className="rounded-t-2xl px-3 py-2.5 border-b border-border flex items-center justify-between" style={{ background: col.color + "12" }}>
                     <span className="text-sm font-semibold flex items-center gap-1.5">{col.emoji} {col.label}</span>
-                    <span className="text-xs font-bold rounded-full px-2 py-0.5" style={{ background: col.color + "20", color: col.color }}>{items.length}</span>
+                    <span className="text-xs font-bold rounded-full px-2 py-0.5" style={{ background: col.color + "20", color: col.color }}>{allItems.length}</span>
                   </div>
                   <div className="p-2 space-y-2 min-h-[80px]">
                     {items.map((o) => {
@@ -220,7 +233,11 @@ export default function OrdensProducao() {
                         draggable
                         onDragStart={(e) => { e.dataTransfer.setData("text/plain", o.id); setDragId(o.id); }}
                         onDragEnd={() => { setDragId(null); setOverCol(null); }}
-                        className={`rounded-xl border border-border bg-card p-3 relative overflow-hidden cursor-grab active:cursor-grabbing ${dragId === o.id ? "opacity-50" : ""}`}
+                        className={cn(
+                          "rounded-xl border bg-card p-3 relative overflow-hidden cursor-grab active:cursor-grabbing",
+                          dragId === o.id ? "opacity-50" : "",
+                          o.priority <= 2 && o.op_status !== "concluida" && o.op_status !== "cancelada" ? "border-red-500/40 ring-1 ring-red-500/20" : "border-border",
+                        )}
                       >
                         <div className="absolute left-0 top-0 bottom-0 w-1" style={{ background: col.color }} />
                         <div className="flex items-center justify-between gap-2 pl-1.5">
@@ -271,6 +288,11 @@ export default function OrdensProducao() {
                       );
                     })}
                     {items.length === 0 && <p className="text-[11px] text-muted-foreground/50 text-center py-4">Vazio</p>}
+                    {hiddenCount > 0 && (
+                      <button onClick={() => { setStatusFilter(col.statuses[0]); setViewMode("list"); }} className="w-full text-[11px] text-muted-foreground hover:text-foreground py-1.5 rounded-md hover:bg-muted/50 transition-colors">
+                        +{hiddenCount} mais — ver na Lista
+                      </button>
+                    )}
                   </div>
                 </div>
               );
