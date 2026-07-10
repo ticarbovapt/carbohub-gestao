@@ -147,17 +147,17 @@ export default function OrdensProducao() {
   const REPLENISH_TO = 2;  // sugere produzir até 2× o mínimo
   const openProductIds = useMemo(() => new Set(abertas.map((o) => o.product_id).filter(Boolean)), [abertas]);
   const suggestionsAll = useMemo(() => mrpProducts
-    .filter((p) => (p.category === "Produto Final" || p.category === "Semi-acabado") && p.safety_stock_qty > 0)
+    .filter((p) => (p.category === "Produto Final" || p.category === "Semi-acabado") && p.min_rn > 0)
     // Produção olha SÓ o HUB Natal (HUB-RN) — SP/LogHouse não contam pra reposição.
     .map((p) => ({ p, current: p.hubs.find((h) => h.warehouse_name === "HUB-RN")?.quantity ?? 0 }))
-    .filter((x) => x.current <= x.p.safety_stock_qty * REORDER_AT)
+    .filter((x) => x.current <= x.p.min_rn * REORDER_AT)
     .map((x) => ({
       ...x,
-      critico: x.current < x.p.safety_stock_qty,
-      deficit: Math.max(1, Math.ceil(x.p.safety_stock_qty * REPLENISH_TO - x.current)),
+      critico: x.current < x.p.min_rn,
+      deficit: Math.max(1, Math.ceil(x.p.min_rn * REPLENISH_TO - x.current)),
       hasOpenOp: openProductIds.has(x.p.id),
       // nível de estoque relativo ao mínimo (0–100%), pra barrinha.
-      level: Math.min(100, Math.round((x.current / x.p.safety_stock_qty) * 100)),
+      level: Math.min(100, Math.round((x.current / x.p.min_rn) * 100)),
     }))
     // Acionáveis primeiro (sem OP), depois críticos, depois quem está mais baixo.
     .sort((a, b) => Number(a.hasOpenOp) - Number(b.hasOpenOp) || Number(b.critico) - Number(a.critico) || a.level - b.level),
@@ -336,7 +336,7 @@ export default function OrdensProducao() {
                       <span className="text-muted-foreground">Estoque</span>
                       <span className="tabular-nums font-medium">
                         <span className={critico ? "text-red-500" : ""}>{current.toLocaleString("pt-BR")}</span>
-                        <span className="text-muted-foreground"> / mín {p.safety_stock_qty.toLocaleString("pt-BR")} {p.stock_unit}</span>
+                        <span className="text-muted-foreground"> / mín {p.min_rn.toLocaleString("pt-BR")} {p.stock_unit}</span>
                       </span>
                     </div>
                     <div className="h-2 w-full rounded-full bg-muted overflow-hidden">
