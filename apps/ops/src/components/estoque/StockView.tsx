@@ -24,7 +24,9 @@ export function StockView({ hub, editable }: { hub: Hub; editable: boolean }) {
   const { data: products = [], isLoading, error } = useStock();
 
   const filtered = useMemo(() => products.filter((p) => {
-    if (category !== "all" && p.category !== category) return false;
+    // Case-insensitive: produtos com categoria "insumo" (minúscula/typo) não somem
+    // ao filtrar por "Insumo".
+    if (category !== "all" && (p.category || "").toLowerCase() !== category.toLowerCase()) return false;
     if (onlyLow && (p.hubs[hub.id] ?? 0) >= minForHub(p, hub.id)) return false;
     if (search) {
       const q = search.toLowerCase();
@@ -35,7 +37,9 @@ export function StockView({ hub, editable }: { hub: Hub; editable: boolean }) {
   const lowTotal = useMemo(() => products.filter((p) => (p.hubs[hub.id] ?? 0) < minForHub(p, hub.id)).length, [products, hub.id]);
 
   // ── Agrupamento por categoria (Insumo, Produto Final, …) ───────────────────
-  const CAT_ORDER = ["Insumo", "Matéria-Prima", "Produto Final", "Embalagem"];
+  // Mesmas categorias do catálogo MRP (MrpProductFormDialog). "Matéria-Prima" não
+  // existe — categorias fora desta lista caem no fim, em ordem alfabética.
+  const CAT_ORDER = ["Produto Final", "Semi-acabado", "Insumo", "Embalagem", "Carbonatação", "Outro"];
   const grupos = useMemo(() => {
     const m = new Map<string, typeof filtered>();
     for (const p of filtered) {

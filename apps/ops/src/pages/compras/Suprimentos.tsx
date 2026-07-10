@@ -23,6 +23,7 @@ import { CDSPRegistrarEnvioDialog } from "@/components/estoque/CDSPRegistrarEnvi
 import { RemessaConfirmDialog } from "@/components/estoque/RemessaConfirmDialog";
 import { useStock } from "@/hooks/useStock";
 import { useStockMovements } from "@/hooks/useStockMovements";
+import { useStockMovementStats } from "@/hooks/useStockMovementStats";
 import { useStockTransfers, type Transfer } from "@/hooks/useStockTransfers";
 import { MinStockDialog } from "@/components/estoque/MinStockDialog";
 
@@ -80,7 +81,7 @@ export default function Suprimentos() {
   const stockId = STOCK_HUB_ID[hub];
   const lowStock = useMemo(
     () => products.filter((p) => { const min = minForHub(p, stockId); return min > 0 && (p.hubs[stockId] ?? 0) < min; })
-      .map((p) => ({ name: p.name, qty: p.hubs[stockId] ?? 0 })),
+      .map((p) => ({ name: p.name, qty: p.hubs[stockId] ?? 0, unit: p.stock_unit || "un" })),
     [products, stockId],
   );
   // Intervalo [from, to] do período escolhido (rápido, mês específico ou custom).
@@ -92,7 +93,8 @@ export default function Suprimentos() {
     if (periodo === "custom") {
       const f = customFrom ? new Date(customFrom + "T00:00:00") : new Date(0);
       const t = customTo ? new Date(customTo + "T23:59:59") : now;
-      return { from: f, to: t };
+      // Se o usuário inverter (de > até), troca em vez de mostrar vazio.
+      return f > t ? { from: t, to: f } : { from: f, to: t };
     }
     const [y, mth] = periodo.split("-").map(Number);
     if (y && mth) return { from: new Date(y, mth - 1, 1), to: new Date(y, mth, 0, 23, 59, 59) };
@@ -101,12 +103,14 @@ export default function Suprimentos() {
   // Movimentações do hub atual (cada tela é independente)
   const movimentacoesHub = useMemo(() => movimentacoes.filter((m) => m.warehouseCode === HUB_CODE[hub]), [movimentacoes, hub]);
   const movsPeriodo = useMemo(() => movimentacoesHub.filter((m) => { const d = new Date(m.data); return d >= range.from && d <= range.to; }), [movimentacoesHub, range]);
+  // KPIs de movimentação contados DIRETO no banco (sem o cap de 300 da lista — C10).
+  const { data: movStats } = useStockMovementStats(HUB_CODE[hub], range.from.toISOString(), range.to.toISOString());
   const kpis = {
     total: products.length,
     emBaixa: lowStock.length,
-    entradas: movsPeriodo.filter((m) => m.tipo === "entrada").length,
-    saidas: movsPeriodo.filter((m) => m.tipo === "saida").length,
-    movimentacoes: movsPeriodo.length,
+    entradas: movStats?.entradas ?? movsPeriodo.filter((m) => m.tipo === "entrada").length,
+    saidas: movStats?.saidas ?? movsPeriodo.filter((m) => m.tipo === "saida").length,
+    movimentacoes: movStats?.movimentacoes ?? movsPeriodo.length,
   };
 
   // Ao trocar de hub, volta para "estoque" se a aba ativa não existir no novo hub.
@@ -185,7 +189,7 @@ export default function Suprimentos() {
             <div className="flex-1 min-w-0">
               <p className="text-sm font-semibold text-destructive">{lowStock.length} produtos abaixo do nível de segurança — enviar reposição ao CD</p>
               <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1">
-                {lowStock.map((s) => <span key={s.name} className="text-xs text-muted-foreground">{s.name} ({s.qty} un)</span>)}
+                {lowStock.map((s) => <span key={s.name} className="text-xs text-muted-foreground">{s.name} ({s.qty} {s.unit})</span>)}
               </div>
             </div>
           </div>

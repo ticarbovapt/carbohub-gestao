@@ -15,7 +15,7 @@ import { ClipboardList, Plus, Pencil, Trash2, Loader2, AlertTriangle } from "luc
 import { toast } from "sonner";
 import { useBom, useBomMutations } from "@/hooks/useBom";
 import { useMrpProducts } from "@/hooks/useMrpProducts";
-import { ALL_UNITS, unitLabel, convertUnit } from "@/lib/units";
+import { ALL_UNITS, unitLabel, convertUnit, isCountUnit } from "@/lib/units";
 
 interface BomDialogProps {
   open: boolean;
@@ -59,6 +59,11 @@ export function BomDialog({ open, onOpenChange, productId, productName }: BomDia
     // (ex.: ml↔L). Bloqueia dimensão incompatível (ml num insumo contado em un).
     if (convertUnit(1, unit, stockUnit) === null) {
       toast.error(`Unidade incompatível: o insumo é estocado em ${unitLabel(stockUnit)}. Use uma unidade da mesma grandeza.`);
+      return;
+    }
+    // Unidade contável (un) não aceita fração — não existe "meia garrafa" na ficha.
+    if (isCountUnit(unit) && !Number.isInteger(Number(qty))) {
+      toast.error(`${unitLabel(unit)} é contável: use um número inteiro (sem casas decimais).`);
       return;
     }
     try {
