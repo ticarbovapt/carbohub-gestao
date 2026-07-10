@@ -43,6 +43,7 @@ export interface OpRow {
   need_date: string | null;
   production_route: ProductionRoute;
   created_at: string | null;
+  customer_name: string | null; // cliente do pedido de venda (OP vinda do pós-venda)
 }
 
 export function useProductionOrders() {
@@ -60,12 +61,15 @@ export function useProductionOrders() {
       // com OPs antigas. Resolve os dois catálogos para exibir código/nome no card.
       const skuIds = [...new Set(rows.map((r: any) => r.sku_id).filter(Boolean))];
       const prodIds = [...new Set(rows.map((r: any) => r.product_id).filter(Boolean))];
-      const [skuRes, prodRes] = await Promise.all([
+      const orderIds = [...new Set(rows.map((r: any) => r.source_order_id).filter(Boolean))];
+      const [skuRes, prodRes, orderRes] = await Promise.all([
         skuIds.length ? db.from("sku").select("id, code, name").in("id", skuIds) : Promise.resolve({ data: [] }),
         prodIds.length ? db.from("mrp_products").select("id, product_code, name").in("id", prodIds) : Promise.resolve({ data: [] }),
+        orderIds.length ? db.from("carboze_orders").select("id, customer_name").in("id", orderIds) : Promise.resolve({ data: [] }),
       ]);
       const skuMap = new Map((skuRes.data ?? []).map((s: any) => [s.id, { code: s.code, name: s.name }]));
       const prodMap = new Map((prodRes.data ?? []).map((p: any) => [p.id, { code: p.product_code, name: p.name }]));
+      const custMap = new Map((orderRes.data ?? []).map((o: any) => [o.id, o.customer_name as string | null]));
 
       return rows.map((r: any) => {
         const ref = prodMap.get(r.product_id) ?? skuMap.get(r.sku_id) as { code: string; name: string } | undefined;
@@ -87,6 +91,7 @@ export function useProductionOrders() {
           need_date: r.need_date ? String(r.need_date).slice(0, 10) : null,
           production_route: (r.production_route ?? null) as ProductionRoute,
           created_at: r.created_at ?? null,
+          customer_name: (custMap.get(r.source_order_id) ?? null) as string | null,
         };
       });
     },

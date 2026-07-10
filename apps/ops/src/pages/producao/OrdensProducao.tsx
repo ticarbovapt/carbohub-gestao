@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   Factory, Plus, LayoutGrid, List, Search, TrendingUp, Target, XCircle,
-  Pencil, Trash2, ClipboardCheck, Loader2, CalendarClock, Clock, CheckCircle2, AlertTriangle, ChevronDown,
+  Pencil, Trash2, ClipboardCheck, Loader2, CalendarClock, Clock, CheckCircle2, AlertTriangle, ChevronDown, User,
 } from "lucide-react";
 import { useProducibility } from "@/hooks/useProducibility";
 import { useMrpProducts } from "@/hooks/useMrpProducts";
@@ -174,8 +174,9 @@ export default function OrdensProducao() {
   }), [orders, searchQuery, statusFilter, priorityFilter]);
 
   return (
-    <div className="p-4 md:p-6">
-      <div className="space-y-6">
+    <div className="p-4 md:p-6 h-[calc(100dvh-3.5rem)] flex flex-col overflow-hidden">
+      <div className="flex flex-col flex-1 min-h-0 gap-6">
+        <div className="shrink-0 space-y-6">
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
@@ -359,11 +360,13 @@ export default function OrdensProducao() {
           </div>
         )}
 
+        </div>
+
         {/* Kanban ou Lista */}
         {isLoading ? (
           <div className="flex items-center justify-center gap-2 py-16 text-muted-foreground"><Loader2 className="h-5 w-5 animate-spin" /> Carregando…</div>
         ) : viewMode === "kanban" ? (
-          <div className="flex gap-3 overflow-x-auto pb-3">
+          <div className="flex gap-3 overflow-x-auto flex-1 min-h-0 pb-3">
             {KANBAN_COLUMNS.map((col) => {
               // Ordena por prioridade (1 = urgente primeiro), depois prazo mais próximo.
               const allItems = filtered
@@ -397,7 +400,7 @@ export default function OrdensProducao() {
                   onDragLeave={() => setOverCol((c) => (c === col.id ? null : c))}
                   onDrop={dropHere}
                   className={cn(
-                    "flex-1 min-w-0 rounded-2xl border bg-board-surface/40 flex flex-col transition-all",
+                    "flex-1 min-w-[300px] h-full rounded-2xl border bg-board-surface/40 flex flex-col transition-all",
                     isOver ? "border-primary" : "border-border",
                     isSkipped ? "opacity-40" : "",
                   )}
@@ -416,7 +419,7 @@ export default function OrdensProducao() {
                       <span className="text-xs font-bold rounded-full px-2 py-0.5" style={{ background: col.color + "20", color: col.color }}>{allItems.length}</span>
                     </div>
                   </div>
-                  <div className="p-2 space-y-2 min-h-[80px]">
+                  <div className="p-2 space-y-2 overflow-y-auto flex-1 min-h-0">
                     {items.map((o) => {
                       const prod = EARLY_STAGES.has(o.op_status) ? producible.check(o.product_id, o.planned_quantity, o.production_route) : null;
                       const overdue = !!o.need_date && o.op_status !== "concluida" && o.op_status !== "cancelada" && o.need_date < todayISO();
@@ -429,7 +432,7 @@ export default function OrdensProducao() {
                         onDragStart={(e) => { e.dataTransfer.setData("text/plain", o.id); setDragId(o.id); }}
                         onDragEnd={() => { setDragId(null); setOverCol(null); }}
                         className={cn(
-                          "rounded-xl border bg-card relative flex flex-col h-[190px]",
+                          "rounded-xl border bg-card relative flex flex-col h-[212px] shrink-0",
                           dragId === o.id ? "opacity-50" : "",
                           o.priority <= 2 && !isDone ? "border-red-500/40 ring-1 ring-red-500/20" : "border-border",
                         )}
@@ -447,6 +450,11 @@ export default function OrdensProducao() {
                             <Badge variant="outline" className={cn("text-white border-0 text-[10px] shrink-0", PRIORITY_BADGE_COLORS[o.priority])}>{PRIORITY_LABELS[o.priority]}</Badge>
                           </div>
                           <p className="text-sm font-semibold mt-1 leading-tight line-clamp-2">{o.sku_name}</p>
+                          {o.customer_name && (
+                            <p className="flex items-center gap-1 text-xs font-medium text-foreground/90 mt-0.5 truncate">
+                              <User className="h-3 w-3 shrink-0 text-muted-foreground" /> {o.customer_name}
+                            </p>
+                          )}
                           <p className="text-xs text-muted-foreground mt-0.5">{o.planned_quantity} un · {DEMAND_SOURCE_LABELS[o.demand_source]}</p>
                           <p className={cn("flex items-center gap-1 text-[11px] font-medium mt-1", o.need_date ? (overdue ? "text-red-500" : "text-muted-foreground") : "text-muted-foreground/50")}>
                             <CalendarClock className="h-3 w-3 shrink-0" /> {o.need_date ? <>Prazo: {dt(o.need_date)}{overdue && " · vencido"}</> : "Sem prazo"}
@@ -504,7 +512,7 @@ export default function OrdensProducao() {
             <p className="text-sm">Tente ajustar os filtros de busca.</p>
           </div>
         ) : (
-          <div className="rounded-lg border bg-card overflow-x-auto">
+          <div className="rounded-lg border bg-card overflow-auto flex-1 min-h-0">
             <Table>
               <TableHeader>
                 <TableRow>
