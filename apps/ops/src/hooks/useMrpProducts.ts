@@ -23,7 +23,8 @@ export interface MrpProduct {
   product_code: string;
   category: string;
   current_stock_qty: number;
-  safety_stock_qty: number;
+  safety_stock_qty: number;   // legado (global) — NÃO usar p/ produção
+  min_rn: number;             // estoque mínimo do HUB-RN (ops_stock_min) — fonte p/ produção
   stock_unit: string;
   hubs: HubStock[];
   has_bom: boolean;   // tem ficha (mrp_bom) cadastrada — relevante p/ Produto Final
@@ -33,7 +34,7 @@ export function useMrpProducts() {
   return useQuery({
     queryKey: ["ops", "mrp-products"],
     queryFn: async (): Promise<MrpProduct[]> => {
-      const [products, stock, bom] = await Promise.all([
+      const [products, stock, bom, mins] = await Promise.all([
         db
           .from("mrp_products")
           .select("id, name, product_code, category, current_stock_qty, safety_stock_qty, stock_unit")
@@ -43,13 +44,21 @@ export function useMrpProducts() {
           .from("warehouse_stock")
           .select("product_id, quantity, warehouse:warehouses(code, name, is_active)"),
         db.from("mrp_bom").select("product_id"),
+        // mínimo por hub — só interessa o HUB-RN (Natal) p/ produção.
+        db.from("ops_stock_min").select("product_id, min_qty, warehouse:warehouses(code)"),
       ]);
 
       if (products.error) throw products.error;
       if (stock.error) throw stock.error;
       if (bom.error) throw bom.error;
+      if (mins.error) throw mins.error;
 
       const withBom = new Set<string>((bom.data ?? []).map((b: { product_id: string }) => b.product_id));
+
+      const minRnByProduct = new Map<string, number>();
+      for (const row of mins.data ?? []) {
+        if (row.warehouse?.code === "HUB-RN") minRnByProduct.set(row.product_id, Number(row.min_qty) || 0);
+      }
 
       // Estoque por produto → lista de hubs (ignora hubs inativos).
       const byProduct = new Map<string, HubStock[]>();
@@ -68,6 +77,7 @@ export function useMrpProducts() {
         category: (p.category as string) ?? "Outro",
         current_stock_qty: Number(p.current_stock_qty) || 0,
         safety_stock_qty: Number(p.safety_stock_qty) || 0,
+        min_rn: minRnByProduct.get(p.id as string) ?? 0,
         stock_unit: (p.stock_unit as string) ?? "un",
         hubs: byProduct.get(p.id as string) ?? [],
         has_bom: withBom.has(p.id as string),
