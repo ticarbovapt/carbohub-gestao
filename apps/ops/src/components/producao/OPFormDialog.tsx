@@ -38,6 +38,7 @@ interface OPFormDialogProps {
   mode: "create" | "edit";
   id?: string;
   initial?: OPFormInitial;
+  lockQuantity?: boolean; // OP vinda de venda → quantidade segue o pedido (não edita)
 }
 
 interface MaterialLine {
@@ -51,7 +52,7 @@ interface MaterialLine {
   critical: boolean;
 }
 
-export function OPFormDialog({ open, onOpenChange, mode, id, initial }: OPFormDialogProps) {
+export function OPFormDialog({ open, onOpenChange, mode, id, initial, lockQuantity }: OPFormDialogProps) {
   const { data: products = [] } = useMrpProducts();
   const { create, update } = useProductionOrderMutations();
   const [productId, setProductId] = useState(initial?.product_id ?? "");
@@ -157,7 +158,8 @@ export function OPFormDialog({ open, onOpenChange, mode, id, initial }: OPFormDi
           {/* Quantidade Planejada */}
           <div className="space-y-2">
             <Label>Quantidade Planejada *</Label>
-            <Input type="number" min={1} value={plannedQty} onChange={(e) => setPlannedQty(e.target.value)} />
+            <Input type="number" min={1} value={plannedQty} onChange={(e) => setPlannedQty(e.target.value)} disabled={lockQuantity} className={lockQuantity ? "opacity-70 cursor-not-allowed" : undefined} />
+            {lockQuantity && <p className="text-[11px] text-muted-foreground">A quantidade vem do pedido de venda e não pode ser alterada aqui.</p>}
           </div>
 
           {/* Checagem de materiais (HUB-RN) */}

@@ -397,7 +397,7 @@ export default function OrdensProducao() {
                   onDragLeave={() => setOverCol((c) => (c === col.id ? null : c))}
                   onDrop={dropHere}
                   className={cn(
-                    "flex-1 min-w-[200px] rounded-2xl border bg-board-surface/40 flex flex-col transition-all",
+                    "flex-1 min-w-0 rounded-2xl border bg-board-surface/40 flex flex-col transition-all",
                     isOver ? "border-primary" : "border-border",
                     isSkipped ? "opacity-40" : "",
                   )}
@@ -429,40 +429,38 @@ export default function OrdensProducao() {
                         onDragStart={(e) => { e.dataTransfer.setData("text/plain", o.id); setDragId(o.id); }}
                         onDragEnd={() => { setDragId(null); setOverCol(null); }}
                         className={cn(
-                          "rounded-xl border bg-card relative overflow-hidden flex flex-col h-[176px]",
+                          "rounded-xl border bg-card relative flex flex-col h-[190px]",
                           dragId === o.id ? "opacity-50" : "",
                           o.priority <= 2 && !isDone ? "border-red-500/40 ring-1 ring-red-500/20" : "border-border",
                         )}
                       >
-                        <div className="absolute left-0 top-0 bottom-0 w-1" style={{ background: col.color }} />
-                        {/* Corpo clicável → abre detalhes/edição (altura fixa: excedente é cortado) */}
+                        <div className="absolute left-0 top-0 bottom-0 w-1 rounded-l-xl" style={{ background: col.color }} />
+                        {/* Corpo clicável → abre detalhes/edição */}
                         <button
                           type="button"
                           onClick={() => setEditOp(o)}
-                          className="text-left p-3 pl-4 flex-1 min-h-0 overflow-hidden cursor-pointer hover:bg-muted/30 transition-colors"
+                          className="text-left px-3 pt-2.5 pb-1 pl-4 flex-1 min-h-0 flex flex-col cursor-pointer hover:bg-muted/30 transition-colors rounded-t-xl"
                           title="Ver detalhes da OP"
                         >
                           <div className="flex items-center justify-between gap-2">
-                            <span className="font-mono text-xs font-medium text-blue-500">{o.op_number}</span>
-                            <Badge variant="outline" className={cn("text-white border-0 text-[10px]", PRIORITY_BADGE_COLORS[o.priority])}>{PRIORITY_LABELS[o.priority]}</Badge>
+                            <span className="font-mono text-[11px] font-medium text-blue-500 truncate">{o.op_number}</span>
+                            <Badge variant="outline" className={cn("text-white border-0 text-[10px] shrink-0", PRIORITY_BADGE_COLORS[o.priority])}>{PRIORITY_LABELS[o.priority]}</Badge>
                           </div>
-                          <p className="text-sm font-semibold mt-1 leading-tight">{o.sku_name}</p>
-                          <p className="text-xs text-muted-foreground">{o.planned_quantity} un · {DEMAND_SOURCE_LABELS[o.demand_source]}</p>
-                          {o.need_date && (
-                            <p className={cn("flex items-center gap-1 text-[11px] font-medium mt-1.5", overdue ? "text-red-500" : "text-muted-foreground")}>
-                              <CalendarClock className="h-3 w-3" /> Prazo: {dt(o.need_date)}{overdue && " · vencido"}
-                            </p>
-                          )}
-                          <div className="flex flex-wrap items-center gap-1 mt-1.5">
+                          <p className="text-sm font-semibold mt-1 leading-tight line-clamp-2">{o.sku_name}</p>
+                          <p className="text-xs text-muted-foreground mt-0.5">{o.planned_quantity} un · {DEMAND_SOURCE_LABELS[o.demand_source]}</p>
+                          <p className={cn("flex items-center gap-1 text-[11px] font-medium mt-1", o.need_date ? (overdue ? "text-red-500" : "text-muted-foreground") : "text-muted-foreground/50")}>
+                            <CalendarClock className="h-3 w-3 shrink-0" /> {o.need_date ? <>Prazo: {dt(o.need_date)}{overdue && " · vencido"}</> : "Sem prazo"}
+                          </p>
+                          {/* Badges: uma linha, sem estourar a altura */}
+                          <div className="flex items-center gap-1 mt-auto overflow-hidden">
                             {o.production_route && (
-                              <span className={cn("inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-medium", o.production_route === "rotular" ? "bg-pink-500/15 text-pink-600 dark:text-pink-400" : "bg-orange-500/15 text-orange-600 dark:text-orange-400")}>
-                                {o.production_route === "rotular" ? "🏷️ Só rotular" : "⚙️ Do zero"}
+                              <span className={cn("shrink-0 inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-medium", o.production_route === "rotular" ? "bg-pink-500/15 text-pink-600 dark:text-pink-400" : "bg-orange-500/15 text-orange-600 dark:text-orange-400")}>
+                                {o.production_route === "rotular" ? "🏷️ Rotular" : "⚙️ Do zero"}
                               </span>
                             )}
-                            {prod === "ok" && <span className="inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-medium bg-emerald-500/15 text-emerald-600 dark:text-emerald-400"><CheckCircle2 className="h-3 w-3" /> pronto p/ separar</span>}
-                            {prod === "falta" && <span className="inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-medium bg-destructive/15 text-destructive"><AlertTriangle className="h-3 w-3" /> falta insumo</span>}
-                            {prod === "sem_ficha" && <span className="inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-medium bg-amber-500/15 text-amber-600 dark:text-amber-400">sem ficha</span>}
-                            {age != null && age > 0 && <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground/70"><Clock className="h-3 w-3" /> {age}d</span>}
+                            {prod === "ok" && <span className="shrink-0 inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-medium bg-emerald-500/15 text-emerald-600 dark:text-emerald-400"><CheckCircle2 className="h-3 w-3" /> pronto</span>}
+                            {prod === "falta" && <span className="shrink-0 inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-medium bg-destructive/15 text-destructive"><AlertTriangle className="h-3 w-3" /> falta insumo</span>}
+                            {prod === "sem_ficha" && <span className="shrink-0 inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-medium bg-amber-500/15 text-amber-600 dark:text-amber-400">sem ficha</span>}
                           </div>
                         </button>
                         {/* Seletor de etapa — mover pra frente/trás (trava a etapa que a rota pula) */}
@@ -572,6 +570,7 @@ export default function OrdensProducao() {
           onOpenChange={(v) => { if (!v) setEditOp(null); }}
           mode="edit"
           id={editOp.id}
+          lockQuantity={editOp.demand_source === "venda"}
           initial={{
             product_id: editOp.product_id ?? "",
             product_label: editOp.sku_name,
