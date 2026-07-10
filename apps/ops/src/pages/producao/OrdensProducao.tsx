@@ -148,7 +148,8 @@ export default function OrdensProducao() {
   const openProductIds = useMemo(() => new Set(abertas.map((o) => o.product_id).filter(Boolean)), [abertas]);
   const suggestionsAll = useMemo(() => mrpProducts
     .filter((p) => (p.category === "Produto Final" || p.category === "Semi-acabado") && p.safety_stock_qty > 0)
-    .map((p) => ({ p, current: p.hubs.reduce((s, h) => s + h.quantity, 0) }))
+    // Produção olha SÓ o HUB Natal (HUB-RN) — SP/LogHouse não contam pra reposição.
+    .map((p) => ({ p, current: p.hubs.find((h) => h.warehouse_name === "HUB-RN")?.quantity ?? 0 }))
     .filter((x) => x.current <= x.p.safety_stock_qty * REORDER_AT)
     .map((x) => ({
       ...x,
