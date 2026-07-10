@@ -22,6 +22,8 @@ export type OpStatus =
   | "liberada_producao" | "em_producao" | "envase" | "rotulagem" | "aguardando_confirmacao" | "confirmada"
   | "aguardando_qualidade" | "qualidade_aprovada" | "liberada" | "concluida" | "bloqueada" | "cancelada";
 
+export type ProductionRoute = "rotular" | "zero" | null;
+
 export interface OpRow {
   id: string;
   op_number: string;
@@ -36,6 +38,7 @@ export interface OpRow {
   op_status: OpStatus;
   demand_source: string;
   need_date: string | null;
+  production_route: ProductionRoute;
 }
 
 export function useProductionOrders() {
@@ -44,7 +47,7 @@ export function useProductionOrders() {
     queryFn: async (): Promise<OpRow[]> => {
       const res = await db
         .from("production_orders")
-        .select("id, op_number, sku_id, product_id, planned_quantity, good_quantity, rejected_quantity, priority, op_status, demand_source, need_date, product_code, source_order_id")
+        .select("id, op_number, sku_id, product_id, planned_quantity, good_quantity, rejected_quantity, priority, op_status, demand_source, need_date, product_code, source_order_id, production_route")
         .order("created_at", { ascending: false });
       if (res.error) throw res.error;
       const rows = res.data ?? [];
@@ -78,6 +81,7 @@ export function useProductionOrders() {
           op_status: (r.op_status ?? "rascunho") as OpStatus,
           demand_source: r.demand_source ?? "",
           need_date: r.need_date ? String(r.need_date).slice(0, 10) : null,
+          production_route: (r.production_route ?? null) as ProductionRoute,
         };
       });
     },
@@ -172,8 +176,12 @@ export function useProductionOrderMutations() {
   //     credita pelos itens do pedido + marca PRODUZIDO; senão credita o Produto
   //     Final da OP. O card do pós-venda não se move sozinho — alguém confere.
   const setStatus = useMutation({
-    mutationFn: async (p: { id: string; op_status: OpStatus }) => {
-      const res = await db.from("production_orders").update({ op_status: p.op_status }).eq("id", p.id);
+    mutationFn: async (p: { id: string; op_status: OpStatus; route?: ProductionRoute }) => {
+      const patch: Record<string, unknown> = { op_status: p.op_status };
+      // Grava a rota escolhida (só rotular / do zero) ANTES da baixa — a função de
+      // dedução no banco lê production_route pra saber se explode o semi-acabado.
+      if (p.route !== undefined) patch.production_route = p.route;
+      const res = await db.from("production_orders").update(patch).eq("id", p.id);
       if (res.error) throw res.error;
       try {
         if (p.op_status === "separada") {
