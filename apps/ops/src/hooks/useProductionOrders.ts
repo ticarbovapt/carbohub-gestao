@@ -223,6 +223,27 @@ export function useProductionOrderMutations() {
     },
   });
 
+  // Conclui a OP com consumo real dos insumos → registra perdas + reconcilia estoque
+  // + credita o produto (via RPC op_conclude, idempotente).
+  const conclude = useMutation({
+    mutationFn: async (p: {
+      id: string; good: number; rejected: number;
+      consumption: { insumo_id: string; actual_qty: number; theoretical_qty: number; deducted_qty: number; unit: string }[];
+    }) => {
+      const res = await db.rpc("op_conclude", {
+        p_op_id: p.id, p_good: p.good, p_rejected: p.rejected, p_consumption: p.consumption,
+      });
+      if (res.error) throw res.error;
+    },
+    onSuccess: () => {
+      invalidate();
+      qc.invalidateQueries({ queryKey: ["ops", "pos-venda"] });
+      qc.invalidateQueries({ queryKey: ["ops", "hubrn-stock"] });
+      qc.invalidateQueries({ queryKey: ["ops", "mrp-products"] });
+      qc.invalidateQueries({ queryKey: ["ops", "material-loss"] });
+    },
+  });
+
   const remove = useMutation({
     mutationFn: async (id: string) => {
       const res = await db.from("production_orders").delete().eq("id", id);
@@ -231,5 +252,5 @@ export function useProductionOrderMutations() {
     onSuccess: invalidate,
   });
 
-  return { create, update, confirm, setStatus, remove };
+  return { create, update, confirm, setStatus, conclude, remove };
 }

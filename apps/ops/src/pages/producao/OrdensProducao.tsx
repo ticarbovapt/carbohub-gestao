@@ -80,7 +80,7 @@ const EARLY_STAGES = new Set(["rascunho", "planejada", "aguardando_separacao"]);
 export default function OrdensProducao() {
   const canManage = true; // acesso (gestor vs membro) entra na fase de permissões
   const { data: orders = [], isLoading } = useProductionOrders();
-  const { remove, setStatus } = useProductionOrderMutations();
+  const { remove, setStatus, conclude } = useProductionOrderMutations();
   const producible = useProducibility();
   const { data: mrpProducts = [] } = useMrpProducts();
   const categoryById = useMemo(() => new Map(mrpProducts.map((p) => [p.id, p.category])), [mrpProducts]);
@@ -598,20 +598,19 @@ export default function OrdensProducao() {
         toLabel={pendingMove?.toLabel ?? ""}
         toStatus={pendingMove?.toStatus ?? "planejada"}
         skipWarning={pendingMove?.skipWarning ?? false}
-        pending={setStatus.isPending}
-        onConfirm={({ route, good, rejected }) => {
+        pending={setStatus.isPending || conclude.isPending}
+        onConfirm={({ route, good, rejected, consumption }) => {
           if (!pendingMove) return;
           const { op, toStatus, toLabel } = pendingMove;
-          // Só grava a rota quando ela é decidida na separação (evita sobrescrever).
+          const onSuccess = () => { toast.success(`OP movida para ${toLabel}.`); setPendingMove(null); };
+          const onError = (e: unknown) => toast.error(e instanceof Error ? e.message : "Não foi possível mover a OP.");
+          // Conclusão passa pela RPC op_conclude (perdas + reconciliação + crédito).
+          if (toStatus === "concluida") {
+            conclude.mutate({ id: op.id, good: good ?? 0, rejected: rejected ?? 0, consumption: consumption ?? [] }, { onSuccess, onError });
+            return;
+          }
           const routeArg = toStatus === "separada" ? { route } : {};
-          const qualArg = toStatus === "concluida" ? { good, rejected } : {};
-          setStatus.mutate(
-            { id: op.id, op_status: toStatus, ...routeArg, ...qualArg },
-            {
-              onSuccess: () => { toast.success(`OP movida para ${toLabel}.`); setPendingMove(null); },
-              onError: (e) => toast.error(e instanceof Error ? e.message : "Não foi possível mover a OP."),
-            },
-          );
+          setStatus.mutate({ id: op.id, op_status: toStatus, ...routeArg }, { onSuccess, onError });
         }}
       />
       <ConfirmOPDialog
