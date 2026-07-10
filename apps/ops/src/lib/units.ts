@@ -40,3 +40,15 @@ export function compatibleUnits(unit: string): string[] {
 export function unitLabel(unit: string): string {
   return UNITS[norm(unit)]?.label ?? unit;
 }
+
+/** Unidade contável (peças inteiras — un, cx…). Volume/massa aceitam decimal.
+ *  Desconhecidas são tratadas como contáveis (inteiro) por segurança. */
+export function isCountUnit(unit: string): boolean {
+  const dim = UNITS[norm(unit)]?.dim;
+  return dim === "count" || dim === undefined;
+}
+
+/** Arredonda respeitando a unidade: inteiro p/ contável, 3 casas p/ vol/massa. */
+export function roundForUnit(qty: number, unit: string): number {
+  return isCountUnit(unit) ? Math.round(qty) : Math.round(qty * 1000) / 1000;
+}
