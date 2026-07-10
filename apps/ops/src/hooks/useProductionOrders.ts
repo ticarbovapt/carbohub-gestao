@@ -19,7 +19,7 @@ const db = supabase as unknown as {
 
 export type OpStatus =
   | "rascunho" | "planejada" | "aguardando_separacao" | "separada" | "aguardando_liberacao"
-  | "liberada_producao" | "em_producao" | "aguardando_confirmacao" | "confirmada"
+  | "liberada_producao" | "em_producao" | "envase" | "rotulagem" | "aguardando_confirmacao" | "confirmada"
   | "aguardando_qualidade" | "qualidade_aprovada" | "liberada" | "concluida" | "bloqueada" | "cancelada";
 
 export interface OpRow {
@@ -163,28 +163,34 @@ export function useProductionOrderMutations() {
     onSuccess: invalidate,
   });
 
-  // Muda o status da OP (mover no kanban). Ao chegar em "concluida", se a OP veio
-  // do pós-venda (source_order_id), marca o pedido como PRODUZIDO (flag) — o card
-  // não se move sozinho; alguém confere e move para "Em Separação".
+  // Muda o status da OP (mover no kanban) e dispara a movimentação de estoque:
+  //   • "separada"  → DEDUZ os insumos do HUB-RN (mrp_bom × qtd). Idempotente.
+  //   • "concluida" → CREDITA o produto: se veio do pós-venda (source_order_id),
+  //     credita pelos itens do pedido + marca PRODUZIDO; senão credita o Produto
+  //     Final da OP. O card do pós-venda não se move sozinho — alguém confere.
   const setStatus = useMutation({
     mutationFn: async (p: { id: string; op_status: OpStatus }) => {
       const res = await db.from("production_orders").update({ op_status: p.op_status }).eq("id", p.id);
       if (res.error) throw res.error;
-      if (p.op_status === "concluida") {
-        try {
+      try {
+        if (p.op_status === "separada") {
+          await db.rpc("op_deduct_materials", { p_op_id: p.id });
+        } else if (p.op_status === "concluida") {
           const op = await db.from("production_orders").select("source_order_id").eq("id", p.id).single();
           const orderId = op.data?.source_order_id;
           if (orderId) {
-            // Credita o estoque do HUB-RN + marca production_done (idempotente no banco).
             await db.rpc("pos_venda_credit_stock", { p_order_id: orderId });
+          } else {
+            await db.rpc("op_credit_product", { p_op_id: p.id });
           }
-        } catch (e) { console.error("[op-status] falha ao creditar estoque/sinalizar o pós-venda:", e); }
-      }
+        }
+      } catch (e) { console.error("[op-status] falha na movimentação de estoque:", e); }
     },
     onSuccess: () => {
       invalidate();
       qc.invalidateQueries({ queryKey: ["ops", "pos-venda"] });
       qc.invalidateQueries({ queryKey: ["ops", "hubrn-stock"] });
+      qc.invalidateQueries({ queryKey: ["ops", "mrp-products"] });
     },
   });
 
