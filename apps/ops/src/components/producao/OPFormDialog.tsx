@@ -250,10 +250,13 @@ export function OPFormDialog({ open, onOpenChange, mode, id, initial, lockQuanti
               onChange={(e) => setCustomerName(e.target.value)}
               placeholder={needsCustomer ? "Ex.: Lucas teste / Nome da empresa" : "Opcional (interno mostra a fonte + data)"}
               disabled={lockQuantity}
+              className={needsCustomer && !customerName.trim() ? "border-destructive focus-visible:ring-destructive" : undefined}
             />
-            {!needsCustomer && (
+            {needsCustomer && !customerName.trim() ? (
+              <p className="text-[11px] text-destructive">Obrigatório para venda/recorrência — informe o cliente/empresa.</p>
+            ) : !needsCustomer ? (
               <p className="text-[11px] text-muted-foreground">Para Safety Stock / PCP Manual, o card mostra a fonte e a data de criação.</p>
-            )}
+            ) : null}
           </div>
 
           {/* Data de Necessidade */}
@@ -271,7 +274,7 @@ export function OPFormDialog({ open, onOpenChange, mode, id, initial, lockQuanti
 
         <DialogFooter>
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={pending}>Cancelar</Button>
-          <Button type="button" onClick={handleSubmit} disabled={pending}>
+          <Button type="button" onClick={handleSubmit} disabled={pending || (mode === "create" && needsCustomer && !customerName.trim())}>
             {pending ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Salvando…</> : (mode === "create" ? "Criar OP" : "Salvar")}
           </Button>
         </DialogFooter>
