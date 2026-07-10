@@ -15,7 +15,7 @@ import { ClipboardList, Plus, Trash2, Loader2, AlertTriangle } from "lucide-reac
 import { toast } from "sonner";
 import { useBom, useBomMutations } from "@/hooks/useBom";
 import { useMrpProducts } from "@/hooks/useMrpProducts";
-import { compatibleUnits, unitLabel } from "@/lib/units";
+import { ALL_UNITS, unitLabel } from "@/lib/units";
 
 interface BomDialogProps {
   open: boolean;
@@ -40,7 +40,8 @@ export function BomDialog({ open, onOpenChange, productId, productName }: BomDia
   // Unidade do insumo no estoque → oferece unidades compatíveis (ex.: L → ml/L).
   const selectedInsumo = products.find((p) => p.id === insumoId);
   const stockUnit = selectedInsumo?.stock_unit || "un";
-  const unitOptions = [...new Set([...compatibleUnits(stockUnit), unit].filter(Boolean))];
+  // Dropdown completo (un, ml, L, g, kg) + preserva unidade atual se for custom.
+  const unitOptions = [...new Set([...ALL_UNITS, unit].filter(Boolean))];
 
   const handleAdd = async () => {
     if (!productId) return;

@@ -17,6 +17,9 @@ const UNITS: Record<string, UnitDef> = {
 
 const norm = (u: string) => (u || "").trim().toLowerCase();
 
+/** Todas as unidades padrão para o seletor (contagem, volume, massa). */
+export const ALL_UNITS: string[] = ["un", "ml", "l", "g", "kg"];
+
 /** Converte `qty` de `from` para `to`. Retorna null se as unidades forem de
  *  dimensões diferentes ou desconhecidas (ex.: ml → un). */
 export function convertUnit(qty: number, from: string, to: string): number | null {
