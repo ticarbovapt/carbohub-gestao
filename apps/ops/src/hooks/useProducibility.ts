@@ -93,6 +93,27 @@ export function useProducibility() {
       return line?.insumo_id ?? null;
     };
 
-    return { check, semiOf };
+    // LE: insumos-gargalo — sem estoque no HUB-RN e usados (explodindo semi) por
+    // ≥2 produtos finais/semi. Um só em falta trava várias produções.
+    const rawSetOf = (productId: string): Set<string> => {
+      const out = new Set<string>();
+      for (const b of boms.get(productId) ?? []) {
+        if (byId.get(b.insumo_id)?.category === "Semi-acabado") {
+          for (const s of boms.get(b.insumo_id) ?? []) out.add(s.insumo_id);
+        } else out.add(b.insumo_id);
+      }
+      return out;
+    };
+    const reverse = new Map<string, number>();
+    for (const p of products) {
+      if (p.category !== "Produto Final" && p.category !== "Semi-acabado") continue;
+      for (const ins of rawSetOf(p.id)) reverse.set(ins, (reverse.get(ins) ?? 0) + 1);
+    }
+    const bottlenecks = [...reverse.entries()]
+      .filter(([ins, cnt]) => cnt >= 2 && hubStock(ins) <= 0)
+      .map(([ins, cnt]) => ({ insumoId: ins, name: byId.get(ins)?.name ?? "—", affected: cnt }))
+      .sort((a, b) => b.affected - a.affected);
+
+    return { check, semiOf, bottlenecks };
   }, [products, bomByProduct]);
 }

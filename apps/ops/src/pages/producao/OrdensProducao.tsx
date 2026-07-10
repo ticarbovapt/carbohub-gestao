@@ -239,6 +239,23 @@ export default function OrdensProducao() {
           </Select>
         </div>
 
+        {/* LE: insumos-gargalo (em falta, travam vários produtos) */}
+        {canManage && producible.bottlenecks.length > 0 && (
+          <div className="rounded-xl border border-red-500/30 bg-red-500/5 p-3">
+            <div className="flex items-center gap-2 mb-1.5 text-sm font-semibold text-red-600 dark:text-red-400">
+              <XCircle className="h-4 w-4" /> Insumo em falta travando produção
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {producible.bottlenecks.map((b) => (
+                <span key={b.insumoId} className="inline-flex items-center gap-1.5 rounded-lg border border-red-500/30 bg-card px-2.5 py-1 text-xs">
+                  <span className="font-medium">{b.name}</span>
+                  <span className="text-[11px] text-muted-foreground">afeta {b.affected} produto{b.affected > 1 ? "s" : ""}</span>
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Reposição sugerida (no ponto de reposição) */}
         {canManage && suggestionsAll.length > 0 && (
           <div className="rounded-xl border border-amber-500/25 bg-amber-500/5 p-3">
