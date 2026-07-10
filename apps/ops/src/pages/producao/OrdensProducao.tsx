@@ -274,12 +274,19 @@ export default function OrdensProducao() {
                     isSkipped ? "opacity-40" : "",
                   )}
                 >
-                  <div className="rounded-t-2xl px-3 py-2.5 border-b border-border flex items-center justify-between" style={{ background: col.color + "12" }}>
+                  <div className="rounded-t-2xl px-3 py-2.5 border-b border-border flex items-center justify-between gap-2" style={{ background: col.color + "12" }}>
                     <span className="text-sm font-semibold flex items-center gap-1.5">
                       {col.emoji} {col.label}
                       {isSkipped && <span className="text-[9px] font-normal text-muted-foreground">(pula)</span>}
                     </span>
-                    <span className="text-xs font-bold rounded-full px-2 py-0.5" style={{ background: col.color + "20", color: col.color }}>{allItems.length}</span>
+                    <div className="flex items-center gap-1">
+                      {canManage && col.id === "planejada" && (
+                        <button onClick={() => { setCreateInitial(null); setCreateOpen(true); }} title="Nova OP" className="p-0.5 rounded hover:bg-black/10 text-muted-foreground hover:text-foreground transition-colors">
+                          <Plus className="h-3.5 w-3.5" />
+                        </button>
+                      )}
+                      <span className="text-xs font-bold rounded-full px-2 py-0.5" style={{ background: col.color + "20", color: col.color }}>{allItems.length}</span>
+                    </div>
                   </div>
                   <div className="p-2 space-y-2 min-h-[80px]">
                     {items.map((o) => {
