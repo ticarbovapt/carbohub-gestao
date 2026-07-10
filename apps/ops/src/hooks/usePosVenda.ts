@@ -180,8 +180,14 @@ async function ensureProductionOrderForOrder(orderId: string): Promise<boolean> 
       ? String(items[0].name ?? "Produto")
       : `${items.length} itens · pedido ${ord.data.order_number ?? ""}`.trim();
 
+  // Pedido de um produto só → vincula o product_id (Produto Final do MRP) para o
+  // check de materiais achar a BOM. Pedido com vários produtos fica sem vínculo
+  // (uma OP não representa uma cesta de produtos distintos).
+  const singleProductId = items.length === 1 ? (items[0].product_id || null) : null;
+
   const ins = await db.from("production_orders").insert({
     sku_id: null,
+    product_id: singleProductId,
     planned_quantity: totalQty,
     op_status: "rascunho",           // → coluna Backlog
     demand_source: "venda",          // enum fixo; a origem pós-venda fica em deviation_notes + source_order_id
