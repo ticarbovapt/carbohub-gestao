@@ -8,11 +8,14 @@ import { CarboSearchInput } from "@/components/ui/carbo-input";
 import {
   CarboTable, CarboTableHeader, CarboTableBody, CarboTableRow, CarboTableHead, CarboTableCell,
 } from "@/components/ui/carbo-table";
-import { Package, Plus, ClipboardList, Pencil, AlertTriangle, AlertCircle, CheckCircle, Loader2 } from "lucide-react";
+import { Package, Plus, ClipboardList, Pencil, Trash2, AlertTriangle, AlertCircle, CheckCircle, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { MrpProductFormDialog } from "@/components/producao/MrpProductFormDialog";
 import { BomDialog } from "@/components/producao/BomDialog";
+import { DeleteConfirmDialog } from "@/components/producao/DeleteConfirmDialog";
 import { useMrpProducts, type MrpProduct } from "@/hooks/useMrpProducts";
+import { useMrpProductMutations } from "@/hooks/useMrpProductMutations";
+import { toast } from "sonner";
 
 const CATEGORY_FILTER_TABS = [
   { key: "all", label: "Todos" },
@@ -49,8 +52,10 @@ export default function ProdutosMrp() {
   const [createOpen, setCreateOpen] = useState(false);
   const [editProduct, setEditProduct] = useState<MrpProduct | null>(null);
   const [bomProduct, setBomProduct] = useState<MrpProduct | null>(null);
+  const [deleteProduct, setDeleteProduct] = useState<MrpProduct | null>(null);
 
   const { data: products = [], isLoading, error } = useMrpProducts();
+  const { remove, deactivate } = useMrpProductMutations();
 
   const filtered = products.filter((p) => {
     if (categoryFilter !== "all" && p.category !== categoryFilter) return false;
@@ -153,7 +158,14 @@ export default function ProdutosMrp() {
                                 ))}
                               </div>
                             </CarboTableCell>
-                            {canEdit && <CarboTableCell><button onClick={() => setEditProduct(p)} className="p-1.5 hover:bg-muted rounded-md"><Pencil className="h-3.5 w-3.5 text-muted-foreground" /></button></CarboTableCell>}
+                            {canEdit && (
+                              <CarboTableCell>
+                                <div className="flex items-center gap-0.5">
+                                  <button onClick={() => setEditProduct(p)} className="p-1.5 hover:bg-muted rounded-md" title="Editar"><Pencil className="h-3.5 w-3.5 text-muted-foreground" /></button>
+                                  <button onClick={() => setDeleteProduct(p)} className="p-1.5 hover:bg-destructive/10 rounded-md" title="Excluir"><Trash2 className="h-3.5 w-3.5 text-destructive" /></button>
+                                </div>
+                              </CarboTableCell>
+                            )}
                           </CarboTableRow>
                         );
                       })}
@@ -189,6 +201,33 @@ export default function ProdutosMrp() {
         onOpenChange={(v) => { if (!v) setBomProduct(null); }}
         productId={bomProduct?.id ?? null}
         productName={bomProduct?.name ?? ""}
+      />
+      <DeleteConfirmDialog
+        open={!!deleteProduct}
+        onOpenChange={(v) => { if (!v) setDeleteProduct(null); }}
+        title="Excluir produto?"
+        description={`"${deleteProduct?.name ?? ""}" será removido do catálogo. Só é possível excluir produtos sem estoque, sem BOM que os use como insumo e sem OP. Se tiver vínculo, desative em vez de excluir.`}
+        onConfirm={deleteProduct ? async () => {
+          try {
+            await remove.mutateAsync({ id: deleteProduct.id, name: deleteProduct.name });
+            toast.success("Produto excluído.");
+            setDeleteProduct(null);
+          } catch (e) {
+            const msg = e instanceof Error ? e.message : "Não foi possível excluir.";
+            // Se travou por vínculo, oferece desativar.
+            toast.error(msg, {
+              duration: 10000,
+              action: {
+                label: "Desativar",
+                onClick: async () => {
+                  try { await deactivate.mutateAsync(deleteProduct.id); toast.success("Produto desativado."); setDeleteProduct(null); }
+                  catch (er) { toast.error(er instanceof Error ? er.message : "Falha ao desativar."); }
+                },
+              },
+            });
+            setDeleteProduct(null);
+          }
+        } : undefined}
       />
     </div>
   );
