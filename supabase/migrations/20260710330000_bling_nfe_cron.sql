@@ -15,12 +15,13 @@
 -- casamento); o detalhe é capado em 150/execução, então o histórico é
 -- enriquecido em rodadas sem estourar tempo.
 --
+-- OBS: pg_cron/pg_net JÁ estão instalados (os crons existentes usam). NÃO usar
+-- CREATE EXTENSION aqui — re-criar dispara o after-create com grants que
+-- conflitam no Supabase ("dependent privileges exist").
+--
 -- ⚠️ X-Cron-Secret DEVE ser igual ao env CRON_SECRET da function bling-sync
 -- (mesmo segredo já usado pelos crons existentes). Se rotacionar, atualize aqui.
 -- ─────────────────────────────────────────────────────────────────────────────
-
-CREATE EXTENSION IF NOT EXISTS pg_cron WITH SCHEMA extensions;
-CREATE EXTENSION IF NOT EXISTS pg_net WITH SCHEMA extensions;
 
 -- Remove versão anterior (por nome) para não duplicar ao reaplicar.
 DO $$
