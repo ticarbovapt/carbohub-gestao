@@ -10,6 +10,7 @@ import { CarboSkeleton } from "@/components/ui/CarboSkeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { NfeLinkSuggestions } from "./NfeLinkSuggestions";
 import { BaixarNFButton } from "./BaixarNFButton";
+import { Pager, useUrlPage, paginate } from "./Pager";
 import {
   useOrphanNFes, useLinkableOrders, useLinkNFeToOrder, type OrphanNFe,
 } from "@/hooks/useNfeLinking";
@@ -73,6 +74,8 @@ export function VincularNFsTab() {
   const [search, setSearch] = useState("");
   const { data: orphans = [], isLoading } = useOrphanNFes(search);
   const [linking, setLinking] = useState<OrphanNFe | null>(null);
+  const [page, setPage] = useUrlPage("pvinc");
+  const pag = paginate(orphans, page);
 
   return (
     <div className="space-y-4">
@@ -88,7 +91,7 @@ export function VincularNFsTab() {
               <p className="text-xs text-muted-foreground">Baixe o PDF ou vincule ao pedido certo manualmente (o que as sugestões não casaram).</p>
             </div>
             <div className="w-full sm:w-72">
-              <CarboSearchInput placeholder="Buscar NF por nº ou cliente…" value={search} onChange={(e) => setSearch(e.target.value)} />
+              <CarboSearchInput placeholder="Buscar NF por nº ou cliente…" value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }} />
             </div>
           </div>
 
@@ -108,7 +111,7 @@ export function VincularNFsTab() {
                 </CarboTableRow>
               </CarboTableHeader>
               <CarboTableBody>
-                {orphans.map((n) => (
+                {pag.slice.map((n) => (
                   <CarboTableRow key={n.id}>
                     <CarboTableCell>
                       <CarboBadge variant="secondary" className="gap-1"><FileText className="h-3 w-3" /> {n.numero || n.bling_id}{n.serie ? `/${n.serie}` : ""}</CarboBadge>
@@ -129,6 +132,8 @@ export function VincularNFsTab() {
               </CarboTableBody>
             </CarboTable>
           )}
+
+          {!isLoading && <Pager page={pag.safePage} pageCount={pag.pageCount} total={orphans.length} onPage={setPage} />}
         </CarboCardContent>
       </CarboCard>
 

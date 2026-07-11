@@ -7,6 +7,7 @@ import { CarboTable, CarboTableHeader, CarboTableBody, CarboTableRow, CarboTable
 import { CarboEmptyState } from "@/components/ui/carbo-empty-state";
 import { CarboSkeleton } from "@/components/ui/CarboSkeleton";
 import { BaixarNFButton } from "./BaixarNFButton";
+import { Pager, useUrlPage, paginate } from "./Pager";
 import { useAllNFes } from "@/hooks/useNfeLinking";
 
 const fmtBRL = (v: number | null) => (v ?? 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -21,6 +22,8 @@ const fmtDate = (s: string | null) => {
 export function TodasNFsTab() {
   const [search, setSearch] = useState("");
   const { data: nfes = [], isLoading } = useAllNFes(search);
+  const [page, setPage] = useUrlPage("ptodas");
+  const pag = paginate(nfes, page);
 
   return (
     <CarboCard>
@@ -31,7 +34,7 @@ export function TodasNFsTab() {
             <p className="text-xs text-muted-foreground">Todas as NFs do Bling — baixe o PDF de qualquer uma. Busque por nº, cliente ou pedido.</p>
           </div>
           <div className="w-full sm:w-72">
-            <CarboSearchInput placeholder="Buscar por nº da NF, cliente ou pedido…" value={search} onChange={(e) => setSearch(e.target.value)} />
+            <CarboSearchInput placeholder="Buscar por nº da NF, cliente ou pedido…" value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }} />
           </div>
         </div>
 
@@ -52,7 +55,7 @@ export function TodasNFsTab() {
               </CarboTableRow>
             </CarboTableHeader>
             <CarboTableBody>
-              {nfes.map((n) => (
+              {pag.slice.map((n) => (
                 <CarboTableRow key={n.id}>
                   <CarboTableCell>
                     <CarboBadge variant="secondary" className="gap-1"><FileText className="h-3 w-3" /> {n.numero || n.bling_id}{n.serie ? `/${n.serie}` : ""}</CarboBadge>
@@ -77,6 +80,8 @@ export function TodasNFsTab() {
             </CarboTableBody>
           </CarboTable>
         )}
+
+        {!isLoading && <Pager page={pag.safePage} pageCount={pag.pageCount} total={nfes.length} onPage={setPage} />}
       </CarboCardContent>
     </CarboCard>
   );

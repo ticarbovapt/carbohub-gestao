@@ -22,6 +22,7 @@ import { BlingConfirmDialog } from "@/components/faturamento/BlingConfirmDialog"
 import { BaixarNFButton } from "@/components/faturamento/BaixarNFButton";
 import { VincularNFsTab } from "@/components/faturamento/VincularNFsTab";
 import { TodasNFsTab } from "@/components/faturamento/TodasNFsTab";
+import { Pager, useUrlPage, paginate } from "@/components/faturamento/Pager";
 
 const MONTHS = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
 
@@ -96,8 +97,18 @@ export default function Faturamento() {
   const bling = useMemo(() => list.filter(isBling), [list]);
   const soma = (rows: FaturamentoOrder[]) => rows.reduce((s, o) => s + Number(o.total || 0), 0);
 
-  const changeMonth = (delta: number) =>
+  // Paginação (20/pág) das abas sistema e Bling — página na URL (persiste no F5).
+  const [pSist, setPSist] = useUrlPage("psist");
+  const [pBling, setPBling] = useUrlPage("pbling");
+  const sistPag = paginate(sistema, pSist);
+  const blingPag = paginate(bling, pBling);
+  // Nova busca/mês → volta pra página 1 das listas paginadas.
+  const resetPages = () => { setPSist(1); setPBling(1); };
+
+  const changeMonth = (delta: number) => {
+    resetPages();
     setMonth((m) => new Date(m.getFullYear(), m.getMonth() + delta, 1));
+  };
 
   function Tabela({ rows, showAction }: { rows: FaturamentoOrder[]; showAction: boolean }) {
     if (isLoading) {
@@ -202,7 +213,7 @@ export default function Faturamento() {
               <CarboButton variant="outline" size="icon" onClick={() => changeMonth(1)} aria-label="Próximo mês"><ChevronRight className="h-4 w-4" /></CarboButton>
             </div>
             <div className="flex-1 min-w-48">
-              <CarboSearchInput placeholder="Buscar por cliente ou nº do pedido (busca global)…" value={search} onChange={(e) => setSearch(e.target.value)} />
+              <CarboSearchInput placeholder="Buscar por cliente ou nº do pedido (busca global)…" value={search} onChange={(e) => { setSearch(e.target.value); resetPages(); }} />
             </div>
             <label className="flex items-center gap-2 text-sm text-muted-foreground whitespace-nowrap">
               <Switch checked={showAll} onCheckedChange={setShowAll} /> Mostrar já faturados
@@ -220,7 +231,10 @@ export default function Faturamento() {
           </TabsList>
 
           <TabsContent value="sistema" className="mt-4">
-            <CarboCard><CarboCardContent className="pt-6"><Tabela rows={sistema} showAction /></CarboCardContent></CarboCard>
+            <CarboCard><CarboCardContent className="pt-6">
+              <Tabela rows={sistPag.slice} showAction />
+              <Pager page={sistPag.safePage} pageCount={sistPag.pageCount} total={sistema.length} onPage={setPSist} />
+            </CarboCardContent></CarboCard>
             <p className="text-xs text-muted-foreground mt-3">
               Fluxo: <strong>Criar no Bling</strong> envia o pedido pro Bling (o nº <code>V…</code> vai na observação) e abre o Bling
               pra você conferir e emitir a NF-e. A sincronização casa a NF ao pedido pela observação — o pedido continua aqui como
@@ -229,7 +243,10 @@ export default function Faturamento() {
           </TabsContent>
 
           <TabsContent value="bling" className="mt-4">
-            <CarboCard><CarboCardContent className="pt-6"><Tabela rows={bling} showAction={false} /></CarboCardContent></CarboCard>
+            <CarboCard><CarboCardContent className="pt-6">
+              <Tabela rows={blingPag.slice} showAction={false} />
+              <Pager page={blingPag.safePage} pageCount={blingPag.pageCount} total={bling.length} onPage={setPBling} />
+            </CarboCardContent></CarboCard>
             <p className="text-xs text-muted-foreground mt-3">
               Pedidos criados <strong>direto no Bling</strong> (não nasceram de uma venda do sistema) e vendas do sistema já enviadas
               ao Bling — ficam aqui para rastreabilidade. <strong>Sem NF</strong> = a nota ainda não foi emitida no Bling (só existe o
