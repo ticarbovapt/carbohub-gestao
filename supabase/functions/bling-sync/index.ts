@@ -972,6 +972,82 @@ function extractValorNota(d: any): number | null {
   return v != null ? Number(v) : null;
 }
 
+// ── Resolução da observação (nº do pedido V… / PED-…) ──────────────────────
+// O código do pedido fica em "Dados adicionais / Observações" do DANFE. O JSON
+// do detalhe do Bling NEM SEMPRE traz esse texto (ou traz com outro nome), mas
+// o XML SEMPRE traz — é dele que o DANFE é renderizado, na tag <infAdic><infCpl>.
+// Por isso a resolução tenta, em ordem: (1) campos diretos do JSON, (2) varredura
+// profunda do JSON, (3) o XML (fonte de verdade). Assim o casamento automático
+// funciona para 100% das NFs autorizadas, sem depender do formato do JSON.
+const OBS_CODE_REGEX = /(V\d{10}|PED-\d{4}-\d{5})/i;
+
+// Decodifica as entidades XML básicas que aparecem em <infCpl> (&amp; etc.).
+function decodeXmlEntities(s: string): string {
+  return s
+    .replace(/&lt;/g, "<").replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"').replace(/&apos;/g, "'")
+    .replace(/&amp;/g, "&");
+}
+
+// Varre qualquer valor string na árvore do objeto procurando o código do pedido.
+function deepFindCode(obj: any, depth = 0): string | null {
+  if (obj == null || depth > 6) return null;
+  if (typeof obj === "string") return OBS_CODE_REGEX.test(obj) ? obj : null;
+  if (typeof obj !== "object") return null;
+  for (const v of Object.values(obj)) {
+    const found = deepFindCode(v, depth + 1);
+    if (found) return found;
+  }
+  return null;
+}
+
+// Baixa o XML da NF e extrai as informações complementares (<infCpl>) e de fisco
+// (<infAdFisco>) — onde mora a observação com o nº do pedido e o vendedor.
+async function extractObsFromXml(xmlUrl: string): Promise<string | null> {
+  try {
+    const res = await fetch(xmlUrl);
+    if (!res.ok) return null;
+    const xml = await res.text();
+    const parts: string[] = [];
+    const cpl   = xml.match(/<infCpl>([\s\S]*?)<\/infCpl>/i);
+    const fisco = xml.match(/<infAdFisco>([\s\S]*?)<\/infAdFisco>/i);
+    if (cpl?.[1])   parts.push(decodeXmlEntities(cpl[1].trim()));
+    if (fisco?.[1]) parts.push(decodeXmlEntities(fisco[1].trim()));
+    const joined = parts.join(" ").trim();
+    return joined || null;
+  } catch (e) {
+    console.error("[bling-sync] extractObsFromXml failed:", e);
+    return null;
+  }
+}
+
+// Resolve a observação da NF a partir do detalhe do Bling (+ XML como fallback).
+async function resolveNfeObs(d: any, xmlUrl?: string | null): Promise<string | null> {
+  // 1. Campos diretos do JSON (às vezes string, às vezes objeto aninhado).
+  let obs: any = d?.informacoesAdicionais ?? d?.observacoes ?? null;
+  if (obs && typeof obs === "object") {
+    obs = obs.informacoesAdicionaisContribuinte
+      || obs.informacoesComplementares
+      || obs.informacoesAdicionaisContribuente
+      || null;
+  }
+  if (typeof obs === "string" && OBS_CODE_REGEX.test(obs)) return obs;
+
+  // 2. Varredura profunda do JSON (campo pode ter outro nome/aninhamento).
+  const deep = deepFindCode(d);
+  if (deep) return deep;
+
+  // 3. XML — fonte de verdade do DANFE; SEMPRE tem <infCpl> quando emitido pelo sistema.
+  const link = xmlUrl || d?.xml || d?.linkXml || d?.linkXML || null;
+  if (link) {
+    const fromXml = await extractObsFromXml(link);
+    if (fromXml) return fromXml;
+  }
+
+  // 4. Fallback: qualquer texto de observação do JSON, mesmo sem código.
+  return typeof obs === "string" ? obs : null;
+}
+
 // ── syncNFe: busca notas fiscais emitidas do Bling ─────────────────────────
 // Passo 1: lista + upsert básico
 // Passo 2: busca detalhe (observação + valor + CNPJ + situação) para NFs sem detalhe
@@ -1026,7 +1102,7 @@ async function syncNFe(
   // O cron chama sync periodicamente, então o histórico é enriquecido em rodadas.
   const { data: needsDetail } = await supabaseAdmin
     .from("bling_nfe")
-    .select("id, bling_id")
+    .select("id, bling_id, xml_url")
     .is("informacoes_adicionais", null)
     .in("match_status", ["pending"])
     .limit(150);
@@ -1036,8 +1112,8 @@ async function syncNFe(
     try {
       const detail = await blingFetch(token, `/nfe/${nf.bling_id}`, 1, 1);
       const d = detail.data || {};
-      // Bling API v3 usa "informacoesAdicionais" para NF; fallback "observacoes"
-      const obs = d.informacoesAdicionais || d.observacoes || null;
+      // Observação (nº do pedido V…) do JSON ou, se faltar, do XML (fonte de verdade).
+      const obs = await resolveNfeObs(d, d.xml || nf.xml_url);
 
       const update: Record<string, any> = {
         informacoes_adicionais: obs,
@@ -1077,7 +1153,7 @@ async function syncNFe(
     .toISOString().split("T")[0];
   const { data: recheckNoCode } = await supabaseAdmin
     .from("bling_nfe")
-    .select("id, bling_id")
+    .select("id, bling_id, xml_url")
     .eq("match_status", "no_code")
     .gte("data_emissao", noCodeCutoff)
     .order("updated_at", { ascending: true })
@@ -1088,7 +1164,7 @@ async function syncNFe(
     try {
       const detail = await blingFetch(token, `/nfe/${nf.bling_id}`, 1, 1);
       const d = detail.data || {};
-      const obs = d.informacoesAdicionais || d.observacoes || null;
+      const obs = await resolveNfeObs(d, d.xml || nf.xml_url);
       await supabaseAdmin.from("bling_nfe").update({
         informacoes_adicionais: obs,
         // volta para "pending" só se há observação para reavaliar; senão segue no_code
@@ -1831,17 +1907,31 @@ Deno.serve(async (req: Request): Promise<Response> => {
           d.pdf || d.linkPDF || d.linkPdf || d.linkDanfe || d.danfe || d.link || null;
         const xml = d.xml || d.linkXml || d.linkXML || null;
 
-        // Cacheia no banco se achou algo
-        if (pdf || xml) {
+        // Auto-cura: ao baixar a NF, também resolve a observação (nº do pedido)
+        // — do JSON ou do XML — e persiste. Se ela tiver o código e a NF ainda
+        // não estiver vinculada, dispara o casamento na hora. Assim o simples ato
+        // de baixar a NF já vincula o pedido, sem esperar o cron.
+        const obs = await resolveNfeObs(d, xml);
+        const hasCode = !!(obs && OBS_CODE_REGEX.test(obs));
+
+        // Cacheia links + observação se achou algo
+        if (pdf || xml || obs) {
           await supabaseAdmin.from("bling_nfe").update({
             ...(pdf ? { pdf_url: pdf } : {}),
             ...(xml ? { xml_url: xml } : {}),
+            ...(obs ? { informacoes_adicionais: obs } : {}),
+            ...(hasCode ? { match_status: "pending" } : {}),
             updated_at: new Date().toISOString(),
           }).eq("bling_id", Number(blingNfId));
         }
 
+        // Tenta vincular imediatamente (operação só-DB, rápida).
+        if (hasCode) {
+          try { await matchNFesToOrders(supabaseAdmin); } catch (_) { /* best-effort */ }
+        }
+
         return new Response(
-          JSON.stringify({ success: true, pdf, xml, situacao: d.situacao ?? null, keys: Object.keys(d) }),
+          JSON.stringify({ success: true, pdf, xml, obs, matched: hasCode, situacao: d.situacao ?? null, keys: Object.keys(d) }),
           { status: 200, headers: { "Content-Type": "application/json", ...corsHeaders } }
         );
       } catch (e) {
