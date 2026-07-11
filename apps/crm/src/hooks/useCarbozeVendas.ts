@@ -177,7 +177,15 @@ export interface NfFiles {
   numero: string | null;
 }
 
-/** Busca os arquivos (PDF/XML) da NF vinculada a um pedido, pelo bling_nf_id. */
+/**
+ * Busca os arquivos (PDF/XML) da NF vinculada a um pedido, pelo bling_nf_id.
+ *
+ * A lista do Bling NÃO traz o link do DANFE — só o detalhe GET /nfe/{id}. Por
+ * isso o `bling_nfe.pdf_url` do cache costuma vir null. Quando faltar, buscamos
+ * o link AO VIVO na edge function `bling-sync` (entity `nfe_links`), que busca
+ * no Bling e cacheia — mesmo caminho do Finanças (useNfeLinks). Assim o botão
+ * "Baixar NF" do Sales funciona sem depender do cache estar preenchido.
+ */
 export async function fetchNfFiles(blingNfId: number): Promise<NfFiles | null> {
   const { data, error } = await db
     .from("bling_nfe")
@@ -185,7 +193,24 @@ export async function fetchNfFiles(blingNfId: number): Promise<NfFiles | null> {
     .eq("bling_id", blingNfId)
     .maybeSingle();
   if (error) throw error;
-  return (data as NfFiles) ?? null;
+
+  const cached = (data as NfFiles) ?? null;
+  if (cached?.pdf_url || cached?.xml_url) return cached;
+
+  // Cache sem link — busca ao vivo no Bling (e cacheia pdf_url pra próxima vez).
+  const res = await supabase.functions.invoke("bling-sync", {
+    body: { entity: "nfe_links", bling_nf_id: blingNfId },
+  });
+  if (!res.data?.success) {
+    // Deixa o cache (pode ter chave/numero) e sinaliza que não veio arquivo.
+    return cached;
+  }
+  return {
+    pdf_url: res.data.pdf ?? cached?.pdf_url ?? null,
+    xml_url: res.data.xml ?? cached?.xml_url ?? null,
+    chave_acesso: cached?.chave_acesso ?? null,
+    numero: cached?.numero ?? null,
+  };
 }
 
 /** Atribui vendedor (perfil) a vários pedidos de uma vez — grava vendedor_id/name. */
