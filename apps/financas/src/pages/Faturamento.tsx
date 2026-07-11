@@ -57,7 +57,10 @@ const nfUnlocked = (o: FaturamentoOrder) => {
 export default function Faturamento() {
   const [month, setMonth] = useState(() => new Date());
   const [search, setSearch] = useState("");
-  const [showAll, setShowAll] = useState(false);
+  // Padrão: mostra TODOS os pedidos do mês (com e sem NF) — é uma tela de
+  // rastreabilidade/faturamento. Desligar "Mostrar já faturados" filtra para
+  // ver só os pendentes (sem NF vinculada).
+  const [showAll, setShowAll] = useState(true);
 
   const { data: orders, isLoading } = useFaturamento({ month, search, showAll });
   // Pedido em confirmação: abre o diálogo que mostra o que vai pro Bling (inclui
@@ -195,16 +198,18 @@ export default function Faturamento() {
             <CarboCard><CarboCardContent className="pt-6"><Tabela rows={sistema} showAction /></CarboCardContent></CarboCard>
             <p className="text-xs text-muted-foreground mt-3">
               Fluxo: <strong>Criar no Bling</strong> envia o pedido pro Bling (o nº <code>V…</code> vai na observação) e abre o Bling
-              pra você conferir e emitir a NF-e. A sincronização casa a NF ao pedido pela observação e ele sai da fila — com o vendedor já vinculado.
+              pra você conferir e emitir a NF-e. A sincronização casa a NF ao pedido pela observação — o pedido continua aqui como
+              <strong> Faturado</strong> (com a NF pra baixar). Desligue <em>“Mostrar já faturados”</em> pra ver só os pendentes.
             </p>
           </TabsContent>
 
           <TabsContent value="bling" className="mt-4">
             <CarboCard><CarboCardContent className="pt-6"><Tabela rows={bling} showAction={false} /></CarboCardContent></CarboCard>
             <p className="text-xs text-muted-foreground mt-3">
-              Pedidos criados <strong>direto no Bling</strong> (não nasceram de uma venda do sistema). Ficam aqui para rastreabilidade
-              de valores. Quando a NF de uma venda do sistema é emitida com o <code>V…</code> na observação, ela casa automaticamente e
-              deixa de aparecer aqui. Os que sobram foram feitos por fora — o que é normal.
+              Pedidos criados <strong>direto no Bling</strong> (não nasceram de uma venda do sistema) e vendas do sistema já enviadas
+              ao Bling — ficam aqui para rastreabilidade. <strong>Sem NF</strong> = a nota ainda não foi emitida no Bling (só existe o
+              pedido de venda). Quando a NF é emitida com o <code>V…</code> na observação, ela casa automaticamente e o pedido passa a
+              mostrar a NF pra baixar. Desligue <em>“Mostrar já faturados”</em> pra ver só os que ainda estão sem NF.
             </p>
           </TabsContent>
 
