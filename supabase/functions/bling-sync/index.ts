@@ -1914,16 +1914,17 @@ Deno.serve(async (req: Request): Promise<Response> => {
         const obs = await resolveNfeObs(d, xml);
         const hasCode = !!(obs && OBS_CODE_REGEX.test(obs));
 
-        // Cacheia links + observação se achou algo
-        if (pdf || xml || obs) {
-          await supabaseAdmin.from("bling_nfe").update({
-            ...(pdf ? { pdf_url: pdf } : {}),
-            ...(xml ? { xml_url: xml } : {}),
-            ...(obs ? { informacoes_adicionais: obs } : {}),
-            ...(hasCode ? { match_status: "pending" } : {}),
-            updated_at: new Date().toISOString(),
-          }).eq("bling_id", Number(blingNfId));
-        }
+        // Cacheia links + observação + o DETALHE completo (raw_data) — o detalhe
+        // é bem mais rico que o item de lista e serve de fonte para diagnóstico
+        // e reprocessamento futuro.
+        await supabaseAdmin.from("bling_nfe").update({
+          ...(pdf ? { pdf_url: pdf } : {}),
+          ...(xml ? { xml_url: xml } : {}),
+          ...(obs ? { informacoes_adicionais: obs } : {}),
+          ...(hasCode ? { match_status: "pending" } : {}),
+          raw_data: d,
+          updated_at: new Date().toISOString(),
+        }).eq("bling_id", Number(blingNfId));
 
         // Tenta vincular imediatamente (operação só-DB, rápida).
         if (hasCode) {
