@@ -96,9 +96,15 @@ export default function BlingIntegration() {
   };
 
   const loadSyncLogs = async () => {
+    // Esconde as rodadas AUTOMÁTICAS de NF-e (cron de hora em hora) — elas têm
+    // triggered_by NULL e, sendo 24/dia, inundavam o histórico só com "Nfe".
+    // O histórico passa a mostrar o que as pessoas dispararam + o sync geral
+    // diário. Mantém: qualquer entidade ≠ nfe, ou qualquer coisa disparada por
+    // um usuário (triggered_by preenchido).
     const { data } = await supabase
       .from("bling_sync_log")
       .select("*")
+      .or("entity_type.neq.nfe,triggered_by.not.is.null")
       .order("started_at", { ascending: false })
       .limit(10);
     if (data) setSyncLogs(data as SyncLog[]);
