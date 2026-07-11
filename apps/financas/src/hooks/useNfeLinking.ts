@@ -175,6 +175,42 @@ export function useOrphanNFes(search = "") {
   });
 }
 
+export interface AllNFe {
+  id: string;
+  bling_id: number;
+  numero: string | null;
+  serie: string | null;
+  contato_nome: string | null;
+  valor_total: number | null;
+  data_emissao: string | null;
+  match_status: string | null;
+  matched_order_number: string | null;
+  order_id: string | null;
+}
+
+/** TODAS as NFs do Bling (vinculadas ou não) — pra localizar e baixar qualquer uma. */
+export function useAllNFes(search = "") {
+  return useQuery({
+    queryKey: ["all-nfes", search.trim()],
+    staleTime: 30_000,
+    queryFn: async (): Promise<AllNFe[]> => {
+      const { data, error } = await supabase
+        .from("bling_nfe")
+        .select("id, bling_id, numero, serie, contato_nome, valor_total, data_emissao, match_status, matched_order_number, order_id")
+        .order("data_emissao", { ascending: false })
+        .limit(1000);
+      if (error) throw error;
+      let rows = (data || []) as AllNFe[];
+      const q = search.trim().toLowerCase();
+      if (q) rows = rows.filter((n) =>
+        (n.contato_nome || "").toLowerCase().includes(q) ||
+        (n.numero || "").includes(q) ||
+        (n.matched_order_number || "").toLowerCase().includes(q));
+      return rows;
+    },
+  });
+}
+
 export interface LinkableOrder {
   id: string;
   order_number: string;

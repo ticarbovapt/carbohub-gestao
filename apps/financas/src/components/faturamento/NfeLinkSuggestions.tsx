@@ -70,7 +70,8 @@ function SuggestionRow({ s, dismiss }: { s: NfeLinkSuggestion; dismiss: (id: str
 
 export function NfeLinkSuggestions() {
   const { data: suggestions = [], isLoading } = useNfeLinkSuggestions();
-  const [open, setOpen] = useState(true);
+  // Começa FECHADA — o usuário abre quando quiser revisar as sugestões.
+  const [open, setOpen] = useState(false);
   const [dismissed, setDismissed] = useState<Set<string>>(new Set());
 
   const dismiss = (orderId: string) => setDismissed((prev) => new Set(prev).add(orderId));

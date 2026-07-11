@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import {
-  Receipt, FileText, ChevronLeft, ChevronRight, CheckCircle2, DollarSign, Store, Building2, Lock, Link2,
+  Receipt, FileText, ChevronLeft, ChevronRight, CheckCircle2, DollarSign, Store, Building2, Lock, Link2, Files,
 } from "lucide-react";
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
 import { CarboButton } from "@/components/ui/carbo-button";
@@ -20,6 +21,7 @@ import {
 import { BlingConfirmDialog } from "@/components/faturamento/BlingConfirmDialog";
 import { BaixarNFButton } from "@/components/faturamento/BaixarNFButton";
 import { VincularNFsTab } from "@/components/faturamento/VincularNFsTab";
+import { TodasNFsTab } from "@/components/faturamento/TodasNFsTab";
 
 const MONTHS = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
 
@@ -70,6 +72,13 @@ const nfUnlocked = (o: FaturamentoOrder) => {
 export default function Faturamento() {
   const [month, setMonth] = useState(() => new Date());
   const [search, setSearch] = useState("");
+  // Aba ativa persistida na URL (?tab=…), pra não voltar pro "sistema" a cada F5.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const VALID_TABS = ["sistema", "bling", "vincular", "todas"];
+  const rawTab = searchParams.get("tab") || "sistema";
+  const activeTab = VALID_TABS.includes(rawTab) ? rawTab : "sistema";
+  const setActiveTab = (v: string) =>
+    setSearchParams((prev) => { prev.set("tab", v); return prev; }, { replace: true });
   // Padrão: mostra TODOS os pedidos do mês (com e sem NF) — é uma tela de
   // rastreabilidade/faturamento. Desligar "Mostrar já faturados" filtra para
   // ver só os pendentes (sem NF vinculada).
@@ -201,12 +210,13 @@ export default function Faturamento() {
           </CarboCardContent>
         </CarboCard>
 
-        {/* Abas: sistema vs Bling vs vínculo de NFs */}
-        <Tabs defaultValue="sistema">
+        {/* Abas: sistema vs Bling vs vínculo de NFs vs todas as NFs */}
+        <Tabs value={activeTab} onValueChange={setActiveTab}>
           <TabsList>
             <TabsTrigger value="sistema" className="gap-2"><Building2 className="h-4 w-4" /> Vendas do sistema ({sistema.length})</TabsTrigger>
             <TabsTrigger value="bling" className="gap-2"><Store className="h-4 w-4" /> Do Bling ({bling.length})</TabsTrigger>
             <TabsTrigger value="vincular" className="gap-2"><Link2 className="h-4 w-4" /> Vincular NFs</TabsTrigger>
+            <TabsTrigger value="todas" className="gap-2"><Files className="h-4 w-4" /> Todas as NFs</TabsTrigger>
           </TabsList>
 
           <TabsContent value="sistema" className="mt-4">
@@ -230,6 +240,10 @@ export default function Faturamento() {
 
           <TabsContent value="vincular" className="mt-4">
             <VincularNFsTab />
+          </TabsContent>
+
+          <TabsContent value="todas" className="mt-4">
+            <TodasNFsTab />
           </TabsContent>
         </Tabs>
       </div>
