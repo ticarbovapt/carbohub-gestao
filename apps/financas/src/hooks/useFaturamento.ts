@@ -27,6 +27,10 @@ export interface FaturamentoOrder {
   status: string;
   vendedor_name: string | null;
   external_ref: string | null;
+  // Observação importada do pedido do Bling. Quando um pedido BLING-… traz aqui
+  // o nº de uma venda do sistema (V…), ele é o MESMO pedido — a tela o esconde
+  // pra não duplicar (a NF casa com a venda do sistema).
+  notes: string | null;
   // Fiscal / PO
   ie: string | null;
   po_number: string | null;

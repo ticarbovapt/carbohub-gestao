@@ -32,6 +32,15 @@ const isBling = (o: FaturamentoOrder) =>
   (o.external_ref ?? "").toLowerCase().startsWith("bling") ||
   (o.order_number ?? "").toUpperCase().startsWith("BLING-");
 
+// Duplicado: um pedido criado no Bling que traz na observação (notes) o nº de
+// uma venda do sistema (V…). É o MESMO pedido — a NF vai casar com a venda do
+// sistema (por esse código), então escondemos o registro do Bling pra não
+// aparecer duas vezes nem contar o valor em dobro. O código V… só é gerado pelo
+// sistema, então a presença dele já identifica o duplicado (independe do mês).
+const SYSTEM_CODE_RE = /V\d{10}/i;
+const isBlingDupOfSystem = (o: FaturamentoOrder) =>
+  isBling(o) && SYSTEM_CODE_RE.test(o.notes ?? "");
+
 // Funil do Pós-venda (Carbo Ops). O Faturamento só libera a emissão da NF quando
 // o card chega em "gerar_nf" (ou além). Antes disso o pedido aparece na lista,
 // mas o botão fica travado mostrando em que etapa do pós-venda ele está.
@@ -67,7 +76,9 @@ export default function Faturamento() {
   // o pré-cadastro do cliente, se for novo) para o financeiro conferir e confirmar.
   const [toBling, setToBling] = useState<FaturamentoOrder | null>(null);
 
-  const list = orders ?? [];
+  // Remove os pedidos do Bling que são duplicata de uma venda do sistema (V… na
+  // observação) — some da lista, some dos KPIs, some da contagem das abas.
+  const list = useMemo(() => (orders ?? []).filter((o) => !isBlingDupOfSystem(o)), [orders]);
   const sistema = useMemo(() => list.filter((o) => !isBling(o)), [list]);
   const bling = useMemo(() => list.filter(isBling), [list]);
   const soma = (rows: FaturamentoOrder[]) => rows.reduce((s, o) => s + Number(o.total || 0), 0);
