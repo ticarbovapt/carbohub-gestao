@@ -32,6 +32,7 @@ interface SyncLog {
   error_message: string | null;
   started_at: string;
   finished_at: string | null;
+  triggered_by: string | null;
 }
 
 // ── Bridge helpers (client-side, no edge function needed) ──────────────────
@@ -68,6 +69,7 @@ export default function BlingIntegration() {
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState<string | null>(null);
   const [syncLogs, setSyncLogs] = useState<SyncLog[]>([]);
+  const [autoNfeLogs, setAutoNfeLogs] = useState<SyncLog[]>([]);
   const [counts, setCounts] = useState({ products: 0, contacts: 0, orders: 0 });
 
   // Status vem DIRETO da tabela compartilhada bling_integration (mesma do
@@ -96,11 +98,10 @@ export default function BlingIntegration() {
   };
 
   const loadSyncLogs = async () => {
-    // Esconde as rodadas AUTOMÁTICAS de NF-e (cron de hora em hora) — elas têm
-    // triggered_by NULL e, sendo 24/dia, inundavam o histórico só com "Nfe".
-    // O histórico passa a mostrar o que as pessoas dispararam + o sync geral
-    // diário. Mantém: qualquer entidade ≠ nfe, ou qualquer coisa disparada por
-    // um usuário (triggered_by preenchido).
+    // Lista detalhada: tudo, MENOS as rodadas automáticas de NF-e. Essas (cron
+    // de hora em hora, triggered_by NULL, 24/dia) afogavam o histórico só com
+    // "Nfe", então viram um RESUMO separado abaixo — sem perder o monitoramento
+    // (a última execução e as falhas aparecem no resumo).
     const { data } = await supabase
       .from("bling_sync_log")
       .select("*")
@@ -108,6 +109,17 @@ export default function BlingIntegration() {
       .order("started_at", { ascending: false })
       .limit(10);
     if (data) setSyncLogs(data as SyncLog[]);
+
+    // Resumo das rodadas automáticas de NF-e (últimas 30) — pra ver se o cron
+    // está rodando e se alguma falhou.
+    const { data: autoNfe } = await supabase
+      .from("bling_sync_log")
+      .select("*")
+      .eq("entity_type", "nfe")
+      .is("triggered_by", null)
+      .order("started_at", { ascending: false })
+      .limit(30);
+    if (autoNfe) setAutoNfeLogs(autoNfe as SyncLog[]);
   };
 
   const loadCounts = async () => {
@@ -530,13 +542,47 @@ export default function BlingIntegration() {
           </Card>
 
           {/* Sync History */}
-          {syncLogs.length > 0 && (
+          {(syncLogs.length > 0 || autoNfeLogs.length > 0) && (
             <Card>
               <CardHeader>
                 <CardTitle className="text-lg">Histórico de Sincronização</CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="space-y-2">
+                  {/* Resumo das rodadas AUTOMÁTICAS de NF-e (cron de hora em hora) */}
+                  {autoNfeLogs.length > 0 && (() => {
+                    const last = autoNfeLogs[0];
+                    const fails = autoNfeLogs.filter((l) => l.status === "failed").length;
+                    return (
+                      <div className="flex items-center justify-between p-3 rounded-lg bg-muted/30 border border-dashed">
+                        <div className="flex items-center gap-3">
+                          {fails > 0 ? (
+                            <XCircle className="h-4 w-4 text-red-500" />
+                          ) : last.status === "running" ? (
+                            <Loader2 className="h-4 w-4 animate-spin text-blue-500" />
+                          ) : (
+                            <CheckCircle className="h-4 w-4 text-green-500" />
+                          )}
+                          <div>
+                            <span className="font-medium">NF-e (automático · de hora em hora)</span>
+                            {fails > 0 ? (
+                              <p className="text-xs text-red-500">
+                                {fails} falha(s) nas últimas {autoNfeLogs.length} execuções — verificar
+                              </p>
+                            ) : (
+                              <span className="text-sm text-muted-foreground ml-2">
+                                última: {last.records_synced} registros · OK
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                          <Clock className="h-3 w-3" />
+                          {new Date(last.started_at).toLocaleString("pt-BR")}
+                        </div>
+                      </div>
+                    );
+                  })()}
                   {syncLogs.map((log) => (
                     <div
                       key={log.id}
