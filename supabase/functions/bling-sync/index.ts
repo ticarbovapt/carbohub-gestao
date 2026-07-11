@@ -1179,6 +1179,49 @@ async function syncNFe(
   }
   if (rechecked > 0) console.log(`[bling-sync] NFe no_code recheck: ${rechecked} reprocessed`);
 
+  // ── Passo 2c: backfill de observação de TODAS as NFs (inclusive manual/matched) ─
+  // Passo 2/2b só leem o detalhe de NFs pending/no_code. As já vinculadas à mão
+  // (manual) ou casadas ficavam com informacoes_adicionais VAZIO, mesmo o XML
+  // tendo o texto — por isso a observação só existia no banco para uma NF.
+  // Aqui lemos o detalhe + XML de QUALQUER NF que ainda esteja sem observação e
+  // preenchemos, SEM tocar em match_status nem order_id (não desfaz vínculo
+  // manual). Garante que a leitura funciona para o histórico inteiro e deixa a
+  // observação disponível em todo o sistema. Guardamos '' quando o XML não tem
+  // observação, pra a NF não ser re-buscada infinitamente.
+  const { data: needsObsBackfill } = await supabaseAdmin
+    .from("bling_nfe")
+    .select("id, bling_id, xml_url")
+    .is("informacoes_adicionais", null)
+    .not("match_status", "in", "(pending,no_code)")
+    .order("data_emissao", { ascending: false })
+    .limit(100);
+
+  let backfilled = 0;
+  for (const nf of (needsObsBackfill || [])) {
+    try {
+      const detail = await blingFetch(token, `/nfe/${nf.bling_id}`, 1, 1);
+      const d = detail.data || {};
+      const obs = await resolveNfeObs(d, d.xml || nf.xml_url);
+      const pdfLink = d.pdf || d.linkPDF || d.linkPdf || d.linkDanfe || d.danfe || d.link || null;
+      const upd: Record<string, any> = {
+        informacoes_adicionais: obs ?? "",   // '' = lida, sem observação
+        raw_data: d,
+        updated_at: new Date().toISOString(),
+      };
+      if (d.xml)  upd.xml_url = d.xml;
+      if (pdfLink) upd.pdf_url = pdfLink;
+      const valor = extractValorNota(d);
+      if (valor != null) upd.valor_total = valor;
+      // NÃO mexe em match_status/order_id — preserva o vínculo manual.
+      await supabaseAdmin.from("bling_nfe").update(upd).eq("id", nf.id);
+      backfilled++;
+    } catch (e) {
+      console.error(`[bling-sync] NFe obs backfill failed for bling_id ${nf.bling_id}:`, e);
+    }
+    await new Promise((r) => setTimeout(r, 300));
+  }
+  if (backfilled > 0) console.log(`[bling-sync] NFe obs backfill: ${backfilled} processed`);
+
   // ── Passo 3: cruzamento automático ────────────────────────────────────────
   const matched = await matchNFesToOrders(supabaseAdmin);
   console.log(`[bling-sync] NFe matching: ${matched.matched} matched, ${matched.invalid} invalid`);
