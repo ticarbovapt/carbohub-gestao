@@ -244,11 +244,19 @@ export default function BlingIntegration() {
 
           const status = mapBlingStatus(bo.situacao_id, bo.situacao_valor);
 
-          const { data: existing } = await (supabase as any).from("carboze_orders").select("id, status").eq("external_ref", externalRef).single();
+          const { data: existing } = await (supabase as any).from("carboze_orders").select("id, status, notes").eq("external_ref", externalRef).single();
 
           if (existing) {
-            if (existing.status !== status) {
-              await (supabase as any).from("carboze_orders").update({ status, updated_at: new Date().toISOString() }).eq("id", existing.id);
+            // Atualiza status E a observação (notes). A observação chega no detalhe
+            // do pedido, muitas vezes DEPOIS da 1ª importação — sem atualizar aqui,
+            // o notes ficava null pra sempre e o dedup (BLING-… que referencia um
+            // V… do sistema) não reconhecia o duplicado.
+            const patch: Record<string, any> = {};
+            if (existing.status !== status) patch.status = status;
+            if (bo.observacoes && existing.notes !== bo.observacoes) patch.notes = bo.observacoes;
+            if (Object.keys(patch).length) {
+              patch.updated_at = new Date().toISOString();
+              await (supabase as any).from("carboze_orders").update(patch).eq("id", existing.id);
             }
           } else {
             const orderDate = bo.data ? new Date(bo.data).toISOString() : new Date().toISOString();

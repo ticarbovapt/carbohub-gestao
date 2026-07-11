@@ -32,14 +32,18 @@ const isBling = (o: FaturamentoOrder) =>
   (o.external_ref ?? "").toLowerCase().startsWith("bling") ||
   (o.order_number ?? "").toUpperCase().startsWith("BLING-");
 
-// Duplicado: um pedido criado no Bling que traz na observação (notes) o nº de
-// uma venda do sistema (V…). É o MESMO pedido — a NF vai casar com a venda do
-// sistema (por esse código), então escondemos o registro do Bling pra não
-// aparecer duas vezes nem contar o valor em dobro. O código V… só é gerado pelo
-// sistema, então a presença dele já identifica o duplicado (independe do mês).
+// Duplicado: um pedido com número BLING-… (criado direto no Bling) que traz na
+// observação (notes) o nº de uma venda do sistema (V…). É o MESMO pedido — a NF
+// casa com a venda do sistema por esse código, então escondemos o registro do
+// Bling pra não duplicar nem contar o valor em dobro.
+//
+// IMPORTANTE: a checagem é pelo NÚMERO ser BLING-… (não por "ser do Bling"),
+// porque uma venda do sistema (V…) enviada ao Bling também fica com external_ref
+// "bling-…" e tem o próprio V… na observação — ela NÃO pode ser escondida.
 const SYSTEM_CODE_RE = /V\d{10}/i;
 const isBlingDupOfSystem = (o: FaturamentoOrder) =>
-  isBling(o) && SYSTEM_CODE_RE.test(o.notes ?? "");
+  (o.order_number ?? "").toUpperCase().startsWith("BLING-") &&
+  SYSTEM_CODE_RE.test(o.notes ?? "");
 
 // Funil do Pós-venda (Carbo Ops). O Faturamento só libera a emissão da NF quando
 // o card chega em "gerar_nf" (ou além). Antes disso o pedido aparece na lista,
