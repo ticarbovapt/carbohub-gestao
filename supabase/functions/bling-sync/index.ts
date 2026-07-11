@@ -1194,7 +1194,7 @@ async function syncNFe(
     .is("informacoes_adicionais", null)
     .not("match_status", "in", "(pending,no_code)")
     .order("data_emissao", { ascending: false })
-    .limit(100);
+    .limit(40);   // lote pequeno no cron (não estourar 150s); o grosso vai no entity nfe_backfill
 
   let backfilled = 0;
   for (const nf of (needsObsBackfill || [])) {
@@ -1927,6 +1927,63 @@ Deno.serve(async (req: Request): Promise<Response> => {
           { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } }
         );
       }
+    }
+
+    // ── Ação: backfill da observação de TODAS as NFs (lote grande, dedicado) ──
+    // Lê o detalhe + XML e preenche informacoes_adicionais de qualquer NF que
+    // ainda esteja sem observação — INCLUSIVE manual/matched (o sync normal só
+    // lê pending/no_code). Não desfaz vínculo manual: só reabre p/ casamento as
+    // que ainda NÃO estão vinculadas e cujo XML tem o código do pedido. Enxuto
+    // (sem list/2b/matcher pesados), então cabe no tempo — dispare até zerar.
+    if (entity === "nfe_backfill") {
+      const { data: rows } = await supabaseAdmin
+        .from("bling_nfe")
+        .select("id, bling_id, xml_url, match_status, order_id")
+        .is("informacoes_adicionais", null)
+        .order("data_emissao", { ascending: false })
+        .limit(120);
+
+      let done = 0, reopened = 0;
+      for (const nf of (rows || [])) {
+        try {
+          const detail = await blingFetch(token, `/nfe/${nf.bling_id}`, 1, 1);
+          const d = detail.data || {};
+          const obs = await resolveNfeObs(d, d.xml || nf.xml_url);
+          const hasCode = !!(obs && OBS_CODE_REGEX.test(obs));
+          const pdfLink = d.pdf || d.linkPDF || d.linkPdf || d.linkDanfe || d.danfe || d.link || null;
+          const upd: Record<string, any> = {
+            informacoes_adicionais: obs ?? "",   // '' = lida, sem observação
+            raw_data: d,
+            updated_at: new Date().toISOString(),
+          };
+          if (d.xml)   upd.xml_url = d.xml;
+          if (pdfLink) upd.pdf_url = pdfLink;
+          const valor = extractValorNota(d);
+          if (valor != null) upd.valor_total = valor;
+          // Só reabre p/ casamento as NÃO vinculadas ainda (preserva manual/matched).
+          if (hasCode && !nf.order_id && nf.match_status !== "manual" && nf.match_status !== "matched") {
+            upd.match_status = "pending";
+            reopened++;
+          }
+          await supabaseAdmin.from("bling_nfe").update(upd).eq("id", nf.id);
+          done++;
+        } catch (e) {
+          console.error(`[bling-sync] nfe_backfill failed for bling_id ${nf.bling_id}:`, e);
+        }
+        await new Promise((r) => setTimeout(r, 350));
+      }
+      // Se alguma virou "pending" com código, tenta casar agora (só-DB, rápido).
+      if (reopened > 0) { try { await matchNFesToOrders(supabaseAdmin); } catch (_) { /* best-effort */ } }
+
+      const { count: remaining } = await supabaseAdmin
+        .from("bling_nfe")
+        .select("id", { count: "exact", head: true })
+        .is("informacoes_adicionais", null);
+
+      return new Response(
+        JSON.stringify({ success: true, processed: done, reopened_for_match: reopened, remaining_null: remaining ?? null }),
+        { status: 200, headers: { "Content-Type": "application/json", ...corsHeaders } }
+      );
     }
 
     // ── Ação pontual: buscar o link do DANFE/XML de uma NF (sob demanda) ──────
