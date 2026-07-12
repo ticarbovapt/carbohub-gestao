@@ -87,6 +87,39 @@ export function useSelectQuote() {
   });
 }
 
+// Cotação de RASCUNHO (na criação da requisição, antes de existir request_id).
+export interface DraftQuote {
+  key: string;
+  item_index: number;
+  item_descricao: string | null;
+  supplier_name: string;
+  unit_price: number;
+  quantidade: number;
+  notes: string | null;
+  link: string | null;
+  selected: boolean;
+}
+
+/** Persiste as cotações de rascunho depois que a requisição foi criada (tem id). */
+export async function persistDraftQuotes(requestId: string, drafts: DraftQuote[]) {
+  if (!drafts.length) return;
+  const { data: u } = await supabase.auth.getUser();
+  const rows = drafts.map((d) => ({
+    request_id: requestId,
+    item_index: d.item_index,
+    item_descricao: d.item_descricao ?? null,
+    supplier_name: d.supplier_name,
+    unit_price: d.unit_price,
+    quantidade: d.quantidade,
+    notes: d.notes ?? null,
+    link: d.link ?? null,
+    selected: !!d.selected,
+    created_by: u?.user?.id ?? null,
+  }));
+  const { error } = await (supabase as any).from("purchase_quotes").insert(rows);
+  if (error) throw error;
+}
+
 export function useDeleteQuote() {
   const qc = useQueryClient();
   return useMutation({

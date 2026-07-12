@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Plus, Trash2, ShoppingCart, Info, Loader2, Boxes, User } from "lucide-react";
+import { Plus, Trash2, ShoppingCart, Info, Loader2, Boxes, User, ChevronRight, ChevronDown } from "lucide-react";
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
 import { CarboCard, CarboCardContent, CarboCardHeader, CarboCardTitle } from "@/components/ui/carbo-card";
 import { CarboBadge } from "@/components/ui/carbo-badge";
@@ -9,10 +9,10 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { CarboTable, CarboTableHeader, CarboTableBody, CarboTableRow, CarboTableHead, CarboTableCell } from "@/components/ui/carbo-table";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { useMyPurchaseRequests, useCreatePurchaseRequest, type ReqItem } from "@/hooks/usePurchaseRequests";
 import { CotacoesPanel } from "@/components/compras/CotacoesPanel";
+import { persistDraftQuotes, type DraftQuote } from "@/hooks/useCotacoes";
 
 const COST_CENTERS = [
   "Produção", "Operações", "Manutenção", "Logística", "Qualidade",
@@ -73,7 +73,8 @@ export default function RequisicaoCompra() {
   const [referenceUrl, setReferenceUrl] = useState("");
   const [obs, setObs] = useState("");
   const [items, setItems] = useState<ReqItem[]>([emptyItem()]);
-  const [cotacaoRC, setCotacaoRC] = useState<{ id: string; items: ReqItem[] } | null>(null);
+  const [draftQuotes, setDraftQuotes] = useState<DraftQuote[]>([]);
+  const [showCot, setShowCot] = useState(false);
 
   const isSetor = escopo === "setor";
   const estimated = items.reduce((s, i) => s + i.quantidade * i.valor_unitario, 0);
@@ -81,13 +82,18 @@ export default function RequisicaoCompra() {
   const updateItem = (idx: number, field: keyof ReqItem, value: any) =>
     setItems((prev) => prev.map((it, i) => (i === idx ? { ...it, [field]: value } : it)));
   const addItem = () => setItems((p) => [...p, emptyItem()]);
-  const removeItem = (idx: number) => setItems((p) => p.filter((_, i) => i !== idx));
+  const removeItem = (idx: number) => {
+    setItems((p) => p.filter((_, i) => i !== idx));
+    // Reconcilia as cotações de rascunho: remove as do item e reindexa as de cima.
+    setDraftQuotes((qs) => qs.filter((q) => q.item_index !== idx).map((q) => q.item_index > idx ? { ...q, item_index: q.item_index - 1 } : q));
+  };
 
   const switchEscopo = (e: "setor" | "individual") => { setEscopo(e); setMotivo(""); };
 
   const reset = () => {
     setEscopo("setor"); setMotivo(""); setPriority("normal"); setNeededBy("");
     setCostCenter(""); setSupplier(""); setReferenceUrl(""); setObs(""); setItems([emptyItem()]);
+    setDraftQuotes([]); setShowCot(false);
   };
 
   const submit = async (asDraft: boolean) => {
@@ -100,7 +106,7 @@ export default function RequisicaoCompra() {
       : "uso_direto";
 
     try {
-      await create.mutateAsync({
+      const created: any = await create.mutateAsync({
         escopo,
         motivo,
         purchase_type,
@@ -114,6 +120,10 @@ export default function RequisicaoCompra() {
         items,
         status: asDraft ? "rascunho" : "aguardando_aprovacao",
       });
+      // Salva as cotações levantadas na criação, já vinculadas à requisição.
+      if (created?.id && draftQuotes.length) {
+        try { await persistDraftQuotes(created.id, draftQuotes); } catch { /* best-effort */ }
+      }
       reset();
     } catch { /* erro tratado no hook */ }
   };
@@ -268,6 +278,21 @@ export default function RequisicaoCompra() {
               </div>
             </div>
 
+            {/* Cotações — opcional, na CRIAÇÃO (levanta preço em N fornecedores por item) */}
+            <div className="space-y-2">
+              <button type="button" onClick={() => setShowCot((v) => !v)} className="flex items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-foreground">
+                {showCot ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                Cotações (opcional)
+                {draftQuotes.length > 0 && <CarboBadge variant="info" className="text-[10px]">{draftQuotes.length}</CarboBadge>}
+              </button>
+              {showCot && (
+                <>
+                  <p className="text-[11px] text-muted-foreground">Levante preço em mais de um fornecedor por item, se já tiver. O comprador também pode completar no Finanças.</p>
+                  <CotacoesPanel items={items} draft={{ quotes: draftQuotes, onChange: setDraftQuotes }} />
+                </>
+              )}
+            </div>
+
             {/* Observação — opcional em ambos (sem justificativa/impacto obrigatórios) */}
             <div className="space-y-1.5">
               <Label>{isSetor ? "Observações (opcional)" : "Observação (opcional)"}</Label>
@@ -308,7 +333,6 @@ export default function RequisicaoCompra() {
                     <CarboTableHead className="text-right">Valor</CarboTableHead>
                     <CarboTableHead>Status</CarboTableHead>
                     <CarboTableHead>Data</CarboTableHead>
-                    <CarboTableHead className="text-right">Cotações</CarboTableHead>
                   </CarboTableRow>
                 </CarboTableHeader>
                 <CarboTableBody>
@@ -322,9 +346,6 @@ export default function RequisicaoCompra() {
                         <CarboTableCell className="text-right">{brl(Number(r.estimated_value))}</CarboTableCell>
                         <CarboTableCell><CarboBadge variant={st.variant}>{st.label}</CarboBadge></CarboTableCell>
                         <CarboTableCell>{fmtDate(r.created_at)}</CarboTableCell>
-                        <CarboTableCell className="text-right">
-                          <Button variant="outline" size="sm" onClick={() => setCotacaoRC({ id: r.id, items: r.items ?? [] })}>Cotações</Button>
-                        </CarboTableCell>
                       </CarboTableRow>
                     );
                   })}
@@ -333,14 +354,6 @@ export default function RequisicaoCompra() {
             )}
           </CarboCardContent>
         </CarboCard>
-
-        {/* Cotações da requisição */}
-        <Dialog open={!!cotacaoRC} onOpenChange={(o) => !o && setCotacaoRC(null)}>
-          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-            <DialogHeader><DialogTitle>Cotações por item</DialogTitle></DialogHeader>
-            {cotacaoRC && <CotacoesPanel requestId={cotacaoRC.id} items={cotacaoRC.items} />}
-          </DialogContent>
-        </Dialog>
       </div>
     </div>
   );

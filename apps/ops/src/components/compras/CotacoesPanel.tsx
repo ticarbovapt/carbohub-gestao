@@ -5,20 +5,37 @@ import { CarboBadge } from "@/components/ui/carbo-badge";
 import { CarboInput } from "@/components/ui/carbo-input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { useQuotes, useAddQuote, useSelectQuote, useDeleteQuote } from "@/hooks/useCotacoes";
+import { useQuotes, useAddQuote, useSelectQuote, useDeleteQuote, type DraftQuote } from "@/hooks/useCotacoes";
 
 interface Item { descricao: string; quantidade: number; unidade: string; valor_unitario: number; }
 
-const brl = (v: number) => (v ?? 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+// Linha normalizada (rowKey = id no banco OU key do rascunho).
+interface Row { rowKey: string; item_index: number; supplier_name: string; unit_price: number; quantidade: number; notes: string | null; link: string | null; selected: boolean; }
 
-// Painel de cotações por item — compacto. Cada item lista suas cotações em linhas
-// pequenas; "Adicionar cotação" abre um mini-popup (não fica bloco aberto na tela).
-// O comprador marca a vencedora por item; o rodapé soma o total escolhido.
-export function CotacoesPanel({ requestId, items, editable = true }: { requestId: string; items: Item[]; editable?: boolean }) {
-  const { data: quotes = [], isLoading } = useQuotes(requestId);
+const brl = (v: number) => (v ?? 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+const uid = () => (crypto?.randomUUID?.() ?? String(Math.random()).slice(2));
+
+// Painel de cotações por item — compacto. Funciona em DOIS modos:
+//  • persistido: recebe `requestId` (Finanças) → lê/grava em purchase_quotes.
+//  • rascunho:   recebe `draft` (criação da requisição, antes de existir id) →
+//                opera no estado local; salvo junto ao enviar a requisição.
+export function CotacoesPanel({
+  requestId, draft, items, editable = true,
+}: {
+  requestId?: string;
+  draft?: { quotes: DraftQuote[]; onChange: (q: DraftQuote[]) => void };
+  items: Item[];
+  editable?: boolean;
+}) {
+  const isDraft = !!draft;
+  const { data: dbQuotes = [], isLoading } = useQuotes(isDraft ? null : (requestId ?? null));
   const add = useAddQuote();
   const select = useSelectQuote();
   const del = useDeleteQuote();
+
+  const rows: Row[] = isDraft
+    ? draft!.quotes.map((q) => ({ rowKey: q.key, item_index: q.item_index, supplier_name: q.supplier_name, unit_price: q.unit_price, quantidade: q.quantidade, notes: q.notes, link: q.link, selected: q.selected }))
+    : dbQuotes.map((q) => ({ rowKey: q.id, item_index: q.item_index, supplier_name: q.supplier_name, unit_price: q.unit_price, quantidade: q.quantidade, notes: q.notes, link: q.link, selected: q.selected }));
 
   const [adding, setAdding] = useState<{ index: number; descricao: string; quantidade: number } | null>(null);
   const [supplier, setSupplier] = useState("");
@@ -30,29 +47,45 @@ export function CotacoesPanel({ requestId, items, editable = true }: { requestId
     setAdding({ index, descricao: it.descricao, quantidade: it.quantidade });
     setSupplier(""); setUnitPrice(""); setNotes(""); setLink("");
   };
-  const submitAdd = () => {
+
+  const doAdd = () => {
     if (!adding || !supplier.trim()) return;
-    add.mutate({
-      request_id: requestId, item_index: adding.index, item_descricao: adding.descricao,
-      supplier_name: supplier.trim(), unit_price: Number(unitPrice) || 0, quantidade: adding.quantidade,
-      notes: notes || null, link: link || null,
-    }, { onSuccess: () => setAdding(null) });
+    const base = { item_index: adding.index, item_descricao: adding.descricao, supplier_name: supplier.trim(), unit_price: Number(unitPrice) || 0, quantidade: adding.quantidade, notes: notes || null, link: link || null };
+    if (isDraft) {
+      draft!.onChange([...draft!.quotes, { key: uid(), selected: false, ...base }]);
+      setAdding(null);
+    } else if (requestId) {
+      add.mutate({ request_id: requestId, ...base }, { onSuccess: () => setAdding(null) });
+    }
   };
 
-  const totalEscolhido = quotes.filter((q) => q.selected).reduce((s, q) => s + q.unit_price * q.quantidade, 0);
-  const semEscolha = items.filter((_, i) => !quotes.some((q) => q.item_index === i && q.selected)).length;
-  const hasAnyQuote = quotes.length > 0;
+  const doSelect = (r: Row) => {
+    if (isDraft) {
+      draft!.onChange(draft!.quotes.map((q) =>
+        q.item_index === r.item_index ? { ...q, selected: q.key === r.rowKey ? !r.selected : false } : q));
+    } else if (requestId) {
+      select.mutate({ id: r.rowKey, request_id: requestId, item_index: r.item_index, selected: !r.selected });
+    }
+  };
+
+  const doDelete = (r: Row) => {
+    if (isDraft) draft!.onChange(draft!.quotes.filter((q) => q.key !== r.rowKey));
+    else if (requestId) del.mutate({ id: r.rowKey, request_id: requestId });
+  };
+
+  const totalEscolhido = rows.filter((r) => r.selected).reduce((s, r) => s + r.unit_price * r.quantidade, 0);
+  const semEscolha = items.filter((_, i) => !rows.some((r) => r.item_index === i && r.selected)).length;
 
   return (
     <div className="space-y-3">
       {items.map((it, i) => {
-        const qs = quotes.filter((q) => q.item_index === i);
+        const qs = rows.filter((r) => r.item_index === i);
         const min = qs.length ? Math.min(...qs.map((q) => q.unit_price)) : null;
         return (
           <div key={i} className="rounded-lg border border-border">
             <div className="flex items-center justify-between px-3 py-2 bg-muted/40 rounded-t-lg">
               <div className="text-sm">
-                <span className="font-medium">{it.descricao || "—"}</span>
+                <span className="font-medium">{it.descricao || `Item ${i + 1}`}</span>
                 <span className="text-muted-foreground ml-2">{it.quantidade} {it.unidade}</span>
               </div>
               {editable && (
@@ -67,7 +100,7 @@ export function CotacoesPanel({ requestId, items, editable = true }: { requestId
             ) : (
               <div className="divide-y divide-border">
                 {qs.map((q) => (
-                  <div key={q.id} className={`flex items-center gap-2 px-3 py-2 text-sm ${q.selected ? "bg-carbo-green/5" : ""}`}>
+                  <div key={q.rowKey} className={`flex items-center gap-2 px-3 py-2 text-sm ${q.selected ? "bg-carbo-green/5" : ""}`}>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="font-medium truncate">{q.supplier_name}</span>
@@ -83,13 +116,10 @@ export function CotacoesPanel({ requestId, items, editable = true }: { requestId
                     </div>
                     {editable && (
                       <div className="flex items-center gap-1 shrink-0">
-                        <CarboButton
-                          size="sm" variant={q.selected ? "default" : "outline"} className="h-7 gap-1"
-                          onClick={() => select.mutate({ id: q.id, request_id: requestId, item_index: i, selected: !q.selected })}
-                        >
+                        <CarboButton size="sm" variant={q.selected ? "default" : "outline"} className="h-7 gap-1" onClick={() => doSelect(q)}>
                           <Check className="h-3.5 w-3.5" /> {q.selected ? "Escolhida" : "Escolher"}
                         </CarboButton>
-                        <CarboButton size="icon" variant="ghost" className="h-7 w-7 text-destructive" onClick={() => del.mutate({ id: q.id, request_id: requestId })}>
+                        <CarboButton size="icon" variant="ghost" className="h-7 w-7 text-destructive" onClick={() => doDelete(q)}>
                           <Trash2 className="h-3.5 w-3.5" />
                         </CarboButton>
                       </div>
@@ -102,7 +132,7 @@ export function CotacoesPanel({ requestId, items, editable = true }: { requestId
         );
       })}
 
-      {hasAnyQuote && (
+      {rows.length > 0 && (
         <div className="flex items-center justify-between text-sm px-1">
           <span className="text-muted-foreground">
             {semEscolha === 0 ? "Todos os itens têm cotação escolhida." : `${semEscolha} item(ns) sem cotação escolhida.`}
@@ -112,10 +142,9 @@ export function CotacoesPanel({ requestId, items, editable = true }: { requestId
       )}
       {isLoading && <p className="text-xs text-muted-foreground">Carregando cotações…</p>}
 
-      {/* Mini-popup pra adicionar cotação */}
       <Dialog open={!!adding} onOpenChange={(o) => !o && setAdding(null)}>
         <DialogContent className="max-w-sm">
-          <DialogHeader><DialogTitle>Cotação — {adding?.descricao}</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>Cotação — {adding?.descricao || "item"}</DialogTitle></DialogHeader>
           <div className="space-y-3 py-1">
             <div className="space-y-1.5">
               <Label>Fornecedor *</Label>
@@ -139,7 +168,7 @@ export function CotacoesPanel({ requestId, items, editable = true }: { requestId
           </div>
           <DialogFooter>
             <CarboButton variant="outline" onClick={() => setAdding(null)}>Cancelar</CarboButton>
-            <CarboButton onClick={submitAdd} disabled={!supplier.trim() || add.isPending}>Adicionar</CarboButton>
+            <CarboButton onClick={doAdd} disabled={!supplier.trim() || add.isPending}>Adicionar</CarboButton>
           </DialogFooter>
         </DialogContent>
       </Dialog>
