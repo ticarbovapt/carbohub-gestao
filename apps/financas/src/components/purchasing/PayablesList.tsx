@@ -1,10 +1,11 @@
 import { useState, useEffect } from "react";
-import { CreditCard, CheckCircle2, Upload } from "lucide-react";
+import { CreditCard, CheckCircle2, Undo2, Ban } from "lucide-react";
 import { CarboBadge } from "@/components/ui/carbo-badge";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { usePurchasePayables, useUpdatePayableStatus } from "@/hooks/usePurchasing";
+import { useAuth } from "@/contexts/AuthContext";
 import { PAYABLE_STATUS_LABELS, type PayableStatus } from "@/types/purchasing";
 import { format, isPast, isToday, differenceInCalendarDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -27,6 +28,7 @@ export function PayablesList({ initialStatus }: { initialStatus?: string } = {})
   // "Atrasado" não acha nada (no banco elas ficam como "programado").
   const { data: allPayables, isLoading } = usePurchasePayables();
   const updateStatus = useUpdatePayableStatus();
+  const { gestor } = useAuth();
   const [payingId, setPayingId] = useState<string | null>(null);
 
   const formatCurrency = (val: number) =>
@@ -139,15 +141,26 @@ export function PayablesList({ initialStatus }: { initialStatus?: string } = {})
                   <CarboTableCell className="text-sm text-muted-foreground">
                     {p.paid_at ? format(new Date(p.paid_at), "dd/MM/yyyy", { locale: ptBR }) : "—"}
                   </CarboTableCell>
-                  <CarboTableCell>
-                    {p.status !== "pago" && p.status !== "cancelado" && (
-                      <Button
-                        variant="ghost" size="sm" className="gap-1.5 text-success"
-                        onClick={() => setPayingId(p.id)}
-                      >
-                        <CheckCircle2 className="h-3.5 w-3.5" />
-                        Pagar
+                  <CarboTableCell onClick={(e) => e.stopPropagation()}>
+                    {!gestor ? (
+                      <span className="text-muted-foreground text-xs">—</span>
+                    ) : p.status === "pago" ? (
+                      <Button variant="ghost" size="sm" className="gap-1.5 text-muted-foreground"
+                        onClick={() => updateStatus.mutate({ id: p.id, status: "programado" })} title="Estornar pagamento">
+                        <Undo2 className="h-3.5 w-3.5" /> Estornar
                       </Button>
+                    ) : p.status === "cancelado" ? (
+                      <span className="text-muted-foreground text-xs">—</span>
+                    ) : (
+                      <div className="flex items-center gap-1">
+                        <Button variant="ghost" size="sm" className="gap-1.5 text-success" onClick={() => setPayingId(p.id)}>
+                          <CheckCircle2 className="h-3.5 w-3.5" /> Pagar
+                        </Button>
+                        <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive"
+                          onClick={() => updateStatus.mutate({ id: p.id, status: "cancelado" })} title="Cancelar conta">
+                          <Ban className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
                     )}
                   </CarboTableCell>
                 </CarboTableRow>

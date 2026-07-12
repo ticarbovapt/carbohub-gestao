@@ -447,6 +447,10 @@ export function useUpdatePayableStatus() {
       if (status === "pago") {
         updates.paid_at = new Date().toISOString();
         updates.paid_by = user!.id;
+      } else {
+        // Estorno / cancelamento: limpa o registro de pagamento.
+        updates.paid_at = null;
+        updates.paid_by = null;
       }
       if (payment_proof_url) updates.payment_proof_url = payment_proof_url;
 

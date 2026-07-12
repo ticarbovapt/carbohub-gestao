@@ -6,8 +6,10 @@ import { PAYMENT_METHOD_TYPE_LABELS } from "@/types/purchasing";
 import { CarboBadge } from "@/components/ui/carbo-badge";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { usePurchaseOrders } from "@/hooks/usePurchasing";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import { Ban } from "lucide-react";
+import { usePurchaseOrders, useUpdatePurchaseOrderStatus } from "@/hooks/usePurchasing";
+import { useAuth } from "@/contexts/AuthContext";
 import { ORDER_STATUS_LABELS, type PurchaseOrder, type PurchaseOrderStatus } from "@/types/purchasing";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -31,8 +33,11 @@ export function PurchaseOrdersList() {
   );
   const { data: methods = [] } = usePaymentMethods();
   const pmById = new Map(methods.map((m) => [m.id, m]));
+  const { gestor } = useAuth();
+  const updateStatus = useUpdatePurchaseOrderStatus();
   const [selectedOC, setSelectedOC] = useState<PurchaseOrder | null>(null);
   const [comprarOC, setComprarOC] = useState<PurchaseOrder | null>(null);
+  const [cancelOC, setCancelOC] = useState<PurchaseOrder | null>(null);
 
   const formatCurrency = (val: number) =>
     new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(val);
@@ -176,6 +181,28 @@ export function PurchaseOrdersList() {
               )}
             </div>
           )}
+          {gestor && selectedOC && (selectedOC.status === "gerada" || selectedOC.status === "comprada") && (
+            <DialogFooter>
+              <Button variant="outline" className="gap-1.5 text-destructive" onClick={() => setCancelOC(selectedOC)}>
+                <Ban className="h-4 w-4" /> Cancelar OC
+              </Button>
+            </DialogFooter>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Confirmação de cancelamento da OC */}
+      <Dialog open={!!cancelOC} onOpenChange={(o) => !o && setCancelOC(null)}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Cancelar OC {cancelOC?.oc_number}?</DialogTitle></DialogHeader>
+          <p className="text-sm text-muted-foreground">A ordem sai do fluxo (não poderá ser recebida nem faturada). Use quando a OC foi gerada por engano ou a compra não vai acontecer.</p>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCancelOC(null)}>Voltar</Button>
+            <Button variant="destructive" disabled={updateStatus.isPending}
+              onClick={() => { if (cancelOC) updateStatus.mutate({ id: cancelOC.id, status: "cancelada" }, { onSuccess: () => { setCancelOC(null); setSelectedOC(null); } }); }}>
+              Cancelar OC
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 

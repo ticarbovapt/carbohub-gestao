@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { CarboCard, CarboCardContent, CarboCardHeader, CarboCardTitle } from "@/components/ui/carbo-card";
 import { useCreatePurchaseRequest } from "@/hooks/usePurchasing";
 import { useSuppliers } from "@/hooks/useSuppliers";
+import { toast } from "@/hooks/use-toast";
 import type { PurchaseRequestItem } from "@/types/purchasing";
 
 const UNITS_OF_MEASURE = ["un", "kg", "g", "L", "mL", "m", "cm", "m²", "m³", "pç", "cx", "pct", "par", "h", "km"];
@@ -58,6 +59,11 @@ export function PurchaseRequestForm({ serviceOrderId, onClose }: PurchaseRequest
 
   const handleSubmit = async (asDraft: boolean) => {
     if (!costCenter || !justification || items.some((i) => !i.descricao)) return;
+    // Enviar para aprovação exige valor > 0 (rascunho pode ficar sem valor ainda).
+    if (!asDraft && estimatedValue <= 0) {
+      toast({ title: "Informe o valor dos itens", description: "O valor estimado precisa ser maior que zero para enviar à aprovação.", variant: "destructive" });
+      return;
+    }
 
     await createRC.mutateAsync({
       cost_center: costCenter,

@@ -171,14 +171,14 @@ export function ReceberDialog({ oc, onClose }: { oc: PurchaseOrder | null; onClo
           ))}
           {divergente && (
             <div className="space-y-1.5 pt-1">
-              <Label>Observação da divergência</Label>
+              <Label>Observação da divergência *</Label>
               <Input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="O que veio diferente?" />
             </div>
           )}
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>Cancelar</Button>
-          <Button onClick={submit} disabled={create.isPending} className="gap-1.5 bg-carbo-green hover:bg-carbo-green/90 text-white">
+          <Button onClick={submit} disabled={create.isPending || (divergente && !notes.trim())} className="gap-1.5 bg-carbo-green hover:bg-carbo-green/90 text-white">
             {create.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <PackageCheck className="h-4 w-4" />}
             Registrar recebimento
           </Button>

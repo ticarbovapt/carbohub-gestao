@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Plus, Edit2, Trash2, CreditCard } from "lucide-react";
+import { Plus, Edit2, Trash2, CreditCard, Power, PowerOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -110,10 +110,13 @@ export function PaymentMethodsList() {
                     {canManage && (
                       <TableCell>
                         <div className="flex gap-1">
-                          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(pm)}>
+                          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(pm)} title="Editar">
                             <Edit2 className="h-3.5 w-3.5" />
                           </Button>
-                          <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => setDeleteId(pm.id)}>
+                          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => update.mutate({ id: pm.id, is_active: !pm.is_active })} title={pm.is_active ? "Inativar" : "Ativar"}>
+                            {pm.is_active ? <PowerOff className="h-3.5 w-3.5" /> : <Power className="h-3.5 w-3.5 text-success" />}
+                          </Button>
+                          <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => setDeleteId(pm.id)} title="Excluir">
                             <Trash2 className="h-3.5 w-3.5" />
                           </Button>
                         </div>

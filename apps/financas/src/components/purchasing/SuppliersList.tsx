@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Plus, Search, Edit2, Trash2, Building2, Phone, MapPin } from "lucide-react";
+import { Plus, Search, Edit2, Trash2, Building2, Phone, MapPin, Power, PowerOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -140,14 +140,15 @@ export function SuppliersList() {
                     {canManage && (
                       <TableCell>
                         <div className="flex gap-1">
-                          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(s)}>
+                          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(s)} title="Editar">
                             <Edit2 className="h-3.5 w-3.5" />
                           </Button>
-                          {gestor && (
-                            <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => setDeleteId(s.id)}>
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </Button>
-                          )}
+                          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => updateSupplier.mutate({ id: s.id, is_active: !s.is_active })} title={s.is_active ? "Inativar" : "Ativar"}>
+                            {s.is_active ? <PowerOff className="h-3.5 w-3.5" /> : <Power className="h-3.5 w-3.5 text-success" />}
+                          </Button>
+                          <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => setDeleteId(s.id)} title="Excluir">
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
                         </div>
                       </TableCell>
                     )}
