@@ -92,6 +92,47 @@ export const PAYMENT_METHOD_TYPE_LABELS: Record<PaymentMethodType, string> = {
   manual: 'Manual / outro',
 };
 
+// ── Assinaturas / recorrências ───────────────────────────────────────────────
+export type SubscriptionCycle = 'mensal' | 'trimestral' | 'anual';
+export type SubscriptionStatus = 'ativa' | 'pausada' | 'cancelada';
+export type SubscriptionCharge = 'automatica' | 'manual';
+
+export interface Subscription {
+  id: string;
+  nome: string;
+  departamento: string | null;
+  valor: number;
+  currency: string;                 // BRL | USD
+  ciclo: SubscriptionCycle;
+  proximo_vencimento: string | null;
+  payment_method_id: string | null;
+  cobranca: SubscriptionCharge;
+  status: SubscriptionStatus;
+  responsavel: string | null;
+  url: string | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export const SUBSCRIPTION_CYCLE_LABELS: Record<SubscriptionCycle, string> = {
+  mensal: 'Mensal',
+  trimestral: 'Trimestral',
+  anual: 'Anual',
+};
+
+export const SUBSCRIPTION_STATUS_LABELS: Record<SubscriptionStatus, string> = {
+  ativa: 'Ativa',
+  pausada: 'Pausada',
+  cancelada: 'Cancelada',
+};
+
+/** Custo normalizado por mês (pra comparar assinaturas de ciclos diferentes). */
+export function subscriptionMonthlyCost(s: Pick<Subscription, 'valor' | 'ciclo'>): number {
+  const v = Number(s.valor) || 0;
+  return s.ciclo === 'anual' ? v / 12 : s.ciclo === 'trimestral' ? v / 3 : v;
+}
+
 export interface PurchaseReceiving {
   id: string;
   purchase_order_id: string;

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Wallet, Plus, FileText, Package, Receipt, CreditCard, BarChart3, Clock, AlertTriangle, CheckCircle2, Building2, Wallet as WalletIcon } from "lucide-react";
+import { Wallet, Plus, FileText, Package, Receipt, CreditCard, BarChart3, Clock, AlertTriangle, CheckCircle2, Building2, Wallet as WalletIcon, RefreshCw } from "lucide-react";
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
 import { CarboCard, CarboCardContent, CarboCardHeader, CarboCardTitle } from "@/components/ui/carbo-card";
 import { CarboBadge } from "@/components/ui/carbo-badge";
@@ -23,6 +23,7 @@ import { PayablesList } from "@/components/purchasing/PayablesList";
 import { PurchasingDashboard } from "@/components/purchasing/PurchasingDashboard";
 import { SuppliersList } from "@/components/purchasing/SuppliersList";
 import { PaymentMethodsList } from "@/components/purchasing/PaymentMethodsList";
+import { SubscriptionsList } from "@/components/purchasing/SubscriptionsList";
 
 export default function Purchasing() {
   const { gestor } = useAuth();
@@ -133,6 +134,10 @@ export default function Purchasing() {
               <WalletIcon className="h-3.5 w-3.5" />
               Cartões
             </TabsTrigger>
+            <TabsTrigger value="assinaturas" className="gap-1.5">
+              <RefreshCw className="h-3.5 w-3.5" />
+              Assinaturas
+            </TabsTrigger>
             {canSeeDashboard && (
               <TabsTrigger value="dashboard" className="gap-1.5">
                 <BarChart3 className="h-3.5 w-3.5" />
@@ -161,6 +166,9 @@ export default function Purchasing() {
           </TabsContent>
           <TabsContent value="cartoes">
             <PaymentMethodsList />
+          </TabsContent>
+          <TabsContent value="assinaturas">
+            <SubscriptionsList />
           </TabsContent>
           {canSeeDashboard && (
             <TabsContent value="dashboard">
