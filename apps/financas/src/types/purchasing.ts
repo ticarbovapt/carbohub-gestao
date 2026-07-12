@@ -25,6 +25,7 @@ export interface PurchaseRequest {
   requested_by: string;
   cost_center: string;
   purchase_type: PurchaseRequestType;
+  escopo?: 'setor' | 'individual' | null;
   suggested_supplier: string | null;
   estimated_value: number;
   justification: string;

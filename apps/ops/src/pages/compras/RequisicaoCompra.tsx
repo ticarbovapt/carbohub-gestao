@@ -35,6 +35,7 @@ export default function RequisicaoCompra() {
   const create = useCreatePurchaseRequest();
   const { data: minhas = [], isLoading } = useMyPurchaseRequests();
 
+  const [escopo, setEscopo] = useState<"setor" | "individual">("setor");
   const [costCenter, setCostCenter] = useState("");
   const [purchaseType, setPurchaseType] = useState("uso_direto");
   const [supplier, setSupplier] = useState("");
@@ -50,7 +51,7 @@ export default function RequisicaoCompra() {
   const removeItem = (idx: number) => setItems((p) => p.filter((_, i) => i !== idx));
 
   const reset = () => {
-    setCostCenter(""); setPurchaseType("uso_direto"); setSupplier("");
+    setEscopo("setor"); setCostCenter(""); setPurchaseType("uso_direto"); setSupplier("");
     setJustification(""); setImpact(""); setItems([emptyItem()]);
   };
 
@@ -62,6 +63,7 @@ export default function RequisicaoCompra() {
       await create.mutateAsync({
         cost_center: costCenter,
         purchase_type: purchaseType,
+        escopo,
         suggested_supplier: supplier || null,
         estimated_value: estimated,
         justification,
@@ -91,6 +93,29 @@ export default function RequisicaoCompra() {
         <CarboCard>
           <CarboCardHeader><CarboCardTitle>Nova Requisição</CarboCardTitle></CarboCardHeader>
           <CarboCardContent className="space-y-4">
+            {/* Escopo: do setor (insumo/operação) vs individual (uso pessoal) */}
+            <div className="space-y-1.5">
+              <Label>Esta compra é</Label>
+              <div className="grid grid-cols-2 gap-2 max-w-md">
+                <button
+                  type="button"
+                  onClick={() => setEscopo("setor")}
+                  className={`rounded-lg border px-3 py-2 text-left text-sm transition-colors ${escopo === "setor" ? "border-carbo-green bg-carbo-green/10" : "border-input hover:border-muted-foreground/40"}`}
+                >
+                  <span className="font-semibold">Do setor</span>
+                  <span className="block text-xs text-muted-foreground">Insumo / operação (ex.: reposição de estoque)</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setEscopo("individual")}
+                  className={`rounded-lg border px-3 py-2 text-left text-sm transition-colors ${escopo === "individual" ? "border-carbo-green bg-carbo-green/10" : "border-input hover:border-muted-foreground/40"}`}
+                >
+                  <span className="font-semibold">Individual</span>
+                  <span className="block text-xs text-muted-foreground">Uso pessoal / material de trabalho seu</span>
+                </button>
+              </div>
+            </div>
+
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="space-y-1.5">
                 <Label>Centro de Custo *</Label>

@@ -62,6 +62,7 @@ export function PurchaseRequestsList({ showNewForm, onCloseForm }: PurchaseReque
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [tipoFilter, setTipoFilter] = useState<string>("all");
   const [setorFilter, setSetorFilter] = useState<string>("all");
+  const [escopoFilter, setEscopoFilter] = useState<string>("all");
   const { data: allRequests, isLoading } = usePurchaseRequests(
     statusFilter !== "all" ? { status: statusFilter } : undefined
   );
@@ -79,9 +80,11 @@ export function PurchaseRequestsList({ showNewForm, onCloseForm }: PurchaseReque
     .sort((a, b) => (deptLabel[a] ?? a).localeCompare(deptLabel[b] ?? b, "pt-BR"));
 
   // Filtro client-side por Tipo e Setor (status já vem filtrado do servidor).
+  const escopoOf = (rc: PurchaseRequest) => (rc as any).escopo ?? "individual";
   const requests = (allRequests ?? []).filter((rc) => {
     if (tipoFilter !== "all" && rc.purchase_type !== tipoFilter) return false;
     if (setorFilter !== "all" && setorOf(rc) !== setorFilter) return false;
+    if (escopoFilter !== "all" && escopoOf(rc) !== escopoFilter) return false;
     return true;
   });
 
@@ -146,6 +149,17 @@ export function PurchaseRequestsList({ showNewForm, onCloseForm }: PurchaseReque
             {setores.map((d) => <SelectItem key={d} value={d}>{deptLabel[d] ?? d}</SelectItem>)}
           </SelectContent>
         </Select>
+
+        <Select value={escopoFilter} onValueChange={setEscopoFilter}>
+          <SelectTrigger className="w-[170px]">
+            <SelectValue placeholder="Escopo" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Setor e Individual</SelectItem>
+            <SelectItem value="setor">Do setor</SelectItem>
+            <SelectItem value="individual">Individual</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
       {/* Table */}
@@ -185,7 +199,14 @@ export function PurchaseRequestsList({ showNewForm, onCloseForm }: PurchaseReque
                     : <span className="text-muted-foreground text-xs">—</span>}
                 </CarboTableCell>
                 <CarboTableCell>{rc.cost_center}</CarboTableCell>
-                <CarboTableCell>{PURCHASE_TYPE_LABELS[rc.purchase_type]}</CarboTableCell>
+                <CarboTableCell>
+                  <div className="flex items-center gap-2">
+                    <span>{PURCHASE_TYPE_LABELS[rc.purchase_type]}</span>
+                    <CarboBadge variant={escopoOf(rc) === "setor" ? "info" : "secondary"} className="text-[10px]">
+                      {escopoOf(rc) === "setor" ? "Setor" : "Individual"}
+                    </CarboBadge>
+                  </div>
+                </CarboTableCell>
                 <CarboTableCell className="font-mono">{formatCurrency(rc.estimated_value)}</CarboTableCell>
                 <CarboTableCell>
                   <CarboBadge variant={statusVariantMap[rc.status]} dot>

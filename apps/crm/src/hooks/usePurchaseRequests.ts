@@ -51,6 +51,7 @@ export interface CreatePRInput {
   cost_center: string;
   purchase_type: string;
   suggested_supplier?: string | null;
+  escopo?: string; // "setor" | "individual"
   estimated_value: number;
   justification: string;
   operational_impact?: string | null;
@@ -70,6 +71,7 @@ export function useCreatePurchaseRequest() {
           requested_by: u?.user?.id ?? null,
           cost_center: v.cost_center,
           purchase_type: v.purchase_type,
+          escopo: v.escopo || "individual",
           suggested_supplier: v.suggested_supplier || null,
           estimated_value: v.estimated_value,
           justification: v.justification,
