@@ -50,10 +50,14 @@ export function useMyPurchaseRequests() {
 export interface CreatePRInput {
   cost_center: string;
   purchase_type: string;
-  escopo?: string; // "setor" | "individual"
+  escopo?: string;               // "setor" | "individual"
+  motivo?: string | null;        // motivo estruturado / categoria
+  priority?: string | null;      // "normal" | "alta" | "critica"
+  needed_by?: string | null;     // data necessária (YYYY-MM-DD)
+  reference_url?: string | null; // link do produto (individual)
   suggested_supplier?: string | null;
   estimated_value: number;
-  justification: string;
+  justification?: string | null;
   operational_impact?: string | null;
   items: ReqItem[];
   status?: string; // "rascunho" | "aguardando_aprovacao"
@@ -72,9 +76,13 @@ export function useCreatePurchaseRequest() {
           cost_center: v.cost_center,
           purchase_type: v.purchase_type,
           escopo: v.escopo || "individual",
+          motivo: v.motivo || null,
+          priority: v.priority || null,
+          needed_by: v.needed_by || null,
+          reference_url: v.reference_url || null,
           suggested_supplier: v.suggested_supplier || null,
           estimated_value: v.estimated_value,
-          justification: v.justification,
+          justification: v.justification || null,
           operational_impact: v.operational_impact || null,
           items: v.items,
           status: v.status || "rascunho",

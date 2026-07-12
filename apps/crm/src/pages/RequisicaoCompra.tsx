@@ -12,11 +12,17 @@ import { CarboTable, CarboTableHeader, CarboTableBody, CarboTableRow, CarboTable
 import { toast } from "sonner";
 import { useMyPurchaseRequests, useCreatePurchaseRequest, type ReqItem } from "@/hooks/usePurchaseRequests";
 
-const COST_CENTERS = [
-  "Operações", "Manutenção", "Logística", "Administrativo", "Comercial", "TI",
-  "Marketing", "Qualidade", "Financeiro", "RH", "Jurídico", "P&D", "Compras", "Produção",
+const UNITS = ["un", "kg", "g", "L", "mL", "m", "cm", "pç", "cx", "pct", "par"];
+
+// No Sales a compra é sempre INDIVIDUAL (material de trabalho pessoal). Insumo do
+// setor é pedido no Carbo Ops. Fluxo enxuto: categoria + itens + observação.
+const CATEGORIAS: { value: string; label: string }[] = [
+  { value: "material_escritorio", label: "Material de escritório" },
+  { value: "equipamento",         label: "Equipamento / periférico" },
+  { value: "epi",                 label: "EPI / segurança" },
+  { value: "software",            label: "Software / licença" },
+  { value: "outro",               label: "Outro" },
 ];
-const UNITS = ["un", "kg", "g", "L", "mL", "m", "cm", "m²", "m³", "pç", "cx", "pct", "par", "h", "km"];
 
 const brl = (v: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v || 0);
 const fmtDate = (s: string) => new Date(s).toLocaleDateString("pt-BR");
@@ -26,7 +32,7 @@ const STATUS_LABEL: Record<string, { label: string; variant: "default" | "succes
   aguardando_aprovacao: { label: "Aguardando aprovação", variant: "warning" },
   aprovada: { label: "Aprovada", variant: "success" },
   rejeitada: { label: "Rejeitada", variant: "destructive" },
-  convertida_pc: { label: "Convertida em OC", variant: "default" },
+  convertida: { label: "Convertida em OC", variant: "default" },
 };
 
 const emptyItem = (): ReqItem => ({ descricao: "", quantidade: 1, unidade: "un", valor_unitario: 0 });
@@ -35,11 +41,9 @@ export default function RequisicaoCompra() {
   const create = useCreatePurchaseRequest();
   const { data: minhas = [], isLoading } = useMyPurchaseRequests();
 
-  const [costCenter, setCostCenter] = useState("");
-  const [purchaseType, setPurchaseType] = useState("uso_direto");
-  const [supplier, setSupplier] = useState("");
-  const [justification, setJustification] = useState("");
-  const [impact, setImpact] = useState("");
+  const [categoria, setCategoria] = useState("");
+  const [referenceUrl, setReferenceUrl] = useState("");
+  const [obs, setObs] = useState("");
   const [items, setItems] = useState<ReqItem[]>([emptyItem()]);
 
   const estimated = items.reduce((s, i) => s + i.quantidade * i.valor_unitario, 0);
@@ -49,24 +53,21 @@ export default function RequisicaoCompra() {
   const addItem = () => setItems((p) => [...p, emptyItem()]);
   const removeItem = (idx: number) => setItems((p) => p.filter((_, i) => i !== idx));
 
-  const reset = () => {
-    setCostCenter(""); setPurchaseType("uso_direto"); setSupplier("");
-    setJustification(""); setImpact(""); setItems([emptyItem()]);
-  };
+  const reset = () => { setCategoria(""); setReferenceUrl(""); setObs(""); setItems([emptyItem()]); };
 
   const submit = async (asDraft: boolean) => {
-    if (!costCenter) { toast.error("Selecione o centro de custo."); return; }
-    if (!justification.trim()) { toast.error("Preencha a justificativa."); return; }
+    if (!categoria) { toast.error("Selecione a categoria."); return; }
     if (items.some((i) => !i.descricao.trim())) { toast.error("Descreva todos os itens."); return; }
     try {
       await create.mutateAsync({
-        cost_center: costCenter,
-        purchase_type: purchaseType,
-        escopo: "individual", // no Sales é sempre compra pessoal (ninguém pede insumo)
-        suggested_supplier: supplier || null,
+        escopo: "individual",
+        motivo: categoria,
+        purchase_type: "uso_direto",
+        cost_center: "Pessoal",
+        priority: "normal",
+        reference_url: referenceUrl || null,
         estimated_value: estimated,
-        justification,
-        operational_impact: impact || null,
+        justification: obs || null,
         items,
         status: asDraft ? "rascunho" : "aguardando_aprovacao",
       });
@@ -76,70 +77,47 @@ export default function RequisicaoCompra() {
 
   return (
     <div className="p-4 md:p-6">
-      <div className="space-y-6 max-w-[1100px] mx-auto">
+      <div className="space-y-6 max-w-[1000px] mx-auto">
         <CarboPageHeader
-          title="Requisição de Compra"
-          description="Solicite uma compra — o restante do fluxo (aprovação, OC, NF, contas a pagar) acontece no Carbo Finanças"
+          title="Solicitar Compra"
+          description="Material de trabalho para você — o financeiro aprova e faz a compra"
           icon={ShoppingCart}
         />
 
         <div className="flex items-start gap-2 px-3 py-2 rounded-md bg-blue-500/10 border border-blue-500/20 text-sm text-blue-500">
           <Info className="h-4 w-4 shrink-0 mt-0.5" />
-          <span>A requisição enviada aqui aparece na aba <strong>Requisições</strong> do <strong>Carbo Finanças</strong>, onde é aprovada e segue o fluxo de compra.</span>
+          <span>Compra <strong>pessoal</strong> (uso próprio). Vai para a aba <strong>Requisições</strong> do <strong>Carbo Finanças</strong> pra aprovação. <em>Insumo do setor é pedido no Carbo Ops.</em></span>
         </div>
 
-        {/* Formulário */}
         <CarboCard>
-          <CarboCardHeader><CarboCardTitle>Nova Requisição</CarboCardTitle></CarboCardHeader>
-          <CarboCardContent className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <CarboCardHeader><CarboCardTitle>Nova solicitação</CarboCardTitle></CarboCardHeader>
+          <CarboCardContent className="space-y-5">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-1.5">
-                <Label>Centro de Custo *</Label>
-                <Select value={costCenter} onValueChange={setCostCenter}>
-                  <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
-                  <SelectContent>{COST_CENTERS.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
+                <Label>Categoria *</Label>
+                <Select value={categoria} onValueChange={setCategoria}>
+                  <SelectTrigger><SelectValue placeholder="O que você precisa?" /></SelectTrigger>
+                  <SelectContent>{CATEGORIAS.map((c) => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
               <div className="space-y-1.5">
-                <Label>Tipo de Compra</Label>
-                <Select value={purchaseType} onValueChange={setPurchaseType}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="uso_direto">Uso Direto — material do dia a dia</SelectItem>
-                    <SelectItem value="investimento">Investimento — equipamento (capex)</SelectItem>
-                  </SelectContent>
-                </Select>
-                <p className="text-[11px] text-muted-foreground">
-                  Compra <strong>pessoal</strong> / material de trabalho seu — o financeiro aprova. (Insumo do setor é pedido no Ops.)
-                </p>
+                <Label>Link de referência (opcional)</Label>
+                <Input value={referenceUrl} onChange={(e) => setReferenceUrl(e.target.value)} placeholder="Cole o link do produto, se tiver" />
               </div>
-              <div className="space-y-1.5">
-                <Label>Fornecedor Sugerido</Label>
-                <Input value={supplier} onChange={(e) => setSupplier(e.target.value)} placeholder="Opcional" />
-              </div>
-            </div>
-
-            <div className="space-y-1.5">
-              <Label>Justificativa *</Label>
-              <Textarea value={justification} onChange={(e) => setJustification(e.target.value)} placeholder="Descreva a necessidade..." />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Impacto Operacional</Label>
-              <Textarea value={impact} onChange={(e) => setImpact(e.target.value)} placeholder="Descreva o impacto se não aprovado..." />
             </div>
 
             {/* Itens */}
             <div>
               <div className="flex items-center justify-between mb-2">
-                <Label>Itens da Requisição</Label>
-                <Button variant="outline" size="sm" onClick={addItem} className="gap-1"><Plus className="h-3.5 w-3.5" /> Adicionar Item</Button>
+                <Label>Itens</Label>
+                <Button variant="outline" size="sm" onClick={addItem} className="gap-1"><Plus className="h-3.5 w-3.5" /> Adicionar item</Button>
               </div>
               <div className="space-y-2">
                 {items.map((item, idx) => (
                   <div key={idx} className="grid grid-cols-12 gap-2 items-end">
-                    <div className="col-span-5">
+                    <div className="col-span-6">
                       {idx === 0 && <Label className="text-xs">Descrição</Label>}
-                      <Input value={item.descricao} onChange={(e) => updateItem(idx, "descricao", e.target.value)} placeholder="Descrição do item" />
+                      <Input value={item.descricao} onChange={(e) => updateItem(idx, "descricao", e.target.value)} placeholder="O que comprar" />
                     </div>
                     <div className="col-span-2">
                       {idx === 0 && <Label className="text-xs">Qtd</Label>}
@@ -156,48 +134,46 @@ export default function RequisicaoCompra() {
                       {idx === 0 && <Label className="text-xs">Valor Unit.</Label>}
                       <Input type="number" min={0} step={0.01} value={item.valor_unitario} onChange={(e) => updateItem(idx, "valor_unitario", Number(e.target.value))} />
                     </div>
-                    <div className="col-span-1 flex justify-center">
-                      {items.length > 1 && (
-                        <Button variant="ghost" size="icon" onClick={() => removeItem(idx)} className="h-8 w-8 text-destructive"><Trash2 className="h-3.5 w-3.5" /></Button>
-                      )}
-                    </div>
                   </div>
                 ))}
               </div>
               <div className="mt-3 text-right">
-                <span className="text-sm text-muted-foreground">Valor Estimado: </span>
+                <span className="text-sm text-muted-foreground">Valor estimado: </span>
                 <span className="text-lg font-bold">{brl(estimated)}</span>
               </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label>Observação (opcional)</Label>
+              <Textarea value={obs} onChange={(e) => setObs(e.target.value)} placeholder="Pra que você precisa, se ajudar o financeiro a decidir." rows={2} />
             </div>
 
             <div className="flex justify-end gap-3 pt-4 border-t border-border">
               <Button variant="outline" onClick={reset} disabled={create.isPending}>Limpar</Button>
               <Button variant="secondary" onClick={() => submit(true)} disabled={create.isPending}>
-                {create.isPending ? <><Loader2 className="h-4 w-4 mr-1 animate-spin" /> Salvando…</> : "Salvar Rascunho"}
+                {create.isPending ? <><Loader2 className="h-4 w-4 mr-1 animate-spin" /> Salvando…</> : "Salvar rascunho"}
               </Button>
               <Button onClick={() => submit(false)} disabled={create.isPending} className="bg-carbo-green hover:bg-carbo-green/90 text-white">
-                Enviar para Aprovação
+                Enviar para aprovação
               </Button>
             </div>
           </CarboCardContent>
         </CarboCard>
 
-        {/* Minhas requisições */}
+        {/* Minhas solicitações */}
         <CarboCard>
-          <CarboCardHeader><CarboCardTitle>Minhas Requisições</CarboCardTitle></CarboCardHeader>
+          <CarboCardHeader><CarboCardTitle>Minhas Solicitações</CarboCardTitle></CarboCardHeader>
           <CarboCardContent>
             {isLoading ? (
               <p className="py-8 text-center text-sm text-muted-foreground">Carregando…</p>
             ) : minhas.length === 0 ? (
-              <p className="py-8 text-center text-sm text-muted-foreground">Você ainda não criou requisições.</p>
+              <p className="py-8 text-center text-sm text-muted-foreground">Você ainda não fez solicitações.</p>
             ) : (
               <CarboTable>
                 <CarboTableHeader>
                   <CarboTableRow>
-                    <CarboTableHead>Nº RC</CarboTableHead>
-                    <CarboTableHead>Centro de Custo</CarboTableHead>
-                    <CarboTableHead>Tipo</CarboTableHead>
-                    <CarboTableHead className="text-right">Valor Estimado</CarboTableHead>
+                    <CarboTableHead>Nº</CarboTableHead>
+                    <CarboTableHead className="text-right">Valor</CarboTableHead>
                     <CarboTableHead>Status</CarboTableHead>
                     <CarboTableHead>Data</CarboTableHead>
                   </CarboTableRow>
@@ -208,8 +184,6 @@ export default function RequisicaoCompra() {
                     return (
                       <CarboTableRow key={r.id}>
                         <CarboTableCell className="font-medium">{r.rc_number === "TEMP" ? "—" : r.rc_number}</CarboTableCell>
-                        <CarboTableCell>{r.cost_center}</CarboTableCell>
-                        <CarboTableCell className="capitalize">{r.purchase_type?.replace(/_/g, " ")}</CarboTableCell>
                         <CarboTableCell className="text-right">{brl(Number(r.estimated_value))}</CarboTableCell>
                         <CarboTableCell><CarboBadge variant={st.variant}>{st.label}</CarboBadge></CarboTableCell>
                         <CarboTableCell>{fmtDate(r.created_at)}</CarboTableCell>

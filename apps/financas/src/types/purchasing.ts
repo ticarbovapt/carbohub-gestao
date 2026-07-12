@@ -26,6 +26,10 @@ export interface PurchaseRequest {
   cost_center: string;
   purchase_type: PurchaseRequestType;
   escopo?: 'setor' | 'individual' | null;
+  motivo?: string | null;
+  priority?: 'normal' | 'alta' | 'critica' | null;
+  needed_by?: string | null;
+  reference_url?: string | null;
   suggested_supplier: string | null;
   estimated_value: number;
   justification: string;
@@ -136,6 +140,22 @@ export const PURCHASE_TYPE_HINTS: Record<PurchaseRequestType, string> = {
   uso_direto: 'Material de trabalho do dia a dia.',
   investimento: 'Equipamento / bem durável (capex).',
 };
+
+// Motivo estruturado (setor + categorias individuais) → rótulo legível.
+export const MOTIVO_LABELS: Record<string, string> = {
+  reposicao_safety: 'Reposição — estoque de segurança',
+  ruptura: 'Ruptura — item em falta',
+  demanda: 'Aumento de demanda',
+  novo_projeto: 'Novo produto / projeto',
+  manutencao: 'Manutenção / operação',
+  equipamento: 'Equipamento',
+  outro: 'Outro',
+  material_escritorio: 'Material de escritório',
+  epi: 'EPI / segurança',
+  software: 'Software / licença',
+};
+
+export const PRIORITY_LABELS: Record<string, string> = { normal: 'Normal', alta: 'Alta', critica: 'Crítica' };
 
 export const ORDER_STATUS_LABELS: Record<PurchaseOrderStatus, string> = {
   gerada: 'Gerada',

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Plus, Trash2, ShoppingCart, Info, Loader2 } from "lucide-react";
+import { Plus, Trash2, ShoppingCart, Info, Loader2, Boxes, User } from "lucide-react";
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
 import { CarboCard, CarboCardContent, CarboCardHeader, CarboCardTitle } from "@/components/ui/carbo-card";
 import { CarboBadge } from "@/components/ui/carbo-badge";
@@ -13,10 +13,37 @@ import { toast } from "sonner";
 import { useMyPurchaseRequests, useCreatePurchaseRequest, type ReqItem } from "@/hooks/usePurchaseRequests";
 
 const COST_CENTERS = [
-  "Operações", "Manutenção", "Logística", "Administrativo", "Comercial", "TI",
-  "Marketing", "Qualidade", "Financeiro", "RH", "Jurídico", "P&D", "Compras", "Produção",
+  "Produção", "Operações", "Manutenção", "Logística", "Qualidade",
+  "Administrativo", "Comercial", "TI", "Marketing", "Financeiro", "RH", "P&D", "Compras",
 ];
 const UNITS = ["un", "kg", "g", "L", "mL", "m", "cm", "m²", "m³", "pç", "cx", "pct", "par", "h", "km"];
+
+// Compra do SETOR: motivo estruturado. Cada motivo já define a natureza contábil
+// (purchase_type) — o solicitante não precisa saber de "estoque/uso direto/capex".
+const MOTIVOS_SETOR: { value: string; label: string; type: string }[] = [
+  { value: "reposicao_safety", label: "Reposição — estoque de segurança atingido", type: "estoque" },
+  { value: "ruptura",          label: "Ruptura — item em falta / vai faltar",      type: "estoque" },
+  { value: "demanda",          label: "Aumento de demanda / pico",                 type: "estoque" },
+  { value: "novo_projeto",     label: "Novo produto / projeto",                    type: "estoque" },
+  { value: "manutencao",       label: "Manutenção / consumo de operação",          type: "uso_direto" },
+  { value: "equipamento",      label: "Equipamento / investimento (capex)",        type: "investimento" },
+  { value: "outro",            label: "Outro",                                     type: "estoque" },
+];
+
+// Compra INDIVIDUAL: categoria do material pessoal.
+const CATEGORIAS_IND: { value: string; label: string }[] = [
+  { value: "material_escritorio", label: "Material de escritório" },
+  { value: "equipamento",         label: "Equipamento / periférico" },
+  { value: "epi",                 label: "EPI / segurança" },
+  { value: "software",            label: "Software / licença" },
+  { value: "outro",               label: "Outro" },
+];
+
+const PRIORIDADES: { value: string; label: string }[] = [
+  { value: "normal",  label: "Normal" },
+  { value: "alta",    label: "Alta" },
+  { value: "critica", label: "Crítica" },
+];
 
 const brl = (v: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v || 0);
 const fmtDate = (s: string) => new Date(s).toLocaleDateString("pt-BR");
@@ -26,7 +53,7 @@ const STATUS_LABEL: Record<string, { label: string; variant: "default" | "succes
   aguardando_aprovacao: { label: "Aguardando aprovação", variant: "warning" },
   aprovada: { label: "Aprovada", variant: "success" },
   rejeitada: { label: "Rejeitada", variant: "destructive" },
-  convertida_pc: { label: "Convertida em OC", variant: "default" },
+  convertida: { label: "Convertida em OC", variant: "default" },
 };
 
 const emptyItem = (): ReqItem => ({ descricao: "", quantidade: 1, unidade: "un", valor_unitario: 0 });
@@ -36,13 +63,16 @@ export default function RequisicaoCompra() {
   const { data: minhas = [], isLoading } = useMyPurchaseRequests();
 
   const [escopo, setEscopo] = useState<"setor" | "individual">("setor");
+  const [motivo, setMotivo] = useState("");
+  const [priority, setPriority] = useState("normal");
+  const [neededBy, setNeededBy] = useState("");
   const [costCenter, setCostCenter] = useState("");
-  const [purchaseType, setPurchaseType] = useState("uso_direto");
   const [supplier, setSupplier] = useState("");
-  const [justification, setJustification] = useState("");
-  const [impact, setImpact] = useState("");
+  const [referenceUrl, setReferenceUrl] = useState("");
+  const [obs, setObs] = useState("");
   const [items, setItems] = useState<ReqItem[]>([emptyItem()]);
 
+  const isSetor = escopo === "setor";
   const estimated = items.reduce((s, i) => s + i.quantidade * i.valor_unitario, 0);
 
   const updateItem = (idx: number, field: keyof ReqItem, value: any) =>
@@ -50,24 +80,34 @@ export default function RequisicaoCompra() {
   const addItem = () => setItems((p) => [...p, emptyItem()]);
   const removeItem = (idx: number) => setItems((p) => p.filter((_, i) => i !== idx));
 
+  const switchEscopo = (e: "setor" | "individual") => { setEscopo(e); setMotivo(""); };
+
   const reset = () => {
-    setEscopo("setor"); setCostCenter(""); setPurchaseType("uso_direto"); setSupplier("");
-    setJustification(""); setImpact(""); setItems([emptyItem()]);
+    setEscopo("setor"); setMotivo(""); setPriority("normal"); setNeededBy("");
+    setCostCenter(""); setSupplier(""); setReferenceUrl(""); setObs(""); setItems([emptyItem()]);
   };
 
   const submit = async (asDraft: boolean) => {
-    if (!costCenter) { toast.error("Selecione o centro de custo."); return; }
-    if (!justification.trim()) { toast.error("Preencha a justificativa."); return; }
     if (items.some((i) => !i.descricao.trim())) { toast.error("Descreva todos os itens."); return; }
+    if (!motivo) { toast.error(isSetor ? "Selecione o motivo da requisição." : "Selecione a categoria."); return; }
+    if (isSetor && !costCenter) { toast.error("Selecione o centro de custo."); return; }
+
+    const purchase_type = isSetor
+      ? (MOTIVOS_SETOR.find((m) => m.value === motivo)?.type ?? "estoque")
+      : "uso_direto";
+
     try {
       await create.mutateAsync({
-        cost_center: costCenter,
-        purchase_type: purchaseType,
         escopo,
-        suggested_supplier: supplier || null,
+        motivo,
+        purchase_type,
+        cost_center: isSetor ? costCenter : "Pessoal",
+        priority: isSetor ? priority : "normal",
+        needed_by: neededBy || null,
+        reference_url: isSetor ? null : (referenceUrl || null),
+        suggested_supplier: isSetor ? (supplier || null) : null,
         estimated_value: estimated,
-        justification,
-        operational_impact: impact || null,
+        justification: obs || null,
         items,
         status: asDraft ? "rascunho" : "aguardando_aprovacao",
       });
@@ -80,91 +120,121 @@ export default function RequisicaoCompra() {
       <div className="space-y-6 max-w-[1100px] mx-auto">
         <CarboPageHeader
           title="Requisição de Compra"
-          description="Solicite uma compra — o restante do fluxo (aprovação, OC, NF, contas a pagar) acontece no Carbo Finanças"
+          description="Solicite uma compra — aprovação, OC, NF e contas a pagar seguem no Carbo Finanças"
           icon={ShoppingCart}
         />
 
         <div className="flex items-start gap-2 px-3 py-2 rounded-md bg-blue-500/10 border border-blue-500/20 text-sm text-blue-500">
           <Info className="h-4 w-4 shrink-0 mt-0.5" />
-          <span>A requisição enviada aqui aparece na aba <strong>Requisições</strong> do <strong>Carbo Finanças</strong>, onde é aprovada e segue o fluxo de compra.</span>
+          <span>A requisição enviada aqui vai para a aba <strong>Requisições</strong> do <strong>Carbo Finanças</strong>, onde é aprovada e segue o fluxo de compra.</span>
         </div>
 
-        {/* Formulário */}
         <CarboCard>
           <CarboCardHeader><CarboCardTitle>Nova Requisição</CarboCardTitle></CarboCardHeader>
-          <CarboCardContent className="space-y-4">
-            {/* Escopo: do setor (insumo/operação) vs individual (uso pessoal) */}
-            <div className="space-y-1.5">
-              <Label>Esta compra é</Label>
-              <div className="grid grid-cols-2 gap-2 max-w-md">
-                <button
-                  type="button"
-                  onClick={() => setEscopo("setor")}
-                  className={`rounded-lg border px-3 py-2 text-left text-sm transition-colors ${escopo === "setor" ? "border-carbo-green bg-carbo-green/10" : "border-input hover:border-muted-foreground/40"}`}
-                >
-                  <span className="font-semibold">Do setor</span>
-                  <span className="block text-xs text-muted-foreground">Insumo / operação (ex.: reposição de estoque)</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setEscopo("individual")}
-                  className={`rounded-lg border px-3 py-2 text-left text-sm transition-colors ${escopo === "individual" ? "border-carbo-green bg-carbo-green/10" : "border-input hover:border-muted-foreground/40"}`}
-                >
-                  <span className="font-semibold">Individual</span>
-                  <span className="block text-xs text-muted-foreground">Uso pessoal / material de trabalho seu</span>
-                </button>
-              </div>
+          <CarboCardContent className="space-y-5">
+            {/* Escopo — define o formulário inteiro */}
+            <div className="grid sm:grid-cols-2 gap-3">
+              {([
+                { key: "setor", icon: Boxes, title: "Compra do setor", desc: "Insumo / operação — reposição de estoque, produção." },
+                { key: "individual", icon: User, title: "Compra individual", desc: "Material de trabalho seu — uso pessoal." },
+              ] as const).map((opt) => {
+                const active = escopo === opt.key;
+                return (
+                  <button
+                    key={opt.key}
+                    type="button"
+                    onClick={() => switchEscopo(opt.key)}
+                    className={`flex items-start gap-3 rounded-xl border p-4 text-left transition-all ${active ? "border-carbo-green bg-carbo-green/5 ring-1 ring-carbo-green/30" : "border-border hover:border-muted-foreground/40"}`}
+                  >
+                    <div className={`h-9 w-9 rounded-lg flex items-center justify-center shrink-0 ${active ? "bg-carbo-green/15 text-carbo-green" : "bg-muted text-muted-foreground"}`}>
+                      <opt.icon className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <p className="font-semibold text-sm">{opt.title}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">{opt.desc}</p>
+                    </div>
+                  </button>
+                );
+              })}
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="space-y-1.5">
-                <Label>Centro de Custo *</Label>
-                <Select value={costCenter} onValueChange={setCostCenter}>
-                  <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
-                  <SelectContent>{COST_CENTERS.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1.5">
-                <Label>Tipo de Compra</Label>
-                <Select value={purchaseType} onValueChange={setPurchaseType}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="estoque">Estoque — reposição de insumo</SelectItem>
-                    <SelectItem value="uso_direto">Uso Direto — material do dia a dia</SelectItem>
-                    <SelectItem value="investimento">Investimento — equipamento (capex)</SelectItem>
-                  </SelectContent>
-                </Select>
-                <p className="text-[11px] text-muted-foreground">
-                  Estoque = insumo p/ não faltar · Uso Direto = material de trabalho · Investimento = equipamento.
-                </p>
-              </div>
-              <div className="space-y-1.5">
-                <Label>Fornecedor Sugerido</Label>
-                <Input value={supplier} onChange={(e) => setSupplier(e.target.value)} placeholder="Opcional" />
-              </div>
-            </div>
+            {/* ── Campos do SETOR ─────────────────────────────────────────── */}
+            {isSetor ? (
+              <div className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <Label>Motivo da requisição *</Label>
+                    <Select value={motivo} onValueChange={setMotivo}>
+                      <SelectTrigger><SelectValue placeholder="Por que está comprando?" /></SelectTrigger>
+                      <SelectContent>{MOTIVOS_SETOR.map((m) => <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>)}</SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Prioridade</Label>
+                    <div className="inline-flex rounded-lg border border-border p-1 bg-muted/30 w-full">
+                      {PRIORIDADES.map((p) => (
+                        <button
+                          key={p.value}
+                          type="button"
+                          onClick={() => setPriority(p.value)}
+                          className={`flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${priority === p.value
+                            ? (p.value === "critica" ? "bg-destructive text-white" : p.value === "alta" ? "bg-warning text-warning-foreground" : "bg-background shadow-sm")
+                            : "text-muted-foreground hover:text-foreground"}`}
+                        >
+                          {p.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
 
-            <div className="space-y-1.5">
-              <Label>Justificativa *</Label>
-              <Textarea value={justification} onChange={(e) => setJustification(e.target.value)} placeholder="Descreva a necessidade..." />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Impacto Operacional</Label>
-              <Textarea value={impact} onChange={(e) => setImpact(e.target.value)} placeholder="Descreva o impacto se não aprovado..." />
-            </div>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="space-y-1.5">
+                    <Label>Centro de Custo *</Label>
+                    <Select value={costCenter} onValueChange={setCostCenter}>
+                      <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
+                      <SelectContent>{COST_CENTERS.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Precisa até (opcional)</Label>
+                    <Input type="date" value={neededBy} onChange={(e) => setNeededBy(e.target.value)} />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Fornecedor sugerido (opcional)</Label>
+                    <Input value={supplier} onChange={(e) => setSupplier(e.target.value)} placeholder="Se já tiver um" />
+                  </div>
+                </div>
+              </div>
+            ) : (
+              /* ── Campos do INDIVIDUAL (enxuto) ──────────────────────────── */
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <Label>Categoria *</Label>
+                  <Select value={motivo} onValueChange={setMotivo}>
+                    <SelectTrigger><SelectValue placeholder="O que você precisa?" /></SelectTrigger>
+                    <SelectContent>{CATEGORIAS_IND.map((c) => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}</SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Link de referência (opcional)</Label>
+                  <Input value={referenceUrl} onChange={(e) => setReferenceUrl(e.target.value)} placeholder="Cole o link do produto, se tiver" />
+                </div>
+              </div>
+            )}
 
             {/* Itens */}
             <div>
               <div className="flex items-center justify-between mb-2">
-                <Label>Itens da Requisição</Label>
-                <Button variant="outline" size="sm" onClick={addItem} className="gap-1"><Plus className="h-3.5 w-3.5" /> Adicionar Item</Button>
+                <Label>Itens</Label>
+                <Button variant="outline" size="sm" onClick={addItem} className="gap-1"><Plus className="h-3.5 w-3.5" /> Adicionar item</Button>
               </div>
               <div className="space-y-2">
                 {items.map((item, idx) => (
                   <div key={idx} className="grid grid-cols-12 gap-2 items-end">
                     <div className="col-span-5">
                       {idx === 0 && <Label className="text-xs">Descrição</Label>}
-                      <Input value={item.descricao} onChange={(e) => updateItem(idx, "descricao", e.target.value)} placeholder="Descrição do item" />
+                      <Input value={item.descricao} onChange={(e) => updateItem(idx, "descricao", e.target.value)} placeholder="O que comprar" />
                     </div>
                     <div className="col-span-2">
                       {idx === 0 && <Label className="text-xs">Qtd</Label>}
@@ -190,18 +260,29 @@ export default function RequisicaoCompra() {
                 ))}
               </div>
               <div className="mt-3 text-right">
-                <span className="text-sm text-muted-foreground">Valor Estimado: </span>
+                <span className="text-sm text-muted-foreground">Valor estimado: </span>
                 <span className="text-lg font-bold">{brl(estimated)}</span>
               </div>
+            </div>
+
+            {/* Observação — opcional em ambos (sem justificativa/impacto obrigatórios) */}
+            <div className="space-y-1.5">
+              <Label>{isSetor ? "Observações (opcional)" : "Observação (opcional)"}</Label>
+              <Textarea
+                value={obs}
+                onChange={(e) => setObs(e.target.value)}
+                placeholder={isSetor ? "Contexto adicional pro comprador, se precisar." : "Algo que ajude o financeiro a decidir, se precisar."}
+                rows={isSetor ? 3 : 2}
+              />
             </div>
 
             <div className="flex justify-end gap-3 pt-4 border-t border-border">
               <Button variant="outline" onClick={reset} disabled={create.isPending}>Limpar</Button>
               <Button variant="secondary" onClick={() => submit(true)} disabled={create.isPending}>
-                {create.isPending ? <><Loader2 className="h-4 w-4 mr-1 animate-spin" /> Salvando…</> : "Salvar Rascunho"}
+                {create.isPending ? <><Loader2 className="h-4 w-4 mr-1 animate-spin" /> Salvando…</> : "Salvar rascunho"}
               </Button>
               <Button onClick={() => submit(false)} disabled={create.isPending} className="bg-carbo-green hover:bg-carbo-green/90 text-white">
-                Enviar para Aprovação
+                Enviar para aprovação
               </Button>
             </div>
           </CarboCardContent>
@@ -220,9 +301,8 @@ export default function RequisicaoCompra() {
                 <CarboTableHeader>
                   <CarboTableRow>
                     <CarboTableHead>Nº RC</CarboTableHead>
-                    <CarboTableHead>Centro de Custo</CarboTableHead>
-                    <CarboTableHead>Tipo</CarboTableHead>
-                    <CarboTableHead className="text-right">Valor Estimado</CarboTableHead>
+                    <CarboTableHead>Escopo</CarboTableHead>
+                    <CarboTableHead className="text-right">Valor</CarboTableHead>
                     <CarboTableHead>Status</CarboTableHead>
                     <CarboTableHead>Data</CarboTableHead>
                   </CarboTableRow>
@@ -230,11 +310,11 @@ export default function RequisicaoCompra() {
                 <CarboTableBody>
                   {minhas.map((r) => {
                     const st = STATUS_LABEL[r.status] ?? { label: r.status, variant: "default" as const };
+                    const esc = (r as any).escopo === "setor" ? "Do setor" : "Individual";
                     return (
                       <CarboTableRow key={r.id}>
                         <CarboTableCell className="font-medium">{r.rc_number === "TEMP" ? "—" : r.rc_number}</CarboTableCell>
-                        <CarboTableCell>{r.cost_center}</CarboTableCell>
-                        <CarboTableCell className="capitalize">{r.purchase_type?.replace(/_/g, " ")}</CarboTableCell>
+                        <CarboTableCell><CarboBadge variant={(r as any).escopo === "setor" ? "info" : "secondary"}>{esc}</CarboBadge></CarboTableCell>
                         <CarboTableCell className="text-right">{brl(Number(r.estimated_value))}</CarboTableCell>
                         <CarboTableCell><CarboBadge variant={st.variant}>{st.label}</CarboBadge></CarboTableCell>
                         <CarboTableCell>{fmtDate(r.created_at)}</CarboTableCell>

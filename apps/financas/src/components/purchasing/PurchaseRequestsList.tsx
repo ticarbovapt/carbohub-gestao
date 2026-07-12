@@ -12,6 +12,8 @@ import { PurchaseRequestForm } from "./PurchaseRequestForm";
 import {
   REQUEST_STATUS_LABELS,
   PURCHASE_TYPE_LABELS,
+  MOTIVO_LABELS,
+  PRIORITY_LABELS,
   type PurchaseRequest,
   type PurchaseRequestStatus,
 } from "@/types/purchasing";
@@ -200,11 +202,16 @@ export function PurchaseRequestsList({ showNewForm, onCloseForm }: PurchaseReque
                 </CarboTableCell>
                 <CarboTableCell>{rc.cost_center}</CarboTableCell>
                 <CarboTableCell>
-                  <div className="flex items-center gap-2">
-                    <span>{PURCHASE_TYPE_LABELS[rc.purchase_type]}</span>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span>{(rc as any).motivo ? (MOTIVO_LABELS[(rc as any).motivo] ?? PURCHASE_TYPE_LABELS[rc.purchase_type]) : PURCHASE_TYPE_LABELS[rc.purchase_type]}</span>
                     <CarboBadge variant={escopoOf(rc) === "setor" ? "info" : "secondary"} className="text-[10px]">
                       {escopoOf(rc) === "setor" ? "Setor" : "Individual"}
                     </CarboBadge>
+                    {((rc as any).priority === "critica" || (rc as any).priority === "alta") && (
+                      <CarboBadge variant={(rc as any).priority === "critica" ? "destructive" : "warning"} className="text-[10px]">
+                        {PRIORITY_LABELS[(rc as any).priority]}
+                      </CarboBadge>
+                    )}
                   </div>
                 </CarboTableCell>
                 <CarboTableCell className="font-mono">{formatCurrency(rc.estimated_value)}</CarboTableCell>
@@ -256,15 +263,30 @@ export function PurchaseRequestsList({ showNewForm, onCloseForm }: PurchaseReque
               <div className="grid grid-cols-2 gap-4 text-sm">
                 <div><span className="text-muted-foreground">Solicitante:</span> <strong>{requesterName(selectedRC)}</strong></div>
                 <div><span className="text-muted-foreground">Setor:</span> <strong>{setorOf(selectedRC) ? (deptLabel[setorOf(selectedRC)!] ?? setorOf(selectedRC)) : "—"}</strong></div>
+                <div><span className="text-muted-foreground">Escopo:</span> <strong>{escopoOf(selectedRC) === "setor" ? "Do setor" : "Individual"}</strong></div>
+                {(selectedRC as any).motivo && (
+                  <div><span className="text-muted-foreground">Motivo:</span> <strong>{MOTIVO_LABELS[(selectedRC as any).motivo] ?? (selectedRC as any).motivo}</strong></div>
+                )}
+                {(selectedRC as any).priority && (selectedRC as any).priority !== "normal" && (
+                  <div><span className="text-muted-foreground">Prioridade:</span> <strong>{PRIORITY_LABELS[(selectedRC as any).priority]}</strong></div>
+                )}
+                {(selectedRC as any).needed_by && (
+                  <div><span className="text-muted-foreground">Precisa até:</span> <strong>{format(new Date((selectedRC as any).needed_by), "dd/MM/yyyy", { locale: ptBR })}</strong></div>
+                )}
                 <div><span className="text-muted-foreground">Centro de Custo:</span> <strong>{selectedRC.cost_center}</strong></div>
                 <div><span className="text-muted-foreground">Tipo:</span> <strong>{PURCHASE_TYPE_LABELS[selectedRC.purchase_type]}</strong></div>
                 <div><span className="text-muted-foreground">Fornecedor:</span> <strong>{selectedRC.suggested_supplier || "—"}</strong></div>
                 <div><span className="text-muted-foreground">Valor:</span> <strong className="kpi-number">{formatCurrency(selectedRC.estimated_value)}</strong></div>
+                {(selectedRC as any).reference_url && (
+                  <div className="col-span-2"><span className="text-muted-foreground">Link:</span> <a href={(selectedRC as any).reference_url} target="_blank" rel="noopener" className="text-carbo-green underline break-all">{(selectedRC as any).reference_url}</a></div>
+                )}
               </div>
-              <div>
-                <p className="text-sm text-muted-foreground mb-1">Justificativa</p>
-                <p className="text-sm bg-muted/50 rounded-lg p-3">{selectedRC.justification}</p>
-              </div>
+              {selectedRC.justification && (
+                <div>
+                  <p className="text-sm text-muted-foreground mb-1">Observação</p>
+                  <p className="text-sm bg-muted/50 rounded-lg p-3">{selectedRC.justification}</p>
+                </div>
+              )}
               {selectedRC.operational_impact && (
                 <div>
                   <p className="text-sm text-muted-foreground mb-1">Impacto Operacional</p>
