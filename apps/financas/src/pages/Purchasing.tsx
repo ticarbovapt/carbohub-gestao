@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useParams, useNavigate } from "react-router-dom";
 import { usePersistedState } from "@/hooks/usePersistedState";
 import { Wallet, Plus, FileText, Package, Receipt, CreditCard, BarChart3, Clock, AlertTriangle, CheckCircle2, Building2, Wallet as WalletIcon, RefreshCw, DollarSign } from "lucide-react";
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
@@ -29,8 +30,23 @@ import { SubscriptionsList } from "@/components/purchasing/SubscriptionsList";
 export default function Purchasing() {
   const { gestor } = useAuth();
   const [showNewRC, setShowNewRC] = useState(false);
-  const [activeTab, setActiveTab] = usePersistedState("compras.tab", "requisicoes");
+  const { tab } = useParams();
+  const navigate = useNavigate();
+  const [persistedTab, setPersistedTab] = usePersistedState("compras.tab", "requisicoes");
   const [payFilter, setPayFilter] = useState<string>("");
+
+  // Cada aba vira um caminho: /compras/<aba>. A URL manda; o localStorage é só
+  // fallback quando entra em /compras sem aba (ex: link do menu lateral).
+  const TABS = ["requisicoes", "ordens", "recebimento", "notas", "pagar", "fornecedores", "cartoes", "assinaturas", ...(gestor ? ["dashboard"] : [])];
+  const resolved = tab && TABS.includes(tab) ? tab : persistedTab;
+  const activeTab = TABS.includes(resolved) ? resolved : "requisicoes";
+  const setActiveTab = (t: string) => { setPersistedTab(t); navigate(`/compras/${t}`); };
+
+  // Entrou em /compras (ou aba inválida) → reflete a aba resolvida na URL.
+  useEffect(() => {
+    if (!tab || !TABS.includes(tab)) navigate(`/compras/${activeTab}`, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab]);
 
   // Abre uma aba já com um filtro aplicado (deep-link a partir dos KPIs).
   const goPayables = (filter: string) => { setPayFilter(filter); setActiveTab("pagar"); };

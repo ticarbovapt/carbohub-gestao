@@ -26,6 +26,7 @@ export default function App() {
         <Route path="/" element={<Home />} />
         <Route path="/financeiro" element={<Financeiro />} />
         <Route path="/compras" element={<Purchasing />} />
+        <Route path="/compras/:tab" element={<Purchasing />} />
         <Route path="/suprimentos" element={<Suprimentos />} />
         <Route path="/pedidos" element={<Orders />} />
         <Route path="/faturamento" element={<Faturamento />} />
