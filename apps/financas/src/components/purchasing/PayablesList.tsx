@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { CreditCard, CheckCircle2, Upload } from "lucide-react";
 import { CarboBadge } from "@/components/ui/carbo-badge";
 import { Button } from "@/components/ui/button";
@@ -19,8 +19,10 @@ const statusVariantMap: Record<PayableStatus, any> = {
   cancelado: "cancelled",
 };
 
-export function PayablesList() {
-  const [statusFilter, setStatusFilter] = useState<string>("all");
+export function PayablesList({ initialStatus }: { initialStatus?: string } = {}) {
+  const [statusFilter, setStatusFilter] = useState<string>(initialStatus ?? "all");
+  // Sincroniza quando a aba é aberta via KPI já com um filtro (ex: "atrasado").
+  useEffect(() => { if (initialStatus) setStatusFilter(initialStatus); }, [initialStatus]);
   // Busca TODAS e filtra no cliente pelo status EFETIVO — senão o filtro
   // "Atrasado" não acha nada (no banco elas ficam como "programado").
   const { data: allPayables, isLoading } = usePurchasePayables();

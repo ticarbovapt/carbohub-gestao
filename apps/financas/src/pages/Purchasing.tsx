@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Wallet, Plus, FileText, Package, Receipt, CreditCard, BarChart3, Clock, AlertTriangle, CheckCircle2, Building2, Wallet as WalletIcon, RefreshCw } from "lucide-react";
+import { Wallet, Plus, FileText, Package, Receipt, CreditCard, BarChart3, Clock, AlertTriangle, CheckCircle2, Building2, Wallet as WalletIcon, RefreshCw, DollarSign } from "lucide-react";
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
 import { CarboCard, CarboCardContent, CarboCardHeader, CarboCardTitle } from "@/components/ui/carbo-card";
 import { CarboBadge } from "@/components/ui/carbo-badge";
@@ -29,6 +29,10 @@ export default function Purchasing() {
   const { gestor } = useAuth();
   const [showNewRC, setShowNewRC] = useState(false);
   const [activeTab, setActiveTab] = useState("requisicoes");
+  const [payFilter, setPayFilter] = useState<string>("all");
+
+  // Abre uma aba já com um filtro aplicado (deep-link a partir dos KPIs).
+  const goPayables = (filter: string) => { setPayFilter(filter); setActiveTab("pagar"); };
 
   const { data: kpis } = usePurchasingKPIs();
 
@@ -64,7 +68,7 @@ export default function Purchasing() {
                 <p className="text-2xl font-bold kpi-number">{kpis.rcPendentes}</p>
               </CarboCardContent>
             </CarboCard>
-            <CarboCard variant="kpi" padding="sm" className="cursor-pointer" onClick={() => setActiveTab("recebimento")} title="Ver OCs aguardando recebimento">
+            <CarboCard variant="kpi" padding="sm" className="cursor-pointer" onClick={() => setActiveTab("ordens")} title="Ver ordens de compra">
               <CarboCardContent>
                 <div className="flex items-center gap-2 mb-1">
                   <Package className="h-4 w-4 text-carbo-blue" />
@@ -73,7 +77,7 @@ export default function Purchasing() {
                 <p className="text-2xl font-bold kpi-number">{kpis.ocAbertas}</p>
               </CarboCardContent>
             </CarboCard>
-            <CarboCard variant="kpi" padding="sm" className="cursor-pointer" onClick={() => setActiveTab("pagar")} title="Ver contas a pagar">
+            <CarboCard variant="kpi" padding="sm" className="cursor-pointer" onClick={() => goPayables("atrasado")} title="Ver contas atrasadas">
               <CarboCardContent>
                 <div className="flex items-center gap-2 mb-1">
                   <AlertTriangle className="h-4 w-4 text-destructive" />
@@ -85,13 +89,13 @@ export default function Purchasing() {
             <CarboCard variant="kpi" padding="sm" className="cursor-pointer" onClick={() => setActiveTab("ordens")} title="Ver ordens de compra">
               <CarboCardContent>
                 <div className="flex items-center gap-2 mb-1">
-                  <BarChart3 className="h-4 w-4 text-carbo-green" />
+                  <DollarSign className="h-4 w-4 text-carbo-green" />
                   <span className="text-xs text-muted-foreground">Comprometido</span>
                 </div>
                 <p className="text-lg font-bold kpi-number">{formatCurrency(kpis.totalComprometido)}</p>
               </CarboCardContent>
             </CarboCard>
-            <CarboCard variant="kpi" padding="sm" className="cursor-pointer" onClick={() => setActiveTab("pagar")} title="Ver contas a pagar">
+            <CarboCard variant="kpi" padding="sm" className="cursor-pointer" onClick={() => goPayables("all")} title="Ver contas a pagar">
               <CarboCardContent>
                 <div className="flex items-center gap-2 mb-1">
                   <CreditCard className="h-4 w-4 text-warning" />
@@ -126,6 +130,9 @@ export default function Purchasing() {
               <CreditCard className="h-3.5 w-3.5" />
               Contas a Pagar
             </TabsTrigger>
+
+            <div className="w-px self-stretch bg-border mx-1 my-1" aria-hidden />
+
             <TabsTrigger value="fornecedores" className="gap-1.5">
               <Building2 className="h-3.5 w-3.5" />
               Fornecedores
@@ -139,10 +146,13 @@ export default function Purchasing() {
               Assinaturas
             </TabsTrigger>
             {canSeeDashboard && (
-              <TabsTrigger value="dashboard" className="gap-1.5">
-                <BarChart3 className="h-3.5 w-3.5" />
-                Dashboard
-              </TabsTrigger>
+              <>
+                <div className="w-px self-stretch bg-border mx-1 my-1" aria-hidden />
+                <TabsTrigger value="dashboard" className="gap-1.5">
+                  <BarChart3 className="h-3.5 w-3.5" />
+                  Dashboard
+                </TabsTrigger>
+              </>
             )}
           </TabsList>
 
@@ -159,7 +169,7 @@ export default function Purchasing() {
             <InvoicesList />
           </TabsContent>
           <TabsContent value="pagar">
-            <PayablesList />
+            <PayablesList initialStatus={payFilter} />
           </TabsContent>
           <TabsContent value="fornecedores">
             <SuppliersList />
