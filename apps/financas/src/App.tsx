@@ -4,6 +4,8 @@ import { Layout } from "./components/Layout";
 import Home from "./pages/Home";
 import Financeiro from "./pages/Financeiro";
 import Purchasing from "./pages/Purchasing";
+import Recebiveis from "./pages/Recebiveis";
+import FluxoCaixa from "./pages/FluxoCaixa";
 import Suprimentos from "./pages/Suprimentos";
 import Orders from "./pages/Orders";
 import Faturamento from "./pages/Faturamento";
@@ -27,6 +29,8 @@ export default function App() {
         <Route path="/financeiro" element={<Financeiro />} />
         <Route path="/compras" element={<Purchasing />} />
         <Route path="/compras/:tab" element={<Purchasing />} />
+        <Route path="/recebiveis" element={<Recebiveis />} />
+        <Route path="/fluxo-caixa" element={<FluxoCaixa />} />
         <Route path="/suprimentos" element={<Suprimentos />} />
         <Route path="/pedidos" element={<Orders />} />
         <Route path="/faturamento" element={<Faturamento />} />

@@ -1774,6 +1774,79 @@ async function syncContasPagar(
   return { synced: totalSynced, failed: totalFailed };
 }
 
+// Espelha /contas/receber do Bling em receivables (source='bling'). Alimenta o
+// Contas a Receber e o fluxo de caixa consolidado.
+function mapContaReceberStatus(situacao: unknown): string {
+  const s = Number(situacao);
+  if (s === 2) return "recebido";           // baixado/recebido
+  if (s === 4 || s === 5) return "cancelado";
+  return "programado";                       // em aberto / parcial
+}
+
+async function syncContasReceber(
+  supabaseAdmin: ReturnType<typeof createClient>,
+  token: string,
+  logId: string
+): Promise<{ synced: number; failed: number }> {
+  let page = 1, totalSynced = 0, totalFailed = 0, hasMore = true;
+  const contactNameCache = new Map<number, string | null>();
+  const resolveName = async (conta: any): Promise<string> => {
+    const direto = conta.contato?.nome || conta.cliente?.nome || conta.contato?.fantasia;
+    if (direto) return String(direto);
+    const contatoId = Number(conta.contato?.id ?? conta.cliente?.id ?? 0) || null;
+    if (contatoId) {
+      if (!contactNameCache.has(contatoId)) {
+        const { data: c } = await supabaseAdmin.from("bling_contacts").select("nome, fantasia").eq("bling_id", contatoId).maybeSingle();
+        contactNameCache.set(contatoId, (c?.nome as string) || (c?.fantasia as string) || null);
+      }
+      const nome = contactNameCache.get(contatoId);
+      if (nome) return nome;
+    }
+    return "Cliente não identificado";
+  };
+
+  while (hasMore) {
+    const data = await blingFetch(token, "/contas/receber", page, 100);
+    const contas = data.data || [];
+    if (contas.length === 0) { hasMore = false; break; }
+    for (const conta of contas) {
+      try {
+        const vencimento: string | null = conta.vencimento || conta.dataVencimento || null;
+        const cliente = await resolveName(conta);
+        const valor = Number(conta.valor ?? conta.valorTotal ?? conta.saldo ?? 0);
+        const numero = conta.numeroDocumento || conta.numero || String(conta.id);
+        const status = mapContaReceberStatus(conta.situacao);
+        await supabaseAdmin.from("receivables").upsert(
+          {
+            bling_id: conta.id,
+            bling_numero: numero ? String(numero) : null,
+            source: "bling",
+            customer_name: cliente,
+            amount: valor,
+            due_date: vencimento || new Date().toISOString().split("T")[0],
+            status,
+            received_at: status === "recebido" ? (conta.dataPagamento || conta.dataBaixa || null) : null,
+            notes: conta.historico || conta.observacoes || null,
+            bling_raw: conta,
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: "bling_id" }
+        );
+        totalSynced++;
+      } catch (e) {
+        console.error("[bling-sync] Failed to upsert conta a receber:", e);
+        totalFailed++;
+      }
+    }
+    await new Promise((resolve) => setTimeout(resolve, 350));
+    page++;
+    if (contas.length < 100) hasMore = false;
+  }
+
+  await supabaseAdmin.from("bling_sync_log").update({ records_synced: totalSynced, records_failed: totalFailed }).eq("id", logId);
+  return { synced: totalSynced, failed: totalFailed };
+}
+
 // ── FASE 1: Pedidos de Compra (Bling → Sistema) ────────────────────────────
 // Espelha /pedidos/compras do Bling em purchase_orders (source='bling').
 // Alimenta o gráfico "Custo por Fornecedor (Top 8)".
@@ -2068,7 +2141,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
     const results: Record<string, any> = {};
 
     // Etapas de BUSCA no Bling (chamadas externas, lentas). NÃO inclui treatment/bridge.
-    const FETCH_ENTITIES = ["products", "variacoes", "stock", "contacts", "orders", "order_details", "vendedores", "nfe", "contas_pagar", "pedidos_compra"];
+    const FETCH_ENTITIES = ["products", "variacoes", "stock", "contacts", "orders", "order_details", "vendedores", "nfe", "contas_pagar", "contas_receber", "pedidos_compra"];
 
     // "all"  = pipeline completo numa só invocação (legado — pode estourar o tempo antes do bridge)
     // "fetch" = apenas busca no Bling (sem treatment/bridge) — usado em pipeline por fases
@@ -2149,6 +2222,9 @@ Deno.serve(async (req: Request): Promise<Response> => {
             break;
           case "contas_pagar":
             result = await syncWithRetry(entityType, syncContasPagar, logId);
+            break;
+          case "contas_receber":
+            result = await syncWithRetry(entityType, syncContasReceber, logId);
             break;
           case "pedidos_compra":
             result = await syncWithRetry(entityType, syncPedidosCompra, logId);
