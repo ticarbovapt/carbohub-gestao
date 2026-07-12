@@ -1,6 +1,5 @@
 import { useState } from "react";
-import { Eye, Send, PackageCheck, FileUp } from "lucide-react";
-import { ReceberDialog, LancarNFDialog } from "./OCActionsDialogs";
+import { Eye, Send } from "lucide-react";
 import { CarboBadge } from "@/components/ui/carbo-badge";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -28,8 +27,6 @@ export function PurchaseOrdersList() {
   );
   const updateStatus = useUpdatePurchaseOrderStatus();
   const [selectedOC, setSelectedOC] = useState<PurchaseOrder | null>(null);
-  const [receberOC, setReceberOC] = useState<PurchaseOrder | null>(null);
-  const [nfOC, setNfOC] = useState<PurchaseOrder | null>(null);
 
   const formatCurrency = (val: number) =>
     new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(val);
@@ -102,16 +99,6 @@ export function PurchaseOrdersList() {
                         <Send className="h-4 w-4" />
                       </Button>
                     )}
-                    {oc.status !== "recebida" && oc.status !== "cancelada" && (
-                      <Button variant="ghost" size="icon" className="h-8 w-8 text-carbo-green" onClick={() => setReceberOC(oc)} title="Receber">
-                        <PackageCheck className="h-4 w-4" />
-                      </Button>
-                    )}
-                    {(oc.status === "recebida" || oc.status === "parcialmente_recebida") && (
-                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setNfOC(oc)} title="Lançar NF">
-                        <FileUp className="h-4 w-4" />
-                      </Button>
-                    )}
                   </div>
                 </CarboTableCell>
               </CarboTableRow>
@@ -163,9 +150,6 @@ export function PurchaseOrdersList() {
           )}
         </DialogContent>
       </Dialog>
-
-      <ReceberDialog oc={receberOC} onClose={() => setReceberOC(null)} />
-      <LancarNFDialog oc={nfOC} onClose={() => setNfOC(null)} />
     </div>
   );
 }
