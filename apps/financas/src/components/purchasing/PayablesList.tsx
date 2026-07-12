@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { usePurchasePayablesOpen, usePurchasePayablesPaged, useUpdatePayableStatus } from "@/hooks/usePurchasing";
 import { useAuth } from "@/contexts/AuthContext";
 import { PAYABLE_STATUS_LABELS, type PayableStatus } from "@/types/purchasing";
-import { format, isPast, isToday, differenceInCalendarDays } from "date-fns";
+import { format, isPast, isToday, differenceInCalendarDays, addMonths, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import {
   CarboTable, CarboTableHeader, CarboTableBody, CarboTableRow, CarboTableHead, CarboTableCell,
@@ -51,8 +51,10 @@ export function PayablesList({ initialStatus }: { initialStatus?: string } = {})
   const [pageSize, setPageSize] = usePersistedState<number>("compras.pagar.pageSize", 20);
   const [payingId, setPayingId] = useState<string | null>(null);
 
-  // Período efetivo: o Mês tem prioridade; senão usa De/Até.
-  const periodo = mes ? monthBounds(mes) : { first: from, last: to };
+  // De/Até é a fonte de verdade quando preenchido; senão vale o navegador de mês.
+  const usaPeriodo = !!(from || to);
+  const periodo = usaPeriodo ? { first: from, last: to } : monthBounds(mes);
+  const shiftMes = (delta: number) => setMes(format(addMonths(parseISO(`${mes || CURRENT_MONTH}-01`), delta), "yyyy-MM"));
 
   // Só sobrescreve o filtro quando veio um deep-link real dos KPIs (não vazio).
   useEffect(() => { if (initialStatus) { setStatusFilter(initialStatus); setPage(0); } }, [initialStatus]);
@@ -75,8 +77,7 @@ export function PayablesList({ initialStatus }: { initialStatus?: string } = {})
   const venceHoje = abertas.filter((p) => isToday(new Date(p.due_date)));
   const vence7 = abertas.filter((p) => { const d = differenceInCalendarDays(new Date(p.due_date), new Date()); return d >= 1 && d <= 7; });
 
-  const applyMes = (ym: string) => { setMes(ym); setFrom(""); setTo(""); };
-  const clearPeriodo = () => { setMes(""); setFrom(""); setTo(""); };
+  const clearPeriodo = () => { setFrom(""); setTo(""); };
 
   const payingPayable = rows.find((p) => p.id === payingId);
   const handlePay = async () => {
@@ -142,18 +143,30 @@ export function PayablesList({ initialStatus }: { initialStatus?: string } = {})
         </div>
         <div className="space-y-1">
           <Label className="text-xs text-muted-foreground">Mês</Label>
-          <Input type="month" className="w-[150px]" value={mes} onChange={(e) => applyMes(e.target.value)} />
+          <div className={`inline-flex items-center rounded-md border border-border h-10 ${usaPeriodo ? "opacity-40" : ""}`}>
+            <button className="px-2 h-full hover:text-carbo-green disabled:opacity-40" onClick={() => shiftMes(-1)} disabled={usaPeriodo} title="Mês anterior">
+              <ChevronLeft className="h-4 w-4" />
+            </button>
+            <span className="px-2 text-sm min-w-[120px] text-center capitalize">
+              {format(parseISO(`${mes || CURRENT_MONTH}-01`), "MMMM yyyy", { locale: ptBR })}
+            </span>
+            <button className="px-2 h-full hover:text-carbo-green disabled:opacity-40" onClick={() => shiftMes(1)} disabled={usaPeriodo} title="Próximo mês">
+              <ChevronRight className="h-4 w-4" />
+            </button>
+          </div>
         </div>
         <div className="space-y-1">
           <Label className="text-xs text-muted-foreground">De</Label>
-          <Input type="date" className="w-[150px]" value={from} onChange={(e) => { setMes(""); setFrom(e.target.value); }} />
+          <Input type="date" className="w-[150px]" value={from} onChange={(e) => setFrom(e.target.value)} />
         </div>
         <div className="space-y-1">
           <Label className="text-xs text-muted-foreground">Até</Label>
-          <Input type="date" className="w-[150px]" value={to} onChange={(e) => { setMes(""); setTo(e.target.value); }} />
+          <Input type="date" className="w-[150px]" value={to} onChange={(e) => setTo(e.target.value)} />
         </div>
-        {(mes || from || to) && (
-          <Button variant="ghost" size="sm" className="text-muted-foreground" onClick={clearPeriodo}>Limpar período</Button>
+        {usaPeriodo && (
+          <Button variant="ghost" size="sm" className="text-muted-foreground" onClick={clearPeriodo} title="Voltar pro navegador de mês">
+            Limpar De/Até
+          </Button>
         )}
       </div>
 
