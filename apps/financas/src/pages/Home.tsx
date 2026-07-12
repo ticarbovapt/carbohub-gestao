@@ -11,10 +11,9 @@ const sumVencido = (rows: { bucket: string; total: number }[]) => rows.filter((a
 const sum30 = (rows: { bucket: string; total: number }[]) => rows.filter((a) => ["vence_hoje", "a_vencer_7", "a_vencer_30"].includes(a.bucket)).reduce((s, a) => s + Number(a.total), 0);
 
 const ATALHOS = [
-  { to: "/financeiro", label: "Financeiro", desc: "Requisições, cotações, aprovações e contas a pagar.", icon: Wallet, color: "text-warning" },
-  { to: "/compras", label: "Compras & Suprimentos", desc: "Requisições, OC, recebimento, NF, contas a pagar.", icon: ShoppingCart, color: "text-carbo-blue" },
-  { to: "/recebiveis", label: "Contas a Receber", desc: "Títulos a receber, baixa e inadimplência.", icon: HandCoins, color: "text-carbo-green" },
-  { to: "/fluxo-caixa", label: "Fluxo de Caixa", desc: "Entradas × saídas e saldo projetado.", icon: Landmark, color: "text-carbo-blue" },
+  { to: "/compras", label: "Financeiro & Suprimentos", desc: "Requisições, OC, recebimento, NF, contas a pagar/receber, caixa.", icon: ShoppingCart, color: "text-carbo-blue" },
+  { to: "/compras/recebiveis", label: "Contas a Receber", desc: "Títulos a receber, baixa e inadimplência.", icon: HandCoins, color: "text-carbo-green" },
+  { to: "/compras/fluxo", label: "Fluxo de Caixa", desc: "Entradas × saídas e saldo projetado.", icon: Landmark, color: "text-carbo-blue" },
   { to: "/suprimentos", label: "Suprimentos", desc: "Estoque, movimentações, recebimento e política.", icon: Package, color: "text-carbo-green" },
   { to: "/pedidos", label: "Pedidos (RV)", desc: "Pedidos, faturamento e entregas.", icon: ClipboardList, color: "text-primary" },
   { to: "/comissionamento", label: "Comissionamento", desc: "Calcular comissões e controlar pagamentos.", icon: Percent, color: "text-carbo-green" },
@@ -68,8 +67,8 @@ export default function Home() {
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
           <Kpi to="/compras/pagar" icon={AlertTriangle} label="A pagar vencido" value={brl(pagarVencido)} tone={pagarVencido > 0 ? "text-destructive" : ""} />
           <Kpi to="/compras/pagar" icon={Clock} label="A pagar (30 dias)" value={brl(pagar30)} />
-          <Kpi to="/recebiveis" icon={HandCoins} label="A receber vencido" value={brl(receberVencido)} tone={receberVencido > 0 ? "text-destructive" : ""} sub="inadimplência" />
-          <Kpi to="/fluxo-caixa" icon={TrendingUp} label="Saldo projetado (8 sem.)" value={brl(saldo8)} tone={saldo8 < 0 ? "text-destructive" : "text-success"} />
+          <Kpi to="/compras/recebiveis" icon={HandCoins} label="A receber vencido" value={brl(receberVencido)} tone={receberVencido > 0 ? "text-destructive" : ""} sub="inadimplência" />
+          <Kpi to="/compras/fluxo" icon={TrendingUp} label="Saldo projetado (8 sem.)" value={brl(saldo8)} tone={saldo8 < 0 ? "text-destructive" : "text-success"} />
           <Kpi to="/compras/requisicoes" icon={ClipboardList} label="RCs a aprovar" value={String(rcPend.length)} tone={rcPend.length > 0 ? "text-warning" : ""} />
         </div>
 

@@ -1,6 +1,5 @@
 import { useState, useEffect } from "react";
 import { HandCoins, CheckCircle2, Ban, ChevronLeft, ChevronRight, Plus } from "lucide-react";
-import { CarboPageHeader } from "@/components/ui/carbo-page-header";
 import { CarboBadge } from "@/components/ui/carbo-badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -84,12 +83,10 @@ export default function Recebiveis() {
 
   return (
     <div className="space-y-4">
-      <CarboPageHeader
-        title="Contas a Receber"
-        description="Títulos a receber de clientes — do sistema e do Bling — com baixa e aging."
-        icon={HandCoins}
-        actions={<Button onClick={() => setShowNew(true)} className="gap-2 carbo-gradient text-white"><Plus className="h-4 w-4" /> Novo recebível</Button>}
-      />
+      <div className="flex items-center justify-between">
+        <p className="text-sm text-muted-foreground">Títulos a receber de clientes — do sistema e do Bling — com baixa e aging.</p>
+        <Button onClick={() => setShowNew(true)} className="gap-2 carbo-gradient text-white"><Plus className="h-4 w-4" /> Novo recebível</Button>
+      </div>
 
       {/* Aging */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">

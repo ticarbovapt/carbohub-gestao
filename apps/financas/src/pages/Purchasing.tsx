@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { usePersistedState } from "@/hooks/usePersistedState";
-import { Wallet, Plus, FileText, Package, Receipt, CreditCard, BarChart3, Clock, AlertTriangle, CheckCircle2, Building2, Wallet as WalletIcon, RefreshCw, DollarSign } from "lucide-react";
+import { Wallet, Plus, FileText, Package, Receipt, CreditCard, BarChart3, Clock, AlertTriangle, CheckCircle2, Building2, Wallet as WalletIcon, RefreshCw, DollarSign, HandCoins, Landmark } from "lucide-react";
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
 import { CarboCard, CarboCardContent, CarboCardHeader, CarboCardTitle } from "@/components/ui/carbo-card";
 import { CarboBadge } from "@/components/ui/carbo-badge";
@@ -26,6 +26,8 @@ import { PurchasingDashboard } from "@/components/purchasing/PurchasingDashboard
 import { SuppliersList } from "@/components/purchasing/SuppliersList";
 import { PaymentMethodsList } from "@/components/purchasing/PaymentMethodsList";
 import { SubscriptionsList } from "@/components/purchasing/SubscriptionsList";
+import Recebiveis from "@/pages/Recebiveis";
+import FluxoCaixa from "@/pages/FluxoCaixa";
 
 export default function Purchasing() {
   const { gestor } = useAuth();
@@ -37,7 +39,7 @@ export default function Purchasing() {
 
   // Cada aba vira um caminho: /compras/<aba>. A URL manda; o localStorage é só
   // fallback quando entra em /compras sem aba (ex: link do menu lateral).
-  const TABS = ["requisicoes", "ordens", "recebimento", "notas", "pagar", "fornecedores", "cartoes", "assinaturas", ...(gestor ? ["dashboard"] : [])];
+  const TABS = ["requisicoes", "ordens", "recebimento", "notas", "pagar", "recebiveis", "fluxo", "fornecedores", "cartoes", "assinaturas", ...(gestor ? ["dashboard"] : [])];
   const resolved = tab && TABS.includes(tab) ? tab : persistedTab;
   const activeTab = TABS.includes(resolved) ? resolved : "requisicoes";
   const setActiveTab = (t: string) => { setPersistedTab(t); navigate(`/compras/${t}`); };
@@ -147,6 +149,14 @@ export default function Purchasing() {
               <CreditCard className="h-3.5 w-3.5" />
               Contas a Pagar
             </TabsTrigger>
+            <TabsTrigger value="recebiveis" className="gap-1.5">
+              <HandCoins className="h-3.5 w-3.5" />
+              Contas a Receber
+            </TabsTrigger>
+            <TabsTrigger value="fluxo" className="gap-1.5">
+              <Landmark className="h-3.5 w-3.5" />
+              Fluxo de Caixa
+            </TabsTrigger>
 
             <div className="w-px self-stretch bg-border mx-1 my-1" aria-hidden />
 
@@ -187,6 +197,12 @@ export default function Purchasing() {
           </TabsContent>
           <TabsContent value="pagar">
             <PayablesList initialStatus={payFilter} />
+          </TabsContent>
+          <TabsContent value="recebiveis">
+            <Recebiveis />
+          </TabsContent>
+          <TabsContent value="fluxo">
+            <FluxoCaixa />
           </TabsContent>
           <TabsContent value="fornecedores">
             <SuppliersList />

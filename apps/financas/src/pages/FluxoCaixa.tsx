@@ -1,9 +1,7 @@
 import { useMemo } from "react";
-import { Landmark } from "lucide-react";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, ComposedChart, Line, Cell,
 } from "recharts";
-import { CarboPageHeader } from "@/components/ui/carbo-page-header";
 import { CarboCard, CarboCardContent, CarboCardHeader, CarboCardTitle } from "@/components/ui/carbo-card";
 import { usePersistedState } from "@/hooks/usePersistedState";
 import { useFinAging } from "@/hooks/useFinanceDashboard";
@@ -55,8 +53,6 @@ export default function FluxoCaixa() {
 
   return (
     <div className="space-y-6">
-      <CarboPageHeader title="Fluxo de Caixa" description="Entradas (receber) × saídas (pagar) e saldo projetado — visão de tesouraria." icon={Landmark} />
-
       <div className="flex items-center gap-3">
         <div className="inline-flex rounded-lg border border-border p-0.5">
           {[["all", "Todas"], ["interno", "Sistema"], ["bling", "Bling"]].map(([v, l]) => (

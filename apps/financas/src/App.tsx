@@ -2,10 +2,7 @@ import { Routes, Route, Navigate } from "react-router-dom";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import { Layout } from "./components/Layout";
 import Home from "./pages/Home";
-import Financeiro from "./pages/Financeiro";
 import Purchasing from "./pages/Purchasing";
-import Recebiveis from "./pages/Recebiveis";
-import FluxoCaixa from "./pages/FluxoCaixa";
 import Suprimentos from "./pages/Suprimentos";
 import Orders from "./pages/Orders";
 import Faturamento from "./pages/Faturamento";
@@ -26,11 +23,13 @@ export default function App() {
     <Routes>
       <Route element={<ProtectedRoute><Layout /></ProtectedRoute>}>
         <Route path="/" element={<Home />} />
-        <Route path="/financeiro" element={<Financeiro />} />
+        {/* /financeiro aposentado — consolidado no hub /compras */}
+        <Route path="/financeiro" element={<Navigate to="/compras" replace />} />
         <Route path="/compras" element={<Purchasing />} />
         <Route path="/compras/:tab" element={<Purchasing />} />
-        <Route path="/recebiveis" element={<Recebiveis />} />
-        <Route path="/fluxo-caixa" element={<FluxoCaixa />} />
+        {/* Contas a Receber e Fluxo de Caixa viraram abas dentro de /compras */}
+        <Route path="/recebiveis" element={<Navigate to="/compras/recebiveis" replace />} />
+        <Route path="/fluxo-caixa" element={<Navigate to="/compras/fluxo" replace />} />
         <Route path="/suprimentos" element={<Suprimentos />} />
         <Route path="/pedidos" element={<Orders />} />
         <Route path="/faturamento" element={<Faturamento />} />
