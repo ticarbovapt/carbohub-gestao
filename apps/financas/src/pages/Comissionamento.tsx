@@ -15,6 +15,8 @@ import { Label } from "@/components/ui/label";
 import { CarboInput } from "@/components/ui/carbo-input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { useAuth } from "@/contexts/AuthContext";
+import { AlertCircle } from "lucide-react";
 import {
   useComissaoAgregado, useCommissionStatements, useCreateStatement, useAddPayment,
   type CommissionStatement,
@@ -178,7 +180,7 @@ function PayDialog({ st, onClose }: { st: CommissionStatement | null; onClose: (
         </div>
         <DialogFooter>
           <CarboButton variant="outline" onClick={onClose}>Cancelar</CarboButton>
-          <CarboButton onClick={submit} disabled={amount <= 0 || add.isPending}>{add.isPending ? "Registrando…" : "Registrar pagamento"}</CarboButton>
+          <CarboButton onClick={submit} disabled={amount <= 0 || amount > saldo + 0.01 || add.isPending}>{add.isPending ? "Registrando…" : "Registrar pagamento"}</CarboButton>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -256,6 +258,18 @@ function PagamentosTab() {
 }
 
 export default function Comissionamento() {
+  const { gestor } = useAuth();
+  if (!gestor) {
+    return (
+      <div className="space-y-6">
+        <CarboPageHeader title="Comissionamento" description="Calcule a comissão sobre as vendas faturadas do período e controle os pagamentos." icon={Percent} />
+        <CarboCard><CarboCardContent>
+          <CarboEmptyState icon={AlertCircle} title="Acesso restrito"
+            description="Só gestores podem gerar e pagar comissões. Fale com um gestor se precisar." />
+        </CarboCardContent></CarboCard>
+      </div>
+    );
+  }
   return (
     <div className="space-y-6">
       <CarboPageHeader title="Comissionamento" description="Calcule a comissão sobre as vendas faturadas do período e controle os pagamentos." icon={Percent} />

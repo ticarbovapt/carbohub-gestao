@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -64,6 +65,7 @@ function mapBlingStatus(situacaoId: number | null, situacaoValor: string | null)
 }
 
 export default function BlingIntegration() {
+  const { gestor } = useAuth();
   const [isConnected, setIsConnected] = useState(false);
   const [isExpired, setIsExpired] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -161,12 +163,19 @@ export default function BlingIntegration() {
   };
 
   const handleDisconnect = async () => {
+    if (!gestor) { toast.error("Só gestor pode desconectar o Bling."); return; }
+    // A integração Bling é COMPARTILHADA com o Controle e demais apps —
+    // desconectar aqui afeta TODOS. Confirma e desativa (reversível), sem apagar.
+    if (!window.confirm("Isto desconecta o Bling de TODO o ecossistema (Controle, Ops, etc.), não só do Finanças. Deseja continuar?")) return;
     try {
-      // Delete tokens directly — edge function deployed version may not handle "disconnect"
-      await (supabase as any).from("bling_integration").delete().gte("created_at", "2000-01-01");
+      const { error } = await (supabase as any)
+        .from("bling_integration")
+        .update({ is_active: false, updated_at: new Date().toISOString() })
+        .eq("is_active", true);
+      if (error) throw error;
       setIsConnected(false);
       setIsExpired(false);
-      toast.success("Bling desconectado");
+      toast.success("Bling desativado (reconecte quando quiser).");
     } catch {
       toast.error("Erro ao desconectar");
     }

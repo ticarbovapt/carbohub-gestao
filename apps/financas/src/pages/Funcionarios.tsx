@@ -14,6 +14,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useEmployeesFinance, useUpsertEmployeeFinance, type EmployeeRow, type EmployeeFinance, type SystemProfile } from "@/hooks/useEmployeeFinance";
 import { useOrgLabels } from "@/hooks/useTeamMembers";
+import { useAuth } from "@/contexts/AuthContext";
 
 const initials = (name: string) => name.split(" ").filter(Boolean).slice(0, 2).map((p) => p[0]?.toUpperCase() ?? "").join("");
 
@@ -151,6 +152,7 @@ function EditDialog({
 }
 
 export default function Funcionarios() {
+  const { gestor } = useAuth();
   const { rows, unlinkedProfiles, isLoading } = useEmployeesFinance();
   const { data: labels } = useOrgLabels();
   const deptLabel = labels?.deptLabel ?? {};
@@ -189,6 +191,18 @@ export default function Funcionarios() {
     title: "Novo funcionário (avulso)",
     allowLink: false,
   });
+
+  if (!gestor) {
+    return (
+      <div className="space-y-6">
+        <CarboPageHeader title="Funcionários" description="Dados financeiros para pagamento (PIX, banco) e contato de emergência." icon={Users} />
+        <CarboCard><CarboCardContent>
+          <CarboEmptyState icon={AlertCircle} title="Acesso restrito"
+            description="Só gestores podem ver e editar dados financeiros de funcionários (PIX, conta bancária). Fale com um gestor se precisar." />
+        </CarboCardContent></CarboCard>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
