@@ -13,6 +13,15 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useEmployeesFinance, useUpsertEmployeeFinance, type EmployeeRow, type EmployeeFinance, type SystemProfile } from "@/hooks/useEmployeeFinance";
+import { useOrgLabels } from "@/hooks/useTeamMembers";
+
+const initials = (name: string) => name.split(" ").filter(Boolean).slice(0, 2).map((p) => p[0]?.toUpperCase() ?? "").join("");
+
+function Avatar({ url, name }: { url: string | null; name: string }) {
+  return url
+    ? <img src={url} alt={name} className="h-8 w-8 rounded-full object-cover shrink-0" />
+    : <div className="h-8 w-8 rounded-full bg-muted flex items-center justify-center text-xs font-semibold text-muted-foreground shrink-0">{initials(name) || "?"}</div>;
+}
 
 const NO_USER = "__none__";
 
@@ -143,11 +152,22 @@ function EditDialog({
 
 export default function Funcionarios() {
   const { rows, unlinkedProfiles, isLoading } = useEmployeesFinance();
+  const { data: labels } = useOrgLabels();
+  const deptLabel = labels?.deptLabel ?? {};
   const [search, setSearch] = useState("");
+  const [setor, setSetor] = useState("__all__");
   const [editing, setEditing] = useState<{ initial: EmployeeFinance; title: string; allowLink: boolean } | null>(null);
 
+  // Setores presentes na lista (pra montar o filtro), com rótulo legível.
+  const setores = Array.from(new Set(rows.map((r) => r.department).filter(Boolean) as string[]))
+    .sort((a, b) => (deptLabel[a] ?? a).localeCompare(deptLabel[b] ?? b, "pt-BR"));
+
   const q = search.trim().toLowerCase();
-  const list = q ? rows.filter((r) => r.displayName.toLowerCase().includes(q) || (r.username || "").toLowerCase().includes(q)) : rows;
+  const list = rows.filter((r) => {
+    if (setor !== "__all__" && r.department !== setor && r.secondaryDepartment !== setor) return false;
+    if (q && !(r.displayName.toLowerCase().includes(q) || (r.username || "").toLowerCase().includes(q))) return false;
+    return true;
+  });
 
   const openEdit = (r: EmployeeRow) => setEditing({
     initial: {
@@ -181,7 +201,16 @@ export default function Funcionarios() {
 
       <CarboCard>
         <CarboCardContent className="pt-6 space-y-4">
-          <div className="flex justify-end">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-end gap-3">
+            <div className="w-full sm:w-56">
+              <Select value={setor} onValueChange={setSetor}>
+                <SelectTrigger><SelectValue placeholder="Setor" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__all__">Todos os setores</SelectItem>
+                  {setores.map((d) => <SelectItem key={d} value={d}>{deptLabel[d] ?? d}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
             <div className="w-full sm:w-72">
               <CarboSearchInput placeholder="Buscar funcionário…" value={search} onChange={(e) => setSearch(e.target.value)} />
             </div>
@@ -196,7 +225,7 @@ export default function Funcionarios() {
               <CarboTableHeader>
                 <CarboTableRow>
                   <CarboTableHead>Funcionário</CarboTableHead>
-                  <CarboTableHead>Origem</CarboTableHead>
+                  <CarboTableHead>Setor</CarboTableHead>
                   <CarboTableHead>PIX</CarboTableHead>
                   <CarboTableHead>Banco</CarboTableHead>
                   <CarboTableHead>Telefone</CarboTableHead>
@@ -207,11 +236,16 @@ export default function Funcionarios() {
               <CarboTableBody>
                 {list.map((r) => (
                   <CarboTableRow key={r.key}>
-                    <CarboTableCell className="font-medium">{r.displayName}</CarboTableCell>
+                    <CarboTableCell className="font-medium">
+                      <div className="flex items-center gap-2.5">
+                        <Avatar url={r.avatarUrl} name={r.displayName} />
+                        <span>{r.displayName}</span>
+                      </div>
+                    </CarboTableCell>
                     <CarboTableCell>
-                      {r.origin === "sistema"
-                        ? <CarboBadge variant="secondary">Usuário do sistema</CarboBadge>
-                        : <CarboBadge variant="secondary">Avulso</CarboBadge>}
+                      {r.department
+                        ? <span>{deptLabel[r.department] ?? r.department}</span>
+                        : <span className="text-muted-foreground text-xs">Avulso</span>}
                     </CarboTableCell>
                     <CarboTableCell className="max-w-[180px] truncate">{r.pix_key || <span className="text-muted-foreground">—</span>}</CarboTableCell>
                     <CarboTableCell>{r.bank_name ? `${r.bank_name}${r.bank_agency ? ` · ag ${r.bank_agency}` : ""}` : <span className="text-muted-foreground">—</span>}</CarboTableCell>

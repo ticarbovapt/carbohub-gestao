@@ -32,13 +32,19 @@ export interface EmployeeFinance {
   notes: string | null;
 }
 
-export interface SystemProfile { id: string; full_name: string | null; username: string | null; email: string | null; }
+export interface SystemProfile {
+  id: string; full_name: string | null; username: string | null; email: string | null;
+  avatar_url: string | null; department: string | null; secondary_department: string | null;
+}
 
 export interface EmployeeRow extends EmployeeFinance {
   key: string;
   displayName: string;
   username: string | null;
   email: string | null;
+  avatarUrl: string | null;
+  department: string | null;           // setor (chave); null p/ avulso
+  secondaryDepartment: string | null;
   linkedUserName: string | null; // nome do usuário do sistema vinculado
   origin: "sistema" | "avulso";  // veio de um perfil do sistema ou cadastrado à mão
   hasData: boolean;
@@ -50,8 +56,10 @@ const emptyFinance = (): EmployeeFinance => ({
   account_type: null, phone: null, emergency_name: null, emergency_phone: null, notes: null,
 });
 
+// Cadastro deixa de ser "Pendente" quando tem o MÍNIMO pra pagar: uma chave PIX,
+// OU os dados bancários completos (banco + agência + conta).
 const filled = (f: EmployeeFinance) =>
-  !!(f.pix_key || f.bank_name || f.bank_account || f.phone || f.cpf || f.emergency_phone);
+  !!(f.pix_key?.trim() || (f.bank_name?.trim() && f.bank_agency?.trim() && f.bank_account?.trim()));
 
 /** Perfis do sistema (todos) + funcionários avulsos + dados financeiros. */
 export function useEmployeesFinance() {
@@ -90,6 +98,9 @@ export function useEmployeesFinance() {
       displayName: p.full_name || p.username || "—",
       username: p.username,
       email: p.email,
+      avatarUrl: p.avatar_url,
+      department: p.department,
+      secondaryDepartment: p.secondary_department,
       linkedUserName: p.full_name || p.username,
       origin: "sistema",
       hasData: !!f && filled(f),
@@ -105,6 +116,9 @@ export function useEmployeesFinance() {
       displayName: f.full_name || "—",
       username: null,
       email: null,
+      avatarUrl: null,
+      department: null,
+      secondaryDepartment: null,
       linkedUserName: f.user_id ? "(usuário removido)" : null,
       origin: "avulso",
       hasData: filled(f),
