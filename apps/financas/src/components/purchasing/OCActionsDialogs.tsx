@@ -21,15 +21,23 @@ export function RegistrarCompraDialog({ oc, onClose }: { oc: PurchaseOrder | nul
   // "card:<id>" pra formas cadastradas; "type:pix|boleto|manual" pra avulsas.
   const [choice, setChoice] = useState<string>("");
   const [isPaid, setIsPaid] = useState(true);
+  const [venc, setVenc] = useState(today());
   const [lastId, setLastId] = useState<string | null>(null);
-  if (oc && oc.id !== lastId) { setLastId(oc.id); setChoice(""); setIsPaid(true); }
+  if (oc && oc.id !== lastId) { setLastId(oc.id); setChoice(""); setIsPaid(true); setVenc(today()); }
   if (!oc) return null;
 
+  // "Já paga" exige a forma de pagamento (como foi pago). "A pagar" exige a
+  // previsão de vencimento (a forma de pagamento fica pra depois, na conta).
+  const canSubmit = isPaid ? !!choice : !!venc;
+
   const submit = () => {
+    if (!canSubmit) return;
     const [kind, val] = choice.split(":");
-    const payload = kind === "card"
-      ? { id: oc.id, payment_method_id: val, payment_type: null, is_paid: isPaid }
-      : { id: oc.id, payment_method_id: null, payment_type: kind === "type" ? val : null, is_paid: isPaid };
+    const payload = isPaid
+      ? (kind === "card"
+          ? { id: oc.id, payment_method_id: val, payment_type: null, is_paid: true }
+          : { id: oc.id, payment_method_id: null, payment_type: kind === "type" ? val : null, is_paid: true })
+      : { id: oc.id, payment_method_id: null, payment_type: null, is_paid: false, payment_due_date: venc };
     register.mutate(payload, { onSuccess: onClose });
   };
 
@@ -41,46 +49,57 @@ export function RegistrarCompraDialog({ oc, onClose }: { oc: PurchaseOrder | nul
           <DialogDescription>Fornecedor {oc.supplier_name} · {brl(Number(oc.total_value))}</DialogDescription>
         </DialogHeader>
         <div className="space-y-3 py-1">
+          {/* 1º: já pagou ou vai pagar? */}
           <div className="space-y-1.5">
-            <Label>Forma de pagamento</Label>
-            <Select value={choice} onValueChange={setChoice}>
-              <SelectTrigger><SelectValue placeholder="Como foi pago?" /></SelectTrigger>
-              <SelectContent>
-                {methods.length > 0 && methods.map((m) => (
-                  <SelectItem key={m.id} value={`card:${m.id}`}>{labelPaymentMethod(m)}</SelectItem>
-                ))}
-                <SelectItem value="type:pix">{PAYMENT_METHOD_TYPE_LABELS.pix}</SelectItem>
-                <SelectItem value="type:boleto">{PAYMENT_METHOD_TYPE_LABELS.boleto}</SelectItem>
-                <SelectItem value="type:manual">{PAYMENT_METHOD_TYPE_LABELS.manual}</SelectItem>
-              </SelectContent>
-            </Select>
-            {methods.length === 0 && (
-              <p className="text-[11px] text-muted-foreground">Cadastre cartões na aba "Cartões" pra escolher aqui.</p>
-            )}
-          </div>
-          <div className="space-y-1.5">
-            <Label>Pagamento</Label>
+            <Label>Essa compra…</Label>
             <div className="grid grid-cols-2 gap-2">
               <button
                 type="button" onClick={() => setIsPaid(true)}
                 className={`rounded-lg border px-3 py-2.5 text-sm text-left transition-colors ${isPaid ? "border-carbo-green bg-carbo-green/10 text-carbo-green font-medium" : "border-border text-muted-foreground hover:border-carbo-green/40"}`}
               >
-                <div className="flex items-center gap-1.5"><CheckCircle2 className="h-4 w-4" /> Já paga</div>
+                <div className="flex items-center gap-1.5"><CheckCircle2 className="h-4 w-4" /> Já foi paga</div>
                 <p className="text-[11px] text-muted-foreground mt-0.5 font-normal">Pagamento feito agora</p>
               </button>
               <button
                 type="button" onClick={() => setIsPaid(false)}
                 className={`rounded-lg border px-3 py-2.5 text-sm text-left transition-colors ${!isPaid ? "border-carbo-green bg-carbo-green/10 text-carbo-green font-medium" : "border-border text-muted-foreground hover:border-carbo-green/40"}`}
               >
-                <div className="flex items-center gap-1.5"><Clock className="h-4 w-4" /> A pagar</div>
-                <p className="text-[11px] text-muted-foreground mt-0.5 font-normal">Conta gerada na NF</p>
+                <div className="flex items-center gap-1.5"><Clock className="h-4 w-4" /> Vou pagar depois</div>
+                <p className="text-[11px] text-muted-foreground mt-0.5 font-normal">Vira conta a pagar</p>
               </button>
             </div>
           </div>
+
+          {/* 2º: depende da escolha acima */}
+          {isPaid ? (
+            <div className="space-y-1.5">
+              <Label>Como foi pago? *</Label>
+              <Select value={choice} onValueChange={setChoice}>
+                <SelectTrigger><SelectValue placeholder="Forma de pagamento" /></SelectTrigger>
+                <SelectContent>
+                  {methods.length > 0 && methods.map((m) => (
+                    <SelectItem key={m.id} value={`card:${m.id}`}>{labelPaymentMethod(m)}</SelectItem>
+                  ))}
+                  <SelectItem value="type:pix">{PAYMENT_METHOD_TYPE_LABELS.pix}</SelectItem>
+                  <SelectItem value="type:boleto">{PAYMENT_METHOD_TYPE_LABELS.boleto}</SelectItem>
+                  <SelectItem value="type:manual">{PAYMENT_METHOD_TYPE_LABELS.manual}</SelectItem>
+                </SelectContent>
+              </Select>
+              {methods.length === 0 && (
+                <p className="text-[11px] text-muted-foreground">Cadastre cartões na aba "Cartões" pra escolher aqui.</p>
+              )}
+            </div>
+          ) : (
+            <div className="space-y-1.5">
+              <Label>Previsão de vencimento *</Label>
+              <Input type="date" value={venc} onChange={(e) => setVenc(e.target.value)} />
+              <p className="text-[11px] text-muted-foreground">Usada pra pré-preencher a conta a pagar ao lançar a NF.</p>
+            </div>
+          )}
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>Cancelar</Button>
-          <Button onClick={submit} disabled={!choice || register.isPending} className="gap-1.5 bg-carbo-green hover:bg-carbo-green/90 text-white">
+          <Button onClick={submit} disabled={!canSubmit || register.isPending} className="gap-1.5 bg-carbo-green hover:bg-carbo-green/90 text-white">
             {register.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShoppingCart className="h-4 w-4" />}
             Confirmar compra
           </Button>
@@ -183,7 +202,9 @@ export function LancarNFDialog({ oc, onClose }: { oc: PurchaseOrder | null; onCl
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [lastId, setLastId] = useState<string | null>(null);
-  if (oc && oc.id !== lastId) { setLastId(oc.id); setNumero(""); setDataNF(today()); setValor(Number(oc.total_value) || 0); setGerarPagavel(true); setVencimento(today()); setFile(null); }
+  // OC já paga não deve gerar conta a pagar (senão duplica). "A pagar" pré-preenche
+  // o vencimento com a previsão registrada na compra.
+  if (oc && oc.id !== lastId) { setLastId(oc.id); setNumero(""); setDataNF(today()); setValor(Number(oc.total_value) || 0); setGerarPagavel(!oc.is_paid); setVencimento(oc.payment_due_date || today()); setFile(null); }
   if (!oc) return null;
 
   // 3-way match automático: OC existe; recebimento OK existe; valor bate (tol. 1%).
@@ -258,6 +279,7 @@ export function LancarNFDialog({ oc, onClose }: { oc: PurchaseOrder | null; onCl
               : <p className="text-[11px] text-muted-foreground">Opcional — fica arquivado e disponível pra download depois.</p>}
           </div>
 
+          {oc.is_paid && <p className="text-[11px] text-success">OC já paga na compra — normalmente não gera conta a pagar.</p>}
           <label className="flex items-center gap-2 text-sm pt-1">
             <input type="checkbox" checked={gerarPagavel} onChange={(e) => setGerarPagavel(e.target.checked)} /> Gerar conta a pagar
           </label>

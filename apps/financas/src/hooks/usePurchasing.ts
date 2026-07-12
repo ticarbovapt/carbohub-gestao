@@ -196,6 +196,7 @@ export function useRegisterOCPurchase() {
       payment_method_id?: string | null;
       payment_type?: string | null;
       is_paid: boolean;
+      payment_due_date?: string | null;
     }) => {
       const now = new Date().toISOString();
       const { error } = await supabase
@@ -207,6 +208,7 @@ export function useRegisterOCPurchase() {
           purchased_at: now,
           is_paid: values.is_paid,
           paid_at: values.is_paid ? now : null,
+          payment_due_date: values.is_paid ? null : (values.payment_due_date || null),
         } as any)
         .eq("id", values.id);
       if (error) throw error;

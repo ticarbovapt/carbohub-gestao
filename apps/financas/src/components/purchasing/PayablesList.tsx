@@ -21,9 +21,9 @@ const statusVariantMap: Record<PayableStatus, any> = {
 
 export function PayablesList() {
   const [statusFilter, setStatusFilter] = useState<string>("all");
-  const { data: payables, isLoading } = usePurchasePayables(
-    statusFilter !== "all" ? { status: statusFilter } : undefined
-  );
+  // Busca TODAS e filtra no cliente pelo status EFETIVO — senão o filtro
+  // "Atrasado" não acha nada (no banco elas ficam como "programado").
+  const { data: allPayables, isLoading } = usePurchasePayables();
   const updateStatus = useUpdatePayableStatus();
   const [payingId, setPayingId] = useState<string | null>(null);
 
@@ -37,8 +37,10 @@ export function PayablesList() {
   const getEffectiveStatus = (p: { status: PayableStatus; due_date: string }) =>
     isOverdue(p) ? "atrasado" : p.status;
 
-  // Resumo (aging) sobre o que está EM ABERTO no conjunto carregado.
-  const abertas = (payables ?? []).filter((p) => p.status !== "pago" && p.status !== "cancelado");
+  const payables = (allPayables ?? []).filter((p) => statusFilter === "all" || getEffectiveStatus(p) === statusFilter);
+
+  // Resumo (aging) sobre o que está EM ABERTO — sempre no total (ignora o filtro).
+  const abertas = (allPayables ?? []).filter((p) => p.status !== "pago" && p.status !== "cancelado");
   const sum = (arr: typeof abertas) => arr.reduce((s, p) => s + Number(p.amount || 0), 0);
   const vencidas = abertas.filter(isOverdue);
   const venceHoje = abertas.filter((p) => isToday(new Date(p.due_date)));

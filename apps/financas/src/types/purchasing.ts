@@ -63,6 +63,7 @@ export interface PurchaseOrder {
   purchased_at: string | null;
   is_paid: boolean;
   paid_at: string | null;
+  payment_due_date: string | null;
   created_at: string;
   updated_at: string;
 }
