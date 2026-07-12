@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { Eye, Send, Package } from "lucide-react";
+import { Eye, Send, PackageCheck, FileUp } from "lucide-react";
+import { ReceberDialog, LancarNFDialog } from "./OCActionsDialogs";
 import { CarboBadge } from "@/components/ui/carbo-badge";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -27,6 +28,8 @@ export function PurchaseOrdersList() {
   );
   const updateStatus = useUpdatePurchaseOrderStatus();
   const [selectedOC, setSelectedOC] = useState<PurchaseOrder | null>(null);
+  const [receberOC, setReceberOC] = useState<PurchaseOrder | null>(null);
+  const [nfOC, setNfOC] = useState<PurchaseOrder | null>(null);
 
   const formatCurrency = (val: number) =>
     new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(val);
@@ -70,7 +73,7 @@ export function PurchaseOrdersList() {
             </CarboTableRow>
           ) : (
             orders.map((oc) => (
-              <CarboTableRow key={oc.id} interactive>
+              <CarboTableRow key={oc.id} interactive className="cursor-pointer" onClick={() => setSelectedOC(oc)}>
                 <CarboTableCell className="font-mono font-medium">{oc.oc_number}</CarboTableCell>
                 <CarboTableCell>{oc.supplier_name}</CarboTableCell>
                 <CarboTableCell className="font-mono">{formatCurrency(oc.total_value)}</CarboTableCell>
@@ -85,9 +88,9 @@ export function PurchaseOrdersList() {
                 <CarboTableCell className="text-muted-foreground text-sm">
                   {format(new Date(oc.created_at), "dd/MM/yyyy", { locale: ptBR })}
                 </CarboTableCell>
-                <CarboTableCell>
+                <CarboTableCell onClick={(e) => e.stopPropagation()}>
                   <div className="flex items-center gap-1">
-                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setSelectedOC(oc)}>
+                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setSelectedOC(oc)} title="Ver">
                       <Eye className="h-4 w-4" />
                     </Button>
                     {oc.status === "gerada" && (
@@ -97,6 +100,16 @@ export function PurchaseOrdersList() {
                         title="Enviar ao Fornecedor"
                       >
                         <Send className="h-4 w-4" />
+                      </Button>
+                    )}
+                    {oc.status !== "recebida" && oc.status !== "cancelada" && (
+                      <Button variant="ghost" size="icon" className="h-8 w-8 text-carbo-green" onClick={() => setReceberOC(oc)} title="Receber">
+                        <PackageCheck className="h-4 w-4" />
+                      </Button>
+                    )}
+                    {(oc.status === "recebida" || oc.status === "parcialmente_recebida") && (
+                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setNfOC(oc)} title="Lançar NF">
+                        <FileUp className="h-4 w-4" />
                       </Button>
                     )}
                   </div>
@@ -150,6 +163,9 @@ export function PurchaseOrdersList() {
           )}
         </DialogContent>
       </Dialog>
+
+      <ReceberDialog oc={receberOC} onClose={() => setReceberOC(null)} />
+      <LancarNFDialog oc={nfOC} onClose={() => setNfOC(null)} />
     </div>
   );
 }
