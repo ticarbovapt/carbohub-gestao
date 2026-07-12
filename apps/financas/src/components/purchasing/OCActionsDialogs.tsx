@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { PackageCheck, FileUp, Loader2, CheckCircle2, XCircle, ShoppingCart } from "lucide-react";
+import { PackageCheck, FileUp, Loader2, CheckCircle2, XCircle, ShoppingCart, Clock } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -58,11 +58,25 @@ export function RegistrarCompraDialog({ oc, onClose }: { oc: PurchaseOrder | nul
               <p className="text-[11px] text-muted-foreground">Cadastre cartões na aba "Cartões" pra escolher aqui.</p>
             )}
           </div>
-          <label className="flex items-center gap-2 text-sm pt-1">
-            <input type="checkbox" checked={isPaid} onChange={(e) => setIsPaid(e.target.checked)} />
-            Já foi paga
-          </label>
-          {!isPaid && <p className="text-[11px] text-muted-foreground">Sem pagamento agora — gere a conta a pagar ao lançar a NF.</p>}
+          <div className="space-y-1.5">
+            <Label>Pagamento</Label>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button" onClick={() => setIsPaid(true)}
+                className={`rounded-lg border px-3 py-2.5 text-sm text-left transition-colors ${isPaid ? "border-carbo-green bg-carbo-green/10 text-carbo-green font-medium" : "border-border text-muted-foreground hover:border-carbo-green/40"}`}
+              >
+                <div className="flex items-center gap-1.5"><CheckCircle2 className="h-4 w-4" /> Já paga</div>
+                <p className="text-[11px] text-muted-foreground mt-0.5 font-normal">Pagamento feito agora</p>
+              </button>
+              <button
+                type="button" onClick={() => setIsPaid(false)}
+                className={`rounded-lg border px-3 py-2.5 text-sm text-left transition-colors ${!isPaid ? "border-carbo-green bg-carbo-green/10 text-carbo-green font-medium" : "border-border text-muted-foreground hover:border-carbo-green/40"}`}
+              >
+                <div className="flex items-center gap-1.5"><Clock className="h-4 w-4" /> A pagar</div>
+                <p className="text-[11px] text-muted-foreground mt-0.5 font-normal">Conta gerada na NF</p>
+              </button>
+            </div>
+          </div>
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>Cancelar</Button>
