@@ -255,6 +255,16 @@ export function PurchaseRequestsList({ showNewForm, onCloseForm }: PurchaseReque
                         </Button>
                       </>
                     )}
+                    {rc.status === "aprovada" && (
+                      <Button
+                        size="sm"
+                        className="h-8 gap-1 bg-carbo-green hover:bg-carbo-green/90 text-white"
+                        onClick={() => setGerarOC(rc)}
+                        title="Gerar Ordem de Compra"
+                      >
+                        <PackagePlus className="h-4 w-4" /> Gerar OC
+                      </Button>
+                    )}
                   </div>
                 </CarboTableCell>
               </CarboTableRow>

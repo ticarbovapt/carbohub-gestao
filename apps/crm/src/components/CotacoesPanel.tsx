@@ -5,7 +5,7 @@ import { CarboBadge } from "@/components/ui/carbo-badge";
 import { CarboInput } from "@/components/ui/carbo-input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { useQuotes, useAddQuote, useSelectQuote, useDeleteQuote, type DraftQuote } from "@/hooks/useCotacoes";
+import { useQuotes, useAddQuote, useSelectQuote, useDeleteQuote, useSuppliersLite, type DraftQuote } from "@/hooks/useCotacoes";
 
 interface Item { descricao: string; quantidade: number; unidade: string; valor_unitario: number; }
 
@@ -29,6 +29,7 @@ export function CotacoesPanel({
 }) {
   const isDraft = !!draft;
   const { data: dbQuotes = [], isLoading } = useQuotes(isDraft ? null : (requestId ?? null));
+  const { data: suppliers = [] } = useSuppliersLite();
   const add = useAddQuote();
   const select = useSelectQuote();
   const del = useDeleteQuote();
@@ -50,7 +51,9 @@ export function CotacoesPanel({
 
   const doAdd = () => {
     if (!adding || !supplier.trim()) return;
-    const base = { item_index: adding.index, item_descricao: adding.descricao, supplier_name: supplier.trim(), unit_price: Number(unitPrice) || 0, quantidade: adding.quantidade, notes: notes || null, link: link || null };
+    // Casa com o cadastro de fornecedores (case-insensitive) → grava supplier_id.
+    const matched = suppliers.find((s) => s.name.trim().toLowerCase() === supplier.trim().toLowerCase());
+    const base = { item_index: adding.index, item_descricao: adding.descricao, supplier_name: supplier.trim(), supplier_id: matched?.id ?? null, unit_price: Number(unitPrice) || 0, quantidade: adding.quantidade, notes: notes || null, link: link || null };
     if (isDraft) {
       draft!.onChange([...draft!.quotes, { key: uid(), selected: false, ...base }]);
       setAdding(null);
@@ -148,7 +151,11 @@ export function CotacoesPanel({
           <div className="space-y-3 py-1">
             <div className="space-y-1.5">
               <Label>Fornecedor *</Label>
-              <CarboInput value={supplier} onChange={(e) => setSupplier(e.target.value)} placeholder="Nome do fornecedor" />
+              <CarboInput value={supplier} onChange={(e) => setSupplier(e.target.value)} placeholder="Nome do fornecedor" list="cotacao-fornecedores" />
+              <datalist id="cotacao-fornecedores">
+                {suppliers.map((s) => <option key={s.id} value={s.name} />)}
+              </datalist>
+              <p className="text-[11px] text-muted-foreground">Escolha do cadastro pra não duplicar (ou digite um novo).</p>
             </div>
             <div className="space-y-1.5">
               <Label>Preço unitário (R$)</Label>

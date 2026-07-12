@@ -9,7 +9,7 @@ import type { PurchaseRequest } from "@/types/purchasing";
 
 const brl = (v: number) => (v ?? 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
-interface Line { i: number; descricao: string; quantidade: number; unidade: string; unit_price: number; supplier: string; fromQuote: boolean; }
+interface Line { i: number; descricao: string; quantidade: number; unidade: string; unit_price: number; supplier: string; supplier_id: string | null; fromQuote: boolean; }
 
 // Gera a(s) OC(s) a partir de uma RC aprovada. Usa a COTAÇÃO VENCEDORA de cada
 // item (fornecedor + preço). Itens sem cotação escolhida caem num grupo
@@ -32,6 +32,7 @@ export function GerarOCDialog({ rc, onClose }: { rc: PurchaseRequest | null; onC
       unidade: it.unidade,
       unit_price: q ? Number(q.unit_price) : Number(it.valor_unitario) || 0,
       supplier: q ? q.supplier_name : "A definir",
+      supplier_id: q ? (q.supplier_id ?? null) : null,
       fromQuote: !!q,
     };
   });
@@ -53,6 +54,7 @@ export function GerarOCDialog({ rc, onClose }: { rc: PurchaseRequest | null; onC
         await createOC.mutateAsync({
           purchase_request_id: rc!.id,
           supplier_name: supplier,
+          supplier_id: ls.find((l) => l.supplier_id)?.supplier_id ?? undefined,
           items: ocItems as any,
           total_value: total,
           expected_delivery: (rc as any)?.needed_by || undefined,

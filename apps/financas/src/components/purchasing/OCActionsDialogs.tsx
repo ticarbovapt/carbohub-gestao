@@ -123,6 +123,7 @@ export function LancarNFDialog({ oc, onClose }: { oc: PurchaseOrder | null; onCl
       if (gerarPagavel) {
         await createPayable.mutateAsync({
           purchase_order_id: oc.id, invoice_id: inv?.id, supplier_name: oc.supplier_name,
+          supplier_id: (oc as any).supplier_id || undefined,
           amount: valor, due_date: vencimento,
         });
       }

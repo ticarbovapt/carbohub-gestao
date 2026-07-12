@@ -136,6 +136,7 @@ export function useCreatePurchaseOrder() {
       purchase_request_id: string;
       service_order_id?: string;
       supplier_name: string;
+      supplier_id?: string;
       supplier_document?: string;
       supplier_contact?: string;
       items: PurchaseRequestItem[];
@@ -150,6 +151,7 @@ export function useCreatePurchaseOrder() {
           purchase_request_id: values.purchase_request_id,
           service_order_id: values.service_order_id || null,
           supplier_name: values.supplier_name,
+          supplier_id: values.supplier_id || null,
           supplier_document: values.supplier_document || null,
           supplier_contact: values.supplier_contact || null,
           items: values.items as any,
@@ -366,6 +368,7 @@ export function useCreatePayable() {
       purchase_order_id: string;
       service_order_id?: string;
       supplier_name: string;
+      supplier_id?: string;
       amount: number;
       due_date: string;
       notes?: string;
@@ -377,6 +380,7 @@ export function useCreatePayable() {
           purchase_order_id: values.purchase_order_id,
           service_order_id: values.service_order_id || null,
           supplier_name: values.supplier_name,
+          supplier_id: values.supplier_id || null,
           amount: values.amount,
           due_date: values.due_date,
           notes: values.notes || null,

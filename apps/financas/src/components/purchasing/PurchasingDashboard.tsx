@@ -23,24 +23,23 @@ export function PurchasingDashboard() {
   // costuma trazer poucos/nenhum pedido de compra, caímos para purchase_payables
   // (contas a pagar) agrupado por fornecedor — que vem populado do sync.
   const costCenterData = (() => {
-    const bySupplier: Record<string, number> = {};
+    // Agrupa por supplier_id quando existe (evita "Acme" vs "Acme LTDA"); senão
+    // cai pro nome normalizado. O rótulo é o nome do fornecedor.
+    const acc: Record<string, { name: string; valor: number }> = {};
+    const add = (id: string | null | undefined, name: string | null, valor: number) => {
+      if (!name) return;
+      const key = id || name.trim().toLowerCase();
+      acc[key] = { name: acc[key]?.name ?? name, valor: (acc[key]?.valor ?? 0) + valor };
+    };
 
     if (orders && orders.length > 0) {
-      orders.forEach((o) => {
-        if (o.status !== "cancelada" && o.supplier_name) {
-          bySupplier[o.supplier_name] = (bySupplier[o.supplier_name] || 0) + Number(o.total_value);
-        }
-      });
+      orders.forEach((o) => { if (o.status !== "cancelada") add((o as any).supplier_id, o.supplier_name, Number(o.total_value)); });
     } else if (payables && payables.length > 0) {
-      payables.forEach((p) => {
-        if (p.status !== "cancelado" && p.supplier_name) {
-          bySupplier[p.supplier_name] = (bySupplier[p.supplier_name] || 0) + Number(p.amount);
-        }
-      });
+      payables.forEach((p) => { if (p.status !== "cancelado") add((p as any).supplier_id, p.supplier_name, Number(p.amount)); });
     }
 
-    return Object.entries(bySupplier)
-      .map(([name, valor]) => ({ name: name.length > 15 ? name.slice(0, 15) + "…" : name, valor }))
+    return Object.values(acc)
+      .map(({ name, valor }) => ({ name: name.length > 15 ? name.slice(0, 15) + "…" : name, valor }))
       .sort((a, b) => b.valor - a.valor)
       .slice(0, 8);
   })();

@@ -15,11 +15,27 @@ export interface Quote {
   item_index: number;
   item_descricao: string | null;
   supplier_name: string;
+  supplier_id: string | null;
   unit_price: number;
   quantidade: number;
   notes: string | null;
   link: string | null;
   selected: boolean;
+}
+
+export interface SupplierLite { id: string; name: string }
+
+/** Cadastro de fornecedores (ativos) — pra autocomplete/vínculo nas cotações. */
+export function useSuppliersLite() {
+  return useQuery({
+    queryKey: ["suppliers_lite"],
+    staleTime: 60_000,
+    queryFn: async (): Promise<SupplierLite[]> => {
+      const { data, error } = await db.from("suppliers").select("id, name").eq("is_active", true).order("name");
+      if (error) throw error;
+      return (data ?? []) as SupplierLite[];
+    },
+  });
 }
 
 export function useQuotes(requestId: string | null) {
@@ -44,7 +60,7 @@ export function useAddQuote() {
   return useMutation({
     mutationFn: async (q: {
       request_id: string; item_index: number; item_descricao?: string | null;
-      supplier_name: string; unit_price: number; quantidade: number; notes?: string | null; link?: string | null;
+      supplier_name: string; supplier_id?: string | null; unit_price: number; quantidade: number; notes?: string | null; link?: string | null;
     }) => {
       const { data: u } = await supabase.auth.getUser();
       const { error } = await db.from("purchase_quotes").insert({
@@ -52,6 +68,7 @@ export function useAddQuote() {
         item_index: q.item_index,
         item_descricao: q.item_descricao ?? null,
         supplier_name: q.supplier_name,
+        supplier_id: q.supplier_id ?? null,
         unit_price: q.unit_price,
         quantidade: q.quantidade,
         notes: q.notes ?? null,
@@ -93,6 +110,7 @@ export interface DraftQuote {
   item_index: number;
   item_descricao: string | null;
   supplier_name: string;
+  supplier_id: string | null;
   unit_price: number;
   quantidade: number;
   notes: string | null;
@@ -109,6 +127,7 @@ export async function persistDraftQuotes(requestId: string, drafts: DraftQuote[]
     item_index: d.item_index,
     item_descricao: d.item_descricao ?? null,
     supplier_name: d.supplier_name,
+    supplier_id: d.supplier_id ?? null,
     unit_price: d.unit_price,
     quantidade: d.quantidade,
     notes: d.notes ?? null,
