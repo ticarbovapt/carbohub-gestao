@@ -398,6 +398,51 @@ export function usePurchasePayables(filters?: { status?: string }) {
   });
 }
 
+// Contas EM ABERTO (pra o resumo de aging) — poucas linhas, opcionalmente
+// filtradas por origem. Separado da lista paginada pra o aging refletir o total.
+export function usePurchasePayablesOpen(source?: string) {
+  return useQuery({
+    queryKey: ["purchase-payables-open", source ?? "all"],
+    queryFn: async () => {
+      let q = supabase
+        .from("purchase_payables")
+        .select("id, amount, due_date, status, source")
+        .neq("status", "pago")
+        .neq("status", "cancelado");
+      if (source && source !== "all") q = q.eq("source", source as any);
+      const { data, error } = await q;
+      if (error) throw error;
+      return (data || []) as any[];
+    },
+  });
+}
+
+// Lista PAGINADA no servidor com filtros (origem, status efetivo, período).
+// Evita carregar todo o histórico do Bling de uma vez.
+export function usePurchasePayablesPaged(params: {
+  source: string; status: string; from: string; to: string; page: number; pageSize: number;
+}) {
+  return useQuery({
+    queryKey: ["purchase-payables-paged", params],
+    queryFn: async () => {
+      const today = new Date().toISOString().slice(0, 10);
+      let q = supabase.from("purchase_payables").select("*", { count: "exact" });
+      if (params.source !== "all") q = q.eq("source", params.source as any);
+      if (params.status === "pago") q = q.eq("status", "pago" as any);
+      else if (params.status === "cancelado") q = q.eq("status", "cancelado" as any);
+      else if (params.status === "atrasado") q = q.neq("status", "pago" as any).neq("status", "cancelado" as any).lt("due_date", today);
+      else if (params.status === "programado") q = q.neq("status", "pago" as any).neq("status", "cancelado" as any).gte("due_date", today);
+      if (params.from) q = q.gte("due_date", params.from);
+      if (params.to) q = q.lte("due_date", params.to);
+      const fromIdx = params.page * params.pageSize;
+      q = q.order("due_date", { ascending: false }).range(fromIdx, fromIdx + params.pageSize - 1);
+      const { data, error, count } = await q;
+      if (error) throw error;
+      return { rows: (data || []) as unknown as PurchasePayable[], count: count || 0 };
+    },
+  });
+}
+
 export function useCreatePayable() {
   const queryClient = useQueryClient();
 
@@ -459,6 +504,9 @@ export function useUpdatePayableStatus() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["purchase-payables"] });
+      queryClient.invalidateQueries({ queryKey: ["purchase-payables-paged"] });
+      queryClient.invalidateQueries({ queryKey: ["purchase-payables-open"] });
+      queryClient.invalidateQueries({ queryKey: ["purchasing-kpis"] });
       toast({ title: "Status atualizado" });
     },
   });

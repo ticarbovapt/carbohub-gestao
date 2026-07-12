@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { usePersistedState } from "@/hooks/usePersistedState";
 import { ShoppingCart } from "lucide-react";
 import { RegistrarCompraDialog } from "./OCActionsDialogs";
 import { usePaymentMethods, labelPaymentMethod } from "@/hooks/usePaymentMethods";
@@ -27,7 +28,7 @@ const statusVariantMap: Record<PurchaseOrderStatus, any> = {
 };
 
 export function PurchaseOrdersList() {
-  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [statusFilter, setStatusFilter] = usePersistedState<string>("compras.oc.status", "all");
   const { data: orders, isLoading } = usePurchaseOrders(
     statusFilter !== "all" ? { status: statusFilter } : undefined
   );

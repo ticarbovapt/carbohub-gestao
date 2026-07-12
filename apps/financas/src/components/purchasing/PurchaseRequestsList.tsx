@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { usePersistedState } from "@/hooks/usePersistedState";
 import { FileText, Eye, CheckCircle2, XCircle, Send, PackagePlus } from "lucide-react";
 import { CarboCard, CarboCardContent } from "@/components/ui/carbo-card";
 import { CarboBadge } from "@/components/ui/carbo-badge";
@@ -64,10 +65,10 @@ function useRequesterInfo() {
 }
 
 export function PurchaseRequestsList({ showNewForm, onCloseForm }: PurchaseRequestsListProps) {
-  const [statusFilter, setStatusFilter] = useState<string>("all");
-  const [tipoFilter, setTipoFilter] = useState<string>("all");
-  const [setorFilter, setSetorFilter] = useState<string>("all");
-  const [escopoFilter, setEscopoFilter] = useState<string>("all");
+  const [statusFilter, setStatusFilter] = usePersistedState<string>("compras.rc.status", "all");
+  const [tipoFilter, setTipoFilter] = usePersistedState<string>("compras.rc.tipo", "all");
+  const [setorFilter, setSetorFilter] = usePersistedState<string>("compras.rc.setor", "all");
+  const [escopoFilter, setEscopoFilter] = usePersistedState<string>("compras.rc.escopo", "all");
   const { data: allRequests, isLoading } = usePurchaseRequests(
     statusFilter !== "all" ? { status: statusFilter } : undefined
   );

@@ -179,6 +179,8 @@ export interface PurchasePayable {
   payment_proof_url: string | null;
   status: PayableStatus;
   notes: string | null;
+  source: string;            // 'interno' (criado no sistema) | 'bling' (espelho)
+  bling_numero: string | null;
   created_at: string;
   updated_at: string;
 }

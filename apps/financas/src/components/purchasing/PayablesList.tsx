@@ -1,10 +1,13 @@
 import { useState, useEffect } from "react";
-import { CreditCard, CheckCircle2, Undo2, Ban } from "lucide-react";
+import { usePersistedState } from "@/hooks/usePersistedState";
+import { CreditCard, CheckCircle2, Undo2, Ban, ChevronLeft, ChevronRight } from "lucide-react";
 import { CarboBadge } from "@/components/ui/carbo-badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { usePurchasePayables, useUpdatePayableStatus } from "@/hooks/usePurchasing";
+import { usePurchasePayablesOpen, usePurchasePayablesPaged, useUpdatePayableStatus } from "@/hooks/usePurchasing";
 import { useAuth } from "@/contexts/AuthContext";
 import { PAYABLE_STATUS_LABELS, type PayableStatus } from "@/types/purchasing";
 import { format, isPast, isToday, differenceInCalendarDays } from "date-fns";
@@ -20,43 +23,69 @@ const statusVariantMap: Record<PayableStatus, any> = {
   cancelado: "cancelled",
 };
 
+const isOverdue = (p: { status: PayableStatus; due_date: string }) =>
+  p.status !== "pago" && p.status !== "cancelado" && isPast(new Date(p.due_date)) && !isToday(new Date(p.due_date));
+
+const effectiveStatus = (p: { status: PayableStatus; due_date: string }) =>
+  isOverdue(p) ? "atrasado" : p.status;
+
+const monthBounds = (ym: string) => {
+  // ym = "2026-07" → primeiro e último dia do mês.
+  const [y, m] = ym.split("-").map(Number);
+  const first = `${ym}-01`;
+  const last = new Date(y, m, 0).toISOString().slice(0, 10);
+  return { first, last };
+};
+
 export function PayablesList({ initialStatus }: { initialStatus?: string } = {}) {
-  const [statusFilter, setStatusFilter] = useState<string>(initialStatus ?? "all");
-  // Sincroniza quando a aba é aberta via KPI já com um filtro (ex: "atrasado").
-  useEffect(() => { if (initialStatus) setStatusFilter(initialStatus); }, [initialStatus]);
-  // Busca TODAS e filtra no cliente pelo status EFETIVO — senão o filtro
-  // "Atrasado" não acha nada (no banco elas ficam como "programado").
-  const { data: allPayables, isLoading } = usePurchasePayables();
-  const updateStatus = useUpdatePayableStatus();
   const { gestor } = useAuth();
+  const [statusFilter, setStatusFilter] = usePersistedState<string>("compras.pagar.status", "all");
+  const [source, setSource] = usePersistedState<string>("compras.pagar.source", "all");
+  const [mes, setMes] = usePersistedState<string>("compras.pagar.mes", "");
+  const [from, setFrom] = usePersistedState<string>("compras.pagar.from", "");
+  const [to, setTo] = usePersistedState<string>("compras.pagar.to", "");
+  const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = usePersistedState<number>("compras.pagar.pageSize", 20);
   const [payingId, setPayingId] = useState<string | null>(null);
+
+  // Só sobrescreve o filtro quando veio um deep-link real dos KPIs (não vazio).
+  useEffect(() => { if (initialStatus) { setStatusFilter(initialStatus); setPage(0); } }, [initialStatus]);
+  // Qualquer mudança de filtro volta pra primeira página.
+  useEffect(() => { setPage(0); }, [statusFilter, source, from, to, pageSize]);
+
+  const updateStatus = useUpdatePayableStatus();
+  const { data: openRows } = usePurchasePayablesOpen(source);
+  const { data: paged, isLoading } = usePurchasePayablesPaged({ source, status: statusFilter, from, to, page, pageSize });
+  const rows = paged?.rows ?? [];
+  const total = paged?.count ?? 0;
 
   const formatCurrency = (val: number) =>
     new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(val);
 
-  // Regra ÚNICA de "vencido" (usada na lista e no resumo): em aberto e a data já passou.
-  const isOverdue = (p: { status: PayableStatus; due_date: string }) =>
-    p.status !== "pago" && p.status !== "cancelado" && isPast(new Date(p.due_date)) && !isToday(new Date(p.due_date));
-
-  const getEffectiveStatus = (p: { status: PayableStatus; due_date: string }) =>
-    isOverdue(p) ? "atrasado" : p.status;
-
-  const payables = (allPayables ?? []).filter((p) => statusFilter === "all" || getEffectiveStatus(p) === statusFilter);
-
-  // Resumo (aging) sobre o que está EM ABERTO — sempre no total (ignora o filtro).
-  const abertas = (allPayables ?? []).filter((p) => p.status !== "pago" && p.status !== "cancelado");
-  const sum = (arr: typeof abertas) => arr.reduce((s, p) => s + Number(p.amount || 0), 0);
+  // Resumo (aging) sobre o que está EM ABERTO (respeita só o filtro de origem).
+  const abertas = openRows ?? [];
+  const sum = (arr: any[]) => arr.reduce((s, p) => s + Number(p.amount || 0), 0);
   const vencidas = abertas.filter(isOverdue);
   const venceHoje = abertas.filter((p) => isToday(new Date(p.due_date)));
   const vence7 = abertas.filter((p) => { const d = differenceInCalendarDays(new Date(p.due_date), new Date()); return d >= 1 && d <= 7; });
 
-  const payingPayable = (allPayables ?? []).find((p) => p.id === payingId);
+  const applyMes = (ym: string) => {
+    setMes(ym);
+    if (ym) { const { first, last } = monthBounds(ym); setFrom(first); setTo(last); }
+    else { setFrom(""); setTo(""); }
+  };
+  const clearPeriodo = () => { setMes(""); setFrom(""); setTo(""); };
 
+  const payingPayable = rows.find((p) => p.id === payingId);
   const handlePay = async () => {
     if (!payingId) return;
     await updateStatus.mutateAsync({ id: payingId, status: "pago" });
     setPayingId(null);
   };
+
+  const from1 = total === 0 ? 0 : page * pageSize + 1;
+  const to1 = Math.min(total, (page + 1) * pageSize);
+  const lastPage = Math.max(0, Math.ceil(total / pageSize) - 1);
 
   return (
     <div className="space-y-4">
@@ -84,24 +113,53 @@ export function PayablesList({ initialStatus }: { initialStatus?: string } = {})
         </div>
       </div>
 
-      <div className="flex items-center gap-3">
-        <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="w-[200px]">
-            <SelectValue placeholder="Filtrar por status" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Todos os status</SelectItem>
-            {Object.entries(PAYABLE_STATUS_LABELS).map(([key, label]) => (
-              <SelectItem key={key} value={key}>{label}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+      {/* Filtros */}
+      <div className="flex flex-wrap items-end gap-3">
+        <div className="space-y-1">
+          <Label className="text-xs text-muted-foreground">Origem</Label>
+          <Select value={source} onValueChange={setSource}>
+            <SelectTrigger className="w-[150px]"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todas as origens</SelectItem>
+              <SelectItem value="interno">Criadas no sistema</SelectItem>
+              <SelectItem value="bling">Importadas do Bling</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-1">
+          <Label className="text-xs text-muted-foreground">Status</Label>
+          <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <SelectTrigger className="w-[160px]"><SelectValue placeholder="Status" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos os status</SelectItem>
+              {Object.entries(PAYABLE_STATUS_LABELS).map(([key, label]) => (
+                <SelectItem key={key} value={key}>{label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-1">
+          <Label className="text-xs text-muted-foreground">Mês</Label>
+          <Input type="month" className="w-[150px]" value={mes} onChange={(e) => applyMes(e.target.value)} />
+        </div>
+        <div className="space-y-1">
+          <Label className="text-xs text-muted-foreground">De</Label>
+          <Input type="date" className="w-[150px]" value={from} onChange={(e) => { setMes(""); setFrom(e.target.value); }} />
+        </div>
+        <div className="space-y-1">
+          <Label className="text-xs text-muted-foreground">Até</Label>
+          <Input type="date" className="w-[150px]" value={to} onChange={(e) => { setMes(""); setTo(e.target.value); }} />
+        </div>
+        {(mes || from || to) && (
+          <Button variant="ghost" size="sm" className="text-muted-foreground" onClick={clearPeriodo}>Limpar período</Button>
+        )}
       </div>
 
       <CarboTable>
         <CarboTableHeader>
           <CarboTableRow>
             <CarboTableHead>Fornecedor</CarboTableHead>
+            <CarboTableHead>Origem</CarboTableHead>
             <CarboTableHead>Valor</CarboTableHead>
             <CarboTableHead>Vencimento</CarboTableHead>
             <CarboTableHead>Status</CarboTableHead>
@@ -112,31 +170,35 @@ export function PayablesList({ initialStatus }: { initialStatus?: string } = {})
         <CarboTableBody>
           {isLoading ? (
             <CarboTableRow>
-              <CarboTableCell colSpan={6} className="text-center text-muted-foreground py-8">Carregando...</CarboTableCell>
+              <CarboTableCell colSpan={7} className="text-center text-muted-foreground py-8">Carregando...</CarboTableCell>
             </CarboTableRow>
-          ) : !payables?.length ? (
+          ) : !rows.length ? (
             <CarboTableRow>
-              <CarboTableCell colSpan={6} className="text-center text-muted-foreground py-8">
+              <CarboTableCell colSpan={7} className="text-center text-muted-foreground py-8">
                 <div className="flex flex-col items-center gap-2">
                   <CreditCard className="h-8 w-8 text-muted-foreground/50" />
-                  <span>Nenhuma conta a pagar</span>
+                  <span>Nenhuma conta a pagar com esses filtros</span>
                 </div>
               </CarboTableCell>
             </CarboTableRow>
           ) : (
-            payables.map((p) => {
-              const effectiveStatus = getEffectiveStatus(p);
+            rows.map((p) => {
+              const eff = effectiveStatus(p);
+              const isBling = p.source === "bling";
               return (
                 <CarboTableRow key={p.id}>
                   <CarboTableCell className="font-medium">{p.supplier_name}</CarboTableCell>
+                  <CarboTableCell>
+                    <CarboBadge variant={isBling ? "secondary" : "info"} className="text-[10px]" title={isBling ? (p.bling_numero ? `Bling nº ${p.bling_numero}` : "Importada do Bling") : "Criada no sistema"}>
+                      {isBling ? "Bling" : "Sistema"}
+                    </CarboBadge>
+                  </CarboTableCell>
                   <CarboTableCell className="font-mono">{formatCurrency(p.amount)}</CarboTableCell>
                   <CarboTableCell className="text-sm">
                     {format(new Date(p.due_date), "dd/MM/yyyy", { locale: ptBR })}
                   </CarboTableCell>
                   <CarboTableCell>
-                    <CarboBadge variant={statusVariantMap[effectiveStatus]} dot>
-                      {PAYABLE_STATUS_LABELS[effectiveStatus]}
-                    </CarboBadge>
+                    <CarboBadge variant={statusVariantMap[eff]} dot>{PAYABLE_STATUS_LABELS[eff]}</CarboBadge>
                   </CarboTableCell>
                   <CarboTableCell className="text-sm text-muted-foreground">
                     {p.paid_at ? format(new Date(p.paid_at), "dd/MM/yyyy", { locale: ptBR }) : "—"}
@@ -169,6 +231,31 @@ export function PayablesList({ initialStatus }: { initialStatus?: string } = {})
           )}
         </CarboTableBody>
       </CarboTable>
+
+      {/* Paginação */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <span>Por página</span>
+          <Select value={String(pageSize)} onValueChange={(v) => setPageSize(Number(v))}>
+            <SelectTrigger className="w-[80px] h-8"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="20">20</SelectItem>
+              <SelectItem value="50">50</SelectItem>
+              <SelectItem value="100">100</SelectItem>
+            </SelectContent>
+          </Select>
+          <span>{from1}–{to1} de {total}</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" className="gap-1" disabled={page <= 0} onClick={() => setPage((p) => Math.max(0, p - 1))}>
+            <ChevronLeft className="h-4 w-4" /> Anterior
+          </Button>
+          <span className="text-sm text-muted-foreground">{page + 1} / {lastPage + 1}</span>
+          <Button variant="outline" size="sm" className="gap-1" disabled={page >= lastPage} onClick={() => setPage((p) => Math.min(lastPage, p + 1))}>
+            Próxima <ChevronRight className="h-4 w-4" />
+          </Button>
+        </div>
+      </div>
 
       {/* Payment Confirmation Dialog */}
       <Dialog open={!!payingId} onOpenChange={() => setPayingId(null)}>

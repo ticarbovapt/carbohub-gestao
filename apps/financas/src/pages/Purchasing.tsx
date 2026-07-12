@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { usePersistedState } from "@/hooks/usePersistedState";
 import { Wallet, Plus, FileText, Package, Receipt, CreditCard, BarChart3, Clock, AlertTriangle, CheckCircle2, Building2, Wallet as WalletIcon, RefreshCw, DollarSign } from "lucide-react";
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
 import { CarboCard, CarboCardContent, CarboCardHeader, CarboCardTitle } from "@/components/ui/carbo-card";
@@ -28,8 +29,8 @@ import { SubscriptionsList } from "@/components/purchasing/SubscriptionsList";
 export default function Purchasing() {
   const { gestor } = useAuth();
   const [showNewRC, setShowNewRC] = useState(false);
-  const [activeTab, setActiveTab] = useState("requisicoes");
-  const [payFilter, setPayFilter] = useState<string>("all");
+  const [activeTab, setActiveTab] = usePersistedState("compras.tab", "requisicoes");
+  const [payFilter, setPayFilter] = useState<string>("");
 
   // Abre uma aba já com um filtro aplicado (deep-link a partir dos KPIs).
   const goPayables = (filter: string) => { setPayFilter(filter); setActiveTab("pagar"); };

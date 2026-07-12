@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { usePersistedState } from "@/hooks/usePersistedState";
 import { Plus, Edit2, Trash2, Pause, Play, RefreshCw, CreditCard, CalendarClock, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -32,8 +33,8 @@ const emptyForm = {
 export function SubscriptionsList() {
   const { gestor } = useAuth();
   const canManage = gestor;
-  const [view, setView] = useState<SubscriptionStatus>("ativa");
-  const [setorFilter, setSetorFilter] = useState("all");
+  const [view, setView] = usePersistedState<SubscriptionStatus>("compras.assin.view", "ativa");
+  const [setorFilter, setSetorFilter] = usePersistedState<string>("compras.assin.setor", "all");
   const [showForm, setShowForm] = useState(false);
   const [editSub, setEditSub] = useState<Subscription | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
