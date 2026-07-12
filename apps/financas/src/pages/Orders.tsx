@@ -243,7 +243,7 @@ export default function Orders() {
               </DropdownMenu>
 
               {gestor && (
-                <CarboButton onClick={() => navigate("/orders/new")}>
+                <CarboButton onClick={() => navigate("/vender")}>
                   <Plus className="h-4 w-4 mr-1" />
                   Novo Pedido
                 </CarboButton>
@@ -476,7 +476,7 @@ export default function Orders() {
                 gestor
                   ? {
                       label: "Novo Pedido",
-                      onClick: () => navigate("/orders/new"),
+                      onClick: () => navigate("/vender"),
                     }
                   : undefined
               }
@@ -508,8 +508,8 @@ export default function Orders() {
                 return (
                   <CarboTableRow
                     key={order.id}
-                    interactive
-                    onClick={() => navigate(`/orders/${order.id}`)}
+                    interactive={gestor}
+                    onClick={gestor ? () => { setSelectedOrder(order); setIsEditDialogOpen(true); } : undefined}
                   >
                     <CarboTableCell>
                       <span className="font-mono text-sm font-medium text-carbo-green">
@@ -595,7 +595,7 @@ export default function Orders() {
                       </CarboTableCell>
                     )}
                     <CarboTableCell>
-                      <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                      {gestor && <ChevronRight className="h-4 w-4 text-muted-foreground" />}
                     </CarboTableCell>
                   </CarboTableRow>
                 );
