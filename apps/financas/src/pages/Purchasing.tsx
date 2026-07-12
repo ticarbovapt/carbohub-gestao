@@ -53,7 +53,7 @@ export default function Purchasing() {
         {/* KPI Cards */}
         {kpis && (
           <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
-            <CarboCard variant="kpi" padding="sm">
+            <CarboCard variant="kpi" padding="sm" className="cursor-pointer" onClick={() => setActiveTab("requisicoes")} title="Ver requisições">
               <CarboCardContent>
                 <div className="flex items-center gap-2 mb-1">
                   <Clock className="h-4 w-4 text-warning" />
@@ -62,7 +62,7 @@ export default function Purchasing() {
                 <p className="text-2xl font-bold kpi-number">{kpis.rcPendentes}</p>
               </CarboCardContent>
             </CarboCard>
-            <CarboCard variant="kpi" padding="sm">
+            <CarboCard variant="kpi" padding="sm" className="cursor-pointer" onClick={() => setActiveTab("recebimento")} title="Ver OCs aguardando recebimento">
               <CarboCardContent>
                 <div className="flex items-center gap-2 mb-1">
                   <Package className="h-4 w-4 text-carbo-blue" />
@@ -71,7 +71,7 @@ export default function Purchasing() {
                 <p className="text-2xl font-bold kpi-number">{kpis.ocAbertas}</p>
               </CarboCardContent>
             </CarboCard>
-            <CarboCard variant="kpi" padding="sm">
+            <CarboCard variant="kpi" padding="sm" className="cursor-pointer" onClick={() => setActiveTab("pagar")} title="Ver contas a pagar">
               <CarboCardContent>
                 <div className="flex items-center gap-2 mb-1">
                   <AlertTriangle className="h-4 w-4 text-destructive" />
@@ -80,7 +80,7 @@ export default function Purchasing() {
                 <p className="text-2xl font-bold kpi-number text-destructive">{kpis.pagamentosAtrasados}</p>
               </CarboCardContent>
             </CarboCard>
-            <CarboCard variant="kpi" padding="sm">
+            <CarboCard variant="kpi" padding="sm" className="cursor-pointer" onClick={() => setActiveTab("ordens")} title="Ver ordens de compra">
               <CarboCardContent>
                 <div className="flex items-center gap-2 mb-1">
                   <BarChart3 className="h-4 w-4 text-carbo-green" />
@@ -89,7 +89,7 @@ export default function Purchasing() {
                 <p className="text-lg font-bold kpi-number">{formatCurrency(kpis.totalComprometido)}</p>
               </CarboCardContent>
             </CarboCard>
-            <CarboCard variant="kpi" padding="sm">
+            <CarboCard variant="kpi" padding="sm" className="cursor-pointer" onClick={() => setActiveTab("pagar")} title="Ver contas a pagar">
               <CarboCardContent>
                 <div className="flex items-center gap-2 mb-1">
                   <CreditCard className="h-4 w-4 text-warning" />
