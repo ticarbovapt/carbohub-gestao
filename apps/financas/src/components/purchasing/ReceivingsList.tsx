@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { AlertTriangle, CheckCircle2, Package } from "lucide-react";
 import { CarboBadge } from "@/components/ui/carbo-badge";
-import { usePurchaseReceivings } from "@/hooks/usePurchasing";
+import { usePurchaseReceivings, usePurchaseOrders } from "@/hooks/usePurchasing";
 import { RECEIVING_STATUS_LABELS, type ReceivingStatus } from "@/types/purchasing";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -17,6 +17,8 @@ const statusVariantMap: Record<ReceivingStatus, any> = {
 
 export function ReceivingsList() {
   const { data: receivings, isLoading } = usePurchaseReceivings();
+  const { data: orders } = usePurchaseOrders();
+  const ocNumberById = new Map((orders ?? []).map((o: any) => [o.id, o.oc_number]));
 
   return (
     <div className="space-y-4">
@@ -47,7 +49,7 @@ export function ReceivingsList() {
           ) : (
             receivings.map((rec) => (
               <CarboTableRow key={rec.id}>
-                <CarboTableCell className="font-mono text-sm">{rec.purchase_order_id.slice(0, 8)}...</CarboTableCell>
+                <CarboTableCell className="font-mono text-sm">{ocNumberById.get(rec.purchase_order_id) ?? `${rec.purchase_order_id.slice(0, 8)}…`}</CarboTableCell>
                 <CarboTableCell className="text-sm">
                   {format(new Date(rec.received_at), "dd/MM/yyyy HH:mm", { locale: ptBR })}
                 </CarboTableCell>

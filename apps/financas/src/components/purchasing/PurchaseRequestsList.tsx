@@ -95,14 +95,17 @@ export function PurchaseRequestsList({ showNewForm, onCloseForm }: PurchaseReque
   const [rejectReason, setRejectReason] = useState("");
   const [showRejectDialog, setShowRejectDialog] = useState(false);
   const [rejectingId, setRejectingId] = useState<string | null>(null);
+  const [approving, setApproving] = useState<PurchaseRequest | null>(null);
 
   const canApprove = gestor;
 
   const formatCurrency = (val: number) =>
     new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(val);
 
-  const handleApprove = async (id: string) => {
-    await approveRC.mutateAsync({ id, approved: true });
+  const handleApprove = async () => {
+    if (!approving) return;
+    await approveRC.mutateAsync({ id: approving.id, approved: true });
+    setApproving(null);
   };
 
   const handleReject = async () => {
@@ -174,6 +177,7 @@ export function PurchaseRequestsList({ showNewForm, onCloseForm }: PurchaseReque
             <CarboTableHead>Centro de Custo</CarboTableHead>
             <CarboTableHead>Tipo</CarboTableHead>
             <CarboTableHead>Valor Estimado</CarboTableHead>
+            <CarboTableHead>Prazo</CarboTableHead>
             <CarboTableHead>Status</CarboTableHead>
             <CarboTableHead>Data</CarboTableHead>
             <CarboTableHead>Ações</CarboTableHead>
@@ -182,13 +186,13 @@ export function PurchaseRequestsList({ showNewForm, onCloseForm }: PurchaseReque
         <CarboTableBody>
           {isLoading ? (
             <CarboTableRow>
-              <CarboTableCell colSpan={8} className="text-center text-muted-foreground py-8">
+              <CarboTableCell colSpan={9} className="text-center text-muted-foreground py-8">
                 Carregando...
               </CarboTableCell>
             </CarboTableRow>
           ) : !requests?.length ? (
             <CarboTableRow>
-              <CarboTableCell colSpan={8} className="text-center text-muted-foreground py-8">
+              <CarboTableCell colSpan={9} className="text-center text-muted-foreground py-8">
                 Nenhuma requisição encontrada
               </CarboTableCell>
             </CarboTableRow>
@@ -217,6 +221,9 @@ export function PurchaseRequestsList({ showNewForm, onCloseForm }: PurchaseReque
                   </div>
                 </CarboTableCell>
                 <CarboTableCell className="font-mono">{formatCurrency(rc.estimated_value)}</CarboTableCell>
+                <CarboTableCell className="text-sm text-muted-foreground">
+                  {(rc as any).needed_by ? format(new Date((rc as any).needed_by), "dd/MM/yyyy", { locale: ptBR }) : "—"}
+                </CarboTableCell>
                 <CarboTableCell>
                   <CarboBadge variant={statusVariantMap[rc.status]} dot>
                     {REQUEST_STATUS_LABELS[rc.status]}
@@ -232,7 +239,7 @@ export function PurchaseRequestsList({ showNewForm, onCloseForm }: PurchaseReque
                     </Button>
                     {canApprove && rc.status === "aguardando_aprovacao" && (
                       <>
-                        <Button variant="ghost" size="icon" className="h-8 w-8 text-success" onClick={() => handleApprove(rc.id)} title="Aprovar">
+                        <Button variant="ghost" size="icon" className="h-8 w-8 text-success" onClick={() => setApproving(rc)} title="Aprovar">
                           <CheckCircle2 className="h-4 w-4" />
                         </Button>
                         <Button
@@ -337,6 +344,24 @@ export function PurchaseRequestsList({ showNewForm, onCloseForm }: PurchaseReque
               )}
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Approve Dialog */}
+      <Dialog open={!!approving} onOpenChange={(o) => !o && setApproving(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Aprovar requisição</DialogTitle>
+            <DialogDescription>
+              {approving && <>Aprovar a RC <strong>{approving.rc_number}</strong> — {formatCurrency(approving.estimated_value)}?</>}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setApproving(null)}>Cancelar</Button>
+            <Button onClick={handleApprove} disabled={approveRC.isPending} className="gap-1.5 text-white bg-carbo-green hover:bg-carbo-green/90">
+              <CheckCircle2 className="h-4 w-4" /> Aprovar
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 

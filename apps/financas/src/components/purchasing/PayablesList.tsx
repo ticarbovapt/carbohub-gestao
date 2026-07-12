@@ -6,7 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { usePurchasePayables, useUpdatePayableStatus } from "@/hooks/usePurchasing";
 import { PAYABLE_STATUS_LABELS, type PayableStatus } from "@/types/purchasing";
-import { format, isPast, isToday } from "date-fns";
+import { format, isPast, isToday, differenceInCalendarDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import {
   CarboTable, CarboTableHeader, CarboTableBody, CarboTableRow, CarboTableHead, CarboTableCell,
@@ -30,12 +30,19 @@ export function PayablesList() {
   const formatCurrency = (val: number) =>
     new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(val);
 
-  const getEffectiveStatus = (p: { status: PayableStatus; due_date: string }) => {
-    if (p.status === "programado" && isPast(new Date(p.due_date)) && !isToday(new Date(p.due_date))) {
-      return "atrasado";
-    }
-    return p.status;
-  };
+  // Regra ÚNICA de "vencido" (usada na lista e no resumo): em aberto e a data já passou.
+  const isOverdue = (p: { status: PayableStatus; due_date: string }) =>
+    p.status !== "pago" && p.status !== "cancelado" && isPast(new Date(p.due_date)) && !isToday(new Date(p.due_date));
+
+  const getEffectiveStatus = (p: { status: PayableStatus; due_date: string }) =>
+    isOverdue(p) ? "atrasado" : p.status;
+
+  // Resumo (aging) sobre o que está EM ABERTO no conjunto carregado.
+  const abertas = (payables ?? []).filter((p) => p.status !== "pago" && p.status !== "cancelado");
+  const sum = (arr: typeof abertas) => arr.reduce((s, p) => s + Number(p.amount || 0), 0);
+  const vencidas = abertas.filter(isOverdue);
+  const venceHoje = abertas.filter((p) => isToday(new Date(p.due_date)));
+  const vence7 = abertas.filter((p) => { const d = differenceInCalendarDays(new Date(p.due_date), new Date()); return d >= 1 && d <= 7; });
 
   const handlePay = async () => {
     if (!payingId) return;
@@ -45,6 +52,30 @@ export function PayablesList() {
 
   return (
     <div className="space-y-4">
+      {/* Resumo de aging */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div className="rounded-xl border border-border p-3">
+          <p className="text-xs text-muted-foreground">A pagar (em aberto)</p>
+          <p className="text-lg font-bold">{formatCurrency(sum(abertas))}</p>
+          <p className="text-[11px] text-muted-foreground">{abertas.length} conta(s)</p>
+        </div>
+        <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-3">
+          <p className="text-xs text-destructive">Vencido</p>
+          <p className="text-lg font-bold text-destructive">{formatCurrency(sum(vencidas))}</p>
+          <p className="text-[11px] text-muted-foreground">{vencidas.length} conta(s)</p>
+        </div>
+        <div className="rounded-xl border border-warning/30 bg-warning/5 p-3">
+          <p className="text-xs text-warning-foreground">Vence hoje</p>
+          <p className="text-lg font-bold">{formatCurrency(sum(venceHoje))}</p>
+          <p className="text-[11px] text-muted-foreground">{venceHoje.length} conta(s)</p>
+        </div>
+        <div className="rounded-xl border border-border p-3">
+          <p className="text-xs text-muted-foreground">Próximos 7 dias</p>
+          <p className="text-lg font-bold">{formatCurrency(sum(vence7))}</p>
+          <p className="text-[11px] text-muted-foreground">{vence7.length} conta(s)</p>
+        </div>
+      </div>
+
       <div className="flex items-center gap-3">
         <Select value={statusFilter} onValueChange={setStatusFilter}>
           <SelectTrigger className="w-[200px]">
