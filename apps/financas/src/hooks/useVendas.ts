@@ -35,6 +35,9 @@ export interface NovaVendaInput {
   freight_type?: string;
   total: number;
   notes?: string;
+  internal_notes?: string;
+  vendedor_id?: string;
+  vendedor_name?: string;
   itens: VendaItemInput[];
 }
 
@@ -59,9 +62,11 @@ export function useCreateVenda() {
         }));
 
       const { data: u } = await supabase.auth.getUser();
-      let vendedorName: string | null = null;
-      if (u?.user?.id) {
-        const { data: prof } = await db.from("profiles").select("full_name").eq("id", u.user.id).maybeSingle();
+      // Vendedor: usa o override (gestor pode lançar por outro); senão o logado.
+      const vendedorId = input.vendedor_id || u?.user?.id || null;
+      let vendedorName: string | null = input.vendedor_name || null;
+      if (!vendedorName && vendedorId) {
+        const { data: prof } = await db.from("profiles").select("full_name").eq("id", vendedorId).maybeSingle();
         vendedorName = (prof as { full_name?: string } | null)?.full_name ?? null;
       }
 
@@ -88,7 +93,8 @@ export function useCreateVenda() {
           total: input.total,
           status: input.status === "orcamento" ? "quote" : "pending",
           notes: input.notes || null,
-          vendedor_id: u?.user?.id ?? null,
+          internal_notes: input.internal_notes || null,
+          vendedor_id: vendedorId,
           vendedor_name: vendedorName,
         })
         .select("id, order_number")
