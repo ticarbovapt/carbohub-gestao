@@ -37,25 +37,31 @@ const monthBounds = (ym: string) => {
   return { first, last };
 };
 
+const CURRENT_MONTH = new Date().toISOString().slice(0, 7);
+
 export function PayablesList({ initialStatus }: { initialStatus?: string } = {}) {
   const { gestor } = useAuth();
   const [statusFilter, setStatusFilter] = usePersistedState<string>("compras.pagar.status", "all");
   const [source, setSource] = usePersistedState<string>("compras.pagar.source", "all");
-  const [mes, setMes] = usePersistedState<string>("compras.pagar.mes", "");
+  // Padrão: mês atual (chave v2 pra aplicar o novo default mesmo pra quem já usou).
+  const [mes, setMes] = usePersistedState<string>("compras.pagar.mes.v2", CURRENT_MONTH);
   const [from, setFrom] = usePersistedState<string>("compras.pagar.from", "");
   const [to, setTo] = usePersistedState<string>("compras.pagar.to", "");
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = usePersistedState<number>("compras.pagar.pageSize", 20);
   const [payingId, setPayingId] = useState<string | null>(null);
 
+  // Período efetivo: o Mês tem prioridade; senão usa De/Até.
+  const periodo = mes ? monthBounds(mes) : { first: from, last: to };
+
   // Só sobrescreve o filtro quando veio um deep-link real dos KPIs (não vazio).
   useEffect(() => { if (initialStatus) { setStatusFilter(initialStatus); setPage(0); } }, [initialStatus]);
   // Qualquer mudança de filtro volta pra primeira página.
-  useEffect(() => { setPage(0); }, [statusFilter, source, from, to, pageSize]);
+  useEffect(() => { setPage(0); }, [statusFilter, source, mes, from, to, pageSize]);
 
   const updateStatus = useUpdatePayableStatus();
   const { data: openRows } = usePurchasePayablesOpen(source);
-  const { data: paged, isLoading } = usePurchasePayablesPaged({ source, status: statusFilter, from, to, page, pageSize });
+  const { data: paged, isLoading } = usePurchasePayablesPaged({ source, status: statusFilter, from: periodo.first, to: periodo.last, page, pageSize });
   const rows = paged?.rows ?? [];
   const total = paged?.count ?? 0;
 
@@ -69,11 +75,7 @@ export function PayablesList({ initialStatus }: { initialStatus?: string } = {})
   const venceHoje = abertas.filter((p) => isToday(new Date(p.due_date)));
   const vence7 = abertas.filter((p) => { const d = differenceInCalendarDays(new Date(p.due_date), new Date()); return d >= 1 && d <= 7; });
 
-  const applyMes = (ym: string) => {
-    setMes(ym);
-    if (ym) { const { first, last } = monthBounds(ym); setFrom(first); setTo(last); }
-    else { setFrom(""); setTo(""); }
-  };
+  const applyMes = (ym: string) => { setMes(ym); setFrom(""); setTo(""); };
   const clearPeriodo = () => { setMes(""); setFrom(""); setTo(""); };
 
   const payingPayable = rows.find((p) => p.id === payingId);

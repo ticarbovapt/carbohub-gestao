@@ -435,7 +435,8 @@ export function usePurchasePayablesPaged(params: {
       if (params.from) q = q.gte("due_date", params.from);
       if (params.to) q = q.lte("due_date", params.to);
       const fromIdx = params.page * params.pageSize;
-      q = q.order("due_date", { ascending: false }).range(fromIdx, fromIdx + params.pageSize - 1);
+      // Cronológico: vencimento mais próximo primeiro (não joga o futuro no topo).
+      q = q.order("due_date", { ascending: true }).range(fromIdx, fromIdx + params.pageSize - 1);
       const { data, error, count } = await q;
       if (error) throw error;
       return { rows: (data || []) as unknown as PurchasePayable[], count: count || 0 };
