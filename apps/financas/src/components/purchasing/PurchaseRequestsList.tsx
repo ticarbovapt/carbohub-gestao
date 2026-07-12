@@ -170,7 +170,7 @@ export function PurchaseRequestsList({ showNewForm, onCloseForm }: PurchaseReque
         <CarboTableHeader>
           <CarboTableRow>
             <CarboTableHead>Nº RC</CarboTableHead>
-            <CarboTableHead>Setor</CarboTableHead>
+            <CarboTableHead>Solicitante</CarboTableHead>
             <CarboTableHead>Centro de Custo</CarboTableHead>
             <CarboTableHead>Tipo</CarboTableHead>
             <CarboTableHead>Valor Estimado</CarboTableHead>
@@ -194,12 +194,13 @@ export function PurchaseRequestsList({ showNewForm, onCloseForm }: PurchaseReque
             </CarboTableRow>
           ) : (
             requests.map((rc) => (
-              <CarboTableRow key={rc.id} interactive>
+              <CarboTableRow key={rc.id} interactive className="cursor-pointer" onClick={() => setSelectedRC(rc)}>
                 <CarboTableCell className="font-mono font-medium">{rc.rc_number}</CarboTableCell>
                 <CarboTableCell>
-                  {setorOf(rc)
-                    ? <span>{deptLabel[setorOf(rc)!] ?? setorOf(rc)}</span>
-                    : <span className="text-muted-foreground text-xs">—</span>}
+                  <div className="leading-tight">
+                    <p className="font-medium">{requesterName(rc)}</p>
+                    {setorOf(rc) && <p className="text-xs text-muted-foreground">{deptLabel[setorOf(rc)!] ?? setorOf(rc)}</p>}
+                  </div>
                 </CarboTableCell>
                 <CarboTableCell>{rc.cost_center}</CarboTableCell>
                 <CarboTableCell>
@@ -224,14 +225,14 @@ export function PurchaseRequestsList({ showNewForm, onCloseForm }: PurchaseReque
                 <CarboTableCell className="text-muted-foreground text-sm">
                   {format(new Date(rc.created_at), "dd/MM/yyyy", { locale: ptBR })}
                 </CarboTableCell>
-                <CarboTableCell>
+                <CarboTableCell onClick={(e) => e.stopPropagation()}>
                   <div className="flex items-center gap-1">
-                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setSelectedRC(rc)}>
+                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setSelectedRC(rc)} title="Ver detalhes">
                       <Eye className="h-4 w-4" />
                     </Button>
                     {canApprove && rc.status === "aguardando_aprovacao" && (
                       <>
-                        <Button variant="ghost" size="icon" className="h-8 w-8 text-success" onClick={() => handleApprove(rc.id)}>
+                        <Button variant="ghost" size="icon" className="h-8 w-8 text-success" onClick={() => handleApprove(rc.id)} title="Aprovar">
                           <CheckCircle2 className="h-4 w-4" />
                         </Button>
                         <Button
@@ -239,6 +240,7 @@ export function PurchaseRequestsList({ showNewForm, onCloseForm }: PurchaseReque
                           size="icon"
                           className="h-8 w-8 text-destructive"
                           onClick={() => { setRejectingId(rc.id); setShowRejectDialog(true); }}
+                          title="Rejeitar"
                         >
                           <XCircle className="h-4 w-4" />
                         </Button>
