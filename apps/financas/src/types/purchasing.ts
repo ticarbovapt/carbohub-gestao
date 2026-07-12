@@ -36,6 +36,7 @@ export interface PurchaseRequest {
   operational_impact: string | null;
   items: PurchaseRequestItem[];
   status: PurchaseRequestStatus;
+  submitted_at: string | null;
   approved_by: string | null;
   approved_at: string | null;
   rejection_reason: string | null;

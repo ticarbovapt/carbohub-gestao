@@ -289,7 +289,7 @@ export function PurchasingDashboard() {
             ) : (
               <div className="space-y-2 max-h-[260px] overflow-y-auto">
                 {pendentes.slice(0, 12).map((rc) => {
-                  const dias = differenceInCalendarDays(today(), new Date(rc.created_at));
+                  const dias = differenceInCalendarDays(today(), new Date(rc.submitted_at ?? rc.created_at));
                   return (
                     <div key={rc.id} className="flex items-center justify-between text-sm border-b border-border pb-1.5">
                       <div className="min-w-0">

@@ -64,7 +64,9 @@ export function useCreatePurchaseRequest() {
           items: values.items as any,
           service_order_id: values.service_order_id || null,
           status: (values.status || "rascunho") as any,
-        })
+          // Carimba o envio quando já nasce aguardando aprovação.
+          submitted_at: values.status === "aguardando_aprovacao" ? new Date().toISOString() : null,
+        } as any)
         .select()
         .single();
 
