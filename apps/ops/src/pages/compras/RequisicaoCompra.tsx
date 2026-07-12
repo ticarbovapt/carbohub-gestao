@@ -69,7 +69,6 @@ export default function RequisicaoCompra() {
   const [priority, setPriority] = useState("normal");
   const [neededBy, setNeededBy] = useState("");
   const [costCenter, setCostCenter] = useState("");
-  const [supplier, setSupplier] = useState("");
   const [referenceUrl, setReferenceUrl] = useState("");
   const [obs, setObs] = useState("");
   const [items, setItems] = useState<ReqItem[]>([emptyItem()]);
@@ -92,7 +91,7 @@ export default function RequisicaoCompra() {
 
   const reset = () => {
     setEscopo("setor"); setMotivo(""); setPriority("normal"); setNeededBy("");
-    setCostCenter(""); setSupplier(""); setReferenceUrl(""); setObs(""); setItems([emptyItem()]);
+    setCostCenter(""); setReferenceUrl(""); setObs(""); setItems([emptyItem()]);
     setDraftQuotes([]); setShowCot(false);
   };
 
@@ -114,7 +113,7 @@ export default function RequisicaoCompra() {
         priority: isSetor ? priority : "normal",
         needed_by: neededBy || null,
         reference_url: isSetor ? null : (referenceUrl || null),
-        suggested_supplier: isSetor ? (supplier || null) : null,
+        suggested_supplier: null, // fornecedor vem das cotações por item, não mais de um campo
         estimated_value: estimated,
         justification: obs || null,
         items,
@@ -201,7 +200,7 @@ export default function RequisicaoCompra() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-1.5">
                     <Label>Centro de Custo *</Label>
                     <Select value={costCenter} onValueChange={setCostCenter}>
@@ -212,10 +211,6 @@ export default function RequisicaoCompra() {
                   <div className="space-y-1.5">
                     <Label>Precisa até (opcional)</Label>
                     <Input type="date" value={neededBy} onChange={(e) => setNeededBy(e.target.value)} />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label>Fornecedor sugerido (opcional)</Label>
-                    <Input value={supplier} onChange={(e) => setSupplier(e.target.value)} placeholder="Se já tiver um" />
                   </div>
                 </div>
               </div>
