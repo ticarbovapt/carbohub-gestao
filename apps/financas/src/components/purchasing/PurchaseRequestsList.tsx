@@ -21,6 +21,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useOrgLabels } from "@/hooks/useTeamMembers";
+import { CotacoesPanel } from "./CotacoesPanel";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import {
@@ -318,6 +319,12 @@ export function PurchaseRequestsList({ showNewForm, onCloseForm }: PurchaseReque
                       </tbody>
                     </table>
                   </div>
+                </div>
+              )}
+              {selectedRC.items?.length > 0 && (
+                <div>
+                  <p className="text-sm text-muted-foreground mb-2">Cotações por item</p>
+                  <CotacoesPanel requestId={selectedRC.id} items={selectedRC.items as any} />
                 </div>
               )}
               {selectedRC.rejection_reason && (

@@ -9,8 +9,10 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { CarboTable, CarboTableHeader, CarboTableBody, CarboTableRow, CarboTableHead, CarboTableCell } from "@/components/ui/carbo-table";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { useMyPurchaseRequests, useCreatePurchaseRequest, type ReqItem } from "@/hooks/usePurchaseRequests";
+import { CotacoesPanel } from "@/components/compras/CotacoesPanel";
 
 const COST_CENTERS = [
   "Produção", "Operações", "Manutenção", "Logística", "Qualidade",
@@ -71,6 +73,7 @@ export default function RequisicaoCompra() {
   const [referenceUrl, setReferenceUrl] = useState("");
   const [obs, setObs] = useState("");
   const [items, setItems] = useState<ReqItem[]>([emptyItem()]);
+  const [cotacaoRC, setCotacaoRC] = useState<{ id: string; items: ReqItem[] } | null>(null);
 
   const isSetor = escopo === "setor";
   const estimated = items.reduce((s, i) => s + i.quantidade * i.valor_unitario, 0);
@@ -305,6 +308,7 @@ export default function RequisicaoCompra() {
                     <CarboTableHead className="text-right">Valor</CarboTableHead>
                     <CarboTableHead>Status</CarboTableHead>
                     <CarboTableHead>Data</CarboTableHead>
+                    <CarboTableHead className="text-right">Cotações</CarboTableHead>
                   </CarboTableRow>
                 </CarboTableHeader>
                 <CarboTableBody>
@@ -318,6 +322,9 @@ export default function RequisicaoCompra() {
                         <CarboTableCell className="text-right">{brl(Number(r.estimated_value))}</CarboTableCell>
                         <CarboTableCell><CarboBadge variant={st.variant}>{st.label}</CarboBadge></CarboTableCell>
                         <CarboTableCell>{fmtDate(r.created_at)}</CarboTableCell>
+                        <CarboTableCell className="text-right">
+                          <Button variant="outline" size="sm" onClick={() => setCotacaoRC({ id: r.id, items: r.items ?? [] })}>Cotações</Button>
+                        </CarboTableCell>
                       </CarboTableRow>
                     );
                   })}
@@ -326,6 +333,14 @@ export default function RequisicaoCompra() {
             )}
           </CarboCardContent>
         </CarboCard>
+
+        {/* Cotações da requisição */}
+        <Dialog open={!!cotacaoRC} onOpenChange={(o) => !o && setCotacaoRC(null)}>
+          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader><DialogTitle>Cotações por item</DialogTitle></DialogHeader>
+            {cotacaoRC && <CotacoesPanel requestId={cotacaoRC.id} items={cotacaoRC.items} />}
+          </DialogContent>
+        </Dialog>
       </div>
     </div>
   );
