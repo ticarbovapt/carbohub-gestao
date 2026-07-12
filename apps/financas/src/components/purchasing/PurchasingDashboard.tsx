@@ -89,18 +89,24 @@ export function PurchasingDashboard() {
     mes: format(new Date(m.mes), "MMM/yy", { locale: ptBR }), Pago: Number(m.pago), "Em aberto": Number(m.aberto),
   })), [monthly]);
 
-  // Curva ABC (Pareto): barra de gasto + linha de % acumulado.
+  // Curva ABC (Pareto): barra de gasto + linha de % acumulado sobre o TOTAL do
+  // período (não só o top-N) — senão o acumulado bate 100% no último e
+  // superestima a concentração.
+  const gastoTotalPeriodo = useMemo(
+    () => statusSum.filter((s) => s.status_efetivo !== "cancelado").reduce((acc, s) => acc + Number(s.total), 0),
+    [statusSum]
+  );
   const abcData = useMemo(() => {
-    const totalGeral = suppliers.reduce((s, x) => s + Number(x.total), 0) || 1;
+    const base = gastoTotalPeriodo || suppliers.reduce((s, x) => s + Number(x.total), 0) || 1;
     let acc = 0;
     return suppliers.map((x) => {
       acc += Number(x.total);
       return {
         nome: x.supplier_name.length > 16 ? x.supplier_name.slice(0, 16) + "…" : x.supplier_name,
-        valor: Number(x.total), acumulado: Math.round((acc / totalGeral) * 100),
+        valor: Number(x.total), acumulado: Math.min(100, Math.round((acc / base) * 100)),
       };
     });
-  }, [suppliers]);
+  }, [suppliers, gastoTotalPeriodo]);
 
   const cycleData = useMemo(() => cycle.map((c) => ({ etapa: c.etapa, dias: Number(c.p50_dias), n: c.n })), [cycle]);
 

@@ -272,11 +272,12 @@ export function useOrderStats() {
         shipped: data.filter((o) => o.status === "shipped").length,
         delivered: data.filter((o) => o.status === "delivered").length,
         cancelled: data.filter((o) => o.status === "cancelled").length,
+        // Faturamento = receita realizada (faturada em diante), não só entregue.
         totalRevenue: data
-          .filter((o) => o.status === "delivered")
+          .filter((o) => ["invoiced", "shipped", "delivered"].includes(o.status))
           .reduce((sum, o) => sum + Number(o.total || 0), 0),
         totalCommissions: data
-          .filter((o) => o.has_commission && o.status === "delivered")
+          .filter((o) => o.has_commission && ["invoiced", "shipped", "delivered"].includes(o.status))
           .reduce((sum, o) => sum + Number(o.commission_amount || 0), 0),
       };
 

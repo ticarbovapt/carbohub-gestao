@@ -94,7 +94,7 @@ export default function Orders() {
 
   const handleRefreshAll = () => {
     queryClient.invalidateQueries({ queryKey: ["carboze-orders"] });
-    queryClient.invalidateQueries({ queryKey: ["carboze-order-stats"] });
+    queryClient.invalidateQueries({ queryKey: ["order-stats"] });
   };
 
   // Unique vendedores and clients for dropdowns

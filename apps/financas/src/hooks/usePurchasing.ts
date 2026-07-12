@@ -490,10 +490,11 @@ export function useUpdatePayableStatus() {
   const { user } = useAuth();
 
   return useMutation({
-    mutationFn: async ({ id, status, payment_proof_url }: { id: string; status: string; payment_proof_url?: string }) => {
+    mutationFn: async ({ id, status, payment_proof_url, paid_at }: { id: string; status: string; payment_proof_url?: string; paid_at?: string }) => {
       const updates: any = { status };
       if (status === "pago") {
-        updates.paid_at = new Date().toISOString();
+        // Data efetiva do pagamento (default hoje) — importante pro DPO/realizado.
+        updates.paid_at = paid_at ? new Date(paid_at + "T12:00:00").toISOString() : new Date().toISOString();
         updates.paid_by = user!.id;
       } else {
         // Estorno / cancelamento: limpa o registro de pagamento.

@@ -83,9 +83,10 @@ export function PayablesList({ initialStatus }: { initialStatus?: string } = {})
   const clearPeriodo = () => { setFrom(""); setTo(""); };
 
   const payingPayable = rows.find((p) => p.id === payingId);
+  const [paidAt, setPaidAt] = useState(new Date().toISOString().slice(0, 10));
   const handlePay = async () => {
     if (!payingId) return;
-    await updateStatus.mutateAsync({ id: payingId, status: "pago" });
+    await updateStatus.mutateAsync({ id: payingId, status: "pago", paid_at: paidAt });
     setPayingId(null);
   };
 
@@ -233,7 +234,7 @@ export function PayablesList({ initialStatus }: { initialStatus?: string } = {})
                       <span className="text-muted-foreground text-xs">—</span>
                     ) : (
                       <div className="flex items-center gap-1">
-                        <Button variant="ghost" size="sm" className="gap-1.5 text-success" onClick={() => setPayingId(p.id)}>
+                        <Button variant="ghost" size="sm" className="gap-1.5 text-success" onClick={() => { setPaidAt(new Date().toISOString().slice(0, 10)); setPayingId(p.id); }}>
                           <CheckCircle2 className="h-3.5 w-3.5" /> Pagar
                         </Button>
                         <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive"
@@ -288,6 +289,10 @@ export function PayablesList({ initialStatus }: { initialStatus?: string } = {})
                 <div className="flex justify-between"><span className="text-muted-foreground">Fornecedor</span><strong>{payingPayable.supplier_name}</strong></div>
                 <div className="flex justify-between"><span className="text-muted-foreground">Valor</span><strong className="font-mono">{formatCurrency(payingPayable.amount)}</strong></div>
                 <div className="flex justify-between"><span className="text-muted-foreground">Vencimento</span><strong>{format(new Date(payingPayable.due_date), "dd/MM/yyyy", { locale: ptBR })}</strong></div>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Data do pagamento</Label>
+                <Input type="date" value={paidAt} onChange={(e) => setPaidAt(e.target.value)} />
               </div>
             </div>
           ) : (

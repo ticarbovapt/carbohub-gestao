@@ -264,12 +264,14 @@ export function useFinanceiroKPIs() {
       const payables = (payRes.data || []) as any[];
       const today = new Date().toISOString().split("T")[0];
 
+      // "Em aberto" = não pago e não cancelado (regra única, igual à de Contas a Pagar).
+      const emAberto = (p: any) => p.status !== 'pago' && p.status !== 'cancelado';
       return {
         rcPendentes: rcs.filter(r => r.status === 'aguardando_aprovacao').length,
         rcEmCotacao: rcs.filter(r => r.status === 'em_cotacao').length,
         totalRCs: rcs.length,
-        pagamentosAtrasados: payables.filter(p => p.status === 'programado' && p.due_date < today).length,
-        totalAPagar: payables.filter(p => p.status === 'programado').reduce((s: number, p: any) => s + (Number(p.amount) || 0), 0),
+        pagamentosAtrasados: payables.filter(p => emAberto(p) && p.due_date < today).length,
+        totalAPagar: payables.filter(emAberto).reduce((s: number, p: any) => s + (Number(p.amount) || 0), 0),
       };
     },
   });
