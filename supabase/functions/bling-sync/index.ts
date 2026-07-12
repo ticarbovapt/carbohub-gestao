@@ -1703,6 +1703,26 @@ async function syncContasPagar(
   let totalFailed = 0;
   let hasMore = true;
 
+  // O endpoint /contas/pagar costuma trazer o contato só com id (sem nome).
+  // Resolvemos o nome do fornecedor pelo id via bling_contacts (já sincronizado
+  // com tipoContato=F). Cache pra não repetir a consulta.
+  const contactNameCache = new Map<number, string | null>();
+  const resolveSupplierName = async (conta: any): Promise<string> => {
+    const direto = conta.contato?.nome || conta.fornecedor?.nome || conta.contato?.fantasia;
+    if (direto) return String(direto);
+    const contatoId = Number(conta.contato?.id ?? conta.fornecedor?.id ?? 0) || null;
+    if (contatoId) {
+      if (!contactNameCache.has(contatoId)) {
+        const { data: c } = await supabaseAdmin
+          .from("bling_contacts").select("nome, fantasia").eq("bling_id", contatoId).maybeSingle();
+        contactNameCache.set(contatoId, (c?.nome as string) || (c?.fantasia as string) || null);
+      }
+      const nome = contactNameCache.get(contatoId);
+      if (nome) return nome;
+    }
+    return "Fornecedor não identificado";
+  };
+
   while (hasMore) {
     const data = await blingFetch(token, "/contas/pagar", page, 100);
     const contas = data.data || [];
@@ -1715,7 +1735,7 @@ async function syncContasPagar(
     for (const conta of contas) {
       try {
         const vencimento: string | null = conta.vencimento || conta.dataVencimento || null;
-        const fornecedor = conta.contato?.nome || conta.fornecedor?.nome || conta.contato?.fantasia || "Fornecedor não identificado";
+        const fornecedor = await resolveSupplierName(conta);
         const valor = Number(conta.valor ?? conta.valorTotal ?? conta.saldo ?? 0);
         const numero = conta.numeroDocumento || conta.numero || String(conta.id);
 
