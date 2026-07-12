@@ -1,4 +1,5 @@
-import React, { useState, useMemo, useRef } from "react";
+import React, { useState, useMemo, useRef, useEffect } from "react";
+import { Pager, useUrlPage, paginate } from "@/components/faturamento/Pager";
 import * as XLSX from "xlsx";
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
 import { CarboButton } from "@/components/ui/carbo-button";
@@ -140,6 +141,17 @@ export default function Orders() {
       );
     });
   }, [orders, searchQuery, statusFilter, typeFilter, productFilter, vendedorFilter, clienteFilter, dateFrom, dateTo]);
+
+  // Paginação 20/pág — página na URL (?porders=), persiste no F5. Ao mudar um
+  // filtro/busca volta pra página 1 (o guard do 1º render preserva a página no F5).
+  const [ordersPage, setOrdersPage] = useUrlPage("porders");
+  const ordersPag = paginate(filteredOrders, ordersPage);
+  const didMountPage = useRef(false);
+  useEffect(() => {
+    if (!didMountPage.current) { didMountPage.current = true; return; }
+    setOrdersPage(1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchQuery, statusFilter, typeFilter, productFilter, vendedorFilter, clienteFilter, dateFrom, dateTo]);
 
   // ── Export helpers ────────────────────────────────────────────────────────
   const buildExportRows = () =>
@@ -489,7 +501,7 @@ export default function Orders() {
               </CarboTableRow>
             </CarboTableHeader>
             <CarboTableBody>
-              {filteredOrders.map((order) => {
+              {ordersPag.slice.map((order) => {
                 const items = Array.isArray(order.items) ? (order.items as unknown as OrderItem[]) : [];
                 const totalQuantity = items.reduce((sum, item) => sum + (item.quantity || 0), 0);
                 const orderType = order.order_type || 'spot';
@@ -591,6 +603,9 @@ export default function Orders() {
             </CarboTableBody>
           </CarboTable>
         )}
+          {!isLoading && filteredOrders.length > 0 && (
+            <Pager page={ordersPag.safePage} pageCount={ordersPag.pageCount} total={filteredOrders.length} onPage={setOrdersPage} />
+          )}
           </TabsContent>
         </Tabs>
       </div>
