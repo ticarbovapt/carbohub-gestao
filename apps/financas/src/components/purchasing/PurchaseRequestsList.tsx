@@ -22,6 +22,7 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useOrgLabels } from "@/hooks/useTeamMembers";
 import { CotacoesPanel } from "./CotacoesPanel";
+import { useQuotes } from "@/hooks/useCotacoes";
 import { GerarOCDialog } from "./GerarOCDialog";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -100,6 +101,13 @@ export function PurchaseRequestsList({ showNewForm, onCloseForm }: PurchaseReque
   const [gerarOC, setGerarOC] = useState<PurchaseRequest | null>(null);
 
   const canApprove = gestor;
+
+  // Cotações da RC aberta — pra mostrar o total NEGOCIADO na hora de aprovar
+  // (o valor que importa pra decisão, não o estimado do solicitante).
+  const { data: selQuotes = [] } = useQuotes(selectedRC?.id ?? null);
+  const totalCotado = selQuotes.filter((q) => q.selected).reduce((s, q) => s + q.unit_price * q.quantidade, 0);
+  const itensComCotacao = new Set(selQuotes.filter((q) => q.selected).map((q) => q.item_index)).size;
+  const itensSemCotacao = Math.max(0, (selectedRC?.items?.length ?? 0) - itensComCotacao);
 
   const formatCurrency = (val: number) =>
     new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(val);
@@ -236,33 +244,17 @@ export function PurchaseRequestsList({ showNewForm, onCloseForm }: PurchaseReque
                 </CarboTableCell>
                 <CarboTableCell onClick={(e) => e.stopPropagation()}>
                   <div className="flex items-center gap-1">
-                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setSelectedRC(rc)} title="Ver detalhes">
-                      <Eye className="h-4 w-4" />
-                    </Button>
-                    {canApprove && rc.status === "aguardando_aprovacao" && (
-                      <>
-                        <Button variant="ghost" size="icon" className="h-8 w-8 text-success" onClick={() => setApproving(rc)} title="Aprovar">
-                          <CheckCircle2 className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8 text-destructive"
-                          onClick={() => { setRejectingId(rc.id); setShowRejectDialog(true); }}
-                          title="Rejeitar"
-                        >
-                          <XCircle className="h-4 w-4" />
-                        </Button>
-                      </>
-                    )}
-                    {rc.status === "aprovada" && (
-                      <Button
-                        size="sm"
-                        className="h-8 gap-1 bg-carbo-green hover:bg-carbo-green/90 text-white"
-                        onClick={() => setGerarOC(rc)}
-                        title="Gerar Ordem de Compra"
-                      >
+                    {canApprove && rc.status === "aguardando_aprovacao" ? (
+                      <Button size="sm" className="h-8 gap-1 bg-carbo-green hover:bg-carbo-green/90 text-white" onClick={() => setSelectedRC(rc)} title="Analisar e aprovar">
+                        <Eye className="h-4 w-4" /> Analisar
+                      </Button>
+                    ) : rc.status === "aprovada" ? (
+                      <Button size="sm" className="h-8 gap-1 bg-carbo-green hover:bg-carbo-green/90 text-white" onClick={() => setGerarOC(rc)} title="Gerar Ordem de Compra">
                         <PackagePlus className="h-4 w-4" /> Gerar OC
+                      </Button>
+                    ) : (
+                      <Button variant="ghost" size="sm" className="h-8 gap-1 text-muted-foreground" onClick={() => setSelectedRC(rc)}>
+                        <Eye className="h-4 w-4" /> Ver
                       </Button>
                     )}
                   </div>
@@ -356,14 +348,30 @@ export function PurchaseRequestsList({ showNewForm, onCloseForm }: PurchaseReque
               )}
             </div>
           )}
-          {selectedRC?.status === "aprovada" && (
-            <DialogFooter>
-              <Button
-                className="gap-1.5 bg-carbo-green hover:bg-carbo-green/90 text-white"
-                onClick={() => { setGerarOC(selectedRC); setSelectedRC(null); }}
-              >
-                <PackagePlus className="h-4 w-4" /> Gerar Ordem de Compra
-              </Button>
+          {selectedRC && (selectedRC.status === "aguardando_aprovacao" || selectedRC.status === "aprovada") && (
+            <DialogFooter className="flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <div className="text-xs text-muted-foreground">
+                Estimado <strong>{formatCurrency(selectedRC.estimated_value)}</strong>
+                {totalCotado > 0 && <> · Cotado <strong className="text-carbo-green">{formatCurrency(totalCotado)}</strong></>}
+                {itensSemCotacao > 0 && <> · <span className="text-warning-foreground">{itensSemCotacao} item(ns) sem cotação</span></>}
+              </div>
+              {canApprove && selectedRC.status === "aguardando_aprovacao" ? (
+                <div className="flex gap-2">
+                  <Button variant="outline" className="gap-1.5 text-destructive" onClick={() => { setRejectingId(selectedRC.id); setShowRejectDialog(true); }}>
+                    <XCircle className="h-4 w-4" /> Rejeitar
+                  </Button>
+                  <Button className="gap-1.5 bg-carbo-green hover:bg-carbo-green/90 text-white" onClick={() => setApproving(selectedRC)}>
+                    <CheckCircle2 className="h-4 w-4" /> Aprovar
+                  </Button>
+                </div>
+              ) : selectedRC.status === "aprovada" ? (
+                <Button
+                  className="gap-1.5 bg-carbo-green hover:bg-carbo-green/90 text-white"
+                  onClick={() => { setGerarOC(selectedRC); setSelectedRC(null); }}
+                >
+                  <PackagePlus className="h-4 w-4" /> Gerar Ordem de Compra
+                </Button>
+              ) : null}
             </DialogFooter>
           )}
         </DialogContent>
@@ -377,7 +385,14 @@ export function PurchaseRequestsList({ showNewForm, onCloseForm }: PurchaseReque
           <DialogHeader>
             <DialogTitle>Aprovar requisição</DialogTitle>
             <DialogDescription>
-              {approving && <>Aprovar a RC <strong>{approving.rc_number}</strong> — {formatCurrency(approving.estimated_value)}?</>}
+              {approving && (
+                <>
+                  Aprovar a RC <strong>{approving.rc_number}</strong>?<br />
+                  Valor estimado: <strong>{formatCurrency(approving.estimated_value)}</strong>
+                  {totalCotado > 0 && <> · Total cotado: <strong className="text-carbo-green">{formatCurrency(totalCotado)}</strong></>}
+                  {itensSemCotacao > 0 && <> · <span className="text-warning-foreground">{itensSemCotacao} item(ns) sem cotação escolhida</span></>}
+                </>
+              )}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>

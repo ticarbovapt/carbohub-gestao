@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Eye, ShoppingCart } from "lucide-react";
+import { ShoppingCart } from "lucide-react";
 import { RegistrarCompraDialog } from "./OCActionsDialogs";
 import { usePaymentMethods, labelPaymentMethod } from "@/hooks/usePaymentMethods";
 import { PAYMENT_METHOD_TYPE_LABELS } from "@/types/purchasing";
@@ -59,9 +59,9 @@ export function PurchaseOrdersList() {
             <CarboTableHead>Nº OC</CarboTableHead>
             <CarboTableHead>Fornecedor</CarboTableHead>
             <CarboTableHead>Valor Total</CarboTableHead>
+            <CarboTableHead>Pagamento</CarboTableHead>
             <CarboTableHead>Previsão Entrega</CarboTableHead>
             <CarboTableHead>Status</CarboTableHead>
-            <CarboTableHead>Data</CarboTableHead>
             <CarboTableHead>Ações</CarboTableHead>
           </CarboTableRow>
         </CarboTableHeader>
@@ -80,6 +80,22 @@ export function PurchaseOrdersList() {
                 <CarboTableCell className="font-mono font-medium">{oc.oc_number}</CarboTableCell>
                 <CarboTableCell>{oc.supplier_name}</CarboTableCell>
                 <CarboTableCell className="font-mono">{formatCurrency(oc.total_value)}</CarboTableCell>
+                <CarboTableCell>
+                  {oc.purchased_at ? (
+                    <div className="flex flex-col gap-0.5">
+                      <CarboBadge variant={oc.is_paid ? "success" : "warning"} className="text-[10px] w-fit">
+                        {oc.is_paid ? "Pago" : "A pagar"}
+                      </CarboBadge>
+                      <span className="text-[11px] text-muted-foreground">
+                        {oc.payment_method_id
+                          ? labelPaymentMethod(pmById.get(oc.payment_method_id))
+                          : (oc.payment_type ? (PAYMENT_METHOD_TYPE_LABELS[oc.payment_type as keyof typeof PAYMENT_METHOD_TYPE_LABELS] ?? oc.payment_type) : "")}
+                      </span>
+                    </div>
+                  ) : (
+                    <span className="text-muted-foreground text-sm">—</span>
+                  )}
+                </CarboTableCell>
                 <CarboTableCell className="text-muted-foreground text-sm">
                   {oc.expected_delivery ? format(new Date(oc.expected_delivery), "dd/MM/yyyy", { locale: ptBR }) : "—"}
                 </CarboTableCell>
@@ -88,20 +104,14 @@ export function PurchaseOrdersList() {
                     {ORDER_STATUS_LABELS[oc.status]}
                   </CarboBadge>
                 </CarboTableCell>
-                <CarboTableCell className="text-muted-foreground text-sm">
-                  {format(new Date(oc.created_at), "dd/MM/yyyy", { locale: ptBR })}
-                </CarboTableCell>
                 <CarboTableCell onClick={(e) => e.stopPropagation()}>
-                  <div className="flex items-center gap-1">
-                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setSelectedOC(oc)} title="Ver">
-                      <Eye className="h-4 w-4" />
+                  {oc.status === "gerada" ? (
+                    <Button size="sm" className="h-8 gap-1 bg-carbo-green hover:bg-carbo-green/90 text-white" onClick={() => setComprarOC(oc)} title="Registrar compra">
+                      <ShoppingCart className="h-4 w-4" /> Registrar compra
                     </Button>
-                    {oc.status === "gerada" && (
-                      <Button size="sm" className="h-8 gap-1 bg-carbo-green hover:bg-carbo-green/90 text-white" onClick={() => setComprarOC(oc)} title="Registrar compra">
-                        <ShoppingCart className="h-4 w-4" /> Compra feita
-                      </Button>
-                    )}
-                  </div>
+                  ) : (
+                    <span className="text-muted-foreground text-sm">—</span>
+                  )}
                 </CarboTableCell>
               </CarboTableRow>
             ))

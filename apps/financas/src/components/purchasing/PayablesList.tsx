@@ -46,6 +46,8 @@ export function PayablesList() {
   const venceHoje = abertas.filter((p) => isToday(new Date(p.due_date)));
   const vence7 = abertas.filter((p) => { const d = differenceInCalendarDays(new Date(p.due_date), new Date()); return d >= 1 && d <= 7; });
 
+  const payingPayable = (allPayables ?? []).find((p) => p.id === payingId);
+
   const handlePay = async () => {
     if (!payingId) return;
     await updateStatus.mutateAsync({ id: payingId, status: "pago" });
@@ -159,7 +161,18 @@ export function PayablesList() {
           <DialogHeader>
             <DialogTitle>Confirmar Pagamento</DialogTitle>
           </DialogHeader>
-          <p className="text-sm text-muted-foreground">Deseja marcar esta conta como paga?</p>
+          {payingPayable ? (
+            <div className="space-y-2 text-sm">
+              <p className="text-muted-foreground">Marcar esta conta como paga?</p>
+              <div className="rounded-lg border border-border p-3 space-y-1">
+                <div className="flex justify-between"><span className="text-muted-foreground">Fornecedor</span><strong>{payingPayable.supplier_name}</strong></div>
+                <div className="flex justify-between"><span className="text-muted-foreground">Valor</span><strong className="font-mono">{formatCurrency(payingPayable.amount)}</strong></div>
+                <div className="flex justify-between"><span className="text-muted-foreground">Vencimento</span><strong>{format(new Date(payingPayable.due_date), "dd/MM/yyyy", { locale: ptBR })}</strong></div>
+              </div>
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground">Deseja marcar esta conta como paga?</p>
+          )}
           <DialogFooter>
             <Button variant="outline" onClick={() => setPayingId(null)}>Cancelar</Button>
             <Button onClick={handlePay} disabled={updateStatus.isPending} className="gap-1.5 carbo-gradient text-white">

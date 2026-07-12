@@ -11,11 +11,11 @@ import {
   CarboTable, CarboTableHeader, CarboTableBody, CarboTableRow, CarboTableHead, CarboTableCell,
 } from "@/components/ui/carbo-table";
 
-function MatchIcon({ match }: { match: boolean }) {
+function MatchIcon({ match, okTitle, failTitle }: { match: boolean; okTitle: string; failTitle: string }) {
   return match ? (
-    <CheckCircle2 className="h-4 w-4 text-success" />
+    <CheckCircle2 className="h-4 w-4 text-success" aria-label={okTitle}><title>{okTitle}</title></CheckCircle2>
   ) : (
-    <XCircle className="h-4 w-4 text-destructive" />
+    <XCircle className="h-4 w-4 text-destructive" aria-label={failTitle}><title>{failTitle}</title></XCircle>
   );
 }
 
@@ -30,6 +30,7 @@ export function InvoicesList() {
   const [nfOC, setNfOC] = useState<PurchaseOrder | null>(null);
 
   const ocNumberById = new Map((orders ?? []).map((o: any) => [o.id, o.oc_number]));
+  const ocValueById = new Map((orders ?? []).map((o: any) => [o.id, Number(o.total_value) || 0]));
   const ocWithInvoice = new Set((invoices ?? []).map((i) => i.purchase_order_id));
 
   // OCs recebidas (total ou parcial) e ainda sem NF lançada.
@@ -123,10 +124,15 @@ export function InvoicesList() {
                     <CarboTableCell className="text-sm">
                       {format(new Date(inv.invoice_date), "dd/MM/yyyy", { locale: ptBR })}
                     </CarboTableCell>
-                    <CarboTableCell className="font-mono">{brl(inv.invoice_value)}</CarboTableCell>
-                    <CarboTableCell><MatchIcon match={inv.oc_match} /></CarboTableCell>
-                    <CarboTableCell><MatchIcon match={inv.receiving_match} /></CarboTableCell>
-                    <CarboTableCell><MatchIcon match={inv.value_match} /></CarboTableCell>
+                    <CarboTableCell className="font-mono">
+                      {brl(inv.invoice_value)}
+                      {!inv.value_match && ocValueById.has(inv.purchase_order_id) && (
+                        <span className="block text-[11px] text-destructive">OC {brl(ocValueById.get(inv.purchase_order_id)!)}</span>
+                      )}
+                    </CarboTableCell>
+                    <CarboTableCell><MatchIcon match={inv.oc_match} okTitle="OC vinculada" failTitle="Sem OC vinculada" /></CarboTableCell>
+                    <CarboTableCell><MatchIcon match={inv.receiving_match} okTitle="Recebimento conferido" failTitle="Sem recebimento conferido" /></CarboTableCell>
+                    <CarboTableCell><MatchIcon match={inv.value_match} okTitle="Valor bate com a OC" failTitle="Valor diverge da OC" /></CarboTableCell>
                     <CarboTableCell>
                       <CarboBadge variant={allMatch ? "success" : "warning"} dot>
                         {allMatch ? "Conferida" : "Pendente"}

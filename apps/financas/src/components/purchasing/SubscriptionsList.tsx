@@ -32,7 +32,7 @@ const emptyForm = {
 export function SubscriptionsList() {
   const { gestor } = useAuth();
   const canManage = gestor;
-  const [view, setView] = useState<"ativas" | "paradas">("ativas");
+  const [view, setView] = useState<SubscriptionStatus>("ativa");
   const [setorFilter, setSetorFilter] = useState("all");
   const [showForm, setShowForm] = useState(false);
   const [editSub, setEditSub] = useState<Subscription | null>(null);
@@ -49,8 +49,7 @@ export function SubscriptionsList() {
   const setores = Array.from(new Set(subs.map((s) => s.departamento).filter(Boolean) as string[])).sort((a, b) => a.localeCompare(b, "pt-BR"));
 
   const visible = subs.filter((s) => {
-    const inView = view === "ativas" ? s.status === "ativa" : s.status !== "ativa";
-    if (!inView) return false;
+    if (s.status !== view) return false;
     if (setorFilter !== "all" && (s.departamento ?? "") !== setorFilter) return false;
     return true;
   });
@@ -60,7 +59,10 @@ export function SubscriptionsList() {
     const ativas = subs.filter((s) => s.status === "ativa");
     const byCur: Record<string, number> = {};
     ativas.forEach((s) => { byCur[s.currency] = (byCur[s.currency] || 0) + subscriptionMonthlyCost(s); });
-    const manuaisProximas = ativas.filter((s) => s.cobranca === "manual" && s.proximo_vencimento).length;
+    // Manuais que vencem em ≤7 dias (ou já venceram) — as que exigem ação agora.
+    const manuaisProximas = ativas.filter((s) =>
+      s.cobranca === "manual" && s.proximo_vencimento && differenceInCalendarDays(new Date(s.proximo_vencimento), new Date()) <= 7
+    ).length;
     return { qtd: ativas.length, byCur, manuaisProximas };
   }, [subs]);
 
@@ -131,7 +133,7 @@ export function SubscriptionsList() {
         ))}
         <CarboCard variant="kpi" padding="sm">
           <CarboCardContent>
-            <div className="flex items-center gap-2 mb-1"><CalendarClock className="h-4 w-4 text-warning" /><span className="text-xs text-muted-foreground">Pagto manual</span></div>
+            <div className="flex items-center gap-2 mb-1"><CalendarClock className="h-4 w-4 text-warning" /><span className="text-xs text-muted-foreground">Manual a vencer (7d)</span></div>
             <p className="text-2xl font-bold kpi-number">{kpis.manuaisProximas}</p>
           </CarboCardContent>
         </CarboCard>
@@ -141,8 +143,14 @@ export function SubscriptionsList() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           <div className="inline-flex rounded-lg border border-border p-0.5">
-            <button onClick={() => setView("ativas")} className={`px-3 py-1.5 text-sm rounded-md ${view === "ativas" ? "bg-carbo-green text-white" : "text-muted-foreground"}`}>Ativas</button>
-            <button onClick={() => setView("paradas")} className={`px-3 py-1.5 text-sm rounded-md ${view === "paradas" ? "bg-carbo-green text-white" : "text-muted-foreground"}`}>Paradas</button>
+            {(["ativa", "pausada", "cancelada"] as SubscriptionStatus[]).map((st) => (
+              <button
+                key={st} onClick={() => setView(st)} aria-pressed={view === st}
+                className={`px-3 py-1.5 text-sm rounded-md transition-colors ${view === st ? "bg-carbo-green text-white" : "text-muted-foreground hover:text-foreground"}`}
+              >
+                {st === "ativa" ? "Ativas" : st === "pausada" ? "Pausadas" : "Canceladas"}
+              </button>
+            ))}
           </div>
           <Select value={setorFilter} onValueChange={setSetorFilter}>
             <SelectTrigger className="w-[180px]"><SelectValue placeholder="Setor" /></SelectTrigger>
@@ -177,7 +185,7 @@ export function SubscriptionsList() {
               <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">Carregando...</TableCell></TableRow>
             ) : visible.length === 0 ? (
               <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
-                {view === "ativas" ? "Nenhuma assinatura ativa" : "Nenhuma assinatura parada"}
+                {view === "ativa" ? "Nenhuma assinatura ativa" : view === "pausada" ? "Nenhuma assinatura pausada" : "Nenhuma assinatura cancelada"}
               </TableCell></TableRow>
             ) : (
               visible.map((s) => (
