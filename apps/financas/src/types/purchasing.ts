@@ -1,5 +1,5 @@
 export type PurchaseRequestType = 'estoque' | 'uso_direto' | 'investimento';
-export type PurchaseRequestStatus = 'rascunho' | 'aguardando_aprovacao' | 'aprovada' | 'rejeitada' | 'cancelada';
+export type PurchaseRequestStatus = 'rascunho' | 'aguardando_aprovacao' | 'aprovada' | 'rejeitada' | 'cancelada' | 'convertida';
 export type PurchaseOrderStatus = 'gerada' | 'enviada_fornecedor' | 'parcialmente_recebida' | 'recebida' | 'cancelada';
 export type ReceivingStatus = 'pendente' | 'conferido_ok' | 'conferido_divergencia';
 export type PayableStatus = 'programado' | 'pago' | 'atrasado' | 'cancelado';
@@ -126,6 +126,14 @@ export const REQUEST_STATUS_LABELS: Record<PurchaseRequestStatus, string> = {
   aprovada: 'Aprovada',
   rejeitada: 'Rejeitada',
   cancelada: 'Cancelada',
+  convertida: 'Convertida em OC',
+};
+
+// Explicação de cada tipo — pra Ops e Sales escolherem certo no formulário.
+export const PURCHASE_TYPE_HINTS: Record<PurchaseRequestType, string> = {
+  estoque: 'Reposição de insumo / estoque (não deixar faltar).',
+  uso_direto: 'Material de trabalho do dia a dia.',
+  investimento: 'Equipamento / bem durável (capex).',
 };
 
 export const ORDER_STATUS_LABELS: Record<PurchaseOrderStatus, string> = {

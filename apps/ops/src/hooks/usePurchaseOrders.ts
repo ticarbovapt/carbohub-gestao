@@ -78,6 +78,9 @@ export function useGenerateOc() {
         generated_by: auth?.user?.id ?? null,
       });
       if (res.error) throw res.error;
+
+      // Fecha o ciclo: a requisição vira "Convertida em OC".
+      await db.from("purchase_requests").update({ status: "convertida" }).eq("id", requestId);
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["ops", "purchase-orders"] });

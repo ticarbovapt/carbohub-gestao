@@ -104,11 +104,14 @@ export default function RequisicaoCompra() {
                 <Select value={purchaseType} onValueChange={setPurchaseType}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="estoque">Estoque</SelectItem>
-                    <SelectItem value="uso_direto">Uso Direto</SelectItem>
-                    <SelectItem value="investimento">Investimento</SelectItem>
+                    <SelectItem value="estoque">Estoque — reposição de insumo</SelectItem>
+                    <SelectItem value="uso_direto">Uso Direto — material do dia a dia</SelectItem>
+                    <SelectItem value="investimento">Investimento — equipamento (capex)</SelectItem>
                   </SelectContent>
                 </Select>
+                <p className="text-[11px] text-muted-foreground">
+                  Estoque = insumo p/ não faltar · Uso Direto = material de trabalho · Investimento = equipamento.
+                </p>
               </div>
               <div className="space-y-1.5">
                 <Label>Fornecedor Sugerido</Label>

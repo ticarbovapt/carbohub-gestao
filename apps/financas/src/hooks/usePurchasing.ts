@@ -162,6 +162,14 @@ export function useCreatePurchaseOrder() {
         .single();
 
       if (error) throw error;
+
+      // Fecha o ciclo: a requisição vira "Convertida em OC" (sai da fila de
+      // pendências e fica rastreável, em vez de ficar "aprovada" pra sempre).
+      await supabase
+        .from("purchase_requests")
+        .update({ status: "convertida" as any })
+        .eq("id", values.purchase_request_id);
+
       return data;
     },
     onSuccess: () => {

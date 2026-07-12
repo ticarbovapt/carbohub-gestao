@@ -16,6 +16,9 @@ import {
   type PurchaseRequestStatus,
 } from "@/types/purchasing";
 import { useAuth } from "@/contexts/AuthContext";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+import { useOrgLabels } from "@/hooks/useTeamMembers";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import {
@@ -38,15 +41,49 @@ const statusVariantMap: Record<PurchaseRequestStatus, any> = {
   aprovada: "success",
   rejeitada: "destructive",
   cancelada: "cancelled",
+  convertida: "default",
 };
+
+// Perfis do sistema (id → nome/setor) pra mostrar o SETOR do solicitante da RC.
+function useRequesterInfo() {
+  return useQuery({
+    queryKey: ["all_profiles"],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any).rpc("carbo_all_profiles");
+      if (error) throw error;
+      const byId = new Map<string, { full_name: string | null; department: string | null }>();
+      for (const p of (data ?? []) as any[]) byId.set(p.id, { full_name: p.full_name, department: p.department });
+      return byId;
+    },
+  });
+}
 
 export function PurchaseRequestsList({ showNewForm, onCloseForm }: PurchaseRequestsListProps) {
   const [statusFilter, setStatusFilter] = useState<string>("all");
-  const { data: requests, isLoading } = usePurchaseRequests(
+  const [tipoFilter, setTipoFilter] = useState<string>("all");
+  const [setorFilter, setSetorFilter] = useState<string>("all");
+  const { data: allRequests, isLoading } = usePurchaseRequests(
     statusFilter !== "all" ? { status: statusFilter } : undefined
   );
   const approveRC = useApprovePurchaseRequest();
   const { gestor } = useAuth();
+  const { data: requesterById } = useRequesterInfo();
+  const { data: labels } = useOrgLabels();
+  const deptLabel = labels?.deptLabel ?? {};
+
+  const setorOf = (rc: PurchaseRequest) => requesterById?.get(rc.requested_by)?.department ?? null;
+  const requesterName = (rc: PurchaseRequest) => requesterById?.get(rc.requested_by)?.full_name ?? "—";
+
+  // Setores presentes (pra montar o filtro).
+  const setores = Array.from(new Set((allRequests ?? []).map(setorOf).filter(Boolean) as string[]))
+    .sort((a, b) => (deptLabel[a] ?? a).localeCompare(deptLabel[b] ?? b, "pt-BR"));
+
+  // Filtro client-side por Tipo e Setor (status já vem filtrado do servidor).
+  const requests = (allRequests ?? []).filter((rc) => {
+    if (tipoFilter !== "all" && rc.purchase_type !== tipoFilter) return false;
+    if (setorFilter !== "all" && setorOf(rc) !== setorFilter) return false;
+    return true;
+  });
 
   const [selectedRC, setSelectedRC] = useState<PurchaseRequest | null>(null);
   const [rejectReason, setRejectReason] = useState("");
@@ -75,9 +112,9 @@ export function PurchaseRequestsList({ showNewForm, onCloseForm }: PurchaseReque
       {showNewForm && <PurchaseRequestForm onClose={onCloseForm} />}
 
       {/* Filters */}
-      <div className="flex items-center gap-3">
+      <div className="flex flex-wrap items-center gap-3">
         <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="w-[200px]">
+          <SelectTrigger className="w-[190px]">
             <SelectValue placeholder="Filtrar por status" />
           </SelectTrigger>
           <SelectContent>
@@ -87,6 +124,28 @@ export function PurchaseRequestsList({ showNewForm, onCloseForm }: PurchaseReque
             ))}
           </SelectContent>
         </Select>
+
+        <Select value={tipoFilter} onValueChange={setTipoFilter}>
+          <SelectTrigger className="w-[180px]">
+            <SelectValue placeholder="Tipo de compra" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todos os tipos</SelectItem>
+            {Object.entries(PURCHASE_TYPE_LABELS).map(([key, label]) => (
+              <SelectItem key={key} value={key}>{label}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        <Select value={setorFilter} onValueChange={setSetorFilter}>
+          <SelectTrigger className="w-[180px]">
+            <SelectValue placeholder="Setor solicitante" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todos os setores</SelectItem>
+            {setores.map((d) => <SelectItem key={d} value={d}>{deptLabel[d] ?? d}</SelectItem>)}
+          </SelectContent>
+        </Select>
       </div>
 
       {/* Table */}
@@ -94,6 +153,7 @@ export function PurchaseRequestsList({ showNewForm, onCloseForm }: PurchaseReque
         <CarboTableHeader>
           <CarboTableRow>
             <CarboTableHead>Nº RC</CarboTableHead>
+            <CarboTableHead>Setor</CarboTableHead>
             <CarboTableHead>Centro de Custo</CarboTableHead>
             <CarboTableHead>Tipo</CarboTableHead>
             <CarboTableHead>Valor Estimado</CarboTableHead>
@@ -105,13 +165,13 @@ export function PurchaseRequestsList({ showNewForm, onCloseForm }: PurchaseReque
         <CarboTableBody>
           {isLoading ? (
             <CarboTableRow>
-              <CarboTableCell colSpan={7} className="text-center text-muted-foreground py-8">
+              <CarboTableCell colSpan={8} className="text-center text-muted-foreground py-8">
                 Carregando...
               </CarboTableCell>
             </CarboTableRow>
           ) : !requests?.length ? (
             <CarboTableRow>
-              <CarboTableCell colSpan={7} className="text-center text-muted-foreground py-8">
+              <CarboTableCell colSpan={8} className="text-center text-muted-foreground py-8">
                 Nenhuma requisição encontrada
               </CarboTableCell>
             </CarboTableRow>
@@ -119,6 +179,11 @@ export function PurchaseRequestsList({ showNewForm, onCloseForm }: PurchaseReque
             requests.map((rc) => (
               <CarboTableRow key={rc.id} interactive>
                 <CarboTableCell className="font-mono font-medium">{rc.rc_number}</CarboTableCell>
+                <CarboTableCell>
+                  {setorOf(rc)
+                    ? <span>{deptLabel[setorOf(rc)!] ?? setorOf(rc)}</span>
+                    : <span className="text-muted-foreground text-xs">—</span>}
+                </CarboTableCell>
                 <CarboTableCell>{rc.cost_center}</CarboTableCell>
                 <CarboTableCell>{PURCHASE_TYPE_LABELS[rc.purchase_type]}</CarboTableCell>
                 <CarboTableCell className="font-mono">{formatCurrency(rc.estimated_value)}</CarboTableCell>
@@ -168,6 +233,8 @@ export function PurchaseRequestsList({ showNewForm, onCloseForm }: PurchaseReque
           {selectedRC && (
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-4 text-sm">
+                <div><span className="text-muted-foreground">Solicitante:</span> <strong>{requesterName(selectedRC)}</strong></div>
+                <div><span className="text-muted-foreground">Setor:</span> <strong>{setorOf(selectedRC) ? (deptLabel[setorOf(selectedRC)!] ?? setorOf(selectedRC)) : "—"}</strong></div>
                 <div><span className="text-muted-foreground">Centro de Custo:</span> <strong>{selectedRC.cost_center}</strong></div>
                 <div><span className="text-muted-foreground">Tipo:</span> <strong>{PURCHASE_TYPE_LABELS[selectedRC.purchase_type]}</strong></div>
                 <div><span className="text-muted-foreground">Fornecedor:</span> <strong>{selectedRC.suggested_supplier || "—"}</strong></div>
