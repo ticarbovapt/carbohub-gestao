@@ -160,10 +160,14 @@ export default function Funcionarios() {
     allowLink: r.origin === "avulso", // perfil do sistema já é o vínculo; avulso pode vincular
   });
 
+  // "Novo funcionário" é pra gente que NÃO é usuário do sistema (avulso). Quem já
+  // é usuário do sistema já aparece na lista — basta editar a linha dele. Por isso
+  // aqui não oferecemos vínculo (evita duplicar). O vínculo aparece ao EDITAR um
+  // avulso, quando ele passar a ter usuário no sistema.
   const openNew = () => setEditing({
     initial: { id: null, user_id: null, full_name: "", cpf: null, pix_key: null, pix_type: null, bank_name: null, bank_code: null, bank_agency: null, bank_account: null, account_type: null, phone: null, emergency_name: null, emergency_phone: null, notes: null },
-    title: "Novo funcionário",
-    allowLink: true,
+    title: "Novo funcionário (avulso)",
+    allowLink: false,
   });
 
   return (
