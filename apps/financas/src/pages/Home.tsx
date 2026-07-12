@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { Wallet, ShoppingCart, Package, ClipboardList, BarChart3, Link2, ArrowRight } from "lucide-react";
+import { Wallet, ShoppingCart, Package, ClipboardList, BarChart3, Link2, ArrowRight, Percent, Users } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { CarboCard, CarboCardContent } from "@/components/ui/carbo-card";
 
@@ -8,6 +8,8 @@ const ATALHOS = [
   { to: "/compras", label: "Compras & Suprimentos", desc: "Requisições, OC, recebimento, NF, contas a pagar.", icon: ShoppingCart, color: "text-carbo-blue" },
   { to: "/suprimentos", label: "Suprimentos", desc: "Estoque, movimentações, recebimento e política.", icon: Package, color: "text-carbo-green" },
   { to: "/pedidos", label: "Pedidos (RV)", desc: "Pedidos, faturamento e entregas.", icon: ClipboardList, color: "text-primary" },
+  { to: "/comissionamento", label: "Comissionamento", desc: "Calcular comissões e controlar pagamentos.", icon: Percent, color: "text-carbo-green" },
+  { to: "/funcionarios", label: "Funcionários", desc: "Dados bancários/PIX e contato de emergência.", icon: Users, color: "text-warning" },
   { to: "/dashboard-financeiro", label: "Dashboard Financeiro", desc: "Contas a pagar e custo por fornecedor.", icon: BarChart3, color: "text-carbo-blue" },
   { to: "/integracoes/bling", label: "Integração Bling", desc: "Conectar e sincronizar com o Bling ERP.", icon: Link2, color: "text-success" },
 ];

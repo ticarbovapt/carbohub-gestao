@@ -14,6 +14,8 @@ import Profile from "./pages/Profile";
 import MinhaEquipe from "./pages/MinhaEquipe";
 import BugReports from "./pages/BugReports";
 import Vender from "./pages/Vender";
+import Comissionamento from "./pages/Comissionamento";
+import Funcionarios from "./pages/Funcionarios";
 
 // Carbo Finanças. Acesso liberado pelo Admin via flag carbo_financas
 // (ProtectedRoute). Telas portadas 1:1 do Carbo Controle.
@@ -27,6 +29,8 @@ export default function App() {
         <Route path="/suprimentos" element={<Suprimentos />} />
         <Route path="/pedidos" element={<Orders />} />
         <Route path="/faturamento" element={<Faturamento />} />
+        <Route path="/comissionamento" element={<Comissionamento />} />
+        <Route path="/funcionarios" element={<Funcionarios />} />
         <Route path="/dashboard-financeiro" element={<DashboardFinanceiro />} />
         <Route path="/integracoes/bling" element={<BlingIntegracao />} />
         <Route path="/integracoes/bling/callback" element={<BlingCallback />} />
