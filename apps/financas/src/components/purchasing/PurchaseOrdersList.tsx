@@ -1,10 +1,13 @@
 import { useState } from "react";
-import { Eye, Send } from "lucide-react";
+import { Eye, ShoppingCart } from "lucide-react";
+import { RegistrarCompraDialog } from "./OCActionsDialogs";
+import { usePaymentMethods, labelPaymentMethod } from "@/hooks/usePaymentMethods";
+import { PAYMENT_METHOD_TYPE_LABELS } from "@/types/purchasing";
 import { CarboBadge } from "@/components/ui/carbo-badge";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { usePurchaseOrders, useUpdatePurchaseOrderStatus } from "@/hooks/usePurchasing";
+import { usePurchaseOrders } from "@/hooks/usePurchasing";
 import { ORDER_STATUS_LABELS, type PurchaseOrder, type PurchaseOrderStatus } from "@/types/purchasing";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -14,6 +17,7 @@ import {
 
 const statusVariantMap: Record<PurchaseOrderStatus, any> = {
   gerada: "info",
+  comprada: "default",
   enviada_fornecedor: "warning",
   parcialmente_recebida: "warning",
   recebida: "success",
@@ -25,8 +29,10 @@ export function PurchaseOrdersList() {
   const { data: orders, isLoading } = usePurchaseOrders(
     statusFilter !== "all" ? { status: statusFilter } : undefined
   );
-  const updateStatus = useUpdatePurchaseOrderStatus();
+  const { data: methods = [] } = usePaymentMethods();
+  const pmById = new Map(methods.map((m) => [m.id, m]));
   const [selectedOC, setSelectedOC] = useState<PurchaseOrder | null>(null);
+  const [comprarOC, setComprarOC] = useState<PurchaseOrder | null>(null);
 
   const formatCurrency = (val: number) =>
     new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(val);
@@ -91,12 +97,8 @@ export function PurchaseOrdersList() {
                       <Eye className="h-4 w-4" />
                     </Button>
                     {oc.status === "gerada" && (
-                      <Button
-                        variant="ghost" size="icon" className="h-8 w-8 text-carbo-blue"
-                        onClick={() => updateStatus.mutate({ id: oc.id, status: "enviada_fornecedor" })}
-                        title="Enviar ao Fornecedor"
-                      >
-                        <Send className="h-4 w-4" />
+                      <Button size="sm" className="h-8 gap-1 bg-carbo-green hover:bg-carbo-green/90 text-white" onClick={() => setComprarOC(oc)} title="Registrar compra">
+                        <ShoppingCart className="h-4 w-4" /> Compra feita
                       </Button>
                     )}
                   </div>
@@ -121,6 +123,22 @@ export function PurchaseOrdersList() {
                 <div><span className="text-muted-foreground">CNPJ/CPF:</span> <strong>{selectedOC.supplier_document || "—"}</strong></div>
                 <div><span className="text-muted-foreground">Condição Pgto:</span> <strong>{selectedOC.payment_condition || "—"}</strong></div>
                 <div><span className="text-muted-foreground">Valor Total:</span> <strong className="kpi-number">{formatCurrency(selectedOC.total_value)}</strong></div>
+                {(selectedOC.payment_method_id || selectedOC.payment_type) && (
+                  <div>
+                    <span className="text-muted-foreground">Forma de pagto:</span>{" "}
+                    <strong>
+                      {selectedOC.payment_method_id
+                        ? labelPaymentMethod(pmById.get(selectedOC.payment_method_id))
+                        : (PAYMENT_METHOD_TYPE_LABELS[selectedOC.payment_type as keyof typeof PAYMENT_METHOD_TYPE_LABELS] ?? selectedOC.payment_type)}
+                    </strong>
+                  </div>
+                )}
+                {selectedOC.purchased_at && (
+                  <div>
+                    <span className="text-muted-foreground">Pagamento:</span>{" "}
+                    <strong>{selectedOC.is_paid ? "Pago" : "Em aberto"}</strong>
+                  </div>
+                )}
               </div>
               {selectedOC.items?.length > 0 && (
                 <div className="border border-border rounded-lg overflow-hidden">
@@ -150,6 +168,8 @@ export function PurchaseOrdersList() {
           )}
         </DialogContent>
       </Dialog>
+
+      <RegistrarCompraDialog oc={comprarOC} onClose={() => setComprarOC(null)} />
     </div>
   );
 }

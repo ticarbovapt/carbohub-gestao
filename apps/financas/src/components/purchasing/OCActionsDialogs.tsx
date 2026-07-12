@@ -1,16 +1,80 @@
 import { useState } from "react";
-import { PackageCheck, FileUp, Loader2, CheckCircle2, XCircle } from "lucide-react";
+import { PackageCheck, FileUp, Loader2, CheckCircle2, XCircle, ShoppingCart } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { CarboBadge } from "@/components/ui/carbo-badge";
-import { useCreateReceiving, useCreateInvoice, useCreatePayable, usePurchaseReceivings } from "@/hooks/usePurchasing";
-import type { PurchaseOrder, ReceivedItem } from "@/types/purchasing";
+import { supabase } from "@/integrations/supabase/client";
+import { useCreateReceiving, useCreateInvoice, useCreatePayable, usePurchaseReceivings, useRegisterOCPurchase } from "@/hooks/usePurchasing";
+import { usePaymentMethods, labelPaymentMethod } from "@/hooks/usePaymentMethods";
+import { PAYMENT_METHOD_TYPE_LABELS, type PurchaseOrder, type ReceivedItem } from "@/types/purchasing";
 
 const brl = (v: number) => (v ?? 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 const today = () => new Date().toISOString().slice(0, 10);
+
+// ── Registrar compra da OC (forma de pagamento + pago) ───────────────────────
+export function RegistrarCompraDialog({ oc, onClose }: { oc: PurchaseOrder | null; onClose: () => void }) {
+  const register = useRegisterOCPurchase();
+  const { data: methods = [] } = usePaymentMethods(true);
+  // "card:<id>" pra formas cadastradas; "type:pix|boleto|manual" pra avulsas.
+  const [choice, setChoice] = useState<string>("");
+  const [isPaid, setIsPaid] = useState(true);
+  const [lastId, setLastId] = useState<string | null>(null);
+  if (oc && oc.id !== lastId) { setLastId(oc.id); setChoice(""); setIsPaid(true); }
+  if (!oc) return null;
+
+  const submit = () => {
+    const [kind, val] = choice.split(":");
+    const payload = kind === "card"
+      ? { id: oc.id, payment_method_id: val, payment_type: null, is_paid: isPaid }
+      : { id: oc.id, payment_method_id: null, payment_type: kind === "type" ? val : null, is_paid: isPaid };
+    register.mutate(payload, { onSuccess: onClose });
+  };
+
+  return (
+    <Dialog open={!!oc} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Registrar compra — {oc.oc_number}</DialogTitle>
+          <DialogDescription>Fornecedor {oc.supplier_name} · {brl(Number(oc.total_value))}</DialogDescription>
+        </DialogHeader>
+        <div className="space-y-3 py-1">
+          <div className="space-y-1.5">
+            <Label>Forma de pagamento</Label>
+            <Select value={choice} onValueChange={setChoice}>
+              <SelectTrigger><SelectValue placeholder="Como foi pago?" /></SelectTrigger>
+              <SelectContent>
+                {methods.length > 0 && methods.map((m) => (
+                  <SelectItem key={m.id} value={`card:${m.id}`}>{labelPaymentMethod(m)}</SelectItem>
+                ))}
+                <SelectItem value="type:pix">{PAYMENT_METHOD_TYPE_LABELS.pix}</SelectItem>
+                <SelectItem value="type:boleto">{PAYMENT_METHOD_TYPE_LABELS.boleto}</SelectItem>
+                <SelectItem value="type:manual">{PAYMENT_METHOD_TYPE_LABELS.manual}</SelectItem>
+              </SelectContent>
+            </Select>
+            {methods.length === 0 && (
+              <p className="text-[11px] text-muted-foreground">Cadastre cartões na aba "Cartões" pra escolher aqui.</p>
+            )}
+          </div>
+          <label className="flex items-center gap-2 text-sm pt-1">
+            <input type="checkbox" checked={isPaid} onChange={(e) => setIsPaid(e.target.checked)} />
+            Já foi paga
+          </label>
+          {!isPaid && <p className="text-[11px] text-muted-foreground">Sem pagamento agora — gere a conta a pagar ao lançar a NF.</p>}
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>Cancelar</Button>
+          <Button onClick={submit} disabled={!choice || register.isPending} className="gap-1.5 bg-carbo-green hover:bg-carbo-green/90 text-white">
+            {register.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShoppingCart className="h-4 w-4" />}
+            Confirmar compra
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
 
 // ── Receber contra a OC ──────────────────────────────────────────────────────
 export function ReceberDialog({ oc, onClose }: { oc: PurchaseOrder | null; onClose: () => void }) {
@@ -102,8 +166,10 @@ export function LancarNFDialog({ oc, onClose }: { oc: PurchaseOrder | null; onCl
   const [valor, setValor] = useState<number>(0);
   const [gerarPagavel, setGerarPagavel] = useState(true);
   const [vencimento, setVencimento] = useState(today());
+  const [file, setFile] = useState<File | null>(null);
+  const [uploading, setUploading] = useState(false);
   const [lastId, setLastId] = useState<string | null>(null);
-  if (oc && oc.id !== lastId) { setLastId(oc.id); setNumero(""); setDataNF(today()); setValor(Number(oc.total_value) || 0); setGerarPagavel(true); setVencimento(today()); }
+  if (oc && oc.id !== lastId) { setLastId(oc.id); setNumero(""); setDataNF(today()); setValor(Number(oc.total_value) || 0); setGerarPagavel(true); setVencimento(today()); setFile(null); }
   if (!oc) return null;
 
   // 3-way match automático: OC existe; recebimento OK existe; valor bate (tol. 1%).
@@ -116,9 +182,20 @@ export function LancarNFDialog({ oc, onClose }: { oc: PurchaseOrder | null; onCl
   const submit = async () => {
     if (!numero.trim()) return;
     try {
+      // Anexo opcional (PDF/XML) → Supabase Storage; guarda a URL pública na NF.
+      let file_url: string | undefined;
+      if (file) {
+        setUploading(true);
+        const safe = file.name.replace(/[^\w.\-]/g, "_");
+        const path = `${oc.id}/${numero.trim()}-${safe}`;
+        const up = await supabase.storage.from("purchase-invoices").upload(path, file, { upsert: true, contentType: file.type || undefined });
+        setUploading(false);
+        if (up.error) throw up.error;
+        file_url = supabase.storage.from("purchase-invoices").getPublicUrl(path).data.publicUrl;
+      }
       const inv: any = await createInvoice.mutateAsync({
         purchase_order_id: oc.id, receiving_id: rec?.id, invoice_number: numero.trim(),
-        invoice_date: dataNF, invoice_value: valor, oc_match, receiving_match, value_match,
+        invoice_date: dataNF, invoice_value: valor, file_url, oc_match, receiving_match, value_match,
       });
       if (gerarPagavel) {
         await createPayable.mutateAsync({
@@ -128,7 +205,7 @@ export function LancarNFDialog({ oc, onClose }: { oc: PurchaseOrder | null; onCl
         });
       }
       onClose();
-    } catch { /* erro tratado no hook */ }
+    } catch { setUploading(false); /* erro tratado no hook */ }
   };
 
   const MatchTag = ({ ok, label }: { ok: boolean; label: string }) => (
@@ -159,6 +236,14 @@ export function LancarNFDialog({ oc, onClose }: { oc: PurchaseOrder | null; onCl
           </div>
           {!receiving_match && <p className="text-[11px] text-muted-foreground">Sem recebimento conferido pra esta OC — receba antes pra fechar o match.</p>}
 
+          <div className="space-y-1.5">
+            <Label>Anexo da NF (PDF ou XML)</Label>
+            <Input type="file" accept=".pdf,.xml,application/pdf,text/xml,application/xml" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
+            {file
+              ? <p className="text-[11px] text-muted-foreground truncate">Anexo: {file.name}</p>
+              : <p className="text-[11px] text-muted-foreground">Opcional — fica arquivado e disponível pra download depois.</p>}
+          </div>
+
           <label className="flex items-center gap-2 text-sm pt-1">
             <input type="checkbox" checked={gerarPagavel} onChange={(e) => setGerarPagavel(e.target.checked)} /> Gerar conta a pagar
           </label>
@@ -168,9 +253,9 @@ export function LancarNFDialog({ oc, onClose }: { oc: PurchaseOrder | null; onCl
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>Cancelar</Button>
-          <Button onClick={submit} disabled={!numero.trim() || createInvoice.isPending || createPayable.isPending} className="gap-1.5 bg-carbo-green hover:bg-carbo-green/90 text-white">
-            {(createInvoice.isPending || createPayable.isPending) ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileUp className="h-4 w-4" />}
-            Lançar NF{gerarPagavel ? " + conta" : ""}
+          <Button onClick={submit} disabled={!numero.trim() || uploading || createInvoice.isPending || createPayable.isPending} className="gap-1.5 bg-carbo-green hover:bg-carbo-green/90 text-white">
+            {(uploading || createInvoice.isPending || createPayable.isPending) ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileUp className="h-4 w-4" />}
+            {uploading ? "Enviando anexo…" : `Lançar NF${gerarPagavel ? " + conta" : ""}`}
           </Button>
         </DialogFooter>
       </DialogContent>

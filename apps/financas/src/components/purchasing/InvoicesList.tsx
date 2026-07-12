@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { CheckCircle2, XCircle, Receipt, FileUp } from "lucide-react";
+import { CheckCircle2, XCircle, Receipt, FileUp, Download } from "lucide-react";
 import { CarboBadge } from "@/components/ui/carbo-badge";
 import { Button } from "@/components/ui/button";
 import { usePurchaseInvoices, usePurchaseOrders } from "@/hooks/usePurchasing";
@@ -96,16 +96,17 @@ export function InvoicesList() {
               <CarboTableHead>Receb. ✓</CarboTableHead>
               <CarboTableHead>Valor ✓</CarboTableHead>
               <CarboTableHead>Verificação</CarboTableHead>
+              <CarboTableHead>Anexo</CarboTableHead>
             </CarboTableRow>
           </CarboTableHeader>
           <CarboTableBody>
             {isLoading ? (
               <CarboTableRow>
-                <CarboTableCell colSpan={8} className="text-center text-muted-foreground py-8">Carregando...</CarboTableCell>
+                <CarboTableCell colSpan={9} className="text-center text-muted-foreground py-8">Carregando...</CarboTableCell>
               </CarboTableRow>
             ) : !invoices?.length ? (
               <CarboTableRow>
-                <CarboTableCell colSpan={8} className="text-center text-muted-foreground py-8">
+                <CarboTableCell colSpan={9} className="text-center text-muted-foreground py-8">
                   <div className="flex flex-col items-center gap-2">
                     <Receipt className="h-8 w-8 text-muted-foreground/50" />
                     <span>Nenhuma nota fiscal registrada</span>
@@ -130,6 +131,15 @@ export function InvoicesList() {
                       <CarboBadge variant={allMatch ? "success" : "warning"} dot>
                         {allMatch ? "Conferida" : "Pendente"}
                       </CarboBadge>
+                    </CarboTableCell>
+                    <CarboTableCell>
+                      {inv.file_url ? (
+                        <a href={inv.file_url} target="_blank" rel="noopener" className="inline-flex items-center gap-1 text-carbo-green text-sm hover:underline">
+                          <Download className="h-3.5 w-3.5" /> Baixar
+                        </a>
+                      ) : (
+                        <span className="text-muted-foreground text-sm">—</span>
+                      )}
                     </CarboTableCell>
                   </CarboTableRow>
                 );

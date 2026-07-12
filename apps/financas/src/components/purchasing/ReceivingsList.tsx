@@ -29,10 +29,11 @@ export function ReceivingsList() {
 
   const ocNumberById = new Map((orders ?? []).map((o: any) => [o.id, o.oc_number]));
 
-  // OCs aguardando recebimento: geradas/enviadas/parciais (ainda não recebidas
-  // por completo) e não canceladas.
+  // OCs aguardando recebimento: já compradas (ou enviadas, legado) e parciais,
+  // ainda não recebidas por completo. Uma OC só "gerada" precisa registrar a
+  // compra antes (botão "Compra feita" na aba Ordens de Compra).
   const aguardando = (orders ?? []).filter(
-    (o) => o.status === "gerada" || o.status === "enviada_fornecedor" || o.status === "parcialmente_recebida"
+    (o) => o.status === "comprada" || o.status === "enviada_fornecedor" || o.status === "parcialmente_recebida"
   );
 
   return (

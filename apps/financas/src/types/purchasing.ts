@@ -1,6 +1,6 @@
 export type PurchaseRequestType = 'estoque' | 'uso_direto' | 'investimento';
 export type PurchaseRequestStatus = 'rascunho' | 'aguardando_aprovacao' | 'aprovada' | 'rejeitada' | 'cancelada' | 'convertida';
-export type PurchaseOrderStatus = 'gerada' | 'enviada_fornecedor' | 'parcialmente_recebida' | 'recebida' | 'cancelada';
+export type PurchaseOrderStatus = 'gerada' | 'comprada' | 'enviada_fornecedor' | 'parcialmente_recebida' | 'recebida' | 'cancelada';
 export type ReceivingStatus = 'pendente' | 'conferido_ok' | 'conferido_divergencia';
 export type PayableStatus = 'programado' | 'pago' | 'atrasado' | 'cancelado';
 
@@ -57,9 +57,40 @@ export interface PurchaseOrder {
   expected_delivery: string | null;
   status: PurchaseOrderStatus;
   generated_by: string;
+  // Registro da compra (forma de pagamento / pago)
+  payment_method_id: string | null;
+  payment_type: string | null;
+  purchased_at: string | null;
+  is_paid: boolean;
+  paid_at: string | null;
   created_at: string;
   updated_at: string;
 }
+
+// Cadastro de Cartões / formas de pagamento. Por PCI, só últimos 4 + bandeira.
+export type PaymentMethodType = 'credito' | 'debito' | 'pix' | 'boleto' | 'manual';
+
+export interface PaymentMethod {
+  id: string;
+  apelido: string;
+  tipo: PaymentMethodType;
+  bandeira: string | null;
+  ultimos4: string | null;
+  titular: string | null;
+  departamento: string | null;
+  is_active: boolean;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export const PAYMENT_METHOD_TYPE_LABELS: Record<PaymentMethodType, string> = {
+  credito: 'Cartão de crédito',
+  debito: 'Cartão de débito',
+  pix: 'Pix',
+  boleto: 'Boleto',
+  manual: 'Manual / outro',
+};
 
 export interface PurchaseReceiving {
   id: string;
@@ -159,6 +190,7 @@ export const PRIORITY_LABELS: Record<string, string> = { normal: 'Normal', alta:
 
 export const ORDER_STATUS_LABELS: Record<PurchaseOrderStatus, string> = {
   gerada: 'Gerada',
+  comprada: 'Compra feita',
   enviada_fornecedor: 'Enviada ao Fornecedor',
   parcialmente_recebida: 'Parcialmente Recebida',
   recebida: 'Recebida',

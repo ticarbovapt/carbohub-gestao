@@ -185,6 +185,43 @@ export function useCreatePurchaseOrder() {
   });
 }
 
+// Registra a COMPRA da OC: forma de pagamento usada e se já foi paga. Move a OC
+// de 'gerada' pra 'comprada' (fica pronta pra receber).
+export function useRegisterOCPurchase() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (values: {
+      id: string;
+      payment_method_id?: string | null;
+      payment_type?: string | null;
+      is_paid: boolean;
+    }) => {
+      const now = new Date().toISOString();
+      const { error } = await supabase
+        .from("purchase_orders")
+        .update({
+          status: "comprada" as any,
+          payment_method_id: values.payment_method_id || null,
+          payment_type: values.payment_type || null,
+          purchased_at: now,
+          is_paid: values.is_paid,
+          paid_at: values.is_paid ? now : null,
+        } as any)
+        .eq("id", values.id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["purchase-orders"] });
+      queryClient.invalidateQueries({ queryKey: ["purchasing-kpis"] });
+      toast({ title: "Compra registrada" });
+    },
+    onError: (err: any) => {
+      toast({ title: "Erro ao registrar compra", description: err.message, variant: "destructive" });
+    },
+  });
+}
+
 export function useUpdatePurchaseOrderStatus() {
   const queryClient = useQueryClient();
 
@@ -457,7 +494,7 @@ export function usePurchasingKPIs() {
 
       return {
         rcPendentes: requests.filter((r) => r.status === "aguardando_aprovacao").length,
-        ocAbertas: orders.filter((o) => ["gerada", "enviada_fornecedor"].includes(o.status)).length,
+        ocAbertas: orders.filter((o) => !["recebida", "cancelada"].includes(o.status)).length,
         pagamentosAtrasados: payables.filter((p) => p.status === "programado" && p.due_date < today).length,
         totalComprometido: orders
           .filter((o) => o.status !== "cancelada")
