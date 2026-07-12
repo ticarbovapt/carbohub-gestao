@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { Percent, DollarSign, Wallet, Receipt, CheckCircle2 } from "lucide-react";
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
 import { CarboCard, CarboCardContent } from "@/components/ui/carbo-card";
@@ -19,6 +19,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { AlertCircle } from "lucide-react";
 import {
   useComissaoAgregado, useCommissionStatements, useCreateStatement, useAddPayment,
+  useCommissionRules, useUpsertCommissionRule, useStatementItems,
   type CommissionStatement,
 } from "@/hooks/useComissao";
 
@@ -34,15 +35,70 @@ const STATUS: Record<string, { label: string; variant: "success" | "warning" | "
   aberto:  { label: "Aberto",  variant: "secondary" },
 };
 
+// ── Dialog: regras de % (padrão + por vendedor) ──────────────────────────────
+function RegrasDialog({ open, onClose, vendedores, regras, defaultRate, rateFor }: {
+  open: boolean; onClose: () => void; vendedores: { id: string; name: string }[];
+  regras: { vendedor_id: string | null; rate_pct: number }[]; defaultRate: number; rateFor: (id: string) => number;
+}) {
+  const upsert = useUpsertCommissionRule();
+  const [padrao, setPadrao] = useState(defaultRate);
+  const [porVend, setPorVend] = useState<Record<string, number>>({});
+  const [lastOpen, setLastOpen] = useState(false);
+  if (open && !lastOpen) { setLastOpen(true); setPadrao(defaultRate); setPorVend(Object.fromEntries(vendedores.map((v) => [v.id, rateFor(v.id)]))); }
+  if (!open && lastOpen) setLastOpen(false);
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
+        <DialogHeader><DialogTitle>Regras de comissão (%)</DialogTitle></DialogHeader>
+        <div className="space-y-3">
+          <div className="flex items-end justify-between gap-3 border-b border-border pb-3">
+            <div className="space-y-1.5 flex-1"><Label>% padrão (todos sem regra própria)</Label>
+              <DecimalInput value={padrao} onValueChange={setPadrao} min={0} max={100} />
+            </div>
+            <CarboButton size="sm" onClick={() => upsert.mutate({ vendedor_id: null, rate_pct: padrao })} disabled={upsert.isPending}>Salvar padrão</CarboButton>
+          </div>
+          <p className="text-xs text-muted-foreground">Regra por vendedor (sobrepõe o padrão):</p>
+          {vendedores.length === 0 ? <p className="text-sm text-muted-foreground">Sem vendedores no período.</p> : vendedores.map((v) => (
+            <div key={v.id} className="flex items-end justify-between gap-3">
+              <div className="space-y-1.5 flex-1"><Label>{v.name}</Label>
+                <DecimalInput value={porVend[v.id] ?? 0} onValueChange={(val) => setPorVend((p) => ({ ...p, [v.id]: val }))} min={0} max={100} />
+              </div>
+              <CarboButton size="sm" variant="outline" onClick={() => upsert.mutate({ vendedor_id: v.id, vendedor_name: v.name, rate_pct: porVend[v.id] ?? 0 })} disabled={upsert.isPending}>Salvar</CarboButton>
+            </div>
+          ))}
+        </div>
+        <DialogFooter><CarboButton variant="outline" onClick={onClose}>Fechar</CarboButton></DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 // ── Aba: calcular e gerar comissões ──────────────────────────────────────────
 function CalcularTab() {
   const [from, setFrom] = useState(monthStart());
   const [to, setTo] = useState(monthEnd());
   const [vendFilter, setVendFilter] = useState("__all__");
   const [pcts, setPcts] = useState<Record<string, number>>({});
+  const [showRegras, setShowRegras] = useState(false);
 
   const { data: agg = [], isLoading } = useComissaoAgregado(from, to);
+  const { data: regras = [] } = useCommissionRules();
   const create = useCreateStatement();
+
+  // Resolve o % de cada vendedor: regra específica > regra padrão > 0.
+  const defaultRate = regras.find((r) => r.vendedor_id === null)?.rate_pct ?? 0;
+  const rateFor = (vid: string) => regras.find((r) => r.vendedor_id === vid)?.rate_pct ?? defaultRate;
+
+  // Pré-preenche o % a partir das regras (sem sobrescrever o que já foi digitado).
+  useEffect(() => {
+    setPcts((prev) => {
+      const next = { ...prev };
+      for (const a of agg) if (next[a.vendedor_id] == null) next[a.vendedor_id] = rateFor(a.vendedor_id);
+      return next;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [agg, regras]);
 
   const vendedores = useMemo(() => agg.map((a) => ({ id: a.vendedor_id, name: a.vendedor_name || "—" })), [agg]);
   const rows = vendFilter === "__all__" ? agg : agg.filter((a) => a.vendedor_id === vendFilter);
@@ -70,11 +126,13 @@ function CalcularTab() {
               </SelectContent>
             </Select>
           </div>
-          <div className="md:ml-auto text-sm text-muted-foreground">
-            Base faturada no período: <strong className="text-foreground">{brl(totalBase)}</strong>
+          <div className="md:ml-auto flex items-center gap-3">
+            <span className="text-sm text-muted-foreground">Base faturada: <strong className="text-foreground">{brl(totalBase)}</strong></span>
+            <CarboButton size="sm" variant="outline" onClick={() => setShowRegras(true)}>Regras de %</CarboButton>
           </div>
         </CarboCardContent>
       </CarboCard>
+      <RegrasDialog open={showRegras} onClose={() => setShowRegras(false)} vendedores={vendedores} regras={regras} defaultRate={defaultRate} rateFor={rateFor} />
 
       <CarboCard>
         <CarboCardContent className="pt-6">
@@ -191,6 +249,7 @@ function PayDialog({ st, onClose }: { st: CommissionStatement | null; onClose: (
 function PagamentosTab() {
   const { data: statements = [], isLoading } = useCommissionStatements();
   const [paying, setPaying] = useState<CommissionStatement | null>(null);
+  const [memoria, setMemoria] = useState<CommissionStatement | null>(null);
 
   const totalDevido = statements.reduce((s, x) => s + Number(x.amount_due), 0);
   const totalPago = statements.reduce((s, x) => s + Number(x.amount_paid), 0);
@@ -239,9 +298,12 @@ function PagamentosTab() {
                       <CarboTableCell className="text-right font-medium">{brl(saldo)}</CarboTableCell>
                       <CarboTableCell><CarboBadge variant={st.variant}>{st.label}</CarboBadge></CarboTableCell>
                       <CarboTableCell className="text-right">
-                        <CarboButton size="sm" variant={s.status === "pago" ? "outline" : "default"} disabled={s.status === "pago"} onClick={() => setPaying(s)}>
-                          {s.status === "pago" ? "Quitado" : "Registrar pagamento"}
-                        </CarboButton>
+                        <div className="flex items-center justify-end gap-1">
+                          <CarboButton size="sm" variant="ghost" onClick={() => setMemoria(s)}>Memória</CarboButton>
+                          <CarboButton size="sm" variant={s.status === "pago" ? "outline" : "default"} disabled={s.status === "pago"} onClick={() => setPaying(s)}>
+                            {s.status === "pago" ? "Quitado" : "Registrar pagamento"}
+                          </CarboButton>
+                        </div>
                       </CarboTableCell>
                     </CarboTableRow>
                   );
@@ -253,7 +315,44 @@ function PagamentosTab() {
       </CarboCard>
 
       <PayDialog st={paying} onClose={() => setPaying(null)} />
+      <MemoriaDialog st={memoria} onClose={() => setMemoria(null)} />
     </div>
+  );
+}
+
+// ── Dialog: memória de cálculo (NFs que compõem o fechamento) ─────────────────
+function MemoriaDialog({ st, onClose }: { st: CommissionStatement | null; onClose: () => void }) {
+  const { data: items = [], isLoading } = useStatementItems(st?.id ?? null);
+  if (!st) return null;
+  const soma = items.reduce((s, i) => s + Number(i.total), 0);
+  return (
+    <Dialog open={!!st} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Memória de cálculo — {st.vendedor_name || "Vendedor"}</DialogTitle>
+          <DialogDescription>{fmtDate(st.period_start)} – {fmtDate(st.period_end)} · Base {brl(st.base_sales)} · {Number(st.rate_pct)}% = {brl(st.amount_due)}</DialogDescription>
+        </DialogHeader>
+        {isLoading ? <p className="text-sm text-muted-foreground py-4">Carregando…</p>
+          : items.length === 0 ? <p className="text-sm text-muted-foreground py-4">Sem itens registrados (fechamento anterior à memória de cálculo).</p>
+          : (
+            <div className="space-y-1.5 py-1">
+              {items.map((i) => (
+                <div key={i.id} className="flex items-center justify-between text-sm border-b border-border pb-1.5">
+                  <div className="min-w-0">
+                    <p className="font-mono truncate">{i.order_number || "—"}</p>
+                    <p className="text-[11px] text-muted-foreground truncate">{i.customer_name || "—"}{i.sale_date ? ` · ${fmtDate(i.sale_date)}` : ""}</p>
+                  </div>
+                  <span className="font-medium shrink-0">{brl(Number(i.total))}</span>
+                </div>
+              ))}
+              <div className="flex items-center justify-between pt-1 text-sm font-semibold">
+                <span>{items.length} NF(s)</span><span>{brl(soma)}</span>
+              </div>
+            </div>
+          )}
+        <DialogFooter><CarboButton variant="outline" onClick={onClose}>Fechar</CarboButton></DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
