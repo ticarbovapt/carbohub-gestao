@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { FileText, Eye, CheckCircle2, XCircle, Send } from "lucide-react";
+import { FileText, Eye, CheckCircle2, XCircle, Send, PackagePlus } from "lucide-react";
 import { CarboCard, CarboCardContent } from "@/components/ui/carbo-card";
 import { CarboBadge } from "@/components/ui/carbo-badge";
 import { Button } from "@/components/ui/button";
@@ -22,6 +22,7 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useOrgLabels } from "@/hooks/useTeamMembers";
 import { CotacoesPanel } from "./CotacoesPanel";
+import { GerarOCDialog } from "./GerarOCDialog";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import {
@@ -96,6 +97,7 @@ export function PurchaseRequestsList({ showNewForm, onCloseForm }: PurchaseReque
   const [showRejectDialog, setShowRejectDialog] = useState(false);
   const [rejectingId, setRejectingId] = useState<string | null>(null);
   const [approving, setApproving] = useState<PurchaseRequest | null>(null);
+  const [gerarOC, setGerarOC] = useState<PurchaseRequest | null>(null);
 
   const canApprove = gestor;
 
@@ -344,8 +346,20 @@ export function PurchaseRequestsList({ showNewForm, onCloseForm }: PurchaseReque
               )}
             </div>
           )}
+          {selectedRC?.status === "aprovada" && (
+            <DialogFooter>
+              <Button
+                className="gap-1.5 bg-carbo-green hover:bg-carbo-green/90 text-white"
+                onClick={() => { setGerarOC(selectedRC); setSelectedRC(null); }}
+              >
+                <PackagePlus className="h-4 w-4" /> Gerar Ordem de Compra
+              </Button>
+            </DialogFooter>
+          )}
         </DialogContent>
       </Dialog>
+
+      <GerarOCDialog rc={gerarOC} onClose={() => setGerarOC(null)} />
 
       {/* Approve Dialog */}
       <Dialog open={!!approving} onOpenChange={(o) => !o && setApproving(null)}>
