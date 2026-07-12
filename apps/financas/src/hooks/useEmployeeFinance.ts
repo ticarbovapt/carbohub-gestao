@@ -1,18 +1,22 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { useTeamMembers } from "./useTeamMembers";
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Dados financeiros dos funcionários (PIX / banco / contato de emergência) —
-// o que o financeiro precisa pra pagar. Vem em employee_finance (1 linha por
-// funcionário, ligada ao profiles.id). A lista de pessoas vem do RPC de equipe;
-// aqui casamos com os dados financeiros já cadastrados.
+// Funcionários (dados financeiros pra pagamento) — cadastro próprio em
+// employee_finance, com vínculo OPCIONAL a um usuário do sistema (user_id).
+// A tela mostra: TODOS os perfis do sistema (RPC carbo_all_profiles) + os
+// funcionários avulsos criados aqui (sem usuário). Dá pra criar um funcionário
+// sem usuário e, depois, vincular a um usuário quando ele existir no sistema.
 // ─────────────────────────────────────────────────────────────────────────────
-const db = supabase as unknown as { from: (t: string) => any };
+const db = supabase as unknown as {
+  from: (t: string) => any;
+  rpc: (fn: string, args?: unknown) => Promise<{ data: any; error: any }>;
+};
 
 export interface EmployeeFinance {
-  user_id: string;
+  id: string | null;             // employee_finance.id (null = ainda não cadastrado)
+  user_id: string | null;        // usuário do sistema vinculado (opcional)
   full_name: string | null;
   cpf: string | null;
   pix_key: string | null;
@@ -28,58 +32,117 @@ export interface EmployeeFinance {
   notes: string | null;
 }
 
+export interface SystemProfile { id: string; full_name: string | null; username: string | null; email: string | null; }
+
 export interface EmployeeRow extends EmployeeFinance {
-  team_name: string | null;      // nome vindo do cadastro (profiles)
+  key: string;
+  displayName: string;
   username: string | null;
   email: string | null;
-  hasData: boolean;              // já tem dados financeiros preenchidos?
+  linkedUserName: string | null; // nome do usuário do sistema vinculado
+  origin: "sistema" | "avulso";  // veio de um perfil do sistema ou cadastrado à mão
+  hasData: boolean;
 }
 
-const EMPTY = (userId: string): EmployeeFinance => ({
-  user_id: userId, full_name: null, cpf: null, pix_key: null, pix_type: null,
+const emptyFinance = (): EmployeeFinance => ({
+  id: null, user_id: null, full_name: null, cpf: null, pix_key: null, pix_type: null,
   bank_name: null, bank_code: null, bank_agency: null, bank_account: null,
   account_type: null, phone: null, emergency_name: null, emergency_phone: null, notes: null,
 });
 
-/** Lista de funcionários (equipe) + dados financeiros cadastrados. */
+const filled = (f: EmployeeFinance) =>
+  !!(f.pix_key || f.bank_name || f.bank_account || f.phone || f.cpf || f.emergency_phone);
+
+/** Perfis do sistema (todos) + funcionários avulsos + dados financeiros. */
 export function useEmployeesFinance() {
-  const team = useTeamMembers();
-  const finance = useQuery({
+  const profilesQ = useQuery({
+    queryKey: ["all_profiles"],
+    queryFn: async (): Promise<SystemProfile[]> => {
+      const { data, error } = await db.rpc("carbo_all_profiles");
+      if (error) throw error as Error;
+      return (data ?? []) as SystemProfile[];
+    },
+  });
+  const financeQ = useQuery({
     queryKey: ["employee_finance"],
     queryFn: async (): Promise<EmployeeFinance[]> => {
-      const { data, error } = await db.from("employee_finance").select("*");
+      const { data, error } = await db.from("employee_finance").select("*").eq("active", true);
       if (error) throw error;
       return (data ?? []) as EmployeeFinance[];
     },
   });
 
-  const byId = new Map((finance.data ?? []).map((f) => [f.user_id, f]));
-  const rows: EmployeeRow[] = (team.data ?? []).map((m) => {
-    const f = byId.get(m.id);
-    return {
-      ...(f ?? EMPTY(m.id)),
-      full_name: f?.full_name ?? m.full_name,
-      team_name: m.full_name,
-      username: m.username,
-      email: m.email,
-      hasData: !!f,
-    };
-  });
+  const profiles = profilesQ.data ?? [];
+  const finance = financeQ.data ?? [];
+  const profById = new Map(profiles.map((p) => [p.id, p]));
+  const finByUser = new Map(finance.filter((f) => f.user_id).map((f) => [f.user_id as string, f]));
 
-  return { rows, isLoading: team.isLoading || finance.isLoading };
+  const rows: EmployeeRow[] = [];
+
+  // 1) Um item por perfil do sistema (com dados financeiros, se já vinculados).
+  for (const p of profiles) {
+    const f = finByUser.get(p.id);
+    rows.push({
+      ...(f ?? emptyFinance()),
+      full_name: f?.full_name ?? p.full_name,
+      key: f?.id ?? `profile:${p.id}`,
+      user_id: p.id,
+      displayName: p.full_name || p.username || "—",
+      username: p.username,
+      email: p.email,
+      linkedUserName: p.full_name || p.username,
+      origin: "sistema",
+      hasData: !!f && filled(f),
+    });
+  }
+
+  // 2) Funcionários avulsos (sem usuário do sistema vinculado).
+  for (const f of finance) {
+    if (f.user_id && profById.has(f.user_id)) continue; // já listado acima
+    rows.push({
+      ...f,
+      key: f.id ?? `fin:${f.full_name}`,
+      displayName: f.full_name || "—",
+      username: null,
+      email: null,
+      linkedUserName: f.user_id ? "(usuário removido)" : null,
+      origin: "avulso",
+      hasData: filled(f),
+    });
+  }
+
+  rows.sort((a, b) => a.displayName.localeCompare(b.displayName, "pt-BR"));
+
+  return {
+    rows,
+    profiles,
+    // perfis do sistema ainda NÃO vinculados a nenhum funcionário (pra "vincular usuário")
+    unlinkedProfiles: profiles.filter((p) => !finByUser.has(p.id)),
+    isLoading: profilesQ.isLoading || financeQ.isLoading,
+  };
 }
 
-/** Cria/atualiza os dados financeiros de um funcionário (upsert por user_id). */
+/** Cria/atualiza um funcionário. Sem id → insere; com id → atualiza. */
 export function useUpsertEmployeeFinance() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (e: EmployeeFinance) => {
       const { data: u } = await supabase.auth.getUser();
-      const { error } = await db.from("employee_finance").upsert(
-        { ...e, updated_by: u?.user?.id ?? null, updated_at: new Date().toISOString() },
-        { onConflict: "user_id" },
-      );
-      if (error) throw error;
+      const payload: Record<string, unknown> = {
+        user_id: e.user_id, full_name: e.full_name, cpf: e.cpf,
+        pix_key: e.pix_key, pix_type: e.pix_type,
+        bank_name: e.bank_name, bank_code: e.bank_code, bank_agency: e.bank_agency,
+        bank_account: e.bank_account, account_type: e.account_type,
+        phone: e.phone, emergency_name: e.emergency_name, emergency_phone: e.emergency_phone,
+        notes: e.notes, updated_by: u?.user?.id ?? null, updated_at: new Date().toISOString(),
+      };
+      if (e.id) {
+        const { error } = await db.from("employee_finance").update(payload).eq("id", e.id);
+        if (error) throw error;
+      } else {
+        const { error } = await db.from("employee_finance").insert(payload);
+        if (error) throw error;
+      }
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["employee_finance"] });

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Users, Pencil, CheckCircle2, AlertCircle } from "lucide-react";
+import { Users, Pencil, CheckCircle2, AlertCircle, UserPlus, Link2 } from "lucide-react";
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
 import { CarboCard, CarboCardContent } from "@/components/ui/carbo-card";
 import { CarboButton } from "@/components/ui/carbo-button";
@@ -12,42 +12,66 @@ import { CarboEmptyState } from "@/components/ui/carbo-empty-state";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useEmployeesFinance, useUpsertEmployeeFinance, type EmployeeRow, type EmployeeFinance } from "@/hooks/useEmployeeFinance";
+import { useEmployeesFinance, useUpsertEmployeeFinance, type EmployeeRow, type EmployeeFinance, type SystemProfile } from "@/hooks/useEmployeeFinance";
 
-function EditDialog({ row, onClose }: { row: EmployeeRow | null; onClose: () => void }) {
+const NO_USER = "__none__";
+
+function EditDialog({
+  open, initial, title, allowLink, unlinkedProfiles, onClose,
+}: {
+  open: boolean; initial: EmployeeFinance | null; title: string; allowLink: boolean;
+  unlinkedProfiles: SystemProfile[]; onClose: () => void;
+}) {
   const upsert = useUpsertEmployeeFinance();
   const [form, setForm] = useState<EmployeeFinance | null>(null);
-  // Sincroniza o form quando abre um funcionário
-  const current = form && row && form.user_id === row.user_id ? form : row ? { ...row } : null;
-  const set = (k: keyof EmployeeFinance, v: string) => current && setForm({ ...current, [k]: v });
+  const [lastKey, setLastKey] = useState<string>("");
+  // Reinicia o form ao abrir outro funcionário
+  const key = (initial?.id ?? "") + "|" + (initial?.user_id ?? "") + "|" + (initial?.full_name ?? "");
+  if (open && initial && key !== lastKey) { setLastKey(key); setForm({ ...initial }); }
+  const f = form;
+  const set = (k: keyof EmployeeFinance, v: string | null) => f && setForm({ ...f, [k]: v });
 
-  if (!row || !current) return null;
+  if (!open || !f) return null;
 
   const save = () => {
-    const { team_name, username, email, hasData, ...data } = current as any;
-    upsert.mutate(data as EmployeeFinance, { onSuccess: onClose });
+    if (!f.full_name || !f.full_name.trim()) { return; }
+    upsert.mutate(f, { onSuccess: onClose });
   };
 
   return (
-    <Dialog open={!!row} onOpenChange={(o) => !o && onClose()}>
+    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>Dados financeiros — {row.team_name || row.full_name || "Funcionário"}</DialogTitle>
-        </DialogHeader>
+        <DialogHeader><DialogTitle>{title}</DialogTitle></DialogHeader>
 
         <div className="grid sm:grid-cols-2 gap-4 py-2">
           <div className="space-y-1.5">
-            <Label>Nome completo</Label>
-            <CarboInput value={current.full_name ?? ""} onChange={(e) => set("full_name", e.target.value)} placeholder="Nome completo" />
+            <Label>Nome completo *</Label>
+            <CarboInput value={f.full_name ?? ""} onChange={(e) => set("full_name", e.target.value)} placeholder="Nome completo" />
           </div>
           <div className="space-y-1.5">
             <Label>CPF</Label>
-            <CarboInput value={current.cpf ?? ""} onChange={(e) => set("cpf", e.target.value)} placeholder="000.000.000-00" />
+            <CarboInput value={f.cpf ?? ""} onChange={(e) => set("cpf", e.target.value)} placeholder="000.000.000-00" />
           </div>
+
+          {allowLink && (
+            <div className="space-y-1.5 sm:col-span-2">
+              <Label className="flex items-center gap-1.5"><Link2 className="h-3.5 w-3.5" /> Vincular usuário do sistema (opcional)</Label>
+              <Select value={f.user_id ?? NO_USER} onValueChange={(v) => set("user_id", v === NO_USER ? null : v)}>
+                <SelectTrigger><SelectValue placeholder="Sem usuário vinculado" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={NO_USER}>Sem usuário vinculado</SelectItem>
+                  {unlinkedProfiles.map((p) => (
+                    <SelectItem key={p.id} value={p.id}>{p.full_name || p.username || p.email || p.id}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-[11px] text-muted-foreground">Se a pessoa já é usuária do sistema, vincule aqui. Dá pra criar o funcionário sem usuário e vincular depois.</p>
+            </div>
+          )}
 
           <div className="space-y-1.5">
             <Label>Tipo de chave PIX</Label>
-            <Select value={current.pix_type ?? ""} onValueChange={(v) => set("pix_type", v)}>
+            <Select value={f.pix_type ?? ""} onValueChange={(v) => set("pix_type", v)}>
               <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="cpf">CPF</SelectItem>
@@ -60,28 +84,28 @@ function EditDialog({ row, onClose }: { row: EmployeeRow | null; onClose: () => 
           </div>
           <div className="space-y-1.5">
             <Label>Chave PIX</Label>
-            <CarboInput value={current.pix_key ?? ""} onChange={(e) => set("pix_key", e.target.value)} placeholder="Chave PIX" />
+            <CarboInput value={f.pix_key ?? ""} onChange={(e) => set("pix_key", e.target.value)} placeholder="Chave PIX" />
           </div>
 
           <div className="space-y-1.5">
             <Label>Banco</Label>
-            <CarboInput value={current.bank_name ?? ""} onChange={(e) => set("bank_name", e.target.value)} placeholder="Nome do banco" />
+            <CarboInput value={f.bank_name ?? ""} onChange={(e) => set("bank_name", e.target.value)} placeholder="Nome do banco" />
           </div>
           <div className="space-y-1.5">
             <Label>Código do banco</Label>
-            <CarboInput value={current.bank_code ?? ""} onChange={(e) => set("bank_code", e.target.value)} placeholder="Ex.: 341" />
+            <CarboInput value={f.bank_code ?? ""} onChange={(e) => set("bank_code", e.target.value)} placeholder="Ex.: 341" />
           </div>
           <div className="space-y-1.5">
             <Label>Agência</Label>
-            <CarboInput value={current.bank_agency ?? ""} onChange={(e) => set("bank_agency", e.target.value)} placeholder="0000" />
+            <CarboInput value={f.bank_agency ?? ""} onChange={(e) => set("bank_agency", e.target.value)} placeholder="0000" />
           </div>
           <div className="space-y-1.5">
             <Label>Conta</Label>
-            <CarboInput value={current.bank_account ?? ""} onChange={(e) => set("bank_account", e.target.value)} placeholder="00000-0" />
+            <CarboInput value={f.bank_account ?? ""} onChange={(e) => set("bank_account", e.target.value)} placeholder="00000-0" />
           </div>
           <div className="space-y-1.5">
             <Label>Tipo de conta</Label>
-            <Select value={current.account_type ?? ""} onValueChange={(v) => set("account_type", v)}>
+            <Select value={f.account_type ?? ""} onValueChange={(v) => set("account_type", v)}>
               <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="corrente">Corrente</SelectItem>
@@ -92,25 +116,25 @@ function EditDialog({ row, onClose }: { row: EmployeeRow | null; onClose: () => 
 
           <div className="space-y-1.5">
             <Label>Telefone</Label>
-            <CarboInput value={current.phone ?? ""} onChange={(e) => set("phone", e.target.value)} placeholder="(00) 00000-0000" />
+            <CarboInput value={f.phone ?? ""} onChange={(e) => set("phone", e.target.value)} placeholder="(00) 00000-0000" />
           </div>
           <div className="space-y-1.5">
             <Label>Contato de emergência (nome)</Label>
-            <CarboInput value={current.emergency_name ?? ""} onChange={(e) => set("emergency_name", e.target.value)} placeholder="Nome" />
+            <CarboInput value={f.emergency_name ?? ""} onChange={(e) => set("emergency_name", e.target.value)} placeholder="Nome" />
           </div>
           <div className="space-y-1.5">
             <Label>Contato de emergência (telefone)</Label>
-            <CarboInput value={current.emergency_phone ?? ""} onChange={(e) => set("emergency_phone", e.target.value)} placeholder="(00) 00000-0000" />
+            <CarboInput value={f.emergency_phone ?? ""} onChange={(e) => set("emergency_phone", e.target.value)} placeholder="(00) 00000-0000" />
           </div>
           <div className="space-y-1.5 sm:col-span-2">
             <Label>Observações</Label>
-            <CarboInput value={current.notes ?? ""} onChange={(e) => set("notes", e.target.value)} placeholder="Anotações" />
+            <CarboInput value={f.notes ?? ""} onChange={(e) => set("notes", e.target.value)} placeholder="Anotações" />
           </div>
         </div>
 
         <DialogFooter>
           <CarboButton variant="outline" onClick={onClose}>Cancelar</CarboButton>
-          <CarboButton onClick={save} disabled={upsert.isPending}>{upsert.isPending ? "Salvando…" : "Salvar"}</CarboButton>
+          <CarboButton onClick={save} disabled={upsert.isPending || !f.full_name?.trim()}>{upsert.isPending ? "Salvando…" : "Salvar"}</CarboButton>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -118,18 +142,38 @@ function EditDialog({ row, onClose }: { row: EmployeeRow | null; onClose: () => 
 }
 
 export default function Funcionarios() {
-  const { rows, isLoading } = useEmployeesFinance();
+  const { rows, unlinkedProfiles, isLoading } = useEmployeesFinance();
   const [search, setSearch] = useState("");
-  const [editing, setEditing] = useState<EmployeeRow | null>(null);
+  const [editing, setEditing] = useState<{ initial: EmployeeFinance; title: string; allowLink: boolean } | null>(null);
 
   const q = search.trim().toLowerCase();
-  const list = q
-    ? rows.filter((r) => (r.team_name || r.full_name || "").toLowerCase().includes(q) || (r.username || "").toLowerCase().includes(q))
-    : rows;
+  const list = q ? rows.filter((r) => r.displayName.toLowerCase().includes(q) || (r.username || "").toLowerCase().includes(q)) : rows;
+
+  const openEdit = (r: EmployeeRow) => setEditing({
+    initial: {
+      id: r.id, user_id: r.user_id, full_name: r.full_name ?? r.displayName, cpf: r.cpf,
+      pix_key: r.pix_key, pix_type: r.pix_type, bank_name: r.bank_name, bank_code: r.bank_code,
+      bank_agency: r.bank_agency, bank_account: r.bank_account, account_type: r.account_type,
+      phone: r.phone, emergency_name: r.emergency_name, emergency_phone: r.emergency_phone, notes: r.notes,
+    },
+    title: `Dados financeiros — ${r.displayName}`,
+    allowLink: r.origin === "avulso", // perfil do sistema já é o vínculo; avulso pode vincular
+  });
+
+  const openNew = () => setEditing({
+    initial: { id: null, user_id: null, full_name: "", cpf: null, pix_key: null, pix_type: null, bank_name: null, bank_code: null, bank_agency: null, bank_account: null, account_type: null, phone: null, emergency_name: null, emergency_phone: null, notes: null },
+    title: "Novo funcionário",
+    allowLink: true,
+  });
 
   return (
     <div className="space-y-6">
-      <CarboPageHeader title="Funcionários" description="Dados financeiros para pagamento (PIX, banco) e contato de emergência." icon={Users} />
+      <CarboPageHeader
+        title="Funcionários"
+        description="Dados financeiros para pagamento (PIX, banco) e contato de emergência."
+        icon={Users}
+        actions={<CarboButton className="gap-1.5" onClick={openNew}><UserPlus className="h-4 w-4" /> Novo funcionário</CarboButton>}
+      />
 
       <CarboCard>
         <CarboCardContent className="pt-6 space-y-4">
@@ -142,12 +186,13 @@ export default function Funcionarios() {
           {isLoading ? (
             <div className="space-y-2">{Array.from({ length: 5 }).map((_, i) => <CarboSkeleton key={i} className="h-12 w-full" />)}</div>
           ) : list.length === 0 ? (
-            <CarboEmptyState icon={Users} title="Nenhum funcionário" description={search ? "Nenhum encontrado." : "A lista vem da sua equipe cadastrada."} />
+            <CarboEmptyState icon={Users} title="Nenhum funcionário" description={search ? "Nenhum encontrado." : "Clique em Novo funcionário para cadastrar."} />
           ) : (
             <CarboTable>
               <CarboTableHeader>
                 <CarboTableRow>
                   <CarboTableHead>Funcionário</CarboTableHead>
+                  <CarboTableHead>Origem</CarboTableHead>
                   <CarboTableHead>PIX</CarboTableHead>
                   <CarboTableHead>Banco</CarboTableHead>
                   <CarboTableHead>Telefone</CarboTableHead>
@@ -157,9 +202,14 @@ export default function Funcionarios() {
               </CarboTableHeader>
               <CarboTableBody>
                 {list.map((r) => (
-                  <CarboTableRow key={r.user_id}>
-                    <CarboTableCell className="font-medium">{r.team_name || r.full_name || "—"}</CarboTableCell>
-                    <CarboTableCell className="max-w-[200px] truncate">{r.pix_key || <span className="text-muted-foreground">—</span>}</CarboTableCell>
+                  <CarboTableRow key={r.key}>
+                    <CarboTableCell className="font-medium">{r.displayName}</CarboTableCell>
+                    <CarboTableCell>
+                      {r.origin === "sistema"
+                        ? <CarboBadge variant="secondary">Usuário do sistema</CarboBadge>
+                        : <CarboBadge variant="secondary">Avulso</CarboBadge>}
+                    </CarboTableCell>
+                    <CarboTableCell className="max-w-[180px] truncate">{r.pix_key || <span className="text-muted-foreground">—</span>}</CarboTableCell>
                     <CarboTableCell>{r.bank_name ? `${r.bank_name}${r.bank_agency ? ` · ag ${r.bank_agency}` : ""}` : <span className="text-muted-foreground">—</span>}</CarboTableCell>
                     <CarboTableCell>{r.phone || <span className="text-muted-foreground">—</span>}</CarboTableCell>
                     <CarboTableCell>
@@ -168,7 +218,7 @@ export default function Funcionarios() {
                         : <CarboBadge variant="warning" className="gap-1"><AlertCircle className="h-3 w-3" /> Pendente</CarboBadge>}
                     </CarboTableCell>
                     <CarboTableCell className="text-right">
-                      <CarboButton size="sm" variant="outline" className="gap-1.5" onClick={() => setEditing(r)}>
+                      <CarboButton size="sm" variant="outline" className="gap-1.5" onClick={() => openEdit(r)}>
                         <Pencil className="h-3.5 w-3.5" /> Editar
                       </CarboButton>
                     </CarboTableCell>
@@ -180,7 +230,14 @@ export default function Funcionarios() {
         </CarboCardContent>
       </CarboCard>
 
-      <EditDialog row={editing} onClose={() => setEditing(null)} />
+      <EditDialog
+        open={!!editing}
+        initial={editing?.initial ?? null}
+        title={editing?.title ?? ""}
+        allowLink={editing?.allowLink ?? false}
+        unlinkedProfiles={unlinkedProfiles}
+        onClose={() => setEditing(null)}
+      />
     </div>
   );
 }
