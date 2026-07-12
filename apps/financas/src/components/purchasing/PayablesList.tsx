@@ -29,15 +29,17 @@ const isOverdue = (p: { status: PayableStatus; due_date: string }) =>
 const effectiveStatus = (p: { status: PayableStatus; due_date: string }) =>
   isOverdue(p) ? "atrasado" : p.status;
 
-const monthBounds = (ym: string) => {
-  // ym = "2026-07" → primeiro e último dia do mês.
-  const [y, m] = ym.split("-").map(Number);
-  const first = `${ym}-01`;
-  const last = new Date(y, m, 0).toISOString().slice(0, 10);
-  return { first, last };
-};
-
 const CURRENT_MONTH = new Date().toISOString().slice(0, 7);
+const isYm = (v: string) => /^\d{4}-\d{2}$/.test(v);
+
+const monthBounds = (ym: string) => {
+  // ym = "2026-07" → primeiro e último dia do mês. Blindado contra valor inválido
+  // (evitava travar a tela toda com "Invalid time value").
+  const valid = isYm(ym) ? ym : CURRENT_MONTH;
+  const [y, m] = valid.split("-").map(Number);
+  const lastDay = new Date(y, m, 0).getDate();
+  return { first: `${valid}-01`, last: `${valid}-${String(lastDay).padStart(2, "0")}` };
+};
 
 export function PayablesList({ initialStatus }: { initialStatus?: string } = {}) {
   const { gestor } = useAuth();
@@ -52,9 +54,10 @@ export function PayablesList({ initialStatus }: { initialStatus?: string } = {})
   const [payingId, setPayingId] = useState<string | null>(null);
 
   // De/Até é a fonte de verdade quando preenchido; senão vale o navegador de mês.
+  const mesSafe = isYm(mes) ? mes : CURRENT_MONTH;
   const usaPeriodo = !!(from || to);
-  const periodo = usaPeriodo ? { first: from, last: to } : monthBounds(mes);
-  const shiftMes = (delta: number) => setMes(format(addMonths(parseISO(`${mes || CURRENT_MONTH}-01`), delta), "yyyy-MM"));
+  const periodo = usaPeriodo ? { first: from, last: to } : monthBounds(mesSafe);
+  const shiftMes = (delta: number) => setMes(format(addMonths(parseISO(`${mesSafe}-01`), delta), "yyyy-MM"));
 
   // Só sobrescreve o filtro quando veio um deep-link real dos KPIs (não vazio).
   useEffect(() => { if (initialStatus) { setStatusFilter(initialStatus); setPage(0); } }, [initialStatus]);
@@ -148,7 +151,7 @@ export function PayablesList({ initialStatus }: { initialStatus?: string } = {})
               <ChevronLeft className="h-4 w-4" />
             </button>
             <span className="px-2 text-sm min-w-[120px] text-center capitalize">
-              {format(parseISO(`${mes || CURRENT_MONTH}-01`), "MMMM yyyy", { locale: ptBR })}
+              {format(parseISO(`${mesSafe}-01`), "MMMM yyyy", { locale: ptBR })}
             </span>
             <button className="px-2 h-full hover:text-carbo-green disabled:opacity-40" onClick={() => shiftMes(1)} disabled={usaPeriodo} title="Próximo mês">
               <ChevronRight className="h-4 w-4" />
