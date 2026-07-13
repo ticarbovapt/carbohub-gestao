@@ -103,7 +103,6 @@ export function useCreateVenda() {
 // ── Dashboard Comercial ──────────────────────────────────────────────────────
 
 const MES_ABBR = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
-const monthLabel = (d: Date) => `${MES_ABBR[d.getMonth()]}/${String(d.getFullYear()).slice(2)}`;
 
 export interface MonthlyRow { mes: string; faturado: number; pedidos: number; ticketMedio: number; }
 export interface ComercialKpis {
@@ -125,86 +124,48 @@ const EMPTY: ComercialData = {
   annualGrowthData: [],
 };
 
-interface OrderRow {
-  total: number | null;
-  status: string;
-  customer_name: string | null;
-  vendedor_name: string | null;
-  created_at: string;
-  sale_date: string | null;
-}
-
 export function useComercialDashboard(vendedor: string = "all") {
   return useQuery<ComercialData>({
     queryKey: ["ops", "comercial", vendedor],
     queryFn: async () => {
-      const { data, error } = await db
-        .from("carboze_orders")
-        .select("total, status, customer_name, vendedor_name, created_at, sale_date")
-        .neq("status", "cancelled");
+      // Agregação no servidor (RPC) — antes puxava todos os pedidos pro cliente.
+      const { data, error } = await (db as any).rpc("ops_comercial_dashboard", { p_vendedor: vendedor });
       if (error) throw error;
+      const d = (data ?? {}) as {
+        vendedores?: string[];
+        monthly?: { y: number; m: number; faturado: number; pedidos: number }[];
+        totalVendas?: number; totalBRL?: number; maiorVenda?: number; maiorCliente?: string;
+        topCliente?: string; topQtd?: number;
+      };
 
-      let rows = (data || []) as OrderRow[];
-      if (vendedor !== "all") rows = rows.filter((r) => (r.vendedor_name || "") === vendedor);
-      if (rows.length === 0) return { ...EMPTY, vendedores: distinctVendedores((data || []) as OrderRow[]) };
+      const vendedores = d.vendedores ?? [];
+      const monthlyData: MonthlyRow[] = (d.monthly ?? []).map((r) => {
+        const faturado = Number(r.faturado) || 0;
+        const pedidos = Number(r.pedidos) || 0;
+        return {
+          mes: `${MES_ABBR[(Number(r.m) || 1) - 1]}/${String(r.y).slice(2)}`,
+          faturado, pedidos, ticketMedio: pedidos ? Math.round(faturado / pedidos) : 0,
+        };
+      });
+      if (monthlyData.length === 0 && (Number(d.totalVendas) || 0) === 0) return { ...EMPTY, vendedores };
 
-      const vendedores = distinctVendedores((data || []) as OrderRow[]);
-
-      // Agrega por mês (ordem cronológica)
-      const byMonth = new Map<string, { d: Date; faturado: number; pedidos: number }>();
-      for (const r of rows) {
-        const d = new Date(r.sale_date || r.created_at);
-        const key = `${d.getFullYear()}-${String(d.getMonth()).padStart(2, "0")}`;
-        const cur = byMonth.get(key) || { d: new Date(d.getFullYear(), d.getMonth(), 1), faturado: 0, pedidos: 0 };
-        cur.faturado += Number(r.total || 0);
-        cur.pedidos += 1;
-        byMonth.set(key, cur);
-      }
-      const monthlyData: MonthlyRow[] = [...byMonth.entries()]
-        .sort((a, b) => a[1].d.getTime() - b[1].d.getTime())
-        .map(([, v]) => ({
-          mes: monthLabel(v.d),
-          faturado: Math.round(v.faturado),
-          pedidos: v.pedidos,
-          ticketMedio: v.pedidos ? Math.round(v.faturado / v.pedidos) : 0,
-        }));
-
-      // KPIs
-      const totalBRL = rows.reduce((s, r) => s + Number(r.total || 0), 0);
-      const totalVendas = rows.length;
-      let maiorVenda = 0, maiorCliente = "—";
-      const porCliente = new Map<string, number>();
-      for (const r of rows) {
-        const t = Number(r.total || 0);
-        if (t > maiorVenda) { maiorVenda = t; maiorCliente = r.customer_name || "—"; }
-        const c = r.customer_name || "—";
-        porCliente.set(c, (porCliente.get(c) || 0) + 1);
-      }
-      let topCliente = "—", topQtd = 0;
-      for (const [c, q] of porCliente) if (q > topQtd) { topQtd = q; topCliente = c; }
-
+      const totalVendas = Number(d.totalVendas) || 0;
+      const totalBRL = Number(d.totalBRL) || 0;
       const kpis: ComercialKpis = {
         totalVendas, totalBRL,
-        maiorVenda, maiorCliente,
-        topCliente, topQtd,
+        maiorVenda: Number(d.maiorVenda) || 0, maiorCliente: d.maiorCliente || "—",
+        topCliente: d.topCliente || "—", topQtd: Number(d.topQtd) || 0,
         ticketMedio: totalVendas ? totalBRL / totalVendas : 0,
       };
 
-      // Crescimento anual: real por mês vs projeção +15%/mês a partir do 1º mês
+      // Crescimento anual: real por mês vs projeção +15%/mês a partir do 1º mês.
       const base = monthlyData[0]?.faturado || 0;
       const annualGrowthData: AnnualRow[] = monthlyData.map((m, i) => ({
-        label: m.mes,
-        real: m.faturado,
+        label: m.mes, real: m.faturado,
         projecao: base > 0 ? Math.round(base * Math.pow(1.15, i)) : null,
       }));
 
       return { vendedores, monthlyData, kpis, annualGrowthData };
     },
   });
-}
-
-function distinctVendedores(rows: OrderRow[]): string[] {
-  const set = new Set<string>();
-  for (const r of rows) if (r.vendedor_name) set.add(r.vendedor_name);
-  return [...set].sort();
 }
