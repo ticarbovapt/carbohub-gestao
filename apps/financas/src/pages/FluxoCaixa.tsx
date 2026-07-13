@@ -88,9 +88,10 @@ export default function FluxoCaixa() {
               </ComposedChart>
             </ResponsiveContainer>
           )}
-          {onTime && onTime.recebidos > 0 && (
-            <p className="text-[11px] text-muted-foreground mt-1">Recebimento no prazo: {onTime.pct_no_prazo}% ({onTime.no_prazo}/{onTime.recebidos}).</p>
-          )}
+          <p className="text-[11px] text-muted-foreground mt-1">
+            O vencido em aberto entra na 1ª semana (é desembolso/recebimento que já deveria ter ocorrido).
+            {onTime && onTime.recebidos > 0 && <> · Recebimento no prazo: {onTime.pct_no_prazo}% ({onTime.no_prazo}/{onTime.recebidos}).</>}
+          </p>
         </CarboCardContent>
       </CarboCard>
 
