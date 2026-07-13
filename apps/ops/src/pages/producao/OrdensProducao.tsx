@@ -186,8 +186,8 @@ export default function OrdensProducao() {
   }), [orders, searchQuery, statusFilter, priorityFilter]);
 
   return (
-    <div className="p-4 md:p-6 h-[calc(100dvh-3.5rem)] flex flex-col overflow-hidden">
-      <div className="flex flex-col flex-1 min-h-0 gap-6">
+    <div className="p-4 md:p-6 h-[calc(100dvh-3.5rem)] flex flex-col overflow-y-auto">
+      <div className="flex flex-col gap-6">
         <div className="shrink-0 space-y-6">
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -378,7 +378,7 @@ export default function OrdensProducao() {
         {isLoading ? (
           <div className="flex items-center justify-center gap-2 py-16 text-muted-foreground"><Loader2 className="h-5 w-5 animate-spin" /> Carregando…</div>
         ) : viewMode === "kanban" ? (
-          <div className="flex gap-3 overflow-x-auto flex-1 min-h-0 pb-3">
+          <div className="flex gap-3 overflow-x-auto h-[70vh] pb-3">
             {KANBAN_COLUMNS.map((col) => {
               // Concluída/Bloqueada acumulam — mostra as recentes e resume o resto.
               const CAP = 12;
