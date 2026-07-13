@@ -88,30 +88,64 @@ const SELECT_BASE =
   "notes, items, created_at, updated_at, fulfillment_stage, linha, bling_nf_id, invoice_number, status";
 const SELECT_COLS = SELECT_BASE + ", production_done";
 
-/** Todas as vendas manuais (visão de operações). */
-export function usePosVendaOrders() {
-  return useQuery({
-    queryKey: ["ops", "pos-venda"],
-    queryFn: async (): Promise<PosVendaOrder[]> => {
-      const run = (cols: string) => db
-        .from("carboze_orders")
-        .select(cols)
-        .is("external_ref", null)
-        // Orçamento (status='quote') ainda não é venda — só entra no rastreio
-        // quando vira venda de verdade lá no Sales/CRM. Mantém status nulo.
-        .or("status.is.null,status.neq.quote")
-        .order("created_at", { ascending: false })
-        .limit(500);
+// Etapas terminais do rastreio (colunas que só acumulam).
+const TERMINAL_STAGES = ["entregue", "cancelado"];
 
-      let { data, error } = await run(SELECT_COLS);
-      // Resiliência: se a coluna production_done ainda não existir no banco
-      // (migração não rodada), não quebra o quadro — tenta sem ela.
-      if (error) {
-        const fb = await run(SELECT_BASE);
-        if (fb.error) throw fb.error;
-        data = (fb.data || []).map((r: any) => ({ ...r, production_done: false }));
+export interface PosVendaData {
+  orders: PosVendaOrder[];
+  terminalShown: number;   // finalizados carregados (dentro da janela)
+  terminalTotal: number;   // finalizados no total (para saber quantos ficaram fora)
+}
+
+/**
+ * Vendas manuais para o rastreio. NUNCA trunca os ATIVOS (carrega todos); os
+ * FINALIZADOS (entregue/cancelado) vêm por JANELA DE TEMPO (terminalDays), com
+ * contagem real — assim o board fica leve sem esconder nada em silêncio.
+ */
+export function usePosVendaOrders(terminalDays: number | "all" = 30) {
+  return useQuery({
+    queryKey: ["ops", "pos-venda", terminalDays],
+    queryFn: async (): Promise<PosVendaData> => {
+      const cutoff = terminalDays === "all" ? null : new Date(Date.now() - terminalDays * 86_400_000).toISOString();
+      // Orçamento (status='quote') não é venda; mantém status nulo.
+      const base = (cols: string) => db.from("carboze_orders").select(cols)
+        .is("external_ref", null).or("status.is.null,status.neq.quote");
+
+      // Ativos: tudo que NÃO está finalizado — sem teto (limite de segurança alto).
+      const runActive = (cols: string) => base(cols)
+        .not("fulfillment_stage", "in", "(entregue,cancelado)")
+        .order("created_at", { ascending: false }).limit(2000);
+      // Finalizados: só dentro da janela, mais recentes primeiro.
+      const runTerminal = (cols: string) => {
+        let q = base(cols).in("fulfillment_stage", TERMINAL_STAGES)
+          .order("updated_at", { ascending: false }).limit(500);
+        if (cutoff) q = q.gte("updated_at", cutoff);
+        return q;
+      };
+
+      let act = await runActive(SELECT_COLS);
+      let term = await runTerminal(SELECT_COLS);
+      // Resiliência: se production_done ainda não existir, tenta sem ela.
+      if (act.error || term.error) {
+        act = await runActive(SELECT_BASE);
+        term = await runTerminal(SELECT_BASE);
+        if (act.error) throw act.error;
+        if (term.error) throw term.error;
+        act.data = (act.data || []).map((r: any) => ({ ...r, production_done: false }));
+        term.data = (term.data || []).map((r: any) => ({ ...r, production_done: false }));
       }
-      const list = (data || []) as PosVendaOrder[];
+
+      // Total de finalizados (para o "há mais N ocultos"). Só quando há janela.
+      let terminalTotal = (term.data || []).length;
+      if (cutoff) {
+        const cnt = await db.from("carboze_orders")
+          .select("*", { count: "exact", head: true })
+          .is("external_ref", null).or("status.is.null,status.neq.quote")
+          .in("fulfillment_stage", TERMINAL_STAGES);
+        terminalTotal = cnt.count ?? terminalTotal;
+      }
+
+      const list = [...(act.data || []), ...(term.data || [])] as PosVendaOrder[];
 
       // Enriquece com a foto do vendedor (profiles.avatar_url).
       const ids = [...new Set(list.map((o) => o.vendedor_id).filter(Boolean))] as string[];
@@ -120,7 +154,7 @@ export function usePosVendaOrders() {
         const map = new Map((profs || []).map((p: any) => [p.id, p.avatar_url]));
         for (const o of list) o.vendedor_avatar = (o.vendedor_id && map.get(o.vendedor_id)) || null;
       }
-      return list;
+      return { orders: list, terminalShown: (term.data || []).length, terminalTotal };
     },
     refetchInterval: 60_000,
   });

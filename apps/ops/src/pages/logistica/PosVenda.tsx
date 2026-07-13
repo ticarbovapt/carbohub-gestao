@@ -27,7 +27,11 @@ function VendedorTag({ name, avatar }: { name: string; avatar: string | null }) 
 }
 
 export default function PosVenda() {
-  const { data: orders = [], isLoading } = usePosVendaOrders();
+  // Janela dos FINALIZADOS (entregue/cancelado). Ativos sempre carregam 100%.
+  const [terminalDays, setTerminalDays] = useState<number | "all">(30);
+  const { data, isLoading } = usePosVendaOrders(terminalDays);
+  const orders = data?.orders ?? [];
+  const terminalHidden = Math.max(0, (data?.terminalTotal ?? 0) - (data?.terminalShown ?? 0));
   const updateStage = useUpdateFulfillmentStage();
   const [dragId, setDragId] = useState<string | null>(null);
   const [overStage, setOverStage] = useState<FulfillmentStage | null>(null);
@@ -120,6 +124,24 @@ export default function PosVenda() {
           description="Jornada das vendas manuais (Carbo Sales) — operações controlam da Nova Venda à Entrega"
           icon={ShoppingBag}
         />
+
+        {/* Janela dos finalizados — os ativos sempre aparecem 100%. */}
+        <div className="flex items-center justify-end gap-2 shrink-0 -mt-1 flex-wrap">
+          <span className="text-xs text-muted-foreground">Finalizados:</span>
+          <Select value={String(terminalDays)} onValueChange={(v) => setTerminalDays(v === "all" ? "all" : Number(v))}>
+            <SelectTrigger className="h-8 w-[150px] text-xs"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="30">Últimos 30 dias</SelectItem>
+              <SelectItem value="90">Últimos 90 dias</SelectItem>
+              <SelectItem value="all">Tudo</SelectItem>
+            </SelectContent>
+          </Select>
+          {terminalDays !== "all" && terminalHidden > 0 && (
+            <button onClick={() => setTerminalDays("all")} className="text-xs text-primary hover:underline">
+              +{terminalHidden} finalizado{terminalHidden > 1 ? "s" : ""} oculto{terminalHidden > 1 ? "s" : ""} · ver tudo
+            </button>
+          )}
+        </div>
 
         {isLoading ? (
           <div className="flex items-center justify-center gap-2 py-16 text-muted-foreground">

@@ -98,7 +98,7 @@ export default function Alertas() {
     }
 
     // 2/3/4) Pós-venda: pedido parado, produzido aguardando mover, NF pendente.
-    for (const o of posQ.data ?? []) {
+    for (const o of posQ.data?.orders ?? []) {
       const stg = o.fulfillment_stage;
       if (TERMINAL.has(stg)) continue;
       const idade = daysSince(o.updated_at ?? o.created_at);
