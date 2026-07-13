@@ -12,7 +12,7 @@ RETURNS jsonb LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $
     SELECT total, customer_name, vendedor_name,
            coalesce(sale_date, created_at::date) AS d
     FROM public.carboze_orders
-    WHERE coalesce(status, '') NOT IN ('quote', 'cancelled')
+    WHERE status IS NULL OR status NOT IN ('quote', 'cancelled')
   ),
   filt AS (
     SELECT * FROM base WHERE p_vendedor = 'all' OR coalesce(vendedor_name, '') = p_vendedor
