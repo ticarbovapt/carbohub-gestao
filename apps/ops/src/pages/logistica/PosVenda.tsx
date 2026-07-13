@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { toast } from "sonner";
 import { ShoppingBag, Loader2, User, Calendar, MapPin, Phone, Mail, Package } from "lucide-react";
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -77,8 +78,21 @@ export default function PosVenda() {
   // a caixa de confirmação ciente do estoque (a decisão final é do operador).
   // "Separado" é o ponto em que o estoque é REALMENTE deduzido — por isso também
   // passa pelo portão (B10: mover direto pra Separado não pode pular a conferência).
+  // Portão fiscal: não deixa o pedido ir pra Transporte/Entregue sem NF emitida.
+  // Considera "com NF" quem já tem bling_nf_id/nº ou já passou de "NF Finalizada".
+  const STAGE_ORDER = POSVENDA_STAGES.map((s) => s.key);
+  const hasNF = (o: PosVendaOrder) =>
+    !!o.bling_nf_id || !!o.invoice_number ||
+    STAGE_ORDER.indexOf(o.fulfillment_stage) >= STAGE_ORDER.indexOf("nf_finalizada");
+
   function requestStage(order: PosVendaOrder, stage: FulfillmentStage) {
     if (order.fulfillment_stage === stage) return;
+    if ((stage === "em_transporte" || stage === "entregue") && !hasNF(order)) {
+      toast.error("Emita a NF antes de enviar", {
+        description: "Este pedido ainda não tem nota fiscal finalizada. Passe por “Gerar Nota Fiscal” → “NF Finalizada” antes de mover para Transporte/Entrega.",
+      });
+      return;
+    }
     if (stage === "separando" || stage === "criar_op" || stage === "separado") { setPending({ order, target: stage }); return; }
     updateStage.mutate({ id: order.id, stage });
   }

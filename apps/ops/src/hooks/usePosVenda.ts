@@ -176,7 +176,7 @@ async function ensureProductionOrderForOrder(orderId: string): Promise<boolean> 
 
   const ord = await db
     .from("carboze_orders")
-    .select("order_number, customer_name, items")
+    .select("order_number, customer_name, items, delivery_date")
     .eq("id", orderId).single();
   if (ord.error || !ord.data) throw ord.error ?? new Error("Pedido não encontrado");
 
@@ -197,6 +197,8 @@ async function ensureProductionOrderForOrder(orderId: string): Promise<boolean> 
     sku_id: null,
     product_id: singleProductId,
     planned_quantity: totalQty,
+    // Prazo da OP = data de entrega do pedido (senão a OP some do KPI "Atrasadas").
+    need_date: ord.data.delivery_date || null,
     op_status: "rascunho",           // → coluna Backlog
     demand_source: "venda",          // enum fixo; a origem pós-venda fica em deviation_notes + source_order_id
     priority: 3,
