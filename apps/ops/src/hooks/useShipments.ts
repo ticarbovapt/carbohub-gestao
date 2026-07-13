@@ -1,6 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 import type { Shipment, ShipmentStatus } from "@/components/logistica/shipments";
+
+// Etapas do pedido em que a NF já está resolvida (portão fiscal).
+const NF_OK_STAGES = ["nf_finalizada", "em_transporte", "entregue"];
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Remessas (ops_shipments) — tabela interna do Carbo Ops. RLS: authenticated.
@@ -67,6 +71,25 @@ export function useShipmentMutations() {
 
   const update = useMutation({
     mutationFn: async (p: { id: string; status?: ShipmentStatus; carrierName?: string; trackingCode?: string }) => {
+      const avancandoExpedicao = p.status === "em_transporte" || p.status === "entregue";
+      // Pedido ligado (para portão fiscal e espelho de status).
+      let orderId: string | null | undefined;
+      if (avancandoExpedicao) {
+        const sh = await db.from("ops_shipments").select("order_id").eq("id", p.id).maybeSingle();
+        orderId = sh.data?.order_id as string | null | undefined;
+        // Portão fiscal: mesma regra do Rastreio — não deixa despachar/entregar
+        // sem NF. Vale nos DOIS lados (aqui abortamos antes de mover a remessa).
+        if (orderId) {
+          const ord = await db.from("carboze_orders")
+            .select("bling_nf_id, invoice_number, fulfillment_stage").eq("id", orderId).maybeSingle();
+          const o = ord.data;
+          const hasNF = !!o?.bling_nf_id || !!o?.invoice_number || NF_OK_STAGES.includes(o?.fulfillment_stage);
+          if (o && !hasNF) {
+            throw new Error("Pedido sem nota fiscal: emita a NF antes de enviar/entregar esta remessa.");
+          }
+        }
+      }
+
       const updates: Record<string, unknown> = { updated_at: new Date().toISOString() };
       if (p.status) updates.status = p.status;
       if (p.carrierName !== undefined) updates.carrier_name = p.carrierName.trim() || null;
@@ -77,21 +100,18 @@ export function useShipmentMutations() {
       // Espelha no pedido ligado só os status de expedição para frente.
       // Cancelamento NÃO é sincronizado por aqui: cancelar precisa estornar o
       // estoque, o que só acontece no fluxo do pedido (Rastreio de venda).
-      if (p.status === "em_transporte" || p.status === "entregue") {
-        const sh = await db.from("ops_shipments").select("order_id").eq("id", p.id).maybeSingle();
-        const orderId = sh.data?.order_id as string | null | undefined;
-        if (orderId) {
-          const ou = await db.from("carboze_orders")
-            .update({ fulfillment_stage: p.status, updated_at: new Date().toISOString() })
-            .eq("id", orderId);
-          if (ou.error) console.error("[shipments] falha ao sincronizar pedido:", ou.error);
-        }
+      if (avancandoExpedicao && orderId) {
+        const ou = await db.from("carboze_orders")
+          .update({ fulfillment_stage: p.status, updated_at: new Date().toISOString() })
+          .eq("id", orderId);
+        if (ou.error) console.error("[shipments] falha ao sincronizar pedido:", ou.error);
       }
     },
     onSuccess: () => {
       invalidate();
       qc.invalidateQueries({ queryKey: ["ops", "pos-venda"] });
     },
+    onError: (e: Error) => toast.error(e.message),
   });
 
   const remove = useMutation({
