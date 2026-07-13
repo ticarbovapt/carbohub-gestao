@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { HandCoins, CheckCircle2, Ban, ChevronLeft, ChevronRight, Plus } from "lucide-react";
+import { HandCoins, CheckCircle2, Ban, ChevronLeft, ChevronRight, Plus, FileDown } from "lucide-react";
 import { CarboBadge } from "@/components/ui/carbo-badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,6 +13,7 @@ import { usePersistedState } from "@/hooks/usePersistedState";
 import { useAuth } from "@/contexts/AuthContext";
 import {
   useReceivablesOpen, useReceivablesPaged, useUpdateReceivableStatus, useCreateReceivable,
+  useInvoicedOrdersNoReceivable, useGenerateReceivablesFromOrders,
   RECEIVABLE_STATUS_LABELS, type Receivable, type ReceivableStatus,
 } from "@/hooks/useReceivables";
 import { format, isPast, isToday, differenceInCalendarDays, addMonths, parseISO } from "date-fns";
@@ -49,6 +50,7 @@ export default function Recebiveis() {
   const [recAt, setRecAt] = useState(new Date().toISOString().slice(0, 10));
   const [showNew, setShowNew] = useState(false);
   const [form, setForm] = useState({ customer_name: "", amount: "", due_date: CURRENT_MONTH + "-01", notes: "" });
+  const [showGerar, setShowGerar] = useState(false);
 
   const mesSafe = isYm(mes) ? mes : CURRENT_MONTH;
   const usaPeriodo = !!(from || to);
@@ -83,9 +85,12 @@ export default function Recebiveis() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-2">
         <p className="text-sm text-muted-foreground">Títulos a receber de clientes — do sistema e do Bling — com baixa e aging.</p>
-        <Button onClick={() => setShowNew(true)} className="gap-2 carbo-gradient text-white"><Plus className="h-4 w-4" /> Novo recebível</Button>
+        <div className="flex items-center gap-2 shrink-0">
+          <Button variant="outline" onClick={() => setShowGerar(true)} className="gap-2"><FileDown className="h-4 w-4" /> Gerar de pedidos faturados</Button>
+          <Button onClick={() => setShowNew(true)} className="gap-2 carbo-gradient text-white"><Plus className="h-4 w-4" /> Novo recebível</Button>
+        </div>
       </div>
 
       {/* Aging */}
@@ -238,6 +243,9 @@ export default function Recebiveis() {
         </DialogContent>
       </Dialog>
 
+      {/* Gerar de pedidos faturados */}
+      <GerarDeVendasDialog open={showGerar} onClose={() => setShowGerar(false)} />
+
       {/* Novo recebível */}
       <Dialog open={showNew} onOpenChange={setShowNew}>
         <DialogContent>
@@ -257,5 +265,74 @@ export default function Recebiveis() {
         </DialogContent>
       </Dialog>
     </div>
+  );
+}
+
+// Vencimento estimado do pedido: data da venda + nº de dias achado no prazo
+// de pagamento (ex.: "30", "boleto 28 dias"). Sem número → vence na venda.
+const dueFromOrder = (o: { sale_date: string | null; created_at: string; payment_terms: string | null }) => {
+  const base = (o.sale_date || o.created_at || "").slice(0, 10) || CURRENT_MONTH + "-01";
+  const days = o.payment_terms ? Number(o.payment_terms.match(/\d+/)?.[0] ?? 0) : 0;
+  const d = parseISO(base + "T12:00:00");
+  d.setDate(d.getDate() + (Number.isFinite(days) ? days : 0));
+  return format(d, "yyyy-MM-dd");
+};
+
+function GerarDeVendasDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const { data: pedidos = [], isLoading } = useInvoicedOrdersNoReceivable();
+  const gen = useGenerateReceivablesFromOrders();
+  const [sel, setSel] = useState<Record<string, boolean>>({});
+  const [due, setDue] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    if (!open) return;
+    const s: Record<string, boolean> = {}, d: Record<string, string> = {};
+    pedidos.forEach((p) => { s[p.id] = true; d[p.id] = dueFromOrder(p); });
+    setSel(s); setDue(d);
+  }, [open, pedidos]);
+
+  const selecionados = pedidos.filter((p) => sel[p.id]);
+  const totalSel = selecionados.reduce((s, p) => s + p.total, 0);
+
+  const gerar = async () => {
+    const items = selecionados.map((p) => ({ order_id: p.id, customer_name: p.customer_name, amount: p.total, due_date: due[p.id] || dueFromOrder(p) }));
+    if (items.length) await gen.mutateAsync(items);
+    onClose();
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Gerar títulos a receber de pedidos faturados</DialogTitle>
+        </DialogHeader>
+        <p className="text-[11px] text-warning-foreground bg-warning/10 border border-warning/30 rounded-lg p-2">
+          Só gere de pedidos cujo título <strong>ainda não veio do Bling</strong>, pra não duplicar. O vencimento é estimado pelo prazo de pagamento — confira.
+        </p>
+        {isLoading ? <p className="text-sm text-muted-foreground py-6">Carregando…</p>
+          : pedidos.length === 0 ? <p className="text-sm text-muted-foreground py-6 text-center">Nenhum pedido faturado sem título a receber.</p>
+          : (
+            <div className="space-y-1.5 py-1">
+              {pedidos.map((p) => (
+                <div key={p.id} className="flex items-center gap-2 text-sm border-b border-border pb-1.5">
+                  <input type="checkbox" checked={!!sel[p.id]} onChange={(e) => setSel((s) => ({ ...s, [p.id]: e.target.checked }))} />
+                  <div className="flex-1 min-w-0">
+                    <p className="font-mono truncate">{p.order_number || "—"}</p>
+                    <p className="text-[11px] text-muted-foreground truncate">{p.customer_name || "—"} · {brl(p.total)}{p.payment_terms ? ` · ${p.payment_terms}` : ""}</p>
+                  </div>
+                  <Input type="date" className="w-[150px] h-9" value={due[p.id] ?? dueFromOrder(p)} onChange={(e) => setDue((d) => ({ ...d, [p.id]: e.target.value }))} />
+                </div>
+              ))}
+            </div>
+          )}
+        <DialogFooter className="flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <span className="text-xs text-muted-foreground">{selecionados.length} selecionado(s) · {brl(totalSel)}</span>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={onClose}>Cancelar</Button>
+            <Button onClick={gerar} disabled={selecionados.length === 0 || gen.isPending} className="carbo-gradient text-white">Gerar {selecionados.length} título(s)</Button>
+          </div>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

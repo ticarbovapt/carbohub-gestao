@@ -118,6 +118,50 @@ export function useCreateReceivable() {
   });
 }
 
+// ── Order-to-cash: gerar título a receber de pedido faturado ──────────────────
+export interface InvoicedOrder {
+  id: string; order_number: string | null; customer_name: string | null;
+  total: number; sale_date: string | null; payment_terms: string | null; created_at: string;
+}
+
+/** Pedidos FATURADOS que ainda não têm título a receber vinculado (order_id). */
+export function useInvoicedOrdersNoReceivable() {
+  return useQuery({
+    queryKey: ["invoiced-no-receivable"],
+    queryFn: async (): Promise<InvoicedOrder[]> => {
+      const { data: recs, error: e1 } = await db.from("receivables").select("order_id").not("order_id", "is", null);
+      if (e1) throw e1;
+      const linked = new Set((recs ?? []).map((r: any) => r.order_id));
+      const { data: orders, error } = await db
+        .from("carboze_orders_secure")
+        .select("*")
+        .eq("status", "invoiced")
+        .order("created_at", { ascending: false })
+        .limit(300);
+      if (error) throw error;
+      return ((orders ?? []) as any[])
+        .filter((o) => !linked.has(o.id))
+        .map((o) => ({ id: o.id, order_number: o.order_number ?? null, customer_name: o.customer_name ?? null, total: Number(o.total || 0), sale_date: o.sale_date ?? null, payment_terms: o.payment_terms ?? null, created_at: o.created_at }));
+    },
+  });
+}
+
+export function useGenerateReceivablesFromOrders() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (items: { order_id: string; customer_name: string | null; amount: number; due_date: string }[]) => {
+      const { data: u } = await supabase.auth.getUser();
+      const rows = items.map((i) => ({
+        source: "interno", customer_name: i.customer_name, order_id: i.order_id,
+        amount: i.amount, currency: "BRL", due_date: i.due_date, status: "programado", created_by: u?.user?.id ?? null,
+      }));
+      if (rows.length) { const { error } = await db.from("receivables").insert(rows); if (error) throw error; }
+    },
+    onSuccess: () => { invalidate(qc); qc.invalidateQueries({ queryKey: ["invoiced-no-receivable"] }); toast({ title: "Títulos a receber gerados" }); },
+    onError: (e: any) => toast({ title: "Erro ao gerar títulos", description: e.message, variant: "destructive" }),
+  });
+}
+
 // ── Dashboards ────────────────────────────────────────────────────────────────
 export function useFinReceivablesAging(source: string) {
   return useQuery({
