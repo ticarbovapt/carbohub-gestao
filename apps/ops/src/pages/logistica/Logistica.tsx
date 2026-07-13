@@ -9,7 +9,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { CarboBadge } from "@/components/ui/carbo-badge";
 import { Truck, Calculator, BarChart3, Plus, Loader2, Clock, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
-import { LogisticsKpis } from "@/components/logistica/shipments";
+import { LogisticsKpis, ShipmentsKanban, type Shipment } from "@/components/logistica/shipments";
+import { ShipmentDetailsDialog } from "@/components/logistica/ShipmentDetailsDialog";
 import { NovaRemessaDialog } from "@/components/logistica/NovaRemessaDialog";
 import { useShipments } from "@/hooks/useShipments";
 import { useCalculateFreight, localEstimate, FREIGHT_ORIGINS, type FreightCarrier, type FreightUnavailable } from "@/hooks/useFreightQuote";
@@ -22,7 +23,8 @@ const prazoFrete = (min: number | null, max: number | null) => {
 };
 
 export default function Logistica() {
-  const { data: shipments = [] } = useShipments();
+  const { data: shipments = [], isLoading: shipmentsLoading } = useShipments();
+  const [shipment, setShipment] = useState<Shipment | null>(null);
   const calc = useCalculateFreight();
   // Lembra a aba ativa entre recarregamentos.
   const [tab, setTab] = useState(() => localStorage.getItem("ops-logistica-tab") || "gestao");
@@ -88,6 +90,11 @@ export default function Logistica() {
 
           <TabsContent value="gestao" className="space-y-4 mt-4">
             <LogisticsKpis shipments={shipments} />
+            {shipmentsLoading ? (
+              <div className="flex items-center justify-center gap-2 py-16 text-muted-foreground"><Loader2 className="h-5 w-5 animate-spin" /> Carregando remessas…</div>
+            ) : (
+              <ShipmentsKanban shipments={shipments} onView={setShipment} />
+            )}
           </TabsContent>
 
           <TabsContent value="frete" className="space-y-6 mt-4">
@@ -184,6 +191,11 @@ export default function Logistica() {
       </div>
 
       <NovaRemessaDialog open={novaOpen} onOpenChange={setNovaOpen} />
+      <ShipmentDetailsDialog
+        shipment={shipment}
+        open={shipment !== null}
+        onOpenChange={(o) => { if (!o) setShipment(null); }}
+      />
     </div>
   );
 }
