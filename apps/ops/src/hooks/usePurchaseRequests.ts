@@ -31,22 +31,6 @@ export interface PurchaseRequest {
   created_at: string;
 }
 
-/** Minhas requisições (escopo próprio do solicitante). */
-export function useMyPurchaseRequests() {
-  return useQuery({
-    queryKey: ["ops", "my-purchase-requests"],
-    queryFn: async (): Promise<PurchaseRequest[]> => {
-      const { data: u } = await supabase.auth.getUser();
-      const uid = u?.user?.id;
-      let q = db.from("purchase_requests").select("*").order("created_at", { ascending: false }).limit(100);
-      if (uid) q = q.eq("requested_by", uid);
-      const { data, error } = await q;
-      if (error) throw error;
-      return (data || []) as PurchaseRequest[];
-    },
-  });
-}
-
 /** Minhas requisições PAGINADAS (server-side: .range() + contagem exata). */
 export function useMyPurchaseRequestsPaged(page: number, pageSize: number) {
   return useQuery({

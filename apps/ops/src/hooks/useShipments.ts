@@ -107,9 +107,16 @@ export function useShipmentMutations() {
         if (ou.error) console.error("[shipments] falha ao sincronizar pedido:", ou.error);
       }
     },
-    onSuccess: () => {
+    onSuccess: (_d, p) => {
       invalidate();
       qc.invalidateQueries({ queryKey: ["ops", "pos-venda"] });
+      // Cancelamento não é espelhado no pedido (estorno de estoque só no fluxo
+      // do pedido) — avisa pra não deixar o pedido vivo sem querer.
+      if (p.status === "cancelado") {
+        toast("Remessa cancelada — o pedido de venda NÃO foi cancelado.", {
+          description: "Se quiser cancelar o pedido, faça no Rastreio de venda (lá o estoque é estornado).",
+        });
+      }
     },
     onError: (e: Error) => toast.error(e.message),
   });

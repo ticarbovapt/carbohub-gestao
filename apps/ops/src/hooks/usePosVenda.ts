@@ -281,13 +281,17 @@ async function ensureShipmentForOrder(orderId: string): Promise<boolean> {
 
   const ord = await db
     .from("carboze_orders")
-    .select("order_number, customer_name, delivery_city, delivery_state, items")
+    .select("order_number, customer_name, delivery_address, delivery_city, delivery_state, delivery_zip, items")
     .eq("id", orderId).single();
   if (ord.error || !ord.data) throw ord.error ?? new Error("Pedido não encontrado");
 
   const items: any[] = Array.isArray(ord.data.items) ? ord.data.items : [];
   const itemCount = items.reduce((s, it) => s + (Number(it.quantity) || 0), 0);
-  const destino = [ord.data.delivery_city, ord.data.delivery_state].filter(Boolean).join(" / ") || null;
+  // Destino completo (logradouro · cidade/UF · CEP) — pra gerar etiqueta/coleta
+  // sem reabrir o pedido.
+  const cidadeUf = [ord.data.delivery_city, ord.data.delivery_state].filter(Boolean).join("/");
+  const destino = [ord.data.delivery_address, cidadeUf, ord.data.delivery_zip ? `CEP ${ord.data.delivery_zip}` : null]
+    .filter(Boolean).join(" · ") || null;
   const { data: auth } = await db.auth.getUser();
 
   const ins = await db.from("ops_shipments").insert({
@@ -364,7 +368,7 @@ export function useUpdateFulfillmentStage() {
       else if (res?.opCreated) toast.success("Etapa atualizada · OP(s) criada(s) no Backlog (uma por item).");
       else if (res?.stage === "separado") {
         const remessa = res.shipmentCreated ? " · remessa criada na Logística" : "";
-        if (res.deductedLines === 0) toast.warning("Separado, mas NADA foi deduzido do estoque — o pedido não tem produto vinculado." + remessa, { duration: 8000 });
+        if (res.deductedLines === 0) toast.warning("Separado, mas nada foi deduzido agora (já deduzido antes, ou o pedido não tem produto vinculado)." + remessa, { duration: 8000 });
         else toast.success("Separado · estoque deduzido do HUB-RN" + remessa + ".");
       }
       else if (res?.restoredLines && res.restoredLines > 0) toast.success("Etapa atualizada · estoque estornado para o HUB-RN.");
