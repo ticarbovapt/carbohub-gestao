@@ -143,7 +143,7 @@ export default function DashboardsLojas() {
                 </CardTitle>
                 <p className="text-xl font-bold text-green-500 leading-none tabular-nums mt-0.5">
                   {fmtK(totalFaturado)}
-                  <span className="text-xs font-normal text-muted-foreground ml-1">na rede</span>
+                  <span className="text-xs font-normal text-muted-foreground ml-1">acumulado</span>
                 </p>
               </div>
               <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold bg-green-500/10 text-green-500">R$</span>
