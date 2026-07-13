@@ -16,27 +16,55 @@ function ensureCtx(): AudioContext | null {
     return audioCtx;
   } catch { return null; }
 }
-function play(seq: Array<[number, number]>, type: OscillatorType, peak: number) {
-  const ctx = ensureCtx();
-  if (!ctx || ctx.state !== "running") return;
+function newMaster(ctx: AudioContext): GainNode {
   const master = ctx.createGain();
   master.gain.value = 0.9;
   master.connect(ctx.destination);
-  let t = ctx.currentTime;
-  for (const [f, dur] of seq) {
+  return master;
+}
+// Um tinido metálico curto de moeda: parcial inarmônica (2.76x) dá o "clink".
+function coinPing(ctx: AudioContext, master: GainNode, t: number, base: number, peak: number) {
+  [1, 2.76].forEach((mult, i) => {
     const o = ctx.createOscillator(), g = ctx.createGain();
-    o.type = type; o.frequency.value = f;
+    o.type = i === 0 ? "square" : "triangle";
+    o.frequency.value = base * mult;
+    o.connect(g); g.connect(master);
+    const p = i === 0 ? peak : peak * 0.4;
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(p, t + 0.006);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.13);
+    o.start(t); o.stop(t + 0.15);
+  });
+}
+// Moedas caindo no cofre (vibe de venda/caixa): cascata de tinidos subindo.
+function playCoin() {
+  const ctx = ensureCtx();
+  if (!ctx || ctx.state !== "running") return;
+  const master = newMaster(ctx);
+  const now = ctx.currentTime;
+  const notes = [1318.51, 1567.98, 1760.0, 2093.0, 1567.98, 1975.53, 2093.0, 2637.02];
+  notes.forEach((f, i) => {
+    const jitter = (i % 3) * 0.011;
+    coinPing(ctx, master, now + i * 0.055 + jitter, f, 0.5);
+  });
+}
+// Ding amigável pras demais notificações (não-venda).
+function playDing() {
+  const ctx = ensureCtx();
+  if (!ctx || ctx.state !== "running") return;
+  const master = newMaster(ctx);
+  let t = ctx.currentTime;
+  for (const [f, dur] of [[659.25, 0.4], [783.99, 0.4], [1046.5, 0.42]] as Array<[number, number]>) {
+    const o = ctx.createOscillator(), g = ctx.createGain();
+    o.type = "triangle"; o.frequency.value = f;
     o.connect(g); g.connect(master);
     g.gain.setValueAtTime(0.0001, t);
-    g.gain.exponentialRampToValueAtTime(peak, t + 0.015);
+    g.gain.exponentialRampToValueAtTime(0.5, t + 0.015);
     g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
     o.start(t); o.stop(t + dur + 0.02);
     t += dur * 0.7;
   }
 }
-// Moedinha (vibe de venda) x ding amigável pras demais notificações.
-function playCoin() { play([[987.77, 0.09], [1318.51, 0.5]], "square", 0.5); }
-function playDing() { play([[659.25, 0.4], [783.99, 0.4], [1046.5, 0.42]], "triangle", 0.5); }
 
 // Tempo real do Financeiro: mantém badges/KPIs ao vivo e dispara toast + som +
 // sininho quando chega uma notificação nova (sem precisar dar F5).
