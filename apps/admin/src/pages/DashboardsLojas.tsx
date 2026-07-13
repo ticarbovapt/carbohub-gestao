@@ -144,9 +144,8 @@ export default function DashboardsLojas() {
                     fill={`url(#grad-lojas-${v.key})`} maxBarSize={26}
                     radius={v.key === "outro" ? [5, 5, 0, 0] : [0, 0, 0, 0]} />
                 ))}
-                <Line yAxisId="unidades" type="monotone" dataKey="unidades" stroke="#0f172a"
-                  strokeWidth={2.5} dot={false} activeDot={{ r: 5 }}
-                  className="stroke-foreground" />
+                <Line yAxisId="unidades" type="monotone" dataKey="unidades" stroke="#f43f5e"
+                  strokeWidth={2.5} dot={false} activeDot={{ r: 5 }} />
               </ComposedChart>
             </ResponsiveContainer>
           </CardContent>
