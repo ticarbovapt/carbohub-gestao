@@ -60,7 +60,7 @@ function Nav({ onNavigate }: { onNavigate?: () => void }) {
                     <Lock className="h-3 w-3 ml-auto shrink-0" />
                   </div>
                 ) : (
-                  <NavLink key={item.path} to={item.path} className={subCls} onClick={onNavigate}>
+                  <NavLink key={item.path} to={item.path} end={item.end} className={subCls} onClick={onNavigate}>
                     <item.icon className="h-4 w-4 shrink-0" /> <span className="truncate">{item.label}</span>
                   </NavLink>
                 )

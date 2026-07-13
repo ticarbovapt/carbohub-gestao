@@ -102,7 +102,7 @@ export default function PosVenda() {
     <div className="p-4 md:p-6 h-[calc(100dvh-3.5rem)] flex flex-col overflow-hidden">
       <div className="max-w-[1700px] mx-auto w-full flex flex-col flex-1 min-h-0 gap-4">
         <CarboPageHeader
-          title="Pós-venda"
+          title="Rastreio de venda"
           description="Jornada das vendas manuais (Carbo Sales) — operações controlam da Nova Venda à Entrega"
           icon={ShoppingBag}
         />

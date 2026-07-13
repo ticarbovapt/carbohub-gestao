@@ -17,6 +17,8 @@ export interface OpsNavItem {
   label: string;
   icon: LucideIcon;
   ready?: boolean;
+  /** Marca ativo só na rota exata — evita acender junto com sub-rotas irmãs. */
+  end?: boolean;
   /** Origem no Controle (referência para o port fiel). */
   from?: string;
   /** Tela espelhada do Sales (só visualização). */
@@ -69,8 +71,8 @@ export const OPS_GROUPS: OpsNavGroup[] = [
   {
     label: "Logística",
     items: [
-      { path: "/logistica/pos-venda", label: "Pós-venda", icon: ShoppingBag, from: "carboze_orders", ready: true },
-      { path: "/logistica", label: "Logística", icon: Truck, from: "/logistics", ready: true },
+      { path: "/logistica/pos-venda", label: "Rastreio de venda", icon: ShoppingBag, from: "carboze_orders", ready: true },
+      { path: "/logistica", label: "Logística", icon: Truck, from: "/logistics", ready: true, end: true },
       { path: "/logistica/viagens", label: "Viagens & PC", icon: Plane, from: "/viagens", ready: true },
       { path: "/logistica/dashboard", label: "Dashboard de Logística", icon: BarChart3, from: "/dashboards/logistica", ready: true },
     ],
