@@ -3,7 +3,7 @@ import {
   Store, DollarSign, ShoppingCart, Boxes, Users, AlertTriangle, TrendingUp,
 } from "lucide-react";
 import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
+  ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
 } from "recharts";
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
 import { CarboKPI } from "@/components/ui/carbo-kpi";
@@ -45,12 +45,14 @@ export default function DashboardsLojas() {
   const { data: kpisPrev } = useLojasKpisPrev(30);
   const { data: series = [] } = useLojasTimeseries(30);
 
-  // Pivot: uma linha por dia, uma coluna por variante (para a barra empilhada).
+  // Pivot: uma linha por dia — receita por variante (colunas empilhadas) +
+  // unidades totais do dia (linha).
   const chartData = useMemo(() => {
     const byDay = new Map<string, Record<string, number | string>>();
     for (const r of series) {
-      const row = byDay.get(r.day) ?? { day: r.day, label: dayLabel(r.day) };
+      const row = byDay.get(r.day) ?? { day: r.day, label: dayLabel(r.day), unidades: 0 };
       row[r.variant] = (Number(row[r.variant]) || 0) + Number(r.total_amount || 0);
+      row.unidades = (Number(row.unidades) || 0) + Number(r.total_qty || 0);
       byDay.set(r.day, row);
     }
     return Array.from(byDay.values()).sort((a, b) => String(a.day).localeCompare(String(b.day)));
@@ -105,31 +107,47 @@ export default function DashboardsLojas() {
           icon={TrendingUp} iconColor="green" loading={kLoad} />
       </div>
 
-      {/* Receita por dia (empilhada por variante) */}
+      {/* Receita por variante (colunas) + unidades (linha) por dia */}
       {chartData.length > 0 && (
         <Card className="rounded-2xl border-0 shadow-sm">
           <CardHeader className="pb-1 pt-5 px-5">
             <CardTitle className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
-              Receita por dia · por variante
+              Receita por variante · unidades vendidas por dia
             </CardTitle>
           </CardHeader>
           <CardContent className="px-2 pb-4">
-            <ResponsiveContainer width="100%" height={240}>
-              <BarChart data={chartData} margin={{ top: 4, right: 12, left: -10, bottom: 0 }}>
+            <ResponsiveContainer width="100%" height={280}>
+              <ComposedChart data={chartData} margin={{ top: 8, right: 8, left: -10, bottom: 0 }}>
+                <defs>
+                  {VARIANTS.map((v) => (
+                    <linearGradient key={v.key} id={`grad-lojas-${v.key}`} x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor={v.color} stopOpacity={0.95} />
+                      <stop offset="100%" stopColor={v.color} stopOpacity={0.5} />
+                    </linearGradient>
+                  ))}
+                </defs>
                 <CartesianGrid strokeDasharray="3 3" className="stroke-border/50" vertical={false} />
                 <XAxis dataKey="label" tick={{ fontSize: 10 }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fontSize: 10 }} axisLine={false} tickLine={false}
+                <YAxis yAxisId="receita" tick={{ fontSize: 10 }} axisLine={false} tickLine={false}
                   tickFormatter={(x: number) => (x >= 1000 ? `${Math.round(x / 1000)}k` : String(x))} />
+                <YAxis yAxisId="unidades" orientation="right" tick={{ fontSize: 10, fill: "#64748b" }}
+                  axisLine={false} tickLine={false} allowDecimals={false} width={28} />
                 <Tooltip
                   contentStyle={{ background: "var(--background)", border: "1px solid var(--border)", borderRadius: 10, fontSize: 12 }}
-                  formatter={(v: number, n: string) => [fmtBRL(v), VARIANTS.find((x) => x.key === n)?.label ?? n]}
+                  formatter={(v: number, n: string) =>
+                    n === "unidades" ? [v, "Unidades"] : [fmtBRL(v), VARIANTS.find((x) => x.key === n)?.label ?? n]}
                   cursor={{ fill: "var(--muted)", opacity: 0.3 }} />
-                <Legend iconType="square" iconSize={10} formatter={(v) => VARIANTS.find((x) => x.key === v)?.label ?? v} />
+                <Legend iconType="circle" iconSize={9}
+                  formatter={(v) => (v === "unidades" ? "Unidades" : VARIANTS.find((x) => x.key === v)?.label ?? v)} />
                 {VARIANTS.map((v) => (
-                  <Bar key={v.key} dataKey={v.key} stackId="rev" fill={v.color} maxBarSize={28}
-                    radius={v.key === "outro" ? [4, 4, 0, 0] : [0, 0, 0, 0]} />
+                  <Bar key={v.key} yAxisId="receita" dataKey={v.key} stackId="rev"
+                    fill={`url(#grad-lojas-${v.key})`} maxBarSize={26}
+                    radius={v.key === "outro" ? [5, 5, 0, 0] : [0, 0, 0, 0]} />
                 ))}
-              </BarChart>
+                <Line yAxisId="unidades" type="monotone" dataKey="unidades" stroke="#0f172a"
+                  strokeWidth={2.5} dot={false} activeDot={{ r: 5 }}
+                  className="stroke-foreground" />
+              </ComposedChart>
             </ResponsiveContainer>
           </CardContent>
         </Card>
