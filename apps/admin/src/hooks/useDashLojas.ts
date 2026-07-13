@@ -7,11 +7,12 @@
 // public.profiles.allowed_interfaces (ponte carbo-admin). Sem a flag, os RPCs
 // retornam vazio (a página degrada com um aviso, não quebra).
 //
-// Nada é escrito; nada é copiado do controle legado. Só chamamos os mesmos
-// RPCs agregados que o próprio Portal de Vendas usa.
+// O período vem de um PeriodRange {from,to} (seletor 7d/15d/mês/personalizado).
+// Nada é escrito; nada é copiado do controle legado.
 // ─────────────────────────────────────────────────────────────────────────────
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { previousRange, type PeriodRange } from "@/components/ui/PeriodPicker";
 
 // Cliente apontado para o schema `produtos` (o client padrão é `public`).
 // Cast solto: os tipos gerados do Admin só conhecem `public`.
@@ -33,21 +34,6 @@ export interface LojasTimeseriesRow {
   day: string; variant: string; total_qty: number; total_amount: number;
 }
 
-// ── helpers de período (YYYY-MM-DD, igual ao portal de origem) ────────────────
-function period(days: number) {
-  const to = new Date();
-  const from = new Date();
-  from.setDate(to.getDate() - days);
-  return { p_from: from.toISOString().slice(0, 10), p_to: to.toISOString().slice(0, 10) };
-}
-function periodPrev(days: number) {
-  const to = new Date();
-  to.setDate(to.getDate() - days);
-  const from = new Date(to);
-  from.setDate(from.getDate() - days);
-  return { p_from: from.toISOString().slice(0, 10), p_to: to.toISOString().slice(0, 10) };
-}
-
 async function rpc<T>(fn: string, args?: Record<string, unknown>): Promise<T> {
   const { data, error } = await produtosDb.rpc(fn, args);
   if (error) throw new Error(error.message);
@@ -56,29 +42,30 @@ async function rpc<T>(fn: string, args?: Record<string, unknown>): Promise<T> {
 
 // ── hooks ─────────────────────────────────────────────────────────────────────
 
-/** KPIs do período atual (rede toda). */
-export function useLojasKpis(days = 30) {
+/** KPIs do período selecionado (rede toda). */
+export function useLojasKpis(range: PeriodRange) {
   return useQuery({
-    queryKey: ["dash-lojas-kpis", days],
+    queryKey: ["dash-lojas-kpis", range.from, range.to],
     queryFn: async (): Promise<LojasGlobalKpis | null> =>
-      ((await rpc<LojasGlobalKpis[]>("admin_get_global_kpis", period(days)))[0] ?? null),
+      ((await rpc<LojasGlobalKpis[]>("admin_get_global_kpis", { p_from: range.from, p_to: range.to }))[0] ?? null),
   });
 }
 
-/** KPIs do período imediatamente anterior — para o Δ% comparativo. */
-export function useLojasKpisPrev(days = 30) {
+/** KPIs do período imediatamente anterior (mesma duração) — para o Δ% comparativo. */
+export function useLojasKpisPrev(range: PeriodRange) {
+  const prev = previousRange(range);
   return useQuery({
-    queryKey: ["dash-lojas-kpis-prev", days],
+    queryKey: ["dash-lojas-kpis-prev", prev.from, prev.to],
     queryFn: async (): Promise<LojasGlobalKpis | null> =>
-      ((await rpc<LojasGlobalKpis[]>("admin_get_global_kpis", periodPrev(days)))[0] ?? null),
+      ((await rpc<LojasGlobalKpis[]>("admin_get_global_kpis", { p_from: prev.from, p_to: prev.to }))[0] ?? null),
   });
 }
 
 /** Série de vendas por dia (rede toda) — p_posto_id=null agrega todos os postos. */
-export function useLojasTimeseries(days = 30) {
+export function useLojasTimeseries(range: PeriodRange) {
   return useQuery({
-    queryKey: ["dash-lojas-timeseries", days],
+    queryKey: ["dash-lojas-timeseries", range.from, range.to],
     queryFn: () =>
-      rpc<LojasTimeseriesRow[]>("get_scoped_sales_timeseries", { p_posto_id: null, ...period(days) }),
+      rpc<LojasTimeseriesRow[]>("get_scoped_sales_timeseries", { p_posto_id: null, p_from: range.from, p_to: range.to }),
   });
 }

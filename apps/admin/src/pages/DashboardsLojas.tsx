@@ -1,28 +1,47 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
+import { Store, DollarSign, ShoppingCart, Boxes, Users, AlertTriangle, TrendingUp } from "lucide-react";
 import {
-  Store, DollarSign, ShoppingCart, Boxes, Users, AlertTriangle, TrendingUp,
-} from "lucide-react";
-import {
-  ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
+  ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LabelList,
 } from "recharts";
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
 import { CarboKPI } from "@/components/ui/carbo-kpi";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { PeriodPicker, presetRange, rangeLabel, type PeriodRange } from "@/components/ui/PeriodPicker";
 import { useAuth } from "@/contexts/AuthContext";
 import { fmtBRL, fmtBRLc, delta } from "@/lib/dash-format";
 import { useLojasKpis, useLojasKpisPrev, useLojasTimeseries } from "@/hooks/useDashLojas";
 
-// Rótulo curto de dia (dd/MM) para o eixo do gráfico diário.
+// Rótulo curto de dia (dd/MM) para o eixo dos gráficos diários.
 const dayLabel = (iso: string) =>
   new Date(iso + "T12:00:00").toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
 
-// Variantes do CarboZé (produtos.products.variant) e suas cores no gráfico.
-const VARIANTS: { key: string; label: string; color: string }[] = [
-  { key: "sache", label: "Sachê", color: "#22c55e" },
-  { key: "100ml", label: "100ml", color: "#3b82f6" },
-  { key: "1L", label: "1L", color: "#f59e0b" },
-  { key: "outro", label: "Outro", color: "#a78bfa" },
-];
+// ── Helpers de gráfico (mesma estética do Comercial) ──────────────────────────
+const fmtK = (v: number) =>
+  v >= 1_000_000 ? `R$${(v / 1_000_000).toFixed(1)}M`
+  : v >= 1000 ? `R$${(v / 1000).toFixed(0)}k`
+  : `R$${Math.round(v)}`;
+
+const TooltipBRL = ({ active, payload, label }: any) => {
+  if (!active || !payload?.length) return null;
+  const main = payload.find((p: any) => p.type === "bar") ?? payload[0];
+  return (
+    <div style={{ background: "#1a2234", border: "1px solid rgba(255,255,255,0.14)", boxShadow: "0 8px 28px rgba(0,0,0,0.45)", borderRadius: 10, padding: "8px 14px", fontSize: 12 }}>
+      <p style={{ color: "#fff", fontWeight: 700, marginBottom: 6, fontSize: 13 }}>{label}</p>
+      <p style={{ color: "#4ade80" }}>{Number(main.value).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</p>
+    </div>
+  );
+};
+
+const TooltipUn = ({ active, payload, label }: any) => {
+  if (!active || !payload?.length) return null;
+  const main = payload.find((p: any) => p.type === "bar") ?? payload[0];
+  return (
+    <div style={{ background: "#1a2234", border: "1px solid rgba(255,255,255,0.14)", boxShadow: "0 8px 28px rgba(0,0,0,0.45)", borderRadius: 10, padding: "8px 14px", fontSize: 12 }}>
+      <p style={{ color: "#fff", fontWeight: 700, marginBottom: 6, fontSize: 13 }}>{label}</p>
+      <p style={{ color: "#93c5fd" }}>{Number(main.value).toLocaleString("pt-BR")} unidades</p>
+    </div>
+  );
+};
 
 function AccessNotice() {
   return (
@@ -40,23 +59,28 @@ function AccessNotice() {
 
 export default function DashboardsLojas() {
   const { canAdmin } = useAuth();
+  const [range, setRange] = useState<PeriodRange>(() => presetRange("month"));
 
-  const { data: kpis, isLoading: kLoad } = useLojasKpis(30);
-  const { data: kpisPrev } = useLojasKpisPrev(30);
-  const { data: series = [] } = useLojasTimeseries(30);
+  const { data: kpis, isLoading: kLoad } = useLojasKpis(range);
+  const { data: kpisPrev } = useLojasKpisPrev(range);
+  const { data: series = [] } = useLojasTimeseries(range);
 
-  // Pivot: uma linha por dia — receita por variante (colunas empilhadas) +
-  // unidades totais do dia (linha).
+  // Agrega a série por dia: faturamento (R$) e unidades vendidas.
   const chartData = useMemo(() => {
-    const byDay = new Map<string, Record<string, number | string>>();
+    const byDay = new Map<string, { day: string; dia: string; faturado: number; unidades: number }>();
     for (const r of series) {
-      const row = byDay.get(r.day) ?? { day: r.day, label: dayLabel(r.day), unidades: 0 };
-      row[r.variant] = (Number(row[r.variant]) || 0) + Number(r.total_amount || 0);
-      row.unidades = (Number(row.unidades) || 0) + Number(r.total_qty || 0);
+      const row = byDay.get(r.day) ?? { day: r.day, dia: dayLabel(r.day), faturado: 0, unidades: 0 };
+      row.faturado += Number(r.total_amount || 0);
+      row.unidades += Number(r.total_qty || 0);
       byDay.set(r.day, row);
     }
-    return Array.from(byDay.values()).sort((a, b) => String(a.day).localeCompare(String(b.day)));
+    return Array.from(byDay.values()).sort((a, b) => a.day.localeCompare(b.day));
   }, [series]);
+
+  // Rótulos nos pontos só quando há poucos dias (evita poluir 30d+).
+  const showLabels = chartData.length > 0 && chartData.length <= 16;
+  const totalFaturado = chartData.reduce((s, d) => s + d.faturado, 0);
+  const totalUnidades = chartData.reduce((s, d) => s + d.unidades, 0);
 
   const dRevenue = delta(kpis?.total_revenue ?? 0, kpisPrev?.total_revenue ?? 0);
   const dSales = delta(kpis?.total_sales ?? 0, kpisPrev?.total_sales ?? 0);
@@ -78,17 +102,17 @@ export default function DashboardsLojas() {
         icon={Store}
         iconColor="green"
         title="Lojas — Visão Geral"
-        description="Consolidado da rede do Portal de Vendas (CarboZé) · últimos 30 dias"
+        description={`Consolidado da rede do Portal de Vendas (CarboZé) · ${rangeLabel(range)}`}
+        actions={<PeriodPicker value={range} onChange={setRange} />}
       />
 
       {!kLoad && !hasData && <AccessNotice />}
 
       {/* KPIs */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <CarboKPI title="Receita (30d)" value={fmtBRL(kpis?.total_revenue ?? 0)} icon={DollarSign}
-          iconColor="green" loading={kLoad}
-          trend={{ ...dRevenue, label: "vs período anterior" }} />
-        <CarboKPI title="Vendas (30d)" value={kpis?.total_sales ?? 0} icon={ShoppingCart}
+        <CarboKPI title="Receita" value={fmtBRL(kpis?.total_revenue ?? 0)} icon={DollarSign}
+          iconColor="green" loading={kLoad} trend={{ ...dRevenue, label: "vs período anterior" }} />
+        <CarboKPI title="Vendas" value={kpis?.total_sales ?? 0} icon={ShoppingCart}
           iconColor="blue" loading={kLoad} trend={{ ...dSales, label: "vs anterior" }} />
         <CarboKPI title="Unidades vendidas" value={kpis?.total_units ?? 0} icon={Boxes}
           iconColor="green" loading={kLoad} />
@@ -107,50 +131,83 @@ export default function DashboardsLojas() {
           icon={TrendingUp} iconColor="green" loading={kLoad} />
       </div>
 
-      {/* Receita por variante (colunas) + unidades (linha) por dia */}
-      {chartData.length > 0 && (
+      {/* Gráficos no estilo do Comercial */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+        {/* Faturamento por dia — área/coluna verde + linha */}
         <Card className="rounded-2xl border-0 shadow-sm">
           <CardHeader className="pb-1 pt-5 px-5">
-            <CardTitle className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
-              Receita por variante · unidades vendidas por dia
-            </CardTitle>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
+                  Total Faturado no Período
+                </CardTitle>
+                <p className="text-xl font-bold text-green-500 leading-none tabular-nums mt-0.5">
+                  {fmtK(totalFaturado)}
+                  <span className="text-xs font-normal text-muted-foreground ml-1">na rede</span>
+                </p>
+              </div>
+              <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold bg-green-500/10 text-green-500">R$</span>
+            </div>
           </CardHeader>
           <CardContent className="px-2 pb-4">
-            <ResponsiveContainer width="100%" height={280}>
-              <ComposedChart data={chartData} margin={{ top: 8, right: 8, left: -10, bottom: 0 }}>
-                <defs>
-                  {VARIANTS.map((v) => (
-                    <linearGradient key={v.key} id={`grad-lojas-${v.key}`} x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor={v.color} stopOpacity={0.95} />
-                      <stop offset="100%" stopColor={v.color} stopOpacity={0.5} />
-                    </linearGradient>
-                  ))}
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" className="stroke-border/50" vertical={false} />
-                <XAxis dataKey="label" tick={{ fontSize: 10 }} axisLine={false} tickLine={false} />
-                <YAxis yAxisId="receita" tick={{ fontSize: 10 }} axisLine={false} tickLine={false}
-                  tickFormatter={(x: number) => (x >= 1000 ? `${Math.round(x / 1000)}k` : String(x))} />
-                <YAxis yAxisId="unidades" orientation="right" tick={{ fontSize: 10, fill: "#64748b" }}
-                  axisLine={false} tickLine={false} allowDecimals={false} width={28} />
-                <Tooltip
-                  contentStyle={{ background: "var(--background)", border: "1px solid var(--border)", borderRadius: 10, fontSize: 12 }}
-                  formatter={(v: number, n: string) =>
-                    n === "unidades" ? [v, "Unidades"] : [fmtBRL(v), VARIANTS.find((x) => x.key === n)?.label ?? n]}
-                  cursor={{ fill: "var(--muted)", opacity: 0.3 }} />
-                <Legend iconType="circle" iconSize={9}
-                  formatter={(v) => (v === "unidades" ? "Unidades" : VARIANTS.find((x) => x.key === v)?.label ?? v)} />
-                {VARIANTS.map((v) => (
-                  <Bar key={v.key} yAxisId="receita" dataKey={v.key} stackId="rev"
-                    fill={`url(#grad-lojas-${v.key})`} maxBarSize={26}
-                    radius={v.key === "outro" ? [5, 5, 0, 0] : [0, 0, 0, 0]} />
-                ))}
-                <Line yAxisId="unidades" type="monotone" dataKey="unidades" stroke="#f43f5e"
-                  strokeWidth={2.5} dot={false} activeDot={{ r: 5 }} />
+            <ResponsiveContainer width="100%" height={220}>
+              <ComposedChart data={chartData} margin={{ top: 22, right: 8, bottom: 0, left: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.08)" vertical={false} />
+                <XAxis dataKey="dia" tick={{ fontSize: 11, fill: "#94a3b8" }} axisLine={false} tickLine={false} dy={4} />
+                <YAxis tick={{ fontSize: 10, fill: "#94a3b8" }} axisLine={false} tickLine={false} width={44}
+                  tickFormatter={v => v >= 1000 ? `${(v / 1000).toFixed(0)}k` : String(v)} />
+                <Tooltip cursor={{ fill: "rgba(148,163,184,0.08)" }} content={<TooltipBRL />} />
+                <Bar dataKey="faturado" fill="rgba(26,122,74,0.18)" stroke="#1a7a4a" strokeWidth={1.5} radius={[4, 4, 0, 0]} maxBarSize={48} isAnimationActive={false}>
+                  {showLabels && (
+                    <LabelList dataKey="faturado" position="top"
+                      formatter={(v: number) => v >= 1000 ? `R$${(v / 1000).toFixed(0)}k` : v > 0 ? `R$${Math.round(v)}` : ""}
+                      style={{ fontSize: 10, fill: "#1a7a4a", fontWeight: 700 }} />
+                  )}
+                </Bar>
+                <Line type="monotoneX" dataKey="faturado" stroke="#1a7a4a" strokeWidth={2.5}
+                  dot={{ r: 3, fill: "#1a7a4a", stroke: "#fff", strokeWidth: 2 }} activeDot={{ r: 5 }} isAnimationActive={false} />
               </ComposedChart>
             </ResponsiveContainer>
           </CardContent>
         </Card>
-      )}
+
+        {/* Unidades vendidas por dia — barras azuis + linha tracejada */}
+        <Card className="rounded-2xl border-0 shadow-sm">
+          <CardHeader className="pb-1 pt-5 px-5">
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
+                  Unidades Vendidas no Período
+                </CardTitle>
+                <p className="text-xl font-bold text-[#3b6ea5] leading-none tabular-nums mt-0.5">
+                  {totalUnidades.toLocaleString("pt-BR")}
+                  <span className="text-xs font-normal text-muted-foreground ml-1">unidades</span>
+                </p>
+              </div>
+              <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold bg-blue-500/10 text-blue-400">Qtd</span>
+            </div>
+          </CardHeader>
+          <CardContent className="px-2 pb-4">
+            <ResponsiveContainer width="100%" height={220}>
+              <ComposedChart data={chartData} margin={{ top: 22, right: 8, bottom: 0, left: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.08)" vertical={false} />
+                <XAxis dataKey="dia" tick={{ fontSize: 11, fill: "#94a3b8" }} axisLine={false} tickLine={false} dy={4} />
+                <YAxis allowDecimals={false} tick={{ fontSize: 10, fill: "#94a3b8" }} axisLine={false} tickLine={false} width={28} />
+                <Tooltip cursor={{ fill: "rgba(148,163,184,0.08)" }} content={<TooltipUn />} />
+                <Bar dataKey="unidades" fill="rgba(59,110,165,0.75)" radius={[5, 5, 0, 0]} maxBarSize={48} isAnimationActive={false}>
+                  {showLabels && (
+                    <LabelList dataKey="unidades" position="top"
+                      formatter={(v: number) => v > 0 ? String(v) : ""}
+                      style={{ fontSize: 11, fill: "#94a3b8", fontWeight: 700 }} />
+                  )}
+                </Bar>
+                <Line type="monotoneX" dataKey="unidades" stroke="#3b6ea5" strokeWidth={2.5} strokeDasharray="5 3"
+                  dot={{ r: 3, fill: "#3b6ea5", stroke: "#fff", strokeWidth: 2 }} activeDot={{ r: 5 }} isAnimationActive={false} />
+              </ComposedChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+      </div>
     </main>
   );
 }
