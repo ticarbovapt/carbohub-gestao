@@ -140,12 +140,19 @@ export default function PosVenda() {
                     isOver ? "border-carbo-green bg-carbo-green/5" : "border-border bg-board-surface/40"
                   }`}
                 >
-                  <div className="px-3 py-2.5 border-b border-border flex items-center justify-between shrink-0">
-                    <span className="flex items-center gap-2 text-sm font-semibold">
-                      <span className="h-2.5 w-2.5 rounded-full" style={{ background: stage.color }} />
-                      {stage.label}
+                  <div className="px-3 py-2.5 border-b border-border flex items-center justify-between gap-2 shrink-0">
+                    <span className="flex items-center gap-2 text-sm font-semibold min-w-0">
+                      <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ background: stage.color }} />
+                      <span className="truncate">{stage.label}</span>
                     </span>
-                    <span className="text-xs text-muted-foreground tabular-nums">{items.length}</span>
+                    <span className="flex items-center gap-1.5 shrink-0">
+                      {stage.key === "criar_op" && items.some((i) => i.production_done) && (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400" title="Produzidos aguardando mover para Em Separação">
+                          🏭 {items.filter((i) => i.production_done).length} pronto{items.filter((i) => i.production_done).length > 1 ? "s" : ""}
+                        </span>
+                      )}
+                      <span className="text-xs text-muted-foreground tabular-nums">{items.length}</span>
+                    </span>
                   </div>
                   <div className="p-2 space-y-2 md:overflow-y-auto md:flex-1 md:min-h-0">
                     {items.length === 0 ? (
