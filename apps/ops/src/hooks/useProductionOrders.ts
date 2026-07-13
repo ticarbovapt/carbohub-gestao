@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -44,6 +45,7 @@ export interface OpRow {
   production_route: ProductionRoute;
   created_at: string | null;
   updated_at: string | null; // última mudança (proxy de "recém-concluída/atualizada")
+  stage_since: string | null; // quando entrou na etapa atual → "parado há X"
   customer_name: string | null; // cliente do pedido de venda (OP vinda do pós-venda)
   source_order_id: string | null; // pedido de origem (pós-venda) → trava a quantidade
 }
@@ -54,7 +56,7 @@ export function useProductionOrders() {
     queryFn: async (): Promise<OpRow[]> => {
       const res = await db
         .from("production_orders")
-        .select("id, op_number, sku_id, product_id, planned_quantity, good_quantity, rejected_quantity, priority, op_status, demand_source, need_date, product_code, source_order_id, production_route, created_at, updated_at, customer_name")
+        .select("id, op_number, sku_id, product_id, planned_quantity, good_quantity, rejected_quantity, priority, op_status, demand_source, need_date, product_code, source_order_id, production_route, created_at, updated_at, stage_since, customer_name")
         .order("created_at", { ascending: false });
       if (res.error) throw res.error;
       const rows = res.data ?? [];
@@ -94,11 +96,63 @@ export function useProductionOrders() {
           production_route: (r.production_route ?? null) as ProductionRoute,
           created_at: r.created_at ?? null,
           updated_at: r.updated_at ?? null,
+          stage_since: r.stage_since ?? null,
           customer_name: (r.customer_name || custMap.get(r.source_order_id) || null) as string | null,
           source_order_id: r.source_order_id ?? null,
         };
       });
     },
+  });
+}
+
+// Tempo real do kanban de produção: mover card reflete na tela de todos os
+// logados ao vivo (sistema compartilhado). Assina production_orders e invalida
+// as queries do quadro + acompanhamentos.
+export function useProductionRealtime() {
+  const qc = useQueryClient();
+  useEffect(() => {
+    const inval = () => {
+      qc.invalidateQueries({ queryKey: ["ops", "production-orders"] });
+      qc.invalidateQueries({ queryKey: ["ops", "op-by-order"] });
+      qc.invalidateQueries({ queryKey: ["ops", "op-moves"] });
+      qc.invalidateQueries({ queryKey: ["ops", "production-dashboard"] });
+      qc.invalidateQueries({ queryKey: ["ops", "pos-venda"] });
+    };
+    const ch = supabase
+      .channel("ops-production-live")
+      .on("postgres_changes", { event: "*", schema: "public", table: "production_orders" }, inval)
+      .on("postgres_changes", { event: "*", schema: "public", table: "production_order_moves" }, inval)
+      .subscribe();
+    return () => { supabase.removeChannel(ch); };
+  }, [qc]);
+}
+
+// Última movimentação de cada OP (quem moveu, quando) — para exibir no card.
+export interface OpMove { movedByName: string | null; movedAt: string; }
+export function useLastOpMoves(opIds: string[], enabled: boolean) {
+  const ids = [...new Set(opIds.filter(Boolean))] as string[];
+  return useQuery({
+    queryKey: ["ops", "op-moves", [...ids].sort()],
+    enabled: enabled && ids.length > 0,
+    queryFn: async (): Promise<Record<string, OpMove>> => {
+      const res = await db
+        .from("production_order_moves")
+        .select("op_id, moved_by, moved_at")
+        .in("op_id", ids)
+        .order("moved_at", { ascending: false });
+      const latest: Record<string, { moved_by: string | null; moved_at: string }> = {};
+      for (const r of (res.data ?? [])) if (!latest[r.op_id]) latest[r.op_id] = { moved_by: r.moved_by, moved_at: r.moved_at };
+      const uids = [...new Set(Object.values(latest).map((r) => r.moved_by).filter(Boolean))] as string[];
+      const nameMap = new Map<string, string>();
+      if (uids.length) {
+        const p = await db.from("profiles").select("id, full_name").in("id", uids);
+        for (const x of (p.data ?? [])) nameMap.set(x.id, x.full_name);
+      }
+      const map: Record<string, OpMove> = {};
+      for (const [oid, r] of Object.entries(latest)) map[oid] = { movedByName: (r.moved_by && nameMap.get(r.moved_by)) || null, movedAt: r.moved_at };
+      return map;
+    },
+    refetchInterval: 60_000,
   });
 }
 

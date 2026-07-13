@@ -20,7 +20,7 @@ import { ConfirmOPDialog } from "@/components/producao/ConfirmOPDialog";
 import { DeleteConfirmDialog } from "@/components/producao/DeleteConfirmDialog";
 import { MoveOPDialog } from "@/components/producao/MoveOPDialog";
 import { toast } from "sonner";
-import { useProductionOrders, useProductionOrderMutations, type OpRow, type OpStatus as OpStatusT } from "@/hooks/useProductionOrders";
+import { useProductionOrders, useProductionOrderMutations, useProductionRealtime, useLastOpMoves, type OpRow, type OpStatus as OpStatusT } from "@/hooks/useProductionOrders";
 
 type OpStatus =
   | "rascunho" | "planejada" | "aguardando_separacao" | "separada" | "aguardando_liberacao"
@@ -81,6 +81,15 @@ function KpiCard({ icon: Icon, label, value, sub, color, onClick }: { icon: type
 const dt = (s: string | null) => (s ? new Date(s + "T00:00:00").toLocaleDateString("pt-BR") : "—");
 const todayISO = () => new Date().toISOString().slice(0, 10);
 const daysSince = (iso: string | null) => (iso ? Math.floor((Date.now() - new Date(iso).getTime()) / 86_400_000) : null);
+// "Parado há X" na etapa atual (a partir de stage_since).
+const dwellLabel = (iso: string | null): string | null => {
+  if (!iso) return null;
+  const ms = Date.now() - new Date(iso).getTime();
+  if (ms < 0 || Number.isNaN(ms)) return null;
+  const h = Math.floor(ms / 3_600_000);
+  if (h < 1) return "<1h";
+  return h < 24 ? `${h}h` : `${Math.floor(h / 24)}d`;
+};
 // Só faz sentido cobrar "produzível" nas etapas antes da separação.
 const EARLY_STAGES = new Set(["rascunho", "planejada", "aguardando_separacao"]);
 
@@ -88,6 +97,8 @@ export default function OrdensProducao() {
   const canManage = true; // acesso (gestor vs membro) entra na fase de permissões
   const { data: orders = [], isLoading } = useProductionOrders();
   const { remove, setStatus, conclude } = useProductionOrderMutations();
+  useProductionRealtime(); // move card → reflete na tela de todos ao vivo
+  const { data: lastMoves = {} } = useLastOpMoves(orders.map((o) => o.id), orders.length > 0);
   const producible = useProducibility();
   const { data: mrpProducts = [] } = useMrpProducts();
   const categoryById = useMemo(() => new Map(mrpProducts.map((p) => [p.id, p.category])), [mrpProducts]);
@@ -457,7 +468,7 @@ export default function OrdensProducao() {
                         onDragStart={(e) => { e.dataTransfer.setData("text/plain", o.id); setDragId(o.id); }}
                         onDragEnd={() => { setDragId(null); setOverCol(null); }}
                         className={cn(
-                          "rounded-xl border bg-card relative flex flex-col h-[212px] shrink-0",
+                          "rounded-xl border bg-card relative flex flex-col h-[232px] shrink-0",
                           dragId === o.id ? "opacity-50" : "",
                           o.priority <= 2 && !isDone ? "border-red-500/40 ring-1 ring-red-500/20" : "border-border",
                         )}
@@ -484,6 +495,12 @@ export default function OrdensProducao() {
                           <p className={cn("flex items-center gap-1 text-[11px] font-medium mt-1", o.need_date ? (overdue ? "text-red-500" : "text-muted-foreground") : "text-muted-foreground/50")}>
                             <CalendarClock className="h-3 w-3 shrink-0" /> {o.need_date ? <>Prazo: {dt(o.need_date)}{overdue && " · vencido"}</> : "Sem prazo"}
                           </p>
+                          {!isDone && dwellLabel(o.stage_since) && (
+                            <p className="flex items-center gap-1 text-[11px] text-muted-foreground mt-0.5 truncate" title="Tempo parado nesta etapa e quem moveu por último">
+                              <Clock className="h-3 w-3 shrink-0" /> parado há {dwellLabel(o.stage_since)}
+                              {lastMoves[o.id]?.movedByName && <span className="truncate"> · por {lastMoves[o.id].movedByName}</span>}
+                            </p>
+                          )}
                           {/* Badges: uma linha, sem estourar a altura */}
                           <div className="flex items-center gap-1 mt-auto overflow-hidden">
                             {o.production_route && (
