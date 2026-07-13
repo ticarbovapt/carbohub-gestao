@@ -148,7 +148,13 @@ export default function OrdensProducao() {
   const perdasTotais = orders.reduce((s, o) => s + (o.op_status !== "cancelada" ? (o.rejected_quantity ?? 0) : 0), 0);
   // Atrasadas: prazo vencido e ainda abertas. Prontas: dá pra separar agora.
   const atrasadas = abertas.filter((o) => o.need_date && o.need_date < todayISO()).length;
-  const prontas = abertas.filter((o) => EARLY_STAGES.has(o.op_status) && producible.check(o.product_id, o.planned_quantity, o.production_route) === "ok").length;
+  // Reserva: aloca o estoque às OPs abertas na ordem da fila (a 1ª leva; a próxima
+  // do mesmo insumo escasso fica "falta"). Elimina o "pronto" fantasma.
+  const prodVerdicts = useMemo(
+    () => producible.allocate(abertas.filter((o) => EARLY_STAGES.has(o.op_status))),
+    [producible, abertas],
+  );
+  const prontas = [...prodVerdicts.values()].filter((v) => v === "ok").length;
 
   // Reposição sugerida: produzíveis no PONTO DE REPOSIÇÃO (perto do mínimo, não só
   // abaixo) e sem OP aberta. Só avisa que está baixo e QUANTO falta — a fábrica
@@ -440,7 +446,7 @@ export default function OrdensProducao() {
                   </div>
                   <div className="p-2 space-y-2 overflow-y-auto flex-1 min-h-0">
                     {items.map((o) => {
-                      const prod = EARLY_STAGES.has(o.op_status) ? producible.check(o.product_id, o.planned_quantity, o.production_route) : null;
+                      const prod = EARLY_STAGES.has(o.op_status) ? (prodVerdicts.get(o.id) ?? null) : null;
                       const overdue = !!o.need_date && o.op_status !== "concluida" && o.op_status !== "cancelada" && o.need_date < todayISO();
                       const age = daysSince(o.created_at);
                       const isDone = o.op_status === "concluida" || o.op_status === "cancelada";

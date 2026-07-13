@@ -86,6 +86,52 @@ export function useProducibility() {
       return "falta";
     };
 
+    // RESERVA (soft-allocation): percorre as OPs abertas na ordem da fila e vai
+    // "gastando" o estoque. A 1ª que precisa do insumo escasso fica "ok" (reserva);
+    // a próxima do mesmo insumo fica "falta". Elimina o "pronto" fantasma e o
+    // estoque negativo por duas OPs olhando o mesmo saldo. É só leitura — não grava.
+    type AllocOp = {
+      id: string; product_id: string | null; planned_quantity: number;
+      production_route?: ProductionRoute | null; need_date?: string | null; priority?: number;
+    };
+    const allocate = (ops: AllocOp[]): Map<string, Producible> => {
+      const remaining = new Map<string, number>();
+      const avail = (insumoId: string) => {
+        if (!remaining.has(insumoId)) remaining.set(insumoId, hubStock(insumoId));
+        return remaining.get(insumoId) as number;
+      };
+      const needOf = (l: { insumoId: string; qtyBom: number; unit: string }) => {
+        const stockUnit = byId.get(l.insumoId)?.stock_unit || l.unit || "un";
+        return convertUnit(l.qtyBom, l.unit || stockUnit, stockUnit) ?? l.qtyBom;
+      };
+      const fits = (lines: { insumoId: string; qtyBom: number; unit: string }[]) =>
+        lines.every((l) => avail(l.insumoId) >= needOf(l));
+      const consume = (lines: { insumoId: string; qtyBom: number; unit: string }[]) =>
+        lines.forEach((l) => remaining.set(l.insumoId, avail(l.insumoId) - needOf(l)));
+
+      // Mesma ordem da fila do kanban: prazo mais próximo, depois prioridade.
+      const sorted = [...ops].sort((a, b) =>
+        (a.need_date ?? "9999-12-31").localeCompare(b.need_date ?? "9999-12-31")
+        || ((a.priority ?? 3) - (b.priority ?? 3)));
+
+      const verdict = new Map<string, Producible>();
+      for (const op of sorted) {
+        if (!op.product_id || !boms.get(op.product_id)?.length) { verdict.set(op.id, "sem_ficha"); continue; }
+        const qty = op.planned_quantity;
+        let chosen: { insumoId: string; qtyBom: number; unit: string }[] | null = null;
+        if (op.production_route === "zero") { const l = zeroLines(op.product_id, qty); if (fits(l)) chosen = l; }
+        else if (op.production_route === "rotular") { const l = directLines(op.product_id, qty); if (fits(l)) chosen = l; }
+        else {
+          const d = directLines(op.product_id, qty);
+          if (fits(d)) chosen = d;
+          else if (hasSemi(op.product_id)) { const z = zeroLines(op.product_id, qty); if (fits(z)) chosen = z; }
+        }
+        if (chosen) { consume(chosen); verdict.set(op.id, "ok"); }
+        else verdict.set(op.id, "falta");
+      }
+      return verdict;
+    };
+
     // id do semi-acabado (Envasado) que compõe o produto, ou null.
     const semiOf = (productId: string | null): string | null => {
       if (!productId) return null;
@@ -114,6 +160,6 @@ export function useProducibility() {
       .map(([ins, cnt]) => ({ insumoId: ins, name: byId.get(ins)?.name ?? "—", affected: cnt }))
       .sort((a, b) => b.affected - a.affected);
 
-    return { check, semiOf, bottlenecks };
+    return { check, allocate, semiOf, bottlenecks };
   }, [products, bomByProduct]);
 }
