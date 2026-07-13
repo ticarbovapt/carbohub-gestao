@@ -112,7 +112,7 @@ export default function PosVenda() {
             <Loader2 className="h-5 w-5 animate-spin" /> Carregando…
           </div>
         ) : (
-          <div className="flex gap-3 overflow-x-auto flex-1 min-h-0">
+          <div className="flex flex-col md:flex-row gap-3 overflow-y-auto md:overflow-x-auto flex-1 min-h-0">
             {POSVENDA_STAGES.map((stage) => {
               const items = byStage[stage.key] ?? [];
               const isOver = overStage === stage.key;
@@ -122,7 +122,7 @@ export default function PosVenda() {
                   onDragOver={(e) => { e.preventDefault(); setOverStage(stage.key); }}
                   onDragLeave={() => setOverStage((s) => (s === stage.key ? null : s))}
                   onDrop={() => drop(stage.key)}
-                  className={`flex-1 min-w-[280px] h-full rounded-2xl border flex flex-col transition-colors ${
+                  className={`w-full md:flex-1 md:min-w-[280px] md:h-full rounded-2xl border flex flex-col transition-colors ${
                     isOver ? "border-carbo-green bg-carbo-green/5" : "border-border bg-board-surface/40"
                   }`}
                 >
@@ -133,7 +133,7 @@ export default function PosVenda() {
                     </span>
                     <span className="text-xs text-muted-foreground tabular-nums">{items.length}</span>
                   </div>
-                  <div className="p-2 space-y-2 overflow-y-auto flex-1 min-h-0">
+                  <div className="p-2 space-y-2 md:overflow-y-auto md:flex-1 md:min-h-0">
                     {items.length === 0 ? (
                       <p className="text-xs text-muted-foreground/60 text-center py-6">Vazio</p>
                     ) : (

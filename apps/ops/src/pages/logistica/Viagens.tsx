@@ -91,8 +91,8 @@ export default function Viagens() {
             <div className="rounded-lg border bg-card overflow-x-auto">
               <Table>
                 <TableHeader><TableRow>
-                  <TableHead>Destino</TableHead><TableHead>Solicitante</TableHead><TableHead>Ida</TableHead>
-                  <TableHead className="text-right">Valor</TableHead><TableHead>Status</TableHead><TableHead>PC</TableHead><TableHead className="w-[150px]">Ações</TableHead>
+                  <TableHead>Destino</TableHead><TableHead className="hidden md:table-cell">Solicitante</TableHead><TableHead className="hidden md:table-cell">Ida</TableHead>
+                  <TableHead className="text-right">Valor</TableHead><TableHead>Status</TableHead><TableHead className="hidden md:table-cell">PC</TableHead><TableHead className="w-[150px]">Ações</TableHead>
                 </TableRow></TableHeader>
                 <TableBody>
                   {rows.length === 0 && (
@@ -105,11 +105,11 @@ export default function Viagens() {
                   {rows.map((v) => (
                     <TableRow key={v.id}>
                       <TableCell><p className="font-medium">{v.destino}</p><p className="text-xs text-muted-foreground truncate max-w-[220px]">{v.objetivo}</p></TableCell>
-                      <TableCell className="text-sm">{v.solicitante}</TableCell>
-                      <TableCell className="text-sm text-muted-foreground">{dt(v.data_ida)}</TableCell>
+                      <TableCell className="hidden md:table-cell text-sm">{v.solicitante}</TableCell>
+                      <TableCell className="hidden md:table-cell text-sm text-muted-foreground">{dt(v.data_ida)}</TableCell>
                       <TableCell className="text-right font-semibold tabular-nums">{brl(v.valor_estimado)}</TableCell>
                       <TableCell><span className={cn("text-xs font-semibold px-2 py-0.5 rounded-full", STATUS_COLOR[v.status])}>{STATUS_LABEL[v.status]}</span></TableCell>
-                      <TableCell>{v.pc_status ? <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-muted">{PC_LABEL[v.pc_status] ?? v.pc_status}</span> : <span className="text-xs text-muted-foreground">—</span>}</TableCell>
+                      <TableCell className="hidden md:table-cell">{v.pc_status ? <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-muted">{PC_LABEL[v.pc_status] ?? v.pc_status}</span> : <span className="text-xs text-muted-foreground">—</span>}</TableCell>
                       <TableCell>
                         <div className="flex items-center gap-1">
                           <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setDetalhe(v)} title="Detalhes"><Eye className="h-4 w-4" /></Button>

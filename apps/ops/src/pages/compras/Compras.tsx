@@ -47,8 +47,8 @@ function KpiCard({ icon: Icon, label, value, color }: { icon: typeof Clock; labe
   return (
     <CarboCard variant="kpi" padding="sm">
       <CarboCardContent>
-        <div className="flex items-center gap-2 mb-1"><Icon className={`h-4 w-4 ${color}`} /><span className="text-xs text-muted-foreground">{label}</span></div>
-        <p className="text-2xl font-bold">{value}</p>
+        <div className="flex items-center gap-2 mb-1"><Icon className={`h-4 w-4 shrink-0 ${color}`} /><span className="text-xs text-muted-foreground truncate">{label}</span></div>
+        <p className="text-xl sm:text-2xl font-bold tabular-nums truncate">{value}</p>
       </CarboCardContent>
     </CarboCard>
   );
@@ -61,7 +61,7 @@ function SimpleTable({ headers, rows, showValor = true }: { headers: string[]; r
       <CarboTable>
         <CarboTableHeader>
           <CarboTableRow>
-            {headers.map((h) => <CarboTableHead key={h}>{h}</CarboTableHead>)}
+            {headers.map((h, i) => <CarboTableHead key={h} className={i === 2 ? "hidden md:table-cell" : undefined}>{h}</CarboTableHead>)}
             {showValor && <CarboTableHead className="text-right">Valor</CarboTableHead>}
             <CarboTableHead>Status</CarboTableHead>
           </CarboTableRow>
@@ -71,7 +71,7 @@ function SimpleTable({ headers, rows, showValor = true }: { headers: string[]; r
             <CarboTableRow key={r.id}>
               <CarboTableCell className="font-mono text-sm font-medium">{r.col1}</CarboTableCell>
               <CarboTableCell>{r.col2}</CarboTableCell>
-              <CarboTableCell className="text-sm text-muted-foreground">{r.col3}</CarboTableCell>
+              <CarboTableCell className="hidden md:table-cell text-sm text-muted-foreground">{r.col3}</CarboTableCell>
               {showValor && <CarboTableCell className="text-right font-semibold">{r.valor ? brl(r.valor) : "—"}</CarboTableCell>}
               <CarboTableCell><CarboBadge variant={r.statusVariant} dot>{r.status}</CarboBadge></CarboTableCell>
             </CarboTableRow>

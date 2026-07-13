@@ -105,7 +105,10 @@ export default function OrdensProducao() {
   // Abre no Kanban por padrão e LEMBRA a última escolha (persiste no F5).
   const [viewMode, setViewMode] = useState<"list" | "kanban">(() => {
     const saved = typeof localStorage !== "undefined" ? localStorage.getItem("ops:op-view") : null;
-    return saved === "list" || saved === "kanban" ? saved : "kanban";
+    if (saved === "list" || saved === "kanban") return saved;
+    // Sem preferência salva: no mobile, Lista (evita rolagem horizontal de 8 colunas).
+    const isMobile = typeof window !== "undefined" && window.innerWidth < 768;
+    return isMobile ? "list" : "kanban";
   });
   useEffect(() => {
     try { localStorage.setItem("ops:op-view", viewMode); } catch { /* ignora */ }
@@ -225,14 +228,14 @@ export default function OrdensProducao() {
             <Input placeholder="Buscar por OP ou SKU..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="pl-9" />
           </div>
           <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="w-[220px]"><SelectValue placeholder="Todos os status" /></SelectTrigger>
+            <SelectTrigger className="w-full sm:w-[220px]"><SelectValue placeholder="Todos os status" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Todos os status</SelectItem>
               {Object.entries(OP_STATUS_LABELS).map(([k, l]) => <SelectItem key={k} value={k}>{l}</SelectItem>)}
             </SelectContent>
           </Select>
           <Select value={priorityFilter} onValueChange={setPriorityFilter}>
-            <SelectTrigger className="w-[200px]"><SelectValue placeholder="Todas as prioridades" /></SelectTrigger>
+            <SelectTrigger className="w-full sm:w-[200px]"><SelectValue placeholder="Todas as prioridades" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Todas as prioridades</SelectItem>
               {Object.entries(PRIORITY_LABELS).map(([k, l]) => <SelectItem key={k} value={k}>{l}</SelectItem>)}
@@ -378,7 +381,7 @@ export default function OrdensProducao() {
         {isLoading ? (
           <div className="flex items-center justify-center gap-2 py-16 text-muted-foreground"><Loader2 className="h-5 w-5 animate-spin" /> Carregando…</div>
         ) : viewMode === "kanban" ? (
-          <div className="flex gap-3 overflow-x-auto h-[70vh] pb-3">
+          <div className="flex gap-3 overflow-x-auto h-[60vh] md:h-[70vh] pb-3">
             {KANBAN_COLUMNS.map((col) => {
               // Concluída/Bloqueada acumulam — mostra as recentes e resume o resto.
               const CAP = 12;
@@ -496,7 +499,7 @@ export default function OrdensProducao() {
                               if (!tc) return;
                               setPendingMove({ op: o, toStatus: tc.statuses[0], fromLabel: col.label, toLabel: tc.label, skipWarning: skippedColFor(o) === tc.id });
                             }}>
-                              <SelectTrigger className="h-7 text-xs"><SelectValue /></SelectTrigger>
+                              <SelectTrigger className="h-9 text-xs"><SelectValue /></SelectTrigger>
                               <SelectContent>
                                 {KANBAN_COLUMNS.map((c) => (
                                   <SelectItem key={c.id} value={c.id} disabled={skippedColFor(o) === c.id}>
