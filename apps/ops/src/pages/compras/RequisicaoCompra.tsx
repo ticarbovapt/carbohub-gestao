@@ -11,7 +11,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { CarboTable, CarboTableHeader, CarboTableBody, CarboTableRow, CarboTableHead, CarboTableCell } from "@/components/ui/carbo-table";
 import { toast } from "sonner";
-import { useMyPurchaseRequests, useCreatePurchaseRequest, type ReqItem } from "@/hooks/usePurchaseRequests";
+import { useMyPurchaseRequestsPaged, useCreatePurchaseRequest, type ReqItem } from "@/hooks/usePurchaseRequests";
+import { PaginationControls } from "@/components/ui/pagination-controls";
 import { CotacoesPanel } from "@/components/compras/CotacoesPanel";
 import { persistDraftQuotes, type DraftQuote } from "@/hooks/useCotacoes";
 
@@ -67,7 +68,14 @@ interface RCPrefill {
 
 export default function RequisicaoCompra() {
   const create = useCreatePurchaseRequest();
-  const { data: minhas = [], isLoading } = useMyPurchaseRequests();
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
+  const { data: paged, isLoading } = useMyPurchaseRequestsPaged(page, pageSize);
+  const minhas = paged?.rows ?? [];
+  const total = paged?.total ?? 0;
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const goPage = (p: number) => setPage(Math.min(totalPages, Math.max(1, p)));
+  const changePageSize = (s: number) => { setPageSize(s); setPage(1); };
 
   // Vindo da Central de Alertas com "Requisitar" → já abre com o item preenchido.
   const pref = (useLocation().state as { prefill?: RCPrefill } | null)?.prefill;
@@ -329,35 +337,50 @@ export default function RequisicaoCompra() {
           <CarboCardContent>
             {isLoading ? (
               <p className="py-8 text-center text-sm text-muted-foreground">Carregando…</p>
-            ) : minhas.length === 0 ? (
+            ) : total === 0 ? (
               <p className="py-8 text-center text-sm text-muted-foreground">Você ainda não criou requisições.</p>
             ) : (
-              <CarboTable>
-                <CarboTableHeader>
-                  <CarboTableRow>
-                    <CarboTableHead>Nº RC</CarboTableHead>
-                    <CarboTableHead>Escopo</CarboTableHead>
-                    <CarboTableHead className="text-right">Valor</CarboTableHead>
-                    <CarboTableHead>Status</CarboTableHead>
-                    <CarboTableHead>Data</CarboTableHead>
-                  </CarboTableRow>
-                </CarboTableHeader>
-                <CarboTableBody>
-                  {minhas.map((r) => {
-                    const st = STATUS_LABEL[r.status] ?? { label: r.status, variant: "default" as const };
-                    const esc = (r as any).escopo === "setor" ? "Do setor" : "Individual";
-                    return (
-                      <CarboTableRow key={r.id}>
-                        <CarboTableCell className="font-medium">{r.rc_number === "TEMP" ? "—" : r.rc_number}</CarboTableCell>
-                        <CarboTableCell><CarboBadge variant={(r as any).escopo === "setor" ? "info" : "secondary"}>{esc}</CarboBadge></CarboTableCell>
-                        <CarboTableCell className="text-right">{brl(Number(r.estimated_value))}</CarboTableCell>
-                        <CarboTableCell><CarboBadge variant={st.variant}>{st.label}</CarboBadge></CarboTableCell>
-                        <CarboTableCell>{fmtDate(r.created_at)}</CarboTableCell>
-                      </CarboTableRow>
-                    );
-                  })}
-                </CarboTableBody>
-              </CarboTable>
+              <>
+                <CarboTable>
+                  <CarboTableHeader>
+                    <CarboTableRow>
+                      <CarboTableHead>Nº RC</CarboTableHead>
+                      <CarboTableHead>Escopo</CarboTableHead>
+                      <CarboTableHead className="text-right">Valor</CarboTableHead>
+                      <CarboTableHead>Status</CarboTableHead>
+                      <CarboTableHead>Data</CarboTableHead>
+                    </CarboTableRow>
+                  </CarboTableHeader>
+                  <CarboTableBody>
+                    {minhas.map((r) => {
+                      const st = STATUS_LABEL[r.status] ?? { label: r.status, variant: "default" as const };
+                      const esc = (r as any).escopo === "setor" ? "Do setor" : "Individual";
+                      return (
+                        <CarboTableRow key={r.id}>
+                          <CarboTableCell className="font-medium">{r.rc_number === "TEMP" ? "—" : r.rc_number}</CarboTableCell>
+                          <CarboTableCell><CarboBadge variant={(r as any).escopo === "setor" ? "info" : "secondary"}>{esc}</CarboBadge></CarboTableCell>
+                          <CarboTableCell className="text-right">{brl(Number(r.estimated_value))}</CarboTableCell>
+                          <CarboTableCell><CarboBadge variant={st.variant}>{st.label}</CarboBadge></CarboTableCell>
+                          <CarboTableCell>{fmtDate(r.created_at)}</CarboTableCell>
+                        </CarboTableRow>
+                      );
+                    })}
+                  </CarboTableBody>
+                </CarboTable>
+                <PaginationControls
+                  currentPage={page}
+                  totalPages={totalPages}
+                  totalItems={total}
+                  startIndex={(page - 1) * pageSize + 1}
+                  endIndex={Math.min(page * pageSize, total)}
+                  pageSize={pageSize}
+                  pageSizeOptions={[20, 50, 100]}
+                  hasNextPage={page < totalPages}
+                  hasPrevPage={page > 1}
+                  onPageChange={goPage}
+                  onPageSizeChange={changePageSize}
+                />
+              </>
             )}
           </CarboCardContent>
         </CarboCard>

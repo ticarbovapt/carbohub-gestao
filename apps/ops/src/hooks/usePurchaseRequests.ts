@@ -47,6 +47,29 @@ export function useMyPurchaseRequests() {
   });
 }
 
+/** Minhas requisições PAGINADAS (server-side: .range() + contagem exata). */
+export function useMyPurchaseRequestsPaged(page: number, pageSize: number) {
+  return useQuery({
+    queryKey: ["ops", "my-purchase-requests", "paged", page, pageSize],
+    queryFn: async (): Promise<{ rows: PurchaseRequest[]; total: number }> => {
+      const { data: u } = await supabase.auth.getUser();
+      const uid = u?.user?.id;
+      const from = (page - 1) * pageSize;
+      const to = from + pageSize - 1;
+      let q = db.from("purchase_requests")
+        .select("*", { count: "exact" })
+        .order("created_at", { ascending: false })
+        .range(from, to);
+      if (uid) q = q.eq("requested_by", uid);
+      const { data, error, count } = await q;
+      if (error) throw error;
+      return { rows: (data || []) as PurchaseRequest[], total: count ?? 0 };
+    },
+    // Mantém a página anterior visível enquanto a nova carrega (sem "piscar").
+    placeholderData: (prev) => prev,
+  });
+}
+
 export interface CreatePRInput {
   cost_center: string;
   purchase_type: string;
