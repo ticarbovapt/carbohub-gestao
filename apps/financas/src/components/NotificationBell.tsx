@@ -1,7 +1,7 @@
 import { useState } from "react";
 import {
   AtSign, Bell, Bug, Check, CheckCheck, Clock, ListTodo,
-  MessageCircle, Trash2, WifiOff, FileText, Package,
+  MessageCircle, Trash2, WifiOff, FileText, Package, ShoppingCart,
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -23,6 +23,7 @@ const TYPE_CONFIG: Record<string, { Icon: React.ElementType; label: string; colo
   ecommerce_disconnected: { Icon: WifiOff,       label: "E-commerce caído", color: "text-destructive", bg: "bg-destructive/10" },
   finance_rc_pendente:    { Icon: FileText,      label: "Requisição",     color: "text-amber-600",   bg: "bg-amber-500/10" },
   finance_oc_nova:        { Icon: Package,       label: "Ordem de compra", color: "text-blue-500",   bg: "bg-blue-500/10" },
+  ecommerce_sale:         { Icon: ShoppingCart,  label: "Nova venda",     color: "text-emerald-600", bg: "bg-emerald-500/10" },
 };
 
 function NotificationItem({

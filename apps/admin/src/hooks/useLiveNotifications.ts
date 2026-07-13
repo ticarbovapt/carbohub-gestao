@@ -28,35 +28,20 @@ function play(seq: Array<[number, number]>, type: OscillatorType, peak: number) 
     }
   } catch { /* som é bônus */ }
 }
-// Moedinha (vibe de venda) x ding amigável pras demais notificações.
+// Moedinha (vibe de venda): "ca-ching" — toque curto agudo + repique.
 function playCoin() { play([[987.77, 0.09], [1318.51, 0.5]], "square", 0.5); }
+// Ding amigável pra outras notificações.
 function playDing() { play([[659.25, 0.4], [783.99, 0.4], [1046.5, 0.42]], "triangle", 0.5); }
 
-// Tempo real do Financeiro: mantém badges/KPIs ao vivo e dispara toast + som +
-// sininho quando chega uma notificação nova (sem precisar dar F5).
-export function useFinanceRealtime() {
+// Ouve notificações novas ao vivo: toast + som + atualiza o sininho, sem F5.
+export function useLiveNotifications() {
   const qc = useQueryClient();
   const { user } = useAuth();
 
   useEffect(() => {
-    const inval = () => {
-      qc.invalidateQueries({ queryKey: ["purchasing-badges"] });
-      qc.invalidateQueries({ queryKey: ["purchasing-kpis"] });
-    };
-    const ch = supabase
-      .channel("finance-live")
-      .on("postgres_changes", { event: "*", schema: "public", table: "purchase_requests" }, inval)
-      .on("postgres_changes", { event: "*", schema: "public", table: "purchase_orders" }, inval)
-      .on("postgres_changes", { event: "*", schema: "public", table: "purchase_payables" }, inval)
-      .on("postgres_changes", { event: "*", schema: "public", table: "receivables" }, inval)
-      .subscribe();
-    return () => { supabase.removeChannel(ch); };
-  }, [qc]);
-
-  useEffect(() => {
     if (!user?.id) return;
     const ch = supabase
-      .channel("finance-notif-" + user.id)
+      .channel("live-notif-" + user.id)
       .on(
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "notifications", filter: `user_id=eq.${user.id}` },

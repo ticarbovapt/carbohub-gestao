@@ -5,6 +5,7 @@ import { TopBar } from "@/components/TopBar";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useAccessPing } from "@/hooks/useAccessPing";
+import { useLiveNotifications } from "@/hooks/useLiveNotifications";
 
 // Itens de topo (acesso/estrutura) + grupos recém-trazidos do Ops.
 const NAV_TOP = [
@@ -69,6 +70,7 @@ export function Layout() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [deskOpen, setDeskOpen] = useState(true);
   useAccessPing("carbo_admin");
+  useLiveNotifications();
 
   const handleMenu = () => {
     if (isMobile) setMobileOpen(true);

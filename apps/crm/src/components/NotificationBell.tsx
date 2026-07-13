@@ -1,7 +1,7 @@
 import { useState } from "react";
 import {
   AtSign, Bell, Bug, Check, CheckCheck, Clock, ListTodo,
-  MessageCircle, Trash2, WifiOff,
+  MessageCircle, Trash2, WifiOff, ShoppingCart,
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -21,6 +21,7 @@ const TYPE_CONFIG: Record<string, { Icon: React.ElementType; label: string; colo
   bug_report:             { Icon: Bug,           label: "Bug reportado",  color: "text-destructive", bg: "bg-destructive/10" },
   bug_resolved:           { Icon: CheckCheck,    label: "Bug corrigido",  color: "text-emerald-600", bg: "bg-emerald-500/10" },
   ecommerce_disconnected: { Icon: WifiOff,       label: "E-commerce caído", color: "text-destructive", bg: "bg-destructive/10" },
+  ecommerce_sale:         { Icon: ShoppingCart,  label: "Nova venda",     color: "text-emerald-600", bg: "bg-emerald-500/10" },
 };
 
 function NotificationItem({
