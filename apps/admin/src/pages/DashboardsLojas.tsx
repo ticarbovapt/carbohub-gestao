@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import {
-  Store, DollarSign, ShoppingCart, Boxes, Users, AlertTriangle, Trophy, TrendingUp,
+  Store, DollarSign, ShoppingCart, Boxes, Users, AlertTriangle, TrendingUp,
 } from "lucide-react";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
@@ -8,17 +8,13 @@ import {
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
 import { CarboKPI } from "@/components/ui/carbo-kpi";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/contexts/AuthContext";
-import { fmtBRL, fmtBRLc, fmtNum, delta } from "@/lib/dash-format";
+import { fmtBRL, fmtBRLc, delta } from "@/lib/dash-format";
+import { useLojasKpis, useLojasKpisPrev, useLojasTimeseries } from "@/hooks/useDashLojas";
 
 // Rótulo curto de dia (dd/MM) para o eixo do gráfico diário.
 const dayLabel = (iso: string) =>
   new Date(iso + "T12:00:00").toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
-import {
-  useLojasKpis, useLojasKpisPrev, useLojasTimeseries, useLojasRanking,
-  useLojasPostos, useLojasLowStock,
-} from "@/hooks/useDashLojas";
 
 // Variantes do CarboZé (produtos.products.variant) e suas cores no gráfico.
 const VARIANTS: { key: string; label: string; color: string }[] = [
@@ -48,9 +44,6 @@ export default function DashboardsLojas() {
   const { data: kpis, isLoading: kLoad } = useLojasKpis(30);
   const { data: kpisPrev } = useLojasKpisPrev(30);
   const { data: series = [] } = useLojasTimeseries(30);
-  const { data: ranking = [] } = useLojasRanking(30);
-  const { data: postos = [] } = useLojasPostos();
-  const { data: lowStock = [] } = useLojasLowStock();
 
   // Pivot: uma linha por dia, uma coluna por variante (para a barra empilhada).
   const chartData = useMemo(() => {
@@ -141,133 +134,6 @@ export default function DashboardsLojas() {
           </CardContent>
         </Card>
       )}
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-        {/* Ranking de frentistas */}
-        <Card className="rounded-2xl border-0 shadow-sm">
-          <CardHeader className="pt-5 px-5 pb-3">
-            <CardTitle className="text-sm font-semibold flex items-center gap-2">
-              <Trophy className="h-4 w-4 text-amber-500" /> Ranking de frentistas (rede)
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-0 pb-2">
-            {ranking.length === 0 ? (
-              <p className="px-5 py-6 text-sm text-muted-foreground">Sem vendas no período.</p>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-y border-border/50 bg-muted/30 text-muted-foreground text-xs">
-                      <th className="text-left px-5 py-2 font-medium">#</th>
-                      <th className="text-left px-4 py-2 font-medium">Frentista</th>
-                      <th className="text-left px-4 py-2 font-medium">Loja</th>
-                      <th className="text-right px-5 py-2 font-medium">Receita</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border/30">
-                    {ranking.slice(0, 10).map((r) => (
-                      <tr key={r.frentista_id} className="hover:bg-muted/20">
-                        <td className="px-5 py-2.5 font-mono text-xs text-muted-foreground">{r.rank}</td>
-                        <td className="px-4 py-2.5 font-medium">{r.full_name}</td>
-                        <td className="px-4 py-2.5 text-muted-foreground text-xs">{r.posto_name}</td>
-                        <td className="px-5 py-2.5 text-right font-semibold">{fmtBRL(r.total_amount)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Estoque baixo na rede */}
-        <Card className="rounded-2xl border-0 shadow-sm">
-          <CardHeader className="pt-5 px-5 pb-3">
-            <CardTitle className="text-sm font-semibold flex items-center gap-2">
-              <AlertTriangle className="h-4 w-4 text-amber-500" /> Estoque baixo na rede
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-0 pb-2">
-            {lowStock.length === 0 ? (
-              <p className="px-5 py-6 text-sm text-muted-foreground">Nenhum item em falta. 🎉</p>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-y border-border/50 bg-muted/30 text-muted-foreground text-xs">
-                      <th className="text-left px-5 py-2 font-medium">Loja</th>
-                      <th className="text-left px-4 py-2 font-medium">Produto</th>
-                      <th className="text-right px-5 py-2 font-medium">Qtd · mín</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border/30">
-                    {lowStock.slice(0, 10).map((s) => (
-                      <tr key={`${s.posto_id}-${s.product_id}`} className="hover:bg-muted/20">
-                        <td className="px-5 py-2.5 text-muted-foreground text-xs">{s.posto_name}</td>
-                        <td className="px-4 py-2.5 font-medium">
-                          {s.product_name} <span className="text-xs text-muted-foreground">({s.variant})</span>
-                        </td>
-                        <td className="px-5 py-2.5 text-right">
-                          <Badge variant="outline" className="text-xs font-mono text-amber-600 border-amber-500/40">
-                            {fmtNum(s.quantity)} · {fmtNum(s.min_quantity)}
-                          </Badge>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Tabela por loja */}
-      <Card className="rounded-2xl border-0 shadow-sm">
-        <CardHeader className="pt-5 px-5 pb-3">
-          <CardTitle className="text-sm font-semibold flex items-center gap-2">
-            <Store className="h-4 w-4 text-carbo-green" /> Lojas da rede
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="p-0 pb-2">
-          {postos.length === 0 ? (
-            <p className="px-5 py-6 text-sm text-muted-foreground">Nenhuma loja no período.</p>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-y border-border/50 bg-muted/30 text-muted-foreground text-xs">
-                    <th className="text-left px-5 py-2 font-medium">Loja</th>
-                    <th className="text-left px-4 py-2 font-medium">Cidade/UF</th>
-                    <th className="text-right px-4 py-2 font-medium">Vendas</th>
-                    <th className="text-right px-4 py-2 font-medium">Receita</th>
-                    <th className="text-center px-5 py-2 font-medium">Status</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border/30">
-                  {postos.map((p) => (
-                    <tr key={p.posto_id} className="hover:bg-muted/20">
-                      <td className="px-5 py-2.5 font-medium">{p.name}</td>
-                      <td className="px-4 py-2.5 text-muted-foreground text-xs">
-                        {p.city ? `${p.city}${p.state ? `, ${p.state}` : ""}` : "—"}
-                      </td>
-                      <td className="px-4 py-2.5 text-right tabular-nums">{fmtNum(p.sales_count)}</td>
-                      <td className="px-4 py-2.5 text-right tabular-nums font-semibold">{fmtBRL(p.revenue)}</td>
-                      <td className="px-5 py-2.5 text-center">
-                        <Badge variant="outline" className={p.active
-                          ? "text-xs text-green-600 border-green-500/40"
-                          : "text-xs text-muted-foreground"}>
-                          {p.active ? "Ativa" : "Inativa"}
-                        </Badge>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </CardContent>
-      </Card>
     </main>
   );
 }
