@@ -91,6 +91,10 @@ export function MoveOPDialog({ open, onOpenChange, op, fromLabel, toLabel, toSta
   const lines = useMemo(() => buildLinesFor(effectiveRoute, qty), [finalBom, semiBom, semiLine, effectiveRoute, productById, qty]); // eslint-disable-line react-hooks/exhaustive-deps
   const missing = lines.filter((l) => l.incompatible || l.available < l.needed);
   const canSeparate = lines.length > 0 && missing.length === 0;
+  // Unidade incompatível (BOM em ml, estoque em un): deduziria número cru e
+  // corromperia o saldo. Bloqueia de vez — nem "separar mesmo assim". Falta de
+  // estoque continua permitida (modelo "negativo visível + log").
+  const hasIncompatible = lines.some((l) => l.incompatible);
 
   // ── Conclusão: consumo real dos insumos → perdas ────────────────────────────
   const concRoute = (op?.production_route ?? (hasChoice ? route : "rotular")) as ProductionRoute;
@@ -324,10 +328,10 @@ export function MoveOPDialog({ open, onOpenChange, op, fromLabel, toLabel, toSta
                 ? { route: op.production_route ?? null, good: goodNum, rejected: rejectedNum, consumption }
                 : { route: hasChoice ? route : null },
             )}
-            disabled={pending || (isSeparacao && hasChoice && !routeChosen) || (isConclusao && bomLoading)}
+            disabled={pending || (isSeparacao && hasChoice && !routeChosen) || (isSeparacao && hasIncompatible) || (isConclusao && bomLoading)}
           >
             {pending ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Movendo…</>
-              : isSeparacao ? (canSeparate || lines.length === 0 ? "Separar" : "Separar mesmo assim")
+              : isSeparacao ? (hasIncompatible ? "Corrija a unidade do insumo" : canSeparate || lines.length === 0 ? "Separar" : "Separar mesmo assim")
               : isConclusao ? (bomLoading ? "Carregando ficha…" : "Concluir") : "Mover"}
           </Button>
         </DialogFooter>
