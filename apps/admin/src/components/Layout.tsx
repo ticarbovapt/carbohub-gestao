@@ -1,6 +1,9 @@
 import { useState } from "react";
 import { NavLink, Outlet } from "react-router-dom";
-import { Users as UsersIcon, ListTree, Globe, Target, Activity } from "lucide-react";
+import {
+  Users as UsersIcon, ListTree, Globe, Target, Activity,
+  Store, Building2, TrendingUp, LineChart, Factory, Wallet, Truck,
+} from "lucide-react";
 import { TopBar } from "@/components/TopBar";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -14,6 +17,19 @@ const NAV_TOP = [
 ];
 
 const NAV_GROUPS = [
+  {
+    // Espelho dos dashboards principais de cada sistema do ecossistema.
+    label: "Dashboards",
+    items: [
+      { to: "/dashboards/lojas", label: "Lojas (Vendas)", icon: Store },
+      { to: "/dashboards/franqueados", label: "Franqueados", icon: Building2 },
+      { to: "/dashboards/comercial", label: "Comercial", icon: TrendingUp },
+      { to: "/dashboards/estrategico", label: "Estratégico", icon: LineChart },
+      { to: "/dashboards/producao", label: "Produção", icon: Factory },
+      { to: "/dashboards/financeiro", label: "Financeiro", icon: Wallet },
+      { to: "/dashboards/logistica", label: "Logística", icon: Truck },
+    ],
+  },
   {
     label: "Acessos",
     items: [
