@@ -18,7 +18,7 @@ const ATALHOS = [
   { to: "/pedidos", label: "Pedidos (RV)", desc: "Pedidos, faturamento e entregas.", icon: ClipboardList, color: "text-primary" },
   { to: "/comissionamento", label: "Comissionamento", desc: "Calcular comissões e controlar pagamentos.", icon: Percent, color: "text-carbo-green" },
   { to: "/funcionarios", label: "Funcionários", desc: "Dados bancários/PIX e contato de emergência.", icon: Users, color: "text-warning" },
-  { to: "/dashboard-financeiro", label: "Dashboard Financeiro", desc: "Contas a pagar e custo por fornecedor.", icon: BarChart3, color: "text-carbo-blue" },
+  { to: "/compras/dashboard", label: "Dashboard Financeiro", desc: "Aging, fluxo, curva ABC e indicadores.", icon: BarChart3, color: "text-carbo-blue" },
   { to: "/integracoes/bling", label: "Integração Bling", desc: "Conectar e sincronizar com o Bling ERP.", icon: Link2, color: "text-success" },
 ];
 

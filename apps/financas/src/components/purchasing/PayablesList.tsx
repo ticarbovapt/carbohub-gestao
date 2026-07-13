@@ -24,7 +24,7 @@ const statusVariantMap: Record<PayableStatus, any> = {
 };
 
 const isOverdue = (p: { status: PayableStatus; due_date: string }) =>
-  p.status !== "pago" && p.status !== "cancelado" && isPast(new Date(p.due_date)) && !isToday(new Date(p.due_date));
+  p.status !== "pago" && p.status !== "cancelado" && isPast(parseISO(p.due_date)) && !isToday(parseISO(p.due_date));
 
 const effectiveStatus = (p: { status: PayableStatus; due_date: string }) =>
   isOverdue(p) ? "atrasado" : p.status;
@@ -77,8 +77,8 @@ export function PayablesList({ initialStatus }: { initialStatus?: string } = {})
   const abertas = openRows ?? [];
   const sum = (arr: any[]) => arr.reduce((s, p) => s + Number(p.amount || 0), 0);
   const vencidas = abertas.filter(isOverdue);
-  const venceHoje = abertas.filter((p) => isToday(new Date(p.due_date)));
-  const vence7 = abertas.filter((p) => { const d = differenceInCalendarDays(new Date(p.due_date), new Date()); return d >= 1 && d <= 7; });
+  const venceHoje = abertas.filter((p) => isToday(parseISO(p.due_date)));
+  const vence7 = abertas.filter((p) => { const d = differenceInCalendarDays(parseISO(p.due_date), new Date()); return d >= 1 && d <= 7; });
 
   const clearPeriodo = () => { setFrom(""); setTo(""); };
 
@@ -214,7 +214,7 @@ export function PayablesList({ initialStatus }: { initialStatus?: string } = {})
                   </CarboTableCell>
                   <CarboTableCell className="font-mono">{formatCurrency(p.amount)}</CarboTableCell>
                   <CarboTableCell className="text-sm">
-                    {format(new Date(p.due_date), "dd/MM/yyyy", { locale: ptBR })}
+                    {format(parseISO(p.due_date), "dd/MM/yyyy", { locale: ptBR })}
                   </CarboTableCell>
                   <CarboTableCell>
                     <CarboBadge variant={statusVariantMap[eff]} dot>{PAYABLE_STATUS_LABELS[eff]}</CarboBadge>
@@ -288,7 +288,7 @@ export function PayablesList({ initialStatus }: { initialStatus?: string } = {})
               <div className="rounded-lg border border-border p-3 space-y-1">
                 <div className="flex justify-between"><span className="text-muted-foreground">Fornecedor</span><strong>{payingPayable.supplier_name}</strong></div>
                 <div className="flex justify-between"><span className="text-muted-foreground">Valor</span><strong className="font-mono">{formatCurrency(payingPayable.amount)}</strong></div>
-                <div className="flex justify-between"><span className="text-muted-foreground">Vencimento</span><strong>{format(new Date(payingPayable.due_date), "dd/MM/yyyy", { locale: ptBR })}</strong></div>
+                <div className="flex justify-between"><span className="text-muted-foreground">Vencimento</span><strong>{format(parseISO(payingPayable.due_date), "dd/MM/yyyy", { locale: ptBR })}</strong></div>
               </div>
               <div className="space-y-1.5">
                 <Label>Data do pagamento</Label>

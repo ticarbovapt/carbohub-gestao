@@ -1739,6 +1739,10 @@ async function syncContasPagar(
         const valor = Number(conta.valor ?? conta.valorTotal ?? conta.saldo ?? 0);
         const numero = conta.numeroDocumento || conta.numero || String(conta.id);
 
+        // Preserva baixa/cancelamento local (não deixa o Bling reverter pra aberto).
+        const { data: existingPay } = await supabaseAdmin.from("purchase_payables").select("status").eq("bling_id", conta.id).maybeSingle();
+        const payTerminal = existingPay && (existingPay.status === "pago" || existingPay.status === "cancelado");
+        const payStatus = payTerminal ? existingPay.status : mapContaPagarStatus(conta.situacao, vencimento);
         await supabaseAdmin.from("purchase_payables").upsert(
           {
             bling_id: conta.id,
@@ -1747,7 +1751,7 @@ async function syncContasPagar(
             supplier_name: fornecedor,
             amount: valor,
             due_date: vencimento || new Date().toISOString().split("T")[0],
-            status: mapContaPagarStatus(conta.situacao, vencimento),
+            status: payStatus,
             notes: conta.historico || conta.observacoes || null,
             bling_raw: conta,
             updated_at: new Date().toISOString(),
@@ -1816,6 +1820,12 @@ async function syncContasReceber(
         const valor = Number(conta.valor ?? conta.valorTotal ?? conta.saldo ?? 0);
         const numero = conta.numeroDocumento || conta.numero || String(conta.id);
         const status = mapContaReceberStatus(conta.situacao);
+        // Não deixa o Bling reverter uma baixa/cancelamento feito no sistema:
+        // se localmente já está recebido/cancelado, preserva status e data.
+        const { data: existing } = await supabaseAdmin.from("receivables").select("status, received_at").eq("bling_id", conta.id).maybeSingle();
+        const localTerminal = existing && (existing.status === "recebido" || existing.status === "cancelado");
+        const finalStatus = localTerminal ? existing.status : status;
+        const finalReceivedAt = localTerminal ? existing.received_at : (status === "recebido" ? (conta.dataPagamento || conta.dataBaixa || null) : null);
         await supabaseAdmin.from("receivables").upsert(
           {
             bling_id: conta.id,
@@ -1824,8 +1834,8 @@ async function syncContasReceber(
             customer_name: cliente,
             amount: valor,
             due_date: vencimento || new Date().toISOString().split("T")[0],
-            status,
-            received_at: status === "recebido" ? (conta.dataPagamento || conta.dataBaixa || null) : null,
+            status: finalStatus,
+            received_at: finalReceivedAt,
             notes: conta.historico || conta.observacoes || null,
             bling_raw: conta,
             updated_at: new Date().toISOString(),

@@ -6,7 +6,6 @@ import Purchasing from "./pages/Purchasing";
 import Suprimentos from "./pages/Suprimentos";
 import Orders from "./pages/Orders";
 import Faturamento from "./pages/Faturamento";
-import DashboardFinanceiro from "./pages/dashboards/DashboardFinanceiro";
 import BlingIntegracao from "./pages/integracoes/Bling";
 import BlingCallback from "./pages/integracoes/BlingCallback";
 import Profile from "./pages/Profile";
@@ -35,7 +34,8 @@ export default function App() {
         <Route path="/faturamento" element={<Faturamento />} />
         <Route path="/comissionamento" element={<Comissionamento />} />
         <Route path="/funcionarios" element={<Funcionarios />} />
-        <Route path="/dashboard-financeiro" element={<DashboardFinanceiro />} />
+        {/* Dashboard só existe como aba (gated a gestor) dentro de /compras */}
+        <Route path="/dashboard-financeiro" element={<Navigate to="/compras/dashboard" replace />} />
         <Route path="/integracoes/bling" element={<BlingIntegracao />} />
         <Route path="/integracoes/bling/callback" element={<BlingCallback />} />
         <Route path="/perfil" element={<Profile />} />

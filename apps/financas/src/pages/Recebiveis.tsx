@@ -32,7 +32,7 @@ const statusVariant: Record<ReceivableStatus, any> = {
   programado: "info", recebido: "success", atrasado: "destructive", cancelado: "cancelled",
 };
 const isOverdue = (r: { status: ReceivableStatus; due_date: string }) =>
-  r.status !== "recebido" && r.status !== "cancelado" && isPast(new Date(r.due_date)) && !isToday(new Date(r.due_date));
+  r.status !== "recebido" && r.status !== "cancelado" && isPast(parseISO(r.due_date)) && !isToday(parseISO(r.due_date));
 const effectiveStatus = (r: { status: ReceivableStatus; due_date: string }): ReceivableStatus =>
   isOverdue(r) ? "atrasado" : r.status;
 
@@ -67,8 +67,8 @@ export default function Recebiveis() {
   const abertas = openRows ?? [];
   const sum = (arr: any[]) => arr.reduce((s, p) => s + Number(p.amount || 0), 0);
   const vencidas = abertas.filter(isOverdue);
-  const venceHoje = abertas.filter((p) => isToday(new Date(p.due_date)));
-  const vence7 = abertas.filter((p) => { const d = differenceInCalendarDays(new Date(p.due_date), new Date()); return d >= 1 && d <= 7; });
+  const venceHoje = abertas.filter((p) => isToday(parseISO(p.due_date)));
+  const vence7 = abertas.filter((p) => { const d = differenceInCalendarDays(parseISO(p.due_date), new Date()); return d >= 1 && d <= 7; });
 
   const from1 = total === 0 ? 0 : page * pageSize + 1;
   const to1 = Math.min(total, (page + 1) * pageSize);
@@ -176,7 +176,7 @@ export default function Recebiveis() {
                   <CarboTableCell className="font-medium">{r.customer_name || "—"}</CarboTableCell>
                   <CarboTableCell><CarboBadge variant={isBling ? "secondary" : "info"} className="text-[10px]">{isBling ? "Bling" : "Sistema"}</CarboBadge></CarboTableCell>
                   <CarboTableCell className="font-mono">{brl(r.amount)}</CarboTableCell>
-                  <CarboTableCell className="text-sm">{format(new Date(r.due_date), "dd/MM/yyyy", { locale: ptBR })}</CarboTableCell>
+                  <CarboTableCell className="text-sm">{format(parseISO(r.due_date), "dd/MM/yyyy", { locale: ptBR })}</CarboTableCell>
                   <CarboTableCell><CarboBadge variant={statusVariant[eff]} dot>{RECEIVABLE_STATUS_LABELS[eff]}</CarboBadge></CarboTableCell>
                   <CarboTableCell className="text-sm text-muted-foreground">{r.received_at ? format(new Date(r.received_at), "dd/MM/yyyy", { locale: ptBR }) : "—"}</CarboTableCell>
                   <CarboTableCell>
@@ -226,7 +226,7 @@ export default function Recebiveis() {
               <div className="rounded-lg border border-border p-3 space-y-1">
                 <div className="flex justify-between"><span className="text-muted-foreground">Cliente</span><strong>{receiving.customer_name || "—"}</strong></div>
                 <div className="flex justify-between"><span className="text-muted-foreground">Valor</span><strong className="font-mono">{brl(receiving.amount)}</strong></div>
-                <div className="flex justify-between"><span className="text-muted-foreground">Vencimento</span><strong>{format(new Date(receiving.due_date), "dd/MM/yyyy", { locale: ptBR })}</strong></div>
+                <div className="flex justify-between"><span className="text-muted-foreground">Vencimento</span><strong>{format(parseISO(receiving.due_date), "dd/MM/yyyy", { locale: ptBR })}</strong></div>
               </div>
               <div className="space-y-1.5"><Label>Data do recebimento</Label><Input type="date" value={recAt} onChange={(e) => setRecAt(e.target.value)} /></div>
             </div>
