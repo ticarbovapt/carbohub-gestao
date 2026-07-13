@@ -1,4 +1,4 @@
-export type FunnelType = "f1" | "f2" | "f3" | "f4" | "f5" | "f6" | "f7" | "f8";
+export type FunnelType = "f1" | "f2" | "f3" | "f4" | "f5" | "f6" | "f7" | "f8" | "f9";
 
 export type LeadStage =
   | "a_contatar" | "tentativa_1" | "tentativa_2"
@@ -132,6 +132,7 @@ export const FUNNEL_CONFIG: Record<FunnelType, FunnelConfig> = {
   f6: { id: "f6", name: "Frotistas via Licenciado",         shortName: "Frotistas Lic.",description: "Frotistas de licenciados",  icon: "🔗", color: "#F97316", cycleLabel: "15-45 dias", stages: STAGES_COMMERCIAL },
   f7: { id: "f7", name: "Empresas com Motores",             shortName: "Motores",       description: "Geradores, compressores",   icon: "⚙️", color: "#EF4444", cycleLabel: "30-90 dias", stages: STAGES_ENTERPRISE },
   f8: { id: "f8", name: "Empresas c/ Estoque Combustível",  shortName: "Estoque Comb.", description: "Alto valor + recorrência",  icon: "⛽", color: "#10B981", cycleLabel: "30-90 dias", stages: STAGES_ENTERPRISE },
+  f9: { id: "f9", name: "Subdistribuidores",                shortName: "Subdistribuidor", description: "Revenda em escala",       icon: "🏬", color: "#14B8A6", cycleLabel: "7-21 dias",  stages: STAGES_PDV       },
 };
 
 export const LOSS_REASONS = [

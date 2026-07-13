@@ -11,7 +11,7 @@ import { can } from "@/lib/access";
 import type { CRMLead, FunnelType } from "@/types/crm";
 import { FUNNEL_CONFIG, getNextStage } from "@/types/crm";
 
-const FUNNELS: FunnelType[] = ["f1", "f2", "f3", "f4", "f5", "f6", "f7", "f8"];
+const FUNNELS: FunnelType[] = ["f1", "f2", "f3", "f4", "f5", "f6", "f7", "f8", "f9"];
 
 export default function Leads() {
   const { level, isGestor, signOut } = useAuth();
