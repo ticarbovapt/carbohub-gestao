@@ -289,6 +289,13 @@ export function useUpdateFulfillmentStage() {
         if (rr.error) throw rr.error;
         restoredLines = typeof rr.data === "number" ? rr.data : null;
       }
+      // Espelha o status de expedição na remessa ligada (se houver). Não bloqueia.
+      if (stage === "em_transporte" || stage === "entregue" || stage === "cancelado") {
+        const su = await db.from("ops_shipments")
+          .update({ status: stage, updated_at: new Date().toISOString() })
+          .eq("order_id", id);
+        if (su.error) console.error("[pos-venda] falha ao sincronizar remessa:", su.error);
+      }
       return { stage, opCreated, opError, deductedLines, restoredLines, shipmentCreated };
     },
     onSuccess: (res) => {

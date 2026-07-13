@@ -73,8 +73,25 @@ export function useShipmentMutations() {
       if (p.trackingCode !== undefined) updates.tracking_code = p.trackingCode.trim() || null;
       const res = await db.from("ops_shipments").update(updates).eq("id", p.id);
       if (res.error) throw res.error;
+
+      // Espelha no pedido ligado só os status de expedição para frente.
+      // Cancelamento NÃO é sincronizado por aqui: cancelar precisa estornar o
+      // estoque, o que só acontece no fluxo do pedido (Rastreio de venda).
+      if (p.status === "em_transporte" || p.status === "entregue") {
+        const sh = await db.from("ops_shipments").select("order_id").eq("id", p.id).maybeSingle();
+        const orderId = sh.data?.order_id as string | null | undefined;
+        if (orderId) {
+          const ou = await db.from("carboze_orders")
+            .update({ fulfillment_stage: p.status, updated_at: new Date().toISOString() })
+            .eq("id", orderId);
+          if (ou.error) console.error("[shipments] falha ao sincronizar pedido:", ou.error);
+        }
+      }
     },
-    onSuccess: invalidate,
+    onSuccess: () => {
+      invalidate();
+      qc.invalidateQueries({ queryKey: ["ops", "pos-venda"] });
+    },
   });
 
   const remove = useMutation({
