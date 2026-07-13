@@ -26,6 +26,7 @@ export function useShipments() {
         tracking_code: s.tracking_code ?? null,
         status: (s.status ?? "separacao_pendente") as ShipmentStatus,
         items: Number(s.items) || 0,
+        order_id: s.order_id ?? null,
       }));
     },
   });

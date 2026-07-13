@@ -214,6 +214,38 @@ async function ensureProductionOrderForOrder(orderId: string): Promise<boolean> 
   return true;
 }
 
+// Garante uma remessa (ops_shipments) para o pedido SEPARADO, ligada por order_id.
+// Não duplica (índice único em order_id). Cliente, destino e nº de itens vêm do
+// próprio pedido — acaba a redigitação manual do "Nova Remessa".
+async function ensureShipmentForOrder(orderId: string): Promise<boolean> {
+  const existing = await db
+    .from("ops_shipments").select("id").eq("order_id", orderId).limit(1);
+  if (existing.data && existing.data.length) return false; // já tem remessa → não duplica
+
+  const ord = await db
+    .from("carboze_orders")
+    .select("order_number, customer_name, delivery_city, delivery_state, items")
+    .eq("id", orderId).single();
+  if (ord.error || !ord.data) throw ord.error ?? new Error("Pedido não encontrado");
+
+  const items: any[] = Array.isArray(ord.data.items) ? ord.data.items : [];
+  const itemCount = items.reduce((s, it) => s + (Number(it.quantity) || 0), 0);
+  const destino = [ord.data.delivery_city, ord.data.delivery_state].filter(Boolean).join(" / ") || null;
+  const { data: auth } = await db.auth.getUser();
+
+  const ins = await db.from("ops_shipments").insert({
+    order_id: orderId,
+    order_number: ord.data.order_number ?? null,
+    customer: ord.data.customer_name ?? null,
+    destination: destino,
+    items: itemCount,
+    status: "separado",             // acabou de ser separado; pronto pra despachar
+    created_by: auth?.user?.id ?? null,
+  });
+  if (ins.error) throw ins.error;
+  return true;
+}
+
 // Etapas ANTERIORES à separação (estoque ainda não deveria estar deduzido).
 // Voltar o card para uma delas — ou cancelar — precisa ESTORNAR a dedução.
 const PRE_SEPARADO_STAGES = new Set<FulfillmentStage>([
@@ -241,10 +273,14 @@ export function useUpdateFulfillmentStage() {
       // retorna quantas linhas deduziu, para avisar quando deduz ZERO (pedido sem
       // produto vinculado) em vez de mentir "estoque deduzido".
       let deductedLines: number | null = null;
+      let shipmentCreated = false;
       if (stage === "separado") {
         const rr = await db.rpc("pos_venda_deduct_stock", { p_order_id: id });
         if (rr.error) throw rr.error;
         deductedLines = typeof rr.data === "number" ? rr.data : null;
+        // Cria a remessa já ligada ao pedido (não trava a separação se falhar).
+        try { shipmentCreated = await ensureShipmentForOrder(id); }
+        catch (e) { console.error("[pos-venda] falha ao criar remessa:", e); }
       }
       // B9: voltar de "Separado" (ou cancelar) ESTORNA a dedução (idempotente).
       let restoredLines: number | null = null;
@@ -253,17 +289,19 @@ export function useUpdateFulfillmentStage() {
         if (rr.error) throw rr.error;
         restoredLines = typeof rr.data === "number" ? rr.data : null;
       }
-      return { stage, opCreated, opError, deductedLines, restoredLines };
+      return { stage, opCreated, opError, deductedLines, restoredLines, shipmentCreated };
     },
     onSuccess: (res) => {
       qc.invalidateQueries({ queryKey: ["ops", "pos-venda"] });
       qc.invalidateQueries({ queryKey: ["ops", "production-orders"] });
       qc.invalidateQueries({ queryKey: ["ops", "hubrn-stock"] });
+      qc.invalidateQueries({ queryKey: ["ops", "shipments"] });
       if (res?.opError) toast.error("Etapa mudou, mas falhou ao criar a OP: " + res.opError, { duration: 10000 });
       else if (res?.opCreated) toast.success("Etapa atualizada · OP criada no Backlog.");
       else if (res?.stage === "separado") {
-        if (res.deductedLines === 0) toast.warning("Separado, mas NADA foi deduzido do estoque — o pedido não tem produto vinculado.", { duration: 8000 });
-        else toast.success("Separado · estoque deduzido do HUB-RN.");
+        const remessa = res.shipmentCreated ? " · remessa criada na Logística" : "";
+        if (res.deductedLines === 0) toast.warning("Separado, mas NADA foi deduzido do estoque — o pedido não tem produto vinculado." + remessa, { duration: 8000 });
+        else toast.success("Separado · estoque deduzido do HUB-RN" + remessa + ".");
       }
       else if (res?.restoredLines && res.restoredLines > 0) toast.success("Etapa atualizada · estoque estornado para o HUB-RN.");
       else toast.success("Etapa atualizada.");

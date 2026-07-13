@@ -18,6 +18,7 @@ const KANBAN_COLUMNS: ShipmentStatus[] = ["separacao_pendente", "separando", "se
 export interface Shipment {
   id: string; order_number: string; destination: string; customer: string;
   carrier_name: string | null; tracking_code: string | null; status: ShipmentStatus; items: number;
+  order_id: string | null;
 }
 
 export function ShipmentsKanban({ shipments, onView }: { shipments: Shipment[]; onView?: (s: Shipment) => void }) {
