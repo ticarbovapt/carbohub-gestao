@@ -156,6 +156,32 @@ export function useLastOpMoves(opIds: string[], enabled: boolean) {
   });
 }
 
+// Histórico completo de movimentações de UMA OP (timeline no detalhe).
+export interface OpMoveRow { id: string; from_status: string | null; to_status: string | null; movedByName: string | null; movedAt: string; }
+export function useOpMoveHistory(opId: string | undefined, enabled: boolean) {
+  return useQuery({
+    queryKey: ["ops", "op-history", opId],
+    enabled: enabled && !!opId,
+    queryFn: async (): Promise<OpMoveRow[]> => {
+      const res = await db
+        .from("production_order_moves")
+        .select("id, from_status, to_status, moved_by, moved_at")
+        .eq("op_id", opId).order("moved_at", { ascending: false });
+      const rows = res.data ?? [];
+      const uids = [...new Set(rows.map((r: any) => r.moved_by).filter(Boolean))] as string[];
+      const nameMap = new Map<string, string>();
+      if (uids.length) {
+        const p = await db.from("profiles").select("id, full_name").in("id", uids);
+        for (const x of (p.data ?? [])) nameMap.set(x.id, x.full_name);
+      }
+      return rows.map((r: any) => ({
+        id: r.id, from_status: r.from_status, to_status: r.to_status,
+        movedByName: (r.moved_by && nameMap.get(r.moved_by)) || null, movedAt: r.moved_at,
+      }));
+    },
+  });
+}
+
 export interface CreateOpInput {
   productId: string;
   productName: string;

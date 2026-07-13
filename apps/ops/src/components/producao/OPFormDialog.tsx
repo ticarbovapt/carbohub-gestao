@@ -9,12 +9,22 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DatePickerInput } from "@/components/ui/date-picker-input";
 import { CarboBadge } from "@/components/ui/carbo-badge";
-import { Loader2, CheckCircle2, AlertTriangle, PackageX } from "lucide-react";
+import { Loader2, CheckCircle2, AlertTriangle, PackageX, History, User } from "lucide-react";
 import { toast } from "sonner";
 import { useMrpProducts } from "@/hooks/useMrpProducts";
 import { useBom } from "@/hooks/useBom";
-import { useProductionOrderMutations } from "@/hooks/useProductionOrders";
+import { useProductionOrderMutations, useOpMoveHistory } from "@/hooks/useProductionOrders";
 import { convertUnit, unitLabel } from "@/lib/units";
+
+const OP_STATUS_LABELS: Record<string, string> = {
+  rascunho: "Rascunho", planejada: "Planejada", aguardando_separacao: "Aguard. Separação",
+  separada: "Separada", aguardando_liberacao: "Aguard. Liberação", liberada_producao: "Liberada",
+  em_producao: "Em Produção", envase: "Envase", rotulagem: "Rotulagem",
+  aguardando_confirmacao: "Aguard. Confirmação", confirmada: "Confirmada",
+  aguardando_qualidade: "Aguard. Qualidade", qualidade_aprovada: "QA Aprovado", liberada: "Liberada",
+  concluida: "Concluída", bloqueada: "Bloqueada", cancelada: "Cancelada",
+};
+const stLabel = (s: string | null) => (s && OP_STATUS_LABELS[s]) || s || "—";
 
 const PRIORITY_LABELS: Record<string, string> = { "1": "Urgente", "2": "Alta", "3": "Normal", "4": "Baixa", "5": "Planejado" };
 const DEMAND_SOURCE_LABELS: Record<string, string> = { venda: "Venda", recorrencia: "Recorrência", safety_stock: "Safety Stock", pcp_manual: "PCP Manual" };
@@ -55,6 +65,7 @@ interface MaterialLine {
 
 export function OPFormDialog({ open, onOpenChange, mode, id, initial, lockQuantity }: OPFormDialogProps) {
   const { data: products = [] } = useMrpProducts();
+  const { data: history = [] } = useOpMoveHistory(id, mode === "edit" && open);
   const { create, update } = useProductionOrderMutations();
   const [productId, setProductId] = useState(initial?.product_id ?? "");
   const [plannedQty, setPlannedQty] = useState(initial?.planned_quantity != null ? String(initial.planned_quantity) : "");
@@ -273,6 +284,28 @@ export function OPFormDialog({ open, onOpenChange, mode, id, initial, lockQuanti
             <Label>Observações</Label>
             <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Observações sobre a OP..." />
           </div>
+
+          {/* Histórico de movimentações (auditoria: quem moveu, de onde pra onde) */}
+          {mode === "edit" && history.length > 0 && (
+            <div className="space-y-2">
+              <Label className="flex items-center gap-1.5"><History className="h-3.5 w-3.5" /> Histórico de movimentações</Label>
+              <div className="rounded-lg border border-border divide-y divide-border max-h-48 overflow-y-auto">
+                {history.map((h) => (
+                  <div key={h.id} className="flex items-center justify-between gap-2 px-3 py-2 text-xs">
+                    <span className="min-w-0">
+                      <span className="text-muted-foreground">{stLabel(h.from_status)}</span>
+                      <span className="mx-1 text-muted-foreground">→</span>
+                      <span className="font-medium">{stLabel(h.to_status)}</span>
+                    </span>
+                    <span className="flex items-center gap-2 shrink-0 text-muted-foreground">
+                      {h.movedByName && <span className="flex items-center gap-1 truncate max-w-[120px]"><User className="h-3 w-3" /> {h.movedByName}</span>}
+                      <span className="tabular-nums">{new Date(h.movedAt).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}</span>
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         <DialogFooter>

@@ -7,7 +7,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Button } from "@/components/ui/button";
 import { CarboBadge } from "@/components/ui/carbo-badge";
 import {
-  usePosVendaOrders, useUpdateFulfillmentStage, useHubRnStock, useOpsBySource,
+  usePosVendaOrders, usePosVendaRealtime, useUpdateFulfillmentStage, useHubRnStock, useOpsBySource,
   POSVENDA_STAGES, type FulfillmentStage, type PosVendaOrder,
 } from "@/hooks/usePosVenda";
 
@@ -30,6 +30,7 @@ export default function PosVenda() {
   // Janela dos FINALIZADOS (entregue/cancelado). Ativos sempre carregam 100%.
   const [terminalDays, setTerminalDays] = useState<number | "all">(30);
   const { data, isLoading } = usePosVendaOrders(terminalDays);
+  usePosVendaRealtime(); // move card → reflete na tela de todos ao vivo
   const orders = data?.orders ?? [];
   const terminalHidden = Math.max(0, (data?.terminalTotal ?? 0) - (data?.terminalShown ?? 0));
   const updateStage = useUpdateFulfillmentStage();

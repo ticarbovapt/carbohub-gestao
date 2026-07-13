@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -158,6 +159,25 @@ export function usePosVendaOrders(terminalDays: number | "all" = 30) {
     },
     refetchInterval: 60_000,
   });
+}
+
+// Tempo real do Rastreio de venda: mover um card reflete na tela de todos os
+// logados ao vivo (sistema compartilhado). Assina carboze_orders + ops_shipments.
+export function usePosVendaRealtime() {
+  const qc = useQueryClient();
+  useEffect(() => {
+    const inval = () => {
+      qc.invalidateQueries({ queryKey: ["ops", "pos-venda"] });
+      qc.invalidateQueries({ queryKey: ["ops", "op-by-order"] });
+      qc.invalidateQueries({ queryKey: ["ops", "shipments"] });
+    };
+    const ch = supabase
+      .channel("ops-posvenda-live")
+      .on("postgres_changes", { event: "*", schema: "public", table: "carboze_orders" }, inval)
+      .on("postgres_changes", { event: "*", schema: "public", table: "ops_shipments" }, inval)
+      .subscribe();
+    return () => { supabase.removeChannel(ch); };
+  }, [qc]);
 }
 
 // Setor atual da OP no kanban de produção (para acompanhar no pós-venda).
