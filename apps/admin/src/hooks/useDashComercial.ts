@@ -1,97 +1,148 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// Dashboard ESPELHADO (Fase 1 / KPI-level) — Comercial.
+// Dashboard ESPELHADO — Comercial (Admin, visão de gestor "todos vendedores").
 //
-// Espelha o essencial de src/pages/dashboards/DashboardComercial.tsx do controle:
-// lê `carboze_orders` (schema public, mesmo schema do client do Admin) e agrega
-// no cliente. Sem filtros/vendedor/metas — só os números-chave + faturamento/mês.
+// Porta FIEL de apps/crm/src/pages/DashboardComercial.tsx (+ hooks useVendas /
+// useMetas). Lê `carboze_orders` (schema public, mesmo schema do client do Admin)
+// e agrega no cliente EXATAMENTE como o CRM. A linha de meta vem das metas REAIS
+// configuradas (RPC crm_metas_resolvidas_ano), somadas por mês sobre TODOS os
+// vendedores — o Admin é uma visão-gestor de todos, sem filtro de vendedor.
 //
-// Fonte: public.carboze_orders
-//   colunas: total, status, created_at, segmento, customer_name, excluir_metricas
-//   segmento ∈ {consumo, revenda, online, null} · cancelado ∈ {cancelled, cancelado}
+// Status: "pedido" = carboze_orders com status NOT IN ('quote','cancelled')
+//   (mapeamento do CRM: quote↔orcamento, cancelled↔cancelado, demais→pedido).
 // ─────────────────────────────────────────────────────────────────────────────
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+
+const MES_ABBR = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
+const monthLabel = (d: Date) => `${MES_ABBR[d.getMonth()]}/${String(d.getFullYear()).slice(2)}`;
+
+export interface MonthRow {
+  mes: string;
+  faturado: number;
+  pedidos: number;
+  ticketMedio: number;
+}
+
+/** Ponto do Crescimento Anual — real (faturado do mês) vs meta configurada. */
+export interface AnnualGrowthPoint {
+  label: string;
+  meta: number | null;
+  real: number | null;
+}
+
+export interface ComercialData {
+  totalBRL: number;
+  totalVendas: number;
+  ticketMedio: number;
+  maiorVenda: number;
+  maiorCliente: string;
+  topCliente: string;
+  topQtd: number;
+  monthly: MonthRow[];
+  annualGrowth: AnnualGrowthPoint[];
+}
 
 interface CarbozeOrderRow {
   total: number | null;
   status: string | null;
   created_at: string | null;
-  segmento: "consumo" | "revenda" | "online" | null;
+  customer_name: string | null;
+  vendedor_id: string | null;
 }
 
-export interface ComercialSegment {
-  qtd: number;
-  brl: number;
-}
-export interface ComercialData {
-  totalBRL: number;
-  totalVendas: number;
-  ticketMedio: number;
-  segmentos: {
-    consumo: ComercialSegment;
-    revenda: ComercialSegment;
-    online: ComercialSegment;
-    naoClassificado: ComercialSegment;
-  };
-  monthly: { key: string; faturado: number; pedidos: number }[];
-}
+// Mapeamento de status do CRM (useVendas.toCrmStatus): quote→orcamento,
+// cancelled→cancelado, demais→pedido. "pedido" ⇔ status NOT IN (quote,cancelled).
+const isPedido = (s: string | null) => s !== "quote" && s !== "cancelled";
 
-const isCancelled = (s: string | null) => s === "cancelled" || s === "cancelado";
+type MetaRow = { vendedor_id: string; mes: number; target_amount: number };
 
-/** KPIs + segmentação + faturamento mensal dos últimos N meses (via carboze_orders). */
+/** KPIs + séries mensais + crescimento anual (real vs meta), portado do CRM. */
 export function useDashComercial(months = 12) {
   return useQuery({
     queryKey: ["dash-comercial-overview", months],
     queryFn: async (): Promise<ComercialData> => {
-      const now = new Date();
-      const from = new Date(now.getFullYear(), now.getMonth() - (months - 1), 1);
+      const year = new Date().getFullYear();
 
-      const { data, error } = await supabase
+      // ── Pedidos (carboze_orders) — mesma base do CRM (useVendas), todos os vendedores.
+      const { data: ordersData, error: ordersErr } = await supabase
         .from("carboze_orders" as never)
-        .select("total, status, created_at, segmento")
-        .neq("excluir_metricas", true)
-        .gte("created_at", from.toISOString())
-        .order("created_at", { ascending: true });
-      if (error) throw new Error(error.message);
+        .select("total, status, created_at, customer_name, vendedor_id")
+        .order("created_at", { ascending: false });
+      if (ordersErr) throw new Error(ordersErr.message);
 
-      const rows = (data ?? []) as CarbozeOrderRow[];
-      const active = rows.filter((o) => !isCancelled(o.status));
+      const rows = (ordersData ?? []) as unknown as CarbozeOrderRow[];
+      const pedidos = rows.filter((v) => isPedido(v.status));
 
-      const totalVendas = active.length;
-      const totalBRL = active.reduce((s, o) => s + Number(o.total ?? 0), 0);
-      const ticketMedio = totalVendas > 0 ? totalBRL / totalVendas : 0;
-
-      const seg = {
-        consumo: { qtd: 0, brl: 0 },
-        revenda: { qtd: 0, brl: 0 },
-        online: { qtd: 0, brl: 0 },
-        naoClassificado: { qtd: 0, brl: 0 },
-      };
-      const monthMap: Record<string, { faturado: number; pedidos: number }> = {};
-
-      for (const o of active) {
-        const v = Number(o.total ?? 0);
-        const bucket =
-          o.segmento === "consumo" ? seg.consumo
-          : o.segmento === "revenda" ? seg.revenda
-          : o.segmento === "online" ? seg.online
-          : seg.naoClassificado;
-        bucket.qtd++;
-        bucket.brl += v;
-
-        if (o.created_at) {
-          const key = o.created_at.slice(0, 7); // YYYY-MM
-          (monthMap[key] ??= { faturado: 0, pedidos: 0 }).faturado += v;
-          monthMap[key].pedidos++;
+      // ── Metas reais configuradas (RPC crm_metas_resolvidas_ano) — soma TODOS os vendedores.
+      const { data: metasData, error: metasErr } = await (
+        supabase as unknown as {
+          rpc: (fn: string, args?: any) => Promise<{ data: any; error: any }>;
         }
+      ).rpc("crm_metas_resolvidas_ano", { p_ano: year });
+      if (metasErr) throw new Error(metasErr.message);
+      const metasAno = ((metasData ?? []) as MetaRow[]).map((r) => ({
+        vendedor_id: r.vendedor_id,
+        mes: Number(r.mes),
+        target_amount: Number(r.target_amount) || 0,
+      }));
+
+      // ── monthlyData — últimos 9 meses (faturado + pedidos + ticket médio). Verbatim CRM.
+      const now = new Date();
+      const buckets = new Map<string, { faturado: number; pedidos: number }>();
+      for (const v of pedidos) {
+        const d = new Date(v.created_at ?? "");
+        const key = `${d.getFullYear()}-${d.getMonth()}`;
+        const b = buckets.get(key) ?? { faturado: 0, pedidos: 0 };
+        b.faturado += Number(v.total) || 0;
+        b.pedidos += 1;
+        buckets.set(key, b);
+      }
+      const monthly: MonthRow[] = [];
+      for (let i = 8; i >= 0; i--) {
+        const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+        const b = buckets.get(`${d.getFullYear()}-${d.getMonth()}`) ?? { faturado: 0, pedidos: 0 };
+        monthly.push({
+          mes: monthLabel(d),
+          faturado: b.faturado,
+          pedidos: b.pedidos,
+          ticketMedio: b.pedidos > 0 ? Math.round(b.faturado / b.pedidos) : 0,
+        });
       }
 
-      const monthly = Object.entries(monthMap)
-        .sort(([a], [b]) => a.localeCompare(b))
-        .slice(-months)
-        .map(([key, v]) => ({ key, ...v }));
+      // ── KPIs (sobre o conjunto de pedidos). Verbatim CRM.
+      const totalBRL = pedidos.reduce((s, v) => s + (Number(v.total) || 0), 0);
+      const totalVendas = pedidos.length;
+      let maiorVenda = 0, maiorCliente = "—";
+      const byCliente = new Map<string, number>();
+      for (const v of pedidos) {
+        const t = Number(v.total) || 0;
+        if (t > maiorVenda) { maiorVenda = t; maiorCliente = v.customer_name || "—"; }
+        const c = v.customer_name || "—";
+        byCliente.set(c, (byCliente.get(c) ?? 0) + 1);
+      }
+      let topCliente = "—", topQtd = 0;
+      for (const [c, q] of byCliente) if (q > topQtd) { topQtd = q; topCliente = c; }
+      const ticketMedio = totalVendas > 0 ? totalBRL / totalVendas : 0;
 
-      return { totalBRL, totalVendas, ticketMedio, segmentos: seg, monthly };
+      // ── metaPorMes — soma target_amount de TODOS os vendedores por mês (Admin = gestor geral).
+      const metaPorMes = new Map<number, number>();
+      for (const r of metasAno) {
+        metaPorMes.set(r.mes, (metaPorMes.get(r.mes) ?? 0) + Number(r.target_amount || 0));
+      }
+
+      // ── annualGrowthData — 12 meses do ano: real (faturado do mês) vs meta configurada. Verbatim CRM.
+      const annualGrowth: AnnualGrowthPoint[] = Array.from({ length: 12 }, (_, i) => {
+        const d = new Date(year, i, 1);
+        const label = monthLabel(d);
+        const real = monthly.find((m) => m.mes === label)?.faturado ?? null;
+        const meta = metaPorMes.get(i + 1) ?? 0;
+        return { label, meta: meta > 0 ? meta : null, real: real && real > 0 ? real : null };
+      });
+
+      return {
+        totalBRL, totalVendas, ticketMedio, maiorVenda, maiorCliente, topCliente, topQtd,
+        monthly, annualGrowth,
+      };
     },
   });
 }
