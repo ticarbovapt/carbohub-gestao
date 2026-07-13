@@ -65,7 +65,7 @@ export default function Purchasing() {
       <div className="space-y-6">
         <CarboPageHeader
           title="Financeiro & Suprimentos"
-          description="Requisições, ordens de compra, recebimento, notas fiscais e contas a pagar"
+          description="Compras (P2P), contas a pagar e a receber, fluxo de caixa, cadastros e dashboard"
           icon={Wallet}
           actions={
             <Button onClick={() => { setShowNewRC(true); setActiveTab("requisicoes"); }} className="gap-2 carbo-gradient text-white">
@@ -143,8 +143,11 @@ export default function Purchasing() {
             </TabsTrigger>
             <TabsTrigger value="notas" className="gap-1.5">
               <Receipt className="h-3.5 w-3.5" />
-              Notas Fiscais
+              NF de Compra
             </TabsTrigger>
+
+            <div className="w-px self-stretch bg-border mx-1 my-1" aria-hidden />
+
             <TabsTrigger value="pagar" className="gap-1.5">
               <CreditCard className="h-3.5 w-3.5" />
               Contas a Pagar

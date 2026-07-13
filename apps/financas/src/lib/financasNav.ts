@@ -7,7 +7,7 @@ export const FIN_NAV: FinNavItem[] = [
   { path: "/", label: "Início", icon: LayoutDashboard },
   { path: "/compras", label: "Financeiro & Suprimentos", icon: Wallet },
   { path: "/suprimentos", label: "Suprimentos", icon: Package },
-  { path: "/pedidos", label: "Pedidos (RV)", icon: ClipboardList },
+  { path: "/pedidos", label: "Pedidos de Venda", icon: ClipboardList },
   { path: "/faturamento", label: "Faturamento", icon: Receipt },
   { path: "/comissionamento", label: "Comissionamento", icon: Percent },
   { path: "/funcionarios", label: "Funcionários", icon: Users },

@@ -208,7 +208,7 @@ export default function Orders() {
     <>
       <div className="space-y-6">
         <CarboPageHeader
-          title="Controle de pedidos"
+          title="Pedidos de Venda"
           description="Gestão de pedidos, faturamento e entregas"
           icon={ShoppingBag}
           actions={

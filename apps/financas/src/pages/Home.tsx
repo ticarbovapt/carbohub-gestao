@@ -15,7 +15,7 @@ const ATALHOS = [
   { to: "/compras/recebiveis", label: "Contas a Receber", desc: "Títulos a receber, baixa e inadimplência.", icon: HandCoins, color: "text-carbo-green" },
   { to: "/compras/fluxo", label: "Fluxo de Caixa", desc: "Entradas × saídas e saldo projetado.", icon: Landmark, color: "text-carbo-blue" },
   { to: "/suprimentos", label: "Suprimentos", desc: "Estoque, movimentações, recebimento e política.", icon: Package, color: "text-carbo-green" },
-  { to: "/pedidos", label: "Pedidos (RV)", desc: "Pedidos, faturamento e entregas.", icon: ClipboardList, color: "text-primary" },
+  { to: "/pedidos", label: "Pedidos de Venda", desc: "Pedidos, faturamento e entregas.", icon: ClipboardList, color: "text-primary" },
   { to: "/comissionamento", label: "Comissionamento", desc: "Calcular comissões e controlar pagamentos.", icon: Percent, color: "text-carbo-green" },
   { to: "/funcionarios", label: "Funcionários", desc: "Dados bancários/PIX e contato de emergência.", icon: Users, color: "text-warning" },
   { to: "/compras/dashboard", label: "Dashboard Financeiro", desc: "Aging, fluxo, curva ABC e indicadores.", icon: BarChart3, color: "text-carbo-blue" },
