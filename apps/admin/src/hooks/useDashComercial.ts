@@ -15,6 +15,7 @@ import { supabase } from "@/integrations/supabase/client";
 
 const MES_ABBR = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
 const monthLabel = (d: Date) => `${MES_ABBR[d.getMonth()]}/${String(d.getFullYear()).slice(2)}`;
+const pct = (cur: number, prev: number) => (prev > 0 ? ((cur - prev) / prev) * 100 : null);
 
 export interface MonthRow {
   mes: string;
@@ -30,6 +31,31 @@ export interface AnnualGrowthPoint {
   real: number | null;
 }
 
+/** KPIs agregados sobre o conjunto de pedidos filtrado. */
+export interface ComercialKpis {
+  totalVendas: number;
+  totalBRL: number;
+  maiorVenda: number;
+  maiorCliente: string;
+  topCliente: string;
+  topQtd: number;
+  ticketMedio: number;
+}
+
+/** Crescimento M/M e vs Janeiro — porta FIEL do CRM (growth useMemo). */
+export interface ComercialGrowth {
+  mom: {
+    brl: number | null; qty: number | null;
+    curLabel: string; prevLabel: string;
+    cur: MonthRow; prev: MonthRow;
+  };
+  vsJan: {
+    brl: number | null; qty: number | null;
+    curLabel: string; janLabel: string;
+    cur: MonthRow; jan: MonthRow;
+  };
+}
+
 export interface ComercialData {
   totalBRL: number;
   totalVendas: number;
@@ -40,6 +66,8 @@ export interface ComercialData {
   topQtd: number;
   monthly: MonthRow[];
   annualGrowth: AnnualGrowthPoint[];
+  kpis: ComercialKpis;
+  growth: ComercialGrowth;
 }
 
 interface CarbozeOrderRow {
@@ -57,9 +85,9 @@ const isPedido = (s: string | null) => s !== "quote" && s !== "cancelled";
 type MetaRow = { vendedor_id: string; mes: number; target_amount: number };
 
 /** KPIs + séries mensais + crescimento anual (real vs meta), portado do CRM. */
-export function useDashComercial(months = 12) {
+export function useDashComercial(vendedorId: string | null = null, months = 12) {
   return useQuery({
-    queryKey: ["dash-comercial-overview", months],
+    queryKey: ["dash-comercial-overview", vendedorId ?? "all", months],
     queryFn: async (): Promise<ComercialData> => {
       const year = new Date().getFullYear();
 
@@ -71,7 +99,10 @@ export function useDashComercial(months = 12) {
       if (ordersErr) throw new Error(ordersErr.message);
 
       const rows = (ordersData ?? []) as unknown as CarbozeOrderRow[];
-      const pedidos = rows.filter((v) => isPedido(v.status));
+      // "pedido" (status efetivo) + filtro por vendedor selecionado (null/"all" = todos).
+      const pedidos = rows.filter(
+        (v) => isPedido(v.status) && (!vendedorId || v.vendedor_id === vendedorId),
+      );
 
       // ── Metas reais configuradas (RPC crm_metas_resolvidas_ano) — soma TODOS os vendedores.
       const { data: metasData, error: metasErr } = await (
@@ -124,9 +155,11 @@ export function useDashComercial(months = 12) {
       for (const [c, q] of byCliente) if (q > topQtd) { topQtd = q; topCliente = c; }
       const ticketMedio = totalVendas > 0 ? totalBRL / totalVendas : 0;
 
-      // ── metaPorMes — soma target_amount de TODOS os vendedores por mês (Admin = gestor geral).
+      // ── metaPorMes — Admin = gestor: vendedor selecionado → só a meta dele;
+      //    "todos" → soma do time (TODOS os vendedores). Mirror do CRM (metaPorMes).
       const metaPorMes = new Map<number, number>();
       for (const r of metasAno) {
+        if (vendedorId && r.vendedor_id !== vendedorId) continue;
         metaPorMes.set(r.mes, (metaPorMes.get(r.mes) ?? 0) + Number(r.target_amount || 0));
       }
 
@@ -139,9 +172,23 @@ export function useDashComercial(months = 12) {
         return { label, meta: meta > 0 ? meta : null, real: real && real > 0 ? real : null };
       });
 
+      // ── growth — Crescimento M/M e vs Janeiro. Verbatim CRM (growth useMemo).
+      const cur = monthly[monthly.length - 1] ?? { mes: "", faturado: 0, pedidos: 0, ticketMedio: 0 };
+      const prev = monthly[monthly.length - 2] ?? { mes: "", faturado: 0, pedidos: 0, ticketMedio: 0 };
+      const janLbl = monthLabel(new Date(year, 0, 1));
+      const jan = monthly.find((m) => m.mes === janLbl) ?? { mes: janLbl, faturado: 0, pedidos: 0, ticketMedio: 0 };
+      const growth: ComercialGrowth = {
+        mom: { brl: pct(cur.faturado, prev.faturado), qty: pct(cur.pedidos, prev.pedidos), curLabel: cur.mes, prevLabel: prev.mes, cur, prev },
+        vsJan: { brl: pct(cur.faturado, jan.faturado), qty: pct(cur.pedidos, jan.pedidos), curLabel: cur.mes, janLabel: jan.mes, cur, jan },
+      };
+
+      const kpis: ComercialKpis = {
+        totalVendas, totalBRL, maiorVenda, maiorCliente, topCliente, topQtd, ticketMedio,
+      };
+
       return {
         totalBRL, totalVendas, ticketMedio, maiorVenda, maiorCliente, topCliente, topQtd,
-        monthly, annualGrowth,
+        monthly, annualGrowth, kpis, growth,
       };
     },
   });

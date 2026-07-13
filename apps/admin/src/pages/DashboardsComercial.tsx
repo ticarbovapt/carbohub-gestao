@@ -1,16 +1,20 @@
+import { useMemo, useState } from "react";
 import {
-  TrendingUp, DollarSign, ShoppingCart, Receipt, Trophy, AlertTriangle,
+  TrendingUp, DollarSign, ShoppingCart, Trophy, AlertTriangle,
+  Repeat2, BarChart3, ArrowUpRight, ArrowDownRight, Minus, CalendarRange, User,
 } from "lucide-react";
 import {
   ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, LabelList,
 } from "recharts";
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
-import { CarboKPI } from "@/components/ui/carbo-kpi";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useAuth } from "@/contexts/AuthContext";
-import { fmtBRL, fmtBRLc } from "@/lib/dash-format";
 import { useDashComercial } from "@/hooks/useDashComercial";
+import { useVendedoresDir } from "@/hooks/useVendedoresDir";
 
 function RestrictedNotice() {
   return (
@@ -29,6 +33,8 @@ const fmtK = (v: number) =>
   v >= 1_000_000 ? `R$${(v / 1_000_000).toFixed(1)}M`
   : v >= 1000    ? `R$${(v / 1000).toFixed(0)}k`
   : formatCurrency(v);
+
+const pct = (cur: number, prev: number) => (prev > 0 ? ((cur - prev) / prev) * 100 : null);
 
 // Tooltip customizado — evita entradas duplicadas (Bar + Line com mesmo dataKey)
 const TooltipBRL = ({ active, payload, label }: any) => {
@@ -55,7 +61,9 @@ const TooltipQty = ({ active, payload, label }: any) => {
 
 export default function DashboardsComercial() {
   const { canAdmin } = useAuth();
-  const { data, isLoading } = useDashComercial(12);
+  const [vendedor, setVendedor] = useState("all");
+  const { data: vendedoresDir = [] } = useVendedoresDir();
+  const { data } = useDashComercial(vendedor === "all" ? null : vendedor, 12);
 
   if (!canAdmin) {
     return (
@@ -71,25 +79,157 @@ export default function DashboardsComercial() {
   const totalCarbozeOrders = data?.totalVendas ?? 0;
   const ticketMedio = data?.ticketMedio ?? 0;
 
+  // Opções de vendedor — diretório completo (vendedores no topo, avulsos depois).
+  const vendedorOpts = vendedoresDir.map((v) => ({
+    id: v.id, name: v.full_name || "—", avulso: !v.is_vendedor,
+  }));
+
+  const kpis = data?.kpis ?? {
+    totalVendas: 0, totalBRL: 0, maiorVenda: 0, maiorCliente: "—",
+    topCliente: "—", topQtd: 0, ticketMedio: 0,
+  };
+  const growth = data?.growth ?? {
+    mom: { brl: null, qty: null, curLabel: "", prevLabel: "", cur: { mes: "", faturado: 0, pedidos: 0, ticketMedio: 0 }, prev: { mes: "", faturado: 0, pedidos: 0, ticketMedio: 0 } },
+    vsJan: { brl: null, qty: null, curLabel: "", janLabel: "", cur: { mes: "", faturado: 0, pedidos: 0, ticketMedio: 0 }, jan: { mes: "", faturado: 0, pedidos: 0, ticketMedio: 0 } },
+  };
+
+  // 5 KPIs ricos — porta FIEL do CRM (kpiCards).
+  const kpiCards = [
+    { title: "Total de Vendas", value: kpis.totalVendas.toLocaleString("pt-BR"), sub: "Vendas (status pedido)", icon: ShoppingCart, accent: "border-l-green-500", iconBg: "bg-green-500/10 text-green-600" },
+    { title: "R$ Total Vendido", value: fmtK(kpis.totalBRL), sub: "Faturamento acumulado", icon: DollarSign, accent: "border-l-green-500", iconBg: "bg-green-500/10 text-green-600" },
+    { title: "Maior Venda", value: fmtK(kpis.maiorVenda), sub: kpis.maiorCliente, icon: Trophy, accent: "border-l-amber-400", iconBg: "bg-amber-400/10 text-amber-500" },
+    { title: "Top Recorrência", value: kpis.topCliente, sub: kpis.topQtd > 0 ? `${kpis.topQtd} pedidos · mais frequente` : "—", icon: Repeat2, accent: "border-l-blue-400", iconBg: "bg-blue-400/10 text-blue-500" },
+    { title: "Ticket Médio", value: fmtK(kpis.ticketMedio), sub: "Por pedido (período)", icon: TrendingUp, accent: "border-l-violet-400", iconBg: "bg-violet-400/10 text-violet-500" },
+  ];
+
+  // 2 cards de crescimento — porta FIEL do CRM (growthGroups).
+  const growthGroups = [
+    {
+      groupLabel: "Crescimento Mês a Mês", groupSub: `${growth.mom.curLabel} vs ${growth.mom.prevLabel}`, color: "blue" as const,
+      cards: [
+        { label: "Faturamento", pct: growth.mom.brl, current: fmtK(growth.mom.cur.faturado), ref: `${growth.mom.prevLabel}: ${fmtK(growth.mom.prev.faturado)}` },
+        { label: "Volume de Vendas", pct: growth.mom.qty, current: `${growth.mom.cur.pedidos} pedidos`, ref: `${growth.mom.prevLabel}: ${growth.mom.prev.pedidos} pedidos` },
+      ],
+    },
+    {
+      groupLabel: "Último Mês vs Janeiro", groupSub: `${growth.vsJan.curLabel} vs ${growth.vsJan.janLabel}`, color: "green" as const,
+      cards: [
+        { label: "Faturamento", pct: growth.vsJan.brl, current: fmtK(growth.vsJan.cur.faturado), ref: `${growth.vsJan.janLabel}: ${fmtK(growth.vsJan.jan.faturado)}` },
+        { label: "Volume de Vendas", pct: growth.vsJan.qty, current: `${growth.vsJan.cur.pedidos} pedidos`, ref: `${growth.vsJan.janLabel}: ${growth.vsJan.jan.pedidos} pedidos` },
+      ],
+    },
+  ];
+  const colorMap = {
+    blue: { stripe: "bg-blue-500", border: "border-blue-500/20", tag: "bg-blue-500/10 text-blue-500" },
+    green: { stripe: "bg-green-500", border: "border-green-500/20", tag: "bg-green-500/10 text-green-600" },
+  };
+
   return (
     <main className="mx-auto max-w-6xl px-4 sm:px-6 py-8 space-y-6">
-      <CarboPageHeader
-        icon={TrendingUp}
-        iconColor="green"
-        title="Comercial — Visão Geral"
-        description="Vendas, pedidos e performance comercial (todos os vendedores)"
-      />
+      {/* Header + filtros */}
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+        <CarboPageHeader
+          icon={TrendingUp}
+          iconColor="green"
+          title="Comercial — Visão Geral"
+          description="Vendas, pedidos e performance comercial"
+        />
+        <div className="flex flex-wrap items-end gap-2 shrink-0">
+          <div className="space-y-1">
+            <Label className="text-[10px] text-muted-foreground flex items-center gap-1"><CalendarRange className="h-3 w-3" /> Período</Label>
+            <div className="flex items-center gap-1">
+              <Input type="date" className="h-8 w-[130px] text-xs" />
+              <span className="text-xs text-muted-foreground">até</span>
+              <Input type="date" className="h-8 w-[130px] text-xs" />
+            </div>
+          </div>
+          {/* Admin é sempre gestor (canAdmin) → filtro de vendedor sempre visível. */}
+          <div className="space-y-1">
+            <Label className="text-[10px] text-muted-foreground flex items-center gap-1"><User className="h-3 w-3" /> Vendedor</Label>
+            <Select value={vendedor} onValueChange={setVendedor}>
+              <SelectTrigger className="h-8 w-[160px] text-xs"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos vendedores</SelectItem>
+                {vendedorOpts.map((v) => (
+                  <SelectItem key={v.id} value={v.id}>
+                    <span className="flex items-center gap-2">
+                      {v.name}
+                      {v.avulso
+                        ? <span className="text-[10px] font-semibold text-amber-500 border border-amber-500/30 rounded px-1">Avulso</span>
+                        : <span className="text-[10px] font-semibold text-carbo-green border border-carbo-green/30 rounded px-1">Vendedor</span>}
+                    </span>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+      </div>
 
-      {/* KPIs — mesmos valores do CRM (todos os vendedores) */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <CarboKPI title="Total faturado" value={fmtBRL(data?.totalBRL ?? 0)} icon={DollarSign}
-          iconColor="green" loading={isLoading} />
-        <CarboKPI title="Nº de pedidos" value={data?.totalVendas ?? 0} icon={ShoppingCart}
-          iconColor="blue" loading={isLoading} />
-        <CarboKPI title="Ticket médio" value={fmtBRLc(data?.ticketMedio ?? 0)} icon={Receipt}
-          iconColor="green" loading={isLoading} />
-        <CarboKPI title="Maior venda" value={fmtBRL(data?.maiorVenda ?? 0)} icon={Trophy}
-          iconColor="warning" loading={isLoading} />
+      {/* KPIs ricos (5) — porta FIEL do CRM */}
+      <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-5">
+        {kpiCards.map(({ title, value, sub, icon: Icon, accent, iconBg }) => {
+          const valLen = String(value).length;
+          const valSize = valLen <= 6 ? "text-3xl" : valLen <= 10 ? "text-2xl" : valLen <= 16 ? "text-xl" : "text-base";
+          return (
+            <div key={title} className={`relative overflow-hidden rounded-xl bg-card p-4 border border-border border-l-4 ${accent} kpi-glow transition-all hover:-translate-y-0.5`}>
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs font-medium text-muted-foreground truncate">{title}</p>
+                  <p className={`mt-1.5 font-bold text-foreground leading-tight break-words ${valSize}`}>{value}</p>
+                  {sub && <p className="mt-1 text-xs text-muted-foreground leading-snug line-clamp-2" title={sub}>{sub}</p>}
+                </div>
+                <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${iconBg}`}>
+                  <Icon className="h-[18px] w-[18px]" />
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Cards de Crescimento (2) — porta FIEL do CRM */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {growthGroups.map((group) => (
+          <div key={group.groupLabel} className={`rounded-xl border overflow-hidden bg-card ${colorMap[group.color].border}`}>
+            <div className={`h-1 w-full ${colorMap[group.color].stripe}`} />
+            <div className="px-4 pt-3 pb-2 border-b border-border/50">
+              <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${colorMap[group.color].tag}`}>{group.groupLabel}</span>
+              <p className="text-[11px] text-muted-foreground mt-0.5 font-medium">{group.groupSub}</p>
+            </div>
+            <div className="grid grid-cols-2 divide-x divide-border/50">
+              {group.cards.map((card, ci) => {
+                const isUp = card.pct !== null && card.pct >= 0;
+                const isNeutral = card.pct === null;
+                return (
+                  <div key={ci} className="p-4 space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">{card.label}</p>
+                      {isNeutral ? (
+                        <span className="flex items-center gap-0.5 rounded-md px-1.5 py-0.5 text-[11px] font-bold bg-muted text-muted-foreground shrink-0"><Minus className="h-3 w-3" /> s/d</span>
+                      ) : (
+                        <span className={`flex items-center gap-0.5 rounded-md px-1.5 py-0.5 text-xs font-bold shrink-0 ${isUp ? "bg-green-500/10 text-green-500" : "bg-red-400/10 text-red-400"}`}>
+                          {isUp ? <ArrowUpRight className="h-3.5 w-3.5" /> : <ArrowDownRight className="h-3.5 w-3.5" />}{Math.abs(card.pct!).toFixed(1)}%
+                        </span>
+                      )}
+                    </div>
+                    <p className={`text-xl font-bold tabular-nums leading-none ${isNeutral ? "text-foreground" : isUp ? "text-green-500" : "text-red-400"}`}>{card.current}</p>
+                    <p className="text-[11px] text-muted-foreground">{card.ref}</p>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Evolução Mensal de Vendas — cabeçalho de seção (porta do CRM) */}
+      <div>
+        <h2 className="text-base font-bold text-foreground flex items-center gap-2"><BarChart3 className="h-4 w-4 text-primary" /> Evolução Mensal de Vendas</h2>
+        <p className="text-xs text-muted-foreground mt-0.5">
+          <span className="font-semibold text-foreground">{totalCarbozeOrders} pedidos</span>
+          {" · "}<span className="font-semibold text-green-500">{totalCarboze.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })} acumulado</span>
+        </p>
       </div>
 
       {/* ── 4 gráficos portados do CRM (2×2) ───────────────────────────────── */}
