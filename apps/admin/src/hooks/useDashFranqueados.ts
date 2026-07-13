@@ -14,11 +14,6 @@ import { supabase } from "@/integrations/supabase/client";
 
 const licenciadosDb = (supabase as unknown as { schema: (s: string) => {
   rpc: (fn: string, args?: Record<string, unknown>) => Promise<{ data: unknown; error: { message: string } | null }>;
-  from: (t: string) => {
-    select: (c: string) => {
-      or: (f: string) => { order: (c: string) => { limit: (n: number) => Promise<{ data: unknown; error: { message: string } | null }> } };
-    };
-  };
 } }).schema("licenciados");
 
 // ── Tipos (espelham licenciados/src/types) ────────────────────────────────────
@@ -32,13 +27,6 @@ export interface FranqueadosRevenueMonth {
   month_start: string;
   revenue: number;
   services: number;
-}
-export interface FranqueadosLoja {
-  id: string;
-  name: string;
-  city: string | null;
-  state: string | null;
-  active: boolean;
 }
 
 // ── hooks ─────────────────────────────────────────────────────────────────────
@@ -73,21 +61,6 @@ export function useFranqueadosRevenueMonthly(months = 12) {
         out.push(byMonth.get(key) ?? { month_start: `${key}-01`, revenue: 0, services: 0 });
       }
       return out;
-    },
-  });
-}
-
-/** Lojas da rede (exclui operações internas Carbox, como no portal de origem). */
-export function useFranqueadosLojas() {
-  return useQuery({
-    queryKey: ["dash-franqueados-lojas"],
-    queryFn: async (): Promise<FranqueadosLoja[]> => {
-      const { data, error } = await licenciadosDb
-        .from("lojas").select("id, name, city, state, active")
-        .or("is_internal.is.null,is_internal.eq.false")
-        .order("name").limit(500);
-      if (error) throw new Error(error.message);
-      return (data ?? []) as FranqueadosLoja[];
     },
   });
 }
