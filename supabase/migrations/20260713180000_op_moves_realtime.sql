@@ -3,8 +3,13 @@
 -- diálogo, RPC de conclusão) — não depende do front lembrar de gravar.
 
 -- 1) Momento em que a OP entrou na etapa atual (para "parado há X").
-ALTER TABLE public.production_orders
-  ADD COLUMN IF NOT EXISTS stage_since timestamptz NOT NULL DEFAULT now();
+--    Adiciona SEM reescrever a tabela (nullable, sem default volátil na criação)
+--    para não travar o app ao vivo. Default e backfill vêm em passos separados.
+ALTER TABLE public.production_orders ADD COLUMN IF NOT EXISTS stage_since timestamptz;
+ALTER TABLE public.production_orders ALTER COLUMN stage_since SET DEFAULT now();
+UPDATE public.production_orders
+  SET stage_since = coalesce(updated_at, created_at, now())
+  WHERE stage_since IS NULL;
 
 -- 2) Log de movimentações (auditoria de quem moveu o card, de onde pra onde).
 CREATE TABLE IF NOT EXISTS public.production_order_moves (
