@@ -532,6 +532,33 @@ export function useApprovalConfig() {
   });
 }
 
+// ---- Badges por aba (pendências) ----
+
+export function usePurchasingBadges() {
+  return useQuery({
+    queryKey: ["purchasing-badges"],
+    queryFn: async () => {
+      const today = new Date().toISOString().slice(0, 10);
+      const head = { count: "exact" as const, head: true };
+      const [rc, ocGerada, ocReceber, payAtras, recAtras] = await Promise.all([
+        supabase.from("purchase_requests").select("*", head).eq("status", "aguardando_aprovacao" as any),
+        supabase.from("purchase_orders").select("*", head).eq("status", "gerada" as any),
+        supabase.from("purchase_orders").select("*", head).in("status", ["comprada", "enviada_fornecedor"] as any),
+        supabase.from("purchase_payables").select("*", head).neq("status", "pago" as any).neq("status", "cancelado" as any).lt("due_date", today),
+        supabase.from("receivables").select("*", head).neq("status", "recebido").neq("status", "cancelado").lt("due_date", today),
+      ]);
+      return {
+        requisicoes: rc.count ?? 0,
+        ordens: ocGerada.count ?? 0,
+        recebimento: ocReceber.count ?? 0,
+        pagar: payAtras.count ?? 0,
+        recebiveis: recAtras.count ?? 0,
+      } as Record<string, number>;
+    },
+    refetchInterval: 60000,
+  });
+}
+
 // ---- KPIs ----
 
 export function usePurchasingKPIs() {

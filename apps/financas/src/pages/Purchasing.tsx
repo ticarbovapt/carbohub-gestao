@@ -13,6 +13,7 @@ import {
   usePurchaseOrders,
   usePurchasePayables,
   usePurchasingKPIs,
+  usePurchasingBadges,
   usePurchaseReceivings,
   usePurchaseInvoices,
 } from "@/hooks/usePurchasing";
@@ -54,11 +55,25 @@ export default function Purchasing() {
   const goPayables = (filter: string) => { setPayFilter(filter); setActiveTab("pagar"); };
 
   const { data: kpis } = usePurchasingKPIs();
+  const { data: badges } = usePurchasingBadges();
 
   const canSeeDashboard = gestor;
 
   const formatCurrency = (val: number) =>
     new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(val);
+
+  // Pílula de contagem ao vivo dentro da aba. Some quando zera.
+  const CountPill = ({ n, tone = "amber" }: { n?: number; tone?: "amber" | "red" }) => {
+    if (!n) return null;
+    const cls = tone === "red"
+      ? "bg-destructive text-destructive-foreground"
+      : "bg-warning text-warning-foreground";
+    return (
+      <span className={`ml-0.5 inline-flex min-w-[18px] h-[18px] items-center justify-center rounded-full px-1 text-[10px] font-bold leading-none ${cls}`}>
+        {n > 99 ? "99+" : n}
+      </span>
+    );
+  };
 
   return (
     <>
@@ -132,14 +147,17 @@ export default function Purchasing() {
             <TabsTrigger value="requisicoes" className="gap-1.5">
               <FileText className="h-3.5 w-3.5" />
               Requisições
+              <CountPill n={badges?.requisicoes} tone="amber" />
             </TabsTrigger>
             <TabsTrigger value="ordens" className="gap-1.5">
               <Package className="h-3.5 w-3.5" />
               Ordens de Compra
+              <CountPill n={badges?.ordens} tone="amber" />
             </TabsTrigger>
             <TabsTrigger value="recebimento" className="gap-1.5">
               <CheckCircle2 className="h-3.5 w-3.5" />
               Recebimento
+              <CountPill n={badges?.recebimento} tone="amber" />
             </TabsTrigger>
             <TabsTrigger value="notas" className="gap-1.5">
               <Receipt className="h-3.5 w-3.5" />
@@ -151,10 +169,12 @@ export default function Purchasing() {
             <TabsTrigger value="pagar" className="gap-1.5">
               <CreditCard className="h-3.5 w-3.5" />
               Contas a Pagar
+              <CountPill n={badges?.pagar} tone="red" />
             </TabsTrigger>
             <TabsTrigger value="recebiveis" className="gap-1.5">
               <HandCoins className="h-3.5 w-3.5" />
               Contas a Receber
+              <CountPill n={badges?.recebiveis} tone="red" />
             </TabsTrigger>
             <TabsTrigger value="fluxo" className="gap-1.5">
               <Landmark className="h-3.5 w-3.5" />

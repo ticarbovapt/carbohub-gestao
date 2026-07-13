@@ -5,6 +5,7 @@ import { TopBar } from "@/components/TopBar";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useAccessPing } from "@/hooks/useAccessPing";
+import { useFinanceRealtime } from "@/hooks/useFinanceRealtime";
 import { FIN_NAV } from "@/lib/financasNav";
 
 const navCls = ({ isActive }: { isActive: boolean }) =>
@@ -38,6 +39,7 @@ export function Layout() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [deskOpen, setDeskOpen] = useState(true);
   useAccessPing("carbo_financas");
+  useFinanceRealtime();
 
   const handleMenu = () => {
     if (isMobile) setMobileOpen(true);
