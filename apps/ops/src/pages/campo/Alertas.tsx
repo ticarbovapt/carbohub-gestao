@@ -8,6 +8,7 @@ import { useStock } from "@/hooks/useStock";
 import { HUBS } from "@/components/estoque/stockData";
 import { usePosVendaOrders, POSVENDA_STAGES } from "@/hooks/usePosVenda";
 import { useProductionOrders } from "@/hooks/useProductionOrders";
+import { useProducibility } from "@/hooks/useProducibility";
 import { useOS } from "@/hooks/useOS";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -63,6 +64,7 @@ export default function Alertas() {
   const posQ = usePosVendaOrders();
   const opsQ = useProductionOrders();
   const osQ = useOS();
+  const producible = useProducibility();
   const [kindFilter, setKindFilter] = useState<Kind | "all">("all");
 
   const isLoading = stockQ.isLoading || posQ.isLoading || opsQ.isLoading || osQ.isLoading;
@@ -146,8 +148,37 @@ export default function Alertas() {
         action: { label: "Abrir OS", go: () => navigate("/campo/os") } });
     }
 
+    // 7) Produção travada: OP pronta pra separar, OP em falta de insumo (via
+    //    reserva) e insumo-gargalo. Sinais que só existiam dentro de Produção.
+    const EARLY = new Set(["rascunho", "planejada", "aguardando_separacao"]);
+    const earlyOps = (opsQ.data ?? []).filter((o) => EARLY.has(o.op_status));
+    const verdicts = producible.allocate(earlyOps);
+    for (const op of earlyOps) {
+      const v = verdicts.get(op.id);
+      if (v === "ok") {
+        out.push({ id: `opready-${op.id}`, kind: "op",
+          titulo: `${op.op_number ?? "OP"} — ${op.product_code ?? ""}`.trim(),
+          descricao: `Pronta pra separar · ${op.planned_quantity} un`,
+          prioridade: "medium",
+          action: { label: "Abrir produção", go: () => navigate("/producao/ordens") } });
+      } else if (v === "falta") {
+        out.push({ id: `opfalta-${op.id}`, kind: "op",
+          titulo: `${op.op_number ?? "OP"} — ${op.product_code ?? ""}`.trim(),
+          descricao: `Travada — falta insumo em estoque · ${op.planned_quantity} un`,
+          prioridade: "high",
+          action: { label: "Abrir produção", go: () => navigate("/producao/ordens") } });
+      }
+    }
+    for (const b of producible.bottlenecks) {
+      out.push({ id: `gargalo-${b.insumoId}`, kind: "op",
+        titulo: `Insumo-gargalo: ${b.name}`,
+        descricao: `Zerado no HUB-RN · trava ${b.affected} produção(ões)`,
+        prioridade: "critical",
+        action: { label: "Abrir produção", go: () => navigate("/producao/ordens") } });
+    }
+
     return out.sort((a, b) => PRIO_ORDER[a.prioridade] - PRIO_ORDER[b.prioridade]);
-  }, [stockQ.data, posQ.data, opsQ.data, osQ.data, navigate]);
+  }, [stockQ.data, posQ.data, opsQ.data, osQ.data, producible, navigate]);
 
   const byKind = useMemo(() => {
     const m = {} as Record<Kind, number>;
