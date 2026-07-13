@@ -181,35 +181,34 @@ async function ensureProductionOrderForOrder(orderId: string): Promise<boolean> 
   if (ord.error || !ord.data) throw ord.error ?? new Error("Pedido não encontrado");
 
   const items: any[] = Array.isArray(ord.data.items) ? ord.data.items : [];
-  const totalQty = items.reduce((s, it) => s + (Number(it.quantity) || 0), 0) || 1;
-  const label = items.length === 0
-    ? `Pedido ${ord.data.order_number ?? ""}`.trim()
-    : items.length === 1
-      ? String(items[0].name ?? "Produto")
-      : `${items.length} itens · pedido ${ord.data.order_number ?? ""}`.trim();
+  const need = ord.data.delivery_date || null;
+  const baseNote = `Gerada do pós-venda · pedido ${ord.data.order_number ?? ""} · ${ord.data.customer_name ?? ""}`.trim();
 
-  // Pedido de um produto só → vincula o product_id (Produto Final do MRP) para o
-  // check de materiais achar a BOM. Pedido com vários produtos fica sem vínculo
-  // (uma OP não representa uma cesta de produtos distintos).
-  const singleProductId = items.length === 1 ? (items[0].product_id || null) : null;
-
-  const ins = await db.from("production_orders").insert({
-    sku_id: null,
-    product_id: singleProductId,
-    planned_quantity: totalQty,
-    // Prazo da OP = data de entrega do pedido (senão a OP some do KPI "Atrasadas").
-    need_date: ord.data.delivery_date || null,
-    op_status: "rascunho",           // → coluna Backlog
-    demand_source: "venda",          // enum fixo; a origem pós-venda fica em deviation_notes + source_order_id
-    priority: 3,
-    quality_result: "pendente",
-    source_order_id: orderId,
-    deviation_notes: `Gerada do pós-venda · pedido ${ord.data.order_number ?? ""} · ${ord.data.customer_name ?? ""}`.trim(),
-    // legados exigidos pelo schema original
-    product_code: label,
-    quantity: totalQty,
-    status: "pending",
+  // UMA OP por item do pedido — cada uma com seu produto (BOM/checagem de material
+  // funcionam) e sua quantidade. Pedido sem itens → uma OP genérica (sem vínculo).
+  // O pedido só fica "produzido" quando TODAS as OPs concluírem (trigger op_conclude).
+  const source: (any | null)[] = items.length ? items : [null];
+  const rows = source.map((it) => {
+    const qty = it ? (Number(it.quantity) || 1) : 1;
+    const label = it ? String(it.name ?? "Produto") : `Pedido ${ord.data.order_number ?? ""}`.trim();
+    return {
+      sku_id: null,
+      product_id: it ? (it.product_id || null) : null,
+      planned_quantity: qty,
+      need_date: need,                 // prazo herdado do pedido (KPI "Atrasadas")
+      op_status: "rascunho",           // → coluna Backlog
+      demand_source: "venda",
+      priority: 3,
+      quality_result: "pendente",
+      source_order_id: orderId,
+      deviation_notes: baseNote,
+      product_code: label,
+      quantity: qty,
+      status: "pending",
+    };
   });
+
+  const ins = await db.from("production_orders").insert(rows);
   if (ins.error) throw ins.error;
   return true;
 }
@@ -297,7 +296,7 @@ export function useUpdateFulfillmentStage() {
       qc.invalidateQueries({ queryKey: ["ops", "hubrn-stock"] });
       qc.invalidateQueries({ queryKey: ["ops", "shipments"] });
       if (res?.opError) toast.error("Etapa mudou, mas falhou ao criar a OP: " + res.opError, { duration: 10000 });
-      else if (res?.opCreated) toast.success("Etapa atualizada · OP criada no Backlog.");
+      else if (res?.opCreated) toast.success("Etapa atualizada · OP(s) criada(s) no Backlog (uma por item).");
       else if (res?.stage === "separado") {
         const remessa = res.shipmentCreated ? " · remessa criada na Logística" : "";
         if (res.deductedLines === 0) toast.warning("Separado, mas NADA foi deduzido do estoque — o pedido não tem produto vinculado." + remessa, { duration: 8000 });
