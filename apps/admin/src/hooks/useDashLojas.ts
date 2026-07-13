@@ -29,20 +29,6 @@ export interface LojasGlobalKpis {
   total_frentistas: number;
   low_stock_products: number;
 }
-export interface LojasPostoRow {
-  posto_id: string; name: string; city: string | null; state: string | null;
-  rede_id: string | null; active: boolean; frentistas: number;
-  sales_count: number; revenue: number; total_units: number; low_stock_count: number;
-}
-export interface LojasLowStockRow {
-  posto_id: string; posto_name: string; product_id: string;
-  product_name: string; variant: string; quantity: number; min_quantity: number;
-}
-export interface LojasRankRow {
-  frentista_id: string; full_name: string; avatar_url: string | null; active: boolean;
-  posto_id: string; posto_name: string;
-  sales_count: number; total_qty: number; total_amount: number; rank: number;
-}
 export interface LojasTimeseriesRow {
   day: string; variant: string; total_qty: number; total_amount: number;
 }
@@ -94,30 +80,5 @@ export function useLojasTimeseries(days = 30) {
     queryKey: ["dash-lojas-timeseries", days],
     queryFn: () =>
       rpc<LojasTimeseriesRow[]>("get_scoped_sales_timeseries", { p_posto_id: null, ...period(days) }),
-  });
-}
-
-/** Ranking de frentistas da rede (p_rede_id e p_posto_id nulos = geral). */
-export function useLojasRanking(days = 30) {
-  return useQuery({
-    queryKey: ["dash-lojas-ranking", days],
-    queryFn: () =>
-      rpc<LojasRankRow[]>("admin_get_ranking", { ...period(days), p_rede_id: null, p_posto_id: null }),
-  });
-}
-
-/** Uma linha por posto (últimos 30d), com receita/vendas/estoque baixo. */
-export function useLojasPostos() {
-  return useQuery({
-    queryKey: ["dash-lojas-postos"],
-    queryFn: () => rpc<LojasPostoRow[]>("admin_list_postos", period(30)),
-  });
-}
-
-/** Itens em estoque baixo em toda a rede. */
-export function useLojasLowStock() {
-  return useQuery({
-    queryKey: ["dash-lojas-low-stock"],
-    queryFn: () => rpc<LojasLowStockRow[]>("admin_list_low_stock"),
   });
 }
