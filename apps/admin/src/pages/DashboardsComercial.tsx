@@ -1,15 +1,15 @@
 import {
-  TrendingUp, DollarSign, ShoppingCart, Receipt, AlertTriangle,
+  TrendingUp, DollarSign, ShoppingCart, Receipt, Trophy, AlertTriangle,
 } from "lucide-react";
 import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+  ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip,
+  ResponsiveContainer, LabelList,
 } from "recharts";
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
 import { CarboKPI } from "@/components/ui/carbo-kpi";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/contexts/AuthContext";
-import { fmtBRL, fmtBRLc, fmtNum, pct, monthLabel } from "@/lib/dash-format";
+import { fmtBRL, fmtBRLc } from "@/lib/dash-format";
 import { useDashComercial } from "@/hooks/useDashComercial";
 
 function RestrictedNotice() {
@@ -21,12 +21,37 @@ function RestrictedNotice() {
   );
 }
 
-const SEG = [
-  { key: "consumo", label: "Consumo (B2B)", color: "#3b82f6" },
-  { key: "revenda", label: "Revenda (PDV)", color: "#f59e0b" },
-  { key: "online", label: "On-line", color: "#22c55e" },
-  { key: "naoClassificado", label: "Não classificado", color: "#94a3b8" },
-] as const;
+// ── Helpers portados VERBATIM do CRM (DashboardComercial.tsx) ─────────────────
+const formatCurrency = (v: number) =>
+  v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+
+const fmtK = (v: number) =>
+  v >= 1_000_000 ? `R$${(v / 1_000_000).toFixed(1)}M`
+  : v >= 1000    ? `R$${(v / 1000).toFixed(0)}k`
+  : formatCurrency(v);
+
+// Tooltip customizado — evita entradas duplicadas (Bar + Line com mesmo dataKey)
+const TooltipBRL = ({ active, payload, label }: any) => {
+  if (!active || !payload?.length) return null;
+  const main = payload.find((p: any) => p.type === "bar") ?? payload[0];
+  return (
+    <div style={{ background: "#1a2234", border: "1px solid rgba(255,255,255,0.14)", boxShadow: "0 8px 28px rgba(0,0,0,0.45)", borderRadius: 10, padding: "8px 14px", fontSize: 12 }}>
+      <p style={{ color: "#fff", fontWeight: 700, marginBottom: 6, fontSize: 13 }}>{label}</p>
+      <p style={{ color: "#4ade80" }}>{Number(main.value).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</p>
+    </div>
+  );
+};
+
+const TooltipQty = ({ active, payload, label }: any) => {
+  if (!active || !payload?.length) return null;
+  const main = payload.find((p: any) => p.type === "bar") ?? payload[0];
+  return (
+    <div style={{ background: "#1a2234", border: "1px solid rgba(255,255,255,0.14)", boxShadow: "0 8px 28px rgba(0,0,0,0.45)", borderRadius: 10, padding: "8px 14px", fontSize: 12 }}>
+      <p style={{ color: "#fff", fontWeight: 700, marginBottom: 6, fontSize: 13 }}>{label}</p>
+      <p style={{ color: "#93c5fd" }}>{Number(main.value)} vendas</p>
+    </div>
+  );
+};
 
 export default function DashboardsComercial() {
   const { canAdmin } = useAuth();
@@ -40,15 +65,11 @@ export default function DashboardsComercial() {
     );
   }
 
-  const chartData = (data?.monthly ?? []).map((m) => ({
-    mes: monthLabel(m.key + "-01T12:00:00"),
-    faturado: m.faturado,
-  }));
-  const hasChart = chartData.some((d) => d.faturado > 0);
-  const segTotal = data
-    ? data.segmentos.consumo.brl + data.segmentos.revenda.brl +
-      data.segmentos.online.brl + data.segmentos.naoClassificado.brl
-    : 0;
+  const monthlyData = data?.monthly ?? [];
+  const annualGrowthData = data?.annualGrowth ?? [];
+  const totalCarboze = data?.totalBRL ?? 0;
+  const totalCarbozeOrders = data?.totalVendas ?? 0;
+  const ticketMedio = data?.ticketMedio ?? 0;
 
   return (
     <main className="mx-auto max-w-6xl px-4 sm:px-6 py-8 space-y-6">
@@ -56,97 +77,217 @@ export default function DashboardsComercial() {
         icon={TrendingUp}
         iconColor="green"
         title="Comercial — Visão Geral"
-        description="Pedidos e performance de vendas (CarboZé / Bling) · últimos 12 meses"
+        description="Vendas, pedidos e performance comercial (todos os vendedores)"
       />
 
-      {/* KPIs */}
+      {/* KPIs — mesmos valores do CRM (todos os vendedores) */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <CarboKPI title="Total faturado" value={fmtBRL(data?.totalBRL ?? 0)} icon={DollarSign}
           iconColor="green" loading={isLoading} />
-        <CarboKPI title="Nº de vendas" value={data?.totalVendas ?? 0} icon={ShoppingCart}
+        <CarboKPI title="Nº de pedidos" value={data?.totalVendas ?? 0} icon={ShoppingCart}
           iconColor="blue" loading={isLoading} />
         <CarboKPI title="Ticket médio" value={fmtBRLc(data?.ticketMedio ?? 0)} icon={Receipt}
           iconColor="green" loading={isLoading} />
-        <CarboKPI title="Consumo (B2B)" value={fmtBRL(data?.segmentos.consumo.brl ?? 0)} icon={TrendingUp}
-          iconColor="blue" loading={isLoading} />
+        <CarboKPI title="Maior venda" value={fmtBRL(data?.maiorVenda ?? 0)} icon={Trophy}
+          iconColor="warning" loading={isLoading} />
       </div>
 
-      {/* Faturamento por mês */}
-      <Card className="rounded-2xl border-0 shadow-sm">
-        <CardHeader className="pb-1 pt-5 px-5">
-          <CardTitle className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
-            Faturamento por mês
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="px-2 pb-4">
-          {!hasChart ? (
-            <p className="px-3 py-10 text-center text-sm text-muted-foreground">
-              Sem faturamento no período.
-            </p>
-          ) : (
-            <ResponsiveContainer width="100%" height={260}>
-              <BarChart data={chartData} margin={{ top: 4, right: 12, left: -6, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" className="stroke-border/50" vertical={false} />
-                <XAxis dataKey="mes" tick={{ fontSize: 10 }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fontSize: 10 }} axisLine={false} tickLine={false}
-                  tickFormatter={(x: number) => (x >= 1000 ? `${Math.round(x / 1000)}k` : String(x))} />
-                <Tooltip
-                  contentStyle={{ background: "var(--background)", border: "1px solid var(--border)", borderRadius: 10, fontSize: 12 }}
-                  formatter={(v: number) => [fmtBRL(v), "Faturado"]}
-                  cursor={{ fill: "var(--muted)", opacity: 0.3 }} />
-                <Bar dataKey="faturado" fill="#22c55e" radius={[4, 4, 0, 0]} maxBarSize={48} />
-              </BarChart>
-            </ResponsiveContainer>
-          )}
-        </CardContent>
-      </Card>
+      {/* ── 4 gráficos portados do CRM (2×2) ───────────────────────────────── */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
 
-      {/* Vendas por canal */}
-      <Card className="rounded-2xl border-0 shadow-sm">
-        <CardHeader className="pt-5 px-5 pb-3">
-          <CardTitle className="text-sm font-semibold flex items-center gap-2">
-            <ShoppingCart className="h-4 w-4 text-carbo-blue" /> Vendas por canal
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="p-0 pb-2">
-          {segTotal === 0 ? (
-            <p className="px-5 py-6 text-sm text-muted-foreground">Sem vendas classificadas no período.</p>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-y border-border/50 bg-muted/30 text-muted-foreground text-xs">
-                    <th className="text-left px-5 py-2 font-medium">Canal</th>
-                    <th className="text-right px-4 py-2 font-medium">Pedidos</th>
-                    <th className="text-right px-4 py-2 font-medium">Faturado</th>
-                    <th className="text-right px-5 py-2 font-medium">% do total</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border/30">
-                  {SEG.map((s) => {
-                    const d = data!.segmentos[s.key];
-                    return (
-                      <tr key={s.key} className="hover:bg-muted/20">
-                        <td className="px-5 py-2.5 font-medium">
-                          <span className="inline-flex items-center gap-2">
-                            <span className="inline-block h-2.5 w-2.5 rounded-sm" style={{ background: s.color }} />
-                            {s.label}
-                          </span>
-                        </td>
-                        <td className="px-4 py-2.5 text-right tabular-nums">{fmtNum(d.qtd)}</td>
-                        <td className="px-4 py-2.5 text-right tabular-nums font-semibold">{fmtBRL(d.brl)}</td>
-                        <td className="px-5 py-2.5 text-right">
-                          <Badge variant="outline" className="text-xs font-mono">{pct(d.brl, segTotal)}</Badge>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+        {/* ── Gráfico 1: Total Faturado R$ por mês ──────────────── */}
+        <Card className="rounded-2xl border-0 shadow-sm">
+          <CardHeader className="pb-1 pt-5 px-5">
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
+                  Total Faturado por Mês
+                </CardTitle>
+                <p className="text-xl font-bold text-green-500 leading-none tabular-nums mt-0.5">
+                  {fmtK(totalCarboze)}
+                  <span className="text-xs font-normal text-muted-foreground ml-1">acumulado</span>
+                </p>
+              </div>
+              <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold bg-green-500/10 text-green-500">R$</span>
             </div>
-          )}
-        </CardContent>
-      </Card>
+          </CardHeader>
+          <CardContent className="px-2 pb-4">
+            <ResponsiveContainer width="100%" height={220}>
+              <ComposedChart data={monthlyData} margin={{ top: 22, right: 8, bottom: 0, left: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.08)" vertical={false} />
+                <XAxis dataKey="mes" tick={{ fontSize: 11, fill: "#94a3b8" }} axisLine={false} tickLine={false} dy={4} />
+                <YAxis tick={{ fontSize: 10, fill: "#94a3b8" }} axisLine={false} tickLine={false} width={44}
+                  tickFormatter={v => v >= 1000 ? `${(v / 1000).toFixed(0)}k` : String(v)} />
+                <Tooltip cursor={{ fill: "rgba(148,163,184,0.08)" }} content={<TooltipBRL />} />
+                <Bar dataKey="faturado" fill="rgba(26,122,74,0.18)" stroke="#1a7a4a" strokeWidth={1.5} radius={[4, 4, 0, 0]} maxBarSize={48} isAnimationActive={false}>
+                  <LabelList dataKey="faturado" position="top"
+                    formatter={(v: number) => v >= 1000 ? `R$${(v / 1000).toFixed(0)}k` : v > 0 ? `R$${v}` : ""}
+                    style={{ fontSize: 10, fill: "#1a7a4a", fontWeight: 700 }} />
+                </Bar>
+                <Line type="monotoneX" dataKey="faturado" stroke="#1a7a4a" strokeWidth={2.5}
+                  dot={{ r: 3, fill: "#1a7a4a", stroke: "#fff", strokeWidth: 2 }} activeDot={{ r: 5 }} isAnimationActive={false} />
+              </ComposedChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+
+        {/* ── Gráfico 2: Total de Vendas (qtd) por mês ─────────── */}
+        <Card className="rounded-2xl border-0 shadow-sm">
+          <CardHeader className="pb-1 pt-5 px-5">
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
+                  Total de Vendas por Mês
+                </CardTitle>
+                <p className="text-xl font-bold text-[#3b6ea5] leading-none tabular-nums mt-0.5">
+                  {totalCarbozeOrders.toLocaleString("pt-BR")}
+                  <span className="text-xs font-normal text-muted-foreground ml-1">pedidos</span>
+                </p>
+              </div>
+              <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold bg-blue-500/10 text-blue-400">Qtd</span>
+            </div>
+          </CardHeader>
+          <CardContent className="px-2 pb-4">
+            <ResponsiveContainer width="100%" height={220}>
+              <ComposedChart data={monthlyData} margin={{ top: 22, right: 8, bottom: 0, left: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.08)" vertical={false} />
+                <XAxis dataKey="mes" tick={{ fontSize: 11, fill: "#94a3b8" }} axisLine={false} tickLine={false} dy={4} />
+                <YAxis allowDecimals={false} tick={{ fontSize: 10, fill: "#94a3b8" }} axisLine={false} tickLine={false} width={28} />
+                <Tooltip cursor={{ fill: "rgba(148,163,184,0.08)" }} content={<TooltipQty />} />
+                <Bar dataKey="pedidos" fill="rgba(59,110,165,0.75)" radius={[5, 5, 0, 0]} maxBarSize={48} isAnimationActive={false}>
+                  <LabelList dataKey="pedidos" position="top"
+                    formatter={(v: number) => v > 0 ? String(v) : ""}
+                    style={{ fontSize: 11, fill: "#94a3b8", fontWeight: 700 }} />
+                </Bar>
+                <Line type="monotoneX" dataKey="pedidos" stroke="#3b6ea5" strokeWidth={2.5} strokeDasharray="5 3"
+                  dot={{ r: 3, fill: "#3b6ea5", stroke: "#fff", strokeWidth: 2 }} activeDot={{ r: 5 }} isAnimationActive={false} />
+              </ComposedChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+
+        {/* ── Gráfico 3: Crescimento Anual (real vs meta configurada) ─────────── */}
+        <Card className="rounded-2xl border-0 shadow-sm">
+          <CardHeader className="pb-1 pt-5 px-5">
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="text-base font-bold flex items-center gap-2">
+                  <TrendingUp className="h-4 w-4 text-orange-400" />
+                  Crescimento Anual
+                </CardTitle>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Faturamento real vs{" "}
+                  <span className="font-semibold text-orange-400">meta configurada</span> (Metas de Vendedores)
+                </p>
+              </div>
+              {/* Legenda */}
+              <div className="flex items-center gap-3 text-[10px] text-muted-foreground">
+                <span className="flex items-center gap-1">
+                  <span className="inline-block w-3 h-3 rounded-sm bg-emerald-500/70" />
+                  Real
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <span className="inline-block w-5 border-t-2 border-dashed border-orange-400" />
+                  Meta
+                </span>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="px-2 pb-4">
+            <ResponsiveContainer width="100%" height={220}>
+              <ComposedChart data={annualGrowthData} margin={{ top: 20, right: 8, bottom: 0, left: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.08)" vertical={false} />
+                <XAxis dataKey="label" tick={{ fontSize: 10, fill: "#94a3b8" }} axisLine={false} tickLine={false} dy={4} />
+                <YAxis
+                  tick={{ fontSize: 10, fill: "#94a3b8" }}
+                  axisLine={false} tickLine={false} width={44}
+                  tickFormatter={v => v >= 1000 ? `${(v / 1000).toFixed(0)}k` : String(v)}
+                />
+                <Tooltip
+                  cursor={{ fill: "rgba(148,163,184,0.08)" }}
+                  content={({ active, payload, label: lbl }: any) => {
+                    if (!active || !payload?.length) return null;
+                    const rv = payload.find((p: any) => p.dataKey === "real")?.value;
+                    const pv = payload.find((p: any) => p.dataKey === "meta")?.value;
+                    const diff = rv != null && pv != null ? ((Number(rv) - Number(pv)) / Number(pv)) * 100 : null;
+                    const fx = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+                    return (
+                      <div style={{ background: "#1a2234", border: "1px solid rgba(255,255,255,0.14)", boxShadow: "0 8px 28px rgba(0,0,0,0.45)", borderRadius: 10, padding: "8px 14px", fontSize: 12 }}>
+                        <p style={{ color: "#fff", fontWeight: 700, marginBottom: 6, fontSize: 13 }}>{lbl}</p>
+                        {rv != null && <p style={{ color: "#34d399" }}>Real: {fx(Number(rv))}</p>}
+                        {pv != null && <p style={{ color: "#fb923c" }}>Meta: {fx(Number(pv))}</p>}
+                        {diff != null && (
+                          <p style={{ color: diff >= 0 ? "#86efac" : "#f87171", marginTop: 4, fontWeight: 600 }}>
+                            {diff >= 0 ? "▲" : "▼"} {Math.abs(diff).toFixed(1)}% vs meta
+                          </p>
+                        )}
+                      </div>
+                    );
+                  }}
+                />
+                {/* Barras reais — null não renderiza barra (meses futuros) */}
+                <Bar dataKey="real" fill="rgba(16,185,129,0.55)" stroke="#10b981" strokeWidth={1.5}
+                     radius={[4, 4, 0, 0]} maxBarSize={40} isAnimationActive={false}>
+                  <LabelList dataKey="real" position="top"
+                    formatter={(v: number | null) => v != null ? fmtK(v) : ""}
+                    style={{ fontSize: 9, fill: "#6ee7b7", fontWeight: 700 }} />
+                </Bar>
+                {/* Linha de meta configurada tracejada (laranja) */}
+                <Line dataKey="meta" type="monotone" stroke="#fb923c" strokeWidth={2}
+                      strokeDasharray="5 3" dot={false} isAnimationActive={false} connectNulls />
+              </ComposedChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+
+        {/* ── Gráfico 4: Evolução Ticket Médio ────────────────────── */}
+        <Card className="rounded-2xl border-0 shadow-sm">
+          <CardHeader className="pb-1 pt-5 px-5">
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="text-base font-bold flex items-center gap-2">
+                  <TrendingUp className="h-4 w-4 text-violet-500" />
+                  Evolução do Ticket Médio
+                </CardTitle>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Valor médio por pedido mês a mês ·{" "}
+                  <span className="font-semibold text-violet-500">{fmtK(ticketMedio)} média geral</span>
+                </p>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="px-2 pb-4">
+            <ResponsiveContainer width="100%" height={220}>
+              <ComposedChart data={monthlyData} margin={{ top: 22, right: 8, bottom: 0, left: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.08)" vertical={false} />
+                <XAxis dataKey="mes" tick={{ fontSize: 11, fill: "#94a3b8" }} axisLine={false} tickLine={false} dy={4} />
+                <YAxis tick={{ fontSize: 10, fill: "#94a3b8" }} axisLine={false} tickLine={false} width={48}
+                  tickFormatter={v => v >= 1000 ? `${(v / 1000).toFixed(0)}k` : String(v)} />
+                <Tooltip cursor={{ fill: "rgba(148,163,184,0.08)" }}
+                  content={({ active, payload, label }: any) => {
+                    if (!active || !payload?.length) return null;
+                    const v = payload.find((p: any) => p.type === "bar")?.value ?? payload[0]?.value ?? 0;
+                    return (
+                      <div style={{ background: "#1a2234", border: "1px solid rgba(255,255,255,0.14)", boxShadow: "0 8px 28px rgba(0,0,0,0.45)", borderRadius: 10, padding: "8px 14px", fontSize: 12 }}>
+                        <p style={{ color: "#fff", fontWeight: 700, marginBottom: 6, fontSize: 13 }}>{label}</p>
+                        <p style={{ color: "#c4b5fd" }}>Ticket: {Number(v).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</p>
+                      </div>
+                    );
+                  }}
+                />
+                <Bar dataKey="ticketMedio" fill="rgba(139,92,246,0.2)" stroke="#8b5cf6" strokeWidth={1.5} radius={[4, 4, 0, 0]} maxBarSize={48} isAnimationActive={false}>
+                  <LabelList dataKey="ticketMedio" position="top"
+                    formatter={(v: number) => v >= 1000 ? `R$${(v / 1000).toFixed(0)}k` : v > 0 ? `R$${v}` : ""}
+                    style={{ fontSize: 10, fill: "#8b5cf6", fontWeight: 700 }} />
+                </Bar>
+                <Line type="monotoneX" dataKey="ticketMedio" stroke="#8b5cf6" strokeWidth={2.5}
+                  dot={{ r: 3, fill: "#8b5cf6", stroke: "#fff", strokeWidth: 2 }} activeDot={{ r: 5 }} isAnimationActive={false} />
+              </ComposedChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+
+      </div>
     </main>
   );
 }
