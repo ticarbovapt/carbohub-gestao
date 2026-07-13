@@ -173,10 +173,19 @@ const OP_SECTOR: Record<string, string> = {
 };
 export const opSector = (status?: string | null) => (status && OP_SECTOR[status]) || "Pedidos";
 
-export interface OpBrief { op_status: string; op_number: string | null; }
+// Progresso das OPs de um pedido (multi-item): quantas concluíram e o setor da
+// OP mais atrasada (a que ainda falta mais) — é o gargalo a acompanhar.
+export interface OpBrief { total: number; done: number; sector: string; }
 
-/** OP vinculada a cada pedido (source_order_id) — para mostrar em que setor da
- *  produção o pedido está enquanto não é concluído. */
+// Ordem do pipeline de produção (menor = mais no começo = mais atrasada).
+const OP_RANK: Record<string, number> = {
+  rascunho: 0, planejada: 1, aguardando_separacao: 2, separada: 3,
+  aguardando_liberacao: 4, liberada_producao: 5, em_producao: 6, envase: 6,
+  rotulagem: 7, aguardando_confirmacao: 8, confirmada: 8, aguardando_qualidade: 8,
+  qualidade_aprovada: 9, liberada: 9,
+};
+
+/** OPs vinculadas a cada pedido (source_order_id) — progresso e setor gargalo. */
 export function useOpsBySource(orderIds: string[], enabled: boolean) {
   const ids = [...new Set(orderIds.filter(Boolean))] as string[];
   return useQuery({
@@ -184,13 +193,27 @@ export function useOpsBySource(orderIds: string[], enabled: boolean) {
     enabled: enabled && ids.length > 0,
     queryFn: async (): Promise<Record<string, OpBrief>> => {
       const res = await db
-        .from("production_orders").select("source_order_id, op_status, op_number")
+        .from("production_orders").select("source_order_id, op_status")
         .in("source_order_id", ids);
-      const map: Record<string, OpBrief> = {};
+      const agg: Record<string, { total: number; done: number; minRank: number; minStatus: string | null; blocked: boolean }> = {};
       for (const r of (res.data ?? [])) {
-        if (r.source_order_id && !map[r.source_order_id]) {
-          map[r.source_order_id] = { op_status: r.op_status, op_number: r.op_number };
-        }
+        const oid = r.source_order_id as string | null;
+        if (!oid) continue;
+        if (r.op_status === "cancelada") continue; // cancelada não conta
+        const a = (agg[oid] ??= { total: 0, done: 0, minRank: Infinity, minStatus: null, blocked: false });
+        a.total++;
+        if (r.op_status === "concluida") { a.done++; continue; }
+        if (r.op_status === "bloqueada") a.blocked = true;
+        const rk = OP_RANK[r.op_status] ?? 5;
+        if (rk < a.minRank) { a.minRank = rk; a.minStatus = r.op_status; }
+      }
+      const map: Record<string, OpBrief> = {};
+      for (const [oid, a] of Object.entries(agg)) {
+        if (a.total === 0) continue; // só OPs canceladas → sem badge de produção
+        map[oid] = {
+          total: a.total, done: a.done,
+          sector: a.blocked ? "Bloqueada" : a.minStatus ? opSector(a.minStatus) : "Concluída",
+        };
       }
       return map;
     },

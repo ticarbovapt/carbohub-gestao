@@ -7,7 +7,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Button } from "@/components/ui/button";
 import { CarboBadge } from "@/components/ui/carbo-badge";
 import {
-  usePosVendaOrders, useUpdateFulfillmentStage, useHubRnStock, useOpsBySource, opSector,
+  usePosVendaOrders, useUpdateFulfillmentStage, useHubRnStock, useOpsBySource,
   POSVENDA_STAGES, type FulfillmentStage, type PosVendaOrder,
 } from "@/hooks/usePosVenda";
 
@@ -200,8 +200,12 @@ export default function PosVenda() {
                             o.production_done ? (
                               <CarboBadge variant="success" className="gap-1">✅ Produzido — mover p/ Em Separação</CarboBadge>
                             ) : opByOrder[o.id] ? (
-                              <CarboBadge variant="default" className="gap-1">🏭 Produção: {opSector(opByOrder[o.id].op_status)}</CarboBadge>
-                            ) : null
+                              <CarboBadge variant="default" className="gap-1">
+                                🏭 {opByOrder[o.id].done}/{opByOrder[o.id].total} produzidas · {opByOrder[o.id].sector}
+                              </CarboBadge>
+                            ) : (
+                              <CarboBadge variant="warning" className="gap-1">⚠️ Sem OP — recriar (mover p/ Pedido Recebido e voltar)</CarboBadge>
+                            )
                           )}
                           {o.fulfillment_stage === "gerar_nf" && (
                             <CarboBadge variant="warning" className="gap-1">🧾 Liberado no Faturamento — aguardando NF</CarboBadge>
