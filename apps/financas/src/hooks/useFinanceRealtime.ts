@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 
-// Som amigável (dois toques) via Web Audio — sem asset. Destravado no 1º gesto.
+// Som amigável (três toques) via Web Audio — sem asset. Destravado no 1º gesto.
 let audioCtx: AudioContext | null = null;
 function playDing() {
   try {
@@ -13,15 +13,21 @@ function playDing() {
     audioCtx = audioCtx || new AC();
     if (audioCtx!.state === "suspended") audioCtx!.resume();
     const now = audioCtx!.currentTime;
-    [880, 1174.66].forEach((f, i) => {
+    // Ganho mestre alto pra ser audível mesmo com o volume do SO no meio.
+    const master = audioCtx!.createGain();
+    master.gain.value = 0.9;
+    master.connect(audioCtx!.destination);
+    // Arpejo ascendente (dó-mi-sol) — presente sem ser estridente.
+    [659.25, 783.99, 1046.5].forEach((f, i) => {
       const o = audioCtx!.createOscillator(), g = audioCtx!.createGain();
-      o.type = "sine"; o.frequency.value = f;
-      o.connect(g); g.connect(audioCtx!.destination);
-      const t = now + i * 0.14;
+      // triangle soa mais "cheio"/alto que sine no mesmo ganho.
+      o.type = "triangle"; o.frequency.value = f;
+      o.connect(g); g.connect(master);
+      const t = now + i * 0.16;
       g.gain.setValueAtTime(0.0001, t);
-      g.gain.exponentialRampToValueAtTime(0.16, t + 0.02);
-      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.28);
-      o.start(t); o.stop(t + 0.3);
+      g.gain.exponentialRampToValueAtTime(0.6, t + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.4);
+      o.start(t); o.stop(t + 0.42);
     });
   } catch { /* som é bônus */ }
 }
