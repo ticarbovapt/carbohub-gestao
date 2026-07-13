@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useLocation } from "react-router-dom";
 import { Plus, Trash2, ShoppingCart, Info, Loader2, Boxes, User, ChevronRight, ChevronDown } from "lucide-react";
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
 import { CarboCard, CarboCardContent, CarboCardHeader, CarboCardTitle } from "@/components/ui/carbo-card";
@@ -60,18 +61,29 @@ const STATUS_LABEL: Record<string, { label: string; variant: "default" | "succes
 
 const emptyItem = (): ReqItem => ({ descricao: "", quantidade: 1, unidade: "un", valor_unitario: 0 });
 
+interface RCPrefill {
+  descricao?: string; quantidade?: number; unidade?: string; motivo?: string; priority?: string;
+}
+
 export default function RequisicaoCompra() {
   const create = useCreatePurchaseRequest();
   const { data: minhas = [], isLoading } = useMyPurchaseRequests();
 
+  // Vindo da Central de Alertas com "Requisitar" → já abre com o item preenchido.
+  const pref = (useLocation().state as { prefill?: RCPrefill } | null)?.prefill;
+
   const [escopo, setEscopo] = useState<"setor" | "individual">("setor");
-  const [motivo, setMotivo] = useState("");
-  const [priority, setPriority] = useState("normal");
+  const [motivo, setMotivo] = useState(pref?.motivo ?? "");
+  const [priority, setPriority] = useState(pref?.priority ?? "normal");
   const [neededBy, setNeededBy] = useState("");
-  const [costCenter, setCostCenter] = useState("");
+  const [costCenter, setCostCenter] = useState(pref ? "Produção" : "");
   const [referenceUrl, setReferenceUrl] = useState("");
   const [obs, setObs] = useState("");
-  const [items, setItems] = useState<ReqItem[]>([emptyItem()]);
+  const [items, setItems] = useState<ReqItem[]>(
+    pref?.descricao
+      ? [{ descricao: pref.descricao, quantidade: pref.quantidade ?? 1, unidade: pref.unidade ?? "un", valor_unitario: 0 }]
+      : [emptyItem()],
+  );
   const [draftQuotes, setDraftQuotes] = useState<DraftQuote[]>([]);
   const [showCot, setShowCot] = useState(false);
 

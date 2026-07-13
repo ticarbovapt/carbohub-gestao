@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Bell, RefreshCw, AlertTriangle, Clock, CheckCircle2, Package, Loader2, ChevronRight } from "lucide-react";
+import { Bell, RefreshCw, AlertTriangle, Clock, CheckCircle2, Package, Loader2, ChevronRight, ShoppingCart } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { CarboEmptyState } from "@/components/ui/carbo-empty-state";
 import { useStock } from "@/hooks/useStock";
@@ -24,6 +24,8 @@ const PRIO_ORDER: Record<Prioridade, number> = { critical: 0, high: 1, medium: 2
 
 interface StockAlert {
   id: string; titulo: string; descricao: string; prioridade: Prioridade; hubSlug: string;
+  // Dados pra pré-preencher a Requisição de Compra a partir do alerta.
+  productName: string; unit: string; suggestedQty: number; critical: boolean;
 }
 
 export default function Alertas() {
@@ -45,6 +47,8 @@ export default function Alertas() {
         const negativo = qty < 0;
         if (!negativo && (!min || min <= 0 || qty >= min)) continue;
         const prioridade: Prioridade = qty <= 0 ? "critical" : qty < min * 0.5 ? "high" : "medium";
+        // Quanto pedir: o que falta pra voltar ao mínimo (pelo menos 1).
+        const suggestedQty = Math.max(1, Math.ceil((min || 0) - qty));
         out.push({
           id: `${p.id}-${hub.id}`,
           titulo: `${p.name} — ${hub.label}`,
@@ -53,6 +57,10 @@ export default function Alertas() {
             : `Saldo ${qty} ${p.stock_unit} • mínimo ${min} (${p.product_code})`,
           prioridade,
           hubSlug: hub.slug,
+          productName: p.name,
+          unit: p.stock_unit,
+          suggestedQty,
+          critical: qty <= 0,
         });
       }
     }
@@ -122,7 +130,21 @@ export default function Alertas() {
                   </div>
                   <p className="text-xs text-muted-foreground mt-0.5">{a.descricao}</p>
                 </div>
-                <Button variant="ghost" size="sm" className="h-8 text-xs shrink-0 gap-1" onClick={() => navigate(`/estoque/${a.hubSlug}`)}>Ver no estoque <ChevronRight className="h-3.5 w-3.5" /></Button>
+                <div className="flex items-center gap-1 shrink-0">
+                  <Button
+                    variant="outline" size="sm" className="h-8 text-xs gap-1"
+                    onClick={() => navigate("/compras", { state: { prefill: {
+                      descricao: a.productName,
+                      quantidade: a.suggestedQty,
+                      unidade: a.unit,
+                      motivo: a.critical ? "ruptura" : "reposicao_safety",
+                      priority: a.critical ? "critica" : "normal",
+                    } } })}
+                  >
+                    <ShoppingCart className="h-3.5 w-3.5" /> Requisitar
+                  </Button>
+                  <Button variant="ghost" size="sm" className="h-8 text-xs gap-1" onClick={() => navigate(`/estoque/${a.hubSlug}`)}>Ver no estoque <ChevronRight className="h-3.5 w-3.5" /></Button>
+                </div>
               </div>
             );
           })}
