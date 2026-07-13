@@ -84,7 +84,7 @@ export interface PosVendaOrder {
 const SELECT_BASE =
   "id, order_number, customer_name, customer_email, customer_phone, delivery_address, delivery_city, " +
   "delivery_state, delivery_zip, vendedor_name, vendedor_id, subtotal, shipping_cost, discount, total, " +
-  "notes, items, created_at, fulfillment_stage, linha, bling_nf_id, invoice_number";
+  "notes, items, created_at, fulfillment_stage, linha, bling_nf_id, invoice_number, status";
 const SELECT_COLS = SELECT_BASE + ", production_done";
 
 /** Todas as vendas manuais (visão de operações). */
@@ -96,6 +96,9 @@ export function usePosVendaOrders() {
         .from("carboze_orders")
         .select(cols)
         .is("external_ref", null)
+        // Orçamento (status='quote') ainda não é venda — só entra no rastreio
+        // quando vira venda de verdade lá no Sales/CRM. Mantém status nulo.
+        .or("status.is.null,status.neq.quote")
         .order("created_at", { ascending: false })
         .limit(500);
 
