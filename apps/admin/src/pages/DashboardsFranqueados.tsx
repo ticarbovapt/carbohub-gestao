@@ -7,12 +7,9 @@ import {
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
 import { CarboKPI } from "@/components/ui/carbo-kpi";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/contexts/AuthContext";
 import { fmtBRL, monthLabel } from "@/lib/dash-format";
-import {
-  useFranqueadosKpis, useFranqueadosRevenueMonthly, useFranqueadosLojas,
-} from "@/hooks/useDashFranqueados";
+import { useFranqueadosKpis, useFranqueadosRevenueMonthly } from "@/hooks/useDashFranqueados";
 
 function AccessNotice() {
   return (
@@ -34,7 +31,6 @@ export default function DashboardsFranqueados() {
 
   const { data: kpis, isLoading: kLoad } = useFranqueadosKpis();
   const { data: months = [] } = useFranqueadosRevenueMonthly(12);
-  const { data: lojas = [] } = useFranqueadosLojas();
 
   const chartData = months.map((m) => ({ mes: monthLabel(m.month_start), receita: m.revenue }));
   const hasRevenue = chartData.some((d) => d.receita > 0);
@@ -97,49 +93,6 @@ export default function DashboardsFranqueados() {
                 <Bar dataKey="receita" fill="#3b82f6" radius={[4, 4, 0, 0]} maxBarSize={48} />
               </BarChart>
             </ResponsiveContainer>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Lojas */}
-      <Card className="rounded-2xl border-0 shadow-sm">
-        <CardHeader className="pt-5 px-5 pb-3">
-          <CardTitle className="text-sm font-semibold flex items-center gap-2">
-            <Building2 className="h-4 w-4 text-carbo-blue" /> Lojas da rede
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="p-0 pb-2">
-          {lojas.length === 0 ? (
-            <p className="px-5 py-6 text-sm text-muted-foreground">Nenhuma loja cadastrada.</p>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-y border-border/50 bg-muted/30 text-muted-foreground text-xs">
-                    <th className="text-left px-5 py-2 font-medium">Nome</th>
-                    <th className="text-left px-4 py-2 font-medium">Cidade/UF</th>
-                    <th className="text-center px-5 py-2 font-medium">Status</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border/30">
-                  {lojas.map((l) => (
-                    <tr key={l.id} className="hover:bg-muted/20">
-                      <td className="px-5 py-2.5 font-medium">{l.name}</td>
-                      <td className="px-4 py-2.5 text-muted-foreground text-xs">
-                        {l.city ? `${l.city}${l.state ? `, ${l.state}` : ""}` : "—"}
-                      </td>
-                      <td className="px-5 py-2.5 text-center">
-                        <Badge variant="outline" className={l.active
-                          ? "text-xs text-green-600 border-green-500/40"
-                          : "text-xs text-muted-foreground"}>
-                          {l.active ? "Ativa" : "Inativa"}
-                        </Badge>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
           )}
         </CardContent>
       </Card>
