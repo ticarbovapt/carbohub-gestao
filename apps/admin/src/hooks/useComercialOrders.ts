@@ -12,6 +12,7 @@ export interface ComercialOrderRow {
   order_number: string | null;
   created_at: string | null;
   customer_name: string | null;
+  cnpj: string | null;
   vendedor_name: string | null;
   vendedor_id: string | null;
   segmento: string | null;
@@ -42,7 +43,7 @@ export function useComercialOrders(filters: ComercialFonteFilters = {}) {
     queryFn: async (): Promise<ComercialFonteData> => {
       const { data, error } = await db
         .from("carboze_orders")
-        .select("id, order_number, created_at, customer_name, vendedor_name, vendedor_id, segmento, status, total, excluir_metricas, external_ref")
+        .select("id, order_number, created_at, customer_name, cnpj, vendedor_name, vendedor_id, segmento, status, total, excluir_metricas, external_ref")
         .order("created_at", { ascending: false })
         .limit(5000);
       if (error) throw error;
