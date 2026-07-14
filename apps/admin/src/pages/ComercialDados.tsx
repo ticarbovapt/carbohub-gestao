@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Database, AlertTriangle, Search, Download, ShoppingCart, DollarSign, Target, EyeOff, Users, Building2, ListOrdered } from "lucide-react";
+import { Database, AlertTriangle, Search, Download, ShoppingCart, DollarSign, Target, EyeOff, Users, Building2, ListOrdered, ArrowUp, ArrowDown, ChevronsUpDown } from "lucide-react";
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
 import { CarboCard, CarboCardContent } from "@/components/ui/carbo-card";
 import { CarboBadge } from "@/components/ui/carbo-badge";
@@ -24,10 +24,11 @@ const fmtDoc = (v: string | null) => {
 const diasDesde = (s: string | null) => (s ? Math.floor((Date.now() - new Date(s).getTime()) / 86_400_000) : null);
 
 interface ClienteAgg {
-  key: string; cnpj: string | null; nome: string; nomes: Set<string>;
+  key: string; cnpj: string | null; nome: string; nomes: Set<string>; vendedores: Set<string>;
   segmento: string | null; pedidos: number; totalBRL: number; primeira: string | null; ultima: string | null;
   orders: ComercialOrderRow[];
 }
+type SortCol = "cnpj" | "nome" | "canal" | "vendedor" | "pedidos" | "total" | "primeira" | "ultima";
 const CANAL_LABEL: Record<string, string> = { consumo: "Consumo (B2B)", revenda: "Revenda (PDV)", online: "On-line" };
 const canalBadge = (s: string | null) =>
   s === "consumo" ? <CarboBadge variant="default">Consumo</CarboBadge>
@@ -52,6 +53,21 @@ function Tile({ icon: Icon, label, value, tone }: { icon: React.ElementType; lab
         <p className="text-lg font-bold tabular-nums">{value}</p>
       </CarboCardContent>
     </CarboCard>
+  );
+}
+
+function SortTh({ col, label, sort, onSort, align = "left" }: {
+  col: SortCol; label: string; sort: { col: SortCol; dir: "asc" | "desc" }; onSort: (c: SortCol) => void; align?: "left" | "center" | "right";
+}) {
+  const active = sort.col === col;
+  const justify = align === "right" ? "justify-end" : align === "center" ? "justify-center" : "justify-start";
+  return (
+    <th className="px-3 py-2 font-medium">
+      <button onClick={() => onSort(col)} className={`flex items-center gap-1 w-full ${justify} hover:text-foreground transition-colors ${active ? "text-foreground" : ""}`}>
+        {label}
+        {active ? (sort.dir === "asc" ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />) : <ChevronsUpDown className="h-3 w-3 opacity-40" />}
+      </button>
+    </th>
   );
 }
 
@@ -89,8 +105,9 @@ export default function ComercialDados() {
       const key = digits || (nomeKey ? `nome:${nomeKey}` : "");
       if (!key) continue;
       let g = map.get(key);
-      if (!g) { g = { key, cnpj: digits || null, nome: o.customer_name ?? "—", nomes: new Set(), segmento: o.segmento, pedidos: 0, totalBRL: 0, primeira: null, ultima: null, orders: [] }; map.set(key, g); }
+      if (!g) { g = { key, cnpj: digits || null, nome: o.customer_name ?? "—", nomes: new Set(), vendedores: new Set(), segmento: o.segmento, pedidos: 0, totalBRL: 0, primeira: null, ultima: null, orders: [] }; map.set(key, g); }
       if (o.customer_name?.trim()) g.nomes.add(o.customer_name.trim());
+      if (o.vendedor_name?.trim()) g.vendedores.add(o.vendedor_name.trim());
       g.orders.push(o);
       g.pedidos++; g.totalBRL += o.total ?? 0;
       const d = o.created_at;
@@ -99,8 +116,32 @@ export default function ComercialDados() {
         if (!g.ultima || d > g.ultima) { g.ultima = d; g.nome = o.customer_name ?? g.nome; g.segmento = o.segmento ?? g.segmento; }
       }
     }
-    return Array.from(map.values()).sort((a, b) => (b.ultima ?? "").localeCompare(a.ultima ?? ""));
+    return Array.from(map.values());
   }, [rows]);
+
+  const [sort, setSort] = useState<{ col: SortCol; dir: "asc" | "desc" }>({ col: "ultima", dir: "desc" });
+  const toggleSort = (col: SortCol) =>
+    setSort((s) => (s.col === col ? { col, dir: s.dir === "asc" ? "desc" : "asc" } : { col, dir: col === "nome" || col === "cnpj" || col === "canal" || col === "vendedor" ? "asc" : "desc" }));
+  const clientesSorted = useMemo(() => {
+    const dir = sort.dir === "asc" ? 1 : -1;
+    const val = (c: ClienteAgg): string | number => {
+      switch (sort.col) {
+        case "cnpj": return c.cnpj ?? "zzz"; // sem doc por último
+        case "nome": return (c.nome ?? "").toLowerCase();
+        case "canal": return c.segmento ?? "zzz";
+        case "vendedor": return (Array.from(c.vendedores)[0] ?? "zzz").toLowerCase();
+        case "pedidos": return c.pedidos;
+        case "total": return c.totalBRL;
+        case "primeira": return c.primeira ?? "";
+        case "ultima": return c.ultima ?? "";
+      }
+    };
+    return [...clientes].sort((a, b) => {
+      const va = val(a), vb = val(b);
+      if (typeof va === "number" && typeof vb === "number") return (va - vb) * dir;
+      return String(va).localeCompare(String(vb)) * dir;
+    });
+  }, [clientes, sort]);
 
   const nomesDistintos = useMemo(
     () => new Set(rows.filter((r) => r.contaPedido).map((r) => (r.customer_name ?? "").trim().toLowerCase()).filter(Boolean)).size,
@@ -116,9 +157,9 @@ export default function ComercialDados() {
   const esc = (v: any) => `"${String(v ?? "").replace(/"/g, '""')}"`;
   const exportCsv = () => {
     if (view === "clientes") {
-      const head = ["cnpj_cpf", "cliente", "nomes_distintos", "canal", "pedidos", "total", "primeira_compra", "ultima_compra"];
-      const lines = clientes.map((c) => [
-        c.cnpj ? fmtDoc(c.cnpj) : "(sem doc)", c.nome, c.nomes.size,
+      const head = ["cnpj_cpf", "cliente", "vendedor(es)", "nomes_distintos", "canal", "pedidos", "total", "primeira_compra", "ultima_compra"];
+      const lines = clientesSorted.map((c) => [
+        c.cnpj ? fmtDoc(c.cnpj) : "(sem doc)", c.nome, Array.from(c.vendedores).join(" | ") || "—", c.nomes.size,
         c.segmento ? (CANAL_LABEL[c.segmento] ?? c.segmento) : "", c.pedidos, c.totalBRL,
         c.primeira, c.ultima,
       ].map(esc).join(","));
@@ -247,24 +288,30 @@ export default function ComercialDados() {
               <table className="w-full text-sm">
                 <thead className="sticky top-0 bg-board-surface">
                   <tr className="border-b text-left text-xs text-muted-foreground">
-                    <th className="px-3 py-2 font-medium">CNPJ / CPF</th>
-                    <th className="px-3 py-2 font-medium">Cliente</th>
-                    <th className="px-3 py-2 font-medium">Canal</th>
-                    <th className="px-3 py-2 font-medium text-center">Pedidos</th>
-                    <th className="px-3 py-2 font-medium text-right">Total</th>
-                    <th className="px-3 py-2 font-medium">1ª compra</th>
-                    <th className="px-3 py-2 font-medium">Última compra</th>
+                    <SortTh col="cnpj" label="CNPJ / CPF" sort={sort} onSort={toggleSort} />
+                    <SortTh col="nome" label="Cliente" sort={sort} onSort={toggleSort} />
+                    <SortTh col="vendedor" label="Vendedor dono" sort={sort} onSort={toggleSort} />
+                    <SortTh col="canal" label="Canal" sort={sort} onSort={toggleSort} />
+                    <SortTh col="pedidos" label="Pedidos" sort={sort} onSort={toggleSort} align="center" />
+                    <SortTh col="total" label="Total" sort={sort} onSort={toggleSort} align="right" />
+                    <SortTh col="primeira" label="1ª compra" sort={sort} onSort={toggleSort} />
+                    <SortTh col="ultima" label="Última compra" sort={sort} onSort={toggleSort} />
                   </tr>
                 </thead>
                 <tbody>
-                  {clientes.slice(0, 500).map((c) => {
+                  {clientesSorted.slice(0, 500).map((c) => {
                     const dias = diasDesde(c.ultima);
+                    const vend = Array.from(c.vendedores);
                     return (
                       <tr key={c.key} className="border-b last:border-0 hover:bg-accent/40 cursor-pointer" onClick={() => setClienteDetail(c)}>
                         <td className="px-3 py-2 font-mono text-xs whitespace-nowrap">{c.cnpj ? fmtDoc(c.cnpj) : <span className="text-muted-foreground">— (sem doc)</span>}</td>
-                        <td className="px-3 py-2 max-w-[240px]">
+                        <td className="px-3 py-2 max-w-[220px]">
                           <span className="truncate block">{c.nome || "—"}</span>
                           {c.nomes.size > 1 && <span className="text-[10px] text-amber-500">{c.nomes.size} nomes diferentes no mesmo doc</span>}
+                        </td>
+                        <td className="px-3 py-2 text-xs">
+                          {vend.length === 0 ? <span className="text-muted-foreground">—</span>
+                            : vend.map((v) => <div key={v} className="whitespace-nowrap">{v}</div>)}
                         </td>
                         <td className="px-3 py-2">{canalBadge(c.segmento)}</td>
                         <td className="px-3 py-2 text-center tabular-nums font-medium">{c.pedidos}</td>
