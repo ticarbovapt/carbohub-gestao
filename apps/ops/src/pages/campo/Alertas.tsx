@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Bell, RefreshCw, AlertTriangle, Clock, CheckCircle2, Package, Loader2, ChevronRight, ShoppingCart, Truck, Factory, Receipt, Wrench } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { CarboPageHeader } from "@/components/ui/carbo-page-header";
 import { CarboEmptyState } from "@/components/ui/carbo-empty-state";
 import { useStock } from "@/hooks/useStock";
 import { HUBS } from "@/components/estoque/stockData";
@@ -103,7 +104,8 @@ export default function Alertas() {
     for (const o of posQ.data?.orders ?? []) {
       const stg = o.fulfillment_stage;
       if (TERMINAL.has(stg)) continue;
-      const idade = daysSince(o.updated_at ?? o.created_at);
+      // "parado há X" a partir da troca de etapa (coluna dedicada, não poluída).
+      const idade = daysSince(o.stage_changed_at ?? o.updated_at ?? o.created_at);
       const goPos = { label: "Abrir rastreio", go: () => navigate("/logistica/pos-venda") };
 
       if (stg === "criar_op" && o.production_done) {
@@ -133,6 +135,20 @@ export default function Alertas() {
         titulo: `${op.op_number ?? "OP"} — ${op.product_code ?? op.customer_name ?? ""}`.trim(),
         descricao: `Prazo vencido há ${atraso}d · ${op.planned_quantity} un`,
         prioridade: atraso >= 3 ? "critical" : "high",
+        action: { label: "Abrir produção", go: () => navigate("/producao/ordens") } });
+    }
+
+    // 5b) OP PARADA DEMAIS na etapa (independe de prazo) — via stage_since.
+    //     Cobre OPs internas sem need_date que empacam sem gerar alerta.
+    for (const op of opsQ.data ?? []) {
+      if (op.op_status === "concluida" || op.op_status === "cancelada") continue;
+      const parado = daysSince(op.stage_since);
+      if (parado == null || parado < 2) continue;
+      if (op.need_date && op.need_date < today) continue; // já vira "atrasada" acima
+      out.push({ id: `opdwell-${op.id}`, kind: "op",
+        titulo: `${op.op_number ?? "OP"} — ${op.product_code ?? op.customer_name ?? ""}`.trim(),
+        descricao: `Parada há ${parado}d na etapa atual · ${op.planned_quantity} un`,
+        prioridade: parado >= 10 ? "critical" : parado >= 5 ? "high" : "medium",
         action: { label: "Abrir produção", go: () => navigate("/producao/ordens") } });
     }
 
@@ -207,13 +223,16 @@ export default function Alertas() {
   return (
     <div className="p-4 md:p-6">
       <div className="space-y-5 max-w-[1200px] mx-auto">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-bold text-foreground flex items-center gap-2"><Bell className="h-6 w-6" /> Central de Alertas</h1>
-            <p className="text-sm text-muted-foreground mt-0.5">Pendências operacionais: estoque, pedidos, produção, NF e OS de campo</p>
-          </div>
-          <Button variant="outline" size="sm" onClick={refetchAll} disabled={isFetching} className="gap-2"><RefreshCw className={cn("h-4 w-4", isFetching && "animate-spin")} /> Atualizar</Button>
-        </div>
+        <CarboPageHeader
+          title="Central de Alertas"
+          description="Pendências operacionais: estoque, pedidos, produção, NF e OS de campo"
+          icon={Bell}
+          actions={
+            <Button variant="outline" size="sm" onClick={refetchAll} disabled={isFetching} className="gap-2">
+              <RefreshCw className={cn("h-4 w-4", isFetching && "animate-spin")} /> Atualizar
+            </Button>
+          }
+        />
 
         <div className="grid grid-cols-3 gap-3">
           {KPIS.map((k) => (

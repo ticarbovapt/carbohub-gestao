@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { CarboPageHeader } from "@/components/ui/carbo-page-header";
 import { ClipboardList, Calendar, Zap, CheckCircle2, Search, LayoutGrid, List, RefreshCw, Loader2, Eye } from "lucide-react";
 import { useOS, type OSRow } from "@/hooks/useOS";
 
@@ -63,13 +64,16 @@ export default function OrdensServico() {
   return (
     <div className="p-4 md:p-6">
       <div className="space-y-6 max-w-[1600px] mx-auto">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-bold flex items-center gap-3"><ClipboardList className="h-6 w-6 text-purple-500" /> Ordens de Serviço</h1>
-            <p className="text-muted-foreground mt-1">Descarbonização CarboVAPT — B2C · B2B · Frota</p>
-          </div>
-          <Button variant="outline" size="sm" onClick={() => refetch()} className="gap-1"><RefreshCw className={`h-3.5 w-3.5 ${isFetching ? "animate-spin" : ""}`} /></Button>
-        </div>
+        <CarboPageHeader
+          title="Ordens de Serviço"
+          description="Descarbonização CarboVAPT — B2C · B2B · Frota"
+          icon={ClipboardList}
+          actions={
+            <Button variant="outline" size="sm" onClick={() => refetch()} className="gap-1.5">
+              <RefreshCw className={`h-3.5 w-3.5 ${isFetching ? "animate-spin" : ""}`} /> Atualizar
+            </Button>
+          }
+        />
 
         {/* Banner de espelho/somente leitura */}
         <div className="flex items-center gap-2 px-3 py-2 rounded-md bg-blue-500/10 border border-blue-500/20 text-sm text-blue-500">

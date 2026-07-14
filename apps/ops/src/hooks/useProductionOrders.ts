@@ -135,21 +135,17 @@ export function useLastOpMoves(opIds: string[], enabled: boolean) {
     queryKey: ["ops", "op-moves", [...ids].sort()],
     enabled: enabled && ids.length > 0,
     queryFn: async (): Promise<Record<string, OpMove>> => {
-      const res = await db
-        .from("production_order_moves")
-        .select("op_id, moved_by, moved_at")
-        .in("op_id", ids)
-        .order("moved_at", { ascending: false });
-      const latest: Record<string, { moved_by: string | null; moved_at: string }> = {};
-      for (const r of (res.data ?? [])) if (!latest[r.op_id]) latest[r.op_id] = { moved_by: r.moved_by, moved_at: r.moved_at };
-      const uids = [...new Set(Object.values(latest).map((r) => r.moved_by).filter(Boolean))] as string[];
+      // DISTINCT ON no servidor: só a última movimentação por OP (não cresce).
+      const res = await db.rpc("op_last_moves", { p_ids: ids });
+      const rows = (res.data ?? []) as { op_id: string; moved_by: string | null; moved_at: string }[];
+      const uids = [...new Set(rows.map((r) => r.moved_by).filter(Boolean))] as string[];
       const nameMap = new Map<string, string>();
       if (uids.length) {
         const p = await db.from("profiles").select("id, full_name").in("id", uids);
         for (const x of (p.data ?? [])) nameMap.set(x.id, x.full_name);
       }
       const map: Record<string, OpMove> = {};
-      for (const [oid, r] of Object.entries(latest)) map[oid] = { movedByName: (r.moved_by && nameMap.get(r.moved_by)) || null, movedAt: r.moved_at };
+      for (const r of rows) map[r.op_id] = { movedByName: (r.moved_by && nameMap.get(r.moved_by)) || null, movedAt: r.moved_at };
       return map;
     },
     refetchInterval: 60_000,
@@ -277,20 +273,30 @@ export function useProductionOrderMutations() {
   //     credita pelos itens do pedido + marca PRODUZIDO; senão credita o Produto
   //     Final da OP. O card do pós-venda não se move sozinho — alguém confere.
   const setStatus = useMutation({
-    mutationFn: async (p: { id: string; op_status: OpStatus; route?: ProductionRoute }) => {
+    mutationFn: async (p: { id: string; op_status: OpStatus; route?: ProductionRoute; fromStatus?: OpStatus }) => {
       const patch: Record<string, unknown> = { op_status: p.op_status };
       // Grava a rota escolhida (só rotular / do zero) ANTES da baixa — a função de
       // dedução no banco lê production_route pra saber se explode o semi-acabado.
       if (p.route !== undefined) patch.production_route = p.route;
-      const res = await db.from("production_orders").update(patch).eq("id", p.id);
+      // Guarda otimista: só move se o card ainda estiver no estado esperado. Se
+      // outra pessoa já moveu (sistema compartilhado ao vivo), afeta 0 linhas.
+      let q = db.from("production_orders").update(patch).eq("id", p.id);
+      if (p.fromStatus) q = q.eq("op_status", p.fromStatus);
+      const res = await q.select("id");
       if (res.error) throw res.error;
+      if (p.fromStatus && (!res.data || res.data.length === 0)) {
+        throw new Error("Este card já foi movido por outra pessoa — o quadro foi atualizado.");
+      }
       // Movimentação de estoque — erros PROPAGAM (nada de toast de sucesso falso).
       // Conclusão NÃO passa por aqui (vai pela mutation `conclude` → op_conclude).
+      // Sair de "concluída" para uma etapa anterior estorna o crédito da conclusão
+      // (senão reconcluir creditaria o produto de novo).
+      const leavingConcluida = p.fromStatus === "concluida" && p.op_status !== "concluida";
       if (p.op_status === "separada") {
         const rr = await db.rpc("op_deduct_materials", { p_op_id: p.id });
         if (rr.error) throw rr.error;
-      } else if (BACKWARD_STATUSES.has(p.op_status)) {
-        // Voltou/cancelou → estorna EXATAMENTE o que foi movido (ledger).
+      } else if (BACKWARD_STATUSES.has(p.op_status) || leavingConcluida) {
+        // Voltou/cancelou/saiu de concluída → estorna EXATAMENTE o que foi movido.
         const rr = await db.rpc("op_reverse_all", { p_op_id: p.id });
         if (rr.error) throw rr.error;
       }
@@ -301,6 +307,7 @@ export function useProductionOrderMutations() {
       qc.invalidateQueries({ queryKey: ["ops", "hubrn-stock"] });
       qc.invalidateQueries({ queryKey: ["ops", "mrp-products"] });
     },
+    onError: () => invalidate(), // conflito/falha → recarrega o quadro pro estado real
   });
 
   // Conclui a OP com consumo real dos insumos → registra perdas + reconcilia estoque

@@ -61,6 +61,10 @@ export interface PosVendaOrder {
   customer_name: string;
   customer_email: string | null;
   customer_phone: string | null;
+  cnpj: string | null;              // CNPJ/CPF do cliente (documento na venda)
+  customer_ie: string | null;       // Inscrição Estadual (ou "Isento"/null)
+  payment_terms: string | null;     // forma/condição de pagamento
+  freight_type: string | null;      // CIF/FOB
   delivery_address: string | null;
   delivery_city: string | null;
   delivery_state: string | null;
@@ -75,7 +79,8 @@ export interface PosVendaOrder {
   notes: string | null;
   items: PosVendaItem[];
   created_at: string;
-  updated_at: string | null;  // última mudança de etapa → "parado há X dias"
+  updated_at: string | null;
+  stage_changed_at: string | null; // troca de etapa → "parado há X dias" (não poluído)
   fulfillment_stage: FulfillmentStage;
   production_done: boolean;   // OP concluída → aguardando alguém mover p/ Em Separação
   linha: string | null;
@@ -84,9 +89,10 @@ export interface PosVendaOrder {
 }
 
 const SELECT_BASE =
-  "id, order_number, customer_name, customer_email, customer_phone, delivery_address, delivery_city, " +
+  "id, order_number, customer_name, customer_email, customer_phone, cnpj, customer_ie, payment_terms, " +
+  "freight_type, delivery_address, delivery_city, " +
   "delivery_state, delivery_zip, vendedor_name, vendedor_id, subtotal, shipping_cost, discount, total, " +
-  "notes, items, created_at, updated_at, fulfillment_stage, linha, bling_nf_id, invoice_number, status";
+  "notes, items, created_at, updated_at, stage_changed_at, fulfillment_stage, linha, bling_nf_id, invoice_number, status";
 const SELECT_COLS = SELECT_BASE + ", production_done";
 
 // Etapas terminais do rastreio (colunas que só acumulam).
@@ -254,12 +260,12 @@ async function ensureProductionOrderForOrder(orderId: string): Promise<boolean> 
 
   const ord = await db
     .from("carboze_orders")
-    .select("order_number, customer_name, items, delivery_date")
+    .select("order_number, customer_name, items, next_delivery_date")
     .eq("id", orderId).single();
   if (ord.error || !ord.data) throw ord.error ?? new Error("Pedido não encontrado");
 
   const items: any[] = Array.isArray(ord.data.items) ? ord.data.items : [];
-  const need = ord.data.delivery_date || null;
+  const need = ord.data.next_delivery_date || null;
   const baseNote = `Gerada do pós-venda · pedido ${ord.data.order_number ?? ""} · ${ord.data.customer_name ?? ""}`.trim();
 
   // UMA OP por item do pedido — cada uma com seu produto (BOM/checagem de material
@@ -355,13 +361,15 @@ export function useUpdateFulfillmentStage() {
       // produto vinculado) em vez de mentir "estoque deduzido".
       let deductedLines: number | null = null;
       let shipmentCreated = false;
+      let shipmentFailed = false;
       if (stage === "separado") {
         const rr = await db.rpc("pos_venda_deduct_stock", { p_order_id: id });
         if (rr.error) throw rr.error;
         deductedLines = typeof rr.data === "number" ? rr.data : null;
-        // Cria a remessa já ligada ao pedido (não trava a separação se falhar).
+        // Cria a remessa já ligada ao pedido (não trava a separação se falhar,
+        // mas AVISA — senão o pedido fica separado sem remessa e ninguém vê).
         try { shipmentCreated = await ensureShipmentForOrder(id); }
-        catch (e) { console.error("[pos-venda] falha ao criar remessa:", e); }
+        catch (e) { shipmentFailed = true; console.error("[pos-venda] falha ao criar remessa:", e); }
       }
       // B9: voltar de "Separado" (ou cancelar) ESTORNA a dedução (idempotente).
       let restoredLines: number | null = null;
@@ -377,7 +385,7 @@ export function useUpdateFulfillmentStage() {
           .eq("order_id", id);
         if (su.error) console.error("[pos-venda] falha ao sincronizar remessa:", su.error);
       }
-      return { stage, opCreated, opError, deductedLines, restoredLines, shipmentCreated };
+      return { stage, opCreated, opError, deductedLines, restoredLines, shipmentCreated, shipmentFailed };
     },
     onSuccess: (res) => {
       qc.invalidateQueries({ queryKey: ["ops", "pos-venda"] });
@@ -387,6 +395,10 @@ export function useUpdateFulfillmentStage() {
       if (res?.opError) toast.error("Etapa mudou, mas falhou ao criar a OP: " + res.opError, { duration: 10000 });
       else if (res?.opCreated) toast.success("Etapa atualizada · OP(s) criada(s) no Backlog (uma por item).");
       else if (res?.stage === "separado") {
+        if (res.shipmentFailed) {
+          toast.error("Separado, mas FALHOU ao criar a remessa na Logística — crie manualmente ou volte e separe de novo.", { duration: 12000 });
+          return;
+        }
         const remessa = res.shipmentCreated ? " · remessa criada na Logística" : "";
         if (res.deductedLines === 0) toast.warning("Separado, mas nada foi deduzido agora (já deduzido antes, ou o pedido não tem produto vinculado)." + remessa, { duration: 8000 });
         else toast.success("Separado · estoque deduzido do HUB-RN" + remessa + ".");

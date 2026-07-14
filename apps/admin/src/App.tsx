@@ -17,9 +17,6 @@ import DashboardsFranqueados from "./pages/DashboardsFranqueados";
 import DashboardsComercial from "./pages/DashboardsComercial";
 import DashboardsMetas from "./pages/DashboardsMetas";
 import DashboardsEstrategico from "./pages/DashboardsEstrategico";
-import DashboardsProducao from "./pages/DashboardsProducao";
-import DashboardsFinanceiro from "./pages/DashboardsFinanceiro";
-import DashboardsLogistica from "./pages/DashboardsLogistica";
 import { isCarbohubDomain, goToHubLogin } from "@/lib/sso";
 
 // Login é ÚNICO no Hub: /login direto em produção é redirecionado pra lá.
@@ -56,9 +53,6 @@ export default function App() {
         <Route path="/dashboards/comercial" element={<DashboardsComercial />} />
         <Route path="/dashboards/metas" element={<DashboardsMetas />} />
         <Route path="/dashboards/estrategico" element={<DashboardsEstrategico />} />
-        <Route path="/dashboards/producao" element={<DashboardsProducao />} />
-        <Route path="/dashboards/financeiro" element={<DashboardsFinanceiro />} />
-        <Route path="/dashboards/logistica" element={<DashboardsLogistica />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
