@@ -1397,11 +1397,14 @@ async function bridgeOrdersToCarbohub(
   logId: string
 ): Promise<{ synced: number; failed: number }> {
   // Load reference data
-  const [{ data: blingOrders }, { data: skus }, { data: licensees }] = await Promise.all([
+  const [{ data: blingOrders }, { data: skus }, { data: licensees }, { data: contacts }] = await Promise.all([
     supabaseAdmin.from("bling_orders").select("*").order("data", { ascending: false }),
     supabaseAdmin.from("sku").select("id, code, name"),
     supabaseAdmin.from("licensees").select("id, name, trade_name, cnpj"),
+    supabaseAdmin.from("bling_contacts").select("bling_id, cpf_cnpj"),
   ]);
+  // Documento (CNPJ/CPF) do cliente por contato → grava em carboze_orders.cnpj.
+  const contatoDocMap = new Map((contacts || []).map((c: any) => [c.bling_id, c.cpf_cnpj]));
 
   if (!blingOrders?.length) {
     console.log("[bling-bridge] No bling_orders to bridge. Run orders sync first.");
@@ -1453,19 +1456,22 @@ async function bridgeOrdersToCarbohub(
       // Check if exists by external_ref
       const { data: existing } = await supabaseAdmin
         .from("carboze_orders")
-        .select("id, status, items")
+        .select("id, status, items, cnpj")
         .eq("external_ref", externalRef)
         .single();
+      const docCliente = (contatoDocMap.get(bo.contato_id) as string | null) || null;
 
       if (existing) {
-        // Update status and items if changed/missing
-        const needsUpdate = existing.status !== status || (carboItems.length > 0 && (!existing.items || (existing.items as any[]).length === 0));
+        // Update status/items se mudou; e preenche cnpj se estiver faltando.
+        const faltaCnpj = docCliente && (!existing.cnpj || existing.cnpj === "");
+        const needsUpdate = existing.status !== status || (carboItems.length > 0 && (!existing.items || (existing.items as any[]).length === 0)) || faltaCnpj;
         if (needsUpdate) {
           const updatePayload: Record<string, any> = { updated_at: new Date().toISOString() };
           if (existing.status !== status) updatePayload.status = status;
           if (carboItems.length > 0 && (!existing.items || (existing.items as any[]).length === 0)) {
             updatePayload.items = carboItems;
           }
+          if (faltaCnpj) updatePayload.cnpj = docCliente;
           await supabaseAdmin
             .from("carboze_orders")
             .update(updatePayload)
@@ -1479,6 +1485,7 @@ async function bridgeOrdersToCarbohub(
         const { error: insertErr } = await supabaseAdmin.from("carboze_orders").insert({
           order_number: blingOrderNumber,
           customer_name: bo.contato_nome || "Cliente Bling",
+          cnpj: (contatoDocMap.get(bo.contato_id) as string | null) || null,
           items: carboItems,
           subtotal: Number(bo.total_produtos) || 0,
           shipping_cost: Number(bo.total_frete) || 0,
