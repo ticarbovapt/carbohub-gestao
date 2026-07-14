@@ -13,6 +13,7 @@ import { useDashComercial } from "@/hooks/useDashComercial";
 import { useComercialCanais, type CanalKey } from "@/hooks/useComercialCanais";
 import { useCanalMetas } from "@/hooks/useCanalMetas";
 import { ComercialFilterBar, EMPTY_FILTERS, type DashFilters } from "@/components/comercial/ComercialFilterBar";
+import { ComercialTabs } from "@/components/comercial/ComercialTabs";
 import { CanalMetasDialog } from "@/components/comercial/CanalMetasDialog";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -156,7 +157,10 @@ export default function DashboardComercial() {
         {/* 1. Header + filtros */}
         <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
           <CarboPageHeader icon={TrendingUp} title="Dashboard — Comercial" description="Licenciados, pedidos e performance de vendas" />
-          <ComercialFilterBar filters={filters} onChange={setFilters} className="sm:pt-1 shrink-0" />
+          <div className="flex flex-col items-end gap-2 shrink-0">
+            <ComercialTabs />
+            <ComercialFilterBar filters={filters} onChange={setFilters} />
+          </div>
         </div>
 
         {/* 2. KPIs */}

@@ -32,6 +32,7 @@ const NAV_GROUPS = [
     items: [
       { to: "/dashboards/comercial", label: "Visão Geral", icon: TrendingUp },
       { to: "/comercial/dashboard", label: "Dashboard Comercial", icon: LineChart },
+      { to: "/comercial/dados", label: "Dados Comerciais (fonte)", icon: Store },
       { to: "/comercial/vendas", label: "Análise de Vendas", icon: BarChart3 },
       { to: "/comercial/descontos", label: "Aprovações", icon: BadgePercent },
       { to: "/comercial/precos", label: "Tabela de preços", icon: Tags },

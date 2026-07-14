@@ -19,6 +19,7 @@ import ComercialVendas from "./pages/ComercialVendas";
 import DescontoAprovacoes from "./pages/DescontoAprovacoes";
 import ProdutosPrecos from "./pages/ProdutosPrecos";
 import DashboardComercial from "./pages/DashboardComercial";
+import ComercialDados from "./pages/ComercialDados";
 import DashboardsMetas from "./pages/DashboardsMetas";
 import DashboardsEstrategico from "./pages/DashboardsEstrategico";
 import { isCarbohubDomain, goToHubLogin } from "@/lib/sso";
@@ -57,6 +58,7 @@ export default function App() {
         <Route path="/dashboards/comercial" element={<DashboardsComercial />} />
         <Route path="/comercial/vendas" element={<ComercialVendas />} />
         <Route path="/comercial/dashboard" element={<DashboardComercial />} />
+        <Route path="/comercial/dados" element={<ComercialDados />} />
         <Route path="/comercial/descontos" element={<DescontoAprovacoes />} />
         <Route path="/comercial/precos" element={<ProdutosPrecos />} />
         <Route path="/dashboards/metas" element={<DashboardsMetas />} />
