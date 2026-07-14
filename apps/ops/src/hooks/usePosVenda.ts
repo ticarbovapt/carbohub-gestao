@@ -61,6 +61,10 @@ export interface PosVendaOrder {
   customer_name: string;
   customer_email: string | null;
   customer_phone: string | null;
+  cnpj: string | null;              // CNPJ/CPF do cliente (documento na venda)
+  customer_ie: string | null;       // Inscrição Estadual (ou "Isento"/null)
+  payment_terms: string | null;     // forma/condição de pagamento
+  freight_type: string | null;      // CIF/FOB
   delivery_address: string | null;
   delivery_city: string | null;
   delivery_state: string | null;
@@ -85,7 +89,8 @@ export interface PosVendaOrder {
 }
 
 const SELECT_BASE =
-  "id, order_number, customer_name, customer_email, customer_phone, delivery_address, delivery_city, " +
+  "id, order_number, customer_name, customer_email, customer_phone, cnpj, customer_ie, payment_terms, " +
+  "freight_type, delivery_address, delivery_city, " +
   "delivery_state, delivery_zip, vendedor_name, vendedor_id, subtotal, shipping_cost, discount, total, " +
   "notes, items, created_at, updated_at, stage_changed_at, fulfillment_stage, linha, bling_nf_id, invoice_number, status";
 const SELECT_COLS = SELECT_BASE + ", production_done";

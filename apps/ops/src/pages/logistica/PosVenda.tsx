@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
-import { ShoppingBag, Loader2, User, Calendar, MapPin, Phone, Mail, Package } from "lucide-react";
+import { ShoppingBag, Loader2, User, Calendar, MapPin, Phone, Mail, Package, FileText, CreditCard, Truck } from "lucide-react";
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -13,6 +13,13 @@ import {
 
 const brl = (v: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v || 0);
 const fmtDate = (s: string) => new Date(s).toLocaleDateString("pt-BR");
+// Formata CNPJ (14 díg.) ou CPF (11 díg.); mantém como veio se não bater.
+const fmtDoc = (v: string | null) => {
+  const d = (v ?? "").replace(/\D/g, "");
+  if (d.length === 14) return d.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, "$1.$2.$3/$4-$5");
+  if (d.length === 11) return d.replace(/^(\d{3})(\d{3})(\d{3})(\d{2})$/, "$1.$2.$3-$4");
+  return v?.trim() || "—";
+};
 const stageLabel = (k: FulfillmentStage) => POSVENDA_STAGES.find((s) => s.key === k)?.label ?? k;
 
 function VendedorTag({ name, avatar }: { name: string; avatar: string | null }) {
@@ -387,6 +394,28 @@ export default function PosVenda() {
                     </span>
                   </div>
                 )}
+
+                {/* Dados fiscais e de pagamento preenchidos no ato da venda. */}
+                <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-xs rounded-lg border border-border p-3">
+                  <div>
+                    <p className="flex items-center gap-1.5 text-muted-foreground mb-0.5"><FileText className="h-3.5 w-3.5" /> CNPJ / CPF</p>
+                    <p className="font-medium">{fmtDoc(detail.cnpj)}</p>
+                  </div>
+                  <div>
+                    <p className="flex items-center gap-1.5 text-muted-foreground mb-0.5"><FileText className="h-3.5 w-3.5" /> Inscrição Estadual</p>
+                    <p className="font-medium">{detail.customer_ie?.trim() || "Isento / não informado"}</p>
+                  </div>
+                  <div>
+                    <p className="flex items-center gap-1.5 text-muted-foreground mb-0.5"><CreditCard className="h-3.5 w-3.5" /> Forma de pagamento</p>
+                    <p className="font-medium">{detail.payment_terms?.trim() || "—"}</p>
+                  </div>
+                  {detail.freight_type && (
+                    <div>
+                      <p className="flex items-center gap-1.5 text-muted-foreground mb-0.5"><Truck className="h-3.5 w-3.5" /> Frete</p>
+                      <p className="font-medium">{detail.freight_type === "CIF" ? "CIF (por conta do vendedor)" : detail.freight_type === "FOB" ? "FOB (por conta do comprador)" : detail.freight_type}</p>
+                    </div>
+                  )}
+                </div>
 
                 <div>
                   <p className="flex items-center gap-2 font-medium mb-1.5"><Package className="h-4 w-4 text-carbo-green" /> Itens</p>
