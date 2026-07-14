@@ -687,7 +687,9 @@ export default function OrdensProducao() {
             return;
           }
           const routeArg = toStatus === "separada" ? { route } : {};
-          setStatus.mutate({ id: op.id, op_status: toStatus, ...routeArg }, { onSuccess, onError });
+          // fromStatus = estado esperado; se outra pessoa já moveu o card, a
+          // guarda otimista no hook detecta e avisa (sem sobrescrever em silêncio).
+          setStatus.mutate({ id: op.id, op_status: toStatus, fromStatus: op.op_status, ...routeArg }, { onSuccess, onError });
         }}
       />
       <ConfirmOPDialog

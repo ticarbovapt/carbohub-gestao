@@ -355,13 +355,15 @@ export function useUpdateFulfillmentStage() {
       // produto vinculado) em vez de mentir "estoque deduzido".
       let deductedLines: number | null = null;
       let shipmentCreated = false;
+      let shipmentFailed = false;
       if (stage === "separado") {
         const rr = await db.rpc("pos_venda_deduct_stock", { p_order_id: id });
         if (rr.error) throw rr.error;
         deductedLines = typeof rr.data === "number" ? rr.data : null;
-        // Cria a remessa já ligada ao pedido (não trava a separação se falhar).
+        // Cria a remessa já ligada ao pedido (não trava a separação se falhar,
+        // mas AVISA — senão o pedido fica separado sem remessa e ninguém vê).
         try { shipmentCreated = await ensureShipmentForOrder(id); }
-        catch (e) { console.error("[pos-venda] falha ao criar remessa:", e); }
+        catch (e) { shipmentFailed = true; console.error("[pos-venda] falha ao criar remessa:", e); }
       }
       // B9: voltar de "Separado" (ou cancelar) ESTORNA a dedução (idempotente).
       let restoredLines: number | null = null;
@@ -377,7 +379,7 @@ export function useUpdateFulfillmentStage() {
           .eq("order_id", id);
         if (su.error) console.error("[pos-venda] falha ao sincronizar remessa:", su.error);
       }
-      return { stage, opCreated, opError, deductedLines, restoredLines, shipmentCreated };
+      return { stage, opCreated, opError, deductedLines, restoredLines, shipmentCreated, shipmentFailed };
     },
     onSuccess: (res) => {
       qc.invalidateQueries({ queryKey: ["ops", "pos-venda"] });
@@ -387,6 +389,10 @@ export function useUpdateFulfillmentStage() {
       if (res?.opError) toast.error("Etapa mudou, mas falhou ao criar a OP: " + res.opError, { duration: 10000 });
       else if (res?.opCreated) toast.success("Etapa atualizada · OP(s) criada(s) no Backlog (uma por item).");
       else if (res?.stage === "separado") {
+        if (res.shipmentFailed) {
+          toast.error("Separado, mas FALHOU ao criar a remessa na Logística — crie manualmente ou volte e separe de novo.", { duration: 12000 });
+          return;
+        }
         const remessa = res.shipmentCreated ? " · remessa criada na Logística" : "";
         if (res.deductedLines === 0) toast.warning("Separado, mas nada foi deduzido agora (já deduzido antes, ou o pedido não tem produto vinculado)." + remessa, { duration: 8000 });
         else toast.success("Separado · estoque deduzido do HUB-RN" + remessa + ".");

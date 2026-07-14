@@ -136,6 +136,20 @@ export default function Alertas() {
         action: { label: "Abrir produção", go: () => navigate("/producao/ordens") } });
     }
 
+    // 5b) OP PARADA DEMAIS na etapa (independe de prazo) — via stage_since.
+    //     Cobre OPs internas sem need_date que empacam sem gerar alerta.
+    for (const op of opsQ.data ?? []) {
+      if (op.op_status === "concluida" || op.op_status === "cancelada") continue;
+      const parado = daysSince(op.stage_since);
+      if (parado == null || parado < 2) continue;
+      if (op.need_date && op.need_date < today) continue; // já vira "atrasada" acima
+      out.push({ id: `opdwell-${op.id}`, kind: "op",
+        titulo: `${op.op_number ?? "OP"} — ${op.product_code ?? op.customer_name ?? ""}`.trim(),
+        descricao: `Parada há ${parado}d na etapa atual · ${op.planned_quantity} un`,
+        prioridade: parado >= 10 ? "critical" : parado >= 5 ? "high" : "medium",
+        action: { label: "Abrir produção", go: () => navigate("/producao/ordens") } });
+    }
+
     // 6) OS de campo do dia / atrasadas (stage != concluída).
     for (const os of osQ.data ?? []) {
       if (os.stage === "concluida") continue;

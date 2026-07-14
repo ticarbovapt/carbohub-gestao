@@ -277,13 +277,20 @@ export function useProductionOrderMutations() {
   //     credita pelos itens do pedido + marca PRODUZIDO; senão credita o Produto
   //     Final da OP. O card do pós-venda não se move sozinho — alguém confere.
   const setStatus = useMutation({
-    mutationFn: async (p: { id: string; op_status: OpStatus; route?: ProductionRoute }) => {
+    mutationFn: async (p: { id: string; op_status: OpStatus; route?: ProductionRoute; fromStatus?: OpStatus }) => {
       const patch: Record<string, unknown> = { op_status: p.op_status };
       // Grava a rota escolhida (só rotular / do zero) ANTES da baixa — a função de
       // dedução no banco lê production_route pra saber se explode o semi-acabado.
       if (p.route !== undefined) patch.production_route = p.route;
-      const res = await db.from("production_orders").update(patch).eq("id", p.id);
+      // Guarda otimista: só move se o card ainda estiver no estado esperado. Se
+      // outra pessoa já moveu (sistema compartilhado ao vivo), afeta 0 linhas.
+      let q = db.from("production_orders").update(patch).eq("id", p.id);
+      if (p.fromStatus) q = q.eq("op_status", p.fromStatus);
+      const res = await q.select("id");
       if (res.error) throw res.error;
+      if (p.fromStatus && (!res.data || res.data.length === 0)) {
+        throw new Error("Este card já foi movido por outra pessoa — o quadro foi atualizado.");
+      }
       // Movimentação de estoque — erros PROPAGAM (nada de toast de sucesso falso).
       // Conclusão NÃO passa por aqui (vai pela mutation `conclude` → op_conclude).
       if (p.op_status === "separada") {
@@ -301,6 +308,7 @@ export function useProductionOrderMutations() {
       qc.invalidateQueries({ queryKey: ["ops", "hubrn-stock"] });
       qc.invalidateQueries({ queryKey: ["ops", "mrp-products"] });
     },
+    onError: () => invalidate(), // conflito/falha → recarrega o quadro pro estado real
   });
 
   // Conclui a OP com consumo real dos insumos → registra perdas + reconcilia estoque
