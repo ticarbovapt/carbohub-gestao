@@ -18,6 +18,8 @@ export interface VendaItemInput {
   quantidade: number;
   preco_unitario: number;
   bonificacao?: number;
+  product_id?: string | null;
+  product_code?: string | null;
 }
 
 export interface NovaVendaInput {
@@ -59,6 +61,10 @@ export function useCreateVenda() {
           unit_price: i.preco_unitario,
           bonificacao: i.bonificacao ?? 0,
           total: i.quantidade * i.preco_unitario,
+          // Vínculo com o catálogo (mrp_products) → habilita checagem de estoque
+          // no pós-venda e casamento de produto no Bling.
+          product_id: i.product_id ?? null,
+          product_code: i.product_code ?? null,
         }));
 
       const { data: u } = await supabase.auth.getUser();

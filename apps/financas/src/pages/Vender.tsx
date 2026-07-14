@@ -25,9 +25,10 @@ import { useGeocode } from "@/hooks/useGeocode";
 import { MapContainer, TileLayer, CircleMarker, Popup } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 
-// Vender — grava a venda de verdade (crm_vendas) e lê o catálogo real (mrp_products).
-// Pendências de fora do escopo de venda: lookup de CNPJ e mapa (próximas fases).
-// O VENDEDOR é o usuário logado (não há dropdown de vendedor).
+// Vender — grava a venda de verdade (carboze_orders) e lê o catálogo real (mrp_products).
+// Tela ÚNICA e IDÊNTICA em todos os apps (sales/crm, ops, finance, admin): a do
+// sales/crm é a referência. Gestor pode lançar por outro vendedor; os Dados
+// Estratégicos e Notas Internas são gravados em internal_notes (nada é descartado).
 
 const TIPOS_PONTO = ["Posto", "Oficina", "Frota", "PDV", "Licenciado"];
 const CLASSIFICACOES = ["Estratégico", "Potencial", "Regular"];
@@ -76,7 +77,6 @@ export default function Vender() {
       return (data ?? []) as { id: string; full_name: string | null }[];
     },
   });
-  const vendedor = vendedorId ? (vendedores.find((v) => v.id === vendedorId)?.full_name ?? vendedorLogado) : vendedorLogado;
 
   const [mode, setMode] = useState<"venda" | "promo">("venda");
   const [doc, setDoc] = useState("");
@@ -93,6 +93,9 @@ export default function Vender() {
   const [atuaDiesel, setAtuaDiesel] = useState(false);
   const [atuaFrotas, setAtuaFrotas] = useState(false);
   const [vendedorId, setVendedorId] = useState<string>(""); // "" = usuário logado
+  // Vendedor efetivo: se o gestor escolheu outro, usa o nome dele; senão o logado.
+  // (declarado APÓS o useState de vendedorId — senão daria ReferenceError/TDZ.)
+  const vendedor = vendedorId ? (vendedores.find((v) => v.id === vendedorId)?.full_name ?? vendedorLogado) : vendedorLogado;
   const [showEstrategicos, setShowEstrategicos] = useState(false);
   const [showObs, setShowObs] = useState(false);
   const [generating, setGenerating] = useState(false);
@@ -229,10 +232,15 @@ export default function Vender() {
     updateRow(id, { productId });
   }
   const validItems = () =>
-    rows.filter((r) => r.productId && r.qty > 0).map((r) => ({
-      name: produtos.find((p) => p.id === r.productId)?.name ?? "Produto",
-      quantity: r.qty, unit_price: r.unitPrice, bonus_quantity: r.hasBonus ? r.bonusQty : 0,
-    }));
+    rows.filter((r) => r.productId && r.qty > 0).map((r) => {
+      const prod = produtos.find((p) => p.id === r.productId);
+      return {
+        name: prod?.name ?? "Produto",
+        product_id: r.productId,
+        product_code: prod?.product_code ?? null,
+        quantity: r.qty, unit_price: r.unitPrice, bonus_quantity: r.hasBonus ? r.bonusQty : 0,
+      };
+    });
 
   // Junta notas internas + dados estratégicos num bloco (coluna internal_notes),
   // pra nada ser digitado e descartado.
@@ -270,6 +278,8 @@ export default function Vender() {
       notes: obsPublica || undefined,
       itens: validItems().map((i) => ({
         produto: i.name,
+        product_id: i.product_id,
+        product_code: i.product_code,
         quantidade: i.quantity,
         preco_unitario: i.unit_price,
         bonificacao: i.bonus_quantity,

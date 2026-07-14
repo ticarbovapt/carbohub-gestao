@@ -15,6 +15,8 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useAuth } from "@/contexts/AuthContext";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
 import { generateQuotePdf } from "@/lib/quotePdf";
 import { useCreateVenda } from "@/hooks/useVendas";
 import { useProdutos } from "@/hooks/useProdutos";
@@ -23,9 +25,10 @@ import { useGeocode } from "@/hooks/useGeocode";
 import { MapContainer, TileLayer, CircleMarker, Popup } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 
-// Vender — grava a venda de verdade (crm_vendas) e lê o catálogo real (mrp_products).
-// Pendências de fora do escopo de venda: lookup de CNPJ e mapa (próximas fases).
-// O VENDEDOR é o usuário logado (não há dropdown de vendedor).
+// Vender — grava a venda de verdade (carboze_orders) e lê o catálogo real (mrp_products).
+// Tela ÚNICA e IDÊNTICA em todos os apps (sales/crm, ops, finance, admin): a do
+// sales/crm é a referência. Gestor pode lançar por outro vendedor; os Dados
+// Estratégicos e Notas Internas são gravados em internal_notes (nada é descartado).
 
 const TIPOS_PONTO = ["Posto", "Oficina", "Frota", "PDV", "Licenciado"];
 const CLASSIFICACOES = ["Estratégico", "Potencial", "Regular"];
@@ -61,10 +64,19 @@ function CollapsibleCard({
 export default function Vender() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { profile } = useAuth();
-  const vendedor = profile?.full_name ?? profile?.username ?? "";
+  const { profile, gestor } = useAuth();
+  const vendedorLogado = profile?.full_name ?? profile?.username ?? "";
   const createVenda = useCreateVenda();
   const { data: produtos = [] } = useProdutos();
+  // Lista de vendedores (só pra gestor poder lançar por outro).
+  const { data: vendedores = [] } = useQuery({
+    queryKey: ["all_profiles_vender"],
+    enabled: gestor,
+    queryFn: async () => {
+      const { data } = await (supabase as any).rpc("carbo_all_profiles");
+      return (data ?? []) as { id: string; full_name: string | null }[];
+    },
+  });
 
   const [mode, setMode] = useState<"venda" | "promo">("venda");
   const [doc, setDoc] = useState("");
@@ -74,6 +86,16 @@ export default function Vender() {
   const [isLicenciado, setIsLicenciado] = useState(false);
   const [rows, setRows] = useState<ItemRow[]>([emptyRow()]);
   const [obsPublica, setObsPublica] = useState("");
+  const [notasInternas, setNotasInternas] = useState("");
+  const [tipoPonto, setTipoPonto] = useState("");
+  const [classificacao, setClassificacao] = useState("");
+  const [volumeMedio, setVolumeMedio] = useState("");
+  const [atuaDiesel, setAtuaDiesel] = useState(false);
+  const [atuaFrotas, setAtuaFrotas] = useState(false);
+  const [vendedorId, setVendedorId] = useState<string>(""); // "" = usuário logado
+  // Vendedor efetivo: se o gestor escolheu outro, usa o nome dele; senão o logado.
+  // (declarado APÓS o useState de vendedorId — senão daria ReferenceError/TDZ.)
+  const vendedor = vendedorId ? (vendedores.find((v) => v.id === vendedorId)?.full_name ?? vendedorLogado) : vendedorLogado;
   const [showEstrategicos, setShowEstrategicos] = useState(false);
   const [showObs, setShowObs] = useState(false);
   const [generating, setGenerating] = useState(false);
@@ -210,16 +232,39 @@ export default function Vender() {
     updateRow(id, { productId });
   }
   const validItems = () =>
-    rows.filter((r) => r.productId && r.qty > 0).map((r) => ({
-      name: produtos.find((p) => p.id === r.productId)?.name ?? "Produto",
-      quantity: r.qty, unit_price: r.unitPrice, bonus_quantity: r.hasBonus ? r.bonusQty : 0,
-    }));
+    rows.filter((r) => r.productId && r.qty > 0).map((r) => {
+      const prod = produtos.find((p) => p.id === r.productId);
+      return {
+        name: prod?.name ?? "Produto",
+        product_id: r.productId,
+        product_code: prod?.product_code ?? null,
+        quantity: r.qty, unit_price: r.unitPrice, bonus_quantity: r.hasBonus ? r.bonusQty : 0,
+      };
+    });
+
+  // Junta notas internas + dados estratégicos num bloco (coluna internal_notes),
+  // pra nada ser digitado e descartado.
+  function buildInternalNotes(): string | undefined {
+    const temEstrategico = tipoPonto || classificacao || volumeMedio || atuaDiesel || atuaFrotas;
+    const estrategico = temEstrategico
+      ? "[Estratégico] " + [
+          tipoPonto && `Tipo de ponto: ${tipoPonto}`,
+          classificacao && `Classificação: ${classificacao}`,
+          volumeMedio && `Volume médio/mês: ${volumeMedio}`,
+          `Diesel: ${atuaDiesel ? "sim" : "não"}`,
+          `Frotas: ${atuaFrotas ? "sim" : "não"}`,
+        ].filter(Boolean).join(" · ")
+      : "";
+    return [notasInternas.trim(), estrategico].filter(Boolean).join("\n") || undefined;
+  }
 
   // Monta o payload de gravação (cabeçalho + itens) a partir do estado da tela.
   function buildPayload(status: "orcamento" | "pedido") {
     return {
       tipo: mode,
       status,
+      vendedor_id: vendedorId || undefined,
+      internal_notes: buildInternalNotes(),
       customer_name: customerName || undefined,
       customer_doc: doc || undefined,
       customer_email: email || undefined,
@@ -233,6 +278,8 @@ export default function Vender() {
       notes: obsPublica || undefined,
       itens: validItems().map((i) => ({
         produto: i.name,
+        product_id: i.product_id,
+        product_code: i.product_code,
         quantidade: i.quantity,
         preco_unitario: i.unit_price,
         bonificacao: i.bonus_quantity,
@@ -244,6 +291,8 @@ export default function Vender() {
   function resetForm() {
     setMode("venda"); setDoc(""); setCustomerName(""); setEmail(""); setPhone("");
     setIsLicenciado(false); setRows([emptyRow()]); setObsPublica("");
+    setNotasInternas(""); setTipoPonto(""); setClassificacao(""); setVolumeMedio("");
+    setAtuaDiesel(false); setAtuaFrotas(false); setVendedorId("");
     setEndereco({ logradouro: "", numero: "", bairro: "", cidade: "", uf: "", cep: "" });
     setIe(""); setIeUf(""); setDocFeedback(null);
     setCoords(null); setMapMsg(null);
@@ -595,14 +644,14 @@ export default function Vender() {
         <div className="grid md:grid-cols-2 gap-3">
           <div className="space-y-1.5">
             <Label>Tipo de Ponto</Label>
-            <Select>
+            <Select value={tipoPonto} onValueChange={setTipoPonto}>
               <SelectTrigger><SelectValue placeholder="Selecione o tipo" /></SelectTrigger>
               <SelectContent>{TIPOS_PONTO.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
             </Select>
           </div>
           <div className="space-y-1.5">
             <Label>Classificação Interna</Label>
-            <Select>
+            <Select value={classificacao} onValueChange={setClassificacao}>
               <SelectTrigger><SelectValue placeholder="Classificar como" /></SelectTrigger>
               <SelectContent>{CLASSIFICACOES.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
             </Select>
@@ -610,14 +659,14 @@ export default function Vender() {
         </div>
         <div className="space-y-1.5">
           <Label>Volume Médio Mensal (veículos)</Label>
-          <Input type="number" placeholder="Ex: 500" />
+          <Input type="number" placeholder="Ex: 500" value={volumeMedio} onChange={(e) => setVolumeMedio(e.target.value)} />
         </div>
         <div className="grid md:grid-cols-2 gap-3">
           <label className="flex items-center justify-between gap-3 rounded-xl border p-3">
-            <span className="text-sm font-medium">Atua com Diesel?</span><Switch />
+            <span className="text-sm font-medium">Atua com Diesel?</span><Switch checked={atuaDiesel} onCheckedChange={setAtuaDiesel} />
           </label>
           <label className="flex items-center justify-between gap-3 rounded-xl border p-3">
-            <span className="text-sm font-medium">Atua com Frotas?</span><Switch />
+            <span className="text-sm font-medium">Atua com Frotas?</span><Switch checked={atuaFrotas} onCheckedChange={setAtuaFrotas} />
           </label>
         </div>
       </CollapsibleCard>
@@ -630,9 +679,25 @@ export default function Vender() {
         </div>
         <div className="space-y-1.5">
           <Label>Notas Internas</Label>
-          <Textarea placeholder="Visíveis apenas internamente" />
+          <Textarea value={notasInternas} onChange={(e) => setNotasInternas(e.target.value)} placeholder="Visíveis apenas internamente" />
         </div>
       </CollapsibleCard>
+
+      {gestor && (
+        <div className="rounded-xl border p-3 space-y-1.5">
+          <Label>Vendedor responsável</Label>
+          <Select value={vendedorId || "__self__"} onValueChange={(v) => setVendedorId(v === "__self__" ? "" : v)}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__self__">Eu ({vendedorLogado || "—"})</SelectItem>
+              {vendedores.filter((v) => v.id !== profile?.id).map((v) => (
+                <SelectItem key={v.id} value={v.id}>{v.full_name || "—"}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <p className="text-[11px] text-muted-foreground">A comissão desta venda vai pro vendedor selecionado.</p>
+        </div>
+      )}
 
       {/* Rodapé: total + ações */}
       <div className="sticky bottom-0 bg-background/95 backdrop-blur border-t -mx-4 md:-mx-6 px-4 md:px-6 py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
@@ -652,7 +717,7 @@ export default function Vender() {
       </div>
 
       <p className="text-xs text-muted-foreground text-center">
-        Vendedor: <b>{vendedor || "—"}</b> (usuário logado) · Catálogo real, busca de CNPJ, mapa e gravação ativos.
+        Vendedor: <b>{vendedor || "—"}</b>{vendedorId ? "" : " (usuário logado)"} · Catálogo real, busca de CNPJ, mapa e gravação ativos.
       </p>
     </div>
   );

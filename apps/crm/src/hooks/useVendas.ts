@@ -22,7 +22,11 @@ export interface NovaVendaInput {
   customer_name?: string; customer_doc?: string; customer_email?: string; customer_phone?: string; customer_ie?: string;
   is_licenciado?: boolean;
   endereco?: Record<string, unknown> | null; endereco_faturamento?: Record<string, unknown> | null;
-  payment_terms?: string; freight_type?: string; total: number; notes?: string; itens: VendaItemInput[];
+  payment_terms?: string; freight_type?: string; total: number; notes?: string;
+  internal_notes?: string;   // dados estratégicos + notas internas (nada é descartado)
+  vendedor_id?: string;      // gestor pode lançar a venda por outro vendedor
+  vendedor_name?: string;
+  itens: VendaItemInput[];
 }
 
 export interface VendaItemRow { produto: string | null; quantidade: number; preco_unitario: number; bonificacao: number; }
@@ -204,9 +208,11 @@ export function useCreateVenda() {
           product_id: i.product_id ?? null, product_code: i.product_code ?? null,
         }));
       const { data: u } = await supabase.auth.getUser();
-      let vendedorName: string | null = null;
-      if (u?.user?.id) {
-        const { data: prof } = await db.from("profiles").select("full_name").eq("id", u.user.id).maybeSingle();
+      // Vendedor: usa o override (gestor pode lançar por outro); senão o logado.
+      const vendedorId = input.vendedor_id || u?.user?.id || null;
+      let vendedorName: string | null = input.vendedor_name || null;
+      if (!vendedorName && vendedorId) {
+        const { data: prof } = await db.from("profiles").select("full_name").eq("id", vendedorId).maybeSingle();
         vendedorName = (prof as { full_name?: string } | null)?.full_name ?? null;
       }
       const { data: result, error } = await db
@@ -227,7 +233,8 @@ export function useCreateVenda() {
           payment_terms: input.payment_terms || null,
           freight_type: input.freight_type || null,
           items, subtotal: input.total, shipping_cost: 0, discount: 0, total: input.total,
-          notes: input.notes || null, vendedor_id: u?.user?.id ?? null, vendedor_name: vendedorName,
+          notes: input.notes || null, internal_notes: input.internal_notes || null,
+          vendedor_id: vendedorId, vendedor_name: vendedorName,
         })
         .select("id, order_number")
         .single();
