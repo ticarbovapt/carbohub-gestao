@@ -2,7 +2,7 @@ import { useState } from "react";
 import { NavLink, Outlet } from "react-router-dom";
 import {
   Users as UsersIcon, ListTree, Globe, Target, Activity,
-  Store, Building2, TrendingUp, LineChart, Factory, Wallet, Truck,
+  Store, Building2, TrendingUp, LineChart, Factory, Wallet, Truck, Trophy,
 } from "lucide-react";
 import { TopBar } from "@/components/TopBar";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
@@ -24,6 +24,7 @@ const NAV_GROUPS = [
       { to: "/dashboards/lojas", label: "Lojas (Vendas)", icon: Store },
       { to: "/dashboards/franqueados", label: "Franqueados", icon: Building2 },
       { to: "/dashboards/comercial", label: "Comercial", icon: TrendingUp },
+      { to: "/dashboards/metas", label: "Metas (Placar)", icon: Trophy },
       { to: "/dashboards/estrategico", label: "Estratégico", icon: LineChart },
       { to: "/dashboards/producao", label: "Produção", icon: Factory },
       { to: "/dashboards/financeiro", label: "Financeiro", icon: Wallet },
