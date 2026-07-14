@@ -77,7 +77,7 @@ function PctBadge({ pct }: { pct: number | null }) {
     </span>
   );
 }
-function GrowthSub({ label, pct, value, ref }: { label: string; pct: number | null; value: string; ref: string }) {
+function GrowthSub({ label, pct, value, refLine }: { label: string; pct: number | null; value: string; refLine: string }) {
   const tone = pct == null ? "text-board-text" : pct >= 0 ? "text-green-500" : "text-red-400";
   return (
     <div className="p-4 space-y-2">
@@ -86,7 +86,7 @@ function GrowthSub({ label, pct, value, ref }: { label: string; pct: number | nu
         <PctBadge pct={pct} />
       </div>
       <p className={`text-xl font-bold tabular-nums leading-none ${tone}`}>{value}</p>
-      <p className="text-[11px] text-board-muted">{ref}</p>
+      <p className="text-[11px] text-board-muted">{refLine}</p>
     </div>
   );
 }
@@ -178,8 +178,8 @@ export default function DashboardComercial() {
                 <p className="text-[11px] text-board-muted mt-0.5 font-medium">{g.mom.curLabel} vs {g.mom.prevLabel}</p>
               </div>
               <div className="grid grid-cols-2 divide-x divide-border/50">
-                <GrowthSub label="Faturamento" pct={g.mom.brl} value={fmtK(g.mom.cur.faturado)} ref={`${g.mom.prevLabel}: ${fmtK(g.mom.prev.faturado)}`} />
-                <GrowthSub label="Volume de Vendas" pct={g.mom.qty} value={`${g.mom.cur.pedidos} pedidos`} ref={`${g.mom.prevLabel}: ${g.mom.prev.pedidos} pedidos`} />
+                <GrowthSub label="Faturamento" pct={g.mom.brl} value={fmtK(g.mom.cur.faturado)} refLine={`${g.mom.prevLabel}: ${fmtK(g.mom.prev.faturado)}`} />
+                <GrowthSub label="Volume de Vendas" pct={g.mom.qty} value={`${g.mom.cur.pedidos} pedidos`} refLine={`${g.mom.prevLabel}: ${g.mom.prev.pedidos} pedidos`} />
               </div>
             </div>
             <div className="rounded-xl border overflow-hidden bg-board-surface border-green-500/20">
@@ -189,8 +189,8 @@ export default function DashboardComercial() {
                 <p className="text-[11px] text-board-muted mt-0.5 font-medium">{g.vsJan.curLabel} vs {g.vsJan.janLabel}</p>
               </div>
               <div className="grid grid-cols-2 divide-x divide-border/50">
-                <GrowthSub label="Faturamento" pct={g.vsJan.brl} value={fmtK(g.vsJan.cur.faturado)} ref={`${g.vsJan.janLabel}: ${fmtK(g.vsJan.jan.faturado)}`} />
-                <GrowthSub label="Volume de Vendas" pct={g.vsJan.qty} value={`${g.vsJan.cur.pedidos} pedidos`} ref={`${g.vsJan.janLabel}: ${g.vsJan.jan.pedidos} pedidos`} />
+                <GrowthSub label="Faturamento" pct={g.vsJan.brl} value={fmtK(g.vsJan.cur.faturado)} refLine={`${g.vsJan.janLabel}: ${fmtK(g.vsJan.jan.faturado)}`} />
+                <GrowthSub label="Volume de Vendas" pct={g.vsJan.qty} value={`${g.vsJan.cur.pedidos} pedidos`} refLine={`${g.vsJan.janLabel}: ${g.vsJan.jan.pedidos} pedidos`} />
               </div>
             </div>
           </div>
