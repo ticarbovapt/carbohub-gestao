@@ -3,7 +3,7 @@ import { useNavigate, useLocation } from "react-router-dom";
 import { toast } from "sonner";
 import {
   ShoppingCart, Plus, Trash2, Building2, MapPin, Package, Gift, FileText, Search, Target, ChevronDown,
-  Loader2, CheckCircle2, AlertCircle, CreditCard, Percent, Tag,
+  Loader2, CheckCircle2, AlertCircle, CreditCard, Percent, Tag, CalendarClock,
 } from "lucide-react";
 import { CarboCard, CarboCardContent } from "@/components/ui/carbo-card";
 import { CarboButton } from "@/components/ui/carbo-button";
@@ -22,6 +22,8 @@ import { useCreateVenda } from "@/hooks/useVendas";
 import { useProdutos } from "@/hooks/useProdutos";
 import { useDiscountTiersPublic } from "@/hooks/useDiscountTiers";
 import { computeDiscount, resolveTier } from "@/lib/discount";
+import { usePrazoConfigPublic } from "@/hooks/usePrazoConfig";
+import { computePrazos } from "@/lib/prazos";
 import { validateInscricaoEstadual } from "@/lib/inscricaoEstadual";
 import { useGeocode } from "@/hooks/useGeocode";
 import { MapContainer, TileLayer, CircleMarker, Popup } from "react-leaflet";
@@ -37,6 +39,9 @@ const CLASSIFICACOES = ["Estratégico", "Potencial", "Regular"];
 const UFS = ["AC", "AL", "AP", "AM", "BA", "CE", "DF", "ES", "GO", "MA", "MT", "MS", "MG", "PA", "PB", "PR", "PE", "PI", "RJ", "RN", "RS", "RO", "RR", "SC", "SP", "SE", "TO"];
 
 const brl = (n: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(n);
+// Data local (yyyy-mm-dd) para o <input type="date"> e formatação pt-BR.
+const toISO = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+const fmtBr = (d: Date) => d.toLocaleDateString("pt-BR");
 
 interface ItemRow {
   id: string; productId: string; qty: number; unitPrice: number; hasBonus: boolean; bonusQty: number;
@@ -128,6 +133,15 @@ export default function Vender() {
   const [discRaw, setDiscRaw] = useState(0);
   const [discReason, setDiscReason] = useState("");
   const { data: discountCfg = { enabled: false, tiers: [] } } = useDiscountTiersPublic();
+
+  // ── Prazo de entrega + PPF/PPE (opcional; banco recalcula de forma autoritativa) ──
+  const [deliveryDate, setDeliveryDate] = useState("");
+  const { data: prazoCfg = { enabled: false, minBusinessDays: 3, shipOffsetDays: 1 } } = usePrazoConfigPublic();
+  const todayISO = toISO(new Date());
+  const prazos = useMemo(
+    () => (deliveryDate ? computePrazos(new Date(), new Date(deliveryDate + "T00:00:00"), prazoCfg) : null),
+    [deliveryDate, prazoCfg],
+  );
   const pagamentoLabel = useMemo(() => {
     switch (pagModalidade) {
       case "pix": return "PIX";
@@ -295,6 +309,7 @@ export default function Vender() {
       desconto_valor: discEnabled ? disc.amount : 0,
       desconto_percent: discEnabled ? disc.percent : 0,
       desconto_motivo: discReason.trim() || undefined,
+      agreed_delivery_date: deliveryDate || undefined,
       total,
       notes: obsPublica || undefined,
       itens: validItems().map((i) => ({
@@ -320,6 +335,7 @@ export default function Vender() {
     setFatMesmo(true); setFatEndereco({ logradouro: "", numero: "", bairro: "", cidade: "", uf: "", cep: "" });
     setPagModalidade(""); setPagParcelas("1"); setPagFaturamento("");
     setDiscEnabled(false); setDiscType("percent"); setDiscRaw(0); setDiscReason("");
+    setDeliveryDate("");
   }
 
   async function handleQuote() {
@@ -661,6 +677,40 @@ export default function Vender() {
               <div className="flex justify-between border-t pt-1 font-bold text-base"><span>Total</span><span className="tabular-nums">{brl(total)}</span></div>
             </div>
           </div>
+        </CarboCardContent>
+      </CarboCard>
+
+      {/* Prazo de Entrega e Fabricação (opcional) */}
+      <CarboCard>
+        <CarboCardContent className="p-4 space-y-3">
+          <h3 className="font-semibold flex items-center gap-2"><CalendarClock className="h-4 w-4 text-carbo-green" /> Prazo de Entrega</h3>
+          <div className="grid md:grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label>Data de entrega combinada</Label>
+              <Input type="date" min={todayISO} value={deliveryDate} onChange={(e) => setDeliveryDate(e.target.value)} />
+              <p className="text-[11px] text-muted-foreground">Combine com o cliente. O prazo de fábrica (PPF/PPE) é calculado em dias úteis.</p>
+            </div>
+          </div>
+          {prazos && (
+            <div className="space-y-2">
+              <div className="rounded-lg border divide-y text-sm max-w-sm">
+                <div className="flex justify-between px-3 py-2"><span className="text-muted-foreground">Fabricar até (PPF)</span><span className="tabular-nums font-medium">{fmtBr(prazos.ppf)}</span></div>
+                <div className="flex justify-between px-3 py-2"><span className="text-muted-foreground">Expedir até (PPE)</span><span className="tabular-nums font-medium">{fmtBr(prazos.ppe)}</span></div>
+                <div className="flex justify-between px-3 py-2"><span className="text-muted-foreground">Dias úteis para fabricar</span><span className="tabular-nums">{prazos.businessDaysAvailable}</span></div>
+              </div>
+              {prazos.belowMinimum && (
+                <div className="rounded-lg border border-amber-500/40 bg-amber-500/5 p-3 space-y-2 max-w-sm">
+                  <p className="text-xs flex items-start gap-1 text-amber-600">
+                    <AlertCircle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+                    Precisa de no mínimo {prazoCfg.minBusinessDays} dias úteis para fabricar e enviar. Esta venda abrirá uma liberação de fabricação para o gestor.
+                  </p>
+                  <Button type="button" variant="outline" size="sm" onClick={() => setDeliveryDate(toISO(prazos.suggestedDeliveryDate))}>
+                    <CalendarClock className="h-3.5 w-3.5 mr-1" /> Usar data sugerida ({fmtBr(prazos.suggestedDeliveryDate)})
+                  </Button>
+                </div>
+              )}
+            </div>
+          )}
         </CarboCardContent>
       </CarboCard>
 

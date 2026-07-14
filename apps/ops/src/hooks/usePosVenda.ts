@@ -65,6 +65,9 @@ export interface PosVendaOrder {
   customer_ie: string | null;       // Inscrição Estadual (ou "Isento"/null)
   payment_terms: string | null;     // forma/condição de pagamento
   freight_type: string | null;      // CIF/FOB
+  agreed_delivery_date: string | null; // entrega combinada na venda
+  ppf_date: string | null;             // fabricar até (prazo de produção)
+  ppe_date: string | null;             // expedir até
   delivery_address: string | null;
   delivery_city: string | null;
   delivery_state: string | null;
@@ -90,7 +93,7 @@ export interface PosVendaOrder {
 
 const SELECT_BASE =
   "id, order_number, customer_name, customer_email, customer_phone, cnpj, customer_ie, payment_terms, " +
-  "freight_type, delivery_address, delivery_city, " +
+  "freight_type, agreed_delivery_date, ppf_date, ppe_date, delivery_address, delivery_city, " +
   "delivery_state, delivery_zip, vendedor_name, vendedor_id, subtotal, shipping_cost, discount, total, " +
   "notes, items, created_at, updated_at, stage_changed_at, fulfillment_stage, linha, bling_nf_id, invoice_number, status";
 const SELECT_COLS = SELECT_BASE + ", production_done";
@@ -260,12 +263,13 @@ async function ensureProductionOrderForOrder(orderId: string): Promise<boolean> 
 
   const ord = await db
     .from("carboze_orders")
-    .select("order_number, customer_name, items, next_delivery_date")
+    .select("order_number, customer_name, items, ppf_date, next_delivery_date")
     .eq("id", orderId).single();
   if (ord.error || !ord.data) throw ord.error ?? new Error("Pedido não encontrado");
 
   const items: any[] = Array.isArray(ord.data.items) ? ord.data.items : [];
-  const need = ord.data.next_delivery_date || null;
+  // need_date = PPF (fabricar até) quando houver prazo definido na venda.
+  const need = ord.data.ppf_date || ord.data.next_delivery_date || null;
   const baseNote = `Gerada do pós-venda · pedido ${ord.data.order_number ?? ""} · ${ord.data.customer_name ?? ""}`.trim();
 
   // UMA OP por item do pedido — cada uma com seu produto (BOM/checagem de material

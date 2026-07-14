@@ -32,7 +32,7 @@ const NAV_GROUPS = [
     items: [
       { to: "/dashboards/comercial", label: "Visão Geral", icon: TrendingUp },
       { to: "/comercial/vendas", label: "Análise de Vendas", icon: BarChart3 },
-      { to: "/comercial/descontos", label: "Aprovações de desconto", icon: BadgePercent },
+      { to: "/comercial/descontos", label: "Aprovações", icon: BadgePercent },
       { to: "/comercial/precos", label: "Tabela de preços", icon: Tags },
       { to: "/dashboards/metas", label: "Metas (Placar)", icon: Trophy },
     ],

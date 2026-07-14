@@ -13,6 +13,8 @@ import {
 
 const brl = (v: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v || 0);
 const fmtDate = (s: string) => new Date(s).toLocaleDateString("pt-BR");
+// Data-only (yyyy-mm-dd) sem shift de fuso.
+const fmtDay = (s: string | null) => (s ? new Date(s + "T00:00:00").toLocaleDateString("pt-BR") : "—");
 // Formata CNPJ (14 díg.) ou CPF (11 díg.); mantém como veio se não bater.
 const fmtDoc = (v: string | null) => {
   const d = (v ?? "").replace(/\D/g, "");
@@ -416,6 +418,24 @@ export default function PosVenda() {
                     </div>
                   )}
                 </div>
+
+                {/* Prazos de fábrica definidos na venda (PPF/PPE). */}
+                {detail.agreed_delivery_date && (
+                  <div className="grid grid-cols-3 gap-x-4 text-xs rounded-lg border border-border p-3">
+                    <div>
+                      <p className="flex items-center gap-1.5 text-muted-foreground mb-0.5"><Calendar className="h-3.5 w-3.5" /> Entrega combinada</p>
+                      <p className="font-medium">{fmtDay(detail.agreed_delivery_date)}</p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground mb-0.5">Fabricar até (PPF)</p>
+                      <p className="font-medium">{fmtDay(detail.ppf_date)}</p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground mb-0.5">Expedir até (PPE)</p>
+                      <p className="font-medium">{fmtDay(detail.ppe_date)}</p>
+                    </div>
+                  </div>
+                )}
 
                 <div>
                   <p className="flex items-center gap-2 font-medium mb-1.5"><Package className="h-4 w-4 text-carbo-green" /> Itens</p>

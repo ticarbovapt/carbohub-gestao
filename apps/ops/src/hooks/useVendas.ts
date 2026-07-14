@@ -40,6 +40,7 @@ export interface NovaVendaInput {
   desconto_valor?: number;      // R$ de desconto
   desconto_percent?: number;    // % efetivo
   desconto_motivo?: string;
+  agreed_delivery_date?: string;  // data de entrega combinada; banco calcula PPF/PPE
   total: number;                // total líquido (já com desconto)
   notes?: string;
   internal_notes?: string;
@@ -107,6 +108,8 @@ export function useCreateVenda() {
           discount_percent: input.desconto_percent ?? 0,
           discount_reason: input.desconto_motivo ?? null,
           discount_requested_by: vendedorId,
+          // Prazo: só a data combinada; PPF/PPE/status são calculados pelo trigger.
+          agreed_delivery_date: input.agreed_delivery_date ?? null,
           status: input.status === "orcamento" ? "quote" : "pending",
           notes: input.notes || null,
           internal_notes: input.internal_notes || null,
