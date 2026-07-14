@@ -1401,10 +1401,22 @@ async function bridgeOrdersToCarbohub(
     supabaseAdmin.from("bling_orders").select("*").order("data", { ascending: false }),
     supabaseAdmin.from("sku").select("id, code, name"),
     supabaseAdmin.from("licensees").select("id, name, trade_name, cnpj"),
-    supabaseAdmin.from("bling_contacts").select("bling_id, cpf_cnpj"),
+    supabaseAdmin.from("bling_contacts").select("bling_id, cpf_cnpj, ie, email, telefone, celular, raw_data"),
   ]);
-  // Documento (CNPJ/CPF) do cliente por contato → grava em carboze_orders.cnpj.
-  const contatoDocMap = new Map((contacts || []).map((c: any) => [c.bling_id, c.cpf_cnpj]));
+  // Contato completo por bling_id → enriquece o pedido (doc, IE, contato, endereço).
+  const contatoMap = new Map((contacts || []).map((c: any) => [c.bling_id, c]));
+  // Extrai o endereço do contato (Bling v3: raw_data.endereco.geral) → campos de entrega.
+  const enderecoContato = (c: any) => {
+    const g = c?.raw_data?.endereco?.geral ?? c?.raw_data?.endereco ?? {};
+    const logr = [g.endereco || g.logradouro || "", g.numero ? `, ${g.numero}` : ""].join("").trim();
+    return {
+      delivery_address: logr || null,
+      delivery_neighborhood: g.bairro || null,
+      delivery_city: g.municipio || g.cidade || null,
+      delivery_state: (g.uf || "").toUpperCase() || null,
+      delivery_zip: (g.cep ? String(g.cep).replace(/\D/g, "") : null),
+    };
+  };
 
   if (!blingOrders?.length) {
     console.log("[bling-bridge] No bling_orders to bridge. Run orders sync first.");
@@ -1456,26 +1468,38 @@ async function bridgeOrdersToCarbohub(
       // Check if exists by external_ref
       const { data: existing } = await supabaseAdmin
         .from("carboze_orders")
-        .select("id, status, items, cnpj")
+        .select("id, status, items, cnpj, customer_ie, customer_email, customer_phone, delivery_address")
         .eq("external_ref", externalRef)
         .single();
-      const docCliente = (contatoDocMap.get(bo.contato_id) as string | null) || null;
+      const contato: any = contatoMap.get(bo.contato_id) || null;
+      const docCliente = (contato?.cpf_cnpj as string | null) || null;
+      const end = enderecoContato(contato);
+      const fone = contato?.telefone || contato?.celular || null;
 
       if (existing) {
-        // Update status/items se mudou; e preenche cnpj se estiver faltando.
-        const faltaCnpj = docCliente && (!existing.cnpj || existing.cnpj === "");
-        const needsUpdate = existing.status !== status || (carboItems.length > 0 && (!existing.items || (existing.items as any[]).length === 0)) || faltaCnpj;
-        if (needsUpdate) {
-          const updatePayload: Record<string, any> = { updated_at: new Date().toISOString() };
-          if (existing.status !== status) updatePayload.status = status;
-          if (carboItems.length > 0 && (!existing.items || (existing.items as any[]).length === 0)) {
-            updatePayload.items = carboItems;
-          }
-          if (faltaCnpj) updatePayload.cnpj = docCliente;
-          await supabaseAdmin
-            .from("carboze_orders")
-            .update(updatePayload)
-            .eq("id", existing.id);
+        // Atualiza status/itens quando mudam; e PREENCHE os campos do cliente que
+        // estiverem vazios (doc, IE, contato, endereço) — sem sobrescrever o que já tem.
+        const setIfEmpty = (payload: Record<string, any>, col: string, cur: any, val: any) => {
+          if (val && (cur == null || cur === "")) payload[col] = val;
+        };
+        const updatePayload: Record<string, any> = {};
+        if (existing.status !== status) updatePayload.status = status;
+        if (carboItems.length > 0 && (!existing.items || (existing.items as any[]).length === 0)) updatePayload.items = carboItems;
+        setIfEmpty(updatePayload, "cnpj", existing.cnpj, docCliente);
+        setIfEmpty(updatePayload, "customer_ie", existing.customer_ie, contato?.ie);
+        setIfEmpty(updatePayload, "customer_email", existing.customer_email, contato?.email);
+        setIfEmpty(updatePayload, "customer_phone", existing.customer_phone, fone);
+        setIfEmpty(updatePayload, "delivery_address", existing.delivery_address, end.delivery_address);
+        // Endereço: só completa cidade/uf/cep/bairro quando o logradouro estava vazio.
+        if (updatePayload.delivery_address) {
+          if (end.delivery_neighborhood) updatePayload.delivery_neighborhood = end.delivery_neighborhood;
+          if (end.delivery_city) updatePayload.delivery_city = end.delivery_city;
+          if (end.delivery_state) updatePayload.delivery_state = end.delivery_state;
+          if (end.delivery_zip) updatePayload.delivery_zip = end.delivery_zip;
+        }
+        if (Object.keys(updatePayload).length > 0) {
+          updatePayload.updated_at = new Date().toISOString();
+          await supabaseAdmin.from("carboze_orders").update(updatePayload).eq("id", existing.id);
         }
       } else {
         const orderDate = bo.data ? new Date(bo.data).toISOString() : new Date().toISOString();
@@ -1485,7 +1509,15 @@ async function bridgeOrdersToCarbohub(
         const { error: insertErr } = await supabaseAdmin.from("carboze_orders").insert({
           order_number: blingOrderNumber,
           customer_name: bo.contato_nome || "Cliente Bling",
-          cnpj: (contatoDocMap.get(bo.contato_id) as string | null) || null,
+          cnpj: docCliente,
+          customer_ie: contato?.ie || null,
+          customer_email: contato?.email || null,
+          customer_phone: fone,
+          delivery_address: end.delivery_address,
+          delivery_neighborhood: end.delivery_neighborhood,
+          delivery_city: end.delivery_city,
+          delivery_state: end.delivery_state,
+          delivery_zip: end.delivery_zip,
           items: carboItems,
           subtotal: Number(bo.total_produtos) || 0,
           shipping_cost: Number(bo.total_frete) || 0,
