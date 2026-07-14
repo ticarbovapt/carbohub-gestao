@@ -255,12 +255,12 @@ async function ensureProductionOrderForOrder(orderId: string): Promise<boolean> 
 
   const ord = await db
     .from("carboze_orders")
-    .select("order_number, customer_name, items, delivery_date")
+    .select("order_number, customer_name, items, next_delivery_date")
     .eq("id", orderId).single();
   if (ord.error || !ord.data) throw ord.error ?? new Error("Pedido não encontrado");
 
   const items: any[] = Array.isArray(ord.data.items) ? ord.data.items : [];
-  const need = ord.data.delivery_date || null;
+  const need = ord.data.next_delivery_date || null;
   const baseNote = `Gerada do pós-venda · pedido ${ord.data.order_number ?? ""} · ${ord.data.customer_name ?? ""}`.trim();
 
   // UMA OP por item do pedido — cada uma com seu produto (BOM/checagem de material
