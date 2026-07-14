@@ -14,6 +14,9 @@ import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
+import { ptBR } from "date-fns/locale";
 import { useAuth } from "@/contexts/AuthContext";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -136,8 +139,8 @@ export default function Vender() {
 
   // ── Prazo de entrega + PPF/PPE (opcional; banco recalcula de forma autoritativa) ──
   const [deliveryDate, setDeliveryDate] = useState("");
+  const [dateOpen, setDateOpen] = useState(false);
   const { data: prazoCfg = { enabled: false, minBusinessDays: 3, shipOffsetDays: 1 } } = usePrazoConfigPublic();
-  const todayISO = toISO(new Date());
   const prazos = useMemo(
     () => (deliveryDate ? computePrazos(new Date(), new Date(deliveryDate + "T00:00:00"), prazoCfg) : null),
     [deliveryDate, prazoCfg],
@@ -687,7 +690,34 @@ export default function Vender() {
           <div className="grid md:grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label>Data de entrega combinada</Label>
-              <Input type="date" min={todayISO} value={deliveryDate} onChange={(e) => setDeliveryDate(e.target.value)} />
+              <Popover open={dateOpen} onOpenChange={setDateOpen}>
+                <PopoverTrigger asChild>
+                  <Button type="button" variant="outline" className="w-full justify-start font-normal">
+                    <CalendarClock className="h-4 w-4 mr-2 text-muted-foreground" />
+                    {deliveryDate ? fmtBr(new Date(deliveryDate + "T00:00:00")) : <span className="text-muted-foreground">Selecionar data</span>}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar
+                    mode="single"
+                    locale={ptBR}
+                    captionLayout="dropdown-buttons"
+                    fromYear={new Date().getFullYear()}
+                    toYear={new Date().getFullYear() + 3}
+                    selected={deliveryDate ? new Date(deliveryDate + "T00:00:00") : undefined}
+                    defaultMonth={deliveryDate ? new Date(deliveryDate + "T00:00:00") : new Date()}
+                    disabled={(d) => d < new Date(new Date().setHours(0, 0, 0, 0))}
+                    onSelect={(d) => { setDeliveryDate(d ? toISO(d) : ""); setDateOpen(false); }}
+                    classNames={{
+                      caption: "flex justify-center pt-1 relative items-center gap-1",
+                      caption_dropdowns: "flex gap-1",
+                      caption_label: "hidden",
+                      dropdown: "bg-background border rounded-md text-sm px-2 py-1 outline-none",
+                    }}
+                    initialFocus
+                  />
+                </PopoverContent>
+              </Popover>
               <p className="text-[11px] text-muted-foreground">Combine com o cliente. O prazo de fábrica (PPF/PPE) é calculado em dias úteis.</p>
             </div>
           </div>
