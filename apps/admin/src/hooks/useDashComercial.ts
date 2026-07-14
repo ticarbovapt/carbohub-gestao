@@ -76,7 +76,10 @@ interface CarbozeOrderRow {
   created_at: string | null;
   customer_name: string | null;
   vendedor_id: string | null;
+  segmento: string | null;
 }
+
+export interface ComercialFilters { from?: string; to?: string; segmento?: string }
 
 // Mapeamento de status do CRM (useVendas.toCrmStatus): quote→orcamento,
 // cancelled→cancelado, demais→pedido. "pedido" ⇔ status NOT IN (quote,cancelled).
@@ -85,24 +88,37 @@ const isPedido = (s: string | null) => s !== "quote" && s !== "cancelled";
 type MetaRow = { vendedor_id: string; mes: number; target_amount: number };
 
 /** KPIs + séries mensais + crescimento anual (real vs meta), portado do CRM. */
-export function useDashComercial(vendedorId: string | null = null, months = 12) {
+export function useDashComercial(vendedorId: string | null = null, months = 12, filters: ComercialFilters = {}) {
+  const { from, to, segmento } = filters;
   return useQuery({
-    queryKey: ["dash-comercial-overview", vendedorId ?? "all", months],
+    queryKey: ["dash-comercial-overview", vendedorId ?? "all", months, from ?? "", to ?? "", segmento ?? "all"],
     queryFn: async (): Promise<ComercialData> => {
       const year = new Date().getFullYear();
 
       // ── Pedidos (carboze_orders) — mesma base do CRM (useVendas), todos os vendedores.
       const { data: ordersData, error: ordersErr } = await supabase
         .from("carboze_orders" as never)
-        .select("total, status, created_at, customer_name, vendedor_id")
+        .select("total, status, created_at, customer_name, vendedor_id, segmento")
         .order("created_at", { ascending: false });
       if (ordersErr) throw new Error(ordersErr.message);
 
+      const fromTs = from ? new Date(from + "T00:00:00").getTime() : null;
+      const toTs = to ? new Date(to + "T23:59:59").getTime() : null;
       const rows = (ordersData ?? []) as unknown as CarbozeOrderRow[];
-      // "pedido" (status efetivo) + filtro por vendedor selecionado (null/"all" = todos).
-      const pedidos = rows.filter(
-        (v) => isPedido(v.status) && (!vendedorId || v.vendedor_id === vendedorId),
-      );
+      // "pedido" (status efetivo) + filtros: vendedor, período, canal.
+      const pedidos = rows.filter((v) => {
+        if (!isPedido(v.status)) return false;
+        if (vendedorId && v.vendedor_id !== vendedorId) return false;
+        if (segmento && segmento !== "all") {
+          if (segmento === "none" ? v.segmento != null : v.segmento !== segmento) return false;
+        }
+        if (fromTs || toTs) {
+          const t = new Date(v.created_at ?? "").getTime();
+          if (fromTs && t < fromTs) return false;
+          if (toTs && t > toTs) return false;
+        }
+        return true;
+      });
 
       // ── Metas reais configuradas (RPC crm_metas_resolvidas_ano) — soma TODOS os vendedores.
       const { data: metasData, error: metasErr } = await (
@@ -129,7 +145,7 @@ export function useDashComercial(vendedorId: string | null = null, months = 12) 
         buckets.set(key, b);
       }
       const monthly: MonthRow[] = [];
-      for (let i = 8; i >= 0; i--) {
+      for (let i = months - 1; i >= 0; i--) {
         const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
         const b = buckets.get(`${d.getFullYear()}-${d.getMonth()}`) ?? { faturado: 0, pedidos: 0 };
         monthly.push({

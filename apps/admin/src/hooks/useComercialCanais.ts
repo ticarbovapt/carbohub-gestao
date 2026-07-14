@@ -16,8 +16,11 @@ interface OrderRow {
   created_at: string | null;
   customer_name: string | null;
   segmento: string | null;
+  vendedor_id: string | null;
   excluir_metricas: boolean | null;
 }
+
+export interface CanaisFilters { vendedorId?: string | null; from?: string; to?: string }
 
 // Ativo = não cancelado (unifica os dois vocabulários; corrige o bug do legado
 // que só olhava 'cancelled').
@@ -46,17 +49,29 @@ export interface ComercialCanaisData {
   year: number;
 }
 
-export function useComercialCanais() {
+export function useComercialCanais(filters: CanaisFilters = {}) {
+  const { vendedorId, from, to } = filters;
   return useQuery({
-    queryKey: ["comercial-canais"],
+    queryKey: ["comercial-canais", vendedorId ?? "all", from ?? "", to ?? ""],
     queryFn: async (): Promise<ComercialCanaisData> => {
       const year = new Date().getFullYear();
       const { data, error } = await db
         .from("carboze_orders")
-        .select("total, status, created_at, customer_name, segmento, excluir_metricas")
+        .select("total, status, created_at, customer_name, segmento, vendedor_id, excluir_metricas")
         .order("created_at", { ascending: true });
       if (error) throw error;
-      const orders = ((data ?? []) as OrderRow[]).filter((o) => o.excluir_metricas !== true);
+      const fromTs = from ? new Date(from + "T00:00:00").getTime() : null;
+      const toTs = to ? new Date(to + "T23:59:59").getTime() : null;
+      const orders = ((data ?? []) as OrderRow[]).filter((o) => {
+        if (o.excluir_metricas === true) return false;
+        if (vendedorId && o.vendedor_id !== vendedorId) return false;
+        if (fromTs || toTs) {
+          const t = new Date(o.created_at ?? "").getTime();
+          if (fromTs && t < fromTs) return false;
+          if (toTs && t > toTs) return false;
+        }
+        return true;
+      });
       const active = orders.filter((o) => isActive(o.status));
 
       // ── 12) Segmentação (Consumo/Revenda/Online/Não classificado) ──
