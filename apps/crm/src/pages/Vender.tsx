@@ -712,6 +712,7 @@ export default function Vender() {
                       caption: "flex justify-center pt-1 relative items-center gap-1",
                       caption_dropdowns: "flex gap-1",
                       caption_label: "hidden",
+                      vhidden: "sr-only",  // esconde o "Month:/Year:" (rótulo de leitor de tela)
                       dropdown: "bg-background border rounded-md text-sm px-2 py-1 outline-none",
                     }}
                     initialFocus
