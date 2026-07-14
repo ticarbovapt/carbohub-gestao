@@ -103,7 +103,8 @@ export default function Alertas() {
     for (const o of posQ.data?.orders ?? []) {
       const stg = o.fulfillment_stage;
       if (TERMINAL.has(stg)) continue;
-      const idade = daysSince(o.updated_at ?? o.created_at);
+      // "parado há X" a partir da troca de etapa (coluna dedicada, não poluída).
+      const idade = daysSince(o.stage_changed_at ?? o.updated_at ?? o.created_at);
       const goPos = { label: "Abrir rastreio", go: () => navigate("/logistica/pos-venda") };
 
       if (stg === "criar_op" && o.production_done) {

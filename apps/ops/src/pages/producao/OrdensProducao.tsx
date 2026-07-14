@@ -683,7 +683,17 @@ export default function OrdensProducao() {
           const onError = (e: unknown) => toast.error(e instanceof Error ? e.message : "Não foi possível mover a OP.");
           // Conclusão passa pela RPC op_conclude (perdas + reconciliação + crédito).
           if (toStatus === "concluida") {
-            conclude.mutate({ id: op.id, good: good ?? 0, rejected: rejected ?? 0, consumption: consumption ?? [] }, { onSuccess, onError });
+            conclude.mutate({ id: op.id, good: good ?? 0, rejected: rejected ?? 0, consumption: consumption ?? [] }, {
+              onSuccess: () => {
+                onSuccess();
+                // Aviso (não trava): OP de venda concluída com menos que o pedido
+                // → o acabado pode faltar/ficar negativo no envio.
+                if (op.source_order_id && (good ?? 0) < op.planned_quantity) {
+                  toast.warning(`Produzido ${good ?? 0} de ${op.planned_quantity} — pode faltar no envio deste pedido.`, { duration: 9000 });
+                }
+              },
+              onError,
+            });
             return;
           }
           const routeArg = toStatus === "separada" ? { route } : {};

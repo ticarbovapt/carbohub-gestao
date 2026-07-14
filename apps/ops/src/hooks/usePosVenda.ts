@@ -75,7 +75,8 @@ export interface PosVendaOrder {
   notes: string | null;
   items: PosVendaItem[];
   created_at: string;
-  updated_at: string | null;  // última mudança de etapa → "parado há X dias"
+  updated_at: string | null;
+  stage_changed_at: string | null; // troca de etapa → "parado há X dias" (não poluído)
   fulfillment_stage: FulfillmentStage;
   production_done: boolean;   // OP concluída → aguardando alguém mover p/ Em Separação
   linha: string | null;
@@ -86,7 +87,7 @@ export interface PosVendaOrder {
 const SELECT_BASE =
   "id, order_number, customer_name, customer_email, customer_phone, delivery_address, delivery_city, " +
   "delivery_state, delivery_zip, vendedor_name, vendedor_id, subtotal, shipping_cost, discount, total, " +
-  "notes, items, created_at, updated_at, fulfillment_stage, linha, bling_nf_id, invoice_number, status";
+  "notes, items, created_at, updated_at, stage_changed_at, fulfillment_stage, linha, bling_nf_id, invoice_number, status";
 const SELECT_COLS = SELECT_BASE + ", production_done";
 
 // Etapas terminais do rastreio (colunas que só acumulam).
