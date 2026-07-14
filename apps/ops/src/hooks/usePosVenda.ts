@@ -117,9 +117,13 @@ export function usePosVendaOrders(terminalDays: number | "all" = 30) {
     queryKey: ["ops", "pos-venda", terminalDays],
     queryFn: async (): Promise<PosVendaData> => {
       const cutoff = terminalDays === "all" ? null : new Date(Date.now() - terminalDays * 86_400_000).toISOString();
-      // Orçamento (status='quote') não é venda; mantém status nulo.
+      // Rastreio = vendas MANUAIS (Carbo Sales). Inclui as que já foram pro Bling
+      // pra emitir NF (têm external_ref) SE forem venda manual (order_number 'V…'),
+      // pois continuam sendo controladas aqui até a entrega. Pedidos nascidos no
+      // Bling (BLING-…) seguem de fora — têm fluxo próprio. Orçamento (quote) fora.
       const base = (cols: string) => db.from("carboze_orders").select(cols)
-        .is("external_ref", null).or("status.is.null,status.neq.quote");
+        .or("external_ref.is.null,order_number.like.V*")
+        .or("status.is.null,status.neq.quote");
 
       // Ativos: tudo que NÃO está finalizado — sem teto (limite de segurança alto).
       const runActive = (cols: string) => base(cols)
