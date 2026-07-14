@@ -6,6 +6,7 @@ import { CarboBadge } from "@/components/ui/carbo-badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useAuth } from "@/contexts/AuthContext";
 import { useComercialOrders, type ComercialOrderRow } from "@/hooks/useComercialOrders";
 import { ComercialFilterBar, EMPTY_FILTERS, type DashFilters } from "@/components/comercial/ComercialFilterBar";
@@ -25,6 +26,7 @@ const diasDesde = (s: string | null) => (s ? Math.floor((Date.now() - new Date(s
 interface ClienteAgg {
   key: string; cnpj: string | null; nome: string; nomes: Set<string>;
   segmento: string | null; pedidos: number; totalBRL: number; primeira: string | null; ultima: string | null;
+  orders: ComercialOrderRow[];
 }
 const CANAL_LABEL: Record<string, string> = { consumo: "Consumo (B2B)", revenda: "Revenda (PDV)", online: "On-line" };
 const canalBadge = (s: string | null) =>
@@ -60,6 +62,7 @@ export default function ComercialDados() {
   const [statusFiltro, setStatusFiltro] = useState("all");
   const [soMetricas, setSoMetricas] = useState(false);
   const [view, setView] = useState<"pedidos" | "clientes">("pedidos");
+  const [clienteDetail, setClienteDetail] = useState<ClienteAgg | null>(null);
 
   const vendedorId = filters.vendedor === "all" ? null : filters.vendedor;
   const { data, isLoading } = useComercialOrders({ vendedorId, from: filters.from, to: filters.to, segmento: filters.segmento });
@@ -86,8 +89,9 @@ export default function ComercialDados() {
       const key = digits || (nomeKey ? `nome:${nomeKey}` : "");
       if (!key) continue;
       let g = map.get(key);
-      if (!g) { g = { key, cnpj: digits || null, nome: o.customer_name ?? "—", nomes: new Set(), segmento: o.segmento, pedidos: 0, totalBRL: 0, primeira: null, ultima: null }; map.set(key, g); }
+      if (!g) { g = { key, cnpj: digits || null, nome: o.customer_name ?? "—", nomes: new Set(), segmento: o.segmento, pedidos: 0, totalBRL: 0, primeira: null, ultima: null, orders: [] }; map.set(key, g); }
       if (o.customer_name?.trim()) g.nomes.add(o.customer_name.trim());
+      g.orders.push(o);
       g.pedidos++; g.totalBRL += o.total ?? 0;
       const d = o.created_at;
       if (d) {
@@ -256,7 +260,7 @@ export default function ComercialDados() {
                   {clientes.slice(0, 500).map((c) => {
                     const dias = diasDesde(c.ultima);
                     return (
-                      <tr key={c.key} className="border-b last:border-0 hover:bg-accent/40">
+                      <tr key={c.key} className="border-b last:border-0 hover:bg-accent/40 cursor-pointer" onClick={() => setClienteDetail(c)}>
                         <td className="px-3 py-2 font-mono text-xs whitespace-nowrap">{c.cnpj ? fmtDoc(c.cnpj) : <span className="text-muted-foreground">— (sem doc)</span>}</td>
                         <td className="px-3 py-2 max-w-[240px]">
                           <span className="truncate block">{c.nome || "—"}</span>
@@ -282,6 +286,66 @@ export default function ComercialDados() {
         {view === "pedidos" && rows.length > 500 && <p className="text-xs text-muted-foreground text-center">Mostrando as 500 primeiras · use os filtros ou o CSV para o resto ({rows.length} no total).</p>}
         {view === "clientes" && clientes.length > 500 && <p className="text-xs text-muted-foreground text-center">Mostrando os 500 primeiros clientes · use o CSV para o resto ({clientes.length} no total).</p>}
       </div>
+
+      {/* Detalhe do cliente — pedidos, datas, último pedido (para follow-up). */}
+      <Dialog open={!!clienteDetail} onOpenChange={(o) => !o && setClienteDetail(null)}>
+        <DialogContent className="max-w-2xl max-h-[88vh] overflow-y-auto">
+          {clienteDetail && (() => {
+            const c = clienteDetail;
+            const ordersSorted = [...c.orders].sort((a, b) => (b.created_at ?? "").localeCompare(a.created_at ?? ""));
+            const dias = diasDesde(c.ultima);
+            return (
+              <>
+                <DialogHeader>
+                  <DialogTitle className="flex items-center gap-2 flex-wrap">
+                    <span>{c.nome || "—"}</span>
+                    {canalBadge(c.segmento)}
+                  </DialogTitle>
+                  <p className="text-xs text-muted-foreground font-mono">{c.cnpj ? fmtDoc(c.cnpj) : "— (sem documento)"}</p>
+                </DialogHeader>
+
+                {/* Resumo do cliente */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center">
+                  <div className="rounded-lg border p-2"><p className="text-[11px] text-muted-foreground">Pedidos</p><p className="text-lg font-bold tabular-nums">{c.pedidos}</p></div>
+                  <div className="rounded-lg border p-2"><p className="text-[11px] text-muted-foreground">Total</p><p className="text-lg font-bold tabular-nums">{brl(c.totalBRL)}</p></div>
+                  <div className="rounded-lg border p-2"><p className="text-[11px] text-muted-foreground">Ticket médio</p><p className="text-lg font-bold tabular-nums">{brl(c.pedidos ? c.totalBRL / c.pedidos : 0)}</p></div>
+                  <div className="rounded-lg border p-2"><p className="text-[11px] text-muted-foreground">Última compra</p><p className="text-sm font-bold">{fmtDay(c.ultima)}{dias != null && <span className="block text-[10px] font-normal text-muted-foreground">{dias === 0 ? "hoje" : `há ${dias} dias`}</span>}</p></div>
+                </div>
+
+                {c.nomes.size > 1 && (
+                  <p className="text-[11px] text-amber-500">⚠ Este documento aparece com {c.nomes.size} nomes diferentes: {Array.from(c.nomes).join(" · ")}</p>
+                )}
+
+                {/* Pedidos do cliente */}
+                <div className="rounded-lg border overflow-hidden">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b text-left text-xs text-muted-foreground bg-muted/30">
+                        <th className="px-3 py-2 font-medium">Pedido</th>
+                        <th className="px-3 py-2 font-medium">Data</th>
+                        <th className="px-3 py-2 font-medium text-right">Total</th>
+                        <th className="px-3 py-2 font-medium">Status</th>
+                        <th className="px-3 py-2 font-medium">Origem</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {ordersSorted.map((o, i) => (
+                        <tr key={o.id} className="border-b last:border-0">
+                          <td className="px-3 py-2 font-mono text-xs whitespace-nowrap">{o.order_number || "—"}{i === 0 && <span className="ml-1 text-[9px] font-semibold text-carbo-green">último</span>}</td>
+                          <td className="px-3 py-2 text-xs whitespace-nowrap text-muted-foreground">{fmtDateTime(o.created_at)}</td>
+                          <td className="px-3 py-2 text-right tabular-nums font-medium">{brl(o.total || 0)}</td>
+                          <td className="px-3 py-2 text-xs">{o.status || "—"}</td>
+                          <td className="px-3 py-2 text-xs text-muted-foreground">{o.external_ref?.startsWith("bling-") ? "Bling" : "Manual"}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            );
+          })()}
+        </DialogContent>
+      </Dialog>
     </main>
   );
 }
