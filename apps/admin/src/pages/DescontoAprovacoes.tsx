@@ -100,7 +100,14 @@ function Fila() {
                     <td className="px-4 py-2 text-right tabular-nums text-destructive whitespace-nowrap">- {brl(Number(r.discount))}{r.discount_percent > 0 ? ` (${r.discount_percent}%)` : ""}</td>
                     <td className="px-4 py-2 text-right tabular-nums font-semibold">{brl(Number(r.total))}</td>
                     <td className="px-4 py-2">{tierBadge(r.discount_approval_tier)}</td>
-                    <td className="px-4 py-2">{statusBadge(r.discount_approval_status)}</td>
+                    <td className="px-4 py-2">
+                      {statusBadge(r.discount_approval_status)}
+                      {r.discount_approver_name && (
+                        <div className="text-[10px] text-muted-foreground mt-0.5">
+                          por {r.discount_approver_name}{r.discount_approved_at ? ` · ${fmtDate(r.discount_approved_at)}` : ""}
+                        </div>
+                      )}
+                    </td>
                     <td className="px-4 py-2 text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                       {r.discount_approval_status === "pending" ? (
                         <div className="flex gap-1 justify-end">
@@ -142,6 +149,12 @@ function Fila() {
                   <span className="text-muted-foreground">Desconto</span><span className="text-right tabular-nums text-destructive">- {brl(Number(detail.discount))}{detail.discount_percent > 0 ? ` (${detail.discount_percent}%)` : ""}</span>
                   <span className="text-muted-foreground">Total</span><span className="text-right tabular-nums font-semibold">{brl(Number(detail.total))}</span>
                   <span className="text-muted-foreground">Alçada exigida</span><span className="text-right">{AUTHORITY_LABEL[(detail.discount_approval_tier as DiscountAuthority)] ?? "—"}</span>
+                  {detail.discount_approver_name && (
+                    <>
+                      <span className="text-muted-foreground">Decidido por</span>
+                      <span className="text-right">{detail.discount_approver_name}{detail.discount_approved_at ? ` · ${fmtDate(detail.discount_approved_at)}` : ""}</span>
+                    </>
+                  )}
                 </div>
                 {detail.discount_reason && (
                   <div className="text-xs"><span className="text-muted-foreground">Motivo: </span>{detail.discount_reason}</div>

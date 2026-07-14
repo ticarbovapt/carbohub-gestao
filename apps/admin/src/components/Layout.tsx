@@ -2,7 +2,7 @@ import { useState } from "react";
 import { NavLink, Outlet } from "react-router-dom";
 import {
   Users as UsersIcon, ListTree, Globe, Target, Activity,
-  Store, Building2, TrendingUp, LineChart, Trophy, BarChart3, BadgePercent,
+  Store, Building2, TrendingUp, LineChart, Trophy, BarChart3, BadgePercent, Tags,
 } from "lucide-react";
 import { TopBar } from "@/components/TopBar";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
@@ -33,6 +33,7 @@ const NAV_GROUPS = [
       { to: "/dashboards/comercial", label: "Visão Geral", icon: TrendingUp },
       { to: "/comercial/vendas", label: "Análise de Vendas", icon: BarChart3 },
       { to: "/comercial/descontos", label: "Aprovações de desconto", icon: BadgePercent },
+      { to: "/comercial/precos", label: "Tabela de preços", icon: Tags },
       { to: "/dashboards/metas", label: "Metas (Placar)", icon: Trophy },
     ],
   },

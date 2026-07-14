@@ -25,6 +25,8 @@ export interface DiscountApproval {
   discount_reason: string | null;
   discount_approval_status: ApprovalStatus;
   discount_approval_tier: DiscountAuthority | "none";
+  discount_approver_id: string | null;
+  discount_approver_name: string | null;   // resolvido de profiles (quem aprovou/recusou)
   discount_approver_notes: string | null;
   discount_approved_at: string | null;
   created_at: string;
@@ -33,7 +35,7 @@ export interface DiscountApproval {
 
 const SELECT =
   "id, order_number, customer_name, vendedor_name, subtotal, discount, discount_percent, total, " +
-  "discount_reason, discount_approval_status, discount_approval_tier, discount_approver_notes, " +
+  "discount_reason, discount_approval_status, discount_approval_tier, discount_approver_id, discount_approver_notes, " +
   "discount_approved_at, created_at, status";
 
 /** Fila de descontos (só vendas com desconto > 0). filter: 'pending'|'approved'|'rejected'|'all'. */
@@ -46,7 +48,17 @@ export function useDiscountApprovals(filter: "pending" | "approved" | "rejected"
       if (filter !== "all") q = q.eq("discount_approval_status", filter);
       const { data, error } = await q.order("created_at", { ascending: false }).limit(200);
       if (error) throw error;
-      return (data ?? []) as DiscountApproval[];
+      const rows = (data ?? []) as DiscountApproval[];
+      // Resolve o nome de quem aprovou/recusou (quem = qual gestor decidiu).
+      const ids = [...new Set(rows.map((r) => r.discount_approver_id).filter(Boolean))] as string[];
+      let names: Record<string, string> = {};
+      if (ids.length) {
+        const prof = await db.from("profiles").select("id, full_name").in("id", ids);
+        for (const p of (prof.data ?? []) as { id: string; full_name: string | null }[]) {
+          names[p.id] = p.full_name ?? "—";
+        }
+      }
+      return rows.map((r) => ({ ...r, discount_approver_name: r.discount_approver_id ? names[r.discount_approver_id] ?? "—" : null }));
     },
   });
 }
