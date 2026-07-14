@@ -23,6 +23,11 @@ export interface NovaVendaInput {
   is_licenciado?: boolean;
   endereco?: Record<string, unknown> | null; endereco_faturamento?: Record<string, unknown> | null;
   payment_terms?: string; freight_type?: string; total: number; notes?: string;
+  subtotal_bruto?: number;   // subtotal antes do desconto
+  desconto_tipo?: string;    // 'value' | 'percent'
+  desconto_valor?: number;   // R$ de desconto
+  desconto_percent?: number; // % efetivo
+  desconto_motivo?: string;
   internal_notes?: string;   // dados estratégicos + notas internas (nada é descartado)
   vendedor_id?: string;      // gestor pode lançar a venda por outro vendedor
   vendedor_name?: string;
@@ -232,7 +237,13 @@ export function useCreateVenda() {
           billing_address: input.endereco_faturamento ?? null,
           payment_terms: input.payment_terms || null,
           freight_type: input.freight_type || null,
-          items, subtotal: input.total, shipping_cost: 0, discount: 0, total: input.total,
+          items, subtotal: input.subtotal_bruto ?? input.total, shipping_cost: 0,
+          discount: input.desconto_valor ?? 0, total: input.total,
+          // Intenção do desconto; o trigger define o status/alçada de forma autoritativa.
+          discount_type: input.desconto_tipo ?? "none",
+          discount_percent: input.desconto_percent ?? 0,
+          discount_reason: input.desconto_motivo ?? null,
+          discount_requested_by: vendedorId,
           notes: input.notes || null, internal_notes: input.internal_notes || null,
           vendedor_id: vendedorId, vendedor_name: vendedorName,
         })

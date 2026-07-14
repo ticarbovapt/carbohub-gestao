@@ -3,7 +3,7 @@ import { useNavigate, useLocation } from "react-router-dom";
 import { toast } from "sonner";
 import {
   ShoppingCart, Plus, Trash2, Building2, MapPin, Package, Gift, FileText, Search, Target, ChevronDown,
-  Loader2, CheckCircle2, AlertCircle, CreditCard,
+  Loader2, CheckCircle2, AlertCircle, CreditCard, Percent, Tag,
 } from "lucide-react";
 import { CarboCard, CarboCardContent } from "@/components/ui/carbo-card";
 import { CarboButton } from "@/components/ui/carbo-button";
@@ -20,6 +20,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { generateQuotePdf } from "@/lib/quotePdf";
 import { useCreateVenda } from "@/hooks/useVendas";
 import { useProdutos } from "@/hooks/useProdutos";
+import { useDiscountTiersPublic } from "@/hooks/useDiscountTiers";
+import { computeDiscount, resolveTier } from "@/lib/discount";
 import { validateInscricaoEstadual } from "@/lib/inscricaoEstadual";
 import { useGeocode } from "@/hooks/useGeocode";
 import { MapContainer, TileLayer, CircleMarker, Popup } from "react-leaflet";
@@ -119,6 +121,13 @@ export default function Vender() {
   const [pagModalidade, setPagModalidade] = useState("");      // pix | boleto_avista | boleto_faturado | debito | credito
   const [pagParcelas, setPagParcelas] = useState("1");          // 1..12 (crédito)
   const [pagFaturamento, setPagFaturamento] = useState("");     // ex.: 30/60/90 (boleto faturado)
+
+  // ── Desconto (valor R$ ou percentual %) + alçada (hoje inerte/auto) ──
+  const [discEnabled, setDiscEnabled] = useState(false);
+  const [discType, setDiscType] = useState<"value" | "percent">("percent");
+  const [discRaw, setDiscRaw] = useState(0);
+  const [discReason, setDiscReason] = useState("");
+  const { data: discountCfg = { enabled: false, tiers: [] } } = useDiscountTiersPublic();
   const pagamentoLabel = useMemo(() => {
     switch (pagModalidade) {
       case "pix": return "PIX";
@@ -158,6 +167,13 @@ export default function Vender() {
   }
 
   const subtotal = useMemo(() => rows.reduce((s, r) => s + r.qty * r.unitPrice, 0), [rows]);
+  // Desconto calculado + alçada resolvida; total líquido que vai pro pedido/orçamento.
+  const disc = useMemo(
+    () => computeDiscount(subtotal, { enabled: discEnabled, type: discType, rawValue: discRaw, reason: discReason }),
+    [subtotal, discEnabled, discType, discRaw, discReason],
+  );
+  const discTier = useMemo(() => resolveTier(disc.percent, discountCfg), [disc.percent, discountCfg]);
+  const total = discEnabled && !disc.error ? disc.finalTotal : subtotal;
 
   // Formata CPF (≤11 díg.) ou CNPJ (12+).
   function formatDoc(v: string) {
@@ -274,7 +290,12 @@ export default function Vender() {
       payment_terms: pagamentoLabel || undefined,
       endereco: (endereco.logradouro || endereco.cidade || endereco.cep) ? endereco : null,
       endereco_faturamento: fatMesmo ? null : ((fatEndereco.logradouro || fatEndereco.cidade || fatEndereco.cep) ? fatEndereco : null),
-      total: subtotal,
+      subtotal_bruto: subtotal,
+      desconto_tipo: discEnabled && disc.amount > 0 ? discType : undefined,
+      desconto_valor: discEnabled ? disc.amount : 0,
+      desconto_percent: discEnabled ? disc.percent : 0,
+      desconto_motivo: discReason.trim() || undefined,
+      total,
       notes: obsPublica || undefined,
       itens: validItems().map((i) => ({
         produto: i.name,
@@ -298,11 +319,13 @@ export default function Vender() {
     setCoords(null); setMapMsg(null);
     setFatMesmo(true); setFatEndereco({ logradouro: "", numero: "", bairro: "", cidade: "", uf: "", cep: "" });
     setPagModalidade(""); setPagParcelas("1"); setPagFaturamento("");
+    setDiscEnabled(false); setDiscType("percent"); setDiscRaw(0); setDiscReason("");
   }
 
   async function handleQuote() {
     const items = validItems();
     if (items.length === 0) { toast.error("Adicione ao menos um item."); return; }
+    if (disc.error) { toast.error(disc.error); return; }
     if (!pagamentoValido) { toast.error("Selecione a forma de pagamento."); return; }
     setGenerating(true);
     try {
@@ -315,7 +338,8 @@ export default function Vender() {
         ie: ie || undefined,
         endereco,
         endereco_faturamento: fatMesmo ? null : fatEndereco,
-        vendedor_name: vendedor || undefined, items, total: subtotal,
+        vendedor_name: vendedor || undefined, items,
+        subtotal, discount: disc.amount, discount_percent: disc.percent, total,
         payment_terms: pagamentoLabel || undefined,
         notes: obsPublica || undefined, created_at: new Date().toISOString(), validityDays: 7,
       });
@@ -328,6 +352,7 @@ export default function Vender() {
 
   async function handleSell() {
     if (validItems().length === 0) { toast.error("Adicione ao menos um item."); return; }
+    if (disc.error) { toast.error(disc.error); return; }
     if (!pagamentoValido) { toast.error("Selecione a forma de pagamento."); return; }
     try {
       const { numero } = await createVenda.mutateAsync(buildPayload("pedido"));
@@ -584,10 +609,56 @@ export default function Vender() {
             );
           })}
 
+          {/* Desconto (valor R$ ou percentual %) */}
+          <div className="rounded-xl border p-3 space-y-3">
+            <label className="flex items-center gap-2">
+              <Switch checked={discEnabled} onCheckedChange={setDiscEnabled} />
+              <span className="text-sm flex items-center gap-1"><Tag className="h-3.5 w-3.5 text-carbo-green" /> Aplicar desconto</span>
+            </label>
+            {discEnabled && (
+              <div className="space-y-3">
+                <div className="flex flex-col sm:flex-row gap-3">
+                  <div className="grid grid-cols-2 gap-2 sm:w-56 shrink-0">
+                    {([["percent", "%", Percent], ["value", "R$", Tag]] as const).map(([v, label, Ico]) => (
+                      <button key={v} type="button" onClick={() => setDiscType(v)}
+                        className={`rounded-lg border p-2 text-sm font-medium flex items-center justify-center gap-1 transition-all ${
+                          discType === v ? "border-carbo-green bg-carbo-green/5 text-foreground" : "bg-card text-muted-foreground hover:bg-muted"}`}>
+                        <Ico className="h-3.5 w-3.5" /> {label}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="flex-1 space-y-1.5">
+                    <Label>{discType === "percent" ? "Percentual (%)" : "Valor (R$)"}</Label>
+                    <Input type="number" min={0} step={discType === "percent" ? "0.01" : "0.01"}
+                      value={discRaw || ""} onChange={(e) => setDiscRaw(Number(e.target.value))}
+                      placeholder={discType === "percent" ? "ex.: 5" : "ex.: 100,00"}
+                      className={disc.error ? "border-destructive focus-visible:ring-destructive" : ""} />
+                  </div>
+                  <div className="flex-1 space-y-1.5">
+                    <Label>Motivo (opcional)</Label>
+                    <Input value={discReason} onChange={(e) => setDiscReason(e.target.value)} placeholder="Ex.: fidelização, volume…" />
+                  </div>
+                </div>
+                {disc.error ? (
+                  <p className="text-xs flex items-center gap-1 text-destructive"><AlertCircle className="h-3.5 w-3.5 shrink-0" /> {disc.error}</p>
+                ) : discTier.hint ? (
+                  <p className={`text-xs flex items-center gap-1 ${discTier.needsApproval ? "text-amber-500" : "text-muted-foreground"}`}>
+                    {discTier.needsApproval ? <AlertCircle className="h-3.5 w-3.5 shrink-0" /> : <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />}
+                    {discTier.hint}
+                  </p>
+                ) : null}
+              </div>
+            )}
+          </div>
+
+          {/* Resumo: subtotal · desconto · total */}
           <div className="flex justify-end border-t pt-3">
-            <div className="text-right">
-              <p className="text-xs text-muted-foreground">Subtotal</p>
-              <p className="text-lg font-bold">{brl(subtotal)}</p>
+            <div className="w-full sm:w-64 space-y-1 text-sm">
+              <div className="flex justify-between"><span className="text-muted-foreground">Subtotal</span><span className="tabular-nums">{brl(subtotal)}</span></div>
+              {discEnabled && !disc.error && disc.amount > 0 && (
+                <div className="flex justify-between text-destructive"><span>Desconto{disc.percent > 0 ? ` (${disc.percent}%)` : ""}</span><span className="tabular-nums">- {brl(disc.amount)}</span></div>
+              )}
+              <div className="flex justify-between border-t pt-1 font-bold text-base"><span>Total</span><span className="tabular-nums">{brl(total)}</span></div>
             </div>
           </div>
         </CarboCardContent>
@@ -703,14 +774,14 @@ export default function Vender() {
       <div className="sticky bottom-0 bg-background/95 backdrop-blur border-t -mx-4 md:-mx-6 px-4 md:px-6 py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div className="flex items-center justify-between sm:block">
           <p className="text-xs text-muted-foreground">Total</p>
-          <p className="text-xl font-bold">{brl(subtotal)}</p>
+          <p className="text-xl font-bold">{brl(total)}</p>
         </div>
         <div className="flex items-center gap-2 w-full sm:w-auto">
           <Button variant="ghost" className="hidden sm:inline-flex" onClick={() => navigate("/pedidos")}>Cancelar</Button>
-          <Button variant="outline" className="flex-1 sm:flex-none" onClick={handleQuote} disabled={generating || !pagamentoValido}>
+          <Button variant="outline" className="flex-1 sm:flex-none" onClick={handleQuote} disabled={generating || !pagamentoValido || !!disc.error}>
             <FileText className="h-4 w-4 mr-1" /> {generating ? "Gerando..." : (<><span className="hidden sm:inline">Gerar&nbsp;</span>Orçamento</>)}
           </Button>
-          <CarboButton onClick={handleSell} className="flex-1 sm:flex-none sm:min-w-[150px]" disabled={!pagamentoValido}>
+          <CarboButton onClick={handleSell} className="flex-1 sm:flex-none sm:min-w-[150px]" disabled={!pagamentoValido || !!disc.error}>
             <ShoppingCart className="h-4 w-4 mr-1" /> Gerar Venda
           </CarboButton>
         </div>

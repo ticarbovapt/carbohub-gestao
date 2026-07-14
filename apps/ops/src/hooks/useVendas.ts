@@ -35,7 +35,12 @@ export interface NovaVendaInput {
   endereco_faturamento?: Record<string, unknown> | null;
   payment_terms?: string;
   freight_type?: string;
-  total: number;
+  subtotal_bruto?: number;      // subtotal antes do desconto
+  desconto_tipo?: string;       // 'value' | 'percent'
+  desconto_valor?: number;      // R$ de desconto
+  desconto_percent?: number;    // % efetivo
+  desconto_motivo?: string;
+  total: number;                // total líquido (já com desconto)
   notes?: string;
   internal_notes?: string;
   vendedor_id?: string;
@@ -93,10 +98,15 @@ export function useCreateVenda() {
           payment_terms: input.payment_terms || null,
           freight_type: input.freight_type || null,
           items,
-          subtotal: input.total,
+          subtotal: input.subtotal_bruto ?? input.total,
           shipping_cost: 0,
-          discount: 0,
+          discount: input.desconto_valor ?? 0,
           total: input.total,
+          // Intenção do desconto; o trigger define o status/alçada de forma autoritativa.
+          discount_type: input.desconto_tipo ?? "none",
+          discount_percent: input.desconto_percent ?? 0,
+          discount_reason: input.desconto_motivo ?? null,
+          discount_requested_by: vendedorId,
           status: input.status === "orcamento" ? "quote" : "pending",
           notes: input.notes || null,
           internal_notes: input.internal_notes || null,

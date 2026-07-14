@@ -38,6 +38,8 @@ export interface QuotePdfData {
   payment_terms?: string | null;     // forma de pagamento escolhida
   items?: unknown;
   subtotal?: number | null;
+  discount?: number | null;          // desconto aplicado (R$)
+  discount_percent?: number | null;  // % do desconto (para exibição)
   total?: number | null;
   created_at?: string | null;
   notes?: string | null;
@@ -212,10 +214,21 @@ export async function generateQuotePdf(order: QuotePdfData) {
     margin: { left: M, right: M },
   });
 
-  // ── Total ──────────────────────────────────────────────────────────────────
+  // ── Total (com Subtotal + Desconto, quando houver) ──────────────────────────
   const afterTable = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY;
+  const discount = Number(order.discount ?? 0);
+  const subtotal = Number(order.subtotal ?? order.total ?? 0);
   const total = order.total ?? order.subtotal ?? 0;
   let ty = afterTable + 6;
+  // Linhas de Subtotal e Desconto só aparecem quando há desconto (evita poluir).
+  if (discount > 0) {
+    doc.setFont("helvetica", "normal"); doc.setFontSize(9); doc.setTextColor(0);
+    doc.text(`Subtotal: ${brl(subtotal)}`, pageW - M - 3, ty + 4, { align: "right" });
+    ty += 5;
+    const pctTxt = order.discount_percent ? ` (${order.discount_percent}%)` : "";
+    doc.text(`Desconto${pctTxt}: - ${brl(discount)}`, pageW - M - 3, ty + 4, { align: "right" });
+    ty += 6;
+  }
   doc.setFillColor(...GREEN);
   doc.rect(pageW - M - 70, ty, 70, 9, "F");
   doc.setTextColor(255); doc.setFont("helvetica", "bold"); doc.setFontSize(11);
