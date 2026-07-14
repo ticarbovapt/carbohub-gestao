@@ -15,6 +15,7 @@ import UltimoAcesso from "./pages/UltimoAcesso";
 import DashboardsLojas from "./pages/DashboardsLojas";
 import DashboardsFranqueados from "./pages/DashboardsFranqueados";
 import DashboardsComercial from "./pages/DashboardsComercial";
+import DashboardsMetas from "./pages/DashboardsMetas";
 import DashboardsEstrategico from "./pages/DashboardsEstrategico";
 import { isCarbohubDomain, goToHubLogin } from "@/lib/sso";
 
@@ -50,6 +51,7 @@ export default function App() {
         <Route path="/dashboards/lojas" element={<DashboardsLojas />} />
         <Route path="/dashboards/franqueados" element={<DashboardsFranqueados />} />
         <Route path="/dashboards/comercial" element={<DashboardsComercial />} />
+        <Route path="/dashboards/metas" element={<DashboardsMetas />} />
         <Route path="/dashboards/estrategico" element={<DashboardsEstrategico />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
