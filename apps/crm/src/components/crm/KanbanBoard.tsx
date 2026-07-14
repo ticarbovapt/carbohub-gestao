@@ -75,6 +75,7 @@ export function KanbanBoard({ leads, funnelType, onAdvance, onMarkLost, onLeadCl
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
       onDragCancel={() => setActiveId(null)}
+      autoScroll={{ threshold: { x: 0.2, y: 0.2 }, acceleration: 18 }}
     >
       <div className="flex gap-3 overflow-x-auto pb-4">
         {stages.map((stage) => (

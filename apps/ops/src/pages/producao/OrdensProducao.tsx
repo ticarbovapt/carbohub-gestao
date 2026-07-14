@@ -21,6 +21,7 @@ import { DeleteConfirmDialog } from "@/components/producao/DeleteConfirmDialog";
 import { MoveOPDialog } from "@/components/producao/MoveOPDialog";
 import { toast } from "sonner";
 import { useProductionOrders, useProductionOrderMutations, useProductionRealtime, useLastOpMoves, type OpRow, type OpStatus as OpStatusT } from "@/hooks/useProductionOrders";
+import { useDragScroll } from "@/hooks/useDragScroll";
 
 type OpStatus =
   | "rascunho" | "planejada" | "aguardando_separacao" | "separada" | "aguardando_liberacao"
@@ -117,6 +118,7 @@ export default function OrdensProducao() {
   };
   const [dragId, setDragId] = useState<string | null>(null);
   const [overCol, setOverCol] = useState<string | null>(null);
+  const scrollRef = useDragScroll<HTMLDivElement>();
   // Abre no Kanban por padrão e LEMBRA a última escolha (persiste no F5).
   const [viewMode, setViewMode] = useState<"list" | "kanban">(() => {
     const saved = typeof localStorage !== "undefined" ? localStorage.getItem("ops:op-view") : null;
@@ -403,7 +405,7 @@ export default function OrdensProducao() {
         {isLoading ? (
           <div className="flex items-center justify-center gap-2 py-16 text-muted-foreground"><Loader2 className="h-5 w-5 animate-spin" /> Carregando…</div>
         ) : viewMode === "kanban" ? (
-          <div className="flex gap-3 overflow-x-auto h-[60vh] md:h-[70vh] pb-3">
+          <div ref={scrollRef} className="flex gap-3 overflow-x-auto h-[60vh] md:h-[70vh] pb-3">
             {KANBAN_COLUMNS.map((col) => {
               // Concluída/Bloqueada acumulam — mostra as recentes e resume o resto.
               const CAP = 12;

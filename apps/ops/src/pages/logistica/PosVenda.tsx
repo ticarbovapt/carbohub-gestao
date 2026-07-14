@@ -10,6 +10,7 @@ import {
   usePosVendaOrders, usePosVendaRealtime, useUpdateFulfillmentStage, useHubRnStock, useOpsBySource,
   POSVENDA_STAGES, type FulfillmentStage, type PosVendaOrder,
 } from "@/hooks/usePosVenda";
+import { useDragScroll } from "@/hooks/useDragScroll";
 
 const brl = (v: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v || 0);
 const fmtDate = (s: string) => new Date(s).toLocaleDateString("pt-BR");
@@ -45,6 +46,7 @@ export default function PosVenda() {
   const updateStage = useUpdateFulfillmentStage();
   const [dragId, setDragId] = useState<string | null>(null);
   const [overStage, setOverStage] = useState<FulfillmentStage | null>(null);
+  const scrollRef = useDragScroll<HTMLDivElement>();
   const [detail, setDetail] = useState<PosVendaOrder | null>(null);
   // Pedido + destino aguardando confirmação (Em Separação OU Criar Ordem de Produção).
   const [pending, setPending] = useState<{ order: PosVendaOrder; target: FulfillmentStage } | null>(null);
@@ -158,7 +160,7 @@ export default function PosVenda() {
             <Loader2 className="h-5 w-5 animate-spin" /> Carregando…
           </div>
         ) : (
-          <div className="flex flex-col md:flex-row gap-3 overflow-y-auto md:overflow-x-auto flex-1 min-h-0">
+          <div ref={scrollRef} className="flex flex-col md:flex-row gap-3 overflow-y-auto md:overflow-x-auto flex-1 min-h-0">
             {POSVENDA_STAGES.map((stage) => {
               const items = byStage[stage.key] ?? [];
               const isOver = overStage === stage.key;
