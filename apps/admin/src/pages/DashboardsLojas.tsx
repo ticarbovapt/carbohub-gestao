@@ -101,7 +101,7 @@ export default function DashboardsLojas() {
       <CarboPageHeader
         icon={Store}
         iconColor="green"
-        title="Lojas — Visão Geral"
+        title="Portal de Vendas — Visão Geral"
         description={`Consolidado da rede do Portal de Vendas (CarboZé) · ${rangeLabel(range)}`}
         actions={<PeriodPicker value={range} onChange={setRange} />}
       />
