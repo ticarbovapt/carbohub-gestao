@@ -117,12 +117,16 @@ export function usePosVendaOrders(terminalDays: number | "all" = 30) {
     queryKey: ["ops", "pos-venda", terminalDays],
     queryFn: async (): Promise<PosVendaData> => {
       const cutoff = terminalDays === "all" ? null : new Date(Date.now() - terminalDays * 86_400_000).toISOString();
-      // Rastreio = vendas MANUAIS (Carbo Sales). Inclui as que já foram pro Bling
-      // pra emitir NF (têm external_ref) SE forem venda manual (order_number 'V…'),
-      // pois continuam sendo controladas aqui até a entrega. Pedidos nascidos no
-      // Bling (BLING-…) seguem de fora — têm fluxo próprio. Orçamento (quote) fora.
+      // Rastreio = vendas MANUAIS (Carbo Sales). Regra do external_ref:
+      //  • sem external_ref → venda ainda no fluxo manual (aparece).
+      //  • com external_ref (foi pro Bling p/ NF) → só aparece se for venda
+      //    manual (order_number 'V…') E já tiver AVANÇADO além das etapas iniciais
+      //    (nova_venda/separacao_pendente) — ou seja, está de fato no pipeline
+      //    operacional (separação/NF/transporte). Assim a venda faturada segue
+      //    até a entrega, mas as antigas travadas no início (faturadas por fora)
+      //    não voltam. Pedidos nascidos no Bling (BLING-…) ficam de fora.
       const base = (cols: string) => db.from("carboze_orders").select(cols)
-        .or("external_ref.is.null,order_number.like.V*")
+        .or("external_ref.is.null,and(order_number.like.V*,fulfillment_stage.not.in.(nova_venda,separacao_pendente))")
         .or("status.is.null,status.neq.quote");
 
       // Ativos: tudo que NÃO está finalizado — sem teto (limite de segurança alto).
