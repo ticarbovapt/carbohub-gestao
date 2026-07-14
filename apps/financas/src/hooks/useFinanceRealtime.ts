@@ -111,8 +111,10 @@ export function useFinanceRealtime() {
         (payload: any) => {
           const n = payload.new;
           qc.invalidateQueries({ queryKey: ["notifications", user.id] });
-          if (n?.type === "ecommerce_sale") playCoin(); else playDing();
-          toast(n?.title ?? "Nova notificação", { description: n?.body ?? undefined });
+          // Só venda (moedinha) e financeiro (RC/OC, ding) tocam som + toast.
+          // Bug e demais notificações são só sininho (bell), sem barulho.
+          if (n?.type === "ecommerce_sale") { playCoin(); toast(n?.title ?? "Nova venda", { description: n?.body ?? undefined }); }
+          else if (n?.type === "finance_rc_pendente" || n?.type === "finance_oc_nova") { playDing(); toast(n?.title ?? "Financeiro", { description: n?.body ?? undefined }); }
         },
       )
       .subscribe();
