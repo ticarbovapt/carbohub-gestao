@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Badge } from "@/components/ui/badge";
+import { CarboBadge } from "@/components/ui/carbo-badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -35,16 +35,20 @@ const OP_STATUS_LABELS: Record<OpStatus, string> = {
   aguardando_qualidade: "Aguard. Qualidade", qualidade_aprovada: "QA Aprovado", liberada: "Liberada",
   concluida: "Concluída", bloqueada: "Bloqueada", cancelada: "Cancelada",
 };
-const OP_STATUS_COLORS: Record<OpStatus, string> = {
-  rascunho: "bg-gray-500", planejada: "bg-blue-500", aguardando_separacao: "bg-amber-500",
-  separada: "bg-cyan-500", aguardando_liberacao: "bg-indigo-500", liberada_producao: "bg-teal-500",
-  em_producao: "bg-orange-500", envase: "bg-orange-500", rotulagem: "bg-pink-500",
-  aguardando_confirmacao: "bg-purple-500", confirmada: "bg-violet-500",
-  aguardando_qualidade: "bg-yellow-500", qualidade_aprovada: "bg-green-500", liberada: "bg-emerald-500",
-  concluida: "bg-green-600", bloqueada: "bg-red-500", cancelada: "bg-gray-400",
-};
 const PRIORITY_LABELS: Record<number, string> = { 1: "Urgente", 2: "Alta", 3: "Normal", 4: "Baixa", 5: "Planejado" };
-const PRIORITY_BADGE_COLORS: Record<number, string> = { 1: "bg-red-500", 2: "bg-orange-500", 3: "bg-blue-500", 4: "bg-gray-400", 5: "bg-gray-300" };
+// Badges semânticos (contraste garantido em claro/escuro). A cor única de cada
+// status já vem do stripe da coluna do kanban — o badge só sinaliza a natureza.
+type CarboBadgeVariant = "draft" | "info" | "warning" | "active" | "completed" | "destructive" | "cancelled" | "urgent" | "high" | "low";
+const PRIORITY_VARIANT: Record<number, CarboBadgeVariant> = { 1: "urgent", 2: "high", 3: "info", 4: "low", 5: "draft" };
+const OP_STATUS_VARIANT: Record<OpStatus, CarboBadgeVariant> = {
+  rascunho: "draft", planejada: "info",
+  aguardando_separacao: "warning", aguardando_liberacao: "warning",
+  aguardando_confirmacao: "warning", aguardando_qualidade: "warning",
+  separada: "active", liberada_producao: "active", em_producao: "active",
+  envase: "active", rotulagem: "active", confirmada: "active",
+  qualidade_aprovada: "active", liberada: "active",
+  concluida: "completed", bloqueada: "destructive", cancelada: "cancelled",
+};
 const DEMAND_SOURCE_LABELS: Record<string, string> = { venda: "Venda", recorrencia: "Recorrência", safety_stock: "Safety Stock", pcp_manual: "PCP Manual", pos_venda: "Pós-venda" };
 
 // Ao soltar o card numa coluna, aplica statuses[0] (o status "canônico" da coluna).
@@ -484,7 +488,7 @@ export default function OrdensProducao() {
                         >
                           <div className="flex items-center justify-between gap-2">
                             <span className="font-mono text-[11px] font-medium text-blue-500 truncate">{o.op_number}</span>
-                            <Badge variant="outline" className={cn("text-white border-0 text-[10px] shrink-0", PRIORITY_BADGE_COLORS[o.priority])}>{PRIORITY_LABELS[o.priority]}</Badge>
+                            <CarboBadge variant={PRIORITY_VARIANT[o.priority]} size="sm" className="shrink-0">{PRIORITY_LABELS[o.priority]}</CarboBadge>
                           </div>
                           <p className="text-sm font-semibold mt-1 leading-tight line-clamp-2">{o.sku_name}</p>
                           {/* Identificação: cliente (venda) ou fonte interna + data de criação */}
@@ -582,8 +586,8 @@ export default function OrdensProducao() {
                         )}
                       </div>
                     </TableCell>
-                    <TableCell><Badge variant="outline" className={cn("text-white border-0 text-xs", PRIORITY_BADGE_COLORS[o.priority])}>{PRIORITY_LABELS[o.priority]}</Badge></TableCell>
-                    <TableCell><Badge variant="outline" className={cn("text-white border-0 text-xs", OP_STATUS_COLORS[o.op_status])}>{OP_STATUS_LABELS[o.op_status]}</Badge></TableCell>
+                    <TableCell><CarboBadge variant={PRIORITY_VARIANT[o.priority]} size="sm">{PRIORITY_LABELS[o.priority]}</CarboBadge></TableCell>
+                    <TableCell><CarboBadge variant={OP_STATUS_VARIANT[o.op_status]} size="sm">{OP_STATUS_LABELS[o.op_status]}</CarboBadge></TableCell>
                     <TableCell className="text-sm text-muted-foreground">{DEMAND_SOURCE_LABELS[o.demand_source] || "—"}</TableCell>
                     <TableCell className="text-sm text-muted-foreground">{dt(o.need_date)}</TableCell>
                     {canManage && (
