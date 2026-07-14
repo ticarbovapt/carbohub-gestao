@@ -18,7 +18,9 @@ export interface EstrategicoData {
   activeOS: number;
   overdueOS: number;
   activeLicensees: number;
+  newLicensees: number;   // licenciados criados no mês corrente
   activeMachines: number;
+  totalMachines: number;  // para derivar máquinas fora de operação
   monthlyRevenue: number;
   revenueMonthly: { key: string; receita: number; vendas: number }[];
 }
@@ -31,6 +33,7 @@ type LooseQuery = {
   eq: (c: string, v: unknown) => LooseQuery;
   in: (c: string, v: unknown[]) => LooseQuery;
   lt: (c: string, v: unknown) => LooseQuery;
+  gte: (c: string, v: unknown) => LooseQuery;
   then: (
     onfulfilled: (r: { count: number | null; error: { message: string } | null }) => void,
   ) => Promise<void>;
@@ -54,11 +57,13 @@ export function useDashEstrategico(months = 12) {
       const chartFrom = new Date(now.getFullYear(), now.getMonth() - (months - 1), 1).toISOString();
 
       // ── Contagens (KPIs) ──────────────────────────────────────────────────
-      const [activeOS, overdueOS, activeLicensees, activeMachines] = await Promise.all([
+      const [activeOS, overdueOS, activeLicensees, newLicensees, activeMachines, totalMachines] = await Promise.all([
         runCount(table("service_orders").in("status", ["active", "draft"])),
         runCount(table("service_orders").eq("status", "active").lt("sla_deadline", nowIso)),
         runCount(table("licensees").eq("status", "active")),
+        runCount(table("licensees").gte("created_at", curMonthStart)),
         runCount(table("machines").eq("status", "operational")),
+        runCount(table("machines")),
       ]);
 
       // ── Receita por mês (view secure; fallback carboze_orders) ────────────
@@ -87,7 +92,7 @@ export function useDashEstrategico(months = 12) {
         .slice(-months)
         .map(([key, v]) => ({ key, ...v }));
 
-      return { activeOS, overdueOS, activeLicensees, activeMachines, monthlyRevenue, revenueMonthly };
+      return { activeOS, overdueOS, activeLicensees, newLicensees, activeMachines, totalMachines, monthlyRevenue, revenueMonthly };
     },
   });
 }

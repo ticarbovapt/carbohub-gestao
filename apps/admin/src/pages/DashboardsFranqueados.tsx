@@ -78,7 +78,7 @@ export default function DashboardsFranqueados() {
       <CarboPageHeader
         icon={Building2}
         iconColor="blue"
-        title="Franqueados — Visão Geral"
+        title="Licenciados — Visão Geral"
         description="Rede de descarbonização CarboVapt · consolidado de todas as lojas"
       />
 

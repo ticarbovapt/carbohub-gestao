@@ -21,8 +21,8 @@ const NAV_GROUPS = [
     // Espelho dos dashboards principais de cada sistema do ecossistema.
     label: "Dashboards",
     items: [
-      { to: "/dashboards/lojas", label: "Lojas (Vendas)", icon: Store },
-      { to: "/dashboards/franqueados", label: "Franqueados", icon: Building2 },
+      { to: "/dashboards/lojas", label: "Portal de Vendas", icon: Store },
+      { to: "/dashboards/franqueados", label: "Licenciados", icon: Building2 },
       { to: "/dashboards/estrategico", label: "Estratégico", icon: LineChart },
     ],
   },

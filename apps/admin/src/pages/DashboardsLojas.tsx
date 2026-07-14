@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Store, DollarSign, ShoppingCart, Boxes, Users, AlertTriangle, TrendingUp } from "lucide-react";
+import { Store, DollarSign, ShoppingCart, Boxes, AlertTriangle, TrendingUp } from "lucide-react";
 import {
   ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LabelList,
 } from "recharts";
@@ -101,7 +101,7 @@ export default function DashboardsLojas() {
       <CarboPageHeader
         icon={Store}
         iconColor="green"
-        title="Lojas — Visão Geral"
+        title="Portal de Vendas — Visão Geral"
         description={`Consolidado da rede do Portal de Vendas (CarboZé) · ${rangeLabel(range)}`}
         actions={<PeriodPicker value={range} onChange={setRange} />}
       />
@@ -119,12 +119,10 @@ export default function DashboardsLojas() {
         <CarboKPI title="Lojas ativas" value={kpis?.active_postos ?? 0} icon={Store}
           iconColor="blue" loading={kLoad} />
       </div>
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
         <CarboKPI title="Total de lojas" value={kpis?.total_postos ?? 0} icon={Store}
           iconColor="muted" loading={kLoad} />
-        <CarboKPI title="Frentistas" value={kpis?.total_frentistas ?? 0} icon={Users}
-          iconColor="muted" loading={kLoad} />
-        <CarboKPI title="Produtos em falta" value={kpis?.low_stock_products ?? 0} icon={AlertTriangle}
+        <CarboKPI title="Estoque" value={kpis?.low_stock_products ? "Atenção" : "Em dia"} icon={AlertTriangle}
           iconColor={kpis?.low_stock_products ? "warning" : "muted"} loading={kLoad} />
         <CarboKPI title="Ticket médio"
           value={fmtBRLc(kpis && kpis.total_sales > 0 ? kpis.total_revenue / kpis.total_sales : 0)}
