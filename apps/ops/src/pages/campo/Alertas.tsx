@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Bell, RefreshCw, AlertTriangle, Clock, CheckCircle2, Package, Loader2, ChevronRight, ShoppingCart, Truck, Factory, Receipt, Wrench } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { CarboPageHeader } from "@/components/ui/carbo-page-header";
 import { CarboEmptyState } from "@/components/ui/carbo-empty-state";
 import { useStock } from "@/hooks/useStock";
 import { HUBS } from "@/components/estoque/stockData";
@@ -222,13 +223,16 @@ export default function Alertas() {
   return (
     <div className="p-4 md:p-6">
       <div className="space-y-5 max-w-[1200px] mx-auto">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-bold text-foreground flex items-center gap-2"><Bell className="h-6 w-6" /> Central de Alertas</h1>
-            <p className="text-sm text-muted-foreground mt-0.5">Pendências operacionais: estoque, pedidos, produção, NF e OS de campo</p>
-          </div>
-          <Button variant="outline" size="sm" onClick={refetchAll} disabled={isFetching} className="gap-2"><RefreshCw className={cn("h-4 w-4", isFetching && "animate-spin")} /> Atualizar</Button>
-        </div>
+        <CarboPageHeader
+          title="Central de Alertas"
+          description="Pendências operacionais: estoque, pedidos, produção, NF e OS de campo"
+          icon={Bell}
+          actions={
+            <Button variant="outline" size="sm" onClick={refetchAll} disabled={isFetching} className="gap-2">
+              <RefreshCw className={cn("h-4 w-4", isFetching && "animate-spin")} /> Atualizar
+            </Button>
+          }
+        />
 
         <div className="grid grid-cols-3 gap-3">
           {KPIS.map((k) => (

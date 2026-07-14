@@ -210,23 +210,24 @@ export default function OrdensProducao() {
       <div className="flex flex-col gap-6">
         <div className="shrink-0 space-y-6">
         {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-bold flex items-center gap-3"><Factory className="h-6 w-6 text-orange-500" /> Ordens de Produção</h1>
-            <p className="text-muted-foreground mt-1">Gestão e acompanhamento de OPs</p>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="flex rounded-lg border overflow-hidden">
-              <button onClick={() => setViewMode("kanban")} className={`px-3 py-2 text-xs flex items-center gap-1.5 transition-colors ${viewMode === "kanban" ? "bg-primary text-primary-foreground" : "hover:bg-muted text-muted-foreground"}`}>
-                <LayoutGrid className="h-3.5 w-3.5" /> Kanban
-              </button>
-              <button onClick={() => setViewMode("list")} className={`px-3 py-2 text-xs flex items-center gap-1.5 border-l transition-colors ${viewMode === "list" ? "bg-primary text-primary-foreground" : "hover:bg-muted text-muted-foreground"}`}>
-                <List className="h-3.5 w-3.5" /> Lista
-              </button>
-            </div>
-            {canManage && <Button onClick={() => setCreateOpen(true)} className="gap-2"><Plus className="h-4 w-4" /> Nova OP</Button>}
-          </div>
-        </div>
+        <CarboPageHeader
+          title="Ordens de Produção"
+          description="Gestão e acompanhamento de OPs"
+          icon={Factory}
+          actions={
+            <>
+              <div className="flex rounded-lg border overflow-hidden">
+                <button onClick={() => setViewMode("kanban")} className={`px-3 py-2 text-xs flex items-center gap-1.5 transition-colors ${viewMode === "kanban" ? "bg-primary text-primary-foreground" : "hover:bg-muted text-muted-foreground"}`}>
+                  <LayoutGrid className="h-3.5 w-3.5" /> Kanban
+                </button>
+                <button onClick={() => setViewMode("list")} className={`px-3 py-2 text-xs flex items-center gap-1.5 border-l transition-colors ${viewMode === "list" ? "bg-primary text-primary-foreground" : "hover:bg-muted text-muted-foreground"}`}>
+                  <List className="h-3.5 w-3.5" /> Lista
+                </button>
+              </div>
+              {canManage && <Button onClick={() => setCreateOpen(true)} className="gap-2"><Plus className="h-4 w-4" /> Nova OP</Button>}
+            </>
+          }
+        />
 
         {/* KPIs */}
         <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
