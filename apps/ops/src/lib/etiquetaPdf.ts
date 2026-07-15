@@ -81,6 +81,7 @@ export interface EtiquetaData {
   delivery_zip: string | null;
   volumes: number;
   weightKg: number | null;
+  transportadora?: string | null;
   chaveAcesso?: string | null;
 }
 
@@ -253,29 +254,46 @@ export async function gerarEtiquetaPDF(data: EtiquetaData, emissao: Date = new D
     doc.line(M, y, W - M, y);
     y += 4;
 
-    // ── NF + PESO + VOLUME (faixa de destaque) ──
-    // Caixa VOLUME grande no canto superior direito.
-    const volBoxW = 30, volBoxH = 16;
-    const volBoxX = W - M - volBoxW, volBoxY = y - 1;
+    // ── Faixa de expedição: NOTA FISCAL / PESO / TRANSPORTADORA + VOLUME ──
+    const bandY = y;
+    const bandH = 24;
+    const volBoxW = 28;
+    const volBoxX = W - M - volBoxW;
+    const leftW = volBoxX - M - 3;
+    const col2X = M + leftW / 2;
+
+    // Caixa VOLUME (direita), alinhada à altura da faixa.
     doc.setLineWidth(0.4);
-    doc.rect(volBoxX, volBoxY, volBoxW, volBoxH);
+    doc.rect(volBoxX, bandY, volBoxW, bandH);
     doc.setFont("helvetica", "bold");
     doc.setFontSize(6.5);
-    doc.text("VOLUME", volBoxX + volBoxW / 2, volBoxY + 4, { align: "center" });
-    doc.setFontSize(15);
-    doc.text(`${vol}/${total}`, volBoxX + volBoxW / 2, volBoxY + 12.5, { align: "center" });
+    doc.text("VOLUME", volBoxX + volBoxW / 2, bandY + 6, { align: "center" });
+    doc.setFontSize(16);
+    doc.text(`${vol}/${total}`, volBoxX + volBoxW / 2, bandY + 16, { align: "center" });
 
+    // NOTA FISCAL (topo, destaque).
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(7);
-    doc.text("NOTA FISCAL", M, y + 2);
-    doc.setFontSize(13);
-    doc.text(nf || "—", M, y + 8);
+    doc.setFontSize(6.5);
+    doc.text("NOTA FISCAL", M, bandY + 4);
+    doc.setFontSize(14);
+    doc.text(nf || "—", M, bandY + 10.5);
+
+    // Divisória fina entre NF e a linha peso/transportadora.
+    doc.setLineWidth(0.2);
+    doc.line(M, bandY + 13, volBoxX - 3, bandY + 13);
+
+    // PESO BRUTO (col. esq.) + TRANSPORTADORA (col. dir.).
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(7);
-    doc.text("PESO BRUTO", M, y + 13.5);
-    doc.setFontSize(11);
-    doc.text(peso, M, y + 18.5);
-    y += 22;
+    doc.setFontSize(6.5);
+    doc.text("PESO BRUTO", M, bandY + 17);
+    doc.text("TRANSPORTADORA", col2X, bandY + 17);
+    doc.setFontSize(10);
+    doc.text(peso, M, bandY + 22.5);
+    const transp = data.transportadora?.trim() || "—";
+    const transpFit = doc.splitTextToSize(transp, leftW / 2 - 2)[0] as string;
+    doc.text(transpFit, col2X, bandY + 22.5);
+
+    y = bandY + bandH + 4;
 
     doc.setLineWidth(0.2);
     doc.line(M, y, W - M, y);

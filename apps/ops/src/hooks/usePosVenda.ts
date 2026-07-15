@@ -106,8 +106,9 @@ export interface PosVendaOrder {
   linha: string | null;
   bling_nf_id: number | null;      // NF vinculada (Faturamento/Bling) → NF finalizada
   invoice_number: string | null;   // nº da NF-e, quando emitida
-  shipment_volumes: number | null;    // volumes informados na separação (etiqueta)
-  shipment_weight_kg: number | null;  // peso bruto (kg) informado na separação (etiqueta)
+  shipment_volumes: number | null;    // volumes informados na expedição (etiqueta)
+  shipment_weight_kg: number | null;  // peso bruto (kg) informado na expedição (etiqueta)
+  shipment_carrier: string | null;    // transportadora do envio (etiqueta)
 }
 
 const SELECT_BASE =
@@ -115,7 +116,7 @@ const SELECT_BASE =
   "freight_type, agreed_delivery_date, ppf_date, ppe_date, delivery_address, delivery_city, " +
   "delivery_state, delivery_zip, vendedor_name, vendedor_id, subtotal, shipping_cost, discount, total, " +
   "notes, items, created_at, updated_at, stage_changed_at, fulfillment_stage, linha, bling_nf_id, invoice_number, " +
-  "shipment_volumes, shipment_weight_kg, status";
+  "shipment_volumes, shipment_weight_kg, shipment_carrier, status";
 const SELECT_COLS = SELECT_BASE + ", production_done";
 
 // Etapas terminais do rastreio (colunas que só acumulam).
@@ -454,14 +455,15 @@ export function useUpdateFulfillmentStage() {
 export function useUpdateShipmentInfo() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, volumes, weightKg }: { id: string; volumes?: number | null; weightKg?: number | null }) => {
+    mutationFn: async ({ id, volumes, weightKg, carrier }: { id: string; volumes?: number | null; weightKg?: number | null; carrier?: string | null }) => {
       const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };
       if (volumes !== undefined) patch.shipment_volumes = volumes;
       if (weightKg !== undefined) patch.shipment_weight_kg = weightKg;
+      if (carrier !== undefined) patch.shipment_carrier = carrier;
       const { error } = await db.from("carboze_orders").update(patch).eq("id", id);
       if (error) throw error;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["ops", "pos-venda"] }),
-    onError: (e: Error) => toast.error("Erro ao salvar volumes/peso: " + e.message),
+    onError: (e: Error) => toast.error("Erro ao salvar dados de expedição: " + e.message),
   });
 }

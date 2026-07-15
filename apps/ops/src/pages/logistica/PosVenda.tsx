@@ -28,6 +28,9 @@ const fmtDoc = (v: string | null) => {
   return v?.trim() || "—";
 };
 const stageLabel = (k: FulfillmentStage) => POSVENDA_STAGES.find((s) => s.key === k)?.label ?? k;
+// Normaliza volumes (≥1) e peso (aceita vírgula) dos campos de expedição.
+const parseVolumes = (v: string): number => { const n = Math.round(Number(v.trim())); return v.trim() !== "" && Number.isFinite(n) && n > 0 ? n : 1; };
+const parsePesoKg = (p: string): number | null => { const s = p.trim().replace(",", "."); if (s === "") return null; const n = Number(s); return Number.isFinite(n) && n >= 0 ? n : null; };
 
 function VendedorTag({ name, avatar }: { name: string; avatar: string | null }) {
   return (
@@ -55,27 +58,33 @@ export default function PosVenda() {
   const [detail, setDetail] = useState<PosVendaOrder | null>(null);
   // Pedido + destino aguardando confirmação (Em Separação OU Criar Ordem de Produção).
   const [pending, setPending] = useState<{ order: PosVendaOrder; target: FulfillmentStage } | null>(null);
-  // Volumes + peso bruto (etiqueta) — preenchidos ao confirmar "Separado".
-  const [sepVolumes, setSepVolumes] = useState("");
-  const [sepPeso, setSepPeso] = useState("");
-  // Ao abrir a caixa, pré-preenche com o que já houver no card (reedição).
+  // ── Dados de expedição ao ir p/ "Gerar Nota Fiscal" (Separado → Gerar NF) ──
+  // Volumes, peso bruto e TRANSPORTADORA — salvos no card e usados na etiqueta.
+  const [gnfOrder, setGnfOrder] = useState<PosVendaOrder | null>(null);
+  const [gnfVolumes, setGnfVolumes] = useState("");
+  const [gnfPeso, setGnfPeso] = useState("");
+  const [gnfCarrier, setGnfCarrier] = useState("");
+  const [gnfSaving, setGnfSaving] = useState(false);
   useEffect(() => {
-    if (pending) {
-      setSepVolumes(pending.order.shipment_volumes != null ? String(pending.order.shipment_volumes) : "");
-      setSepPeso(pending.order.shipment_weight_kg != null ? String(pending.order.shipment_weight_kg).replace(".", ",") : "");
+    if (gnfOrder) {
+      setGnfVolumes(gnfOrder.shipment_volumes != null ? String(gnfOrder.shipment_volumes) : "1");
+      setGnfPeso(gnfOrder.shipment_weight_kg != null ? String(gnfOrder.shipment_weight_kg).replace(".", ",") : "");
+      setGnfCarrier(gnfOrder.shipment_carrier ?? "");
     }
-  }, [pending]);
+  }, [gnfOrder]);
 
   // ── Emitir etiqueta ──
   const [etiquetaOrder, setEtiquetaOrder] = useState<PosVendaOrder | null>(null);
   const [etqVolumes, setEtqVolumes] = useState("");
   const [etqPeso, setEtqPeso] = useState("");
+  const [etqCarrier, setEtqCarrier] = useState("");
   const [etqChave, setEtqChave] = useState<string | null>(null);
   const [gerando, setGerando] = useState(false);
   useEffect(() => {
     if (etiquetaOrder) {
       setEtqVolumes(etiquetaOrder.shipment_volumes != null ? String(etiquetaOrder.shipment_volumes) : "1");
       setEtqPeso(etiquetaOrder.shipment_weight_kg != null ? String(etiquetaOrder.shipment_weight_kg).replace(".", ",") : "");
+      setEtqCarrier(etiquetaOrder.shipment_carrier ?? "");
       setEtqChave(null);
       // Busca best-effort a chave de acesso da NF (código de barras). Não bloqueia.
       if (etiquetaOrder.bling_nf_id) {
@@ -85,19 +94,20 @@ export default function PosVenda() {
   }, [etiquetaOrder]);
 
   // Volumes/peso normalizados do diálogo (usados no PDF e persistidos).
-  const parsedEtqVolumes = (() => { const v = etqVolumes.trim(); const n = Math.round(Number(v)); return v !== "" && Number.isFinite(n) && n > 0 ? n : 1; })();
-  const parsedEtqPeso = (() => { const p = etqPeso.trim().replace(",", "."); if (p === "") return null; const n = Number(p); return Number.isFinite(n) && n >= 0 ? n : null; })();
+  const parsedEtqVolumes = parseVolumes(etqVolumes);
+  const parsedEtqPeso = parsePesoKg(etqPeso);
 
-  // Gera a etiqueta: persiste volumes/peso ajustados no card e monta o PDF.
+  // Gera a etiqueta: persiste volumes/peso/transportadora ajustados no card e monta o PDF.
   // moveToTransporte=true → depois move o card p/ Em Transporte (respeita portão NF).
   async function emitirEtiqueta(order: PosVendaOrder, moveToTransporte: boolean) {
     setGerando(true);
     try {
       const volumes = parsedEtqVolumes;
       const weightKg = parsedEtqPeso;
+      const carrier = etqCarrier.trim() || null;
       // Persiste no card quando mudou (não quebra a dedução do "separado").
-      if (volumes !== order.shipment_volumes || weightKg !== order.shipment_weight_kg) {
-        await updateShipInfo.mutateAsync({ id: order.id, volumes, weightKg });
+      if (volumes !== order.shipment_volumes || weightKg !== order.shipment_weight_kg || carrier !== order.shipment_carrier) {
+        await updateShipInfo.mutateAsync({ id: order.id, volumes, weightKg, carrier });
       }
       const payload: EtiquetaData = {
         order_number: order.order_number,
@@ -110,6 +120,7 @@ export default function PosVenda() {
         delivery_zip: order.delivery_zip,
         volumes,
         weightKg,
+        transportadora: carrier,
         chaveAcesso: etqChave,
       };
       await gerarEtiquetaPDF(payload);
@@ -180,25 +191,35 @@ export default function PosVenda() {
       });
       return;
     }
+    // Ao ir para "Gerar Nota Fiscal": abre a caixa de expedição (volumes/peso/
+    // transportadora) — é onde operações informa esses dados p/ a etiqueta.
+    if (stage === "gerar_nf") { setGnfOrder(order); return; }
     if (stage === "separando" || stage === "criar_op" || stage === "separado") { setPending({ order, target: stage }); return; }
     updateStage.mutate({ id: order.id, stage });
   }
 
-  // Aplica a etapa escolhida na caixa e fecha. Ao SEPARAR, leva volumes/peso
-  // (etiqueta) — só envia o que foi digitado (número válido).
+  // Aplica a etapa escolhida na caixa de conferência de estoque e fecha.
   function commitStage(stage: FulfillmentStage) {
-    if (pending) {
-      let volumes: number | null | undefined;
-      let weightKg: number | null | undefined;
-      if (stage === "separado") {
-        const v = sepVolumes.trim();
-        const p = sepPeso.trim().replace(",", ".");
-        volumes = v === "" ? null : (Number.isFinite(Number(v)) ? Math.max(0, Math.round(Number(v))) : undefined);
-        weightKg = p === "" ? null : (Number.isFinite(Number(p)) ? Math.max(0, Number(p)) : undefined);
-      }
-      updateStage.mutate({ id: pending.order.id, stage, volumes, weightKg });
-    }
+    if (pending) updateStage.mutate({ id: pending.order.id, stage });
     setPending(null);
+  }
+
+  // Confirma a expedição: salva volumes/peso/transportadora no card e move p/ Gerar NF.
+  async function confirmGerarNf() {
+    if (!gnfOrder) return;
+    setGnfSaving(true);
+    try {
+      await updateShipInfo.mutateAsync({
+        id: gnfOrder.id,
+        volumes: parseVolumes(gnfVolumes),
+        weightKg: parsePesoKg(gnfPeso),
+        carrier: gnfCarrier.trim() || null,
+      });
+      updateStage.mutate({ id: gnfOrder.id, stage: "gerar_nf" });
+      setGnfOrder(null);
+    } finally {
+      setGnfSaving(false);
+    }
   }
 
   const drop = (stage: FulfillmentStage) => {
@@ -410,23 +431,6 @@ export default function PosVenda() {
 
             {!stockLoading && (
               <>
-                {/* Volumes + peso bruto (etiqueta) — só quando vai para "Separado". */}
-                {sepTarget === "separado" && (hasStock || !stockKnown) && (
-                  <div className="grid grid-cols-2 gap-3 rounded-lg border border-border p-3">
-                    <div className="space-y-1.5">
-                      <Label className="text-xs flex items-center gap-1.5"><Boxes className="h-3.5 w-3.5 text-muted-foreground" /> Volumes</Label>
-                      <Input type="number" min={0} inputMode="numeric" value={sepVolumes}
-                        onChange={(e) => setSepVolumes(e.target.value)} placeholder="ex.: 3" />
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label className="text-xs flex items-center gap-1.5"><Weight className="h-3.5 w-3.5 text-muted-foreground" /> Peso bruto (kg)</Label>
-                      <Input type="text" inputMode="decimal" value={sepPeso}
-                        onChange={(e) => setSepPeso(e.target.value)} placeholder="ex.: 12,5" />
-                    </div>
-                    <p className="col-span-2 text-[11px] text-muted-foreground">Opcional agora — usado na emissão da etiqueta.</p>
-                  </div>
-                )}
-
                 {/* Mensagem curta + ações, por caso */}
                 {!stockKnown ? (
                   /* Não deu para conferir (item sem vínculo de produto). */
@@ -513,6 +517,11 @@ export default function PosVenda() {
                   <Input type="text" inputMode="decimal" value={etqPeso}
                     onChange={(e) => setEtqPeso(e.target.value)} placeholder="ex.: 12,5" />
                 </div>
+                <div className="space-y-1.5 col-span-2">
+                  <Label className="text-xs flex items-center gap-1.5"><Truck className="h-3.5 w-3.5 text-muted-foreground" /> Transportadora</Label>
+                  <Input type="text" value={etqCarrier}
+                    onChange={(e) => setEtqCarrier(e.target.value)} placeholder="Nome da transportadora" />
+                </div>
                 <p className="col-span-2 text-[11px] text-muted-foreground">
                   Serão gerada(s) <strong>{parsedEtqVolumes}</strong> etiqueta(s) (uma por volume). Ajustes ficam salvos no card.
                 </p>
@@ -529,6 +538,49 @@ export default function PosVenda() {
                 </Button>
                 <Button className="w-full" variant="ghost" disabled={gerando}
                   onClick={() => setEtiquetaOrder(null)}>Fechar</Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Expedição: volumes/peso/transportadora ao ir p/ Gerar Nota Fiscal */}
+      <Dialog open={!!gnfOrder} onOpenChange={(o) => !o && setGnfOrder(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><Truck className="h-4 w-4 text-carbo-blue" /> Dados de expedição</DialogTitle>
+          </DialogHeader>
+          {gnfOrder && (
+            <div className="space-y-3 text-sm">
+              <div className="rounded-lg border border-border p-3 space-y-1">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-semibold text-sm">{gnfOrder.customer_name}</span>
+                  <span className="font-mono text-xs text-muted-foreground shrink-0">{gnfOrder.order_number}</span>
+                </div>
+                <p className="text-xs text-muted-foreground">Informe os dados do envio — vão para a etiqueta. Ao confirmar, o card segue para <strong>Gerar Nota Fiscal</strong>.</p>
+              </div>
+              <div className="grid grid-cols-2 gap-3 rounded-lg border border-border p-3">
+                <div className="space-y-1.5">
+                  <Label className="text-xs flex items-center gap-1.5"><Boxes className="h-3.5 w-3.5 text-muted-foreground" /> Volumes</Label>
+                  <Input type="number" min={1} inputMode="numeric" value={gnfVolumes}
+                    onChange={(e) => setGnfVolumes(e.target.value)} placeholder="1" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs flex items-center gap-1.5"><Weight className="h-3.5 w-3.5 text-muted-foreground" /> Peso bruto (kg)</Label>
+                  <Input type="text" inputMode="decimal" value={gnfPeso}
+                    onChange={(e) => setGnfPeso(e.target.value)} placeholder="ex.: 12,5" />
+                </div>
+                <div className="space-y-1.5 col-span-2">
+                  <Label className="text-xs flex items-center gap-1.5"><Truck className="h-3.5 w-3.5 text-muted-foreground" /> Transportadora</Label>
+                  <Input type="text" value={gnfCarrier}
+                    onChange={(e) => setGnfCarrier(e.target.value)} placeholder="Nome da transportadora" />
+                </div>
+              </div>
+              <div className="flex flex-col gap-2 pt-1">
+                <Button className="w-full gap-1.5" disabled={gnfSaving} onClick={confirmGerarNf}>
+                  {gnfSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : null} Confirmar → Gerar Nota Fiscal
+                </Button>
+                <Button className="w-full" variant="ghost" disabled={gnfSaving} onClick={() => setGnfOrder(null)}>Cancelar</Button>
               </div>
             </div>
           )}
@@ -601,6 +653,12 @@ export default function PosVenda() {
                     <div>
                       <p className="flex items-center gap-1.5 text-muted-foreground mb-0.5"><Weight className="h-3.5 w-3.5" /> Peso bruto</p>
                       <p className="font-medium">{String(detail.shipment_weight_kg).replace(".", ",")} kg</p>
+                    </div>
+                  )}
+                  {detail.shipment_carrier && (
+                    <div>
+                      <p className="flex items-center gap-1.5 text-muted-foreground mb-0.5"><Truck className="h-3.5 w-3.5" /> Transportadora</p>
+                      <p className="font-medium">{detail.shipment_carrier}</p>
                     </div>
                   )}
                 </div>
