@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { Users, Pencil, CheckCircle2, AlertCircle, UserPlus, Link2, Cake, PartyPopper } from "lucide-react";
+import { Users, Pencil, CheckCircle2, AlertCircle, UserPlus, Link2, Cake } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
 import { CarboCard, CarboCardContent } from "@/components/ui/carbo-card";
@@ -18,6 +18,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useEmployeesFinance, useUpsertEmployeeFinance, type EmployeeRow, type EmployeeFinance, type SystemProfile } from "@/hooks/useEmployeeFinance";
 import { useOrgLabels } from "@/hooks/useTeamMembers";
 import { useAuth } from "@/contexts/AuthContext";
+import { Aniversariantes } from "@/components/funcionarios/Aniversariantes";
+import { parseBirth } from "@/lib/birthdays";
 
 const initials = (name: string) => name.split(" ").filter(Boolean).slice(0, 2).map((p) => p[0]?.toUpperCase() ?? "").join("");
 
@@ -165,158 +167,6 @@ function EditDialog({
   );
 }
 
-// ── Aniversariantes ─────────────────────────────────────────────────────────
-const MESES = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
-
-function parseBirth(bd: string | null): { month: number; day: number } | null {
-  const m = (bd ?? "").match(/^(\d{4})-(\d{2})-(\d{2})/);
-  if (!m) return null;
-  const month = Number(m[2]), day = Number(m[3]);
-  if (month < 1 || month > 12 || day < 1 || day > 31) return null;
-  return { month, day };
-}
-
-// Dias corridos até o próximo aniversário (0 = hoje).
-function daysUntil(month: number, day: number, today: Date): number {
-  const t0 = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-  let next = new Date(today.getFullYear(), month - 1, day);
-  if (next.getTime() < t0.getTime()) next = new Date(today.getFullYear() + 1, month - 1, day);
-  return Math.round((next.getTime() - t0.getTime()) / 86_400_000);
-}
-
-interface BdayItem { r: EmployeeRow; month: number; day: number; dias: number; passou: boolean }
-
-function PersonPill({ it }: { it: BdayItem }) {
-  const hoje = it.dias === 0;
-  const proximo = it.dias >= 1 && it.dias <= 7;
-  const cls = hoje
-    ? "ring-2 ring-emerald-500/70 bg-emerald-500/10"
-    : proximo
-      ? "ring-1 ring-amber-500/60 bg-amber-500/10"
-      : it.passou
-        ? "opacity-60 bg-muted/30"
-        : "bg-muted/30";
-  const legenda = hoje
-    ? "🎂 É hoje!"
-    : proximo
-      ? `faltam ${it.dias} ${it.dias === 1 ? "dia" : "dias"}`
-      : it.passou
-        ? "já passou"
-        : `dia ${String(it.day).padStart(2, "0")}`;
-  return (
-    <div className={`flex items-center gap-2.5 rounded-lg px-3 py-2 ${cls}`}>
-      <Avatar url={it.r.avatarUrl} name={it.r.displayName} />
-      <div className="min-w-0 flex-1">
-        <p className="text-sm font-medium truncate">{it.r.displayName}</p>
-        <p className="text-[11px] text-muted-foreground">{String(it.day).padStart(2, "0")}/{String(it.month).padStart(2, "0")}</p>
-      </div>
-      <span className={`text-[11px] font-medium shrink-0 ${hoje ? "text-emerald-600" : proximo ? "text-amber-600" : "text-muted-foreground"}`}>{legenda}</span>
-    </div>
-  );
-}
-
-function Aniversariantes({ rows }: { rows: EmployeeRow[] }) {
-  const today = new Date();
-  const curMonth = today.getMonth() + 1;
-  const t0 = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-
-  const items: BdayItem[] = rows.flatMap((r) => {
-    const b = parseBirth(r.birth_date);
-    if (!b) return [];
-    const thisYear = new Date(today.getFullYear(), b.month - 1, b.day);
-    return [{ r, month: b.month, day: b.day, dias: daysUntil(b.month, b.day, today), passou: thisYear.getTime() < t0.getTime() }];
-  });
-
-  const doMes = items.filter((x) => x.month === curMonth).sort((a, b) => a.day - b.day);
-  // Próximos 7 dias (pode cruzar pro mês que vem) — alerta de antecedência.
-  const proximos = items.filter((x) => x.dias >= 0 && x.dias <= 7).sort((a, b) => a.dias - b.dias);
-  const semData = rows.filter((r) => !parseBirth(r.birth_date));
-  const porMes = Array.from({ length: 12 }, (_, i) => items.filter((x) => x.month === i + 1).sort((a, b) => a.day - b.day));
-
-  return (
-    <div className="space-y-6">
-      {/* Alerta de antecedência: quem faz aniversário nos próximos 7 dias */}
-      {proximos.length > 0 && (
-        <CarboCard>
-          <CarboCardContent className="pt-6 space-y-3">
-            <div className="flex items-center gap-2">
-              <PartyPopper className="h-4 w-4 text-amber-500" />
-              <h3 className="text-sm font-semibold">Chegando ({proximos.length}) — próximos 7 dias</h3>
-            </div>
-            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-2">
-              {proximos.map((it) => <PersonPill key={it.r.key} it={it} />)}
-            </div>
-          </CarboCardContent>
-        </CarboCard>
-      )}
-
-      {/* Aniversariantes do mês atual em destaque */}
-      <CarboCard>
-        <CarboCardContent className="pt-6 space-y-3">
-          <div className="flex items-center gap-2">
-            <Cake className="h-4 w-4 text-primary" />
-            <h3 className="text-sm font-semibold">Aniversariantes de {MESES[curMonth - 1]} ({doMes.length})</h3>
-          </div>
-          {doMes.length === 0 ? (
-            <p className="text-sm text-muted-foreground">Ninguém faz aniversário este mês.</p>
-          ) : (
-            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-2">
-              {doMes.map((it) => <PersonPill key={it.r.key} it={it} />)}
-            </div>
-          )}
-        </CarboCardContent>
-      </CarboCard>
-
-      {/* Calendário anual: subdivisão por mês */}
-      <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {porMes.map((lista, i) => {
-          const isCur = i + 1 === curMonth;
-          return (
-            <CarboCard key={i} className={isCur ? "ring-1 ring-primary/50" : ""}>
-              <CarboCardContent className="pt-4 space-y-2">
-                <div className="flex items-center justify-between">
-                  <h4 className={`text-sm font-semibold ${isCur ? "text-primary" : ""}`}>{MESES[i]}</h4>
-                  <CarboBadge variant={isCur ? "success" : "outline"}>{lista.length}</CarboBadge>
-                </div>
-                {lista.length === 0 ? (
-                  <p className="text-xs text-muted-foreground">—</p>
-                ) : (
-                  <ul className="space-y-1">
-                    {lista.map((it) => (
-                      <li key={it.r.key} className="flex items-center gap-2 text-xs">
-                        <span className="tabular-nums text-muted-foreground w-6 shrink-0">{String(it.day).padStart(2, "0")}</span>
-                        <span className="truncate">{it.r.displayName}</span>
-                        {it.dias === 0 && <span className="ml-auto text-emerald-600 shrink-0">🎂</span>}
-                        {it.dias >= 1 && it.dias <= 7 && <span className="ml-auto text-amber-600 shrink-0">⏳</span>}
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </CarboCardContent>
-            </CarboCard>
-          );
-        })}
-      </div>
-
-      {/* Sem data cadastrada — lembra de preencher */}
-      {semData.length > 0 && (
-        <CarboCard>
-          <CarboCardContent className="pt-6 space-y-2">
-            <div className="flex items-center gap-2">
-              <AlertCircle className="h-4 w-4 text-muted-foreground" />
-              <h3 className="text-sm font-semibold">Sem data de aniversário ({semData.length})</h3>
-            </div>
-            <p className="text-xs text-muted-foreground">
-              {semData.map((r) => r.displayName).join(", ")}
-            </p>
-            <p className="text-[11px] text-muted-foreground">Edite o funcionário na aba “Equipe” para preencher a data.</p>
-          </CarboCardContent>
-        </CarboCard>
-      )}
-    </div>
-  );
-}
-
 export default function Funcionarios() {
   const { gestor } = useAuth();
   // Aba ativa persistida na URL (?tab=…), pra não voltar pra "equipe" a cada F5.
@@ -420,6 +270,7 @@ export default function Funcionarios() {
                 <CarboTableRow>
                   <CarboTableHead>Funcionário</CarboTableHead>
                   <CarboTableHead>Setor</CarboTableHead>
+                  <CarboTableHead>Aniversário</CarboTableHead>
                   <CarboTableHead>PIX</CarboTableHead>
                   <CarboTableHead>Banco</CarboTableHead>
                   <CarboTableHead>Telefone</CarboTableHead>
@@ -440,6 +291,14 @@ export default function Funcionarios() {
                       {r.department
                         ? <span>{deptLabel[r.department] ?? r.department}</span>
                         : <span className="text-muted-foreground text-xs">Avulso</span>}
+                    </CarboTableCell>
+                    <CarboTableCell>
+                      {(() => {
+                        const b = parseBirth(r.birth_date);
+                        return b
+                          ? <span className="tabular-nums flex items-center gap-1.5"><Cake className="h-3.5 w-3.5 text-muted-foreground" />{String(b.day).padStart(2, "0")}/{String(b.month).padStart(2, "0")}</span>
+                          : <span className="text-muted-foreground text-xs">—</span>;
+                      })()}
                     </CarboTableCell>
                     <CarboTableCell className="max-w-[180px] truncate">{r.pix_key || <span className="text-muted-foreground">—</span>}</CarboTableCell>
                     <CarboTableCell>{r.bank_name ? `${r.bank_name}${r.bank_agency ? ` · ag ${r.bank_agency}` : ""}` : <span className="text-muted-foreground">—</span>}</CarboTableCell>
