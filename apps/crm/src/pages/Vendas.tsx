@@ -36,6 +36,9 @@ const STATUS_VARIANT: Record<string, "success" | "warning" | "destructive" | "se
 };
 
 const fmtBRL = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", minimumFractionDigits: 0, maximumFractionDigits: 0 });
+// Valores do detalhe financeiro precisam dos centavos (desconto por item etc.).
+const fmtMoney = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+const num = (v: unknown) => (v == null ? 0 : Number(v) || 0);
 const fmtDate = (s: string) => format(parseISO(s.length === 10 ? s + "T00:00:00" : s), "dd/MM/yyyy", { locale: ptBR });
 const effectiveDate = (r: CarbozeVendaRow) => r.sale_date ?? r.created_at.substring(0, 10);
 
@@ -256,6 +259,17 @@ export default function Vendas() {
                 <tbody>
                   {filtered.map((venda) => {
                     const isQuote = venda.status === "quote";
+                    // Financeiro defensivo: pedidos antigos podem não ter subtotal/discount.
+                    const itemsBruto = venda.items.reduce((s, it) => s + num(it.quantity) * num(it.unit_price), 0);
+                    const itemsDesc = venda.items.reduce((s, it) => s + num(it.discount_amount), 0);
+                    const subtotalDet = venda.subtotal != null ? num(venda.subtotal) : (itemsBruto || null);
+                    const descontoDet = venda.discount != null ? num(venda.discount) : itemsDesc;
+                    const percentDet = venda.discount_percent != null
+                      ? num(venda.discount_percent)
+                      : (subtotalDet && subtotalDet > 0 ? Math.round((descontoDet / subtotalDet) * 10000) / 100 : 0);
+                    const vendedorNome = (venda.vendedor_id && nomeById[venda.vendedor_id]) || venda.vendedor_name || null;
+                    const buyerNotes = venda.buyer_notes && venda.buyer_notes !== venda.notes ? venda.buyer_notes : null;
+                    const generalNotes = venda.general_notes && venda.general_notes !== venda.notes && venda.general_notes !== venda.buyer_notes ? venda.general_notes : null;
                     return (
                       <Fragment key={venda.id}>
                         <tr
@@ -340,23 +354,88 @@ export default function Vendas() {
                                 {venda.items.length === 0 ? (
                                   <p className="text-xs text-muted-foreground">Sem itens.</p>
                                 ) : (
-                                  <div className="grid gap-1">
-                                    {venda.items.map((item, idx) => (
-                                      <div key={idx} className="flex items-center justify-between text-xs">
-                                        <span className="font-medium">{item.name}</span>
-                                        <div className="flex items-center gap-4 text-muted-foreground">
-                                          <span>{item.quantity}x</span><span>{fmtBRL(item.unit_price)}/un</span><span className="font-semibold text-foreground">{fmtBRL(item.total)}</span>
+                                  <div className="grid gap-1.5">
+                                    {venda.items.map((item, idx) => {
+                                      const bruto = num(item.quantity) * num(item.unit_price);
+                                      const desc = num(item.discount_amount);
+                                      const liquido = item.total != null ? num(item.total) : bruto - desc;
+                                      const descLabel = desc > 0
+                                        ? (item.discount_type === "percent" && bruto > 0
+                                            ? `− ${(Math.round((desc / bruto) * 10000) / 100)}%`
+                                            : `− ${fmtMoney(desc)}`)
+                                        : null;
+                                      return (
+                                        <div key={idx} className="flex items-start justify-between gap-3 text-xs">
+                                          <div className="min-w-0">
+                                            <span className="font-medium">{item.name}</span>
+                                            {num(item.bonus_quantity) > 0 && (
+                                              <span className="ml-1.5 text-[10px] font-semibold text-carbo-green border border-carbo-green/30 rounded px-1">+{num(item.bonus_quantity)} bonif.</span>
+                                            )}
+                                          </div>
+                                          <div className="flex items-center gap-3 text-muted-foreground whitespace-nowrap">
+                                            <span>{num(item.quantity)} × {fmtMoney(num(item.unit_price))}</span>
+                                            {descLabel && <span className="text-destructive">{descLabel}</span>}
+                                            <span className="font-semibold text-foreground">{fmtMoney(liquido)}</span>
+                                          </div>
                                         </div>
-                                      </div>
-                                    ))}
+                                      );
+                                    })}
                                   </div>
                                 )}
                               </div>
 
-                              {venda.notes && (
+                              {/* Resumo financeiro */}
+                              <div className="flex justify-end">
+                                <div className="w-full sm:w-64 space-y-0.5 text-xs">
+                                  {subtotalDet != null && (
+                                    <div className="flex justify-between"><span className="text-muted-foreground">Subtotal</span><span className="tabular-nums">{fmtMoney(subtotalDet)}</span></div>
+                                  )}
+                                  {descontoDet > 0 && (
+                                    <div className="flex justify-between text-destructive"><span>Desconto{percentDet > 0 ? ` (${percentDet}%)` : ""}</span><span className="tabular-nums">− {fmtMoney(descontoDet)}</span></div>
+                                  )}
+                                  <div className="flex justify-between border-t pt-0.5 font-bold text-sm"><span>Total</span><span className="tabular-nums">{fmtMoney(num(venda.total))}</span></div>
+                                </div>
+                              </div>
+
+                              {/* Pagamento e frete */}
+                              {(venda.payment_terms || venda.freight_type || (venda.shipping_cost ?? 0) > 0) && (
                                 <div>
+                                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">Pagamento</p>
+                                  <div className="grid sm:grid-cols-2 gap-x-6 gap-y-1 text-xs">
+                                    {venda.payment_terms && <div><span className="text-muted-foreground">Forma/condição:</span> <span className="font-medium">{venda.payment_terms}</span></div>}
+                                    {(venda.freight_type || (venda.shipping_cost ?? 0) > 0) && (
+                                      <div><span className="text-muted-foreground">Frete:</span> <span className="font-medium">{[venda.freight_type, (venda.shipping_cost ?? 0) > 0 ? fmtMoney(num(venda.shipping_cost)) : null].filter(Boolean).join(" · ") || "—"}</span></div>
+                                    )}
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* Prazo de entrega */}
+                              {(venda.agreed_delivery_date || venda.ppf_date || venda.ppe_date) && (
+                                <div>
+                                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">Prazo de Entrega</p>
+                                  <div className="grid sm:grid-cols-3 gap-x-6 gap-y-1 text-xs">
+                                    {venda.agreed_delivery_date && <div><span className="text-muted-foreground">Combinada:</span> <span className="font-medium">{fmtDate(venda.agreed_delivery_date)}</span></div>}
+                                    {venda.ppf_date && <div><span className="text-muted-foreground">Fabricar até (PPF):</span> <span className="font-medium">{fmtDate(venda.ppf_date)}</span></div>}
+                                    {venda.ppe_date && <div><span className="text-muted-foreground">Expedir até (PPE):</span> <span className="font-medium">{fmtDate(venda.ppe_date)}</span></div>}
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* Vendedor / Nº pedido de compra do cliente */}
+                              {(vendedorNome || venda.po_number) && (
+                                <div className="grid sm:grid-cols-2 gap-x-6 gap-y-1 text-xs">
+                                  {vendedorNome && <div><span className="text-muted-foreground">Vendedor:</span> <span className="font-medium">{vendedorNome}</span></div>}
+                                  {venda.po_number && <div><span className="text-muted-foreground">Nº pedido de compra (cliente):</span> <span className="font-medium">{venda.po_number}</span></div>}
+                                </div>
+                              )}
+
+                              {(venda.notes || buyerNotes || generalNotes) && (
+                                <div className="space-y-1">
                                   <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">Observações</p>
-                                  <p className="text-xs">{venda.notes}</p>
+                                  {venda.notes && <p className="text-xs">{venda.notes}</p>}
+                                  {buyerNotes && <p className="text-xs"><span className="text-muted-foreground">Comprador:</span> {buyerNotes}</p>}
+                                  {generalNotes && <p className="text-xs"><span className="text-muted-foreground">Gerais:</span> {generalNotes}</p>}
                                 </div>
                               )}
 

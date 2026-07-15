@@ -13,7 +13,15 @@ const db = supabase as unknown as {
   rpc: (fn: string, args?: Record<string, unknown>) => Promise<{ data: any; error: any }>;
 };
 
-export interface VendaItem { name: string; quantity: number; unit_price: number; total: number; }
+export interface VendaItem {
+  name: string; quantity: number; unit_price: number; total: number;
+  product_code?: string | null;
+  bonus_quantity?: number;
+  // Desconto POR ITEM (gravado no ato da venda).
+  discount_type?: string;     // 'percent' | 'value' | 'none'
+  discount_value?: number;    // número digitado (% ou R$)
+  discount_amount?: number;   // R$ abatido na linha
+}
 
 export interface CarbozeVendaRow {
   id: string;
@@ -33,6 +41,22 @@ export interface CarbozeVendaRow {
   notes: string | null;
   items: VendaItem[];
   total: number;
+  // Financeiro do pedido (carboze_orders).
+  subtotal: number | null;
+  discount: number | null;
+  discount_percent: number | null;
+  // Pagamento / frete.
+  payment_terms: string | null;
+  freight_type: string | null;
+  shipping_cost: number | null;
+  // Prazos.
+  agreed_delivery_date: string | null;
+  ppf_date: string | null;
+  ppe_date: string | null;
+  // Extras.
+  po_number: string | null;
+  buyer_notes: string | null;
+  general_notes: string | null;
   status: string;                 // quote | pending | confirmed | invoiced | shipped | delivered | cancelled
   vendedor_id: string | null;
   vendedor_name: string | null;
@@ -113,6 +137,18 @@ export function useCarbozeVendas({ month, customFrom, customTo, vendedorFilter, 
           notes: row.notes ?? null,
           items: Array.isArray(row.items) ? (row.items as VendaItem[]) : [],
           total: Number(row.total || 0),
+          subtotal: row.subtotal != null ? Number(row.subtotal) : null,
+          discount: row.discount != null ? Number(row.discount) : null,
+          discount_percent: row.discount_percent != null ? Number(row.discount_percent) : null,
+          payment_terms: row.payment_terms ?? null,
+          freight_type: row.freight_type ?? null,
+          shipping_cost: row.shipping_cost != null ? Number(row.shipping_cost) : null,
+          agreed_delivery_date: row.agreed_delivery_date ?? null,
+          ppf_date: row.ppf_date ?? null,
+          ppe_date: row.ppe_date ?? null,
+          po_number: row.po_number ?? null,
+          buyer_notes: row.buyer_notes ?? null,
+          general_notes: row.general_notes ?? null,
           status: row.status,
           vendedor_id: row.vendedor_id ?? null,
           vendedor_name: row.vendedor_name ?? null,

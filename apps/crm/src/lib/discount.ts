@@ -52,6 +52,41 @@ export function computeDiscount(subtotal: number, s: DiscountInput): DiscountRes
   return { amount, percent, finalTotal: round2(Math.max(0, subtotal - amount)), error: null };
 }
 
+export interface LineDiscountInput {
+  type: DiscountType;  // 'percent' ou 'value'
+  value: number;       // número digitado na linha (% se percent, R$ se value)
+}
+
+export interface LineDiscountResult {
+  amount: number;   // R$ abatido na linha (>= 0, <= bruto)
+  net: number;      // líquido da linha (bruto - amount, nunca < 0)
+  percent: number;  // % efetivo do desconto sobre o bruto da linha
+}
+
+/**
+ * Desconto POR LINHA (dinheiro): dado o bruto (qty*unit) e a intenção do item,
+ * devolve o R$ abatido, o líquido e o % efetivo. Clampa sempre: nunca negativo,
+ * nunca maior que o bruto. Função pura — replicada idêntica nos 4 apps.
+ */
+export function computeLineDiscount(bruto: number, s: LineDiscountInput): LineDiscountResult {
+  const grossBase = bruto > 0 ? round2(bruto) : 0;
+  if (grossBase <= 0 || !s.value || s.value <= 0) {
+    return { amount: 0, net: grossBase, percent: 0 };
+  }
+  let amount: number;
+  if (s.type === "percent") {
+    const pct = Math.min(100, Math.max(0, s.value));
+    amount = round2((grossBase * pct) / 100);
+  } else {
+    amount = round2(s.value);
+  }
+  // Clamp: nunca negativo, nunca acima do bruto.
+  amount = Math.min(Math.max(0, amount), grossBase);
+  const net = round2(grossBase - amount);
+  const percent = grossBase > 0 ? round2((amount / grossBase) * 100) : 0;
+  return { amount, net, percent };
+}
+
 /** Faixa/alçada de um percentual, conforme a config. Desligado ⇒ auto. */
 export function resolveTier(
   percent: number,

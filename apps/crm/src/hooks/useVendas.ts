@@ -15,7 +15,14 @@ const db = supabase as unknown as {
 export type VendaStatus = "orcamento" | "pedido" | "cancelado";
 export type VendaTipo = "venda" | "promo";
 
-export interface VendaItemInput { produto: string; quantidade: number; preco_unitario: number; bonificacao?: number; product_id?: string | null; product_code?: string | null; }
+export interface VendaItemInput {
+  produto: string; quantidade: number; preco_unitario: number; bonificacao?: number;
+  product_id?: string | null; product_code?: string | null;
+  // Desconto POR ITEM (dinheiro): tipo, valor digitado e R$ abatido na linha.
+  discount_type?: string;    // 'percent' | 'value' | 'none'
+  discount_value?: number;   // número digitado (% ou R$)
+  discount_amount?: number;  // R$ efetivamente abatido na linha
+}
 
 export interface NovaVendaInput {
   tipo: VendaTipo; status: VendaStatus;
@@ -204,15 +211,25 @@ export function useCreateVenda() {
     mutationFn: async (input: NovaVendaInput): Promise<{ id: string; numero: string | null }> => {
       const e = (input.endereco ?? {}) as Record<string, string>;
       const deliveryAddr = ([e.logradouro, e.numero].filter(Boolean).join(", ") + (e.bairro ? ` - ${e.bairro}` : "")).trim();
+      const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
       const items = (input.itens ?? [])
         .filter((i) => i.produto && i.quantidade > 0)
-        .map((i) => ({
-          name: i.produto, quantity: i.quantidade, unit_price: i.preco_unitario,
-          bonificacao: i.bonificacao ?? 0, total: i.quantidade * i.preco_unitario,
-          // Vínculo com o catálogo (mrp_products) → habilita checagem de estoque
-          // no pós-venda e casamento de produto no Bling.
-          product_id: i.product_id ?? null, product_code: i.product_code ?? null,
-        }));
+        .map((i) => {
+          const bruto = i.quantidade * i.preco_unitario;
+          const descLinha = Math.min(Math.max(0, i.discount_amount ?? 0), round2(bruto));
+          return {
+            name: i.produto, quantity: i.quantidade, unit_price: i.preco_unitario,
+            bonificacao: i.bonificacao ?? 0,
+            // Desconto por item: tipo, valor digitado e R$ abatido; total = líquido da linha.
+            discount_type: (i.discount_amount ?? 0) > 0 ? (i.discount_type ?? "value") : "none",
+            discount_value: i.discount_value ?? 0,
+            discount_amount: descLinha,
+            total: round2(bruto - descLinha),
+            // Vínculo com o catálogo (mrp_products) → habilita checagem de estoque
+            // no pós-venda e casamento de produto no Bling.
+            product_id: i.product_id ?? null, product_code: i.product_code ?? null,
+          };
+        });
       const { data: u } = await supabase.auth.getUser();
       // Vendedor: usa o override (gestor pode lançar por outro); senão o logado.
       const vendedorId = input.vendedor_id || u?.user?.id || null;

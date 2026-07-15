@@ -24,7 +24,7 @@ import { generateQuotePdf } from "@/lib/quotePdf";
 import { useCreateVenda } from "@/hooks/useVendas";
 import { useProdutos } from "@/hooks/useProdutos";
 import { useDiscountTiersPublic } from "@/hooks/useDiscountTiers";
-import { computeDiscount, resolveTier } from "@/lib/discount";
+import { computeLineDiscount, resolveTier } from "@/lib/discount";
 import { usePrazoConfigPublic } from "@/hooks/usePrazoConfig";
 import { computePrazos } from "@/lib/prazos";
 import { validateInscricaoEstadual } from "@/lib/inscricaoEstadual";
@@ -48,8 +48,12 @@ const fmtBr = (d: Date) => d.toLocaleDateString("pt-BR");
 
 interface ItemRow {
   id: string; productId: string; qty: number; unitPrice: number; hasBonus: boolean; bonusQty: number;
+  // Desconto POR ITEM: toggle % ou R$ e o valor digitado naquela linha.
+  discType: "percent" | "value"; discValue: number;
 }
-const emptyRow = (): ItemRow => ({ id: crypto.randomUUID(), productId: "", qty: 1, unitPrice: 0, hasBonus: false, bonusQty: 0 });
+const emptyRow = (): ItemRow => ({ id: crypto.randomUUID(), productId: "", qty: 1, unitPrice: 0, hasBonus: false, bonusQty: 0, discType: "percent", discValue: 0 });
+
+const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
 
 // Cabeçalho clicável de seção opcional (recolhível).
 function CollapsibleCard({
@@ -130,10 +134,8 @@ export default function Vender() {
   const [pagParcelas, setPagParcelas] = useState("1");          // 1..12 (crédito)
   const [pagFaturamento, setPagFaturamento] = useState("");     // ex.: 30/60/90 (boleto faturado)
 
-  // ── Desconto (valor R$ ou percentual %) + alçada (hoje inerte/auto) ──
-  const [discEnabled, setDiscEnabled] = useState(false);
-  const [discType, setDiscType] = useState<"value" | "percent">("percent");
-  const [discRaw, setDiscRaw] = useState(0);
+  // ── Desconto POR ITEM (cada linha tem o seu) + alçada pela % AGREGADA do pedido ──
+  // Motivo único do desconto (só aparece quando há desconto) — alimenta a alçada.
   const [discReason, setDiscReason] = useState("");
   const { data: discountCfg = { enabled: false, tiers: [] } } = useDiscountTiersPublic();
 
@@ -183,14 +185,27 @@ export default function Vender() {
     else { setCoords(null); setMapMsg("Não foi possível localizar este endereço. Confira os dados."); }
   }
 
-  const subtotal = useMemo(() => rows.reduce((s, r) => s + r.qty * r.unitPrice, 0), [rows]);
-  // Desconto calculado + alçada resolvida; total líquido que vai pro pedido/orçamento.
-  const disc = useMemo(
-    () => computeDiscount(subtotal, { enabled: discEnabled, type: discType, rawValue: discRaw, reason: discReason }),
-    [subtotal, discEnabled, discType, discRaw, discReason],
-  );
-  const discTier = useMemo(() => resolveTier(disc.percent, discountCfg), [disc.percent, discountCfg]);
-  const total = discEnabled && !disc.error ? disc.finalTotal : subtotal;
+  // Totais do pedido a partir do desconto POR ITEM:
+  // subtotalBruto = Σ brutos · descontoTotal = Σ descontos de linha · total = líquido.
+  // percentAgregado = descontoTotal / subtotalBruto × 100 (é o que alimenta a alçada).
+  const { subtotalBruto, descontoTotal, total, percentAgregado } = useMemo(() => {
+    let bruto = 0, desc = 0;
+    for (const r of rows) {
+      const g = r.qty * r.unitPrice;
+      const line = computeLineDiscount(g, { type: r.discType, value: r.discValue });
+      bruto += g;
+      desc += line.amount;
+    }
+    bruto = round2(bruto);
+    desc = round2(desc);
+    return {
+      subtotalBruto: bruto,
+      descontoTotal: desc,
+      total: round2(Math.max(0, bruto - desc)),
+      percentAgregado: bruto > 0 ? round2((desc / bruto) * 100) : 0,
+    };
+  }, [rows]);
+  const discTier = useMemo(() => resolveTier(percentAgregado, discountCfg), [percentAgregado, discountCfg]);
 
   // Formata CPF (≤11 díg.) ou CNPJ (12+).
   function formatDoc(v: string) {
@@ -267,11 +282,18 @@ export default function Vender() {
   const validItems = () =>
     rows.filter((r) => r.productId && r.qty > 0).map((r) => {
       const prod = produtos.find((p) => p.id === r.productId);
+      const bruto = r.qty * r.unitPrice;
+      const line = computeLineDiscount(bruto, { type: r.discType, value: r.discValue });
       return {
         name: prod?.name ?? "Produto",
         product_id: r.productId,
         product_code: prod?.product_code ?? null,
         quantity: r.qty, unit_price: r.unitPrice, bonus_quantity: r.hasBonus ? r.bonusQty : 0,
+        // Desconto da linha: tipo, valor digitado, R$ abatido e total já líquido.
+        discount_type: line.amount > 0 ? r.discType : "none",
+        discount_value: r.discValue,
+        discount_amount: line.amount,
+        total: line.net,
       };
     });
 
@@ -307,11 +329,12 @@ export default function Vender() {
       payment_terms: pagamentoLabel || undefined,
       endereco: (endereco.logradouro || endereco.cidade || endereco.cep) ? endereco : null,
       endereco_faturamento: fatMesmo ? null : ((fatEndereco.logradouro || fatEndereco.cidade || fatEndereco.cep) ? fatEndereco : null),
-      subtotal_bruto: subtotal,
-      desconto_tipo: discEnabled && disc.amount > 0 ? discType : undefined,
-      desconto_valor: discEnabled ? disc.amount : 0,
-      desconto_percent: discEnabled ? disc.percent : 0,
-      desconto_motivo: discReason.trim() || undefined,
+      subtotal_bruto: subtotalBruto,
+      // Desconto do pedido = agregado dos itens; tipo 'value' (R$) quando há desconto.
+      desconto_tipo: descontoTotal > 0 ? "value" : undefined,
+      desconto_valor: descontoTotal,
+      desconto_percent: percentAgregado,
+      desconto_motivo: descontoTotal > 0 ? (discReason.trim() || undefined) : undefined,
       agreed_delivery_date: deliveryDate || undefined,
       total,
       notes: obsPublica || undefined,
@@ -322,6 +345,9 @@ export default function Vender() {
         quantidade: i.quantity,
         preco_unitario: i.unit_price,
         bonificacao: i.bonus_quantity,
+        discount_type: i.discount_type,
+        discount_value: i.discount_value,
+        discount_amount: i.discount_amount,
       })),
     } as const;
   }
@@ -337,14 +363,13 @@ export default function Vender() {
     setCoords(null); setMapMsg(null);
     setFatMesmo(true); setFatEndereco({ logradouro: "", numero: "", bairro: "", cidade: "", uf: "", cep: "" });
     setPagModalidade(""); setPagParcelas("1"); setPagFaturamento("");
-    setDiscEnabled(false); setDiscType("percent"); setDiscRaw(0); setDiscReason("");
+    setDiscReason("");
     setDeliveryDate("");
   }
 
   async function handleQuote() {
     const items = validItems();
     if (items.length === 0) { toast.error("Adicione ao menos um item."); return; }
-    if (disc.error) { toast.error(disc.error); return; }
     if (!pagamentoValido) { toast.error("Selecione a forma de pagamento."); return; }
     setGenerating(true);
     try {
@@ -358,7 +383,7 @@ export default function Vender() {
         endereco,
         endereco_faturamento: fatMesmo ? null : fatEndereco,
         vendedor_name: vendedor || undefined, items,
-        subtotal, discount: disc.amount, discount_percent: disc.percent, total,
+        subtotal: subtotalBruto, discount: descontoTotal, discount_percent: percentAgregado, total,
         payment_terms: pagamentoLabel || undefined,
         notes: obsPublica || undefined, created_at: new Date().toISOString(), validityDays: 7,
       });
@@ -371,7 +396,6 @@ export default function Vender() {
 
   async function handleSell() {
     if (validItems().length === 0) { toast.error("Adicione ao menos um item."); return; }
-    if (disc.error) { toast.error(disc.error); return; }
     if (!pagamentoValido) { toast.error("Selecione a forma de pagamento."); return; }
     try {
       const { numero } = await createVenda.mutateAsync(buildPayload("pedido"));
@@ -582,7 +606,8 @@ export default function Vender() {
           </div>
 
           {rows.map((r) => {
-            const lineTotal = r.qty * r.unitPrice;
+            const bruto = r.qty * r.unitPrice;
+            const line = computeLineDiscount(bruto, { type: r.discType, value: r.discValue });
             return (
               <div key={r.id} className="rounded-xl border p-3 space-y-3">
                 <div className="grid grid-cols-1 sm:grid-cols-[1fr_90px_120px_auto] gap-3 items-end">
@@ -604,7 +629,12 @@ export default function Vender() {
                   <div className="flex items-center justify-between sm:justify-end gap-3 sm:pb-2">
                     <div className="text-right">
                       <p className="text-xs text-muted-foreground">Total</p>
-                      <p className="font-semibold">{brl(lineTotal)}</p>
+                      <p className="font-semibold">{brl(line.net)}</p>
+                      {line.amount > 0 && (
+                        <p className="text-[11px] text-destructive tabular-nums">
+                          − {brl(line.amount)}{r.discType === "percent" ? ` (${line.percent}%)` : ""}
+                        </p>
+                      )}
                     </div>
                     {rows.length > 1 && (
                       <button onClick={() => setRows((p) => p.filter((x) => x.id !== r.id))}
@@ -612,7 +642,7 @@ export default function Vender() {
                     )}
                   </div>
                 </div>
-                <div className="flex flex-wrap items-center gap-3">
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-3">
                   <label className="flex items-center gap-2">
                     <Switch checked={r.hasBonus} onCheckedChange={(v) => updateRow(r.id, { hasBonus: v })} />
                     <span className="text-sm flex items-center gap-1"><Gift className="h-3.5 w-3.5 text-carbo-green" /> Tem bonificação</span>
@@ -623,59 +653,49 @@ export default function Vender() {
                       <Input type="number" min={0} value={r.bonusQty} onChange={(e) => updateRow(r.id, { bonusQty: Number(e.target.value) })} className="w-24" />
                     </div>
                   )}
+                  {/* Desconto POR ITEM: toggle % | R$ + valor */}
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm flex items-center gap-1"><Tag className="h-3.5 w-3.5 text-carbo-green" /> Desconto</span>
+                    <div className="grid grid-cols-2 gap-1 w-[92px] shrink-0">
+                      {([["percent", "%", Percent], ["value", "R$", Tag]] as const).map(([v, label, Ico]) => (
+                        <button key={v} type="button" onClick={() => updateRow(r.id, { discType: v })}
+                          className={`rounded-md border px-1.5 py-1 text-xs font-medium flex items-center justify-center gap-0.5 transition-all ${
+                            r.discType === v ? "border-carbo-green bg-carbo-green/5 text-foreground" : "bg-card text-muted-foreground hover:bg-muted"}`}>
+                          <Ico className="h-3 w-3" /> {label}
+                        </button>
+                      ))}
+                    </div>
+                    <Input type="number" min={0} step="0.01" className="w-28"
+                      value={r.discValue || ""} onChange={(e) => updateRow(r.id, { discValue: Number(e.target.value) })}
+                      placeholder={r.discType === "percent" ? "ex.: 5" : "ex.: 100,00"} />
+                  </div>
                 </div>
               </div>
             );
           })}
 
-          {/* Desconto (valor R$ ou percentual %) */}
-          <div className="rounded-xl border p-3 space-y-3">
-            <label className="flex items-center gap-2">
-              <Switch checked={discEnabled} onCheckedChange={setDiscEnabled} />
-              <span className="text-sm flex items-center gap-1"><Tag className="h-3.5 w-3.5 text-carbo-green" /> Aplicar desconto</span>
-            </label>
-            {discEnabled && (
-              <div className="space-y-3">
-                <div className="flex flex-col sm:flex-row gap-3">
-                  <div className="grid grid-cols-2 gap-2 sm:w-56 shrink-0">
-                    {([["percent", "%", Percent], ["value", "R$", Tag]] as const).map(([v, label, Ico]) => (
-                      <button key={v} type="button" onClick={() => setDiscType(v)}
-                        className={`rounded-lg border p-2 text-sm font-medium flex items-center justify-center gap-1 transition-all ${
-                          discType === v ? "border-carbo-green bg-carbo-green/5 text-foreground" : "bg-card text-muted-foreground hover:bg-muted"}`}>
-                        <Ico className="h-3.5 w-3.5" /> {label}
-                      </button>
-                    ))}
-                  </div>
-                  <div className="flex-1 space-y-1.5">
-                    <Label>{discType === "percent" ? "Percentual (%)" : "Valor (R$)"}</Label>
-                    <Input type="number" min={0} step={discType === "percent" ? "0.01" : "0.01"}
-                      value={discRaw || ""} onChange={(e) => setDiscRaw(Number(e.target.value))}
-                      placeholder={discType === "percent" ? "ex.: 5" : "ex.: 100,00"}
-                      className={disc.error ? "border-destructive focus-visible:ring-destructive" : ""} />
-                  </div>
-                  <div className="flex-1 space-y-1.5">
-                    <Label>Motivo (opcional)</Label>
-                    <Input value={discReason} onChange={(e) => setDiscReason(e.target.value)} placeholder="Ex.: fidelização, volume…" />
-                  </div>
-                </div>
-                {disc.error ? (
-                  <p className="text-xs flex items-center gap-1 text-destructive"><AlertCircle className="h-3.5 w-3.5 shrink-0" /> {disc.error}</p>
-                ) : discTier.hint ? (
-                  <p className={`text-xs flex items-center gap-1 ${discTier.needsApproval ? "text-amber-500" : "text-muted-foreground"}`}>
-                    {discTier.needsApproval ? <AlertCircle className="h-3.5 w-3.5 shrink-0" /> : <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />}
-                    {discTier.hint}
-                  </p>
-                ) : null}
+          {/* Motivo do desconto (só quando há desconto) — alimenta a alçada. */}
+          {descontoTotal > 0 && (
+            <div className="rounded-xl border p-3 space-y-3">
+              <div className="space-y-1.5">
+                <Label className="flex items-center gap-1"><Tag className="h-3.5 w-3.5 text-carbo-green" /> Motivo do desconto (opcional)</Label>
+                <Input value={discReason} onChange={(e) => setDiscReason(e.target.value)} placeholder="Ex.: fidelização, volume…" />
               </div>
-            )}
-          </div>
+              {discTier.hint && (
+                <p className={`text-xs flex items-center gap-1 ${discTier.needsApproval ? "text-amber-500" : "text-muted-foreground"}`}>
+                  {discTier.needsApproval ? <AlertCircle className="h-3.5 w-3.5 shrink-0" /> : <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />}
+                  {discTier.hint}
+                </p>
+              )}
+            </div>
+          )}
 
           {/* Resumo: subtotal · desconto · total */}
           <div className="flex justify-end border-t pt-3">
             <div className="w-full sm:w-64 space-y-1 text-sm">
-              <div className="flex justify-between"><span className="text-muted-foreground">Subtotal</span><span className="tabular-nums">{brl(subtotal)}</span></div>
-              {discEnabled && !disc.error && disc.amount > 0 && (
-                <div className="flex justify-between text-destructive"><span>Desconto{disc.percent > 0 ? ` (${disc.percent}%)` : ""}</span><span className="tabular-nums">- {brl(disc.amount)}</span></div>
+              <div className="flex justify-between"><span className="text-muted-foreground">Subtotal</span><span className="tabular-nums">{brl(subtotalBruto)}</span></div>
+              {descontoTotal > 0 && (
+                <div className="flex justify-between text-destructive"><span>Desconto{percentAgregado > 0 ? ` (${percentAgregado}%)` : ""}</span><span className="tabular-nums">− {brl(descontoTotal)}</span></div>
               )}
               <div className="flex justify-between border-t pt-1 font-bold text-base"><span>Total</span><span className="tabular-nums">{brl(total)}</span></div>
             </div>
@@ -859,10 +879,10 @@ export default function Vender() {
         </div>
         <div className="flex items-center gap-2 w-full sm:w-auto">
           <Button variant="ghost" className="hidden sm:inline-flex" onClick={() => navigate("/pedidos")}>Cancelar</Button>
-          <Button variant="outline" className="flex-1 sm:flex-none" onClick={handleQuote} disabled={generating || !pagamentoValido || !!disc.error}>
+          <Button variant="outline" className="flex-1 sm:flex-none" onClick={handleQuote} disabled={generating || !pagamentoValido}>
             <FileText className="h-4 w-4 mr-1" /> {generating ? "Gerando..." : (<><span className="hidden sm:inline">Gerar&nbsp;</span>Orçamento</>)}
           </Button>
-          <CarboButton onClick={handleSell} className="flex-1 sm:flex-none sm:min-w-[150px]" disabled={!pagamentoValido || !!disc.error}>
+          <CarboButton onClick={handleSell} className="flex-1 sm:flex-none sm:min-w-[150px]" disabled={!pagamentoValido}>
             <ShoppingCart className="h-4 w-4 mr-1" /> Gerar Venda
           </CarboButton>
         </div>
