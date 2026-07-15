@@ -1471,10 +1471,10 @@ async function bridgeOrdersToCarbohub(
         .select("id, status, items, cnpj, customer_ie, customer_email, customer_phone, delivery_address")
         .eq("external_ref", externalRef)
         .single();
-      const contato: any = contatoMap.get(bo.contato_id) || null;
-      const docCliente = (contato?.cpf_cnpj as string | null) || null;
-      const end = enderecoContato(contato);
-      const fone = contato?.telefone || contato?.celular || null;
+      const contatoInfo: any = contatoMap.get(bo.contato_id) || null;
+      const docCliente = (contatoInfo?.cpf_cnpj as string | null) || null;
+      const end = enderecoContato(contatoInfo);
+      const fone = contatoInfo?.telefone || contatoInfo?.celular || null;
 
       if (existing) {
         // Atualiza status/itens quando mudam; e PREENCHE os campos do cliente que
@@ -1486,8 +1486,8 @@ async function bridgeOrdersToCarbohub(
         if (existing.status !== status) updatePayload.status = status;
         if (carboItems.length > 0 && (!existing.items || (existing.items as any[]).length === 0)) updatePayload.items = carboItems;
         setIfEmpty(updatePayload, "cnpj", existing.cnpj, docCliente);
-        setIfEmpty(updatePayload, "customer_ie", existing.customer_ie, contato?.ie);
-        setIfEmpty(updatePayload, "customer_email", existing.customer_email, contato?.email);
+        setIfEmpty(updatePayload, "customer_ie", existing.customer_ie, contatoInfo?.ie);
+        setIfEmpty(updatePayload, "customer_email", existing.customer_email, contatoInfo?.email);
         setIfEmpty(updatePayload, "customer_phone", existing.customer_phone, fone);
         setIfEmpty(updatePayload, "delivery_address", existing.delivery_address, end.delivery_address);
         // Endereço: só completa cidade/uf/cep/bairro quando o logradouro estava vazio.
@@ -1510,8 +1510,8 @@ async function bridgeOrdersToCarbohub(
           order_number: blingOrderNumber,
           customer_name: bo.contato_nome || "Cliente Bling",
           cnpj: docCliente,
-          customer_ie: contato?.ie || null,
-          customer_email: contato?.email || null,
+          customer_ie: contatoInfo?.ie || null,
+          customer_email: contatoInfo?.email || null,
           customer_phone: fone,
           delivery_address: end.delivery_address,
           delivery_neighborhood: end.delivery_neighborhood,
