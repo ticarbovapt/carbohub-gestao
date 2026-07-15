@@ -1,10 +1,55 @@
 import jsPDF from "jspdf";
+import logoUrl from "@/assets/logo-grupo-carbo.png";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Etiqueta de transporte (10×15 cm) — gerador próprio (a do Bling é feia).
-// Uma PÁGINA por volume, com "VOLUME X/N", dados de remetente/destinatário,
-// NF, peso e um código de barras CODE128 vetorial (nítido p/ impressora térmica).
+// Uma PÁGINA por volume, com a LOGO do Grupo Carbo, "VOLUME X/N", dados de
+// remetente/destinatário, NF, peso e um código de barras CODE128 vetorial.
 // ─────────────────────────────────────────────────────────────────────────────
+
+// Verde da marca (Grupo Carbo) — usado em detalhes sutis da etiqueta.
+const CARBO_GREEN: [number, number, number] = [34, 168, 83];
+
+// Carrega a logo real e APARA a margem transparente/branca (bounding box da
+// "tinta"), preservando a proporção — assim a logo encaixa limpa, sem esticar
+// nem redesenhar. Devolve dataUrl + dimensões já aparadas (null se falhar).
+function loadLogoTrimmed(url: string): Promise<{ dataUrl: string; w: number; h: number } | null> {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => {
+      try {
+        const c = document.createElement("canvas");
+        c.width = img.naturalWidth; c.height = img.naturalHeight;
+        const ctx = c.getContext("2d");
+        if (!ctx) { resolve(null); return; }
+        ctx.drawImage(img, 0, 0);
+        const { data, width, height } = ctx.getImageData(0, 0, c.width, c.height);
+        // Bounding box dos pixels de "tinta" (não transparentes e não quase-brancos).
+        let minX = width, minY = height, maxX = -1, maxY = -1;
+        for (let y = 0; y < height; y++) {
+          for (let x = 0; x < width; x++) {
+            const i = (y * width + x) * 4;
+            const a = data[i + 3];
+            const isInk = a > 16 && (data[i] < 245 || data[i + 1] < 245 || data[i + 2] < 245);
+            if (isInk) {
+              if (x < minX) minX = x; if (x > maxX) maxX = x;
+              if (y < minY) minY = y; if (y > maxY) maxY = y;
+            }
+          }
+        }
+        if (maxX < minX || maxY < minY) { resolve({ dataUrl: c.toDataURL("image/png"), w: c.width, h: c.height }); return; }
+        const bw = maxX - minX + 1, bh = maxY - minY + 1;
+        const crop = document.createElement("canvas");
+        crop.width = bw; crop.height = bh;
+        crop.getContext("2d")?.drawImage(c, minX, minY, bw, bh, 0, 0, bw, bh);
+        resolve({ dataUrl: crop.toDataURL("image/png"), w: bw, h: bh });
+      } catch { resolve(null); }
+    };
+    img.onerror = () => resolve(null);
+    img.src = url;
+  });
+}
 
 // AJUSTÁVEL — dados fixos do remetente (confirmar com o financeiro/fiscal).
 const REMETENTE = {
@@ -137,12 +182,13 @@ function fmtCep(v: string | null | undefined): string | null {
  * @param data dados da etiqueta
  * @param emissao data de emissão (default: agora)
  */
-export function gerarEtiquetaPDF(data: EtiquetaData, emissao: Date = new Date()): void {
+export async function gerarEtiquetaPDF(data: EtiquetaData, emissao: Date = new Date()): Promise<void> {
   const doc = new jsPDF({ unit: "mm", format: [100, 150], orientation: "portrait" });
   const W = 100;
   const M = 6;                 // margem
   const CW = W - 2 * M;        // largura útil
   const total = Math.max(1, Math.floor(data.volumes) || 1);
+  const logo = await loadLogoTrimmed(logoUrl);
 
   const cidadeUf = [data.delivery_city, data.delivery_state].filter(Boolean).join(" / ");
   const cep = fmtCep(data.delivery_zip);
@@ -164,6 +210,19 @@ export function gerarEtiquetaPDF(data: EtiquetaData, emissao: Date = new Date())
     doc.setDrawColor(0, 0, 0);
     doc.setLineWidth(0.4);
     doc.rect(M - 2, M - 2, CW + 4, 150 - 2 * (M - 2));
+
+    // ── Cabeçalho: LOGO real do Grupo Carbo (proporção preservada). ──
+    if (logo) {
+      const lw = 40;                      // largura alvo
+      const lh = lw * (logo.h / logo.w);  // altura pela proporção aparada
+      doc.addImage(logo.dataUrl, "PNG", M, y, lw, lh);
+      y += lh + 2.5;
+    }
+    // Régua verde da marca sob o cabeçalho.
+    doc.setDrawColor(...CARBO_GREEN);
+    doc.setLineWidth(0.7);
+    doc.line(M, y, W - M, y);
+    y += 4;
 
     // ── REMETENTE ──
     doc.setFont("helvetica", "bold");

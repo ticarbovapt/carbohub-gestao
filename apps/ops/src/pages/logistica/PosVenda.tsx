@@ -112,7 +112,7 @@ export default function PosVenda() {
         weightKg,
         chaveAcesso: etqChave,
       };
-      gerarEtiquetaPDF(payload);
+      await gerarEtiquetaPDF(payload);
       if (moveToTransporte) {
         requestStage(order, "em_transporte");
       }
