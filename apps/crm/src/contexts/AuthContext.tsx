@@ -2,12 +2,18 @@ import { createContext, useContext, useEffect, useState, ReactNode } from "react
 import { User, Session } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import {
-  isManager, fnKey, scopeFromLevel,
+  isManager, levelFromIdentity, fnKey, scopeFromLevel,
   type AccessLevel, type DataScope, type Identity, type FnAccessMap,
 } from "@/lib/access";
 
 // Interface deste app em profiles.allowed_interfaces (Camada 1).
 export const APP_INTERFACE = "carbo_crm";
+
+// Interfaces que dão ENTRADA no Carbo Sales. Usuários EXTERNOS (portal de lojas /
+// PDV) não têm linha em public.profiles → profile null → barrados aqui. Entre os
+// usuários INTERNOS, libera quem tiver o Sales, o Portal de Vendas ou o
+// Licenciados marcado no perfil (evita 2º login pra quem já é interno).
+const SALES_INTERFACES = ["carbo_crm", "portal_pdv", "portal_licenciado"];
 
 // Perfil mínimo que o CRM precisa (identidade vem do CORE compartilhado).
 export interface Profile extends Identity {
@@ -106,7 +112,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const isGestor = isManager(profile, fnMap);
   const level: AccessLevel = isGestor ? "gestor" : "membro";
   const scope = scopeFromLevel(level);
-  const hasAppAccess = !!profile?.allowed_interfaces?.includes(APP_INTERFACE);
+  // Camada 1 (SEGURANÇA): sem perfil interno (externo do portal de lojas) NÃO
+  // entra. Superusuário (command/head/ceo/TI) sempre entra; senão precisa de uma
+  // das interfaces de venda liberada no perfil.
+  const isSuperUser = levelFromIdentity(profile) === "gestor";
+  const hasAppAccess =
+    !!profile &&
+    (isSuperUser || (profile.allowed_interfaces ?? []).some((i) => SALES_INTERFACES.includes(i)));
 
   return (
     <AuthContext.Provider value={{
