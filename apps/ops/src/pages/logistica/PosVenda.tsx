@@ -102,18 +102,12 @@ export default function PosVenda() {
     }
   }, [gnfOrder]);
 
-  // ── Emitir etiqueta ──
+  // ── Emitir etiqueta (SÓ LEITURA — dados vêm do card; edição é no detalhe) ──
   const [etiquetaOrder, setEtiquetaOrder] = useState<PosVendaOrder | null>(null);
-  const [etqVolumes, setEtqVolumes] = useState("");
-  const [etqPeso, setEtqPeso] = useState("");
-  const [etqCarrier, setEtqCarrier] = useState("");
   const [etqChave, setEtqChave] = useState<string | null>(null);
   const [gerando, setGerando] = useState(false);
   useEffect(() => {
     if (etiquetaOrder) {
-      setEtqVolumes(etiquetaOrder.shipment_volumes != null ? String(etiquetaOrder.shipment_volumes) : "1");
-      setEtqPeso(etiquetaOrder.shipment_weight_kg != null ? String(etiquetaOrder.shipment_weight_kg).replace(".", ",") : "");
-      setEtqCarrier(etiquetaOrder.shipment_carrier ?? "");
       setEtqChave(null);
       // Busca best-effort a chave de acesso da NF (código de barras). Não bloqueia.
       if (etiquetaOrder.bling_nf_id) {
@@ -122,22 +116,15 @@ export default function PosVenda() {
     }
   }, [etiquetaOrder]);
 
-  // Volumes/peso normalizados do diálogo (usados no PDF e persistidos).
-  const parsedEtqVolumes = parseVolumes(etqVolumes);
-  const parsedEtqPeso = parsePesoKg(etqPeso);
+  // Volumes efetivos (mínimo 1) do card em emissão — nº de etiquetas.
+  const etqTotalVolumes = etiquetaOrder?.shipment_volumes && etiquetaOrder.shipment_volumes > 0 ? etiquetaOrder.shipment_volumes : 1;
 
-  // Gera a etiqueta: persiste volumes/peso/transportadora ajustados no card e monta o PDF.
+  // Gera a etiqueta usando os dados JÁ salvos no card (sem editar aqui).
   // moveToTransporte=true → depois move o card p/ Em Transporte (respeita portão NF).
   async function emitirEtiqueta(order: PosVendaOrder, moveToTransporte: boolean) {
     setGerando(true);
     try {
-      const volumes = parsedEtqVolumes;
-      const weightKg = parsedEtqPeso;
-      const carrier = etqCarrier.trim() || null;
-      // Persiste no card quando mudou (não quebra a dedução do "separado").
-      if (volumes !== order.shipment_volumes || weightKg !== order.shipment_weight_kg || carrier !== order.shipment_carrier) {
-        await updateShipInfo.mutateAsync({ id: order.id, volumes, weightKg, carrier });
-      }
+      const volumes = order.shipment_volumes && order.shipment_volumes > 0 ? order.shipment_volumes : 1;
       const payload: EtiquetaData = {
         order_number: order.order_number,
         invoice_number: order.invoice_number ?? (order.bling_nf_id ? `#${order.bling_nf_id}` : null),
@@ -148,8 +135,8 @@ export default function PosVenda() {
         delivery_state: order.delivery_state,
         delivery_zip: order.delivery_zip,
         volumes,
-        weightKg,
-        transportadora: carrier,
+        weightKg: order.shipment_weight_kg,
+        transportadora: order.shipment_carrier,
         chaveAcesso: etqChave,
       };
       await gerarEtiquetaPDF(payload);
@@ -534,25 +521,23 @@ export default function PosVenda() {
                 </p>
               </div>
 
-              {/* Volumes + peso (editáveis; persistem no card ao gerar) */}
-              <div className="grid grid-cols-2 gap-3 rounded-lg border border-border p-3">
-                <div className="space-y-1.5">
-                  <Label className="text-xs flex items-center gap-1.5"><Boxes className="h-3.5 w-3.5 text-muted-foreground" /> Volumes</Label>
-                  <Input type="number" min={1} inputMode="numeric" value={etqVolumes}
-                    onChange={(e) => setEtqVolumes(e.target.value)} placeholder="1" />
+              {/* Volumes / peso / transportadora — SÓ LEITURA. Para alterar, use
+                  "Editar" no detalhe do pedido (evita mexer por engano na emissão). */}
+              <div className="grid grid-cols-3 gap-x-4 gap-y-1 text-xs rounded-lg border border-border p-3">
+                <div>
+                  <p className="flex items-center gap-1.5 text-muted-foreground mb-0.5"><Boxes className="h-3.5 w-3.5" /> Volumes</p>
+                  <p className="font-semibold text-sm">{etqTotalVolumes}</p>
                 </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs flex items-center gap-1.5"><Weight className="h-3.5 w-3.5 text-muted-foreground" /> Peso bruto (kg)</Label>
-                  <Input type="text" inputMode="decimal" value={etqPeso}
-                    onChange={(e) => setEtqPeso(e.target.value)} placeholder="ex.: 12,5" />
+                <div>
+                  <p className="flex items-center gap-1.5 text-muted-foreground mb-0.5"><Weight className="h-3.5 w-3.5" /> Peso bruto</p>
+                  <p className="font-semibold text-sm">{etiquetaOrder.shipment_weight_kg != null ? `${String(etiquetaOrder.shipment_weight_kg).replace(".", ",")} kg` : "—"}</p>
                 </div>
-                <div className="space-y-1.5 col-span-2">
-                  <Label className="text-xs flex items-center gap-1.5"><Truck className="h-3.5 w-3.5 text-muted-foreground" /> Transportadora</Label>
-                  <Input type="text" value={etqCarrier}
-                    onChange={(e) => setEtqCarrier(e.target.value)} placeholder="Nome da transportadora" />
+                <div>
+                  <p className="flex items-center gap-1.5 text-muted-foreground mb-0.5"><Truck className="h-3.5 w-3.5" /> Transportadora</p>
+                  <p className="font-semibold text-sm truncate">{etiquetaOrder.shipment_carrier || "—"}</p>
                 </div>
-                <p className="col-span-2 text-[11px] text-muted-foreground">
-                  Serão gerada(s) <strong>{parsedEtqVolumes}</strong> etiqueta(s) (uma por volume). Ajustes ficam salvos no card.
+                <p className="col-span-3 text-[11px] text-muted-foreground pt-1">
+                  Serão gerada(s) <strong>{etqTotalVolumes}</strong> etiqueta(s) (uma por volume). Para alterar, use “Editar” no detalhe do pedido.
                 </p>
               </div>
 
