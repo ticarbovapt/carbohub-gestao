@@ -420,30 +420,23 @@ async function createBlingPedido(
 
   // Fallback por LINHA: a venda pode ter sido digitada com o nome livre
   // ("CarboPRO 100ml") sem código que bata com o `codigo` do Bling. Aqui
-  // pré-carrego o catálogo e mapeio cada produto Carbo → sua linha, para casar
-  // o item pelo nome quando o código falhar. Assim envia o produto oficial e a
-  // NF sai com o nome exato do Bling, sem o vendedor precisar mudar nada.
-  const { data: blingCatalog } = await supabaseAdmin
+  // pré-carrego os produtos OFICIAIS (LINHA_TO_BLING_CODIGO) para casar o item
+  // pelo nome quando o código falhar — enviando o produto certo, com o nome
+  // exato do Bling na NF, sem o vendedor precisar mudar nada.
+  const officialCodigos = Object.values(LINHA_TO_BLING_CODIGO);
+  const { data: officialProducts } = await supabaseAdmin
     .from("bling_products")
-    .select("bling_id, nome, codigo");
-  const linhaCandidates = new Map<string, Array<{ bling_id: number; nome: string; canonical: boolean }>>();
-  for (const p of (blingCatalog || []) as any[]) {
-    const linha = carboLinhaStrict(p.codigo || "", p.nome || "");
-    if (!linha) continue;
-    const canonical = !!SKU_TO_LINHA[(p.codigo || "").toUpperCase().trim()];
-    const arr = linhaCandidates.get(linha) || [];
-    arr.push({ bling_id: p.bling_id, nome: p.nome || "", canonical });
-    linhaCandidates.set(linha, arr);
+    .select("bling_id, nome, codigo")
+    .in("codigo", officialCodigos);
+  const codigoToProduct = new Map<string, { bling_id: number; nome: string }>();
+  for (const p of (officialProducts || []) as any[]) {
+    codigoToProduct.set(String(p.codigo), { bling_id: p.bling_id, nome: p.nome || "" });
   }
-  // Resolve a linha → 1 produto do Bling, SÓ quando inequívoco (evita mandar
-  // produto errado): prefere o canônico (código conhecido); senão, único da linha.
+  // Resolve a linha → produto oficial do Bling (determinístico, via mapa fixo).
   const resolveByLinha = (linha: string): { bling_id: number; nome: string } | null => {
-    const arr = linhaCandidates.get(linha);
-    if (!arr || arr.length === 0) return null;
-    const canon = arr.filter((a) => a.canonical);
-    if (canon.length === 1) return canon[0];
-    if (arr.length === 1) return arr[0];
-    return null;
+    const cod = LINHA_TO_BLING_CODIGO[linha];
+    if (!cod) return null;
+    return codigoToProduct.get(cod) || null;
   };
 
   for (const item of rawItems) {
@@ -919,6 +912,19 @@ function detectLinhaFromName(name: string): string {
   if (n.includes("vapt") || n.includes("servi")) return "carbovapt";
   return "carboze_100ml";
 }
+
+// ── Linha do produto Carbo → código OFICIAL do produto no catálogo do Bling ────
+// O catálogo do Bling é bagunçado (nomes duplicados, rótulos, kits, códigos
+// nulos), então NÃO dá pra casar por nome com segurança. Este mapa fixa qual é
+// o produto correto por linha — o mesmo que sai nas NFs (nome fiscal formal).
+// Ajustar aqui se o produto oficial de alguma linha mudar no Bling.
+const LINHA_TO_BLING_CODIGO: Record<string, string> = {
+  "carbopro":           "072", // CARBOPRO ESTABILIZADOR E OTIMIZADOR 100ML
+  "carboze_100ml":      "035", // CARBOZÉ ESTABILIZADOR E OTIMIZADOR 100ML
+  "carboze_1l":         "034", // CARBOZÉ ESTABILIZADOR E OTIMIZADOR 1 L
+  "carboze_sache_10ml": "084", // CARBOZÉ SACHÊ 10ML
+  // carbovapt: sem produto formal cadastrado no catálogo ainda → descrição livre.
+};
 
 // Detecção ESTRITA de linha (código OU nome) — só retorna linha quando o item é
 // reconhecidamente um produto Carbo. Para o resto retorna null (evita bucketar
