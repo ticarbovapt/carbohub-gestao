@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { Users, Pencil, CheckCircle2, AlertCircle, UserPlus, Link2, Cake, PartyPopper } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
@@ -310,6 +311,13 @@ function Aniversariantes({ rows }: { rows: EmployeeRow[] }) {
 
 export default function Funcionarios() {
   const { gestor } = useAuth();
+  // Aba ativa persistida na URL (?tab=…), pra não voltar pra "equipe" a cada F5.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const VALID_TABS = ["equipe", "aniversarios"];
+  const rawTab = searchParams.get("tab") || "equipe";
+  const activeTab = VALID_TABS.includes(rawTab) ? rawTab : "equipe";
+  const setActiveTab = (v: string) =>
+    setSearchParams((prev) => { prev.set("tab", v); return prev; }, { replace: true });
   const { rows, unlinkedProfiles, isLoading } = useEmployeesFinance();
   const { data: labels } = useOrgLabels();
   const deptLabel = labels?.deptLabel ?? {};
@@ -370,7 +378,7 @@ export default function Funcionarios() {
         actions={<CarboButton className="gap-1.5" onClick={openNew}><UserPlus className="h-4 w-4" /> Novo funcionário</CarboButton>}
       />
 
-      <Tabs defaultValue="equipe">
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList>
           <TabsTrigger value="equipe" className="gap-1.5"><Users className="h-4 w-4" /> Equipe</TabsTrigger>
           <TabsTrigger value="aniversarios" className="gap-1.5"><Cake className="h-4 w-4" /> Aniversariantes</TabsTrigger>
