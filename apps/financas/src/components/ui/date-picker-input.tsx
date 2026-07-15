@@ -20,6 +20,10 @@ interface DatePickerInputProps {
   clearable?: boolean;
   disablePast?: boolean;   // bloqueia datas anteriores a hoje
   disableFuture?: boolean; // bloqueia datas posteriores a hoje
+  // Dropdown de mês/ano no cabeçalho (útil p/ datas longe de hoje, ex.: aniversário).
+  monthYearDropdown?: boolean;
+  fromYear?: number;
+  toYear?: number;
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -31,6 +35,9 @@ export function DatePickerInput({
   clearable = true,
   disablePast = false,
   disableFuture = false,
+  monthYearDropdown = false,
+  fromYear,
+  toYear,
 }: DatePickerInputProps) {
   const [open, setOpen] = useState(false);
 
@@ -87,9 +94,24 @@ export function DatePickerInput({
         <Calendar
           mode="single"
           selected={selected}
+          defaultMonth={selected}
           onSelect={handleSelect}
           initialFocus
           locale={ptBR}
+          {...(monthYearDropdown
+            ? {
+                captionLayout: "dropdown-buttons" as const,
+                fromYear: fromYear ?? new Date().getFullYear() - 100,
+                toYear: toYear ?? new Date().getFullYear(),
+                classNames: {
+                  caption: "flex justify-center pt-1 relative items-center gap-1",
+                  caption_dropdowns: "flex gap-1",
+                  caption_label: "hidden",
+                  vhidden: "sr-only", // esconde o "Month:/Year:" (rótulo de leitor de tela)
+                  dropdown: "bg-background border rounded-md text-sm px-2 py-1 outline-none",
+                },
+              }
+            : {})}
           disabled={(date) => {
               const today = new Date();
               today.setHours(0, 0, 0, 0);

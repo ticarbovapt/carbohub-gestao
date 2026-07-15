@@ -8,6 +8,7 @@ import { CarboButton } from "@/components/ui/carbo-button";
 import { CarboBadge } from "@/components/ui/carbo-badge";
 import { CarboInput } from "@/components/ui/carbo-input";
 import { CarboSearchInput } from "@/components/ui/carbo-input";
+import { DatePickerInput } from "@/components/ui/date-picker-input";
 import { CarboTable, CarboTableHeader, CarboTableBody, CarboTableRow, CarboTableHead, CarboTableCell } from "@/components/ui/carbo-table";
 import { CarboSkeleton } from "@/components/ui/CarboSkeleton";
 import { CarboEmptyState } from "@/components/ui/carbo-empty-state";
@@ -66,7 +67,14 @@ function EditDialog({
           </div>
           <div className="space-y-1.5 sm:col-span-2">
             <Label>Data de aniversário</Label>
-            <CarboInput type="date" value={f.birth_date ?? ""} onChange={(e) => set("birth_date", e.target.value || null)} />
+            <DatePickerInput
+              value={f.birth_date ?? ""}
+              onChange={(v) => set("birth_date", v || null)}
+              monthYearDropdown
+              disableFuture
+              fromYear={1940}
+              className="w-full h-9"
+            />
           </div>
 
           {allowLink && (
