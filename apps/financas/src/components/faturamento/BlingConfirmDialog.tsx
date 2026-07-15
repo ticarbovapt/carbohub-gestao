@@ -253,6 +253,22 @@ export function BlingConfirmDialog({
               </div>
             </div>
 
+            {/* Pagamento */}
+            {data.payment_summary?.escolhido && (
+              <div>
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">Pagamento</p>
+                <div className="flex items-center gap-2 text-xs">
+                  {data.payment_summary.forma_bling
+                    ? <CarboBadge variant="success" className="shrink-0">Bling: {data.payment_summary.forma_bling}</CarboBadge>
+                    : <CarboBadge variant="warning" className="shrink-0">sem forma no Bling</CarboBadge>}
+                  <span className="truncate">
+                    {data.payment_summary.escolhido}
+                    {data.payment_summary.parcelas > 1 ? ` · ${data.payment_summary.parcelas}x` : ""}
+                  </span>
+                </div>
+              </div>
+            )}
+
             {/* Observação */}
             {obs && (
               <div>

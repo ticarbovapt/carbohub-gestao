@@ -151,6 +151,8 @@ export interface BlingPreview {
   will_create_contact?: boolean;
   contact_to_create?: BlingContactToCreate | null;
   items_summary: Array<{ name: string; matched: boolean; codigo: string }>;
+  // Pagamento resolvido: o que foi escolhido na venda + a forma casada no Bling.
+  payment_summary?: { escolhido: string | null; forma_bling: string | null; parcelas: number };
   warnings: string[];
   payload: Record<string, any>;
 }

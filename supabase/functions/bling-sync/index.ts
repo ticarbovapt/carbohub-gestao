@@ -163,6 +163,69 @@ async function blingPost(token: string, endpoint: string, body: unknown, _retrie
   return response.json();
 }
 
+// ── Pagamento: traduz o texto da venda (payment_terms) para o Bling ──────────
+// A /vender grava a forma escolhida como rótulo ("PIX", "Boleto à vista",
+// "Boleto faturado (30/60/90)", "Cartão de crédito 3x", "Cartão de débito").
+// Aqui devolvemos a forma canônica + o cronograma de parcelas (offsets em dias).
+const normDiacritics = (s: string) =>
+  (s || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+
+function parsePaymentTerms(termsRaw: string): { forma: string | null; schedule: number[] } {
+  const t = normDiacritics(termsRaw).trim();
+  if (!t) return { forma: null, schedule: [] };
+  if (t.includes("pix")) return { forma: "pix", schedule: [0] };
+  if (t.includes("boleto")) {
+    const m = t.match(/\d{1,3}(?:\s*\/\s*\d{1,3})*/);
+    if (t.includes("faturado") && m) {
+      const days = m[0].split("/").map((x) => parseInt(x.trim(), 10)).filter((n) => !isNaN(n));
+      if (days.length) return { forma: "boleto", schedule: days };
+    }
+    return { forma: "boleto", schedule: [0] }; // à vista
+  }
+  if (t.includes("credito")) {
+    const m = t.match(/(\d{1,2})\s*x/);
+    const n = m ? Math.max(1, Math.min(12, parseInt(m[1], 10))) : 1;
+    return { forma: "credito", schedule: Array.from({ length: n }, (_, i) => (i + 1) * 30) };
+  }
+  if (t.includes("debito")) return { forma: "debito", schedule: [0] };
+  return { forma: null, schedule: [] };
+}
+
+// Resolve a forma canônica → id da forma de pagamento cadastrada no Bling
+// (cada conta tem os seus). Casa por nome; prefere ativa. null = não achou.
+async function resolveBlingFormaPagamento(
+  token: string,
+  forma: string,
+): Promise<{ id: number; descricao: string } | null> {
+  let list: any[] = [];
+  try {
+    const res = await blingFetch(token, "/formas-pagamentos", 1, 100);
+    list = res?.data || [];
+  } catch (_e) {
+    return null;
+  }
+  const preds: Record<string, (d: string) => boolean> = {
+    pix: (d) => d.includes("pix"),
+    boleto: (d) => d.includes("boleto"),
+    credito: (d) => d.includes("credito"),
+    debito: (d) => d.includes("debito"),
+  };
+  const pred = preds[forma];
+  if (!pred) return null;
+  const cands = list.filter((f) => pred(normDiacritics(f.descricao || "")));
+  if (cands.length === 0) return null;
+  const active = cands.filter((f) => f.situacao === undefined || f.situacao === 1);
+  const pick = active[0] || cands[0];
+  return { id: pick.id, descricao: pick.descricao || "" };
+}
+
+// Soma N dias corridos a uma data 'YYYY-MM-DD' e devolve 'YYYY-MM-DD'.
+function addCalendarDays(dateStr: string, n: number): string {
+  const d = new Date((dateStr || "").substring(0, 10) + "T00:00:00");
+  d.setDate(d.getDate() + n);
+  return d.toISOString().substring(0, 10);
+}
+
 // ── buildContactPayload: monta o cadastro de cliente (POST /contatos, API v3)
 // a partir dos dados do próprio pedido. NÃO cria nada — só monta o corpo, que é
 // mostrado na tela de confirmação e só enviado ao Bling quando um humano confirma.
@@ -555,6 +618,35 @@ async function createBlingPedido(
     pedidoPayload.desconto = { tipo: 1, valor: Number(order.discount) };
   }
 
+  // Pagamento: envia a forma escolhida + parcelas pro Bling (preenche a
+  // "Condição de pagamento" e o campo "Forma" da parcela). Best-effort: se a
+  // forma não existir no Bling, o pedido segue sem parcela (com aviso).
+  const pagInfo = parsePaymentTerms(order.payment_terms || "");
+  const paymentSummary: { escolhido: string | null; forma_bling: string | null; parcelas: number } = {
+    escolhido: order.payment_terms || null,
+    forma_bling: null,
+    parcelas: 0,
+  };
+  if (pagInfo.forma && Number(order.total) > 0) {
+    const formaBling = await resolveBlingFormaPagamento(token, pagInfo.forma);
+    if (formaBling) {
+      const base = order.sale_date || (order.created_at || "").substring(0, 10);
+      const sched = pagInfo.schedule.length ? pagInfo.schedule : [0];
+      const total = Number(order.total);
+      const n = sched.length;
+      const each = Math.floor((total / n) * 100) / 100;
+      pedidoPayload.parcelas = sched.map((days, i) => ({
+        dataVencimento: addCalendarDays(base, days),
+        valor: i === n - 1 ? Math.round((total - each * (n - 1)) * 100) / 100 : each,
+        formaPagamento: { id: formaBling.id },
+      }));
+      paymentSummary.forma_bling = formaBling.descricao;
+      paymentSummary.parcelas = n;
+    } else {
+      warnings.push(`Forma de pagamento "${order.payment_terms}" não encontrada no catálogo de formas do Bling — o pedido irá sem parcela definida.`);
+    }
+  }
+
   // ── DRY-RUN: devolve a pré-visualização sem enviar nada ──────────────────
   if (dryRun) {
     return {
@@ -569,6 +661,7 @@ async function createBlingPedido(
       will_create_contact: !!contactToCreate,
       contact_to_create: contactToCreate,
       items_summary: itemsSummary,
+      payment_summary: paymentSummary,
       warnings,
       payload: pedidoPayload,
     };
