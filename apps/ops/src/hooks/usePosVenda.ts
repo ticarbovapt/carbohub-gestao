@@ -89,13 +89,16 @@ export interface PosVendaOrder {
   linha: string | null;
   bling_nf_id: number | null;      // NF vinculada (Faturamento/Bling) → NF finalizada
   invoice_number: string | null;   // nº da NF-e, quando emitida
+  shipment_volumes: number | null;    // volumes informados na separação (etiqueta)
+  shipment_weight_kg: number | null;  // peso bruto (kg) informado na separação (etiqueta)
 }
 
 const SELECT_BASE =
   "id, order_number, customer_name, customer_email, customer_phone, cnpj, customer_ie, payment_terms, " +
   "freight_type, agreed_delivery_date, ppf_date, ppe_date, delivery_address, delivery_city, " +
   "delivery_state, delivery_zip, vendedor_name, vendedor_id, subtotal, shipping_cost, discount, total, " +
-  "notes, items, created_at, updated_at, stage_changed_at, fulfillment_stage, linha, bling_nf_id, invoice_number, status";
+  "notes, items, created_at, updated_at, stage_changed_at, fulfillment_stage, linha, bling_nf_id, invoice_number, " +
+  "shipment_volumes, shipment_weight_kg, status";
 const SELECT_COLS = SELECT_BASE + ", production_done";
 
 // Etapas terminais do rastreio (colunas que só acumulam).
@@ -354,10 +357,16 @@ const PRE_SEPARADO_STAGES = new Set<FulfillmentStage>([
 export function useUpdateFulfillmentStage() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, stage }: { id: string; stage: FulfillmentStage }) => {
+    mutationFn: async ({ id, stage, volumes, weightKg }: { id: string; stage: FulfillmentStage; volumes?: number | null; weightKg?: number | null }) => {
+      const patch: Record<string, unknown> = { fulfillment_stage: stage, updated_at: new Date().toISOString() };
+      // Volumes/peso da etiqueta: gravados ao SEPARAR (só sobrescreve quando veio valor).
+      if (stage === "separado") {
+        if (volumes !== undefined) patch.shipment_volumes = volumes;
+        if (weightKg !== undefined) patch.shipment_weight_kg = weightKg;
+      }
       const { error } = await db
         .from("carboze_orders")
-        .update({ fulfillment_stage: stage, updated_at: new Date().toISOString() })
+        .update(patch)
         .eq("id", id);
       if (error) throw error;
       // Ao entrar em "Criar Ordem de Produção", nasce a OP no Backlog (sem duplicar).

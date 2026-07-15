@@ -1,10 +1,12 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { ShoppingBag, Loader2, User, Calendar, MapPin, Phone, Mail, Package, FileText, CreditCard, Truck } from "lucide-react";
+import { ShoppingBag, Loader2, User, Calendar, MapPin, Phone, Mail, Package, FileText, CreditCard, Truck, Boxes, Weight } from "lucide-react";
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { CarboBadge } from "@/components/ui/carbo-badge";
 import {
   usePosVendaOrders, usePosVendaRealtime, useUpdateFulfillmentStage, useHubRnStock, useOpsBySource,
@@ -50,6 +52,16 @@ export default function PosVenda() {
   const [detail, setDetail] = useState<PosVendaOrder | null>(null);
   // Pedido + destino aguardando confirmação (Em Separação OU Criar Ordem de Produção).
   const [pending, setPending] = useState<{ order: PosVendaOrder; target: FulfillmentStage } | null>(null);
+  // Volumes + peso bruto (etiqueta) — preenchidos ao confirmar "Separado".
+  const [sepVolumes, setSepVolumes] = useState("");
+  const [sepPeso, setSepPeso] = useState("");
+  // Ao abrir a caixa, pré-preenche com o que já houver no card (reedição).
+  useEffect(() => {
+    if (pending) {
+      setSepVolumes(pending.order.shipment_volumes != null ? String(pending.order.shipment_volumes) : "");
+      setSepPeso(pending.order.shipment_weight_kg != null ? String(pending.order.shipment_weight_kg).replace(".", ",") : "");
+    }
+  }, [pending]);
 
   // Estoque HUB-RN dos itens do pedido em confirmação (checagem real).
   const pendingItems = useMemo(
@@ -113,9 +125,20 @@ export default function PosVenda() {
     updateStage.mutate({ id: order.id, stage });
   }
 
-  // Aplica a etapa escolhida na caixa e fecha.
+  // Aplica a etapa escolhida na caixa e fecha. Ao SEPARAR, leva volumes/peso
+  // (etiqueta) — só envia o que foi digitado (número válido).
   function commitStage(stage: FulfillmentStage) {
-    if (pending) updateStage.mutate({ id: pending.order.id, stage });
+    if (pending) {
+      let volumes: number | null | undefined;
+      let weightKg: number | null | undefined;
+      if (stage === "separado") {
+        const v = sepVolumes.trim();
+        const p = sepPeso.trim().replace(",", ".");
+        volumes = v === "" ? null : (Number.isFinite(Number(v)) ? Math.max(0, Math.round(Number(v))) : undefined);
+        weightKg = p === "" ? null : (Number.isFinite(Number(p)) ? Math.max(0, Number(p)) : undefined);
+      }
+      updateStage.mutate({ id: pending.order.id, stage, volumes, weightKg });
+    }
     setPending(null);
   }
 
@@ -319,6 +342,23 @@ export default function PosVenda() {
 
             {!stockLoading && (
               <>
+                {/* Volumes + peso bruto (etiqueta) — só quando vai para "Separado". */}
+                {sepTarget === "separado" && (hasStock || !stockKnown) && (
+                  <div className="grid grid-cols-2 gap-3 rounded-lg border border-border p-3">
+                    <div className="space-y-1.5">
+                      <Label className="text-xs flex items-center gap-1.5"><Boxes className="h-3.5 w-3.5 text-muted-foreground" /> Volumes</Label>
+                      <Input type="number" min={0} inputMode="numeric" value={sepVolumes}
+                        onChange={(e) => setSepVolumes(e.target.value)} placeholder="ex.: 3" />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs flex items-center gap-1.5"><Weight className="h-3.5 w-3.5 text-muted-foreground" /> Peso bruto (kg)</Label>
+                      <Input type="text" inputMode="decimal" value={sepPeso}
+                        onChange={(e) => setSepPeso(e.target.value)} placeholder="ex.: 12,5" />
+                    </div>
+                    <p className="col-span-2 text-[11px] text-muted-foreground">Opcional agora — usado na emissão da etiqueta.</p>
+                  </div>
+                )}
+
                 {/* Mensagem curta + ações, por caso */}
                 {!stockKnown ? (
                   /* Não deu para conferir (item sem vínculo de produto). */
@@ -417,6 +457,18 @@ export default function PosVenda() {
                     <div>
                       <p className="flex items-center gap-1.5 text-muted-foreground mb-0.5"><Truck className="h-3.5 w-3.5" /> Frete</p>
                       <p className="font-medium">{detail.freight_type === "CIF" ? "CIF (por conta do vendedor)" : detail.freight_type === "FOB" ? "FOB (por conta do comprador)" : detail.freight_type}</p>
+                    </div>
+                  )}
+                  {detail.shipment_volumes != null && (
+                    <div>
+                      <p className="flex items-center gap-1.5 text-muted-foreground mb-0.5"><Boxes className="h-3.5 w-3.5" /> Volumes</p>
+                      <p className="font-medium">{detail.shipment_volumes}</p>
+                    </div>
+                  )}
+                  {detail.shipment_weight_kg != null && (
+                    <div>
+                      <p className="flex items-center gap-1.5 text-muted-foreground mb-0.5"><Weight className="h-3.5 w-3.5" /> Peso bruto</p>
+                      <p className="font-medium">{String(detail.shipment_weight_kg).replace(".", ",")} kg</p>
                     </div>
                   )}
                 </div>
