@@ -418,24 +418,68 @@ async function createBlingPedido(
   const blingItems = [];
   const itemsSummary: Array<{ name: string; matched: boolean; codigo: string }> = [];
 
+  // Fallback por LINHA: a venda pode ter sido digitada com o nome livre
+  // ("CarboPRO 100ml") sem código que bata com o `codigo` do Bling. Aqui
+  // pré-carrego o catálogo e mapeio cada produto Carbo → sua linha, para casar
+  // o item pelo nome quando o código falhar. Assim envia o produto oficial e a
+  // NF sai com o nome exato do Bling, sem o vendedor precisar mudar nada.
+  const { data: blingCatalog } = await supabaseAdmin
+    .from("bling_products")
+    .select("bling_id, nome, codigo");
+  const linhaCandidates = new Map<string, Array<{ bling_id: number; nome: string; canonical: boolean }>>();
+  for (const p of (blingCatalog || []) as any[]) {
+    const linha = carboLinhaStrict(p.codigo || "", p.nome || "");
+    if (!linha) continue;
+    const canonical = !!SKU_TO_LINHA[(p.codigo || "").toUpperCase().trim()];
+    const arr = linhaCandidates.get(linha) || [];
+    arr.push({ bling_id: p.bling_id, nome: p.nome || "", canonical });
+    linhaCandidates.set(linha, arr);
+  }
+  // Resolve a linha → 1 produto do Bling, SÓ quando inequívoco (evita mandar
+  // produto errado): prefere o canônico (código conhecido); senão, único da linha.
+  const resolveByLinha = (linha: string): { bling_id: number; nome: string } | null => {
+    const arr = linhaCandidates.get(linha);
+    if (!arr || arr.length === 0) return null;
+    const canon = arr.filter((a) => a.canonical);
+    if (canon.length === 1) return canon[0];
+    if (arr.length === 1) return arr[0];
+    return null;
+  };
+
   for (const item of rawItems) {
     const codigo: string = item.product_code || item.sku_code || "";
     let blingProductId: number | null = null;
+    let blingProductName = "";
 
     if (codigo) {
       const { data: prod } = await supabaseAdmin
         .from("bling_products")
-        .select("bling_id")
+        .select("bling_id, nome")
         .eq("codigo", codigo)
         .maybeSingle();
       blingProductId = prod?.bling_id || null;
+      blingProductName = (prod as any)?.nome || "";
+    }
+
+    // Sem código casado → tenta pela linha (nome livre reconhecido como Carbo).
+    if (!blingProductId) {
+      const linha = carboLinhaStrict(codigo, item.name || "");
+      if (linha) {
+        const hit = resolveByLinha(linha);
+        if (hit) { blingProductId = hit.bling_id; blingProductName = hit.nome; }
+      }
     }
 
     if (!blingProductId) {
       warnings.push(`Produto "${item.name || codigo}" não casou com o catálogo do Bling — será enviado como descrição livre.`);
     }
 
-    itemsSummary.push({ name: item.name || codigo || "Produto", matched: !!blingProductId, codigo });
+    // Quando casou, mostra o nome OFICIAL do Bling (o que vai na NF).
+    itemsSummary.push({
+      name: (blingProductId && blingProductName) || item.name || codigo || "Produto",
+      matched: !!blingProductId,
+      codigo,
+    });
 
     blingItems.push({
       ...(blingProductId
@@ -874,6 +918,19 @@ function detectLinhaFromName(name: string): string {
   if (n.includes("carbopro") || n.includes("pro ") || n.includes("pro-")) return "carbopro";
   if (n.includes("vapt") || n.includes("servi")) return "carbovapt";
   return "carboze_100ml";
+}
+
+// Detecção ESTRITA de linha (código OU nome) — só retorna linha quando o item é
+// reconhecidamente um produto Carbo. Para o resto retorna null (evita bucketar
+// item qualquer no default "carboze_100ml"). Usada para casar item de venda ↔
+// catálogo do Bling sem chutar produto errado.
+function carboLinhaStrict(codigo: string, name: string): string | null {
+  const byCode = SKU_TO_LINHA[(codigo || "").toUpperCase().trim()];
+  if (byCode) return byCode;
+  const n = (name || "").toLowerCase();
+  // Precisa parecer um produto Carbo (marca/linha) para entrar no casamento.
+  if (!/\bcarbo/.test(n) && !n.includes("carboz") && !n.includes("vapt")) return null;
+  return detectLinhaFromName(name);
 }
 
 // Bling situacao → CarboHub status
