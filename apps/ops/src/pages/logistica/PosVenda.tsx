@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { ShoppingBag, Loader2, User, Calendar, MapPin, Phone, Mail, Package, FileText, CreditCard, Truck, Boxes, Weight, Tag } from "lucide-react";
+import { ShoppingBag, Loader2, User, Calendar, MapPin, Phone, Mail, Package, FileText, CreditCard, Truck, Boxes, Weight, Tag, Pencil, CheckCircle2 } from "lucide-react";
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -56,6 +56,35 @@ export default function PosVenda() {
   const [overStage, setOverStage] = useState<FulfillmentStage | null>(null);
   const scrollRef = useDragScroll<HTMLDivElement>();
   const [detail, setDetail] = useState<PosVendaOrder | null>(null);
+  // Edição RÁPIDA de expedição no detalhe — só operacional (volumes/peso/
+  // transportadora). Fiscal (CNPJ/IE/pagamento/faturamento) NÃO é editável aqui.
+  const [editShip, setEditShip] = useState(false);
+  const [edVolumes, setEdVolumes] = useState("");
+  const [edPeso, setEdPeso] = useState("");
+  const [edCarrier, setEdCarrier] = useState("");
+  const [savingEdit, setSavingEdit] = useState(false);
+  useEffect(() => { setEditShip(false); }, [detail?.id]);
+  const startEditShip = () => {
+    if (!detail) return;
+    setEdVolumes(detail.shipment_volumes != null ? String(detail.shipment_volumes) : "");
+    setEdPeso(detail.shipment_weight_kg != null ? String(detail.shipment_weight_kg).replace(".", ",") : "");
+    setEdCarrier(detail.shipment_carrier ?? "");
+    setEditShip(true);
+  };
+  async function saveEditShip() {
+    if (!detail) return;
+    setSavingEdit(true);
+    try {
+      const volumes = edVolumes.trim() === "" ? null : parseVolumes(edVolumes);
+      const weightKg = parsePesoKg(edPeso);
+      const carrier = edCarrier.trim() || null;
+      await updateShipInfo.mutateAsync({ id: detail.id, volumes, weightKg, carrier });
+      setDetail((d) => (d ? { ...d, shipment_volumes: volumes, shipment_weight_kg: weightKg, shipment_carrier: carrier } : d));
+      setEditShip(false);
+    } finally {
+      setSavingEdit(false);
+    }
+  }
   // Pedido + destino aguardando confirmação (Em Separação OU Criar Ordem de Produção).
   const [pending, setPending] = useState<{ order: PosVendaOrder; target: FulfillmentStage } | null>(null);
   // ── Dados de expedição ao ir p/ "Gerar Nota Fiscal" (Separado → Gerar NF) ──
@@ -643,22 +672,54 @@ export default function PosVenda() {
                       <p className="font-medium">{detail.freight_type === "CIF" ? "CIF (por conta do vendedor)" : detail.freight_type === "FOB" ? "FOB (por conta do comprador)" : detail.freight_type}</p>
                     </div>
                   )}
-                  {detail.shipment_volumes != null && (
-                    <div>
-                      <p className="flex items-center gap-1.5 text-muted-foreground mb-0.5"><Boxes className="h-3.5 w-3.5" /> Volumes</p>
-                      <p className="font-medium">{detail.shipment_volumes}</p>
+                </div>
+
+                {/* Expedição — EDITÁVEL (só operacional: volumes/peso/transportadora). */}
+                <div className="rounded-lg border border-border p-3 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1.5"><Truck className="h-3.5 w-3.5" /> Expedição</p>
+                    {!editShip ? (
+                      <Button size="sm" variant="ghost" className="h-7 gap-1.5 text-xs" onClick={startEditShip}>
+                        <Pencil className="h-3.5 w-3.5" /> Editar
+                      </Button>
+                    ) : (
+                      <div className="flex gap-1.5">
+                        <Button size="sm" variant="ghost" className="h-7 text-xs" disabled={savingEdit} onClick={() => setEditShip(false)}>Cancelar</Button>
+                        <Button size="sm" className="h-7 gap-1.5 text-xs" disabled={savingEdit} onClick={saveEditShip}>
+                          {savingEdit ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />} Salvar
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                  {!editShip ? (
+                    <div className="grid grid-cols-3 gap-x-4 gap-y-1 text-xs">
+                      <div>
+                        <p className="flex items-center gap-1.5 text-muted-foreground mb-0.5"><Boxes className="h-3.5 w-3.5" /> Volumes</p>
+                        <p className="font-medium">{detail.shipment_volumes ?? "—"}</p>
+                      </div>
+                      <div>
+                        <p className="flex items-center gap-1.5 text-muted-foreground mb-0.5"><Weight className="h-3.5 w-3.5" /> Peso bruto</p>
+                        <p className="font-medium">{detail.shipment_weight_kg != null ? `${String(detail.shipment_weight_kg).replace(".", ",")} kg` : "—"}</p>
+                      </div>
+                      <div>
+                        <p className="flex items-center gap-1.5 text-muted-foreground mb-0.5"><Truck className="h-3.5 w-3.5" /> Transportadora</p>
+                        <p className="font-medium">{detail.shipment_carrier || "—"}</p>
+                      </div>
                     </div>
-                  )}
-                  {detail.shipment_weight_kg != null && (
-                    <div>
-                      <p className="flex items-center gap-1.5 text-muted-foreground mb-0.5"><Weight className="h-3.5 w-3.5" /> Peso bruto</p>
-                      <p className="font-medium">{String(detail.shipment_weight_kg).replace(".", ",")} kg</p>
-                    </div>
-                  )}
-                  {detail.shipment_carrier && (
-                    <div>
-                      <p className="flex items-center gap-1.5 text-muted-foreground mb-0.5"><Truck className="h-3.5 w-3.5" /> Transportadora</p>
-                      <p className="font-medium">{detail.shipment_carrier}</p>
+                  ) : (
+                    <div className="grid grid-cols-3 gap-3">
+                      <div className="space-y-1">
+                        <Label className="text-[11px] flex items-center gap-1"><Boxes className="h-3 w-3" /> Volumes</Label>
+                        <Input type="number" min={1} inputMode="numeric" value={edVolumes} onChange={(e) => setEdVolumes(e.target.value)} placeholder="1" className="h-8" />
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-[11px] flex items-center gap-1"><Weight className="h-3 w-3" /> Peso (kg)</Label>
+                        <Input type="text" inputMode="decimal" value={edPeso} onChange={(e) => setEdPeso(e.target.value)} placeholder="ex.: 12,5" className="h-8" />
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-[11px] flex items-center gap-1"><Truck className="h-3 w-3" /> Transportadora</Label>
+                        <Input type="text" value={edCarrier} onChange={(e) => setEdCarrier(e.target.value)} placeholder="Nome" className="h-8" />
+                      </div>
                     </div>
                   )}
                 </div>
