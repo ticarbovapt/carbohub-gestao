@@ -1,7 +1,7 @@
-import { useMemo, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import {
-  Receipt, FileText, ChevronLeft, ChevronRight, CheckCircle2, DollarSign, Store, Building2, Lock, Link2, Files,
+  Receipt, FileText, ChevronLeft, ChevronRight, CheckCircle2, DollarSign, Store, Building2, Lock, Link2, Files, Package,
 } from "lucide-react";
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
 import { CarboButton } from "@/components/ui/carbo-button";
@@ -29,6 +29,23 @@ const MONTHS = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "
 const fmtCurrency = (v: number) =>
   new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v || 0);
 const fmtDate = (s: string | null) => (s ? new Date(s).toLocaleDateString("pt-BR") : "—");
+const num = (v: unknown) => (v == null ? 0 : Number(v) || 0);
+
+// Endereço de entrega (colunas texto) → linha legível.
+function fmtEntrega(o: FaturamentoOrder): string | null {
+  const cityUf = [o.delivery_city, o.delivery_state].filter(Boolean).join("/");
+  const cep = o.delivery_zip ? `CEP ${o.delivery_zip}` : "";
+  return [o.delivery_address, cityUf, cep].filter(Boolean).join(" — ") || null;
+}
+// Endereço de faturamento (jsonb) → linha legível.
+function fmtFaturamento(e: Record<string, unknown> | null): string | null {
+  if (!e) return null;
+  const s = (k: string) => (e[k] != null ? String(e[k]) : "");
+  const l1 = [s("logradouro"), s("numero")].filter(Boolean).join(", ");
+  const l2 = [s("bairro"), [s("cidade"), s("uf")].filter(Boolean).join("/")].filter(Boolean).join(" · ");
+  const cep = s("cep") ? `CEP ${s("cep")}` : "";
+  return [l1, l2, cep].filter(Boolean).join(" — ") || null;
+}
 
 // Origem do pedido: veio do Bling (external_ref bling-…) ou nasceu no sistema.
 const isBling = (o: FaturamentoOrder) =>
@@ -84,6 +101,8 @@ export default function Faturamento() {
   // rastreabilidade/faturamento. Desligar "Mostrar já faturados" filtra para
   // ver só os pendentes (sem NF vinculada).
   const [showAll, setShowAll] = useState(true);
+  // Linha expandida (detalhe do pedido para conferência). Clicar na linha alterna.
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const { data: orders, isLoading } = useFaturamento({ month, search, showAll });
   // Pedido em confirmação: abre o diálogo que mostra o que vai pro Bling (inclui
@@ -141,45 +160,191 @@ export default function Faturamento() {
         <CarboTableBody>
           {rows.map((o) => {
             const hasNF = !!o.bling_nf_id;
+            const colSpan = showAction ? 7 : 6;
+            // Financeiro defensivo: pedidos antigos podem não ter subtotal/discount.
+            const itemsBruto = o.items.reduce((s, it) => s + num(it.quantity) * num(it.unit_price), 0);
+            const itemsDesc = o.items.reduce((s, it) => s + num(it.discount_amount), 0);
+            const subtotalDet = o.subtotal != null ? num(o.subtotal) : (itemsBruto || null);
+            const descontoDet = o.discount != null ? num(o.discount) : itemsDesc;
+            const percentDet = o.discount_percent != null
+              ? num(o.discount_percent)
+              : (subtotalDet && subtotalDet > 0 ? Math.round((descontoDet / subtotalDet) * 10000) / 100 : 0);
+            const buyerNotes = o.buyer_notes && o.buyer_notes !== o.notes ? o.buyer_notes : null;
+            const generalNotes = o.general_notes && o.general_notes !== o.notes && o.general_notes !== o.buyer_notes ? o.general_notes : null;
             return (
-              <CarboTableRow key={o.id}>
-                <CarboTableCell className="font-medium">{o.order_number}</CarboTableCell>
-                <CarboTableCell>{o.customer_name}</CarboTableCell>
-                <CarboTableCell>{fmtDate(o.sale_date || o.created_at)}</CarboTableCell>
-                <CarboTableCell>{o.vendedor_name || <span className="text-muted-foreground">—</span>}</CarboTableCell>
-                <CarboTableCell className="text-right font-medium">{fmtCurrency(Number(o.total))}</CarboTableCell>
-                <CarboTableCell>
-                  {hasNF ? (
-                    <div className="flex items-center gap-2">
-                      <CarboBadge variant="success" className="gap-1"><FileText className="h-3 w-3" /> NF {o.invoice_number || o.bling_nf_id}</CarboBadge>
-                      <BaixarNFButton blingNfId={o.bling_nf_id as number} label="Baixar" />
-                    </div>
-                  ) : (
-                    <CarboBadge variant="warning">Sem NF</CarboBadge>
-                  )}
-                </CarboTableCell>
-                {showAction && (
-                  <CarboTableCell className="text-right">
+              <Fragment key={o.id}>
+                <CarboTableRow
+                  interactive
+                  className={expandedId === o.id ? "bg-muted/20" : undefined}
+                  onClick={() => setExpandedId(expandedId === o.id ? null : o.id)}
+                >
+                  <CarboTableCell className="font-medium">{o.order_number}</CarboTableCell>
+                  <CarboTableCell>{o.customer_name}</CarboTableCell>
+                  <CarboTableCell>{fmtDate(o.sale_date || o.created_at)}</CarboTableCell>
+                  <CarboTableCell>{o.vendedor_name || <span className="text-muted-foreground">—</span>}</CarboTableCell>
+                  <CarboTableCell className="text-right font-medium">{fmtCurrency(Number(o.total))}</CarboTableCell>
+                  <CarboTableCell onClick={(e) => e.stopPropagation()}>
                     {hasNF ? (
-                      <span className="text-muted-foreground text-sm">Faturado</span>
-                    ) : nfUnlocked(o) ? (
-                      <div className="flex justify-end">
-                        <CarboButton size="sm" onClick={() => setToBling(o)}>
-                          <Receipt className="h-3.5 w-3.5 mr-1" /> Criar no Bling
-                        </CarboButton>
+                      <div className="flex items-center gap-2">
+                        <CarboBadge variant="success" className="gap-1"><FileText className="h-3 w-3" /> NF {o.invoice_number || o.bling_nf_id}</CarboBadge>
+                        <BaixarNFButton blingNfId={o.bling_nf_id as number} label="Baixar" />
                       </div>
                     ) : (
-                      // Travado: o pedido ainda não chegou em "Gerar NF" no Pós-venda.
-                      <span
-                        className="inline-flex items-center gap-1.5 text-xs text-muted-foreground"
-                        title="Libera quando o pedido chegar em 'Gerar Nota Fiscal' no Pós-venda (Carbo Ops)."
-                      >
-                        <Lock className="h-3 w-3" /> {stageLabel(o.fulfillment_stage)}
-                      </span>
+                      <CarboBadge variant="warning">Sem NF</CarboBadge>
                     )}
                   </CarboTableCell>
+                  {showAction && (
+                    <CarboTableCell className="text-right" onClick={(e) => e.stopPropagation()}>
+                      {hasNF ? (
+                        <span className="text-muted-foreground text-sm">Faturado</span>
+                      ) : nfUnlocked(o) ? (
+                        <div className="flex justify-end">
+                          <CarboButton size="sm" onClick={() => setToBling(o)}>
+                            <Receipt className="h-3.5 w-3.5 mr-1" /> Criar no Bling
+                          </CarboButton>
+                        </div>
+                      ) : (
+                        // Travado: o pedido ainda não chegou em "Gerar NF" no Pós-venda.
+                        <span
+                          className="inline-flex items-center gap-1.5 text-xs text-muted-foreground"
+                          title="Libera quando o pedido chegar em 'Gerar Nota Fiscal' no Pós-venda (Carbo Ops)."
+                        >
+                          <Lock className="h-3 w-3" /> {stageLabel(o.fulfillment_stage)}
+                        </span>
+                      )}
+                    </CarboTableCell>
+                  )}
+                </CarboTableRow>
+
+                {expandedId === o.id && (
+                  <CarboTableRow className="bg-muted/10 hover:bg-muted/10">
+                    <CarboTableCell colSpan={colSpan} className="px-6 py-4 space-y-4">
+                      {/* Cliente */}
+                      <div>
+                        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5">Cliente</p>
+                        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-x-6 gap-y-1 text-xs">
+                          <div><span className="text-muted-foreground">Nome:</span> <span className="font-medium">{o.customer_name}</span></div>
+                          <div><span className="text-muted-foreground">CNPJ/CPF:</span> <span className="font-medium">{o.cnpj || "—"}</span></div>
+                          <div><span className="text-muted-foreground">Inscr. Estadual:</span> <span className="font-medium">{o.customer_ie || "—"}</span></div>
+                          <div><span className="text-muted-foreground">Contato:</span> <span className="font-medium">{[o.customer_email, o.customer_phone].filter(Boolean).join(" · ") || "—"}</span></div>
+                        </div>
+                      </div>
+
+                      {/* Endereços */}
+                      <div className="grid sm:grid-cols-2 gap-4">
+                        <div>
+                          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">Endereço de Entrega</p>
+                          <p className="text-xs">{fmtEntrega(o) || <span className="text-muted-foreground">—</span>}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">Endereço de Faturamento (NF)</p>
+                          <p className="text-xs">{o.billing_address ? (fmtFaturamento(o.billing_address) || <span className="text-muted-foreground">Mesmo da entrega</span>) : <span className="text-muted-foreground">Mesmo da entrega</span>}</p>
+                        </div>
+                      </div>
+
+                      {/* NF */}
+                      {(o.invoice_number || o.bling_nf_id) && (
+                        <div className="text-xs">
+                          <span className="text-muted-foreground">Nota Fiscal: </span>
+                          <span className="font-medium">{o.invoice_number || `#${o.bling_nf_id}`}</span>
+                        </div>
+                      )}
+
+                      {/* Produtos */}
+                      <div>
+                        <div className="flex items-center gap-2 mb-2"><Package className="h-3.5 w-3.5 text-muted-foreground" /><p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Produtos</p></div>
+                        {o.items.length === 0 ? (
+                          <p className="text-xs text-muted-foreground">Sem itens.</p>
+                        ) : (
+                          <div className="grid gap-1.5">
+                            {o.items.map((item, idx) => {
+                              const bruto = num(item.quantity) * num(item.unit_price);
+                              const desc = num(item.discount_amount);
+                              const liquido = item.total != null ? num(item.total) : bruto - desc;
+                              const descLabel = desc > 0
+                                ? (item.discount_type === "percent" && bruto > 0
+                                    ? `− ${(Math.round((desc / bruto) * 10000) / 100)}%`
+                                    : `− ${fmtCurrency(desc)}`)
+                                : null;
+                              return (
+                                <div key={idx} className="flex items-start justify-between gap-3 text-xs">
+                                  <div className="min-w-0">
+                                    <span className="font-medium">{item.name}</span>
+                                    {num(item.bonus_quantity) > 0 && (
+                                      <span className="ml-1.5 text-[10px] font-semibold text-carbo-green border border-carbo-green/30 rounded px-1">+{num(item.bonus_quantity)} bonif.</span>
+                                    )}
+                                  </div>
+                                  <div className="flex items-center gap-3 text-muted-foreground whitespace-nowrap">
+                                    <span>{num(item.quantity)} × {fmtCurrency(num(item.unit_price))}</span>
+                                    {descLabel && <span className="text-destructive">{descLabel}</span>}
+                                    <span className="font-semibold text-foreground">{fmtCurrency(liquido)}</span>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Resumo financeiro */}
+                      <div className="flex justify-end">
+                        <div className="w-full sm:w-64 space-y-0.5 text-xs">
+                          {subtotalDet != null && (
+                            <div className="flex justify-between"><span className="text-muted-foreground">Subtotal</span><span className="tabular-nums">{fmtCurrency(subtotalDet)}</span></div>
+                          )}
+                          {descontoDet > 0 && (
+                            <div className="flex justify-between text-destructive"><span>Desconto{percentDet > 0 ? ` (${percentDet}%)` : ""}</span><span className="tabular-nums">− {fmtCurrency(descontoDet)}</span></div>
+                          )}
+                          <div className="flex justify-between border-t pt-0.5 font-bold text-sm"><span>Total</span><span className="tabular-nums">{fmtCurrency(num(o.total))}</span></div>
+                        </div>
+                      </div>
+
+                      {/* Pagamento e frete */}
+                      {(o.payment_terms || o.freight_type || (o.shipping_cost ?? 0) > 0) && (
+                        <div>
+                          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">Pagamento</p>
+                          <div className="grid sm:grid-cols-2 gap-x-6 gap-y-1 text-xs">
+                            {o.payment_terms && <div><span className="text-muted-foreground">Forma/condição:</span> <span className="font-medium">{o.payment_terms}</span></div>}
+                            {(o.freight_type || (o.shipping_cost ?? 0) > 0) && (
+                              <div><span className="text-muted-foreground">Frete:</span> <span className="font-medium">{[o.freight_type, (o.shipping_cost ?? 0) > 0 ? fmtCurrency(num(o.shipping_cost)) : null].filter(Boolean).join(" · ") || "—"}</span></div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Prazo de entrega */}
+                      {(o.agreed_delivery_date || o.ppf_date || o.ppe_date) && (
+                        <div>
+                          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">Prazo de Entrega</p>
+                          <div className="grid sm:grid-cols-3 gap-x-6 gap-y-1 text-xs">
+                            {o.agreed_delivery_date && <div><span className="text-muted-foreground">Combinada:</span> <span className="font-medium">{fmtDate(o.agreed_delivery_date)}</span></div>}
+                            {o.ppf_date && <div><span className="text-muted-foreground">Fabricar até (PPF):</span> <span className="font-medium">{fmtDate(o.ppf_date)}</span></div>}
+                            {o.ppe_date && <div><span className="text-muted-foreground">Expedir até (PPE):</span> <span className="font-medium">{fmtDate(o.ppe_date)}</span></div>}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Vendedor / Nº pedido de compra do cliente */}
+                      {(o.vendedor_name || o.po_number) && (
+                        <div className="grid sm:grid-cols-2 gap-x-6 gap-y-1 text-xs">
+                          {o.vendedor_name && <div><span className="text-muted-foreground">Vendedor:</span> <span className="font-medium">{o.vendedor_name}</span></div>}
+                          {o.po_number && <div><span className="text-muted-foreground">Nº pedido de compra (cliente):</span> <span className="font-medium">{o.po_number}</span></div>}
+                        </div>
+                      )}
+
+                      {/* Observações */}
+                      {(o.notes || buyerNotes || generalNotes) && (
+                        <div className="space-y-1">
+                          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">Observações</p>
+                          {o.notes && <p className="text-xs">{o.notes}</p>}
+                          {buyerNotes && <p className="text-xs"><span className="text-muted-foreground">Comprador:</span> {buyerNotes}</p>}
+                          {generalNotes && <p className="text-xs"><span className="text-muted-foreground">Gerais:</span> {generalNotes}</p>}
+                        </div>
+                      )}
+                    </CarboTableCell>
+                  </CarboTableRow>
                 )}
-              </CarboTableRow>
+              </Fragment>
             );
           })}
         </CarboTableBody>

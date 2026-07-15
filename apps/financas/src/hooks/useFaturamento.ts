@@ -3,6 +3,17 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import type { OrderItem } from "@/hooks/useCarbozeOrders";
 
+// Item do pedido com os campos usados no detalhe (desconto por linha,
+// bonificação, código). Vêm no jsonb `items` de carboze_orders; só faltavam
+// tipados. Espelha o VendaItem do CRM (useCarbozeVendas).
+export interface FaturamentoItem extends OrderItem {
+  product_code?: string | null;
+  bonus_quantity?: number;
+  discount_type?: string;   // 'percent' | 'value' | 'none'
+  discount_value?: number;  // número digitado (% ou R$)
+  discount_amount?: number; // R$ abatido na linha
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Fila de Faturamento — pedidos registrados no Sales/Controle (carboze_orders)
 // que ainda NÃO têm Nota Fiscal vinculada. O financeiro emite a NF no Bling a
@@ -15,16 +26,23 @@ export interface FaturamentoOrder {
   created_at: string;
   sale_date: string | null;
   customer_name: string;
+  // Dados do cliente para o detalhe (nomes reais das colunas em carboze_orders).
+  cnpj: string | null;
+  customer_ie: string | null;
+  customer_email: string | null;
+  customer_phone: string | null;
   delivery_address: string | null;
   delivery_city: string | null;
   delivery_state: string | null;
   delivery_zip: string | null;
-  items: OrderItem[];
+  items: FaturamentoItem[];
   subtotal: number;
   shipping_cost: number;
   discount: number;
+  discount_percent: number | null;
   total: number;
   status: string;
+  vendedor_id: string | null;
   vendedor_name: string | null;
   external_ref: string | null;
   // Observação importada do pedido do Bling. Quando um pedido BLING-… traz aqui
@@ -35,7 +53,8 @@ export interface FaturamentoOrder {
   ie: string | null;
   po_number: string | null;
   po_date: string | null;
-  billing_address: string | null;
+  // Endereço de faturamento (jsonb: logradouro/numero/bairro/cidade/uf/cep).
+  billing_address: Record<string, unknown> | null;
   billing_city: string | null;
   billing_state: string | null;
   billing_zip: string | null;
@@ -43,6 +62,10 @@ export interface FaturamentoOrder {
   billing_contact_email: string | null;
   payment_terms: string | null;
   freight_type: "CIF" | "FOB" | null;
+  // Prazos de entrega combinados (usados no detalhe).
+  agreed_delivery_date: string | null;
+  ppf_date: string | null;
+  ppe_date: string | null;
   buyer_notes: string | null;
   general_notes: string | null;
   // NF linkage
@@ -97,7 +120,7 @@ export function useFaturamento({ month, search = "", showAll = false }: Faturame
 
       return (data || []).map((row: any) => ({
         ...row,
-        items: Array.isArray(row.items) ? (row.items as unknown as OrderItem[]) : [],
+        items: Array.isArray(row.items) ? (row.items as unknown as FaturamentoItem[]) : [],
       })) as FaturamentoOrder[];
     },
     refetchInterval: 60_000,
