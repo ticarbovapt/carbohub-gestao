@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { ShoppingBag, Loader2, User, Calendar, MapPin, Phone, Mail, Package, FileText, CreditCard, Truck, Boxes, Weight } from "lucide-react";
+import { ShoppingBag, Loader2, User, Calendar, MapPin, Phone, Mail, Package, FileText, CreditCard, Truck, Boxes, Weight, Tag } from "lucide-react";
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -9,10 +9,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { CarboBadge } from "@/components/ui/carbo-badge";
 import {
-  usePosVendaOrders, usePosVendaRealtime, useUpdateFulfillmentStage, useHubRnStock, useOpsBySource,
+  usePosVendaOrders, usePosVendaRealtime, useUpdateFulfillmentStage, useUpdateShipmentInfo,
+  useHubRnStock, useOpsBySource, fetchNfFiles,
   POSVENDA_STAGES, type FulfillmentStage, type PosVendaOrder,
 } from "@/hooks/usePosVenda";
 import { useDragScroll } from "@/hooks/useDragScroll";
+import { gerarEtiquetaPDF, type EtiquetaData } from "@/lib/etiquetaPdf";
 
 const brl = (v: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v || 0);
 const fmtDate = (s: string) => new Date(s).toLocaleDateString("pt-BR");
@@ -46,6 +48,7 @@ export default function PosVenda() {
   const orders = data?.orders ?? [];
   const terminalHidden = Math.max(0, (data?.terminalTotal ?? 0) - (data?.terminalShown ?? 0));
   const updateStage = useUpdateFulfillmentStage();
+  const updateShipInfo = useUpdateShipmentInfo();
   const [dragId, setDragId] = useState<string | null>(null);
   const [overStage, setOverStage] = useState<FulfillmentStage | null>(null);
   const scrollRef = useDragScroll<HTMLDivElement>();
@@ -62,6 +65,62 @@ export default function PosVenda() {
       setSepPeso(pending.order.shipment_weight_kg != null ? String(pending.order.shipment_weight_kg).replace(".", ",") : "");
     }
   }, [pending]);
+
+  // ── Emitir etiqueta ──
+  const [etiquetaOrder, setEtiquetaOrder] = useState<PosVendaOrder | null>(null);
+  const [etqVolumes, setEtqVolumes] = useState("");
+  const [etqPeso, setEtqPeso] = useState("");
+  const [etqChave, setEtqChave] = useState<string | null>(null);
+  const [gerando, setGerando] = useState(false);
+  useEffect(() => {
+    if (etiquetaOrder) {
+      setEtqVolumes(etiquetaOrder.shipment_volumes != null ? String(etiquetaOrder.shipment_volumes) : "1");
+      setEtqPeso(etiquetaOrder.shipment_weight_kg != null ? String(etiquetaOrder.shipment_weight_kg).replace(".", ",") : "");
+      setEtqChave(null);
+      // Busca best-effort a chave de acesso da NF (código de barras). Não bloqueia.
+      if (etiquetaOrder.bling_nf_id) {
+        fetchNfFiles(etiquetaOrder.bling_nf_id).then((nf) => setEtqChave(nf?.chave_acesso ?? null)).catch(() => {});
+      }
+    }
+  }, [etiquetaOrder]);
+
+  // Volumes/peso normalizados do diálogo (usados no PDF e persistidos).
+  const parsedEtqVolumes = (() => { const v = etqVolumes.trim(); const n = Math.round(Number(v)); return v !== "" && Number.isFinite(n) && n > 0 ? n : 1; })();
+  const parsedEtqPeso = (() => { const p = etqPeso.trim().replace(",", "."); if (p === "") return null; const n = Number(p); return Number.isFinite(n) && n >= 0 ? n : null; })();
+
+  // Gera a etiqueta: persiste volumes/peso ajustados no card e monta o PDF.
+  // moveToTransporte=true → depois move o card p/ Em Transporte (respeita portão NF).
+  async function emitirEtiqueta(order: PosVendaOrder, moveToTransporte: boolean) {
+    setGerando(true);
+    try {
+      const volumes = parsedEtqVolumes;
+      const weightKg = parsedEtqPeso;
+      // Persiste no card quando mudou (não quebra a dedução do "separado").
+      if (volumes !== order.shipment_volumes || weightKg !== order.shipment_weight_kg) {
+        await updateShipInfo.mutateAsync({ id: order.id, volumes, weightKg });
+      }
+      const payload: EtiquetaData = {
+        order_number: order.order_number,
+        invoice_number: order.invoice_number ?? (order.bling_nf_id ? `#${order.bling_nf_id}` : null),
+        cnpj: order.cnpj,
+        customer_name: order.customer_name,
+        delivery_address: order.delivery_address,
+        delivery_city: order.delivery_city,
+        delivery_state: order.delivery_state,
+        delivery_zip: order.delivery_zip,
+        volumes,
+        weightKg,
+        chaveAcesso: etqChave,
+      };
+      gerarEtiquetaPDF(payload);
+      if (moveToTransporte) {
+        requestStage(order, "em_transporte");
+      }
+      setEtiquetaOrder(null);
+    } finally {
+      setGerando(false);
+    }
+  }
 
   // Estoque HUB-RN dos itens do pedido em confirmação (checagem real).
   const pendingItems = useMemo(
@@ -115,9 +174,9 @@ export default function PosVenda() {
 
   function requestStage(order: PosVendaOrder, stage: FulfillmentStage) {
     if (order.fulfillment_stage === stage) return;
-    if ((stage === "em_transporte" || stage === "entregue") && !hasNF(order)) {
-      toast.error("Emita a NF antes de enviar", {
-        description: "Este pedido ainda não tem nota fiscal finalizada. Passe por “Gerar Nota Fiscal” → “NF Finalizada” antes de mover para Transporte/Entrega.",
+    if ((stage === "emitir_etiqueta" || stage === "em_transporte" || stage === "entregue") && !hasNF(order)) {
+      toast.error("Emita a NF antes de gerar etiqueta/enviar", {
+        description: "Este pedido ainda não tem nota fiscal finalizada. A etiqueta mostra o nº da NF — passe por “Gerar Nota Fiscal” → “NF Finalizada” antes de emitir a etiqueta ou mover para Transporte/Entrega.",
       });
       return;
     }
@@ -247,6 +306,15 @@ export default function PosVenda() {
                           )}
                           {o.fulfillment_stage === "nf_finalizada" && (
                             <CarboBadge variant="success" className="gap-1">🧾 NF {o.invoice_number || o.bling_nf_id || "emitida"}</CarboBadge>
+                          )}
+                          {o.fulfillment_stage === "emitir_etiqueta" && (
+                            <div onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>
+                              <CarboBadge variant="info" className="gap-1 mb-2">🧾 NF {o.invoice_number || o.bling_nf_id || "emitida"}</CarboBadge>
+                              <Button size="sm" variant="outline" className="w-full h-9 text-xs gap-1.5"
+                                onClick={() => setEtiquetaOrder(o)}>
+                                <Tag className="h-3.5 w-3.5" /> Emitir etiqueta
+                              </Button>
+                            </div>
                           )}
                           <div className="flex items-center gap-3 text-xs text-muted-foreground">
                             {o.vendedor_name && <VendedorTag name={o.vendedor_name} avatar={o.vendedor_avatar} />}
@@ -400,6 +468,70 @@ export default function PosVenda() {
               </>
             )}
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Emitir etiqueta de transporte (PDF 10×15) */}
+      <Dialog open={!!etiquetaOrder} onOpenChange={(o) => !o && setEtiquetaOrder(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><Tag className="h-4 w-4 text-carbo-blue" /> Emitir etiqueta</DialogTitle>
+          </DialogHeader>
+          {etiquetaOrder && (
+            <div className="space-y-4 text-sm">
+              {/* Resumo do pedido */}
+              <div className="rounded-lg border border-border p-3 space-y-1.5 text-xs">
+                <div className="flex items-start justify-between gap-2">
+                  <span className="font-semibold text-sm">{etiquetaOrder.customer_name}</span>
+                  <span className="font-mono text-muted-foreground shrink-0">{etiquetaOrder.order_number}</span>
+                </div>
+                {(etiquetaOrder.delivery_city || etiquetaOrder.delivery_state) && (
+                  <p className="flex items-center gap-1.5 text-muted-foreground">
+                    <MapPin className="h-3.5 w-3.5" />
+                    {[etiquetaOrder.delivery_city, etiquetaOrder.delivery_state].filter(Boolean).join(" / ")}
+                    {etiquetaOrder.delivery_zip ? ` · CEP ${etiquetaOrder.delivery_zip}` : ""}
+                  </p>
+                )}
+                <p className="flex items-center gap-1.5">
+                  <FileText className="h-3.5 w-3.5 text-muted-foreground" />
+                  NF: <span className="font-medium">{etiquetaOrder.invoice_number || (etiquetaOrder.bling_nf_id ? `#${etiquetaOrder.bling_nf_id}` : "—")}</span>
+                </p>
+                <p className="text-[11px] text-muted-foreground">
+                  Código de barras: {etqChave ? "chave de acesso da NF" : "nº do pedido (chave da NF indisponível)"}
+                </p>
+              </div>
+
+              {/* Volumes + peso (editáveis; persistem no card ao gerar) */}
+              <div className="grid grid-cols-2 gap-3 rounded-lg border border-border p-3">
+                <div className="space-y-1.5">
+                  <Label className="text-xs flex items-center gap-1.5"><Boxes className="h-3.5 w-3.5 text-muted-foreground" /> Volumes</Label>
+                  <Input type="number" min={1} inputMode="numeric" value={etqVolumes}
+                    onChange={(e) => setEtqVolumes(e.target.value)} placeholder="1" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs flex items-center gap-1.5"><Weight className="h-3.5 w-3.5 text-muted-foreground" /> Peso bruto (kg)</Label>
+                  <Input type="text" inputMode="decimal" value={etqPeso}
+                    onChange={(e) => setEtqPeso(e.target.value)} placeholder="ex.: 12,5" />
+                </div>
+                <p className="col-span-2 text-[11px] text-muted-foreground">
+                  Serão gerada(s) <strong>{parsedEtqVolumes}</strong> etiqueta(s) (uma por volume). Ajustes ficam salvos no card.
+                </p>
+              </div>
+
+              <div className="flex flex-col gap-2 pt-1">
+                <Button className="w-full gap-1.5" disabled={gerando}
+                  onClick={() => emitirEtiqueta(etiquetaOrder, false)}>
+                  {gerando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Tag className="h-4 w-4" />} Gerar PDF (10×15)
+                </Button>
+                <Button className="w-full" variant="outline" disabled={gerando}
+                  onClick={() => emitirEtiqueta(etiquetaOrder, true)}>
+                  Gerar e enviar → Em Transporte
+                </Button>
+                <Button className="w-full" variant="ghost" disabled={gerando}
+                  onClick={() => setEtiquetaOrder(null)}>Fechar</Button>
+              </div>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
 

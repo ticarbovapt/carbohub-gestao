@@ -16,7 +16,7 @@ const db = supabase as unknown as {
 
 export type FulfillmentStage =
   | "nova_venda" | "separacao_pendente" | "criar_op" | "separando" | "separado"
-  | "gerar_nf" | "nf_finalizada"
+  | "gerar_nf" | "nf_finalizada" | "emitir_etiqueta"
   | "em_transporte" | "entregue" | "cancelado";
 
 export const POSVENDA_STAGES: { key: FulfillmentStage; label: string; color: string }[] = [
@@ -27,10 +27,27 @@ export const POSVENDA_STAGES: { key: FulfillmentStage; label: string; color: str
   { key: "separado",            label: "Separado",                color: "#8b5cf6" },
   { key: "gerar_nf",            label: "Gerar Nota Fiscal",       color: "#f43f5e" },
   { key: "nf_finalizada",       label: "NF Finalizada",           color: "#14b8a6" },
+  { key: "emitir_etiqueta",     label: "Emitir Etiqueta",         color: "#0ea5e9" },
   { key: "em_transporte",       label: "Em Transporte",           color: "#06b6d4" },
   { key: "entregue",            label: "Entregue",                color: "#10b981" },
   { key: "cancelado",           label: "Cancelado",               color: "#ef4444" },
 ];
+
+// Arquivos/metadados da NF vinculada (Bling) — best-effort para a etiqueta.
+// A chave de acesso vira o código de barras da etiqueta quando disponível.
+export interface NfFiles { pdf_url: string | null; xml_url: string | null; chave_acesso: string | null; numero: string | null; }
+export async function fetchNfFiles(blingNfId: number): Promise<NfFiles | null> {
+  const { data, error } = await db
+    .from("bling_nfe").select("pdf_url, xml_url, chave_acesso, numero")
+    .eq("bling_id", blingNfId).maybeSingle();
+  if (error || !data) return null;
+  return {
+    pdf_url: data.pdf_url ?? null,
+    xml_url: data.xml_url ?? null,
+    chave_acesso: data.chave_acesso ?? null,
+    numero: data.numero ?? null,
+  };
+}
 
 export interface PosVendaItem { name?: string; quantity?: number; unit_price?: number; total?: number; product_id?: string | null; product_code?: string | null; }
 
@@ -428,5 +445,23 @@ export function useUpdateFulfillmentStage() {
       else toast.success("Etapa atualizada.");
     },
     onError: (e: Error) => toast.error("Erro ao atualizar etapa: " + e.message),
+  });
+}
+
+// Grava volumes/peso bruto (etiqueta) no card SEM mexer na etapa — usado ao
+// emitir a etiqueta, quando o operador ajusta os valores fora do fluxo "Separado".
+// Caminho simples e direto (não interfere na dedução de estoque do separado).
+export function useUpdateShipmentInfo() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, volumes, weightKg }: { id: string; volumes?: number | null; weightKg?: number | null }) => {
+      const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };
+      if (volumes !== undefined) patch.shipment_volumes = volumes;
+      if (weightKg !== undefined) patch.shipment_weight_kg = weightKg;
+      const { error } = await db.from("carboze_orders").update(patch).eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["ops", "pos-venda"] }),
+    onError: (e: Error) => toast.error("Erro ao salvar volumes/peso: " + e.message),
   });
 }
