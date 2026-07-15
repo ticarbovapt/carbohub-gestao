@@ -7,9 +7,6 @@ import logoUrl from "@/assets/logo-grupo-carbo.png";
 // remetente/destinatário, NF, peso e um código de barras CODE128 vetorial.
 // ─────────────────────────────────────────────────────────────────────────────
 
-// Verde da marca (Grupo Carbo) — usado em detalhes sutis da etiqueta.
-const CARBO_GREEN: [number, number, number] = [34, 168, 83];
-
 // Carrega a logo real e APARA a margem transparente/branca (bounding box da
 // "tinta"), preservando a proporção — assim a logo encaixa limpa, sem esticar
 // nem redesenhar. Devolve dataUrl + dimensões já aparadas (null se falhar).
@@ -42,7 +39,20 @@ function loadLogoTrimmed(url: string): Promise<{ dataUrl: string; w: number; h: 
         const bw = maxX - minX + 1, bh = maxY - minY + 1;
         const crop = document.createElement("canvas");
         crop.width = bw; crop.height = bh;
-        crop.getContext("2d")?.drawImage(c, minX, minY, bw, bh, 0, 0, bw, bh);
+        const cctx = crop.getContext("2d");
+        cctx?.drawImage(c, minX, minY, bw, bh, 0, 0, bw, bh);
+        // Impressora térmica é MONOCROMÁTICA: converte a logo para PRETO —
+        // tinta (cor) → preto (mantendo o alpha p/ borda suave), fundo → transparente.
+        if (cctx) {
+          const id = cctx.getImageData(0, 0, bw, bh);
+          const d = id.data;
+          for (let i = 0; i < d.length; i += 4) {
+            const isInk = d[i + 3] > 16 && (d[i] < 245 || d[i + 1] < 245 || d[i + 2] < 245);
+            if (isInk) { d[i] = 0; d[i + 1] = 0; d[i + 2] = 0; }
+            else { d[i + 3] = 0; }
+          }
+          cctx.putImageData(id, 0, 0);
+        }
         resolve({ dataUrl: crop.toDataURL("image/png"), w: bw, h: bh });
       } catch { resolve(null); }
     };
@@ -211,15 +221,15 @@ export async function gerarEtiquetaPDF(data: EtiquetaData, emissao: Date = new D
     doc.setLineWidth(0.4);
     doc.rect(M - 2, M - 2, CW + 4, 150 - 2 * (M - 2));
 
-    // ── Cabeçalho: LOGO real do Grupo Carbo (proporção preservada). ──
+    // ── Cabeçalho: LOGO real do Grupo Carbo (P&B, centralizada). ──
     if (logo) {
-      const lw = 40;                      // largura alvo
+      const lw = 42;                      // largura alvo
       const lh = lw * (logo.h / logo.w);  // altura pela proporção aparada
-      doc.addImage(logo.dataUrl, "PNG", M, y, lw, lh);
+      doc.addImage(logo.dataUrl, "PNG", (W - lw) / 2, y, lw, lh);
       y += lh + 2.5;
     }
-    // Régua verde da marca sob o cabeçalho.
-    doc.setDrawColor(...CARBO_GREEN);
+    // Régua preta sob o cabeçalho (impressora mono).
+    doc.setDrawColor(0, 0, 0);
     doc.setLineWidth(0.7);
     doc.line(M, y, W - M, y);
     y += 4;
@@ -305,7 +315,7 @@ export async function gerarEtiquetaPDF(data: EtiquetaData, emissao: Date = new D
     // ── Rodapé ──
     doc.setFont("helvetica", "normal");
     doc.setFontSize(6.5);
-    doc.setTextColor(60, 60, 60);
+    doc.setTextColor(0, 0, 0);
     doc.text(`Pedido: ${data.order_number || "—"}`, M, 150 - M);
     doc.text(`Emissão: ${dataEmissao}`, W - M, 150 - M, { align: "right" });
   }
