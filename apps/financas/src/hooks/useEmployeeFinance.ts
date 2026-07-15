@@ -19,6 +19,7 @@ export interface EmployeeFinance {
   user_id: string | null;        // usuário do sistema vinculado (opcional)
   full_name: string | null;
   cpf: string | null;
+  birth_date: string | null;      // 'YYYY-MM-DD' — aniversário
   pix_key: string | null;
   pix_type: string | null;
   bank_name: string | null;
@@ -51,7 +52,7 @@ export interface EmployeeRow extends EmployeeFinance {
 }
 
 const emptyFinance = (): EmployeeFinance => ({
-  id: null, user_id: null, full_name: null, cpf: null, pix_key: null, pix_type: null,
+  id: null, user_id: null, full_name: null, cpf: null, birth_date: null, pix_key: null, pix_type: null,
   bank_name: null, bank_code: null, bank_agency: null, bank_account: null,
   account_type: null, phone: null, emergency_name: null, emergency_phone: null, notes: null,
 });
@@ -143,7 +144,7 @@ export function useUpsertEmployeeFinance() {
     mutationFn: async (e: EmployeeFinance) => {
       const { data: u } = await supabase.auth.getUser();
       const payload: Record<string, unknown> = {
-        user_id: e.user_id, full_name: e.full_name, cpf: e.cpf,
+        user_id: e.user_id, full_name: e.full_name, cpf: e.cpf, birth_date: e.birth_date || null,
         pix_key: e.pix_key, pix_type: e.pix_type,
         bank_name: e.bank_name, bank_code: e.bank_code, bank_agency: e.bank_agency,
         bank_account: e.bank_account, account_type: e.account_type,
