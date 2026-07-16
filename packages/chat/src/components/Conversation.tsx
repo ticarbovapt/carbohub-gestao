@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { useMessages } from "../hooks";
+import { useMessages, useProfilesMap } from "../hooks";
 import { useChatCtx } from "../context";
 import { Avatar } from "./Avatar";
 import { Composer } from "./Composer";
@@ -18,6 +18,7 @@ function dayLabel(iso: string) {
 export function Conversation({ conv }: { conv: Conv }) {
   const { currentUser } = useChatCtx();
   const { data: messages = [], isLoading } = useMessages(conv.channel.id);
+  const { data: profMap = {} } = useProfilesMap(messages.map((m) => m.sender_id ?? "").filter(Boolean));
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "auto" }); }, [messages.length]);
@@ -60,12 +61,17 @@ export function Conversation({ conv }: { conv: Conv }) {
                   )}
                   <div className={`flex gap-2.5 ${grouped ? "mt-0.5" : "mt-2"}`}>
                     <div className="w-9 shrink-0">
-                      {!grouped && <Avatar name={m.sender?.full_name} url={m.sender?.avatar_url} size={36} />}
+                      {!grouped && <Avatar
+                        name={profMap[m.sender_id ?? ""]?.full_name ?? m.sender?.full_name}
+                        url={profMap[m.sender_id ?? ""]?.avatar_url ?? m.sender?.avatar_url}
+                        size={36} />}
                     </div>
                     <div className="min-w-0 flex-1">
                       {!grouped && (
                         <p className="text-xs">
-                          <span className="font-semibold text-foreground">{mine ? "Você" : (m.sender?.full_name ?? "—")}</span>
+                          <span className="font-semibold text-foreground">
+                            {mine ? "Você" : (profMap[m.sender_id ?? ""]?.full_name ?? m.sender?.full_name ?? "—")}
+                          </span>
                           <span className="ml-2 text-muted-foreground">
                             {new Date(m.created_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
                           </span>

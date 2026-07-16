@@ -24,17 +24,25 @@ export function useConversations() {
         .from("chat_channels").select("*").in("id", ids).is("archived_at", null);
       if (cErr) throw cErr;
 
-      // membros das DMs → o "outro" define título/avatar
+      // membros das DMs → o "outro" define título/avatar. Nome/avatar vêm da RPC
+      // definer (a RLS de profiles esconderia o outro para usuários de escopo).
       const dmIds = (channels ?? []).filter((c: ChatChannel) => c.type === "dm").map((c: ChatChannel) => c.id);
       const otherByChannel: Record<string, ChatProfileRef> = {};
       if (dmIds.length) {
         const { data: others } = await supabase
           .from("chat_channel_members")
-          .select("channel_id, profiles!chat_channel_members_user_id_fkey(id, full_name, avatar_url)")
+          .select("channel_id, user_id")
           .in("channel_id", dmIds)
           .neq("user_id", currentUser.id);
-        for (const r of (others ?? []) as any[]) {
-          const p = r.profiles;
+        const rows = (others ?? []) as { channel_id: string; user_id: string }[];
+        const ids = Array.from(new Set(rows.map((r) => r.user_id)));
+        const profMap: Record<string, ChatProfileRef> = {};
+        if (ids.length) {
+          const { data: profs } = await supabase.rpc("chat_profiles", { p_ids: ids });
+          for (const p of (profs ?? []) as ChatProfileRef[]) profMap[p.id] = p;
+        }
+        for (const r of rows) {
+          const p = profMap[r.user_id];
           if (p) otherByChannel[r.channel_id] = p;
         }
       }
@@ -252,6 +260,24 @@ export function useDirectory(search: string) {
       const { data, error } = await supabase.rpc("chat_directory", { p_search: search.trim() || null });
       if (error) throw error;
       return ((data ?? []) as ChatProfileRef[]).filter((p) => p.id !== currentUser.id);
+    },
+  });
+}
+
+// Mapa id → {full_name, avatar_url} via RPC definer (contorna a RLS de profiles).
+export function useProfilesMap(ids: string[]) {
+  const { supabase } = useChatCtx();
+  const key = Array.from(new Set(ids.filter(Boolean))).sort();
+  return useQuery({
+    queryKey: ["chat", "profiles-map", key],
+    enabled: key.length > 0,
+    staleTime: 5 * 60_000,
+    queryFn: async (): Promise<Record<string, ChatProfileRef>> => {
+      const { data, error } = await supabase.rpc("chat_profiles", { p_ids: key });
+      if (error) throw error;
+      const map: Record<string, ChatProfileRef> = {};
+      for (const p of (data ?? []) as ChatProfileRef[]) map[p.id] = p;
+      return map;
     },
   });
 }
