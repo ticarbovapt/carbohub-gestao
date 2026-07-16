@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import {
   X, Trash2, ChevronRight, ArrowRightLeft, ShoppingCart, History,
   StickyNote, Phone, CheckSquare, Clock, GitBranch, AlertTriangle, Pin, PinOff,
-  MessageSquare, ArrowRight,
+  MessageSquare, ArrowRight, Pencil,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -87,6 +87,34 @@ export function DealDetail({ lead, funnelType, onClose }: DealDetailProps) {
   const [actType, setActType] = useState("note");
   const [actText, setActText] = useState("");
   const [actDue, setActDue] = useState("");
+
+  // Edição do bloco Cliente / Contato (botão Editar → Salvar/Cancelar).
+  const [editContact, setEditContact] = useState(false);
+  const [draftName, setDraftName] = useState(lead.contact_name ?? "");
+  const [draftPhone, setDraftPhone] = useState(lead.contact_phone ?? "");
+  const [draftEmail, setDraftEmail] = useState(lead.contact_email ?? "");
+  useEffect(() => {
+    setDraftName(lead.contact_name ?? "");
+    setDraftPhone(lead.contact_phone ?? "");
+    setDraftEmail(lead.contact_email ?? "");
+    setEditContact(false);
+  }, [lead.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function startEditContact() {
+    setDraftName(lead.contact_name ?? "");
+    setDraftPhone(lead.contact_phone ?? "");
+    setDraftEmail(lead.contact_email ?? "");
+    setEditContact(true);
+  }
+  async function saveContact() {
+    await updateLead.mutateAsync({
+      id: lead.id,
+      contact_name: draftName.trim() || null,
+      contact_phone: draftPhone.trim() || null,
+      contact_email: draftEmail.trim() || null,
+    });
+    setEditContact(false);
+  }
 
   const funnelCfg = FUNNEL_CONFIG[funnelType];
   const stages = getStagesForFunnel(funnelType);
@@ -234,32 +262,48 @@ export function DealDetail({ lead, funnelType, onClose }: DealDetailProps) {
               )}
             </Card>
 
-            <Card title="Cliente / Contato">
-              <EditableField
-                label="Nome do contato"
-                value={lead.contact_name}
-                placeholder="Adicionar nome…"
-                onSave={(v) => updateLead.mutateAsync({ id: lead.id, contact_name: v })}
-              />
-              <EditableField
-                label="Telefone"
-                type="tel"
-                value={lead.contact_phone}
-                placeholder="Adicionar telefone…"
-                onSave={(v) => updateLead.mutateAsync({ id: lead.id, contact_phone: v })}
-              />
-              <Field label="WhatsApp" value={lead.contact_whatsapp} />
-              <EditableField
-                label="E-mail"
-                type="email"
-                value={lead.contact_email}
-                placeholder="Adicionar e-mail…"
-                onSave={(v) => updateLead.mutateAsync({ id: lead.id, contact_email: v })}
-              />
-              <Field label="Cidade / UF" value={contactCity} />
-              <Field label={docLabel} value={formatDoc(lead.cnpj)} />
-              <Field label="Razão social" value={lead.legal_name} />
-              <Field label="Nome fantasia" value={lead.trade_name} />
+            <Card
+              title="Cliente / Contato"
+              action={!editContact ? (
+                <button onClick={startEditContact} className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
+                  <Pencil className="h-3 w-3" /> Editar
+                </button>
+              ) : null}
+            >
+              {editContact ? (
+                <>
+                  <LabeledInput label="Nome do contato" value={draftName} onChange={setDraftName} placeholder="Nome da pessoa" />
+                  <LabeledInput label="Telefone" type="tel" value={draftPhone} onChange={setDraftPhone} placeholder="(00) 00000-0000" />
+                  <LabeledInput label="E-mail" type="email" value={draftEmail} onChange={setDraftEmail} placeholder="email@empresa.com" />
+                  <div className="flex gap-2 pt-1">
+                    <Button size="sm" onClick={saveContact} disabled={updateLead.isPending}>
+                      {updateLead.isPending ? "Salvando..." : "Salvar"}
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={() => setEditContact(false)} disabled={updateLead.isPending}>Cancelar</Button>
+                  </div>
+                  <div className="mt-1 space-y-2.5 border-t pt-2.5">
+                    <Field label="WhatsApp" value={lead.contact_whatsapp} />
+                    <Field label="Cidade / UF" value={contactCity} />
+                    <Field label={docLabel} value={formatDoc(lead.cnpj)} />
+                    <Field label="Razão social" value={lead.legal_name} />
+                    <Field label="Nome fantasia" value={lead.trade_name} />
+                  </div>
+                </>
+              ) : (
+                <>
+                  <Field label="Nome do contato" value={lead.contact_name} />
+                  <Field label="Telefone" value={lead.contact_phone} />
+                  <Field label="E-mail" value={lead.contact_email} />
+                  <Field label="WhatsApp" value={lead.contact_whatsapp} />
+                  <Field label="Cidade / UF" value={contactCity} />
+                  <Field label={docLabel} value={formatDoc(lead.cnpj)} />
+                  <Field label="Razão social" value={lead.legal_name} />
+                  <Field label="Nome fantasia" value={lead.trade_name} />
+                  {!lead.contact_name && !lead.contact_phone && !lead.contact_email && (
+                    <p className="text-xs text-muted-foreground">Nenhum contato cadastrado. Clique em <span className="font-medium">Editar</span> para adicionar.</p>
+                  )}
+                </>
+              )}
             </Card>
 
             <Card title="Responsável">
@@ -592,11 +636,37 @@ function ActivityCard({
 
 /* ---------- Campos ---------- */
 
-function Card({ title, children }: { title: string; children: React.ReactNode }) {
+function Card({ title, action, children }: { title: string; action?: React.ReactNode; children: React.ReactNode }) {
   return (
     <div className="rounded-lg border bg-card p-4">
-      <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">{title}</p>
+      <div className="mb-3 flex items-center justify-between gap-2">
+        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{title}</p>
+        {action}
+      </div>
       <div className="space-y-2.5">{children}</div>
+    </div>
+  );
+}
+
+function LabeledInput({
+  label, value, onChange, type = "text", placeholder,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  type?: string;
+  placeholder?: string;
+}) {
+  return (
+    <div>
+      <p className="mb-1 text-[11px] uppercase tracking-wide text-muted-foreground">{label}</p>
+      <input
+        type={type}
+        value={value}
+        placeholder={placeholder}
+        onChange={(e) => onChange(e.target.value)}
+        className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+      />
     </div>
   );
 }
@@ -611,42 +681,3 @@ function Field({ label, value }: { label: string; value: string | null }) {
   );
 }
 
-// Campo editável inline: parece texto, vira input ao focar; salva no blur/Enter
-// só quando o valor mudou. Fica sempre visível (mesmo vazio) para permitir preencher.
-function EditableField({
-  label, value, onSave, type = "text", placeholder,
-}: {
-  label: string;
-  value: string | null;
-  onSave: (v: string | null) => Promise<unknown>;
-  type?: string;
-  placeholder?: string;
-}) {
-  const [v, setV] = useState(value ?? "");
-  const [saving, setSaving] = useState(false);
-  useEffect(() => { setV(value ?? ""); }, [value]);
-
-  const dirty = (v.trim() || null) !== (value || null);
-
-  async function commit() {
-    if (!dirty || saving) return;
-    setSaving(true);
-    try { await onSave(v.trim() || null); } finally { setSaving(false); }
-  }
-
-  return (
-    <div>
-      <p className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</p>
-      <input
-        type={type}
-        value={v}
-        placeholder={placeholder}
-        disabled={saving}
-        onChange={(e) => setV(e.target.value)}
-        onBlur={commit}
-        onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); (e.target as HTMLInputElement).blur(); } }}
-        className="w-full rounded border border-transparent bg-transparent px-0 py-0.5 text-sm text-foreground placeholder:text-muted-foreground/60 hover:border-input focus:border-primary focus:px-2 focus:outline-none"
-      />
-    </div>
-  );
-}
