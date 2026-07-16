@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Send, Paperclip, X, CornerUpLeft, Users, Smile } from "lucide-react";
 import { useSendMessage, useDirectory, kindFromMime, type OutgoingAttachment } from "../hooks";
 import { AudioRecorder } from "./AudioRecorder";
@@ -28,6 +28,14 @@ export function Composer({
   const fileRef = useRef<HTMLInputElement>(null);
   const textRef = useRef<HTMLTextAreaElement>(null);
   const send = useSendMessage(channelId);
+
+  // Auto-cresce conforme as linhas até um máximo (depois rola) — estilo WhatsApp.
+  useEffect(() => {
+    const el = textRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = Math.min(el.scrollHeight, 160) + "px";
+  }, [text]);
 
   function insertEmoji(emoji: string) {
     const el = textRef.current;
@@ -167,7 +175,7 @@ export function Composer({
             }}
             placeholder={isGroup ? "Mensagem…  @ menciona · Enter envia" : "Mensagem…  Enter envia"}
             rows={1}
-            className="max-h-40 min-h-[40px] flex-1 resize-y rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+            className="max-h-40 min-h-[40px] flex-1 resize-none overflow-y-auto rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
           />
 
           {/* direita: enviar quando há conteúdo, microfone quando vazio (estilo WhatsApp) */}
