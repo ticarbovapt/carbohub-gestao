@@ -240,7 +240,13 @@ export function DealDetail({ lead, funnelType, onClose }: DealDetailProps) {
                 onSave={(v) => updateLead.mutateAsync({ id: lead.id, contact_phone: v })}
               />
               <Field label="WhatsApp" value={lead.contact_whatsapp} />
-              <Field label="E-mail" value={lead.contact_email} />
+              <EditableField
+                label="E-mail"
+                type="email"
+                value={lead.contact_email}
+                placeholder="Adicionar e-mail…"
+                onSave={(v) => updateLead.mutateAsync({ id: lead.id, contact_email: v })}
+              />
               <Field label="Cidade / UF" value={contactCity} />
               <Field label={docLabel} value={formatDoc(lead.cnpj)} />
               <Field label="Razão social" value={lead.legal_name} />
