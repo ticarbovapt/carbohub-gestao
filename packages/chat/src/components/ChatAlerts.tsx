@@ -3,6 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { useChatCtx } from "../context";
 import { playMessageChime } from "../lib/sound";
+import type { Conversation } from "../types";
 
 const kindLabel = (k: string) =>
   k === "image" ? "📷 Imagem" : k === "audio" ? "🎤 Áudio" : k === "video" ? "🎬 Vídeo" : k === "file" ? "📎 Arquivo" : "Nova mensagem";
@@ -23,9 +24,12 @@ export function ChatAlerts() {
 
         // Vendo esse canal agora? só atualiza, sem som/toast.
         const viewing = activeChannelRef.current === msg.channel_id && document.visibilityState === "visible";
+        // Conversa silenciada? não toca/toasta.
+        const convs = qc.getQueryData<Conversation[]>(["chat", "conversations", currentUser.id]);
+        const muted = convs?.find((c) => c.channel.id === msg.channel_id)?.muted;
         qc.invalidateQueries({ queryKey: ["chat", "unread-total", currentUser.id] });
         qc.invalidateQueries({ queryKey: ["chat", "conversations", currentUser.id] });
-        if (viewing) return;
+        if (viewing || muted) return;
 
         playMessageChime();
 

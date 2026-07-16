@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { MessageSquarePlus, UsersRound, Search, Plus } from "lucide-react";
+import { MessageSquarePlus, UsersRound, Search, Plus, Pin, BellOff } from "lucide-react";
 import { useConversations } from "../hooks";
 import { useChatCtx } from "../context";
 import { Avatar } from "./Avatar";
@@ -110,16 +110,18 @@ export function ConversationList({
               className={`flex w-full items-center gap-3 border-b border-border/50 px-3 py-2.5 text-left ${selectedId === c.channel.id ? "bg-primary/10" : "hover:bg-muted/60"}`}>
               <Avatar name={c.title} url={c.avatarUrl} size={48} />
               <div className="min-w-0 flex-1">
-                <div className="flex items-baseline gap-2">
+                <div className="flex items-baseline gap-1.5">
+                  {c.pinned && <Pin className="h-3 w-3 shrink-0 text-muted-foreground" />}
                   <span className="min-w-0 flex-1 truncate text-sm font-semibold">{c.title}</span>
-                  <span className={`shrink-0 text-[11px] ${c.unread > 0 ? "font-semibold text-primary" : "text-muted-foreground"}`}>
+                  <span className={`shrink-0 text-[11px] ${c.unread > 0 && !c.muted ? "font-semibold text-primary" : "text-muted-foreground"}`}>
                     {timeLabel(c.lastAt)}
                   </span>
                 </div>
                 <div className="mt-0.5 flex items-center gap-2">
                   <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">{previewText(c)}</span>
+                  {c.muted && <BellOff className="h-3 w-3 shrink-0 text-muted-foreground" />}
                   {c.unread > 0 && (
-                    <span className="inline-flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-primary px-1.5 text-[11px] font-semibold text-primary-foreground">
+                    <span className={`inline-flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full px-1.5 text-[11px] font-semibold ${c.muted ? "bg-muted-foreground/40 text-foreground" : "bg-primary text-primary-foreground"}`}>
                       {c.unread > 99 ? "99+" : c.unread}
                     </span>
                   )}

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { Search, X } from "lucide-react";
 import { useMessages, useProfilesMap } from "../hooks";
 import { useChatCtx } from "../context";
 import { Avatar } from "./Avatar";
@@ -22,35 +23,57 @@ export function Conversation({ conv, onDeleted }: { conv: Conv; onDeleted?: () =
   const { data: profMap = {} } = useProfilesMap(messages.map((m) => m.sender_id ?? "").filter(Boolean));
   const bottomRef = useRef<HTMLDivElement>(null);
   const [panelOpen, setPanelOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [search, setSearch] = useState("");
 
-  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "auto" }); }, [messages.length]);
-  useEffect(() => { setPanelOpen(false); }, [conv.channel.id]);
+  const q = search.trim().toLowerCase();
+  const shown = q ? messages.filter((m) => (m.body ?? "").toLowerCase().includes(q)) : messages;
+
+  useEffect(() => { if (!q) bottomRef.current?.scrollIntoView({ behavior: "auto" }); }, [messages.length, q]);
+  useEffect(() => { setPanelOpen(false); setSearchOpen(false); setSearch(""); }, [conv.channel.id]);
 
   return (
     <div className="flex h-full">
     <div className="flex h-full min-w-0 flex-1 flex-col">
-      {/* header (clique abre os dados) */}
-      <button onClick={() => setPanelOpen((o) => !o)}
-        className="flex items-center gap-3 border-b px-4 py-3 text-left hover:bg-muted/40">
-        <Avatar name={conv.title} url={conv.avatarUrl} size={36} />
-        <div className="min-w-0">
-          <p className="truncate text-sm font-semibold">{conv.title}</p>
-          <p className="text-[11px] text-muted-foreground">
-            {conv.channel.type === "dm" ? "Mensagem direta" : (conv.channel.is_private ? "Grupo privado" : "Grupo")}
-          </p>
+      {/* header (clique no nome abre os dados; lupa busca) */}
+      <div className="flex items-center gap-2 border-b px-4 py-2">
+        <button onClick={() => setPanelOpen((o) => !o)} className="flex min-w-0 flex-1 items-center gap-3 text-left">
+          <Avatar name={conv.title} url={conv.avatarUrl} size={36} />
+          <div className="min-w-0">
+            <p className="truncate text-sm font-semibold">{conv.title}</p>
+            <p className="text-[11px] text-muted-foreground">
+              {conv.channel.type === "dm" ? "Mensagem direta" : (conv.channel.is_private ? "Grupo privado" : "Grupo")}
+            </p>
+          </div>
+        </button>
+        <button onClick={() => { setSearchOpen((o) => !o); setSearch(""); }} title="Buscar na conversa"
+          className="shrink-0 rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground">
+          <Search className="h-4 w-4" />
+        </button>
+      </div>
+
+      {searchOpen && (
+        <div className="border-b p-2">
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+            <input autoFocus value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar mensagem…"
+              className="h-8 w-full rounded-md border border-input bg-background pl-8 pr-8 text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
+            {search && <button onClick={() => setSearch("")} className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"><X className="h-3.5 w-3.5" /></button>}
+          </div>
+          {q && <p className="mt-1 px-1 text-[11px] text-muted-foreground">{shown.length} resultado(s)</p>}
         </div>
-      </button>
+      )}
 
       {/* mensagens */}
       <div className="flex-1 overflow-y-auto px-4 py-3">
         {isLoading ? (
           <p className="text-sm text-muted-foreground">Carregando…</p>
-        ) : messages.length === 0 ? (
-          <p className="text-sm text-muted-foreground">Nenhuma mensagem ainda. Diga oi 👋</p>
+        ) : shown.length === 0 ? (
+          <p className="text-sm text-muted-foreground">{q ? "Nenhuma mensagem encontrada." : "Nenhuma mensagem ainda. Diga oi 👋"}</p>
         ) : (
           <div className="space-y-1">
-            {messages.map((m, i) => {
-              const prev = messages[i - 1];
+            {shown.map((m, i) => {
+              const prev = shown[i - 1];
               const newDay = !prev || dayKey(prev.created_at) !== dayKey(m.created_at);
               const mine = m.sender_id === currentUser.id;
               const grouped = prev && prev.sender_id === m.sender_id && !newDay

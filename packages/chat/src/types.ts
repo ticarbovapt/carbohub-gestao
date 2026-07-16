@@ -67,4 +67,6 @@ export interface Conversation {
   lastKind: MessageKind | null;
   lastSenderId: string | null;
   lastSenderName: string | null;
+  muted: boolean;
+  pinned: boolean;
 }

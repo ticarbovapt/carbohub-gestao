@@ -27,7 +27,7 @@ export function useConversations() {
         other_id: string | null; other_name: string | null; other_avatar: string | null;
         last_body: string | null; last_kind: string | null; last_at: string | null;
         last_sender_id: string | null; last_sender_name: string | null;
-        unread: number; last_activity: string | null;
+        unread: number; last_activity: string | null; muted: boolean; pinned: boolean;
       };
       return ((data ?? []) as Row[]).map((r): Conversation => ({
         channel: {
@@ -44,6 +44,8 @@ export function useConversations() {
         lastKind: (r.last_kind as Conversation["lastKind"]) ?? null,
         lastSenderId: r.last_sender_id,
         lastSenderName: r.last_sender_name,
+        muted: !!r.muted,
+        pinned: !!r.pinned,
       }));
     },
   });
@@ -270,6 +272,68 @@ export function useLeaveConversation() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["chat", "conversations", currentUser.id] });
       qc.invalidateQueries({ queryKey: ["chat", "unread-total", currentUser.id] });
+    },
+  });
+}
+
+// Silenciar / fixar a conversa (por usuário).
+export function useUpdateMembership() {
+  const { supabase, currentUser } = useChatCtx();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ channelId, patch }: { channelId: string; patch: { muted?: boolean; pinned?: boolean } }) => {
+      const { error } = await supabase.from("chat_channel_members")
+        .update(patch).eq("channel_id", channelId).eq("user_id", currentUser.id);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["chat", "conversations", currentUser.id] }),
+  });
+}
+
+// Renomear grupo (dono/admin — validado na RLS de chat_channels).
+export function useRenameChannel() {
+  const { supabase, currentUser } = useChatCtx();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ channelId, name }: { channelId: string; name: string }) => {
+      const { error } = await supabase.from("chat_channels").update({ name: name.trim() }).eq("id", channelId);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["chat", "conversations", currentUser.id] }),
+  });
+}
+
+// Adicionar membros a um grupo (dono/admin).
+export function useAddMembers() {
+  const { supabase, currentUser } = useChatCtx();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ channelId, userIds }: { channelId: string; userIds: string[] }) => {
+      if (!userIds.length) return;
+      const rows = userIds.map((id) => ({ channel_id: channelId, user_id: id, role: "member" }));
+      const { error } = await supabase.from("chat_channel_members").upsert(rows, { onConflict: "channel_id,user_id", ignoreDuplicates: true });
+      if (error) throw error;
+    },
+    onSuccess: (_d, v) => {
+      qc.invalidateQueries({ queryKey: ["chat", "members", v.channelId] });
+      qc.invalidateQueries({ queryKey: ["chat", "conversations", currentUser.id] });
+    },
+  });
+}
+
+// Remover membro de um grupo (dono/admin).
+export function useRemoveMember() {
+  const { supabase, currentUser } = useChatCtx();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ channelId, userId }: { channelId: string; userId: string }) => {
+      const { error } = await supabase.from("chat_channel_members")
+        .delete().eq("channel_id", channelId).eq("user_id", userId);
+      if (error) throw error;
+    },
+    onSuccess: (_d, v) => {
+      qc.invalidateQueries({ queryKey: ["chat", "members", v.channelId] });
+      qc.invalidateQueries({ queryKey: ["chat", "conversations", currentUser.id] });
     },
   });
 }

@@ -50,6 +50,7 @@ export function NewDmDialog({ onClose, onOpened }: { onClose: () => void; onOpen
             otherUserId: p.id,
             unread: 0,
             lastAt: null, lastBody: null, lastKind: null, lastSenderId: null, lastSenderName: null,
+            muted: false, pinned: false,
           });
           onClose();
         }} />}
@@ -95,6 +96,7 @@ export function NewChannelDialog({ onClose, onOpened }: { onClose: () => void; o
       otherUserId: null,
       unread: 0,
       lastAt: null, lastBody: null, lastKind: null, lastSenderId: null, lastSenderName: null,
+      muted: false, pinned: false,
     });
     onClose();
   }
