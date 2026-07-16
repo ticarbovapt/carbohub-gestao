@@ -5,18 +5,21 @@ import {
 } from "lucide-react";
 import {
   useUserInfo, useChannelMembers, useChannelMedia, useLeaveConversation, useSignedUrl,
-  useUpdateMembership, useRenameChannel, useAddMembers, useRemoveMember, useDirectory,
+  useUpdateMembership, useRenameChannel, useAddMembers, useRemoveMember, useDirectory, useConversations,
 } from "../hooks";
 import { useChatCtx } from "../context";
 import { Avatar } from "./Avatar";
 import type { Conversation, ChatAttachment } from "../types";
 
-export function ContactPanel({ conv, onClose, onDeleted }: {
+export function ContactPanel({ conv: convProp, onClose, onDeleted }: {
   conv: Conversation;
   onClose: () => void;
   onDeleted: () => void;
 }) {
   const { currentUser } = useChatCtx();
+  // Lê o estado VIVO da conversa (muted/pinned) da lista; cai no snapshot se ainda não veio.
+  const { data: convs = [] } = useConversations();
+  const conv = convs.find((c) => c.channel.id === convProp.channel.id) ?? convProp;
   const isDm = conv.channel.type === "dm";
   const { data: info } = useUserInfo(isDm ? conv.otherUserId : null);
   const { data: members = [] } = useChannelMembers(conv.channel.id, !isDm);

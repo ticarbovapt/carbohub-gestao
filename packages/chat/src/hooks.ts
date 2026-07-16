@@ -281,12 +281,15 @@ export function useUpdateMembership() {
   const { supabase, currentUser } = useChatCtx();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ channelId, patch }: { channelId: string; patch: { muted?: boolean; pinned?: boolean } }) => {
+    mutationFn: async ({ channelId, patch }: { channelId: string; patch: { muted?: boolean; pinned?: boolean; last_read_at?: string } }) => {
       const { error } = await supabase.from("chat_channel_members")
         .update(patch).eq("channel_id", channelId).eq("user_id", currentUser.id);
       if (error) throw error;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["chat", "conversations", currentUser.id] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["chat", "conversations", currentUser.id] });
+      qc.invalidateQueries({ queryKey: ["chat", "unread-total", currentUser.id] });
+    },
   });
 }
 

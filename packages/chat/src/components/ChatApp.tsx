@@ -20,7 +20,11 @@ export function ChatApp() {
   return (
     <div className="flex h-full min-h-0 w-full overflow-hidden">
       <div className="w-72 shrink-0">
-        <ConversationList selectedId={selected?.channel.id ?? null} onSelect={setSelected} />
+        <ConversationList
+          selectedId={selected?.channel.id ?? null}
+          onSelect={setSelected}
+          onRemoved={(id) => setSelected((s) => (s?.channel.id === id ? null : s))}
+        />
       </div>
       <div className="min-w-0 flex-1">
         {selected ? (
