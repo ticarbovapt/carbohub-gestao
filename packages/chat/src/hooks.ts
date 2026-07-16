@@ -53,21 +53,8 @@ export function useConversations() {
       }));
     },
   });
-
-  // Realtime: qualquer nova mensagem/canal recarrega a lista (não-lidas/ordem).
-  useEffect(() => {
-    const ch = supabase
-      .channel("chat:conversations:" + currentUser.id + ":" + rid())
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "chat_messages" }, () => {
-        qc.invalidateQueries({ queryKey: ["chat", "conversations", currentUser.id] });
-      })
-      .on("postgres_changes", { event: "*", schema: "public", table: "chat_channel_members", filter: `user_id=eq.${currentUser.id}` }, () => {
-        qc.invalidateQueries({ queryKey: ["chat", "conversations", currentUser.id] });
-      })
-      .subscribe();
-    return () => { supabase.removeChannel(ch); };
-  }, [supabase, qc, currentUser.id]);
-
+  // A atualização em tempo real é feita UMA vez pelo <ChatAlerts> (no provider),
+  // que invalida esta query — evita múltiplas assinaturas do mesmo canal.
   return query;
 }
 
@@ -234,8 +221,8 @@ export function useSignedUrl(path: string | null | undefined) {
 // ─────────────────────────────────────────────────────────────────────────────
 export function useUnreadTotal() {
   const { supabase, currentUser } = useChatCtx();
-  const qc = useQueryClient();
-  const query = useQuery({
+  // Invalidação em tempo real é feita pelo <ChatAlerts> (assinatura única).
+  return useQuery({
     queryKey: ["chat", "unread-total", currentUser.id],
     queryFn: async (): Promise<number> => {
       const { data, error } = await supabase.rpc("chat_unread_counts");
@@ -244,16 +231,6 @@ export function useUnreadTotal() {
     },
     refetchInterval: 60_000,
   });
-  useEffect(() => {
-    const ch = supabase
-      .channel("chat:unread:" + currentUser.id + ":" + rid())
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "chat_messages" }, () => {
-        qc.invalidateQueries({ queryKey: ["chat", "unread-total", currentUser.id] });
-      })
-      .subscribe();
-    return () => { supabase.removeChannel(ch); };
-  }, [supabase, qc, currentUser.id]);
-  return query;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

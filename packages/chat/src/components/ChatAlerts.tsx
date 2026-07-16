@@ -44,6 +44,10 @@ export function ChatAlerts() {
           duration: 6000,
         });
       })
+      .on("postgres_changes", { event: "*", schema: "public", table: "chat_channel_members", filter: `user_id=eq.${currentUser.id}` }, () => {
+        qc.invalidateQueries({ queryKey: ["chat", "conversations", currentUser.id] });
+        qc.invalidateQueries({ queryKey: ["chat", "unread-total", currentUser.id] });
+      })
       .subscribe();
     return () => { supabase.removeChannel(ch); };
   }, [supabase, qc, currentUser.id, activeChannelRef]);
