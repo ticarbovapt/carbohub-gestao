@@ -137,7 +137,7 @@ export function ConversationList({
                     {timeLabel(c.lastAt)}
                   </span>
                 </div>
-                <div className="mt-0.5 flex items-center gap-2">
+                <div className="mt-0.5 flex items-center gap-1.5">
                   <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">{previewText(c)}</span>
                   {c.muted && <BellOff className="h-3 w-3 shrink-0 text-muted-foreground" />}
                   {c.unread > 0 && (
@@ -145,13 +145,13 @@ export function ConversationList({
                       {c.unread > 99 ? "99+" : c.unread}
                     </span>
                   )}
+                  {/* botão de ações: no fluxo, aparece no hover e empurra o badge p/ esquerda */}
+                  <button onClick={(e) => openRowMenu(c, e)} title="Opções"
+                    className="hidden shrink-0 items-center justify-center rounded text-muted-foreground hover:text-foreground group-hover:inline-flex">
+                    <ChevronDown className="h-4 w-4" />
+                  </button>
                 </div>
               </div>
-              {/* botão de ações (aparece no hover, centralizado na direita) */}
-              <button onClick={(e) => openRowMenu(c, e)} title="Opções"
-                className="absolute right-2 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full border bg-card text-muted-foreground opacity-0 shadow-sm transition-opacity hover:bg-muted hover:text-foreground group-hover:opacity-100">
-                <ChevronDown className="h-4 w-4" />
-              </button>
             </div>
           ))
         )}
