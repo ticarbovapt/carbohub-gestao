@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useInfiniteQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -68,7 +68,6 @@ export default function Auditoria() {
   const [search, setSearch] = useState("");
   const [debounced, setDebounced] = useState("");
   const [activeSources, setActiveSources] = useState<string[]>([]); // vazio = todas
-  const [limit, setLimit] = useState(PAGE);
 
   // debounce simples da busca
   useEffect(() => {
@@ -76,21 +75,30 @@ export default function Auditoria() {
     return () => clearTimeout(t);
   }, [search]);
 
-  const { data = [], isLoading, isFetching, refetch, error } = useQuery({
-    queryKey: ["admin-audit-feed", activeSources, debounced, limit],
-    queryFn: async (): Promise<AuditRow[]> => {
+  const {
+    data, isLoading, isFetching, refetch, error,
+    fetchNextPage, hasNextPage, isFetchingNextPage,
+  } = useInfiniteQuery({
+    queryKey: ["admin-audit-feed", activeSources, debounced],
+    initialPageParam: 0,
+    queryFn: async ({ pageParam }): Promise<AuditRow[]> => {
       const { data, error } = await supabase.rpc("admin_audit_feed", {
         p_sources: activeSources.length ? activeSources : null,
         p_search: debounced || null,
         p_from: null,
         p_to: null,
-        p_limit: limit,
-        p_offset: 0,
+        p_limit: PAGE,
+        p_offset: pageParam,
       });
       if (error) throw error;
       return (data ?? []) as AuditRow[];
     },
+    // Só há próxima página se a última veio cheia; o offset é o total já carregado.
+    getNextPageParam: (lastPage, allPages) =>
+      lastPage.length === PAGE ? allPages.reduce((n, p) => n + p.length, 0) : undefined,
   });
+
+  const rows = data?.pages.flat() ?? [];
 
   function toggleCategory(cat: string) {
     const ids = SOURCES.filter((s) => s.category === cat).map((s) => s.id);
@@ -98,7 +106,6 @@ export default function Auditoria() {
     setActiveSources((prev) =>
       allActive ? prev.filter((id) => !ids.includes(id)) : Array.from(new Set([...prev, ...ids])),
     );
-    setLimit(PAGE);
   }
 
   const activeCats = new Set(
@@ -132,14 +139,14 @@ export default function Auditoria() {
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             value={search}
-            onChange={(e) => { setSearch(e.target.value); setLimit(PAGE); }}
+            onChange={(e) => setSearch(e.target.value)}
             placeholder="Buscar por descrição, item ou responsável…"
             className="pl-9"
           />
         </div>
         <div className="flex flex-wrap gap-1.5">
           <button
-            onClick={() => { setActiveSources([]); setLimit(PAGE); }}
+            onClick={() => setActiveSources([])}
             className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
               activeSources.length === 0 ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:text-foreground"
             }`}
@@ -169,21 +176,23 @@ export default function Auditoria() {
         <div className="space-y-2">
           {Array.from({ length: 8 }).map((_, i) => <Skeleton key={i} className="h-16 w-full rounded-lg" />)}
         </div>
-      ) : data.length === 0 ? (
+      ) : rows.length === 0 ? (
         <div className="rounded-lg border bg-card p-10 text-center text-sm text-muted-foreground">
           Nenhum evento encontrado para os filtros atuais.
         </div>
       ) : (
         <div className="space-y-2">
-          {data.map((row, i) => <AuditItem key={`${row.source}-${row.event_at}-${i}`} row={row} />)}
-          {data.length >= limit && (
+          {rows.map((row, i) => <AuditItem key={`${row.source}-${row.event_at}-${i}`} row={row} />)}
+          {hasNextPage && (
             <div className="pt-2 text-center">
-              <Button variant="outline" size="sm" onClick={() => setLimit((l) => l + PAGE)} disabled={isFetching}>
-                Carregar mais
+              <Button variant="outline" size="sm" onClick={() => fetchNextPage()} disabled={isFetchingNextPage}>
+                {isFetchingNextPage ? "Carregando…" : "Carregar mais"}
               </Button>
             </div>
           )}
-          <p className="pt-1 text-center text-[11px] text-muted-foreground">{data.length} evento(s) exibido(s)</p>
+          <p className="pt-1 text-center text-[11px] text-muted-foreground">
+            {rows.length} evento(s){hasNextPage ? " — há mais para carregar" : ""}
+          </p>
         </div>
       )}
     </div>
