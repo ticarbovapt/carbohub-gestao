@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { MessageSquarePlus, UsersRound, Search } from "lucide-react";
+import { MessageSquarePlus, UsersRound, Search, Plus } from "lucide-react";
 import { useConversations } from "../hooks";
 import { useChatCtx } from "../context";
 import { Avatar } from "./Avatar";
@@ -37,6 +37,7 @@ export function ConversationList({
   const [filter, setFilter] = useState<"all" | "group">("all");
   const [search, setSearch] = useState("");
   const [dialog, setDialog] = useState<null | "dm" | "group">(null);
+  const [menuOpen, setMenuOpen] = useState(false);
 
   const filtered = conversations
     .filter((c) => (filter === "group" ? c.channel.type === "group" : true))
@@ -54,17 +55,28 @@ export function ConversationList({
 
   return (
     <div className="flex h-full w-full flex-col border-r">
-      {/* header: título + ações */}
-      <div className="flex items-center gap-1 border-b p-2">
+      {/* header: título + botão único (menu) */}
+      <div className="relative flex items-center gap-1 border-b p-2">
         <span className="flex-1 px-1 text-sm font-semibold">Conversas</span>
-        <button onClick={() => setDialog("dm")} title="Nova conversa"
+        <button onClick={() => setMenuOpen((o) => !o)} title="Nova conversa ou grupo"
           className="rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground">
-          <MessageSquarePlus className="h-4 w-4" />
+          <Plus className="h-4 w-4" />
         </button>
-        <button onClick={() => setDialog("group")} title="Novo grupo"
-          className="rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground">
-          <UsersRound className="h-4 w-4" />
-        </button>
+        {menuOpen && (
+          <>
+            <div className="fixed inset-0 z-10" onClick={() => setMenuOpen(false)} />
+            <div className="absolute right-2 top-11 z-20 w-48 overflow-hidden rounded-lg border bg-popover shadow-lg">
+              <button onClick={() => { setDialog("dm"); setMenuOpen(false); }}
+                className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm hover:bg-muted">
+                <MessageSquarePlus className="h-4 w-4 text-muted-foreground" /> Nova conversa
+              </button>
+              <button onClick={() => { setDialog("group"); setMenuOpen(false); }}
+                className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm hover:bg-muted">
+                <UsersRound className="h-4 w-4 text-muted-foreground" /> Novo grupo
+              </button>
+            </div>
+          </>
+        )}
       </div>
 
       {/* busca + filtro */}
