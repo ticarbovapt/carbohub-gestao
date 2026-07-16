@@ -11,6 +11,7 @@
     "@tanstack/react-query": "*",
     "lucide-react": "*",
     "react": "*",
-    "react-dom": "*"
+    "react-dom": "*",
+    "sonner": "*"
   }
 }

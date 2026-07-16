@@ -16,6 +16,6 @@ export default defineConfig({
     },
     // pacote compartilhado é código-fonte fora do app: força os deps a resolverem
     // a partir do node_modules DESTE app (evita cópias duplicadas de react etc.).
-    dedupe: ["react", "react-dom", "@tanstack/react-query", "@supabase/supabase-js", "lucide-react"],
+    dedupe: ["react", "react-dom", "@tanstack/react-query", "@supabase/supabase-js", "lucide-react", "sonner"],
   },
 });

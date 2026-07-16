@@ -1,12 +1,21 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { MessagesSquare } from "lucide-react";
 import { ConversationList } from "./ConversationList";
 import { Conversation } from "./Conversation";
+import { useChatCtx } from "../context";
 import type { Conversation as Conv } from "../types";
 
 // Tela cheia do Carbo Chat: lista (esquerda) + conversa aberta (direita).
 export function ChatApp() {
   const [selected, setSelected] = useState<Conv | null>(null);
+  const { activeChannelRef } = useChatCtx();
+
+  // Informa o alerta global qual canal está aberto (para não tocar/toastar o que
+  // você já vê). Limpa ao sair do chat (desmontar) ou trocar de conversa.
+  useEffect(() => {
+    activeChannelRef.current = selected?.channel.id ?? null;
+    return () => { activeChannelRef.current = null; };
+  }, [selected, activeChannelRef]);
 
   return (
     <div className="flex h-full min-h-0 w-full overflow-hidden">
