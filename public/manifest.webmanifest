@@ -1,0 +1,15 @@
+{
+  "name": "Carbo HUB",
+  "short_name": "Carbo Hub",
+  "description": "Um hub único para operar, vender e escalar — Grupo Carbo",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0b0f10",
+  "theme_color": "#0b0f10",
+  "icons": [
+    { "src": "/favicon.png", "sizes": "1080x1080", "type": "image/png", "purpose": "any" },
+    { "src": "/favicon.png", "sizes": "1080x1080", "type": "image/png", "purpose": "maskable" }
+  ]
+}

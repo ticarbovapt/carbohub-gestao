@@ -10,6 +10,7 @@ import { RealtimeMachineAlertsProvider } from "@/hooks/useRealtimeMachineAlerts"
 import { PageProgressBar } from "@/components/ui/PageProgressBar";
 import { PDVLayout } from "./components/layouts/PDVLayout";
 import { AIChatDrawer } from "./components/ai/AIChatDrawer";
+import { InstallHub } from "./components/InstallHub";
 import { HomeHub } from "./components/home/HomeHub";
 
 // ── Lazy page imports ─────────────────────────────────────────────────────────
@@ -335,6 +336,7 @@ const App = () => (
             <PageProgressBar />
             <AnimatedRoutes />
             <AIChatDrawer />
+            <InstallHub />
           </BrowserRouter>
         </TooltipProvider>
       </RealtimeMachineAlertsProvider>
