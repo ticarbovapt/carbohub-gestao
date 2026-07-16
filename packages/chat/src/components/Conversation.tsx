@@ -145,8 +145,8 @@ function MessageBubble({
   return (
     <div className={`group flex ${mine ? "justify-end" : "justify-start"}`}>
       <div className={`relative max-w-[78%] ${mine ? "items-end" : "items-start"} flex flex-col`}>
-        {/* toolbar no hover */}
-        <div className={`absolute -top-3 z-10 flex items-center gap-0.5 rounded-full border bg-popover px-1 py-0.5 opacity-0 shadow-sm transition-opacity group-hover:opacity-100 ${mine ? "right-2" : "left-2"}`}>
+        {/* toolbar: escondido; só aparece ao passar o mouse na mensagem */}
+        <div className={`absolute -top-3 z-10 hidden items-center gap-0.5 rounded-full border bg-popover px-1 py-0.5 shadow-sm group-hover:flex ${mine ? "right-2" : "left-2"}`}>
           <button onClick={() => setPickerOpen((o) => !o)} title="Reagir" className="rounded-full p-1 text-muted-foreground hover:bg-muted hover:text-foreground"><SmilePlus className="h-3.5 w-3.5" /></button>
           <button onClick={onReply} title="Responder" className="rounded-full p-1 text-muted-foreground hover:bg-muted hover:text-foreground"><Reply className="h-3.5 w-3.5" /></button>
         </div>
