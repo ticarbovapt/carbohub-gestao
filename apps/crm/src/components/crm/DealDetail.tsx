@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import {
   X, Trash2, ChevronRight, ArrowRightLeft, ShoppingCart, History,
   StickyNote, Phone, CheckSquare, Clock, GitBranch, AlertTriangle, Pin, PinOff,
+  MessageSquare, ArrowRight,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -359,6 +360,11 @@ export function DealDetail({ lead, funnelType, onClose }: DealDetailProps) {
                 activities={activities}
                 onTogglePin={(a) => togglePin.mutate({ id: a.id, pinned: !a.pinned, lead_id: lead.id })}
                 pinBusy={togglePin.isPending}
+                resolveUser={(id) => {
+                  const u = id ? dir.find((d) => d.id === id) : undefined;
+                  return { avatar_url: u?.avatar_url, full_name: u?.full_name };
+                }}
+                stageLabel={(sid) => (sid ? (stages.find((s) => s.id === sid)?.label ?? sid) : "?")}
               />
             </div>
           </div>
@@ -429,22 +435,27 @@ function dayLabel(iso: string): string {
   return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "long", year: "numeric" });
 }
 
-function ActivityIcon({ type, status }: { type: string; status: string | null }) {
-  const cls = "h-3.5 w-3.5";
-  if (type === "call") return <Phone className={cls} />;
-  if (type === "task") return status === "pending" ? <Clock className={cls} /> : <CheckSquare className={cls} />;
-  if (type === "stage_change") return <GitBranch className={cls} />;
-  if (type === "note") return <StickyNote className={cls} />;
-  return <StickyNote className={cls} />;
+type ActMeta = { label: string; nodeClass: string; Icon: typeof Phone };
+
+function activityMeta(type: string, status: string | null): ActMeta {
+  switch (type) {
+    case "call": return { label: "Ligação", nodeClass: "bg-sky-500", Icon: Phone };
+    case "task": return { label: "Tarefa", nodeClass: "bg-amber-500", Icon: status === "pending" ? Clock : CheckSquare };
+    case "stage_change": return { label: "Etapa alterada", nodeClass: "bg-muted-foreground/40", Icon: GitBranch };
+    case "note": return { label: "Comentário", nodeClass: "bg-blue-500", Icon: MessageSquare };
+    default: return { label: "Registro", nodeClass: "bg-muted-foreground/40", Icon: StickyNote };
+  }
 }
 
-function Timeline({
-  activities, onTogglePin, pinBusy,
-}: {
+interface TimelineProps {
   activities: LeadActivity[];
   onTogglePin: (a: LeadActivity) => void;
   pinBusy: boolean;
-}) {
+  resolveUser: (id: string | null) => { avatar_url?: string | null; full_name?: string | null };
+  stageLabel: (stageId: string | null) => string;
+}
+
+function Timeline({ activities, onTogglePin, pinBusy, resolveUser, stageLabel }: TimelineProps) {
   if (activities.length === 0) {
     return <p className="text-sm text-muted-foreground">Nenhuma atividade ainda. Registre a primeira acima.</p>;
   }
@@ -461,82 +472,120 @@ function Timeline({
     else groups.push({ label, items: [a] });
   }
 
+  const common = { onTogglePin, pinBusy, resolveUser, stageLabel };
+
   return (
-    <div className="space-y-5">
+    <div className="space-y-6">
       {pinned.length > 0 && (
-        <div>
-          <div className="mb-2 flex items-center gap-2">
-            <Pin className="h-3 w-3 text-amber-500" />
+        <div className="space-y-3">
+          <div className="flex items-center gap-2">
+            <Pin className="h-3.5 w-3.5 text-amber-500" />
             <span className="text-xs font-semibold text-amber-600 dark:text-amber-400">Fixados</span>
             <div className="h-px flex-1 bg-border" />
           </div>
-          <div className="space-y-3">
-            {pinned.map((a) => (
-              <ActivityRow key={`pin-${a.id}`} a={a} onTogglePin={onTogglePin} pinBusy={pinBusy} highlight />
-            ))}
-          </div>
+          {pinned.map((a) => (
+            <ActivityCard key={`pin-${a.id}`} a={a} highlight {...common} />
+          ))}
         </div>
       )}
 
-      {groups.map((g) => (
-        <div key={g.label}>
-          <div className="mb-2 flex items-center gap-2">
-            <span className="text-xs font-semibold text-muted-foreground">{g.label}</span>
-            <div className="h-px flex-1 bg-border" />
-          </div>
-          <div className="space-y-3">
-            {g.items.map((a) => (
-              <ActivityRow key={a.id} a={a} onTogglePin={onTogglePin} pinBusy={pinBusy} />
-            ))}
-          </div>
+      {/* Feed com trilho vertical à esquerda (estilo Bitrix) */}
+      <div className="relative">
+        <div className="pointer-events-none absolute bottom-2 left-4 top-2 w-px bg-border" aria-hidden />
+        <div className="space-y-4">
+          {groups.map((g) => (
+            <div key={g.label} className="space-y-4">
+              <div className="relative flex justify-center py-1">
+                <span className="z-10 rounded-full bg-primary px-3 py-0.5 text-xs font-medium text-primary-foreground">{g.label}</span>
+              </div>
+              {g.items.map((a) => {
+                const meta = activityMeta(a.activity_type, a.status);
+                return (
+                  <div key={a.id} className="relative flex gap-3">
+                    <div className={`relative z-10 flex h-8 w-8 shrink-0 items-center justify-center rounded-full ring-4 ring-background ${meta.nodeClass}`}>
+                      <meta.Icon className="h-4 w-4 text-white" />
+                    </div>
+                    <ActivityCard a={a} {...common} />
+                  </div>
+                );
+              })}
+            </div>
+          ))}
         </div>
-      ))}
+      </div>
     </div>
   );
 }
 
-function ActivityRow({
-  a, onTogglePin, pinBusy, highlight,
+function ActivityCard({
+  a, onTogglePin, pinBusy, resolveUser, stageLabel, highlight,
 }: {
   a: LeadActivity;
   onTogglePin: (a: LeadActivity) => void;
   pinBusy: boolean;
+  resolveUser: (id: string | null) => { avatar_url?: string | null; full_name?: string | null };
+  stageLabel: (stageId: string | null) => string;
   highlight?: boolean;
 }) {
+  const meta = activityMeta(a.activity_type, a.status);
   const when = new Date(a.created_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
-  // Mudança de etapa é registro do sistema — não pode ser fixada.
   const canPin = a.activity_type !== "stage_change";
+  const author = resolveUser(a.created_by);
+  const authorName = author.full_name || a.created_by_name || "—";
+  const isStage = a.activity_type === "stage_change";
+
   return (
     <div className={[
-      "group flex gap-3 rounded-md",
-      highlight ? "bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 p-2.5" : "",
+      "min-w-0 flex-1 rounded-lg border bg-card shadow-sm",
+      highlight ? "border-amber-300 bg-amber-50 dark:border-amber-500/30 dark:bg-amber-500/10" : "",
     ].join(" ")}>
-      <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
-        <ActivityIcon type={a.activity_type} status={a.status} />
+      {/* Header: tipo + hora à esquerda, avatar de quem fez à direita */}
+      <div className="flex items-start justify-between gap-2 px-3 pt-2.5">
+        <div className="flex items-center gap-2">
+          {a.pinned && <Pin className="h-3 w-3 text-amber-500" />}
+          <span className="text-sm font-semibold text-foreground">{meta.label}</span>
+          <span className="text-[11px] text-muted-foreground">{when}</span>
+        </div>
+        <div title={authorName} className="shrink-0">
+          <ProfileAvatar userId={a.created_by || a.id} avatarUrl={author.avatar_url} fullName={author.full_name} size={24} />
+        </div>
       </div>
-      <div className="min-w-0 flex-1">
-        <p className="whitespace-pre-wrap break-words text-sm text-foreground">{a.subject || a.body || a.activity_type}</p>
-        <p className="text-[11px] text-muted-foreground">
-          {a.created_by_name || "—"} · {when}
-          {a.activity_type === "task" && a.status === "pending" && a.due_at && (
-            <span className="text-amber-500"> · prazo {new Date(a.due_at).toLocaleDateString("pt-BR")}</span>
+
+      {/* Corpo */}
+      <div className="px-3 pb-2.5 pt-1.5">
+        {isStage ? (
+          <div className="flex flex-wrap items-center gap-1.5 text-xs">
+            <span className="rounded-full bg-muted px-2 py-0.5 text-muted-foreground">{stageLabel(a.stage_from)}</span>
+            <ArrowRight className="h-3 w-3 text-muted-foreground" />
+            <span className="rounded-full bg-muted px-2 py-0.5 font-medium text-foreground">{stageLabel(a.stage_to)}</span>
+          </div>
+        ) : (
+          <p className="whitespace-pre-wrap break-words text-sm text-foreground">{a.subject || a.body || meta.label}</p>
+        )}
+
+        {a.activity_type === "task" && a.status === "pending" && a.due_at && (
+          <p className="mt-1 text-[11px] text-amber-500">prazo {new Date(a.due_at).toLocaleDateString("pt-BR")}</p>
+        )}
+
+        {/* Rodapé: autor + ação fixar */}
+        <div className="mt-2 flex items-center justify-between">
+          <span className="text-[11px] text-muted-foreground">por {authorName}</span>
+          {canPin && (
+            <button
+              type="button"
+              onClick={() => onTogglePin(a)}
+              disabled={pinBusy}
+              className={[
+                "flex items-center gap-1 rounded px-2 py-0.5 text-[11px] transition-colors",
+                a.pinned ? "text-amber-600 hover:bg-amber-100 dark:text-amber-400 dark:hover:bg-amber-500/20"
+                         : "text-muted-foreground hover:bg-muted hover:text-foreground",
+              ].join(" ")}
+            >
+              {a.pinned ? <><PinOff className="h-3 w-3" /> Desafixar</> : <><Pin className="h-3 w-3" /> Fixar</>}
+            </button>
           )}
-        </p>
+        </div>
       </div>
-      {canPin && (
-        <button
-          type="button"
-          onClick={() => onTogglePin(a)}
-          disabled={pinBusy}
-          title={a.pinned ? "Desafixar" : "Fixar no topo"}
-          className={[
-            "shrink-0 self-start p-1 rounded transition-opacity",
-            a.pinned ? "text-amber-500" : "text-muted-foreground opacity-0 group-hover:opacity-100 hover:text-foreground",
-          ].join(" ")}
-        >
-          {a.pinned ? <PinOff className="h-3.5 w-3.5" /> : <Pin className="h-3.5 w-3.5" />}
-        </button>
-      )}
     </div>
   );
 }
