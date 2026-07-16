@@ -1,8 +1,9 @@
 import { useMemo, useState } from "react";
 import {
   Database, AlertTriangle, Search, Download, ShoppingCart, DollarSign, Target, EyeOff,
-  Users, Building2, ListOrdered, ArrowUp, ArrowDown, ChevronsUpDown, Layers,
+  Users, Building2, ListOrdered, ArrowUp, ArrowDown, ChevronsUpDown, Layers, Loader2, CheckCircle2, UserPlus,
 } from "lucide-react";
+import { toast } from "sonner";
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
 import { CarboCard, CarboCardContent } from "@/components/ui/carbo-card";
 import { CarboBadge } from "@/components/ui/carbo-badge";
@@ -14,6 +15,8 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useComercialOrders, type ComercialOrderRow } from "@/hooks/useComercialOrders";
 import { ComercialFilterBar, EMPTY_FILTERS, type DashFilters } from "@/components/comercial/ComercialFilterBar";
 import { ComercialTabs } from "@/components/comercial/ComercialTabs";
+import { useFollowupLeadStatus, useCreateFollowupLead } from "@/hooks/useFollowupLead";
+import { useVendedoresDir } from "@/hooks/useVendedoresDir";
 
 const brl = (v: number) => (v || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 const fmtDateTime = (s: string | null) => (s ? new Date(s).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" }) : "—");
@@ -91,6 +94,34 @@ function SortTh({ col, label, sort, onSort, align = "left" }: {
   );
 }
 
+// Último pedido (mais recente) do cliente — fonte de CNPJ/nome/vendedor do card.
+const ultimoPedido = (r: RowVM): ComercialOrderRow | undefined =>
+  [...r.orders].sort((a, b) => (b.created_at ?? "").localeCompare(a.created_at ?? ""))[0];
+const cnpjDoRow = (r: RowVM): string | null =>
+  (ultimoPedido(r)?.cnpj ?? "").replace(/\D/g, "") || r.cnpjs[0] || null;
+
+// Célula "Ação" — 1 status query por cliente (funil f10 + CNPJ).
+function FollowupCell({ row, pending, onCreate }: {
+  row: RowVM; pending: boolean; onCreate: (r: RowVM) => void;
+}) {
+  const cnpjDigits = cnpjDoRow(row);
+  const { data: status } = useFollowupLeadStatus(cnpjDigits);
+
+  if (!cnpjDigits)
+    return <Button size="sm" variant="outline" className="h-7 text-xs" disabled title="sem CNPJ">Criar follow-up</Button>;
+  if (status?.exists)
+    return (
+      <Button size="sm" variant="outline" className="h-7 text-xs text-carbo-green border-carbo-green/40" disabled>
+        <CheckCircle2 className="h-3.5 w-3.5 mr-1" /> No follow-up
+      </Button>
+    );
+  return (
+    <Button size="sm" variant="outline" className="h-7 text-xs" disabled={pending} onClick={() => onCreate(row)}>
+      {pending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <><UserPlus className="h-3.5 w-3.5 mr-1" /> Criar follow-up</>}
+    </Button>
+  );
+}
+
 export default function ComercialDados() {
   const { canAdmin } = useAuth();
   const [filters, setFilters] = useState<DashFilters>(EMPTY_FILTERS);
@@ -101,6 +132,26 @@ export default function ComercialDados() {
   const [agrupado, setAgrupado] = useState(false);
   const [detail, setDetail] = useState<RowVM | null>(null);
   const [sort, setSort] = useState<{ col: SortCol; dir: "asc" | "desc" }>({ col: "ultima", dir: "desc" });
+
+  // Follow-up (funil f10) — criação a partir da linha de cliente.
+  const createFollowup = useCreateFollowupLead();
+  const [pendingKey, setPendingKey] = useState<string | null>(null);
+  const [vendDialog, setVendDialog] = useState<RowVM | null>(null);
+  const [vendSel, setVendSel] = useState("");
+  const { data: vendedores } = useVendedoresDir();
+
+  const runCreate = (r: RowVM, override?: string) => {
+    setPendingKey(r.key);
+    createFollowup.mutate(
+      { row: r, assignedToOverride: override },
+      { onSettled: () => setPendingKey(null), onSuccess: () => setVendDialog(null) },
+    );
+  };
+  const onCreateFollowup = (r: RowVM) => {
+    if (r.cnpjs.length > 1) toast.info(`Cliente com ${r.cnpjs.length} CNPJs; usando o do último pedido.`);
+    if (ultimoPedido(r)?.vendedor_id) runCreate(r);
+    else { setVendSel(""); setVendDialog(r); }
+  };
 
   const vendedorId = filters.vendedor === "all" ? null : filters.vendedor;
   const { data, isLoading } = useComercialOrders({ vendedorId, from: filters.from, to: filters.to, segmento: filters.segmento });
@@ -351,6 +402,7 @@ export default function ComercialDados() {
                     <SortTh col="total" label="Total" sort={sort} onSort={toggleSort} align="right" />
                     <SortTh col="primeira" label="1ª compra" sort={sort} onSort={toggleSort} />
                     <SortTh col="ultima" label="Última compra" sort={sort} onSort={toggleSort} />
+                    <th className="px-3 py-2 font-medium text-right">Ação</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -371,6 +423,9 @@ export default function ComercialDados() {
                         <td className="px-3 py-2 text-right tabular-nums font-medium">{brl(r.totalBRL)}</td>
                         <td className="px-3 py-2 text-xs whitespace-nowrap text-muted-foreground">{fmtDay(r.primeira)}</td>
                         <td className="px-3 py-2 text-xs whitespace-nowrap">{fmtDay(r.ultima)}{dias != null && <span className="text-[10px] text-muted-foreground ml-1">({dias === 0 ? "hoje" : `há ${dias}d`})</span>}</td>
+                        <td className="px-3 py-2 text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                          <FollowupCell row={r} pending={pendingKey === r.key} onCreate={onCreateFollowup} />
+                        </td>
                       </tr>
                     );
                   })}
@@ -455,6 +510,36 @@ export default function ComercialDados() {
               </>
             );
           })()}
+        </DialogContent>
+      </Dialog>
+
+      {/* Escolher vendedor — só quando o último pedido não tem vendedor. */}
+      <Dialog open={!!vendDialog} onOpenChange={(o) => !o && setVendDialog(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Escolher vendedor do follow-up</DialogTitle>
+          </DialogHeader>
+          <p className="text-xs text-muted-foreground">
+            O último pedido de <b className="text-foreground">{vendDialog?.nome || "—"}</b> não tem vendedor. Escolha o dono do card.
+          </p>
+          <Select value={vendSel} onValueChange={setVendSel}>
+            <SelectTrigger className="h-9"><SelectValue placeholder="Selecione o vendedor…" /></SelectTrigger>
+            <SelectContent>
+              {(vendedores ?? []).filter((v) => v.is_vendedor).map((v) => (
+                <SelectItem key={v.id} value={v.id}>{v.full_name || v.id}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button variant="outline" size="sm" onClick={() => setVendDialog(null)}>Cancelar</Button>
+            <Button
+              size="sm"
+              disabled={!vendSel || (!!pendingKey && pendingKey === vendDialog?.key)}
+              onClick={() => vendDialog && runCreate(vendDialog, vendSel)}
+            >
+              {pendingKey && pendingKey === vendDialog?.key ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Criar follow-up"}
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
     </main>
