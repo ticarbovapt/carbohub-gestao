@@ -15,7 +15,7 @@ import {
 } from "@/types/crm";
 import {
   useAdvanceLeadStage, useMarkLeadLost, useTransferLead, useLeadOwnerLog,
-  useLeadActivities, useAddLeadActivity, useDeleteLead, type LeadActivity,
+  useLeadActivities, useAddLeadActivity, useDeleteLead, useUpdateCRMLead, type LeadActivity,
 } from "@/hooks/useCRMLeads";
 import { useVendedoresDir } from "@/hooks/useVendas";
 import { useAuth } from "@/contexts/AuthContext";
@@ -33,6 +33,22 @@ const TEMP_LABEL = { quente: "🔥 Quente", morno: "🌡️ Morno", frio: "❄�
 const brl = (v: number) =>
   new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 }).format(v || 0);
 
+// Normaliza CPF (≤11 díg.) ou CNPJ (12+ díg.) com pontuação. Aceita valor já
+// mascarado ou só dígitos; se não parecer documento, devolve como veio.
+function formatDoc(v: string | null): string | null {
+  if (!v) return null;
+  const d = v.replace(/\D/g, "");
+  if (!d) return v;
+  if (d.length <= 11) {
+    if (d.length <= 3) return d;
+    if (d.length <= 6) return `${d.slice(0, 3)}.${d.slice(3)}`;
+    if (d.length <= 9) return `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6)}`;
+    return `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6, 9)}-${d.slice(9, 11)}`;
+  }
+  const c = d.slice(0, 14);
+  return `${c.slice(0, 2)}.${c.slice(2, 5)}.${c.slice(5, 8)}/${c.slice(8, 12)}-${c.slice(12)}`;
+}
+
 export function DealDetail({ lead, funnelType, onClose }: DealDetailProps) {
   const navigate = useNavigate();
   const { isGestor, user, profile } = useAuth();
@@ -42,6 +58,7 @@ export function DealDetail({ lead, funnelType, onClose }: DealDetailProps) {
   const transfer = useTransferLead();
   const deleteLead = useDeleteLead();
   const addActivity = useAddLeadActivity();
+  const updateLead = useUpdateCRMLead();
 
   const { data: activities = [] } = useLeadActivities(lead.id);
   const { data: dir = [] } = useVendedoresDir();
@@ -135,6 +152,8 @@ export function DealDetail({ lead, funnelType, onClose }: DealDetailProps) {
   }
 
   const contactCity = [lead.city, lead.state].filter(Boolean).join(" / ") || null;
+  const docDigits = (lead.cnpj || "").replace(/\D/g, "");
+  const docLabel = docDigits.length > 0 && docDigits.length <= 11 ? "CPF" : "CNPJ";
 
   return (
     <Dialog open onOpenChange={(o) => { if (!o) onClose(); }}>
@@ -207,12 +226,23 @@ export function DealDetail({ lead, funnelType, onClose }: DealDetailProps) {
             </Card>
 
             <Card title="Cliente / Contato">
-              <Field label="Nome" value={lead.contact_name} />
-              <Field label="Telefone" value={lead.contact_phone} />
+              <EditableField
+                label="Nome do contato"
+                value={lead.contact_name}
+                placeholder="Adicionar nome…"
+                onSave={(v) => updateLead.mutateAsync({ id: lead.id, contact_name: v })}
+              />
+              <EditableField
+                label="Telefone"
+                type="tel"
+                value={lead.contact_phone}
+                placeholder="Adicionar telefone…"
+                onSave={(v) => updateLead.mutateAsync({ id: lead.id, contact_phone: v })}
+              />
               <Field label="WhatsApp" value={lead.contact_whatsapp} />
               <Field label="E-mail" value={lead.contact_email} />
               <Field label="Cidade / UF" value={contactCity} />
-              <Field label="CNPJ" value={lead.cnpj} />
+              <Field label={docLabel} value={formatDoc(lead.cnpj)} />
               <Field label="Razão social" value={lead.legal_name} />
               <Field label="Nome fantasia" value={lead.trade_name} />
             </Card>
@@ -446,6 +476,46 @@ function Field({ label, value }: { label: string; value: string | null }) {
     <div>
       <p className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</p>
       <p className="text-sm text-foreground break-words">{value}</p>
+    </div>
+  );
+}
+
+// Campo editável inline: parece texto, vira input ao focar; salva no blur/Enter
+// só quando o valor mudou. Fica sempre visível (mesmo vazio) para permitir preencher.
+function EditableField({
+  label, value, onSave, type = "text", placeholder,
+}: {
+  label: string;
+  value: string | null;
+  onSave: (v: string | null) => Promise<unknown>;
+  type?: string;
+  placeholder?: string;
+}) {
+  const [v, setV] = useState(value ?? "");
+  const [saving, setSaving] = useState(false);
+  useEffect(() => { setV(value ?? ""); }, [value]);
+
+  const dirty = (v.trim() || null) !== (value || null);
+
+  async function commit() {
+    if (!dirty || saving) return;
+    setSaving(true);
+    try { await onSave(v.trim() || null); } finally { setSaving(false); }
+  }
+
+  return (
+    <div>
+      <p className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</p>
+      <input
+        type={type}
+        value={v}
+        placeholder={placeholder}
+        disabled={saving}
+        onChange={(e) => setV(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); (e.target as HTMLInputElement).blur(); } }}
+        className="w-full rounded border border-transparent bg-transparent px-0 py-0.5 text-sm text-foreground placeholder:text-muted-foreground/60 hover:border-input focus:border-primary focus:px-2 focus:outline-none"
+      />
     </div>
   );
 }
