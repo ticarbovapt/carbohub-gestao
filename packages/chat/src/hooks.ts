@@ -248,9 +248,8 @@ export function useDirectory(search: string) {
   return useQuery({
     queryKey: ["chat", "directory", search],
     queryFn: async (): Promise<ChatProfileRef[]> => {
-      let q = supabase.from("profiles").select("id, full_name, avatar_url").order("full_name").limit(30);
-      if (search.trim()) q = q.ilike("full_name", `%${search.trim()}%`);
-      const { data, error } = await q;
+      // RPC definer: traz TODOS os internos (a RLS de profiles filtraria por escopo).
+      const { data, error } = await supabase.rpc("chat_directory", { p_search: search.trim() || null });
       if (error) throw error;
       return ((data ?? []) as ChatProfileRef[]).filter((p) => p.id !== currentUser.id);
     },
