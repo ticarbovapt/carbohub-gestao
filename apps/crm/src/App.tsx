@@ -6,6 +6,7 @@ import Login from "./pages/Login";
 import CRM from "./pages/CRM";
 import Pipelines from "./pages/Pipelines";
 import Vender from "./pages/Vender";
+import Chat from "./pages/Chat";
 import Pedidos from "./pages/Pedidos";
 import DashboardComercial from "./pages/DashboardComercial";
 import Vendas from "./pages/Vendas";
@@ -45,6 +46,7 @@ export default function App() {
         {/* compat: rotas antigas por funil → pipelines com filtro */}
         <Route path="/crm/:funnelType" element={<Navigate to="/crm/pipelines" replace />} />
         <Route path="/vender" element={<Vender />} />
+        <Route path="/chat" element={<Chat />} />
         <Route path="/pedidos" element={<Pedidos />} />
         <Route path="/compras" element={<RequisicaoCompra />} />
         <Route path="/pos-venda" element={<PosVenda />} />

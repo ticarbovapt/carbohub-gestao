@@ -2,8 +2,11 @@ import { useState } from "react";
 import { NavLink, Outlet } from "react-router-dom";
 import {
   KanbanSquare, ClipboardList, TrendingUp, Target, BarChart3, LayoutDashboard,
-  Wind, CalendarDays, MapPinned, Map, Share2, ShoppingCart, ShoppingBag,
+  Wind, CalendarDays, MapPinned, Map, Share2, ShoppingCart, ShoppingBag, MessagesSquare,
 } from "lucide-react";
+import { ChatBadge, ChatProvider } from "@carbo/chat";
+import { supabase } from "@/integrations/supabase/client";
+import { useMemo } from "react";
 import { TopBar } from "@/components/TopBar";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -60,6 +63,11 @@ function Nav({ onNavigate }: { onNavigate?: () => void }) {
       </div>
 
       <div className="pt-2 space-y-1">
+        <NavLink to="/chat" className={navCls} onClick={onNavigate}>
+          <MessagesSquare className="h-4 w-4" />
+          <span className="flex-1">Carbo Chat</span>
+          <ChatBadge />
+        </NavLink>
         {NAV.map((n) => (
           <NavLink key={n.to} to={n.to} className={navCls} onClick={onNavigate}>
             <n.icon className="h-4 w-4" /> {n.label}
@@ -104,6 +112,11 @@ export function SalesShell() {
   const [deskOpen, setDeskOpen] = useState(true);
   useAccessPing("carbo_crm");
   useLiveNotifications();
+  const { user, profile } = useAuth();
+  const chatUser = useMemo(
+    () => ({ id: user?.id ?? "", full_name: profile?.full_name ?? null, avatar_url: profile?.avatar_url ?? null }),
+    [user?.id, profile?.full_name, profile?.avatar_url],
+  );
 
   const handleMenu = () => {
     if (isMobile) setMobileOpen(true);
@@ -111,6 +124,7 @@ export function SalesShell() {
   };
 
   return (
+    <ChatProvider supabase={supabase} currentUser={chatUser}>
     <div className="h-screen overflow-hidden bg-background text-foreground flex flex-col">
       <TopBar appName="Carbo Sales" onMenu={handleMenu} />
 
@@ -134,5 +148,6 @@ export function SalesShell() {
         </main>
       </div>
     </div>
+    </ChatProvider>
   );
 }
