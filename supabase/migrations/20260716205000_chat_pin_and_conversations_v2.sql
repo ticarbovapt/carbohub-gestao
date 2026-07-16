@@ -5,6 +5,9 @@
 ALTER TABLE public.chat_channel_members
   ADD COLUMN IF NOT EXISTS pinned boolean NOT NULL DEFAULT false;
 
+-- A função já existe com outra assinatura; trocar o tipo de retorno exige DROP.
+DROP FUNCTION IF EXISTS public.chat_conversations();
+
 CREATE OR REPLACE FUNCTION public.chat_conversations()
 RETURNS TABLE (
   channel_id uuid, type text, name text, is_private boolean, channel_avatar text,
