@@ -2,7 +2,7 @@ import { useState } from "react";
 import { NavLink, Outlet } from "react-router-dom";
 import {
   Users as UsersIcon, ListTree, Globe, Target, Activity,
-  Store, Building2, TrendingUp, LineChart, Trophy, BarChart3, BadgePercent, Tags,
+  Store, Building2, TrendingUp, LineChart, Trophy, BarChart3, BadgePercent, Tags, ShieldCheck,
 } from "lucide-react";
 import { TopBar } from "@/components/TopBar";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
@@ -43,6 +43,7 @@ const NAV_GROUPS = [
     label: "Acessos",
     items: [
       { to: "/ultimo-acesso", label: "Último acesso", icon: Activity },
+      { to: "/auditoria", label: "Central de Auditoria", icon: ShieldCheck },
     ],
   },
   {
