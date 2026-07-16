@@ -154,15 +154,17 @@ export function useSendMessage(channelId: string | null) {
   const { supabase, currentUser } = useChatCtx();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (payload: string | { body?: string; attachments?: OutgoingAttachment[] }) => {
+    mutationFn: async (payload: string | { body?: string; attachments?: OutgoingAttachment[]; mentions?: string[] }) => {
       const body = typeof payload === "string" ? payload : (payload.body ?? "");
       const attachments = typeof payload === "string" ? [] : (payload.attachments ?? []);
+      const mentions = typeof payload === "string" ? [] : (payload.mentions ?? []);
       if (!channelId) return;
       if (!body.trim() && attachments.length === 0) return;
 
       const kind = attachments.length ? attachments[0].kind : "text";
       const { data: msg, error } = await supabase.from("chat_messages").insert({
         channel_id: channelId, sender_id: currentUser.id, kind, body: body.trim() || null,
+        mentions: mentions.length ? mentions : [],
       }).select("id").single();
       if (error) throw error;
       const messageId = (msg as { id: string }).id;
