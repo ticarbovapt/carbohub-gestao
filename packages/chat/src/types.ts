@@ -39,6 +39,12 @@ export interface ChatAttachment {
   thumbnail_path: string | null;
 }
 
+export interface ChatReaction {
+  message_id: string;
+  user_id: string;
+  emoji: string;
+}
+
 export interface ChatMessage {
   id: string;
   channel_id: string;
@@ -53,6 +59,7 @@ export interface ChatMessage {
   deleted_at: string | null;
   sender?: ChatProfileRef | null;
   attachments?: ChatAttachment[];
+  reactions?: ChatReaction[];
 }
 
 // Conversa normalizada para a lista (DM mostra o outro; grupo mostra o nome).

@@ -81,7 +81,7 @@ export function useMessages(channelId: string | null) {
     queryFn: async (): Promise<ChatMessage[]> => {
       const { data, error } = await supabase
         .from("chat_messages")
-        .select("*, sender:profiles!chat_messages_sender_id_fkey(id, full_name, avatar_url), attachments:chat_attachments(*)")
+        .select("*, sender:profiles!chat_messages_sender_id_fkey(id, full_name, avatar_url), attachments:chat_attachments(*), reactions:chat_reactions(message_id, user_id, emoji)")
         .eq("channel_id", channelId)
         .is("deleted_at", null)
         .order("created_at", { ascending: true })
@@ -99,6 +99,9 @@ export function useMessages(channelId: string | null) {
         qc.invalidateQueries({ queryKey: key });
       })
       .on("postgres_changes", { event: "UPDATE", schema: "public", table: "chat_messages", filter: `channel_id=eq.${channelId}` }, () => {
+        qc.invalidateQueries({ queryKey: key });
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "chat_reactions" }, () => {
         qc.invalidateQueries({ queryKey: key });
       })
       .subscribe();
@@ -139,10 +142,12 @@ export function useSendMessage(channelId: string | null) {
   const { supabase, currentUser } = useChatCtx();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (payload: string | { body?: string; attachments?: OutgoingAttachment[]; mentions?: string[] }) => {
+    mutationFn: async (payload: string | { body?: string; attachments?: OutgoingAttachment[]; mentions?: string[]; replyToId?: string | null; mentionAll?: boolean }) => {
       const body = typeof payload === "string" ? payload : (payload.body ?? "");
       const attachments = typeof payload === "string" ? [] : (payload.attachments ?? []);
       const mentions = typeof payload === "string" ? [] : (payload.mentions ?? []);
+      const replyToId = typeof payload === "string" ? null : (payload.replyToId ?? null);
+      const mentionAll = typeof payload === "string" ? false : !!payload.mentionAll;
       if (!channelId) return;
       if (!body.trim() && attachments.length === 0) return;
 
@@ -150,6 +155,8 @@ export function useSendMessage(channelId: string | null) {
       const { data: msg, error } = await supabase.from("chat_messages").insert({
         channel_id: channelId, sender_id: currentUser.id, kind, body: body.trim() || null,
         mentions: mentions.length ? mentions : [],
+        reply_to_id: replyToId,
+        metadata: mentionAll ? { mention_all: true } : {},
       }).select("id").single();
       if (error) throw error;
       const messageId = (msg as { id: string }).id;
@@ -180,6 +187,26 @@ export function useSendMessage(channelId: string | null) {
       qc.invalidateQueries({ queryKey: ["chat", "messages", channelId] });
       qc.invalidateQueries({ queryKey: ["chat", "conversations", currentUser.id] });
     },
+  });
+}
+
+// Reagir / desreagir a uma mensagem.
+export function useToggleReaction() {
+  const { supabase, currentUser } = useChatCtx();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ messageId, emoji, active }: { messageId: string; emoji: string; channelId: string; active: boolean }) => {
+      if (active) {
+        const { error } = await supabase.from("chat_reactions")
+          .delete().eq("message_id", messageId).eq("user_id", currentUser.id).eq("emoji", emoji);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.from("chat_reactions")
+          .insert({ message_id: messageId, user_id: currentUser.id, emoji });
+        if (error) throw error;
+      }
+    },
+    onSuccess: (_d, v) => qc.invalidateQueries({ queryKey: ["chat", "messages", v.channelId] }),
   });
 }
 
