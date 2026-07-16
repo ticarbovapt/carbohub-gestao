@@ -1,14 +1,17 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { NavLink, Outlet } from "react-router-dom";
 import {
   Users as UsersIcon, ListTree, Globe, Target, Activity,
-  Store, Building2, TrendingUp, LineChart, Trophy, BarChart3, BadgePercent, Tags, ShieldCheck,
+  Store, Building2, TrendingUp, LineChart, Trophy, BarChart3, BadgePercent, Tags, ShieldCheck, MessagesSquare,
 } from "lucide-react";
 import { TopBar } from "@/components/TopBar";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useAccessPing } from "@/hooks/useAccessPing";
 import { useLiveNotifications } from "@/hooks/useLiveNotifications";
+import { ChatProvider, ChatBadge } from "@carbo/chat";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
 
 // Itens de topo (acesso/estrutura) + grupos recém-trazidos do Ops.
 const NAV_TOP = [
@@ -75,6 +78,12 @@ function Nav({ onNavigate }: { onNavigate?: () => void }) {
         </NavLink>
       ))}
 
+      <NavLink to="/chat" className={navCls} onClick={onNavigate}>
+        <MessagesSquare className="h-4 w-4" />
+        <span className="flex-1">Carbo Chat</span>
+        <ChatBadge />
+      </NavLink>
+
       {NAV_GROUPS.map((g) => (
         <div key={g.label} className="pt-3">
           <p className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/70">{g.label}</p>
@@ -97,6 +106,11 @@ export function Layout() {
   const [deskOpen, setDeskOpen] = useState(true);
   useAccessPing("carbo_admin");
   useLiveNotifications();
+  const { user, profile } = useAuth();
+  const chatUser = useMemo(
+    () => ({ id: user?.id ?? "", full_name: profile?.full_name ?? null, avatar_url: (profile as { avatar_url?: string | null })?.avatar_url ?? null }),
+    [user?.id, profile?.full_name, profile],
+  );
 
   const handleMenu = () => {
     if (isMobile) setMobileOpen(true);
@@ -104,6 +118,7 @@ export function Layout() {
   };
 
   return (
+    <ChatProvider supabase={supabase} currentUser={chatUser}>
     <div className="h-screen overflow-hidden bg-background flex flex-col">
       <TopBar appName="Carbo Admin" onMenu={handleMenu} />
 
@@ -127,5 +142,6 @@ export function Layout() {
         </main>
       </div>
     </div>
+    </ChatProvider>
   );
 }

@@ -2,6 +2,7 @@ import { Routes, Route, Navigate } from "react-router-dom";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import { Layout } from "./components/Layout";
 import Home from "./pages/Home";
+import Chat from "./pages/Chat";
 import Purchasing from "./pages/Purchasing";
 import Suprimentos from "./pages/Suprimentos";
 import Orders from "./pages/Orders";
@@ -22,6 +23,7 @@ export default function App() {
     <Routes>
       <Route element={<ProtectedRoute><Layout /></ProtectedRoute>}>
         <Route path="/" element={<Home />} />
+        <Route path="/chat" element={<Chat />} />
         {/* /financeiro aposentado — consolidado no hub /compras */}
         <Route path="/financeiro" element={<Navigate to="/compras" replace />} />
         <Route path="/compras" element={<Purchasing />} />

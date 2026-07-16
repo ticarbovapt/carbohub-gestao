@@ -19,6 +19,9 @@
     "paths": {
       "@/*": [
         "./src/*"
+      ],
+      "@carbo/chat": [
+        "../../packages/chat/src/index.ts"
       ]
     },
     "skipLibCheck": true,

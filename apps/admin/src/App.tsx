@@ -23,6 +23,7 @@ import ComercialDados from "./pages/ComercialDados";
 import DashboardsMetas from "./pages/DashboardsMetas";
 import DashboardsEstrategico from "./pages/DashboardsEstrategico";
 import Auditoria from "./pages/Auditoria";
+import Chat from "./pages/Chat";
 import { isCarbohubDomain, goToHubLogin } from "@/lib/sso";
 
 // Login é ÚNICO no Hub: /login direto em produção é redirecionado pra lá.
@@ -53,6 +54,7 @@ export default function App() {
         <Route path="/vender" element={<Vender />} />
         <Route path="/ultimo-acesso" element={<UltimoAcesso />} />
         <Route path="/auditoria" element={<Auditoria />} />
+        <Route path="/chat" element={<Chat />} />
 
         {/* Dashboards espelhados dos sistemas do ecossistema */}
         <Route path="/dashboards/lojas" element={<DashboardsLojas />} />

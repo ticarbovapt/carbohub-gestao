@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { NavLink, Outlet } from "react-router-dom";
+import { MessagesSquare } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { TopBar } from "@/components/TopBar";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
@@ -7,6 +8,9 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { useAccessPing } from "@/hooks/useAccessPing";
 import { useFinanceRealtime } from "@/hooks/useFinanceRealtime";
 import { FIN_NAV } from "@/lib/financasNav";
+import { ChatProvider, ChatBadge } from "@carbo/chat";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
 
 const navCls = ({ isActive }: { isActive: boolean }) =>
   cn(
@@ -19,6 +23,11 @@ const navCls = ({ isActive }: { isActive: boolean }) =>
 function Nav({ onNavigate }: { onNavigate?: () => void }) {
   return (
     <nav className="flex-1 p-2 space-y-1">
+      <NavLink to="/chat" className={navCls} onClick={onNavigate}>
+        <MessagesSquare className="h-4 w-4" />
+        <span className="flex-1">Carbo Chat</span>
+        <ChatBadge />
+      </NavLink>
       {FIN_NAV.map((item) => (
         <NavLink
           key={item.path}
@@ -40,6 +49,11 @@ export function Layout() {
   const [deskOpen, setDeskOpen] = useState(true);
   useAccessPing("carbo_financas");
   useFinanceRealtime();
+  const { user, profile } = useAuth();
+  const chatUser = useMemo(
+    () => ({ id: user?.id ?? "", full_name: profile?.full_name ?? null, avatar_url: (profile as { avatar_url?: string | null })?.avatar_url ?? null }),
+    [user?.id, profile?.full_name, profile],
+  );
 
   const handleMenu = () => {
     if (isMobile) setMobileOpen(true);
@@ -47,6 +61,7 @@ export function Layout() {
   };
 
   return (
+    <ChatProvider supabase={supabase} currentUser={chatUser}>
     <div className="h-screen overflow-hidden bg-background flex flex-col">
       <TopBar appName="Carbo Finanças" onMenu={handleMenu} />
 
@@ -71,5 +86,6 @@ export function Layout() {
         </main>
       </div>
     </div>
+    </ChatProvider>
   );
 }
