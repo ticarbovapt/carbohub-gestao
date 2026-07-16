@@ -1,8 +1,10 @@
 -- ─────────────────────────────────────────────────────────────────────────────
--- Diretório do Carbo Chat v2: mostra TODOS os internos com conta real.
---  • Exclui org_only (membros do organograma SEM conta de auth — não recebem msg).
+-- Diretório do Carbo Chat v2: MESMA fonte da tela de Usuários do Admin —
+-- a tabela public.profiles, sem recorte. A tela do Admin lê profiles direto e
+-- vê todos porque gestor tem RLS ampla; o usuário comum é limitado por escopo,
+-- por isso a RPC é SECURITY DEFINER (devolve todos os cadastrados no sistema).
 --  • Usa username/e-mail quando full_name é nulo (não some ninguém, ex.: TI).
---  • Busca por nome OU username.
+--  • Busca por nome / username / e-mail.
 -- ─────────────────────────────────────────────────────────────────────────────
 
 CREATE OR REPLACE FUNCTION public.chat_directory(p_search text DEFAULT NULL)
@@ -14,7 +16,6 @@ LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
   FROM public.profiles p
   WHERE p.id <> auth.uid()
     AND public.is_employee(auth.uid())
-    AND COALESCE(p.org_only, false) = false
     AND (
       p_search IS NULL OR p_search = ''
       OR COALESCE(p.full_name, '') ILIKE '%' || p_search || '%'
@@ -22,7 +23,7 @@ LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
       OR COALESCE(p.email, '')     ILIKE '%' || p_search || '%'
     )
   ORDER BY 2
-  LIMIT 100;
+  LIMIT 200;
 $$;
 
 GRANT EXECUTE ON FUNCTION public.chat_directory(text) TO authenticated;
