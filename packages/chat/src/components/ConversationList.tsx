@@ -147,9 +147,9 @@ export function ConversationList({
                   )}
                 </div>
               </div>
-              {/* botão de ações (aparece no hover) */}
+              {/* botão de ações (aparece no hover, centralizado na direita) */}
               <button onClick={(e) => openRowMenu(c, e)} title="Opções"
-                className="absolute right-1.5 top-1.5 rounded-md bg-background/80 p-0.5 text-muted-foreground opacity-0 shadow-sm transition-opacity hover:text-foreground group-hover:opacity-100">
+                className="absolute right-2 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full border bg-card text-muted-foreground opacity-0 shadow-sm transition-opacity hover:bg-muted hover:text-foreground group-hover:opacity-100">
                 <ChevronDown className="h-4 w-4" />
               </button>
             </div>
