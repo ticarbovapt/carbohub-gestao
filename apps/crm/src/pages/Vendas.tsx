@@ -164,20 +164,24 @@ export default function Vendas() {
   }, [rows, search, vendedorFilter]);
 
   const sum = (list: CarbozeVendaRow[]) => list.reduce((s, v) => s + v.total, 0);
+  // "Faturado" = já tem NF vinculada OU o pedido já saiu (invoiced/shipped/
+  // delivered) — quem foi enviado/entregue necessariamente já tem NF (só não
+  // linkada aqui). Assim um pedido ENTREGUE não cai em "aguardando faturamento".
+  const isActive = (v: CarbozeVendaRow) => v.status !== "cancelled" && v.status !== "quote";
+  const FATURADO_STATUS = new Set(["invoiced", "shipped", "delivered"]);
+  const isFaturada = (v: CarbozeVendaRow) => isActive(v) && (!!v.bling_nf_id || !!v.invoice_number || FATURADO_STATUS.has(v.status));
+  const isAguardando = (v: CarbozeVendaRow) => isActive(v) && !isFaturada(v);
+
   const quotes = filtered.filter((v) => v.status === "quote");
-  const active = filtered.filter((v) => v.status !== "cancelled" && v.status !== "quote");
-  // Faturado = venda com NF vinculada; aguardando = venda ainda sem NF.
-  const faturadas = active.filter((v) => !!v.bling_nf_id || !!v.invoice_number);
-  const aguardando = active.filter((v) => !v.bling_nf_id && !v.invoice_number);
+  const active = filtered.filter(isActive);
+  const faturadas = active.filter(isFaturada);
+  const aguardando = active.filter(isAguardando);
   const totalFaturado = sum(faturadas);
   const totalAguardando = sum(aguardando);
   const totalOrcamento = sum(quotes);
   const cancelled = filtered.filter((v) => v.status === "cancelled").length;
 
-  // Aplica o filtro do card clicado (se houver) só sobre a TABELA — os totais
-  // dos KPIs continuam sobre o conjunto completo (filtered).
-  const isFaturada = (v: CarbozeVendaRow) => v.status !== "cancelled" && v.status !== "quote" && (!!v.bling_nf_id || !!v.invoice_number);
-  const isAguardando = (v: CarbozeVendaRow) => v.status !== "cancelled" && v.status !== "quote" && !v.bling_nf_id && !v.invoice_number;
+  // Filtro do card clicado — só sobre a TABELA (os totais dos KPIs seguem no total).
   const tableRows = filtered.filter((v) => {
     if (!kpiFilter) return true;
     if (kpiFilter === "faturado") return isFaturada(v);
@@ -226,7 +230,7 @@ export default function Vendas() {
             <CarboCardContent className="p-3 text-center">
               <p className="text-xl font-bold text-carbo-green tabular-nums">{fmtBRL(totalFaturado)}</p>
               <p className="text-xs text-muted-foreground">Total faturado</p>
-              <p className="text-[10px] text-muted-foreground/70 mt-0.5">{faturadas.length} venda(s) com NF</p>
+              <p className="text-[10px] text-muted-foreground/70 mt-0.5">{faturadas.length} venda(s) faturada(s)</p>
             </CarboCardContent>
           </CarboCard>
           <CarboCard onClick={() => toggleKpi("aguardando")}
@@ -234,7 +238,7 @@ export default function Vendas() {
             <CarboCardContent className="p-3 text-center">
               <p className="text-xl font-bold text-amber-400 tabular-nums">{fmtBRL(totalAguardando)}</p>
               <p className="text-xs text-muted-foreground">Aguardando faturamento</p>
-              <p className="text-[10px] text-muted-foreground/70 mt-0.5">{aguardando.length} venda(s) sem NF</p>
+              <p className="text-[10px] text-muted-foreground/70 mt-0.5">{aguardando.length} venda(s) a faturar</p>
             </CarboCardContent>
           </CarboCard>
           <CarboCard onClick={() => toggleKpi("orcamento")}
