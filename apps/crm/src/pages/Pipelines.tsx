@@ -18,7 +18,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { KanbanBoard } from "@/components/crm/KanbanBoard";
 import { LeadCard, type LeadOwner } from "@/components/crm/LeadCard";
 import { LeadForm } from "@/components/crm/LeadForm";
-import { LeadDrawer } from "@/components/crm/LeadDrawer";
+import { DealDetail } from "@/components/crm/DealDetail";
 import { FUNNEL_CONFIG, getStagesForFunnel, getNextStage, LOSS_REASONS } from "@/types/crm";
 import type { FunnelType, CRMLead } from "@/types/crm";
 
@@ -345,7 +345,7 @@ export default function Pipelines() {
       </div>
 
       {isFormOpen && <LeadForm funnelType={ft} initialStage={isAll ? undefined : formStage} onClose={() => setIsFormOpen(false)} />}
-      {drawerLead && <LeadDrawer lead={drawerLead} funnelType={drawerLead.funnel_type as FunnelType} onClose={() => setDrawerLead(null)} />}
+      {drawerLead && <DealDetail lead={drawerLead} funnelType={drawerLead.funnel_type as FunnelType} onClose={() => setDrawerLead(null)} />}
 
       <Dialog open={!!lostDialogLead} onOpenChange={(o) => { if (!o) setLostDialogLead(null); }}>
         <DialogContent className="sm:max-w-sm">
