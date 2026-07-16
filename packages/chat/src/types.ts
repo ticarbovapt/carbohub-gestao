@@ -62,4 +62,9 @@ export interface Conversation {
   avatarUrl: string | null;
   otherUserId: string | null; // dm
   unread: number;
+  lastAt: string | null;
+  lastBody: string | null;
+  lastKind: MessageKind | null;
+  lastSenderId: string | null;
+  lastSenderName: string | null;
 }

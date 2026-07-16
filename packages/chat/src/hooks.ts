@@ -13,63 +13,32 @@ export function useConversations() {
   const query = useQuery({
     queryKey: ["chat", "conversations", currentUser.id],
     queryFn: async (): Promise<Conversation[]> => {
-      // canais dos quais sou membro (RLS já garante o escopo)
-      const { data: memberships, error: mErr } = await supabase
-        .from("chat_channel_members").select("channel_id").eq("user_id", currentUser.id);
-      if (mErr) throw mErr;
-      const ids = (memberships ?? []).map((m: { channel_id: string }) => m.channel_id);
-      if (!ids.length) return [];
-
-      const { data: channels, error: cErr } = await supabase
-        .from("chat_channels").select("*").in("id", ids).is("archived_at", null);
-      if (cErr) throw cErr;
-
-      // membros das DMs → o "outro" define título/avatar. Nome/avatar vêm da RPC
-      // definer (a RLS de profiles esconderia o outro para usuários de escopo).
-      const dmIds = (channels ?? []).filter((c: ChatChannel) => c.type === "dm").map((c: ChatChannel) => c.id);
-      const otherByChannel: Record<string, ChatProfileRef> = {};
-      if (dmIds.length) {
-        const { data: others } = await supabase
-          .from("chat_channel_members")
-          .select("channel_id, user_id")
-          .in("channel_id", dmIds)
-          .neq("user_id", currentUser.id);
-        const rows = (others ?? []) as { channel_id: string; user_id: string }[];
-        const ids = Array.from(new Set(rows.map((r) => r.user_id)));
-        const profMap: Record<string, ChatProfileRef> = {};
-        if (ids.length) {
-          const { data: profs } = await supabase.rpc("chat_profiles", { p_ids: ids });
-          for (const p of (profs ?? []) as ChatProfileRef[]) profMap[p.id] = p;
-        }
-        for (const r of rows) {
-          const p = profMap[r.user_id];
-          if (p) otherByChannel[r.channel_id] = p;
-        }
-      }
-
-      // não-lidas
-      const { data: unreadRows } = await supabase.rpc("chat_unread_counts");
-      const unreadByChannel: Record<string, number> = {};
-      for (const u of (unreadRows ?? []) as { channel_id: string; unread: number }[]) {
-        unreadByChannel[u.channel_id] = Number(u.unread) || 0;
-      }
-
-      const list: Conversation[] = (channels ?? []).map((c: ChatChannel) => {
-        const other = otherByChannel[c.id];
-        const title = c.type === "dm"
-          ? (other?.full_name ?? "Conversa")
-          : (c.name ?? "Canal");
-        return {
-          channel: c,
-          title,
-          avatarUrl: c.type === "dm" ? (other?.avatar_url ?? null) : c.avatar_url,
-          otherUserId: c.type === "dm" ? (other?.id ?? null) : null,
-          unread: unreadByChannel[c.id] ?? 0,
-        };
-      });
-      // ordena: mais recentes primeiro (por created_at do canal como proxy)
-      list.sort((a, b) => b.channel.created_at.localeCompare(a.channel.created_at));
-      return list;
+      // RPC definer: já traz o outro (DM), a última mensagem, não-lidas e ordena.
+      const { data, error } = await supabase.rpc("chat_conversations");
+      if (error) throw error;
+      type Row = {
+        channel_id: string; type: "group" | "dm"; name: string | null; is_private: boolean; channel_avatar: string | null;
+        other_id: string | null; other_name: string | null; other_avatar: string | null;
+        last_body: string | null; last_kind: string | null; last_at: string | null;
+        last_sender_id: string | null; last_sender_name: string | null;
+        unread: number; last_activity: string | null;
+      };
+      return ((data ?? []) as Row[]).map((r): Conversation => ({
+        channel: {
+          id: r.channel_id, type: r.type, name: r.name, description: null,
+          is_private: r.is_private, avatar_url: r.channel_avatar, created_by: null,
+          created_at: r.last_activity ?? new Date(0).toISOString(), archived_at: null,
+        },
+        title: r.type === "dm" ? (r.other_name ?? "Conversa") : (r.name ?? "Canal"),
+        avatarUrl: r.type === "dm" ? r.other_avatar : r.channel_avatar,
+        otherUserId: r.other_id,
+        unread: Number(r.unread) || 0,
+        lastAt: r.last_at,
+        lastBody: r.last_body,
+        lastKind: (r.last_kind as Conversation["lastKind"]) ?? null,
+        lastSenderId: r.last_sender_id,
+        lastSenderName: r.last_sender_name,
+      }));
     },
   });
 
