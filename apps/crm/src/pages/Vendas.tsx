@@ -69,6 +69,8 @@ export default function Vendas() {
   const [vendedorFilter, setVendedor] = useState("__all__");
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  // Filtro por KPI (clicar no card): mostra na tabela só o que alimenta o card.
+  const [kpiFilter, setKpiFilter] = useState<"faturado" | "aguardando" | "orcamento" | "cancelado" | null>(null);
 
   const hasCustomRange = !!(customFrom || customTo);
   const clearCustomRange = () => { setCustomFrom(""); setCustomTo(""); };
@@ -172,6 +174,22 @@ export default function Vendas() {
   const totalOrcamento = sum(quotes);
   const cancelled = filtered.filter((v) => v.status === "cancelled").length;
 
+  // Aplica o filtro do card clicado (se houver) só sobre a TABELA — os totais
+  // dos KPIs continuam sobre o conjunto completo (filtered).
+  const isFaturada = (v: CarbozeVendaRow) => v.status !== "cancelled" && v.status !== "quote" && (!!v.bling_nf_id || !!v.invoice_number);
+  const isAguardando = (v: CarbozeVendaRow) => v.status !== "cancelled" && v.status !== "quote" && !v.bling_nf_id && !v.invoice_number;
+  const tableRows = filtered.filter((v) => {
+    if (!kpiFilter) return true;
+    if (kpiFilter === "faturado") return isFaturada(v);
+    if (kpiFilter === "aguardando") return isAguardando(v);
+    if (kpiFilter === "orcamento") return v.status === "quote";
+    return v.status === "cancelled";
+  });
+  const toggleKpi = (k: NonNullable<typeof kpiFilter>) => setKpiFilter((cur) => (cur === k ? null : k));
+  const KPI_LABEL: Record<NonNullable<typeof kpiFilter>, string> = {
+    faturado: "Total faturado", aguardando: "Aguardando faturamento", orcamento: "Em orçamento", cancelado: "Canceladas",
+  };
+
   return (
     <div className="p-4 md:p-6">
       <div className="space-y-5 max-w-5xl mx-auto">
@@ -203,26 +221,46 @@ export default function Vendas() {
         {/* KPIs — totais em R$ por situação de faturamento (+ orçamentos e canceladas).
             Para colaborador (vê só o próprio), a query já limita ao vendedor logado. */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <CarboCard><CarboCardContent className="p-3 text-center">
-            <p className="text-xl font-bold text-carbo-green tabular-nums">{fmtBRL(totalFaturado)}</p>
-            <p className="text-xs text-muted-foreground">Total faturado</p>
-            <p className="text-[10px] text-muted-foreground/70 mt-0.5">{faturadas.length} venda(s) com NF</p>
-          </CarboCardContent></CarboCard>
-          <CarboCard><CarboCardContent className="p-3 text-center">
-            <p className="text-xl font-bold text-amber-400 tabular-nums">{fmtBRL(totalAguardando)}</p>
-            <p className="text-xs text-muted-foreground">Aguardando faturamento</p>
-            <p className="text-[10px] text-muted-foreground/70 mt-0.5">{aguardando.length} venda(s) sem NF</p>
-          </CarboCardContent></CarboCard>
-          <CarboCard><CarboCardContent className="p-3 text-center">
-            <p className="text-xl font-bold text-sky-400 tabular-nums">{fmtBRL(totalOrcamento)}</p>
-            <p className="text-xs text-muted-foreground">Em orçamento</p>
-            <p className="text-[10px] text-muted-foreground/70 mt-0.5">{quotes.length} orçamento(s)</p>
-          </CarboCardContent></CarboCard>
-          <CarboCard><CarboCardContent className="p-3 text-center">
-            <p className="text-2xl font-bold text-red-400 tabular-nums">{cancelled}</p>
-            <p className="text-xs text-muted-foreground">Canceladas</p>
-          </CarboCardContent></CarboCard>
+          <CarboCard onClick={() => toggleKpi("faturado")}
+            className={`cursor-pointer transition ${kpiFilter === "faturado" ? "ring-2 ring-carbo-green/60" : "hover:bg-muted/20"}`}>
+            <CarboCardContent className="p-3 text-center">
+              <p className="text-xl font-bold text-carbo-green tabular-nums">{fmtBRL(totalFaturado)}</p>
+              <p className="text-xs text-muted-foreground">Total faturado</p>
+              <p className="text-[10px] text-muted-foreground/70 mt-0.5">{faturadas.length} venda(s) com NF</p>
+            </CarboCardContent>
+          </CarboCard>
+          <CarboCard onClick={() => toggleKpi("aguardando")}
+            className={`cursor-pointer transition ${kpiFilter === "aguardando" ? "ring-2 ring-amber-400/60" : "hover:bg-muted/20"}`}>
+            <CarboCardContent className="p-3 text-center">
+              <p className="text-xl font-bold text-amber-400 tabular-nums">{fmtBRL(totalAguardando)}</p>
+              <p className="text-xs text-muted-foreground">Aguardando faturamento</p>
+              <p className="text-[10px] text-muted-foreground/70 mt-0.5">{aguardando.length} venda(s) sem NF</p>
+            </CarboCardContent>
+          </CarboCard>
+          <CarboCard onClick={() => toggleKpi("orcamento")}
+            className={`cursor-pointer transition ${kpiFilter === "orcamento" ? "ring-2 ring-sky-400/60" : "hover:bg-muted/20"}`}>
+            <CarboCardContent className="p-3 text-center">
+              <p className="text-xl font-bold text-sky-400 tabular-nums">{fmtBRL(totalOrcamento)}</p>
+              <p className="text-xs text-muted-foreground">Em orçamento</p>
+              <p className="text-[10px] text-muted-foreground/70 mt-0.5">{quotes.length} orçamento(s)</p>
+            </CarboCardContent>
+          </CarboCard>
+          <CarboCard onClick={() => toggleKpi("cancelado")}
+            className={`cursor-pointer transition ${kpiFilter === "cancelado" ? "ring-2 ring-red-400/60" : "hover:bg-muted/20"}`}>
+            <CarboCardContent className="p-3 text-center">
+              <p className="text-2xl font-bold text-red-400 tabular-nums">{cancelled}</p>
+              <p className="text-xs text-muted-foreground">Canceladas</p>
+            </CarboCardContent>
+          </CarboCard>
         </div>
+        {kpiFilter && (
+          <div className="flex items-center gap-2 text-xs text-muted-foreground -mt-2">
+            <span>Filtrando por <strong className="text-foreground">{KPI_LABEL[kpiFilter]}</strong> ({tableRows.length})</span>
+            <button className="inline-flex items-center gap-1 text-primary hover:underline" onClick={() => setKpiFilter(null)}>
+              <X className="h-3 w-3" /> limpar
+            </button>
+          </div>
+        )}
 
         {/* Filtros */}
         <div className="flex gap-2 flex-wrap">
@@ -253,7 +291,7 @@ export default function Vendas() {
         {/* Tabela */}
         {isLoading ? (
           <CarboCard><CarboCardContent className="py-16 text-center text-muted-foreground">Carregando…</CarboCardContent></CarboCard>
-        ) : filtered.length === 0 ? (
+        ) : tableRows.length === 0 ? (
           <CarboCard><CarboCardContent className="py-16 text-center space-y-3"><TrendingUp className="h-12 w-12 mx-auto text-muted-foreground/30" /><p className="text-muted-foreground">Nenhum registro encontrado neste período.</p></CarboCardContent></CarboCard>
         ) : (
           <CarboCard padding="none">
@@ -263,8 +301,8 @@ export default function Vendas() {
                   <tr className="border-b bg-muted/30">
                     {isHead && (
                       <th className="w-10 p-3">
-                        <Checkbox checked={filtered.length > 0 && selectedIds.size === filtered.length}
-                          onCheckedChange={(c) => { if (c) setSelectedIds(new Set(filtered.map((v) => v.id))); else setSelectedIds(new Set()); }}
+                        <Checkbox checked={tableRows.length > 0 && selectedIds.size === tableRows.length}
+                          onCheckedChange={(c) => { if (c) setSelectedIds(new Set(tableRows.map((v) => v.id))); else setSelectedIds(new Set()); }}
                           aria-label="Selecionar todos" />
                       </th>
                     )}
@@ -279,7 +317,7 @@ export default function Vendas() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filtered.map((venda) => {
+                  {tableRows.map((venda) => {
                     const isQuote = venda.status === "quote";
                     // Financeiro defensivo: pedidos antigos podem não ter subtotal/discount.
                     const itemsBruto = venda.items.reduce((s, it) => s + num(it.quantity) * num(it.unit_price), 0);
