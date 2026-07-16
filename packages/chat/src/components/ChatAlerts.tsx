@@ -17,7 +17,7 @@ export function ChatAlerts() {
 
   useEffect(() => {
     const ch = supabase
-      .channel("chat:alerts:" + currentUser.id)
+      .channel("chat:alerts:" + currentUser.id + ":" + Math.random().toString(36).slice(2, 10))
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "chat_messages" }, async (payload) => {
         const msg = payload.new as { sender_id: string | null; channel_id: string; body: string | null; kind: string };
         if (!msg || msg.sender_id === currentUser.id) return;

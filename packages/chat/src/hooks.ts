@@ -1,6 +1,10 @@
 import { useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useChatCtx } from "./context";
+
+// Sufixo único por assinatura Realtime — evita colidir nomes de canal quando o
+// mesmo hook é usado em vários componentes ("cannot add callbacks after subscribe").
+const rid = () => Math.random().toString(36).slice(2, 10);
 import type { ChatAttachment, ChatChannel, ChatMessage, ChatProfileRef, Conversation } from "./types";
 
 export interface ChatUserInfo {
@@ -53,7 +57,7 @@ export function useConversations() {
   // Realtime: qualquer nova mensagem/canal recarrega a lista (não-lidas/ordem).
   useEffect(() => {
     const ch = supabase
-      .channel("chat:conversations:" + currentUser.id)
+      .channel("chat:conversations:" + currentUser.id + ":" + rid())
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "chat_messages" }, () => {
         qc.invalidateQueries({ queryKey: ["chat", "conversations", currentUser.id] });
       })
@@ -94,7 +98,7 @@ export function useMessages(channelId: string | null) {
   useEffect(() => {
     if (!channelId) return;
     const ch = supabase
-      .channel("chat:messages:" + channelId)
+      .channel("chat:messages:" + channelId + ":" + rid())
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "chat_messages", filter: `channel_id=eq.${channelId}` }, () => {
         qc.invalidateQueries({ queryKey: key });
       })
@@ -242,7 +246,7 @@ export function useUnreadTotal() {
   });
   useEffect(() => {
     const ch = supabase
-      .channel("chat:unread:" + currentUser.id)
+      .channel("chat:unread:" + currentUser.id + ":" + rid())
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "chat_messages" }, () => {
         qc.invalidateQueries({ queryKey: ["chat", "unread-total", currentUser.id] });
       })
