@@ -161,9 +161,15 @@ export default function Vendas() {
     });
   }, [rows, search, vendedorFilter]);
 
+  const sum = (list: CarbozeVendaRow[]) => list.reduce((s, v) => s + v.total, 0);
   const quotes = filtered.filter((v) => v.status === "quote");
   const active = filtered.filter((v) => v.status !== "cancelled" && v.status !== "quote");
-  const totalRevenue = active.reduce((s, v) => s + v.total, 0);
+  // Faturado = venda com NF vinculada; aguardando = venda ainda sem NF.
+  const faturadas = active.filter((v) => !!v.bling_nf_id || !!v.invoice_number);
+  const aguardando = active.filter((v) => !v.bling_nf_id && !v.invoice_number);
+  const totalFaturado = sum(faturadas);
+  const totalAguardando = sum(aguardando);
+  const totalOrcamento = sum(quotes);
   const cancelled = filtered.filter((v) => v.status === "cancelled").length;
 
   return (
@@ -194,12 +200,28 @@ export default function Vendas() {
           </div>
         </div>
 
-        {/* KPIs */}
-        <div className="grid grid-cols-4 gap-3">
-          <CarboCard><CarboCardContent className="p-3 text-center"><p className="text-2xl font-bold text-amber-400 tabular-nums">{quotes.length}</p><p className="text-xs text-muted-foreground">Orçamentos</p></CarboCardContent></CarboCard>
-          <CarboCard><CarboCardContent className="p-3 text-center"><p className="text-2xl font-bold text-carbo-green tabular-nums">{active.length}</p><p className="text-xs text-muted-foreground">Vendas</p></CarboCardContent></CarboCard>
-          <CarboCard><CarboCardContent className="p-3 text-center"><p className="text-xl font-bold tabular-nums">{fmtBRL(totalRevenue)}</p><p className="text-xs text-muted-foreground">Total de vendas</p></CarboCardContent></CarboCard>
-          <CarboCard><CarboCardContent className="p-3 text-center"><p className="text-2xl font-bold text-red-400 tabular-nums">{cancelled}</p><p className="text-xs text-muted-foreground">Canceladas</p></CarboCardContent></CarboCard>
+        {/* KPIs — totais em R$ por situação de faturamento (+ orçamentos e canceladas).
+            Para colaborador (vê só o próprio), a query já limita ao vendedor logado. */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <CarboCard><CarboCardContent className="p-3 text-center">
+            <p className="text-xl font-bold text-carbo-green tabular-nums">{fmtBRL(totalFaturado)}</p>
+            <p className="text-xs text-muted-foreground">Total faturado</p>
+            <p className="text-[10px] text-muted-foreground/70 mt-0.5">{faturadas.length} venda(s) com NF</p>
+          </CarboCardContent></CarboCard>
+          <CarboCard><CarboCardContent className="p-3 text-center">
+            <p className="text-xl font-bold text-amber-400 tabular-nums">{fmtBRL(totalAguardando)}</p>
+            <p className="text-xs text-muted-foreground">Aguardando faturamento</p>
+            <p className="text-[10px] text-muted-foreground/70 mt-0.5">{aguardando.length} venda(s) sem NF</p>
+          </CarboCardContent></CarboCard>
+          <CarboCard><CarboCardContent className="p-3 text-center">
+            <p className="text-xl font-bold text-sky-400 tabular-nums">{fmtBRL(totalOrcamento)}</p>
+            <p className="text-xs text-muted-foreground">Em orçamento</p>
+            <p className="text-[10px] text-muted-foreground/70 mt-0.5">{quotes.length} orçamento(s)</p>
+          </CarboCardContent></CarboCard>
+          <CarboCard><CarboCardContent className="p-3 text-center">
+            <p className="text-2xl font-bold text-red-400 tabular-nums">{cancelled}</p>
+            <p className="text-xs text-muted-foreground">Canceladas</p>
+          </CarboCardContent></CarboCard>
         </div>
 
         {/* Filtros */}
