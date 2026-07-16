@@ -127,6 +127,9 @@ export function DealDetail({ lead, funnelType, onClose }: DealDetailProps) {
   const nameById = (id: string | null) => (id ? (dir.find((d) => d.id === id)?.full_name ?? "—") : "—");
   const ownerId = lead.assigned_to ?? lead.created_by ?? "";
   const owner = dir.find((d) => d.id === ownerId);
+  // Gestor pode excluir qualquer card; o criador só o próprio (a policy de DELETE
+  // no banco confirma; toda exclusão é registrada por trigger de auditoria).
+  const canDelete = isGestor || (!!user?.id && lead.created_by === user.id);
 
   // Clique numa etapa: se for etapa de PERDA, abre o fluxo "Perdido" (motivo);
   // senão, seta a etapa direto via useAdvanceLeadStage (registra na timeline).
@@ -212,7 +215,7 @@ export function DealDetail({ lead, funnelType, onClose }: DealDetailProps) {
             </div>
           </div>
           <div className="flex items-center gap-1 shrink-0">
-            {isGestor && (
+            {canDelete && (
               <button onClick={() => setConfirmDelete(true)} className="text-muted-foreground hover:text-destructive p-1.5" title="Excluir lead">
                 <Trash2 className="h-4 w-4" />
               </button>
