@@ -1,9 +1,10 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useMessages, useProfilesMap } from "../hooks";
 import { useChatCtx } from "../context";
 import { Avatar } from "./Avatar";
 import { Composer } from "./Composer";
 import { Attachment } from "./Attachment";
+import { ContactPanel } from "./ContactPanel";
 import type { Conversation as Conv } from "../types";
 
 const dayKey = (iso: string) => new Date(iso).toLocaleDateString("pt-BR");
@@ -15,18 +16,22 @@ function dayLabel(iso: string) {
   return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "long", year: "numeric" });
 }
 
-export function Conversation({ conv }: { conv: Conv }) {
+export function Conversation({ conv, onDeleted }: { conv: Conv; onDeleted?: () => void }) {
   const { currentUser } = useChatCtx();
   const { data: messages = [], isLoading } = useMessages(conv.channel.id);
   const { data: profMap = {} } = useProfilesMap(messages.map((m) => m.sender_id ?? "").filter(Boolean));
   const bottomRef = useRef<HTMLDivElement>(null);
+  const [panelOpen, setPanelOpen] = useState(false);
 
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "auto" }); }, [messages.length]);
+  useEffect(() => { setPanelOpen(false); }, [conv.channel.id]);
 
   return (
-    <div className="flex h-full flex-col">
-      {/* header */}
-      <div className="flex items-center gap-3 border-b px-4 py-3">
+    <div className="flex h-full">
+    <div className="flex h-full min-w-0 flex-1 flex-col">
+      {/* header (clique abre os dados) */}
+      <button onClick={() => setPanelOpen((o) => !o)}
+        className="flex items-center gap-3 border-b px-4 py-3 text-left hover:bg-muted/40">
         <Avatar name={conv.title} url={conv.avatarUrl} size={36} />
         <div className="min-w-0">
           <p className="truncate text-sm font-semibold">{conv.title}</p>
@@ -34,7 +39,7 @@ export function Conversation({ conv }: { conv: Conv }) {
             {conv.channel.type === "dm" ? "Mensagem direta" : (conv.channel.is_private ? "Grupo privado" : "Grupo")}
           </p>
         </div>
-      </div>
+      </button>
 
       {/* mensagens */}
       <div className="flex-1 overflow-y-auto px-4 py-3">
@@ -94,6 +99,15 @@ export function Conversation({ conv }: { conv: Conv }) {
       </div>
 
       <Composer channelId={conv.channel.id} />
+    </div>
+
+    {panelOpen && (
+      <ContactPanel
+        conv={conv}
+        onClose={() => setPanelOpen(false)}
+        onDeleted={() => { setPanelOpen(false); onDeleted?.(); }}
+      />
+    )}
     </div>
   );
 }

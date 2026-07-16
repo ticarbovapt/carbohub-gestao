@@ -1,7 +1,13 @@
 import { useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useChatCtx } from "./context";
-import type { ChatChannel, ChatMessage, ChatProfileRef, Conversation } from "./types";
+import type { ChatAttachment, ChatChannel, ChatMessage, ChatProfileRef, Conversation } from "./types";
+
+export interface ChatUserInfo {
+  id: string; full_name: string | null; avatar_url: string | null;
+  department: string | null; funcao: string | null; email: string | null; username: string | null;
+}
+export interface ChannelMember { id: string; role: string; full_name: string | null; avatar_url: string | null; }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Conversas (DMs + grupos) do usuário, já normalizadas + não-lidas.
@@ -247,6 +253,87 @@ export function useProfilesMap(ids: string[]) {
       const map: Record<string, ChatProfileRef> = {};
       for (const p of (data ?? []) as ChatProfileRef[]) map[p.id] = p;
       return map;
+    },
+  });
+}
+
+// Excluir/limpar a conversa para mim (sai do canal — some da minha lista).
+export function useLeaveConversation() {
+  const { supabase, currentUser } = useChatCtx();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (channelId: string) => {
+      const { error } = await supabase.from("chat_channel_members")
+        .delete().eq("channel_id", channelId).eq("user_id", currentUser.id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["chat", "conversations", currentUser.id] });
+      qc.invalidateQueries({ queryKey: ["chat", "unread-total", currentUser.id] });
+    },
+  });
+}
+
+// Dados do contato (DM).
+export function useUserInfo(userId: string | null) {
+  const { supabase } = useChatCtx();
+  return useQuery({
+    queryKey: ["chat", "user-info", userId],
+    enabled: !!userId,
+    queryFn: async (): Promise<ChatUserInfo | null> => {
+      const { data, error } = await supabase.rpc("chat_user_info", { p_id: userId });
+      if (error) throw error;
+      return ((data ?? [])[0] as ChatUserInfo) ?? null;
+    },
+  });
+}
+
+// Membros de um grupo (com nome/avatar via RPC definer).
+export function useChannelMembers(channelId: string | null, enabled = true) {
+  const { supabase } = useChatCtx();
+  return useQuery({
+    queryKey: ["chat", "members", channelId],
+    enabled: !!channelId && enabled,
+    queryFn: async (): Promise<ChannelMember[]> => {
+      const { data: mem, error } = await supabase
+        .from("chat_channel_members").select("user_id, role").eq("channel_id", channelId);
+      if (error) throw error;
+      const rows = (mem ?? []) as { user_id: string; role: string }[];
+      const ids = rows.map((r) => r.user_id);
+      const map: Record<string, ChatProfileRef> = {};
+      if (ids.length) {
+        const { data: profs } = await supabase.rpc("chat_profiles", { p_ids: ids });
+        for (const p of (profs ?? []) as ChatProfileRef[]) map[p.id] = p;
+      }
+      return rows.map((r) => ({
+        id: r.user_id, role: r.role,
+        full_name: map[r.user_id]?.full_name ?? null,
+        avatar_url: map[r.user_id]?.avatar_url ?? null,
+      }));
+    },
+  });
+}
+
+// Mídias/arquivos da conversa (anexos), mais recentes primeiro.
+export function useChannelMedia(channelId: string | null, enabled = true) {
+  const { supabase } = useChatCtx();
+  return useQuery({
+    queryKey: ["chat", "media", channelId],
+    enabled: !!channelId && enabled,
+    queryFn: async (): Promise<ChatAttachment[]> => {
+      const { data: msgs, error } = await supabase
+        .from("chat_messages").select("id, created_at").eq("channel_id", channelId).is("deleted_at", null);
+      if (error) throw error;
+      const rows = (msgs ?? []) as { id: string; created_at: string }[];
+      const when: Record<string, string> = {};
+      for (const m of rows) when[m.id] = m.created_at;
+      const ids = rows.map((m) => m.id);
+      if (!ids.length) return [];
+      const { data: atts, error: aErr } = await supabase.from("chat_attachments").select("*").in("message_id", ids);
+      if (aErr) throw aErr;
+      return ((atts ?? []) as ChatAttachment[]).sort(
+        (a, b) => (when[b.message_id] ?? "").localeCompare(when[a.message_id] ?? ""),
+      );
     },
   });
 }

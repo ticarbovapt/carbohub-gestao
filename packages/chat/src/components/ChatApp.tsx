@@ -24,7 +24,7 @@ export function ChatApp() {
       </div>
       <div className="min-w-0 flex-1">
         {selected ? (
-          <Conversation key={selected.channel.id} conv={selected} />
+          <Conversation key={selected.channel.id} conv={selected} onDeleted={() => setSelected(null)} />
         ) : (
           <div className="flex h-full flex-col items-center justify-center gap-3 text-center text-muted-foreground">
             <MessagesSquare className="h-12 w-12 opacity-40" />
