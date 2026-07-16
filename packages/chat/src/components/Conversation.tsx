@@ -142,26 +142,29 @@ function MessageBubble({
   }
   const reactList = Object.entries(agg);
 
-  return (
-    <div className={`group flex ${mine ? "justify-end" : "justify-start"}`}>
-      <div className={`relative max-w-[78%] ${mine ? "items-end" : "items-start"} flex flex-col`}>
-        {/* toolbar: escondido; só aparece ao passar o mouse na mensagem */}
-        <div className={`absolute -top-3 z-10 hidden items-center gap-0.5 rounded-full border bg-popover px-1 py-0.5 shadow-sm group-hover:flex ${mine ? "right-2" : "left-2"}`}>
-          <button onClick={() => setPickerOpen((o) => !o)} title="Reagir" className="rounded-full p-1 text-muted-foreground hover:bg-muted hover:text-foreground"><SmilePlus className="h-3.5 w-3.5" /></button>
-          <button onClick={onReply} title="Responder" className="rounded-full p-1 text-muted-foreground hover:bg-muted hover:text-foreground"><Reply className="h-3.5 w-3.5" /></button>
-        </div>
-        {pickerOpen && (
-          <>
-            <div className="fixed inset-0 z-20" onClick={() => setPickerOpen(false)} />
-            <div className={`absolute -top-9 z-30 flex gap-0.5 rounded-full border bg-popover px-1.5 py-1 shadow-lg ${mine ? "right-0" : "left-0"}`}>
-              {REACTS.map((e) => (
-                <button key={e} onClick={() => { onReact(e, !!agg[e]?.mine); setPickerOpen(false); }}
-                  className="rounded-full px-1 text-lg leading-none hover:scale-125 transition-transform">{e}</button>
-              ))}
-            </div>
-          </>
-        )}
+  // Toolbar ao LADO do balão (como no WhatsApp): escondido, aparece no hover.
+  const toolbar = (
+    <div className="relative hidden shrink-0 items-center gap-0.5 self-center group-hover:flex">
+      <button onClick={() => setPickerOpen((o) => !o)} title="Reagir" className="rounded-full p-1 text-muted-foreground hover:bg-muted hover:text-foreground"><SmilePlus className="h-4 w-4" /></button>
+      <button onClick={onReply} title="Responder" className="rounded-full p-1 text-muted-foreground hover:bg-muted hover:text-foreground"><Reply className="h-4 w-4" /></button>
+      {pickerOpen && (
+        <>
+          <div className="fixed inset-0 z-20" onClick={() => setPickerOpen(false)} />
+          <div className={`absolute -top-10 z-30 flex gap-0.5 rounded-full border bg-popover px-1.5 py-1 shadow-lg ${mine ? "right-0" : "left-0"}`}>
+            {REACTS.map((e) => (
+              <button key={e} onClick={() => { onReact(e, !!agg[e]?.mine); setPickerOpen(false); }}
+                className="rounded-full px-1 text-lg leading-none transition-transform hover:scale-125">{e}</button>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
 
+  return (
+    <div className={`group flex items-center gap-1 ${mine ? "justify-end" : "justify-start"}`}>
+      {mine && toolbar}
+      <div className={`max-w-[78%] ${mine ? "items-end" : "items-start"} flex flex-col`}>
         <div className={`rounded-2xl px-3 py-2 text-sm ${mine ? "rounded-br-sm bg-primary text-primary-foreground" : "rounded-bl-sm bg-muted text-foreground"}`}>
           {showName && <p className="mb-0.5 text-xs font-semibold text-primary">{senderName}</p>}
 
@@ -191,6 +194,7 @@ function MessageBubble({
           </div>
         )}
       </div>
+      {!mine && toolbar}
     </div>
   );
 }
