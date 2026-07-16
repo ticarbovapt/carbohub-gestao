@@ -2,6 +2,9 @@ import { useState } from "react";
 import { X, Check, Search } from "lucide-react";
 import { useDirectory, useStartDm, useCreateChannel } from "../hooks";
 import { Avatar } from "./Avatar";
+import type { ChatProfileRef, Conversation } from "../types";
+
+const nowIso = () => new Date().toISOString();
 
 function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
   return (
@@ -33,25 +36,35 @@ function DirectorySearch({ children }: { children: (search: string, setSearch: (
   );
 }
 
-export function NewDmDialog({ onClose, onOpened }: { onClose: () => void; onOpened: (channelId: string) => void }) {
+export function NewDmDialog({ onClose, onOpened }: { onClose: () => void; onOpened: (conv: Conversation) => void }) {
   const startDm = useStartDm();
   return (
     <Modal title="Nova mensagem direta" onClose={onClose}>
       <DirectorySearch>
-        {(search) => <DirList search={search} onPick={async (id) => { const cid = await startDm.mutateAsync(id); onOpened(cid); onClose(); }} />}
+        {(search) => <DirList search={search} onPick={async (p) => {
+          const cid = await startDm.mutateAsync(p.id);
+          onOpened({
+            channel: { id: cid, type: "dm", name: null, description: null, is_private: true, avatar_url: null, created_by: null, created_at: nowIso(), archived_at: null },
+            title: p.full_name ?? "Conversa",
+            avatarUrl: p.avatar_url ?? null,
+            otherUserId: p.id,
+            unread: 0,
+          });
+          onClose();
+        }} />}
       </DirectorySearch>
     </Modal>
   );
 }
 
-function DirList({ search, onPick, selected }: { search: string; onPick: (id: string) => void; selected?: Set<string> }) {
+function DirList({ search, onPick, selected }: { search: string; onPick: (p: ChatProfileRef) => void; selected?: Set<string> }) {
   const { data: people = [], isLoading } = useDirectory(search);
   if (isLoading) return <p className="text-sm text-muted-foreground">Carregando…</p>;
   if (!people.length) return <p className="text-sm text-muted-foreground">Ninguém encontrado.</p>;
   return (
     <div className="max-h-72 space-y-1 overflow-y-auto">
       {people.map((p) => (
-        <button key={p.id} onClick={() => onPick(p.id)}
+        <button key={p.id} onClick={() => onPick(p)}
           className="flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left hover:bg-muted">
           <Avatar name={p.full_name} url={p.avatar_url} size={32} />
           <span className="flex-1 truncate text-sm">{p.full_name ?? "—"}</span>
@@ -62,7 +75,7 @@ function DirList({ search, onPick, selected }: { search: string; onPick: (id: st
   );
 }
 
-export function NewChannelDialog({ onClose, onOpened }: { onClose: () => void; onOpened: (channelId: string) => void }) {
+export function NewChannelDialog({ onClose, onOpened }: { onClose: () => void; onOpened: (conv: Conversation) => void }) {
   const [name, setName] = useState("");
   const [isPrivate, setIsPrivate] = useState(true);
   const [members, setMembers] = useState<Set<string>>(new Set());
@@ -74,7 +87,14 @@ export function NewChannelDialog({ onClose, onOpened }: { onClose: () => void; o
   async function submit() {
     if (!name.trim() || create.isPending) return;
     const cid = await create.mutateAsync({ name, memberIds: [...members], isPrivate });
-    onOpened(cid); onClose();
+    onOpened({
+      channel: { id: cid, type: "group", name: name.trim(), description: null, is_private: isPrivate, avatar_url: null, created_by: null, created_at: nowIso(), archived_at: null },
+      title: name.trim(),
+      avatarUrl: null,
+      otherUserId: null,
+      unread: 0,
+    });
+    onClose();
   }
 
   return (

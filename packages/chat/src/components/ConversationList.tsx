@@ -20,9 +20,9 @@ export function ConversationList({
     .filter((c) => (tab === "dm" ? c.channel.type === "dm" : c.channel.type === "group"))
     .filter((c) => !search.trim() || c.title.toLowerCase().includes(search.trim().toLowerCase()));
 
-  function openNew(channelId: string) {
-    const found = conversations.find((c) => c.channel.id === channelId);
-    if (found) onSelect(found);
+  function openNew(conv: Conversation) {
+    setTab(conv.channel.type === "dm" ? "dm" : "group");
+    onSelect(conv); // abre já, mesmo antes da lista recarregar
   }
 
   return (
