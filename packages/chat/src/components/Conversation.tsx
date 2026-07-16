@@ -3,6 +3,7 @@ import { useMessages } from "../hooks";
 import { useChatCtx } from "../context";
 import { Avatar } from "./Avatar";
 import { Composer } from "./Composer";
+import { Attachment } from "./Attachment";
 import type { Conversation as Conv } from "../types";
 
 const dayKey = (iso: string) => new Date(iso).toLocaleDateString("pt-BR");
@@ -70,7 +71,12 @@ export function Conversation({ conv }: { conv: Conv }) {
                           </span>
                         </p>
                       )}
-                      <p className="whitespace-pre-wrap break-words text-sm text-foreground">{m.body}</p>
+                      {m.body && <p className="whitespace-pre-wrap break-words text-sm text-foreground">{m.body}</p>}
+                      {m.attachments && m.attachments.length > 0 && (
+                        <div className="mt-1 space-y-1.5">
+                          {m.attachments.map((att) => <Attachment key={att.id} att={att} />)}
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>

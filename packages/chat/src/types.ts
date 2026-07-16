@@ -27,6 +27,18 @@ export interface ChatChannel {
   archived_at: string | null;
 }
 
+export interface ChatAttachment {
+  id: string;
+  message_id: string;
+  storage_path: string;
+  mime_type: string | null;
+  size_bytes: number | null;
+  width: number | null;
+  height: number | null;
+  duration_ms: number | null;
+  thumbnail_path: string | null;
+}
+
 export interface ChatMessage {
   id: string;
   channel_id: string;
@@ -40,6 +52,7 @@ export interface ChatMessage {
   edited_at: string | null;
   deleted_at: string | null;
   sender?: ChatProfileRef | null;
+  attachments?: ChatAttachment[];
 }
 
 // Conversa normalizada para a lista (DM mostra o outro; grupo mostra o nome).
