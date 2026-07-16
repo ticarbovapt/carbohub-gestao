@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   X, Trash2, ChevronRight, ArrowRightLeft, ShoppingCart, History,
-  StickyNote, Phone, CheckSquare, Clock, GitBranch, AlertTriangle,
+  StickyNote, Phone, CheckSquare, Clock, GitBranch, AlertTriangle, Pin, PinOff,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -15,7 +15,8 @@ import {
 } from "@/types/crm";
 import {
   useAdvanceLeadStage, useMarkLeadLost, useTransferLead, useLeadOwnerLog,
-  useLeadActivities, useAddLeadActivity, useDeleteLead, useUpdateCRMLead, type LeadActivity,
+  useLeadActivities, useAddLeadActivity, useDeleteLead, useUpdateCRMLead,
+  useToggleActivityPin, type LeadActivity,
 } from "@/hooks/useCRMLeads";
 import { useVendedoresDir } from "@/hooks/useVendas";
 import { useAuth } from "@/contexts/AuthContext";
@@ -29,6 +30,12 @@ interface DealDetailProps {
 
 const TEMP_VARIANT = { quente: "destructive" as const, morno: "warning" as const, frio: "secondary" as const };
 const TEMP_LABEL = { quente: "🔥 Quente", morno: "🌡️ Morno", frio: "❄️ Frio" };
+
+const ACT_TYPES = [
+  { id: "note", label: "Nota", icon: <StickyNote className="h-4 w-4" /> },
+  { id: "call", label: "Ligação", icon: <Phone className="h-4 w-4" /> },
+  { id: "task", label: "Tarefa", icon: <CheckSquare className="h-4 w-4" /> },
+];
 
 const brl = (v: number) =>
   new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 }).format(v || 0);
@@ -59,6 +66,7 @@ export function DealDetail({ lead, funnelType, onClose }: DealDetailProps) {
   const deleteLead = useDeleteLead();
   const addActivity = useAddLeadActivity();
   const updateLead = useUpdateCRMLead();
+  const togglePin = useToggleActivityPin();
 
   const { data: activities = [] } = useLeadActivities(lead.id);
   const { data: dir = [] } = useVendedoresDir();
@@ -309,19 +317,29 @@ export function DealDetail({ lead, funnelType, onClose }: DealDetailProps) {
 
           {/* Direita — compositor + timeline (~60%) */}
           <div className="flex w-full flex-1 flex-col overflow-hidden lg:w-3/5">
-            {/* Compositor */}
+            {/* Compositor — abas de tipo (Nota / Ligação / Tarefa) no topo */}
             <div className="border-b p-5">
-              <select
-                className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
-                value={actType} onChange={(e) => setActType(e.target.value)}
-              >
-                <option value="note">📝 Nota</option>
-                <option value="call">📞 Ligação</option>
-                <option value="task">✅ Tarefa</option>
-              </select>
+              <div className="flex gap-1 border-b">
+                {ACT_TYPES.map((t) => {
+                  const active = actType === t.id;
+                  return (
+                    <button
+                      key={t.id}
+                      type="button"
+                      onClick={() => setActType(t.id)}
+                      className={[
+                        "flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium -mb-px border-b-2 transition-colors",
+                        active ? "border-primary text-foreground" : "border-transparent text-muted-foreground hover:text-foreground",
+                      ].join(" ")}
+                    >
+                      {t.icon} {t.label}
+                    </button>
+                  );
+                })}
+              </div>
               <textarea
-                className="mt-2 min-h-[80px] w-full resize-y rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-                placeholder={actType === "task" ? "O que precisa ser feito?" : "Escreva a nota / o que foi conversado..."}
+                className="mt-3 min-h-[80px] w-full resize-y rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                placeholder={actType === "task" ? "O que precisa ser feito?" : actType === "call" ? "Resumo da ligação..." : "Escreva a nota / o que foi conversado..."}
                 value={actText} onChange={(e) => setActText(e.target.value)}
                 onKeyDown={(e) => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); handleAddActivity(); } }}
               />
@@ -335,9 +353,13 @@ export function DealDetail({ lead, funnelType, onClose }: DealDetailProps) {
               </div>
             </div>
 
-            {/* Timeline agrupada por data */}
+            {/* Timeline agrupada por data (com faixa de fixados no topo) */}
             <div className="flex-1 overflow-y-auto p-5">
-              <Timeline activities={activities} />
+              <Timeline
+                activities={activities}
+                onTogglePin={(a) => togglePin.mutate({ id: a.id, pinned: !a.pinned, lead_id: lead.id })}
+                pinBusy={togglePin.isPending}
+              />
             </div>
           </div>
         </div>
@@ -416,10 +438,19 @@ function ActivityIcon({ type, status }: { type: string; status: string | null })
   return <StickyNote className={cls} />;
 }
 
-function Timeline({ activities }: { activities: LeadActivity[] }) {
+function Timeline({
+  activities, onTogglePin, pinBusy,
+}: {
+  activities: LeadActivity[];
+  onTogglePin: (a: LeadActivity) => void;
+  pinBusy: boolean;
+}) {
   if (activities.length === 0) {
     return <p className="text-sm text-muted-foreground">Nenhuma atividade ainda. Registre a primeira acima.</p>;
   }
+
+  // Fixados sobem para uma faixa no topo, mas permanecem na sequência normal abaixo.
+  const pinned = activities.filter((a) => a.pinned);
 
   // activities já vêm ordenadas desc por created_at. Agrupa por dia preservando a ordem.
   const groups: { label: string; items: LeadActivity[] }[] = [];
@@ -432,6 +463,21 @@ function Timeline({ activities }: { activities: LeadActivity[] }) {
 
   return (
     <div className="space-y-5">
+      {pinned.length > 0 && (
+        <div>
+          <div className="mb-2 flex items-center gap-2">
+            <Pin className="h-3 w-3 text-amber-500" />
+            <span className="text-xs font-semibold text-amber-600 dark:text-amber-400">Fixados</span>
+            <div className="h-px flex-1 bg-border" />
+          </div>
+          <div className="space-y-3">
+            {pinned.map((a) => (
+              <ActivityRow key={`pin-${a.id}`} a={a} onTogglePin={onTogglePin} pinBusy={pinBusy} highlight />
+            ))}
+          </div>
+        </div>
+      )}
+
       {groups.map((g) => (
         <div key={g.label}>
           <div className="mb-2 flex items-center gap-2">
@@ -439,28 +485,58 @@ function Timeline({ activities }: { activities: LeadActivity[] }) {
             <div className="h-px flex-1 bg-border" />
           </div>
           <div className="space-y-3">
-            {g.items.map((a) => {
-              const when = new Date(a.created_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
-              return (
-                <div key={a.id} className="flex gap-3">
-                  <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
-                    <ActivityIcon type={a.activity_type} status={a.status} />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="whitespace-pre-wrap break-words text-sm text-foreground">{a.subject || a.body || a.activity_type}</p>
-                    <p className="text-[11px] text-muted-foreground">
-                      {a.created_by_name || "—"} · {when}
-                      {a.activity_type === "task" && a.status === "pending" && a.due_at && (
-                        <span className="text-amber-500"> · prazo {new Date(a.due_at).toLocaleDateString("pt-BR")}</span>
-                      )}
-                    </p>
-                  </div>
-                </div>
-              );
-            })}
+            {g.items.map((a) => (
+              <ActivityRow key={a.id} a={a} onTogglePin={onTogglePin} pinBusy={pinBusy} />
+            ))}
           </div>
         </div>
       ))}
+    </div>
+  );
+}
+
+function ActivityRow({
+  a, onTogglePin, pinBusy, highlight,
+}: {
+  a: LeadActivity;
+  onTogglePin: (a: LeadActivity) => void;
+  pinBusy: boolean;
+  highlight?: boolean;
+}) {
+  const when = new Date(a.created_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+  // Mudança de etapa é registro do sistema — não pode ser fixada.
+  const canPin = a.activity_type !== "stage_change";
+  return (
+    <div className={[
+      "group flex gap-3 rounded-md",
+      highlight ? "bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 p-2.5" : "",
+    ].join(" ")}>
+      <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
+        <ActivityIcon type={a.activity_type} status={a.status} />
+      </div>
+      <div className="min-w-0 flex-1">
+        <p className="whitespace-pre-wrap break-words text-sm text-foreground">{a.subject || a.body || a.activity_type}</p>
+        <p className="text-[11px] text-muted-foreground">
+          {a.created_by_name || "—"} · {when}
+          {a.activity_type === "task" && a.status === "pending" && a.due_at && (
+            <span className="text-amber-500"> · prazo {new Date(a.due_at).toLocaleDateString("pt-BR")}</span>
+          )}
+        </p>
+      </div>
+      {canPin && (
+        <button
+          type="button"
+          onClick={() => onTogglePin(a)}
+          disabled={pinBusy}
+          title={a.pinned ? "Desafixar" : "Fixar no topo"}
+          className={[
+            "shrink-0 self-start p-1 rounded transition-opacity",
+            a.pinned ? "text-amber-500" : "text-muted-foreground opacity-0 group-hover:opacity-100 hover:text-foreground",
+          ].join(" ")}
+        >
+          {a.pinned ? <PinOff className="h-3.5 w-3.5" /> : <Pin className="h-3.5 w-3.5" />}
+        </button>
+      )}
     </div>
   );
 }

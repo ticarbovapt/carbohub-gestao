@@ -59,6 +59,7 @@ export interface LeadActivity {
   created_by: string | null;
   created_by_name: string | null;
   created_at: string;
+  pinned: boolean;                  // fixado no topo da timeline
 }
 
 /** Linha do tempo do lead (atividades: notas, ligações, tarefas, mudanças de etapa). */
@@ -69,7 +70,7 @@ export function useLeadActivities(leadId: string | null) {
     queryFn: async (): Promise<LeadActivity[]> => {
       const { data, error } = await db
         .from("crm_sales_lead_activities")
-        .select("id, activity_type, subject, body, status, due_at, done_at, stage_from, stage_to, created_by, created_by_name, created_at")
+        .select("id, activity_type, subject, body, status, due_at, done_at, stage_from, stage_to, created_by, created_by_name, created_at, pinned")
         .eq("lead_id", leadId)
         .order("created_at", { ascending: false });
       if (error) throw error;
@@ -103,6 +104,20 @@ export function useAddLeadActivity() {
     onSuccess: (_d, v) => {
       qc.invalidateQueries({ queryKey: ["crm-lead-activities", v.lead_id] });
       qc.invalidateQueries({ queryKey: ["crm-leads"] });
+    },
+  });
+}
+
+/** Fixa/desafixa um comentário no topo da timeline do lead. */
+export function useToggleActivityPin() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, pinned }: { id: string; pinned: boolean; lead_id: string }) => {
+      const { error } = await db.from("crm_sales_lead_activities").update({ pinned }).eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: (_d, v) => {
+      qc.invalidateQueries({ queryKey: ["crm-lead-activities", v.lead_id] });
     },
   });
 }
