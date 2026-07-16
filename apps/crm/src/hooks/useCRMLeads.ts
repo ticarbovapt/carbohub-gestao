@@ -113,12 +113,18 @@ export function useToggleActivityPin() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ id, pinned }: { id: string; pinned: boolean; lead_id: string }) => {
-      const { error } = await db.from("crm_sales_lead_activities").update({ pinned }).eq("id", id);
+      const { data, error } = await db
+        .from("crm_sales_lead_activities").update({ pinned }).eq("id", id).select("id");
       if (error) throw error;
+      // RLS pode bloquear o UPDATE sem erro (0 linhas). Sinaliza em vez de falhar mudo.
+      if (!data || (data as unknown[]).length === 0) {
+        throw new Error("Sem permissão para fixar este comentário.");
+      }
     },
     onSuccess: (_d, v) => {
       qc.invalidateQueries({ queryKey: ["crm-lead-activities", v.lead_id] });
     },
+    onError: (e: Error) => toast.error(e.message),
   });
 }
 
