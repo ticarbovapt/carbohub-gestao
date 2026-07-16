@@ -1,4 +1,4 @@
-export type FunnelType = "f1" | "f2" | "f3" | "f4" | "f5" | "f6" | "f7" | "f8" | "f9";
+export type FunnelType = "f1" | "f2" | "f3" | "f4" | "f5" | "f6" | "f7" | "f8" | "f9" | "f10" | "f11" | "f12";
 
 export type LeadStage =
   | "a_contatar" | "tentativa_1" | "tentativa_2"
@@ -123,6 +123,40 @@ const STAGES_VENDAS: StageConfig[] = [
   { id: "perdido",     label: "Perdido",          icon: "❌", color: "#EF4444" },
 ];
 
+// Follow up — reativação da base de clientes que JÁ compraram (recompra).
+const STAGES_FOLLOWUP: StageConfig[] = [
+  { id: "a_reativar",   label: "A Reativar",     icon: "🔁", color: "#94A3B8" },
+  { id: "contato",      label: "Contato Feito",  icon: "📞", color: "#F59E0B" },
+  { id: "reengajado",   label: "Reengajado",     icon: "🔥", color: "#3B82F6" },
+  { id: "oferta",       label: "Oferta Enviada", icon: "🎁", color: "#8B5CF6" },
+  { id: "negociacao",   label: "Negociação",     icon: "🤝", color: "#06B6D4" },
+  { id: "recomprou",    label: "Recomprou",      icon: "✅", color: "#22C55E" },
+  { id: "sem_interesse",label: "Sem Interesse",  icon: "❌", color: "#EF4444" },
+];
+
+// Inbound — closers fechando leads de anúncio ou já qualificados pelo Outbound.
+const STAGES_INBOUND: StageConfig[] = [
+  { id: "novo",        label: "Lead Recebido",    icon: "📥", color: "#94A3B8" },
+  { id: "contato",     label: "Contato Feito",    icon: "📞", color: "#F59E0B" },
+  { id: "qualificado", label: "Qualificado",      icon: "🎯", color: "#3B82F6" },
+  { id: "proposta",    label: "Proposta Enviada", icon: "📄", color: "#8B5CF6" },
+  { id: "negociacao",  label: "Negociação",       icon: "🤝", color: "#06B6D4" },
+  { id: "ganho",       label: "Ganho",            icon: "✅", color: "#22C55E" },
+  { id: "perdido",     label: "Perdido",          icon: "❌", color: "#EF4444" },
+];
+
+// Outbound — SDR fazendo prospecção ativa (Google/Instagram/LinkedIn) e passando
+// os qualificados para o Closer (Inbound).
+const STAGES_OUTBOUND: StageConfig[] = [
+  { id: "prospeccao",  label: "Prospecção",        icon: "🔎", color: "#94A3B8" },
+  { id: "cadencia",    label: "Cadência",          icon: "📨", color: "#F59E0B" },
+  { id: "conectado",   label: "Conectado",         icon: "📞", color: "#F97316" },
+  { id: "qualificado", label: "Qualificado (SQL)", icon: "🎯", color: "#3B82F6" },
+  { id: "reuniao",     label: "Reunião Agendada",  icon: "📅", color: "#8B5CF6" },
+  { id: "repassado",   label: "Passado ao Closer", icon: "➡️", color: "#22C55E" },
+  { id: "descartado",  label: "Descartado",        icon: "❌", color: "#EF4444" },
+];
+
 export const FUNNEL_CONFIG: Record<FunnelType, FunnelConfig> = {
   f1: { id: "f1", name: "Vendas",                          shortName: "Vendas",        description: "Jornada do cliente",        icon: "💼", color: "#3BC770", cycleLabel: "1-30 dias",  stages: STAGES_VENDAS },
   f2: { id: "f2", name: "Licenciados CarboVapt",            shortName: "Licenciados",   description: "Licenciamento",             icon: "🏢", color: "#8B5CF6", cycleLabel: "15-60 dias", stages: STAGES_LICENSEE  },
@@ -133,6 +167,9 @@ export const FUNNEL_CONFIG: Record<FunnelType, FunnelConfig> = {
   f7: { id: "f7", name: "Empresas com Motores",             shortName: "Motores",       description: "Geradores, compressores",   icon: "⚙️", color: "#EF4444", cycleLabel: "30-90 dias", stages: STAGES_ENTERPRISE },
   f8: { id: "f8", name: "Empresas c/ Estoque Combustível",  shortName: "Estoque Comb.", description: "Alto valor + recorrência",  icon: "⛽", color: "#10B981", cycleLabel: "30-90 dias", stages: STAGES_ENTERPRISE },
   f9: { id: "f9", name: "Subdistribuidores",                shortName: "Subdistribuidor", description: "Revenda em escala",       icon: "🏬", color: "#14B8A6", cycleLabel: "7-21 dias",  stages: STAGES_PDV       },
+  f10:{ id: "f10", name: "Follow up",                        shortName: "Follow up",     description: "Recompra da base de clientes", icon: "🔁", color: "#EAB308", cycleLabel: "recorrente", stages: STAGES_FOLLOWUP },
+  f11:{ id: "f11", name: "Inbound",                          shortName: "Inbound",       description: "Closers — anúncios e qualificados", icon: "🎯", color: "#3BC770", cycleLabel: "1-15 dias", stages: STAGES_INBOUND },
+  f12:{ id: "f12", name: "Outbound",                         shortName: "Outbound",      description: "SDR — prospecção ativa",    icon: "🔎", color: "#6366F1", cycleLabel: "1-30 dias", stages: STAGES_OUTBOUND },
 };
 
 export const LOSS_REASONS = [
@@ -161,7 +198,7 @@ export function getNextStage(funnelType: FunnelType, currentStage: string): stri
 }
 
 export function isTerminalStage(stageId: string): boolean {
-  return ["convertido", "sem_interesse", "parceiro", "descartado", "fechamento", "ganho", "perdido"].includes(stageId);
+  return ["convertido", "sem_interesse", "parceiro", "descartado", "fechamento", "ganho", "perdido", "recomprou", "repassado"].includes(stageId);
 }
 
 /** Estágio de "perda" do funil (varia por funil). Vendas usa 'perdido'. */
