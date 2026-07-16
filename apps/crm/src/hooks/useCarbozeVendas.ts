@@ -58,6 +58,7 @@ export interface CarbozeVendaRow {
   buyer_notes: string | null;
   general_notes: string | null;
   status: string;                 // quote | pending | confirmed | invoiced | shipped | delivered | cancelled
+  fulfillment_stage: string | null; // etapa no kanban de rastreio (Pós-venda/Ops)
   vendedor_id: string | null;
   vendedor_name: string | null;
   invoice_number: string | null;
@@ -150,6 +151,7 @@ export function useCarbozeVendas({ month, customFrom, customTo, vendedorFilter, 
           buyer_notes: row.buyer_notes ?? null,
           general_notes: row.general_notes ?? null,
           status: row.status,
+          fulfillment_stage: row.fulfillment_stage ?? null,
           vendedor_id: row.vendedor_id ?? null,
           vendedor_name: row.vendedor_name ?? null,
           invoice_number: row.invoice_number ?? null,

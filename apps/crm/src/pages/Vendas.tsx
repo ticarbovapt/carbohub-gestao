@@ -26,14 +26,28 @@ import {
 // Vendas e Orçamentos — FONTE ÚNICA: carboze_orders (mesma da VendasPage do Controle).
 // Traz Bling + legado + vendas nativas. Orçamento = status 'quote'.
 
-const STATUS_LABEL: Record<string, string> = {
-  quote: "Orçamento", pending: "Pendente", confirmed: "Confirmado", invoiced: "Faturado",
-  shipped: "Enviado", delivered: "Entregue", cancelled: "Cancelado",
+// A coluna STATUS reflete a ETAPA do kanban de rastreio (Pós-venda/Ops), para o
+// vendedor acompanhar em que coluna a venda dele está. Orçamento e Cancelado têm
+// precedência (não entram no funil de rastreio).
+type BadgeVariant = "success" | "warning" | "destructive" | "secondary" | "default";
+const STAGE_LABEL: Record<string, string> = {
+  nova_venda: "Nova Venda", separacao_pendente: "Pedido Recebido", criar_op: "Criar OP",
+  separando: "Em Separação", separado: "Separado", gerar_nf: "Gerar NF",
+  nf_finalizada: "NF Finalizada", emitir_etiqueta: "Emitir Etiqueta",
+  em_transporte: "Em Transporte", entregue: "Entregue", cancelado: "Cancelado",
 };
-const STATUS_VARIANT: Record<string, "success" | "warning" | "destructive" | "secondary"> = {
-  quote: "secondary", delivered: "success", shipped: "warning", confirmed: "warning",
-  invoiced: "warning", pending: "secondary", cancelled: "destructive",
+const STAGE_VARIANT: Record<string, BadgeVariant> = {
+  nova_venda: "secondary", separacao_pendente: "secondary", criar_op: "warning",
+  separando: "warning", separado: "warning", gerar_nf: "warning",
+  nf_finalizada: "warning", emitir_etiqueta: "warning", em_transporte: "default",
+  entregue: "success", cancelado: "destructive",
 };
+function statusBadge(v: CarbozeVendaRow): { label: string; variant: BadgeVariant } {
+  if (v.status === "quote") return { label: "Orçamento", variant: "secondary" };
+  if (v.status === "cancelled") return { label: "Cancelado", variant: "destructive" };
+  const stage = v.fulfillment_stage || "nova_venda";
+  return { label: STAGE_LABEL[stage] ?? stage, variant: STAGE_VARIANT[stage] ?? "secondary" };
+}
 
 const fmtBRL = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", minimumFractionDigits: 0, maximumFractionDigits: 0 });
 // Valores do detalhe financeiro precisam dos centavos (desconto por item etc.).
@@ -347,7 +361,7 @@ export default function Vendas() {
                                 aria-label={`Selecionar ${venda.order_number}`} />
                             </td>
                           )}
-                          <td className="p-3"><CarboBadge variant={STATUS_VARIANT[venda.status] ?? "secondary"} size="sm">{STATUS_LABEL[venda.status] ?? venda.status}</CarboBadge></td>
+                          <td className="p-3">{(() => { const b = statusBadge(venda); return <CarboBadge variant={b.variant} size="sm">{b.label}</CarboBadge>; })()}</td>
                           <td className="p-3 font-mono text-xs font-medium">{venda.order_number}</td>
                           <td className="p-3 text-muted-foreground whitespace-nowrap">{fmtDate(effectiveDate(venda))}{venda.sale_date && venda.sale_date !== venda.created_at.substring(0, 10) && <span className="ml-1 text-[10px] text-amber-500 font-medium">✱</span>}</td>
                           <td className="p-3 font-medium max-w-[180px] truncate">{venda.customer_name}</td>
