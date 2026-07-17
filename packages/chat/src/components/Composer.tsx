@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { Send, Paperclip, X, CornerUpLeft, Users, Smile, ChevronDown, Clock } from "lucide-react";
+import { Send, Paperclip, X, CornerUpLeft, Users, Smile, Clock } from "lucide-react";
 import { useSendMessage, useScheduleMessage, useDirectory, kindFromMime, type OutgoingAttachment } from "../hooks";
 import { sendTyping } from "../lib/presence";
 import { formatWhen } from "../lib/schedule";
@@ -228,26 +228,28 @@ export function Composer({
 
           {/* direita: enviar quando há conteúdo, microfone quando vazio (estilo WhatsApp) */}
           {(text.trim() || files.length > 0) ? (
-            <div className="relative flex shrink-0 items-center">
-              <button onClick={() => setSendMenu((o) => !o)} title="Opções de envio" aria-label="Opções de envio"
-                className="flex h-10 w-6 items-center justify-center rounded-l-lg text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring">
-                <ChevronDown className="h-4 w-4" />
-              </button>
+            <div className="flex shrink-0 items-center gap-1.5">
+              <div className="relative">
+                <button onClick={() => setSendMenu((o) => !o)} title="Enviar depois" aria-label="Agendar envio" aria-expanded={sendMenu}
+                  className="flex h-10 w-10 items-center justify-center rounded-lg border text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring">
+                  <Clock className="h-5 w-5" />
+                </button>
+                {sendMenu && (
+                  <>
+                    <div className="fixed inset-0 z-20" onClick={() => setSendMenu(false)} />
+                    <div className="absolute bottom-12 right-0 z-30 w-44 overflow-hidden rounded-lg border bg-popover shadow-lg">
+                      <button onClick={() => { setSendMenu(false); setScheduleOpen(true); }}
+                        className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm hover:bg-muted">
+                        <Clock className="h-4 w-4 text-muted-foreground" /> Enviar depois
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
               <button onClick={submit} disabled={send.isPending}
                 className="flex h-10 w-10 items-center justify-center rounded-full bg-primary text-primary-foreground disabled:opacity-40 focus-visible:ring-2 focus-visible:ring-ring" title="Enviar" aria-label="Enviar mensagem">
                 <Send className="h-4 w-4" />
               </button>
-              {sendMenu && (
-                <>
-                  <div className="fixed inset-0 z-20" onClick={() => setSendMenu(false)} />
-                  <div className="absolute bottom-12 right-0 z-30 w-44 overflow-hidden rounded-lg border bg-popover shadow-lg">
-                    <button onClick={() => { setSendMenu(false); setScheduleOpen(true); }}
-                      className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm hover:bg-muted">
-                      <Clock className="h-4 w-4 text-muted-foreground" /> Enviar depois
-                    </button>
-                  </div>
-                </>
-              )}
             </div>
           ) : (
             <AudioRecorder onSend={sendAudio} disabled={send.isPending} />
