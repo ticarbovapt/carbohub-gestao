@@ -10,6 +10,7 @@ import { Composer } from "./Composer";
 import { Attachment } from "./Attachment";
 import { ContactPanel } from "./ContactPanel";
 import { AnnouncementStatus } from "./AnnouncementStatus";
+import { ScheduledBar } from "./ScheduledBar";
 
 interface AnnInfo { isPublisher: boolean; acked: boolean; canAck: boolean; count: number; onAck: () => void; onStatus: () => void }
 import type { Conversation as Conv, ChatMessage } from "../types";
@@ -351,8 +352,11 @@ export function Conversation({ conv, focus, onClearFocus, onBack, onDeleted }: {
             <Lock className="h-3.5 w-3.5" /> Somente leitura — comunicado oficial
           </div>
         ) : (
-          <Composer channelId={conv.channel.id} isGroup={isGroup} replyTo={replyTo} onClearReply={() => setReplyTo(null)}
-            replyToName={replyTo ? nameOf(replyTo.sender_id) : ""} onEditLast={editLast} />
+          <>
+            <ScheduledBar channelId={conv.channel.id} />
+            <Composer channelId={conv.channel.id} isGroup={isGroup} replyTo={replyTo} onClearReply={() => setReplyTo(null)}
+              replyToName={replyTo ? nameOf(replyTo.sender_id) : ""} onEditLast={editLast} />
+          </>
         )}
       </div>
 
