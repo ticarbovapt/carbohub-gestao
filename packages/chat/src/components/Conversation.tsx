@@ -143,6 +143,7 @@ export function Conversation({ conv, onDeleted }: { conv: Conv; onDeleted?: () =
                       repliedName={m.reply_to_id ? nameOf(byId[m.reply_to_id]?.sender_id ?? null) : ""}
                       currentUserId={currentUser.id}
                       receipt={mine ? messageReceipt(m.created_at, members, currentUser.id).status : null}
+                      menuUp={i >= shown.length - 3}
                       onReply={() => setReplyTo(m)}
                       onReact={(emoji, active) => react.mutate({ messageId: m.id, emoji, channelId: conv.channel.id, active })}
                       onEdit={(body) => edit.mutate({ messageId: m.id, body, channelId: conv.channel.id })}
@@ -168,11 +169,11 @@ export function Conversation({ conv, onDeleted }: { conv: Conv; onDeleted?: () =
 }
 
 function MessageBubble({
-  m, mine, isGroup, showName, senderName, repliedTo, repliedName, currentUserId, receipt, onReply, onReact, onEdit, onDelete,
+  m, mine, isGroup, showName, senderName, repliedTo, repliedName, currentUserId, receipt, menuUp, onReply, onReact, onEdit, onDelete,
 }: {
   m: ChatMessage; mine: boolean; isGroup: boolean; showName: boolean; senderName: string;
   repliedTo: ChatMessage | null; repliedName: string; currentUserId: string;
-  receipt: ReceiptStatus | null;
+  receipt: ReceiptStatus | null; menuUp: boolean;
   onReply: () => void; onReact: (emoji: string, active: boolean) => void;
   onEdit: (body: string) => void; onDelete: () => void;
 }) {
@@ -225,7 +226,7 @@ function MessageBubble({
             <>
               <div className="fixed inset-0 z-20" onClick={closeMenu} />
               {confirmDel ? (
-                <div className="absolute right-0 top-7 z-30 w-52 overflow-hidden rounded-lg border bg-popover p-3 shadow-lg">
+                <div className={`absolute right-0 z-30 w-52 overflow-hidden rounded-lg border bg-popover p-3 shadow-lg ${menuUp ? "bottom-7" : "top-7"}`}>
                   <p className="mb-2 text-xs text-foreground">Apagar esta mensagem para todos?</p>
                   <div className="flex justify-end gap-1.5 text-xs">
                     <button onClick={closeMenu} className="rounded-md px-2.5 py-1 hover:bg-muted">Cancelar</button>
@@ -234,7 +235,7 @@ function MessageBubble({
                   </div>
                 </div>
               ) : (
-                <div className="absolute right-0 top-7 z-30 w-36 overflow-hidden rounded-lg border bg-popover shadow-lg">
+                <div className={`absolute right-0 z-30 w-36 overflow-hidden rounded-lg border bg-popover shadow-lg ${menuUp ? "bottom-7" : "top-7"}`}>
                   {m.kind === "text" && (
                     <button onClick={() => { setDraft(m.body ?? ""); setEditing(true); closeMenu(); }}
                       className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-muted"><Pencil className="h-3.5 w-3.5" /> Editar</button>
