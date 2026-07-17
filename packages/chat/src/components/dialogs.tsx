@@ -119,6 +119,7 @@ function MemberPicker({ selMap, setSelMap }: {
 export function NewChannelDialog({ onClose, onOpened }: { onClose: () => void; onOpened: (conv: Conversation) => void }) {
   const [name, setName] = useState("");
   const [isPrivate, setIsPrivate] = useState(true);
+  const [description, setDescription] = useState("");
   const [selMap, setSelMap] = useState<Map<string, ChatProfileRef>>(new Map());
   const create = useCreateChannel();
 
@@ -126,13 +127,13 @@ export function NewChannelDialog({ onClose, onOpened }: { onClose: () => void; o
     if (!name.trim() || create.isPending) return;
     let cid: string;
     try {
-      cid = await create.mutateAsync({ name, memberIds: [...selMap.keys()], isPrivate });
+      cid = await create.mutateAsync({ name, memberIds: [...selMap.keys()], isPrivate, description: description.trim() || undefined });
     } catch (e) {
       toast.error("Não foi possível criar. " + ((e as { message?: string })?.message ?? ""));
       return;
     }
     onOpened({
-      channel: { id: cid, type: "group", name: name.trim(), description: null, is_private: isPrivate, avatar_url: null, created_by: null, created_at: nowIso(), archived_at: null, is_announcement: false },
+      channel: { id: cid, type: "group", name: name.trim(), description: description.trim() || null, is_private: isPrivate, avatar_url: null, created_by: null, created_at: nowIso(), archived_at: null, is_announcement: false, visibility: isPrivate ? "private" : "public" },
       title: name.trim(), avatarUrl: null, otherUserId: null, unread: 0,
       lastAt: null, lastBody: null, lastKind: null, lastSenderId: null, lastSenderName: null,
       muted: false, pinned: false, archived: false, isAnnouncement: false, needsAck: false,
@@ -141,19 +142,31 @@ export function NewChannelDialog({ onClose, onOpened }: { onClose: () => void; o
   }
 
   return (
-    <Modal title="Novo grupo" onClose={onClose}>
-      <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Nome do grupo"
+    <Modal title="Novo grupo ou canal" onClose={onClose}>
+      <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Nome"
+        className="mb-2 h-9 w-full rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
+      <input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Descrição / assunto (opcional)"
         className="mb-3 h-9 w-full rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
-      <label className="mb-3 flex items-center gap-2 text-sm">
-        <input type="checkbox" checked={isPrivate} onChange={(e) => setIsPrivate(e.target.checked)} />
-        Grupo privado (só convidados entram)
-      </label>
+
+      {/* Visibilidade */}
+      <div className="mb-1 flex gap-1.5">
+        {([[true, "Privado"], [false, "Público"]] as [boolean, string][]).map(([v, label]) => (
+          <button key={label} type="button" onClick={() => setIsPrivate(v)}
+            className={`flex-1 rounded-md border px-3 py-1.5 text-xs font-medium ${isPrivate === v ? "border-primary bg-primary/10 text-primary" : "text-muted-foreground hover:bg-muted"}`}>
+            {label}
+          </button>
+        ))}
+      </div>
+      <p className="mb-3 text-[11px] text-muted-foreground">
+        {isPrivate ? "Só convidados entram e veem as mensagens." : "Qualquer interno encontra em “Explorar canais”, lê e pode entrar."}
+      </p>
+
       <MemberPicker selMap={selMap} setSelMap={setSelMap} />
       <div className="mt-4 flex justify-end gap-2">
         <button onClick={onClose} className="rounded-md border px-3 py-1.5 text-sm hover:bg-muted">Cancelar</button>
         <button onClick={submit} disabled={!name.trim() || create.isPending}
           className="rounded-md bg-primary px-3 py-1.5 text-sm text-primary-foreground disabled:opacity-40">
-          {create.isPending ? "Criando…" : "Criar grupo"}
+          {create.isPending ? "Criando…" : (isPrivate ? "Criar grupo" : "Criar canal")}
         </button>
       </div>
     </Modal>

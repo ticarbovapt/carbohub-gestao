@@ -26,6 +26,8 @@ export interface ChatChannel {
   created_at: string;
   archived_at: string | null;
   is_announcement?: boolean;
+  visibility?: "public" | "private";
+  topic?: string | null;
 }
 
 export interface ChatAttachment {

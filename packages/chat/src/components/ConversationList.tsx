@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import {
   MessageSquarePlus, UsersRound, Search, Plus, Pin, PinOff, BellOff, Bell,
-  ChevronDown, CheckCheck, Circle, Trash2, LogOut, Archive, ArchiveRestore, Megaphone, Clock,
+  ChevronDown, CheckCheck, Circle, Trash2, LogOut, Archive, ArchiveRestore, Megaphone, Clock, Hash,
 } from "lucide-react";
 import { useConversations, useUpdateMembership, useLeaveConversation, useSearchMessages, useCanAnnounce, useScheduledMessages } from "../hooks";
 import { useChatCtx } from "../context";
@@ -10,6 +10,7 @@ import { richToPlain } from "../lib/format";
 import { Avatar } from "./Avatar";
 import { NewDmDialog, NewChannelDialog, NewAnnouncementDialog } from "./dialogs";
 import { ScheduledPanel } from "./ScheduledPanel";
+import { ExploreChannels } from "./ExploreChannels";
 import type { Conversation } from "../types";
 
 // Subtítulo da linha: "digitando…" (verde) enquanto alguém digita; senão a prévia.
@@ -77,6 +78,7 @@ export function ConversationList({
   const { data: scheduled = [] } = useScheduledMessages();
   const scheduledCount = scheduled.filter((s) => s.status === "pending").length;
   const [showScheduled, setShowScheduled] = useState(false);
+  const [showExplore, setShowExplore] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [rowMenu, setRowMenu] = useState<{ conv: Conversation; x: number; y: number } | null>(null);
 
@@ -120,6 +122,10 @@ export function ConversationList({
       {/* header: título + botão único (menu) */}
       <div className="relative flex items-center gap-1 border-b p-2">
         <span className="flex-1 px-1 text-sm font-semibold">Conversas</span>
+        <button onClick={() => setShowExplore(true)} title="Explorar canais públicos" aria-label="Explorar canais públicos"
+          className="rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring">
+          <Hash className="h-4 w-4" />
+        </button>
         <button onClick={() => setShowScheduled(true)} title="Mensagens agendadas" aria-label="Mensagens agendadas"
           className="relative rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring">
           <Clock className="h-4 w-4" />
@@ -285,6 +291,7 @@ export function ConversationList({
       )}
 
       {showScheduled && <ScheduledPanel onClose={() => setShowScheduled(false)} />}
+      {showExplore && <ExploreChannels onClose={() => setShowExplore(false)} onOpen={onSelect} />}
       {dialog === "dm" && <NewDmDialog onClose={() => setDialog(null)} onOpened={onSelect} />}
       {dialog === "group" && <NewChannelDialog onClose={() => setDialog(null)} onOpened={onSelect} />}
       {dialog === "announcement" && <NewAnnouncementDialog onClose={() => setDialog(null)} onOpened={onSelect} />}

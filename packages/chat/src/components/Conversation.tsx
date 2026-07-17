@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Search, X, SmilePlus, Reply, CornerUpLeft, Check, CheckCheck, MoreVertical, Pencil, Trash2, ArrowDown, Megaphone, Lock, ChevronLeft, Bug, Lightbulb, CheckCircle2, XCircle, Info } from "lucide-react";
-import { useMessages, useProfilesMap, useToggleReaction, useChannelMembers, useUserInfo, useEditMessage, useDeleteMessage, useSearchMessages, useChannelAcks, useAckMessage } from "../hooks";
+import { useMessages, useProfilesMap, useToggleReaction, useChannelMembers, useUserInfo, useEditMessage, useDeleteMessage, useSearchMessages, useChannelAcks, useAckMessage, useJoinChannel } from "../hooks";
 import { useChatCtx } from "../context";
 import { messageReceipt, type ReceiptStatus } from "../lib/receipts";
 import { useIsOnline, useTyping } from "../lib/presence";
@@ -141,7 +141,11 @@ export function Conversation({ conv, focus, onClearFocus, onBack, onDeleted }: {
   const { currentUser, openConversation } = useChatCtx();
   const isGroup = conv.channel.type === "group";
   const { data: messages = [], isLoading } = useMessages(conv.channel.id, focus?.at ?? null);
-  const { data: members = [] } = useChannelMembers(conv.channel.id);
+  const { data: members = [], isLoading: membersLoading } = useChannelMembers(conv.channel.id);
+  const join = useJoinChannel();
+  const amMember = members.some((m) => m.id === currentUser.id);
+  // Canal público que você está só espiando (não é membro): lê, mas não posta.
+  const isPublicPreview = isGroup && conv.channel.visibility === "public" && !membersLoading && !amMember;
   const { data: profMap = {} } = useProfilesMap(messages.map((m) => m.sender_id ?? "").filter(Boolean));
   // Comunicado oficial (announcement).
   const isAnnouncement = !!conv.isAnnouncement;
@@ -350,6 +354,14 @@ export function Conversation({ conv, focus, onClearFocus, onBack, onDeleted }: {
         {isAnnouncement && !isPublisher ? (
           <div className="flex items-center justify-center gap-1.5 border-t p-3 text-center text-xs text-muted-foreground">
             <Lock className="h-3.5 w-3.5" /> Somente leitura — comunicado oficial
+          </div>
+        ) : isPublicPreview ? (
+          <div className="flex flex-col items-center gap-2 border-t bg-primary/5 p-3 text-center sm:flex-row sm:justify-between sm:text-left">
+            <span className="text-xs text-muted-foreground">Você está vendo um canal público. Entre para participar e receber os avisos.</span>
+            <button onClick={() => join.mutate(conv.channel.id)} disabled={join.isPending}
+              className="shrink-0 rounded-md bg-primary px-4 py-1.5 text-sm font-semibold text-primary-foreground disabled:opacity-50">
+              {join.isPending ? "Entrando…" : "Entrar no canal"}
+            </button>
           </div>
         ) : (
           <>

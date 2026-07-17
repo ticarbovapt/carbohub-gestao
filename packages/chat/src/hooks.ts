@@ -857,15 +857,64 @@ export function useCreateChannel() {
   const { supabase, currentUser } = useChatCtx();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ name, memberIds, isPrivate }: { name: string; memberIds: string[]; isPrivate: boolean }): Promise<string> => {
+    mutationFn: async ({ name, memberIds, isPrivate, description, topic }: {
+      name: string; memberIds: string[]; isPrivate: boolean; description?: string; topic?: string;
+    }): Promise<string> => {
       // RPC definer: cria canal + owner + membros atomicamente, sem o impasse de
       // RLS (grupo privado não é "visível" ao inserir membros pelo cliente).
       const { data, error } = await supabase.rpc("chat_create_group", {
         p_name: name, p_member_ids: memberIds, p_is_private: isPrivate,
+        p_visibility: isPrivate ? "private" : "public",
+        p_description: description ?? null, p_topic: topic ?? null,
       });
       if (error) throw error;
       return data as string;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["chat", "conversations", currentUser.id] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["chat", "conversations", currentUser.id] });
+      qc.invalidateQueries({ queryKey: ["chat", "public-channels"] });
+    },
+  });
+}
+
+// Diretório de canais PÚBLICOS (Explorar). Respeita is_employee no servidor.
+export interface PublicChannel {
+  channelId: string; name: string | null; description: string | null; topic: string | null;
+  avatarUrl: string | null; memberCount: number; isMember: boolean; lastActivity: string | null;
+}
+export function usePublicChannels(search: string) {
+  const { supabase } = useChatCtx();
+  const q = search.trim();
+  return useQuery({
+    queryKey: ["chat", "public-channels", q],
+    queryFn: async (): Promise<PublicChannel[]> => {
+      const { data, error } = await supabase.rpc("chat_public_channels", { p_search: q || null });
+      if (error) throw error;
+      type Row = {
+        channel_id: string; name: string | null; description: string | null; topic: string | null;
+        avatar_url: string | null; member_count: number; is_member: boolean; last_activity: string | null;
+      };
+      return ((data ?? []) as Row[]).map((r) => ({
+        channelId: r.channel_id, name: r.name, description: r.description, topic: r.topic,
+        avatarUrl: r.avatar_url, memberCount: Number(r.member_count) || 0,
+        isMember: !!r.is_member, lastActivity: r.last_activity,
+      }));
+    },
+  });
+}
+
+export function useJoinChannel() {
+  const { supabase, currentUser } = useChatCtx();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (channelId: string) => {
+      const { error } = await supabase.rpc("chat_join_channel", { p_channel: channelId });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["chat", "public-channels"] });
+      qc.invalidateQueries({ queryKey: ["chat", "conversations", currentUser.id] });
+      qc.invalidateQueries({ queryKey: ["chat", "members"] });
+    },
   });
 }
