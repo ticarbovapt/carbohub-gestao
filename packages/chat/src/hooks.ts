@@ -918,3 +918,78 @@ export function useJoinChannel() {
     },
   });
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Status pessoal + Não perturbe / horário de silêncio.
+// ─────────────────────────────────────────────────────────────────────────────
+export type Availability = "disponivel" | "em_reuniao" | "em_campo" | "ausente" | "ferias";
+export interface UserStatus {
+  emoji: string | null; texto: string | null; availability: Availability; dnd: boolean; expiraEm: string | null;
+}
+export interface MyStatus extends UserStatus {
+  quietInicio: string | null; quietFim: string | null; timezone: string; urgentBypass: boolean;
+}
+
+export function useMyStatus() {
+  const { supabase, currentUser } = useChatCtx();
+  return useQuery({
+    queryKey: ["chat", "my-status", currentUser.id],
+    queryFn: async (): Promise<MyStatus | null> => {
+      const { data, error } = await supabase.from("chat_user_status").select("*").eq("user_id", currentUser.id).maybeSingle();
+      if (error) throw error;
+      if (!data) return null;
+      const r = data as Record<string, unknown>;
+      return {
+        emoji: (r.emoji as string) ?? null, texto: (r.texto as string) ?? null,
+        availability: (r.availability as Availability) ?? "disponivel", dnd: !!r.dnd,
+        expiraEm: (r.expira_em as string) ?? null,
+        quietInicio: (r.quiet_inicio as string) ?? null, quietFim: (r.quiet_fim as string) ?? null,
+        timezone: (r.timezone as string) ?? "America/Sao_Paulo", urgentBypass: r.urgent_bypass !== false,
+      };
+    },
+  });
+}
+
+export interface SetStatusInput {
+  emoji?: string | null; texto?: string | null; availability?: Availability; expira_em?: string | null;
+  dnd?: boolean; quiet_inicio?: string | null; quiet_fim?: string | null; timezone?: string; urgent_bypass?: boolean;
+}
+export function useSetStatus() {
+  const { supabase, currentUser } = useChatCtx();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (patch: SetStatusInput) => {
+      const { error } = await supabase.from("chat_user_status")
+        .upsert({ user_id: currentUser.id, ...patch, updated_at: new Date().toISOString() }, { onConflict: "user_id" });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["chat", "my-status", currentUser.id] });
+      qc.invalidateQueries({ queryKey: ["chat", "statuses"] });
+    },
+  });
+}
+
+// Status efetivo (emoji/texto/availability) de várias pessoas — lista/painel.
+export function useUserStatuses(ids: string[]) {
+  const { supabase } = useChatCtx();
+  const key = Array.from(new Set(ids.filter(Boolean))).sort();
+  return useQuery({
+    queryKey: ["chat", "statuses", key],
+    enabled: key.length > 0,
+    staleTime: 60_000,
+    refetchOnWindowFocus: false,
+    queryFn: async (): Promise<Record<string, UserStatus>> => {
+      const { data, error } = await supabase.rpc("chat_statuses", { p_ids: key });
+      if (error) throw error;
+      const map: Record<string, UserStatus> = {};
+      for (const r of (data ?? []) as Record<string, unknown>[]) {
+        map[r.user_id as string] = {
+          emoji: (r.emoji as string) ?? null, texto: (r.texto as string) ?? null,
+          availability: (r.availability as Availability) ?? "disponivel", dnd: !!r.dnd, expiraEm: (r.expira_em as string) ?? null,
+        };
+      }
+      return map;
+    },
+  });
+}

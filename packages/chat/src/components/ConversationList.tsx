@@ -3,7 +3,7 @@ import {
   MessageSquarePlus, UsersRound, Search, Plus, Pin, PinOff, BellOff, Bell,
   ChevronDown, CheckCheck, Circle, Trash2, LogOut, Archive, ArchiveRestore, Megaphone, Clock, Hash,
 } from "lucide-react";
-import { useConversations, useUpdateMembership, useLeaveConversation, useSearchMessages, useCanAnnounce, useScheduledMessages } from "../hooks";
+import { useConversations, useUpdateMembership, useLeaveConversation, useSearchMessages, useCanAnnounce, useScheduledMessages, useMyStatus, useUserStatuses } from "../hooks";
 import { useChatCtx } from "../context";
 import { useTyping } from "../lib/presence";
 import { richToPlain } from "../lib/format";
@@ -11,6 +11,8 @@ import { Avatar } from "./Avatar";
 import { NewDmDialog, NewChannelDialog, NewAnnouncementDialog } from "./dialogs";
 import { ScheduledPanel } from "./ScheduledPanel";
 import { ExploreChannels } from "./ExploreChannels";
+import { StatusDialog } from "./StatusDialog";
+import { AvailabilityDot, statusText } from "./StatusBadge";
 import type { Conversation } from "../types";
 
 // Subtítulo da linha: "digitando…" (verde) enquanto alguém digita; senão a prévia.
@@ -56,6 +58,10 @@ export function ConversationList({
 }) {
   const { currentUser, openConversation } = useChatCtx();
   const { data: conversations = [], isLoading } = useConversations();
+  const { data: myStatus } = useMyStatus();
+  const dmOtherIds = conversations.filter((c) => c.channel.type === "dm" && c.otherUserId).map((c) => c.otherUserId as string);
+  const { data: statuses = {} } = useUserStatuses(dmOtherIds);
+  const [showStatus, setShowStatus] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
 
   // Atalho: Ctrl/⌘ + K foca a busca de conversas.
@@ -119,6 +125,20 @@ export function ConversationList({
 
   return (
     <div className="flex h-full w-full flex-col border-r">
+      {/* barra do meu status */}
+      <button onClick={() => setShowStatus(true)} title="Definir meu status"
+        className="flex items-center gap-2.5 border-b px-3 py-2 text-left hover:bg-muted/50">
+        <span className="relative shrink-0">
+          <Avatar name={currentUser.full_name} url={currentUser.avatar_url} size={32} />
+          <AvailabilityDot availability={myStatus?.availability} size={9} className="absolute -bottom-0.5 -right-0.5" />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-sm font-semibold">{currentUser.full_name ?? "Você"}</span>
+          <span className="block truncate text-xs text-muted-foreground">
+            {statusText(myStatus) || "Definir status"}{myStatus?.dnd ? " · 🔕 Não perturbe" : ""}
+          </span>
+        </span>
+      </button>
       {/* header: título + botão único (menu) */}
       <div className="relative flex items-center gap-1 border-b p-2">
         <span className="flex-1 px-1 text-sm font-semibold">Conversas</span>
@@ -202,11 +222,20 @@ export function ConversationList({
               aria-label={`Conversa com ${c.title}${c.unread > 0 ? `, ${c.unread} não lidas` : ""}`}
               onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onSelect(c); } }}
               className={`group relative flex w-full cursor-pointer items-center gap-3 border-b border-border/50 px-3 py-2.5 text-left focus-visible:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring ${selectedId === c.channel.id ? "bg-primary/10" : c.needsAck ? "bg-amber-50 dark:bg-amber-500/10" : "md:hover:bg-muted/60"}`}>
-              <Avatar name={c.title} url={c.avatarUrl} size={48} />
+              <span className="relative shrink-0">
+                <Avatar name={c.title} url={c.avatarUrl} size={48} />
+                {c.channel.type === "dm" && c.otherUserId && statuses[c.otherUserId] && (
+                  <AvailabilityDot availability={statuses[c.otherUserId].availability} className="absolute bottom-0 right-0" />
+                )}
+              </span>
               <div className="min-w-0 flex-1">
                 <div className="flex items-baseline gap-1.5">
                   {c.needsAck ? <Megaphone className="h-3 w-3 shrink-0 self-center text-amber-500" /> : c.pinned && <Pin className="h-3 w-3 shrink-0 text-muted-foreground" />}
-                  <span className="min-w-0 flex-1 truncate text-sm font-semibold">{c.title}</span>
+                  <span className="min-w-0 truncate text-sm font-semibold">{c.title}</span>
+                  {c.channel.type === "dm" && c.otherUserId && statuses[c.otherUserId]?.emoji && (
+                    <span className="shrink-0 text-xs" title={statuses[c.otherUserId]?.texto ?? ""}>{statuses[c.otherUserId]?.emoji}</span>
+                  )}
+                  <span className="flex-1" />
                   <span className={`shrink-0 text-[11px] ${c.unread > 0 && !c.muted ? "font-semibold text-primary" : "text-muted-foreground"}`}>
                     {timeLabel(c.lastAt)}
                   </span>
@@ -292,6 +321,7 @@ export function ConversationList({
 
       {showScheduled && <ScheduledPanel onClose={() => setShowScheduled(false)} />}
       {showExplore && <ExploreChannels onClose={() => setShowExplore(false)} onOpen={onSelect} />}
+      {showStatus && <StatusDialog onClose={() => setShowStatus(false)} />}
       {dialog === "dm" && <NewDmDialog onClose={() => setDialog(null)} onOpened={onSelect} />}
       {dialog === "group" && <NewChannelDialog onClose={() => setDialog(null)} onOpened={onSelect} />}
       {dialog === "announcement" && <NewAnnouncementDialog onClose={() => setDialog(null)} onOpened={onSelect} />}

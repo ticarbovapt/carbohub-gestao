@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Search, X, SmilePlus, Reply, CornerUpLeft, Check, CheckCheck, MoreVertical, Pencil, Trash2, ArrowDown, Megaphone, Lock, ChevronLeft, Bug, Lightbulb, CheckCircle2, XCircle, Info } from "lucide-react";
-import { useMessages, useProfilesMap, useToggleReaction, useChannelMembers, useUserInfo, useEditMessage, useDeleteMessage, useSearchMessages, useChannelAcks, useAckMessage, useJoinChannel } from "../hooks";
+import { useMessages, useProfilesMap, useToggleReaction, useChannelMembers, useUserInfo, useEditMessage, useDeleteMessage, useSearchMessages, useChannelAcks, useAckMessage, useJoinChannel, useUserStatuses } from "../hooks";
+import { statusText } from "./StatusBadge";
 import { useChatCtx } from "../context";
 import { messageReceipt, type ReceiptStatus } from "../lib/receipts";
 import { useIsOnline, useTyping } from "../lib/presence";
@@ -114,6 +115,9 @@ function HeaderStatus({ channelId, isGroup, otherUserId, currentUserId, isAnnoun
   const otherOnline = useIsOnline(isGroup ? null : otherUserId);
   const typing = useTyping(channelId, currentUserId);
   const { data: otherInfo } = useUserInfo(!isGroup ? otherUserId : null);
+  const { data: statuses = {} } = useUserStatuses(!isGroup && otherUserId ? [otherUserId] : []);
+  const st = !isGroup && otherUserId ? statuses[otherUserId] : undefined;
+  const stTxt = statusText(st);
   return (
     <p className="truncate text-[11px]">
       {typing.length > 0 ? (
@@ -122,6 +126,8 @@ function HeaderStatus({ channelId, isGroup, otherUserId, currentUserId, isAnnoun
             ? (typing.length === 1 ? `${firstName(typing[0].name)} está digitando…` : `${typing.length} pessoas digitando…`)
             : "digitando…"}
         </span>
+      ) : stTxt ? (
+        <span className="text-muted-foreground">{stTxt}{st?.dnd ? " · 🔕" : ""}</span>
       ) : isAnnouncement ? (
         <span className="text-amber-500">Comunicado oficial{isPublisher ? " · você publica" : " · somente leitura"}</span>
       ) : !isGroup ? (

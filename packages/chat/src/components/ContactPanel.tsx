@@ -4,12 +4,13 @@ import {
   Pencil, UserPlus, Check, CheckCheck, Clock, Camera, Search as SearchIcon,
 } from "lucide-react";
 import {
-  useUserInfo, useChannelMembers, useChannelMedia, useLeaveConversation, useSignedUrl,
+  useUserInfo, useChannelMembers, useChannelMedia, useLeaveConversation, useSignedUrl, useUserStatuses,
   useUpdateMembership, useRenameChannel, useAddMembers, useRemoveMember, useDirectory, useConversations, useSetChannelAvatar,
 } from "../hooks";
 import { useChatCtx } from "../context";
 import { memberReceipt } from "../lib/receipts";
 import { Avatar } from "./Avatar";
+import { AvailabilityDot, AVAIL_META, statusText } from "./StatusBadge";
 import type { Conversation, ChatAttachment } from "../types";
 
 // Ícone de recibo de um membro para a última mensagem do grupo.
@@ -30,6 +31,8 @@ export function ContactPanel({ conv: convProp, onClose, onDeleted }: {
   const conv = convs.find((c) => c.channel.id === convProp.channel.id) ?? convProp;
   const isDm = conv.channel.type === "dm";
   const { data: info } = useUserInfo(isDm ? conv.otherUserId : null);
+  const { data: dmStatuses = {} } = useUserStatuses(isDm && conv.otherUserId ? [conv.otherUserId] : []);
+  const dmStatus = isDm && conv.otherUserId ? dmStatuses[conv.otherUserId] : undefined;
   const { data: members = [] } = useChannelMembers(conv.channel.id, !isDm);
   const { data: media = [] } = useChannelMedia(conv.channel.id);
   const leave = useLeaveConversation();
@@ -95,7 +98,14 @@ export function ContactPanel({ conv: convProp, onClose, onDeleted }: {
           )}
           {isDm ? (
             <div className="text-sm text-muted-foreground">
-              {[info?.department, info?.funcao].filter(Boolean).join(" · ") || "—"}
+              {(statusText(dmStatus) || dmStatus?.availability) && (
+                <p className="mb-1 inline-flex items-center gap-1.5 text-xs font-medium text-foreground">
+                  <AvailabilityDot availability={dmStatus?.availability} size={9} />
+                  {statusText(dmStatus) || AVAIL_META[dmStatus!.availability].label}
+                  {dmStatus?.dnd ? " · 🔕 Não perturbe" : ""}
+                </p>
+              )}
+              <p>{[info?.department, info?.funcao].filter(Boolean).join(" · ") || "—"}</p>
               {info?.email && <p className="text-xs">{info.email}</p>}
             </div>
           ) : (
