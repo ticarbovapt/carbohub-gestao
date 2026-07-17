@@ -70,13 +70,14 @@ const SYS_KINDS = [
 
 function SystemNotice({ body, when }: { body: string; when: string }) {
   const kind = SYS_KINDS.find((k) => k.re.test(body));
-  // Fallback: qualquer outra mensagem de sistema → linha central simples.
+  // Fallback: outra mensagem de sistema → bolha neutra à esquerda.
   if (!kind) {
     return (
-      <div className="my-3 flex justify-center px-4">
-        <span className="inline-flex items-center gap-1.5 rounded-full border bg-muted/50 px-3 py-1 text-[11px] text-muted-foreground">
-          <Info className="h-3.5 w-3.5" /> {body}
-        </span>
+      <div className="flex justify-start">
+        <div className="max-w-[85%] rounded-2xl rounded-bl-sm border bg-muted px-3 py-2 text-sm text-muted-foreground sm:max-w-[420px]">
+          <span className="inline-flex items-center gap-1.5"><Info className="h-3.5 w-3.5" /> {body}</span>
+          <span className="ml-2 text-[10px]">{when}</span>
+        </div>
       </div>
     );
   }
@@ -84,16 +85,17 @@ function SystemNotice({ body, when }: { body: string; when: string }) {
   const [title, extra] = rest.split(/\s+—\s+/, 2);
   const sub = kind.sub(extra ?? "");
   const { Icon } = kind;
+  // Bolha de chat (lado recebido), tingida pela cor do tipo.
   return (
-    <div className="my-3 flex justify-center px-4">
-      <div className={`w-full max-w-sm rounded-xl border ${kind.ring} px-3.5 py-2.5`}>
-        <div className="flex items-center gap-2">
-          <Icon className={`h-4 w-4 shrink-0 ${kind.fg}`} />
+    <div className="flex justify-start">
+      <div className={`max-w-[85%] rounded-2xl rounded-bl-sm border px-3 py-2 sm:max-w-[420px] ${kind.ring}`}>
+        <div className="mb-0.5 flex items-center gap-1.5">
+          <Icon className={`h-3.5 w-3.5 shrink-0 ${kind.fg}`} />
           <span className={`text-[11px] font-semibold uppercase tracking-wide ${kind.fg}`}>{kind.label}</span>
-          <span className="ml-auto text-[10px] text-muted-foreground">{when}</span>
         </div>
-        <p className="mt-1 break-words text-sm font-medium text-foreground">{title}</p>
+        <p className="break-words text-sm font-medium text-foreground">{title}</p>
         {sub && <p className="mt-0.5 break-words text-xs text-muted-foreground">{sub}</p>}
+        <div className="mt-0.5 text-right text-[10px] text-muted-foreground">{when}</div>
       </div>
     </div>
   );
