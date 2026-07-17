@@ -76,4 +76,5 @@ export interface Conversation {
   lastSenderName: string | null;
   muted: boolean;
   pinned: boolean;
+  archived: boolean;
 }

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import {
   MessageSquarePlus, UsersRound, Search, Plus, Pin, PinOff, BellOff, Bell,
-  ChevronDown, CheckCheck, Circle, Trash2, LogOut,
+  ChevronDown, CheckCheck, Circle, Trash2, LogOut, Archive, ArchiveRestore,
 } from "lucide-react";
 import { useConversations, useUpdateMembership, useLeaveConversation, useSearchMessages } from "../hooks";
 import { useChatCtx } from "../context";
@@ -55,7 +55,7 @@ export function ConversationList({
   const { data: conversations = [], isLoading } = useConversations();
   const membership = useUpdateMembership();
   const leave = useLeaveConversation();
-  const [filter, setFilter] = useState<"all" | "group">("all");
+  const [filter, setFilter] = useState<"all" | "group" | "archived">("all");
   const [search, setSearch] = useState("");
   const [dialog, setDialog] = useState<null | "dm" | "group">(null);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -67,6 +67,7 @@ export function ConversationList({
   }
   function togglePin(c: Conversation) { membership.mutate({ channelId: c.channel.id, patch: { pinned: !c.pinned } }); setRowMenu(null); }
   function toggleMute(c: Conversation) { membership.mutate({ channelId: c.channel.id, patch: { muted: !c.muted } }); setRowMenu(null); }
+  function toggleArchive(c: Conversation) { membership.mutate({ channelId: c.channel.id, patch: { archived: !c.archived } }); setRowMenu(null); }
   function markRead(c: Conversation) { membership.mutate({ channelId: c.channel.id, patch: { last_read_at: new Date().toISOString() } }); setRowMenu(null); }
   function markUnread(c: Conversation) {
     const base = c.lastAt ? new Date(new Date(c.lastAt).getTime() - 1000) : new Date(Date.now() - 1000);
@@ -75,8 +76,10 @@ export function ConversationList({
   function removeConv(c: Conversation) { leave.mutate(c.channel.id); onRemoved?.(c.channel.id); setRowMenu(null); }
 
   const filtered = conversations
+    .filter((c) => (filter === "archived" ? c.archived : !c.archived))
     .filter((c) => (filter === "group" ? c.channel.type === "group" : true))
     .filter((c) => !search.trim() || c.title.toLowerCase().includes(search.trim().toLowerCase()));
+  const archivedCount = conversations.filter((c) => c.archived).length;
 
   // Busca GLOBAL de mensagens no servidor (full-text) — seção "Mensagens".
   const searching = search.trim().length >= 2;
@@ -135,6 +138,12 @@ export function ConversationList({
             className={`rounded-full px-3 py-1 text-xs font-medium ${filter === "group" ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-muted"}`}>
             Grupos
           </button>
+          {(archivedCount > 0 || filter === "archived") && (
+            <button onClick={() => setFilter("archived")}
+              className={`rounded-full px-3 py-1 text-xs font-medium ${filter === "archived" ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-muted"}`}>
+              Arquivadas{archivedCount > 0 ? ` (${archivedCount})` : ""}
+            </button>
+          )}
         </div>
       </div>
 
@@ -221,6 +230,8 @@ export function ConversationList({
               label={rowMenu.conv.pinned ? "Desafixar conversa" : "Fixar conversa"} onClick={() => togglePin(rowMenu.conv)} />
             <MenuItem icon={rowMenu.conv.muted ? <Bell className="h-4 w-4" /> : <BellOff className="h-4 w-4" />}
               label={rowMenu.conv.muted ? "Ativar notificações" : "Silenciar"} onClick={() => toggleMute(rowMenu.conv)} />
+            <MenuItem icon={rowMenu.conv.archived ? <ArchiveRestore className="h-4 w-4" /> : <Archive className="h-4 w-4" />}
+              label={rowMenu.conv.archived ? "Desarquivar" : "Arquivar conversa"} onClick={() => toggleArchive(rowMenu.conv)} />
             {rowMenu.conv.unread > 0 ? (
               <MenuItem icon={<CheckCheck className="h-4 w-4" />} label="Marcar como lida" onClick={() => markRead(rowMenu.conv)} />
             ) : (

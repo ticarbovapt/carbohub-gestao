@@ -36,7 +36,7 @@ export function useConversations() {
         other_id: string | null; other_name: string | null; other_avatar: string | null;
         last_body: string | null; last_kind: string | null; last_at: string | null;
         last_sender_id: string | null; last_sender_name: string | null;
-        unread: number; last_activity: string | null; muted: boolean; pinned: boolean;
+        unread: number; last_activity: string | null; muted: boolean; pinned: boolean; archived: boolean;
       };
       return ((data ?? []) as Row[]).map((r): Conversation => ({
         channel: {
@@ -55,6 +55,7 @@ export function useConversations() {
         lastSenderName: r.last_sender_name,
         muted: !!r.muted,
         pinned: !!r.pinned,
+        archived: !!r.archived,
       }));
     },
   });
@@ -382,7 +383,7 @@ export function useUpdateMembership() {
   const { supabase, currentUser } = useChatCtx();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ channelId, patch }: { channelId: string; patch: { muted?: boolean; pinned?: boolean; last_read_at?: string } }) => {
+    mutationFn: async ({ channelId, patch }: { channelId: string; patch: { muted?: boolean; pinned?: boolean; last_read_at?: string; archived?: boolean } }) => {
       const { error } = await supabase.from("chat_channel_members")
         .update(patch).eq("channel_id", channelId).eq("user_id", currentUser.id);
       if (error) throw error;
