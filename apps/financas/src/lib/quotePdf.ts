@@ -141,11 +141,11 @@ export async function generateQuotePdf(order: QuotePdfData) {
   // Marca: logo Grupo Carbo em BRANCO, grande e sem margem (preenche a faixa).
   const logo = await loadImage(logoUrl, true);
   if (logo) {
-    let lh = 17;
+    let lh = 11.5;
     let lw = lh * (logo.w / logo.h);
-    const maxLw = 100;
+    const maxLw = 78;
     if (lw > maxLw) { lh = lh * (maxLw / lw); lw = maxLw; }
-    doc.addImage(logo.dataUrl, "PNG", M, 4.5, lw, lh);
+    doc.addImage(logo.dataUrl, "PNG", M, 5.5, lw, lh);
   } else {
     doc.setFont("helvetica", "bold"); doc.setFontSize(23); doc.setTextColor(255);
     doc.text("GRUPO CARBO", M, 16);
