@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Search, X, SmilePlus, Reply, CornerUpLeft, Check, CheckCheck, MoreVertical, Pencil, Trash2, ArrowDown, Megaphone, Lock, ChevronLeft } from "lucide-react";
+import { Search, X, SmilePlus, Reply, CornerUpLeft, Check, CheckCheck, MoreVertical, Pencil, Trash2, ArrowDown, Megaphone, Lock, ChevronLeft, Bug, Lightbulb, CheckCircle2, XCircle, Info } from "lucide-react";
 import { useMessages, useProfilesMap, useToggleReaction, useChannelMembers, useUserInfo, useEditMessage, useDeleteMessage, useSearchMessages, useChannelAcks, useAckMessage } from "../hooks";
 import { useChatCtx } from "../context";
 import { messageReceipt, type ReceiptStatus } from "../lib/receipts";
@@ -57,6 +57,46 @@ function lastSeenLabel(iso: string) {
   const y = new Date(now); y.setDate(now.getDate() - 1);
   if (d.toDateString() === y.toDateString()) return `ontem às ${hhmm}`;
   return `${d.toLocaleDateString("pt-BR")} às ${hhmm}`;
+}
+
+// Mensagem do sistema (evento de bug/sugestão): cartão central, discreto e
+// colorido por tipo — em vez de virar um "balão" de conversa (feio/confuso).
+const SYS_KINDS = [
+  { re: /^🐞\s*Novo bug:\s*/i, label: "Novo bug", Icon: Bug, ring: "border-amber-500/25 bg-amber-500/10", fg: "text-amber-600 dark:text-amber-400", sub: (x: string) => (x ? `Reportado por ${x}` : "") },
+  { re: /^💡\s*Nova sugest[ãa]o:\s*/i, label: "Nova sugestão", Icon: Lightbulb, ring: "border-violet-500/25 bg-violet-500/10", fg: "text-violet-600 dark:text-violet-400", sub: (x: string) => (x ? `Sugerido por ${x}` : "") },
+  { re: /^✅\s*Resolvido:\s*/i, label: "Resolvido", Icon: CheckCircle2, ring: "border-emerald-500/25 bg-emerald-500/10", fg: "text-emerald-600 dark:text-emerald-400", sub: (x: string) => (x ? `Obs.: ${x}` : "") },
+  { re: /^🚫\s*Recusado:\s*/i, label: "Recusado", Icon: XCircle, ring: "border-rose-500/25 bg-rose-500/10", fg: "text-rose-600 dark:text-rose-400", sub: (x: string) => (x ? `Motivo: ${x}` : "") },
+];
+
+function SystemNotice({ body, when }: { body: string; when: string }) {
+  const kind = SYS_KINDS.find((k) => k.re.test(body));
+  // Fallback: qualquer outra mensagem de sistema → linha central simples.
+  if (!kind) {
+    return (
+      <div className="my-3 flex justify-center px-4">
+        <span className="inline-flex items-center gap-1.5 rounded-full border bg-muted/50 px-3 py-1 text-[11px] text-muted-foreground">
+          <Info className="h-3.5 w-3.5" /> {body}
+        </span>
+      </div>
+    );
+  }
+  const rest = body.replace(kind.re, "").trim();
+  const [title, extra] = rest.split(/\s+—\s+/, 2);
+  const sub = kind.sub(extra ?? "");
+  const { Icon } = kind;
+  return (
+    <div className="my-3 flex justify-center px-4">
+      <div className={`w-full max-w-sm rounded-xl border ${kind.ring} px-3.5 py-2.5`}>
+        <div className="flex items-center gap-2">
+          <Icon className={`h-4 w-4 shrink-0 ${kind.fg}`} />
+          <span className={`text-[11px] font-semibold uppercase tracking-wide ${kind.fg}`}>{kind.label}</span>
+          <span className="ml-auto text-[10px] text-muted-foreground">{when}</span>
+        </div>
+        <p className="mt-1 break-words text-sm font-medium text-foreground">{title}</p>
+        {sub && <p className="mt-0.5 break-words text-xs text-muted-foreground">{sub}</p>}
+      </div>
+    </div>
+  );
 }
 
 // Linha de status do cabeçalho (digitando / online / visto por último). Isolada
@@ -259,6 +299,9 @@ export function Conversation({ conv, focus, onClearFocus, onBack, onDeleted }: {
                         <span className="rounded-full bg-muted px-3 py-0.5 text-[11px] text-muted-foreground">{dayLabel(m.created_at)}</span>
                       </div>
                     )}
+                    {m.kind === "system" ? (
+                      <SystemNotice body={m.body ?? ""} when={new Date(m.created_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })} />
+                    ) : (
                     <MessageBubble
                       m={m} mine={mine} isGroup={isGroup} showName={isGroup && !mine && !grouped}
                       senderName={nameOf(m.sender_id)}
@@ -282,6 +325,7 @@ export function Conversation({ conv, focus, onClearFocus, onBack, onDeleted }: {
                       onEdit={(body) => edit.mutate({ messageId: m.id, body, channelId: conv.channel.id })}
                       onDelete={() => del.mutate({ messageId: m.id, channelId: conv.channel.id })}
                     />
+                    )}
                   </div>
                 );
               })}

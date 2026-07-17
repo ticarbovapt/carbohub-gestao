@@ -49,6 +49,10 @@ export function ChatAlerts() {
         const convs = qc.getQueryData<Conversation[]>(["chat", "conversations", currentUser.id]);
         const muted = convs?.find((c) => c.channel.id === msg.channel_id)?.muted;
         scheduleRefresh();
+        // Invalida as mensagens DESTE canal mesmo que a conversa esteja fechada:
+        // sem isso, reabrir dentro do staleTime mostrava o cache antigo (ex.: a
+        // mensagem "✅ Resolvido" do bug não aparecia até o cache expirar).
+        qc.invalidateQueries({ queryKey: ["chat", "messages", msg.channel_id] });
         // Mensagem do sistema (bug/sugestão no grupo): entra na lista, mas nunca toca/toasta.
         if (viewing || muted || msg.kind === "system") return;
 
