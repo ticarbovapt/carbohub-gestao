@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { toast } from "sonner";
 import { X, Check, Search } from "lucide-react";
 import { useDirectory, useStartDm, useCreateChannel, useCreateAnnouncement, useCanAnnounce } from "../hooks";
 import { Avatar } from "./Avatar";
@@ -63,16 +64,24 @@ function DirList({ search, onPick, selected }: { search: string; onPick: (p: Cha
   const { data: people = [], isLoading } = useDirectory(search);
   if (isLoading) return <p className="text-sm text-muted-foreground">Carregando…</p>;
   if (!people.length) return <p className="text-sm text-muted-foreground">Ninguém encontrado.</p>;
+  const selectable = !!selected;
   return (
     <div className="max-h-72 space-y-1 overflow-y-auto">
-      {people.map((p) => (
-        <button key={p.id} onClick={() => onPick(p)}
-          className="flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left hover:bg-muted">
-          <Avatar name={p.full_name} url={p.avatar_url} size={32} />
-          <span className="flex-1 truncate text-sm">{p.full_name ?? "—"}</span>
-          {selected?.has(p.id) && <Check className="h-4 w-4 text-primary" />}
-        </button>
-      ))}
+      {people.map((p) => {
+        const isSel = selected?.has(p.id);
+        return (
+          <button key={p.id} onClick={() => onPick(p)} aria-pressed={selectable ? !!isSel : undefined}
+            className={`flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left transition-colors ${isSel ? "bg-primary/10 ring-1 ring-primary/40" : "hover:bg-muted"}`}>
+            <Avatar name={p.full_name} url={p.avatar_url} size={32} />
+            <span className="flex-1 truncate text-sm">{p.full_name ?? "—"}</span>
+            {selectable && (
+              <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border ${isSel ? "border-primary bg-primary text-primary-foreground" : "border-muted-foreground/40"}`}>
+                {isSel && <Check className="h-3.5 w-3.5" />}
+              </span>
+            )}
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -92,9 +101,15 @@ export function NewChannelDialog({ onClose, onOpened }: { onClose: () => void; o
   }
   async function submit() {
     if (!name.trim() || busy) return;
-    const cid = announce
-      ? await createAnn.mutateAsync({ name, memberIds: [...members] })
-      : await create.mutateAsync({ name, memberIds: [...members], isPrivate });
+    let cid: string;
+    try {
+      cid = announce
+        ? await createAnn.mutateAsync({ name, memberIds: [...members] })
+        : await create.mutateAsync({ name, memberIds: [...members], isPrivate });
+    } catch (e) {
+      toast.error("Não foi possível criar. " + ((e as { message?: string })?.message ?? ""));
+      return;
+    }
     onOpened({
       channel: { id: cid, type: "group", name: name.trim(), description: null, is_private: announce ? true : isPrivate, avatar_url: null, created_by: null, created_at: nowIso(), archived_at: null, is_announcement: announce },
       title: name.trim(),
