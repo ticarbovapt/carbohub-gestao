@@ -5,6 +5,7 @@ import { Avatar } from "./Avatar";
 import { useChatCtx } from "../context";
 import { playMessageChime } from "../lib/sound";
 import { presenceBus } from "../lib/presence";
+import { richToPlain } from "../lib/format";
 import type { Conversation } from "../types";
 
 const kindLabel = (k: string) =>
@@ -48,7 +49,7 @@ export function ChatAlerts() {
           avatarUrl = (data as { avatar_url?: string | null } | null)?.avatar_url ?? null;
         } catch { /* ignora */ }
 
-        const preview = msg.body?.trim() || kindLabel(msg.kind);
+        const preview = (msg.body?.trim() ? richToPlain(msg.body.trim()) : "") || kindLabel(msg.kind);
         // Toast inteiro clicável (funciona no PC também) → abre a conversa (?c=).
         // Largura fixa (o toast.custom não herda a largura padrão do sonner).
         // Fica no top-right; o <Toaster offset> dos apps o mantém abaixo do header.

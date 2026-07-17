@@ -4,6 +4,7 @@ import { useMessages, useProfilesMap, useToggleReaction, useChannelMembers, useU
 import { useChatCtx } from "../context";
 import { messageReceipt, type ReceiptStatus } from "../lib/receipts";
 import { useIsOnline, useTyping } from "../lib/presence";
+import { renderRich, richToPlain } from "../lib/format";
 import { Avatar } from "./Avatar";
 import { Composer } from "./Composer";
 import { Attachment } from "./Attachment";
@@ -409,7 +410,7 @@ function MessageBubble({
           {repliedTo && (
             <div className={`mb-1 rounded-md border-l-2 px-2 py-1 text-xs ${mine ? "border-black/20 bg-black/5 dark:border-white/40 dark:bg-white/10" : "border-primary bg-background/60"}`}>
               <p className="font-medium opacity-80"><CornerUpLeft className="mr-1 inline h-3 w-3" />{repliedName}</p>
-              <p className="truncate opacity-70">{repliedTo.body?.trim() || kindLabel(repliedTo.kind)}</p>
+              <p className="truncate opacity-70">{repliedTo.body?.trim() ? richToPlain(repliedTo.body.trim()) : kindLabel(repliedTo.kind)}</p>
             </div>
           )}
 
@@ -429,7 +430,7 @@ function MessageBubble({
             </div>
           ) : (
             <>
-              {m.body && <p className="whitespace-pre-wrap break-words">{m.body}</p>}
+              {m.body && <p className="whitespace-pre-wrap break-words">{renderRich(m.body)}</p>}
               {m.attachments && m.attachments.length > 0 && (
                 <div className="mt-1 space-y-1.5">{m.attachments.map((att) => <Attachment key={att.id} att={att} />)}</div>
               )}

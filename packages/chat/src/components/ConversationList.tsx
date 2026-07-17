@@ -6,6 +6,7 @@ import {
 import { useConversations, useUpdateMembership, useLeaveConversation, useSearchMessages, useCanAnnounce } from "../hooks";
 import { useChatCtx } from "../context";
 import { useTyping } from "../lib/presence";
+import { richToPlain } from "../lib/format";
 import { Avatar } from "./Avatar";
 import { NewDmDialog, NewChannelDialog, NewAnnouncementDialog } from "./dialogs";
 import type { Conversation } from "../types";
@@ -101,7 +102,7 @@ export function ConversationList({
   const ghits = (gsearch.data?.pages ?? []).flat();
 
   function previewText(c: Conversation) {
-    const base = c.lastBody?.trim() || kindPreview(c.lastKind);
+    const base = (c.lastBody?.trim() ? richToPlain(c.lastBody.trim()) : "") || kindPreview(c.lastKind);
     if (!base && !c.lastKind) return "Nova conversa";
     if (c.channel.type === "group" && c.lastSenderId) {
       const who = c.lastSenderId === currentUser.id ? "Você" : (c.lastSenderName ?? "—");
