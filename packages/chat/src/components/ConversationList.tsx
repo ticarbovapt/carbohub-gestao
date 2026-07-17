@@ -182,7 +182,7 @@ export function ConversationList({
               role="button" tabIndex={0} aria-current={selectedId === c.channel.id}
               aria-label={`Conversa com ${c.title}${c.unread > 0 ? `, ${c.unread} não lidas` : ""}`}
               onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onSelect(c); } }}
-              className={`group relative flex w-full cursor-pointer items-center gap-3 border-b border-border/50 px-3 py-2.5 text-left focus-visible:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring ${selectedId === c.channel.id ? "bg-primary/10" : "hover:bg-muted/60"}`}>
+              className={`group relative flex w-full cursor-pointer items-center gap-3 border-b border-border/50 px-3 py-2.5 text-left focus-visible:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring ${selectedId === c.channel.id ? "bg-primary/10" : "md:hover:bg-muted/60"}`}>
               <Avatar name={c.title} url={c.avatarUrl} size={48} />
               <div className="min-w-0 flex-1">
                 <div className="flex items-baseline gap-1.5">
@@ -202,7 +202,7 @@ export function ConversationList({
                   )}
                   {/* botão de ações: no fluxo, aparece no hover e empurra o badge p/ esquerda */}
                   <button onClick={(e) => openRowMenu(c, e)} title="Opções" aria-label="Opções da conversa"
-                    className="hidden shrink-0 items-center justify-center rounded text-muted-foreground hover:text-foreground group-hover:inline-flex">
+                    className="hidden shrink-0 items-center justify-center rounded text-muted-foreground hover:text-foreground md:group-hover:inline-flex">
                     <ChevronDown className="h-4 w-4" />
                   </button>
                 </div>
