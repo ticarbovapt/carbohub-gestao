@@ -14,7 +14,9 @@ const COMPANY = {
   site: "carboze.com.br",
 };
 
-const GREEN: [number, number, number] = [16, 122, 87];
+// Paleta forte (igual ao modelo de referência): verde floresta + acento lima.
+const GREEN: [number, number, number] = [15, 64, 45];     // #0F402D — faixa, cabeçalhos, total
+const LIME: [number, number, number] = [141, 198, 63];    // #8DC63F — fios/caixa de acento
 
 interface QuoteItem {
   name?: string;
@@ -56,7 +58,9 @@ const dateBR = (iso?: string | null) =>
   iso ? new Date(iso).toLocaleDateString("pt-BR") : new Date().toLocaleDateString("pt-BR");
 
 // Carrega a imagem preservando as dimensões naturais (para não esticar a logo).
-function loadImage(url: string): Promise<{ dataUrl: string; w: number; h: number } | null> {
+// tintWhite: recolore a logo para BRANCO (silhueta) — para aparecer sobre a faixa
+// verde escura sem precisar de fundo/chip branco.
+function loadImage(url: string, tintWhite = false): Promise<{ dataUrl: string; w: number; h: number } | null> {
   return new Promise((resolve) => {
     const img = new Image();
     img.crossOrigin = "anonymous";
@@ -65,7 +69,13 @@ function loadImage(url: string): Promise<{ dataUrl: string; w: number; h: number
         const canvas = document.createElement("canvas");
         canvas.width = img.naturalWidth;
         canvas.height = img.naturalHeight;
-        canvas.getContext("2d")?.drawImage(img, 0, 0);
+        const ctx = canvas.getContext("2d");
+        ctx?.drawImage(img, 0, 0);
+        if (ctx && tintWhite) {
+          ctx.globalCompositeOperation = "source-in"; // mantém o alpha, pinta de branco
+          ctx.fillStyle = "#ffffff";
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+        }
         resolve({ dataUrl: canvas.toDataURL("image/png"), w: img.naturalWidth, h: img.naturalHeight });
       } catch { resolve(null); }
     };
@@ -89,11 +99,10 @@ export async function generateQuotePdf(order: QuotePdfData) {
   const pageH = doc.internal.pageSize.getHeight();
   const M = 14;
 
-  // ── Cabeçalho: faixa da identidade Grupo Carbo (inspirado no modelo aprovado) ─
-  // Faixa verde full-width com a marca à esquerda, caixa "ORÇAMENTO" à direita e a
-  // linha da empresa na base; fios de acento no topo e na base.
-  const GREEN_DARK: [number, number, number] = [11, 84, 60];
-  const GREEN_SOFT: [number, number, number] = [214, 236, 227];
+  // ── Cabeçalho: faixa da identidade Grupo Carbo (igual ao modelo de referência) ─
+  // Faixa verde floresta full-width, marca BRANCA à esquerda, caixa "ORÇAMENTO"
+  // lima à direita e a linha da empresa na base; fios de acento LIMA no topo/base.
+  const GREEN_SOFT: [number, number, number] = [205, 224, 214];
   const BAND_H = 27;
 
   const created = dateBR(order.created_at);
@@ -103,30 +112,27 @@ export async function generateQuotePdf(order: QuotePdfData) {
   const validUntil = validUntilDate.toLocaleDateString("pt-BR");
 
   doc.setFillColor(...GREEN); doc.rect(0, 0, pageW, BAND_H, "F");
-  doc.setFillColor(...GREEN_DARK);
-  doc.rect(0, 0, pageW, 1.5, "F");
-  doc.rect(0, BAND_H - 1.2, pageW, 1.2, "F");
+  doc.setFillColor(...LIME);
+  doc.rect(0, 0, pageW, 1.8, "F");
+  doc.rect(0, BAND_H - 1.5, pageW, 1.5, "F");
 
-  // Marca: logo num "chip" branco (contraste garantido sobre o verde) ou wordmark.
-  const logo = await loadImage(logoUrl);
+  // Marca: logo Grupo Carbo em BRANCO direto na faixa (sem chip).
+  const logo = await loadImage(logoUrl, true);
   if (logo) {
-    const chipH = 14, chipPad = 2.5, chipY = 4;
-    let lw = (chipH - chipPad * 2) * (logo.w / logo.h);
-    let lh = chipH - chipPad * 2;
-    const maxLw = 44;
+    let lh = 12;
+    let lw = lh * (logo.w / logo.h);
+    const maxLw = 62;
     if (lw > maxLw) { lh = lh * (maxLw / lw); lw = maxLw; }
-    doc.setFillColor(255); doc.roundedRect(M, chipY, lw + chipPad * 2, chipH, 2, 2, "F");
-    doc.addImage(logo.dataUrl, "PNG", M + chipPad, chipY + (chipH - lh) / 2, lw, lh);
+    doc.addImage(logo.dataUrl, "PNG", M, 4.5, lw, lh);
   } else {
     doc.setFont("helvetica", "bold"); doc.setFontSize(20); doc.setTextColor(255);
-    doc.text("GRUPO CARBO", M, 15);
+    doc.text("GRUPO CARBO", M, 14);
   }
 
-  // Caixa "ORÇAMENTO" à direita (borda branca) + datas + nº.
+  // Caixa "ORÇAMENTO" à direita: preenchida em LIMA com texto verde escuro.
   const boxW = 58, boxH = 17, boxX = pageW - M - boxW, boxY = 4;
-  doc.setDrawColor(255); doc.setLineWidth(0.4);
-  doc.roundedRect(boxX, boxY, boxW, boxH, 2, 2, "S");
-  doc.setTextColor(255); doc.setFont("helvetica", "bold"); doc.setFontSize(13);
+  doc.setFillColor(...LIME); doc.roundedRect(boxX, boxY, boxW, boxH, 2, 2, "F");
+  doc.setTextColor(...GREEN); doc.setFont("helvetica", "bold"); doc.setFontSize(13);
   doc.text("ORÇAMENTO", boxX + boxW / 2, boxY + 7, { align: "center" });
   doc.setFont("helvetica", "normal"); doc.setFontSize(7.5);
   doc.text(`Emissão: ${created}`, boxX + boxW / 2, boxY + 11.6, { align: "center" });
