@@ -91,7 +91,7 @@ export function ConversationList({
   function removeConv(c: Conversation) { leave.mutate(c.channel.id); onRemoved?.(c.channel.id); setRowMenu(null); }
 
   const filtered = conversations
-    .filter((c) => (filter === "archived" ? c.archived : !c.archived))
+    .filter((c) => (filter === "archived" ? c.archived : (!c.archived || c.needsAck)))
     .filter((c) => (filter === "group" ? c.channel.type === "group" : true))
     .filter((c) => !search.trim() || c.title.toLowerCase().includes(search.trim().toLowerCase()));
   const archivedCount = conversations.filter((c) => c.archived).length;
@@ -182,11 +182,11 @@ export function ConversationList({
               role="button" tabIndex={0} aria-current={selectedId === c.channel.id}
               aria-label={`Conversa com ${c.title}${c.unread > 0 ? `, ${c.unread} não lidas` : ""}`}
               onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onSelect(c); } }}
-              className={`group relative flex w-full cursor-pointer items-center gap-3 border-b border-border/50 px-3 py-2.5 text-left focus-visible:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring ${selectedId === c.channel.id ? "bg-primary/10" : "md:hover:bg-muted/60"}`}>
+              className={`group relative flex w-full cursor-pointer items-center gap-3 border-b border-border/50 px-3 py-2.5 text-left focus-visible:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring ${selectedId === c.channel.id ? "bg-primary/10" : c.needsAck ? "bg-amber-50 dark:bg-amber-500/10" : "md:hover:bg-muted/60"}`}>
               <Avatar name={c.title} url={c.avatarUrl} size={48} />
               <div className="min-w-0 flex-1">
                 <div className="flex items-baseline gap-1.5">
-                  {c.pinned && <Pin className="h-3 w-3 shrink-0 text-muted-foreground" />}
+                  {c.needsAck ? <Megaphone className="h-3 w-3 shrink-0 self-center text-amber-500" /> : c.pinned && <Pin className="h-3 w-3 shrink-0 text-muted-foreground" />}
                   <span className="min-w-0 flex-1 truncate text-sm font-semibold">{c.title}</span>
                   <span className={`shrink-0 text-[11px] ${c.unread > 0 && !c.muted ? "font-semibold text-primary" : "text-muted-foreground"}`}>
                     {timeLabel(c.lastAt)}

@@ -79,4 +79,5 @@ export interface Conversation {
   pinned: boolean;
   archived: boolean;
   isAnnouncement: boolean;
+  needsAck: boolean;
 }

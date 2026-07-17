@@ -36,7 +36,7 @@ export function useConversations() {
         other_id: string | null; other_name: string | null; other_avatar: string | null;
         last_body: string | null; last_kind: string | null; last_at: string | null;
         last_sender_id: string | null; last_sender_name: string | null;
-        unread: number; last_activity: string | null; muted: boolean; pinned: boolean; archived: boolean; is_announcement: boolean;
+        unread: number; last_activity: string | null; muted: boolean; pinned: boolean; archived: boolean; is_announcement: boolean; needs_ack: boolean;
       };
       return ((data ?? []) as Row[]).map((r): Conversation => ({
         channel: {
@@ -58,6 +58,7 @@ export function useConversations() {
         pinned: !!r.pinned,
         archived: !!r.archived,
         isAnnouncement: !!r.is_announcement,
+        needsAck: !!r.needs_ack,
       }));
     },
   });
@@ -331,13 +332,32 @@ export function useCreateAnnouncement() {
   });
 }
 
-// Cria o comunicado E já publica a 1ª mensagem (título = nome; texto + imagem).
+// Departamentos (pro seletor de público do comunicado).
+export function useDepartments() {
+  const { supabase } = useChatCtx();
+  return useQuery({
+    queryKey: ["chat", "departments"],
+    queryFn: async (): Promise<string[]> => {
+      const { data, error } = await supabase.rpc("chat_departments");
+      if (error) throw error;
+      return ((data ?? []) as { dep: string }[]).map((r) => r.dep);
+    },
+  });
+}
+
+export type AnnAudience = "all" | "departments" | "users";
+
+// Cria o comunicado (público resolvido no servidor) E publica a 1ª mensagem.
 export function usePublishAnnouncement() {
   const { supabase, currentUser } = useChatCtx();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ name, memberIds, body, image }: { name: string; memberIds: string[]; body: string; image?: File | null }): Promise<string> => {
-      const { data, error } = await supabase.rpc("chat_create_announcement", { p_name: name, p_member_ids: memberIds, p_admin_ids: [] });
+    mutationFn: async ({ name, audience, departments, memberIds, body, image }:
+      { name: string; audience: AnnAudience; departments?: string[]; memberIds?: string[]; body: string; image?: File | null }): Promise<string> => {
+      const { data, error } = await supabase.rpc("chat_create_announcement_audience", {
+        p_name: name, p_audience: audience,
+        p_departments: departments ?? [], p_user_ids: memberIds ?? [],
+      });
       if (error) throw error;
       const channelId = data as string;
       const kind = image ? "image" : "text";

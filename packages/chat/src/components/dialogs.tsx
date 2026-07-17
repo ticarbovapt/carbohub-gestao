@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { toast } from "sonner";
 import { X, Check, Search, Image as ImageIcon } from "lucide-react";
-import { useDirectory, useStartDm, useCreateChannel, usePublishAnnouncement } from "../hooks";
+import { useDirectory, useStartDm, useCreateChannel, usePublishAnnouncement, useDepartments } from "../hooks";
+import type { AnnAudience } from "../hooks";
 import { Avatar } from "./Avatar";
 import type { ChatProfileRef, Conversation } from "../types";
 
@@ -51,7 +52,7 @@ export function NewDmDialog({ onClose, onOpened }: { onClose: () => void; onOpen
             otherUserId: p.id,
             unread: 0,
             lastAt: null, lastBody: null, lastKind: null, lastSenderId: null, lastSenderName: null,
-            muted: false, pinned: false, archived: false, isAnnouncement: false,
+            muted: false, pinned: false, archived: false, isAnnouncement: false, needsAck: false,
           });
           onClose();
         }} />}
@@ -134,7 +135,7 @@ export function NewChannelDialog({ onClose, onOpened }: { onClose: () => void; o
       channel: { id: cid, type: "group", name: name.trim(), description: null, is_private: isPrivate, avatar_url: null, created_by: null, created_at: nowIso(), archived_at: null, is_announcement: false },
       title: name.trim(), avatarUrl: null, otherUserId: null, unread: 0,
       lastAt: null, lastBody: null, lastKind: null, lastSenderId: null, lastSenderName: null,
-      muted: false, pinned: false, archived: false, isAnnouncement: false,
+      muted: false, pinned: false, archived: false, isAnnouncement: false, needsAck: false,
     });
     onClose();
   }
@@ -159,20 +160,29 @@ export function NewChannelDialog({ onClose, onOpened }: { onClose: () => void; o
   );
 }
 
-// Comunicado oficial: título + texto + imagem (opcional) + destinatários.
+// Comunicado oficial: título + texto + imagem + PÚBLICO (todos/departamento/pessoas).
 export function NewAnnouncementDialog({ onClose, onOpened }: { onClose: () => void; onOpened: (conv: Conversation) => void }) {
   const [name, setName] = useState("");
   const [body, setBody] = useState("");
   const [image, setImage] = useState<File | null>(null);
+  const [audience, setAudience] = useState<AnnAudience>("all");
+  const [depts, setDepts] = useState<Set<string>>(new Set());
   const [selMap, setSelMap] = useState<Map<string, ChatProfileRef>>(new Map());
   const publish = usePublishAnnouncement();
-  const canSubmit = !!name.trim() && (!!body.trim() || !!image) && !publish.isPending;
+  const { data: departments = [] } = useDepartments();
+
+  const audienceOk = audience === "all" || (audience === "departments" && depts.size > 0) || (audience === "users" && selMap.size > 0);
+  const canSubmit = !!name.trim() && (!!body.trim() || !!image) && audienceOk && !publish.isPending;
 
   async function submit() {
     if (!canSubmit) return;
     let cid: string;
     try {
-      cid = await publish.mutateAsync({ name, memberIds: [...selMap.keys()], body, image });
+      cid = await publish.mutateAsync({
+        name, audience,
+        departments: [...depts], memberIds: [...selMap.keys()],
+        body, image,
+      });
     } catch (e) {
       toast.error("Não foi possível publicar. " + ((e as { message?: string })?.message ?? ""));
       return;
@@ -181,10 +191,12 @@ export function NewAnnouncementDialog({ onClose, onOpened }: { onClose: () => vo
       channel: { id: cid, type: "group", name: name.trim(), description: null, is_private: true, avatar_url: null, created_by: null, created_at: nowIso(), archived_at: null, is_announcement: true },
       title: name.trim(), avatarUrl: null, otherUserId: null, unread: 0,
       lastAt: nowIso(), lastBody: body.trim() || (image ? "📷 Imagem" : null), lastKind: image ? "image" : "text", lastSenderId: null, lastSenderName: "Você",
-      muted: false, pinned: false, archived: false, isAnnouncement: true,
+      muted: false, pinned: false, archived: false, isAnnouncement: true, needsAck: false,
     });
     onClose();
   }
+
+  const pretty = (d: string) => d.replace(/_/g, " ").replace(/\b\w/g, (m) => m.toUpperCase());
 
   return (
     <Modal title="Novo comunicado oficial" onClose={onClose}>
@@ -192,7 +204,6 @@ export function NewAnnouncementDialog({ onClose, onOpened }: { onClose: () => vo
         className="mb-2 h-9 w-full rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
       <textarea value={body} onChange={(e) => setBody(e.target.value)} placeholder="Texto do comunicado…" rows={4}
         className="mb-2 w-full resize-y rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
-      {/* imagem opcional */}
       {image ? (
         <div className="mb-3 flex items-center gap-2 rounded-md border p-2">
           <img src={URL.createObjectURL(image)} alt="" className="h-12 w-12 rounded object-cover" />
@@ -205,7 +216,37 @@ export function NewAnnouncementDialog({ onClose, onOpened }: { onClose: () => vo
           <input type="file" accept="image/*" className="hidden" onChange={(e) => setImage(e.target.files?.[0] ?? null)} />
         </label>
       )}
-      <MemberPicker selMap={selMap} setSelMap={setSelMap} />
+
+      {/* PÚBLICO */}
+      <p className="mb-1.5 text-xs font-medium text-muted-foreground">Enviar para</p>
+      <div className="mb-2 flex flex-wrap gap-1.5">
+        {([["all", "Todos"], ["departments", "Por departamento"], ["users", "Escolher pessoas"]] as [AnnAudience, string][]).map(([v, label]) => (
+          <button key={v} onClick={() => setAudience(v)} type="button"
+            className={`rounded-full px-3 py-1 text-xs font-medium ${audience === v ? "bg-primary/10 text-primary ring-1 ring-primary/40" : "text-muted-foreground hover:bg-muted"}`}>
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {audience === "all" && (
+        <p className="mb-1 text-[11px] text-muted-foreground">Vai para todos os funcionários.</p>
+      )}
+      {audience === "departments" && (
+        <div className="mb-1 flex flex-wrap gap-1.5">
+          {departments.map((d) => {
+            const on = depts.has(d);
+            return (
+              <button key={d} type="button"
+                onClick={() => setDepts((prev) => { const n = new Set(prev); n.has(d) ? n.delete(d) : n.add(d); return n; })}
+                className={`rounded-full border px-2.5 py-1 text-xs ${on ? "border-primary bg-primary/10 text-primary" : "hover:bg-muted"}`}>
+                {pretty(d)}
+              </button>
+            );
+          })}
+        </div>
+      )}
+      {audience === "users" && <MemberPicker selMap={selMap} setSelMap={setSelMap} />}
+
       <div className="mt-4 flex justify-end gap-2">
         <button onClick={onClose} className="rounded-md border px-3 py-1.5 text-sm hover:bg-muted">Cancelar</button>
         <button onClick={submit} disabled={!canSubmit}
