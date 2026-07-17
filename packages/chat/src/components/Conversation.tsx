@@ -12,13 +12,11 @@ import type { Conversation as Conv, ChatMessage } from "../types";
 // Indicador de recibo (só nas minhas mensagens): ✓ enviada, ✓✓ entregue, ✓✓ azul lida.
 function Ticks({ status }: { status: ReceiptStatus }) {
   if (status === "sent") return <Check className="h-3.5 w-3.5 opacity-70" aria-label="Enviada" />;
-  const read = status === "read";
-  return (
-    <CheckCheck
-      className={`h-3.5 w-3.5 ${read ? "text-sky-400" : "opacity-70"}`}
-      aria-label={read ? "Lida" : "Entregue"}
-    />
-  );
+  if (status === "read") {
+    // Azul claro + traço grosso pra saltar mesmo no verde forte do balão.
+    return <CheckCheck className="h-4 w-4 text-sky-300 drop-shadow-[0_0_1px_rgba(0,0,0,0.35)]" strokeWidth={3} aria-label="Lida" />;
+  }
+  return <CheckCheck className="h-3.5 w-3.5 opacity-70" aria-label="Entregue" />;
 }
 
 const REACTS = ["👍", "❤️", "😂", "😮", "😢", "🙏", "✅"];
