@@ -1,9 +1,11 @@
+import { useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import type { CRMLead, FunnelType } from "@/types/crm";
 import { getStagesForFunnel, getLostStage } from "@/types/crm";
 import { useAuth } from "@/contexts/AuthContext";
+import { playMoveSuccess, playMoveError } from "@/lib/sfx";
 
 // Leads do Carbo Sales = tabelas PRÓPRIAS (crm_sales_leads / crm_sales_lead_activities),
 // isoladas do Controle. Tabelas novas não estão nos tipos gerados → cliente sem tipo.
@@ -329,12 +331,38 @@ export function useAdvanceLeadStage() {
       return data;
     },
     onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: ["crm-leads", variables.funnelType] });
+      queryClient.invalidateQueries({ queryKey: ["crm-leads"] });
       queryClient.invalidateQueries({ queryKey: ["crm-lead", variables.id] });
-      toast.success("Etapa avançada!");
+      queryClient.invalidateQueries({ queryKey: ["crm-stats"] });
+      playMoveSuccess();
+      toast.success("Card movido!");
     },
-    onError: (error: Error) => toast.error("Erro: " + error.message),
+    onError: (error: Error) => { playMoveError(); toast.error("Não foi possível mover: " + error.message); },
   });
+}
+
+// Board ao vivo: escuta mudanças em crm_sales_leads e atualiza o Kanban de todos
+// (ex.: ver os vendedores movimentando os cards em tempo real). Coalesce p/ não
+// invalidar em rajada quando vários cards se movem.
+export function useCRMLeadsRealtime() {
+  const qc = useQueryClient();
+  useEffect(() => {
+    let timer: number | null = null;
+    const refresh = () => {
+      if (timer != null) return;
+      timer = window.setTimeout(() => {
+        timer = null;
+        qc.invalidateQueries({ queryKey: ["crm-leads"] });
+        qc.invalidateQueries({ queryKey: ["crm-stats"] });
+        qc.invalidateQueries({ queryKey: ["crm-all-stats"] });
+      }, 300);
+    };
+    const ch = supabase
+      .channel("crm-leads-live")
+      .on("postgres_changes", { event: "*", schema: "public", table: "crm_sales_leads" }, refresh)
+      .subscribe();
+    return () => { if (timer != null) window.clearTimeout(timer); supabase.removeChannel(ch); };
+  }, [qc]);
 }
 
 export function useMarkLeadLost() {
@@ -371,10 +399,12 @@ export function useMarkLeadLost() {
 
       return data;
     },
-    onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: ["crm-leads", variables.funnelType] });
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["crm-leads"] });
+      queryClient.invalidateQueries({ queryKey: ["crm-stats"] });
+      playMoveSuccess();
       toast.success("Lead marcado como perdido");
     },
-    onError: (error: Error) => toast.error("Erro: " + error.message),
+    onError: (error: Error) => { playMoveError(); toast.error("Erro: " + error.message); },
   });
 }

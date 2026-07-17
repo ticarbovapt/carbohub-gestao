@@ -12,7 +12,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
 import { Plus, Users, TrendingUp, AlertTriangle, Flame, LayoutGrid, List, KanbanSquare } from "lucide-react";
-import { useCRMLeads, useAllCRMLeads, useCRMStats, useAdvanceLeadStage, useMarkLeadLost } from "@/hooks/useCRMLeads";
+import { useCRMLeads, useAllCRMLeads, useCRMStats, useAdvanceLeadStage, useMarkLeadLost, useCRMLeadsRealtime } from "@/hooks/useCRMLeads";
 import { useVendedoresDir } from "@/hooks/useVendas";
 import { useAuth } from "@/contexts/AuthContext";
 import { KanbanBoard } from "@/components/crm/KanbanBoard";
@@ -164,6 +164,7 @@ export default function Pipelines() {
   const { data: funnelLeads = [], isLoading: l1 } = useCRMLeads(ft);
   const { data: allLeads = [], isLoading: l2 } = useAllCRMLeads();
   const { data: stats } = useCRMStats(ft);
+  useCRMLeadsRealtime(); // board ao vivo (ver os vendedores movimentando os cards)
   const advanceLead = useAdvanceLeadStage();
   const markLost = useMarkLeadLost();
   const stages = getStagesForFunnel(ft);
