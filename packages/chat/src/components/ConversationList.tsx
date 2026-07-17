@@ -12,7 +12,7 @@ import { NewDmDialog, NewChannelDialog, NewAnnouncementDialog } from "./dialogs"
 import { ScheduledPanel } from "./ScheduledPanel";
 import { ExploreChannels } from "./ExploreChannels";
 import { StatusDialog } from "./StatusDialog";
-import { AvailabilityDot, statusText } from "./StatusBadge";
+import { AvailabilityDot, statusText, AVAIL_META } from "./StatusBadge";
 import type { Conversation } from "../types";
 
 // Subtítulo da linha: "digitando…" (verde) enquanto alguém digita; senão a prévia.
@@ -135,7 +135,7 @@ export function ConversationList({
         <span className="min-w-0 flex-1">
           <span className="block truncate text-sm font-semibold">{currentUser.full_name ?? "Você"}</span>
           <span className="block truncate text-xs text-muted-foreground">
-            {statusText(myStatus) || "Definir status"}{myStatus?.dnd ? " · 🔕 Não perturbe" : ""}
+            {statusText(myStatus) || (myStatus ? AVAIL_META[myStatus.availability].label : "Definir status")}{myStatus?.dnd ? " · 🔕 Não perturbe" : ""}
           </span>
         </span>
       </button>
