@@ -517,6 +517,28 @@ export function useRenameChannel() {
   });
 }
 
+// Trocar a foto do grupo (upload no bucket público chat-avatars + avatar_url).
+export function useSetChannelAvatar() {
+  const { supabase, currentUser } = useChatCtx();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ channelId, file }: { channelId: string; file: File }): Promise<string> => {
+      const ext = (file.name.split(".").pop() || "jpg").toLowerCase();
+      const path = `${channelId}/${Date.now()}.${ext}`;
+      const { error: upErr } = await supabase.storage.from("chat-avatars").upload(path, file, { contentType: file.type || undefined, upsert: true });
+      if (upErr) throw upErr;
+      const url = supabase.storage.from("chat-avatars").getPublicUrl(path).data.publicUrl;
+      const { error } = await supabase.from("chat_channels").update({ avatar_url: url }).eq("id", channelId);
+      if (error) throw error;
+      return url;
+    },
+    onSuccess: (_d, v) => {
+      qc.invalidateQueries({ queryKey: ["chat", "conversations", currentUser.id] });
+      qc.invalidateQueries({ queryKey: ["chat", "members", v.channelId] });
+    },
+  });
+}
+
 // Adicionar membros a um grupo (dono/admin).
 export function useAddMembers() {
   const { supabase, currentUser } = useChatCtx();

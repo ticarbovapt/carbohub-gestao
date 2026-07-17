@@ -1,11 +1,11 @@
 import { useState } from "react";
 import {
   X, Trash2, LogOut, FileText, Play, Mic, Bell, BellOff, Pin, PinOff,
-  Pencil, UserPlus, Check, CheckCheck, Clock, Search as SearchIcon,
+  Pencil, UserPlus, Check, CheckCheck, Clock, Camera, Search as SearchIcon,
 } from "lucide-react";
 import {
   useUserInfo, useChannelMembers, useChannelMedia, useLeaveConversation, useSignedUrl,
-  useUpdateMembership, useRenameChannel, useAddMembers, useRemoveMember, useDirectory, useConversations,
+  useUpdateMembership, useRenameChannel, useAddMembers, useRemoveMember, useDirectory, useConversations, useSetChannelAvatar,
 } from "../hooks";
 import { useChatCtx } from "../context";
 import { memberReceipt } from "../lib/receipts";
@@ -35,6 +35,7 @@ export function ContactPanel({ conv: convProp, onClose, onDeleted }: {
   const leave = useLeaveConversation();
   const membership = useUpdateMembership();
   const rename = useRenameChannel();
+  const setAvatar = useSetChannelAvatar();
   const addMembers = useAddMembers();
   const removeMember = useRemoveMember();
 
@@ -63,7 +64,18 @@ export function ContactPanel({ conv: convProp, onClose, onDeleted }: {
       <div className="flex-1 overflow-y-auto">
         {/* cabeçalho */}
         <div className="flex flex-col items-center gap-2 border-b px-4 py-6 text-center">
-          <Avatar name={conv.title} url={conv.avatarUrl} size={88} />
+          {!isDm && canManage ? (
+            <label className="group relative cursor-pointer" title="Trocar foto do grupo">
+              <Avatar name={conv.title} url={conv.avatarUrl} size={88} />
+              <span className="absolute inset-0 flex items-center justify-center rounded-full bg-black/45 text-white opacity-0 transition-opacity group-hover:opacity-100">
+                {setAvatar.isPending ? <span className="text-[11px]">enviando…</span> : <Camera className="h-6 w-6" />}
+              </span>
+              <input type="file" accept="image/*" className="hidden"
+                onChange={(e) => { const f = e.target.files?.[0]; if (f) setAvatar.mutate({ channelId: conv.channel.id, file: f }); e.currentTarget.value = ""; }} />
+            </label>
+          ) : (
+            <Avatar name={conv.title} url={conv.avatarUrl} size={88} />
+          )}
           {editingName ? (
             <div className="flex w-full items-center gap-1">
               <input autoFocus value={nameDraft} onChange={(e) => setNameDraft(e.target.value)}
