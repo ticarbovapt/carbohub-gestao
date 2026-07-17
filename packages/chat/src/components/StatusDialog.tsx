@@ -5,8 +5,8 @@ import { useMyStatus, useSetStatus, type Availability } from "../hooks";
 import { AVAIL_META } from "./StatusBadge";
 
 const PRESETS: { emoji: string; texto: string; availability: Availability }[] = [
-  { emoji: "🚗", texto: "Em campo", availability: "em_campo" },
-  { emoji: "📅", texto: "Em reunião", availability: "em_reuniao" },
+  { emoji: "📍", texto: "Em campo", availability: "em_campo" },
+  { emoji: "🗓️", texto: "Em reunião", availability: "em_reuniao" },
   { emoji: "🌴", texto: "De férias", availability: "ferias" },
   { emoji: "🌙", texto: "Ausente", availability: "ausente" },
 ];

@@ -231,9 +231,11 @@ export function ConversationList({
               <div className="min-w-0 flex-1">
                 <div className="flex items-baseline gap-1.5">
                   {c.needsAck ? <Megaphone className="h-3 w-3 shrink-0 self-center text-amber-500" /> : c.pinned && <Pin className="h-3 w-3 shrink-0 text-muted-foreground" />}
-                  <span className="min-w-0 truncate text-sm font-semibold">{c.title}</span>
-                  {c.channel.type === "dm" && c.otherUserId && statuses[c.otherUserId]?.emoji && (
-                    <span className="shrink-0 text-xs" title={statuses[c.otherUserId]?.texto ?? ""}>{statuses[c.otherUserId]?.emoji}</span>
+                  <span className="min-w-0 shrink truncate text-sm font-semibold">{c.title}</span>
+                  {c.channel.type === "dm" && c.otherUserId && statusText(statuses[c.otherUserId]) && (
+                    <span className="min-w-0 shrink truncate text-[11px] font-normal text-muted-foreground">
+                      {statusText(statuses[c.otherUserId])}
+                    </span>
                   )}
                   <span className="flex-1" />
                   <span className={`shrink-0 text-[11px] ${c.unread > 0 && !c.muted ? "font-semibold text-primary" : "text-muted-foreground"}`}>

@@ -3,7 +3,7 @@ import type { Availability, UserStatus } from "../hooks";
 export const AVAIL_META: Record<Availability, { label: string; color: string; emoji: string }> = {
   disponivel: { label: "Disponível", color: "#22c55e", emoji: "🟢" },
   em_reuniao: { label: "Em reunião", color: "#ef4444", emoji: "📅" },
-  em_campo:   { label: "Em campo",   color: "#3b82f6", emoji: "🚗" },
+  em_campo:   { label: "Em campo",   color: "#3b82f6", emoji: "📍" },
   ausente:    { label: "Ausente",    color: "#f59e0b", emoji: "🌙" },
   ferias:     { label: "De férias",  color: "#a855f7", emoji: "🌴" },
 };
