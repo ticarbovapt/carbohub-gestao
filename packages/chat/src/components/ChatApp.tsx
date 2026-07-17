@@ -97,7 +97,8 @@ export function ChatApp() {
 
   return (
     <div className="flex h-full min-h-0 w-full overflow-hidden">
-      <div className="flex w-72 shrink-0 flex-col border-r">
+      {/* Lista: tela cheia no celular; coluna fixa no desktop. Some no mobile quando há conversa aberta. */}
+      <div className={`${selected ? "hidden md:flex" : "flex"} w-full shrink-0 flex-col border-r md:w-72`}>
         <div className="min-h-0 flex-1">
           <ConversationList
             selectedId={selected?.channel.id ?? null}
@@ -109,11 +110,13 @@ export function ChatApp() {
           <EnablePushButton />
         </div>
       </div>
-      <div className="min-w-0 flex-1">
+      {/* Conversa: tela cheia no celular; some no mobile quando não há conversa. */}
+      <div className={`${selected ? "block" : "hidden md:block"} min-w-0 flex-1`}>
         {selected ? (
           <Conversation key={selected.channel.id} conv={selected}
             focus={focus && focus.messageId ? focus : null}
             onClearFocus={() => setFocus(null)}
+            onBack={() => setSelected(null)}
             onDeleted={() => setSelected(null)} />
         ) : (
           <div className="flex h-full flex-col items-center justify-center gap-3 text-center text-muted-foreground">

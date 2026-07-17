@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Search, X, SmilePlus, Reply, CornerUpLeft, Check, CheckCheck, MoreVertical, Pencil, Trash2, ArrowDown, Megaphone, Lock } from "lucide-react";
+import { Search, X, SmilePlus, Reply, CornerUpLeft, Check, CheckCheck, MoreVertical, Pencil, Trash2, ArrowDown, Megaphone, Lock, ChevronLeft } from "lucide-react";
 import { useMessages, useProfilesMap, useToggleReaction, useChannelMembers, useUserInfo, useEditMessage, useDeleteMessage, useSearchMessages, useChannelAcks, useAckMessage } from "../hooks";
 import { useChatCtx } from "../context";
 import { messageReceipt, type ReceiptStatus } from "../lib/receipts";
@@ -59,8 +59,8 @@ function lastSeenLabel(iso: string) {
   return `${d.toLocaleDateString("pt-BR")} às ${hhmm}`;
 }
 
-export function Conversation({ conv, focus, onClearFocus, onDeleted }: {
-  conv: Conv; focus?: { messageId: string; at: string } | null; onClearFocus?: () => void; onDeleted?: () => void;
+export function Conversation({ conv, focus, onClearFocus, onBack, onDeleted }: {
+  conv: Conv; focus?: { messageId: string; at: string } | null; onClearFocus?: () => void; onBack?: () => void; onDeleted?: () => void;
 }) {
   const { currentUser, openConversation } = useChatCtx();
   const isGroup = conv.channel.type === "group";
@@ -147,6 +147,12 @@ export function Conversation({ conv, focus, onClearFocus, onDeleted }: {
       <div className="flex h-full min-w-0 flex-1 flex-col">
         {/* header */}
         <div className="flex items-center gap-2 border-b px-4 py-2">
+          {onBack && (
+            <button onClick={onBack} aria-label="Voltar" title="Voltar"
+              className="-ml-1 shrink-0 rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground md:hidden">
+              <ChevronLeft className="h-5 w-5" />
+            </button>
+          )}
           <button onClick={() => setPanelOpen((o) => !o)} aria-label={isGroup ? "Dados do grupo" : "Dados do contato"} aria-expanded={panelOpen}
             className="flex min-w-0 flex-1 items-center gap-3 rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
             <Avatar name={conv.title} url={conv.avatarUrl} size={36} />

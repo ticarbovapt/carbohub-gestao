@@ -54,7 +54,7 @@ export function ContactPanel({ conv: convProp, onClose, onDeleted }: {
   }
 
   return (
-    <div className="flex h-full w-80 shrink-0 flex-col border-l bg-card">
+    <div className="flex h-full w-full shrink-0 flex-col border-l bg-card md:w-80">
       <div className="flex items-center gap-2 border-b px-4 py-3">
         <button onClick={onClose} aria-label="Fechar painel" className="text-muted-foreground hover:text-foreground"><X className="h-4 w-4" /></button>
         <span className="text-sm font-semibold">{isDm ? "Dados do contato" : "Dados do grupo"}</span>
