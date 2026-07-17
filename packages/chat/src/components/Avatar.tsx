@@ -7,7 +7,16 @@ function initials(name?: string | null) {
 export function Avatar({ name, url, size = 36 }: { name?: string | null; url?: string | null; size?: number }) {
   const s = { width: size, height: size };
   if (url) {
-    return <img src={url} alt={name ?? ""} style={s} className="shrink-0 rounded-full object-cover" />;
+    // decoding/loading async: a decodificação da imagem sai da main thread, então
+    // trocar de conversa não trava esperando decodificar a foto do grupo/pessoa
+    // (era a causa das "long tasks" de ~750ms por troca).
+    return (
+      <img
+        src={url} alt={name ?? ""} width={size} height={size} style={s}
+        decoding="async" loading="lazy"
+        className="shrink-0 rounded-full object-cover"
+      />
+    );
   }
   return (
     <div

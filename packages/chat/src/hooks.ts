@@ -157,15 +157,21 @@ export function useMessages(channelId: string | null, focusAt?: string | null) {
     const isNewChannel = prev.ch !== channelId;
     const grew = !isNewChannel && msgLen > prev.len;
     if (!isNewChannel && !grew) return;
-    marked.current = { ch: channelId, len: msgLen };
-    const cur = qc.getQueryData<Conversation[]>(convKey);
-    const hadUnread = (cur?.find((c) => c.channel.id === channelId)?.unread ?? 0) > 0;
-    supabase.rpc("chat_mark_read", { p_channel: channelId }).then(() => {
-      if (!hadUnread) return;
-      qc.setQueryData<Conversation[]>(convKey, (old) =>
-        old ? old.map((c) => (c.channel.id === channelId ? { ...c, unread: 0 } : c)) : old);
-      qc.invalidateQueries({ queryKey: ["chat", "unread-total", currentUser.id] });
-    }, () => {});
+    // Debounce: clicar rápido por várias conversas NÃO dispara um chat_mark_read
+    // por clique (isso entupia o pool de conexões e travava os cliques "um por
+    // um"). Só marca a conversa em que você fica ~500ms.
+    const t = window.setTimeout(() => {
+      marked.current = { ch: channelId, len: msgLen };
+      const cur = qc.getQueryData<Conversation[]>(convKey);
+      const hadUnread = (cur?.find((c) => c.channel.id === channelId)?.unread ?? 0) > 0;
+      supabase.rpc("chat_mark_read", { p_channel: channelId }).then(() => {
+        if (!hadUnread) return;
+        qc.setQueryData<Conversation[]>(convKey, (old) =>
+          old ? old.map((c) => (c.channel.id === channelId ? { ...c, unread: 0 } : c)) : old);
+        qc.invalidateQueries({ queryKey: ["chat", "unread-total", currentUser.id] });
+      }, () => {});
+    }, 500);
+    return () => window.clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [channelId, msgLen, query.isLoading]);
 
@@ -571,14 +577,37 @@ export function useRenameChannel() {
 }
 
 // Trocar a foto do grupo (upload no bucket público chat-avatars + avatar_url).
+// Reduz a imagem a no máx. `max`px (avatar é exibido em ≤80px). Uma foto de vários
+// MB vira ~20–40KB → sem download/decodificação pesada travando a troca de conversa.
+async function downscaleImage(file: File, max = 256): Promise<Blob> {
+  try {
+    const bmp = await createImageBitmap(file);
+    const scale = Math.min(1, max / Math.max(bmp.width, bmp.height));
+    if (scale >= 1 && file.size < 120_000) { bmp.close?.(); return file; }
+    const w = Math.max(1, Math.round(bmp.width * scale));
+    const h = Math.max(1, Math.round(bmp.height * scale));
+    const canvas = document.createElement("canvas");
+    canvas.width = w; canvas.height = h;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) { bmp.close?.(); return file; }
+    ctx.drawImage(bmp, 0, 0, w, h);
+    bmp.close?.();
+    const blob: Blob | null = await new Promise((res) => canvas.toBlob(res, "image/webp", 0.85));
+    return blob ?? file;
+  } catch {
+    return file; // navegador sem suporte → sobe original
+  }
+}
+
 export function useSetChannelAvatar() {
   const { supabase, currentUser } = useChatCtx();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ channelId, file }: { channelId: string; file: File }): Promise<string> => {
-      const ext = (file.name.split(".").pop() || "jpg").toLowerCase();
+      const blob = await downscaleImage(file);
+      const ext = blob.type === "image/webp" ? "webp" : (file.name.split(".").pop() || "jpg").toLowerCase();
       const path = `${channelId}/${Date.now()}.${ext}`;
-      const { error: upErr } = await supabase.storage.from("chat-avatars").upload(path, file, { contentType: file.type || undefined, upsert: true });
+      const { error: upErr } = await supabase.storage.from("chat-avatars").upload(path, blob, { contentType: blob.type || undefined, upsert: true });
       if (upErr) throw upErr;
       const url = supabase.storage.from("chat-avatars").getPublicUrl(path).data.publicUrl;
       const { error } = await supabase.from("chat_channels").update({ avatar_url: url }).eq("id", channelId);

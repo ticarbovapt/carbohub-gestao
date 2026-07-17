@@ -89,10 +89,12 @@ export function ChatApp() {
         p_origin: window.location.origin,
       }).then(() => {}, () => {});
     };
-    ping();
+    // Debounce do ping ao trocar de conversa: clicar rápido por várias não dispara
+    // um chat_presence_ping por clique (aliviava o pool de conexões).
+    const t = window.setTimeout(ping, 600);
     const iv = window.setInterval(ping, 25_000);
     document.addEventListener("visibilitychange", ping);
-    return () => { window.clearInterval(iv); document.removeEventListener("visibilitychange", ping); };
+    return () => { window.clearTimeout(t); window.clearInterval(iv); document.removeEventListener("visibilitychange", ping); };
   }, [supabase, currentUser.id, selected]);
 
   return (
