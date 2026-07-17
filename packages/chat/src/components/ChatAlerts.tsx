@@ -37,7 +37,8 @@ export function ChatAlerts() {
         const muted = convs?.find((c) => c.channel.id === msg.channel_id)?.muted;
         qc.invalidateQueries({ queryKey: ["chat", "unread-total", currentUser.id] });
         qc.invalidateQueries({ queryKey: ["chat", "conversations", currentUser.id] });
-        if (viewing || muted) return;
+        // Mensagem do sistema (bug/sugestão no grupo): entra na lista, mas nunca toca/toasta.
+        if (viewing || muted || msg.kind === "system") return;
 
         playMessageChime();
 
