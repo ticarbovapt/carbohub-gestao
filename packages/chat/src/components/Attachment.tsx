@@ -30,12 +30,13 @@ export function Attachment({ att }: { att: ChatAttachment }) {
   if (kind === "image") {
     return (
       <a href={url} target="_blank" rel="noreferrer" className="block">
-        <img src={url} alt="" className="max-h-64 max-w-xs rounded-lg border object-cover" />
+        {/* natural (sem forçar caixa): mostra a imagem inteira, tamanho ~WhatsApp */}
+        <img src={url} alt="" className="max-h-80 w-auto max-w-full rounded-lg" />
       </a>
     );
   }
   if (kind === "video") {
-    return <video src={url} controls className="max-h-64 max-w-xs rounded-lg border" />;
+    return <video src={url} controls className="max-h-80 w-auto max-w-full rounded-lg" />;
   }
   if (kind === "audio") {
     return <audio src={url} controls className="h-10 w-64 max-w-full" />;
