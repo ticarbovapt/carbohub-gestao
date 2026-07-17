@@ -98,11 +98,11 @@ export function ContactPanel({ conv: convProp, onClose, onDeleted }: {
           )}
           {isDm ? (
             <div className="text-sm text-muted-foreground">
-              {(statusText(dmStatus) || dmStatus?.availability) && (
+              {dmStatus && (
                 <p className="mb-1 inline-flex items-center gap-1.5 text-xs font-medium text-foreground">
-                  <AvailabilityDot availability={dmStatus?.availability} size={9} />
-                  {statusText(dmStatus) || AVAIL_META[dmStatus!.availability].label}
-                  {dmStatus?.dnd ? " · 🔕 Não perturbe" : ""}
+                  {dmStatus.availability === "disponivel" && <AvailabilityDot availability="disponivel" size={9} />}
+                  {statusText(dmStatus) || AVAIL_META[dmStatus.availability].label}
+                  {dmStatus.dnd ? " · 🔕 Não perturbe" : ""}
                 </p>
               )}
               <p>{[info?.department, info?.funcao].filter(Boolean).join(" · ") || "—"}</p>

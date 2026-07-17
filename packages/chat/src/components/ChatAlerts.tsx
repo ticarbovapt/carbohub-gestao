@@ -93,6 +93,11 @@ export function ChatAlerts() {
       .on("postgres_changes", { event: "UPDATE", schema: "public", table: "chat_messages" }, () => {
         scheduleRefresh();
       })
+      // Status pessoal ao vivo: mudou o status de alguém → repinta lista/cabeçalho.
+      .on("postgres_changes", { event: "*", schema: "public", table: "chat_user_status" }, () => {
+        qc.invalidateQueries({ queryKey: ["chat", "statuses"] });
+        qc.invalidateQueries({ queryKey: ["chat", "my-status"] });
+      })
       // Presence: quem está online agora (chave = user_id).
       .on("presence", { event: "sync" }, () => {
         presenceBus.setOnline(Object.keys(ch.presenceState()));

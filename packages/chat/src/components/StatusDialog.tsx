@@ -2,13 +2,15 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { X, Moon, BellOff } from "lucide-react";
 import { useMyStatus, useSetStatus, type Availability } from "../hooks";
-import { AVAIL_META } from "./StatusBadge";
 
-const PRESETS: { emoji: string; texto: string; availability: Availability }[] = [
-  { emoji: "📍", texto: "Em campo", availability: "em_campo" },
-  { emoji: "🗓️", texto: "Em reunião", availability: "em_reuniao" },
-  { emoji: "🌴", texto: "De férias", availability: "ferias" },
-  { emoji: "🌙", texto: "Ausente", availability: "ausente" },
+// Um único seletor coerente: escolher define emoji + texto + disponibilidade
+// juntos (nada de "Em campo" com bolinha de férias). Texto abaixo é opcional.
+const STATUS_OPTIONS: { key: Availability; emoji: string; texto: string; label: string }[] = [
+  { key: "disponivel", emoji: "",   texto: "",           label: "🟢 Disponível" },
+  { key: "em_campo",   emoji: "📍", texto: "Em campo",   label: "📍 Em campo" },
+  { key: "em_reuniao", emoji: "🗓️", texto: "Em reunião", label: "🗓️ Em reunião" },
+  { key: "ferias",     emoji: "🌴", texto: "De férias",  label: "🌴 De férias" },
+  { key: "ausente",    emoji: "🌙", texto: "Ausente",    label: "🌙 Ausente" },
 ];
 
 const EXPIRY: { key: string; label: string; ms: number | null }[] = [
@@ -87,32 +89,27 @@ export function StatusDialog({ onClose }: { onClose: () => void }) {
         </div>
 
         <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4">
-          {/* emoji + texto */}
-          <div className="flex gap-2">
-            <input value={emoji} onChange={(e) => setEmoji(e.target.value.slice(0, 4))} placeholder="🙂" maxLength={4}
-              className="h-9 w-12 shrink-0 rounded-md border border-input bg-background text-center text-lg focus:outline-none focus:ring-2 focus:ring-ring" />
-            <input value={texto} onChange={(e) => setTexto(e.target.value)} placeholder="O que você está fazendo?" maxLength={80}
-              className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
-          </div>
-
-          {/* presets */}
-          <div className="flex flex-wrap gap-1.5">
-            {PRESETS.map((p) => (
-              <button key={p.texto} onClick={() => { setEmoji(p.emoji); setTexto(p.texto); setAvailability(p.availability); }}
-                className="rounded-full border px-2.5 py-1 text-xs hover:bg-muted">{p.emoji} {p.texto}</button>
-            ))}
-          </div>
-
-          {/* disponibilidade */}
+          {/* status (define emoji + texto + disponibilidade juntos) */}
           <div>
-            <p className="mb-1.5 text-xs font-medium text-muted-foreground">Disponibilidade</p>
+            <p className="mb-1.5 text-xs font-medium text-muted-foreground">Status</p>
             <div className="flex flex-wrap gap-1.5">
-              {(Object.keys(AVAIL_META) as Availability[]).map((a) => (
-                <button key={a} onClick={() => setAvailability(a)}
-                  className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs ${availability === a ? "border-primary bg-primary/10 text-primary" : "hover:bg-muted"}`}>
-                  <span className="h-2 w-2 rounded-full" style={{ backgroundColor: AVAIL_META[a].color }} /> {AVAIL_META[a].label}
+              {STATUS_OPTIONS.map((o) => (
+                <button key={o.key} onClick={() => { setEmoji(o.emoji); setTexto(o.texto); setAvailability(o.key); }}
+                  className={`rounded-full border px-3 py-1.5 text-xs font-medium ${availability === o.key ? "border-primary bg-primary/10 text-primary" : "hover:bg-muted"}`}>
+                  {o.label}
                 </button>
               ))}
+            </div>
+          </div>
+
+          {/* personalizar (opcional) */}
+          <div>
+            <p className="mb-1.5 text-xs font-medium text-muted-foreground">Personalizar (opcional)</p>
+            <div className="flex gap-2">
+              <input value={emoji} onChange={(e) => setEmoji(e.target.value.slice(0, 4))} placeholder="🙂" maxLength={4}
+                className="h-9 w-12 shrink-0 rounded-md border border-input bg-background text-center text-lg focus:outline-none focus:ring-2 focus:ring-ring" />
+              <input value={texto} onChange={(e) => setTexto(e.target.value)} placeholder="Ex.: Em campo — Fortaleza" maxLength={80}
+                className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
             </div>
           </div>
 

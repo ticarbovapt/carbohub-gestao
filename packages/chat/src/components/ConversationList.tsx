@@ -130,7 +130,9 @@ export function ConversationList({
         className="flex items-center gap-2.5 border-b px-3 py-2 text-left hover:bg-muted/50">
         <span className="relative shrink-0">
           <Avatar name={currentUser.full_name} url={currentUser.avatar_url} size={32} />
-          <AvailabilityDot availability={myStatus?.availability} size={9} className="absolute -bottom-0.5 -right-0.5" />
+          {(!myStatus || myStatus.availability === "disponivel") && (
+            <AvailabilityDot availability="disponivel" size={9} className="absolute -bottom-0.5 -right-0.5" />
+          )}
         </span>
         <span className="min-w-0 flex-1">
           <span className="block truncate text-sm font-semibold">{currentUser.full_name ?? "Você"}</span>
@@ -224,8 +226,8 @@ export function ConversationList({
               className={`group relative flex w-full cursor-pointer items-center gap-3 border-b border-border/50 px-3 py-2.5 text-left focus-visible:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring ${selectedId === c.channel.id ? "bg-primary/10" : c.needsAck ? "bg-amber-50 dark:bg-amber-500/10" : "md:hover:bg-muted/60"}`}>
               <span className="relative shrink-0">
                 <Avatar name={c.title} url={c.avatarUrl} size={48} />
-                {c.channel.type === "dm" && c.otherUserId && statuses[c.otherUserId] && (
-                  <AvailabilityDot availability={statuses[c.otherUserId].availability} className="absolute bottom-0 right-0" />
+                {c.channel.type === "dm" && c.otherUserId && statuses[c.otherUserId]?.availability === "disponivel" && (
+                  <AvailabilityDot availability="disponivel" className="absolute bottom-0 right-0" />
                 )}
               </span>
               <div className="min-w-0 flex-1">

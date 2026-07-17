@@ -126,14 +126,15 @@ function HeaderStatus({ channelId, isGroup, otherUserId, currentUserId, isAnnoun
             ? (typing.length === 1 ? `${firstName(typing[0].name)} está digitando…` : `${typing.length} pessoas digitando…`)
             : "digitando…"}
         </span>
-      ) : stTxt ? (
-        <span className="text-muted-foreground">{stTxt}{st?.dnd ? " · 🔕" : ""}</span>
       ) : isAnnouncement ? (
         <span className="text-amber-500">Comunicado oficial{isPublisher ? " · você publica" : " · somente leitura"}</span>
       ) : !isGroup ? (
-        otherOnline
-          ? <span className="text-emerald-500">online</span>
-          : <span className="text-muted-foreground">{otherInfo?.last_seen_at ? `visto por último ${lastSeenLabel(otherInfo.last_seen_at)}` : "Mensagem direta"}</span>
+        <span className="text-muted-foreground">
+          {stTxt ? `${stTxt}${st?.dnd ? " 🔕" : ""} · ` : ""}
+          {otherOnline
+            ? <span className="text-emerald-500">online</span>
+            : (otherInfo?.last_seen_at ? `visto por último ${lastSeenLabel(otherInfo.last_seen_at)}` : "Mensagem direta")}
+        </span>
       ) : (
         <span className="text-muted-foreground">{isPrivate ? "Grupo privado" : "Grupo"}</span>
       )}

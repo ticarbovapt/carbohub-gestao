@@ -78,7 +78,7 @@ function DirList({ search, onPick, selected }: { search: string; onPick: (p: Cha
             className={`flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left transition-colors ${isSel ? "bg-primary/10 ring-1 ring-primary/40" : "hover:bg-muted"}`}>
             <span className="relative shrink-0">
               <Avatar name={p.full_name} url={p.avatar_url} size={32} />
-              {st && <AvailabilityDot availability={st.availability} size={9} className="absolute -bottom-0.5 -right-0.5" />}
+              {st?.availability === "disponivel" && <AvailabilityDot availability="disponivel" size={9} className="absolute -bottom-0.5 -right-0.5" />}
             </span>
             <span className="flex min-w-0 flex-1 flex-col">
               <span className="truncate text-sm">{p.full_name ?? "—"}</span>
