@@ -163,8 +163,8 @@ export async function generateQuotePdf(order: QuotePdfData) {
 
   // Linha da empresa (branco suave) na base da faixa.
   doc.setFont("helvetica", "normal"); doc.setFontSize(7); doc.setTextColor(...GREEN_SOFT);
-  doc.text(`${COMPANY.name}  ·  CNPJ ${COMPANY.cnpj}`, M, BAND_H - 5.5);
-  doc.text(`${COMPANY.endereco} · ${COMPANY.cidade} · ${COMPANY.telefone}`, M, BAND_H - 2);
+  doc.text(`${COMPANY.name}  ·  CNPJ ${COMPANY.cnpj}`, M, BAND_H - 8);
+  doc.text(`${COMPANY.endereco} · ${COMPANY.cidade} · ${COMPANY.telefone}`, M, BAND_H - 4);
   doc.setTextColor(0); doc.setLineWidth(0.2);
 
   // Início do conteúdo abaixo da faixa.
