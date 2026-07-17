@@ -1,15 +1,23 @@
 import { useState } from "react";
 import {
   X, Trash2, LogOut, FileText, Play, Mic, Bell, BellOff, Pin, PinOff,
-  Pencil, UserPlus, Check, Search as SearchIcon,
+  Pencil, UserPlus, Check, CheckCheck, Clock, Search as SearchIcon,
 } from "lucide-react";
 import {
   useUserInfo, useChannelMembers, useChannelMedia, useLeaveConversation, useSignedUrl,
   useUpdateMembership, useRenameChannel, useAddMembers, useRemoveMember, useDirectory, useConversations,
 } from "../hooks";
 import { useChatCtx } from "../context";
+import { memberReceipt } from "../lib/receipts";
 import { Avatar } from "./Avatar";
 import type { Conversation, ChatAttachment } from "../types";
+
+// Ícone de recibo de um membro para a última mensagem do grupo.
+function MemberTick({ status }: { status: "sent" | "delivered" | "read" }) {
+  if (status === "read") return <CheckCheck className="h-3.5 w-3.5 text-sky-400" aria-label="Leu" />;
+  if (status === "delivered") return <CheckCheck className="h-3.5 w-3.5 text-muted-foreground/70" aria-label="Recebeu" />;
+  return <Clock className="h-3 w-3 text-muted-foreground/60" aria-label="Pendente" />;
+}
 
 export function ContactPanel({ conv: convProp, onClose, onDeleted }: {
   conv: Conversation;
@@ -108,11 +116,19 @@ export function ContactPanel({ conv: convProp, onClose, onDeleted }: {
                 </button>
               )}
             </div>
+            {/* Recibo da última mensagem: quantos já leram + detalhe por membro. */}
+            {conv.lastAt && (
+              <p className="mb-2 flex items-center gap-1 text-[11px] text-muted-foreground">
+                <CheckCheck className="h-3.5 w-3.5 text-sky-400" />
+                {members.filter((m) => memberReceipt(conv.lastAt!, m) === "read").length} de {members.length} leram a última mensagem
+              </p>
+            )}
             <div className="space-y-1.5">
               {members.map((m) => (
                 <div key={m.id} className="group flex items-center gap-2.5">
                   <Avatar name={m.full_name} url={m.avatar_url} size={30} />
                   <span className="flex-1 truncate text-sm">{m.full_name ?? "—"}{m.id === currentUser.id && " (você)"}</span>
+                  {conv.lastAt && m.id !== currentUser.id && <MemberTick status={memberReceipt(conv.lastAt, m)} />}
                   {m.role !== "member" && <span className="text-[11px] text-muted-foreground">{m.role === "owner" ? "dono" : "admin"}</span>}
                   {canManage && m.id !== currentUser.id && m.role !== "owner" && (
                     <button onClick={() => removeMember.mutate({ channelId: conv.channel.id, userId: m.id })}

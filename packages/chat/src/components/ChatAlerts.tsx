@@ -23,6 +23,9 @@ export function ChatAlerts() {
         const msg = payload.new as { sender_id: string | null; channel_id: string; body: string | null; kind: string };
         if (!msg || msg.sender_id === currentUser.id) return;
 
+        // Recibo "entregue": recebi a mensagem (mesmo com a conversa fechada/mutada).
+        supabase.rpc("chat_mark_delivered", { p_channel: msg.channel_id }).then(() => {}, () => {});
+
         // Vendo esse canal agora? só atualiza, sem som/toast.
         const viewing = activeChannelRef.current === msg.channel_id && document.visibilityState === "visible";
         // Conversa silenciada? não toca/toasta.

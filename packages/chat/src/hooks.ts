@@ -11,7 +11,11 @@ export interface ChatUserInfo {
   id: string; full_name: string | null; avatar_url: string | null;
   department: string | null; funcao: string | null; email: string | null; username: string | null;
 }
-export interface ChannelMember { id: string; role: string; full_name: string | null; avatar_url: string | null; }
+export interface ChannelMember {
+  id: string; role: string; full_name: string | null; avatar_url: string | null;
+  // recibos de leitura (estilo WhatsApp)
+  lastReadAt?: string | null; lastDeliveredAt?: string | null;
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Conversas (DMs + grupos) do usuário, já normalizadas + não-lidas.
@@ -94,6 +98,11 @@ export function useMessages(channelId: string | null) {
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "chat_reactions" }, () => {
         qc.invalidateQueries({ queryKey: key });
+      })
+      // Recibos de leitura ao vivo: quando um membro marca lido/entregue, o
+      // last_read_at/last_delivered_at muda → recalcula os ✓/✓✓ nas mensagens.
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "chat_channel_members", filter: `channel_id=eq.${channelId}` }, () => {
+        qc.invalidateQueries({ queryKey: ["chat", "members", channelId] });
       })
       .subscribe();
     return () => { supabase.removeChannel(ch); };
@@ -371,9 +380,9 @@ export function useChannelMembers(channelId: string | null, enabled = true) {
     enabled: !!channelId && enabled,
     queryFn: async (): Promise<ChannelMember[]> => {
       const { data: mem, error } = await supabase
-        .from("chat_channel_members").select("user_id, role").eq("channel_id", channelId);
+        .from("chat_channel_members").select("user_id, role, last_read_at, last_delivered_at").eq("channel_id", channelId);
       if (error) throw error;
-      const rows = (mem ?? []) as { user_id: string; role: string }[];
+      const rows = (mem ?? []) as { user_id: string; role: string; last_read_at: string | null; last_delivered_at: string | null }[];
       const ids = rows.map((r) => r.user_id);
       const map: Record<string, ChatProfileRef> = {};
       if (ids.length) {
@@ -384,6 +393,8 @@ export function useChannelMembers(channelId: string | null, enabled = true) {
         id: r.user_id, role: r.role,
         full_name: map[r.user_id]?.full_name ?? null,
         avatar_url: map[r.user_id]?.avatar_url ?? null,
+        lastReadAt: r.last_read_at,
+        lastDeliveredAt: r.last_delivered_at,
       }));
     },
   });

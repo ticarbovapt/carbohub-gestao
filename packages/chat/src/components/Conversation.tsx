@@ -1,12 +1,25 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Search, X, SmilePlus, Reply, CornerUpLeft } from "lucide-react";
-import { useMessages, useProfilesMap, useToggleReaction } from "../hooks";
+import { Search, X, SmilePlus, Reply, CornerUpLeft, Check, CheckCheck } from "lucide-react";
+import { useMessages, useProfilesMap, useToggleReaction, useChannelMembers } from "../hooks";
 import { useChatCtx } from "../context";
+import { messageReceipt, type ReceiptStatus } from "../lib/receipts";
 import { Avatar } from "./Avatar";
 import { Composer } from "./Composer";
 import { Attachment } from "./Attachment";
 import { ContactPanel } from "./ContactPanel";
 import type { Conversation as Conv, ChatMessage } from "../types";
+
+// Indicador de recibo (só nas minhas mensagens): ✓ enviada, ✓✓ entregue, ✓✓ azul lida.
+function Ticks({ status }: { status: ReceiptStatus }) {
+  if (status === "sent") return <Check className="h-3.5 w-3.5 opacity-70" aria-label="Enviada" />;
+  const read = status === "read";
+  return (
+    <CheckCheck
+      className={`h-3.5 w-3.5 ${read ? "text-sky-400" : "opacity-70"}`}
+      aria-label={read ? "Lida" : "Entregue"}
+    />
+  );
+}
 
 const REACTS = ["👍", "❤️", "😂", "😮", "😢", "🙏", "✅"];
 const dayKey = (iso: string) => new Date(iso).toLocaleDateString("pt-BR");
@@ -24,6 +37,7 @@ export function Conversation({ conv, onDeleted }: { conv: Conv; onDeleted?: () =
   const { currentUser } = useChatCtx();
   const isGroup = conv.channel.type === "group";
   const { data: messages = [], isLoading } = useMessages(conv.channel.id);
+  const { data: members = [] } = useChannelMembers(conv.channel.id);
   const { data: profMap = {} } = useProfilesMap(messages.map((m) => m.sender_id ?? "").filter(Boolean));
   const react = useToggleReaction();
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -101,6 +115,7 @@ export function Conversation({ conv, onDeleted }: { conv: Conv; onDeleted?: () =
                       repliedTo={m.reply_to_id ? byId[m.reply_to_id] ?? null : null}
                       repliedName={m.reply_to_id ? nameOf(byId[m.reply_to_id]?.sender_id ?? null) : ""}
                       currentUserId={currentUser.id}
+                      receipt={mine ? messageReceipt(m.created_at, members, currentUser.id).status : null}
                       onReply={() => setReplyTo(m)}
                       onReact={(emoji, active) => react.mutate({ messageId: m.id, emoji, channelId: conv.channel.id, active })}
                     />
@@ -124,10 +139,11 @@ export function Conversation({ conv, onDeleted }: { conv: Conv; onDeleted?: () =
 }
 
 function MessageBubble({
-  m, mine, isGroup, showName, senderName, repliedTo, repliedName, currentUserId, onReply, onReact,
+  m, mine, isGroup, showName, senderName, repliedTo, repliedName, currentUserId, receipt, onReply, onReact,
 }: {
   m: ChatMessage; mine: boolean; isGroup: boolean; showName: boolean; senderName: string;
   repliedTo: ChatMessage | null; repliedName: string; currentUserId: string;
+  receipt: ReceiptStatus | null;
   onReply: () => void; onReact: (emoji: string, active: boolean) => void;
 }) {
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -179,7 +195,10 @@ function MessageBubble({
           {m.attachments && m.attachments.length > 0 && (
             <div className="mt-1 space-y-1.5">{m.attachments.map((att) => <Attachment key={att.id} att={att} />)}</div>
           )}
-          <p className={`mt-0.5 text-right text-[10px] ${mine ? "text-primary-foreground/70" : "text-muted-foreground"}`}>{when}</p>
+          <div className={`mt-0.5 flex items-center justify-end gap-1 text-[10px] ${mine ? "text-primary-foreground/70" : "text-muted-foreground"}`}>
+            <span>{when}</span>
+            {mine && receipt && <Ticks status={receipt} />}
+          </div>
         </div>
 
         {/* reações abaixo do balão */}
