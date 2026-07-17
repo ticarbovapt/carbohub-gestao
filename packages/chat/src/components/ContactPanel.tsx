@@ -56,7 +56,7 @@ export function ContactPanel({ conv: convProp, onClose, onDeleted }: {
   return (
     <div className="flex h-full w-80 shrink-0 flex-col border-l bg-card">
       <div className="flex items-center gap-2 border-b px-4 py-3">
-        <button onClick={onClose} className="text-muted-foreground hover:text-foreground"><X className="h-4 w-4" /></button>
+        <button onClick={onClose} aria-label="Fechar painel" className="text-muted-foreground hover:text-foreground"><X className="h-4 w-4" /></button>
         <span className="text-sm font-semibold">{isDm ? "Dados do contato" : "Dados do grupo"}</span>
       </div>
 
@@ -132,7 +132,7 @@ export function ContactPanel({ conv: convProp, onClose, onDeleted }: {
                   {m.role !== "member" && <span className="text-[11px] text-muted-foreground">{m.role === "owner" ? "dono" : "admin"}</span>}
                   {canManage && m.id !== currentUser.id && m.role !== "owner" && (
                     <button onClick={() => removeMember.mutate({ channelId: conv.channel.id, userId: m.id })}
-                      className="text-muted-foreground opacity-0 group-hover:opacity-100 hover:text-destructive" title="Remover">
+                      className="text-muted-foreground opacity-0 group-hover:opacity-100 hover:text-destructive" title="Remover" aria-label="Remover membro">
                       <X className="h-3.5 w-3.5" />
                     </button>
                   )}

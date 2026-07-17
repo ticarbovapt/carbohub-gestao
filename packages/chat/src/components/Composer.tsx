@@ -12,13 +12,14 @@ const kindLabel = (k: string) =>
 const ALL_ID = "__all__";
 
 export function Composer({
-  channelId, isGroup, replyTo, onClearReply, replyToName,
+  channelId, isGroup, replyTo, onClearReply, replyToName, onEditLast,
 }: {
   channelId: string;
   isGroup: boolean;
   replyTo: ChatMessage | null;
   onClearReply: () => void;
   replyToName: string;
+  onEditLast?: () => void;
 }) {
   const [text, setText] = useState("");
   const [files, setFiles] = useState<File[]>([]);
@@ -172,13 +173,13 @@ export function Composer({
           <input ref={fileRef} type="file" multiple hidden
             accept="image/*,video/*,audio/*,application/pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.zip"
             onChange={(e) => pickFiles(e.target.files)} />
-          <button onClick={() => fileRef.current?.click()} title="Anexar"
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted">
+          <button onClick={() => fileRef.current?.click()} title="Anexar" aria-label="Anexar arquivo"
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring">
             <Paperclip className="h-5 w-5" />
           </button>
           <div className="relative shrink-0">
-            <button onClick={() => setEmojiOpen((o) => !o)} title="Emoji"
-              className="flex h-10 w-10 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted">
+            <button onClick={() => setEmojiOpen((o) => !o)} title="Emoji" aria-label="Inserir emoji" aria-expanded={emojiOpen}
+              className="flex h-10 w-10 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring">
               <Smile className="h-5 w-5" />
             </button>
             {emojiOpen && <EmojiPicker onPick={insertEmoji} onClose={() => setEmojiOpen(false)} />}
@@ -190,9 +191,12 @@ export function Composer({
             onChange={onType}
             onBlur={stopTyping}
             onKeyDown={(e) => {
-              if (e.key === "Escape") { setMention(null); }
-              if (e.key === "Enter" && !e.shiftKey && !mention) { e.preventDefault(); submit(); }
+              if (e.key === "Escape") { if (mention) setMention(null); else if (replyTo) onClearReply(); stopTyping(); return; }
+              if (e.key === "Enter" && !e.shiftKey && !mention) { e.preventDefault(); submit(); return; }
+              // ↑ no campo vazio edita a última mensagem sua (estilo WhatsApp/Slack).
+              if (e.key === "ArrowUp" && !text && !mention && onEditLast) { e.preventDefault(); onEditLast(); }
             }}
+            aria-label="Escrever mensagem"
             placeholder={isGroup ? "Mensagem…  @ menciona · Enter envia" : "Mensagem…  Enter envia"}
             rows={1}
             className="max-h-40 min-h-[40px] flex-1 resize-none overflow-y-auto rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
@@ -201,7 +205,7 @@ export function Composer({
           {/* direita: enviar quando há conteúdo, microfone quando vazio (estilo WhatsApp) */}
           {(text.trim() || files.length > 0) ? (
             <button onClick={submit} disabled={send.isPending}
-              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground disabled:opacity-40" title="Enviar">
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground disabled:opacity-40 focus-visible:ring-2 focus-visible:ring-ring" title="Enviar" aria-label="Enviar mensagem">
               <Send className="h-4 w-4" />
             </button>
           ) : (

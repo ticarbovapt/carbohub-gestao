@@ -78,6 +78,28 @@ export function Conversation({ conv, focus, onClearFocus, onDeleted }: {
   const [search, setSearch] = useState("");
   const [replyTo, setReplyTo] = useState<ChatMessage | null>(null);
   const [highlight, setHighlight] = useState<string | null>(null);
+  const [editRequestId, setEditRequestId] = useState<string | null>(null);
+
+  // ↑ no campo vazio → edita minha última mensagem de texto.
+  function editLast() {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const m = messages[i];
+      if (m.sender_id === currentUser.id && m.kind === "text" && !m.deleted_at) { setEditRequestId(m.id); return; }
+    }
+  }
+
+  // Esc fecha em cascata (fora de inputs, que o composer/busca já tratam).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA") return;
+      if (searchOpen) { setSearchOpen(false); setSearch(""); }
+      else if (panelOpen) setPanelOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [searchOpen, panelOpen]);
 
   const q = search.trim();
   // Busca no SERVIDOR (full-text), dentro desta conversa.
@@ -108,7 +130,8 @@ export function Conversation({ conv, focus, onClearFocus, onDeleted }: {
       <div className="flex h-full min-w-0 flex-1 flex-col">
         {/* header */}
         <div className="flex items-center gap-2 border-b px-4 py-2">
-          <button onClick={() => setPanelOpen((o) => !o)} className="flex min-w-0 flex-1 items-center gap-3 text-left">
+          <button onClick={() => setPanelOpen((o) => !o)} aria-label={isGroup ? "Dados do grupo" : "Dados do contato"} aria-expanded={panelOpen}
+            className="flex min-w-0 flex-1 items-center gap-3 rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
             <Avatar name={conv.title} url={conv.avatarUrl} size={36} />
             <div className="min-w-0">
               <p className="truncate text-sm font-semibold">{conv.title}</p>
@@ -129,8 +152,8 @@ export function Conversation({ conv, focus, onClearFocus, onDeleted }: {
               </p>
             </div>
           </button>
-          <button onClick={() => { setSearchOpen((o) => !o); setSearch(""); }} title="Buscar na conversa"
-            className="shrink-0 rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground">
+          <button onClick={() => { setSearchOpen((o) => !o); setSearch(""); }} title="Buscar na conversa" aria-label="Buscar na conversa" aria-expanded={searchOpen}
+            className="shrink-0 rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring">
             <Search className="h-4 w-4" />
           </button>
         </div>
@@ -180,7 +203,7 @@ export function Conversation({ conv, focus, onClearFocus, onDeleted }: {
           ) : messages.length === 0 ? (
             <p className="text-sm text-muted-foreground">Nenhuma mensagem ainda. Diga oi 👋</p>
           ) : (
-            <div className="space-y-0.5">
+            <div className="space-y-0.5" role="log" aria-live="polite" aria-relevant="additions" aria-label="Mensagens">
               {messages.map((m, i) => {
                 const prev = messages[i - 1];
                 const newDay = !prev || dayKey(prev.created_at) !== dayKey(m.created_at);
@@ -203,6 +226,8 @@ export function Conversation({ conv, focus, onClearFocus, onDeleted }: {
                       currentUserId={currentUser.id}
                       receipt={mine ? messageReceipt(m.created_at, members, currentUser.id).status : null}
                       menuUp={i >= messages.length - 3}
+                      startEdit={editRequestId === m.id}
+                      onEditConsumed={() => setEditRequestId(null)}
                       onReply={() => setReplyTo(m)}
                       onReact={(emoji, active) => react.mutate({ messageId: m.id, emoji, channelId: conv.channel.id, active })}
                       onEdit={(body) => edit.mutate({ messageId: m.id, body, channelId: conv.channel.id })}
@@ -225,7 +250,7 @@ export function Conversation({ conv, focus, onClearFocus, onDeleted }: {
         </div>
 
         <Composer channelId={conv.channel.id} isGroup={isGroup} replyTo={replyTo} onClearReply={() => setReplyTo(null)}
-          replyToName={replyTo ? nameOf(replyTo.sender_id) : ""} />
+          replyToName={replyTo ? nameOf(replyTo.sender_id) : ""} onEditLast={editLast} />
       </div>
 
       {panelOpen && (
@@ -236,11 +261,11 @@ export function Conversation({ conv, focus, onClearFocus, onDeleted }: {
 }
 
 function MessageBubble({
-  m, mine, isGroup, showName, senderName, repliedTo, repliedName, currentUserId, receipt, menuUp, onReply, onReact, onEdit, onDelete,
+  m, mine, isGroup, showName, senderName, repliedTo, repliedName, currentUserId, receipt, menuUp, startEdit, onEditConsumed, onReply, onReact, onEdit, onDelete,
 }: {
   m: ChatMessage; mine: boolean; isGroup: boolean; showName: boolean; senderName: string;
   repliedTo: ChatMessage | null; repliedName: string; currentUserId: string;
-  receipt: ReceiptStatus | null; menuUp: boolean;
+  receipt: ReceiptStatus | null; menuUp: boolean; startEdit?: boolean; onEditConsumed?: () => void;
   onReply: () => void; onReact: (emoji: string, active: boolean) => void;
   onEdit: (body: string) => void; onDelete: () => void;
 }) {
@@ -253,6 +278,14 @@ function MessageBubble({
   const when = new Date(m.created_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
   const deleted = !!m.deleted_at;
   const edited = !!m.edited_at;
+
+  // Pedido externo (atalho ↑) pra editar esta mensagem.
+  useEffect(() => {
+    if (!startEdit) return;
+    if (!deleted) { setDraft(m.body ?? ""); setEditing(true); }
+    onEditConsumed?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [startEdit]);
 
   function saveEdit() {
     const b = draft.trim();
@@ -284,11 +317,11 @@ function MessageBubble({
   // Toolbar ao LADO do balão (como no WhatsApp): escondido, aparece no hover.
   const toolbar = (
     <div className="relative hidden shrink-0 items-center gap-0.5 self-center group-hover:flex">
-      <button onClick={() => setPickerOpen((o) => !o)} title="Reagir" className="rounded-full p-1 text-muted-foreground hover:bg-muted hover:text-foreground"><SmilePlus className="h-4 w-4" /></button>
-      <button onClick={onReply} title="Responder" className="rounded-full p-1 text-muted-foreground hover:bg-muted hover:text-foreground"><Reply className="h-4 w-4" /></button>
+      <button onClick={() => setPickerOpen((o) => !o)} title="Reagir" aria-label="Reagir à mensagem" className="rounded-full p-1 text-muted-foreground hover:bg-muted hover:text-foreground"><SmilePlus className="h-4 w-4" /></button>
+      <button onClick={onReply} title="Responder" aria-label="Responder mensagem" className="rounded-full p-1 text-muted-foreground hover:bg-muted hover:text-foreground"><Reply className="h-4 w-4" /></button>
       {mine && (
         <div className="relative">
-          <button onClick={() => setMenuOpen((o) => !o)} title="Mais" className="rounded-full p-1 text-muted-foreground hover:bg-muted hover:text-foreground"><MoreVertical className="h-4 w-4" /></button>
+          <button onClick={() => setMenuOpen((o) => !o)} title="Mais" aria-label="Mais opções da mensagem" aria-haspopup="menu" className="rounded-full p-1 text-muted-foreground hover:bg-muted hover:text-foreground"><MoreVertical className="h-4 w-4" /></button>
           {menuOpen && (
             <>
               <div className="fixed inset-0 z-20" onClick={closeMenu} />

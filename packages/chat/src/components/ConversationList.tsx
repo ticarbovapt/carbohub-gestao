@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   MessageSquarePlus, UsersRound, Search, Plus, Pin, PinOff, BellOff, Bell,
   ChevronDown, CheckCheck, Circle, Trash2, LogOut, Archive, ArchiveRestore,
@@ -53,6 +53,19 @@ export function ConversationList({
 }) {
   const { currentUser, openConversation } = useChatCtx();
   const { data: conversations = [], isLoading } = useConversations();
+  const searchRef = useRef<HTMLInputElement>(null);
+
+  // Atalho: Ctrl/⌘ + K foca a busca de conversas.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        searchRef.current?.focus();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
   const membership = useUpdateMembership();
   const leave = useLeaveConversation();
   const [filter, setFilter] = useState<"all" | "group" | "archived">("all");
@@ -101,8 +114,8 @@ export function ConversationList({
       {/* header: título + botão único (menu) */}
       <div className="relative flex items-center gap-1 border-b p-2">
         <span className="flex-1 px-1 text-sm font-semibold">Conversas</span>
-        <button onClick={() => setMenuOpen((o) => !o)} title="Nova conversa ou grupo"
-          className="rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground">
+        <button onClick={() => setMenuOpen((o) => !o)} title="Nova conversa ou grupo" aria-label="Nova conversa ou grupo"
+          className="rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring">
           <Plus className="h-4 w-4" />
         </button>
         {menuOpen && (
@@ -126,7 +139,9 @@ export function ConversationList({
       <div className="space-y-2 border-b p-2">
         <div className="relative">
           <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar conversa…"
+          <input ref={searchRef} value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar conversa… (Ctrl+K)"
+            aria-label="Buscar conversas e mensagens"
+            onKeyDown={(e) => { if (e.key === "Escape" && search) { e.stopPropagation(); setSearch(""); } }}
             className="h-8 w-full rounded-md border border-input bg-background pl-8 pr-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
         </div>
         <div className="flex gap-1">
@@ -156,7 +171,10 @@ export function ConversationList({
         ) : (
           filtered.map((c) => (
             <div key={c.channel.id} onClick={() => onSelect(c)} onContextMenu={(e) => openRowMenu(c, e)}
-              className={`group relative flex w-full cursor-pointer items-center gap-3 border-b border-border/50 px-3 py-2.5 text-left ${selectedId === c.channel.id ? "bg-primary/10" : "hover:bg-muted/60"}`}>
+              role="button" tabIndex={0} aria-current={selectedId === c.channel.id}
+              aria-label={`Conversa com ${c.title}${c.unread > 0 ? `, ${c.unread} não lidas` : ""}`}
+              onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onSelect(c); } }}
+              className={`group relative flex w-full cursor-pointer items-center gap-3 border-b border-border/50 px-3 py-2.5 text-left focus-visible:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring ${selectedId === c.channel.id ? "bg-primary/10" : "hover:bg-muted/60"}`}>
               <Avatar name={c.title} url={c.avatarUrl} size={48} />
               <div className="min-w-0 flex-1">
                 <div className="flex items-baseline gap-1.5">
@@ -175,7 +193,7 @@ export function ConversationList({
                     </span>
                   )}
                   {/* botão de ações: no fluxo, aparece no hover e empurra o badge p/ esquerda */}
-                  <button onClick={(e) => openRowMenu(c, e)} title="Opções"
+                  <button onClick={(e) => openRowMenu(c, e)} title="Opções" aria-label="Opções da conversa"
                     className="hidden shrink-0 items-center justify-center rounded text-muted-foreground hover:text-foreground group-hover:inline-flex">
                     <ChevronDown className="h-4 w-4" />
                   </button>
@@ -224,7 +242,7 @@ export function ConversationList({
       {rowMenu && (
         <>
           <div className="fixed inset-0 z-40" onClick={() => setRowMenu(null)} onContextMenu={(e) => { e.preventDefault(); setRowMenu(null); }} />
-          <div className="fixed z-50 w-56 overflow-hidden rounded-lg border bg-popover py-1 shadow-lg"
+          <div role="menu" aria-label="Ações da conversa" className="fixed z-50 w-56 overflow-hidden rounded-lg border bg-popover py-1 shadow-lg"
             style={{ left: Math.min(rowMenu.x, window.innerWidth - 232), top: Math.min(rowMenu.y, window.innerHeight - 230) }}>
             <MenuItem icon={rowMenu.conv.pinned ? <PinOff className="h-4 w-4" /> : <Pin className="h-4 w-4" />}
               label={rowMenu.conv.pinned ? "Desafixar conversa" : "Fixar conversa"} onClick={() => togglePin(rowMenu.conv)} />
@@ -253,8 +271,8 @@ export function ConversationList({
 
 function MenuItem({ icon, label, onClick, danger }: { icon: React.ReactNode; label: string; onClick: () => void; danger?: boolean }) {
   return (
-    <button onClick={onClick}
-      className={`flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm hover:bg-muted ${danger ? "text-destructive" : ""}`}>
+    <button onClick={onClick} role="menuitem"
+      className={`flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm hover:bg-muted focus-visible:bg-muted focus-visible:outline-none ${danger ? "text-destructive" : ""}`}>
       {icon} {label}
     </button>
   );
