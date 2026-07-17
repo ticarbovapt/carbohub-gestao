@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Search, X, SmilePlus, Reply, CornerUpLeft, Check, CheckCheck, MoreVertical, Pencil, Trash2 } from "lucide-react";
-import { useMessages, useProfilesMap, useToggleReaction, useChannelMembers, useUserInfo, useEditMessage, useDeleteMessage } from "../hooks";
+import { Search, X, SmilePlus, Reply, CornerUpLeft, Check, CheckCheck, MoreVertical, Pencil, Trash2, ArrowDown } from "lucide-react";
+import { useMessages, useProfilesMap, useToggleReaction, useChannelMembers, useUserInfo, useEditMessage, useDeleteMessage, useSearchMessages } from "../hooks";
 import { useChatCtx } from "../context";
 import { messageReceipt, type ReceiptStatus } from "../lib/receipts";
 import { useIsOnline, useTyping } from "../lib/presence";
@@ -32,6 +32,19 @@ function dayLabel(iso: string) {
 const kindLabel = (k: string) =>
   k === "image" ? "📷 Foto" : k === "audio" ? "🎤 Áudio" : k === "video" ? "🎬 Vídeo" : k === "file" ? "📎 Arquivo" : "Mensagem";
 const firstName = (n: string) => n.split(/\s+/)[0] || n;
+const escapeRegExp = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+// Realce best-effort do termo digitado no trecho do resultado.
+function highlightSnippet(body: string, query: string) {
+  const words = query.split(/\s+/).map((w) => w.trim()).filter((w) => w.length >= 2);
+  if (!words.length) return body;
+  const set = new Set(words.map((w) => w.toLowerCase()));
+  const re = new RegExp(`(${words.map(escapeRegExp).join("|")})`, "ig");
+  return body.split(re).map((part, i) =>
+    set.has(part.toLowerCase())
+      ? <mark key={i} className="rounded bg-yellow-400/40 text-inherit">{part}</mark>
+      : part,
+  );
+}
 function lastSeenLabel(iso: string) {
   const d = new Date(iso), now = new Date();
   if ((now.getTime() - d.getTime()) / 1000 < 60) return "agora há pouco";
@@ -42,10 +55,12 @@ function lastSeenLabel(iso: string) {
   return `${d.toLocaleDateString("pt-BR")} às ${hhmm}`;
 }
 
-export function Conversation({ conv, onDeleted }: { conv: Conv; onDeleted?: () => void }) {
-  const { currentUser } = useChatCtx();
+export function Conversation({ conv, focus, onClearFocus, onDeleted }: {
+  conv: Conv; focus?: { messageId: string; at: string } | null; onClearFocus?: () => void; onDeleted?: () => void;
+}) {
+  const { currentUser, openConversation } = useChatCtx();
   const isGroup = conv.channel.type === "group";
-  const { data: messages = [], isLoading } = useMessages(conv.channel.id);
+  const { data: messages = [], isLoading } = useMessages(conv.channel.id, focus?.at ?? null);
   const { data: members = [] } = useChannelMembers(conv.channel.id);
   const { data: profMap = {} } = useProfilesMap(messages.map((m) => m.sender_id ?? "").filter(Boolean));
   // Presença/typing pro cabeçalho.
@@ -56,18 +71,35 @@ export function Conversation({ conv, onDeleted }: { conv: Conv; onDeleted?: () =
   const edit = useEditMessage();
   const del = useDeleteMessage();
   const bottomRef = useRef<HTMLDivElement>(null);
+  const rowRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
   const [panelOpen, setPanelOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [replyTo, setReplyTo] = useState<ChatMessage | null>(null);
+  const [highlight, setHighlight] = useState<string | null>(null);
+
+  const q = search.trim();
+  // Busca no SERVIDOR (full-text), dentro desta conversa.
+  const searchQ = useSearchMessages(q, conv.channel.id);
+  const hits = (searchQ.data?.pages ?? []).flat();
 
   const byId = useMemo(() => Object.fromEntries(messages.map((m) => [m.id, m])), [messages]);
-  const q = search.trim().toLowerCase();
-  const shown = q ? messages.filter((m) => (m.body ?? "").toLowerCase().includes(q)) : messages;
 
-  useEffect(() => { if (!q) bottomRef.current?.scrollIntoView({ behavior: "auto" }); }, [messages.length, q]);
+  // Rola pro fim — exceto durante busca ou quando estamos focando uma msg antiga.
+  useEffect(() => { if (!q && !focus) bottomRef.current?.scrollIntoView({ behavior: "auto" }); }, [messages.length, q, focus]);
   useEffect(() => { setPanelOpen(false); setSearchOpen(false); setSearch(""); setReplyTo(null); }, [conv.channel.id]);
+
+  // Pular até a mensagem (busca): rola e destaca quando ela está carregada.
+  useEffect(() => {
+    if (!focus?.messageId) return;
+    const el = rowRefs.current[focus.messageId];
+    if (!el) return;
+    el.scrollIntoView({ behavior: "smooth", block: "center" });
+    setHighlight(focus.messageId);
+    const t = window.setTimeout(() => setHighlight(null), 2500);
+    return () => window.clearTimeout(t);
+  }, [focus?.messageId, messages]);
 
   const nameOf = (id: string | null) => (id ? (profMap[id]?.full_name ?? "—") : "—");
 
@@ -111,26 +143,53 @@ export function Conversation({ conv, onDeleted }: { conv: Conv; onDeleted?: () =
                 className="h-8 w-full rounded-md border border-input bg-background pl-8 pr-8 text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
               {search && <button onClick={() => setSearch("")} className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"><X className="h-3.5 w-3.5" /></button>}
             </div>
-            {q && <p className="mt-1 px-1 text-[11px] text-muted-foreground">{shown.length} resultado(s)</p>}
+            {q.length === 1 && <p className="mt-1 px-1 text-[11px] text-muted-foreground">Digite ao menos 2 letras…</p>}
           </div>
         )}
 
-        {/* mensagens */}
-        <div className="flex-1 overflow-y-auto px-4 py-3">
-          {isLoading ? (
+        {/* mensagens OU resultados de busca (servidor) */}
+        <div className="relative flex-1 overflow-y-auto px-4 py-3">
+          {q.length >= 2 ? (
+            searchQ.isLoading ? (
+              <p className="text-sm text-muted-foreground">Buscando…</p>
+            ) : hits.length === 0 ? (
+              <p className="text-sm text-muted-foreground">Nenhuma mensagem encontrada.</p>
+            ) : (
+              <div className="space-y-1">
+                {hits.map((h) => (
+                  <button key={h.messageId}
+                    onClick={() => { openConversation(conv.channel.id, { messageId: h.messageId, at: h.createdAt }); setSearchOpen(false); setSearch(""); }}
+                    className="flex w-full flex-col gap-0.5 rounded-md border px-3 py-2 text-left hover:bg-muted">
+                    <span className="flex items-center justify-between gap-2 text-[11px] text-muted-foreground">
+                      <span className="truncate font-medium text-foreground">{h.senderName ?? "—"}</span>
+                      <span className="shrink-0">{new Date(h.createdAt).toLocaleDateString("pt-BR")} {new Date(h.createdAt).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</span>
+                    </span>
+                    <span className="line-clamp-2 text-sm">{highlightSnippet(h.body, q)}</span>
+                  </button>
+                ))}
+                {searchQ.hasNextPage && (
+                  <button onClick={() => searchQ.fetchNextPage()} disabled={searchQ.isFetchingNextPage}
+                    className="mx-auto mt-1 block rounded-md border px-3 py-1 text-xs text-muted-foreground hover:bg-muted">
+                    {searchQ.isFetchingNextPage ? "Carregando…" : "Carregar mais"}
+                  </button>
+                )}
+              </div>
+            )
+          ) : isLoading ? (
             <p className="text-sm text-muted-foreground">Carregando…</p>
-          ) : shown.length === 0 ? (
-            <p className="text-sm text-muted-foreground">{q ? "Nenhuma mensagem encontrada." : "Nenhuma mensagem ainda. Diga oi 👋"}</p>
+          ) : messages.length === 0 ? (
+            <p className="text-sm text-muted-foreground">Nenhuma mensagem ainda. Diga oi 👋</p>
           ) : (
             <div className="space-y-0.5">
-              {shown.map((m, i) => {
-                const prev = shown[i - 1];
+              {messages.map((m, i) => {
+                const prev = messages[i - 1];
                 const newDay = !prev || dayKey(prev.created_at) !== dayKey(m.created_at);
                 const mine = m.sender_id === currentUser.id;
                 const grouped = prev && prev.sender_id === m.sender_id && !newDay
                   && (new Date(m.created_at).getTime() - new Date(prev.created_at).getTime() < 5 * 60_000);
                 return (
-                  <div key={m.id}>
+                  <div key={m.id} ref={(el) => { rowRefs.current[m.id] = el; }}
+                    className={highlight === m.id ? "rounded-lg ring-2 ring-yellow-400/60 transition-shadow" : undefined}>
                     {newDay && (
                       <div className="my-3 flex items-center justify-center">
                         <span className="rounded-full bg-muted px-3 py-0.5 text-[11px] text-muted-foreground">{dayLabel(m.created_at)}</span>
@@ -143,7 +202,7 @@ export function Conversation({ conv, onDeleted }: { conv: Conv; onDeleted?: () =
                       repliedName={m.reply_to_id ? nameOf(byId[m.reply_to_id]?.sender_id ?? null) : ""}
                       currentUserId={currentUser.id}
                       receipt={mine ? messageReceipt(m.created_at, members, currentUser.id).status : null}
-                      menuUp={i >= shown.length - 3}
+                      menuUp={i >= messages.length - 3}
                       onReply={() => setReplyTo(m)}
                       onReact={(emoji, active) => react.mutate({ messageId: m.id, emoji, channelId: conv.channel.id, active })}
                       onEdit={(body) => edit.mutate({ messageId: m.id, body, channelId: conv.channel.id })}
@@ -154,6 +213,14 @@ export function Conversation({ conv, onDeleted }: { conv: Conv; onDeleted?: () =
               })}
               <div ref={bottomRef} />
             </div>
+          )}
+
+          {/* Focando uma msg antiga (busca): botão de voltar ao fim. */}
+          {focus && q.length < 2 && (
+            <button onClick={() => onClearFocus?.()} title="Ir para o fim"
+              className="absolute bottom-4 right-4 z-10 flex h-9 w-9 items-center justify-center rounded-full border bg-background shadow-md hover:bg-muted">
+              <ArrowDown className="h-4 w-4" />
+            </button>
           )}
         </div>
 

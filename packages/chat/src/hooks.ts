@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient, useInfiniteQuery } from "@tanstack/react-query";
 import { useChatCtx } from "./context";
 
 // Sufixo único por assinatura Realtime — evita colidir nomes de canal quando o
@@ -66,18 +66,34 @@ export function useConversations() {
 // ─────────────────────────────────────────────────────────────────────────────
 // Mensagens de um canal + realtime.
 // ─────────────────────────────────────────────────────────────────────────────
-export function useMessages(channelId: string | null) {
+const MSG_SELECT =
+  "*, sender:profiles!chat_messages_sender_id_fkey(id, full_name, avatar_url), attachments:chat_attachments(*), reactions:chat_reactions(message_id, user_id, emoji)";
+
+// focusAt: quando "pulamos" pra uma mensagem antiga (fora das 200 recentes),
+// carrega uma janela em volta dela (100 antes + 100 depois).
+export function useMessages(channelId: string | null, focusAt?: string | null) {
   const { supabase, currentUser } = useChatCtx();
   const qc = useQueryClient();
-  const key = ["chat", "messages", channelId];
+  const baseKey = ["chat", "messages", channelId];
+  const key = [...baseKey, focusAt ?? "tail"];
 
   const query = useQuery({
     queryKey: key,
     enabled: !!channelId,
     queryFn: async (): Promise<ChatMessage[]> => {
+      if (focusAt) {
+        const before = await supabase.from("chat_messages").select(MSG_SELECT)
+          .eq("channel_id", channelId).lte("created_at", focusAt)
+          .order("created_at", { ascending: false }).limit(100);
+        if (before.error) throw before.error;
+        const after = await supabase.from("chat_messages").select(MSG_SELECT)
+          .eq("channel_id", channelId).gt("created_at", focusAt)
+          .order("created_at", { ascending: true }).limit(100);
+        if (after.error) throw after.error;
+        return [...((before.data ?? []) as ChatMessage[]).reverse(), ...((after.data ?? []) as ChatMessage[])];
+      }
       const { data, error } = await supabase
-        .from("chat_messages")
-        .select("*, sender:profiles!chat_messages_sender_id_fkey(id, full_name, avatar_url), attachments:chat_attachments(*), reactions:chat_reactions(message_id, user_id, emoji)")
+        .from("chat_messages").select(MSG_SELECT)
         .eq("channel_id", channelId)
         .order("created_at", { ascending: true })
         .limit(200);
@@ -91,13 +107,13 @@ export function useMessages(channelId: string | null) {
     const ch = supabase
       .channel("chat:messages:" + channelId + ":" + rid())
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "chat_messages", filter: `channel_id=eq.${channelId}` }, () => {
-        qc.invalidateQueries({ queryKey: key });
+        qc.invalidateQueries({ queryKey: baseKey });
       })
       .on("postgres_changes", { event: "UPDATE", schema: "public", table: "chat_messages", filter: `channel_id=eq.${channelId}` }, () => {
-        qc.invalidateQueries({ queryKey: key });
+        qc.invalidateQueries({ queryKey: baseKey });
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "chat_reactions" }, () => {
-        qc.invalidateQueries({ queryKey: key });
+        qc.invalidateQueries({ queryKey: baseKey });
       })
       // Recibos de leitura ao vivo: quando um membro marca lido/entregue, o
       // last_read_at/last_delivered_at muda → recalcula os ✓/✓✓ nas mensagens.
@@ -119,6 +135,41 @@ export function useMessages(channelId: string | null) {
   }, [channelId, query.dataUpdatedAt]);
 
   return query;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Busca no servidor (full-text). p_channel nulo = global; preenchido = 1 canal.
+// ─────────────────────────────────────────────────────────────────────────────
+export interface SearchHit {
+  messageId: string; channelId: string; channelType: "dm" | "group"; channelTitle: string;
+  body: string; createdAt: string; senderId: string | null; senderName: string | null; rank: number;
+}
+
+const SEARCH_PAGE = 20;
+
+export function useSearchMessages(query: string, channelId?: string | null) {
+  const { supabase } = useChatCtx();
+  const q = query.trim();
+  return useInfiniteQuery({
+    queryKey: ["chat", "search", channelId ?? "global", q],
+    enabled: q.length >= 2,
+    initialPageParam: 0,
+    queryFn: async ({ pageParam }): Promise<SearchHit[]> => {
+      const { data, error } = await supabase.rpc("chat_search", {
+        p_query: q, p_channel: channelId ?? null, p_limit: SEARCH_PAGE, p_offset: pageParam,
+      });
+      if (error) throw error;
+      type Row = {
+        message_id: string; channel_id: string; channel_type: "dm" | "group"; channel_title: string;
+        body: string; created_at: string; sender_id: string | null; sender_name: string | null; rank: number;
+      };
+      return ((data ?? []) as Row[]).map((r) => ({
+        messageId: r.message_id, channelId: r.channel_id, channelType: r.channel_type, channelTitle: r.channel_title,
+        body: r.body, createdAt: r.created_at, senderId: r.sender_id, senderName: r.sender_name, rank: r.rank,
+      }));
+    },
+    getNextPageParam: (last, all) => (last.length === SEARCH_PAGE ? all.length * SEARCH_PAGE : undefined),
+  });
 }
 
 export interface OutgoingAttachment {

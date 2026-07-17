@@ -3,7 +3,7 @@ import {
   MessageSquarePlus, UsersRound, Search, Plus, Pin, PinOff, BellOff, Bell,
   ChevronDown, CheckCheck, Circle, Trash2, LogOut,
 } from "lucide-react";
-import { useConversations, useUpdateMembership, useLeaveConversation } from "../hooks";
+import { useConversations, useUpdateMembership, useLeaveConversation, useSearchMessages } from "../hooks";
 import { useChatCtx } from "../context";
 import { useTyping } from "../lib/presence";
 import { Avatar } from "./Avatar";
@@ -51,7 +51,7 @@ export function ConversationList({
   onSelect: (conv: Conversation) => void;
   onRemoved?: (channelId: string) => void;
 }) {
-  const { currentUser } = useChatCtx();
+  const { currentUser, openConversation } = useChatCtx();
   const { data: conversations = [], isLoading } = useConversations();
   const membership = useUpdateMembership();
   const leave = useLeaveConversation();
@@ -77,6 +77,11 @@ export function ConversationList({
   const filtered = conversations
     .filter((c) => (filter === "group" ? c.channel.type === "group" : true))
     .filter((c) => !search.trim() || c.title.toLowerCase().includes(search.trim().toLowerCase()));
+
+  // Busca GLOBAL de mensagens no servidor (full-text) — seção "Mensagens".
+  const searching = search.trim().length >= 2;
+  const gsearch = useSearchMessages(search.trim(), null);
+  const ghits = (gsearch.data?.pages ?? []).flat();
 
   function previewText(c: Conversation) {
     const base = c.lastBody?.trim() || kindPreview(c.lastKind);
@@ -169,6 +174,40 @@ export function ConversationList({
               </div>
             </div>
           ))
+        )}
+
+        {/* Busca global de mensagens (servidor) */}
+        {searching && (
+          <div className="border-t">
+            <p className="px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Mensagens</p>
+            {gsearch.isLoading ? (
+              <p className="px-3 pb-3 text-xs text-muted-foreground">Buscando…</p>
+            ) : ghits.length === 0 ? (
+              <p className="px-3 pb-3 text-xs text-muted-foreground">Nenhuma mensagem encontrada.</p>
+            ) : (
+              <>
+                {ghits.map((h) => (
+                  <button key={h.messageId}
+                    onClick={() => openConversation(h.channelId, { messageId: h.messageId, at: h.createdAt })}
+                    className="flex w-full flex-col gap-0.5 border-b border-border/50 px-3 py-2 text-left hover:bg-muted/60">
+                    <span className="flex items-center justify-between gap-2 text-[11px]">
+                      <span className="truncate font-semibold">{h.channelTitle}</span>
+                      <span className="shrink-0 text-muted-foreground">{timeLabel(h.createdAt)}</span>
+                    </span>
+                    <span className="truncate text-xs text-muted-foreground">
+                      {h.senderName ? `${h.senderName.split(/\s+/)[0]}: ` : ""}{h.body}
+                    </span>
+                  </button>
+                ))}
+                {gsearch.hasNextPage && (
+                  <button onClick={() => gsearch.fetchNextPage()} disabled={gsearch.isFetchingNextPage}
+                    className="mx-auto my-2 block rounded-md border px-3 py-1 text-xs text-muted-foreground hover:bg-muted">
+                    {gsearch.isFetchingNextPage ? "Carregando…" : "Carregar mais"}
+                  </button>
+                )}
+              </>
+            )}
+          </div>
         )}
       </div>
 

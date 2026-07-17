@@ -12,6 +12,7 @@ const STORAGE_KEY = "carbo-chat-open";
 // Tela cheia do Carbo Chat: lista (esquerda) + conversa aberta (direita).
 export function ChatApp() {
   const [selected, setSelected] = useState<Conv | null>(null);
+  const [focus, setFocus] = useState<{ messageId: string; at: string } | null>(null);
   const { supabase, currentUser, activeChannelRef } = useChatCtx();
   const { data: conversations = [] } = useConversations();
 
@@ -40,8 +41,10 @@ export function ChatApp() {
   // estando no /chat. Reusa o evento disparado por openConversation (context).
   useEffect(() => {
     const onOpen = (e: Event) => {
-      const id = (e as CustomEvent<{ channelId: string }>).detail?.channelId;
+      const detail = (e as CustomEvent<{ channelId: string; focus?: { messageId: string; at: string } }>).detail;
+      const id = detail?.channelId;
       if (!id) return;
+      setFocus(detail.focus ?? null);
       const found = conversations.find((c) => c.channel.id === id);
       if (found) { setSelected(found); pendingOpen.current = null; }
       else pendingOpen.current = id; // ainda não carregou → abre quando chegar
@@ -98,7 +101,7 @@ export function ChatApp() {
         <div className="min-h-0 flex-1">
           <ConversationList
             selectedId={selected?.channel.id ?? null}
-            onSelect={setSelected}
+            onSelect={(c) => { setFocus(null); setSelected(c); }}
             onRemoved={(id) => setSelected((s) => (s?.channel.id === id ? null : s))}
           />
         </div>
@@ -108,7 +111,10 @@ export function ChatApp() {
       </div>
       <div className="min-w-0 flex-1">
         {selected ? (
-          <Conversation key={selected.channel.id} conv={selected} onDeleted={() => setSelected(null)} />
+          <Conversation key={selected.channel.id} conv={selected}
+            focus={focus && focus.messageId ? focus : null}
+            onClearFocus={() => setFocus(null)}
+            onDeleted={() => setSelected(null)} />
         ) : (
           <div className="flex h-full flex-col items-center justify-center gap-3 text-center text-muted-foreground">
             <MessagesSquare className="h-12 w-12 opacity-40" />
