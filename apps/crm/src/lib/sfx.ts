@@ -12,6 +12,16 @@ function audioCtx(): AudioContext | null {
   } catch { return null; }
 }
 
+// O AudioContext só inicia/retoma dentro de um gesto do usuário. O som do card
+// dispara DEPOIS do round-trip no banco (fora do gesto), então "destravamos" o
+// contexto no primeiro clique/tecla/toque — aí o beep async já toca normalmente.
+if (typeof window !== "undefined") {
+  const prime = () => { audioCtx(); };
+  window.addEventListener("pointerdown", prime, { passive: true });
+  window.addEventListener("keydown", prime, { passive: true });
+  window.addEventListener("touchstart", prime, { passive: true });
+}
+
 function beep(freqs: number[], { dur = 0.09, type = "sine" as OscillatorType, gain = 0.05 } = {}) {
   const ac = audioCtx();
   if (!ac) return;
