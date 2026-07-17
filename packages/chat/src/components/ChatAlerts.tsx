@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { MessageSquare } from "lucide-react";
+import { Avatar } from "./Avatar";
 import { useChatCtx } from "../context";
 import { playMessageChime } from "../lib/sound";
 import type { Conversation } from "../types";
@@ -35,30 +35,32 @@ export function ChatAlerts() {
         playMessageChime();
 
         let name = "Nova mensagem";
+        let avatarUrl: string | null = null;
         try {
-          const { data } = await supabase.from("profiles").select("full_name").eq("id", msg.sender_id).maybeSingle();
+          const { data } = await supabase.from("profiles").select("full_name, avatar_url").eq("id", msg.sender_id).maybeSingle();
           if (data?.full_name) name = data.full_name;
+          avatarUrl = (data as { avatar_url?: string | null } | null)?.avatar_url ?? null;
         } catch { /* ignora */ }
 
         const preview = msg.body?.trim() || kindLabel(msg.kind);
         // Toast inteiro clicável (funciona no PC também) → abre a conversa (?c=).
+        // Largura fixa (o toast.custom não herda a largura padrão do sonner) e
+        // posição bottom-right pra não brigar com o sino/header no topo.
         toast.custom((id) => (
           <div
             role="button"
             tabIndex={0}
             onClick={() => { openConversation(msg.channel_id); toast.dismiss(id); }}
             onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { openConversation(msg.channel_id); toast.dismiss(id); } }}
-            className="flex w-full max-w-[90vw] cursor-pointer items-start gap-3 rounded-lg border bg-background p-3 shadow-lg transition-colors hover:bg-accent"
+            className="flex w-[360px] max-w-[calc(100vw-2rem)] cursor-pointer items-center gap-3 rounded-xl border bg-background p-3.5 shadow-lg transition-colors hover:bg-accent"
           >
-            <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-              <MessageSquare className="h-4 w-4" />
-            </div>
+            <Avatar name={name} url={avatarUrl} size={42} />
             <div className="min-w-0 flex-1">
               <p className="truncate text-sm font-semibold text-foreground">{name}</p>
-              <p className="line-clamp-2 text-xs text-muted-foreground">{preview}</p>
+              <p className="line-clamp-2 text-sm text-muted-foreground">{preview}</p>
             </div>
           </div>
-        ), { duration: 6000 });
+        ), { duration: 6000, position: "bottom-right" });
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "chat_channel_members", filter: `user_id=eq.${currentUser.id}` }, () => {
         qc.invalidateQueries({ queryKey: ["chat", "conversations", currentUser.id] });
