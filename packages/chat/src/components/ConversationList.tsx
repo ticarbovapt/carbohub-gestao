@@ -1,13 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import {
   MessageSquarePlus, UsersRound, Search, Plus, Pin, PinOff, BellOff, Bell,
-  ChevronDown, CheckCheck, Circle, Trash2, LogOut, Archive, ArchiveRestore,
+  ChevronDown, CheckCheck, Circle, Trash2, LogOut, Archive, ArchiveRestore, Megaphone,
 } from "lucide-react";
-import { useConversations, useUpdateMembership, useLeaveConversation, useSearchMessages } from "../hooks";
+import { useConversations, useUpdateMembership, useLeaveConversation, useSearchMessages, useCanAnnounce } from "../hooks";
 import { useChatCtx } from "../context";
 import { useTyping } from "../lib/presence";
 import { Avatar } from "./Avatar";
-import { NewDmDialog, NewChannelDialog } from "./dialogs";
+import { NewDmDialog, NewChannelDialog, NewAnnouncementDialog } from "./dialogs";
 import type { Conversation } from "../types";
 
 // Subtítulo da linha: "digitando…" (verde) enquanto alguém digita; senão a prévia.
@@ -70,7 +70,8 @@ export function ConversationList({
   const leave = useLeaveConversation();
   const [filter, setFilter] = useState<"all" | "group" | "archived">("all");
   const [search, setSearch] = useState("");
-  const [dialog, setDialog] = useState<null | "dm" | "group">(null);
+  const [dialog, setDialog] = useState<null | "dm" | "group" | "announcement">(null);
+  const { data: canAnnounce } = useCanAnnounce();
   const [menuOpen, setMenuOpen] = useState(false);
   const [rowMenu, setRowMenu] = useState<{ conv: Conversation; x: number; y: number } | null>(null);
 
@@ -130,6 +131,12 @@ export function ConversationList({
                 className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm hover:bg-muted">
                 <UsersRound className="h-4 w-4 text-muted-foreground" /> Novo grupo
               </button>
+              {canAnnounce && (
+                <button onClick={() => { setDialog("announcement"); setMenuOpen(false); }}
+                  className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm hover:bg-muted">
+                  <Megaphone className="h-4 w-4 text-amber-500" /> Novo comunicado oficial
+                </button>
+              )}
             </div>
           </>
         )}
@@ -265,6 +272,7 @@ export function ConversationList({
 
       {dialog === "dm" && <NewDmDialog onClose={() => setDialog(null)} onOpened={onSelect} />}
       {dialog === "group" && <NewChannelDialog onClose={() => setDialog(null)} onOpened={onSelect} />}
+      {dialog === "announcement" && <NewAnnouncementDialog onClose={() => setDialog(null)} onOpened={onSelect} />}
     </div>
   );
 }

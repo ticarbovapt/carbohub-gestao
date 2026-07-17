@@ -331,6 +331,37 @@ export function useCreateAnnouncement() {
   });
 }
 
+// Cria o comunicado E já publica a 1ª mensagem (título = nome; texto + imagem).
+export function usePublishAnnouncement() {
+  const { supabase, currentUser } = useChatCtx();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ name, memberIds, body, image }: { name: string; memberIds: string[]; body: string; image?: File | null }): Promise<string> => {
+      const { data, error } = await supabase.rpc("chat_create_announcement", { p_name: name, p_member_ids: memberIds, p_admin_ids: [] });
+      if (error) throw error;
+      const channelId = data as string;
+      const kind = image ? "image" : "text";
+      const { data: msg, error: mErr } = await supabase.from("chat_messages")
+        .insert({ channel_id: channelId, sender_id: currentUser.id, kind, body: body.trim() || null, mentions: [], metadata: {} })
+        .select("id").single();
+      if (mErr) throw mErr;
+      const messageId = (msg as { id: string }).id;
+      if (image) {
+        const path = `${channelId}/${messageId}/${Date.now()}-${safeName(image.name)}`;
+        const contentType = image.type || undefined;
+        const { error: upErr } = await supabase.storage.from(BUCKET).upload(path, image, { contentType, upsert: false });
+        if (upErr) throw upErr;
+        const { error: aErr } = await supabase.from("chat_attachments")
+          .insert({ message_id: messageId, storage_path: path, mime_type: contentType ?? null, size_bytes: image.size ?? null });
+        if (aErr) throw aErr;
+        await supabase.from("chat_messages").update({ metadata: { attachments: 1 } }).eq("id", messageId);
+      }
+      return channelId;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["chat", "conversations", currentUser.id] }),
+  });
+}
+
 export function useAckMessage() {
   const { supabase } = useChatCtx();
   const qc = useQueryClient();

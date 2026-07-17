@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { toast } from "sonner";
-import { X, Check, Search } from "lucide-react";
-import { useDirectory, useStartDm, useCreateChannel, useCreateAnnouncement, useCanAnnounce } from "../hooks";
+import { X, Check, Search, Image as ImageIcon } from "lucide-react";
+import { useDirectory, useStartDm, useCreateChannel, usePublishAnnouncement } from "../hooks";
 import { Avatar } from "./Avatar";
 import type { ChatProfileRef, Conversation } from "../types";
 
@@ -86,65 +86,16 @@ function DirList({ search, onPick, selected }: { search: string; onPick: (p: Cha
   );
 }
 
-export function NewChannelDialog({ onClose, onOpened }: { onClose: () => void; onOpened: (conv: Conversation) => void }) {
-  const [name, setName] = useState("");
-  const [isPrivate, setIsPrivate] = useState(true);
-  const [announce, setAnnounce] = useState(false);
-  const [selMap, setSelMap] = useState<Map<string, ChatProfileRef>>(new Map());
-  const create = useCreateChannel();
-  const createAnn = useCreateAnnouncement();
-  const { data: canAnnounce } = useCanAnnounce();
-  const busy = create.isPending || createAnn.isPending;
-
-  const memberIds = [...selMap.keys()];
+// Seletor de membros reutilizável (chips no topo + busca + lista com ✓).
+function MemberPicker({ selMap, setSelMap }: {
+  selMap: Map<string, ChatProfileRef>;
+  setSelMap: React.Dispatch<React.SetStateAction<Map<string, ChatProfileRef>>>;
+}) {
   const selectedIds = new Set(selMap.keys());
-  function toggle(p: ChatProfileRef) {
-    setSelMap((prev) => { const n = new Map(prev); n.has(p.id) ? n.delete(p.id) : n.set(p.id, p); return n; });
-  }
-  function remove(id: string) {
-    setSelMap((prev) => { const n = new Map(prev); n.delete(id); return n; });
-  }
-  async function submit() {
-    if (!name.trim() || busy) return;
-    let cid: string;
-    try {
-      cid = announce
-        ? await createAnn.mutateAsync({ name, memberIds })
-        : await create.mutateAsync({ name, memberIds, isPrivate });
-    } catch (e) {
-      toast.error("Não foi possível criar. " + ((e as { message?: string })?.message ?? ""));
-      return;
-    }
-    onOpened({
-      channel: { id: cid, type: "group", name: name.trim(), description: null, is_private: announce ? true : isPrivate, avatar_url: null, created_by: null, created_at: nowIso(), archived_at: null, is_announcement: announce },
-      title: name.trim(),
-      avatarUrl: null,
-      otherUserId: null,
-      unread: 0,
-      lastAt: null, lastBody: null, lastKind: null, lastSenderId: null, lastSenderName: null,
-      muted: false, pinned: false, archived: false, isAnnouncement: announce,
-    });
-    onClose();
-  }
-
+  const toggle = (p: ChatProfileRef) => setSelMap((prev) => { const n = new Map(prev); n.has(p.id) ? n.delete(p.id) : n.set(p.id, p); return n; });
+  const remove = (id: string) => setSelMap((prev) => { const n = new Map(prev); n.delete(id); return n; });
   return (
-    <Modal title={announce ? "Novo comunicado oficial" : "Novo grupo"} onClose={onClose}>
-      <input
-        value={name} onChange={(e) => setName(e.target.value)} placeholder={announce ? "Título do comunicado" : "Nome do grupo"}
-        className="mb-3 h-9 w-full rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-      />
-      {canAnnounce && (
-        <label className="mb-2 flex items-center gap-2 text-sm">
-          <input type="checkbox" checked={announce} onChange={(e) => setAnnounce(e.target.checked)} />
-          Comunicado oficial (somente leitura; só você e admins publicam)
-        </label>
-      )}
-      {!announce && (
-        <label className="mb-3 flex items-center gap-2 text-sm">
-          <input type="checkbox" checked={isPrivate} onChange={(e) => setIsPrivate(e.target.checked)} />
-          Grupo privado (só convidados entram)
-        </label>
-      )}
+    <>
       <p className="mb-1.5 text-xs font-medium text-muted-foreground">Adicionar pessoas ({selMap.size})</p>
       {selMap.size > 0 && (
         <div className="mb-2 flex flex-wrap gap-1.5">
@@ -160,11 +111,106 @@ export function NewChannelDialog({ onClose, onOpened }: { onClose: () => void; o
       <DirectorySearch>
         {(search) => <DirList search={search} onPick={toggle} selected={selectedIds} />}
       </DirectorySearch>
+    </>
+  );
+}
+
+export function NewChannelDialog({ onClose, onOpened }: { onClose: () => void; onOpened: (conv: Conversation) => void }) {
+  const [name, setName] = useState("");
+  const [isPrivate, setIsPrivate] = useState(true);
+  const [selMap, setSelMap] = useState<Map<string, ChatProfileRef>>(new Map());
+  const create = useCreateChannel();
+
+  async function submit() {
+    if (!name.trim() || create.isPending) return;
+    let cid: string;
+    try {
+      cid = await create.mutateAsync({ name, memberIds: [...selMap.keys()], isPrivate });
+    } catch (e) {
+      toast.error("Não foi possível criar. " + ((e as { message?: string })?.message ?? ""));
+      return;
+    }
+    onOpened({
+      channel: { id: cid, type: "group", name: name.trim(), description: null, is_private: isPrivate, avatar_url: null, created_by: null, created_at: nowIso(), archived_at: null, is_announcement: false },
+      title: name.trim(), avatarUrl: null, otherUserId: null, unread: 0,
+      lastAt: null, lastBody: null, lastKind: null, lastSenderId: null, lastSenderName: null,
+      muted: false, pinned: false, archived: false, isAnnouncement: false,
+    });
+    onClose();
+  }
+
+  return (
+    <Modal title="Novo grupo" onClose={onClose}>
+      <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Nome do grupo"
+        className="mb-3 h-9 w-full rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
+      <label className="mb-3 flex items-center gap-2 text-sm">
+        <input type="checkbox" checked={isPrivate} onChange={(e) => setIsPrivate(e.target.checked)} />
+        Grupo privado (só convidados entram)
+      </label>
+      <MemberPicker selMap={selMap} setSelMap={setSelMap} />
       <div className="mt-4 flex justify-end gap-2">
         <button onClick={onClose} className="rounded-md border px-3 py-1.5 text-sm hover:bg-muted">Cancelar</button>
-        <button onClick={submit} disabled={!name.trim() || busy}
+        <button onClick={submit} disabled={!name.trim() || create.isPending}
           className="rounded-md bg-primary px-3 py-1.5 text-sm text-primary-foreground disabled:opacity-40">
-          {busy ? "Criando…" : announce ? "Criar comunicado" : "Criar grupo"}
+          {create.isPending ? "Criando…" : "Criar grupo"}
+        </button>
+      </div>
+    </Modal>
+  );
+}
+
+// Comunicado oficial: título + texto + imagem (opcional) + destinatários.
+export function NewAnnouncementDialog({ onClose, onOpened }: { onClose: () => void; onOpened: (conv: Conversation) => void }) {
+  const [name, setName] = useState("");
+  const [body, setBody] = useState("");
+  const [image, setImage] = useState<File | null>(null);
+  const [selMap, setSelMap] = useState<Map<string, ChatProfileRef>>(new Map());
+  const publish = usePublishAnnouncement();
+  const canSubmit = !!name.trim() && (!!body.trim() || !!image) && !publish.isPending;
+
+  async function submit() {
+    if (!canSubmit) return;
+    let cid: string;
+    try {
+      cid = await publish.mutateAsync({ name, memberIds: [...selMap.keys()], body, image });
+    } catch (e) {
+      toast.error("Não foi possível publicar. " + ((e as { message?: string })?.message ?? ""));
+      return;
+    }
+    onOpened({
+      channel: { id: cid, type: "group", name: name.trim(), description: null, is_private: true, avatar_url: null, created_by: null, created_at: nowIso(), archived_at: null, is_announcement: true },
+      title: name.trim(), avatarUrl: null, otherUserId: null, unread: 0,
+      lastAt: nowIso(), lastBody: body.trim() || (image ? "📷 Imagem" : null), lastKind: image ? "image" : "text", lastSenderId: null, lastSenderName: "Você",
+      muted: false, pinned: false, archived: false, isAnnouncement: true,
+    });
+    onClose();
+  }
+
+  return (
+    <Modal title="Novo comunicado oficial" onClose={onClose}>
+      <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Título do comunicado"
+        className="mb-2 h-9 w-full rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
+      <textarea value={body} onChange={(e) => setBody(e.target.value)} placeholder="Texto do comunicado…" rows={4}
+        className="mb-2 w-full resize-y rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
+      {/* imagem opcional */}
+      {image ? (
+        <div className="mb-3 flex items-center gap-2 rounded-md border p-2">
+          <img src={URL.createObjectURL(image)} alt="" className="h-12 w-12 rounded object-cover" />
+          <span className="flex-1 truncate text-xs text-muted-foreground">{image.name}</span>
+          <button onClick={() => setImage(null)} aria-label="Remover imagem" className="text-muted-foreground hover:text-destructive"><X className="h-4 w-4" /></button>
+        </div>
+      ) : (
+        <label className="mb-3 flex w-fit cursor-pointer items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs text-muted-foreground hover:bg-muted">
+          <ImageIcon className="h-4 w-4" /> Adicionar imagem
+          <input type="file" accept="image/*" className="hidden" onChange={(e) => setImage(e.target.files?.[0] ?? null)} />
+        </label>
+      )}
+      <MemberPicker selMap={selMap} setSelMap={setSelMap} />
+      <div className="mt-4 flex justify-end gap-2">
+        <button onClick={onClose} className="rounded-md border px-3 py-1.5 text-sm hover:bg-muted">Cancelar</button>
+        <button onClick={submit} disabled={!canSubmit}
+          className="rounded-md bg-primary px-3 py-1.5 text-sm text-primary-foreground disabled:opacity-40">
+          {publish.isPending ? "Publicando…" : "Publicar comunicado"}
         </button>
       </div>
     </Modal>
