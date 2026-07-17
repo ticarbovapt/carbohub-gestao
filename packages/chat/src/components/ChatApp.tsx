@@ -23,6 +23,9 @@ export function ChatApp() {
     } catch { return null; }
   }, []);
   const restored = useRef(false);
+  // Conversa pedida por clique (toast/sininho) que ainda não está na lista
+  // (ex.: DM nova) — abre assim que a lista atualizar.
+  const pendingOpen = useRef<string | null>(null);
 
   // Restaura a conversa aberta quando a lista chega.
   useEffect(() => {
@@ -32,6 +35,27 @@ export function ChatApp() {
     if (found) setSelected(found);
     restored.current = true; // tentou (achou ou não) — não repete
   }, [conversations, selected, initialId]);
+
+  // Clique numa notificação (toast/sininho) → abre a conversa certa, mesmo já
+  // estando no /chat. Reusa o evento disparado por openConversation (context).
+  useEffect(() => {
+    const onOpen = (e: Event) => {
+      const id = (e as CustomEvent<{ channelId: string }>).detail?.channelId;
+      if (!id) return;
+      const found = conversations.find((c) => c.channel.id === id);
+      if (found) { setSelected(found); pendingOpen.current = null; }
+      else pendingOpen.current = id; // ainda não carregou → abre quando chegar
+    };
+    window.addEventListener("carbo-chat:open", onOpen as EventListener);
+    return () => window.removeEventListener("carbo-chat:open", onOpen as EventListener);
+  }, [conversations]);
+
+  // Resolve o pendingOpen quando a lista atualiza (conversa nova entrou).
+  useEffect(() => {
+    if (!pendingOpen.current || !conversations.length) return;
+    const found = conversations.find((c) => c.channel.id === pendingOpen.current);
+    if (found) { setSelected(found); pendingOpen.current = null; }
+  }, [conversations]);
 
   // Persiste a conversa aberta na URL (?c=) + localStorage. Só depois de tentar restaurar.
   useEffect(() => {

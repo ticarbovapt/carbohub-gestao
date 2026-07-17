@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { MessageSquare } from "lucide-react";
 import { useChatCtx } from "../context";
 import { playMessageChime } from "../lib/sound";
 import type { Conversation } from "../types";
@@ -12,7 +13,7 @@ const kindLabel = (k: string) =>
 // Toca som + toast, EXCETO quando você já está com aquele canal aberto e visível.
 // A RLS do Realtime entrega só mensagens dos canais dos quais você é membro.
 export function ChatAlerts() {
-  const { supabase, currentUser, activeChannelRef } = useChatCtx();
+  const { supabase, currentUser, activeChannelRef, openConversation } = useChatCtx();
   const qc = useQueryClient();
 
   useEffect(() => {
@@ -39,10 +40,25 @@ export function ChatAlerts() {
           if (data?.full_name) name = data.full_name;
         } catch { /* ignora */ }
 
-        toast(name, {
-          description: msg.body?.trim() || kindLabel(msg.kind),
-          duration: 6000,
-        });
+        const preview = msg.body?.trim() || kindLabel(msg.kind);
+        // Toast inteiro clicável (funciona no PC também) → abre a conversa (?c=).
+        toast.custom((id) => (
+          <div
+            role="button"
+            tabIndex={0}
+            onClick={() => { openConversation(msg.channel_id); toast.dismiss(id); }}
+            onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { openConversation(msg.channel_id); toast.dismiss(id); } }}
+            className="flex w-full max-w-[90vw] cursor-pointer items-start gap-3 rounded-lg border bg-background p-3 shadow-lg transition-colors hover:bg-accent"
+          >
+            <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+              <MessageSquare className="h-4 w-4" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-semibold text-foreground">{name}</p>
+              <p className="line-clamp-2 text-xs text-muted-foreground">{preview}</p>
+            </div>
+          </div>
+        ), { duration: 6000 });
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "chat_channel_members", filter: `user_id=eq.${currentUser.id}` }, () => {
         qc.invalidateQueries({ queryKey: ["chat", "conversations", currentUser.id] });

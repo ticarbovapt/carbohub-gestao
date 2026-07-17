@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { NavLink, Outlet } from "react-router-dom";
+import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { MessagesSquare } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { TopBar } from "@/components/TopBar";
@@ -55,13 +55,15 @@ export function Layout() {
     [user?.id, profile?.full_name, profile],
   );
 
+  const navigate = useNavigate();
+
   const handleMenu = () => {
     if (isMobile) setMobileOpen(true);
     else setDeskOpen((o) => !o);
   };
 
   return (
-    <ChatProvider supabase={supabase} currentUser={chatUser}>
+    <ChatProvider supabase={supabase} currentUser={chatUser} navigate={navigate}>
     <div className="h-screen overflow-hidden bg-background flex flex-col">
       <TopBar appName="Carbo Finanças" onMenu={handleMenu} />
 

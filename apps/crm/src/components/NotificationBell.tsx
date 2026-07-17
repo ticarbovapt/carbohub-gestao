@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   AtSign, Bell, Bug, Check, CheckCheck, Clock, ListTodo,
   MessageCircle, Trash2, WifiOff, ShoppingCart, FileText, Package,
@@ -28,13 +29,13 @@ const TYPE_CONFIG: Record<string, { Icon: React.ElementType; label: string; colo
 
 function NotificationItem({
   notification, onRead, onDelete,
-}: { notification: Notification; onRead: (id: string) => void; onDelete: (id: string) => void }) {
+}: { notification: Notification; onRead: (id: string) => void; onDelete: (id: string) => void; onOpen: (n: Notification) => void }) {
   const cfg = TYPE_CONFIG[notification.type] || TYPE_CONFIG.message;
   const isUnread = !notification.is_read;
 
   return (
     <div
-      onClick={() => { if (isUnread) onRead(notification.id); }}
+      onClick={() => { if (isUnread) onRead(notification.id); onOpen(notification); }}
       className={cn(
         "group relative flex gap-3 px-4 py-3 hover:bg-accent/40 cursor-pointer transition-colors border-b last:border-0",
         isUnread && "bg-primary/[0.04]"
@@ -84,6 +85,17 @@ function EmptyState({ message }: { message: string }) {
 
 export function NotificationBell() {
   const [open, setOpen] = useState(false);
+  const navigate = useNavigate();
+
+  // Clique numa notificação de chat → abre a conversa certa (?c=).
+  const handleOpen = (n: Notification) => {
+    if (n.reference_type === "chat" && n.reference_id) {
+      setOpen(false);
+      navigate(`/chat?c=${n.reference_id}`);
+      // Se já estiver no /chat, avisa o ChatApp montado pra trocar sem reload.
+      try { window.dispatchEvent(new CustomEvent("carbo-chat:open", { detail: { channelId: n.reference_id } })); } catch { /* noop */ }
+    }
+  };
   const {
     notifications, unreadNotifications, unreadCount,
     markAsRead, markAllAsRead, deleteNotification,
@@ -139,7 +151,7 @@ export function NotificationBell() {
                   <EmptyState message="Nenhuma notificação nova" />
                 ) : (
                   unreadNotifications.map((n) => (
-                    <NotificationItem key={n.id} notification={n} onRead={markAsRead} onDelete={deleteNotification} />
+                    <NotificationItem key={n.id} notification={n} onRead={markAsRead} onDelete={deleteNotification} onOpen={handleOpen} />
                   ))
                 )}
               </ScrollArea>
@@ -151,7 +163,7 @@ export function NotificationBell() {
                   <EmptyState message="Nenhuma notificação ainda" />
                 ) : (
                   notifications.map((n) => (
-                    <NotificationItem key={n.id} notification={n} onRead={markAsRead} onDelete={deleteNotification} />
+                    <NotificationItem key={n.id} notification={n} onRead={markAsRead} onDelete={deleteNotification} onOpen={handleOpen} />
                   ))
                 )}
               </ScrollArea>

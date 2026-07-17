@@ -1,4 +1,4 @@
-import { createContext, useContext, useRef, type MutableRefObject, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useRef, type MutableRefObject, type ReactNode } from "react";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { ChatUser } from "./types";
 import { ChatAlerts } from "./components/ChatAlerts";
@@ -9,20 +9,33 @@ interface ChatCtx {
   currentUser: ChatUser;
   // canal aberto agora (para o alerta global não tocar/toastar o que você já vê).
   activeChannelRef: MutableRefObject<string | null>;
+  // abre a conversa certa no /chat (?c=). Usado pelo toast/sininho ao clicar.
+  openConversation: (channelId: string) => void;
 }
 
 const Ctx = createContext<ChatCtx | null>(null);
 
 export function ChatProvider({
-  supabase, currentUser, children,
+  supabase, currentUser, navigate, children,
 }: {
   supabase: SupabaseClient;
   currentUser: ChatUser;
+  // navegação soft do app (ex.: react-router useNavigate). Sem ela, cai num
+  // window.location.assign (recarrega, mas funciona).
+  navigate?: (path: string) => void;
   children: ReactNode;
 }) {
   const activeChannelRef = useRef<string | null>(null);
+  const openConversation = useCallback((channelId: string) => {
+    const path = `/chat?c=${channelId}`;
+    if (navigate) navigate(path);
+    else window.location.assign(path);
+    // Avisa um ChatApp já montado (ex.: já estava no /chat) pra trocar a conversa
+    // sem recarregar. Quando vem de outra página, o próprio ?c= restaura no mount.
+    try { window.dispatchEvent(new CustomEvent("carbo-chat:open", { detail: { channelId } })); } catch { /* ssr */ }
+  }, [navigate]);
   return (
-    <Ctx.Provider value={{ supabase, currentUser, activeChannelRef }}>
+    <Ctx.Provider value={{ supabase, currentUser, activeChannelRef, openConversation }}>
       {children}
       {/* Alerta global: som + toast de mensagem nova em qualquer página. */}
       {currentUser.id ? <ChatAlerts /> : null}

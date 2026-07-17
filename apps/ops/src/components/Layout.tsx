@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { NavLink, Outlet, useLocation } from "react-router-dom";
+import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { ChevronDown, Lock, MessagesSquare } from "lucide-react";
 import { TopBar } from "@/components/TopBar";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
@@ -94,13 +94,15 @@ export function Layout() {
     [user?.id, profile?.full_name, profile],
   );
 
+  const navigate = useNavigate();
+
   const handleMenu = () => {
     if (isMobile) setMobileOpen(true);
     else setDeskOpen((o) => !o);
   };
 
   return (
-    <ChatProvider supabase={supabase} currentUser={chatUser}>
+    <ChatProvider supabase={supabase} currentUser={chatUser} navigate={navigate}>
     <div className="h-screen overflow-hidden bg-background flex flex-col">
       <TopBar appName="Carbo Ops" onMenu={handleMenu} />
 

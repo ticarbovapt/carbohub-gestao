@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { NavLink, Outlet } from "react-router-dom";
+import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import {
   KanbanSquare, ClipboardList, TrendingUp, Target, BarChart3, LayoutDashboard,
   Wind, CalendarDays, MapPinned, Map, Share2, ShoppingCart, ShoppingBag, MessagesSquare,
@@ -118,13 +118,15 @@ export function SalesShell() {
     [user?.id, profile?.full_name, profile?.avatar_url],
   );
 
+  const navigate = useNavigate();
+
   const handleMenu = () => {
     if (isMobile) setMobileOpen(true);
     else setDeskOpen((o) => !o);
   };
 
   return (
-    <ChatProvider supabase={supabase} currentUser={chatUser}>
+    <ChatProvider supabase={supabase} currentUser={chatUser} navigate={navigate}>
     <div className="h-screen overflow-hidden bg-background text-foreground flex flex-col">
       <TopBar appName="Carbo Sales" onMenu={handleMenu} />
 
