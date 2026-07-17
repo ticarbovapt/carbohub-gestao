@@ -142,13 +142,20 @@ END $$;
 REVOKE ALL ON FUNCTION public.chat_dispatch_scheduled() FROM public, authenticated, anon;
 
 -- ── Cron a cada 1 min (pontualidade mesmo com slots de 5 em 5) ────────────────
-CREATE EXTENSION IF NOT EXISTS pg_cron;
+-- OBS.: NÃO usar CREATE EXTENSION pg_cron via SQL no Supabase (o script interno
+-- da extensão falha por privilégios). Habilite o pg_cron no painel:
+--   Database > Extensions > pg_cron (toggle). Depois este bloco agenda sozinho.
+-- Se o pg_cron ainda não estiver ligado, a migration NÃO falha — só avisa.
 DO $$
 BEGIN
-  IF EXISTS (SELECT 1 FROM cron.job WHERE jobname = 'chat-dispatch-scheduled') THEN
-    PERFORM cron.unschedule('chat-dispatch-scheduled');
+  IF EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'pg_cron') THEN
+    IF EXISTS (SELECT 1 FROM cron.job WHERE jobname = 'chat-dispatch-scheduled') THEN
+      PERFORM cron.unschedule('chat-dispatch-scheduled');
+    END IF;
+    PERFORM cron.schedule('chat-dispatch-scheduled', '* * * * *', 'SELECT public.chat_dispatch_scheduled();');
+  ELSE
+    RAISE NOTICE 'pg_cron não habilitado — ative em Database > Extensions e rode o agendamento à parte.';
   END IF;
-  PERFORM cron.schedule('chat-dispatch-scheduled', '* * * * *', 'SELECT public.chat_dispatch_scheduled();');
 END $$;
 
 NOTIFY pgrst, 'reload schema';
