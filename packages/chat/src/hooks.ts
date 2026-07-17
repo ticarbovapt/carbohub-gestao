@@ -10,6 +10,7 @@ import type { ChatAttachment, ChatChannel, ChatMessage, ChatProfileRef, Conversa
 export interface ChatUserInfo {
   id: string; full_name: string | null; avatar_url: string | null;
   department: string | null; funcao: string | null; email: string | null; username: string | null;
+  last_seen_at?: string | null;
 }
 export interface ChannelMember {
   id: string; role: string; full_name: string | null; avatar_url: string | null;

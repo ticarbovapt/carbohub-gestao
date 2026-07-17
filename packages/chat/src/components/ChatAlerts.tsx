@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { Avatar } from "./Avatar";
 import { useChatCtx } from "../context";
 import { playMessageChime } from "../lib/sound";
+import { presenceBus } from "../lib/presence";
 import type { Conversation } from "../types";
 
 const kindLabel = (k: string) =>
@@ -17,8 +18,10 @@ export function ChatAlerts() {
   const qc = useQueryClient();
 
   useEffect(() => {
+    // UM canal compartilhado (tópico estável) dono do postgres_changes + presence
+    // + broadcast de "digitando". Montado 1x por cliente (aqui) → sem colidir.
     const ch = supabase
-      .channel("chat:alerts:" + currentUser.id + ":" + Math.random().toString(36).slice(2, 10))
+      .channel("carbo-chat-room", { config: { presence: { key: currentUser.id } } })
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "chat_messages" }, async (payload) => {
         const msg = payload.new as { sender_id: string | null; channel_id: string; body: string | null; kind: string };
         if (!msg || msg.sender_id === currentUser.id) return;
@@ -69,9 +72,41 @@ export function ChatAlerts() {
         qc.invalidateQueries({ queryKey: ["chat", "conversations", currentUser.id] });
         qc.invalidateQueries({ queryKey: ["chat", "unread-total", currentUser.id] });
       })
-      .subscribe();
-    return () => { supabase.removeChannel(ch); };
-  }, [supabase, qc, currentUser.id, activeChannelRef]);
+      // Presence: quem está online agora (chave = user_id).
+      .on("presence", { event: "sync" }, () => {
+        presenceBus.setOnline(Object.keys(ch.presenceState()));
+      })
+      // "Digitando…" via broadcast (ignora o próprio).
+      .on("broadcast", { event: "typing" }, ({ payload }) => {
+        const p = payload as { channelId: string; userId: string; name: string; on: boolean };
+        if (!p || p.userId === currentUser.id) return;
+        presenceBus.setTyping(p.channelId, p.userId, p.name, p.on);
+      })
+      .subscribe((status) => {
+        if (status !== "SUBSCRIBED") return;
+        ch.track({ user_id: currentUser.id, online_at: new Date().toISOString() });
+        // manda "digitando" pelo mesmo canal (registro pro store global).
+        presenceBus.registerSendTyping((channelId, on) => {
+          ch.send({ type: "broadcast", event: "typing",
+            payload: { channelId, userId: currentUser.id, name: currentUser.full_name ?? "Alguém", on } });
+        });
+      });
+
+    // Heartbeat de "visto por último" (app-wide) + poda dos "digitando" expirados.
+    const touch = () => { if (document.visibilityState === "visible") supabase.rpc("chat_touch_last_seen").then(() => {}, () => {}); };
+    touch();
+    const hb = window.setInterval(touch, 45_000);
+    const prune = window.setInterval(() => presenceBus.prune(), 1_000);
+    document.addEventListener("visibilitychange", touch);
+
+    return () => {
+      presenceBus.registerSendTyping(null);
+      window.clearInterval(hb);
+      window.clearInterval(prune);
+      document.removeEventListener("visibilitychange", touch);
+      supabase.removeChannel(ch);
+    };
+  }, [supabase, qc, currentUser.id, currentUser.full_name, activeChannelRef]);
 
   return null;
 }

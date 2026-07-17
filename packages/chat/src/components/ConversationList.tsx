@@ -5,9 +5,24 @@ import {
 } from "lucide-react";
 import { useConversations, useUpdateMembership, useLeaveConversation } from "../hooks";
 import { useChatCtx } from "../context";
+import { useTyping } from "../lib/presence";
 import { Avatar } from "./Avatar";
 import { NewDmDialog, NewChannelDialog } from "./dialogs";
 import type { Conversation } from "../types";
+
+// Subtítulo da linha: "digitando…" (verde) enquanto alguém digita; senão a prévia.
+function PreviewOrTyping({ channelId, currentUserId, isGroup, preview }: {
+  channelId: string; currentUserId: string; isGroup: boolean; preview: string;
+}) {
+  const typing = useTyping(channelId, currentUserId);
+  if (typing.length > 0) {
+    const label = isGroup
+      ? (typing.length === 1 ? `${typing[0].name.split(/\s+/)[0]} digitando…` : `${typing.length} digitando…`)
+      : "digitando…";
+    return <span className="min-w-0 flex-1 truncate text-xs text-emerald-500">{label}</span>;
+  }
+  return <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">{preview}</span>;
+}
 
 function kindPreview(kind: string | null) {
   switch (kind) {
@@ -138,7 +153,7 @@ export function ConversationList({
                   </span>
                 </div>
                 <div className="mt-0.5 flex items-center gap-1.5">
-                  <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">{previewText(c)}</span>
+                  <PreviewOrTyping channelId={c.channel.id} currentUserId={currentUser.id} isGroup={c.channel.type === "group"} preview={previewText(c)} />
                   {c.muted && <BellOff className="h-3 w-3 shrink-0 text-muted-foreground" />}
                   {c.unread > 0 && (
                     <span className={`inline-flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full px-1.5 text-[11px] font-semibold ${c.muted ? "bg-muted-foreground/40 text-foreground" : "bg-primary text-primary-foreground"}`}>

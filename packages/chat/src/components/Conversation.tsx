@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Search, X, SmilePlus, Reply, CornerUpLeft, Check, CheckCheck } from "lucide-react";
-import { useMessages, useProfilesMap, useToggleReaction, useChannelMembers } from "../hooks";
+import { useMessages, useProfilesMap, useToggleReaction, useChannelMembers, useUserInfo } from "../hooks";
 import { useChatCtx } from "../context";
 import { messageReceipt, type ReceiptStatus } from "../lib/receipts";
+import { useIsOnline, useTyping } from "../lib/presence";
 import { Avatar } from "./Avatar";
 import { Composer } from "./Composer";
 import { Attachment } from "./Attachment";
@@ -30,6 +31,16 @@ function dayLabel(iso: string) {
 }
 const kindLabel = (k: string) =>
   k === "image" ? "📷 Foto" : k === "audio" ? "🎤 Áudio" : k === "video" ? "🎬 Vídeo" : k === "file" ? "📎 Arquivo" : "Mensagem";
+const firstName = (n: string) => n.split(/\s+/)[0] || n;
+function lastSeenLabel(iso: string) {
+  const d = new Date(iso), now = new Date();
+  if ((now.getTime() - d.getTime()) / 1000 < 60) return "agora há pouco";
+  const hhmm = d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+  if (d.toDateString() === now.toDateString()) return `hoje às ${hhmm}`;
+  const y = new Date(now); y.setDate(now.getDate() - 1);
+  if (d.toDateString() === y.toDateString()) return `ontem às ${hhmm}`;
+  return `${d.toLocaleDateString("pt-BR")} às ${hhmm}`;
+}
 
 export function Conversation({ conv, onDeleted }: { conv: Conv; onDeleted?: () => void }) {
   const { currentUser } = useChatCtx();
@@ -37,6 +48,10 @@ export function Conversation({ conv, onDeleted }: { conv: Conv; onDeleted?: () =
   const { data: messages = [], isLoading } = useMessages(conv.channel.id);
   const { data: members = [] } = useChannelMembers(conv.channel.id);
   const { data: profMap = {} } = useProfilesMap(messages.map((m) => m.sender_id ?? "").filter(Boolean));
+  // Presença/typing pro cabeçalho.
+  const otherOnline = useIsOnline(isGroup ? null : conv.otherUserId);
+  const typing = useTyping(conv.channel.id, currentUser.id);
+  const { data: otherInfo } = useUserInfo(!isGroup ? conv.otherUserId : null);
   const react = useToggleReaction();
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -63,8 +78,20 @@ export function Conversation({ conv, onDeleted }: { conv: Conv; onDeleted?: () =
             <Avatar name={conv.title} url={conv.avatarUrl} size={36} />
             <div className="min-w-0">
               <p className="truncate text-sm font-semibold">{conv.title}</p>
-              <p className="text-[11px] text-muted-foreground">
-                {isGroup ? (conv.channel.is_private ? "Grupo privado" : "Grupo") : "Mensagem direta"}
+              <p className="truncate text-[11px]">
+                {typing.length > 0 ? (
+                  <span className="text-emerald-500">
+                    {isGroup
+                      ? (typing.length === 1 ? `${firstName(typing[0].name)} está digitando…` : `${typing.length} pessoas digitando…`)
+                      : "digitando…"}
+                  </span>
+                ) : !isGroup ? (
+                  otherOnline
+                    ? <span className="text-emerald-500">online</span>
+                    : <span className="text-muted-foreground">{otherInfo?.last_seen_at ? `visto por último ${lastSeenLabel(otherInfo.last_seen_at)}` : "Mensagem direta"}</span>
+                ) : (
+                  <span className="text-muted-foreground">{conv.channel.is_private ? "Grupo privado" : "Grupo"}</span>
+                )}
               </p>
             </div>
           </button>

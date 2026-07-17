@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Send, Paperclip, X, CornerUpLeft, Users, Smile } from "lucide-react";
 import { useSendMessage, useDirectory, kindFromMime, type OutgoingAttachment } from "../hooks";
+import { sendTyping } from "../lib/presence";
 import { AudioRecorder } from "./AudioRecorder";
 import { EmojiPicker } from "./EmojiPicker";
 import { Avatar } from "./Avatar";
@@ -28,6 +29,22 @@ export function Composer({
   const fileRef = useRef<HTMLInputElement>(null);
   const textRef = useRef<HTMLTextAreaElement>(null);
   const send = useSendMessage(channelId);
+
+  // "Digitando…": envia no máx. a cada 2.5s enquanto digita; some após 4s parado.
+  const lastTyping = useRef(0);
+  const idleTimer = useRef<number | null>(null);
+  function stopTyping() {
+    if (idleTimer.current) { window.clearTimeout(idleTimer.current); idleTimer.current = null; }
+    if (lastTyping.current) { lastTyping.current = 0; sendTyping(channelId, false); }
+  }
+  function signalTyping() {
+    const now = Date.now();
+    if (now - lastTyping.current > 2500) { lastTyping.current = now; sendTyping(channelId, true); }
+    if (idleTimer.current) window.clearTimeout(idleTimer.current);
+    idleTimer.current = window.setTimeout(stopTyping, 4000);
+  }
+  // Ao trocar de conversa/desmontar, limpa o "digitando".
+  useEffect(() => stopTyping, [channelId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Auto-cresce conforme as linhas até um máximo (depois rola) — estilo WhatsApp.
   useEffect(() => {
@@ -60,6 +77,7 @@ export function Composer({
     const val = e.target.value;
     const caret = e.target.selectionStart ?? val.length;
     setText(val);
+    if (val.trim()) signalTyping(); else stopTyping();
     if (!isGroup) { setMention(null); return; }               // sem menção em DM
     const m = val.slice(0, caret).match(/(?:^|\s)@([\p{L}\d._-]*)$/u);
     setMention(m ? { query: m[1], start: caret - m[1].length - 1 } : null);
@@ -97,6 +115,7 @@ export function Composer({
       replyToId: replyTo?.id ?? null,
     };
     setText(""); setFiles([]); setChosen([]); setAllPicked(false); setMention(null); onClearReply();
+    stopTyping();
     try { await send.mutateAsync(payload); }
     catch { setText(body); setFiles(files); }
   }
@@ -169,6 +188,7 @@ export function Composer({
             ref={textRef}
             value={text}
             onChange={onType}
+            onBlur={stopTyping}
             onKeyDown={(e) => {
               if (e.key === "Escape") { setMention(null); }
               if (e.key === "Enter" && !e.shiftKey && !mention) { e.preventDefault(); submit(); }
