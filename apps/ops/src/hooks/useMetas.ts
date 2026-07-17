@@ -6,7 +6,10 @@ import { supabase } from "@/integrations/supabase/client";
 //  • Vendedores = profiles com is_vendedor = true (via crm_list_vendedores).
 //  • Meta = RESOLVIDA no banco (crm_metas_resolvidas): exceção do mês > degrau de
 //    meta padrão vigente > 0. Ver migration 20260611000011.
-//  • Realizado = RPC crm_vendas_agregado (status 'pedido').
+//  • Realizado = RPC crm_comissao_agregado — MESMA base do comissionamento
+//    (faturado: bling_nf_id NOT NULL, por data efetiva coalesce(sale_date,...)).
+//    Antes usava crm_vendas_agregado (toda venda por created_at) e divergia do
+//    Admin/comissão; agora Meta.realizado == base da comissão.
 // ─────────────────────────────────────────────────────────────────────────────
 const db = supabase as unknown as {
   from: (t: string) => any;
@@ -32,6 +35,9 @@ export interface MetaVendedor {
 }
 
 const iso = (d: Date) => d.toISOString();
+// crm_comissao_agregado recebe DATE e usa intervalo FECHADO (>= p_from AND <= p_to);
+// então passamos a data local YYYY-MM-DD com o fim INCLUSIVO (último dia da janela).
+const ymd = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 type Agg = { vendedor_id: string; total: number; qtd: number };
 const aggMap = (rows: Agg[] | null) => {
   const m = new Map<string, { total: number; qtd: number }>();
@@ -43,10 +49,11 @@ export function useMetasVendedores(month: Date, weekStart: Date) {
   const ano = month.getFullYear();
   const mes = month.getMonth() + 1;
   const monthStart = new Date(ano, month.getMonth(), 1);
-  const monthEnd = new Date(ano, month.getMonth() + 1, 1);
+  const monthEndIncl = new Date(ano, month.getMonth() + 1, 0);   // último dia do mês
   const prevStart = new Date(ano, month.getMonth() - 1, 1);
+  const prevEndIncl = new Date(ano, month.getMonth(), 0);        // último dia do mês anterior
   const weekFrom = new Date(weekStart); weekFrom.setHours(0, 0, 0, 0);
-  const weekTo = new Date(weekFrom); weekTo.setDate(weekTo.getDate() + 7);
+  const weekEndIncl = new Date(weekFrom); weekEndIncl.setDate(weekEndIncl.getDate() + 6); // sex→qui (7 dias)
 
   return useQuery({
     queryKey: ["crm_metas", ano, mes, iso(weekFrom)],
@@ -54,9 +61,9 @@ export function useMetasVendedores(month: Date, weekStart: Date) {
       const [vendsRes, metasRes, monthRes, prevRes, weekRes] = await Promise.all([
         db.rpc("crm_list_vendedores", {}),
         db.rpc("crm_metas_resolvidas", { p_ano: ano, p_mes: mes }),
-        db.rpc("crm_vendas_agregado", { p_from: iso(monthStart), p_to: iso(monthEnd) }),
-        db.rpc("crm_vendas_agregado", { p_from: iso(prevStart), p_to: iso(monthStart) }),
-        db.rpc("crm_vendas_agregado", { p_from: iso(weekFrom), p_to: iso(weekTo) }),
+        db.rpc("crm_comissao_agregado", { p_from: ymd(monthStart), p_to: ymd(monthEndIncl) }),
+        db.rpc("crm_comissao_agregado", { p_from: ymd(prevStart), p_to: ymd(prevEndIncl) }),
+        db.rpc("crm_comissao_agregado", { p_from: ymd(weekFrom), p_to: ymd(weekEndIncl) }),
       ]);
       if (vendsRes.error) throw vendsRes.error;
       if (metasRes.error) throw metasRes.error;
