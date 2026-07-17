@@ -178,8 +178,10 @@ function MessageBubble({
 }) {
   const [pickerOpen, setPickerOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [confirmDel, setConfirmDel] = useState(false);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(m.body ?? "");
+  function closeMenu() { setMenuOpen(false); setConfirmDel(false); }
   const when = new Date(m.created_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
   const deleted = !!m.deleted_at;
   const edited = !!m.edited_at;
@@ -221,15 +223,26 @@ function MessageBubble({
           <button onClick={() => setMenuOpen((o) => !o)} title="Mais" className="rounded-full p-1 text-muted-foreground hover:bg-muted hover:text-foreground"><MoreVertical className="h-4 w-4" /></button>
           {menuOpen && (
             <>
-              <div className="fixed inset-0 z-20" onClick={() => setMenuOpen(false)} />
-              <div className="absolute right-0 top-7 z-30 w-36 overflow-hidden rounded-lg border bg-popover shadow-lg">
-                {m.kind === "text" && (
-                  <button onClick={() => { setDraft(m.body ?? ""); setEditing(true); setMenuOpen(false); }}
-                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-muted"><Pencil className="h-3.5 w-3.5" /> Editar</button>
-                )}
-                <button onClick={() => { setMenuOpen(false); onDelete(); }}
-                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-destructive hover:bg-destructive/10"><Trash2 className="h-3.5 w-3.5" /> Apagar</button>
-              </div>
+              <div className="fixed inset-0 z-20" onClick={closeMenu} />
+              {confirmDel ? (
+                <div className="absolute right-0 top-7 z-30 w-52 overflow-hidden rounded-lg border bg-popover p-3 shadow-lg">
+                  <p className="mb-2 text-xs text-foreground">Apagar esta mensagem para todos?</p>
+                  <div className="flex justify-end gap-1.5 text-xs">
+                    <button onClick={closeMenu} className="rounded-md px-2.5 py-1 hover:bg-muted">Cancelar</button>
+                    <button onClick={() => { closeMenu(); onDelete(); }}
+                      className="rounded-md bg-destructive px-2.5 py-1 font-medium text-destructive-foreground hover:bg-destructive/90">Apagar</button>
+                  </div>
+                </div>
+              ) : (
+                <div className="absolute right-0 top-7 z-30 w-36 overflow-hidden rounded-lg border bg-popover shadow-lg">
+                  {m.kind === "text" && (
+                    <button onClick={() => { setDraft(m.body ?? ""); setEditing(true); closeMenu(); }}
+                      className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-muted"><Pencil className="h-3.5 w-3.5" /> Editar</button>
+                  )}
+                  <button onClick={() => setConfirmDel(true)}
+                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-destructive hover:bg-destructive/10"><Trash2 className="h-3.5 w-3.5" /> Apagar</button>
+                </div>
+              )}
             </>
           )}
         </div>
