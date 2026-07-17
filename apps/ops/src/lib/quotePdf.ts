@@ -89,51 +89,61 @@ export async function generateQuotePdf(order: QuotePdfData) {
   const pageH = doc.internal.pageSize.getHeight();
   const M = 14;
 
-  // ── Cabeçalho: logo (proporção correta) ────────────────────────────────────
-  const logo = await loadImage(logoUrl);
-  let belowLogoY = 28;
-  if (logo) {
-    const targetH = 28;
-    let w = targetH * (logo.w / logo.h);
-    let h = targetH;
-    const maxW = 95;
-    if (w > maxW) { w = maxW; h = maxW * (logo.h / logo.w); }
-    doc.addImage(logo.dataUrl, "PNG", M, 11, w, h);
-    belowLogoY = 11 + h + 4;
-  } else {
-    doc.setFont("helvetica", "bold"); doc.setFontSize(16);
-    doc.text(COMPANY.name, M, 20);
-    belowLogoY = 26;
-  }
+  // ── Cabeçalho: faixa da identidade Grupo Carbo (inspirado no modelo aprovado) ─
+  // Faixa verde full-width com a marca à esquerda, caixa "ORÇAMENTO" à direita e a
+  // linha da empresa na base; fios de acento no topo e na base.
+  const GREEN_DARK: [number, number, number] = [11, 84, 60];
+  const GREEN_SOFT: [number, number, number] = [214, 236, 227];
+  const BAND_H = 27;
 
-  // Título + meta (direita)
-  doc.setFont("helvetica", "bold"); doc.setFontSize(17); doc.setTextColor(...GREEN);
-  doc.text("ORÇAMENTO", pageW - M, 19, { align: "right" });
-  doc.setFont("helvetica", "normal"); doc.setFontSize(9); doc.setTextColor(120);
   const created = dateBR(order.created_at);
   const validity = order.validityDays ?? 7;
-  const validUntil = new Date(order.created_at ? new Date(order.created_at) : new Date());
-  validUntil.setDate(validUntil.getDate() + validity);
-  [
-    order.order_number ? `Nº ${order.order_number}` : "",
-    `Data: ${created}`,
-    `Validade: ${validity} dias (até ${validUntil.toLocaleDateString("pt-BR")})`,
-  ].filter(Boolean).forEach((line, i) => doc.text(line, pageW - M, 26 + i * 4.5, { align: "right" }));
-  doc.setTextColor(0);
+  const validUntilDate = new Date(order.created_at ? new Date(order.created_at) : new Date());
+  validUntilDate.setDate(validUntilDate.getDate() + validity);
+  const validUntil = validUntilDate.toLocaleDateString("pt-BR");
 
-  // Dados da empresa (abaixo da logo)
-  doc.setFontSize(7.5); doc.setTextColor(120);
-  [
-    `${COMPANY.name} · CNPJ ${COMPANY.cnpj}`,
-    `${COMPANY.endereco} · ${COMPANY.cidade}`,
-    `${COMPANY.telefone} · ${COMPANY.email} · ${COMPANY.site}`,
-  ].forEach((line, i) => doc.text(line, M, belowLogoY + i * 3.6));
-  doc.setTextColor(0);
+  doc.setFillColor(...GREEN); doc.rect(0, 0, pageW, BAND_H, "F");
+  doc.setFillColor(...GREEN_DARK);
+  doc.rect(0, 0, pageW, 1.5, "F");
+  doc.rect(0, BAND_H - 1.2, pageW, 1.2, "F");
 
-  // Divisória
-  let y = Math.max(belowLogoY + 12, 40);
-  doc.setDrawColor(225); doc.line(M, y, pageW - M, y);
-  y += 7;
+  // Marca: logo num "chip" branco (contraste garantido sobre o verde) ou wordmark.
+  const logo = await loadImage(logoUrl);
+  if (logo) {
+    const chipH = 14, chipPad = 2.5, chipY = 4;
+    let lw = (chipH - chipPad * 2) * (logo.w / logo.h);
+    let lh = chipH - chipPad * 2;
+    const maxLw = 44;
+    if (lw > maxLw) { lh = lh * (maxLw / lw); lw = maxLw; }
+    doc.setFillColor(255); doc.roundedRect(M, chipY, lw + chipPad * 2, chipH, 2, 2, "F");
+    doc.addImage(logo.dataUrl, "PNG", M + chipPad, chipY + (chipH - lh) / 2, lw, lh);
+  } else {
+    doc.setFont("helvetica", "bold"); doc.setFontSize(20); doc.setTextColor(255);
+    doc.text("GRUPO CARBO", M, 15);
+  }
+
+  // Caixa "ORÇAMENTO" à direita (borda branca) + datas + nº.
+  const boxW = 58, boxH = 17, boxX = pageW - M - boxW, boxY = 4;
+  doc.setDrawColor(255); doc.setLineWidth(0.4);
+  doc.roundedRect(boxX, boxY, boxW, boxH, 2, 2, "S");
+  doc.setTextColor(255); doc.setFont("helvetica", "bold"); doc.setFontSize(13);
+  doc.text("ORÇAMENTO", boxX + boxW / 2, boxY + 7, { align: "center" });
+  doc.setFont("helvetica", "normal"); doc.setFontSize(7.5);
+  doc.text(`Emissão: ${created}`, boxX + boxW / 2, boxY + 11.6, { align: "center" });
+  doc.text(`Válido até: ${validUntil}`, boxX + boxW / 2, boxY + 15, { align: "center" });
+  if (order.order_number) {
+    doc.setFontSize(7.5); doc.setTextColor(...GREEN_SOFT);
+    doc.text(`Nº ${order.order_number}`, boxX + boxW, BAND_H - 3.3, { align: "right" });
+  }
+
+  // Linha da empresa (branco suave) na base da faixa.
+  doc.setFont("helvetica", "normal"); doc.setFontSize(7); doc.setTextColor(...GREEN_SOFT);
+  doc.text(`${COMPANY.name}  ·  CNPJ ${COMPANY.cnpj}`, M, BAND_H - 6.5);
+  doc.text(`${COMPANY.endereco} · ${COMPANY.cidade} · ${COMPANY.telefone}`, M, BAND_H - 2.8);
+  doc.setTextColor(0); doc.setLineWidth(0.2);
+
+  // Início do conteúdo abaixo da faixa.
+  let y = BAND_H + 9;
 
   // ── Blocos do comprador (2 colunas) ────────────────────────────────────────
   const colGap = 6;
