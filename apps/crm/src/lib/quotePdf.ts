@@ -7,8 +7,8 @@ import logoUrl from "@/assets/logo-grupo-carbo.png";
 const COMPANY = {
   name: "Carbo Soluções LTDA",
   cnpj: "36.060.692/0003-72",
-  endereco: "Rua Coronel José Guimarães, 299",
-  cidade: "Lagoa Nova · Natal - RN · CEP 59054-795",
+  endereco: "Rua Almirante Tamandaré, 196",
+  cidade: "Lagoa Nova · Natal - RN · CEP 59054-560",
   telefone: "(84) 3207-5055",
   email: "administrativo@carbovapt.com.br",
   site: "carboze.com.br",
