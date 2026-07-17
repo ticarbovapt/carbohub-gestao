@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Search, X, SmilePlus, Reply, CornerUpLeft, Check, CheckCheck } from "lucide-react";
-import { useMessages, useProfilesMap, useToggleReaction, useChannelMembers, useUserInfo } from "../hooks";
+import { Search, X, SmilePlus, Reply, CornerUpLeft, Check, CheckCheck, MoreVertical, Pencil, Trash2 } from "lucide-react";
+import { useMessages, useProfilesMap, useToggleReaction, useChannelMembers, useUserInfo, useEditMessage, useDeleteMessage } from "../hooks";
 import { useChatCtx } from "../context";
 import { messageReceipt, type ReceiptStatus } from "../lib/receipts";
 import { useIsOnline, useTyping } from "../lib/presence";
@@ -53,6 +53,8 @@ export function Conversation({ conv, onDeleted }: { conv: Conv; onDeleted?: () =
   const typing = useTyping(conv.channel.id, currentUser.id);
   const { data: otherInfo } = useUserInfo(!isGroup ? conv.otherUserId : null);
   const react = useToggleReaction();
+  const edit = useEditMessage();
+  const del = useDeleteMessage();
   const bottomRef = useRef<HTMLDivElement>(null);
 
   const [panelOpen, setPanelOpen] = useState(false);
@@ -143,6 +145,8 @@ export function Conversation({ conv, onDeleted }: { conv: Conv; onDeleted?: () =
                       receipt={mine ? messageReceipt(m.created_at, members, currentUser.id).status : null}
                       onReply={() => setReplyTo(m)}
                       onReact={(emoji, active) => react.mutate({ messageId: m.id, emoji, channelId: conv.channel.id, active })}
+                      onEdit={(body) => edit.mutate({ messageId: m.id, body, channelId: conv.channel.id })}
+                      onDelete={() => del.mutate({ messageId: m.id, channelId: conv.channel.id })}
                     />
                   </div>
                 );
@@ -164,15 +168,39 @@ export function Conversation({ conv, onDeleted }: { conv: Conv; onDeleted?: () =
 }
 
 function MessageBubble({
-  m, mine, isGroup, showName, senderName, repliedTo, repliedName, currentUserId, receipt, onReply, onReact,
+  m, mine, isGroup, showName, senderName, repliedTo, repliedName, currentUserId, receipt, onReply, onReact, onEdit, onDelete,
 }: {
   m: ChatMessage; mine: boolean; isGroup: boolean; showName: boolean; senderName: string;
   repliedTo: ChatMessage | null; repliedName: string; currentUserId: string;
   receipt: ReceiptStatus | null;
   onReply: () => void; onReact: (emoji: string, active: boolean) => void;
+  onEdit: (body: string) => void; onDelete: () => void;
 }) {
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(m.body ?? "");
   const when = new Date(m.created_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+  const deleted = !!m.deleted_at;
+  const edited = !!m.edited_at;
+
+  function saveEdit() {
+    const b = draft.trim();
+    if (b && b !== m.body) onEdit(b);
+    setEditing(false);
+  }
+
+  // Mensagem apagada: tombstone pra todos, sem ações/reações.
+  if (deleted) {
+    return (
+      <div className={`flex ${mine ? "justify-end" : "justify-start"}`}>
+        <div className={`max-w-[78%] rounded-2xl px-3 py-2 text-sm italic text-muted-foreground ${mine ? "rounded-br-sm bg-muted/60" : "rounded-bl-sm bg-muted/60"}`}>
+          <span className="inline-flex items-center gap-1"><Trash2 className="h-3.5 w-3.5" /> Esta mensagem foi apagada</span>
+          <span className="ml-2 text-[10px]">{when}</span>
+        </div>
+      </div>
+    );
+  }
 
   // agrega reações: emoji -> {count, mine}
   const agg: Record<string, { count: number; mine: boolean }> = {};
@@ -188,6 +216,24 @@ function MessageBubble({
     <div className="relative hidden shrink-0 items-center gap-0.5 self-center group-hover:flex">
       <button onClick={() => setPickerOpen((o) => !o)} title="Reagir" className="rounded-full p-1 text-muted-foreground hover:bg-muted hover:text-foreground"><SmilePlus className="h-4 w-4" /></button>
       <button onClick={onReply} title="Responder" className="rounded-full p-1 text-muted-foreground hover:bg-muted hover:text-foreground"><Reply className="h-4 w-4" /></button>
+      {mine && (
+        <div className="relative">
+          <button onClick={() => setMenuOpen((o) => !o)} title="Mais" className="rounded-full p-1 text-muted-foreground hover:bg-muted hover:text-foreground"><MoreVertical className="h-4 w-4" /></button>
+          {menuOpen && (
+            <>
+              <div className="fixed inset-0 z-20" onClick={() => setMenuOpen(false)} />
+              <div className="absolute right-0 top-7 z-30 w-36 overflow-hidden rounded-lg border bg-popover shadow-lg">
+                {m.kind === "text" && (
+                  <button onClick={() => { setDraft(m.body ?? ""); setEditing(true); setMenuOpen(false); }}
+                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-muted"><Pencil className="h-3.5 w-3.5" /> Editar</button>
+                )}
+                <button onClick={() => { setMenuOpen(false); onDelete(); }}
+                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-destructive hover:bg-destructive/10"><Trash2 className="h-3.5 w-3.5" /> Apagar</button>
+              </div>
+            </>
+          )}
+        </div>
+      )}
       {pickerOpen && (
         <>
           <div className="fixed inset-0 z-20" onClick={() => setPickerOpen(false)} />
@@ -216,11 +262,30 @@ function MessageBubble({
             </div>
           )}
 
-          {m.body && <p className="whitespace-pre-wrap break-words">{m.body}</p>}
-          {m.attachments && m.attachments.length > 0 && (
-            <div className="mt-1 space-y-1.5">{m.attachments.map((att) => <Attachment key={att.id} att={att} />)}</div>
+          {editing ? (
+            <div className="flex flex-col gap-1">
+              <textarea autoFocus value={draft} onChange={(e) => setDraft(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); saveEdit(); }
+                  if (e.key === "Escape") { setEditing(false); setDraft(m.body ?? ""); }
+                }}
+                rows={Math.min(6, draft.split("\n").length)}
+                className="w-full min-w-[180px] resize-none rounded-md border border-black/20 bg-white/70 px-2 py-1 text-sm text-neutral-900 focus:outline-none dark:border-white/30 dark:bg-black/20 dark:text-neutral-50" />
+              <div className="flex justify-end gap-1 text-[11px]">
+                <button onClick={() => { setEditing(false); setDraft(m.body ?? ""); }} className="rounded px-2 py-0.5 hover:bg-black/10 dark:hover:bg-white/10">Cancelar</button>
+                <button onClick={saveEdit} className="rounded bg-black/10 px-2 py-0.5 font-medium hover:bg-black/20 dark:bg-white/15 dark:hover:bg-white/25">Salvar</button>
+              </div>
+            </div>
+          ) : (
+            <>
+              {m.body && <p className="whitespace-pre-wrap break-words">{m.body}</p>}
+              {m.attachments && m.attachments.length > 0 && (
+                <div className="mt-1 space-y-1.5">{m.attachments.map((att) => <Attachment key={att.id} att={att} />)}</div>
+              )}
+            </>
           )}
           <div className={`mt-0.5 flex items-center justify-end gap-1 text-[10px] ${mine ? "text-black/50 dark:text-white/60" : "text-muted-foreground"}`}>
+            {edited && <span className="italic">editada</span>}
             <span>{when}</span>
             {mine && receipt && <Ticks status={receipt} />}
           </div>

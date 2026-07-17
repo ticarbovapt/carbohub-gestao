@@ -79,7 +79,6 @@ export function useMessages(channelId: string | null) {
         .from("chat_messages")
         .select("*, sender:profiles!chat_messages_sender_id_fkey(id, full_name, avatar_url), attachments:chat_attachments(*), reactions:chat_reactions(message_id, user_id, emoji)")
         .eq("channel_id", channelId)
-        .is("deleted_at", null)
         .order("created_at", { ascending: true })
         .limit(200);
       if (error) throw error;
@@ -208,6 +207,39 @@ export function useToggleReaction() {
       }
     },
     onSuccess: (_d, v) => qc.invalidateQueries({ queryKey: ["chat", "messages", v.channelId] }),
+  });
+}
+
+// Editar a própria mensagem (marca "(editado)").
+export function useEditMessage() {
+  const { supabase, currentUser } = useChatCtx();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ messageId, body }: { messageId: string; body: string; channelId: string }) => {
+      const { error } = await supabase.rpc("chat_edit_message", { p_id: messageId, p_body: body });
+      if (error) throw error;
+    },
+    onSuccess: (_d, v) => {
+      qc.invalidateQueries({ queryKey: ["chat", "messages", v.channelId] });
+      qc.invalidateQueries({ queryKey: ["chat", "conversations", currentUser.id] });
+    },
+  });
+}
+
+// Apagar a própria mensagem (soft-delete → "Esta mensagem foi apagada").
+export function useDeleteMessage() {
+  const { supabase, currentUser } = useChatCtx();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ messageId }: { messageId: string; channelId: string }) => {
+      const { error } = await supabase.rpc("chat_delete_message", { p_id: messageId });
+      if (error) throw error;
+    },
+    onSuccess: (_d, v) => {
+      qc.invalidateQueries({ queryKey: ["chat", "messages", v.channelId] });
+      qc.invalidateQueries({ queryKey: ["chat", "conversations", currentUser.id] });
+      qc.invalidateQueries({ queryKey: ["chat", "media", v.channelId] });
+    },
   });
 }
 

@@ -72,6 +72,11 @@ export function ChatAlerts() {
         qc.invalidateQueries({ queryKey: ["chat", "conversations", currentUser.id] });
         qc.invalidateQueries({ queryKey: ["chat", "unread-total", currentUser.id] });
       })
+      // Edição/exclusão de mensagem → atualiza a prévia da lista ao vivo p/ todos.
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "chat_messages" }, () => {
+        qc.invalidateQueries({ queryKey: ["chat", "conversations", currentUser.id] });
+        qc.invalidateQueries({ queryKey: ["chat", "unread-total", currentUser.id] });
+      })
       // Presence: quem está online agora (chave = user_id).
       .on("presence", { event: "sync" }, () => {
         presenceBus.setOnline(Object.keys(ch.presenceState()));
