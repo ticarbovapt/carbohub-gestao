@@ -66,17 +66,39 @@ function loadImage(url: string, tintWhite = false): Promise<{ dataUrl: string; w
     img.crossOrigin = "anonymous";
     img.onload = () => {
       try {
+        const W = img.naturalWidth, H = img.naturalHeight;
         const canvas = document.createElement("canvas");
-        canvas.width = img.naturalWidth;
-        canvas.height = img.naturalHeight;
+        canvas.width = W; canvas.height = H;
         const ctx = canvas.getContext("2d");
-        ctx?.drawImage(img, 0, 0);
-        if (ctx && tintWhite) {
-          ctx.globalCompositeOperation = "source-in"; // mantém o alpha, pinta de branco
-          ctx.fillStyle = "#ffffff";
-          ctx.fillRect(0, 0, canvas.width, canvas.height);
+        if (!ctx) { resolve(null); return; }
+        ctx.drawImage(img, 0, 0);
+
+        // Recorta a margem transparente (bounding box dos pixels visíveis) para a
+        // logo preencher a caixa — sem o espaço vazio que a deixava pequena.
+        let sx = 0, sy = 0, sw = W, sh = H;
+        try {
+          const d = ctx.getImageData(0, 0, W, H).data;
+          let minX = W, minY = H, maxX = -1, maxY = -1;
+          for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+            if (d[(y * W + x) * 4 + 3] > 8) {
+              if (x < minX) minX = x; if (x > maxX) maxX = x;
+              if (y < minY) minY = y; if (y > maxY) maxY = y;
+            }
+          }
+          if (maxX >= minX && maxY >= minY) { sx = minX; sy = minY; sw = maxX - minX + 1; sh = maxY - minY + 1; }
+        } catch { /* getImageData bloqueado → usa a imagem inteira */ }
+
+        const out = document.createElement("canvas");
+        out.width = sw; out.height = sh;
+        const octx = out.getContext("2d");
+        if (!octx) { resolve(null); return; }
+        octx.drawImage(canvas, sx, sy, sw, sh, 0, 0, sw, sh);
+        if (tintWhite) {
+          octx.globalCompositeOperation = "source-in"; // mantém o alpha, pinta de branco
+          octx.fillStyle = "#ffffff";
+          octx.fillRect(0, 0, sw, sh);
         }
-        resolve({ dataUrl: canvas.toDataURL("image/png"), w: img.naturalWidth, h: img.naturalHeight });
+        resolve({ dataUrl: out.toDataURL("image/png"), w: sw, h: sh });
       } catch { resolve(null); }
     };
     img.onerror = () => resolve(null);
@@ -103,7 +125,7 @@ export async function generateQuotePdf(order: QuotePdfData) {
   // Faixa verde floresta full-width, marca BRANCA à esquerda, caixa "ORÇAMENTO"
   // lima à direita e a linha da empresa na base; fios de acento LIMA no topo/base.
   const GREEN_SOFT: [number, number, number] = [205, 224, 214];
-  const BAND_H = 27;
+  const BAND_H = 30;
 
   const created = dateBR(order.created_at);
   const validity = order.validityDays ?? 7;
@@ -116,36 +138,33 @@ export async function generateQuotePdf(order: QuotePdfData) {
   doc.rect(0, 0, pageW, 1.8, "F");
   doc.rect(0, BAND_H - 1.5, pageW, 1.5, "F");
 
-  // Marca: logo Grupo Carbo em BRANCO direto na faixa (sem chip).
+  // Marca: logo Grupo Carbo em BRANCO, grande e sem margem (preenche a faixa).
   const logo = await loadImage(logoUrl, true);
   if (logo) {
-    let lh = 12;
+    let lh = 17;
     let lw = lh * (logo.w / logo.h);
-    const maxLw = 62;
+    const maxLw = 100;
     if (lw > maxLw) { lh = lh * (maxLw / lw); lw = maxLw; }
     doc.addImage(logo.dataUrl, "PNG", M, 4.5, lw, lh);
   } else {
-    doc.setFont("helvetica", "bold"); doc.setFontSize(20); doc.setTextColor(255);
-    doc.text("GRUPO CARBO", M, 14);
+    doc.setFont("helvetica", "bold"); doc.setFontSize(23); doc.setTextColor(255);
+    doc.text("GRUPO CARBO", M, 16);
   }
 
-  // Caixa "ORÇAMENTO" à direita: preenchida em LIMA com texto verde escuro.
-  const boxW = 58, boxH = 17, boxX = pageW - M - boxW, boxY = 4;
+  // Caixa "ORÇAMENTO" à direita (LIMA, texto verde): Nº + datas DENTRO do balão.
+  const boxW = 60, boxH = 20, boxX = pageW - M - boxW, boxY = 4;
   doc.setFillColor(...LIME); doc.roundedRect(boxX, boxY, boxW, boxH, 2, 2, "F");
   doc.setTextColor(...GREEN); doc.setFont("helvetica", "bold"); doc.setFontSize(13);
-  doc.text("ORÇAMENTO", boxX + boxW / 2, boxY + 7, { align: "center" });
+  doc.text("ORÇAMENTO", boxX + boxW / 2, boxY + 6.8, { align: "center" });
   doc.setFont("helvetica", "normal"); doc.setFontSize(7.5);
-  doc.text(`Emissão: ${created}`, boxX + boxW / 2, boxY + 11.6, { align: "center" });
-  doc.text(`Válido até: ${validUntil}`, boxX + boxW / 2, boxY + 15, { align: "center" });
-  if (order.order_number) {
-    doc.setFontSize(7.5); doc.setTextColor(...GREEN_SOFT);
-    doc.text(`Nº ${order.order_number}`, boxX + boxW, BAND_H - 3.3, { align: "right" });
-  }
+  if (order.order_number) doc.text(`Nº ${order.order_number}`, boxX + boxW / 2, boxY + 11.4, { align: "center" });
+  doc.text(`Emissão: ${created}`, boxX + boxW / 2, boxY + 15.2, { align: "center" });
+  doc.text(`Válido até: ${validUntil}`, boxX + boxW / 2, boxY + 18.4, { align: "center" });
 
   // Linha da empresa (branco suave) na base da faixa.
   doc.setFont("helvetica", "normal"); doc.setFontSize(7); doc.setTextColor(...GREEN_SOFT);
-  doc.text(`${COMPANY.name}  ·  CNPJ ${COMPANY.cnpj}`, M, BAND_H - 6.5);
-  doc.text(`${COMPANY.endereco} · ${COMPANY.cidade} · ${COMPANY.telefone}`, M, BAND_H - 2.8);
+  doc.text(`${COMPANY.name}  ·  CNPJ ${COMPANY.cnpj}`, M, BAND_H - 5.5);
+  doc.text(`${COMPANY.endereco} · ${COMPANY.cidade} · ${COMPANY.telefone}`, M, BAND_H - 2);
   doc.setTextColor(0); doc.setLineWidth(0.2);
 
   // Início do conteúdo abaixo da faixa.
