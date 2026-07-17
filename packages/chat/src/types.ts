@@ -63,6 +63,23 @@ export interface ChatMessage {
   reactions?: ChatReaction[];
 }
 
+export type ScheduledStatus = "pending" | "sending" | "sent" | "failed" | "canceled";
+
+// Mensagem agendada ("enviar depois").
+export interface ScheduledMessage {
+  id: string;
+  channelId: string;
+  kind: MessageKind;
+  body: string | null;
+  mentions: string[];
+  metadata: Record<string, unknown>;
+  sendAt: string;
+  status: ScheduledStatus;
+  attempts: number;
+  lastError: string | null;
+  attachmentCount: number;
+}
+
 // Conversa normalizada para a lista (DM mostra o outro; grupo mostra o nome).
 export interface Conversation {
   channel: ChatChannel;

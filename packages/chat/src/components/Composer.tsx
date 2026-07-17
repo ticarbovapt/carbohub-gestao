@@ -1,9 +1,12 @@
 import { useEffect, useRef, useState } from "react";
-import { Send, Paperclip, X, CornerUpLeft, Users, Smile } from "lucide-react";
-import { useSendMessage, useDirectory, kindFromMime, type OutgoingAttachment } from "../hooks";
+import { toast } from "sonner";
+import { Send, Paperclip, X, CornerUpLeft, Users, Smile, ChevronDown, Clock } from "lucide-react";
+import { useSendMessage, useScheduleMessage, useDirectory, kindFromMime, type OutgoingAttachment } from "../hooks";
 import { sendTyping } from "../lib/presence";
+import { formatWhen } from "../lib/schedule";
 import { AudioRecorder } from "./AudioRecorder";
 import { EmojiPicker } from "./EmojiPicker";
+import { ScheduleDialog } from "./ScheduleDialog";
 import { Avatar } from "./Avatar";
 import type { ChatMessage } from "../types";
 
@@ -27,9 +30,12 @@ export function Composer({
   const [chosen, setChosen] = useState<{ id: string; name: string }[]>([]);
   const [allPicked, setAllPicked] = useState(false);
   const [emojiOpen, setEmojiOpen] = useState(false);
+  const [sendMenu, setSendMenu] = useState(false);
+  const [scheduleOpen, setScheduleOpen] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const textRef = useRef<HTMLTextAreaElement>(null);
   const send = useSendMessage(channelId);
+  const schedule = useScheduleMessage(channelId);
 
   // "Digitando…": envia no máx. a cada 2.5s enquanto digita; some após 4s parado.
   const lastTyping = useRef(0);
@@ -121,6 +127,24 @@ export function Composer({
     catch { setText(body); setFiles(files); }
   }
 
+  async function scheduleAt(date: Date) {
+    const body = text.trim();
+    const attachments: OutgoingAttachment[] = files.map((f) => ({ file: f, filename: f.name, kind: kindFromMime(f.type) }));
+    if (!body && attachments.length === 0) return;
+    const mentionAll = isGroup && allPicked && body.includes("@todos");
+    const mentions = [...new Set(chosen.filter((c) => c.name && body.includes("@" + c.name)).map((c) => c.id))];
+    const prevText = text, prevFiles = files;
+    setScheduleOpen(false);
+    setText(""); setFiles([]); setChosen([]); setAllPicked(false); setMention(null); onClearReply(); stopTyping();
+    try {
+      const iso = await schedule.mutateAsync({ body, attachments, mentions, mentionAll, sendAt: date });
+      toast.success(`Mensagem agendada para ${formatWhen(new Date(iso))}`);
+    } catch (e) {
+      setText(prevText); setFiles(prevFiles);
+      toast.error("Não foi possível agendar. " + ((e as { message?: string })?.message ?? ""));
+    }
+  }
+
   async function sendAudio(blob: Blob, durationMs: number) {
     try {
       await send.mutateAsync({ attachments: [{ file: blob, filename: `audio-${Date.now()}.webm`, kind: "audio", durationMs }], replyToId: replyTo?.id ?? null });
@@ -204,15 +228,33 @@ export function Composer({
 
           {/* direita: enviar quando há conteúdo, microfone quando vazio (estilo WhatsApp) */}
           {(text.trim() || files.length > 0) ? (
-            <button onClick={submit} disabled={send.isPending}
-              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground disabled:opacity-40 focus-visible:ring-2 focus-visible:ring-ring" title="Enviar" aria-label="Enviar mensagem">
-              <Send className="h-4 w-4" />
-            </button>
+            <div className="relative flex shrink-0 items-center">
+              <button onClick={() => setSendMenu((o) => !o)} title="Opções de envio" aria-label="Opções de envio"
+                className="flex h-10 w-6 items-center justify-center rounded-l-lg text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring">
+                <ChevronDown className="h-4 w-4" />
+              </button>
+              <button onClick={submit} disabled={send.isPending}
+                className="flex h-10 w-10 items-center justify-center rounded-full bg-primary text-primary-foreground disabled:opacity-40 focus-visible:ring-2 focus-visible:ring-ring" title="Enviar" aria-label="Enviar mensagem">
+                <Send className="h-4 w-4" />
+              </button>
+              {sendMenu && (
+                <>
+                  <div className="fixed inset-0 z-20" onClick={() => setSendMenu(false)} />
+                  <div className="absolute bottom-12 right-0 z-30 w-44 overflow-hidden rounded-lg border bg-popover shadow-lg">
+                    <button onClick={() => { setSendMenu(false); setScheduleOpen(true); }}
+                      className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm hover:bg-muted">
+                      <Clock className="h-4 w-4 text-muted-foreground" /> Enviar depois
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
           ) : (
             <AudioRecorder onSend={sendAudio} disabled={send.isPending} />
           )}
         </div>
       </div>
+      {scheduleOpen && <ScheduleDialog onClose={() => setScheduleOpen(false)} onConfirm={scheduleAt} />}
     </div>
   );
 }

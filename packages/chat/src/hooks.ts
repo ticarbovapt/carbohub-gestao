@@ -5,7 +5,7 @@ import { useChatCtx } from "./context";
 // Sufixo único por assinatura Realtime — evita colidir nomes de canal quando o
 // mesmo hook é usado em vários componentes ("cannot add callbacks after subscribe").
 const rid = () => Math.random().toString(36).slice(2, 10);
-import type { ChatAttachment, ChatChannel, ChatMessage, ChatProfileRef, Conversation } from "./types";
+import type { ChatAttachment, ChatChannel, ChatMessage, ChatProfileRef, Conversation, MessageKind, ScheduledMessage, ScheduledStatus } from "./types";
 
 export interface ChatUserInfo {
   id: string; full_name: string | null; avatar_url: string | null;
@@ -283,6 +283,114 @@ export function useSendMessage(channelId: string | null) {
       qc.invalidateQueries({ queryKey: ["chat", "messages", channelId] });
       qc.invalidateQueries({ queryKey: ["chat", "conversations", currentUser.id] });
     },
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Agendar mensagem ("enviar depois"). Os anexos sobem AGORA (o cron não tem
+// navegador pra subir depois); guardamos os paths em metadata.attachments.
+// ─────────────────────────────────────────────────────────────────────────────
+export interface ScheduleInput {
+  body?: string;
+  attachments?: OutgoingAttachment[];
+  mentions?: string[];
+  mentionAll?: boolean;
+  sendAt: Date;
+}
+
+export function useScheduleMessage(channelId: string | null) {
+  const { supabase, currentUser } = useChatCtx();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: ScheduleInput): Promise<string> => {
+      if (!channelId) throw new Error("Sem canal");
+      const body = (input.body ?? "").trim();
+      const attachments = input.attachments ?? [];
+      if (!body && attachments.length === 0) throw new Error("Mensagem vazia");
+
+      const folder = (globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`);
+      const uploaded: { storage_path: string; mime_type: string | null; size_bytes: number | null; duration_ms: number | null }[] = [];
+      for (const att of attachments) {
+        const isImage = att.kind === "image" && ((att.file as File).type ?? "").startsWith("image/");
+        const upload: Blob = isImage ? await downscaleImage(att.file as File, 1600) : att.file;
+        const path = `${channelId}/scheduled/${folder}/${Date.now()}-${safeName(att.filename)}`;
+        const contentType = upload.type || (att.file as File).type || undefined;
+        const { error: upErr } = await supabase.storage.from(BUCKET).upload(path, upload, { contentType, upsert: false });
+        if (upErr) throw upErr;
+        uploaded.push({ storage_path: path, mime_type: contentType ?? null, size_bytes: upload.size ?? null, duration_ms: att.durationMs ?? null });
+      }
+
+      const kind: MessageKind = attachments.length ? attachments[0].kind : "text";
+      const metadata: Record<string, unknown> = {};
+      if (input.mentionAll) metadata.mention_all = true;
+      if (uploaded.length) metadata.attachments = uploaded;
+
+      const { data, error } = await supabase.from("chat_scheduled_messages").insert({
+        author_id: currentUser.id, channel_id: channelId, kind,
+        body: body || null, mentions: input.mentions ?? [],
+        metadata, send_at: input.sendAt.toISOString(),
+      }).select("send_at").single();
+      if (error) throw error;
+      return (data as { send_at: string }).send_at; // já arredondado pelo trigger
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["chat", "scheduled", currentUser.id] }),
+  });
+}
+
+// Fila de agendadas do usuário (pendentes + falhas). Some ao ser enviada.
+export function useScheduledMessages() {
+  const { supabase, currentUser } = useChatCtx();
+  return useQuery({
+    queryKey: ["chat", "scheduled", currentUser.id],
+    refetchInterval: 30_000,
+    queryFn: async (): Promise<ScheduledMessage[]> => {
+      const { data, error } = await supabase.from("chat_scheduled_messages")
+        .select("id, channel_id, kind, body, mentions, metadata, send_at, status, attempts, last_error")
+        .in("status", ["pending", "failed"])
+        .order("send_at", { ascending: true });
+      if (error) throw error;
+      type Row = {
+        id: string; channel_id: string; kind: MessageKind; body: string | null;
+        mentions: string[] | null; metadata: Record<string, unknown> | null;
+        send_at: string; status: ScheduledStatus; attempts: number; last_error: string | null;
+      };
+      return ((data ?? []) as Row[]).map((r): ScheduledMessage => {
+        const atts = (r.metadata as { attachments?: unknown[] } | null)?.attachments;
+        return {
+          id: r.id, channelId: r.channel_id, kind: r.kind, body: r.body,
+          mentions: r.mentions ?? [], metadata: r.metadata ?? {}, sendAt: r.send_at,
+          status: r.status, attempts: r.attempts, lastError: r.last_error,
+          attachmentCount: Array.isArray(atts) ? atts.length : 0,
+        };
+      });
+    },
+  });
+}
+
+export function useUpdateScheduled() {
+  const { supabase, currentUser } = useChatCtx();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, body, sendAt }: { id: string; body?: string; sendAt?: Date }) => {
+      const patch: Record<string, unknown> = {};
+      if (body !== undefined) patch.body = body.trim() || null;
+      if (sendAt) patch.send_at = sendAt.toISOString();
+      const { error } = await supabase.from("chat_scheduled_messages").update(patch).eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["chat", "scheduled", currentUser.id] }),
+  });
+}
+
+export function useCancelScheduled() {
+  const { supabase, currentUser } = useChatCtx();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from("chat_scheduled_messages").update({ status: "canceled" }).eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["chat", "scheduled", currentUser.id] }),
   });
 }
 
