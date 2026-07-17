@@ -288,7 +288,7 @@ export function Conversation({ conv, focus, onClearFocus, onBack, onDeleted }: {
           ) : messages.length === 0 ? (
             <p className="text-sm text-muted-foreground">Nenhuma mensagem ainda. Diga oi 👋</p>
           ) : (
-            <div className="space-y-0.5" role="log" aria-live="polite" aria-relevant="additions" aria-label="Mensagens">
+            <div className="space-y-2" role="log" aria-live="polite" aria-relevant="additions" aria-label="Mensagens">
               {messages.map((m, i) => {
                 const prev = messages[i - 1];
                 const newDay = !prev || dayKey(prev.created_at) !== dayKey(m.created_at);
