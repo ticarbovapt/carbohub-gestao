@@ -40,6 +40,7 @@ export interface NovaVendaInput {
   vendedor_id?: string;      // gestor pode lançar a venda por outro vendedor
   vendedor_name?: string;
   itens: VendaItemInput[];
+  form_snapshot?: unknown;   // snapshot do formulário (JSON) p/ reabrir/editar fielmente
 }
 
 export interface VendaItemRow { produto: string | null; quantidade: number; preco_unitario: number; bonificacao: number; }
@@ -205,67 +206,94 @@ export function useVendedorNomes() {
 
 /** Cria a venda em carboze_orders (V-AAAA-MM-XXXX pelo trigger + vendedor logado).
  *  Orçamento persiste como status 'quote'; pedido como 'pending'. */
+// Monta os campos da carboze_orders a partir do input do formulário — comum a
+// CRIAR e EDITAR (não inclui order_number: no create o trigger gera, no update
+// é preservado). Inclui o snapshot do formulário para reabrir/editar depois.
+async function buildOrderFields(input: NovaVendaInput) {
+  const e = (input.endereco ?? {}) as Record<string, string>;
+  const deliveryAddr = ([e.logradouro, e.numero].filter(Boolean).join(", ") + (e.bairro ? ` - ${e.bairro}` : "")).trim();
+  const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
+  const items = (input.itens ?? [])
+    .filter((i) => i.produto && i.quantidade > 0)
+    .map((i) => {
+      const bruto = i.quantidade * i.preco_unitario;
+      const descLinha = Math.min(Math.max(0, i.discount_amount ?? 0), round2(bruto));
+      return {
+        name: i.produto, quantity: i.quantidade, unit_price: i.preco_unitario,
+        bonificacao: i.bonificacao ?? 0,
+        discount_type: (i.discount_amount ?? 0) > 0 ? (i.discount_type ?? "value") : "none",
+        discount_value: i.discount_value ?? 0,
+        discount_amount: descLinha,
+        total: round2(bruto - descLinha),
+        product_id: i.product_id ?? null, product_code: i.product_code ?? null,
+      };
+    });
+  const { data: u } = await supabase.auth.getUser();
+  const vendedorId = input.vendedor_id || u?.user?.id || null;
+  let vendedorName: string | null = input.vendedor_name || null;
+  if (!vendedorName && vendedorId) {
+    const { data: prof } = await db.from("profiles").select("full_name").eq("id", vendedorId).maybeSingle();
+    vendedorName = (prof as { full_name?: string } | null)?.full_name ?? null;
+  }
+  return {
+    customer_name: input.customer_name || "",
+    customer_email: input.customer_email || null,
+    customer_phone: input.customer_phone || null,
+    cnpj: input.customer_doc || null,
+    customer_ie: input.customer_ie || null,
+    delivery_address: deliveryAddr || null,
+    delivery_city: e.cidade || null,
+    delivery_state: e.uf || e.estado || null,
+    delivery_zip: e.cep || null,
+    billing_address: input.endereco_faturamento ?? null,
+    payment_terms: input.payment_terms || null,
+    freight_type: input.freight_type || null,
+    items, subtotal: input.subtotal_bruto ?? input.total, shipping_cost: 0,
+    discount: input.desconto_valor ?? 0, total: input.total,
+    discount_type: input.desconto_tipo ?? "none",
+    discount_percent: input.desconto_percent ?? 0,
+    discount_reason: input.desconto_motivo ?? null,
+    discount_requested_by: vendedorId,
+    agreed_delivery_date: input.agreed_delivery_date ?? null,
+    notes: input.notes || null, internal_notes: input.internal_notes || null,
+    vendedor_id: vendedorId, vendedor_name: vendedorName,
+    quote_form_snapshot: input.form_snapshot ?? null,
+  };
+}
+
 export function useCreateVenda() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (input: NovaVendaInput): Promise<{ id: string; numero: string | null }> => {
-      const e = (input.endereco ?? {}) as Record<string, string>;
-      const deliveryAddr = ([e.logradouro, e.numero].filter(Boolean).join(", ") + (e.bairro ? ` - ${e.bairro}` : "")).trim();
-      const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
-      const items = (input.itens ?? [])
-        .filter((i) => i.produto && i.quantidade > 0)
-        .map((i) => {
-          const bruto = i.quantidade * i.preco_unitario;
-          const descLinha = Math.min(Math.max(0, i.discount_amount ?? 0), round2(bruto));
-          return {
-            name: i.produto, quantity: i.quantidade, unit_price: i.preco_unitario,
-            bonificacao: i.bonificacao ?? 0,
-            // Desconto por item: tipo, valor digitado e R$ abatido; total = líquido da linha.
-            discount_type: (i.discount_amount ?? 0) > 0 ? (i.discount_type ?? "value") : "none",
-            discount_value: i.discount_value ?? 0,
-            discount_amount: descLinha,
-            total: round2(bruto - descLinha),
-            // Vínculo com o catálogo (mrp_products) → habilita checagem de estoque
-            // no pós-venda e casamento de produto no Bling.
-            product_id: i.product_id ?? null, product_code: i.product_code ?? null,
-          };
-        });
-      const { data: u } = await supabase.auth.getUser();
-      // Vendedor: usa o override (gestor pode lançar por outro); senão o logado.
-      const vendedorId = input.vendedor_id || u?.user?.id || null;
-      let vendedorName: string | null = input.vendedor_name || null;
-      if (!vendedorName && vendedorId) {
-        const { data: prof } = await db.from("profiles").select("full_name").eq("id", vendedorId).maybeSingle();
-        vendedorName = (prof as { full_name?: string } | null)?.full_name ?? null;
-      }
+      const fields = await buildOrderFields(input);
       const { data: result, error } = await db
         .from("carboze_orders")
         .insert({
           order_number: "", // trigger gera V-AAAA-MM-XXXX
           status: input.status === "orcamento" ? "quote" : "pending",
-          customer_name: input.customer_name || "",
-          customer_email: input.customer_email || null,
-          customer_phone: input.customer_phone || null,
-          cnpj: input.customer_doc || null,
-          customer_ie: input.customer_ie || null,
-          delivery_address: deliveryAddr || null,
-          delivery_city: e.cidade || null,
-          delivery_state: e.uf || e.estado || null,
-          delivery_zip: e.cep || null,
-          billing_address: input.endereco_faturamento ?? null,
-          payment_terms: input.payment_terms || null,
-          freight_type: input.freight_type || null,
-          items, subtotal: input.subtotal_bruto ?? input.total, shipping_cost: 0,
-          discount: input.desconto_valor ?? 0, total: input.total,
-          // Intenção do desconto; o trigger define o status/alçada de forma autoritativa.
-          discount_type: input.desconto_tipo ?? "none",
-          discount_percent: input.desconto_percent ?? 0,
-          discount_reason: input.desconto_motivo ?? null,
-          discount_requested_by: vendedorId,
-          agreed_delivery_date: input.agreed_delivery_date ?? null,
-          notes: input.notes || null, internal_notes: input.internal_notes || null,
-          vendedor_id: vendedorId, vendedor_name: vendedorName,
+          ...fields,
         })
+        .select("id, order_number")
+        .single();
+      if (error) throw error;
+      return { id: result.id, numero: result.order_number ?? null };
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["crm_vendas"] }),
+  });
+}
+
+// Edição COMPLETA de um orçamento (reescreve itens + todos os campos e o
+// snapshot). Mantém o mesmo order_number = a "nova verdade". Só faz sentido
+// enquanto está como orçamento (a UI só libera editar em status 'quote').
+export function useUpdateVendaFull() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, input }: { id: string; input: NovaVendaInput }): Promise<{ id: string; numero: string | null }> => {
+      const fields = await buildOrderFields(input);
+      const { data: result, error } = await db
+        .from("carboze_orders")
+        .update({ status: input.status === "orcamento" ? "quote" : "pending", ...fields })
+        .eq("id", id)
         .select("id, order_number")
         .single();
       if (error) throw error;

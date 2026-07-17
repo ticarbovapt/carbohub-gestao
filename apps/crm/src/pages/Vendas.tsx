@@ -10,9 +10,16 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import {
   ChevronLeft, ChevronRight, Search, ShoppingBag, TrendingUp,
   Package, Users, ArrowRightCircle, CalendarDays, X, Trash2, Loader2, FileDown,
+  ChevronDown, Pencil, FileText,
 } from "lucide-react";
 import { toast } from "sonner";
+import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/integrations/supabase/client";
+import { generateQuotePdf } from "@/lib/quotePdf";
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { useVendedoresDir } from "@/hooks/useVendas";
 import {
   useCarbozeVendas, useConvertQuote, useBulkAssignVendedor, useDeleteVenda,
@@ -97,6 +104,7 @@ export default function Vendas() {
   });
   const { data: dir = [] } = useVendedoresDir();
   const convert = useConvertQuote();
+  const navigate = useNavigate();
   const bulkAssign = useBulkAssignVendedor();
   const deleteVenda = useDeleteVenda();
   const [assigning, setAssigning] = useState(false);
@@ -165,6 +173,37 @@ export default function Vendas() {
       toast.success("Orçamento convertido em venda!");
     } catch (e) {
       toast.error("Erro ao converter: " + (e instanceof Error ? e.message : "tente de novo"));
+    }
+  }
+
+  // Baixa o PDF do orçamento a partir do pedido (usa o snapshot do formulário
+  // quando existir; senão monta pelos campos gravados). Serve p/ regerar depois.
+  async function baixarPdf(id: string) {
+    try {
+      const { data, error } = await (supabase as any).from("carboze_orders").select("*").eq("id", id).maybeSingle();
+      if (error || !data) throw error ?? new Error("Pedido não encontrado");
+      const snap = data.quote_form_snapshot as Record<string, any> | null;
+      const items = (Array.isArray(data.items) ? data.items : []).map((it: any) => ({
+        name: it.name, product_code: it.product_code, quantity: it.quantity,
+        unit_price: it.unit_price, bonus_quantity: it.bonificacao,
+      }));
+      await generateQuotePdf({
+        order_number: data.order_number ?? undefined,
+        customer_name: data.customer_name ?? undefined,
+        cnpj: data.cnpj ?? undefined,
+        ie: data.customer_ie ?? undefined,
+        endereco: snap?.endereco ?? { logradouro: data.delivery_address, cidade: data.delivery_city, uf: data.delivery_state, cep: data.delivery_zip },
+        endereco_faturamento: snap?.fatMesmo === false ? snap?.fatEndereco : (data.billing_address ?? null),
+        vendedor_name: data.vendedor_name ?? undefined,
+        items,
+        subtotal: data.subtotal ?? data.total, discount: data.discount ?? 0,
+        discount_percent: data.discount_percent ?? 0, total: data.total,
+        payment_terms: data.payment_terms ?? undefined,
+        notes: data.notes ?? undefined,
+        created_at: data.created_at, validityDays: 7,
+      });
+    } catch (e) {
+      toast.error("Erro ao gerar PDF: " + (e instanceof Error ? e.message : "tente de novo"));
     }
   }
 
@@ -375,20 +414,44 @@ export default function Vendas() {
                           <td className="p-3 text-right" onClick={(e) => e.stopPropagation()}>
                             <div className="flex items-center justify-end gap-1">
                               {isQuote ? (
-                                <button onClick={() => converterEmVenda(venda.id)} className="h-7 px-2 inline-flex items-center gap-1 rounded-md text-xs font-medium bg-carbo-green/10 text-carbo-green hover:bg-carbo-green/20 border border-carbo-green/30 transition-colors" title="Converter orçamento em venda">
-                                  <ArrowRightCircle className="h-3 w-3" /><span className="hidden sm:inline">Converter</span>
-                                </button>
-                              ) : venda.bling_nf_id ? (
-                                <button
-                                  onClick={() => baixarNF(venda)}
-                                  disabled={nfLoadingId === venda.id}
-                                  className="h-7 px-2 inline-flex items-center gap-1 rounded-md text-xs font-medium bg-carbo-green/10 text-carbo-green hover:bg-carbo-green/20 border border-carbo-green/30 transition-colors disabled:opacity-50"
-                                  title={`Baixar NF ${venda.invoice_number ?? venda.bling_nf_id}`}
-                                >
-                                  {nfLoadingId === venda.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <FileDown className="h-3 w-3" />}
-                                  <span className="hidden sm:inline">Baixar NF</span>
-                                </button>
-                              ) : null}
+                                <DropdownMenu>
+                                  <DropdownMenuTrigger asChild>
+                                    <button className="h-7 px-2 inline-flex items-center gap-1 rounded-md text-xs font-medium bg-carbo-green/10 text-carbo-green hover:bg-carbo-green/20 border border-carbo-green/30 transition-colors" title="Editar ou converter o orçamento">
+                                      <span className="hidden sm:inline">Editar / Converter</span><span className="sm:hidden">Ações</span>
+                                      <ChevronDown className="h-3 w-3" />
+                                    </button>
+                                  </DropdownMenuTrigger>
+                                  <DropdownMenuContent align="end" className="w-48">
+                                    <DropdownMenuItem onClick={() => navigate(`/vender?edit=${venda.id}`)}>
+                                      <Pencil className="h-3.5 w-3.5 mr-2" /> Editar orçamento
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem onClick={() => converterEmVenda(venda.id)}>
+                                      <ArrowRightCircle className="h-3.5 w-3.5 mr-2" /> Converter em venda
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem onClick={() => baixarPdf(venda.id)}>
+                                      <FileText className="h-3.5 w-3.5 mr-2" /> Baixar PDF
+                                    </DropdownMenuItem>
+                                  </DropdownMenuContent>
+                                </DropdownMenu>
+                              ) : (
+                                <>
+                                  {venda.bling_nf_id && (
+                                    <button
+                                      onClick={() => baixarNF(venda)}
+                                      disabled={nfLoadingId === venda.id}
+                                      className="h-7 px-2 inline-flex items-center gap-1 rounded-md text-xs font-medium bg-carbo-green/10 text-carbo-green hover:bg-carbo-green/20 border border-carbo-green/30 transition-colors disabled:opacity-50"
+                                      title={`Baixar NF ${venda.invoice_number ?? venda.bling_nf_id}`}
+                                    >
+                                      {nfLoadingId === venda.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <FileDown className="h-3 w-3" />}
+                                      <span className="hidden sm:inline">Baixar NF</span>
+                                    </button>
+                                  )}
+                                  <button onClick={() => baixarPdf(venda.id)} title="Baixar orçamento (PDF)"
+                                    className="h-7 px-2 inline-flex items-center gap-1 rounded-md text-xs font-medium border border-border/60 text-muted-foreground hover:bg-muted transition-colors">
+                                    <FileText className="h-3 w-3" /><span className="hidden sm:inline">PDF</span>
+                                  </button>
+                                </>
+                              )}
                             </div>
                           </td>
                         </tr>

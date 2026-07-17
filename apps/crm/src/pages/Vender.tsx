@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate, useLocation } from "react-router-dom";
+import { useNavigate, useLocation, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import {
   ShoppingCart, Plus, Trash2, Building2, MapPin, Package, Gift, FileText, Search, Target, ChevronDown,
@@ -21,7 +21,8 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { generateQuotePdf } from "@/lib/quotePdf";
-import { useCreateVenda } from "@/hooks/useVendas";
+import { useCreateVenda, useUpdateVendaFull } from "@/hooks/useVendas";
+import { useConvertQuote } from "@/hooks/useCarbozeVendas";
 import { useProdutos } from "@/hooks/useProdutos";
 import { useDiscountTiersPublic } from "@/hooks/useDiscountTiers";
 import { computeLineDiscount, resolveTier } from "@/lib/discount";
@@ -81,7 +82,24 @@ export default function Vender() {
   const { profile, gestor } = useAuth();
   const vendedorLogado = profile?.full_name ?? profile?.username ?? "";
   const createVenda = useCreateVenda();
+  const updateVenda = useUpdateVendaFull();
+  const convertQuote = useConvertQuote();
+  const [searchParams] = useSearchParams();
+  const editId = searchParams.get("edit");
   const { data: produtos = [] } = useProdutos();
+
+  // Modo edição: carrega o pedido cru (com o snapshot do formulário) para reabrir.
+  const { data: editOrder } = useQuery({
+    queryKey: ["vender_edit", editId],
+    enabled: !!editId,
+    queryFn: async () => {
+      const { data, error } = await (supabase as any).from("carboze_orders").select("*").eq("id", editId).maybeSingle();
+      if (error) throw error;
+      return data as Record<string, any> | null;
+    },
+  });
+  const [hydrated, setHydrated] = useState(false);
+  const editNumero = (editOrder?.order_number as string | null) ?? null;
   // Lista de vendedores (só pra gestor poder lançar por outro).
   const { data: vendedores = [] } = useQuery({
     queryKey: ["all_profiles_vender"],
@@ -313,9 +331,65 @@ export default function Vender() {
     return [notasInternas.trim(), estrategico].filter(Boolean).join("\n") || undefined;
   }
 
+  // ── Snapshot do formulário: grava tudo (JSON) e reidrata fielmente na edição ──
+  type FormSnapshot = {
+    mode: "venda" | "promo"; doc: string; customerName: string; email: string; phone: string; isLicenciado: boolean;
+    rows: ItemRow[]; obsPublica: string; notasInternas: string; tipoPonto: string; classificacao: string;
+    volumeMedio: string; atuaDiesel: boolean; atuaFrotas: boolean; vendedorId: string;
+    endereco: typeof endereco; fatMesmo: boolean; fatEndereco: typeof fatEndereco;
+    ie: string; ieUf: string; pagModalidade: string; pagParcelas: string; pagFaturamento: string;
+    discReason: string; deliveryDate: string;
+  };
+  function formSnapshot(): FormSnapshot {
+    return {
+      mode, doc, customerName, email, phone, isLicenciado, rows, obsPublica, notasInternas,
+      tipoPonto, classificacao, volumeMedio, atuaDiesel, atuaFrotas, vendedorId, endereco, fatMesmo,
+      fatEndereco, ie, ieUf, pagModalidade, pagParcelas, pagFaturamento, discReason, deliveryDate,
+    };
+  }
+
+  // Reidrata o formulário ao abrir em modo edição (?edit=<id>).
+  useEffect(() => {
+    if (!editOrder || hydrated) return;
+    const snap = editOrder.quote_form_snapshot as FormSnapshot | null;
+    if (snap && typeof snap === "object") {
+      setMode(snap.mode ?? "venda"); setDoc(snap.doc ?? ""); setCustomerName(snap.customerName ?? "");
+      setEmail(snap.email ?? ""); setPhone(snap.phone ?? ""); setIsLicenciado(!!snap.isLicenciado);
+      setRows(Array.isArray(snap.rows) && snap.rows.length ? snap.rows : [emptyRow()]);
+      setObsPublica(snap.obsPublica ?? ""); setNotasInternas(snap.notasInternas ?? "");
+      setTipoPonto(snap.tipoPonto ?? ""); setClassificacao(snap.classificacao ?? ""); setVolumeMedio(snap.volumeMedio ?? "");
+      setAtuaDiesel(!!snap.atuaDiesel); setAtuaFrotas(!!snap.atuaFrotas); setVendedorId(snap.vendedorId ?? "");
+      if (snap.endereco) setEndereco(snap.endereco);
+      setFatMesmo(snap.fatMesmo ?? true); if (snap.fatEndereco) setFatEndereco(snap.fatEndereco);
+      setIe(snap.ie ?? ""); setIeUf(snap.ieUf ?? "");
+      setPagModalidade(snap.pagModalidade ?? ""); setPagParcelas(snap.pagParcelas ?? "1"); setPagFaturamento(snap.pagFaturamento ?? "");
+      setDiscReason(snap.discReason ?? ""); setDeliveryDate(snap.deliveryDate ?? "");
+      if (snap.tipoPonto || snap.classificacao || snap.volumeMedio || snap.atuaDiesel || snap.atuaFrotas) setShowEstrategicos(true);
+      if (snap.obsPublica || snap.notasInternas) setShowObs(true);
+    } else {
+      // Best-effort (orçamento antigo, sem snapshot) — restaura o que dá pelas colunas.
+      setCustomerName(editOrder.customer_name ?? ""); setDoc(editOrder.cnpj ?? "");
+      setEmail(editOrder.customer_email ?? ""); setPhone(editOrder.customer_phone ?? ""); setIe(editOrder.customer_ie ?? "");
+      const items = Array.isArray(editOrder.items) ? editOrder.items : [];
+      setRows(items.length ? items.map((it: any) => ({
+        id: crypto.randomUUID(), productId: it.product_id ?? "", qty: it.quantity ?? 1, unitPrice: it.unit_price ?? 0,
+        hasBonus: (it.bonificacao ?? 0) > 0, bonusQty: it.bonificacao ?? 0,
+        discType: it.discount_type === "percent" ? "percent" : "value", discValue: it.discount_value ?? 0,
+      })) : [emptyRow()]);
+      setObsPublica(editOrder.notes ?? ""); setNotasInternas(editOrder.internal_notes ?? "");
+      setEndereco((e) => ({ ...e, logradouro: editOrder.delivery_address ?? "", cidade: editOrder.delivery_city ?? "", uf: editOrder.delivery_state ?? "", cep: editOrder.delivery_zip ?? "" }));
+      if (editOrder.billing_address) { setFatMesmo(false); setFatEndereco(editOrder.billing_address); }
+      setDeliveryDate(editOrder.agreed_delivery_date ? String(editOrder.agreed_delivery_date).slice(0, 10) : "");
+      if (editOrder.vendedor_id) setVendedorId(editOrder.vendedor_id);
+    }
+    setHydrated(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editOrder, hydrated]);
+
   // Monta o payload de gravação (cabeçalho + itens) a partir do estado da tela.
   function buildPayload(status: "orcamento" | "pedido") {
     return {
+      form_snapshot: formSnapshot(),
       tipo: mode,
       status,
       vendedor_id: vendedorId || undefined,
@@ -373,8 +447,12 @@ export default function Vender() {
     if (!pagamentoValido) { toast.error("Selecione a forma de pagamento."); return; }
     setGenerating(true);
     try {
-      // 1) Salva o orçamento primeiro — o banco atribui o número (atômico).
-      const { numero } = await createVenda.mutateAsync(buildPayload("orcamento"));
+      // 1) Salva/atualiza o orçamento — no create o banco atribui o número (atômico);
+      //    na edição mantém o mesmo número (nova verdade).
+      const payload = buildPayload("orcamento");
+      const { numero } = editId
+        ? await updateVenda.mutateAsync({ id: editId, input: payload })
+        : await createVenda.mutateAsync(payload);
       // 2) Gera o PDF já com o número do pedido (orçamento fica atrelado a ele).
       await generateQuotePdf({
         order_number: numero ?? undefined,
@@ -387,8 +465,8 @@ export default function Vender() {
         payment_terms: pagamentoLabel || undefined,
         notes: obsPublica || undefined, created_at: new Date().toISOString(), validityDays: 7,
       });
-      toast.success(`Orçamento ${numero ?? ""} gerado e salvo!`);
-      resetForm();
+      toast.success(`Orçamento ${numero ?? ""} ${editId ? "atualizado" : "gerado"} e salvo!`);
+      if (editId) navigate("/pedidos"); else resetForm();
     } catch (e) {
       toast.error("Erro ao gerar/salvar orçamento: " + (e instanceof Error ? e.message : "tente de novo"));
     } finally { setGenerating(false); }
@@ -398,8 +476,15 @@ export default function Vender() {
     if (validItems().length === 0) { toast.error("Adicione ao menos um item."); return; }
     if (!pagamentoValido) { toast.error("Selecione a forma de pagamento."); return; }
     try {
-      const { numero } = await createVenda.mutateAsync(buildPayload("pedido"));
-      toast.success(`Venda ${numero ?? ""} registrada!`);
+      if (editId) {
+        // Salva as edições mantendo o orçamento e converte pelo caminho oficial.
+        await updateVenda.mutateAsync({ id: editId, input: buildPayload("orcamento") });
+        await convertQuote.mutateAsync(editId);
+        toast.success("Orçamento editado e convertido em venda!");
+      } else {
+        const { numero } = await createVenda.mutateAsync(buildPayload("pedido"));
+        toast.success(`Venda ${numero ?? ""} registrada!`);
+      }
       resetForm();
       navigate("/pedidos");
     } catch (e) {
@@ -409,6 +494,15 @@ export default function Vender() {
 
   return (
     <div className="p-4 md:p-6 max-w-4xl mx-auto w-full space-y-5 pb-24">
+      {editId && (
+        <div className="flex items-center justify-between gap-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-2.5 text-sm">
+          <span className="flex items-center gap-2 text-amber-700 dark:text-amber-300">
+            <FileText className="h-4 w-4 shrink-0" />
+            Editando o orçamento <b>{editNumero ?? "…"}</b> — ao salvar, ele vira a nova versão (mesmo número).
+          </span>
+          <Button variant="ghost" size="sm" className="shrink-0" onClick={() => navigate("/pedidos")}>Sair</Button>
+        </div>
+      )}
       {/* Tipo de Operação */}
       <CarboCard>
         <CarboCardContent className="p-4 space-y-3">
@@ -880,10 +974,10 @@ export default function Vender() {
         <div className="flex items-center gap-2 w-full sm:w-auto">
           <Button variant="ghost" className="hidden sm:inline-flex" onClick={() => navigate("/pedidos")}>Cancelar</Button>
           <Button variant="outline" className="flex-1 sm:flex-none" onClick={handleQuote} disabled={generating || !pagamentoValido}>
-            <FileText className="h-4 w-4 mr-1" /> {generating ? "Gerando..." : (<><span className="hidden sm:inline">Gerar&nbsp;</span>Orçamento</>)}
+            <FileText className="h-4 w-4 mr-1" /> {generating ? "Gerando..." : (editId ? (<><span className="hidden sm:inline">Salvar e&nbsp;</span>Gerar PDF</>) : (<><span className="hidden sm:inline">Gerar&nbsp;</span>Orçamento</>))}
           </Button>
           <CarboButton onClick={handleSell} className="flex-1 sm:flex-none sm:min-w-[150px]" disabled={!pagamentoValido}>
-            <ShoppingCart className="h-4 w-4 mr-1" /> Gerar Venda
+            <ShoppingCart className="h-4 w-4 mr-1" /> {editId ? "Salvar e Vender" : "Gerar Venda"}
           </CarboButton>
         </div>
       </div>
