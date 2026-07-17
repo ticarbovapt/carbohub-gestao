@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useRef, type MutableRefObject, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useMemo, useRef, type MutableRefObject, type ReactNode } from "react";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { ChatUser } from "./types";
 import { ChatAlerts } from "./components/ChatAlerts";
@@ -35,8 +35,12 @@ export function ChatProvider({
     // sem recarregar. Quando vem de outra página, o próprio ?c= restaura no mount.
     try { window.dispatchEvent(new CustomEvent("carbo-chat:open", { detail: { channelId, focus } })); } catch { /* ssr */ }
   }, [navigate]);
+  const value = useMemo(
+    () => ({ supabase, currentUser, activeChannelRef, openConversation }),
+    [supabase, currentUser, openConversation],
+  );
   return (
-    <Ctx.Provider value={{ supabase, currentUser, activeChannelRef, openConversation }}>
+    <Ctx.Provider value={value}>
       {children}
       {/* Alerta global: som + toast de mensagem nova em qualquer página. */}
       {currentUser.id ? <ChatAlerts /> : null}

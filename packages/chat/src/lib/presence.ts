@@ -19,8 +19,18 @@ function subscribe(l: () => void) { listeners.add(l); return () => { listeners.d
 // ── escrita (ChatAlerts) ──────────────────────────────────────────────────────
 export const presenceBus = {
   setOnline(ids: Iterable<string>) {
+    // Só re-renderiza se o conjunto REALMENTE mudou. O canal de presença dispara
+    // "sync" a cada heartbeat/reconexão de qualquer um dos ~28 funcionários; sem
+    // esse diff, a lista e a conversa re-renderizavam sem parar (travava o chat).
+    const next = new Set<string>();
+    for (const id of ids) next.add(id);
+    if (next.size === onlineIds.size) {
+      let same = true;
+      for (const id of next) if (!onlineIds.has(id)) { same = false; break; }
+      if (same) return;
+    }
     onlineIds.clear();
-    for (const id of ids) onlineIds.add(id);
+    for (const id of next) onlineIds.add(id);
     bump();
   },
   setTyping(channelId: string, userId: string, name: string, on: boolean) {

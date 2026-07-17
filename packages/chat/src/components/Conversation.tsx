@@ -59,6 +59,37 @@ function lastSeenLabel(iso: string) {
   return `${d.toLocaleDateString("pt-BR")} às ${hhmm}`;
 }
 
+// Linha de status do cabeçalho (digitando / online / visto por último). Isolada
+// num componente próprio para que os "bumps" de presença/typing re-renderizem só
+// esta linha — e NÃO a lista inteira de mensagens (que trava em grupos grandes).
+function HeaderStatus({ channelId, isGroup, otherUserId, currentUserId, isAnnouncement, isPublisher, isPrivate }: {
+  channelId: string; isGroup: boolean; otherUserId: string | null; currentUserId: string;
+  isAnnouncement: boolean; isPublisher: boolean; isPrivate: boolean;
+}) {
+  const otherOnline = useIsOnline(isGroup ? null : otherUserId);
+  const typing = useTyping(channelId, currentUserId);
+  const { data: otherInfo } = useUserInfo(!isGroup ? otherUserId : null);
+  return (
+    <p className="truncate text-[11px]">
+      {typing.length > 0 ? (
+        <span className="text-emerald-500">
+          {isGroup
+            ? (typing.length === 1 ? `${firstName(typing[0].name)} está digitando…` : `${typing.length} pessoas digitando…`)
+            : "digitando…"}
+        </span>
+      ) : isAnnouncement ? (
+        <span className="text-amber-500">Comunicado oficial{isPublisher ? " · você publica" : " · somente leitura"}</span>
+      ) : !isGroup ? (
+        otherOnline
+          ? <span className="text-emerald-500">online</span>
+          : <span className="text-muted-foreground">{otherInfo?.last_seen_at ? `visto por último ${lastSeenLabel(otherInfo.last_seen_at)}` : "Mensagem direta"}</span>
+      ) : (
+        <span className="text-muted-foreground">{isPrivate ? "Grupo privado" : "Grupo"}</span>
+      )}
+    </p>
+  );
+}
+
 export function Conversation({ conv, focus, onClearFocus, onBack, onDeleted }: {
   conv: Conv; focus?: { messageId: string; at: string } | null; onClearFocus?: () => void; onBack?: () => void; onDeleted?: () => void;
 }) {
@@ -80,10 +111,6 @@ export function Conversation({ conv, focus, onClearFocus, onBack, onDeleted }: {
     for (const r of ackRows) m[r.message_id] = (m[r.message_id] || 0) + 1;
     return m;
   }, [ackRows]);
-  // Presença/typing pro cabeçalho.
-  const otherOnline = useIsOnline(isGroup ? null : conv.otherUserId);
-  const typing = useTyping(conv.channel.id, currentUser.id);
-  const { data: otherInfo } = useUserInfo(!isGroup ? conv.otherUserId : null);
   const react = useToggleReaction();
   const edit = useEditMessage();
   const del = useDeleteMessage();
@@ -161,23 +188,9 @@ export function Conversation({ conv, focus, onClearFocus, onBack, onDeleted }: {
                 {isAnnouncement && <Megaphone className="h-3.5 w-3.5 shrink-0 text-amber-500" aria-label="Comunicado oficial" />}
                 <span className="truncate">{conv.title}</span>
               </p>
-              <p className="truncate text-[11px]">
-                {typing.length > 0 ? (
-                  <span className="text-emerald-500">
-                    {isGroup
-                      ? (typing.length === 1 ? `${firstName(typing[0].name)} está digitando…` : `${typing.length} pessoas digitando…`)
-                      : "digitando…"}
-                  </span>
-                ) : isAnnouncement ? (
-                  <span className="text-amber-500">Comunicado oficial{isPublisher ? " · você publica" : " · somente leitura"}</span>
-                ) : !isGroup ? (
-                  otherOnline
-                    ? <span className="text-emerald-500">online</span>
-                    : <span className="text-muted-foreground">{otherInfo?.last_seen_at ? `visto por último ${lastSeenLabel(otherInfo.last_seen_at)}` : "Mensagem direta"}</span>
-                ) : (
-                  <span className="text-muted-foreground">{conv.channel.is_private ? "Grupo privado" : "Grupo"}</span>
-                )}
-              </p>
+              <HeaderStatus channelId={conv.channel.id} isGroup={isGroup} otherUserId={conv.otherUserId}
+                currentUserId={currentUser.id} isAnnouncement={isAnnouncement} isPublisher={isPublisher}
+                isPrivate={conv.channel.is_private} />
             </div>
           </button>
           <button onClick={() => { setSearchOpen((o) => !o); setSearch(""); }} title="Buscar na conversa" aria-label="Buscar na conversa" aria-expanded={searchOpen}

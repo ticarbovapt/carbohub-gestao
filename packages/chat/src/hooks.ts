@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient, useInfiniteQuery } from "@tanstack/react-query";
 import { useChatCtx } from "./context";
 
@@ -27,6 +27,10 @@ export function useConversations() {
 
   const query = useQuery({
     queryKey: ["chat", "conversations", currentUser.id],
+    // Realtime (<ChatAlerts>) invalida quando algo muda de fato; sem isso a lista
+    // não precisa re-buscar só porque troquei de conversa/foquei a aba.
+    staleTime: 30_000,
+    refetchOnWindowFocus: false,
     queryFn: async (): Promise<Conversation[]> => {
       // RPC definer: já traz o outro (DM), a última mensagem, não-lidas e ordena.
       const { data, error } = await supabase.rpc("chat_conversations");
@@ -133,14 +137,31 @@ export function useMessages(channelId: string | null, focusAt?: string | null) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [supabase, channelId]);
 
-  // marca lido ao abrir/atualizar
+  // Marca lido UMA vez ao abrir o canal e novamente só quando chega mensagem
+  // nova enquanto vejo (msgLen cresce). Antes disparava 2x por troca e ainda
+  // invalidava a lista toda (chat_conversations em rajada). Agora: 1 chamada por
+  // abertura; zera as não-lidas DESTE canal no cache (sem refetch da lista) e só
+  // toca o unread-total se havia algo não-lido.
+  const convKey = ["chat", "conversations", currentUser.id];
+  const msgLen = query.data?.length ?? 0;
+  const marked = useRef<{ ch: string | null; len: number }>({ ch: null, len: 0 });
   useEffect(() => {
-    if (!channelId) return;
+    if (!channelId || query.isLoading) return;
+    const prev = marked.current;
+    const isNewChannel = prev.ch !== channelId;
+    const grew = !isNewChannel && msgLen > prev.len;
+    if (!isNewChannel && !grew) return;
+    marked.current = { ch: channelId, len: msgLen };
+    const cur = qc.getQueryData<Conversation[]>(convKey);
+    const hadUnread = (cur?.find((c) => c.channel.id === channelId)?.unread ?? 0) > 0;
     supabase.rpc("chat_mark_read", { p_channel: channelId }).then(() => {
-      qc.invalidateQueries({ queryKey: ["chat", "conversations", currentUser.id] });
+      if (!hadUnread) return;
+      qc.setQueryData<Conversation[]>(convKey, (old) =>
+        old ? old.map((c) => (c.channel.id === channelId ? { ...c, unread: 0 } : c)) : old);
+      qc.invalidateQueries({ queryKey: ["chat", "unread-total", currentUser.id] });
     }, () => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [channelId, query.dataUpdatedAt]);
+  }, [channelId, msgLen, query.isLoading]);
 
   return query;
 }
@@ -452,6 +473,8 @@ export function useUnreadTotal() {
       if (error) throw error;
       return ((data ?? []) as { unread: number }[]).reduce((n, r) => n + (Number(r.unread) || 0), 0);
     },
+    staleTime: 30_000,
+    refetchOnWindowFocus: false,
     refetchInterval: 60_000,
   });
 }
@@ -463,6 +486,10 @@ export function useDirectory(search: string) {
   const { supabase, currentUser } = useChatCtx();
   return useQuery({
     queryKey: ["chat", "directory", search],
+    // O diretório muda raramente; sem isso, cada troca de conversa (o Composer
+    // remonta e busca "" de novo) refazia chat_directory.
+    staleTime: 5 * 60_000,
+    refetchOnWindowFocus: false,
     queryFn: async (): Promise<ChatProfileRef[]> => {
       // RPC definer: traz TODOS os internos (a RLS de profiles filtraria por escopo).
       const { data, error } = await supabase.rpc("chat_directory", { p_search: search.trim() || null });
@@ -600,6 +627,8 @@ export function useUserInfo(userId: string | null) {
   return useQuery({
     queryKey: ["chat", "user-info", userId],
     enabled: !!userId,
+    staleTime: 60_000,
+    refetchOnWindowFocus: false,
     queryFn: async (): Promise<ChatUserInfo | null> => {
       const { data, error } = await supabase.rpc("chat_user_info", { p_id: userId });
       if (error) throw error;
@@ -614,6 +643,10 @@ export function useChannelMembers(channelId: string | null, enabled = true) {
   return useQuery({
     queryKey: ["chat", "members", channelId],
     enabled: !!channelId && enabled,
+    // Recibos de leitura são atualizados ao vivo pelo listener de members em
+    // useMessages (invalida esta key). Sem isso, não re-busca a cada troca.
+    staleTime: 60_000,
+    refetchOnWindowFocus: false,
     queryFn: async (): Promise<ChannelMember[]> => {
       const { data: mem, error } = await supabase
         .from("chat_channel_members").select("user_id, role, last_read_at, last_delivered_at").eq("channel_id", channelId);
