@@ -403,7 +403,7 @@ function MessageBubble({
   return (
     <div className={`group flex items-center gap-1 ${mine ? "justify-end" : "justify-start"}`}>
       {mine && toolbar}
-      <div className={`flex max-w-[85%] flex-col sm:max-w-[520px] ${mine ? "items-end" : "items-start"}`}>
+      <div className={`flex max-w-[85%] flex-col ${(m.attachments?.length ?? 0) > 0 ? "sm:max-w-[340px]" : "sm:max-w-[520px]"} ${mine ? "items-end" : "items-start"}`}>
         <div className={`rounded-2xl px-3 py-2 text-sm ${mine ? "rounded-br-sm bg-[#d9fdd3] text-neutral-900 dark:bg-[#005c4b] dark:text-neutral-50" : "rounded-bl-sm bg-muted text-foreground"}`}>
           {showName && <p className="mb-0.5 text-xs font-semibold text-primary">{senderName}</p>}
 
