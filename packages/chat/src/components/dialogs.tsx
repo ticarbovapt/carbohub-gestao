@@ -90,22 +90,27 @@ export function NewChannelDialog({ onClose, onOpened }: { onClose: () => void; o
   const [name, setName] = useState("");
   const [isPrivate, setIsPrivate] = useState(true);
   const [announce, setAnnounce] = useState(false);
-  const [members, setMembers] = useState<Set<string>>(new Set());
+  const [selMap, setSelMap] = useState<Map<string, ChatProfileRef>>(new Map());
   const create = useCreateChannel();
   const createAnn = useCreateAnnouncement();
   const { data: canAnnounce } = useCanAnnounce();
   const busy = create.isPending || createAnn.isPending;
 
-  function toggle(id: string) {
-    setMembers((prev) => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  const memberIds = [...selMap.keys()];
+  const selectedIds = new Set(selMap.keys());
+  function toggle(p: ChatProfileRef) {
+    setSelMap((prev) => { const n = new Map(prev); n.has(p.id) ? n.delete(p.id) : n.set(p.id, p); return n; });
+  }
+  function remove(id: string) {
+    setSelMap((prev) => { const n = new Map(prev); n.delete(id); return n; });
   }
   async function submit() {
     if (!name.trim() || busy) return;
     let cid: string;
     try {
       cid = announce
-        ? await createAnn.mutateAsync({ name, memberIds: [...members] })
-        : await create.mutateAsync({ name, memberIds: [...members], isPrivate });
+        ? await createAnn.mutateAsync({ name, memberIds })
+        : await create.mutateAsync({ name, memberIds, isPrivate });
     } catch (e) {
       toast.error("Não foi possível criar. " + ((e as { message?: string })?.message ?? ""));
       return;
@@ -140,9 +145,20 @@ export function NewChannelDialog({ onClose, onOpened }: { onClose: () => void; o
           Grupo privado (só convidados entram)
         </label>
       )}
-      <p className="mb-1.5 text-xs font-medium text-muted-foreground">Adicionar pessoas ({members.size})</p>
+      <p className="mb-1.5 text-xs font-medium text-muted-foreground">Adicionar pessoas ({selMap.size})</p>
+      {selMap.size > 0 && (
+        <div className="mb-2 flex flex-wrap gap-1.5">
+          {[...selMap.values()].map((p) => (
+            <span key={p.id} className="flex items-center gap-1.5 rounded-full bg-primary/10 py-1 pl-1 pr-2 text-xs">
+              <Avatar name={p.full_name} url={p.avatar_url} size={20} />
+              <span className="max-w-[120px] truncate">{p.full_name ?? "—"}</span>
+              <button onClick={() => remove(p.id)} aria-label={`Remover ${p.full_name ?? ""}`} className="text-muted-foreground hover:text-foreground"><X className="h-3 w-3" /></button>
+            </span>
+          ))}
+        </div>
+      )}
       <DirectorySearch>
-        {(search) => <DirList search={search} onPick={toggle} selected={members} />}
+        {(search) => <DirList search={search} onPick={toggle} selected={selectedIds} />}
       </DirectorySearch>
       <div className="mt-4 flex justify-end gap-2">
         <button onClick={onClose} className="rounded-md border px-3 py-1.5 text-sm hover:bg-muted">Cancelar</button>
