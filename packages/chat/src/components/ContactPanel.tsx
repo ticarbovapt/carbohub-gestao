@@ -14,7 +14,7 @@ import type { Conversation, ChatAttachment } from "../types";
 
 // Ícone de recibo de um membro para a última mensagem do grupo.
 function MemberTick({ status }: { status: "sent" | "delivered" | "read" }) {
-  if (status === "read") return <CheckCheck className="h-3.5 w-3.5 text-sky-400" aria-label="Leu" />;
+  if (status === "read") return <CheckCheck className="h-3.5 w-3.5 text-[#53bdeb]" aria-label="Leu" />;
   if (status === "delivered") return <CheckCheck className="h-3.5 w-3.5 text-muted-foreground/70" aria-label="Recebeu" />;
   return <Clock className="h-3 w-3 text-muted-foreground/60" aria-label="Pendente" />;
 }
@@ -119,7 +119,7 @@ export function ContactPanel({ conv: convProp, onClose, onDeleted }: {
             {/* Recibo da última mensagem: quantos já leram + detalhe por membro. */}
             {conv.lastAt && (
               <p className="mb-2 flex items-center gap-1 text-[11px] text-muted-foreground">
-                <CheckCheck className="h-3.5 w-3.5 text-sky-400" />
+                <CheckCheck className="h-3.5 w-3.5 text-[#53bdeb]" />
                 {members.filter((m) => memberReceipt(conv.lastAt!, m) === "read").length} de {members.length} leram a última mensagem
               </p>
             )}
