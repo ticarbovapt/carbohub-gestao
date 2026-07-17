@@ -25,6 +25,7 @@ export interface ChatChannel {
   created_by: string | null;
   created_at: string;
   archived_at: string | null;
+  is_announcement?: boolean;
 }
 
 export interface ChatAttachment {
@@ -77,4 +78,5 @@ export interface Conversation {
   muted: boolean;
   pinned: boolean;
   archived: boolean;
+  isAnnouncement: boolean;
 }

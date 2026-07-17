@@ -36,13 +36,14 @@ export function useConversations() {
         other_id: string | null; other_name: string | null; other_avatar: string | null;
         last_body: string | null; last_kind: string | null; last_at: string | null;
         last_sender_id: string | null; last_sender_name: string | null;
-        unread: number; last_activity: string | null; muted: boolean; pinned: boolean; archived: boolean;
+        unread: number; last_activity: string | null; muted: boolean; pinned: boolean; archived: boolean; is_announcement: boolean;
       };
       return ((data ?? []) as Row[]).map((r): Conversation => ({
         channel: {
           id: r.channel_id, type: r.type, name: r.name, description: null,
           is_private: r.is_private, avatar_url: r.channel_avatar, created_by: null,
           created_at: r.last_activity ?? new Date(0).toISOString(), archived_at: null,
+          is_announcement: !!r.is_announcement,
         },
         title: r.type === "dm" ? (r.other_name ?? "Conversa") : (r.name ?? "Canal"),
         avatarUrl: r.type === "dm" ? r.other_avatar : r.channel_avatar,
@@ -56,6 +57,7 @@ export function useConversations() {
         muted: !!r.muted,
         pinned: !!r.pinned,
         archived: !!r.archived,
+        isAnnouncement: !!r.is_announcement,
       }));
     },
   });
@@ -120,6 +122,10 @@ export function useMessages(channelId: string | null, focusAt?: string | null) {
       // last_read_at/last_delivered_at muda → recalcula os ✓/✓✓ nas mensagens.
       .on("postgres_changes", { event: "UPDATE", schema: "public", table: "chat_channel_members", filter: `channel_id=eq.${channelId}` }, () => {
         qc.invalidateQueries({ queryKey: ["chat", "members", channelId] });
+      })
+      // Confirmações de comunicado (ao vivo) — "Li e estou ciente".
+      .on("postgres_changes", { event: "*", schema: "public", table: "chat_acks", filter: `channel_id=eq.${channelId}` }, () => {
+        qc.invalidateQueries({ queryKey: ["chat", "acks", channelId] });
       })
       .subscribe();
     return () => { supabase.removeChannel(ch); };
@@ -291,6 +297,78 @@ export function useDeleteMessage() {
       qc.invalidateQueries({ queryKey: ["chat", "messages", v.channelId] });
       qc.invalidateQueries({ queryKey: ["chat", "conversations", currentUser.id] });
       qc.invalidateQueries({ queryKey: ["chat", "media", v.channelId] });
+    },
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Comunicado Oficial (announcement)
+// ─────────────────────────────────────────────────────────────────────────────
+export function useCanAnnounce() {
+  const { supabase, currentUser } = useChatCtx();
+  return useQuery({
+    queryKey: ["chat", "can-announce", currentUser.id],
+    queryFn: async (): Promise<boolean> => {
+      const { data, error } = await supabase.rpc("chat_can_announce");
+      if (error) throw error;
+      return !!data;
+    },
+  });
+}
+
+export function useCreateAnnouncement() {
+  const { supabase, currentUser } = useChatCtx();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ name, memberIds, adminIds }: { name: string; memberIds: string[]; adminIds?: string[] }): Promise<string> => {
+      const { data, error } = await supabase.rpc("chat_create_announcement", {
+        p_name: name, p_member_ids: memberIds, p_admin_ids: adminIds ?? [],
+      });
+      if (error) throw error;
+      return data as string;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["chat", "conversations", currentUser.id] }),
+  });
+}
+
+export function useAckMessage() {
+  const { supabase } = useChatCtx();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ messageId }: { messageId: string; channelId: string }) => {
+      const { error } = await supabase.rpc("chat_ack_message", { p_message: messageId });
+      if (error) throw error;
+    },
+    onSuccess: (_d, v) => qc.invalidateQueries({ queryKey: ["chat", "acks", v.channelId] }),
+  });
+}
+
+export interface AckRow { message_id: string; user_id: string; acked_at: string }
+// Confirmações do canal: RLS devolve as minhas + (se sou admin) as de todos.
+export function useChannelAcks(channelId: string | null, enabled = true) {
+  const { supabase } = useChatCtx();
+  return useQuery({
+    queryKey: ["chat", "acks", channelId],
+    enabled: !!channelId && enabled,
+    queryFn: async (): Promise<AckRow[]> => {
+      const { data, error } = await supabase.from("chat_acks")
+        .select("message_id, user_id, acked_at").eq("channel_id", channelId);
+      if (error) throw error;
+      return (data ?? []) as AckRow[];
+    },
+  });
+}
+
+export interface AnnouncementStatusRow { user_id: string; full_name: string | null; avatar_url: string | null; acked: boolean; acked_at: string | null }
+export function useAnnouncementStatus(messageId: string | null) {
+  const { supabase } = useChatCtx();
+  return useQuery({
+    queryKey: ["chat", "ann-status", messageId],
+    enabled: !!messageId,
+    queryFn: async (): Promise<AnnouncementStatusRow[]> => {
+      const { data, error } = await supabase.rpc("chat_announcement_status", { p_message: messageId });
+      if (error) throw error;
+      return (data ?? []) as AnnouncementStatusRow[];
     },
   });
 }

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Search, X, SmilePlus, Reply, CornerUpLeft, Check, CheckCheck, MoreVertical, Pencil, Trash2, ArrowDown } from "lucide-react";
-import { useMessages, useProfilesMap, useToggleReaction, useChannelMembers, useUserInfo, useEditMessage, useDeleteMessage, useSearchMessages } from "../hooks";
+import { Search, X, SmilePlus, Reply, CornerUpLeft, Check, CheckCheck, MoreVertical, Pencil, Trash2, ArrowDown, Megaphone, Lock } from "lucide-react";
+import { useMessages, useProfilesMap, useToggleReaction, useChannelMembers, useUserInfo, useEditMessage, useDeleteMessage, useSearchMessages, useChannelAcks, useAckMessage } from "../hooks";
 import { useChatCtx } from "../context";
 import { messageReceipt, type ReceiptStatus } from "../lib/receipts";
 import { useIsOnline, useTyping } from "../lib/presence";
@@ -8,6 +8,9 @@ import { Avatar } from "./Avatar";
 import { Composer } from "./Composer";
 import { Attachment } from "./Attachment";
 import { ContactPanel } from "./ContactPanel";
+import { AnnouncementStatus } from "./AnnouncementStatus";
+
+interface AnnInfo { isPublisher: boolean; acked: boolean; canAck: boolean; count: number; onAck: () => void; onStatus: () => void }
 import type { Conversation as Conv, ChatMessage } from "../types";
 
 // Indicador de recibo (só nas minhas mensagens): ✓ enviada, ✓✓ entregue, ✓✓ azul lida.
@@ -63,6 +66,19 @@ export function Conversation({ conv, focus, onClearFocus, onDeleted }: {
   const { data: messages = [], isLoading } = useMessages(conv.channel.id, focus?.at ?? null);
   const { data: members = [] } = useChannelMembers(conv.channel.id);
   const { data: profMap = {} } = useProfilesMap(messages.map((m) => m.sender_id ?? "").filter(Boolean));
+  // Comunicado oficial (announcement).
+  const isAnnouncement = !!conv.isAnnouncement;
+  const { data: ackRows = [] } = useChannelAcks(conv.channel.id, isAnnouncement);
+  const ack = useAckMessage();
+  const myRole = members.find((m) => m.id === currentUser.id)?.role;
+  const isPublisher = myRole === "owner" || myRole === "admin";
+  const [statusMsgId, setStatusMsgId] = useState<string | null>(null);
+  const myAcked = useMemo(() => new Set(ackRows.filter((r) => r.user_id === currentUser.id).map((r) => r.message_id)), [ackRows, currentUser.id]);
+  const ackCount = useMemo(() => {
+    const m: Record<string, number> = {};
+    for (const r of ackRows) m[r.message_id] = (m[r.message_id] || 0) + 1;
+    return m;
+  }, [ackRows]);
   // Presença/typing pro cabeçalho.
   const otherOnline = useIsOnline(isGroup ? null : conv.otherUserId);
   const typing = useTyping(conv.channel.id, currentUser.id);
@@ -134,7 +150,10 @@ export function Conversation({ conv, focus, onClearFocus, onDeleted }: {
             className="flex min-w-0 flex-1 items-center gap-3 rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
             <Avatar name={conv.title} url={conv.avatarUrl} size={36} />
             <div className="min-w-0">
-              <p className="truncate text-sm font-semibold">{conv.title}</p>
+              <p className="flex items-center gap-1.5 truncate text-sm font-semibold">
+                {isAnnouncement && <Megaphone className="h-3.5 w-3.5 shrink-0 text-amber-500" aria-label="Comunicado oficial" />}
+                <span className="truncate">{conv.title}</span>
+              </p>
               <p className="truncate text-[11px]">
                 {typing.length > 0 ? (
                   <span className="text-emerald-500">
@@ -142,6 +161,8 @@ export function Conversation({ conv, focus, onClearFocus, onDeleted }: {
                       ? (typing.length === 1 ? `${firstName(typing[0].name)} está digitando…` : `${typing.length} pessoas digitando…`)
                       : "digitando…"}
                   </span>
+                ) : isAnnouncement ? (
+                  <span className="text-amber-500">Comunicado oficial{isPublisher ? " · você publica" : " · somente leitura"}</span>
                 ) : !isGroup ? (
                   otherOnline
                     ? <span className="text-emerald-500">online</span>
@@ -228,6 +249,14 @@ export function Conversation({ conv, focus, onClearFocus, onDeleted }: {
                       menuUp={i >= messages.length - 3}
                       startEdit={editRequestId === m.id}
                       onEditConsumed={() => setEditRequestId(null)}
+                      ann={isAnnouncement ? {
+                        isPublisher,
+                        acked: myAcked.has(m.id),
+                        canAck: !isPublisher && m.sender_id !== currentUser.id,
+                        count: ackCount[m.id] || 0,
+                        onAck: () => ack.mutate({ messageId: m.id, channelId: conv.channel.id }),
+                        onStatus: () => setStatusMsgId(m.id),
+                      } : null}
                       onReply={() => setReplyTo(m)}
                       onReact={(emoji, active) => react.mutate({ messageId: m.id, emoji, channelId: conv.channel.id, active })}
                       onEdit={(body) => edit.mutate({ messageId: m.id, body, channelId: conv.channel.id })}
@@ -249,23 +278,31 @@ export function Conversation({ conv, focus, onClearFocus, onDeleted }: {
           )}
         </div>
 
-        <Composer channelId={conv.channel.id} isGroup={isGroup} replyTo={replyTo} onClearReply={() => setReplyTo(null)}
-          replyToName={replyTo ? nameOf(replyTo.sender_id) : ""} onEditLast={editLast} />
+        {isAnnouncement && !isPublisher ? (
+          <div className="flex items-center justify-center gap-1.5 border-t p-3 text-center text-xs text-muted-foreground">
+            <Lock className="h-3.5 w-3.5" /> Somente leitura — comunicado oficial
+          </div>
+        ) : (
+          <Composer channelId={conv.channel.id} isGroup={isGroup} replyTo={replyTo} onClearReply={() => setReplyTo(null)}
+            replyToName={replyTo ? nameOf(replyTo.sender_id) : ""} onEditLast={editLast} />
+        )}
       </div>
 
       {panelOpen && (
         <ContactPanel conv={conv} onClose={() => setPanelOpen(false)} onDeleted={() => { setPanelOpen(false); onDeleted?.(); }} />
       )}
+      {statusMsgId && <AnnouncementStatus messageId={statusMsgId} onClose={() => setStatusMsgId(null)} />}
     </div>
   );
 }
 
 function MessageBubble({
-  m, mine, isGroup, showName, senderName, repliedTo, repliedName, currentUserId, receipt, menuUp, startEdit, onEditConsumed, onReply, onReact, onEdit, onDelete,
+  m, mine, isGroup, showName, senderName, repliedTo, repliedName, currentUserId, receipt, menuUp, startEdit, onEditConsumed, ann, onReply, onReact, onEdit, onDelete,
 }: {
   m: ChatMessage; mine: boolean; isGroup: boolean; showName: boolean; senderName: string;
   repliedTo: ChatMessage | null; repliedName: string; currentUserId: string;
   receipt: ReceiptStatus | null; menuUp: boolean; startEdit?: boolean; onEditConsumed?: () => void;
+  ann?: AnnInfo | null;
   onReply: () => void; onReact: (emoji: string, active: boolean) => void;
   onEdit: (body: string) => void; onDelete: () => void;
 }) {
@@ -403,6 +440,26 @@ function MessageBubble({
             <span>{when}</span>
             {mine && receipt && <Ticks status={receipt} />}
           </div>
+
+          {/* Comunicado oficial: confirmação de leitura / painel do publicador. */}
+          {ann && (
+            <div className={`mt-1.5 border-t pt-1.5 ${mine ? "border-black/10 dark:border-white/10" : "border-border"}`}>
+              {ann.isPublisher ? (
+                <button onClick={ann.onStatus} className="text-xs font-medium underline-offset-2 hover:underline">
+                  {ann.count} {ann.count === 1 ? "confirmou" : "confirmaram"} — ver quem
+                </button>
+              ) : ann.canAck ? (
+                ann.acked ? (
+                  <span className="flex items-center gap-1 text-xs font-medium text-emerald-600"><Check className="h-3.5 w-3.5" /> Você confirmou a leitura</span>
+                ) : (
+                  <button onClick={ann.onAck}
+                    className="rounded-md bg-emerald-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-emerald-700 focus-visible:ring-2 focus-visible:ring-ring">
+                    Li e estou ciente
+                  </button>
+                )
+              ) : null}
+            </div>
+          )}
         </div>
 
         {/* reações abaixo do balão */}

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { X, Check, Search } from "lucide-react";
-import { useDirectory, useStartDm, useCreateChannel } from "../hooks";
+import { useDirectory, useStartDm, useCreateChannel, useCreateAnnouncement, useCanAnnounce } from "../hooks";
 import { Avatar } from "./Avatar";
 import type { ChatProfileRef, Conversation } from "../types";
 
@@ -50,7 +50,7 @@ export function NewDmDialog({ onClose, onOpened }: { onClose: () => void; onOpen
             otherUserId: p.id,
             unread: 0,
             lastAt: null, lastBody: null, lastKind: null, lastSenderId: null, lastSenderName: null,
-            muted: false, pinned: false,
+            muted: false, pinned: false, archived: false, isAnnouncement: false,
           });
           onClose();
         }} />}
@@ -80,46 +80,60 @@ function DirList({ search, onPick, selected }: { search: string; onPick: (p: Cha
 export function NewChannelDialog({ onClose, onOpened }: { onClose: () => void; onOpened: (conv: Conversation) => void }) {
   const [name, setName] = useState("");
   const [isPrivate, setIsPrivate] = useState(true);
+  const [announce, setAnnounce] = useState(false);
   const [members, setMembers] = useState<Set<string>>(new Set());
   const create = useCreateChannel();
+  const createAnn = useCreateAnnouncement();
+  const { data: canAnnounce } = useCanAnnounce();
+  const busy = create.isPending || createAnn.isPending;
 
   function toggle(id: string) {
     setMembers((prev) => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
   }
   async function submit() {
-    if (!name.trim() || create.isPending) return;
-    const cid = await create.mutateAsync({ name, memberIds: [...members], isPrivate });
+    if (!name.trim() || busy) return;
+    const cid = announce
+      ? await createAnn.mutateAsync({ name, memberIds: [...members] })
+      : await create.mutateAsync({ name, memberIds: [...members], isPrivate });
     onOpened({
-      channel: { id: cid, type: "group", name: name.trim(), description: null, is_private: isPrivate, avatar_url: null, created_by: null, created_at: nowIso(), archived_at: null },
+      channel: { id: cid, type: "group", name: name.trim(), description: null, is_private: announce ? true : isPrivate, avatar_url: null, created_by: null, created_at: nowIso(), archived_at: null, is_announcement: announce },
       title: name.trim(),
       avatarUrl: null,
       otherUserId: null,
       unread: 0,
       lastAt: null, lastBody: null, lastKind: null, lastSenderId: null, lastSenderName: null,
-      muted: false, pinned: false,
+      muted: false, pinned: false, archived: false, isAnnouncement: announce,
     });
     onClose();
   }
 
   return (
-    <Modal title="Novo grupo" onClose={onClose}>
+    <Modal title={announce ? "Novo comunicado oficial" : "Novo grupo"} onClose={onClose}>
       <input
-        value={name} onChange={(e) => setName(e.target.value)} placeholder="Nome do grupo"
+        value={name} onChange={(e) => setName(e.target.value)} placeholder={announce ? "Título do comunicado" : "Nome do grupo"}
         className="mb-3 h-9 w-full rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
       />
-      <label className="mb-3 flex items-center gap-2 text-sm">
-        <input type="checkbox" checked={isPrivate} onChange={(e) => setIsPrivate(e.target.checked)} />
-        Grupo privado (só convidados entram)
-      </label>
+      {canAnnounce && (
+        <label className="mb-2 flex items-center gap-2 text-sm">
+          <input type="checkbox" checked={announce} onChange={(e) => setAnnounce(e.target.checked)} />
+          Comunicado oficial (somente leitura; só você e admins publicam)
+        </label>
+      )}
+      {!announce && (
+        <label className="mb-3 flex items-center gap-2 text-sm">
+          <input type="checkbox" checked={isPrivate} onChange={(e) => setIsPrivate(e.target.checked)} />
+          Grupo privado (só convidados entram)
+        </label>
+      )}
       <p className="mb-1.5 text-xs font-medium text-muted-foreground">Adicionar pessoas ({members.size})</p>
       <DirectorySearch>
         {(search) => <DirList search={search} onPick={toggle} selected={members} />}
       </DirectorySearch>
       <div className="mt-4 flex justify-end gap-2">
         <button onClick={onClose} className="rounded-md border px-3 py-1.5 text-sm hover:bg-muted">Cancelar</button>
-        <button onClick={submit} disabled={!name.trim() || create.isPending}
+        <button onClick={submit} disabled={!name.trim() || busy}
           className="rounded-md bg-primary px-3 py-1.5 text-sm text-primary-foreground disabled:opacity-40">
-          {create.isPending ? "Criando…" : "Criar grupo"}
+          {busy ? "Criando…" : announce ? "Criar comunicado" : "Criar grupo"}
         </button>
       </div>
     </Modal>
