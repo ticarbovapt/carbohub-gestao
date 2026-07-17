@@ -19,6 +19,8 @@ END; $$;
 GRANT EXECUTE ON FUNCTION public.chat_touch_last_seen() TO authenticated;
 
 -- chat_user_info passa a devolver last_seen_at (o header do DM já usa esse RPC).
+-- Mudou o tipo de retorno → precisa DROP antes do CREATE.
+DROP FUNCTION IF EXISTS public.chat_user_info(uuid);
 CREATE OR REPLACE FUNCTION public.chat_user_info(p_id uuid)
 RETURNS TABLE (id uuid, full_name text, avatar_url text, department text, funcao text, email text, username text, last_seen_at timestamptz)
 LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
