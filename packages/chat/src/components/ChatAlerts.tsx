@@ -19,6 +19,19 @@ export function ChatAlerts() {
   const qc = useQueryClient();
 
   useEffect(() => {
+    // Coalesce dos refetches disparados por eventos Realtime: em rajada (várias
+    // mensagens/presença ao mesmo tempo) agenda UMA atualização por janela de
+    // 400ms em vez de invalidar conversations+unread a cada evento.
+    let refreshTimer: number | null = null;
+    const scheduleRefresh = () => {
+      if (refreshTimer != null) return;
+      refreshTimer = window.setTimeout(() => {
+        refreshTimer = null;
+        qc.invalidateQueries({ queryKey: ["chat", "conversations", currentUser.id] });
+        qc.invalidateQueries({ queryKey: ["chat", "unread-total", currentUser.id] });
+      }, 400);
+    };
+
     // UM canal compartilhado (tópico estável) dono do postgres_changes + presence
     // + broadcast de "digitando". Montado 1x por cliente (aqui) → sem colidir.
     const ch = supabase
@@ -35,8 +48,7 @@ export function ChatAlerts() {
         // Conversa silenciada? não toca/toasta.
         const convs = qc.getQueryData<Conversation[]>(["chat", "conversations", currentUser.id]);
         const muted = convs?.find((c) => c.channel.id === msg.channel_id)?.muted;
-        qc.invalidateQueries({ queryKey: ["chat", "unread-total", currentUser.id] });
-        qc.invalidateQueries({ queryKey: ["chat", "conversations", currentUser.id] });
+        scheduleRefresh();
         // Mensagem do sistema (bug/sugestão no grupo): entra na lista, mas nunca toca/toasta.
         if (viewing || muted || msg.kind === "system") return;
 
@@ -71,13 +83,11 @@ export function ChatAlerts() {
         ), { duration: 6000, position: "top-right" });
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "chat_channel_members", filter: `user_id=eq.${currentUser.id}` }, () => {
-        qc.invalidateQueries({ queryKey: ["chat", "conversations", currentUser.id] });
-        qc.invalidateQueries({ queryKey: ["chat", "unread-total", currentUser.id] });
+        scheduleRefresh();
       })
       // Edição/exclusão de mensagem → atualiza a prévia da lista ao vivo p/ todos.
       .on("postgres_changes", { event: "UPDATE", schema: "public", table: "chat_messages" }, () => {
-        qc.invalidateQueries({ queryKey: ["chat", "conversations", currentUser.id] });
-        qc.invalidateQueries({ queryKey: ["chat", "unread-total", currentUser.id] });
+        scheduleRefresh();
       })
       // Presence: quem está online agora (chave = user_id).
       .on("presence", { event: "sync" }, () => {
@@ -108,6 +118,7 @@ export function ChatAlerts() {
 
     return () => {
       presenceBus.registerSendTyping(null);
+      if (refreshTimer != null) window.clearTimeout(refreshTimer);
       window.clearInterval(hb);
       window.clearInterval(prune);
       document.removeEventListener("visibilitychange", touch);

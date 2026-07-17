@@ -88,6 +88,12 @@ export function useMessages(channelId: string | null, focusAt?: string | null) {
   const query = useQuery({
     queryKey: key,
     enabled: !!channelId,
+    // Mensagens já vistas ficam em cache: reabrir a conversa renderiza na hora e
+    // atualiza em segundo plano. O Realtime (abaixo) invalida quando chega msg
+    // nova, então o cache nunca fica velho de verdade. Sem isso, cada troca
+    // mostrava "Carregando…" e esperava ~600ms do chat_messages.
+    staleTime: 60_000,
+    refetchOnWindowFocus: false,
     queryFn: async (): Promise<ChatMessage[]> => {
       if (focusAt) {
         const before = await supabase.from("chat_messages").select(MSG_SELECT)
