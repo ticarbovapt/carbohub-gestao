@@ -1,9 +1,10 @@
 import { useState } from "react";
 import { toast } from "sonner";
 import { X, Check, Search, Image as ImageIcon } from "lucide-react";
-import { useDirectory, useStartDm, useCreateChannel, usePublishAnnouncement, useDepartments } from "../hooks";
+import { useDirectory, useStartDm, useCreateChannel, usePublishAnnouncement, useDepartments, useUserStatuses } from "../hooks";
 import type { AnnAudience } from "../hooks";
 import { Avatar } from "./Avatar";
+import { AvailabilityDot, statusText } from "./StatusBadge";
 import type { ChatProfileRef, Conversation } from "../types";
 
 const nowIso = () => new Date().toISOString();
@@ -63,6 +64,7 @@ export function NewDmDialog({ onClose, onOpened }: { onClose: () => void; onOpen
 
 function DirList({ search, onPick, selected }: { search: string; onPick: (p: ChatProfileRef) => void; selected?: Set<string> }) {
   const { data: people = [], isLoading } = useDirectory(search);
+  const { data: statuses = {} } = useUserStatuses(people.map((p) => p.id));
   if (isLoading) return <p className="text-sm text-muted-foreground">Carregando…</p>;
   if (!people.length) return <p className="text-sm text-muted-foreground">Ninguém encontrado.</p>;
   const selectable = !!selected;
@@ -70,11 +72,18 @@ function DirList({ search, onPick, selected }: { search: string; onPick: (p: Cha
     <div className="max-h-72 space-y-1 overflow-y-auto">
       {people.map((p) => {
         const isSel = selected?.has(p.id);
+        const st = statuses[p.id];
         return (
           <button key={p.id} onClick={() => onPick(p)} aria-pressed={selectable ? !!isSel : undefined}
             className={`flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left transition-colors ${isSel ? "bg-primary/10 ring-1 ring-primary/40" : "hover:bg-muted"}`}>
-            <Avatar name={p.full_name} url={p.avatar_url} size={32} />
-            <span className="flex-1 truncate text-sm">{p.full_name ?? "—"}</span>
+            <span className="relative shrink-0">
+              <Avatar name={p.full_name} url={p.avatar_url} size={32} />
+              {st && <AvailabilityDot availability={st.availability} size={9} className="absolute -bottom-0.5 -right-0.5" />}
+            </span>
+            <span className="flex min-w-0 flex-1 flex-col">
+              <span className="truncate text-sm">{p.full_name ?? "—"}</span>
+              {statusText(st) && <span className="truncate text-[11px] text-muted-foreground">{statusText(st)}</span>}
+            </span>
             {selectable && (
               <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border ${isSel ? "border-primary bg-primary text-primary-foreground" : "border-muted-foreground/40"}`}>
                 {isSel && <Check className="h-3.5 w-3.5" />}

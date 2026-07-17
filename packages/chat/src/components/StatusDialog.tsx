@@ -31,15 +31,28 @@ export function StatusDialog({ onClose }: { onClose: () => void }) {
   const [quietInicio, setQuietInicio] = useState("22:00");
   const [quietFim, setQuietFim] = useState("07:00");
   const [urgentBypass, setUrgentBypass] = useState(true);
+  const [voltaEm, setVoltaEm] = useState(""); // De férias: data de volta; vazio = indefinido
 
   useEffect(() => {
     if (!my) return;
     setEmoji(my.emoji ?? ""); setTexto(my.texto ?? ""); setAvailability(my.availability);
     setDnd(my.dnd); setUrgentBypass(my.urgentBypass);
     if (my.quietInicio && my.quietFim) { setQuietOn(true); setQuietInicio(my.quietInicio.slice(0, 5)); setQuietFim(my.quietFim.slice(0, 5)); }
+    if (my.availability === "ferias" && my.expiraEm) {
+      const d = new Date(my.expiraEm);
+      setVoltaEm(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`);
+    }
   }, [my]);
 
-  function expiraEmIso(): string | null {
+  const isFerias = availability === "ferias";
+  const todayStr = (() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; })();
+
+  function computeExpira(): string | null {
+    if (isFerias) {
+      if (!voltaEm) return null; // indefinido: fica de férias até alterar
+      const [y, m, d] = voltaEm.split("-").map(Number);
+      return new Date(y, (m ?? 1) - 1, d ?? 1, 23, 59, 0, 0).toISOString();
+    }
     const opt = EXPIRY.find((e) => e.key === expiry);
     if (!opt || opt.ms === null) return null;
     if (opt.ms === -1) { const d = new Date(); d.setHours(23, 59, 0, 0); return d.toISOString(); }
@@ -50,7 +63,7 @@ export function StatusDialog({ onClose }: { onClose: () => void }) {
     try {
       await set.mutateAsync({
         emoji: emoji.trim() || null, texto: texto.trim() || null, availability,
-        expira_em: (emoji.trim() || texto.trim()) ? expiraEmIso() : null,
+        expira_em: isFerias ? computeExpira() : ((emoji.trim() || texto.trim()) ? computeExpira() : null),
         dnd, urgent_bypass: urgentBypass,
         quiet_inicio: quietOn ? quietInicio : null, quiet_fim: quietOn ? quietFim : null,
         timezone: "America/Sao_Paulo",
@@ -103,16 +116,35 @@ export function StatusDialog({ onClose }: { onClose: () => void }) {
             </div>
           </div>
 
-          {/* expira */}
-          <div>
-            <p className="mb-1.5 text-xs font-medium text-muted-foreground">Limpar o status</p>
-            <div className="flex flex-wrap gap-1.5">
-              {EXPIRY.map((e) => (
-                <button key={e.key} onClick={() => setExpiry(e.key)}
-                  className={`rounded-full border px-2.5 py-1 text-xs ${expiry === e.key ? "border-primary bg-primary/10 text-primary" : "hover:bg-muted"}`}>{e.label}</button>
-              ))}
+          {/* expira / período de férias */}
+          {isFerias ? (
+            <div>
+              <p className="mb-1.5 text-xs font-medium text-muted-foreground">🌴 De férias até</p>
+              <div className="flex flex-wrap items-center gap-2">
+                <input type="date" value={voltaEm} min={todayStr} onChange={(e) => setVoltaEm(e.target.value)}
+                  className="h-9 rounded-md border border-input bg-background px-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
+                <button onClick={() => setVoltaEm("")}
+                  className={`rounded-full border px-3 py-1.5 text-xs font-medium ${!voltaEm ? "border-primary bg-primary/10 text-primary" : "hover:bg-muted"}`}>
+                  Indefinido
+                </button>
+              </div>
+              <p className="mt-1 text-[11px] text-muted-foreground">
+                {voltaEm
+                  ? `Volta automaticamente em ${new Date(voltaEm + "T23:59").toLocaleDateString("pt-BR")}.`
+                  : "Fica de férias até você alterar no sistema."}
+              </p>
             </div>
-          </div>
+          ) : (
+            <div>
+              <p className="mb-1.5 text-xs font-medium text-muted-foreground">Limpar o status</p>
+              <div className="flex flex-wrap gap-1.5">
+                {EXPIRY.map((e) => (
+                  <button key={e.key} onClick={() => setExpiry(e.key)}
+                    className={`rounded-full border px-2.5 py-1 text-xs ${expiry === e.key ? "border-primary bg-primary/10 text-primary" : "hover:bg-muted"}`}>{e.label}</button>
+                ))}
+              </div>
+            </div>
+          )}
 
           <div className="h-px bg-border" />
 
