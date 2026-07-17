@@ -254,15 +254,19 @@ export function useSendMessage(channelId: string | null) {
       const messageId = (msg as { id: string }).id;
 
       for (const att of attachments) {
+        // Imagens: reduz pra ≤1600px antes de subir. Um screenshot/foto de 90+MP
+        // custava >2s de decode na main thread ao aparecer (travava a UI).
+        const isImage = att.kind === "image" && ((att.file as File).type ?? "").startsWith("image/");
+        const upload: Blob = isImage ? await downscaleImage(att.file as File, 1600) : att.file;
         const path = `${channelId}/${messageId}/${Date.now()}-${safeName(att.filename)}`;
-        const contentType = (att.file as File).type || undefined;
-        const { error: upErr } = await supabase.storage.from(BUCKET).upload(path, att.file, { contentType, upsert: false });
+        const contentType = upload.type || (att.file as File).type || undefined;
+        const { error: upErr } = await supabase.storage.from(BUCKET).upload(path, upload, { contentType, upsert: false });
         if (upErr) throw upErr;
         const { error: aErr } = await supabase.from("chat_attachments").insert({
           message_id: messageId,
           storage_path: path,
           mime_type: contentType ?? null,
-          size_bytes: (att.file as File).size ?? null,
+          size_bytes: upload.size ?? null,
           duration_ms: att.durationMs ?? null,
         });
         if (aErr) throw aErr;

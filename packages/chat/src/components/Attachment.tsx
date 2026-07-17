@@ -32,7 +32,7 @@ export function Attachment({ att }: { att: ChatAttachment }) {
     // varia com o tamanho da imagem; abrir (clique) mostra a imagem completa.
     return (
       <a href={url} target="_blank" rel="noreferrer" className="block overflow-hidden rounded-lg bg-neutral-100 dark:bg-neutral-800">
-        <img src={url} alt="" className="aspect-square w-full object-cover" />
+        <img src={url} alt="" loading="lazy" decoding="async" className="aspect-square w-full object-cover" />
       </a>
     );
   }
