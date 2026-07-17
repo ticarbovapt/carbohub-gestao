@@ -28,15 +28,16 @@ export function Attachment({ att }: { att: ChatAttachment }) {
   if (!url) return <p className="text-xs text-muted-foreground">Anexo indisponível</p>;
 
   if (kind === "image") {
+    // Quadro com fundo branco (PNG transparente fica limpo, tipo WhatsApp):
+    // imagem preenche a largura do balão, centralizada, altura pelo conteúdo.
     return (
-      <a href={url} target="_blank" rel="noreferrer" className="block">
-        {/* natural (sem forçar caixa): mostra a imagem inteira, tamanho ~WhatsApp */}
-        <img src={url} alt="" className="max-h-80 w-auto max-w-full rounded-lg" />
+      <a href={url} target="_blank" rel="noreferrer" className="block overflow-hidden rounded-lg bg-white">
+        <img src={url} alt="" className="mx-auto block max-h-80 w-full object-contain" />
       </a>
     );
   }
   if (kind === "video") {
-    return <video src={url} controls className="max-h-80 w-auto max-w-full rounded-lg" />;
+    return <video src={url} controls className="block w-full max-h-80 rounded-lg bg-black" />;
   }
   if (kind === "audio") {
     return <audio src={url} controls className="h-10 w-64 max-w-full" />;
