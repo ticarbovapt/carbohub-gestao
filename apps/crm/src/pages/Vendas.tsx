@@ -249,7 +249,7 @@ export default function Vendas() {
 
   return (
     <div className="p-4 md:p-6">
-      <div className="space-y-5 max-w-5xl mx-auto">
+      <div className="space-y-5 max-w-6xl mx-auto">
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
           <div>
@@ -370,7 +370,7 @@ export default function Vendas() {
                     <th className="text-left p-3 font-medium text-xs text-muted-foreground uppercase tracking-wide">Cidade/UF</th>
                     {isHead && <th className="text-left p-3 font-medium text-xs text-muted-foreground uppercase tracking-wide">Vendedor</th>}
                     <th className="text-right p-3 font-medium text-xs text-muted-foreground uppercase tracking-wide">Total</th>
-                    <th className="w-10 p-3" />
+                    <th className="text-right p-3 font-medium text-xs text-muted-foreground uppercase tracking-wide whitespace-nowrap">Ações</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -411,12 +411,12 @@ export default function Vendas() {
                             </td>
                           )}
                           <td className="p-3 text-right font-bold tabular-nums">{fmtBRL(venda.total)}</td>
-                          <td className="p-3 text-right" onClick={(e) => e.stopPropagation()}>
-                            <div className="flex items-center justify-end gap-1">
+                          <td className="p-3 text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                            <div className="flex items-center justify-end gap-1.5">
                               {isQuote ? (
                                 <DropdownMenu>
                                   <DropdownMenuTrigger asChild>
-                                    <button className="h-7 px-2 inline-flex items-center gap-1 rounded-md text-xs font-medium bg-carbo-green/10 text-carbo-green hover:bg-carbo-green/20 border border-carbo-green/30 transition-colors" title="Editar ou converter o orçamento">
+                                    <button className="h-8 px-2.5 inline-flex items-center gap-1 rounded-md text-xs font-medium whitespace-nowrap bg-carbo-green/10 text-carbo-green hover:bg-carbo-green/20 border border-carbo-green/30 transition-colors" title="Editar ou converter o orçamento">
                                       <span className="hidden sm:inline">Editar / Converter</span><span className="sm:hidden">Ações</span>
                                       <ChevronDown className="h-3 w-3" />
                                     </button>
@@ -439,7 +439,7 @@ export default function Vendas() {
                                     <button
                                       onClick={() => baixarNF(venda)}
                                       disabled={nfLoadingId === venda.id}
-                                      className="h-7 px-2 inline-flex items-center gap-1 rounded-md text-xs font-medium bg-carbo-green/10 text-carbo-green hover:bg-carbo-green/20 border border-carbo-green/30 transition-colors disabled:opacity-50"
+                                      className="h-8 px-2.5 inline-flex items-center gap-1 rounded-md text-xs font-medium whitespace-nowrap bg-carbo-green/10 text-carbo-green hover:bg-carbo-green/20 border border-carbo-green/30 transition-colors disabled:opacity-50"
                                       title={`Baixar NF ${venda.invoice_number ?? venda.bling_nf_id}`}
                                     >
                                       {nfLoadingId === venda.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <FileDown className="h-3 w-3" />}
@@ -447,7 +447,7 @@ export default function Vendas() {
                                     </button>
                                   )}
                                   <button onClick={() => baixarPdf(venda.id)} title="Baixar orçamento (PDF)"
-                                    className="h-7 px-2 inline-flex items-center gap-1 rounded-md text-xs font-medium border border-border/60 text-muted-foreground hover:bg-muted transition-colors">
+                                    className="h-8 px-2.5 inline-flex items-center gap-1 rounded-md text-xs font-medium whitespace-nowrap border border-border/60 text-muted-foreground hover:bg-muted transition-colors">
                                     <FileText className="h-3 w-3" /><span className="hidden sm:inline">PDF</span>
                                   </button>
                                 </>
