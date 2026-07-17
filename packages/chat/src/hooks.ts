@@ -605,20 +605,13 @@ export function useCreateChannel() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ name, memberIds, isPrivate }: { name: string; memberIds: string[]; isPrivate: boolean }): Promise<string> => {
-      // id gerado no cliente: evita reler o canal (a RLS de SELECT exige já ser
-      // membro, o que ainda não é o caso no instante do insert de um grupo privado).
-      const channelId = crypto.randomUUID();
-      const { error } = await supabase
-        .from("chat_channels")
-        .insert({ id: channelId, type: "group", name: name.trim(), is_private: isPrivate, created_by: currentUser.id });
+      // RPC definer: cria canal + owner + membros atomicamente, sem o impasse de
+      // RLS (grupo privado não é "visível" ao inserir membros pelo cliente).
+      const { data, error } = await supabase.rpc("chat_create_group", {
+        p_name: name, p_member_ids: memberIds, p_is_private: isPrivate,
+      });
       if (error) throw error;
-      const members = [
-        { channel_id: channelId, user_id: currentUser.id, role: "owner" },
-        ...memberIds.filter((id) => id !== currentUser.id).map((id) => ({ channel_id: channelId, user_id: id, role: "member" })),
-      ];
-      const { error: mErr } = await supabase.from("chat_channel_members").insert(members);
-      if (mErr) throw mErr;
-      return channelId;
+      return data as string;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["chat", "conversations", currentUser.id] }),
   });
