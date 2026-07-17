@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { MessagesSquare } from "lucide-react";
 import { ConversationList } from "./ConversationList";
 import { Conversation } from "./Conversation";
+import { EnablePushButton } from "./EnablePushButton";
 import { useChatCtx } from "../context";
 import { useConversations } from "../hooks";
 import type { Conversation as Conv } from "../types";
@@ -11,7 +12,7 @@ const STORAGE_KEY = "carbo-chat-open";
 // Tela cheia do Carbo Chat: lista (esquerda) + conversa aberta (direita).
 export function ChatApp() {
   const [selected, setSelected] = useState<Conv | null>(null);
-  const { activeChannelRef } = useChatCtx();
+  const { supabase, currentUser, activeChannelRef } = useChatCtx();
   const { data: conversations = [] } = useConversations();
 
   // canal aberto ANTES dos efeitos limparem (para restaurar no F5).
@@ -49,14 +50,37 @@ export function ChatApp() {
     return () => { activeChannelRef.current = null; };
   }, [selected, activeChannelRef]);
 
+  // Heartbeat de presença: marca "app aberto" (origin) + canal em foco, para o
+  // push saber (a) não avisar quem já está vendo o canal e (b) qual foi o último
+  // app usado (entrega 1 push nele). Só enquanto a aba está visível.
+  useEffect(() => {
+    if (!currentUser.id) return;
+    const ping = () => {
+      if (document.visibilityState !== "visible") return;
+      supabase.rpc("chat_presence_ping", {
+        p_channel_id: selected?.channel.id ?? null,
+        p_origin: window.location.origin,
+      }).then(() => {}, () => {});
+    };
+    ping();
+    const iv = window.setInterval(ping, 25_000);
+    document.addEventListener("visibilitychange", ping);
+    return () => { window.clearInterval(iv); document.removeEventListener("visibilitychange", ping); };
+  }, [supabase, currentUser.id, selected]);
+
   return (
     <div className="flex h-full min-h-0 w-full overflow-hidden">
-      <div className="w-72 shrink-0">
-        <ConversationList
-          selectedId={selected?.channel.id ?? null}
-          onSelect={setSelected}
-          onRemoved={(id) => setSelected((s) => (s?.channel.id === id ? null : s))}
-        />
+      <div className="flex w-72 shrink-0 flex-col border-r">
+        <div className="min-h-0 flex-1">
+          <ConversationList
+            selectedId={selected?.channel.id ?? null}
+            onSelect={setSelected}
+            onRemoved={(id) => setSelected((s) => (s?.channel.id === id ? null : s))}
+          />
+        </div>
+        <div className="shrink-0 empty:hidden [&>*]:m-2">
+          <EnablePushButton />
+        </div>
       </div>
       <div className="min-w-0 flex-1">
         {selected ? (

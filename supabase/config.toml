@@ -92,3 +92,5 @@ verify_jwt = false
 
 [functions.bling-auto-sync]
 verify_jwt = false
+[functions.chat-push]
+verify_jwt = false
