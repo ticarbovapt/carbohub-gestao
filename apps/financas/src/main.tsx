@@ -18,7 +18,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
           <TooltipProvider delayDuration={200}>
             <App />
           </TooltipProvider>
-          <Toaster richColors position="top-right" />
+          <Toaster richColors position="top-right" offset={72} />
         </AuthProvider>
       </BrowserRouter>
     </QueryClientProvider>

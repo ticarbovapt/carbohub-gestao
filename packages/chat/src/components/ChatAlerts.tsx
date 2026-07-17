@@ -44,8 +44,8 @@ export function ChatAlerts() {
 
         const preview = msg.body?.trim() || kindLabel(msg.kind);
         // Toast inteiro clicável (funciona no PC também) → abre a conversa (?c=).
-        // Largura fixa (o toast.custom não herda a largura padrão do sonner) e
-        // posição bottom-right pra não brigar com o sino/header no topo.
+        // Largura fixa (o toast.custom não herda a largura padrão do sonner).
+        // Fica no top-right; o <Toaster offset> dos apps o mantém abaixo do header.
         toast.custom((id) => (
           <div
             role="button"
@@ -60,7 +60,7 @@ export function ChatAlerts() {
               <p className="line-clamp-2 text-sm text-muted-foreground">{preview}</p>
             </div>
           </div>
-        ), { duration: 6000, position: "bottom-right" });
+        ), { duration: 6000, position: "top-right" });
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "chat_channel_members", filter: `user_id=eq.${currentUser.id}` }, () => {
         qc.invalidateQueries({ queryKey: ["chat", "conversations", currentUser.id] });
