@@ -62,10 +62,10 @@ function lastSeenLabel(iso: string) {
 // Mensagem do sistema (evento de bug/sugestão): cartão central, discreto e
 // colorido por tipo — em vez de virar um "balão" de conversa (feio/confuso).
 const SYS_KINDS = [
-  { re: /^🐞\s*Novo bug:\s*/i, label: "Novo bug", Icon: Bug, ring: "border-amber-500/25 bg-amber-500/10", fg: "text-amber-600 dark:text-amber-400", sub: (x: string) => (x ? `Reportado por ${x}` : "") },
-  { re: /^💡\s*Nova sugest[ãa]o:\s*/i, label: "Nova sugestão", Icon: Lightbulb, ring: "border-violet-500/25 bg-violet-500/10", fg: "text-violet-600 dark:text-violet-400", sub: (x: string) => (x ? `Sugerido por ${x}` : "") },
-  { re: /^✅\s*Resolvido:\s*/i, label: "Resolvido", Icon: CheckCircle2, ring: "border-emerald-500/25 bg-emerald-500/10", fg: "text-emerald-600 dark:text-emerald-400", sub: (x: string) => (x ? `Obs.: ${x}` : "") },
-  { re: /^🚫\s*Recusado:\s*/i, label: "Recusado", Icon: XCircle, ring: "border-rose-500/25 bg-rose-500/10", fg: "text-rose-600 dark:text-rose-400", sub: (x: string) => (x ? `Motivo: ${x}` : "") },
+  { key: "bug", re: /^🐞\s*Novo bug:\s*/i, label: "Novo bug", Icon: Bug, ring: "border-amber-500/25 bg-amber-500/10", fg: "text-amber-600 dark:text-amber-400", actorLabel: "Reportado por" },
+  { key: "idea", re: /^💡\s*Nova sugest[ãa]o:\s*/i, label: "Nova sugestão", Icon: Lightbulb, ring: "border-violet-500/25 bg-violet-500/10", fg: "text-violet-600 dark:text-violet-400", actorLabel: "Sugerido por" },
+  { key: "done", re: /^✅\s*Resolvido:\s*/i, label: "Resolvido", Icon: CheckCircle2, ring: "border-emerald-500/25 bg-emerald-500/10", fg: "text-emerald-600 dark:text-emerald-400", actorLabel: "Resolvido por", noteLabel: "Obs." },
+  { key: "denied", re: /^🚫\s*Recusado:\s*/i, label: "Recusado", Icon: XCircle, ring: "border-rose-500/25 bg-rose-500/10", fg: "text-rose-600 dark:text-rose-400", actorLabel: "Recusado por", noteLabel: "Motivo" },
 ];
 
 function SystemNotice({ body, when }: { body: string; when: string }) {
@@ -81,11 +81,12 @@ function SystemNotice({ body, when }: { body: string; when: string }) {
       </div>
     );
   }
-  const rest = body.replace(kind.re, "").trim();
-  const [title, extra] = rest.split(/\s+—\s+/, 2);
-  const sub = kind.sub(extra ?? "");
+  // Corpo: "TÍTULO — QUEM AGIU — OBS/MOTIVO" (as duas últimas partes são opcionais).
+  const parts = body.replace(kind.re, "").trim().split(/\s+—\s+/);
+  const title = parts[0] ?? "";
+  const actor = parts[1] ?? "";
+  const note = parts[2] ?? "";
   const { Icon } = kind;
-  // Bolha de chat (lado recebido), tingida pela cor do tipo.
   return (
     <div className="flex justify-start">
       <div className={`max-w-[85%] rounded-2xl rounded-bl-sm border px-3 py-2 sm:max-w-[420px] ${kind.ring}`}>
@@ -94,7 +95,8 @@ function SystemNotice({ body, when }: { body: string; when: string }) {
           <span className={`text-[11px] font-semibold uppercase tracking-wide ${kind.fg}`}>{kind.label}</span>
         </div>
         <p className="break-words text-sm font-medium text-foreground">{title}</p>
-        {sub && <p className="mt-0.5 break-words text-xs text-muted-foreground">{sub}</p>}
+        {actor && <p className="mt-0.5 break-words text-xs text-muted-foreground">{kind.actorLabel} <span className="font-medium text-foreground/80">{actor}</span></p>}
+        {note && <p className="mt-0.5 break-words text-xs text-muted-foreground">{kind.noteLabel ?? "Obs."}: {note}</p>}
         <div className="mt-0.5 text-right text-[10px] text-muted-foreground">{when}</div>
       </div>
     </div>

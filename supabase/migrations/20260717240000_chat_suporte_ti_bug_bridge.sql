@@ -84,14 +84,19 @@ CREATE TRIGGER trg_carbo_bug_post_chat_ins
   AFTER INSERT ON public.carbo_bug_reports
   FOR EACH ROW EXECUTE FUNCTION public.carbo_bug_post_to_chat_ins();
 
--- 4b) Resolvido / recusado → posta no grupo (com motivo quando houver).
+-- 4b) Resolvido / recusado → posta no grupo com QUEM agiu + motivo/obs.
+--     Formato: "<prefixo>: <título> — <quem agiu> — <obs/motivo>".
 CREATE OR REPLACE FUNCTION public.carbo_bug_post_to_chat_upd()
 RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE v_actor text;
 BEGIN
   IF NEW.status IS DISTINCT FROM OLD.status AND NEW.status IN ('resolved','declined') THEN
+    SELECT COALESCE(NULLIF(btrim(full_name), ''), username, email, 'Alguém')
+      INTO v_actor FROM public.profiles WHERE id = auth.uid();
     PERFORM public.chat_suporte_ti_post(
       CASE WHEN NEW.status = 'resolved' THEN '✅ Resolvido: ' ELSE '🚫 Recusado: ' END
       || NEW.title
+      || ' — ' || COALESCE(v_actor, 'Alguém')
       || COALESCE(' — ' || NULLIF(btrim(NEW.admin_notes), ''), '')
     );
   END IF;
