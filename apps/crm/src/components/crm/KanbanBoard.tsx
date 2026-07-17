@@ -117,7 +117,7 @@ function KanbanColumn({
   const totalValor = leads.reduce((s, l) => s + (Number(l.estimated_revenue) || 0), 0);
   const fmtK = (v: number) => v >= 1000 ? `R$ ${(v / 1000).toFixed(v % 1000 === 0 ? 0 : 1)}k` : `R$ ${v}`;
   return (
-    <div className="flex-shrink-0 w-72 bg-muted/30 rounded-xl border border-border flex flex-col min-h-[calc(100vh-260px)]">
+    <div className="flex-shrink-0 w-72 bg-muted/30 rounded-xl border border-border flex flex-col h-[calc(100vh-260px)]">
       {/* Column header */}
       <div
         className="sticky top-0 p-3 border-b border-border bg-background/80 backdrop-blur-sm rounded-t-xl"
