@@ -53,8 +53,11 @@ serve(async (req) => {
   // 1) Sessão do usuário (JWT do Supabase no header).
   const authHeader = req.headers.get("Authorization") ?? "";
   if (!authHeader.startsWith("Bearer ")) return json(cors, 401, { error: "sem sessão" });
+  const token = authHeader.replace("Bearer ", "");
   const supa = createClient(SUPABASE_URL, ANON_KEY, { global: { headers: { Authorization: authHeader } } });
-  const { data: userData, error: userErr } = await supa.auth.getUser();
+  // Passa o token EXPLÍCITO (na Edge Function não há sessão local; getUser() sem
+  // argumento retornaria "sessão ausente" → 401).
+  const { data: userData, error: userErr } = await supa.auth.getUser(token);
   const user = userData?.user;
   if (userErr || !user) return json(cors, 401, { error: "não autenticado" });
 
