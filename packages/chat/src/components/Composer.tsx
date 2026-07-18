@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { Send, Paperclip, X, CornerUpLeft, Users, Smile, Clock, BarChart3 } from "lucide-react";
+import { Send, Paperclip, X, CornerUpLeft, Users, Smile, Clock, BarChart3, Plus, Image as ImageIcon } from "lucide-react";
 import { useSendMessage, useScheduleMessage, useDirectory, kindFromMime, type OutgoingAttachment } from "../hooks";
 import { sendTyping } from "../lib/presence";
 import { formatWhen } from "../lib/schedule";
@@ -34,7 +34,15 @@ export function Composer({
   const [sendMenu, setSendMenu] = useState(false);
   const [scheduleOpen, setScheduleOpen] = useState(false);
   const [pollOpen, setPollOpen] = useState(false);
+  const [plusOpen, setPlusOpen] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+  // Abre o seletor de arquivo já filtrado pelo tipo escolhido no menu "+".
+  const openPicker = (accept: string) => {
+    const el = fileRef.current;
+    if (!el) return;
+    el.accept = accept;
+    el.click();
+  };
   const textRef = useRef<HTMLTextAreaElement>(null);
   const send = useSendMessage(channelId);
   const schedule = useScheduleMessage(channelId);
@@ -196,13 +204,40 @@ export function Composer({
         )}
 
         <div className="flex items-end gap-2">
+          {/* input único (fotos/vídeos/documentos); o accept é ajustado pelo item do menu */}
           <input ref={fileRef} type="file" multiple hidden
             accept="image/*,video/*,audio/*,application/pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.zip"
             onChange={(e) => pickFiles(e.target.files)} />
-          <button onClick={() => fileRef.current?.click()} title="Anexar" aria-label="Anexar arquivo"
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring">
-            <Paperclip className="h-5 w-5" />
-          </button>
+
+          {/* "+" agrupa anexos e enquete (estilo WhatsApp) — barra limpa */}
+          <div className="relative shrink-0">
+            <button onClick={() => setPlusOpen((o) => !o)} title="Adicionar" aria-label="Adicionar anexo ou enquete" aria-expanded={plusOpen}
+              className="flex h-10 w-10 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring">
+              <Plus className="h-5 w-5" />
+            </button>
+            {plusOpen && (
+              <>
+                <div className="fixed inset-0 z-20" onClick={() => setPlusOpen(false)} />
+                <div className="absolute bottom-12 left-0 z-30 w-52 overflow-hidden rounded-lg border bg-popover shadow-lg">
+                  <button onClick={() => { setPlusOpen(false); openPicker("image/*,video/*"); }}
+                    className="flex w-full items-center gap-2.5 px-3 py-2.5 text-left text-sm hover:bg-muted">
+                    <ImageIcon className="h-4 w-4 text-muted-foreground" /> Fotos e vídeos
+                  </button>
+                  <button onClick={() => { setPlusOpen(false); openPicker("application/pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.zip"); }}
+                    className="flex w-full items-center gap-2.5 px-3 py-2.5 text-left text-sm hover:bg-muted">
+                    <Paperclip className="h-4 w-4 text-muted-foreground" /> Documento
+                  </button>
+                  {channelId && (
+                    <button onClick={() => { setPlusOpen(false); setPollOpen(true); }}
+                      className="flex w-full items-center gap-2.5 px-3 py-2.5 text-left text-sm hover:bg-muted">
+                      <BarChart3 className="h-4 w-4 text-muted-foreground" /> Enquete
+                    </button>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
+
           <div className="relative shrink-0">
             <button onClick={() => setEmojiOpen((o) => !o)} title="Emoji" aria-label="Inserir emoji" aria-expanded={emojiOpen}
               className="flex h-10 w-10 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring">
@@ -210,12 +245,6 @@ export function Composer({
             </button>
             {emojiOpen && <EmojiPicker onPick={insertEmoji} onClose={() => setEmojiOpen(false)} />}
           </div>
-          {channelId && (
-            <button onClick={() => setPollOpen(true)} title="Enquete" aria-label="Criar enquete"
-              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring">
-              <BarChart3 className="h-5 w-5" />
-            </button>
-          )}
 
           <textarea
             ref={textRef}
