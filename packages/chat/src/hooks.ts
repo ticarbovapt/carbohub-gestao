@@ -5,7 +5,7 @@ import { useChatCtx } from "./context";
 // Sufixo único por assinatura Realtime — evita colidir nomes de canal quando o
 // mesmo hook é usado em vários componentes ("cannot add callbacks after subscribe").
 const rid = () => Math.random().toString(36).slice(2, 10);
-import type { ChatAttachment, ChatChannel, ChatMessage, ChatProfileRef, Conversation, MessageKind, PollResults, ScheduledMessage, ScheduledStatus } from "./types";
+import type { ChatAttachment, ChatChannel, ChatMessage, ChatProfileRef, Conversation, FeedComment, FeedHighlights, FeedPost, MessageKind, PollResults, RecentAnnouncement, ScheduledMessage, ScheduledStatus } from "./types";
 
 export interface ChatUserInfo {
   id: string; full_name: string | null; avatar_url: string | null;
@@ -1083,5 +1083,129 @@ export function useSetTranscription() {
     },
     onSuccess: (_d, v) => qc.invalidateQueries({ queryKey: ["chat", "messages", v.channelId] }),
     onError: () => { /* silencioso: o balão já mostra "não foi possível transcrever" */ },
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Mural/Home (feed): destaques, comunicados, kudos, reações e comentários.
+// Atualização ao vivo pelo ChatAlerts (tabelas chat_feed_* no Realtime).
+// ─────────────────────────────────────────────────────────────────────────────
+export function useFeedHighlights() {
+  const { supabase } = useChatCtx();
+  return useQuery({
+    queryKey: ["chat", "feed", "highlights"],
+    staleTime: 5 * 60_000,
+    refetchOnWindowFocus: false,
+    queryFn: async (): Promise<FeedHighlights> => {
+      const { data, error } = await supabase.rpc("chat_feed_highlights");
+      if (error) throw error;
+      return (data as FeedHighlights) ?? { aniversariantes: [], novos_membros: [] };
+    },
+  });
+}
+
+export function useRecentAnnouncements(limit = 5) {
+  const { supabase } = useChatCtx();
+  return useQuery({
+    queryKey: ["chat", "feed", "announcements", limit],
+    staleTime: 60_000,
+    refetchOnWindowFocus: false,
+    queryFn: async (): Promise<RecentAnnouncement[]> => {
+      const { data, error } = await supabase.rpc("chat_recent_announcements", { p_limit: limit });
+      if (error) throw error;
+      type Row = { message_id: string; channel_id: string; channel_name: string | null; body: string | null; created_at: string; sender_name: string | null };
+      return ((data ?? []) as Row[]).map((r) => ({ ...r }));
+    },
+  });
+}
+
+export function useFeed() {
+  const { supabase } = useChatCtx();
+  return useQuery({
+    queryKey: ["chat", "feed", "list"],
+    staleTime: 30_000,
+    refetchOnWindowFocus: false,
+    queryFn: async (): Promise<FeedPost[]> => {
+      const { data, error } = await supabase.rpc("chat_feed_list", { p_limit: 30, p_before: null });
+      if (error) throw error;
+      return (data as FeedPost[]) ?? [];
+    },
+  });
+}
+
+export function useCreateKudos() {
+  const { supabase } = useChatCtx();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ body, targets }: { body: string; targets: string[] }) => {
+      const { error } = await supabase.rpc("chat_feed_create_kudos", { p_body: body, p_targets: targets });
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["chat", "feed", "list"] }),
+  });
+}
+
+export function useCreateAviso() {
+  const { supabase } = useChatCtx();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ body }: { body: string }) => {
+      const { error } = await supabase.rpc("chat_feed_create_aviso", { p_body: body });
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["chat", "feed", "list"] }),
+  });
+}
+
+export function useDeleteFeedPost() {
+  const { supabase } = useChatCtx();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ postId }: { postId: string }) => {
+      const { error } = await supabase.rpc("chat_feed_delete_post", { p_post: postId });
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["chat", "feed", "list"] }),
+  });
+}
+
+export function useReactFeed() {
+  const { supabase } = useChatCtx();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ postId, emoji, on }: { postId: string; emoji: string; on: boolean }) => {
+      const { error } = await supabase.rpc("chat_feed_react", { p_post: postId, p_emoji: emoji, p_on: on });
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["chat", "feed", "list"] }),
+  });
+}
+
+export function useFeedComments(postId: string | null, enabled: boolean) {
+  const { supabase } = useChatCtx();
+  return useQuery({
+    queryKey: ["chat", "feed", "comments", postId],
+    enabled: !!postId && enabled,
+    staleTime: 30_000,
+    queryFn: async (): Promise<FeedComment[]> => {
+      const { data, error } = await supabase.rpc("chat_feed_comments", { p_post: postId });
+      if (error) throw error;
+      return (data as FeedComment[]) ?? [];
+    },
+  });
+}
+
+export function useAddFeedComment() {
+  const { supabase } = useChatCtx();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ postId, body }: { postId: string; body: string }) => {
+      const { error } = await supabase.rpc("chat_feed_comment", { p_post: postId, p_body: body });
+      if (error) throw error;
+    },
+    onSuccess: (_d, v) => {
+      qc.invalidateQueries({ queryKey: ["chat", "feed", "comments", v.postId] });
+      qc.invalidateQueries({ queryKey: ["chat", "feed", "list"] });
+    },
   });
 }

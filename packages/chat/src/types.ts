@@ -84,6 +84,21 @@ export interface PollResults {
   opcoes: PollOptionResult[];
 }
 
+// ── Mural/Home (feed) ──────────────────────────────────────────────────────
+export interface FeedPerson { id: string; full_name: string | null; avatar_url: string | null; department?: string | null; created_at?: string | null }
+export interface FeedReaction { emoji: string; count: number; mine: boolean }
+export interface FeedPost {
+  id: string; tipo: "kudos" | "aviso"; body: string; created_at: string;
+  author: FeedPerson; targets: FeedPerson[]; reactions: FeedReaction[];
+  comment_count: number; can_delete: boolean;
+}
+export interface FeedComment { id: string; body: string; created_at: string; author: FeedPerson }
+export interface FeedHighlights { aniversariantes: FeedPerson[]; novos_membros: FeedPerson[] }
+export interface RecentAnnouncement {
+  message_id: string; channel_id: string; channel_name: string | null;
+  body: string | null; created_at: string; sender_name: string | null;
+}
+
 export type ScheduledStatus = "pending" | "sending" | "sent" | "failed" | "canceled";
 
 // Mensagem agendada ("enviar depois").

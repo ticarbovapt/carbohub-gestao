@@ -103,6 +103,16 @@ export function ChatAlerts() {
         qc.invalidateQueries({ queryKey: ["chat", "statuses"] });
         qc.invalidateQueries({ queryKey: ["chat", "my-status"] });
       })
+      // Mural/Home ao vivo: post/reação/comentário novo → atualiza o feed.
+      .on("postgres_changes", { event: "*", schema: "public", table: "chat_feed_posts" }, () => {
+        qc.invalidateQueries({ queryKey: ["chat", "feed"] });
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "chat_feed_reactions" }, () => {
+        qc.invalidateQueries({ queryKey: ["chat", "feed"] });
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "chat_feed_comments" }, () => {
+        qc.invalidateQueries({ queryKey: ["chat", "feed"] });
+      })
       // Presence: quem está online agora (chave = user_id).
       .on("presence", { event: "sync" }, () => {
         presenceBus.setOnline(Object.keys(ch.presenceState()));

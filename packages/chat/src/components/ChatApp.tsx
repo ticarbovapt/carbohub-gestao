@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { MessagesSquare } from "lucide-react";
 import { ConversationList } from "./ConversationList";
 import { Conversation } from "./Conversation";
+import { ChatFeed } from "./ChatFeed";
 import { EnablePushButton } from "./EnablePushButton";
 import { useChatCtx } from "../context";
 import { useConversations } from "../hooks";
@@ -12,6 +12,7 @@ const STORAGE_KEY = "carbo-chat-open";
 // Tela cheia do Carbo Chat: lista (esquerda) + conversa aberta (direita).
 export function ChatApp() {
   const [selected, setSelected] = useState<Conv | null>(null);
+  const [feedMobile, setFeedMobile] = useState(false); // mostra o mural em tela cheia no celular
   const [focus, setFocus] = useState<{ messageId: string; at: string } | null>(null);
   const { supabase, currentUser, activeChannelRef } = useChatCtx();
   const { data: conversations = [] } = useConversations();
@@ -100,12 +101,13 @@ export function ChatApp() {
   return (
     <div className="flex h-full min-h-0 w-full overflow-hidden">
       {/* Lista: tela cheia no celular; coluna fixa no desktop. Some no mobile quando há conversa aberta. */}
-      <div className={`${selected ? "hidden md:flex" : "flex"} w-full shrink-0 flex-col border-r md:w-72`}>
+      <div className={`${selected || feedMobile ? "hidden md:flex" : "flex"} w-full shrink-0 flex-col border-r md:w-72`}>
         <div className="min-h-0 flex-1">
           <ConversationList
             selectedId={selected?.channel.id ?? null}
-            onSelect={(c) => { setFocus(null); setSelected(c); }}
+            onSelect={(c) => { setFocus(null); setSelected(c); setFeedMobile(false); }}
             onRemoved={(id) => setSelected((s) => (s?.channel.id === id ? null : s))}
+            onOpenHome={() => { setSelected(null); setFeedMobile(true); }}
           />
         </div>
         <div className="shrink-0 empty:hidden [&>*]:m-2">
@@ -113,7 +115,7 @@ export function ChatApp() {
         </div>
       </div>
       {/* Conversa: tela cheia no celular; some no mobile quando não há conversa. */}
-      <div className={`${selected ? "block" : "hidden md:block"} min-w-0 flex-1`}>
+      <div className={`${selected || feedMobile ? "block" : "hidden md:block"} min-w-0 flex-1`}>
         {selected ? (
           <Conversation key={selected.channel.id} conv={selected}
             focus={focus && focus.messageId ? focus : null}
@@ -121,13 +123,7 @@ export function ChatApp() {
             onBack={() => setSelected(null)}
             onDeleted={() => setSelected(null)} />
         ) : (
-          <div className="flex h-full flex-col items-center justify-center gap-3 text-center text-muted-foreground">
-            <MessagesSquare className="h-12 w-12 opacity-40" />
-            <div>
-              <p className="text-sm font-medium text-foreground">Carbo Chat</p>
-              <p className="text-sm">Selecione uma conversa ou comece uma nova.</p>
-            </div>
-          </div>
+          <ChatFeed onBack={() => setFeedMobile(false)} />
         )}
       </div>
     </div>

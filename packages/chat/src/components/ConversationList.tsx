@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import {
   MessageSquarePlus, UsersRound, Search, Plus, Pin, PinOff, BellOff, Bell,
-  ChevronDown, CheckCheck, Circle, Trash2, LogOut, Archive, ArchiveRestore, Megaphone, Clock, Hash,
+  ChevronDown, CheckCheck, Circle, Trash2, LogOut, Archive, ArchiveRestore, Megaphone, Clock, Hash, Home,
 } from "lucide-react";
 import { useConversations, useUpdateMembership, useLeaveConversation, useSearchMessages, useCanAnnounce, useScheduledMessages, useMyStatus, useUserStatuses } from "../hooks";
 import { useChatCtx } from "../context";
@@ -50,11 +50,12 @@ function timeLabel(iso: string | null) {
 }
 
 export function ConversationList({
-  selectedId, onSelect, onRemoved,
+  selectedId, onSelect, onRemoved, onOpenHome,
 }: {
   selectedId: string | null;
   onSelect: (conv: Conversation) => void;
   onRemoved?: (channelId: string) => void;
+  onOpenHome?: () => void;
 }) {
   const { currentUser, openConversation } = useChatCtx();
   const { data: conversations = [], isLoading } = useConversations();
@@ -143,6 +144,10 @@ export function ConversationList({
       </button>
       {/* header: título + botão único (menu) */}
       <div className="relative flex items-center gap-1 border-b p-2">
+        <button onClick={() => onOpenHome?.()} title="Início / Mural" aria-label="Início"
+          className="rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring">
+          <Home className="h-4 w-4" />
+        </button>
         <span className="flex-1 px-1 text-sm font-semibold">Conversas</span>
         <button onClick={() => setShowExplore(true)} title="Explorar canais públicos" aria-label="Explorar canais públicos"
           className="rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring">
