@@ -1252,3 +1252,32 @@ export function useCreateMuralMessage() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["chat", "feed", "list"] }),
   });
 }
+
+// Post unificado do mural: kudos ou aviso, ambos com marcar + imagem + público.
+export function useCreatePost() {
+  const { supabase, currentUser } = useChatCtx();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: { tipo: "kudos" | "aviso"; body: string; image?: File | null; targets: string[]; audience: "all" | "departments" | "users"; departments: string[]; users: string[] }) => {
+      let imagePath: string | null = null;
+      if (input.image) {
+        const blob = await downscaleImage(input.image, 1600);
+        const path = `feed/${currentUser.id}/${Date.now()}-${safeName(input.image.name)}`;
+        const up = await supabase.storage.from(BUCKET).upload(path, blob, { contentType: "image/jpeg", upsert: false });
+        if (up.error) throw up.error;
+        imagePath = path;
+      }
+      const { error } = await supabase.rpc("chat_feed_create_post", {
+        p_tipo: input.tipo,
+        p_body: input.body,
+        p_image_path: imagePath,
+        p_targets: input.targets,
+        p_audience: input.audience,
+        p_departments: input.departments,
+        p_users: input.users,
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["chat", "feed", "list"] }),
+  });
+}

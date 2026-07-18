@@ -5,9 +5,9 @@ import {
   MessageCircle, Trash2, Users, Loader2, ArrowLeft, ChevronRight, Image as ImageIcon,
 } from "lucide-react";
 import {
-  useFeed, useFeedHighlights, useRecentAnnouncements, useCreateKudos,
+  useFeed, useFeedHighlights, useRecentAnnouncements, useCreatePost,
   useReactFeed, useDeleteFeedPost, useFeedComments, useAddFeedComment, useDirectory,
-  useEnsureBirthdays, useDepartments, useCreateMuralMessage, useSignedUrl,
+  useEnsureBirthdays, useDepartments, useSignedUrl,
 } from "../hooks";
 import { useChatCtx } from "../context";
 import { Avatar } from "./Avatar";
@@ -211,86 +211,63 @@ function MuralComposer() {
         {tab("kudos", <Award className="h-4 w-4" />, "Reconhecer colega")}
         {tab("message", <Megaphone className="h-4 w-4" />, "Mensagem / aviso")}
       </div>
-      {mode === "kudos" && <KudosEditor onDone={() => setMode(null)} />}
-      {mode === "message" && <MessageEditor onDone={() => setMode(null)} />}
+      {mode === "kudos" && <PostEditor tipo="kudos" placeholder="Parabéns ao time de expedição por…" onDone={() => setMode(null)} />}
+      {mode === "message" && <PostEditor tipo="aviso" placeholder="Escreva uma mensagem para o mural…" onDone={() => setMode(null)} />}
     </div>
   );
 }
 
-function KudosEditor({ onDone }: { onDone: () => void }) {
+// Editor único (kudos e aviso têm as MESMAS funcionalidades: texto + marcar +
+// imagem + público). Só muda o 'tipo' e o texto de exemplo.
+function PostEditor({ tipo, placeholder, onDone }: { tipo: "kudos" | "aviso"; placeholder: string; onDone: () => void }) {
   const [body, setBody] = useState("");
   const [targets, setTargets] = useState<FeedPerson[]>([]);
-  const create = useCreateKudos();
-  const chosen = useMemo(() => new Set(targets.map((t) => t.id)), [targets]);
-
-  async function submit() {
-    const text = body.trim();
-    if (!text || create.isPending) return;
-    try {
-      await create.mutateAsync({ body: text, targets: targets.map((t) => t.id) });
-      toast.success("Reconhecimento publicado 👏"); onDone();
-    } catch (e) { toast.error((e as Error)?.message || "Não foi possível publicar"); }
-  }
-
-  return (
-    <div className="mt-3">
-      <PersonChips people={targets} onRemove={(id) => setTargets((p) => p.filter((x) => x.id !== id))} />
-      <textarea autoFocus value={body} onChange={(e) => setBody(e.target.value)} rows={2}
-        placeholder="Parabéns ao time de expedição por…"
-        className="w-full resize-none rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
-      <div className="mt-2 flex items-center gap-2">
-        <PeoplePicker chosen={chosen} onAdd={(p) => setTargets((t) => [...t, p])} label="marcar" />
-        <button onClick={submit} disabled={!body.trim() || create.isPending}
-          className="ml-auto flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-sm font-semibold text-primary-foreground disabled:opacity-50">
-          <Send className="h-3.5 w-3.5" /> {create.isPending ? "Publicando…" : "Publicar"}
-        </button>
-      </div>
-    </div>
-  );
-}
-
-function MessageEditor({ onDone }: { onDone: () => void }) {
-  const [body, setBody] = useState("");
   const [image, setImage] = useState<File | null>(null);
   const [aud, setAud] = useState<Aud>("all");
   const [depts, setDepts] = useState<string[]>([]);
   const [users, setUsers] = useState<FeedPerson[]>([]);
   const fileRef = useRef<HTMLInputElement>(null);
   const { data: departments = [] } = useDepartments();
-  const create = useCreateMuralMessage();
-  const chosen = useMemo(() => new Set(users.map((u) => u.id)), [users]);
+  const create = useCreatePost();
+  const chosenTargets = useMemo(() => new Set(targets.map((t) => t.id)), [targets]);
+  const chosenUsers = useMemo(() => new Set(users.map((u) => u.id)), [users]);
   const canSubmit = (body.trim().length > 0 || !!image) && !create.isPending;
 
   async function submit() {
     if (!canSubmit) return;
     try {
       await create.mutateAsync({
-        body: body.trim(), image, audience: aud,
+        tipo, body: body.trim(), image, targets: targets.map((t) => t.id),
+        audience: aud,
         departments: aud === "departments" ? depts : [],
         users: aud === "users" ? users.map((u) => u.id) : [],
       });
-      toast.success("Mensagem publicada no mural"); onDone();
+      toast.success(tipo === "kudos" ? "Reconhecimento publicado 👏" : "Mensagem publicada no mural"); onDone();
     } catch (e) { toast.error((e as Error)?.message || "Não foi possível publicar"); }
   }
 
   return (
     <div className="mt-3 space-y-3">
+      <PersonChips people={targets} onRemove={(id) => setTargets((p) => p.filter((x) => x.id !== id))} />
       <textarea autoFocus value={body} onChange={(e) => setBody(e.target.value)} rows={3}
-        placeholder="Escreva uma mensagem para o mural…"
+        placeholder={placeholder}
         className="w-full resize-none rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
 
       <input ref={fileRef} type="file" accept="image/*" hidden onChange={(e) => setImage(e.target.files?.[0] ?? null)} />
-      {image ? (
-        <div className="flex items-center gap-2 rounded-md border bg-muted/40 px-2 py-1 text-xs">
-          <ImageIcon className="h-4 w-4 text-muted-foreground" />
-          <span className="max-w-[180px] truncate">{image.name}</span>
-          <button onClick={() => { setImage(null); if (fileRef.current) fileRef.current.value = ""; }} className="ml-auto text-muted-foreground hover:text-destructive"><X className="h-3.5 w-3.5" /></button>
-        </div>
-      ) : (
-        <button onClick={() => fileRef.current?.click()} className="flex items-center gap-1.5 text-xs font-medium text-primary hover:underline">
-          <ImageIcon className="h-4 w-4" /> Adicionar imagem
-        </button>
-      )}
+      <div className="flex items-center gap-3">
+        <PeoplePicker chosen={chosenTargets} onAdd={(p) => setTargets((t) => [...t, p])} label="marcar" />
+        {image ? (
+          <span className="flex items-center gap-1.5 rounded-md border bg-muted/40 px-2 py-1 text-xs">
+            <ImageIcon className="h-3.5 w-3.5 text-muted-foreground" />
+            <span className="max-w-[140px] truncate">{image.name}</span>
+            <button onClick={() => { setImage(null); if (fileRef.current) fileRef.current.value = ""; }} className="text-muted-foreground hover:text-destructive"><X className="h-3 w-3" /></button>
+          </span>
+        ) : (
+          <button onClick={() => fileRef.current?.click()} className="flex items-center gap-1.5 text-xs font-medium text-primary hover:underline">
+            <ImageIcon className="h-4 w-4" /> Adicionar imagem
+          </button>
+        )}
+      </div>
 
       <div>
         <p className="mb-1 text-xs font-medium text-muted-foreground">Enviar para</p>
@@ -321,7 +298,7 @@ function MessageEditor({ onDone }: { onDone: () => void }) {
         {aud === "users" && (
           <div className="mt-2">
             <PersonChips people={users} onRemove={(id) => setUsers((p) => p.filter((x) => x.id !== id))} />
-            <PeoplePicker chosen={chosen} onAdd={(p) => setUsers((u) => [...u, p])} label="escolher pessoas" />
+            <PeoplePicker chosen={chosenUsers} onAdd={(p) => setUsers((u) => [...u, p])} label="escolher pessoas" />
           </div>
         )}
       </div>
