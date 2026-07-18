@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
-  Home, Cake, PartyPopper, Megaphone, Award, Send, X, SmilePlus,
+  Home, Cake, PartyPopper, Megaphone, Send, X, SmilePlus,
   MessageCircle, Trash2, Users, Loader2, ArrowLeft, ChevronRight, Image as ImageIcon,
 } from "lucide-react";
 import {
@@ -208,11 +208,11 @@ function MuralComposer() {
   return (
     <div className="rounded-xl border bg-card p-3">
       <div className="flex flex-wrap gap-2">
-        {tab("kudos", <Award className="h-4 w-4" />, "Reconhecer colega")}
-        {tab("message", <Megaphone className="h-4 w-4" />, "Mensagem / aviso")}
+        {tab("kudos", <MessageCircle className="h-4 w-4" />, "Mensagem")}
+        {tab("message", <Megaphone className="h-4 w-4" />, "Aviso")}
       </div>
-      {mode === "kudos" && <PostEditor tipo="kudos" placeholder="Parabéns ao time de expedição por…" onDone={() => setMode(null)} />}
-      {mode === "message" && <PostEditor tipo="aviso" placeholder="Escreva uma mensagem para o mural…" onDone={() => setMode(null)} />}
+      {mode === "kudos" && <PostEditor tipo="kudos" placeholder="Escreva uma mensagem para o mural…" onDone={() => setMode(null)} />}
+      {mode === "message" && <PostEditor tipo="aviso" placeholder="Escreva um aviso…" onDone={() => setMode(null)} />}
     </div>
   );
 }
@@ -242,7 +242,7 @@ function PostEditor({ tipo, placeholder, onDone }: { tipo: "kudos" | "aviso"; pl
         departments: aud === "departments" ? depts : [],
         users: aud === "users" ? users.map((u) => u.id) : [],
       });
-      toast.success(tipo === "kudos" ? "Reconhecimento publicado 👏" : "Mensagem publicada no mural"); onDone();
+      toast.success(tipo === "kudos" ? "Mensagem publicada no mural" : "Aviso publicado"); onDone();
     } catch (e) { toast.error((e as Error)?.message || "Não foi possível publicar"); }
   }
 
@@ -334,7 +334,7 @@ function FeedPostCard({ post, startComments }: { post: FeedPost; startComments?:
   const del = useDeleteFeedPost();
   const isAviso = post.tipo === "aviso";
   const isBday = post.tipo === "aniversario";
-  const badge = isBday ? "🎂 Aniversário" : isAviso ? "Aviso" : "👏 Reconhecimento";
+  const badge = isBday ? "🎂 Aniversário" : isAviso ? "📢 Aviso" : "💬 Mensagem";
   const badgeCls = isBday ? "bg-pink-500/15 text-pink-600" : isAviso ? "bg-primary/15 text-primary" : "bg-amber-500/15 text-amber-600";
 
   return (
