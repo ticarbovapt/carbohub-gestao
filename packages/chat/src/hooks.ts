@@ -1224,3 +1224,31 @@ export function useEnsureBirthdays() {
     onError: () => { /* silencioso */ },
   });
 }
+
+// Mensagem/aviso no mural (qualquer interno): texto + foto opcional + público.
+// A foto é reduzida e sobe no bucket chat-media antes de criar o post.
+export function useCreateMuralMessage() {
+  const { supabase, currentUser } = useChatCtx();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: { body: string; image?: File | null; audience: "all" | "departments" | "users"; departments: string[]; users: string[] }) => {
+      let imagePath: string | null = null;
+      if (input.image) {
+        const blob = await downscaleImage(input.image, 1600);
+        const path = `feed/${currentUser.id}/${Date.now()}-${safeName(input.image.name)}`;
+        const up = await supabase.storage.from(BUCKET).upload(path, blob, { contentType: "image/jpeg", upsert: false });
+        if (up.error) throw up.error;
+        imagePath = path;
+      }
+      const { error } = await supabase.rpc("chat_feed_create_message", {
+        p_body: input.body,
+        p_image_path: imagePath,
+        p_audience: input.audience,
+        p_departments: input.departments,
+        p_users: input.users,
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["chat", "feed", "list"] }),
+  });
+}
