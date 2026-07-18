@@ -3,6 +3,7 @@ import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import {
   Users as UsersIcon, ListTree, Globe, Target, Activity,
   Store, Building2, TrendingUp, LineChart, Trophy, BarChart3, BadgePercent, Tags, ShieldCheck, MessagesSquare,
+  Gauge,
 } from "lucide-react";
 import { TopBar } from "@/components/TopBar";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
@@ -46,6 +47,7 @@ const NAV_GROUPS = [
     label: "Acessos",
     items: [
       { to: "/ultimo-acesso", label: "Último acesso", icon: Activity },
+      { to: "/chat/adocao", label: "Adoção do Carbo Chat", icon: Gauge },
       { to: "/auditoria", label: "Central de Auditoria", icon: ShieldCheck },
     ],
   },
