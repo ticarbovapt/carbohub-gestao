@@ -1,0 +1,13 @@
+{
+  "name": "@carbo/call",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Carbo Call — engine de chamadas (áudio/vídeo) reutilizável sobre LiveKit. Desacoplada do chat; consumida sob demanda (dynamic import).",
+  "type": "module",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "peerDependencies": {
+    "livekit-client": ">=2",
+    "react": "*"
+  }
+}
