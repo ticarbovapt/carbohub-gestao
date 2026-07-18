@@ -88,7 +88,7 @@ export interface PollResults {
 export interface FeedPerson { id: string; full_name: string | null; avatar_url: string | null; department?: string | null; created_at?: string | null }
 export interface FeedReaction { emoji: string; count: number; mine: boolean }
 export interface FeedPost {
-  id: string; tipo: "kudos" | "aviso"; body: string; created_at: string;
+  id: string; tipo: "kudos" | "aviso" | "aniversario"; body: string; created_at: string;
   author: FeedPerson; targets: FeedPerson[]; reactions: FeedReaction[];
   comment_count: number; can_delete: boolean;
 }

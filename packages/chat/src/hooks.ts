@@ -1209,3 +1209,18 @@ export function useAddFeedComment() {
     },
   });
 }
+
+// Materializa os aniversariantes de hoje (idempotente) — chamado quando o mural
+// abre. Depois invalida a lista pra o post do aniversário aparecer fixado.
+export function useEnsureBirthdays() {
+  const { supabase } = useChatCtx();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async () => {
+      const { error } = await supabase.rpc("chat_feed_ensure_birthdays");
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["chat", "feed", "list"] }),
+    onError: () => { /* silencioso */ },
+  });
+}

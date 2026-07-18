@@ -1,12 +1,13 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
   Home, Cake, PartyPopper, Megaphone, Award, Send, X, SmilePlus,
-  MessageCircle, Trash2, Users, Loader2, ArrowLeft,
+  MessageCircle, Trash2, Users, Loader2, ArrowLeft, ChevronRight,
 } from "lucide-react";
 import {
   useFeed, useFeedHighlights, useRecentAnnouncements, useCreateKudos, useCreateAviso,
   useReactFeed, useDeleteFeedPost, useFeedComments, useAddFeedComment, useCanAnnounce, useDirectory,
+  useEnsureBirthdays,
 } from "../hooks";
 import { useChatCtx } from "../context";
 import { Avatar } from "./Avatar";
@@ -30,13 +31,21 @@ function whenLabel(iso: string) {
 const firstName = (n: string | null) => (n ?? "Alguém").split(/\s+/)[0];
 
 // Mural/Home do Carbo Chat — aparece quando nenhuma conversa está aberta.
+const isToday = (iso: string) => new Date(iso).toDateString() === new Date().toDateString();
+
 export function ChatFeed({ onBack }: { onBack?: () => void }) {
   const highlights = useFeedHighlights();
-  const announcements = useRecentAnnouncements(5);
+  const announcements = useRecentAnnouncements(8);
   const feed = useFeed();
+  const ensureBirthdays = useEnsureBirthdays();
 
-  const bdays = highlights.data?.aniversariantes ?? [];
+  // Materializa os aniversariantes do dia ao abrir o mural (idempotente).
+  useEffect(() => { ensureBirthdays.mutate(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   const news = highlights.data?.novos_membros ?? [];
+  const posts = feed.data ?? [];
+  const bdayPosts = posts.filter((p) => p.tipo === "aniversario" && isToday(p.created_at));
+  const socialPosts = posts.filter((p) => p.tipo !== "aniversario");
 
   return (
     <div className="mx-auto flex h-full max-w-2xl flex-col overflow-y-auto p-4">
@@ -50,41 +59,45 @@ export function ChatFeed({ onBack }: { onBack?: () => void }) {
         <h1 className="text-lg font-bold">Início</h1>
       </div>
 
-      {/* Destaques do dia */}
-      {(bdays.length > 0 || news.length > 0) && (
-        <div className="mb-4 grid gap-3 sm:grid-cols-2">
-          {bdays.length > 0 && (
-            <HighlightCard icon={Cake} tone="pink" title="Aniversariantes de hoje" people={bdays}
-              line={(p) => `${firstName(p.full_name)} 🎂`} />
-          )}
-          {news.length > 0 && (
-            <HighlightCard icon={PartyPopper} tone="green" title="Novos no time" people={news}
-              line={(p) => `${firstName(p.full_name)}${p.department ? ` · ${p.department}` : ""}`} />
-          )}
+      {/* Aniversariantes do dia — fixado no topo, comentável o dia todo */}
+      {bdayPosts.length > 0 && (
+        <div className="mb-4 rounded-xl border-2 border-pink-400/40 bg-pink-500/5 p-3">
+          <p className="mb-2 flex items-center gap-1.5 text-sm font-semibold"><Cake className="h-4 w-4 text-pink-500" /> Aniversariantes de hoje</p>
+          <div className="space-y-3">
+            {bdayPosts.map((p) => <FeedPostCard key={p.id} post={p} startComments />)}
+          </div>
         </div>
       )}
 
-      {/* Comunicados oficiais recentes */}
+      {/* Comunicados oficiais recentes (respeita o público do comunicado) */}
       {(announcements.data?.length ?? 0) > 0 && (
-        <div className="mb-4 rounded-xl border bg-card p-3">
-          <p className="mb-2 flex items-center gap-1.5 text-sm font-semibold"><Megaphone className="h-4 w-4 text-primary" /> Comunicados</p>
-          <div className="space-y-1.5">
-            {announcements.data!.map((a) => <AnnouncementRow key={a.message_id} a={a} />)}
+        <div className="mb-4">
+          <p className="mb-2 flex items-center gap-1.5 text-sm font-semibold"><Megaphone className="h-4 w-4 text-primary" /> Comunicados oficiais</p>
+          <div className="space-y-2">
+            {announcements.data!.map((a) => <AnnouncementCard key={a.message_id} a={a} />)}
           </div>
+        </div>
+      )}
+
+      {/* Novos no time */}
+      {news.length > 0 && (
+        <div className="mb-4">
+          <HighlightCard icon={PartyPopper} tone="green" title="Novos no time" people={news}
+            line={(p) => `${firstName(p.full_name)}${p.department ? ` · ${p.department}` : ""}`} />
         </div>
       )}
 
       {/* Compositor de kudos */}
       <KudosComposer />
 
-      {/* Feed */}
+      {/* Feed de reconhecimentos */}
       <div className="mt-4 space-y-3 pb-6">
         {feed.isLoading ? (
           <div className="flex justify-center py-8 text-muted-foreground"><Loader2 className="h-5 w-5 animate-spin" /></div>
-        ) : (feed.data?.length ?? 0) === 0 ? (
+        ) : socialPosts.length === 0 ? (
           <p className="py-8 text-center text-sm text-muted-foreground">Ainda não há reconhecimentos. Seja o primeiro a elogiar um colega 👏</p>
         ) : (
-          feed.data!.map((p) => <FeedPostCard key={p.id} post={p} />)
+          socialPosts.map((p) => <FeedPostCard key={p.id} post={p} />)
         )}
       </div>
     </div>
@@ -111,18 +124,22 @@ function HighlightCard({ icon: Icon, title, people, line, tone }: {
   );
 }
 
-function AnnouncementRow({ a }: { a: RecentAnnouncement }) {
+function AnnouncementCard({ a }: { a: RecentAnnouncement }) {
   const { openConversation } = useChatCtx();
   return (
-    <button onClick={() => openConversation(a.channel_id)}
-      className="flex w-full items-start gap-2 rounded-lg p-1.5 text-left hover:bg-muted">
-      <Megaphone className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-      <span className="min-w-0 flex-1">
-        <span className="block truncate text-xs font-medium">{a.channel_name ?? "Comunicado"}</span>
-        <span className="line-clamp-2 text-xs text-muted-foreground">{a.body ?? ""}</span>
-      </span>
-      <span className="shrink-0 text-[10px] text-muted-foreground">{whenLabel(a.created_at)}</span>
-    </button>
+    <div className="rounded-xl border border-primary/30 bg-primary/5 p-3">
+      <div className="flex items-center gap-1.5">
+        <Megaphone className="h-4 w-4 text-primary" />
+        <span className="truncate text-sm font-semibold">{a.channel_name ?? "Comunicado oficial"}</span>
+        <span className="ml-auto shrink-0 text-[10px] text-muted-foreground">{whenLabel(a.created_at)}</span>
+      </div>
+      {a.sender_name && <p className="mt-0.5 text-[11px] text-muted-foreground">por {a.sender_name}</p>}
+      <p className="mt-1.5 line-clamp-4 whitespace-pre-wrap break-words text-sm">{a.body ?? ""}</p>
+      <button onClick={() => openConversation(a.channel_id)}
+        className="mt-2 flex items-center gap-1 text-xs font-semibold text-primary hover:underline">
+        Abrir e confirmar leitura <ChevronRight className="h-3.5 w-3.5" />
+      </button>
+    </div>
   );
 }
 
@@ -217,22 +234,25 @@ function KudosComposer() {
   );
 }
 
-function FeedPostCard({ post }: { post: FeedPost }) {
+function FeedPostCard({ post, startComments }: { post: FeedPost; startComments?: boolean }) {
   const [pickerOpen, setPickerOpen] = useState(false);
-  const [showComments, setShowComments] = useState(false);
+  const [showComments, setShowComments] = useState(!!startComments);
   const react = useReactFeed();
   const del = useDeleteFeedPost();
   const isAviso = post.tipo === "aviso";
+  const isBday = post.tipo === "aniversario";
+  const badge = isBday ? "🎂 Aniversário" : isAviso ? "Aviso" : "👏 Reconhecimento";
+  const badgeCls = isBday ? "bg-pink-500/15 text-pink-600" : isAviso ? "bg-primary/15 text-primary" : "bg-amber-500/15 text-amber-600";
 
   return (
-    <div className={`rounded-xl border p-3 ${isAviso ? "border-primary/30 bg-primary/5" : "bg-card"}`}>
+    <div className={`rounded-xl border p-3 ${isBday ? "border-pink-400/30 bg-card" : isAviso ? "border-primary/30 bg-primary/5" : "bg-card"}`}>
       <div className="flex items-start gap-2.5">
         <Avatar name={post.author.full_name} url={post.author.avatar_url} size={36} />
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5">
             <span className="text-sm font-semibold">{post.author.full_name ?? "—"}</span>
-            <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium ${isAviso ? "bg-primary/15 text-primary" : "bg-amber-500/15 text-amber-600"}`}>
-              {isAviso ? "Aviso" : "👏 Reconhecimento"}
+            <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium ${badgeCls}`}>
+              {badge}
             </span>
             <span className="ml-auto text-[10px] text-muted-foreground">{whenLabel(post.created_at)}</span>
             {post.can_delete && (
