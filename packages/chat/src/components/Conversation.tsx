@@ -9,6 +9,7 @@ import { renderRich, richToPlain } from "../lib/format";
 import { Avatar } from "./Avatar";
 import { Composer } from "./Composer";
 import { Attachment } from "./Attachment";
+import { PollBubble } from "./PollBubble";
 import { ContactPanel } from "./ContactPanel";
 import { AnnouncementStatus } from "./AnnouncementStatus";
 import { ScheduledBar } from "./ScheduledBar";
@@ -317,6 +318,11 @@ export function Conversation({ conv, focus, onClearFocus, onBack, onDeleted }: {
                     )}
                     {m.kind === "system" ? (
                       <SystemNotice body={m.body ?? ""} when={new Date(m.created_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })} />
+                    ) : m.kind === "poll" ? (
+                      <PollBubble
+                        m={m} mine={mine} isGroup={isGroup} showName={isGroup && !mine && !grouped}
+                        senderName={nameOf(m.sender_id)} currentUserId={currentUser.id} isChannelAdmin={isPublisher}
+                      />
                     ) : (
                     <MessageBubble
                       m={m} mine={mine} isGroup={isGroup} showName={isGroup && !mine && !grouped}

@@ -13,7 +13,7 @@ export interface ChatProfileRef {
 }
 
 export type ChannelType = "group" | "dm";
-export type MessageKind = "text" | "image" | "video" | "audio" | "file" | "system";
+export type MessageKind = "text" | "image" | "video" | "audio" | "file" | "system" | "poll";
 
 export interface ChatChannel {
   id: string;
@@ -63,6 +63,23 @@ export interface ChatMessage {
   sender?: ChatProfileRef | null;
   attachments?: ChatAttachment[];
   reactions?: ChatReaction[];
+}
+
+// Enquete (kind='poll'). Resultado agregado devolvido por chat_poll_get.
+export interface PollVoter { id: string; full_name: string | null; avatar_url: string | null }
+export interface PollOptionResult { idx: number; texto: string; votos: number; votantes: PollVoter[] | null }
+export interface PollResults {
+  message_id: string;
+  channel_id: string;
+  pergunta: string;
+  multipla: boolean;
+  anonima: boolean;
+  expira_em: string | null;
+  fechada_em: string | null;
+  created_by: string | null;
+  total_votantes: number;
+  meus_votos: number[];
+  opcoes: PollOptionResult[];
 }
 
 export type ScheduledStatus = "pending" | "sending" | "sent" | "failed" | "canceled";

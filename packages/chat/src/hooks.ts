@@ -5,7 +5,7 @@ import { useChatCtx } from "./context";
 // Sufixo único por assinatura Realtime — evita colidir nomes de canal quando o
 // mesmo hook é usado em vários componentes ("cannot add callbacks after subscribe").
 const rid = () => Math.random().toString(36).slice(2, 10);
-import type { ChatAttachment, ChatChannel, ChatMessage, ChatProfileRef, Conversation, MessageKind, ScheduledMessage, ScheduledStatus } from "./types";
+import type { ChatAttachment, ChatChannel, ChatMessage, ChatProfileRef, Conversation, MessageKind, PollResults, ScheduledMessage, ScheduledStatus } from "./types";
 
 export interface ChatUserInfo {
   id: string; full_name: string | null; avatar_url: string | null;
@@ -991,5 +991,82 @@ export function useUserStatuses(ids: string[]) {
       }
       return map;
     },
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Enquetes/votações (kind='poll'). Resultados ao vivo reaproveitam a assinatura
+// do ChatAlerts (voto "toca" a mensagem-pai + tabelas de poll no Realtime).
+// ─────────────────────────────────────────────────────────────────────────────
+export interface CreatePollInput {
+  pergunta: string;
+  opcoes: string[];
+  multipla: boolean;
+  anonima: boolean;
+  expiraEm?: string | null;
+}
+
+export function useCreatePoll(channelId: string | null) {
+  const { supabase, currentUser } = useChatCtx();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: CreatePollInput) => {
+      if (!channelId) return;
+      const { data, error } = await supabase.rpc("chat_poll_create", {
+        p_channel: channelId,
+        p_pergunta: input.pergunta,
+        p_opcoes: input.opcoes,
+        p_multipla: input.multipla,
+        p_anonima: input.anonima,
+        p_expira_em: input.expiraEm ?? null,
+      });
+      if (error) throw error;
+      return data as string;
+    },
+    onSuccess: () => {
+      if (channelId) qc.invalidateQueries({ queryKey: ["chat", "messages", channelId] });
+      qc.invalidateQueries({ queryKey: ["chat", "conversations", currentUser.id] });
+    },
+  });
+}
+
+// Config + resultados de uma enquete. staleTime curto; o ChatAlerts invalida
+// ["chat","poll"] quando chega/muda voto → atualiza a barra ao vivo.
+export function usePoll(messageId: string | null) {
+  const { supabase } = useChatCtx();
+  return useQuery({
+    queryKey: ["chat", "poll", messageId],
+    enabled: !!messageId,
+    staleTime: 10_000,
+    refetchOnWindowFocus: false,
+    queryFn: async (): Promise<PollResults | null> => {
+      const { data, error } = await supabase.rpc("chat_poll_get", { p_message_id: messageId });
+      if (error) throw error;
+      return (data as PollResults | null) ?? null;
+    },
+  });
+}
+
+export function useVotePoll() {
+  const { supabase } = useChatCtx();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ pollId, opcoes }: { pollId: string; opcoes: number[] }) => {
+      const { error } = await supabase.rpc("chat_poll_vote", { p_poll: pollId, p_opcoes: opcoes });
+      if (error) throw error;
+    },
+    onSuccess: (_d, v) => qc.invalidateQueries({ queryKey: ["chat", "poll", v.pollId] }),
+  });
+}
+
+export function useClosePoll() {
+  const { supabase } = useChatCtx();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ pollId }: { pollId: string }) => {
+      const { error } = await supabase.rpc("chat_poll_close", { p_poll: pollId });
+      if (error) throw error;
+    },
+    onSuccess: (_d, v) => qc.invalidateQueries({ queryKey: ["chat", "poll", v.pollId] }),
   });
 }

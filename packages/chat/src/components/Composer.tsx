@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { Send, Paperclip, X, CornerUpLeft, Users, Smile, Clock } from "lucide-react";
+import { Send, Paperclip, X, CornerUpLeft, Users, Smile, Clock, BarChart3 } from "lucide-react";
 import { useSendMessage, useScheduleMessage, useDirectory, kindFromMime, type OutgoingAttachment } from "../hooks";
 import { sendTyping } from "../lib/presence";
 import { formatWhen } from "../lib/schedule";
 import { AudioRecorder } from "./AudioRecorder";
 import { EmojiPicker } from "./EmojiPicker";
 import { ScheduleDialog } from "./ScheduleDialog";
+import { PollDialog } from "./PollDialog";
 import { Avatar } from "./Avatar";
 import type { ChatMessage } from "../types";
 
@@ -32,6 +33,7 @@ export function Composer({
   const [emojiOpen, setEmojiOpen] = useState(false);
   const [sendMenu, setSendMenu] = useState(false);
   const [scheduleOpen, setScheduleOpen] = useState(false);
+  const [pollOpen, setPollOpen] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const textRef = useRef<HTMLTextAreaElement>(null);
   const send = useSendMessage(channelId);
@@ -208,6 +210,12 @@ export function Composer({
             </button>
             {emojiOpen && <EmojiPicker onPick={insertEmoji} onClose={() => setEmojiOpen(false)} />}
           </div>
+          {channelId && (
+            <button onClick={() => setPollOpen(true)} title="Enquete" aria-label="Criar enquete"
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring">
+              <BarChart3 className="h-5 w-5" />
+            </button>
+          )}
 
           <textarea
             ref={textRef}
@@ -257,6 +265,7 @@ export function Composer({
         </div>
       </div>
       {scheduleOpen && <ScheduleDialog onClose={() => setScheduleOpen(false)} onConfirm={scheduleAt} />}
+      {pollOpen && channelId && <PollDialog channelId={channelId} onClose={() => setPollOpen(false)} />}
     </div>
   );
 }

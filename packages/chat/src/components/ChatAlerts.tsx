@@ -90,7 +90,12 @@ export function ChatAlerts() {
         scheduleRefresh();
       })
       // Edição/exclusão de mensagem → atualiza a prévia da lista ao vivo p/ todos.
-      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "chat_messages" }, () => {
+      // Enquete: cada voto/fechamento "toca" a mensagem-pai (edited_at). Aqui
+      // detectamos kind='poll' e revalidamos os resultados — barras ao vivo sem
+      // broadcastar os votos (preserva o anonimato).
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "chat_messages" }, (payload) => {
+        const row = payload.new as { id?: string; kind?: string } | null;
+        if (row?.kind === "poll" && row.id) qc.invalidateQueries({ queryKey: ["chat", "poll", row.id] });
         scheduleRefresh();
       })
       // Status pessoal ao vivo: mudou o status de alguém → repinta lista/cabeçalho.
