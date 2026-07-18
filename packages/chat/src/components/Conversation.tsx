@@ -528,7 +528,7 @@ function MessageBubble({
             <>
               {/* Imagem/mídia EM CIMA; texto embaixo (estilo WhatsApp). */}
               {m.attachments && m.attachments.length > 0 && (
-                <div className={`space-y-1.5 ${m.body ? "mb-1.5" : ""}`}>{m.attachments.map((att) => <Attachment key={att.id} att={att} />)}</div>
+                <div className={`space-y-1.5 ${m.body ? "mb-1.5" : ""}`}>{m.attachments.map((att) => <Attachment key={att.id} att={att} channelId={m.channel_id} />)}</div>
               )}
               {m.body && <p className="whitespace-pre-wrap break-words">{renderRich(m.body)}</p>}
             </>

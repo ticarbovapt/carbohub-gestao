@@ -1,5 +1,7 @@
-import { FileText, Download } from "lucide-react";
-import { useSignedUrl } from "../hooks";
+import { useState } from "react";
+import { FileText, Download, FileAudio, Loader2, ChevronDown, ChevronUp, RotateCcw } from "lucide-react";
+import { useSignedUrl, useSetTranscription } from "../hooks";
+import { transcribeAudio } from "../lib/transcribe";
 import type { ChatAttachment } from "../types";
 
 function kindOf(a: ChatAttachment): "image" | "video" | "audio" | "file" {
@@ -20,7 +22,78 @@ function fileName(path: string) {
   return base.replace(/^\d+-/, "");
 }
 
-export function Attachment({ att }: { att: ChatAttachment }) {
+// Áudio + transcrição sob demanda. O texto só aparece quando a pessoa clica em
+// "ver transcrição" (vale p/ quem enviou e quem recebeu). A transcrição roda no
+// navegador (Whisper) e fica salva no banco → transcreve-se uma vez, todos leem.
+function AudioAttachment({ att, url, channelId }: { att: ChatAttachment; url: string; channelId?: string }) {
+  const [open, setOpen] = useState(false);
+  const [busy, setBusy] = useState(false);       // ESTE cliente está transcrevendo
+  const [localErr, setLocalErr] = useState(false);
+  const setTr = useSetTranscription();
+
+  const status = att.transcription_status ?? "none";
+  const done = status === "done" && !!att.transcription;
+  const failed = status === "failed" || localErr;
+  // "pending" de outra pessoa (não deste cliente) → mostra "transcrevendo…".
+  const othersWorking = status === "pending" && !busy;
+
+  async function runTranscription() {
+    if (!channelId || busy) return;
+    setBusy(true); setLocalErr(false);
+    try {
+      // Sinaliza aos outros que está sendo transcrito (evita corrida + mostra ao vivo).
+      setTr.mutate({ attachmentId: att.id, text: null, status: "pending", channelId });
+      const blob = await (await fetch(url)).blob();
+      const text = await transcribeAudio(blob);
+      await setTr.mutateAsync({ attachmentId: att.id, text: text || "(áudio sem fala reconhecível)", status: "done", channelId });
+    } catch {
+      setLocalErr(true);
+      if (channelId) setTr.mutate({ attachmentId: att.id, text: null, status: "failed", channelId });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function onToggle() {
+    const next = !open;
+    setOpen(next);
+    // Ao abrir e ainda não houver texto pronto (nem alguém transcrevendo), começa.
+    if (next && !done && !busy && !othersWorking) runTranscription();
+  }
+
+  return (
+    <div className="flex flex-col gap-1">
+      <audio src={url} controls className="h-10 w-64 max-w-full" />
+      <button onClick={onToggle}
+        className="flex items-center gap-1 self-start text-[11px] font-medium text-primary hover:underline">
+        <FileAudio className="h-3 w-3" />
+        {open ? "ocultar transcrição" : "ver transcrição"}
+        {open ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+      </button>
+
+      {open && (
+        <div className="max-w-[260px] rounded-md bg-black/5 px-2.5 py-1.5 text-xs dark:bg-white/10">
+          {done ? (
+            <p className="whitespace-pre-wrap break-words">{att.transcription}</p>
+          ) : busy || othersWorking ? (
+            <span className="flex items-center gap-1.5 text-muted-foreground"><Loader2 className="h-3 w-3 animate-spin" /> Transcrevendo…</span>
+          ) : failed ? (
+            <div className="flex flex-col gap-1">
+              <span className="text-muted-foreground">Não foi possível transcrever.</span>
+              <button onClick={runTranscription} className="flex items-center gap-1 self-start font-medium text-primary hover:underline">
+                <RotateCcw className="h-3 w-3" /> tentar de novo
+              </button>
+            </div>
+          ) : (
+            <span className="text-muted-foreground">Preparando…</span>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+export function Attachment({ att, channelId }: { att: ChatAttachment; channelId?: string }) {
   const { data: url, isLoading } = useSignedUrl(att.storage_path);
   const kind = kindOf(att);
 
@@ -40,7 +113,7 @@ export function Attachment({ att }: { att: ChatAttachment }) {
     return <video src={url} controls className="block aspect-video w-full rounded-lg bg-black object-cover" />;
   }
   if (kind === "audio") {
-    return <audio src={url} controls className="h-10 w-64 max-w-full" />;
+    return <AudioAttachment att={att} url={url} channelId={channelId} />;
   }
   return (
     <a href={url} target="_blank" rel="noreferrer"

@@ -40,6 +40,8 @@ export interface ChatAttachment {
   height: number | null;
   duration_ms: number | null;
   thumbnail_path: string | null;
+  transcription?: string | null;
+  transcription_status?: "none" | "pending" | "done" | "failed";
 }
 
 export interface ChatReaction {

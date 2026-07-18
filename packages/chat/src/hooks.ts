@@ -1070,3 +1070,18 @@ export function useClosePoll() {
     onSuccess: (_d, v) => qc.invalidateQueries({ queryKey: ["chat", "poll", v.pollId] }),
   });
 }
+
+// Grava a transcrição/estado de um anexo de áudio (chat_set_transcription).
+// A UI atualiza ao vivo pra todos porque a RPC "toca" a mensagem-pai.
+export function useSetTranscription() {
+  const { supabase, currentUser } = useChatCtx();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ attachmentId, text, status }: { attachmentId: string; text: string | null; status: "none" | "pending" | "done" | "failed"; channelId: string }) => {
+      const { error } = await supabase.rpc("chat_set_transcription", { p_attachment: attachmentId, p_text: text, p_status: status });
+      if (error) throw error;
+    },
+    onSuccess: (_d, v) => qc.invalidateQueries({ queryKey: ["chat", "messages", v.channelId] }),
+    onError: () => { /* silencioso: o balão já mostra "não foi possível transcrever" */ },
+  });
+}
