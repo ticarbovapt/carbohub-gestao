@@ -316,6 +316,25 @@ function PostEditor({ tipo, placeholder, onDone }: { tipo: "kudos" | "aviso"; pl
   );
 }
 
+// Botão de apagar com confirmação inline (só aparece pra autor/gestor).
+function DeleteButton({ onConfirm, className }: { onConfirm: () => void; className?: string }) {
+  const [confirm, setConfirm] = useState(false);
+  if (confirm) {
+    return (
+      <span className={`flex items-center gap-1.5 text-[11px] ${className ?? ""}`}>
+        <span className="text-muted-foreground">Apagar?</span>
+        <button onClick={() => { setConfirm(false); onConfirm(); }} className="font-semibold text-destructive hover:underline">sim</button>
+        <button onClick={() => setConfirm(false)} className="text-muted-foreground hover:underline">não</button>
+      </span>
+    );
+  }
+  return (
+    <button onClick={() => setConfirm(true)} title="Apagar" className={`text-muted-foreground hover:text-destructive ${className ?? ""}`}>
+      <Trash2 className="h-3.5 w-3.5" />
+    </button>
+  );
+}
+
 // Imagem de um post do mural (URL assinada do bucket privado).
 function FeedImage({ path }: { path: string }) {
   const { data: url } = useSignedUrl(path);
@@ -350,7 +369,7 @@ function FeedPostCard({ post, startComments }: { post: FeedPost; startComments?:
                   🎂 Hoje é aniversário de {post.author.full_name ?? "um colega"}!
                 </p>
                 {post.can_delete && (
-                  <button onClick={() => del.mutate({ postId: post.id })} title="Apagar" className="ml-auto shrink-0 text-muted-foreground hover:text-destructive"><Trash2 className="h-3.5 w-3.5" /></button>
+                  <DeleteButton onConfirm={() => del.mutate({ postId: post.id })} className="ml-auto shrink-0" />
                 )}
               </div>
               <p className="mt-0.5 text-xs text-muted-foreground">Deixe seu parabéns 🎉</p>
@@ -364,7 +383,7 @@ function FeedPostCard({ post, startComments }: { post: FeedPost; startComments?:
                 </span>
                 <span className="ml-auto text-[10px] text-muted-foreground">{whenLabel(post.created_at)}</span>
                 {post.can_delete && (
-                  <button onClick={() => del.mutate({ postId: post.id })} title="Apagar" className="text-muted-foreground hover:text-destructive"><Trash2 className="h-3.5 w-3.5" /></button>
+                  <DeleteButton onConfirm={() => del.mutate({ postId: post.id })} />
                 )}
               </div>
 
