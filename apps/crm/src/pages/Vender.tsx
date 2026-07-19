@@ -81,7 +81,7 @@ function CollapsibleCard({
 export default function Vender() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { profile, gestor } = useAuth();
+  const { profile, isGestor: gestor } = useAuth();
   const vendedorLogado = profile?.full_name ?? profile?.username ?? "";
   const createVenda = useCreateVenda();
   const updateVenda = useUpdateVendaFull();
