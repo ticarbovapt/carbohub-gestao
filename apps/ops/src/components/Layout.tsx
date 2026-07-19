@@ -1,8 +1,10 @@
 import { useMemo, useState } from "react";
-import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
-import { ChevronDown, Lock, MessagesSquare } from "lucide-react";
+import { Outlet, useLocation, useNavigate } from "react-router-dom";
+import { MessagesSquare } from "lucide-react";
 import { TopBar } from "@/components/TopBar";
-import { Sheet, SheetContent } from "@/components/ui/sheet";
+import { Sidebar, type ShellNavSection } from "@carbo/shell";
+import logoCarbo from "@/assets/logo-carbo.png";
+import { HUB_URL } from "@/lib/sso";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useAccessPing } from "@/hooks/useAccessPing";
 import { useLiveNotifications } from "@/hooks/useLiveNotifications";
@@ -11,81 +13,17 @@ import { ChatProvider, ChatBadge } from "@carbo/chat";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 
-const navCls = ({ isActive }: { isActive: boolean }) =>
-  `flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-    isActive ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-muted hover:text-foreground"
-  }`;
-const subCls = ({ isActive }: { isActive: boolean }) =>
-  `flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-sm transition-colors ${
-    isActive ? "bg-primary/10 text-primary font-medium" : "text-muted-foreground hover:bg-muted hover:text-foreground"
-  }`;
-
-function Nav({ onNavigate }: { onNavigate?: () => void }) {
-  const { pathname } = useLocation();
-  // Grupo que contém a rota atual começa aberto; os demais fechados.
-  const activeGroup = OPS_GROUPS.find((g) => g.items.some((i) => pathname.startsWith(i.path) && i.path !== "/"))?.label;
-  const [open, setOpen] = useState<Record<string, boolean>>(
-    () => Object.fromEntries(OPS_GROUPS.map((g) => [g.label, g.label === activeGroup && !g.locked]))
-  );
-  const toggle = (label: string) => setOpen((o) => ({ ...o, [label]: !o[label] }));
-
-  return (
-    <nav className="p-3 space-y-1 overflow-y-auto">
-      {/* Início */}
-      <NavLink to={OPS_HOME.path} end className={navCls} onClick={onNavigate}>
-        <OPS_HOME.icon className="h-4 w-4" /> {OPS_HOME.label}
-      </NavLink>
-
-      <NavLink to="/chat" className={navCls} onClick={onNavigate}>
-        <MessagesSquare className="h-4 w-4" />
-        <span className="flex-1">Carbo Chat</span>
-        <ChatBadge />
-      </NavLink>
-
-      {OPS_GROUPS.map((group) => (
-        <div key={group.label} className={`pt-2 ${group.locked ? "opacity-70" : ""}`}>
-          <button
-            onClick={() => toggle(group.label)}
-            className="w-full flex items-center justify-between px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/70 hover:text-muted-foreground"
-          >
-            <span className="flex items-center gap-1.5">
-              {group.locked && <Lock className="h-2.5 w-2.5" />} {group.label}
-              {group.locked && <span className="normal-case font-normal text-muted-foreground/50">· no Finanças</span>}
-            </span>
-            <ChevronDown className={`h-3 w-3 transition-transform ${open[group.label] ? "" : "-rotate-90"}`} />
-          </button>
-          {open[group.label] && (
-            <div className="mt-1 space-y-1 border-l border-border ml-3 pl-1">
-              {group.items.map((item) =>
-                item.locked ? (
-                  <div
-                    key={item.path}
-                    title="Tela movida para o Carbo Finanças"
-                    aria-disabled="true"
-                    className="flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-sm text-muted-foreground/50 cursor-not-allowed select-none"
-                  >
-                    <item.icon className="h-4 w-4 shrink-0" />
-                    <span className="truncate">{item.label}</span>
-                    <Lock className="h-3 w-3 ml-auto shrink-0" />
-                  </div>
-                ) : (
-                  <NavLink key={item.path} to={item.path} end={item.end} className={subCls} onClick={onNavigate}>
-                    <item.icon className="h-4 w-4 shrink-0" /> <span className="truncate">{item.label}</span>
-                  </NavLink>
-                )
-              )}
-            </div>
-          )}
-        </div>
-      ))}
-    </nav>
-  );
-}
-
 export function Layout() {
   const isMobile = useIsMobile();
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [deskOpen, setDeskOpen] = useState(true);
+  const [collapsed, setCollapsed] = useState<boolean>(() => {
+    try { return localStorage.getItem("carbo:sidebar:collapsed") === "1"; } catch { return false; }
+  });
+  const toggleCollapsed = () => setCollapsed((c) => {
+    const n = !c;
+    try { localStorage.setItem("carbo:sidebar:collapsed", n ? "1" : "0"); } catch {}
+    return n;
+  });
   useAccessPing("carbo_ops_app");
   useLiveNotifications();
   const { user, profile } = useAuth();
@@ -96,9 +34,33 @@ export function Layout() {
 
   const navigate = useNavigate();
 
+  const { pathname } = useLocation();
+  const activeGroup = OPS_GROUPS.find((g) => g.items.some((i) => i.path !== "/" && pathname.startsWith(i.path)))?.label;
+
+  const sections: ShellNavSection[] = [
+    {
+      items: [
+        { to: OPS_HOME.path, label: OPS_HOME.label, icon: OPS_HOME.icon, end: true },
+        { to: "/chat", label: "Carbo Chat", icon: MessagesSquare, badge: <ChatBadge /> },
+      ],
+    },
+    ...OPS_GROUPS.map((g) => ({
+      label: g.label,
+      collapsible: true,
+      defaultOpen: !g.locked && g.label === activeGroup,
+      locked: g.locked,
+      lockedHint: g.locked ? "Domínio migrado para o Carbo Finanças" : undefined,
+      items: g.items.map((i) => ({
+        to: i.path, label: i.label, icon: i.icon, end: i.end,
+        locked: i.locked,
+        lockedHint: i.locked ? "Tela movida para o Carbo Finanças" : undefined,
+      })),
+    })),
+  ];
+
   const handleMenu = () => {
     if (isMobile) setMobileOpen(true);
-    else setDeskOpen((o) => !o);
+    else toggleCollapsed();
   };
 
   return (
@@ -108,17 +70,14 @@ export function Layout() {
       <TopBar appName="Carbo Ops" onMenu={handleMenu} />
 
       <div className="flex flex-1 min-h-0">
-        {deskOpen && (
-          <aside className="hidden md:block w-60 shrink-0 border-r bg-card overflow-y-auto">
-            <Nav />
-          </aside>
-        )}
-
-        <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
-          <SheetContent side="left" className="w-[280px] p-0 overflow-y-auto">
-            <Nav onNavigate={() => setMobileOpen(false)} />
-          </SheetContent>
-        </Sheet>
+        <Sidebar
+          brand={{ appName: "Carbo Ops", logoSrc: logoCarbo, onLogoClick: () => { window.location.href = `${HUB_URL}/home`; } }}
+          sections={sections}
+          collapsed={collapsed}
+          onToggleCollapse={toggleCollapsed}
+          mobileOpen={mobileOpen}
+          onMobileOpenChange={setMobileOpen}
+        />
 
         <main className="flex-1 min-w-0 overflow-y-auto">
           <Outlet />

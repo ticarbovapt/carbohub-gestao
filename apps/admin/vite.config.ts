@@ -13,6 +13,7 @@ export default defineConfig({
     alias: {
       "@": path.resolve(__dirname, "./src"),
       "@carbo/chat": path.resolve(__dirname, "../../packages/chat/src"),
+      "@carbo/shell": path.resolve(__dirname, "../../packages/shell/src"),
       "@carbo/call": path.resolve(__dirname, "../../packages/call/src"),
       // @carbo/call é source fora do app → força o livekit-client a resolver no
       // node_modules DESTE app (não está hoisted na raiz).

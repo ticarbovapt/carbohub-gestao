@@ -1,18 +1,20 @@
 import { useState } from "react";
-import { NavLink, Outlet, useNavigate } from "react-router-dom";
+import { Outlet, useNavigate } from "react-router-dom";
 import {
   KanbanSquare, ClipboardList, TrendingUp, Target, BarChart3, LayoutDashboard,
   Wind, CalendarDays, MapPinned, Map, Share2, ShoppingCart, ShoppingBag, MessagesSquare,
 } from "lucide-react";
 import { ChatBadge, ChatProvider } from "@carbo/chat";
+import { Sidebar, type ShellNavSection } from "@carbo/shell";
 import { supabase } from "@/integrations/supabase/client";
 import { useMemo } from "react";
 import { TopBar } from "@/components/TopBar";
-import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useAccessPing } from "@/hooks/useAccessPing";
 import { useLiveNotifications } from "@/hooks/useLiveNotifications";
 import { useAuth } from "@/contexts/AuthContext";
+import logoCarbo from "@/assets/logo-carbo.png";
+import { HUB_URL } from "@/lib/sso";
 
 // CRM é uma seção com sub-itens (Funis de Venda = dashboard, Pipelines = kanban).
 const CRM_SUB = [
@@ -39,80 +41,16 @@ const TERR_SUB = [
   { to: "/territorio/expansao", label: "Expansão", icon: TrendingUp },
 ];
 
-const navCls = ({ isActive }: { isActive: boolean }) =>
-  `flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-    isActive ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-muted hover:text-foreground"
-  }`;
-const subCls = ({ isActive }: { isActive: boolean }) =>
-  `flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-sm transition-colors ${
-    isActive ? "bg-primary/10 text-primary font-medium" : "text-muted-foreground hover:bg-muted hover:text-foreground"
-  }`;
-
-function Nav({ onNavigate }: { onNavigate?: () => void }) {
-  const { isGestor } = useAuth();
-  return (
-    <nav className="space-y-1 p-3">
-      {/* Seção CRM */}
-      <p className="px-3 pt-1 pb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/70">CRM</p>
-      <div className="space-y-1 border-l border-border ml-3 pl-1">
-        {CRM_SUB.map((n) => (
-          <NavLink key={n.to} to={n.to} end={n.end} className={subCls} onClick={onNavigate}>
-            <n.icon className="h-4 w-4" /> {n.label}
-          </NavLink>
-        ))}
-      </div>
-
-      <div className="pt-2 space-y-1">
-        <NavLink to="/chat" className={navCls} onClick={onNavigate}>
-          <MessagesSquare className="h-4 w-4" />
-          <span className="flex-1">Carbo Chat</span>
-          <ChatBadge />
-        </NavLink>
-        {NAV.map((n) => (
-          <NavLink key={n.to} to={n.to} className={navCls} onClick={onNavigate}>
-            <n.icon className="h-4 w-4" /> {n.label}
-          </NavLink>
-        ))}
-      </div>
-
-      {/* Seção Descarbonização */}
-      <p className="px-3 pt-3 pb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/70 flex items-center gap-1.5">
-        <Wind className="h-3 w-3" /> Descarbonização
-      </p>
-      <div className="space-y-1 border-l border-border ml-3 pl-1">
-        {DESC_SUB.map((n) => (
-          <NavLink key={n.to} to={n.to} className={subCls} onClick={onNavigate}>
-            <n.icon className="h-4 w-4" /> {n.label}
-          </NavLink>
-        ))}
-      </div>
-
-      {/* Seção Território — só gestor (rede da empresa, não é dado do vendedor) */}
-      {isGestor && (
-        <>
-          <p className="px-3 pt-3 pb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/70 flex items-center gap-1.5">
-            <MapPinned className="h-3 w-3" /> Território
-          </p>
-          <div className="space-y-1 border-l border-border ml-3 pl-1">
-            {TERR_SUB.map((n) => (
-              <NavLink key={n.to} to={n.to} className={subCls} onClick={onNavigate}>
-                <n.icon className="h-4 w-4" /> {n.label}
-              </NavLink>
-            ))}
-          </div>
-        </>
-      )}
-    </nav>
-  );
-}
-
 export function SalesShell() {
   const isMobile = useIsMobile();
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [deskOpen, setDeskOpen] = useState(true);
+  const [collapsed, setCollapsed] = useState<boolean>(() => {
+    try { return localStorage.getItem("carbo:sidebar:collapsed") === "1"; } catch { return false; }
+  });
+  const toggleCollapsed = () => setCollapsed((c) => { const n = !c; try { localStorage.setItem("carbo:sidebar:collapsed", n ? "1" : "0"); } catch {} return n; });
   useAccessPing("carbo_crm");
   useLiveNotifications();
-  const { user, profile } = useAuth();
+  const { user, profile, isGestor } = useAuth();
   const chatUser = useMemo(
     () => ({ id: user?.id ?? "", full_name: profile?.full_name ?? null, avatar_url: profile?.avatar_url ?? null }),
     [user?.id, profile?.full_name, profile?.avatar_url],
@@ -120,9 +58,19 @@ export function SalesShell() {
 
   const navigate = useNavigate();
 
+  const sections: ShellNavSection[] = [
+    { label: "CRM", items: CRM_SUB.map((n) => ({ to: n.to, label: n.label, icon: n.icon, end: (n as any).end })) },
+    { items: [
+        { to: "/chat", label: "Carbo Chat", icon: MessagesSquare, badge: <ChatBadge /> },
+        ...NAV.map((n) => ({ to: n.to, label: n.label, icon: n.icon })),
+    ] },
+    { label: "Descarbonização", icon: Wind, items: DESC_SUB.map((n) => ({ to: n.to, label: n.label, icon: n.icon })) },
+    ...(isGestor ? [{ label: "Território", icon: MapPinned, items: TERR_SUB.map((n) => ({ to: n.to, label: n.label, icon: n.icon })) }] : []),
+  ];
+
   const handleMenu = () => {
     if (isMobile) setMobileOpen(true);
-    else setDeskOpen((o) => !o);
+    else toggleCollapsed();
   };
 
   return (
@@ -132,19 +80,14 @@ export function SalesShell() {
       <TopBar appName="Carbo Sales" onMenu={handleMenu} />
 
       <div className="flex flex-1 min-h-0">
-        {/* Desktop: sidebar fixa (rola por dentro se for maior que a tela) */}
-        {deskOpen && (
-          <aside className="hidden md:block w-52 shrink-0 border-r bg-card overflow-y-auto">
-            <Nav />
-          </aside>
-        )}
-
-        {/* Mobile: gaveta sobreposta */}
-        <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
-          <SheetContent side="left" className="w-[260px] p-0">
-            <Nav onNavigate={() => setMobileOpen(false)} />
-          </SheetContent>
-        </Sheet>
+        <Sidebar
+          brand={{ appName: "Carbo Sales", logoSrc: logoCarbo, onLogoClick: () => { window.location.href = `${HUB_URL}/home`; } }}
+          sections={sections}
+          collapsed={collapsed}
+          onToggleCollapse={toggleCollapsed}
+          mobileOpen={mobileOpen}
+          onMobileOpenChange={setMobileOpen}
+        />
 
         <main className="flex-1 min-w-0 flex flex-col overflow-y-auto">
           <Outlet />

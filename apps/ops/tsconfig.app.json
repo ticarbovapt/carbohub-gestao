@@ -23,6 +23,9 @@
       "@carbo/chat": [
         "../../packages/chat/src/index.ts"
       ],
+      "@carbo/shell": [
+        "../../packages/shell/src/index.ts"
+      ],
       "@carbo/call": [
         "../../packages/call/src/index.ts"
       ],

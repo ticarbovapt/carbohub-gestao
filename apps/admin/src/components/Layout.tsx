@@ -1,16 +1,18 @@
 import { useMemo, useState } from "react";
-import { NavLink, Outlet, useNavigate } from "react-router-dom";
+import { Outlet, useNavigate } from "react-router-dom";
 import {
   Users as UsersIcon, ListTree, Globe, Target, Activity,
   Store, Building2, TrendingUp, LineChart, Trophy, BarChart3, BadgePercent, Tags, ShieldCheck, MessagesSquare,
   Gauge,
 } from "lucide-react";
 import { TopBar } from "@/components/TopBar";
-import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useAccessPing } from "@/hooks/useAccessPing";
 import { useLiveNotifications } from "@/hooks/useLiveNotifications";
 import { ChatProvider, ChatBadge } from "@carbo/chat";
+import { Sidebar, type ShellNavSection } from "@carbo/shell";
+import logoCarbo from "@/assets/logo-carbo.png";
+import { HUB_URL } from "@/lib/sso";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 
@@ -66,46 +68,11 @@ const NAV_GROUPS = [
   },
 ];
 
-const navCls = ({ isActive }: { isActive: boolean }) =>
-  `flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-    isActive ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-muted hover:text-foreground"
-  }`;
-
-function Nav({ onNavigate }: { onNavigate?: () => void }) {
-  return (
-    <nav className="space-y-1 p-3">
-      {NAV_TOP.map((n) => (
-        <NavLink key={n.to} to={n.to} end={n.end} className={navCls} onClick={onNavigate}>
-          <n.icon className="h-4 w-4" /> {n.label}
-        </NavLink>
-      ))}
-
-      <NavLink to="/chat" className={navCls} onClick={onNavigate}>
-        <MessagesSquare className="h-4 w-4" />
-        <span className="flex-1">Carbo Chat</span>
-        <ChatBadge />
-      </NavLink>
-
-      {NAV_GROUPS.map((g) => (
-        <div key={g.label} className="pt-3">
-          <p className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/70">{g.label}</p>
-          <div className="space-y-1">
-            {g.items.map((i) => (
-              <NavLink key={i.to} to={i.to} className={navCls} onClick={onNavigate}>
-                <i.icon className="h-4 w-4" /> {i.label}
-              </NavLink>
-            ))}
-          </div>
-        </div>
-      ))}
-    </nav>
-  );
-}
-
 export function Layout() {
   const isMobile = useIsMobile();
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [deskOpen, setDeskOpen] = useState(true);
+  const [collapsed, setCollapsed] = useState<boolean>(() => { try { return localStorage.getItem("carbo:sidebar:collapsed") === "1"; } catch { return false; } });
+  const toggleCollapsed = () => setCollapsed((c) => { const n = !c; try { localStorage.setItem("carbo:sidebar:collapsed", n ? "1" : "0"); } catch {} return n; });
   useAccessPing("carbo_admin");
   useLiveNotifications();
   const { user, profile } = useAuth();
@@ -118,8 +85,16 @@ export function Layout() {
 
   const handleMenu = () => {
     if (isMobile) setMobileOpen(true);
-    else setDeskOpen((o) => !o);
+    else toggleCollapsed();
   };
+
+  const sections: ShellNavSection[] = [
+    { items: [
+        ...NAV_TOP.map(n => ({ to: n.to, label: n.label, icon: n.icon, end: n.end })),
+        { to: "/chat", label: "Carbo Chat", icon: MessagesSquare, badge: <ChatBadge /> },
+    ] },
+    ...NAV_GROUPS.map(g => ({ label: g.label, items: g.items.map(i => ({ to: i.to, label: i.label, icon: i.icon })) })),
+  ];
 
   return (
     <ChatProvider supabase={supabase} currentUser={chatUser} navigate={navigate}
@@ -128,19 +103,14 @@ export function Layout() {
       <TopBar appName="Carbo Admin" onMenu={handleMenu} />
 
       <div className="flex flex-1 min-h-0">
-        {/* Desktop: sidebar fixa (rola por dentro se for maior que a tela) */}
-        {deskOpen && (
-          <aside className="hidden md:block w-56 shrink-0 border-r bg-card overflow-y-auto">
-            <Nav />
-          </aside>
-        )}
-
-        {/* Mobile: gaveta sobreposta */}
-        <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
-          <SheetContent side="left" className="w-[260px] p-0">
-            <Nav onNavigate={() => setMobileOpen(false)} />
-          </SheetContent>
-        </Sheet>
+        <Sidebar
+          brand={{ appName: "Carbo Admin", logoSrc: logoCarbo, onLogoClick: () => { window.location.href = `${HUB_URL}/home`; } }}
+          sections={sections}
+          collapsed={collapsed}
+          onToggleCollapse={toggleCollapsed}
+          mobileOpen={mobileOpen}
+          onMobileOpenChange={setMobileOpen}
+        />
 
         <main className="flex-1 min-w-0 overflow-y-auto">
           <Outlet />
