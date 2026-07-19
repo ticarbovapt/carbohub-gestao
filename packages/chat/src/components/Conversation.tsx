@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Search, X, SmilePlus, Reply, CornerUpLeft, Check, CheckCheck, MoreVertical, Pencil, Trash2, ArrowDown, Megaphone, Lock, ChevronLeft, Bug, Lightbulb, CheckCircle2, XCircle, Info, Phone, PhoneMissed } from "lucide-react";
-import { useMessages, useProfilesMap, useToggleReaction, useChannelMembers, useUserInfo, useEditMessage, useDeleteMessage, useSearchMessages, useChannelAcks, useAckMessage, useJoinChannel, useUserStatuses } from "../hooks";
+import { Search, X, SmilePlus, Reply, CornerUpLeft, Check, CheckCheck, MoreVertical, Pencil, Trash2, ArrowDown, Megaphone, Lock, ChevronLeft, Bug, Lightbulb, CheckCircle2, XCircle, Info, Phone, PhoneMissed, Headphones } from "lucide-react";
+import { useMessages, useProfilesMap, useToggleReaction, useChannelMembers, useUserInfo, useEditMessage, useDeleteMessage, useSearchMessages, useChannelAcks, useAckMessage, useJoinChannel, useUserStatuses, useActiveGroupCall } from "../hooks";
 import { statusText } from "./StatusBadge";
 import { useChatCtx } from "../context";
 import { messageReceipt, type ReceiptStatus } from "../lib/receipts";
@@ -164,6 +164,7 @@ export function Conversation({ conv, focus, onClearFocus, onBack, onDeleted }: {
   const { currentUser, openConversation } = useChatCtx();
   const callControls = useCallControls();
   const isGroup = conv.channel.type === "group";
+  const groupCall = useActiveGroupCall(isGroup ? conv.channel.id : null, isGroup && callControls.callsEnabled);
   const { data: messages = [], isLoading } = useMessages(conv.channel.id, focus?.at ?? null);
   const { data: members = [], isLoading: membersLoading } = useChannelMembers(conv.channel.id);
   const join = useJoinChannel();
@@ -273,11 +274,30 @@ export function Conversation({ conv, focus, onClearFocus, onBack, onDeleted }: {
               <Phone className="h-4 w-4" />
             </button>
           )}
+          {callControls.callsEnabled && isGroup && !isAnnouncement && callControls.inCallChannelId !== conv.channel.id && (
+            <button onClick={() => callControls.joinGroupCall(conv.channel.id)} disabled={callControls.busy}
+              title={groupCall.data ? "Entrar na chamada de voz" : "Iniciar chamada de voz"} aria-label="Chamada de voz do grupo"
+              className={`shrink-0 rounded-md p-1.5 focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-40 ${groupCall.data ? "text-emerald-600 hover:bg-muted" : "text-muted-foreground hover:bg-muted hover:text-emerald-600"}`}>
+              <Headphones className="h-4 w-4" />
+            </button>
+          )}
           <button onClick={() => { setSearchOpen((o) => !o); setSearch(""); }} title="Buscar na conversa" aria-label="Buscar na conversa" aria-expanded={searchOpen}
             className="shrink-0 rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring">
             <Search className="h-4 w-4" />
           </button>
         </div>
+
+        {/* Huddle em andamento — entrar com 1 clique */}
+        {isGroup && callControls.callsEnabled && groupCall.data && callControls.inCallChannelId !== conv.channel.id && (
+          <button onClick={() => callControls.joinGroupCall(conv.channel.id)} disabled={callControls.busy}
+            className="flex items-center gap-2 border-b bg-emerald-500/10 px-4 py-2 text-left text-sm hover:bg-emerald-500/15 disabled:opacity-50">
+            <span className="flex h-6 w-6 items-center justify-center rounded-full bg-emerald-600 text-white"><Headphones className="h-3.5 w-3.5" /></span>
+            <span className="flex-1">
+              <b>Chamada de voz em andamento</b> · {groupCall.data.count} {groupCall.data.count === 1 ? "pessoa" : "pessoas"}
+            </span>
+            <span className="rounded-md bg-emerald-600 px-2.5 py-1 text-xs font-semibold text-white">Entrar</span>
+          </button>
+        )}
 
         {searchOpen && (
           <div className="border-b p-2">

@@ -1281,3 +1281,22 @@ export function useCreatePost() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["chat", "feed", "list"] }),
   });
 }
+
+// Estado da chamada de voz em grupo (huddle) do canal — pro banner e o painel.
+export interface GroupCallState {
+  session_id: string; room: string; count: number;
+  participants: { id: string; full_name: string | null; avatar_url: string | null }[];
+}
+export function useActiveGroupCall(channelId: string | null, enabled = true) {
+  const { supabase } = useChatCtx();
+  return useQuery({
+    queryKey: ["chat", "group-call", channelId],
+    enabled: !!channelId && enabled,
+    staleTime: 10_000,
+    queryFn: async (): Promise<GroupCallState | null> => {
+      const { data, error } = await supabase.rpc("group_call_state", { p_channel: channelId });
+      if (error) throw error;
+      return (data as GroupCallState | null) ?? null;
+    },
+  });
+}
