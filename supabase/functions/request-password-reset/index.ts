@@ -73,12 +73,16 @@ function resetEmailHtml(fullName: string, code: string): string {
     .note-box { background-color:#0f1c17 !important; }
     .footer-text { color:#8A9691 !important; }
     .footer-brand { color:#E5E7EB !important; }
+    .em-brand { color:#3DC559 !important; }
+    .em-strong { color:#F3F4F6 !important; }
   }
   [data-ogsc] .page-bg { background-color:#0b1512 !important; }
   [data-ogsc] .card { background-color:#12211b !important; }
   [data-ogsc] .t-title { color:#F3F4F6 !important; }
   [data-ogsc] .t-body { color:#C9D2CD !important; }
   [data-ogsc] .t-muted { color:#94A3A0 !important; }
+  [data-ogsc] .em-brand { color:#3DC559 !important; }
+  [data-ogsc] .em-strong { color:#F3F4F6 !important; }
 </style>
 </head>
 <body style="margin:0; padding:0; background-color:#F4F6F5;">
@@ -121,7 +125,7 @@ function resetEmailHtml(fullName: string, code: string): string {
             <h1 class="t-title" style="margin:0 0 6px 0; font-family:Arial,Helvetica,sans-serif; font-size:22px; line-height:28px; font-weight:700; color:#1F2937;">Redefinição de senha</h1>
             <p class="t-body" style="margin:14px 0 0 0; font-family:Arial,Helvetica,sans-serif; font-size:16px; line-height:24px; color:#1F2937;">Olá, ${fullName} 👋</p>
             <p class="t-body" style="margin:12px 0 0 0; font-family:Arial,Helvetica,sans-serif; font-size:15px; line-height:24px; color:#4B5563;">
-              Recebemos uma solicitação para redefinir a senha da sua conta no <strong style="color:#0F402D;">CARBO Hub</strong>. Use o código abaixo para continuar.
+              Recebemos uma solicitação para redefinir a senha da sua conta no <strong class="em-brand" style="color:#0F402D;">CARBO Hub</strong>. Use o código abaixo para continuar.
             </p>
           </td>
         </tr>
@@ -145,7 +149,7 @@ function resetEmailHtml(fullName: string, code: string): string {
               <tr>
                 <td style="padding:16px 18px;">
                   <p class="t-muted" style="margin:0; font-family:Arial,Helvetica,sans-serif; font-size:13px; line-height:20px; color:#6B7280;">
-                    O código <strong style="color:#1F2937;">expira em 15 minutos</strong>. Não o compartilhe com ninguém — nossa equipe jamais irá solicitá-lo.
+                    O código <strong class="em-strong" style="color:#1F2937;">expira em 15 minutos</strong>. Não o compartilhe com ninguém — nossa equipe jamais irá solicitá-lo.
                   </p>
                 </td>
               </tr>
@@ -170,11 +174,11 @@ function resetEmailHtml(fullName: string, code: string): string {
         </tr>
 
         <tr>
-          <td class="px" style="padding:24px 40px 34px 40px;">
-            <p class="footer-brand" style="margin:0; font-family:Arial,Helvetica,sans-serif; font-size:15px; line-height:22px; font-weight:700; color:#0F402D;">Grupo Carbo</p>
-            <p class="footer-text" style="margin:4px 0 0 0; font-family:Arial,Helvetica,sans-serif; font-size:13px; line-height:20px; color:#6B7280;">o ecossistema que conecta operações com crescimento</p>
-            <p class="footer-text" style="margin:16px 0 0 0; font-family:Arial,Helvetica,sans-serif; font-size:12px; line-height:18px; color:#9CA3AF;">Este é um e-mail automático de segurança — por favor, não responda.</p>
-            <p class="footer-text" style="margin:8px 0 0 0; font-family:Arial,Helvetica,sans-serif; font-size:12px; line-height:18px; color:#9CA3AF;">© ${YEAR} Grupo Carbo. Todos os direitos reservados.</p>
+          <td class="px" align="center" style="padding:24px 40px 36px 40px; text-align:center;">
+            <p class="footer-brand" style="margin:0; font-family:Arial,Helvetica,sans-serif; font-size:15px; line-height:22px; font-weight:700; color:#0F402D; text-align:center;">Grupo Carbo</p>
+            <p class="footer-text" style="margin:4px 0 0 0; font-family:Arial,Helvetica,sans-serif; font-size:13px; line-height:20px; color:#6B7280; text-align:center;">o ecossistema que conecta operações com crescimento</p>
+            <p class="footer-text" style="margin:18px 0 0 0; font-family:Arial,Helvetica,sans-serif; font-size:12px; line-height:18px; color:#9CA3AF; text-align:center;">Este é um e-mail automático de segurança — por favor, não responda.</p>
+            <p class="footer-text" style="margin:8px 0 0 0; font-family:Arial,Helvetica,sans-serif; font-size:12px; line-height:18px; color:#9CA3AF; text-align:center;">© ${YEAR} Grupo Carbo. Todos os direitos reservados.</p>
           </td>
         </tr>
 
