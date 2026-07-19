@@ -183,18 +183,38 @@ Deno.serve(async (req: Request): Promise<Response> => {
     const isEmail = identifier.includes("@");
 
     if (isEmail) {
-      // Look up user by email
-      const { data: users } = await supabaseAdmin.auth.admin.listUsers();
-      const user = users?.users?.find((u: { email?: string }) => u.email?.toLowerCase() === identifier.toLowerCase());
-      if (user) {
-        email = user.email!;
-        userId = user.id;
+      // Look up user by email.
+      // ATENÇÃO: auth.admin.listUsers() SEM paginação só retorna a 1ª página
+      // (50 usuários). Com >50 contas, um usuário fora da 1ª página nunca era
+      // encontrado → a função retornava sucesso silencioso sem enviar e-mail.
+      // Aqui paginamos até achar (ou esgotar as páginas).
+      const target = identifier.toLowerCase();
+      const perPage = 1000;
+      for (let page = 1; ; page++) {
+        const { data: list, error: listErr } = await supabaseAdmin.auth.admin.listUsers({ page, perPage });
+        if (listErr) {
+          console.error("listUsers error:", listErr);
+          break;
+        }
+        const user = list?.users?.find((u: { email?: string }) => u.email?.toLowerCase() === target);
+        if (user) {
+          email = user.email!;
+          userId = user.id;
+          break;
+        }
+        // Última página? (menos itens que perPage ou lista vazia)
+        if (!list || list.users.length < perPage) break;
+      }
+
+      if (userId) {
         const { data: profile } = await supabaseAdmin
           .from("profiles")
           .select("full_name")
-          .eq("id", user.id)
+          .eq("id", userId)
           .single();
         fullName = profile?.full_name || "Usuário";
+      } else {
+        console.log("request-password-reset: nenhum usuário encontrado para o e-mail informado");
       }
     } else {
       // Look up user by username
