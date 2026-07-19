@@ -22,6 +22,12 @@
       ],
       "@carbo/chat": [
         "../../packages/chat/src/index.ts"
+      ],
+      "@carbo/call": [
+        "../../packages/call/src/index.ts"
+      ],
+      "livekit-client": [
+        "./node_modules/livekit-client"
       ]
     },
     "skipLibCheck": true,

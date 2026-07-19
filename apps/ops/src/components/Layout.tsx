@@ -102,7 +102,8 @@ export function Layout() {
   };
 
   return (
-    <ChatProvider supabase={supabase} currentUser={chatUser} navigate={navigate}>
+    <ChatProvider supabase={supabase} currentUser={chatUser} navigate={navigate}
+      loadCallEngine={() => import("@carbo/call").then((m) => m.loadCall())}>
     <div className="h-screen overflow-hidden bg-background flex flex-col">
       <TopBar appName="Carbo Ops" onMenu={handleMenu} />
 

@@ -13,6 +13,8 @@ export default defineConfig({
     alias: {
       "@": path.resolve(__dirname, "./src"),
       "@carbo/chat": path.resolve(__dirname, "../../packages/chat/src"),
+      "@carbo/call": path.resolve(__dirname, "../../packages/call/src"),
+      "livekit-client": path.resolve(__dirname, "node_modules/livekit-client"),
     },
     // pacote compartilhado é código-fonte fora do app: força os deps a resolverem
     // a partir do node_modules DESTE app (evita cópias duplicadas de react etc.).

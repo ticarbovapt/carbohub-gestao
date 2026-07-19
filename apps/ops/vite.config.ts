@@ -13,6 +13,8 @@ export default defineConfig({
     alias: {
       "@": path.resolve(__dirname, "./src"),
       "@carbo/chat": path.resolve(__dirname, "../../packages/chat/src"),
+      "@carbo/call": path.resolve(__dirname, "../../packages/call/src"),
+      "livekit-client": path.resolve(__dirname, "node_modules/livekit-client"),
     },
     dedupe: ["react", "react-dom", "@tanstack/react-query", "@supabase/supabase-js", "lucide-react", "sonner"],
   },
