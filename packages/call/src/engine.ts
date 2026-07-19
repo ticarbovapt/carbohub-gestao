@@ -68,7 +68,20 @@ export class CallEngine {
 
   async setMuted(muted: boolean): Promise<void> {
     if (!this.room) return;
-    await this.room.localParticipant.setMicrophoneEnabled(!muted);
+    const lp = this.room.localParticipant;
+    const pubs = Array.from(lp.audioTrackPublications.values());
+    if (pubs.length === 0) {
+      // Ainda não publicou o microfone → usa a API de habilitar/desabilitar.
+      await lp.setMicrophoneEnabled(!muted);
+    } else {
+      // Muta DIRETO no track publicado — garante que para de enviar áudio
+      // (privacidade), independente do estado do setMicrophoneEnabled.
+      for (const pub of pubs) {
+        const t = pub.track;
+        if (!t) continue;
+        if (muted) await t.mute(); else await t.unmute();
+      }
+    }
     this.emitParticipants();
   }
 

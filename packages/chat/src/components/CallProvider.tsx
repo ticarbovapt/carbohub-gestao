@@ -153,10 +153,14 @@ export function CallProvider({ loadCallEngine, children }: { loadCallEngine?: Lo
     cleanup();
   }, [supabase, cleanup]);
 
-  const toggleMute = useCallback(() => {
+  const toggleMute = useCallback(async () => {
     const next = !muted;
-    engineRef.current?.setMuted(next).catch(() => {});
-    setMuted(next);
+    try {
+      await engineRef.current?.setMuted(next);
+      setMuted(next); // só reflete o mudo DEPOIS de confirmar (evita falso "mutado")
+    } catch {
+      toast.error(next ? "Não foi possível mutar" : "Não foi possível desmutar");
+    }
   }, [muted]);
 
   // Tempo decorrido.
