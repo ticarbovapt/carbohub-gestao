@@ -40,8 +40,10 @@ export function CallProvider({ loadCallEngine, children }: { loadCallEngine?: Lo
   useEffect(() => { phaseRef.current = phase; }, [phase]);
 
   const fetchPeer = useCallback(async (id: string): Promise<Peer> => {
-    const { data } = await supabase.from("profiles").select("id, full_name, avatar_url").eq("id", id).maybeSingle();
-    const p = data as { id: string; full_name: string | null; avatar_url: string | null } | null;
+    // RPC definer: a RLS de profiles só deixa ver o PRÓPRIO perfil; nome/foto de
+    // outro interno vêm por aqui.
+    const { data } = await supabase.rpc("chat_user_info", { p_id: id });
+    const p = ((data ?? []) as { full_name: string | null; avatar_url: string | null }[])[0];
     return { id, name: p?.full_name ?? null, avatar: p?.avatar_url ?? null };
   }, [supabase]);
 
@@ -164,6 +166,28 @@ export function CallProvider({ loadCallEngine, children }: { loadCallEngine?: Lo
     return () => { supabase.removeChannel(ch); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [callsEnabled, currentUser.id]);
+
+  // Catch-up: ao abrir o app (ex.: veio de um push de chamada), verifica se há
+  // uma chamada AINDA tocando pra mim e mostra o modal — o INSERT do Realtime
+  // pode ter acontecido antes de eu estar inscrito.
+  useEffect(() => {
+    if (!callsEnabled || !currentUser.id) return;
+    let cancelled = false;
+    (async () => {
+      const { data } = await supabase.from("call_sessions")
+        .select("id, channel_id, started_by, started_at")
+        .eq("callee_id", currentUser.id).eq("status", "ringing")
+        .gte("started_at", new Date(Date.now() - 40_000).toISOString())
+        .order("started_at", { ascending: false }).limit(1);
+      const row = (data ?? [])[0] as { id: string; channel_id: string; started_by: string } | undefined;
+      if (cancelled || !row || phaseRef.current !== "idle") return;
+      sessionRef.current = { id: row.id, room: "call_" + row.id, channelId: row.channel_id };
+      setPeer(await fetchPeer(row.started_by));
+      setPhase("incoming");
+      playRing();
+    })();
+    return () => { cancelled = true; };
+  }, [callsEnabled, currentUser.id, supabase, fetchPeer]);
 
   // Libera o microfone se a aba fechar no meio da chamada.
   useEffect(() => () => { engineRef.current?.disconnect().catch(() => {}); }, []);
