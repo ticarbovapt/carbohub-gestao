@@ -10,6 +10,8 @@ interface MobileDrawerProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   footer?: React.ReactNode;
+  /** Disponível em qualquer largura (modo imersivo), não só no mobile. */
+  fullWidth?: boolean;
 }
 
 /** Renders a single nav item (and its sub-items) in the full/expanded style. */
@@ -131,6 +133,7 @@ export function MobileDrawer({
   open,
   onOpenChange,
   footer,
+  fullWidth,
 }: MobileDrawerProps) {
   // Lock body scroll + Escape to close while open (guard document for SSR).
   useEffect(() => {
@@ -156,7 +159,7 @@ export function MobileDrawer({
   const closeOnNavigate = () => onOpenChange(false);
 
   return (
-    <div className="fixed inset-0 z-50 md:hidden" role="dialog" aria-modal="true">
+    <div className={cn("fixed inset-0 z-50", !fullWidth && "md:hidden")} role="dialog" aria-modal="true">
       {/* Backdrop */}
       <div
         className="absolute inset-0 bg-black/40 animate-in fade-in"

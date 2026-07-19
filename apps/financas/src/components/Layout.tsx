@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Outlet, useNavigate } from "react-router-dom";
+import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import { MessagesSquare } from "lucide-react";
 import { TopBar } from "@/components/TopBar";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -50,8 +50,13 @@ export function Layout() {
     },
   ];
 
+  const { pathname } = useLocation();
+  // Carbo Chat = tela cheia: a sidebar não ocupa espaço em nenhuma largura;
+  // o menu vira gaveta sobreposta (abre pelo botão do topo).
+  const immersive = pathname.startsWith("/chat");
+
   const handleMenu = () => {
-    if (isMobile) setMobileOpen(true);
+    if (immersive || isMobile) setMobileOpen(true);
     else toggleCollapsed();
   };
 
@@ -69,6 +74,7 @@ export function Layout() {
           onToggleCollapse={toggleCollapsed}
           mobileOpen={mobileOpen}
           onMobileOpenChange={setMobileOpen}
+          immersive={immersive}
         />
 
         {/* Padding padrão do conteúdo (única fonte) — evita encostar na borda. */}

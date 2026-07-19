@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Outlet, useNavigate } from "react-router-dom";
+import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import {
   KanbanSquare, ClipboardList, TrendingUp, Target, BarChart3, LayoutDashboard,
   Wind, CalendarDays, MapPinned, Map, Share2, ShoppingCart, ShoppingBag, MessagesSquare,
@@ -68,8 +68,13 @@ export function SalesShell() {
     ...(isGestor ? [{ label: "Território", icon: MapPinned, items: TERR_SUB.map((n) => ({ to: n.to, label: n.label, icon: n.icon })) }] : []),
   ];
 
+  const { pathname } = useLocation();
+  // Carbo Chat = tela cheia: a sidebar não ocupa espaço em nenhuma largura;
+  // o menu vira gaveta sobreposta (abre pelo botão do topo).
+  const immersive = pathname.startsWith("/chat");
+
   const handleMenu = () => {
-    if (isMobile) setMobileOpen(true);
+    if (immersive || isMobile) setMobileOpen(true);
     else toggleCollapsed();
   };
 
@@ -87,6 +92,7 @@ export function SalesShell() {
           onToggleCollapse={toggleCollapsed}
           mobileOpen={mobileOpen}
           onMobileOpenChange={setMobileOpen}
+          immersive={immersive}
         />
 
         <main className="flex-1 min-w-0 flex flex-col overflow-y-auto">

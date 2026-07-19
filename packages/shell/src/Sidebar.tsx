@@ -204,10 +204,15 @@ export function Sidebar({
   mobileOpen,
   onMobileOpenChange,
   footer,
+  immersive,
 }: SidebarProps) {
   return (
     <>
-      {/* ---------------- Desktop aside (always rendered) ---------------- */}
+      {/* ---------------- Desktop aside ----------------
+          Em modo imersivo (ex.: Carbo Chat) a rail NÃO é renderizada em
+          nenhuma largura — o conteúdo ocupa a tela toda e a navegação fica
+          disponível pela gaveta sobreposta (abaixo). */}
+      {!immersive && (
       <aside
         className={cn(
           "hidden h-full min-h-0 shrink-0 flex-col border-r border-border bg-card md:flex",
@@ -288,14 +293,17 @@ export function Sidebar({
           </div>
         )}
       </aside>
+      )}
 
-      {/* ---------------- Mobile drawer ---------------- */}
+      {/* ---------------- Gaveta sobreposta ----------------
+          Sempre disponível no mobile; e em qualquer largura quando imersivo. */}
       <MobileDrawer
         brand={brand}
         sections={sections}
         open={mobileOpen}
         onOpenChange={onMobileOpenChange}
         footer={footer}
+        fullWidth={immersive}
       />
     </>
   );

@@ -51,4 +51,10 @@ export interface SidebarProps {
   onMobileOpenChange: (open: boolean) => void;
   /** optional footer (user card etc.) */
   footer?: ReactNode;
+  /**
+   * Modo imersivo (ex.: tela do Carbo Chat): NÃO ocupa espaço em nenhuma
+   * largura — a rail de desktop some e a navegação vira uma gaveta sobreposta
+   * (aberta pelo botão do topo) em qualquer tamanho de tela.
+   */
+  immersive?: boolean;
 }

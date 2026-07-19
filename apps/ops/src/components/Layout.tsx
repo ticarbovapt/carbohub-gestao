@@ -58,8 +58,12 @@ export function Layout() {
     })),
   ];
 
+  // Carbo Chat = tela cheia: a sidebar não ocupa espaço em nenhuma largura;
+  // o menu vira gaveta sobreposta (abre pelo botão do topo).
+  const immersive = pathname.startsWith("/chat");
+
   const handleMenu = () => {
-    if (isMobile) setMobileOpen(true);
+    if (immersive || isMobile) setMobileOpen(true);
     else toggleCollapsed();
   };
 
@@ -77,6 +81,7 @@ export function Layout() {
           onToggleCollapse={toggleCollapsed}
           mobileOpen={mobileOpen}
           onMobileOpenChange={setMobileOpen}
+          immersive={immersive}
         />
 
         <main className="flex-1 min-w-0 overflow-y-auto">
