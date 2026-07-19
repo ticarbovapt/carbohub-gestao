@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { toast } from "sonner";
 import { Mail } from "lucide-react";
+import { UserCog, Users } from "lucide-react";
 import {
   ShoppingCart, Plus, Trash2, Building2, MapPin, Package, Gift, FileText, Search, Target, ChevronDown,
   Loader2, CheckCircle2, AlertCircle, CreditCard, Percent, Tag, CalendarClock,
@@ -448,6 +449,82 @@ export default function Vender() {
 
   return (
     <div className="p-4 md:p-6 max-w-4xl mx-auto w-full space-y-5 pb-24">
+      {gestor && (
+        <div
+          className={`mb-1 rounded-xl border px-3 py-2.5 transition-colors sm:px-4 ${
+            vendedorId !== ""
+              ? "border-amber-500/40 bg-amber-500/10"
+              : "border-border bg-card"
+          }`}
+        >
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
+            <div className="flex items-center gap-2">
+              <span
+                className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${
+                  vendedorId !== ""
+                    ? "bg-amber-500/20 text-amber-700 dark:text-amber-300"
+                    : "bg-muted text-muted-foreground"
+                }`}
+              >
+                <UserCog className="h-4 w-4" />
+              </span>
+              <span
+                className={`text-sm font-medium ${
+                  vendedorId !== ""
+                    ? "text-amber-700 dark:text-amber-300"
+                    : "text-foreground"
+                }`}
+              >
+                {vendedorId !== "" ? "Lançar venda em nome de" : "Responsável pela venda"}
+              </span>
+            </div>
+
+            <div className="flex flex-1 items-center gap-2 sm:justify-end">
+              <Select
+                value={vendedorId || "__self__"}
+                onValueChange={(v) => setVendedorId(v === "__self__" ? "" : v)}
+              >
+                <SelectTrigger
+                  className={`h-9 w-full sm:w-56 ${
+                    vendedorId !== ""
+                      ? "border-amber-500/40 bg-amber-500/5 text-amber-700 focus:ring-amber-500/30 dark:text-amber-300"
+                      : ""
+                  }`}
+                >
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__self__">
+                    Eu ({vendedorLogado || "—"}) — para mim
+                  </SelectItem>
+                  {vendedores
+                    .filter((v) => v.id !== profile?.id)
+                    .map((v) => (
+                      <SelectItem key={v.id} value={v.id}>
+                        {v.full_name || "—"}
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          {vendedorId !== "" && (
+            <div className="mt-2 flex items-center gap-1.5 text-sm font-semibold text-amber-700 dark:text-amber-300">
+              <Users className="h-3.5 w-3.5" />
+              <span>
+                Em nome de{" "}
+                {vendedores.find((v) => v.id === vendedorId)?.full_name || "—"}
+              </span>
+            </div>
+          )}
+
+          <p className="mt-1.5 text-xs text-muted-foreground">
+            A comissão desta venda vai para o vendedor selecionado.
+          </p>
+        </div>
+      )}
+
       {/* Tipo de Operação */}
       <CarboCard>
         <CarboCardContent className="p-4 space-y-3">
@@ -893,22 +970,6 @@ export default function Vender() {
           <Textarea value={notasInternas} onChange={(e) => setNotasInternas(e.target.value)} placeholder="Visíveis apenas internamente" />
         </div>
       </CollapsibleCard>
-
-      {gestor && (
-        <div className="rounded-xl border p-3 space-y-1.5">
-          <Label>Vendedor responsável</Label>
-          <Select value={vendedorId || "__self__"} onValueChange={(v) => setVendedorId(v === "__self__" ? "" : v)}>
-            <SelectTrigger><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="__self__">Eu ({vendedorLogado || "—"})</SelectItem>
-              {vendedores.filter((v) => v.id !== profile?.id).map((v) => (
-                <SelectItem key={v.id} value={v.id}>{v.full_name || "—"}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <p className="text-[11px] text-muted-foreground">A comissão desta venda vai pro vendedor selecionado.</p>
-        </div>
-      )}
 
       {/* Rodapé: total + ações */}
       <div className="sticky bottom-0 bg-background/95 backdrop-blur border-t -mx-4 md:-mx-6 px-4 md:px-6 py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
