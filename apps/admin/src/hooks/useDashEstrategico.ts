@@ -22,6 +22,7 @@ export interface EstrategicoData {
   activeMachines: number;
   totalMachines: number;  // para derivar máquinas fora de operação
   monthlyRevenue: number;
+  growthPercent: number;  // receita do mês vs mês anterior (%)
   revenueMonthly: { key: string; receita: number; vendas: number }[];
 }
 
@@ -92,7 +93,12 @@ export function useDashEstrategico(months = 12) {
         .slice(-months)
         .map(([key, v]) => ({ key, ...v }));
 
-      return { activeOS, overdueOS, activeLicensees, newLicensees, activeMachines, totalMachines, monthlyRevenue, revenueMonthly };
+      // Crescimento: receita do mês corrente vs mês anterior.
+      const prevKey = new Date(now.getFullYear(), now.getMonth() - 1, 1).toISOString().slice(0, 7);
+      const prevRevenue = monthMap[prevKey]?.receita ?? 0;
+      const growthPercent = prevRevenue > 0 ? Math.round(((monthlyRevenue - prevRevenue) / prevRevenue) * 100) : 0;
+
+      return { activeOS, overdueOS, activeLicensees, newLicensees, activeMachines, totalMachines, monthlyRevenue, growthPercent, revenueMonthly };
     },
   });
 }
