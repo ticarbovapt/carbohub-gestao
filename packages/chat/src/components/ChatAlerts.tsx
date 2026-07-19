@@ -53,8 +53,8 @@ export function ChatAlerts() {
         // sem isso, reabrir dentro do staleTime mostrava o cache antigo (ex.: a
         // mensagem "✅ Resolvido" do bug não aparecia até o cache expirar).
         qc.invalidateQueries({ queryKey: ["chat", "messages", msg.channel_id] });
-        // Mensagem do sistema (bug/sugestão no grupo): entra na lista, mas nunca toca/toasta.
-        if (viewing || muted || msg.kind === "system") return;
+        // Mensagem do sistema (bug/sugestão) ou evento de chamada: entra na lista, mas nunca toca/toasta.
+        if (viewing || muted || msg.kind === "system" || msg.kind === "call") return;
 
         playMessageChime();
 

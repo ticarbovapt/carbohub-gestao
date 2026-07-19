@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Search, X, SmilePlus, Reply, CornerUpLeft, Check, CheckCheck, MoreVertical, Pencil, Trash2, ArrowDown, Megaphone, Lock, ChevronLeft, Bug, Lightbulb, CheckCircle2, XCircle, Info } from "lucide-react";
+import { Search, X, SmilePlus, Reply, CornerUpLeft, Check, CheckCheck, MoreVertical, Pencil, Trash2, ArrowDown, Megaphone, Lock, ChevronLeft, Bug, Lightbulb, CheckCircle2, XCircle, Info, Phone, PhoneMissed } from "lucide-react";
 import { useMessages, useProfilesMap, useToggleReaction, useChannelMembers, useUserInfo, useEditMessage, useDeleteMessage, useSearchMessages, useChannelAcks, useAckMessage, useJoinChannel, useUserStatuses } from "../hooks";
 import { statusText } from "./StatusBadge";
 import { useChatCtx } from "../context";
@@ -10,6 +10,7 @@ import { Avatar } from "./Avatar";
 import { Composer } from "./Composer";
 import { Attachment } from "./Attachment";
 import { PollBubble } from "./PollBubble";
+import { useCallControls } from "./CallProvider";
 import { ContactPanel } from "./ContactPanel";
 import { AnnouncementStatus } from "./AnnouncementStatus";
 import { ScheduledBar } from "./ScheduledBar";
@@ -70,6 +71,20 @@ const SYS_KINDS = [
   { key: "done", re: /^✅\s*Resolvido:\s*/i, label: "Resolvido", Icon: CheckCircle2, ring: "border-emerald-500/25 bg-emerald-500/10", fg: "text-emerald-600 dark:text-emerald-400", actorLabel: "Resolvido por", noteLabel: "Obs." },
   { key: "denied", re: /^🚫\s*Recusado:\s*/i, label: "Recusado", Icon: XCircle, ring: "border-rose-500/25 bg-rose-500/10", fg: "text-rose-600 dark:text-rose-400", actorLabel: "Recusado por", noteLabel: "Motivo" },
 ];
+
+// Evento de chamada no fluxo (kind='call'). Centralizado, com ícone por status.
+function CallNotice({ body, status, when }: { body: string; status: string; when: string }) {
+  const missed = status === "missed" || status === "declined";
+  return (
+    <div className="my-1 flex items-center justify-center">
+      <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs ${missed ? "bg-destructive/10 text-destructive" : "bg-muted text-muted-foreground"}`}>
+        {missed ? <PhoneMissed className="h-3.5 w-3.5" /> : <Phone className="h-3.5 w-3.5" />}
+        {body}
+        <span className="opacity-60">· {when}</span>
+      </span>
+    </div>
+  );
+}
 
 function SystemNotice({ body, when }: { body: string; when: string }) {
   const kind = SYS_KINDS.find((k) => k.re.test(body));
@@ -147,6 +162,7 @@ export function Conversation({ conv, focus, onClearFocus, onBack, onDeleted }: {
   conv: Conv; focus?: { messageId: string; at: string } | null; onClearFocus?: () => void; onBack?: () => void; onDeleted?: () => void;
 }) {
   const { currentUser, openConversation } = useChatCtx();
+  const callControls = useCallControls();
   const isGroup = conv.channel.type === "group";
   const { data: messages = [], isLoading } = useMessages(conv.channel.id, focus?.at ?? null);
   const { data: members = [], isLoading: membersLoading } = useChannelMembers(conv.channel.id);
@@ -250,6 +266,13 @@ export function Conversation({ conv, focus, onClearFocus, onBack, onDeleted }: {
                 isPrivate={conv.channel.is_private} />
             </div>
           </button>
+          {callControls.callsEnabled && !isGroup && !isAnnouncement && (
+            <button onClick={() => callControls.startCall(conv.channel.id)} disabled={callControls.busy}
+              title="Ligar (voz)" aria-label="Ligar (voz)"
+              className="shrink-0 rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-emerald-600 focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-40">
+              <Phone className="h-4 w-4" />
+            </button>
+          )}
           <button onClick={() => { setSearchOpen((o) => !o); setSearch(""); }} title="Buscar na conversa" aria-label="Buscar na conversa" aria-expanded={searchOpen}
             className="shrink-0 rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring">
             <Search className="h-4 w-4" />
@@ -318,6 +341,9 @@ export function Conversation({ conv, focus, onClearFocus, onBack, onDeleted }: {
                     )}
                     {m.kind === "system" ? (
                       <SystemNotice body={m.body ?? ""} when={new Date(m.created_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })} />
+                    ) : m.kind === "call" ? (
+                      <CallNotice body={m.body ?? "Chamada de voz"} status={(m.metadata as { status?: string })?.status ?? "completed"}
+                        when={new Date(m.created_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })} />
                     ) : m.kind === "poll" ? (
                       <PollBubble
                         m={m} mine={mine} isGroup={isGroup} showName={isGroup && !mine && !grouped}

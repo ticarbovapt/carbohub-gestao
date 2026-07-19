@@ -13,7 +13,7 @@ export interface ChatProfileRef {
 }
 
 export type ChannelType = "group" | "dm";
-export type MessageKind = "text" | "image" | "video" | "audio" | "file" | "system" | "poll";
+export type MessageKind = "text" | "image" | "video" | "audio" | "file" | "system" | "poll" | "call";
 
 export interface ChatChannel {
   id: string;
