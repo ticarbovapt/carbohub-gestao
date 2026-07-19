@@ -16,58 +16,6 @@ import { HUB_URL } from "@/lib/sso";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 
-// Itens de topo (acesso/estrutura) + grupos recém-trazidos do Ops.
-const NAV_TOP = [
-  { to: "/", end: true, label: "Usuários", icon: UsersIcon },
-  { to: "/estrutura", end: false, label: "Departamentos e funções", icon: ListTree },
-];
-
-const NAV_GROUPS = [
-  {
-    // Espelho dos dashboards principais de cada sistema do ecossistema.
-    label: "Dashboards",
-    items: [
-      { to: "/dashboards/lojas", label: "Portal de Vendas", icon: Store },
-      { to: "/dashboards/franqueados", label: "Licenciados", icon: Building2 },
-      { to: "/dashboards/estrategico", label: "Estratégico", icon: LineChart },
-    ],
-  },
-  {
-    // Área Comercial — telas dedicadas (espelho read-only do Carbo Sales).
-    label: "Comercial",
-    items: [
-      { to: "/dashboards/comercial", label: "Visão Geral", icon: TrendingUp },
-      { to: "/comercial/dashboard", label: "Dashboard Comercial", icon: LineChart },
-      { to: "/comercial/dados", label: "Dados Comerciais (fonte)", icon: Store },
-      { to: "/comercial/vendas", label: "Análise de Vendas", icon: BarChart3 },
-      { to: "/comercial/descontos", label: "Aprovações", icon: BadgePercent },
-      { to: "/comercial/precos", label: "Tabela de preços", icon: Tags },
-      { to: "/dashboards/metas", label: "Metas (Placar)", icon: Trophy },
-    ],
-  },
-  {
-    label: "Acessos",
-    items: [
-      { to: "/ultimo-acesso", label: "Último acesso", icon: Activity },
-      { to: "/chat/adocao", label: "Adoção do Carbo Chat", icon: Gauge },
-      { to: "/auditoria", label: "Central de Auditoria", icon: ShieldCheck },
-    ],
-  },
-  {
-    label: "E-commerce",
-    items: [
-      { to: "/ecommerce/vendas-online", label: "Vendas Online", icon: Globe },
-      { to: "/ecommerce/metas", label: "Acompanhamento de Metas", icon: Target },
-    ],
-  },
-  {
-    label: "Configuração de Metas",
-    items: [
-      { to: "/metas/configurar", label: "Configurar Metas", icon: Target },
-    ],
-  },
-];
-
 export function Layout() {
   const isMobile = useIsMobile();
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -93,12 +41,39 @@ export function Layout() {
     else toggleCollapsed();
   };
 
+  // Navegação padronizada: topo = item principal + Carbo Chat; depois seções por domínio.
   const sections: ShellNavSection[] = [
     { items: [
-        ...NAV_TOP.map(n => ({ to: n.to, label: n.label, icon: n.icon, end: n.end })),
+        { to: "/", label: "Usuários", icon: UsersIcon, end: true },
         { to: "/chat", label: "Carbo Chat", icon: MessagesSquare, badge: <ChatBadge /> },
     ] },
-    ...NAV_GROUPS.map(g => ({ label: g.label, items: g.items.map(i => ({ to: i.to, label: i.label, icon: i.icon })) })),
+    { label: "Dashboards", items: [
+        { to: "/dashboards/comercial", label: "Visão Geral", icon: TrendingUp },
+        { to: "/dashboards/estrategico", label: "Estratégico", icon: LineChart },
+        { to: "/dashboards/lojas", label: "Portal de Vendas", icon: Store },
+        { to: "/dashboards/franqueados", label: "Licenciados", icon: Building2 },
+        { to: "/dashboards/metas", label: "Metas (Placar)", icon: Trophy },
+    ] },
+    { label: "Comercial", items: [
+        { to: "/comercial/dashboard", label: "Dashboard Comercial", icon: LineChart },
+        { to: "/comercial/vendas", label: "Análise de Vendas", icon: BarChart3 },
+        { to: "/comercial/dados", label: "Dados Comerciais (fonte)", icon: Store },
+        { to: "/comercial/descontos", label: "Aprovações", icon: BadgePercent },
+        { to: "/comercial/precos", label: "Tabela de preços", icon: Tags },
+    ] },
+    { label: "E-commerce", items: [
+        { to: "/ecommerce/vendas-online", label: "Vendas Online", icon: Globe },
+        { to: "/ecommerce/metas", label: "Acompanhamento de Metas", icon: Target },
+    ] },
+    { label: "Configurações", items: [
+        { to: "/estrutura", label: "Departamentos e funções", icon: ListTree },
+        { to: "/metas/configurar", label: "Configurar Metas", icon: Target },
+    ] },
+    { label: "Auditoria", items: [
+        { to: "/auditoria", label: "Central de Auditoria", icon: ShieldCheck },
+        { to: "/ultimo-acesso", label: "Último acesso", icon: Activity },
+        { to: "/chat/adocao", label: "Adoção do Carbo Chat", icon: Gauge },
+    ] },
   ];
 
   return (

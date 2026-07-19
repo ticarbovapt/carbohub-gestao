@@ -41,13 +41,21 @@ export function Layout() {
 
   const navigate = useNavigate();
 
+  // Navegação padronizada: topo = Início + Carbo Chat; depois seções por domínio.
+  // Reusa os ícones/labels do FIN_NAV, referenciando por caminho (nada renomeado).
+  const byPath = Object.fromEntries(FIN_NAV.map((i) => [i.path, i]));
+  const item = (path: string) => {
+    const i = byPath[path];
+    return { to: i.path, label: i.label, icon: i.icon, end: i.path === "/" };
+  };
   const sections: ShellNavSection[] = [
-    {
-      items: [
+    { items: [
+        item("/"),
         { to: "/chat", label: "Carbo Chat", icon: MessagesSquare, badge: <ChatBadge /> },
-        ...FIN_NAV.map((i) => ({ to: i.path, label: i.label, icon: i.icon, end: i.path === "/" })),
-      ],
-    },
+    ] },
+    { label: "Financeiro", items: [item("/faturamento"), item("/comissionamento"), item("/pedidos")] },
+    { label: "Suprimentos", items: [item("/suprimentos"), item("/compras")] },
+    { label: "Configurações", items: [item("/funcionarios"), item("/integracoes/bling")] },
   ];
 
   const { pathname } = useLocation();

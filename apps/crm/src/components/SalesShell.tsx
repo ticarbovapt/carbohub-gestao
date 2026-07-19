@@ -16,31 +16,6 @@ import { useAuth } from "@/contexts/AuthContext";
 import logoCarbo from "@/assets/logo-carbo.png";
 import { HUB_URL } from "@/lib/sso";
 
-// CRM é uma seção com sub-itens (Funis de Venda = dashboard, Pipelines = kanban).
-const CRM_SUB = [
-  { to: "/funis", end: true, label: "Funis de Venda", icon: LayoutDashboard },
-  { to: "/crm/pipelines", label: "Pipelines", icon: KanbanSquare },
-];
-const NAV = [
-  { to: "/pedidos", label: "Pedidos", icon: ClipboardList },
-  { to: "/pos-venda", label: "Pós-venda (meus pedidos)", icon: ShoppingBag },
-  { to: "/compras", label: "Requisição de Compra", icon: ShoppingCart },
-  { to: "/vendas", label: "Vendas", icon: TrendingUp },
-  { to: "/metas", label: "Metas de Vendedores", icon: Target },
-  { to: "/comercial", label: "Dashboard Comercial", icon: BarChart3 },
-];
-// Descarbonização — acompanhamento (pra onde o "+ Nova Descarbonização" leva).
-const DESC_SUB = [
-  { to: "/descarbonizacao/os", label: "Ordens de Serviço", icon: ClipboardList },
-  { to: "/descarbonizacao/agendamentos", label: "Agendamentos", icon: CalendarDays },
-];
-// Território — bases/licenciados (dados reais do CORE) pra mostrar durante a venda.
-const TERR_SUB = [
-  { to: "/territorio/mapa", label: "Mapa Territorial", icon: Map },
-  { to: "/territorio/rede", label: "Mapa da Rede", icon: Share2 },
-  { to: "/territorio/expansao", label: "Expansão", icon: TrendingUp },
-];
-
 export function SalesShell() {
   const isMobile = useIsMobile();
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -58,14 +33,32 @@ export function SalesShell() {
 
   const navigate = useNavigate();
 
+  // Navegação padronizada: topo = item principal + Carbo Chat; depois seções por domínio.
   const sections: ShellNavSection[] = [
-    { label: "CRM", items: CRM_SUB.map((n) => ({ to: n.to, label: n.label, icon: n.icon, end: (n as any).end })) },
     { items: [
+        { to: "/funis", label: "Funis de Venda", icon: LayoutDashboard, end: true },
         { to: "/chat", label: "Carbo Chat", icon: MessagesSquare, badge: <ChatBadge /> },
-        ...NAV.map((n) => ({ to: n.to, label: n.label, icon: n.icon })),
     ] },
-    { label: "Descarbonização", icon: Wind, items: DESC_SUB.map((n) => ({ to: n.to, label: n.label, icon: n.icon })) },
-    ...(isGestor ? [{ label: "Território", icon: MapPinned, items: TERR_SUB.map((n) => ({ to: n.to, label: n.label, icon: n.icon })) }] : []),
+    { label: "Comercial", items: [
+        { to: "/comercial", label: "Dashboard Comercial", icon: BarChart3 },
+        { to: "/crm/pipelines", label: "Pipelines", icon: KanbanSquare },
+        { to: "/vendas", label: "Vendas", icon: TrendingUp },
+        { to: "/metas", label: "Metas de Vendedores", icon: Target },
+    ] },
+    { label: "Pedidos", items: [
+        { to: "/pedidos", label: "Pedidos", icon: ClipboardList },
+        { to: "/pos-venda", label: "Pós-venda (meus pedidos)", icon: ShoppingBag },
+        { to: "/compras", label: "Requisição de Compra", icon: ShoppingCart },
+    ] },
+    { label: "Descarbonização", icon: Wind, items: [
+        { to: "/descarbonizacao/os", label: "Ordens de Serviço", icon: ClipboardList },
+        { to: "/descarbonizacao/agendamentos", label: "Agendamentos", icon: CalendarDays },
+    ] },
+    ...(isGestor ? [{ label: "Território", icon: MapPinned, items: [
+        { to: "/territorio/mapa", label: "Mapa Territorial", icon: Map },
+        { to: "/territorio/rede", label: "Mapa da Rede", icon: Share2 },
+        { to: "/territorio/expansao", label: "Expansão", icon: TrendingUp },
+    ] }] : []),
   ];
 
   const { pathname } = useLocation();

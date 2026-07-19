@@ -162,7 +162,7 @@ export function MobileDrawer({
     <div className={cn("fixed inset-0 z-50", !fullWidth && "md:hidden")} role="dialog" aria-modal="true">
       {/* Backdrop */}
       <div
-        className="absolute inset-0 bg-black/40 animate-in fade-in"
+        className="absolute inset-0 bg-black/40 animate-in fade-in duration-300"
         onClick={() => onOpenChange(false)}
         aria-hidden="true"
       />
@@ -172,7 +172,7 @@ export function MobileDrawer({
         className={cn(
           "absolute inset-y-0 left-0 flex w-[280px] max-w-[85vw] flex-col",
           "border-r border-border bg-card shadow-xl",
-          "animate-in slide-in-from-left duration-200",
+          "animate-in slide-in-from-left duration-300 ease-out",
         )}
       >
         {/* Brand header (no collapse toggle on mobile) */}

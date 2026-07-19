@@ -180,7 +180,7 @@ function NavSection({
       {header}
       <div
         className={cn(
-          "space-y-0.5 overflow-hidden transition-all duration-200",
+          "space-y-0.5 overflow-hidden transition-all duration-[380ms] ease-[cubic-bezier(0.4,0,0.2,1)]",
           bodyVisible ? "max-h-[2000px] opacity-100" : "max-h-0 opacity-0",
         )}
       >
@@ -216,7 +216,8 @@ export function Sidebar({
       <aside
         className={cn(
           "hidden h-full min-h-0 shrink-0 flex-col border-r border-border bg-card md:flex",
-          "transition-[width] duration-200 ease-in-out",
+          // Abre/fecha com curva suave e mais lenta (sensação natural, não "seco").
+          "transition-[width] duration-[380ms] ease-[cubic-bezier(0.4,0,0.2,1)]",
           collapsed ? "w-[68px]" : "w-60",
         )}
       >

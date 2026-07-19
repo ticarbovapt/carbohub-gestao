@@ -8,7 +8,7 @@ import { HUB_URL } from "@/lib/sso";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useAccessPing } from "@/hooks/useAccessPing";
 import { useLiveNotifications } from "@/hooks/useLiveNotifications";
-import { OPS_HOME, OPS_GROUPS } from "@/lib/opsNav";
+import { OPS_HOME, OPS_ALL_ITEMS } from "@/lib/opsNav";
 import { ChatProvider, ChatBadge } from "@carbo/chat";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -35,27 +35,33 @@ export function Layout() {
   const navigate = useNavigate();
 
   const { pathname } = useLocation();
-  const activeGroup = OPS_GROUPS.find((g) => g.items.some((i) => i.path !== "/" && pathname.startsWith(i.path)))?.label;
 
+  // Navegação padronizada (seções estáticas, mesma ordem-espírito dos outros apps;
+  // travados no fim). Reusa ícones/labels/flags do opsNav via lookup por caminho.
+  const byPath = Object.fromEntries([OPS_HOME, ...OPS_ALL_ITEMS].map((i) => [i.path, i]));
+  const it = (path: string) => {
+    const i = byPath[path];
+    return {
+      to: i.path, label: i.label, icon: i.icon, end: i.end,
+      locked: i.locked,
+      lockedHint: i.locked ? "Tela movida para o Carbo Finanças" : undefined,
+    };
+  };
   const sections: ShellNavSection[] = [
-    {
-      items: [
+    { items: [
         { to: OPS_HOME.path, label: OPS_HOME.label, icon: OPS_HOME.icon, end: true },
         { to: "/chat", label: "Carbo Chat", icon: MessagesSquare, badge: <ChatBadge /> },
-      ],
-    },
-    ...OPS_GROUPS.map((g) => ({
-      label: g.label,
-      collapsible: true,
-      defaultOpen: !g.locked && g.label === activeGroup,
-      locked: g.locked,
-      lockedHint: g.locked ? "Domínio migrado para o Carbo Finanças" : undefined,
-      items: g.items.map((i) => ({
-        to: i.path, label: i.label, icon: i.icon, end: i.end,
-        locked: i.locked,
-        lockedHint: i.locked ? "Tela movida para o Carbo Finanças" : undefined,
-      })),
-    })),
+    ] },
+    { label: "Produção", items: ["/producao/dashboard", "/producao/ordens", "/producao/produtos", "/producao/skus", "/producao/lotes", "/producao/fornecedores"].map(it) },
+    { label: "Estoque", items: ["/estoque", "/estoque/hub-natal", "/estoque/cd-sp-loghouse", "/estoque/cd-sp-vendas", "/estoque/cd-bling"].map(it) },
+    { label: "Suprimentos", items: ["/suprimentos", "/compras"].map(it) },
+    { label: "Logística", items: ["/logistica/dashboard", "/logistica", "/logistica/pos-venda", "/logistica/viagens"].map(it) },
+    { label: "Operação de Campo", items: ["/campo/os", "/campo/agendamentos", "/campo/maquinas", "/campo/checklists", "/campo/alertas"].map(it) },
+    { label: "Acompanhamento", items: ["/acompanhamento/comercial", "/acompanhamento/metas"].map(it) },
+    { label: "Financeiro", locked: true, lockedHint: "Domínio migrado para o Carbo Finanças",
+      items: ["/financeiro/dashboard", "/financeiro", "/financeiro/faturamento", "/financeiro/notas-fiscais", "/financeiro/nfse"].map(it) },
+    { label: "Integrações", locked: true, lockedHint: "Domínio migrado para o Carbo Finanças",
+      items: ["/integracoes/bling"].map(it) },
   ];
 
   // Carbo Chat = tela cheia: a sidebar não ocupa espaço em nenhuma largura;
