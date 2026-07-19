@@ -115,7 +115,7 @@ function fmtAddrLines(e: Endereco): string[] {
   return [l1, l2, l3].filter(Boolean);
 }
 
-export async function generateQuotePdf(order: QuotePdfData) {
+export async function generateQuotePdf(order: QuotePdfData, opts?: { download?: boolean }) {
   const doc = new jsPDF();
   const pageW = doc.internal.pageSize.getWidth();
   const pageH = doc.internal.pageSize.getHeight();
@@ -305,5 +305,9 @@ export async function generateQuotePdf(order: QuotePdfData) {
     pageW / 2, pageH - 10, { align: "center" },
   );
 
-  doc.save(`orcamento-${order.order_number || "carbo"}.pdf`);
+  const filename = `orcamento-${order.order_number || "carbo"}.pdf`;
+  if (opts?.download !== false) doc.save(filename);
+  // base64 (sem o prefixo data:) — para anexar no envio por e-mail (send-email)
+  const base64 = doc.output("datauristring").split(",")[1] ?? "";
+  return { filename, base64 };
 }

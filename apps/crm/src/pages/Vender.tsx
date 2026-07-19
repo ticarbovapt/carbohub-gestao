@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useLocation, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
+import { Mail } from "lucide-react";
 import {
   ShoppingCart, Plus, Trash2, Building2, MapPin, Package, Gift, FileText, Search, Target, ChevronDown,
   Loader2, CheckCircle2, AlertCircle, CreditCard, Percent, Tag, CalendarClock,
@@ -131,6 +132,7 @@ export default function Vender() {
   const [showEstrategicos, setShowEstrategicos] = useState(false);
   const [showObs, setShowObs] = useState(false);
   const [generating, setGenerating] = useState(false);
+  const [emailing, setEmailing] = useState(false);
   const [buscando, setBuscando] = useState(false);
   const [docFeedback, setDocFeedback] = useState<{ kind: "ok" | "err"; msg: string } | null>(null);
   const [endereco, setEndereco] = useState({ logradouro: "", numero: "", bairro: "", cidade: "", uf: "", cep: "" });
@@ -470,6 +472,46 @@ export default function Vender() {
     } catch (e) {
       toast.error("Erro ao gerar/salvar orçamento: " + (e instanceof Error ? e.message : "tente de novo"));
     } finally { setGenerating(false); }
+  }
+
+  async function handleEmailQuote() {
+    const items = validItems();
+    if (items.length === 0) { toast.error("Adicione ao menos um item."); return; }
+    if (!pagamentoValido) { toast.error("Selecione a forma de pagamento."); return; }
+    if (!email || !email.includes("@")) { toast.error("Informe o e-mail do cliente para enviar o orçamento."); return; }
+    setEmailing(true);
+    try {
+      const payload = buildPayload("orcamento");
+      const { numero } = editId
+        ? await updateVenda.mutateAsync({ id: editId, input: payload })
+        : await createVenda.mutateAsync(payload);
+      const { base64, filename } = await generateQuotePdf({
+        order_number: numero ?? undefined,
+        customer_name: customerName || "Cliente", cnpj: doc || undefined,
+        ie: ie || undefined,
+        endereco,
+        endereco_faturamento: fatMesmo ? null : fatEndereco,
+        vendedor_name: vendedor || undefined, items,
+        subtotal: subtotalBruto, discount: descontoTotal, discount_percent: percentAgregado, total,
+        payment_terms: pagamentoLabel || undefined,
+        notes: obsPublica || undefined, created_at: new Date().toISOString(), validityDays: 7,
+      }, { download: false });
+      const { data: out, error } = await supabase.functions.invoke("send-email", {
+        body: {
+          template: "orcamento",
+          to: email,
+          data: { order_number: numero ?? null, customer_name: customerName || "Cliente", vendedor_name: vendedor || null },
+          attachments: [{ filename, content: base64 }],
+          replyTo: "administrativo@carbovapt.com.br",
+        },
+      });
+      if (error) throw error;
+      if ((out as { error?: string } | null)?.error) throw new Error((out as { error?: string }).error);
+      toast.success(`Orçamento ${numero ?? ""} enviado para ${email}!`);
+      if (editId) navigate("/pedidos"); else resetForm();
+    } catch (e) {
+      toast.error("Erro ao enviar por e-mail: " + (e instanceof Error ? e.message : "tente de novo"));
+    } finally { setEmailing(false); }
   }
 
   async function handleSell() {
@@ -975,6 +1017,9 @@ export default function Vender() {
           <Button variant="ghost" className="hidden sm:inline-flex" onClick={() => navigate("/pedidos")}>Cancelar</Button>
           <Button variant="outline" className="flex-1 sm:flex-none" onClick={handleQuote} disabled={generating || !pagamentoValido}>
             <FileText className="h-4 w-4 mr-1" /> {generating ? "Gerando..." : (editId ? (<><span className="hidden sm:inline">Salvar e&nbsp;</span>Gerar PDF</>) : (<><span className="hidden sm:inline">Gerar&nbsp;</span>Orçamento</>))}
+          </Button>
+          <Button variant="outline" className="flex-1 sm:flex-none" onClick={handleEmailQuote} disabled={emailing || !pagamentoValido} title="Salvar, gerar o PDF e enviar ao e-mail do cliente">
+            <Mail className="h-4 w-4 mr-1" /> {emailing ? "Enviando..." : (<><span className="hidden sm:inline">Enviar por&nbsp;</span>E-mail</>)}
           </Button>
           <CarboButton onClick={handleSell} className="flex-1 sm:flex-none sm:min-w-[150px]" disabled={!pagamentoValido}>
             <ShoppingCart className="h-4 w-4 mr-1" /> {editId ? "Salvar e Vender" : "Gerar Venda"}
