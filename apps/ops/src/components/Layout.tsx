@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Outlet, useLocation, useNavigate } from "react-router-dom";
+import { Outlet, useNavigate } from "react-router-dom";
 import { MessagesSquare } from "lucide-react";
 import { TopBar } from "@/components/TopBar";
 import { Sidebar, type ShellNavSection } from "@carbo/shell";
@@ -34,8 +34,6 @@ export function Layout() {
 
   const navigate = useNavigate();
 
-  const { pathname } = useLocation();
-
   // Navegação padronizada (seções estáticas, mesma ordem-espírito dos outros apps;
   // travados no fim). Reusa ícones/labels/flags do opsNav via lookup por caminho.
   const byPath = Object.fromEntries([OPS_HOME, ...OPS_ALL_ITEMS].map((i) => [i.path, i]));
@@ -64,12 +62,9 @@ export function Layout() {
       items: ["/integracoes/bling"].map(it) },
   ];
 
-  // Carbo Chat = tela cheia: a sidebar não ocupa espaço em nenhuma largura;
-  // o menu vira gaveta sobreposta (abre pelo botão do topo).
-  const immersive = pathname.startsWith("/chat");
-
+  // Mobile: abre a gaveta. Desktop: recolhe/expande a sidebar (rail).
   const handleMenu = () => {
-    if (immersive || isMobile) setMobileOpen(true);
+    if (isMobile) setMobileOpen(true);
     else toggleCollapsed();
   };
 
@@ -87,7 +82,6 @@ export function Layout() {
           onToggleCollapse={toggleCollapsed}
           mobileOpen={mobileOpen}
           onMobileOpenChange={setMobileOpen}
-          immersive={immersive}
         />
 
         <main className="flex-1 min-w-0 overflow-y-auto">
