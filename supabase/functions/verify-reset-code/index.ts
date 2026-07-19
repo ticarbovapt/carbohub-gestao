@@ -1,4 +1,40 @@
 import { createClient } from "npm:@supabase/supabase-js@2.39.3";
+import { Resend } from "https://esm.sh/resend@4.0.0";
+
+// E-mail de confirmação "senha alterada" (antifraude) — identidade Grupo Carbo.
+function senhaAlteradaEmail(fullName: string): string {
+  const YEAR = new Date().getUTCFullYear();
+  const quando = new Date().toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo", dateStyle: "long", timeStyle: "short" });
+  const P = (h: string) => `<p style="margin:0 0 14px 0; font-family:Arial,Helvetica,sans-serif; font-size:15px; line-height:24px; color:#4B5563;">${h}</p>`;
+  return `<!DOCTYPE html>
+<html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark"><title>Senha alterada — CARBO Hub</title>
+<!--[if mso]><noscript><xml><o:OfficeDocumentSettings><o:PixelsPerInch>96</o:PixelsPerInch></o:OfficeDocumentSettings></xml></noscript><![endif]--></head>
+<body style="margin:0; padding:0; background-color:#F4F6F5;">
+<div style="display:none; max-height:0; overflow:hidden; font-size:1px; color:#F4F6F5;">Confirmação: a senha da sua conta foi alterada.&#8203;&#8203;&#8203;&#8203;&#8203;&#8203;&#8203;&#8203;</div>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#F4F6F5" style="background-color:#F4F6F5;"><tr><td align="center" style="padding:32px 16px;">
+  <table role="presentation" width="560" cellpadding="0" cellspacing="0" border="0" style="width:560px; max-width:560px; background-color:#FFFFFF; border-radius:14px; overflow:hidden; box-shadow:0 1px 3px rgba(15,64,45,0.08);">
+    <tr><td style="height:5px; line-height:5px; font-size:5px; background:linear-gradient(90deg,#3DC559 0%,#2FA84F 45%,#3B7DD8 100%);">&nbsp;</td></tr>
+    <tr><td align="center" bgcolor="#FFFFFF" style="background-color:#FFFFFF; padding:34px 40px 26px 40px;">
+      <img src="https://www.carbohub.com.br/email/grupo-carbo.png" alt="Grupo Carbo" width="230" height="63" style="display:block; border:0; width:230px; height:63px; max-width:230px;">
+    </td></tr>
+    <tr><td style="padding:0 40px;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr><td style="border-top:1px solid #E5E7EB; font-size:0; line-height:0;">&nbsp;</td></tr></table></td></tr>
+    <tr><td style="padding:32px 40px 8px 40px; font-family:Arial,Helvetica,sans-serif;">
+      <h1 style="margin:0 0 16px 0; font-size:22px; line-height:28px; font-weight:700; color:#1F2937;">Senha alterada</h1>
+      ${P(`Olá, <strong style="color:#0F402D;">${fullName}</strong>.`)}
+      ${P(`A senha da sua conta no <strong style="color:#0F402D;">CARBO&nbsp;Hub</strong> foi alterada com sucesso em <strong>${quando}</strong>.`)}
+      ${P(`<strong style="color:#1F2937;">Não foi você?</strong> Avise o TI imediatamente — sua conta pode estar comprometida.`)}
+      ${P(`<span style="color:#6B7280; font-size:13px;">A Carbo nunca pede sua senha por e-mail ou WhatsApp.</span>`)}
+    </td></tr>
+    <tr><td style="padding:24px 40px 36px 40px; text-align:center; font-family:Arial,Helvetica,sans-serif;">
+      <p style="margin:24px 0 0 0; font-size:15px; line-height:22px; font-weight:700; color:#0F402D; text-align:center;">Grupo Carbo</p>
+      <p style="margin:4px 0 0 0; font-size:13px; line-height:20px; color:#6B7280; text-align:center;">o ecossistema que conecta operações com crescimento</p>
+      <p style="margin:16px 0 0 0; font-size:12px; line-height:18px; color:#9CA3AF; text-align:center;">Este é um e-mail automático de segurança — por favor, não responda.</p>
+      <p style="margin:8px 0 0 0; font-size:12px; line-height:18px; color:#9CA3AF; text-align:center;">© ${YEAR} Grupo Carbo. Todos os direitos reservados.</p>
+    </td></tr>
+  </table>
+</td></tr></table></body></html>`;
+}
 
 // CORS
 const ALLOWED_ORIGINS = [
@@ -141,6 +177,28 @@ Deno.serve(async (req: Request): Promise<Response> => {
         .from("profiles")
         .update({ password_must_change: false })
         .eq("id", resetCode.user_id);
+
+      // Confirmação/antifraude: avisa a pessoa que a senha foi alterada.
+      // Não bloqueia o fluxo — se o e-mail falhar, o reset já está feito.
+      try {
+        const resendApiKey = Deno.env.get("RESEND_API_KEY");
+        if (resendApiKey && resetCode.email) {
+          const { data: prof } = await supabaseAdmin
+            .from("profiles")
+            .select("full_name")
+            .eq("id", resetCode.user_id)
+            .single();
+          const resend = new Resend(resendApiKey);
+          await resend.emails.send({
+            from: "Grupo Carbo <noreply@carbohub.com.br>",
+            to: [resetCode.email],
+            subject: "Sua senha do CARBO Hub foi alterada",
+            html: senhaAlteradaEmail(prof?.full_name || "Usuário"),
+          });
+        }
+      } catch (mailErr) {
+        console.error("senha_alterada email error:", mailErr);
+      }
 
       return new Response(
         JSON.stringify({ success: true, message: "Senha redefinida com sucesso" }),
