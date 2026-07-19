@@ -19,6 +19,6 @@ export default defineConfig({
       // node_modules DESTE app (não está hoisted na raiz).
       "livekit-client": path.resolve(__dirname, "node_modules/livekit-client"),
     },
-    dedupe: ["react", "react-dom", "@tanstack/react-query", "@supabase/supabase-js", "lucide-react", "sonner"],
+    dedupe: ["react", "react-dom", "react-router-dom", "@tanstack/react-query", "@supabase/supabase-js", "lucide-react", "sonner"],
   },
 });

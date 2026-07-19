@@ -17,6 +17,6 @@ export default defineConfig({
       "@carbo/call": path.resolve(__dirname, "../../packages/call/src"),
       "livekit-client": path.resolve(__dirname, "node_modules/livekit-client"),
     },
-    dedupe: ["react", "react-dom", "@tanstack/react-query", "@supabase/supabase-js", "lucide-react", "sonner"],
+    dedupe: ["react", "react-dom", "react-router-dom", "@tanstack/react-query", "@supabase/supabase-js", "lucide-react", "sonner"],
   },
 });
