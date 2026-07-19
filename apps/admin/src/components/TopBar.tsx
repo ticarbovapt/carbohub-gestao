@@ -11,7 +11,7 @@ import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent,
   DropdownMenuItem, DropdownMenuSeparator, DropdownMenuLabel,
 } from "@/components/ui/dropdown-menu";
-import { HUB_URL } from "@/lib/sso";
+import { AppSwitcher } from "@carbo/shell";
 import { BugButton } from "@/components/BugButton";
 import { NotificationBell } from "@/components/NotificationBell";
 import { QuickAddMenu } from "@/components/QuickAddMenu";
@@ -56,7 +56,7 @@ function useRoleLabels(p: {
   };
 }
 
-export function TopBar({ appName, onMenu }: { appName: string; onMenu?: () => void }) {
+export function TopBar({ appName, appKey, onMenu }: { appName: string; appKey: string; onMenu?: () => void }) {
   const { user, profile, signOut } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
@@ -87,11 +87,7 @@ export function TopBar({ appName, onMenu }: { appName: string; onMenu?: () => vo
               <Menu className="h-4 w-4" />
             </Button>
           )}
-          <button onClick={() => { window.location.href = `${HUB_URL}/home`; }}
-            className="flex items-center gap-2.5 hover:opacity-80 transition-opacity" title="Ir para o Hub">
-            <img src={logoCarbo} alt="Carbo" className="h-7 w-auto object-contain" />
-            <span className="font-bold text-sm hidden sm:inline">{appName}</span>
-          </button>
+          <AppSwitcher appName={appName} appKey={appKey} logoSrc={logoCarbo} supabase={supabase} userId={user?.id} />
         </div>
 
         <div className="flex items-center gap-1">

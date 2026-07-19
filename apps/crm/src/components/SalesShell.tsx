@@ -71,7 +71,7 @@ export function SalesShell() {
     <ChatProvider supabase={supabase} currentUser={chatUser} navigate={navigate}
       loadCallEngine={() => import("@carbo/call").then((m) => m.loadCall())}>
     <div className="h-screen overflow-hidden bg-background text-foreground flex flex-col">
-      <TopBar appName="Carbo Sales" onMenu={handleMenu} />
+      <TopBar appName="Carbo Sales" appKey="crm" onMenu={handleMenu} />
 
       <div className="flex flex-1 min-h-0">
         <Sidebar

@@ -68,7 +68,7 @@ export function Layout() {
     <ChatProvider supabase={supabase} currentUser={chatUser} navigate={navigate}
       loadCallEngine={() => import("@carbo/call").then((m) => m.loadCall())}>
     <div className="h-screen overflow-hidden bg-background flex flex-col">
-      <TopBar appName="Carbo Finanças" onMenu={handleMenu} />
+      <TopBar appName="Carbo Finanças" appKey="financas" onMenu={handleMenu} />
 
       <div className="flex flex-1 min-h-0">
         <Sidebar
