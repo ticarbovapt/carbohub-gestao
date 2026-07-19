@@ -28,6 +28,78 @@ function getCorsHeaders(req: Request) {
   };
 }
 
+// E-mail com a identidade do Grupo Carbo (verde #0F402D + lime #8DC63F).
+function resetEmailHtml(fullName: string, code: string): string {
+  const YEAR = new Date().getUTCFullYear();
+  return `<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Redefinição de senha · CarboHub</title>
+</head>
+<body style="margin:0;padding:0;background:#0b141a;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#0b141a;padding:32px 12px;">
+    <tr><td align="center">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 10px 40px rgba(0,0,0,.35);">
+
+        <!-- Cabeçalho -->
+        <tr>
+          <td style="background:#0F402D;padding:32px 40px 28px;text-align:center;">
+            <div style="display:inline-block;width:44px;height:44px;border-radius:12px;background:#8DC63F;line-height:44px;text-align:center;margin-bottom:12px;">
+              <span style="color:#0F402D;font-size:22px;font-weight:800;">C</span>
+            </div>
+            <div style="color:#ffffff;font-size:22px;font-weight:800;letter-spacing:.3px;">CARBO Hub</div>
+            <div style="color:#8DC63F;font-size:12px;font-weight:600;letter-spacing:2px;text-transform:uppercase;margin-top:4px;">Ecossistema Grupo Carbo</div>
+          </td>
+        </tr>
+
+        <!-- Corpo -->
+        <tr>
+          <td style="padding:36px 40px 8px;color:#1f2937;">
+            <p style="margin:0 0 6px;font-size:16px;">Olá, <strong>${fullName}</strong> 👋</p>
+            <p style="margin:0 0 22px;font-size:15px;line-height:1.6;color:#374151;">
+              Recebemos uma solicitação para redefinir a sua senha no CarboHub. Use o código abaixo para continuar:
+            </p>
+
+            <!-- Código -->
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+              <tr><td align="center">
+                <div style="display:inline-block;background:#f4f9ec;border:2px solid #8DC63F;border-radius:14px;padding:18px 28px;">
+                  <div style="font-family:'Courier New',monospace;font-size:34px;font-weight:800;letter-spacing:10px;color:#0F402D;">${code}</div>
+                </div>
+              </td></tr>
+            </table>
+
+            <div style="background:#fef8e7;border-left:4px solid #e0a800;border-radius:8px;padding:12px 16px;margin:24px 0 8px;font-size:13px;color:#7a5b00;">
+              <strong>Este código expira em 15 minutos.</strong> Se você não solicitou a redefinição, ignore este e-mail — sua senha continua a mesma.
+            </div>
+
+            <p style="margin:16px 0 0;font-size:13px;color:#6b7280;">Por segurança, nunca compartilhe este código com ninguém.</p>
+          </td>
+        </tr>
+
+        <!-- Rodapé -->
+        <tr>
+          <td style="padding:28px 40px 32px;">
+            <div style="border-top:1px solid #eceff1;padding-top:20px;text-align:center;">
+              <div style="font-size:14px;font-weight:700;color:#0F402D;">Grupo Carbo</div>
+              <div style="font-size:12px;color:#8a94a0;margin-top:4px;line-height:1.5;">
+                CarboHub — o ecossistema que conecta operações com crescimento.<br>
+                Este é um e-mail automático, não é necessário responder.
+              </div>
+              <div style="font-size:11px;color:#b0b8c1;margin-top:14px;">© ${YEAR} Grupo Carbo · Todos os direitos reservados</div>
+            </div>
+          </td>
+        </tr>
+
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+}
+
 /**
  * request-password-reset
  *
@@ -139,57 +211,14 @@ Deno.serve(async (req: Request): Promise<Response> => {
       });
     }
 
-    // Send email with code
+    // Send email with code (identidade Grupo Carbo)
     if (resendApiKey) {
       const resend = new Resend(resendApiKey);
-
       await resend.emails.send({
-        from: "Carbo OPS <noreply@carbohub.com.br>",
+        from: "CarboHub <noreply@carbohub.com.br>",
         to: [email],
-        subject: `${code} — Código de verificação Carbo OPS`,
-        html: `
-          <!DOCTYPE html>
-          <html>
-          <head>
-            <meta charset="utf-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <style>
-              body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #1a1a2e; margin: 0; padding: 0; }
-              .container { max-width: 600px; margin: 0 auto; padding: 40px 20px; }
-              .header { background: linear-gradient(135deg, #0f4c75 0%, #1a1a2e 100%); padding: 40px; text-align: center; border-radius: 12px 12px 0 0; }
-              .header h1 { color: white; margin: 0; font-size: 24px; }
-              .content { background: #ffffff; padding: 40px; border: 1px solid #e5e7eb; border-top: none; }
-              .code-box { background: #f8fafc; border: 2px solid #0f4c75; border-radius: 12px; padding: 24px; margin: 24px 0; text-align: center; }
-              .code { font-family: 'Courier New', monospace; font-size: 36px; font-weight: bold; letter-spacing: 8px; color: #0f4c75; }
-              .footer { background: #f8fafc; padding: 24px 40px; text-align: center; font-size: 14px; color: #64748b; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 12px 12px; }
-              .warning { background: #fef3c7; border-left: 4px solid #f59e0b; padding: 12px 16px; margin: 16px 0; font-size: 13px; }
-            </style>
-          </head>
-          <body>
-            <div class="container">
-              <div class="header">
-                <h1>Redefinição de Senha</h1>
-              </div>
-              <div class="content">
-                <p>Olá, <strong>${fullName}</strong>!</p>
-                <p>Recebemos uma solicitação para redefinir sua senha. Use o código abaixo:</p>
-                <div class="code-box">
-                  <div class="code">${code}</div>
-                </div>
-                <div class="warning">
-                  <strong>Este código expira em 15 minutos.</strong> Se você não solicitou esta redefinição, ignore este e-mail.
-                </div>
-                <p style="font-size: 14px; color: #64748b;">
-                  Não compartilhe este código com ninguém.
-                </p>
-              </div>
-              <div class="footer">
-                <p><strong>Carbo OPS</strong></p>
-              </div>
-            </div>
-          </body>
-          </html>
-        `,
+        subject: `${code} é o seu código de acesso · CarboHub`,
+        html: resetEmailHtml(fullName || "Usuário", code),
       });
     }
 
