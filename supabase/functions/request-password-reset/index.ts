@@ -29,73 +29,119 @@ function getCorsHeaders(req: Request) {
 }
 
 // E-mail com a identidade do Grupo Carbo (verde #0F402D + lime #8DC63F).
+// HTML à prova de e-mail (tabelas, CSS inline, MSO/Outlook, dark-mode, preheader).
 function resetEmailHtml(fullName: string, code: string): string {
   const YEAR = new Date().getUTCFullYear();
   return `<!DOCTYPE html>
-<html lang="pt-BR">
+<html lang="pt-BR" xmlns="http://www.w3.org/1999/xhtml">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Redefinição de senha · CarboHub</title>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="color-scheme" content="light dark">
+  <meta name="supported-color-schemes" content="light dark">
+  <title>Seu código de redefinição de senha — CARBO Hub</title>
+  <!--[if mso]>
+  <noscript><xml><o:OfficeDocumentSettings><o:PixelsPerInch>96</o:PixelsPerInch></o:OfficeDocumentSettings></xml></noscript>
+  <![endif]-->
 </head>
-<body style="margin:0;padding:0;background:#0b141a;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
-  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#0b141a;padding:32px 12px;">
-    <tr><td align="center">
-      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 10px 40px rgba(0,0,0,.35);">
+<body style="margin:0; padding:0; background-color:#0b141a; -webkit-text-size-adjust:100%; -ms-text-size-adjust:100%;">
 
-        <!-- Cabeçalho -->
-        <tr>
-          <td style="background:#0F402D;padding:32px 40px 28px;text-align:center;">
-            <div style="display:inline-block;width:44px;height:44px;border-radius:12px;background:#8DC63F;line-height:44px;text-align:center;margin-bottom:12px;">
-              <span style="color:#0F402D;font-size:22px;font-weight:800;">C</span>
-            </div>
-            <div style="color:#ffffff;font-size:22px;font-weight:800;letter-spacing:.3px;">CARBO Hub</div>
-            <div style="color:#8DC63F;font-size:12px;font-weight:600;letter-spacing:2px;text-transform:uppercase;margin-top:4px;">Ecossistema Grupo Carbo</div>
-          </td>
-        </tr>
+  <div style="display:none; font-size:1px; line-height:1px; max-height:0; max-width:0; opacity:0; overflow:hidden; mso-hide:all; font-family:Arial,Helvetica,sans-serif; color:#0b141a;">
+    Use este código para redefinir sua senha no CarboHub. Ele expira em 15 minutos.
+    &#8203;&#8203;&#8203;&#8203;&#8203;&#8203;&#8203;&#8203;&#8203;&#8203;&#8203;&#8203;&#8203;&#8203;&#8203;&#8203;
+  </div>
 
-        <!-- Corpo -->
-        <tr>
-          <td style="padding:36px 40px 8px;color:#1f2937;">
-            <p style="margin:0 0 6px;font-size:16px;">Olá, <strong>${fullName}</strong> 👋</p>
-            <p style="margin:0 0 22px;font-size:15px;line-height:1.6;color:#374151;">
-              Recebemos uma solicitação para redefinir a sua senha no CarboHub. Use o código abaixo para continuar:
-            </p>
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#0b141a;">
+    <tr>
+      <td align="center" style="padding:32px 16px;">
+        <table role="presentation" width="560" cellpadding="0" cellspacing="0" border="0" style="width:560px; max-width:560px; margin:0 auto;">
 
-            <!-- Código -->
-            <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
-              <tr><td align="center">
-                <div style="display:inline-block;background:#f4f9ec;border:2px solid #8DC63F;border-radius:14px;padding:18px 28px;">
-                  <div style="font-family:'Courier New',monospace;font-size:34px;font-weight:800;letter-spacing:10px;color:#0F402D;">${code}</div>
-                </div>
-              </td></tr>
-            </table>
+          <!-- Cabeçalho / marca -->
+          <tr>
+            <td align="center" style="padding:8px 8px 24px 8px;">
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+                <tr>
+                  <td valign="middle" style="padding-right:12px;">
+                    <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+                      <tr>
+                        <td align="center" valign="middle" width="44" height="44" style="width:44px; height:44px; background-color:#8DC63F; border-radius:10px; font-family:Arial,Helvetica,sans-serif; font-size:22px; font-weight:bold; color:#0F402D; text-align:center; line-height:44px;">C</td>
+                      </tr>
+                    </table>
+                  </td>
+                  <td valign="middle" style="font-family:Arial,Helvetica,sans-serif; text-align:left;">
+                    <div style="font-size:20px; font-weight:bold; color:#ffffff; letter-spacing:0.3px;">CARBO&nbsp;Hub</div>
+                    <div style="font-size:12px; color:#8DC63F; letter-spacing:0.5px;">Ecossistema Grupo Carbo</div>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
 
-            <div style="background:#fef8e7;border-left:4px solid #e0a800;border-radius:8px;padding:12px 16px;margin:24px 0 8px;font-size:13px;color:#7a5b00;">
-              <strong>Este código expira em 15 minutos.</strong> Se você não solicitou a redefinição, ignore este e-mail — sua senha continua a mesma.
-            </div>
+          <!-- Card -->
+          <tr>
+            <td style="background-color:#ffffff; border-radius:14px; border-top:4px solid #0F402D;">
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
 
-            <p style="margin:16px 0 0;font-size:13px;color:#6b7280;">Por segurança, nunca compartilhe este código com ninguém.</p>
-          </td>
-        </tr>
+                <tr>
+                  <td style="padding:36px 40px 8px 40px; font-family:Arial,Helvetica,sans-serif;">
+                    <h1 style="margin:0 0 18px 0; font-size:22px; line-height:1.3; color:#0F402D; font-weight:bold;">Redefinição de senha</h1>
+                    <p style="margin:0 0 16px 0; font-size:16px; line-height:1.6; color:#1f2937;">Olá, ${fullName} 👋</p>
+                    <p style="margin:0 0 16px 0; font-size:16px; line-height:1.6; color:#1f2937;">
+                      Recebemos uma solicitação para redefinir a senha da sua conta no <strong style="color:#0F402D;">CARBO&nbsp;Hub</strong>. Use o código de verificação abaixo para continuar:
+                    </p>
+                  </td>
+                </tr>
 
-        <!-- Rodapé -->
-        <tr>
-          <td style="padding:28px 40px 32px;">
-            <div style="border-top:1px solid #eceff1;padding-top:20px;text-align:center;">
-              <div style="font-size:14px;font-weight:700;color:#0F402D;">Grupo Carbo</div>
-              <div style="font-size:12px;color:#8a94a0;margin-top:4px;line-height:1.5;">
-                CarboHub — o ecossistema que conecta operações com crescimento.<br>
-                Este é um e-mail automático, não é necessário responder.
-              </div>
-              <div style="font-size:11px;color:#b0b8c1;margin-top:14px;">© ${YEAR} Grupo Carbo · Todos os direitos reservados</div>
-            </div>
-          </td>
-        </tr>
+                <tr>
+                  <td style="padding:8px 40px 8px 40px;">
+                    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+                      <tr>
+                        <td align="center" style="background-color:#0F402D; border-radius:12px; padding:26px 20px;">
+                          <div style="font-family:Arial,Helvetica,sans-serif; font-size:12px; letter-spacing:1.5px; text-transform:uppercase; color:#8DC63F; margin-bottom:10px; font-weight:bold;">Seu código de verificação</div>
+                          <div style="font-family:'Courier New',Courier,monospace; font-size:40px; line-height:1.1; letter-spacing:10px; font-weight:bold; color:#ffffff; padding-left:10px;">${code}</div>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
 
-      </table>
-    </td></tr>
+                <tr>
+                  <td style="padding:20px 40px 4px 40px; font-family:Arial,Helvetica,sans-serif;">
+                    <p style="margin:0 0 14px 0; font-size:14px; line-height:1.6; color:#6b7280;">
+                      Este código expira em <strong style="color:#1f2937;">15 minutos</strong> e <strong style="color:#1f2937;">não deve ser compartilhado</strong> com ninguém — nossa equipe jamais irá solicitá-lo.
+                    </p>
+                    <p style="margin:0 0 8px 0; font-size:14px; line-height:1.6; color:#6b7280;">
+                      Se você não solicitou esta redefinição, pode ignorar este e-mail com segurança. Sua senha atual continuará a mesma.
+                    </p>
+                  </td>
+                </tr>
+
+                <tr><td style="padding:20px 40px 32px 40px;">
+                  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
+                    <td style="border-top:1px solid #e5e7eb; font-size:0; line-height:0;">&nbsp;</td>
+                  </tr></table>
+                </td></tr>
+
+              </table>
+            </td>
+          </tr>
+
+          <!-- Rodapé -->
+          <tr>
+            <td style="padding:28px 24px 8px 24px; font-family:Arial,Helvetica,sans-serif; text-align:center;">
+              <div style="font-size:15px; font-weight:bold; color:#ffffff; margin-bottom:6px;">Grupo Carbo</div>
+              <div style="font-size:13px; line-height:1.6; color:#8DC63F; margin-bottom:16px;">o ecossistema que conecta operações com crescimento</div>
+              <div style="font-size:12px; line-height:1.6; color:#6b7280;">Este é um e-mail automático de segurança — por favor, não responda.</div>
+              <div style="font-size:12px; line-height:1.6; color:#6b7280; margin-top:10px;">© ${YEAR} Grupo Carbo. Todos os direitos reservados.</div>
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
   </table>
+
 </body>
 </html>`;
 }
@@ -217,7 +263,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
       await resend.emails.send({
         from: "CarboHub <noreply@carbohub.com.br>",
         to: [email],
-        subject: `${code} é o seu código de acesso · CarboHub`,
+        subject: `Seu código CarboHub: ${code}`,
         html: resetEmailHtml(fullName || "Usuário", code),
       });
     }
