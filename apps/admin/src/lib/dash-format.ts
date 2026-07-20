@@ -22,7 +22,14 @@ export function delta(current: number, previous: number): { value: number; direc
   };
 }
 
-/** Rótulo curto de mês (ex.: "jul/25") a partir de um date ISO. */
+/** Rótulo curto de mês (ex.: "jul/25") a partir de um date ISO.
+ *  TZ-safe: uma data pura ("2026-06-01" ou "2026-06") é interpretada pelo JS como
+ *  meia-noite UTC e, em fusos atrás do UTC (ex.: Brasil UTC-3), recuaria um dia →
+ *  rótulo do mês anterior. Ancoramos no meio-dia local antes de formatar. Strings
+ *  com hora ("...T12:00:00") e objetos Date passam sem alteração. */
 export function monthLabel(iso: string): string {
-  return new Date(iso).toLocaleDateString("pt-BR", { month: "short", year: "2-digit" }).replace(".", "");
+  const anchored = typeof iso === "string" && /^\d{4}-\d{2}(-\d{2})?$/.test(iso)
+    ? `${iso.length === 7 ? `${iso}-01` : iso}T12:00:00`
+    : iso;
+  return new Date(anchored).toLocaleDateString("pt-BR", { month: "short", year: "2-digit" }).replace(".", "");
 }
