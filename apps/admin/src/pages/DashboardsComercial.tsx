@@ -1,11 +1,16 @@
 import { useState } from "react";
 import {
   TrendingUp, DollarSign, ShoppingCart, Trophy, AlertTriangle,
-  Repeat2, ArrowUpRight, ArrowDownRight, Minus,
+  Repeat2, ArrowUpRight, ArrowDownRight, Minus, Users, Receipt,
 } from "lucide-react";
+import { startOfMonth, getDaysInMonth, getDate } from "date-fns";
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
+import { CarboBadge } from "@/components/ui/carbo-badge";
 import { useAuth } from "@/contexts/AuthContext";
 import { useDashComercial } from "@/hooks/useDashComercial";
+import { useMetasVendedores } from "@/hooks/useMetasVendedores";
+import { useComercialExtras } from "@/hooks/useComercialExtras";
+import { useVendedoresDir } from "@/hooks/useVendedoresDir";
 import { VendedorFilter } from "@/components/comercial/VendedorFilter";
 
 function RestrictedNotice() {
@@ -26,10 +31,33 @@ const fmtK = (v: number) =>
   : v >= 1000    ? `R$${(v / 1000).toFixed(0)}k`
   : formatCurrency(v);
 
+function commercialWeekStartOf(d: Date): Date {
+  const n = new Date(d);
+  const diff = (n.getDay() - 5 + 7) % 7;
+  n.setDate(n.getDate() - diff);
+  n.setHours(0, 0, 0, 0);
+  return n;
+}
+
+const META_COLORS = {
+  green:  { bar: "#22c55e", badge: "success"     as const, text: "text-green-500",        ring: "border-green-500/30" },
+  yellow: { bar: "#f59e0b", badge: "warning"     as const, text: "text-amber-500",        ring: "border-amber-500/30" },
+  red:    { bar: "#ef4444", badge: "destructive" as const, text: "text-red-500",          ring: "border-red-500/30" },
+  gray:   { bar: "#64748b", badge: "secondary"   as const, text: "text-muted-foreground", ring: "" },
+};
+
 export default function DashboardsComercial() {
   const { canAdmin } = useAuth();
   const [vendedor, setVendedor] = useState("all");
-  const { data } = useDashComercial(vendedor === "all" ? null : vendedor, 12);
+  const vendedorId = vendedor === "all" ? null : vendedor;
+  const { data } = useDashComercial(vendedorId, 12);
+
+  // Meta do mês (RPC crm_metas_board) + extras (top clientes / últimos pedidos)
+  const month = startOfMonth(new Date());
+  const weekStart = commercialWeekStartOf(new Date());
+  const { data: metas = [] } = useMetasVendedores(month, weekStart);
+  const { data: extras } = useComercialExtras(vendedorId);
+  const { data: vendedoresDir = [] } = useVendedoresDir();
 
   if (!canAdmin) {
     return (
@@ -47,6 +75,25 @@ export default function DashboardsComercial() {
     mom: { brl: null, qty: null, curLabel: "", prevLabel: "", cur: { mes: "", faturado: 0, pedidos: 0, ticketMedio: 0 }, prev: { mes: "", faturado: 0, pedidos: 0, ticketMedio: 0 } },
     vsJan: { brl: null, qty: null, curLabel: "", janLabel: "", cur: { mes: "", faturado: 0, pedidos: 0, ticketMedio: 0 }, jan: { mes: "", faturado: 0, pedidos: 0, ticketMedio: 0 } },
   };
+
+  // ── Meta do mês — time (todos) ou vendedor selecionado ──
+  const metaRow = vendedorId ? metas.find((m) => m.vendedor_id === vendedorId) : null;
+  const metaActual = vendedorId ? (metaRow?.actual_amount ?? 0) : (metas[0]?.team_actual ?? 0);
+  const metaTarget = vendedorId ? (metaRow?.target_amount ?? 0) : (metas[0]?.team_target ?? 0);
+  const metaPct = vendedorId ? (metaRow?.pct_amount ?? 0) : (metas[0]?.team_pct ?? 0);
+  const today = new Date();
+  const expectedPct = (getDate(today) / getDaysInMonth(today)) * 100;
+  const metaKey: keyof typeof META_COLORS =
+    metaTarget <= 0 ? "gray"
+    : metaPct >= expectedPct ? "green"
+    : metaPct >= expectedPct - 15 ? "yellow"
+    : "red";
+  const mc = META_COLORS[metaKey];
+
+  // Nome do vendedor para a tabela de últimos pedidos
+  const vendedorNome = new Map(vendedoresDir.map((v) => [v.id, v.full_name || "—"]));
+  const topClientes = extras?.topClientes ?? [];
+  const recentes = extras?.recentes ?? [];
 
   // 5 KPIs ricos — porta FIEL do CRM (kpiCards).
   const kpiCards = [
@@ -91,6 +138,29 @@ export default function DashboardsComercial() {
         />
         <div className="flex flex-wrap items-end gap-2 shrink-0">
           <VendedorFilter value={vendedor} onChange={setVendedor} />
+        </div>
+      </div>
+
+      {/* Meta do mês (semáforo) */}
+      <div className={`rounded-2xl border bg-card p-5 ${mc.ring}`}>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="min-w-0">
+            <p className="text-xs uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+              <TrendingUp className="h-3.5 w-3.5" /> {vendedorId ? "Meta do vendedor · mês" : "Comercial do mês · realizado vs meta"}
+            </p>
+            <div className="flex items-end gap-2 mt-1">
+              <p className={`text-3xl font-bold tabular-nums ${mc.text}`}>{fmtK(metaActual)}</p>
+              <p className="text-muted-foreground mb-1">/ {fmtK(metaTarget)}</p>
+            </div>
+          </div>
+          <div className="text-right shrink-0">
+            <CarboBadge variant={mc.badge} size="lg">{metaPct.toFixed(1)}% da meta</CarboBadge>
+            <p className="text-[11px] text-muted-foreground mt-1">Esperado hoje: {expectedPct.toFixed(0)}%</p>
+          </div>
+        </div>
+        <div className="relative h-2.5 bg-muted rounded-full overflow-hidden mt-3">
+          <div className="h-full rounded-full transition-all duration-700" style={{ width: `${Math.min(100, metaPct)}%`, backgroundColor: mc.bar }} />
+          {expectedPct > 0 && expectedPct < 100 && <div className="absolute top-0 bottom-0 w-0.5 bg-foreground/40" style={{ left: `${expectedPct}%` }} />}
         </div>
       </div>
 
@@ -149,6 +219,57 @@ export default function DashboardsComercial() {
             </div>
           </div>
         ))}
+      </div>
+
+      {/* Top clientes + Últimos pedidos */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {/* Top clientes por receita */}
+        <div className="rounded-2xl border border-border bg-card overflow-hidden">
+          <div className="flex items-center gap-2 border-b border-border px-5 py-3">
+            <Users className="h-4 w-4 text-primary" />
+            <h2 className="text-sm font-semibold text-foreground">Top Clientes por Receita</h2>
+          </div>
+          <div className="divide-y divide-border">
+            {topClientes.length === 0 ? (
+              <p className="px-5 py-8 text-center text-sm text-muted-foreground">Sem vendas no período.</p>
+            ) : topClientes.map((c, idx) => (
+              <div key={c.name} className="flex items-center justify-between px-5 py-2.5">
+                <div className="flex items-center gap-3 min-w-0">
+                  <span className="w-5 text-center shrink-0 text-sm font-bold text-muted-foreground">{idx + 1}</span>
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-foreground truncate">{c.name}</p>
+                    <p className="text-xs text-muted-foreground">{c.pedidos} pedido{c.pedidos !== 1 ? "s" : ""}</p>
+                  </div>
+                </div>
+                <span className="text-sm font-semibold tabular-nums text-foreground shrink-0">{fmtK(c.receita)}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Últimos pedidos */}
+        <div className="rounded-2xl border border-border bg-card overflow-hidden">
+          <div className="flex items-center gap-2 border-b border-border px-5 py-3">
+            <Receipt className="h-4 w-4 text-primary" />
+            <h2 className="text-sm font-semibold text-foreground">Últimos Pedidos</h2>
+          </div>
+          <div className="divide-y divide-border">
+            {recentes.length === 0 ? (
+              <p className="px-5 py-8 text-center text-sm text-muted-foreground">Sem pedidos recentes.</p>
+            ) : recentes.map((p, idx) => (
+              <div key={idx} className="flex items-center justify-between px-5 py-2.5 gap-3">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-foreground truncate">{p.customer_name}</p>
+                  <p className="text-xs text-muted-foreground truncate">
+                    {vendedorNome.get(p.vendedor_id ?? "") || "—"}
+                    {p.created_at ? ` · ${new Date(p.created_at).toLocaleDateString("pt-BR")}` : ""}
+                  </p>
+                </div>
+                <span className="text-sm font-semibold tabular-nums text-foreground shrink-0">{fmtK(p.total)}</span>
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
     </main>
   );
