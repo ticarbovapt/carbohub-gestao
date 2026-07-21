@@ -358,6 +358,7 @@ async function fetchOrders(platform: EcommercePlatform, period: EcommercePeriod)
 const PLATFORM_LABEL: Record<EcommercePlatform, string> = {
   mercadolivre: "Mercado Livre",
   amazon:       "Amazon",
+  nuvemshop:    "Nuvemshop",
   tiktok:       "TikTok Shop",
   shopee:       "Shopee",
 };

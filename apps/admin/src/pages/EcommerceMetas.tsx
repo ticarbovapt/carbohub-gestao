@@ -182,12 +182,10 @@ type ChartTab    = "daily" | "cumulative" | "history";
 type ChartFilter = "all" | MetaPlatform;
 
 const FILTER_OPTIONS: { value: ChartFilter; emoji: string; label: string }[] = [
-  { value: "all",          emoji: "🎯", label: "Total"      },
-  { value: "mercadolivre", emoji: "🛒", label: "ML"         },
-  { value: "amazon",       emoji: "📦", label: "Amazon"     },
-  { value: "tiktok",       emoji: "🎵", label: "TikTok"     },
-  { value: "shopee",       emoji: "🧡", label: "Shopee"     },
-  { value: "vindi",        emoji: "📄", label: "LPs/Assin." },
+  { value: "all",          emoji: "🎯", label: "Total"     },
+  { value: "mercadolivre", emoji: "🛒", label: "ML"        },
+  { value: "nuvemshop",    emoji: "🛍️", label: "Nuvemshop" },
+  { value: "amazon",       emoji: "📦", label: "Amazon"    },
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────

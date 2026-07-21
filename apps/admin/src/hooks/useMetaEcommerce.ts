@@ -7,7 +7,7 @@ import { toast } from "sonner";
 // Types
 // ─────────────────────────────────────────────────────────────────────────────
 
-export type MetaPlatform = "mercadolivre" | "amazon" | "tiktok" | "shopee" | "vindi" | null;
+export type MetaPlatform = "mercadolivre" | "nuvemshop" | "amazon" | null;
 
 export interface MetaEcommerce {
   id: string;
@@ -42,14 +42,13 @@ export const PLATFORM_META: Record<
   { label: string; emoji: string; color: string }
 > = {
   mercadolivre: { label: "Mercado Livre", emoji: "🛒", color: "#FFD700" },
+  nuvemshop:    { label: "Nuvemshop",     emoji: "🛍️", color: "#2D9CDB" },
   amazon:       { label: "Amazon",        emoji: "📦", color: "#FF9900" },
-  tiktok:       { label: "TikTok Shop",   emoji: "🎵", color: "#FF0050" },
-  shopee:       { label: "Shopee",        emoji: "🧡", color: "#EE4D2D" },
-  vindi:        { label: "LPs / Assin.",  emoji: "📄", color: "#6366f1" },
 };
 
+// Os 3 canais reais de venda online (mesma ordem da tela Vendas Online).
 export const ALL_PLATFORMS: MetaPlatform[] = [
-  "mercadolivre", "amazon", "tiktok", "shopee", "vindi",
+  "mercadolivre", "nuvemshop", "amazon",
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -118,25 +117,11 @@ export function useMetaActuals(month: Date) {
         platformRevenue[o.platform] = (platformRevenue[o.platform] || 0) + Number(o.total || 0);
       }
 
-      // 2. Vindi (LPs / Assinaturas) — paid only
-      const { data: vindi, error: vindiError } = await (supabase as any)
-        .from("vindi_orders")
-        .select("amount, paid_at")
-        .gte("paid_at", start)
-        .lte("paid_at", end)
-        .eq("status", "paid");
-
-      if (vindiError) throw vindiError;
-
-      const vindiRevenue = (vindi || []).reduce(
-        (sum: number, v: any) => sum + Number(v.amount || 0),
+      // Total = soma dos 3 canais reais de venda online (ML + Nuvemshop + Amazon).
+      const total = ["mercadolivre", "nuvemshop", "amazon"].reduce(
+        (a, p) => a + (platformRevenue[p] || 0),
         0
       );
-
-      platformRevenue["vindi"] = vindiRevenue;
-
-      // Total across all
-      const total = Object.values(platformRevenue).reduce((a, b) => a + b, 0);
 
       return { platformRevenue, total };
     },
@@ -148,9 +133,8 @@ export function useMetaActuals(month: Date) {
 // Daily revenue breakdown for the current month (chart)
 // ─────────────────────────────────────────────────────────────────────────────
 
-// platform = null → total (todas as plataformas + vindi)
-// platform = "vindi" → apenas vindi_orders
-// platform = "mercadolivre" | "amazon" | "tiktok" | "shopee" → filtra ecommerce_orders
+// platform = null → total dos 3 canais (ML + Nuvemshop + Amazon)
+// platform = "mercadolivre" | "nuvemshop" | "amazon" → filtra ecommerce_orders
 export function useMetaDailyActuals(month: Date, platform: MetaPlatform = null) {
   const start = startOfMonth(month).toISOString();
   const end   = endOfMonth(month).toISOString();
@@ -160,53 +144,23 @@ export function useMetaDailyActuals(month: Date, platform: MetaPlatform = null) 
     queryFn: async () => {
       const dayMap: Record<string, number> = {};
 
-      if (platform === "vindi") {
-        // Apenas Vindi
-        const { data: vindi, error: vindiError } = await (supabase as any)
-          .from("vindi_orders")
-          .select("amount, paid_at")
-          .gte("paid_at", start)
-          .lte("paid_at", end)
-          .eq("status", "paid");
-        if (vindiError) throw vindiError;
-        for (const v of vindi || []) {
-          const day = v.paid_at?.slice(0, 10);
-          if (day) dayMap[day] = (dayMap[day] || 0) + Number(v.amount || 0);
-        }
-      } else {
-        // ecommerce_orders, com filtro opcional de plataforma
-        let query = (supabase as any)
-          .from("ecommerce_orders")
-          .select("total, ordered_at, platform")
-          .gte("ordered_at", start)
-          .lte("ordered_at", end)
-          .neq("status", "cancelled");
+      // ecommerce_orders, com filtro opcional de plataforma (null = os 3 canais).
+      let query = (supabase as any)
+        .from("ecommerce_orders")
+        .select("total, ordered_at, platform")
+        .gte("ordered_at", start)
+        .lte("ordered_at", end)
+        .neq("status", "cancelled");
 
-        if (platform !== null) {
-          query = query.eq("platform", platform);
-        }
+      if (platform !== null) {
+        query = query.eq("platform", platform);
+      }
 
-        const { data: orders, error } = await query;
-        if (error) throw error;
-        for (const o of orders || []) {
-          const day = o.ordered_at?.slice(0, 10);
-          if (day) dayMap[day] = (dayMap[day] || 0) + Number(o.total || 0);
-        }
-
-        // Total geral também inclui Vindi
-        if (platform === null) {
-          const { data: vindi, error: vindiError } = await (supabase as any)
-            .from("vindi_orders")
-            .select("amount, paid_at")
-            .gte("paid_at", start)
-            .lte("paid_at", end)
-            .eq("status", "paid");
-          if (vindiError) throw vindiError;
-          for (const v of vindi || []) {
-            const day = v.paid_at?.slice(0, 10);
-            if (day) dayMap[day] = (dayMap[day] || 0) + Number(v.amount || 0);
-          }
-        }
+      const { data: orders, error } = await query;
+      if (error) throw error;
+      for (const o of orders || []) {
+        const day = o.ordered_at?.slice(0, 10);
+        if (day) dayMap[day] = (dayMap[day] || 0) + Number(o.total || 0);
       }
 
       // Gera todos os dias do mês até hoje
@@ -335,43 +289,18 @@ export function useMetaMonthlyHistory(platform: MetaPlatform = null) {
     queryFn: async () => {
       const dayMap: Record<string, number> = {};
 
-      if (platform === "vindi") {
-        const { data, error } = await (supabase as any)
-          .from("vindi_orders")
-          .select("amount, paid_at")
-          .eq("status", "paid")
-          .not("paid_at", "is", null);
-        if (error) throw error;
-        for (const v of data || []) {
-          const m = v.paid_at?.slice(0, 7);
-          if (m) dayMap[m] = (dayMap[m] || 0) + Number(v.amount || 0);
-        }
-      } else {
-        let query = (supabase as any)
-          .from("ecommerce_orders")
-          .select("total, ordered_at")
-          .neq("status", "cancelled")
-          .not("ordered_at", "is", null);
-        if (platform !== null) query = query.eq("platform", platform);
-        const { data, error } = await query;
-        if (error) throw error;
-        for (const o of data || []) {
-          const m = o.ordered_at?.slice(0, 7);
-          if (m) dayMap[m] = (dayMap[m] || 0) + Number(o.total || 0);
-        }
-        // Total geral inclui Vindi
-        if (platform === null) {
-          const { data: vindi, error: vErr } = await (supabase as any)
-            .from("vindi_orders")
-            .select("amount, paid_at")
-            .eq("status", "paid")
-            .not("paid_at", "is", null);
-          if (vErr) throw vErr;
-          for (const v of vindi || []) {
-            const m = v.paid_at?.slice(0, 7);
-            if (m) dayMap[m] = (dayMap[m] || 0) + Number(v.amount || 0);
-          }
-        }
+      // Histórico dos 3 canais (ecommerce_orders); null = total dos 3.
+      let query = (supabase as any)
+        .from("ecommerce_orders")
+        .select("total, ordered_at")
+        .neq("status", "cancelled")
+        .not("ordered_at", "is", null);
+      if (platform !== null) query = query.eq("platform", platform);
+      const { data, error } = await query;
+      if (error) throw error;
+      for (const o of data || []) {
+        const m = o.ordered_at?.slice(0, 7);
+        if (m) dayMap[m] = (dayMap[m] || 0) + Number(o.total || 0);
       }
 
       // Busca todas as metas cadastradas para essa plataforma
