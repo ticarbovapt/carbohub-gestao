@@ -20,6 +20,7 @@ export interface ComercialOrderRow {
   total: number | null;
   excluir_metricas: boolean | null;
   external_ref: string | null;
+  origem_override: string | null;
   // derivados (mesmas regras dos hooks do dashboard):
   contaPedido: boolean;   // status NOT IN (quote, cancelled) — entra nos KPIs/gráficos
   contaMetrica: boolean;  // contaPedido && excluir_metricas !== true — entra na análise por canal
@@ -43,7 +44,7 @@ export function useComercialOrders(filters: ComercialFonteFilters = {}) {
     queryFn: async (): Promise<ComercialFonteData> => {
       const { data, error } = await db
         .from("carboze_orders")
-        .select("id, order_number, created_at, customer_name, cnpj, vendedor_name, vendedor_id, segmento, status, total, excluir_metricas, external_ref")
+        .select("id, order_number, created_at, customer_name, cnpj, vendedor_name, vendedor_id, segmento, status, total, excluir_metricas, external_ref, origem_override")
         .order("created_at", { ascending: false })
         .limit(5000);
       if (error) throw error;

@@ -1,9 +1,11 @@
 import { useMemo, useState } from "react";
 import {
   Database, AlertTriangle, Search, Download, ShoppingCart, DollarSign, Target, EyeOff,
-  Users, Building2, ListOrdered, ArrowUp, ArrowDown, ChevronsUpDown, Layers, Loader2, CheckCircle2, UserPlus,
+  Users, Building2, ListOrdered, ArrowUp, ArrowDown, ChevronsUpDown, Layers, Loader2, CheckCircle2, UserPlus, Pencil,
 } from "lucide-react";
 import { toast } from "sonner";
+import { useQueryClient } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
 import { CarboCard, CarboCardContent } from "@/components/ui/carbo-card";
 import { CarboBadge } from "@/components/ui/carbo-badge";
@@ -140,6 +142,48 @@ export default function ComercialDados() {
   const [vendSel, setVendSel] = useState("");
   const { data: vendedores } = useVendedoresDir();
 
+  const qc = useQueryClient();
+
+  // Edição de linha (Canal + Origem) — gestor. Grava direto em carboze_orders (RLS de gestor).
+  const [editRow, setEditRow] = useState<ComercialOrderRow | null>(null);
+  const [editSeg, setEditSeg] = useState<string>("none");
+  const [editOri, setEditOri] = useState<string>("auto");
+  const [savingEdit, setSavingEdit] = useState(false);
+
+  const origemLabel = (o: ComercialOrderRow): "Bling" | "Manual" => {
+    if (o.origem_override === "bling") return "Bling";
+    if (o.origem_override === "manual") return "Manual";
+    return o.external_ref?.startsWith("bling-") ? "Bling" : "Manual";
+  };
+
+  const openEdit = (o: ComercialOrderRow) => {
+    setEditRow(o);
+    setEditSeg(o.segmento ?? "none");
+    setEditOri(o.origem_override ?? "auto");
+  };
+
+  const saveEdit = async () => {
+    if (!editRow) return;
+    setSavingEdit(true);
+    try {
+      const { error } = await (supabase as any)
+        .from("carboze_orders")
+        .update({
+          segmento: editSeg === "none" ? null : editSeg,
+          origem_override: editOri === "auto" ? null : editOri,
+        })
+        .eq("id", editRow.id);
+      if (error) throw error;
+      toast.success("Pedido atualizado");
+      qc.invalidateQueries({ queryKey: ["comercial-fonte"] });
+      setEditRow(null);
+    } catch (e) {
+      toast.error("Erro ao salvar: " + (e instanceof Error ? e.message : "tente de novo"));
+    } finally {
+      setSavingEdit(false);
+    }
+  };
+
   const runCreate = (r: RowVM, override?: string) => {
     setPendingKey(r.key);
     createFollowup.mutate(
@@ -266,7 +310,7 @@ export default function ComercialDados() {
       o.order_number, o.created_at, o.customer_name, o.cnpj ? fmtDoc(o.cnpj) : "", o.vendedor_name,
       o.segmento ? (CANAL_LABEL[o.segmento] ?? o.segmento) : "", o.status, o.total,
       o.contaPedido ? "sim" : "não", o.contaMetrica ? "sim" : "não",
-      o.external_ref?.startsWith("bling-") ? "bling" : "manual",
+      origemLabel(o).toLowerCase(),
     ].map(esc).join(","));
     download("comercial-fonte.csv", head, lines);
   };
@@ -366,6 +410,7 @@ export default function ComercialDados() {
                     <th className="px-3 py-2 font-medium text-right">Total</th>
                     <th className="px-3 py-2 font-medium text-center">Conta?</th>
                     <th className="px-3 py-2 font-medium">Origem</th>
+                    <th className="px-3 py-2 font-medium text-center">Editar</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -381,7 +426,13 @@ export default function ComercialDados() {
                       <td className="px-3 py-2 text-center">
                         {o.contaPedido ? (o.contaMetrica ? <CarboBadge variant="success">Métrica</CarboBadge> : <CarboBadge variant="warning">Excl.</CarboBadge>) : <CarboBadge variant="secondary">Fora</CarboBadge>}
                       </td>
-                      <td className="px-3 py-2 text-xs text-muted-foreground">{o.external_ref?.startsWith("bling-") ? "Bling" : "Manual"}</td>
+                      <td className="px-3 py-2 text-xs text-muted-foreground">{origemLabel(o)}</td>
+                      <td className="px-3 py-2 text-center">
+                        <button onClick={() => openEdit(o)} title="Editar canal e origem"
+                          className="inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground transition-colors">
+                          <Pencil className="h-3.5 w-3.5" />
+                        </button>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -440,6 +491,50 @@ export default function ComercialDados() {
       </div>
 
       {/* Detalhe — pedidos, CNPJs do grupo, datas (para follow-up). */}
+      {/* Editar Canal + Origem do pedido (gestor) */}
+      <Dialog open={!!editRow} onOpenChange={(o) => !o && setEditRow(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Editar pedido {editRow?.order_number || ""}</DialogTitle>
+          </DialogHeader>
+          {editRow && (
+            <div className="space-y-4 pt-1">
+              <p className="text-xs text-muted-foreground truncate">{editRow.customer_name || "—"}</p>
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium">Canal</label>
+                <Select value={editSeg} onValueChange={setEditSeg}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Não classificado</SelectItem>
+                    <SelectItem value="consumo">Consumo (B2B)</SelectItem>
+                    <SelectItem value="revenda">Revenda (PDV)</SelectItem>
+                    <SelectItem value="online">On-line</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium">Origem</label>
+                <Select value={editOri} onValueChange={setEditOri}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="auto">Automática ({editRow.external_ref?.startsWith("bling-") ? "Bling" : "Manual"})</SelectItem>
+                    <SelectItem value="manual">Manual</SelectItem>
+                    <SelectItem value="bling">Bling</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-[11px] text-muted-foreground">"Automática" deriva de onde o pedido entrou. Manual/Bling força o rótulo sem alterar o vínculo do Bling.</p>
+              </div>
+              <div className="flex justify-end gap-2 pt-1">
+                <Button variant="ghost" onClick={() => setEditRow(null)} disabled={savingEdit}>Cancelar</Button>
+                <Button onClick={saveEdit} disabled={savingEdit}>
+                  {savingEdit ? <Loader2 className="h-4 w-4 animate-spin" /> : "Salvar"}
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={!!detail} onOpenChange={(o) => !o && setDetail(null)}>
         <DialogContent className="max-w-2xl max-h-[88vh] overflow-y-auto">
           {detail && (() => {
