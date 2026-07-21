@@ -93,10 +93,15 @@ export function DealDetail({ lead, funnelType, onClose }: DealDetailProps) {
   const [draftName, setDraftName] = useState(lead.contact_name ?? "");
   const [draftPhone, setDraftPhone] = useState(lead.contact_phone ?? "");
   const [draftEmail, setDraftEmail] = useState(lead.contact_email ?? "");
+  // Nome fantasia é editável (apelido/uso comercial); razão social NÃO — é o
+  // dado oficial da empresa (vem da Receita/CNPJ) e não deve ser alterado por
+  // aqui para não gerar divergência com o cadastro fiscal.
+  const [draftTradeName, setDraftTradeName] = useState(lead.trade_name ?? "");
   useEffect(() => {
     setDraftName(lead.contact_name ?? "");
     setDraftPhone(lead.contact_phone ?? "");
     setDraftEmail(lead.contact_email ?? "");
+    setDraftTradeName(lead.trade_name ?? "");
     setEditContact(false);
   }, [lead.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -104,6 +109,7 @@ export function DealDetail({ lead, funnelType, onClose }: DealDetailProps) {
     setDraftName(lead.contact_name ?? "");
     setDraftPhone(lead.contact_phone ?? "");
     setDraftEmail(lead.contact_email ?? "");
+    setDraftTradeName(lead.trade_name ?? "");
     setEditContact(true);
   }
   async function saveContact() {
@@ -112,6 +118,7 @@ export function DealDetail({ lead, funnelType, onClose }: DealDetailProps) {
       contact_name: draftName.trim() || null,
       contact_phone: draftPhone.trim() || null,
       contact_email: draftEmail.trim() || null,
+      trade_name: draftTradeName.trim() || null,
     });
     setEditContact(false);
   }
@@ -278,6 +285,7 @@ export function DealDetail({ lead, funnelType, onClose }: DealDetailProps) {
                   <LabeledInput label="Nome do contato" value={draftName} onChange={setDraftName} placeholder="Nome da pessoa" />
                   <LabeledInput label="Telefone" type="tel" value={draftPhone} onChange={setDraftPhone} placeholder="(00) 00000-0000" />
                   <LabeledInput label="E-mail" type="email" value={draftEmail} onChange={setDraftEmail} placeholder="email@empresa.com" />
+                  <LabeledInput label="Nome fantasia" value={draftTradeName} onChange={setDraftTradeName} placeholder="Nome fantasia da empresa" />
                   <div className="flex gap-2 pt-1">
                     <Button size="sm" onClick={saveContact} disabled={updateLead.isPending}>
                       {updateLead.isPending ? "Salvando..." : "Salvar"}
@@ -289,7 +297,6 @@ export function DealDetail({ lead, funnelType, onClose }: DealDetailProps) {
                     <Field label="Cidade / UF" value={contactCity} />
                     <Field label={docLabel} value={formatDoc(lead.cnpj)} />
                     <Field label="Razão social" value={lead.legal_name} />
-                    <Field label="Nome fantasia" value={lead.trade_name} />
                   </div>
                 </>
               ) : (

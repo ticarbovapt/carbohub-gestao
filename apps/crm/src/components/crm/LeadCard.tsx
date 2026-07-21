@@ -28,7 +28,9 @@ const TEMP_LABEL = { quente: "🔥 Quente", morno: "🌡️ Morno", frio: "❄�
 export function LeadCard({ lead, funnelType: _funnelType, owner, onAdvance, onMarkLost, onClick, originFunnel }: LeadCardProps) {
   const daysSince = getDaysSinceUpdate(lead.updated_at);
   const aging: "red" | "amber" | null = daysSince > 7 ? "red" : daysSince > 3 ? "amber" : null;
-  const displayName = lead.trade_name || lead.legal_name || lead.contact_name || "Sem nome";
+  const displayName = lead.legal_name || lead.trade_name || lead.contact_name || "Sem nome";
+  // Nome fantasia aparece como linha secundária só quando difere da razão social exibida.
+  const secondaryTradeName = lead.trade_name && lead.trade_name !== displayName ? lead.trade_name : null;
   const waLink = lead.contact_phone ? `https://wa.me/55${lead.contact_phone.replace(/\D/g, "")}` : null;
 
   return (
@@ -56,6 +58,9 @@ export function LeadCard({ lead, funnelType: _funnelType, owner, onAdvance, onMa
       <div className="flex items-start justify-between mb-2">
         <div className="flex-1 min-w-0">
           <p className="font-medium text-sm truncate">{displayName}</p>
+          {secondaryTradeName && (
+            <p className="text-xs text-muted-foreground truncate">{secondaryTradeName}</p>
+          )}
           {lead.city && (
             <p className="text-xs text-muted-foreground truncate">
               {lead.city}{lead.state ? `, ${lead.state}` : ""}
