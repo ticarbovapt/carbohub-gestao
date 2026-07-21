@@ -40,6 +40,13 @@ export interface ProdutoEmRisco {
 export interface ProdutoParado {
   id: string; name: string; product_code: string; category: string; qty: number; unit: string; valor: number;
 }
+export interface CustoFabricacao {
+  id: string; name: string; product_code: string; category: string;
+  custoCalculado: number;   // soma dos insumos (parcial se faltar custo de algum item)
+  custoCadastrado: number;  // unit_cost do próprio produto final (p/ comparação)
+  itensFaltantes: number;   // insumos do BOM sem custo cadastrado (ou inativos)
+  totalItensBom: number;
+}
 export interface TransferenciaStatus { status: "em_transito" | "entregue" | "estornado"; count: number; }
 export interface FluxoDiarioRow {
   date: string; // YYYY-MM-DD
@@ -67,6 +74,7 @@ export interface SuprimentosCockpit {
   produtosParados: ProdutoParado[];
   produtosParadosTotal: number;
   valorParado: number;
+  custoFabricacao: CustoFabricacao[];
 }
 
 function mapTransferStatus(raw: string | null): "em_transito" | "entregue" | "estornado" {
@@ -82,7 +90,7 @@ export function useSuprimentosCockpit() {
       const since90 = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString();
       const since180 = new Date(Date.now() - 180 * 24 * 60 * 60 * 1000).toISOString();
 
-      const [productsRes, stockRes, minRes, movRes, transfRes] = await Promise.all([
+      const [productsRes, stockRes, minRes, movRes, transfRes, bomRes] = await Promise.all([
         db.from("mrp_products")
           .select("id, name, product_code, category, unit_cost, safety_stock_qty, stock_unit, is_active")
           .eq("is_active", true),
@@ -96,6 +104,8 @@ export function useSuprimentosCockpit() {
         db.from("stock_transfers")
           .select("status, created_at")
           .gte("created_at", since180),
+        db.from("mrp_bom")
+          .select("product_id, insumo_id, quantity_per_unit"),
       ]);
 
       if (productsRes.error) throw productsRes.error;
@@ -103,6 +113,7 @@ export function useSuprimentosCockpit() {
       if (minRes.error) throw minRes.error;
       if (movRes.error) throw movRes.error;
       if (transfRes.error) throw transfRes.error;
+      if (bomRes.error) throw bomRes.error;
 
       interface Product {
         id: string; name: string; product_code: string; category: string | null;
@@ -270,11 +281,42 @@ export function useSuprimentosCockpit() {
         };
       });
 
+      // ── Custo de Fabricação (BOM): soma o custo dos insumos que compõem cada
+      // produto (Produto Final/Semi-acabado) — parcial e sinalizado quando falta
+      // custo cadastrado de algum insumo, mas SEMPRE mostra o valor já somado.
+      const bomByProduct = new Map<string, { insumo_id: string; qty: number }[]>();
+      for (const row of bomRes.data ?? []) {
+        const arr = bomByProduct.get(row.product_id) ?? [];
+        arr.push({ insumo_id: row.insumo_id, qty: Number(row.quantity_per_unit) || 0 });
+        bomByProduct.set(row.product_id, arr);
+      }
+      const custoFabricacao: CustoFabricacao[] = Array.from(bomByProduct.entries())
+        .map(([productId, itens]): CustoFabricacao | null => {
+          const prod = productById.get(productId);
+          if (!prod) return null; // produto inativo — fora do catálogo ativo
+          let custoCalculado = 0;
+          let itensFaltantes = 0;
+          for (const it of itens) {
+            const insumo = productById.get(it.insumo_id);
+            const custoUnit = insumo?.unit_cost ?? 0;
+            if (!insumo || custoUnit <= 0) itensFaltantes++;
+            custoCalculado += custoUnit * it.qty;
+          }
+          return {
+            id: prod.id, name: prod.name, product_code: prod.product_code,
+            category: categoryOf(prod.category),
+            custoCalculado, custoCadastrado: prod.unit_cost,
+            itensFaltantes, totalItensBom: itens.length,
+          };
+        })
+        .filter((x): x is CustoFabricacao => x !== null)
+        .sort((a, b) => b.custoCalculado - a.custoCalculado);
+
       return {
         valorPorHub, valorTotal, totalProdutosAtivos, produtosComCusto, coberturaPct,
         topProdutos, topProdutosValorPct, riscoPorHub, riscoTotal, riscoCriticoTotal,
         produtosEmRisco, valorPorCategoria, transferencias, fluxoDiario,
-        produtosParados, produtosParadosTotal, valorParado,
+        produtosParados, produtosParadosTotal, valorParado, custoFabricacao,
       };
     },
   });

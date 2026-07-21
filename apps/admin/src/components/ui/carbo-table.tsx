@@ -90,9 +90,13 @@ const CarboTableHead = React.forwardRef<HTMLTableCellElement, CarboTableHeadProp
       onClick={sortable ? onSort : undefined}
       {...props}
     >
-      <div className="flex items-center gap-1">
-        {children}
-        {sortable && (
+      {sortable ? (
+        // Só o cabeçalho sortable precisa do wrapper flex (ícone ao lado do texto).
+        // Um <div flex> ignora text-align do <th> — por isso NÃO envolve o caso
+        // comum (não-sortable), senão "text-right" nunca alinha o texto do header
+        // com os valores da coluna (fica torto vs. as células de dado).
+        <div className="flex items-center gap-1">
+          {children}
           <span className="ml-1">
             {sortDirection === "asc" ? (
               <ChevronUp className="h-4 w-4" />
@@ -102,8 +106,8 @@ const CarboTableHead = React.forwardRef<HTMLTableCellElement, CarboTableHeadProp
               <ChevronsUpDown className="h-3.5 w-3.5 opacity-50" />
             )}
           </span>
-        )}
-      </div>
+        </div>
+      ) : children}
     </th>
   )
 );

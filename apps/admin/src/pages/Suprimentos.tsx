@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import {
   Boxes, AlertTriangle, PackageSearch, ShieldAlert, ArrowLeftRight, TrendingUp,
-  TrendingDown, Layers, Truck, CheckCircle2, RotateCcw,
+  TrendingDown, Layers, Truck, CheckCircle2, RotateCcw, FlaskConical,
 } from "lucide-react";
 import {
   AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell, Legend,
@@ -372,6 +372,72 @@ export default function Suprimentos() {
                       + {d.produtosParadosTotal - d.produtosParados.length} outro(s) produto(s) parado(s)
                     </p>
                   )}
+                </CardContent>
+              </Card>
+            )}
+
+            {/* ── Custo de Fabricação (BOM) — produtos com ficha técnica ─────
+                Soma custo_unitário × quantity_per_unit de cada insumo da BOM.
+                Mostra o valor MESMO parcial (soma o que tem custo) e sinaliza
+                quando falta custo de algum insumo, em vez de esconder o dado. */}
+            {d.custoFabricacao.length > 0 && (
+              <Card className="rounded-2xl border-0 shadow-sm">
+                <CardHeader className="pb-1 pt-5 px-5">
+                  <CardTitle className="text-base font-semibold flex items-center gap-2">
+                    <FlaskConical className="h-4 w-4 text-primary" /> Custo de Fabricação (BOM)
+                  </CardTitle>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Custo calculado a partir da ficha técnica (soma dos insumos) de cada produto — não é o custo cadastrado do produto, é o custo de produzir 1 unidade a partir dos insumos.
+                  </p>
+                </CardHeader>
+                <CardContent className="px-0 pb-2">
+                  <div className="overflow-x-auto">
+                    <CarboTable>
+                      <CarboTableHeader>
+                        <CarboTableRow>
+                          <CarboTableHead>Produto</CarboTableHead>
+                          <CarboTableHead className="text-right">Custo calculado (BOM)</CarboTableHead>
+                          <CarboTableHead className="text-right">Custo cadastrado</CarboTableHead>
+                          <CarboTableHead>Cobertura</CarboTableHead>
+                        </CarboTableRow>
+                      </CarboTableHeader>
+                      <CarboTableBody>
+                        {d.custoFabricacao.map((p) => {
+                          const incompleto = p.itensFaltantes > 0;
+                          return (
+                            <CarboTableRow key={p.id}>
+                              <CarboTableCell>
+                                <p className="text-sm font-semibold text-foreground truncate">{p.name}</p>
+                                <div className="flex items-center gap-2 mt-0.5">
+                                  <span className="text-[10px] font-mono text-muted-foreground">{p.product_code}</span>
+                                  <CarboBadge variant="secondary" size="sm">{p.category}</CarboBadge>
+                                </div>
+                              </CarboTableCell>
+                              <CarboTableCell className="text-right">
+                                <CarboBadge variant={incompleto ? "warning" : "success"} className="whitespace-nowrap">
+                                  {fmtBRL(p.custoCalculado)}
+                                </CarboBadge>
+                              </CarboTableCell>
+                              <CarboTableCell className="text-right tabular-nums text-muted-foreground whitespace-nowrap">
+                                {fmtBRL(p.custoCadastrado)}
+                              </CarboTableCell>
+                              <CarboTableCell>
+                                {incompleto ? (
+                                  <span className="text-xs text-amber-500 whitespace-nowrap">
+                                    Falta custo de {p.itensFaltantes} de {p.totalItensBom} insumo(s)
+                                  </span>
+                                ) : (
+                                  <span className="text-xs text-muted-foreground whitespace-nowrap">
+                                    {p.totalItensBom} insumo(s) — completo
+                                  </span>
+                                )}
+                              </CarboTableCell>
+                            </CarboTableRow>
+                          );
+                        })}
+                      </CarboTableBody>
+                    </CarboTable>
+                  </div>
                 </CardContent>
               </Card>
             )}
