@@ -32,6 +32,7 @@ export interface MrpProductFormInitial {
   category?: string;
   stock_unit?: string;
   safety_stock_qty?: number;
+  unit_cost?: number;
   notes?: string;
 }
 
@@ -61,6 +62,7 @@ export function MrpProductFormDialog({ open, onOpenChange, mode, id, initial }: 
   const [category, setCategory] = useState(initial?.category ?? "Insumo");
   const [unit, setUnit] = useState(initial?.stock_unit ?? "un");
   const [safetyStock, setSafetyStock] = useState(String(initial?.safety_stock_qty ?? 0));
+  const [unitCost, setUnitCost] = useState(String(initial?.unit_cost ?? 0));
   const [notes, setNotes] = useState(initial?.notes ?? "");
 
   const pending = create.isPending || update.isPending;
@@ -68,7 +70,9 @@ export function MrpProductFormDialog({ open, onOpenChange, mode, id, initial }: 
   const handleSubmit = async () => {
     const payload = {
       name, product_code: code, category, stock_unit: unit,
-      safety_stock_qty: Number(safetyStock) || 0, notes,
+      safety_stock_qty: Number(safetyStock) || 0,
+      unit_cost: Number(unitCost) || 0,
+      notes,
     };
     try {
       if (mode === "edit" && id) await update.mutateAsync({ id, ...payload });
@@ -127,6 +131,12 @@ export function MrpProductFormDialog({ open, onOpenChange, mode, id, initial }: 
             <Label>Estoque de Segurança (referência)</Label>
             <Input type="number" placeholder="0" value={safetyStock} onChange={(e) => setSafetyStock(e.target.value)} />
             <p className="text-[11px] text-muted-foreground">O mínimo por hub que aciona a reposição é configurado em Suprimentos → Política de Estoque.</p>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Custo unitário (R$)</Label>
+            <Input type="number" step="0.01" min="0" placeholder="0,00" value={unitCost} onChange={(e) => setUnitCost(e.target.value)} />
+            <p className="text-[11px] text-muted-foreground">Usado para calcular o valor mobilizado em estoque (visível no Carbo Admin → Estoque &amp; Custos).</p>
           </div>
 
           <div className="space-y-2">

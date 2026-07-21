@@ -205,6 +205,7 @@ export default function ProdutosMrp() {
             category: editProduct.category,
             stock_unit: editProduct.stock_unit,
             safety_stock_qty: editProduct.safety_stock_qty,
+            unit_cost: editProduct.unit_cost,
             notes: editProduct.notes ?? "",
           }}
         />

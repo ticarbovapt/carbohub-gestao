@@ -17,6 +17,7 @@ export interface MrpProductInput {
   category: string;
   stock_unit: string;
   safety_stock_qty: number;
+  unit_cost: number;
   notes?: string;
 }
 
@@ -37,6 +38,7 @@ export function useMrpProductMutations() {
         category: p.category,
         stock_unit: p.stock_unit,
         safety_stock_qty: p.safety_stock_qty,
+        unit_cost: p.unit_cost,
         notes: p.notes?.trim() || null,
         is_active: true,
         created_by: auth?.user?.id ?? null,
@@ -55,6 +57,7 @@ export function useMrpProductMutations() {
         category: p.category,
         stock_unit: p.stock_unit,
         safety_stock_qty: p.safety_stock_qty,
+        unit_cost: p.unit_cost,
         notes: p.notes?.trim() || null,
         updated_at: new Date().toISOString(),
       }).eq("id", id);

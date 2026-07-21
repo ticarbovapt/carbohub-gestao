@@ -22,6 +22,7 @@ import DashboardComercial from "./pages/DashboardComercial";
 import ComercialDados from "./pages/ComercialDados";
 import DashboardsMetas from "./pages/DashboardsMetas";
 import DashboardsEstrategico from "./pages/DashboardsEstrategico";
+import EstoqueMrp from "./pages/EstoqueMrp";
 import Auditoria from "./pages/Auditoria";
 import Chat from "./pages/Chat";
 import ChatAdocao from "./pages/ChatAdocao";
@@ -71,6 +72,7 @@ export default function App() {
         <Route path="/comercial/precos" element={<ProdutosPrecos />} />
         <Route path="/dashboards/metas" element={<DashboardsMetas />} />
         <Route path="/dashboards/estrategico" element={<DashboardsEstrategico />} />
+        <Route path="/dashboards/estoque-mrp" element={<EstoqueMrp />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
