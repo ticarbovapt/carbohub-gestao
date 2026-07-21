@@ -12,6 +12,9 @@ import { CarboPageHeader } from "@/components/ui/carbo-page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CarboBadge } from "@/components/ui/carbo-badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  CarboTable, CarboTableHeader, CarboTableBody, CarboTableRow, CarboTableHead, CarboTableCell,
+} from "@/components/ui/carbo-table";
 import { useAuth } from "@/contexts/AuthContext";
 import { fmtBRL, fmtNum } from "@/lib/dash-format";
 import { useSuprimentosCockpit } from "@/hooks/useSuprimentosCockpit";
@@ -229,28 +232,43 @@ export default function Suprimentos() {
                     <PackageSearch className="h-4 w-4 text-primary" /> Top 10 Produtos por Valor Mobilizado
                   </CardTitle>
                 </CardHeader>
-                <CardContent className="px-5 pb-4">
+                <CardContent className="px-0 pb-2">
                   {d.topProdutos.length === 0 ? (
                     <p className="py-16 text-center text-sm text-muted-foreground">Sem dados no período.</p>
                   ) : (
-                    <div className="divide-y divide-border">
-                      {d.topProdutos.map((p, idx) => (
-                        <div key={p.id} className="flex items-center justify-between py-2.5 gap-3">
-                          <div className="flex items-center gap-3 min-w-0">
-                            <span className="w-6 text-center shrink-0 text-sm font-bold text-muted-foreground">
-                              {idx === 0 ? "🥇" : idx === 1 ? "🥈" : idx === 2 ? "🥉" : `${idx + 1}º`}
-                            </span>
-                            <div className="min-w-0">
-                              <p className="text-sm font-semibold text-foreground truncate">{p.name}</p>
-                              <div className="flex items-center gap-2 mt-0.5">
-                                <span className="text-[10px] font-mono text-muted-foreground">{p.product_code}</span>
-                                <CarboBadge variant="secondary" size="sm">{p.category}</CarboBadge>
-                              </div>
-                            </div>
-                          </div>
-                          <CarboBadge variant="success" className="shrink-0">{fmtBRL(p.valor)}</CarboBadge>
-                        </div>
-                      ))}
+                    <div className="overflow-x-auto">
+                      <CarboTable>
+                        <CarboTableHeader>
+                          <CarboTableRow>
+                            <CarboTableHead className="w-10">#</CarboTableHead>
+                            <CarboTableHead>Produto</CarboTableHead>
+                            <CarboTableHead className="text-right">Estoque</CarboTableHead>
+                            <CarboTableHead className="text-right">Valor</CarboTableHead>
+                          </CarboTableRow>
+                        </CarboTableHeader>
+                        <CarboTableBody>
+                          {d.topProdutos.map((p, idx) => (
+                            <CarboTableRow key={p.id}>
+                              <CarboTableCell className="text-center text-sm text-muted-foreground">
+                                {idx === 0 ? "🥇" : idx === 1 ? "🥈" : idx === 2 ? "🥉" : `${idx + 1}º`}
+                              </CarboTableCell>
+                              <CarboTableCell>
+                                <p className="text-sm font-semibold text-foreground truncate">{p.name}</p>
+                                <div className="flex items-center gap-2 mt-0.5">
+                                  <span className="text-[10px] font-mono text-muted-foreground">{p.product_code}</span>
+                                  <CarboBadge variant="secondary" size="sm">{p.category}</CarboBadge>
+                                </div>
+                              </CarboTableCell>
+                              <CarboTableCell className="text-right tabular-nums text-muted-foreground whitespace-nowrap">
+                                {fmtNum(p.qty)} {p.unit}
+                              </CarboTableCell>
+                              <CarboTableCell className="text-right">
+                                <CarboBadge variant="success" className="whitespace-nowrap">{fmtBRL(p.valor)}</CarboBadge>
+                              </CarboTableCell>
+                            </CarboTableRow>
+                          ))}
+                        </CarboTableBody>
+                      </CarboTable>
                     </div>
                   )}
                 </CardContent>

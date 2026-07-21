@@ -31,7 +31,7 @@ const hubLabelOf = (code: string) => HUB_LABELS[code] ?? code;
 
 export interface HubValor { hubCode: string; hubLabel: string; valor: number; }
 export interface HubRisco { hubCode: string; hubLabel: string; count: number; }
-export interface TopProduto { id: string; name: string; product_code: string; category: string; valor: number; }
+export interface TopProduto { id: string; name: string; product_code: string; category: string; qty: number; unit: string; valor: number; }
 export interface ValorCategoria { category: string; valor: number; }
 export interface TransferenciaStatus { status: "em_transito" | "entregue" | "estornado"; count: number; }
 export interface FluxoDiarioRow {
@@ -72,7 +72,7 @@ export function useSuprimentosCockpit() {
 
       const [productsRes, stockRes, minRes, movRes, transfRes] = await Promise.all([
         db.from("mrp_products")
-          .select("id, name, product_code, category, unit_cost, safety_stock_qty, is_active")
+          .select("id, name, product_code, category, unit_cost, safety_stock_qty, stock_unit, is_active")
           .eq("is_active", true),
         db.from("warehouse_stock")
           .select("product_id, quantity, warehouse_id, warehouse:warehouses(id, code, name, is_active)"),
@@ -94,7 +94,7 @@ export function useSuprimentosCockpit() {
 
       interface Product {
         id: string; name: string; product_code: string; category: string | null;
-        unit_cost: number; safety_stock_qty: number;
+        unit_cost: number; safety_stock_qty: number; stock_unit: string;
       }
       const products: Product[] = (productsRes.data ?? []).map((p: Record<string, unknown>) => ({
         id: p.id as string,
@@ -103,6 +103,7 @@ export function useSuprimentosCockpit() {
         category: (p.category as string) ?? null,
         unit_cost: Number(p.unit_cost) || 0,
         safety_stock_qty: Number(p.safety_stock_qty) || 0,
+        stock_unit: (p.stock_unit as string) ?? "un",
       }));
       const productById = new Map(products.map((p) => [p.id, p]));
 
@@ -156,7 +157,10 @@ export function useSuprimentosCockpit() {
       const topProdutos: TopProduto[] = [...produtosComEstoque]
         .sort((a, b) => b.valor - a.valor)
         .slice(0, 10)
-        .map((p) => ({ id: p.id, name: p.name, product_code: p.product_code, category: p.category, valor: p.valor }));
+        .map((p) => ({
+          id: p.id, name: p.name, product_code: p.product_code, category: p.category,
+          qty: hubTotalByProduct.get(p.id) ?? 0, unit: p.stock_unit, valor: p.valor,
+        }));
 
       // ── 8. Valor por categoria (sobre TODOS os produtos com estoque) ───────
       const valorPorCategoriaMap = new Map<string, number>();
