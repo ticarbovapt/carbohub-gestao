@@ -49,7 +49,7 @@ export function Layout() {
         { to: "/dashboards/lojas", label: "Portal de Vendas", icon: Store },
         { to: "/dashboards/franqueados", label: "Licenciados", icon: Building2 },
         { to: "/dashboards/metas", label: "Metas (Placar)", icon: Trophy },
-        { to: "/dashboards/estoque-mrp", label: "Estoque & Custos", icon: Boxes },
+        { to: "/dashboards/suprimentos", label: "Suprimentos", icon: Boxes },
     ] },
     { label: "Comercial", items: [
         { to: "/comercial/dashboard", label: "Dashboard Comercial", icon: LineChart },
