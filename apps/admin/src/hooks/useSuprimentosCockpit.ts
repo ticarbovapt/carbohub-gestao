@@ -33,6 +33,13 @@ export interface HubValor { hubCode: string; hubLabel: string; valor: number; }
 export interface HubRisco { hubCode: string; hubLabel: string; count: number; }
 export interface TopProduto { id: string; name: string; product_code: string; category: string; qty: number; unit: string; valor: number; }
 export interface ValorCategoria { category: string; valor: number; }
+export interface ProdutoEmRisco {
+  id: string; name: string; product_code: string; hubCode: string; hubLabel: string;
+  quantity: number; effectiveMin: number; unit: string;
+}
+export interface ProdutoParado {
+  id: string; name: string; product_code: string; category: string; qty: number; unit: string; valor: number;
+}
 export interface TransferenciaStatus { status: "em_transito" | "entregue" | "estornado"; count: number; }
 export interface FluxoDiarioRow {
   date: string; // YYYY-MM-DD
@@ -49,12 +56,17 @@ export interface SuprimentosCockpit {
   produtosComCusto: number;
   coberturaPct: number;
   topProdutos: TopProduto[];
+  topProdutosValorPct: number;
   riscoPorHub: HubRisco[];
   riscoTotal: number;
   riscoCriticoTotal: number;
+  produtosEmRisco: ProdutoEmRisco[];
   valorPorCategoria: ValorCategoria[];
   transferencias: TransferenciaStatus[];
   fluxoDiario: FluxoDiarioRow[];
+  produtosParados: ProdutoParado[];
+  produtosParadosTotal: number;
+  valorParado: number;
 }
 
 function mapTransferStatus(raw: string | null): "em_transito" | "entregue" | "estornado" {
@@ -161,6 +173,25 @@ export function useSuprimentosCockpit() {
           id: p.id, name: p.name, product_code: p.product_code, category: p.category,
           qty: hubTotalByProduct.get(p.id) ?? 0, unit: p.stock_unit, valor: p.valor,
         }));
+      // Concentração (Pareto): quanto do valor mobilizado total está nesses 10 produtos.
+      const topProdutosValor = topProdutos.reduce((s, p) => s + p.valor, 0);
+      const topProdutosValorPct = valorTotal > 0 ? (topProdutosValor / valorTotal) * 100 : 0;
+
+      // ── Produtos parados: têm estoque, mas nenhuma movimentação nos últimos
+      // 90 dias (mesma janela já buscada em stock_movements) — capital sem giro.
+      const productsWithRecentMovement = new Set<string>(
+        (movRes.data ?? []).map((m: Record<string, unknown>) => m.product_id as string),
+      );
+      const produtosParadosAll: ProdutoParado[] = produtosComEstoque
+        .filter((p) => !productsWithRecentMovement.has(p.id))
+        .map((p) => ({
+          id: p.id, name: p.name, product_code: p.product_code, category: p.category,
+          qty: hubTotalByProduct.get(p.id) ?? 0, unit: p.stock_unit, valor: p.valor,
+        }))
+        .sort((a, b) => b.valor - a.valor);
+      const produtosParadosTotal = produtosParadosAll.length;
+      const valorParado = produtosParadosAll.reduce((s, p) => s + p.valor, 0);
+      const produtosParados = produtosParadosAll.slice(0, 10);
 
       // ── 8. Valor por categoria (sobre TODOS os produtos com estoque) ───────
       const valorPorCategoriaMap = new Map<string, number>();
@@ -183,9 +214,10 @@ export function useSuprimentosCockpit() {
         quantityByProductHub.set(`${row.product_id}::${row.hubCode}`, row.quantity);
       }
 
-      // ── 5/6/7. Risco de ruptura por hub ─────────────────────────────────────
+      // ── 5/6/7. Risco de ruptura por hub — e produtos NOMEADOS (acionável) ───
       const riscoPorHubMap = new Map<string, number>();
       let riscoCriticoTotal = 0;
+      const produtosEmRiscoAll: (ProdutoEmRisco & { gap: number })[] = [];
       for (const p of products) {
         for (const hubCode of activeWarehouseCodes) {
           const key = `${p.id}::${hubCode}`;
@@ -195,6 +227,12 @@ export function useSuprimentosCockpit() {
           if (quantity < effectiveMin) {
             riscoPorHubMap.set(hubCode, (riscoPorHubMap.get(hubCode) ?? 0) + 1);
             if (quantity === 0) riscoCriticoTotal++;
+            produtosEmRiscoAll.push({
+              id: p.id, name: p.name, product_code: p.product_code,
+              hubCode, hubLabel: hubLabelOf(hubCode),
+              quantity, effectiveMin, unit: p.stock_unit,
+              gap: effectiveMin - quantity,
+            });
           }
         }
       }
@@ -202,6 +240,11 @@ export function useSuprimentosCockpit() {
         .map(([hubCode, count]) => ({ hubCode, hubLabel: hubLabelOf(hubCode), count }))
         .sort((a, b) => b.count - a.count);
       const riscoTotal = riscoPorHub.reduce((s, h) => s + h.count, 0);
+      // Prioriza zerados primeiro, depois o maior gap (mais longe do mínimo).
+      const produtosEmRisco: ProdutoEmRisco[] = [...produtosEmRiscoAll]
+        .sort((a, b) => (a.quantity === 0 ? -1 : 0) - (b.quantity === 0 ? -1 : 0) || b.gap - a.gap)
+        .slice(0, 8)
+        .map(({ gap: _gap, ...rest }) => rest);
 
       // ── 9. Transferências entre hubs ────────────────────────────────────────
       const transferenciasMap = new Map<string, number>([
@@ -229,8 +272,9 @@ export function useSuprimentosCockpit() {
 
       return {
         valorPorHub, valorTotal, totalProdutosAtivos, produtosComCusto, coberturaPct,
-        topProdutos, riscoPorHub, riscoTotal, riscoCriticoTotal, valorPorCategoria,
-        transferencias, fluxoDiario,
+        topProdutos, topProdutosValorPct, riscoPorHub, riscoTotal, riscoCriticoTotal,
+        produtosEmRisco, valorPorCategoria, transferencias, fluxoDiario,
+        produtosParados, produtosParadosTotal, valorParado,
       };
     },
   });

@@ -231,6 +231,11 @@ export default function Suprimentos() {
                   <CardTitle className="text-base font-semibold flex items-center gap-2">
                     <PackageSearch className="h-4 w-4 text-primary" /> Top 10 Produtos por Valor Mobilizado
                   </CardTitle>
+                  {d.topProdutos.length > 0 && (
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Esses 10 produtos representam <strong className="text-foreground">{d.topProdutosValorPct.toFixed(0)}%</strong> do valor total mobilizado — concentração de capital a monitorar.
+                    </p>
+                  )}
                 </CardHeader>
                 <CardContent className="px-0 pb-2">
                   {d.topProdutos.length === 0 ? (
@@ -294,27 +299,82 @@ export default function Suprimentos() {
                       <p className="text-xl font-bold tabular-nums text-red-500">{fmtNum(d.riscoCriticoTotal)}</p>
                     </div>
                   </div>
-                  {d.riscoPorHub.length === 0 ? (
+                  {d.produtosEmRisco.length === 0 ? (
                     <p className="text-xs text-muted-foreground text-center py-2">Nenhum produto em risco.</p>
                   ) : (
-                    <div className="space-y-2">
-                      {d.riscoPorHub.map((h) => {
-                        const max = Math.max(...d.riscoPorHub.map((x) => x.count), 1);
-                        return (
-                          <div key={h.hubCode} className="flex items-center gap-2">
-                            <span className="text-xs text-muted-foreground w-24 shrink-0 truncate">{h.hubLabel}</span>
-                            <div className="flex-1 h-4 bg-muted rounded-md overflow-hidden">
-                              <div className="h-full rounded-md bg-amber-500 transition-all duration-700" style={{ width: `${(h.count / max) * 100}%` }} />
-                            </div>
-                            <span className="text-xs font-semibold tabular-nums w-6 text-right">{h.count}</span>
+                    <div className="divide-y divide-border -mx-1">
+                      {d.produtosEmRisco.map((p) => (
+                        <div key={`${p.id}::${p.hubCode}`} className="flex items-center justify-between gap-2 py-2 px-1">
+                          <div className="min-w-0">
+                            <p className="text-xs font-semibold text-foreground truncate">{p.name}</p>
+                            <p className="text-[10px] text-muted-foreground">{p.hubLabel}</p>
                           </div>
-                        );
-                      })}
+                          <span className={`text-xs font-bold tabular-nums shrink-0 ${p.quantity === 0 ? "text-red-500" : "text-amber-500"}`}>
+                            {fmtNum(p.quantity)} / {fmtNum(p.effectiveMin)} {p.unit}
+                          </span>
+                        </div>
+                      ))}
+                      {d.riscoTotal > d.produtosEmRisco.length && (
+                        <p className="text-[11px] text-muted-foreground text-center pt-2">
+                          + {d.riscoTotal - d.produtosEmRisco.length} outro(s) produto(s) em risco
+                        </p>
+                      )}
                     </div>
                   )}
                 </CardContent>
               </Card>
             </div>
+
+            {/* ── Produtos Parados (dead stock) — têm estoque, sem giro em 90d ─ */}
+            {d.produtosParados.length > 0 && (
+              <Card className="rounded-2xl border-0 shadow-sm">
+                <CardHeader className="pb-1 pt-5 px-5">
+                  <CardTitle className="text-base font-semibold flex items-center gap-2">
+                    <PackageSearch className="h-4 w-4 text-amber-500" /> Produtos Parados
+                  </CardTitle>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Têm estoque mas nenhuma movimentação nos últimos 90 dias — <strong className="text-foreground">{fmtNum(d.produtosParadosTotal)} produto(s)</strong>, <strong className="text-foreground">{fmtBRL(d.valorParado)}</strong> parados sem giro.
+                  </p>
+                </CardHeader>
+                <CardContent className="px-0 pb-2">
+                  <div className="overflow-x-auto">
+                    <CarboTable>
+                      <CarboTableHeader>
+                        <CarboTableRow>
+                          <CarboTableHead>Produto</CarboTableHead>
+                          <CarboTableHead className="text-right">Estoque</CarboTableHead>
+                          <CarboTableHead className="text-right">Valor parado</CarboTableHead>
+                        </CarboTableRow>
+                      </CarboTableHeader>
+                      <CarboTableBody>
+                        {d.produtosParados.map((p) => (
+                          <CarboTableRow key={p.id}>
+                            <CarboTableCell>
+                              <p className="text-sm font-semibold text-foreground truncate">{p.name}</p>
+                              <div className="flex items-center gap-2 mt-0.5">
+                                <span className="text-[10px] font-mono text-muted-foreground">{p.product_code}</span>
+                                <CarboBadge variant="secondary" size="sm">{p.category}</CarboBadge>
+                              </div>
+                            </CarboTableCell>
+                            <CarboTableCell className="text-right tabular-nums text-muted-foreground whitespace-nowrap">
+                              {fmtNum(p.qty)} {p.unit}
+                            </CarboTableCell>
+                            <CarboTableCell className="text-right">
+                              <CarboBadge variant="warning" className="whitespace-nowrap">{fmtBRL(p.valor)}</CarboBadge>
+                            </CarboTableCell>
+                          </CarboTableRow>
+                        ))}
+                      </CarboTableBody>
+                    </CarboTable>
+                  </div>
+                  {d.produtosParadosTotal > d.produtosParados.length && (
+                    <p className="text-[11px] text-muted-foreground text-center py-2">
+                      + {d.produtosParadosTotal - d.produtosParados.length} outro(s) produto(s) parado(s)
+                    </p>
+                  )}
+                </CardContent>
+              </Card>
+            )}
 
             {/* ── 5. Valor Mobilizado por Categoria ────────────────────────── */}
             <Card className="rounded-2xl border-0 shadow-sm">
@@ -425,46 +485,28 @@ export default function Suprimentos() {
               </CardContent>
             </Card>
 
-            {/* ── 8. Transferências Entre Hubs ─────────────────────────────── */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-              <div className="lg:col-span-2 grid grid-cols-1 sm:grid-cols-3 gap-3">
-                {d.transferencias.map((t, i) => {
-                  const conf = t.status === "em_transito"
-                    ? { accent: "border-l-blue-400", icon: Truck, badge: "info" as const }
-                    : t.status === "entregue"
-                    ? { accent: "border-l-green-500", icon: CheckCircle2, badge: "success" as const }
-                    : { accent: "border-l-slate-400", icon: RotateCcw, badge: "secondary" as const };
-                  return (
-                    <motion.div key={t.status} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}>
-                      <StatTile label={TRANSFER_LABEL[t.status]} value={fmtNum(t.count)} accent={conf.accent} icon={conf.icon} />
-                    </motion.div>
-                  );
-                })}
-              </div>
-
-              <Card className="rounded-2xl border-0 shadow-sm">
-                <CardHeader className="pb-1 pt-5 px-5">
-                  <CardTitle className="text-base font-semibold flex items-center gap-2">
-                    <ArrowLeftRight className="h-4 w-4 text-primary" /> Transferências
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="px-2 pb-4">
-                  {d.transferencias.every((t) => t.count === 0) ? (
-                    <p className="px-3 py-16 text-center text-sm text-muted-foreground">Sem dados no período.</p>
-                  ) : (
-                    <ResponsiveContainer width="100%" height={220}>
-                      <PieChart>
-                        <Pie data={d.transferencias} dataKey="count" nameKey="status" cx="50%" cy="50%" innerRadius={40} outerRadius={70} paddingAngle={2}>
-                          {d.transferencias.map((t) => <Cell key={t.status} fill={TRANSFER_COLORS[t.status]} />)}
-                        </Pie>
-                        <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v: number, n: string) => [fmtNum(v), TRANSFER_LABEL[n] ?? n]} />
-                        <Legend formatter={(v) => <span className="text-xs">{TRANSFER_LABEL[v] ?? v}</span>} />
-                      </PieChart>
-                    </ResponsiveContainer>
-                  )}
-                </CardContent>
-              </Card>
-            </div>
+            {/* ── Transferências Entre Hubs — demovido a rodapé discreto ──────
+                É status operacional (execução), não estratégico; o detalhe
+                fica no Ops. Aqui é só um lembrete de contexto, sem destaque. */}
+            <Card className="rounded-2xl border-0 shadow-sm bg-muted/20">
+              <CardContent className="p-4">
+                <div className="flex items-center gap-4 flex-wrap text-xs text-muted-foreground">
+                  <span className="flex items-center gap-1.5 font-medium text-foreground shrink-0">
+                    <ArrowLeftRight className="h-3.5 w-3.5" /> Transferências entre hubs (180d):
+                  </span>
+                  {d.transferencias.map((t) => {
+                    const Icon = t.status === "em_transito" ? Truck : t.status === "entregue" ? CheckCircle2 : RotateCcw;
+                    return (
+                      <span key={t.status} className="flex items-center gap-1.5">
+                        <Icon className="h-3.5 w-3.5" style={{ color: TRANSFER_COLORS[t.status] }} />
+                        {fmtNum(t.count)} {TRANSFER_LABEL[t.status].toLowerCase()}
+                      </span>
+                    );
+                  })}
+                  <span className="text-[11px] text-muted-foreground/70 ml-auto">detalhe operacional em Carbo Ops</span>
+                </div>
+              </CardContent>
+            </Card>
           </>
         )}
       </div>
