@@ -172,6 +172,11 @@ export default function Pipelines() {
   const baseLeads = isAll ? allLeads : funnelLeads;
   const isLoading = isAll ? l2 : l1;
 
+  // Dialog do negócio sempre lê o lead VIVO da lista (que já se atualiza via
+  // invalidateQueries/realtime), em vez do snapshot tirado no clique — assim
+  // uma edição (ex.: nome fantasia) aparece na hora, sem precisar de F5.
+  const liveDrawerLead = drawerLead ? (baseLeads.find((l) => l.id === drawerLead.id) ?? drawerLead) : null;
+
   const filteredLeads = baseLeads.filter((lead) => {
     if (!isAll && stageFilter !== "all" && lead.stage !== stageFilter) return false;
     if (vendedorFilter !== "all") {
@@ -346,7 +351,7 @@ export default function Pipelines() {
       </div>
 
       {isFormOpen && <LeadForm funnelType={ft} initialStage={isAll ? undefined : formStage} onClose={() => setIsFormOpen(false)} />}
-      {drawerLead && <DealDetail lead={drawerLead} funnelType={drawerLead.funnel_type as FunnelType} onClose={() => setDrawerLead(null)} />}
+      {liveDrawerLead && <DealDetail lead={liveDrawerLead} funnelType={liveDrawerLead.funnel_type as FunnelType} onClose={() => setDrawerLead(null)} />}
 
       <Dialog open={!!lostDialogLead} onOpenChange={(o) => { if (!o) setLostDialogLead(null); }}>
         <DialogContent className="sm:max-w-sm">
