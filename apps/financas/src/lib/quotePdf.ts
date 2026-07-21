@@ -51,7 +51,7 @@ export interface QuotePdfData {
 // Modalidades exibidas como "aceitas" no PDF. NÃO listamos "Boleto faturado" aqui
 // de propósito (para não induzir o cliente); ele continua selecionável no Vender e,
 // se escolhido, aparece em "Forma escolhida".
-const FORMAS_ACEITAS = "PIX · Boleto à vista · Cartão de débito · Cartão de crédito (até 12x)";
+const FORMAS_ACEITAS = "PIX · Boleto à vista · Cartão de débito · Cartão de crédito";
 
 const brl = (v: number) => (v || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 const dateBR = (iso?: string | null) =>
