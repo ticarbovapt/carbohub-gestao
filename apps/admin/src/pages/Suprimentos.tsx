@@ -388,6 +388,7 @@ export default function Suprimentos() {
                   </CardTitle>
                   <p className="text-xs text-muted-foreground mt-0.5">
                     Custo calculado a partir da ficha técnica (soma dos insumos) de cada produto — não é o custo cadastrado do produto, é o custo de produzir 1 unidade a partir dos insumos.
+                    Produtos com um semi-acabado na ficha (ex.: Embalagem c/ líquido) têm 2 receitas possíveis, mesma lógica de rota usada nas Ordens de Produção do Ops: 🏷️ Rotular (usa o semi-acabado pronto) e ⚙️ Do zero (monta a partir da garrafa, líquido, tampa etc.).
                   </p>
                 </CardHeader>
                 <CardContent className="px-0 pb-2">
@@ -396,7 +397,8 @@ export default function Suprimentos() {
                       <CarboTableHeader>
                         <CarboTableRow>
                           <CarboTableHead>Produto</CarboTableHead>
-                          <CarboTableHead className="text-right">Custo calculado (BOM)</CarboTableHead>
+                          <CarboTableHead className="text-right">🏷️ Rotular</CarboTableHead>
+                          <CarboTableHead className="text-right">⚙️ Do zero</CarboTableHead>
                           <CarboTableHead className="text-right">Custo cadastrado</CarboTableHead>
                           <CarboTableHead>Cobertura</CarboTableHead>
                         </CarboTableRow>
@@ -404,6 +406,8 @@ export default function Suprimentos() {
                       <CarboTableBody>
                         {d.custoFabricacao.map((p) => {
                           const incompleto = p.itensFaltantes > 0;
+                          const temRotaZero = p.custoZero !== null;
+                          const incompletoZero = (p.itensFaltantesZero ?? 0) > 0;
                           return (
                             <CarboTableRow key={p.id}>
                               <CarboTableCell>
@@ -418,19 +422,41 @@ export default function Suprimentos() {
                                   {fmtBRL(p.custoCalculado)}
                                 </CarboBadge>
                               </CarboTableCell>
+                              <CarboTableCell className="text-right">
+                                {temRotaZero ? (
+                                  <CarboBadge variant={incompletoZero ? "warning" : "success"} className="whitespace-nowrap">
+                                    {fmtBRL(p.custoZero!)}
+                                  </CarboBadge>
+                                ) : (
+                                  <span className="text-xs text-muted-foreground">—</span>
+                                )}
+                              </CarboTableCell>
                               <CarboTableCell className="text-right tabular-nums text-muted-foreground whitespace-nowrap">
                                 {fmtBRL(p.custoCadastrado)}
                               </CarboTableCell>
                               <CarboTableCell>
-                                {incompleto ? (
-                                  <span className="text-xs text-amber-500 whitespace-nowrap">
-                                    Falta custo de {p.itensFaltantes} de {p.totalItensBom} insumo(s)
-                                  </span>
-                                ) : (
-                                  <span className="text-xs text-muted-foreground whitespace-nowrap">
-                                    {p.totalItensBom} insumo(s) — completo
-                                  </span>
-                                )}
+                                <div className="flex flex-col gap-0.5">
+                                  {incompleto ? (
+                                    <span className="text-xs text-amber-500 whitespace-nowrap">
+                                      🏷️ Falta custo de {p.itensFaltantes} de {p.totalItensBom} insumo(s)
+                                    </span>
+                                  ) : (
+                                    <span className="text-xs text-muted-foreground whitespace-nowrap">
+                                      🏷️ {p.totalItensBom} insumo(s) — completo
+                                    </span>
+                                  )}
+                                  {temRotaZero && (
+                                    incompletoZero ? (
+                                      <span className="text-xs text-amber-500 whitespace-nowrap">
+                                        ⚙️ Falta custo de {p.itensFaltantesZero} de {p.totalItensBomZero} insumo(s)
+                                      </span>
+                                    ) : (
+                                      <span className="text-xs text-muted-foreground whitespace-nowrap">
+                                        ⚙️ {p.totalItensBomZero} insumo(s) — completo
+                                      </span>
+                                    )
+                                  )}
+                                </div>
                               </CarboTableCell>
                             </CarboTableRow>
                           );

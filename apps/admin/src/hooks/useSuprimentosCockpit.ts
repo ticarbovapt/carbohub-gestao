@@ -42,10 +42,18 @@ export interface ProdutoParado {
 }
 export interface CustoFabricacao {
   id: string; name: string; product_code: string; category: string;
+  // Rota "🏷️ Rotular" — usa o semi-acabado pronto como está no BOM direto.
   custoCalculado: number;   // soma dos insumos (parcial se faltar custo de algum item)
   custoCadastrado: number;  // unit_cost do próprio produto final (p/ comparação)
   itensFaltantes: number;   // insumos do BOM sem custo cadastrado (ou inativos)
   totalItensBom: number;
+  // Rota "⚙️ Do zero" — explode qualquer linha Semi-acabado na própria ficha
+  // técnica dela (garrafa+líquido+tampa em vez do semi-acabado pronto). Só
+  // existe (não-nulo) quando o BOM direto tem pelo menos 1 linha Semi-acabado
+  // — mesmo conceito de production_route ('rotular'|'zero') usado no Ops.
+  custoZero: number | null;
+  itensFaltantesZero: number | null;
+  totalItensBomZero: number | null;
 }
 export interface TransferenciaStatus { status: "em_transito" | "entregue" | "estornado"; count: number; }
 export interface FluxoDiarioRow {
@@ -284,29 +292,68 @@ export function useSuprimentosCockpit() {
       // ── Custo de Fabricação (BOM): soma o custo dos insumos que compõem cada
       // produto (Produto Final/Semi-acabado) — parcial e sinalizado quando falta
       // custo cadastrado de algum insumo, mas SEMPRE mostra o valor já somado.
+      // Quando o BOM direto tem uma linha Semi-acabado (ex.: CarboZé 100ml =
+      // Embalagem 100mL c/ líq. + Rótulo), o produto tem DUAS receitas válidas
+      // de fabricação — mesmo conceito de production_route usado no Ops
+      // (op_deduct_materials / useProducibility.directLines|zeroLines):
+      //   • "🏷️ Rotular" = usa o semi-acabado pronto como está no BOM direto.
+      //   • "⚙️ Do zero"  = explode o semi-acabado na própria ficha técnica
+      //     dele (garrafa + líquido + tampa, em vez do semi-acabado pronto).
       const bomByProduct = new Map<string, { insumo_id: string; qty: number }[]>();
       for (const row of bomRes.data ?? []) {
         const arr = bomByProduct.get(row.product_id) ?? [];
         arr.push({ insumo_id: row.insumo_id, qty: Number(row.quantity_per_unit) || 0 });
         bomByProduct.set(row.product_id, arr);
       }
+      const computeCost = (itens: { insumo_id: string; qty: number }[]) => {
+        let custo = 0;
+        let faltantes = 0;
+        for (const it of itens) {
+          const insumo = productById.get(it.insumo_id);
+          const custoUnit = insumo?.unit_cost ?? 0;
+          if (!insumo || custoUnit <= 0) faltantes++;
+          custo += custoUnit * it.qty;
+        }
+        return { custo, faltantes, total: itens.length };
+      };
+      // Explode toda linha Semi-acabado na própria ficha técnica dela (1 nível
+      // de recursão basta no modelo atual, mas o depth guard evita loop caso
+      // alguém cadastre um semi-acabado dentro de outro).
+      const explodeZero = (
+        itens: { insumo_id: string; qty: number }[],
+        depth = 0,
+      ): { insumo_id: string; qty: number }[] => {
+        const out: { insumo_id: string; qty: number }[] = [];
+        for (const it of itens) {
+          const insumo = productById.get(it.insumo_id);
+          const subItens = bomByProduct.get(it.insumo_id);
+          if (insumo && categoryOf(insumo.category) === "Semi-acabado" && subItens?.length && depth < 3) {
+            for (const sub of explodeZero(subItens, depth + 1)) {
+              out.push({ insumo_id: sub.insumo_id, qty: sub.qty * it.qty });
+            }
+          } else {
+            out.push(it);
+          }
+        }
+        return out;
+      };
       const custoFabricacao: CustoFabricacao[] = Array.from(bomByProduct.entries())
         .map(([productId, itens]): CustoFabricacao | null => {
           const prod = productById.get(productId);
           if (!prod) return null; // produto inativo — fora do catálogo ativo
-          let custoCalculado = 0;
-          let itensFaltantes = 0;
-          for (const it of itens) {
-            const insumo = productById.get(it.insumo_id);
-            const custoUnit = insumo?.unit_cost ?? 0;
-            if (!insumo || custoUnit <= 0) itensFaltantes++;
-            custoCalculado += custoUnit * it.qty;
-          }
+          const rotular = computeCost(itens);
+          const temSemiacabado = itens.some(
+            (it) => categoryOf(productById.get(it.insumo_id)?.category) === "Semi-acabado",
+          );
+          const zero = temSemiacabado ? computeCost(explodeZero(itens)) : null;
           return {
             id: prod.id, name: prod.name, product_code: prod.product_code,
             category: categoryOf(prod.category),
-            custoCalculado, custoCadastrado: prod.unit_cost,
-            itensFaltantes, totalItensBom: itens.length,
+            custoCalculado: rotular.custo, custoCadastrado: prod.unit_cost,
+            itensFaltantes: rotular.faltantes, totalItensBom: rotular.total,
+            custoZero: zero?.custo ?? null,
+            itensFaltantesZero: zero?.faltantes ?? null,
+            totalItensBomZero: zero?.total ?? null,
           };
         })
         .filter((x): x is CustoFabricacao => x !== null)
