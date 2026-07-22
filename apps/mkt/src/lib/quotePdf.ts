@@ -1,0 +1,313 @@
+import { jsPDF } from "jspdf";
+import autoTable from "jspdf-autotable";
+import logoUrl from "@/assets/logo-grupo-carbo.png";
+
+// Orçamento em PDF com a identidade do Grupo Carbo.
+// ⚠️ DADOS DA EMPRESA: confirme/ajuste em COMPANY abaixo (CNPJ, endereço, contato).
+const COMPANY = {
+  name: "Carbo Soluções LTDA",
+  cnpj: "36.060.692/0001-00",
+  endereco: "Rua Almirante Tamandaré, 196",
+  cidade: "Lagoa Nova · Natal - RN · CEP 59054-560",
+  telefone: "(84) 3207-5055",
+  email: "administrativo@carbovapt.com.br",
+  site: "carboze.com.br",
+};
+
+// Paleta forte (igual ao modelo de referência): verde floresta + acento lima.
+const GREEN: [number, number, number] = [15, 64, 45];     // #0F402D — faixa, cabeçalhos, total
+const LIME: [number, number, number] = [141, 198, 63];    // #8DC63F — fios/caixa de acento
+
+interface QuoteItem {
+  name?: string;
+  product_code?: string;
+  quantity?: number;
+  unit_price?: number;
+  bonus_quantity?: number;
+}
+
+type Endereco = Record<string, unknown> | null | undefined;
+
+export interface QuotePdfData {
+  order_number?: string | null;
+  customer_name?: string | null;
+  legal_name?: string | null;
+  cnpj?: string | null;
+  ie?: string | null;
+  endereco?: Endereco;               // endereço de entrega
+  endereco_faturamento?: Endereco;   // se diferente da entrega; null = mesmo
+  vendedor_name?: string | null;
+  payment_terms?: string | null;     // forma de pagamento escolhida
+  items?: unknown;
+  subtotal?: number | null;
+  discount?: number | null;          // desconto aplicado (R$)
+  discount_percent?: number | null;  // % do desconto (para exibição)
+  total?: number | null;
+  created_at?: string | null;
+  notes?: string | null;
+  validityDays?: number;
+}
+
+// Modalidades exibidas como "aceitas" no PDF. NÃO listamos "Boleto faturado" aqui
+// de propósito (para não induzir o cliente); ele continua selecionável no Vender e,
+// se escolhido, aparece em "Forma escolhida".
+const FORMAS_ACEITAS = "PIX · Boleto à vista · Cartão de débito · Cartão de crédito";
+
+const brl = (v: number) => (v || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+const dateBR = (iso?: string | null) =>
+  iso ? new Date(iso).toLocaleDateString("pt-BR") : new Date().toLocaleDateString("pt-BR");
+
+// Carrega a imagem preservando as dimensões naturais (para não esticar a logo).
+// tintWhite: recolore a logo para BRANCO (silhueta) — para aparecer sobre a faixa
+// verde escura sem precisar de fundo/chip branco.
+function loadImage(url: string, tintWhite = false): Promise<{ dataUrl: string; w: number; h: number } | null> {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => {
+      try {
+        const W = img.naturalWidth, H = img.naturalHeight;
+        const canvas = document.createElement("canvas");
+        canvas.width = W; canvas.height = H;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) { resolve(null); return; }
+        ctx.drawImage(img, 0, 0);
+
+        // Recorta a margem transparente (bounding box dos pixels visíveis) para a
+        // logo preencher a caixa — sem o espaço vazio que a deixava pequena.
+        let sx = 0, sy = 0, sw = W, sh = H;
+        try {
+          const d = ctx.getImageData(0, 0, W, H).data;
+          let minX = W, minY = H, maxX = -1, maxY = -1;
+          for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+            if (d[(y * W + x) * 4 + 3] > 8) {
+              if (x < minX) minX = x; if (x > maxX) maxX = x;
+              if (y < minY) minY = y; if (y > maxY) maxY = y;
+            }
+          }
+          if (maxX >= minX && maxY >= minY) { sx = minX; sy = minY; sw = maxX - minX + 1; sh = maxY - minY + 1; }
+        } catch { /* getImageData bloqueado → usa a imagem inteira */ }
+
+        const out = document.createElement("canvas");
+        out.width = sw; out.height = sh;
+        const octx = out.getContext("2d");
+        if (!octx) { resolve(null); return; }
+        octx.drawImage(canvas, sx, sy, sw, sh, 0, 0, sw, sh);
+        if (tintWhite) {
+          octx.globalCompositeOperation = "source-in"; // mantém o alpha, pinta de branco
+          octx.fillStyle = "#ffffff";
+          octx.fillRect(0, 0, sw, sh);
+        }
+        resolve({ dataUrl: out.toDataURL("image/png"), w: sw, h: sh });
+      } catch { resolve(null); }
+    };
+    img.onerror = () => resolve(null);
+    img.src = url;
+  });
+}
+
+const s = (e: Endereco, k: string) => (e && e[k] != null ? String(e[k]) : "");
+function fmtAddrLines(e: Endereco): string[] {
+  if (!e) return [];
+  const l1 = [s(e, "logradouro"), s(e, "numero")].filter(Boolean).join(", ");
+  const l2 = [s(e, "bairro"), [s(e, "cidade"), s(e, "uf")].filter(Boolean).join("/")].filter(Boolean).join(" · ");
+  const l3 = s(e, "cep") ? `CEP ${s(e, "cep")}` : "";
+  return [l1, l2, l3].filter(Boolean);
+}
+
+export async function generateQuotePdf(order: QuotePdfData, opts?: { download?: boolean }) {
+  const doc = new jsPDF();
+  const pageW = doc.internal.pageSize.getWidth();
+  const pageH = doc.internal.pageSize.getHeight();
+  const M = 14;
+
+  // ── Cabeçalho: faixa da identidade Grupo Carbo (igual ao modelo de referência) ─
+  // Faixa verde floresta full-width, marca BRANCA à esquerda, caixa "ORÇAMENTO"
+  // lima à direita e a linha da empresa na base; fios de acento LIMA no topo/base.
+  const GREEN_SOFT: [number, number, number] = [205, 224, 214];
+  const BAND_H = 30;
+
+  const created = dateBR(order.created_at);
+  const validity = order.validityDays ?? 7;
+  const validUntilDate = new Date(order.created_at ? new Date(order.created_at) : new Date());
+  validUntilDate.setDate(validUntilDate.getDate() + validity);
+  const validUntil = validUntilDate.toLocaleDateString("pt-BR");
+
+  doc.setFillColor(...GREEN); doc.rect(0, 0, pageW, BAND_H, "F");
+  doc.setFillColor(...LIME);
+  doc.rect(0, 0, pageW, 1.8, "F");
+  doc.rect(0, BAND_H - 1.5, pageW, 1.5, "F");
+
+  // Marca: logo Grupo Carbo em BRANCO, grande e sem margem (preenche a faixa).
+  const logo = await loadImage(logoUrl, true);
+  if (logo) {
+    let lh = 11.5;
+    let lw = lh * (logo.w / logo.h);
+    const maxLw = 78;
+    if (lw > maxLw) { lh = lh * (maxLw / lw); lw = maxLw; }
+    doc.addImage(logo.dataUrl, "PNG", M, 5.5, lw, lh);
+  } else {
+    doc.setFont("helvetica", "bold"); doc.setFontSize(23); doc.setTextColor(255);
+    doc.text("GRUPO CARBO", M, 16);
+  }
+
+  // Caixa "ORÇAMENTO" à direita (LIMA, texto verde): Nº + datas DENTRO do balão.
+  const boxW = 60, boxH = 20, boxX = pageW - M - boxW, boxY = 4;
+  doc.setFillColor(...LIME); doc.roundedRect(boxX, boxY, boxW, boxH, 2, 2, "F");
+  doc.setTextColor(...GREEN); doc.setFont("helvetica", "bold"); doc.setFontSize(13);
+  doc.text("ORÇAMENTO", boxX + boxW / 2, boxY + 6.8, { align: "center" });
+  doc.setFont("helvetica", "normal"); doc.setFontSize(7.5);
+  if (order.order_number) doc.text(`Nº ${order.order_number}`, boxX + boxW / 2, boxY + 11.4, { align: "center" });
+  doc.text(`Emissão: ${created}`, boxX + boxW / 2, boxY + 15.2, { align: "center" });
+  doc.text(`Válido até: ${validUntil}`, boxX + boxW / 2, boxY + 18.4, { align: "center" });
+
+  // Linha da empresa (branco suave) na base da faixa.
+  doc.setFont("helvetica", "normal"); doc.setFontSize(7); doc.setTextColor(...GREEN_SOFT);
+  doc.text(`${COMPANY.name}  ·  CNPJ ${COMPANY.cnpj}`, M, BAND_H - 8);
+  doc.text(`${COMPANY.endereco} · ${COMPANY.cidade} · ${COMPANY.telefone}`, M, BAND_H - 4);
+  doc.setTextColor(0); doc.setLineWidth(0.2);
+
+  // Início do conteúdo abaixo da faixa.
+  let y = BAND_H + 9;
+
+  // ── Blocos do comprador (2 colunas) ────────────────────────────────────────
+  const colGap = 6;
+  const colW = (pageW - M * 2 - colGap) / 2;
+  const leftX = M;
+  const rightX = M + colW + colGap;
+
+  const blockHeader = (x: number, yy: number, title: string) => {
+    doc.setFillColor(...GREEN); doc.rect(x, yy, colW, 6, "F");
+    doc.setTextColor(255); doc.setFont("helvetica", "bold"); doc.setFontSize(8);
+    doc.text(title, x + 3, yy + 4.1);
+    doc.setTextColor(0);
+  };
+
+  // Esquerda: dados do cliente
+  blockHeader(leftX, y, "DADOS DO CLIENTE");
+  let ly = y + 11;
+  const clienteFields: [string, string][] = [
+    ["Nome / Razão Social", order.customer_name || order.legal_name || "—"],
+    ["CNPJ / CPF", order.cnpj || "—"],
+    ["Inscrição Estadual", order.ie || "—"],
+    ["Vendedor", order.vendedor_name || "—"],
+  ];
+  clienteFields.forEach(([label, val]) => {
+    doc.setFont("helvetica", "normal"); doc.setFontSize(7); doc.setTextColor(140);
+    doc.text(label, leftX + 3, ly);
+    doc.setFont("helvetica", "bold"); doc.setFontSize(9.5); doc.setTextColor(20);
+    doc.text(doc.splitTextToSize(String(val), colW - 6), leftX + 3, ly + 4.2);
+    ly += 10.5;
+  });
+
+  // Direita: endereço de entrega (+ faturamento se diferente)
+  blockHeader(rightX, y, "ENDEREÇO DE ENTREGA");
+  let ry = y + 11;
+  const entrega = fmtAddrLines(order.endereco);
+  doc.setFont("helvetica", "normal"); doc.setFontSize(8.5); doc.setTextColor(40);
+  (entrega.length ? entrega : ["—"]).forEach((l) => { doc.text(l, rightX + 3, ry); ry += 4.6; });
+  ry += 3;
+
+  const fat = fmtAddrLines(order.endereco_faturamento);
+  if (order.endereco_faturamento && fat.length) {
+    blockHeader(rightX, ry, "ENDEREÇO DE FATURAMENTO");
+    ry += 11;
+    doc.setFont("helvetica", "normal"); doc.setFontSize(8.5); doc.setTextColor(40);
+    fat.forEach((l) => { doc.text(l, rightX + 3, ry); ry += 4.6; });
+  } else {
+    doc.setFont("helvetica", "italic"); doc.setFontSize(7.5); doc.setTextColor(150);
+    doc.text("Faturamento: mesmo endereço da entrega", rightX + 3, ry);
+    ry += 4;
+  }
+  doc.setTextColor(0); doc.setFont("helvetica", "normal");
+
+  // ── Itens ──────────────────────────────────────────────────────────────────
+  y = Math.max(ly, ry) + 4;
+  const items = (Array.isArray(order.items) ? order.items : []) as QuoteItem[];
+  const body = items
+    .filter((it) => (it.name || it.product_code) && (it.quantity ?? 0) > 0)
+    .map((it) => {
+      const qty = it.quantity ?? 0;
+      const unit = it.unit_price ?? 0;
+      const bonus = it.bonus_quantity ?? 0;
+      const nome = (it.name || it.product_code || "—") + (bonus > 0 ? `  (+${bonus} bonif.)` : "");
+      return [nome, String(qty), brl(unit), brl(qty * unit)];
+    });
+
+  autoTable(doc, {
+    startY: y,
+    head: [["Produto", "Qtd", "Valor Unit.", "Total"]],
+    body: body.length ? body : [["Nenhum item", "", "", ""]],
+    theme: "striped",
+    headStyles: { fillColor: GREEN, halign: "left", fontSize: 9 },
+    columnStyles: {
+      1: { halign: "center", cellWidth: 20 },
+      2: { halign: "right", cellWidth: 34 },
+      3: { halign: "right", cellWidth: 34 },
+    },
+    styles: { fontSize: 9, cellPadding: 3 },
+    margin: { left: M, right: M },
+  });
+
+  // ── Total (com Subtotal + Desconto, quando houver) ──────────────────────────
+  const afterTable = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY;
+  const discount = Number(order.discount ?? 0);
+  const subtotal = Number(order.subtotal ?? order.total ?? 0);
+  const total = order.total ?? order.subtotal ?? 0;
+  let ty = afterTable + 6;
+  // Linhas de Subtotal e Desconto só aparecem quando há desconto (evita poluir).
+  if (discount > 0) {
+    doc.setFont("helvetica", "normal"); doc.setFontSize(9); doc.setTextColor(0);
+    doc.text(`Subtotal: ${brl(subtotal)}`, pageW - M - 3, ty + 4, { align: "right" });
+    ty += 5;
+    const pctTxt = order.discount_percent ? ` (${order.discount_percent}%)` : "";
+    doc.text(`Desconto${pctTxt}: - ${brl(discount)}`, pageW - M - 3, ty + 4, { align: "right" });
+    ty += 6;
+  }
+  doc.setFillColor(...GREEN);
+  doc.rect(pageW - M - 70, ty, 70, 9, "F");
+  doc.setTextColor(255); doc.setFont("helvetica", "bold"); doc.setFontSize(11);
+  doc.text(`Total: ${brl(total)}`, pageW - M - 3, ty + 6, { align: "right" });
+  doc.setTextColor(0); doc.setFont("helvetica", "normal");
+  ty += 9;
+
+  // ── Pagamento ────────────────────────────────────────────────────────────────
+  ty += 10;
+  doc.setFillColor(...GREEN); doc.rect(M, ty, pageW - M * 2, 6, "F");
+  doc.setTextColor(255); doc.setFont("helvetica", "bold"); doc.setFontSize(8);
+  doc.text("PAGAMENTO", M + 3, ty + 4.1);
+  doc.setTextColor(0); ty += 11;
+  doc.setFont("helvetica", "normal"); doc.setFontSize(8); doc.setTextColor(120);
+  doc.text("Formas aceitas:", M, ty);
+  doc.setTextColor(40);
+  doc.text(doc.splitTextToSize(FORMAS_ACEITAS, pageW - M * 2 - 30), M + 26, ty);
+  ty += 6;
+  doc.setFont("helvetica", "bold"); doc.setFontSize(9.5); doc.setTextColor(20);
+  doc.text(`Forma escolhida: ${order.payment_terms || "—"}`, M, ty);
+  doc.setTextColor(0); doc.setFont("helvetica", "normal");
+  ty += 2;
+
+  // ── Observações ──────────────────────────────────────────────────────────────
+  if (order.notes) {
+    ty += 10;
+    doc.setFontSize(9); doc.setTextColor(90); doc.setFont("helvetica", "bold");
+    doc.text("Observações", M, ty);
+    doc.setFont("helvetica", "normal");
+    const wrapped = doc.splitTextToSize(order.notes, pageW - M * 2);
+    doc.text(wrapped, M, ty + 5);
+    doc.setTextColor(0);
+  }
+
+  // ── Rodapé ───────────────────────────────────────────────────────────────────
+  doc.setFontSize(8); doc.setTextColor(150);
+  doc.text(
+    "Este documento é um orçamento e não possui valor fiscal. Valores sujeitos a confirmação.",
+    pageW / 2, pageH - 10, { align: "center" },
+  );
+
+  const filename = `orcamento-${order.order_number || "carbo"}.pdf`;
+  if (opts?.download !== false) doc.save(filename);
+  // base64 (sem o prefixo data:) — para anexar no envio por e-mail (send-email)
+  const base64 = doc.output("datauristring").split(",")[1] ?? "";
+  return { filename, base64 };
+}
