@@ -158,7 +158,7 @@ export default function Suprimentos() {
       <div className="p-4 md:p-6">
         <div className="space-y-6 max-w-[1500px] mx-auto">
           <CarboPageHeader icon={Boxes} iconColor="gradient" title="Suprimentos"
-            description="Saúde de estoque, giro, risco em R$ e rede de distribuição — visão estratégica, somente leitura" />
+            description="Hub Natal · saúde de estoque, giro, risco em R$ e custo de fabricação — visão estratégica, somente leitura" />
           <Card className="rounded-2xl border-0 shadow-sm">
             <CardContent className="py-16 text-center text-sm text-muted-foreground">
               Não foi possível carregar os dados de suprimentos. Tente novamente mais tarde.
@@ -197,7 +197,11 @@ export default function Suprimentos() {
               ))}
             </div>
 
-            {/* ── 2. Estado da rede — Natal produz → SP vende ───────────────── */}
+            {/* ── 2. Estado da rede — Natal produz → SP vende ───────────────────
+                Só aparece com mais de 1 hub no escopo. Hoje o escopo é só Natal
+                (FOCO_HUBS), então esta seção fica oculta — os CDs de SP são
+                acompanhados de outra forma por enquanto. */}
+            {d.hubResumo.length > 1 && (
             <Card className="rounded-2xl border-0 shadow-sm">
               <CardHeader className="pb-1 pt-5 px-5">
                 <CardTitle className="text-base font-semibold flex items-center gap-2">
@@ -241,58 +245,56 @@ export default function Suprimentos() {
                 </div>
               </CardContent>
             </Card>
+            )}
 
-            {/* ── 3. Ações: a remanejar + risco de ruptura nomeado (R$) ─────── */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-              {/* A remanejar */}
+            {/* ── 3. A remanejar (só quando há mais de 1 hub no escopo) ──────── */}
+            {d.produtosRemanejar.length > 0 && (
               <Card className="rounded-2xl border-0 shadow-sm">
                 <CardHeader className="pb-1 pt-5 px-5">
                   <CardTitle className="text-base font-semibold flex items-center gap-2">
                     <Repeat2 className="h-4 w-4 text-primary" /> A Remanejar
                   </CardTitle>
                   <p className="text-xs text-muted-foreground mt-0.5">
-                    Falta no hub de venda mas <strong className="text-foreground">existe em Natal</strong> — é transferência, não compra. {d.produtosRemanejarTotal > 0 && <>{fmtNum(d.produtosRemanejarTotal)} caso(s).</>}
+                    Falta no hub de venda mas <strong className="text-foreground">existe em Natal</strong> — é transferência, não compra. {fmtNum(d.produtosRemanejarTotal)} caso(s).
                   </p>
                 </CardHeader>
                 <CardContent className="px-0 pb-2">
-                  {d.produtosRemanejar.length === 0 ? (
-                    <p className="py-12 text-center text-sm text-muted-foreground">Nada a remanejar — os hubs de venda estão abastecidos ou a falta é de compra.</p>
-                  ) : (
-                    <div className="overflow-x-auto">
-                      <CarboTable>
-                        <CarboTableHeader>
-                          <CarboTableRow>
-                            <CarboTableHead>Produto</CarboTableHead>
-                            <CarboTableHead>Falta em</CarboTableHead>
-                            <CarboTableHead className="text-right">Transferir</CarboTableHead>
-                            <CarboTableHead className="text-right">Em Natal</CarboTableHead>
+                  <div className="overflow-x-auto">
+                    <CarboTable>
+                      <CarboTableHeader>
+                        <CarboTableRow>
+                          <CarboTableHead>Produto</CarboTableHead>
+                          <CarboTableHead>Falta em</CarboTableHead>
+                          <CarboTableHead className="text-right">Transferir</CarboTableHead>
+                          <CarboTableHead className="text-right">Em Natal</CarboTableHead>
+                        </CarboTableRow>
+                      </CarboTableHeader>
+                      <CarboTableBody>
+                        {d.produtosRemanejar.map((p) => (
+                          <CarboTableRow key={`${p.id}::${p.hubFaltaCode}`}>
+                            <CarboTableCell>
+                              <p className="text-sm font-semibold text-foreground truncate">{p.name}</p>
+                              <span className="text-[10px] font-mono text-muted-foreground">{p.product_code}</span>
+                            </CarboTableCell>
+                            <CarboTableCell className="text-xs text-muted-foreground">{p.hubFaltaLabel}</CarboTableCell>
+                            <CarboTableCell className="text-right">
+                              <CarboBadge variant="warning" className="whitespace-nowrap">{fmtNum(p.faltaQty)} {p.unit}</CarboBadge>
+                            </CarboTableCell>
+                            <CarboTableCell className="text-right tabular-nums text-muted-foreground whitespace-nowrap">{fmtNum(p.disponivelProducao)} {p.unit}</CarboTableCell>
                           </CarboTableRow>
-                        </CarboTableHeader>
-                        <CarboTableBody>
-                          {d.produtosRemanejar.map((p) => (
-                            <CarboTableRow key={`${p.id}::${p.hubFaltaCode}`}>
-                              <CarboTableCell>
-                                <p className="text-sm font-semibold text-foreground truncate">{p.name}</p>
-                                <span className="text-[10px] font-mono text-muted-foreground">{p.product_code}</span>
-                              </CarboTableCell>
-                              <CarboTableCell className="text-xs text-muted-foreground">{p.hubFaltaLabel}</CarboTableCell>
-                              <CarboTableCell className="text-right">
-                                <CarboBadge variant="warning" className="whitespace-nowrap">{fmtNum(p.faltaQty)} {p.unit}</CarboBadge>
-                              </CarboTableCell>
-                              <CarboTableCell className="text-right tabular-nums text-muted-foreground whitespace-nowrap">{fmtNum(p.disponivelProducao)} {p.unit}</CarboTableCell>
-                            </CarboTableRow>
-                          ))}
-                        </CarboTableBody>
-                      </CarboTable>
-                      {d.produtosRemanejarTotal > d.produtosRemanejar.length && (
-                        <p className="text-[11px] text-muted-foreground text-center py-2">+ {d.produtosRemanejarTotal - d.produtosRemanejar.length} outro(s)</p>
-                      )}
-                    </div>
-                  )}
+                        ))}
+                      </CarboTableBody>
+                    </CarboTable>
+                    {d.produtosRemanejarTotal > d.produtosRemanejar.length && (
+                      <p className="text-[11px] text-muted-foreground text-center py-2">+ {d.produtosRemanejarTotal - d.produtosRemanejar.length} outro(s)</p>
+                    )}
+                  </div>
                 </CardContent>
               </Card>
+            )}
 
-              {/* Risco de ruptura nomeado */}
+            {/* Risco de ruptura nomeado (largura total) ─────────────────────── */}
+            <div className="grid grid-cols-1 gap-4">
               <Card className={`rounded-2xl shadow-sm ${d.riscoCriticoTotal > 0 ? "border-2 border-destructive/30" : d.riscoTotal > 0 ? "border border-warning/30" : "border-0"}`}>
                 <CardHeader className="pb-1 pt-5 px-5">
                   <CardTitle className="text-base font-semibold flex items-center gap-2">
@@ -394,6 +396,7 @@ export default function Suprimentos() {
                   </CardTitle>
                   <p className="text-xs text-muted-foreground mt-0.5">
                     Ainda giram, mas há mais de 90 dias de consumo em estoque — <strong className="text-foreground">{fmtNum(d.produtosExcessoTotal)}</strong> produto(s), <strong className="text-foreground">{fmtBRL(d.valorExcesso)}</strong> além do necessário.
+                    <br /><span className="text-[11px]">Cobertura = estoque atual ÷ consumo médio por dia (saídas dos últimos 90 dias em Natal). Ex.: 804 dias = o estoque atual dura 804 dias no ritmo de consumo recente.</span>
                   </p>
                 </CardHeader>
                 <CardContent className="px-0 pb-2">
@@ -405,7 +408,7 @@ export default function Suprimentos() {
                         <CarboTableHeader>
                           <CarboTableRow>
                             <CarboTableHead>Produto</CarboTableHead>
-                            <CarboTableHead className="text-right">Cobertura</CarboTableHead>
+                            <CarboTableHead className="text-right">Cobertura (dias)</CarboTableHead>
                             <CarboTableHead className="text-right">Excesso (R$)</CarboTableHead>
                           </CarboTableRow>
                         </CarboTableHeader>
@@ -520,7 +523,7 @@ export default function Suprimentos() {
                     <FlaskConical className="h-4 w-4 text-primary" /> Custo de Fabricação (ficha técnica)
                   </CardTitle>
                   <p className="text-xs text-muted-foreground mt-0.5">
-                    Custo de produzir 1 unidade, somando os insumos da ficha. Quando há um semi-acabado, comparamos as 2 rotas (🏷️ Rotular vs ⚙️ Do zero) e mostramos a <strong className="text-foreground">mais barata</strong>. O custo cadastrado do produto entra só como comparação — quando está zerado, o cálculo da ficha é a referência.
+                    Custo de produzir 1 unidade, somando os insumos da ficha. Quando há um semi-acabado, comparamos as 2 rotas (🏷️ Rotular vs ⚙️ Do zero) e mostramos a <strong className="text-foreground">mais barata</strong>. O <strong className="text-foreground">preço de venda</strong> é o cadastrado no produto (Ops) e a <strong className="text-foreground">margem</strong> = (preço − custo) ÷ preço — só aparece quando o custo da ficha está completo.
                   </p>
                 </CardHeader>
                 <CardContent className="px-0 pb-2">
@@ -531,6 +534,8 @@ export default function Suprimentos() {
                           <CarboTableHead>Produto</CarboTableHead>
                           <CarboTableHead className="text-right">Custo de fabricação</CarboTableHead>
                           <CarboTableHead>Rota / economia</CarboTableHead>
+                          <CarboTableHead className="text-right">Preço de venda</CarboTableHead>
+                          <CarboTableHead className="text-right">Margem</CarboTableHead>
                           <CarboTableHead className="text-right">vs cadastrado</CarboTableHead>
                           <CarboTableHead>Cobertura</CarboTableHead>
                         </CarboTableRow>
@@ -576,6 +581,24 @@ export default function Suprimentos() {
                                   )
                                 ) : (
                                   <span className="text-xs text-muted-foreground">rota única</span>
+                                )}
+                              </CarboTableCell>
+                              <CarboTableCell className="text-right">
+                                {p.precoVenda != null ? (
+                                  <span className="text-sm font-semibold tabular-nums text-foreground whitespace-nowrap">{fmtBRL(p.precoVenda)}</span>
+                                ) : (
+                                  <span className="text-[11px] text-muted-foreground whitespace-nowrap">sem preço</span>
+                                )}
+                              </CarboTableCell>
+                              <CarboTableCell className="text-right">
+                                {p.margemPct != null ? (
+                                  <CarboBadge variant={p.margemPct >= 40 ? "success" : p.margemPct >= 15 ? "warning" : "destructive"} className="whitespace-nowrap">
+                                    {p.margemPct.toFixed(0)}%
+                                  </CarboBadge>
+                                ) : p.precoVenda != null && !p.completo ? (
+                                  <span className="text-[10px] text-amber-500 whitespace-nowrap">custo incompleto</span>
+                                ) : (
+                                  <span className="text-[11px] text-muted-foreground">—</span>
                                 )}
                               </CarboTableCell>
                               <CarboTableCell className="text-right">

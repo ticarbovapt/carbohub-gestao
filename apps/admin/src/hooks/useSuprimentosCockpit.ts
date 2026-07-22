@@ -28,6 +28,12 @@ export const HUB_LABELS: Record<string, string> = {
 export const PRODUCTION_HUB = "HUB-RN";
 export const SALES_HUBS = ["HUB-SP", "HUB-SP-VENDAS", "CD-BLING"];
 
+// ⚠️ ESCOPO ATUAL: só Hub Natal. Os CDs de SP (LogHouse/Vendas) são acompanhados
+// de outra forma por enquanto — todo estoque/consumo/risco aqui é filtrado a
+// estes hubs. Para reativar a visão de rede completa, adicione os códigos de SP
+// aqui (a seção "Estado da Rede" e "A Remanejar" voltam a aparecer sozinhas).
+export const FOCO_HUBS = ["HUB-RN"];
+
 export const CATEGORY_LIST = ["Produto Final", "Semi-acabado", "Insumo", "Embalagem", "Carbonatação"];
 export const categoryOf = (c: string | null | undefined): string =>
   c && CATEGORY_LIST.includes(c) ? c : "Outro";
@@ -90,6 +96,8 @@ export interface CustoFabricacao {
   economiaZero: number | null;   // custoCalculado − custoZero (>0 = do zero é mais barato)
   completo: boolean;             // rota de referência sem insumo faltando
   variancePct: number | null;    // (custoReferencia − custoCadastrado)/custoCadastrado; null se cadastrado=0
+  precoVenda: number | null;     // sale_price cadastrado (preço de venda de referência)
+  margemPct: number | null;      // (preço − custo referência)/preço; null se falta preço ou custo incompleto
 }
 export interface Tendencia {
   baseDate: string;             // data do snapshot usado como base de comparação
@@ -173,7 +181,7 @@ export function useSuprimentosCockpit() {
 
       const [productsRes, stockRes, minRes, movRes, transfRes, bomRes, snapRes] = await Promise.all([
         db.from("mrp_products")
-          .select("id, name, product_code, category, unit_cost, safety_stock_qty, stock_unit, is_active")
+          .select("id, name, product_code, category, unit_cost, sale_price, safety_stock_qty, stock_unit, is_active")
           .eq("is_active", true),
         db.from("warehouse_stock")
           .select("product_id, quantity, warehouse_id, warehouse:warehouses(id, code, name, is_active)"),
@@ -205,7 +213,7 @@ export function useSuprimentosCockpit() {
 
       interface Product {
         id: string; name: string; product_code: string; category: string | null;
-        unit_cost: number; safety_stock_qty: number; stock_unit: string;
+        unit_cost: number; sale_price: number | null; safety_stock_qty: number; stock_unit: string;
       }
       const products: Product[] = (productsRes.data ?? []).map((p: Record<string, unknown>) => ({
         id: p.id as string,
@@ -213,10 +221,14 @@ export function useSuprimentosCockpit() {
         product_code: (p.product_code as string) ?? "",
         category: (p.category as string) ?? null,
         unit_cost: Number(p.unit_cost) || 0,
+        sale_price: p.sale_price == null ? null : Number(p.sale_price) || 0,
         safety_stock_qty: Number(p.safety_stock_qty) || 0,
         stock_unit: (p.stock_unit as string) ?? "un",
       }));
       const productById = new Map(products.map((p) => [p.id, p]));
+
+      // Escopo de hubs (Natal-only por enquanto).
+      const focoHubs = new Set(FOCO_HUBS);
 
       // ── warehouse_stock ⋈ warehouses ativos ────────────────────────────────
       interface StockRow { product_id: string; warehouse_id: string; hubCode: string; quantity: number; }
@@ -226,6 +238,7 @@ export function useSuprimentosCockpit() {
         const wh = row.warehouse;
         if (!wh || wh.is_active === false) continue;
         const hubCode = wh.code ?? wh.id;
+        if (!focoHubs.has(hubCode)) continue; // escopo: só Natal por enquanto
         activeWarehouseCodes.add(hubCode);
         stockRows.push({
           product_id: row.product_id,
@@ -235,9 +248,14 @@ export function useSuprimentosCockpit() {
         });
       }
 
+      // Movimentações dentro do escopo de hubs (Natal-only por enquanto).
+      const movFoco = (movRes.data ?? []).filter(
+        (m: Record<string, unknown>) => focoHubs.has((m.warehouse as { code?: string } | null)?.code ?? ""),
+      );
+
       // ── Consumo (saídas 90d) por produto — base de giro/cobertura/excesso ───
       const saidas90ByProduct = new Map<string, number>();
-      for (const m of movRes.data ?? []) {
+      for (const m of movFoco) {
         if ((m.tipo as string) !== "saida") continue;
         const pid = m.product_id as string;
         saidas90ByProduct.set(pid, (saidas90ByProduct.get(pid) ?? 0) + (Number(m.quantidade) || 0));
@@ -263,7 +281,7 @@ export function useSuprimentosCockpit() {
 
       // ── Giro / dias de cobertura (rede) — consumo valorizado em R$ ──────────
       let valorSaidas90 = 0;
-      for (const m of movRes.data ?? []) {
+      for (const m of movFoco) {
         if ((m.tipo as string) !== "saida") continue;
         const p = productById.get(m.product_id as string);
         if (!p) continue;
@@ -330,7 +348,7 @@ export function useSuprimentosCockpit() {
 
       // ── Produtos parados (dead stock): estoque, sem NENHUMA movimentação 90d ─
       const productsWithRecentMovement = new Set<string>(
-        (movRes.data ?? []).map((m: Record<string, unknown>) => m.product_id as string),
+        movFoco.map((m: Record<string, unknown>) => m.product_id as string),
       );
       const produtosParadosAll: ProdutoParado[] = produtosComEstoque
         .filter((p) => !productsWithRecentMovement.has(p.id))
@@ -473,7 +491,7 @@ export function useSuprimentosCockpit() {
         .map(([status, count]) => ({ status: status as TransferenciaStatus["status"], count }));
 
       // ── Fluxo diário (linhas cruas, agora valorizadas em R$) ────────────────
-      const fluxoDiario: FluxoDiarioRow[] = (movRes.data ?? []).map((m: Record<string, unknown>) => {
+      const fluxoDiario: FluxoDiarioRow[] = movFoco.map((m: Record<string, unknown>) => {
         const product = productById.get(m.product_id as string);
         const createdAt = (m.created_at as string) ?? "";
         const quantidade = Number(m.quantidade) || 0;
@@ -555,6 +573,10 @@ export function useSuprimentosCockpit() {
           }
           const economiaZero = zero ? rotular.custo - zero.custo : null;
           const variancePct = prod.unit_cost > 0 ? ((custoReferencia - prod.unit_cost) / prod.unit_cost) * 100 : null;
+          const precoVenda = prod.sale_price != null && prod.sale_price > 0 ? prod.sale_price : null;
+          // Margem só faz sentido com custo completo E preço cadastrado.
+          const margemPct = precoVenda != null && completo && custoReferencia > 0
+            ? ((precoVenda - custoReferencia) / precoVenda) * 100 : null;
           return {
             id: prod.id, name: prod.name, product_code: prod.product_code,
             category: categoryOf(prod.category),
@@ -564,7 +586,7 @@ export function useSuprimentosCockpit() {
             itensFaltantesZero: zero?.faltantes ?? null,
             totalItensBomZero: zero?.total ?? null,
             custoReferencia, rotaReferencia, temAlternativa: zero !== null,
-            economiaZero, completo, variancePct,
+            economiaZero, completo, variancePct, precoVenda, margemPct,
           };
         })
         .filter((x): x is CustoFabricacao => x !== null)
