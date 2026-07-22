@@ -50,11 +50,20 @@ const toISO = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padSta
 const fmtBr = (d: Date) => d.toLocaleDateString("pt-BR");
 
 interface ItemRow {
-  id: string; productId: string; qty: number; unitPrice: number; hasBonus: boolean; bonusQty: number;
+  id: string; productId: string; qty: number; unitPrice: number; unitPriceStr?: string; hasBonus: boolean; bonusQty: number;
   // Desconto POR ITEM: toggle % ou R$ e o valor digitado naquela linha.
   discType: "percent" | "value"; discValue: number;
 }
-const emptyRow = (): ItemRow => ({ id: crypto.randomUUID(), productId: "", qty: 1, unitPrice: 0, hasBonus: false, bonusQty: 0, discType: "percent", discValue: 0 });
+const emptyRow = (): ItemRow => ({ id: crypto.randomUUID(), productId: "", qty: 1, unitPrice: 0, unitPriceStr: "", hasBonus: false, bonusQty: 0, discType: "percent", discValue: 0 });
+
+// Preço em pt-BR: aceita vírgula como decimal ("1,50") ou ponto ("1.50"); com
+// vírgula, os pontos são separador de milhar. String vazia → 0.
+const parsePreco = (s: string): number => {
+  if (!s) return 0;
+  const norm = s.includes(",") ? s.replace(/\./g, "").replace(",", ".") : s;
+  const n = parseFloat(norm);
+  return Number.isFinite(n) ? n : 0;
+};
 
 const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
 
@@ -447,6 +456,7 @@ export default function Vender() {
   async function handleQuote() {
     const items = validItems();
     if (items.length === 0) { toast.error("Adicione ao menos um item."); return; }
+    if (items.some((i) => !(i.unit_price > 0))) { toast.error("Informe o preço unitário de todos os itens."); return; }
     if (!pagamentoValido) { toast.error("Selecione a forma de pagamento."); return; }
     setGenerating(true);
     try {
@@ -478,6 +488,7 @@ export default function Vender() {
   async function handleEmailQuote() {
     const items = validItems();
     if (items.length === 0) { toast.error("Adicione ao menos um item."); return; }
+    if (items.some((i) => !(i.unit_price > 0))) { toast.error("Informe o preço unitário de todos os itens."); return; }
     if (!pagamentoValido) { toast.error("Selecione a forma de pagamento."); return; }
     if (!email || !email.includes("@")) { toast.error("Informe o e-mail do cliente para enviar o orçamento."); return; }
     setEmailing(true);
@@ -517,6 +528,7 @@ export default function Vender() {
 
   async function handleSell() {
     if (validItems().length === 0) { toast.error("Adicione ao menos um item."); return; }
+    if (validItems().some((i) => !(i.unit_price > 0))) { toast.error("Informe o preço unitário de todos os itens."); return; }
     if (!pagamentoValido) { toast.error("Selecione a forma de pagamento."); return; }
     try {
       if (editId) {
@@ -837,7 +849,14 @@ export default function Vender() {
                   </div>
                   <div className="space-y-1.5">
                     <Label>Preço Unit. (R$)</Label>
-                    <Input type="number" min={0} step="0.01" value={r.unitPrice} onChange={(e) => updateRow(r.id, { unitPrice: Number(e.target.value) })} placeholder="0,00" />
+                    <Input
+                      type="text" inputMode="decimal"
+                      value={r.unitPriceStr ?? (r.unitPrice ? String(r.unitPrice).replace(".", ",") : "")}
+                      onChange={(e) => {
+                        const raw = e.target.value.replace(/[^\d.,]/g, "");
+                        updateRow(r.id, { unitPriceStr: raw, unitPrice: parsePreco(raw) });
+                      }}
+                      placeholder="0,00" />
                   </div>
                   <div className="flex items-center justify-between sm:justify-end gap-3 sm:pb-2">
                     <div className="text-right">
