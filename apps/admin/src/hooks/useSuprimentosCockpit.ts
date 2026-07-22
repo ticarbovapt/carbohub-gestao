@@ -4,12 +4,14 @@ import { supabase } from "@/integrations/supabase/client";
 // ─────────────────────────────────────────────────────────────────────────────
 // "Suprimentos" — cockpit ESTRATÉGICO de suprimentos para o Admin, cópia própria
 // (somente leitura, cada app é autossuficiente — ver CLAUDE.md). Espelha a
-// intenção estratégica da tela /suprimentos do Carbo Ops (valor mobilizado,
-// cobertura de custo, risco de ruptura, fluxo de movimentações), mas NÃO é
-// operacional: sem registrar remessa, confirmar chegada ou editar política de
-// estoque — isso é feito no Ops.
+// intenção estratégica da tela /suprimentos do Carbo Ops, mas com foco de CEO:
+// não só "quanto de capital está parado e onde", mas TEMPO (giro / dias de
+// cobertura), RISCO EM R$, capital congelado (parado + excesso) e a leitura de
+// REDE (produção em Natal → venda em SP).
 //  • Estoque por hub = warehouse_stock ⋈ warehouses (fonte de verdade — nunca
 //    usar mrp_products.current_stock_qty).
+//  • Consumo = saídas de stock_movements (90d) — usado p/ giro, dias de
+//    cobertura e detecção de excesso; a mesma query já era buscada.
 //  • Mínimo por hub = ops_stock_min, com fallback pro safety_stock_qty do
 //    produto quando não há política específica pro hub (mesma regra do Ops).
 // ─────────────────────────────────────────────────────────────────────────────
@@ -22,6 +24,9 @@ export const HUB_LABELS: Record<string, string> = {
   "HUB-SP-VENDAS": "CD SP Vendas",
   "CD-BLING": "CD Bling",
 };
+// Rede física: Natal produz, SP vende. Usado p/ a leitura de rede e "a remanejar".
+export const PRODUCTION_HUB = "HUB-RN";
+export const SALES_HUBS = ["HUB-SP", "HUB-SP-VENDAS", "CD-BLING"];
 
 export const CATEGORY_LIST = ["Produto Final", "Semi-acabado", "Insumo", "Embalagem", "Carbonatação"];
 export const categoryOf = (c: string | null | undefined): string =>
@@ -29,59 +34,117 @@ export const categoryOf = (c: string | null | undefined): string =>
 
 const hubLabelOf = (code: string) => HUB_LABELS[code] ?? code;
 
+const CONSUMO_JANELA_DIAS = 90;
+// Acima de quantos dias de cobertura um produto COM giro é considerado "excesso"
+// (capital congelado além de 1 trimestre de consumo).
+const EXCESSO_COBERTURA_DIAS = 90;
+
 export interface HubValor { hubCode: string; hubLabel: string; valor: number; }
 export interface HubRisco { hubCode: string; hubLabel: string; count: number; }
+// Nó da rede (topo): valor mobilizado + ruptura + papel (produção/venda).
+export interface HubResumo {
+  hubCode: string; hubLabel: string; valor: number; ruptura: number; papel: "producao" | "venda";
+}
 export interface TopProduto { id: string; name: string; product_code: string; category: string; qty: number; unit: string; valor: number; }
 export interface ValorCategoria { category: string; valor: number; }
+export interface AbcClasse { classe: "A" | "B" | "C"; count: number; valor: number; pctValor: number; pctCount: number; }
 export interface ProdutoEmRisco {
-  id: string; name: string; product_code: string; hubCode: string; hubLabel: string;
+  id: string; name: string; product_code: string; category: string;
+  hubCode: string; hubLabel: string;
   quantity: number; effectiveMin: number; unit: string;
+  valorRisco: number;            // gap × unit_cost (custo p/ repor até o mínimo)
+  diasCobertura: number | null;  // estoque ÷ consumo diário (null se sem giro/sem custo)
+}
+export interface ProdutoRemanejar {
+  id: string; name: string; product_code: string; category: string;
+  hubFaltaCode: string; hubFaltaLabel: string;
+  faltaQty: number; disponivelProducao: number; unit: string; valorRemanejar: number;
 }
 export interface ProdutoParado {
   id: string; name: string; product_code: string; category: string; qty: number; unit: string; valor: number;
 }
+export interface ProdutoExcesso {
+  id: string; name: string; product_code: string; category: string;
+  qty: number; unit: string; diasCobertura: number; valorExcesso: number;
+}
+export interface ProdutoSemCusto {
+  id: string; name: string; product_code: string; category: string; qty: number; unit: string;
+}
 export interface CustoFabricacao {
   id: string; name: string; product_code: string; category: string;
   // Rota "🏷️ Rotular" — usa o semi-acabado pronto como está no BOM direto.
-  custoCalculado: number;   // soma dos insumos (parcial se faltar custo de algum item)
-  custoCadastrado: number;  // unit_cost do próprio produto final (p/ comparação)
-  itensFaltantes: number;   // insumos do BOM sem custo cadastrado (ou inativos)
+  custoCalculado: number;
+  custoCadastrado: number;  // unit_cost do próprio produto (p/ variância; 0 = não cadastrado)
+  itensFaltantes: number;
   totalItensBom: number;
-  // Rota "⚙️ Do zero" — explode qualquer linha Semi-acabado na própria ficha
-  // técnica dela (garrafa+líquido+tampa em vez do semi-acabado pronto). Só
-  // existe (não-nulo) quando o BOM direto tem pelo menos 1 linha Semi-acabado
-  // — mesmo conceito de production_route ('rotular'|'zero') usado no Ops.
+  // Rota "⚙️ Do zero" — explode o semi-acabado nos insumos crus. null = produto
+  // sem semi-acabado na ficha (não há rota alternativa).
   custoZero: number | null;
   itensFaltantesZero: number | null;
   totalItensBomZero: number | null;
+  // Veredito p/ o CEO: custo de referência (rota mais barata entre as completas
+  // possíveis), qual rota, e economia da alternativa.
+  custoReferencia: number;
+  rotaReferencia: "rotular" | "zero";
+  temAlternativa: boolean;
+  economiaZero: number | null;   // custoCalculado − custoZero (>0 = do zero é mais barato)
+  completo: boolean;             // rota de referência sem insumo faltando
+  variancePct: number | null;    // (custoReferencia − custoCadastrado)/custoCadastrado; null se cadastrado=0
 }
 export interface TransferenciaStatus { status: "em_transito" | "entregue" | "estornado"; count: number; }
 export interface FluxoDiarioRow {
   date: string; // YYYY-MM-DD
   tipo: "entrada" | "saida";
   quantidade: number;
+  valor: number;      // quantidade × unit_cost do produto (fluxo em R$)
   hubCode: string;
   category: string;
 }
 
 export interface SuprimentosCockpit {
+  // Valor / capital
   valorPorHub: HubValor[];
   valorTotal: number;
+  hubResumo: HubResumo[];
+  // Giro / tempo
+  valorSaidas90: number;
+  giroAnualizado: number | null;
+  diasCoberturaMedia: number | null;
+  // Cobertura de custo (data-quality)
   totalProdutosAtivos: number;
   produtosComCusto: number;
   coberturaPct: number;
+  produtosSemCusto: ProdutoSemCusto[];
+  produtosSemCustoTotal: number;
+  // Top / concentração
   topProdutos: TopProduto[];
   topProdutosValorPct: number;
+  abc: AbcClasse[];
+  // Risco
   riscoPorHub: HubRisco[];
   riscoTotal: number;
   riscoCriticoTotal: number;
+  riscoValorTotal: number;
   produtosEmRisco: ProdutoEmRisco[];
-  valorPorCategoria: ValorCategoria[];
-  transferencias: TransferenciaStatus[];
-  fluxoDiario: FluxoDiarioRow[];
+  produtosRemanejar: ProdutoRemanejar[];
+  produtosRemanejarTotal: number;
+  // Capital congelado
   produtosParados: ProdutoParado[];
   produtosParadosTotal: number;
   valorParado: number;
+  produtosExcesso: ProdutoExcesso[];
+  produtosExcessoTotal: number;
+  valorExcesso: number;
+  capitalCongelado: number;
+  // Categoria / fluxo
+  valorPorCategoria: ValorCategoria[];
+  fluxoDiario: FluxoDiarioRow[];
+  // Transferências / rede
+  transferencias: TransferenciaStatus[];
+  valorEmTransito: number;
+  unidadesEmTransito: number;
+  transitoDiasMax: number | null;
+  // BOM
   custoFabricacao: CustoFabricacao[];
 }
 
@@ -95,7 +158,7 @@ export function useSuprimentosCockpit() {
   return useQuery({
     queryKey: ["admin", "suprimentos-cockpit"],
     queryFn: async (): Promise<SuprimentosCockpit> => {
-      const since90 = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString();
+      const since90 = new Date(Date.now() - CONSUMO_JANELA_DIAS * 24 * 60 * 60 * 1000).toISOString();
       const since180 = new Date(Date.now() - 180 * 24 * 60 * 60 * 1000).toISOString();
 
       const [productsRes, stockRes, minRes, movRes, transfRes, bomRes] = await Promise.all([
@@ -110,7 +173,7 @@ export function useSuprimentosCockpit() {
           .select("product_id, warehouse_id, tipo, quantidade, created_at, warehouse:warehouses(code)")
           .gte("created_at", since90),
         db.from("stock_transfers")
-          .select("status, created_at")
+          .select("status, created_at, product_id, quantity")
           .gte("created_at", since180),
         db.from("mrp_bom")
           .select("product_id, insumo_id, quantity_per_unit"),
@@ -155,20 +218,45 @@ export function useSuprimentosCockpit() {
         });
       }
 
+      // ── Consumo (saídas 90d) por produto — base de giro/cobertura/excesso ───
+      const saidas90ByProduct = new Map<string, number>();
+      for (const m of movRes.data ?? []) {
+        if ((m.tipo as string) !== "saida") continue;
+        const pid = m.product_id as string;
+        saidas90ByProduct.set(pid, (saidas90ByProduct.get(pid) ?? 0) + (Number(m.quantidade) || 0));
+      }
+      // Consumo diário do produto (unidades/dia) e cobertura em dias p/ um estoque.
+      const consumoDiario = (pid: string) => (saidas90ByProduct.get(pid) ?? 0) / CONSUMO_JANELA_DIAS;
+      const coberturaDias = (pid: string, qty: number): number | null => {
+        const d = consumoDiario(pid);
+        return d > 0 ? qty / d : null;
+      };
+
       // ── 1/2. Valor mobilizado por hub + total ──────────────────────────────
       const valorPorHubMap = new Map<string, number>();
       for (const row of stockRows) {
         const product = productById.get(row.product_id);
         if (!product) continue;
-        const valor = product.unit_cost * row.quantity;
-        valorPorHubMap.set(row.hubCode, (valorPorHubMap.get(row.hubCode) ?? 0) + valor);
+        valorPorHubMap.set(row.hubCode, (valorPorHubMap.get(row.hubCode) ?? 0) + product.unit_cost * row.quantity);
       }
       const valorPorHub: HubValor[] = Array.from(valorPorHubMap.entries())
         .map(([hubCode, valor]) => ({ hubCode, hubLabel: hubLabelOf(hubCode), valor }))
         .sort((a, b) => b.valor - a.valor);
       const valorTotal = valorPorHub.reduce((s, h) => s + h.valor, 0);
 
-      // ── 3. Cobertura de dado ────────────────────────────────────────────────
+      // ── Giro / dias de cobertura (rede) — consumo valorizado em R$ ──────────
+      let valorSaidas90 = 0;
+      for (const m of movRes.data ?? []) {
+        if ((m.tipo as string) !== "saida") continue;
+        const p = productById.get(m.product_id as string);
+        if (!p) continue;
+        valorSaidas90 += p.unit_cost * (Number(m.quantidade) || 0);
+      }
+      const burnDiario = valorSaidas90 / CONSUMO_JANELA_DIAS;
+      const diasCoberturaMedia = burnDiario > 0 ? valorTotal / burnDiario : null;
+      const giroAnualizado = valorTotal > 0 ? (valorSaidas90 * (365 / CONSUMO_JANELA_DIAS)) / valorTotal : null;
+
+      // ── 3. Cobertura de dado + blind spots (produtos com estoque, sem custo) ─
       const totalProdutosAtivos = products.length;
       const produtosComCusto = products.filter((p) => p.unit_cost > 0).length;
       const coberturaPct = totalProdutosAtivos > 0 ? (produtosComCusto / totalProdutosAtivos) * 100 : 0;
@@ -182,22 +270,48 @@ export function useSuprimentosCockpit() {
       const produtosComEstoque = products
         .map((p) => ({ p, total: hubTotalByProduct.get(p.id) ?? 0 }))
         .filter((x) => x.total > 0)
-        .map((x) => ({ ...x.p, category: categoryOf(x.p.category), valor: x.p.unit_cost * x.total }));
+        .map((x) => ({ ...x.p, category: categoryOf(x.p.category), total: x.total, valor: x.p.unit_cost * x.total }));
 
-      // ── 4. Top 10 produtos por valor ────────────────────────────────────────
-      const topProdutos: TopProduto[] = [...produtosComEstoque]
-        .sort((a, b) => b.valor - a.valor)
-        .slice(0, 10)
-        .map((p) => ({
-          id: p.id, name: p.name, product_code: p.product_code, category: p.category,
-          qty: hubTotalByProduct.get(p.id) ?? 0, unit: p.stock_unit, valor: p.valor,
-        }));
-      // Concentração (Pareto): quanto do valor mobilizado total está nesses 10 produtos.
+      // Blind spots: têm estoque mas custo R$0 → some no valor mobilizado.
+      const produtosSemCustoAll: ProdutoSemCusto[] = produtosComEstoque
+        .filter((p) => p.unit_cost <= 0)
+        .map((p) => ({ id: p.id, name: p.name, product_code: p.product_code, category: p.category, qty: p.total, unit: p.stock_unit }))
+        .sort((a, b) => b.qty - a.qty);
+      const produtosSemCustoTotal = produtosSemCustoAll.length;
+      const produtosSemCusto = produtosSemCustoAll.slice(0, 8);
+
+      // ── 4. Top 10 produtos por valor + ABC (Pareto) ─────────────────────────
+      const ordenadosPorValor = [...produtosComEstoque].sort((a, b) => b.valor - a.valor);
+      const topProdutos: TopProduto[] = ordenadosPorValor.slice(0, 10).map((p) => ({
+        id: p.id, name: p.name, product_code: p.product_code, category: p.category,
+        qty: p.total, unit: p.stock_unit, valor: p.valor,
+      }));
       const topProdutosValor = topProdutos.reduce((s, p) => s + p.valor, 0);
       const topProdutosValorPct = valorTotal > 0 ? (topProdutosValor / valorTotal) * 100 : 0;
 
-      // ── Produtos parados: têm estoque, mas nenhuma movimentação nos últimos
-      // 90 dias (mesma janela já buscada em stock_movements) — capital sem giro.
+      // Classificação ABC: A = até 80% do valor acumulado, B = 80–95%, C = resto.
+      const abcAgg: Record<"A" | "B" | "C", { count: number; valor: number }> = {
+        A: { count: 0, valor: 0 }, B: { count: 0, valor: 0 }, C: { count: 0, valor: 0 },
+      };
+      let acum = 0;
+      const totalComValor = ordenadosPorValor.filter((p) => p.valor > 0);
+      for (const p of totalComValor) {
+        const pctAntes = valorTotal > 0 ? acum / valorTotal : 0;
+        const classe: "A" | "B" | "C" = pctAntes < 0.8 ? "A" : pctAntes < 0.95 ? "B" : "C";
+        abcAgg[classe].count++;
+        abcAgg[classe].valor += p.valor;
+        acum += p.valor;
+      }
+      const totalCountAbc = totalComValor.length;
+      const abc: AbcClasse[] = (["A", "B", "C"] as const).map((classe) => ({
+        classe,
+        count: abcAgg[classe].count,
+        valor: abcAgg[classe].valor,
+        pctValor: valorTotal > 0 ? (abcAgg[classe].valor / valorTotal) * 100 : 0,
+        pctCount: totalCountAbc > 0 ? (abcAgg[classe].count / totalCountAbc) * 100 : 0,
+      }));
+
+      // ── Produtos parados (dead stock): estoque, sem NENHUMA movimentação 90d ─
       const productsWithRecentMovement = new Set<string>(
         (movRes.data ?? []).map((m: Record<string, unknown>) => m.product_id as string),
       );
@@ -205,14 +319,36 @@ export function useSuprimentosCockpit() {
         .filter((p) => !productsWithRecentMovement.has(p.id))
         .map((p) => ({
           id: p.id, name: p.name, product_code: p.product_code, category: p.category,
-          qty: hubTotalByProduct.get(p.id) ?? 0, unit: p.stock_unit, valor: p.valor,
+          qty: p.total, unit: p.stock_unit, valor: p.valor,
         }))
         .sort((a, b) => b.valor - a.valor);
       const produtosParadosTotal = produtosParadosAll.length;
       const valorParado = produtosParadosAll.reduce((s, p) => s + p.valor, 0);
       const produtosParados = produtosParadosAll.slice(0, 10);
 
-      // ── 8. Valor por categoria (sobre TODOS os produtos com estoque) ───────
+      // ── Excesso (capital congelado além de EXCESSO_COBERTURA_DIAS de consumo) ─
+      // Só produtos COM giro (saída>0); acima do limite, o estoque além de N dias
+      // de consumo é excesso valorizado.
+      const produtosExcessoAll: ProdutoExcesso[] = [];
+      for (const p of produtosComEstoque) {
+        if (p.unit_cost <= 0) continue;
+        const cob = coberturaDias(p.id, p.total);
+        if (cob === null || cob <= EXCESSO_COBERTURA_DIAS) continue;
+        const consumoNoLimite = consumoDiario(p.id) * EXCESSO_COBERTURA_DIAS;
+        const excessoQty = Math.max(0, p.total - consumoNoLimite);
+        if (excessoQty <= 0) continue;
+        produtosExcessoAll.push({
+          id: p.id, name: p.name, product_code: p.product_code, category: p.category,
+          qty: p.total, unit: p.stock_unit, diasCobertura: cob, valorExcesso: excessoQty * p.unit_cost,
+        });
+      }
+      produtosExcessoAll.sort((a, b) => b.valorExcesso - a.valorExcesso);
+      const produtosExcessoTotal = produtosExcessoAll.length;
+      const valorExcesso = produtosExcessoAll.reduce((s, p) => s + p.valorExcesso, 0);
+      const produtosExcesso = produtosExcessoAll.slice(0, 10);
+      const capitalCongelado = valorParado + valorExcesso;
+
+      // ── 5. Valor por categoria ──────────────────────────────────────────────
       const valorPorCategoriaMap = new Map<string, number>();
       for (const p of produtosComEstoque) {
         valorPorCategoriaMap.set(p.category, (valorPorCategoriaMap.get(p.category) ?? 0) + p.valor);
@@ -222,7 +358,7 @@ export function useSuprimentosCockpit() {
         .sort((a, b) => b.valor - a.valor);
 
       // ── ops_stock_min por produto+hub, fallback safety_stock_qty ────────────
-      const minByProductHub = new Map<string, number>(); // key = `${product_id}::${hubCode}`
+      const minByProductHub = new Map<string, number>();
       for (const row of minRes.data ?? []) {
         const hubCode = row.warehouse?.code;
         if (!hubCode) continue;
@@ -233,72 +369,111 @@ export function useSuprimentosCockpit() {
         quantityByProductHub.set(`${row.product_id}::${row.hubCode}`, row.quantity);
       }
 
-      // ── 5/6/7. Risco de ruptura por hub — e produtos NOMEADOS (acionável) ───
+      // ── Risco de ruptura por hub — nomeado, em R$ e com dias de cobertura ────
       const riscoPorHubMap = new Map<string, number>();
       let riscoCriticoTotal = 0;
+      let riscoValorTotal = 0;
       const produtosEmRiscoAll: (ProdutoEmRisco & { gap: number })[] = [];
+      const remanejarAll: ProdutoRemanejar[] = [];
       for (const p of products) {
         for (const hubCode of activeWarehouseCodes) {
           const key = `${p.id}::${hubCode}`;
           const effectiveMin = minByProductHub.has(key) ? minByProductHub.get(key)! : p.safety_stock_qty;
           if (effectiveMin <= 0) continue;
           const quantity = quantityByProductHub.get(key) ?? 0;
-          if (quantity < effectiveMin) {
-            riscoPorHubMap.set(hubCode, (riscoPorHubMap.get(hubCode) ?? 0) + 1);
-            if (quantity === 0) riscoCriticoTotal++;
-            produtosEmRiscoAll.push({
-              id: p.id, name: p.name, product_code: p.product_code,
-              hubCode, hubLabel: hubLabelOf(hubCode),
-              quantity, effectiveMin, unit: p.stock_unit,
-              gap: effectiveMin - quantity,
-            });
+          if (quantity >= effectiveMin) continue;
+          const gap = effectiveMin - quantity;
+          const valorRisco = gap * p.unit_cost;
+          riscoPorHubMap.set(hubCode, (riscoPorHubMap.get(hubCode) ?? 0) + 1);
+          if (quantity === 0) riscoCriticoTotal++;
+          riscoValorTotal += valorRisco;
+          produtosEmRiscoAll.push({
+            id: p.id, name: p.name, product_code: p.product_code, category: categoryOf(p.category),
+            hubCode, hubLabel: hubLabelOf(hubCode), quantity, effectiveMin, unit: p.stock_unit,
+            valorRisco, diasCobertura: coberturaDias(p.id, quantity), gap,
+          });
+          // "A remanejar": falta num hub de venda mas existe no hub de produção.
+          if (SALES_HUBS.includes(hubCode)) {
+            const disponivelProducao = quantityByProductHub.get(`${p.id}::${PRODUCTION_HUB}`) ?? 0;
+            if (disponivelProducao > 0) {
+              const faltaQty = Math.min(gap, disponivelProducao);
+              remanejarAll.push({
+                id: p.id, name: p.name, product_code: p.product_code, category: categoryOf(p.category),
+                hubFaltaCode: hubCode, hubFaltaLabel: hubLabelOf(hubCode),
+                faltaQty, disponivelProducao, unit: p.stock_unit, valorRemanejar: faltaQty * p.unit_cost,
+              });
+            }
           }
         }
       }
       const riscoPorHub: HubRisco[] = Array.from(riscoPorHubMap.entries())
         .map(([hubCode, count]) => ({ hubCode, hubLabel: hubLabelOf(hubCode), count }))
         .sort((a, b) => b.count - a.count);
-      const riscoTotal = riscoPorHub.reduce((s, h) => s + h.count, 0);
-      // Prioriza zerados primeiro, depois o maior gap (mais longe do mínimo).
+      const riscoTotal = produtosEmRiscoAll.length;
+      // Zerados primeiro; depois maior valor em risco (R$ p/ repor).
       const produtosEmRisco: ProdutoEmRisco[] = [...produtosEmRiscoAll]
-        .sort((a, b) => (a.quantity === 0 ? -1 : 0) - (b.quantity === 0 ? -1 : 0) || b.gap - a.gap)
+        .sort((a, b) => (a.quantity === 0 ? -1 : 0) - (b.quantity === 0 ? -1 : 0) || b.valorRisco - a.valorRisco)
         .slice(0, 8)
         .map(({ gap: _gap, ...rest }) => rest);
+      remanejarAll.sort((a, b) => b.valorRemanejar - a.valorRemanejar);
+      const produtosRemanejarTotal = remanejarAll.length;
+      const produtosRemanejar = remanejarAll.slice(0, 10);
 
-      // ── 9. Transferências entre hubs ────────────────────────────────────────
+      // ── Estado da rede (topo): valor + ruptura por hub, ordenado produção→venda
+      const hubResumo: HubResumo[] = Array.from(activeWarehouseCodes)
+        .map((hubCode) => ({
+          hubCode, hubLabel: hubLabelOf(hubCode),
+          valor: valorPorHubMap.get(hubCode) ?? 0,
+          ruptura: riscoPorHubMap.get(hubCode) ?? 0,
+          papel: (hubCode === PRODUCTION_HUB ? "producao" : "venda") as "producao" | "venda",
+        }))
+        .sort((a, b) => (a.papel === "producao" ? -1 : 0) - (b.papel === "producao" ? -1 : 0) || b.valor - a.valor);
+
+      // ── Transferências entre hubs + valor em trânsito + aging ───────────────
       const transferenciasMap = new Map<string, number>([
         ["em_transito", 0], ["entregue", 0], ["estornado", 0],
       ]);
+      let valorEmTransito = 0;
+      let unidadesEmTransito = 0;
+      let transitoDiasMax: number | null = null;
+      const agora = Date.now();
       for (const row of transfRes.data ?? []) {
         const status = mapTransferStatus(row.status);
         transferenciasMap.set(status, (transferenciasMap.get(status) ?? 0) + 1);
+        if (status === "em_transito") {
+          const qty = Number(row.quantity) || 0;
+          const p = productById.get(row.product_id as string);
+          unidadesEmTransito += qty;
+          if (p) valorEmTransito += p.unit_cost * qty;
+          const created = row.created_at ? new Date(row.created_at as string).getTime() : NaN;
+          if (!Number.isNaN(created)) {
+            const dias = Math.floor((agora - created) / (24 * 60 * 60 * 1000));
+            transitoDiasMax = transitoDiasMax === null ? dias : Math.max(transitoDiasMax, dias);
+          }
+        }
       }
       const transferencias: TransferenciaStatus[] = Array.from(transferenciasMap.entries())
         .map(([status, count]) => ({ status: status as TransferenciaStatus["status"], count }));
 
-      // ── 10. Fluxo diário (linhas cruas — a página agrupa) ──────────────────
+      // ── Fluxo diário (linhas cruas, agora valorizadas em R$) ────────────────
       const fluxoDiario: FluxoDiarioRow[] = (movRes.data ?? []).map((m: Record<string, unknown>) => {
         const product = productById.get(m.product_id as string);
         const createdAt = (m.created_at as string) ?? "";
+        const quantidade = Number(m.quantidade) || 0;
         return {
           date: createdAt.slice(0, 10),
           tipo: (m.tipo as string) === "saida" ? "saida" : "entrada",
-          quantidade: Number(m.quantidade) || 0,
+          quantidade,
+          valor: (product?.unit_cost ?? 0) * quantidade,
           hubCode: (m.warehouse as { code?: string } | null)?.code ?? "—",
           category: categoryOf(product?.category ?? null),
         };
       });
 
-      // ── Custo de Fabricação (BOM): soma o custo dos insumos que compõem cada
-      // produto (Produto Final/Semi-acabado) — parcial e sinalizado quando falta
-      // custo cadastrado de algum insumo, mas SEMPRE mostra o valor já somado.
-      // Quando o BOM direto tem uma linha Semi-acabado (ex.: CarboZé 100ml =
-      // Embalagem 100mL c/ líq. + Rótulo), o produto tem DUAS receitas válidas
-      // de fabricação — mesmo conceito de production_route usado no Ops
-      // (op_deduct_materials / useProducibility.directLines|zeroLines):
-      //   • "🏷️ Rotular" = usa o semi-acabado pronto como está no BOM direto.
-      //   • "⚙️ Do zero"  = explode o semi-acabado na própria ficha técnica
-      //     dele (garrafa + líquido + tampa, em vez do semi-acabado pronto).
+      // ── Custo de Fabricação (BOM): 1 nível direto (rotular) + explosão do
+      // semi-acabado (do zero). Além dos dois custos, calcula o VEREDITO p/ o
+      // CEO: custo de referência (rota mais barata), economia e variância vs
+      // custo cadastrado. Nunca esconde valor parcial; sinaliza incompletude.
       const bomByProduct = new Map<string, { insumo_id: string; qty: number }[]>();
       for (const row of bomRes.data ?? []) {
         const arr = bomByProduct.get(row.product_id) ?? [];
@@ -316,9 +491,6 @@ export function useSuprimentosCockpit() {
         }
         return { custo, faltantes, total: itens.length };
       };
-      // Explode toda linha Semi-acabado na própria ficha técnica dela (1 nível
-      // de recursão basta no modelo atual, mas o depth guard evita loop caso
-      // alguém cadastre um semi-acabado dentro de outro).
       const explodeZero = (
         itens: { insumo_id: string; qty: number }[],
         depth = 0,
@@ -340,12 +512,32 @@ export function useSuprimentosCockpit() {
       const custoFabricacao: CustoFabricacao[] = Array.from(bomByProduct.entries())
         .map(([productId, itens]): CustoFabricacao | null => {
           const prod = productById.get(productId);
-          if (!prod) return null; // produto inativo — fora do catálogo ativo
+          if (!prod) return null;
           const rotular = computeCost(itens);
           const temSemiacabado = itens.some(
             (it) => categoryOf(productById.get(it.insumo_id)?.category) === "Semi-acabado",
           );
           const zero = temSemiacabado ? computeCost(explodeZero(itens)) : null;
+          // Referência: se há alternativa, prefere a rota COMPLETA mais barata;
+          // se ambas incompletas (ou só uma rota), usa rotular como base.
+          let rotaReferencia: "rotular" | "zero" = "rotular";
+          let custoReferencia = rotular.custo;
+          let completo = rotular.faltantes === 0;
+          if (zero) {
+            const rotularOk = rotular.faltantes === 0;
+            const zeroOk = zero.faltantes === 0;
+            if (zeroOk && (!rotularOk || zero.custo < rotular.custo)) {
+              rotaReferencia = "zero"; custoReferencia = zero.custo; completo = true;
+            } else if (rotularOk) {
+              rotaReferencia = "rotular"; custoReferencia = rotular.custo; completo = true;
+            } else {
+              // nenhuma completa → mostra a menor das parciais como piso
+              if (zero.custo < rotular.custo && zero.custo > 0) { rotaReferencia = "zero"; custoReferencia = zero.custo; }
+              completo = false;
+            }
+          }
+          const economiaZero = zero ? rotular.custo - zero.custo : null;
+          const variancePct = prod.unit_cost > 0 ? ((custoReferencia - prod.unit_cost) / prod.unit_cost) * 100 : null;
           return {
             id: prod.id, name: prod.name, product_code: prod.product_code,
             category: categoryOf(prod.category),
@@ -354,16 +546,25 @@ export function useSuprimentosCockpit() {
             custoZero: zero?.custo ?? null,
             itensFaltantesZero: zero?.faltantes ?? null,
             totalItensBomZero: zero?.total ?? null,
+            custoReferencia, rotaReferencia, temAlternativa: zero !== null,
+            economiaZero, completo, variancePct,
           };
         })
         .filter((x): x is CustoFabricacao => x !== null)
-        .sort((a, b) => b.custoCalculado - a.custoCalculado);
+        .sort((a, b) => b.custoReferencia - a.custoReferencia);
 
       return {
-        valorPorHub, valorTotal, totalProdutosAtivos, produtosComCusto, coberturaPct,
-        topProdutos, topProdutosValorPct, riscoPorHub, riscoTotal, riscoCriticoTotal,
-        produtosEmRisco, valorPorCategoria, transferencias, fluxoDiario,
-        produtosParados, produtosParadosTotal, valorParado, custoFabricacao,
+        valorPorHub, valorTotal, hubResumo,
+        valorSaidas90, giroAnualizado, diasCoberturaMedia,
+        totalProdutosAtivos, produtosComCusto, coberturaPct, produtosSemCusto, produtosSemCustoTotal,
+        topProdutos, topProdutosValorPct, abc,
+        riscoPorHub, riscoTotal, riscoCriticoTotal, riscoValorTotal, produtosEmRisco,
+        produtosRemanejar, produtosRemanejarTotal,
+        produtosParados, produtosParadosTotal, valorParado,
+        produtosExcesso, produtosExcessoTotal, valorExcesso, capitalCongelado,
+        valorPorCategoria, fluxoDiario,
+        transferencias, valorEmTransito, unidadesEmTransito, transitoDiasMax,
+        custoFabricacao,
       };
     },
   });
