@@ -1,13 +1,19 @@
-import { Building2, DollarSign, Wrench, CheckCircle2, AlertTriangle } from "lucide-react";
+import { Building2, DollarSign, Wrench, CheckCircle2, AlertTriangle, Trophy, Gauge } from "lucide-react";
 import {
   ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LabelList,
+  PieChart, Pie, Cell, Legend,
 } from "recharts";
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
 import { CarboKPI } from "@/components/ui/carbo-kpi";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useAuth } from "@/contexts/AuthContext";
 import { fmtBRL, monthLabel } from "@/lib/dash-format";
-import { useFranqueadosKpis, useFranqueadosRevenueMonthly } from "@/hooks/useDashFranqueados";
+import {
+  useFranqueadosKpis, useFranqueadosRevenueMonthly,
+  useFranqueadosRanking, useFranqueadosPorte, useFranqueadosRecentServices,
+} from "@/hooks/useDashFranqueados";
+
+const PORTE_COLORS = ["#22c55e", "#3b82f6", "#8b5cf6", "#f59e0b", "#14b8a6", "#ef4444"];
 
 // ── Helpers de gráfico (mesma estética do Comercial) ──────────────────────────
 const fmtK = (v: number) =>
@@ -57,6 +63,9 @@ export default function DashboardsFranqueados() {
 
   const { data: kpis, isLoading: kLoad } = useFranqueadosKpis();
   const { data: months = [] } = useFranqueadosRevenueMonthly(12);
+  const { data: ranking = [] } = useFranqueadosRanking();
+  const { data: porte = [] } = useFranqueadosPorte();
+  const { data: recentes = [] } = useFranqueadosRecentServices(10);
 
   const chartData = months.map((m) => ({
     mes: monthLabel(m.month_start), faturado: m.revenue, servicos: m.services,
@@ -168,6 +177,91 @@ export default function DashboardsFranqueados() {
             </ResponsiveContainer>
           </CardContent>
         </Card>
+      </div>
+
+      {/* Top Licenciados (ranking) + Distribuição por Porte */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <Card className="lg:col-span-2 rounded-2xl border-0 shadow-sm">
+          <CardHeader className="pb-2 pt-5 px-5">
+            <CardTitle className="text-base font-semibold flex items-center gap-2">
+              <Trophy className="h-4 w-4 text-amber-500" /> Top Licenciados
+              <span className="text-xs font-normal text-muted-foreground">· últimos 12 meses</span>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="px-5 pb-5">
+            {ranking.length === 0 ? (
+              <p className="py-8 text-center text-sm text-muted-foreground">Sem dados de licenciados no período.</p>
+            ) : (
+              <div className="divide-y divide-border">
+                {ranking.slice(0, 8).map((r, idx) => (
+                  <div key={r.loja_id} className="flex items-center justify-between py-2.5 gap-3">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <span className="w-6 text-center shrink-0 text-sm font-bold text-muted-foreground">
+                        {idx === 0 ? "🥇" : idx === 1 ? "🥈" : idx === 2 ? "🥉" : `${idx + 1}º`}
+                      </span>
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-foreground truncate">{r.name}</p>
+                        <p className="text-xs text-muted-foreground truncate">
+                          {[r.city, r.state].filter(Boolean).join(" · ") || "—"} · {r.services} serviço{r.services !== 1 ? "s" : ""}
+                        </p>
+                      </div>
+                    </div>
+                    <span className="text-sm font-semibold tabular-nums text-foreground shrink-0">{fmtK(r.revenue)}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card className="rounded-2xl border-0 shadow-sm">
+          <CardHeader className="pb-1 pt-5 px-5">
+            <CardTitle className="text-base font-semibold flex items-center gap-2">
+              <Gauge className="h-4 w-4 text-primary" /> Serviços por Porte
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="px-2 pb-4">
+            {porte.length === 0 ? (
+              <p className="px-3 py-16 text-center text-sm text-muted-foreground">Sem serviços no período.</p>
+            ) : (
+              <ResponsiveContainer width="100%" height={240}>
+                <PieChart>
+                  <Pie data={porte} dataKey="total" nameKey="porte" cx="50%" cy="50%" innerRadius={45} outerRadius={80} paddingAngle={2}>
+                    {porte.map((_, i) => <Cell key={i} fill={PORTE_COLORS[i % PORTE_COLORS.length]} />)}
+                  </Pie>
+                  <Tooltip contentStyle={{ background: "var(--background)", border: "1px solid var(--border)", borderRadius: 10, fontSize: 12 }} formatter={(v: number) => [`${v} serviços`, ""]} />
+                  <Legend formatter={(v) => <span className="text-xs capitalize">{v}</span>} />
+                </PieChart>
+              </ResponsiveContainer>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Últimos serviços */}
+      <div className="rounded-2xl border border-border bg-card overflow-hidden">
+        <div className="flex items-center gap-2 border-b border-border px-5 py-3">
+          <Wrench className="h-4 w-4 text-primary" />
+          <h2 className="text-sm font-semibold text-foreground">Últimos Serviços</h2>
+        </div>
+        <div className="divide-y divide-border">
+          {recentes.length === 0 ? (
+            <p className="px-5 py-8 text-center text-sm text-muted-foreground">
+              Nenhum serviço recente (ou o RPC de últimos serviços ainda não foi aplicado no banco).
+            </p>
+          ) : recentes.map((s) => (
+            <div key={s.service_id} className="flex items-center justify-between px-5 py-2.5 gap-3">
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-foreground truncate">{s.loja_name}</p>
+                <p className="text-xs text-muted-foreground truncate capitalize">
+                  {[s.porte, s.fuel_type].filter(Boolean).join(" · ") || "—"}
+                  {s.performed_at ? ` · ${new Date(s.performed_at).toLocaleDateString("pt-BR")}` : ""}
+                </p>
+              </div>
+              <span className="text-sm font-semibold tabular-nums text-foreground shrink-0">{fmtK(s.total_value)}</span>
+            </div>
+          ))}
+        </div>
       </div>
     </main>
   );
