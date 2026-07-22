@@ -91,6 +91,12 @@ export interface CustoFabricacao {
   completo: boolean;             // rota de referência sem insumo faltando
   variancePct: number | null;    // (custoReferencia − custoCadastrado)/custoCadastrado; null se cadastrado=0
 }
+export interface Tendencia {
+  baseDate: string;             // data do snapshot usado como base de comparação
+  valorTotal: number | null;    // variação % do capital em estoque
+  riscoValor: number | null;    // variação % do risco em R$
+  cobertura: number | null;     // variação em pontos percentuais da cobertura de custo
+}
 export interface TransferenciaStatus { status: "em_transito" | "entregue" | "estornado"; count: number; }
 export interface FluxoDiarioRow {
   date: string; // YYYY-MM-DD
@@ -146,6 +152,8 @@ export interface SuprimentosCockpit {
   transitoDiasMax: number | null;
   // BOM
   custoFabricacao: CustoFabricacao[];
+  // Tendência vs histórico (suprimentos_snapshots) — null até haver base
+  tendencia: Tendencia | null;
 }
 
 function mapTransferStatus(raw: string | null): "em_transito" | "entregue" | "estornado" {
@@ -161,7 +169,9 @@ export function useSuprimentosCockpit() {
       const since90 = new Date(Date.now() - CONSUMO_JANELA_DIAS * 24 * 60 * 60 * 1000).toISOString();
       const since180 = new Date(Date.now() - 180 * 24 * 60 * 60 * 1000).toISOString();
 
-      const [productsRes, stockRes, minRes, movRes, transfRes, bomRes] = await Promise.all([
+      const snapSince = new Date(Date.now() - 45 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+
+      const [productsRes, stockRes, minRes, movRes, transfRes, bomRes, snapRes] = await Promise.all([
         db.from("mrp_products")
           .select("id, name, product_code, category, unit_cost, safety_stock_qty, stock_unit, is_active")
           .eq("is_active", true),
@@ -177,6 +187,13 @@ export function useSuprimentosCockpit() {
           .gte("created_at", since180),
         db.from("mrp_bom")
           .select("product_id, insumo_id, quantity_per_unit"),
+        // Histórico (tendência). Resiliente: se a tabela/migration ainda não
+        // existe, o .catch devolve erro e seguimos sem tendência — não quebra.
+        db.from("suprimentos_snapshots")
+          .select("snapshot_date, valor_total, risco_valor, produtos_ativos, produtos_com_custo")
+          .gte("snapshot_date", snapSince)
+          .order("snapshot_date", { ascending: true })
+          .then((r: unknown) => r, () => ({ data: null, error: true })),
       ]);
 
       if (productsRes.error) throw productsRes.error;
@@ -553,6 +570,33 @@ export function useSuprimentosCockpit() {
         .filter((x): x is CustoFabricacao => x !== null)
         .sort((a, b) => b.custoReferencia - a.custoReferencia);
 
+      // ── Tendência vs histórico ──────────────────────────────────────────────
+      // Base = snapshot mais recente com ao menos ~7 dias (p/ variação ter
+      // significado); se não houver, o mais antigo disponível. Compara com os
+      // valores calculados AGORA (mesma semântica da captura).
+      let tendencia: Tendencia | null = null;
+      const snapData = (snapRes as { data?: Record<string, unknown>[] | null; error?: unknown })?.error
+        ? null
+        : ((snapRes as { data?: Record<string, unknown>[] | null })?.data ?? null);
+      if (snapData && snapData.length > 0) {
+        const hoje = new Date().toISOString().slice(0, 10);
+        const anteriores = snapData.filter((r) => String(r.snapshot_date) < hoje);
+        if (anteriores.length > 0) {
+          const alvo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+          const ateAlvo = anteriores.filter((r) => String(r.snapshot_date) <= alvo);
+          const base = ateAlvo.length > 0 ? ateAlvo[ateAlvo.length - 1] : anteriores[0];
+          const pct = (cur: number, b: number) => (b > 0 ? ((cur - b) / b) * 100 : null);
+          const baseAtivos = Number(base.produtos_ativos) || 0;
+          const baseCobertura = baseAtivos > 0 ? (Number(base.produtos_com_custo) / baseAtivos) * 100 : null;
+          tendencia = {
+            baseDate: String(base.snapshot_date),
+            valorTotal: pct(valorTotal, Number(base.valor_total) || 0),
+            riscoValor: pct(riscoValorTotal, Number(base.risco_valor) || 0),
+            cobertura: baseCobertura === null ? null : coberturaPct - baseCobertura,
+          };
+        }
+      }
+
       return {
         valorPorHub, valorTotal, hubResumo,
         valorSaidas90, giroAnualizado, diasCoberturaMedia,
@@ -564,7 +608,7 @@ export function useSuprimentosCockpit() {
         produtosExcesso, produtosExcessoTotal, valorExcesso, capitalCongelado,
         valorPorCategoria, fluxoDiario,
         transferencias, valorEmTransito, unidadesEmTransito, transitoDiasMax,
-        custoFabricacao,
+        custoFabricacao, tendencia,
       };
     },
   });

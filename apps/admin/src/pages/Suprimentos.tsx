@@ -3,7 +3,7 @@ import { motion } from "framer-motion";
 import {
   Boxes, AlertTriangle, PackageSearch, ShieldAlert, ArrowLeftRight, TrendingUp,
   TrendingDown, Layers, Truck, FlaskConical, Gauge, Snowflake, Coins,
-  Factory, Store, ArrowRight, Repeat2,
+  Factory, Store, ArrowRight, Repeat2, ArrowUpRight, ArrowDownRight,
 } from "lucide-react";
 import {
   AreaChart, Area, BarChart, Bar, Cell,
@@ -42,9 +42,32 @@ function RestrictedNotice() {
 const TOOLTIP_STYLE = { background: "hsl(var(--popover))", border: "1px solid var(--border)", borderRadius: 10, fontSize: 12 };
 const fmtPct = (v: number) => `${v >= 0 ? "" : ""}${v.toFixed(0)}%`;
 
-function StatTile({ label, value, sub, accent, icon: Icon, tone = "blue" }: {
+// Chip de tendência vs base histórica. `higherIsBetter` decide a cor
+// (ex.: risco subindo = ruim/vermelho; cobertura subindo = bom/verde).
+// `neutral` = só direção, sem juízo de valor (ex.: capital em estoque).
+function TrendChip({ value, unit, higherIsBetter, neutral, baseDate }: {
+  value: number | null; unit: "pct" | "pp"; higherIsBetter?: boolean; neutral?: boolean; baseDate: string;
+}) {
+  if (value === null || !Number.isFinite(value)) return null;
+  const rounded = unit === "pct" ? value : value; // pp já em pontos
+  if (Math.abs(rounded) < (unit === "pp" ? 0.5 : 1)) {
+    return <span className="mt-1 inline-block text-[10px] text-muted-foreground" title={`desde ${baseDate}`}>estável</span>;
+  }
+  const up = rounded > 0;
+  const good = neutral ? null : (up === !!higherIsBetter);
+  const color = neutral ? "text-muted-foreground" : good ? "text-emerald-500" : "text-red-500";
+  const Icon = up ? ArrowUpRight : ArrowDownRight;
+  const txt = unit === "pct" ? `${up ? "+" : ""}${rounded.toFixed(0)}%` : `${up ? "+" : ""}${rounded.toFixed(0)} p.p.`;
+  return (
+    <span className={`mt-1 inline-flex items-center gap-0.5 text-[10px] font-medium ${color}`} title={`vs ${baseDate}`}>
+      <Icon className="h-3 w-3" /> {txt}
+    </span>
+  );
+}
+
+function StatTile({ label, value, sub, accent, icon: Icon, tone = "blue", delta }: {
   label: string; value: string; sub?: string; accent: string; icon: React.ElementType;
-  tone?: "blue" | "green" | "amber" | "red" | "teal";
+  tone?: "blue" | "green" | "amber" | "red" | "teal"; delta?: React.ReactNode;
 }) {
   const toneCls: Record<string, string> = {
     blue: "bg-blue-400/10 text-blue-500",
@@ -60,6 +83,7 @@ function StatTile({ label, value, sub, accent, icon: Icon, tone = "blue" }: {
           <p className="text-xs font-medium text-muted-foreground truncate">{label}</p>
           <p className="mt-1.5 text-xl font-bold text-foreground leading-tight break-words tabular-nums">{value}</p>
           {sub && <p className="mt-1 text-xs text-muted-foreground leading-snug">{sub}</p>}
+          {delta}
         </div>
         <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${toneCls[tone]}`}>
           <Icon className="h-[18px] w-[18px]" />
@@ -158,11 +182,14 @@ export default function Suprimentos() {
             {/* ── 1. Faixa executiva — saúde de suprimentos em 5 segundos ───── */}
             <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
               {[
-                { label: "Capital em estoque", value: fmtBRL(d.valorTotal), sub: `${fmtNum(d.totalProdutosAtivos)} produtos ativos`, accent: "border-l-blue-400", icon: Coins, tone: "blue" as const },
+                { label: "Capital em estoque", value: fmtBRL(d.valorTotal), sub: `${fmtNum(d.totalProdutosAtivos)} produtos ativos`, accent: "border-l-blue-400", icon: Coins, tone: "blue" as const,
+                  delta: d.tendencia && <TrendChip value={d.tendencia.valorTotal} unit="pct" neutral baseDate={d.tendencia.baseDate} /> },
                 { label: "Giro anualizado", value: d.giroAnualizado != null ? `${d.giroAnualizado.toFixed(1)}×/ano` : "—", sub: d.diasCoberturaMedia != null ? `${Math.round(d.diasCoberturaMedia)} dias de cobertura` : "sem consumo no período", accent: "border-l-teal-400", icon: Gauge, tone: "teal" as const },
                 { label: "Capital congelado", value: fmtBRL(d.capitalCongelado), sub: `parado ${fmtBRL(d.valorParado)} · excesso ${fmtBRL(d.valorExcesso)}`, accent: "border-l-amber-400", icon: Snowflake, tone: "amber" as const },
-                { label: "Risco de ruptura (R$)", value: fmtBRL(d.riscoValorTotal), sub: `${fmtNum(d.riscoTotal)} abaixo do mínimo · ${fmtNum(d.riscoCriticoTotal)} zerados`, accent: d.riscoCriticoTotal > 0 ? "border-l-red-500" : "border-l-amber-400", icon: ShieldAlert, tone: d.riscoCriticoTotal > 0 ? "red" as const : "amber" as const },
-                { label: "Cobertura de custo", value: `${d.coberturaPct.toFixed(0)}%`, sub: d.produtosSemCustoTotal > 0 ? `${fmtNum(d.produtosSemCustoTotal)} com estoque sem custo` : "cadastro completo", accent: d.coberturaPct >= 80 ? "border-l-emerald-400" : "border-l-amber-400", icon: PackageSearch, tone: d.coberturaPct >= 80 ? "green" as const : "amber" as const },
+                { label: "Risco de ruptura (R$)", value: fmtBRL(d.riscoValorTotal), sub: `${fmtNum(d.riscoTotal)} abaixo do mínimo · ${fmtNum(d.riscoCriticoTotal)} zerados`, accent: d.riscoCriticoTotal > 0 ? "border-l-red-500" : "border-l-amber-400", icon: ShieldAlert, tone: d.riscoCriticoTotal > 0 ? "red" as const : "amber" as const,
+                  delta: d.tendencia && <TrendChip value={d.tendencia.riscoValor} unit="pct" higherIsBetter={false} baseDate={d.tendencia.baseDate} /> },
+                { label: "Cobertura de custo", value: `${d.coberturaPct.toFixed(0)}%`, sub: d.produtosSemCustoTotal > 0 ? `${fmtNum(d.produtosSemCustoTotal)} com estoque sem custo` : "cadastro completo", accent: d.coberturaPct >= 80 ? "border-l-emerald-400" : "border-l-amber-400", icon: PackageSearch, tone: d.coberturaPct >= 80 ? "green" as const : "amber" as const,
+                  delta: d.tendencia && <TrendChip value={d.tendencia.cobertura} unit="pp" higherIsBetter baseDate={d.tendencia.baseDate} /> },
               ].map((t, i) => (
                 <motion.div key={t.label} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.04 }}>
                   <StatTile {...t} />
