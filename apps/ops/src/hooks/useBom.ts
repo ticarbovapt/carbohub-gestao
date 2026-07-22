@@ -21,8 +21,7 @@ export interface BomItem {
   is_critical: boolean;
 }
 
-export function useBom(productId: string | null) {
-  return useQuery({
+export function useBom(productId: string | null) {  return useQuery({
     queryKey: ["ops", "bom", productId],
     enabled: !!productId,
     queryFn: async (): Promise<BomItem[]> => {
@@ -46,6 +45,27 @@ export function useBom(productId: string | null) {
           is_critical: !!b.is_critical,
         };
       });
+    },
+  });
+}
+
+// Todas as linhas de mrp_bom (grafo inteiro) — usado p/ explodir um semi-acabado
+// na própria ficha dele (rota "do zero") só p/ EXIBIÇÃO/custo. É leitura pura, não
+// altera nada da produção (op_deduct_materials continua lendo mrp_bom direto).
+export interface RawBomLine { product_id: string; insumo_id: string; qpu: number; unit: string }
+export function useAllBom(enabled: boolean) {
+  return useQuery({
+    queryKey: ["ops", "bom-all"],
+    enabled,
+    queryFn: async (): Promise<RawBomLine[]> => {
+      const res = await db.from("mrp_bom").select("product_id, insumo_id, quantity_per_unit, unit");
+      if (res.error) throw res.error;
+      return (res.data ?? []).map((r: Record<string, unknown>) => ({
+        product_id: r.product_id as string,
+        insumo_id: r.insumo_id as string,
+        qpu: Number(r.quantity_per_unit) || 0,
+        unit: (r.unit as string) || "un",
+      }));
     },
   });
 }

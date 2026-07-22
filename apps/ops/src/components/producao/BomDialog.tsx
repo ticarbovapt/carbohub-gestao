@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from "@/components/ui/dialog";
@@ -11,11 +11,13 @@ import { CarboBadge } from "@/components/ui/carbo-badge";
 import {
   CarboTable, CarboTableHeader, CarboTableBody, CarboTableRow, CarboTableHead, CarboTableCell,
 } from "@/components/ui/carbo-table";
-import { ClipboardList, Plus, Pencil, Trash2, Loader2, AlertTriangle } from "lucide-react";
+import { ClipboardList, Plus, Pencil, Trash2, Loader2, AlertTriangle, Settings2, Tag } from "lucide-react";
 import { toast } from "sonner";
-import { useBom, useBomMutations } from "@/hooks/useBom";
+import { useBom, useBomMutations, useAllBom } from "@/hooks/useBom";
 import { useMrpProducts } from "@/hooks/useMrpProducts";
 import { ALL_UNITS, unitLabel, convertUnit, isCountUnit } from "@/lib/units";
+
+const fmtBRL = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
 interface BomDialogProps {
   open: boolean;
@@ -37,6 +39,57 @@ export function BomDialog({ open, onOpenChange, productId, productName }: BomDia
 
   const usedIds = new Set(items.map((i) => i.insumo_id));
   const options = products.filter((p) => p.id !== productId && !usedIds.has(p.id));
+
+  // ── Custo por rota (Rotular × Do zero) ──────────────────────────────────────
+  // A rota "Do zero" NÃO é cadastrada aqui: ela é montada automaticamente
+  // explodindo cada linha Semi-acabado na própria ficha dela (garrafa+líquido+
+  // tampa em vez do semi-acabado pronto). Isto é SÓ leitura/custo — a produção
+  // (op_deduct_materials) continua lendo o mrp_bom direto, sem alteração.
+  const { data: allBom = [] } = useAllBom(open);
+  const productsById = useMemo(() => new Map(products.map((p) => [p.id, p])), [products]);
+  const bomByProduct = useMemo(() => {
+    const m = new Map<string, typeof allBom>();
+    for (const r of allBom) { const a = m.get(r.product_id) ?? []; a.push(r); m.set(r.product_id, a); }
+    return m;
+  }, [allBom]);
+
+  // Custo de 1 linha: converte a qtd da ficha p/ a unidade de estoque do insumo
+  // e multiplica pelo custo unitário cadastrado. missing = insumo sem custo.
+  const lineCost = (insumoId: string, qty: number, unit: string): { cost: number; missing: boolean } => {
+    const p = productsById.get(insumoId);
+    if (!p) return { cost: 0, missing: true };
+    const stockUnit = p.stock_unit || unit || "un";
+    const need = convertUnit(qty, unit || stockUnit, stockUnit) ?? qty;
+    return { cost: (p.unit_cost || 0) * need, missing: !(p.unit_cost > 0) };
+  };
+
+  const temSemi = items.some((it) => productsById.get(it.insumo_id)?.category === "Semi-acabado");
+
+  // Receita "Do zero": explode as linhas Semi-acabado; mantém as demais (ex.: rótulo).
+  const zeroRecipe = useMemo(() => {
+    const out: { insumo_id: string; name: string; code: string; qty: number; unit: string }[] = [];
+    for (const it of items) {
+      const p = productsById.get(it.insumo_id);
+      if (p?.category === "Semi-acabado") {
+        for (const s of bomByProduct.get(it.insumo_id) ?? []) {
+          const sp = productsById.get(s.insumo_id);
+          out.push({ insumo_id: s.insumo_id, name: sp?.name ?? "—", code: sp?.product_code ?? "", qty: s.qpu * it.qty, unit: s.unit });
+        }
+      } else {
+        out.push({ insumo_id: it.insumo_id, name: it.insumo, code: it.code, qty: it.qty, unit: it.unit });
+      }
+    }
+    return out;
+  }, [items, bomByProduct, productsById]);
+
+  const rotularTotal = items.reduce((acc, it) => {
+    const c = lineCost(it.insumo_id, it.qty, it.unit);
+    return { cost: acc.cost + c.cost, missing: acc.missing + (c.missing ? 1 : 0) };
+  }, { cost: 0, missing: 0 });
+  const zeroTotal = zeroRecipe.reduce((acc, it) => {
+    const c = lineCost(it.insumo_id, it.qty, it.unit);
+    return { cost: acc.cost + c.cost, missing: acc.missing + (c.missing ? 1 : 0) };
+  }, { cost: 0, missing: 0 });
 
   // Unidade do insumo no estoque → oferece o dropdown completo.
   const selectedInsumo = products.find((p) => p.id === insumoId);
@@ -99,6 +152,15 @@ export function BomDialog({ open, onOpenChange, productId, productName }: BomDia
             BOM — {productName}
           </DialogTitle>
           <DialogDescription>Lista de insumos consumidos por unidade produzida.</DialogDescription>
+          {temSemi && (
+            <p className="text-xs text-muted-foreground pt-1">
+              Este produto tem um <strong>semi-acabado</strong> na ficha, então pode ser fabricado de 2 formas
+              (mesma lógica de rota das Ordens de Produção): <Tag className="inline h-3 w-3 -mt-0.5" /> <strong>Rotular</strong> (usa
+              o semi-acabado pronto — a ficha editável abaixo) e <Settings2 className="inline h-3 w-3 -mt-0.5" /> <strong>Do zero</strong> (monta
+              a partir dos insumos crus). A rota “Do zero” é <strong>calculada automaticamente</strong> a partir da ficha do
+              semi-acabado — só leitura, não altera a produção.
+            </p>
+          )}
         </DialogHeader>
 
         <div className="space-y-4">
@@ -152,6 +214,11 @@ export function BomDialog({ open, onOpenChange, productId, productName }: BomDia
             </Button>
           </div>
 
+          {temSemi && (
+            <div className="flex items-center gap-1.5 text-sm font-semibold text-foreground">
+              <Tag className="h-4 w-4 text-primary" /> Rotular <span className="text-xs font-normal text-muted-foreground">(usa o semi-acabado pronto — ficha editável)</span>
+            </div>
+          )}
           <div className="overflow-x-auto rounded-lg border border-border">
             <CarboTable>
               <CarboTableHeader>
@@ -159,22 +226,26 @@ export function BomDialog({ open, onOpenChange, productId, productName }: BomDia
                   <CarboTableHead>Insumo</CarboTableHead>
                   <CarboTableHead className="text-right">Qtd por unidade</CarboTableHead>
                   <CarboTableHead>Unidade</CarboTableHead>
+                  <CarboTableHead className="text-right">Custo</CarboTableHead>
                   <CarboTableHead>Crítico</CarboTableHead>
                   <CarboTableHead className="w-10" />
                 </CarboTableRow>
               </CarboTableHeader>
               <CarboTableBody>
                 {isLoading && (
-                  <CarboTableRow><CarboTableCell colSpan={5} className="py-8 text-center text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin inline mr-2" /> Carregando…</CarboTableCell></CarboTableRow>
+                  <CarboTableRow><CarboTableCell colSpan={6} className="py-8 text-center text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin inline mr-2" /> Carregando…</CarboTableCell></CarboTableRow>
                 )}
                 {!isLoading && items.length === 0 && (
-                  <CarboTableRow><CarboTableCell colSpan={5} className="py-8 text-center text-sm text-muted-foreground">Nenhum insumo na ficha</CarboTableCell></CarboTableRow>
+                  <CarboTableRow><CarboTableCell colSpan={6} className="py-8 text-center text-sm text-muted-foreground">Nenhum insumo na ficha</CarboTableCell></CarboTableRow>
                 )}
-                {items.map((item) => (
+                {items.map((item) => {
+                  const c = lineCost(item.insumo_id, item.qty, item.unit);
+                  return (
                   <CarboTableRow key={item.id} className={editingId === item.id ? "bg-primary/5" : undefined}>
                     <CarboTableCell className="font-medium">{item.insumo}<span className="ml-2 text-xs text-muted-foreground font-mono">{item.code}</span></CarboTableCell>
                     <CarboTableCell className="text-right tabular-nums">{item.qty.toLocaleString("pt-BR")}</CarboTableCell>
                     <CarboTableCell className="text-muted-foreground">{unitLabel(item.unit)}</CarboTableCell>
+                    <CarboTableCell className="text-right tabular-nums">{c.missing ? <span className="text-xs text-amber-500" title="Insumo sem custo cadastrado">sem custo</span> : fmtBRL(c.cost)}</CarboTableCell>
                     <CarboTableCell>{item.is_critical ? <CarboBadge variant="destructive" className="gap-1"><AlertTriangle className="h-3 w-3" /> Crítico</CarboBadge> : <span className="text-xs text-muted-foreground">—</span>}</CarboTableCell>
                     <CarboTableCell>
                       <div className="flex items-center gap-0.5">
@@ -183,10 +254,60 @@ export function BomDialog({ open, onOpenChange, productId, productName }: BomDia
                       </div>
                     </CarboTableCell>
                   </CarboTableRow>
-                ))}
+                  );
+                })}
+                {!isLoading && items.length > 0 && (
+                  <CarboTableRow className="bg-muted/30">
+                    <CarboTableCell className="font-semibold" colSpan={3}>Custo total {temSemi && "(Rotular)"}</CarboTableCell>
+                    <CarboTableCell className="text-right font-semibold tabular-nums">{fmtBRL(rotularTotal.cost)}</CarboTableCell>
+                    <CarboTableCell colSpan={2}>{rotularTotal.missing > 0 && <span className="text-xs text-amber-500 whitespace-nowrap">falta custo de {rotularTotal.missing} insumo(s)</span>}</CarboTableCell>
+                  </CarboTableRow>
+                )}
               </CarboTableBody>
             </CarboTable>
           </div>
+
+          {/* ── Rota "Do zero" — SÓ LEITURA, montada explodindo o semi-acabado ─── */}
+          {temSemi && (
+            <div className="space-y-2">
+              <div className="flex items-center gap-1.5 text-sm font-semibold text-foreground">
+                <Settings2 className="h-4 w-4 text-primary" /> Do zero
+                <span className="text-xs font-normal text-muted-foreground">(monta a partir dos insumos crus — calculado da ficha do semi-acabado)</span>
+              </div>
+              <div className="overflow-x-auto rounded-lg border border-dashed border-border bg-muted/10">
+                <CarboTable>
+                  <CarboTableHeader>
+                    <CarboTableRow>
+                      <CarboTableHead>Insumo</CarboTableHead>
+                      <CarboTableHead className="text-right">Qtd por unidade</CarboTableHead>
+                      <CarboTableHead>Unidade</CarboTableHead>
+                      <CarboTableHead className="text-right">Custo</CarboTableHead>
+                    </CarboTableRow>
+                  </CarboTableHeader>
+                  <CarboTableBody>
+                    {zeroRecipe.map((it, i) => {
+                      const c = lineCost(it.insumo_id, it.qty, it.unit);
+                      return (
+                        <CarboTableRow key={`${it.insumo_id}-${i}`}>
+                          <CarboTableCell className="font-medium">{it.name}<span className="ml-2 text-xs text-muted-foreground font-mono">{it.code}</span></CarboTableCell>
+                          <CarboTableCell className="text-right tabular-nums">{it.qty.toLocaleString("pt-BR")}</CarboTableCell>
+                          <CarboTableCell className="text-muted-foreground">{unitLabel(it.unit)}</CarboTableCell>
+                          <CarboTableCell className="text-right tabular-nums">{c.missing ? <span className="text-xs text-amber-500" title="Insumo sem custo cadastrado">sem custo</span> : fmtBRL(c.cost)}</CarboTableCell>
+                        </CarboTableRow>
+                      );
+                    })}
+                    <CarboTableRow className="bg-muted/30">
+                      <CarboTableCell className="font-semibold" colSpan={3}>Custo total (Do zero)</CarboTableCell>
+                      <CarboTableCell className="text-right font-semibold tabular-nums">{fmtBRL(zeroTotal.cost)}</CarboTableCell>
+                    </CarboTableRow>
+                  </CarboTableBody>
+                </CarboTable>
+              </div>
+              {zeroTotal.missing > 0 && (
+                <p className="text-xs text-amber-500">⚙️ Do zero: falta custo de {zeroTotal.missing} insumo(s) — o valor acima é parcial (só o que tem custo cadastrado).</p>
+              )}
+            </div>
+          )}
         </div>
 
         <DialogFooter>
