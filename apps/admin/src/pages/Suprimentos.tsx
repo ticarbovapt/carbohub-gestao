@@ -523,7 +523,7 @@ export default function Suprimentos() {
                     <FlaskConical className="h-4 w-4 text-primary" /> Custo de Fabricação (ficha técnica)
                   </CardTitle>
                   <p className="text-xs text-muted-foreground mt-0.5">
-                    Custo de produzir 1 unidade, somando os insumos da ficha. Quando há um semi-acabado, comparamos as 2 rotas (🏷️ Rotular vs ⚙️ Do zero) e mostramos a <strong className="text-foreground">mais barata</strong>. O <strong className="text-foreground">preço de venda</strong> é o cadastrado no produto (Ops) e a <strong className="text-foreground">margem</strong> = (preço − custo) ÷ preço — só aparece quando o custo da ficha está completo.
+                    Custo de produzir 1 unidade, somando os insumos da ficha. Quando há um semi-acabado, comparamos as 2 rotas (🏷️ Rotular vs ⚙️ Do zero) e mostramos a <strong className="text-foreground">mais barata</strong>. O <strong className="text-foreground">preço sugerido</strong> usa o preço praticado quando conhecido (“referência”); senão, com a ficha completa, sugere custo ÷ (1 − 70%); com ficha incompleta não sugere (“custo incompleto”), pra não mostrar preço enganoso. <strong className="text-foreground">Margem</strong> = (preço − custo) ÷ preço, só com custo completo.
                   </p>
                 </CardHeader>
                 <CardContent className="px-0 pb-2">
@@ -534,7 +534,7 @@ export default function Suprimentos() {
                           <CarboTableHead>Produto</CarboTableHead>
                           <CarboTableHead className="text-right">Custo de fabricação</CarboTableHead>
                           <CarboTableHead>Rota / economia</CarboTableHead>
-                          <CarboTableHead className="text-right">Preço de venda</CarboTableHead>
+                          <CarboTableHead className="text-right">Preço sugerido</CarboTableHead>
                           <CarboTableHead className="text-right">Margem</CarboTableHead>
                           <CarboTableHead className="text-right">vs cadastrado</CarboTableHead>
                           <CarboTableHead>Cobertura</CarboTableHead>
@@ -584,18 +584,28 @@ export default function Suprimentos() {
                                 )}
                               </CarboTableCell>
                               <CarboTableCell className="text-right">
-                                {p.precoVenda != null ? (
-                                  <span className="text-sm font-semibold tabular-nums text-foreground whitespace-nowrap">{fmtBRL(p.precoVenda)}</span>
+                                {p.fontePreco === "indisponivel" ? (
+                                  <div className="flex flex-col items-end gap-0.5">
+                                    <span className="text-sm text-muted-foreground">—</span>
+                                    <span className="text-[10px] text-amber-500 whitespace-nowrap">custo incompleto</span>
+                                  </div>
                                 ) : (
-                                  <span className="text-[11px] text-muted-foreground whitespace-nowrap">sem preço</span>
+                                  <div className="flex flex-col items-end gap-0.5">
+                                    <span className="text-sm font-semibold tabular-nums text-foreground whitespace-nowrap">{fmtBRL(p.precoExibir!)}</span>
+                                    <span className="text-[10px] text-muted-foreground whitespace-nowrap">
+                                      {p.fontePreco === "referencia" ? "referência" : `sugerido ${(p.margemAlvoUsada * 100).toFixed(0)}%`}
+                                    </span>
+                                  </div>
                                 )}
                               </CarboTableCell>
                               <CarboTableCell className="text-right">
-                                {p.margemPct != null ? (
-                                  <CarboBadge variant={p.margemPct >= 40 ? "success" : p.margemPct >= 15 ? "warning" : "destructive"} className="whitespace-nowrap">
-                                    {p.margemPct.toFixed(0)}%
+                                {p.margemRealPct != null ? (
+                                  <CarboBadge variant={p.margemRealPct >= 40 ? "success" : p.margemRealPct >= 15 ? "warning" : "destructive"} className="whitespace-nowrap">
+                                    {p.margemRealPct.toFixed(0)}%
                                   </CarboBadge>
-                                ) : p.precoVenda != null && !p.completo ? (
+                                ) : p.fontePreco === "sugerido" ? (
+                                  <CarboBadge variant="secondary" className="whitespace-nowrap">meta {(p.margemAlvoUsada * 100).toFixed(0)}%</CarboBadge>
+                                ) : p.fontePreco === "referencia" ? (
                                   <span className="text-[10px] text-amber-500 whitespace-nowrap">custo incompleto</span>
                                 ) : (
                                   <span className="text-[11px] text-muted-foreground">—</span>

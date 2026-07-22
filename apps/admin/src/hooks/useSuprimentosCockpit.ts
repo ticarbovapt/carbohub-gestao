@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { PRECO_REFERENCIA, MARGEM_ALVO_PADRAO, MARGEM_ALVO_POR_CATEGORIA } from "@/lib/precoReferencia";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // "Suprimentos" — cockpit ESTRATÉGICO de suprimentos para o Admin, cópia própria
@@ -96,8 +97,12 @@ export interface CustoFabricacao {
   economiaZero: number | null;   // custoCalculado − custoZero (>0 = do zero é mais barato)
   completo: boolean;             // rota de referência sem insumo faltando
   variancePct: number | null;    // (custoReferencia − custoCadastrado)/custoCadastrado; null se cadastrado=0
-  precoVenda: number | null;     // sale_price cadastrado (preço de venda de referência)
-  margemPct: number | null;      // (preço − custo referência)/preço; null se falta preço ou custo incompleto
+  // Preço sugerido (cascata: âncora manual → sugestão por custo se ficha
+  // completa → indisponível). Ver apps/admin/src/lib/precoReferencia.ts.
+  precoExibir: number | null;              // preço resolvido (o que a UI mostra)
+  fontePreco: "referencia" | "sugerido" | "indisponivel";
+  margemAlvoUsada: number;                 // margem-alvo aplicada na sugestão
+  margemRealPct: number | null;            // (preço − custo)/preço; só com custo completo
 }
 export interface Tendencia {
   baseDate: string;             // data do snapshot usado como base de comparação
@@ -573,10 +578,19 @@ export function useSuprimentosCockpit() {
           }
           const economiaZero = zero ? rotular.custo - zero.custo : null;
           const variancePct = prod.unit_cost > 0 ? ((custoReferencia - prod.unit_cost) / prod.unit_cost) * 100 : null;
-          const precoVenda = prod.sale_price != null && prod.sale_price > 0 ? prod.sale_price : null;
-          // Margem só faz sentido com custo completo E preço cadastrado.
-          const margemPct = precoVenda != null && completo && custoReferencia > 0
-            ? ((precoVenda - custoReferencia) / precoVenda) * 100 : null;
+          // Preço sugerido — cascata: âncora manual > sugestão por custo (só se
+          // ficha completa, nunca de custo parcial) > indisponível.
+          const precoReferenciaManual = PRECO_REFERENCIA[prod.product_code] ?? null;
+          const margemAlvoUsada = MARGEM_ALVO_POR_CATEGORIA[categoryOf(prod.category)] ?? MARGEM_ALVO_PADRAO;
+          const precoSugeridoCusto = completo && custoReferencia > 0
+            ? custoReferencia / (1 - margemAlvoUsada) : null;
+          const precoExibir = precoReferenciaManual ?? precoSugeridoCusto ?? null;
+          const fontePreco: "referencia" | "sugerido" | "indisponivel" =
+            precoReferenciaManual != null ? "referencia"
+              : precoSugeridoCusto != null ? "sugerido"
+                : "indisponivel";
+          const margemRealPct = precoExibir != null && completo && custoReferencia > 0
+            ? ((precoExibir - custoReferencia) / precoExibir) * 100 : null;
           return {
             id: prod.id, name: prod.name, product_code: prod.product_code,
             category: categoryOf(prod.category),
@@ -586,7 +600,8 @@ export function useSuprimentosCockpit() {
             itensFaltantesZero: zero?.faltantes ?? null,
             totalItensBomZero: zero?.total ?? null,
             custoReferencia, rotaReferencia, temAlternativa: zero !== null,
-            economiaZero, completo, variancePct, precoVenda, margemPct,
+            economiaZero, completo, variancePct,
+            precoExibir, fontePreco, margemAlvoUsada, margemRealPct,
           };
         })
         .filter((x): x is CustoFabricacao => x !== null)
