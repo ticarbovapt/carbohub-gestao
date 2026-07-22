@@ -15,7 +15,9 @@
 -- Só leitura no Admin; nada aqui altera produção/estoque.
 -- ─────────────────────────────────────────────────────────────────────────────
 
-CREATE EXTENSION IF NOT EXISTS pg_cron WITH SCHEMA extensions;
+-- pg_cron já está instalado no projeto (usado pelos crons do Bling). NÃO
+-- recriar aqui: reexecutar `CREATE EXTENSION pg_cron` dispara o script
+-- after-create do Supabase, que falha com "dependent privileges exist".
 
 -- ── Tabela ───────────────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS public.suprimentos_snapshots (
