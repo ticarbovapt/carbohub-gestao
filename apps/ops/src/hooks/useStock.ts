@@ -1,4 +1,5 @@
-import { useQuery } from "@tanstack/react-query";
+import { useEffect } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import type { ProdEstoque } from "@/components/estoque/stockData";
 
@@ -21,6 +22,33 @@ const CODE_TO_HUB: Record<string, string> = {
   "CD-BLING": "bling",
   "HUB-BLING": "bling",
 };
+
+// Realtime de estoque: assina as tabelas-fonte e invalida o cache do react-query
+// quando QUALQUER usuário mexe (produção ou manual), pra tela atualizar ao vivo
+// sem F5. Requer as tabelas na publicação supabase_realtime (migration
+// 20260722020000_estoque_realtime.sql). Chamar uma vez na página de suprimentos/
+// estoque.
+export function useStockLive() {
+  const qc = useQueryClient();
+  useEffect(() => {
+    const inval = () => {
+      qc.invalidateQueries({ queryKey: ["ops", "stock"] });
+      qc.invalidateQueries({ queryKey: ["ops", "stock-movements"] });
+      qc.invalidateQueries({ queryKey: ["ops", "stock-transfers"] });
+      qc.invalidateQueries({ queryKey: ["ops", "stock-movement-stats"] });
+      qc.invalidateQueries({ queryKey: ["ops", "mrp-products"] });
+    };
+    const ch = supabase
+      .channel("ops-suprimentos-live")
+      .on("postgres_changes", { event: "*", schema: "public", table: "warehouse_stock" }, inval)
+      .on("postgres_changes", { event: "*", schema: "public", table: "stock_movements" }, inval)
+      .on("postgres_changes", { event: "*", schema: "public", table: "stock_transfers" }, inval)
+      .on("postgres_changes", { event: "*", schema: "public", table: "ops_stock_min" }, inval)
+      .on("postgres_changes", { event: "*", schema: "public", table: "mrp_products" }, inval)
+      .subscribe();
+    return () => { supabase.removeChannel(ch); };
+  }, [qc]);
+}
 
 export function useStock() {
   return useQuery({

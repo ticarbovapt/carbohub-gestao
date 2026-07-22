@@ -21,7 +21,7 @@ import { StockView } from "@/components/estoque/StockView";
 import { HUBS, minForHub } from "@/components/estoque/stockData";
 import { CDSPRegistrarEnvioDialog } from "@/components/estoque/CDSPRegistrarEnvioDialog";
 import { RemessaConfirmDialog } from "@/components/estoque/RemessaConfirmDialog";
-import { useStock } from "@/hooks/useStock";
+import { useStock, useStockLive } from "@/hooks/useStock";
 import { useStockMovements } from "@/hooks/useStockMovements";
 import { useStockMovementStats } from "@/hooks/useStockMovementStats";
 import { useStockTransfers, type Transfer } from "@/hooks/useStockTransfers";
@@ -68,6 +68,7 @@ export default function Suprimentos() {
   const isRN = hub === "rn", isSP = hub === "sp", isVendas = hub === "sp-vendas", isBling = hub === "bling";
   const stockHub = HUBS.find((h) => h.id === STOCK_HUB_ID[hub]) ?? HUBS[0];
 
+  useStockLive(); // atualiza ao vivo quando outro usuário mexe no estoque (produção ou manual)
   const { data: products = [] } = useStock();
   const { data: movimentacoes = [], isLoading: movLoading } = useStockMovements();
   const { data: transfers = [] } = useStockTransfers();
