@@ -33,6 +33,7 @@ export const SYSTEMS: SystemOption[] = [
   { iface: "portal_licenciado", label: "Carbo Licenciados", hint: "Portal do licenciado" },
   { iface: "portal_pdv",        label: "Portal de Vendas",  hint: "Portal de Vendas (lojas/PDV)" },
   { iface: "carbo_financas",    label: "Carbo Finanças",    hint: "Financeiro — contas a pagar, NF, faturamento" },
+  { iface: "carbo_mkt",         label: "Carbo Marketing",   hint: "Marketing — campanhas e ações" },
   { iface: "carbo_admin",       label: "Carbo Admin",       hint: "Identidades e acessos — só mostra o card no Hub (entrada é por perfil)" },
 ];
 
@@ -48,6 +49,7 @@ export const SYSTEM_BRAND: Record<string, SystemBrand> = {
   portal_licenciado: { short: "Licenciados", chip: "bg-violet-500/10 text-violet-600 ring-1 ring-inset ring-violet-500/20", dot: "bg-violet-500" },
   portal_pdv:        { short: "Vendas",      chip: "bg-amber-500/10 text-amber-600 ring-1 ring-inset ring-amber-500/20",     dot: "bg-amber-500" },
   carbo_financas:    { short: "Finanças",    chip: "bg-teal-500/10 text-teal-600 ring-1 ring-inset ring-teal-500/20",       dot: "bg-teal-500" },
+  carbo_mkt:         { short: "Marketing",   chip: "bg-pink-500/10 text-pink-600 ring-1 ring-inset ring-pink-500/20",       dot: "bg-pink-500" },
   carbo_admin:       { short: "Admin",       chip: "bg-slate-500/10 text-slate-600 ring-1 ring-inset ring-slate-500/20",   dot: "bg-slate-500" },
 };
 export const brandOf = (iface: string): SystemBrand =>

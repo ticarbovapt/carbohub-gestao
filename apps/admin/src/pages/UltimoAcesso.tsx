@@ -38,6 +38,7 @@ const APP_LABEL: Record<string, string> = {
   carbo_crm: "Carbo Sales",
   carbo_ops_app: "Carbo Ops",
   carbo_financas: "Carbo Finanças",
+  carbo_mkt: "Carbo Marketing",
   carbo_ops: "Carbo Controle",
   portal_licenciado: "Licenciados",
   portal_pdv: "Lojas",
