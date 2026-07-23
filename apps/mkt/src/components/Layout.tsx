@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { Outlet, useNavigate } from "react-router-dom";
-import { Home as HomeIcon, MessagesSquare, Megaphone } from "lucide-react";
+import { Home as HomeIcon, MessagesSquare, Megaphone, Trello } from "lucide-react";
 import { TopBar } from "@/components/TopBar";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useAccessPing } from "@/hooks/useAccessPing";
@@ -40,6 +40,7 @@ export function Layout() {
         { to: "/chat", label: "Carbo Chat", icon: MessagesSquare, badge: <ChatBadge /> },
     ] },
     { label: "Marketing", items: [
+        { to: "/quadros", label: "Quadros", icon: Trello },
         { to: "/campanhas", label: "Campanhas", icon: Megaphone },
     ] },
   ];

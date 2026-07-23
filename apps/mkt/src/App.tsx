@@ -4,6 +4,8 @@ import { Layout } from "./components/Layout";
 import Home from "./pages/Home";
 import Chat from "./pages/Chat";
 import Campanhas from "./pages/Campanhas";
+import Quadros from "./pages/Quadros";
+import Board from "./pages/Board";
 import Profile from "./pages/Profile";
 import MinhaEquipe from "./pages/MinhaEquipe";
 import BugReports from "./pages/BugReports";
@@ -18,6 +20,8 @@ export default function App() {
         <Route path="/" element={<Home />} />
         <Route path="/chat" element={<Chat />} />
         <Route path="/campanhas" element={<Campanhas />} />
+        <Route path="/quadros" element={<Quadros />} />
+        <Route path="/quadros/:boardId" element={<Board />} />
         <Route path="/perfil" element={<Profile />} />
         <Route path="/equipe" element={<MinhaEquipe />} />
         <Route path="/bugs" element={<BugReports />} />
