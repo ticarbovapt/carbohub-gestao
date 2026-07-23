@@ -15,7 +15,10 @@ export interface CardFull {
   id: string; board_id: string; list_id: string; title: string; description: string | null;
   start_date: string | null; due_date: string | null; is_complete: boolean; cover: string | null;
 }
-export interface ChecklistItem { id: string; checklist_id: string; text: string; is_done: boolean; position: number; }
+export interface ChecklistItem {
+  id: string; checklist_id: string; text: string; is_done: boolean; position: number;
+  assignee_id: string | null; due_date: string | null;
+}
 export interface Checklist { id: string; card_id: string; title: string; position: number; items: ChecklistItem[]; }
 export interface Comment { id: string; card_id: string; user_id: string; body: string; created_at: string; authorName: string | null; authorAvatar: string | null; }
 export interface Attachment {
@@ -143,6 +146,11 @@ export function useCardMutations(cardId: string | null, boardId?: string) {
     const res = await db.from("mkt_checklist_items").update({ is_done: done }).eq("id", id);
     if (res.error) throw res.error;
   });
+  // Checklist avançado: responsável e data por item.
+  const updateItem = run(async ({ id, patch }: { id: string; patch: { assignee_id?: string | null; due_date?: string | null; text?: string } }) => {
+    const res = await db.from("mkt_checklist_items").update(patch).eq("id", id);
+    if (res.error) throw res.error;
+  });
   const removeItem = run(async ({ id }: { id: string }) => {
     const res = await db.from("mkt_checklist_items").delete().eq("id", id);
     if (res.error) throw res.error;
@@ -181,6 +189,20 @@ export function useCardMutations(cardId: string | null, boardId?: string) {
     }
   });
 
+  // Espelhar: cria um cartão-espelho (mirror_of = original) no quadro/lista destino.
+  const mirrorCard = useMutation({
+    mutationFn: async ({ targetListId, targetBoardId, title, position }: { targetListId: string; targetBoardId: string; title: string; position: number }) => {
+      const res = await db.from("mkt_cards").insert({
+        list_id: targetListId, board_id: targetBoardId, mirror_of: cardId,
+        title, position, created_by: await uid(),
+      });
+      if (res.error) throw res.error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["mkt", "board"] }); // atualiza o quadro destino
+    },
+  });
+
   const addComment = useMutation({
     mutationFn: async ({ body }: { body: string }) => {
       const res = await db.from("mkt_comments").insert({ card_id: cardId, user_id: await uid(), body });
@@ -190,5 +212,5 @@ export function useCardMutations(cardId: string | null, boardId?: string) {
     onSuccess: inval,
   });
 
-  return { updateCard, toggleLabel, createLabel, toggleMember, addChecklist, removeChecklist, addItem, toggleItem, removeItem, addAttachment, removeAttachment, setFieldValue, addComment };
+  return { updateCard, toggleLabel, createLabel, toggleMember, addChecklist, removeChecklist, addItem, toggleItem, updateItem, removeItem, addAttachment, removeAttachment, setFieldValue, mirrorCard, addComment };
 }

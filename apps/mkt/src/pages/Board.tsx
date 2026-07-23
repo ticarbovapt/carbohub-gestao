@@ -9,7 +9,7 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Plus, X, GripVertical, MoreHorizontal, Clock, CheckSquare, MessageSquare, AlignLeft, Paperclip, Settings2 } from "lucide-react";
+import { ArrowLeft, Plus, X, GripVertical, MoreHorizontal, Clock, CheckSquare, MessageSquare, AlignLeft, Paperclip, Settings2, Link2 } from "lucide-react";
 import { toast } from "sonner";
 import {
   useBoard, useBoardLive, useBoardMutations, POS_GAP,
@@ -48,11 +48,21 @@ function BoardCard({ card, labels, onOpen }: { card: CardSummary; labels: Label[
           ))}
         </div>
       )}
+      {card.mirrorOf && (
+        <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
+          <Link2 className="h-3 w-3" /> espelhado de {card.mirrorSourceBoard ?? "—"}{card.mirrorSourceList ? ` / ${card.mirrorSourceList}` : ""}
+        </div>
+      )}
       <p className="text-sm text-foreground leading-snug">{card.title}</p>
       <div className="flex items-center gap-2 flex-wrap text-[11px] text-muted-foreground">
         {card.due_date && (
           <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded ${overdue ? "bg-red-500/15 text-red-500" : card.is_complete ? "bg-emerald-500/15 text-emerald-600" : "bg-muted"}`}>
             <Clock className="h-3 w-3" /> {fmtDue(card.due_date)}
+          </span>
+        )}
+        {card.checklistOverdue && (
+          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-red-500/15 text-red-500" title="Item de checklist atrasado">
+            <CheckSquare className="h-3 w-3" /> atrasado
           </span>
         )}
         {card.description && <AlignLeft className="h-3.5 w-3.5" />}
@@ -117,7 +127,7 @@ function BoardColumn({
         <div className="px-2 pb-2 overflow-y-auto space-y-2 flex-1 min-h-[8px]">
           <SortableContext items={cards.map((c) => c.id)} strategy={verticalListSortingStrategy}>
             {cards.map((c) => (
-              <BoardCard key={c.id} card={c} labels={labels} onOpen={() => onOpenCard(c.id)} />
+              <BoardCard key={c.id} card={c} labels={labels} onOpen={() => onOpenCard(c.mirrorOf ?? c.id)} />
             ))}
           </SortableContext>
         </div>

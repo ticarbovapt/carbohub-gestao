@@ -27,6 +27,9 @@ export interface CardSummary {
   start_date: string | null; due_date: string | null; is_complete: boolean; cover: string | null;
   labelIds: string[]; memberIds: string[];
   checklistDone: number; checklistTotal: number; commentCount: number; attachmentCount: number;
+  checklistOverdue: boolean;
+  // Espelho: quando não-nulo, o conteúdo acima vem do cartão ORIGINAL (mirrorOf).
+  mirrorOf: string | null; mirrorSourceBoard: string | null; mirrorSourceList: string | null;
 }
 export interface BoardData { board: Board; lists: List[]; cards: CardSummary[]; labels: Label[]; }
 
@@ -40,6 +43,19 @@ export function useBoards() {
       const res = await db.from("mkt_boards").select("*").eq("is_archived", false).order("position");
       if (res.error) throw res.error;
       return (res.data ?? []) as Board[];
+    },
+  });
+}
+
+// Listas de um quadro (leve) — usado no picker de espelhar.
+export function useBoardLists(boardId: string | null) {
+  return useQuery({
+    queryKey: ["mkt", "board-lists", boardId],
+    enabled: !!boardId,
+    queryFn: async (): Promise<List[]> => {
+      const res = await db.from("mkt_lists").select("id, board_id, title, position").eq("board_id", boardId).eq("is_archived", false).order("position");
+      if (res.error) throw res.error;
+      return (res.data ?? []) as List[];
     },
   });
 }
@@ -63,21 +79,45 @@ export function useBoard(boardId: string | null) {
       if (cardsRes.error) throw cardsRes.error;
       if (labelsRes.error) throw labelsRes.error;
 
-      const cardIds: string[] = (cardsRes.data ?? []).map((c: { id: string }) => c.id);
+      const boardCards = (cardsRes.data ?? []) as Record<string, unknown>[];
+      const cardIds: string[] = boardCards.map((c) => c.id as string);
+      // Originais dos espelhos deste quadro (podem estar em OUTROS quadros).
+      const originalIds = [...new Set(boardCards.map((c) => c.mirror_of as string | null).filter(Boolean) as string[])];
 
-      // Badges do cartão (só se houver cartões).
+      // Resolve os cartões originais (mesmo arquivados) + títulos de quadro/lista de origem.
+      const originalById = new Map<string, Record<string, unknown>>();
+      const origBoardTitle = new Map<string, string>();
+      const origListTitle = new Map<string, string>();
+      if (originalIds.length > 0) {
+        const oRes = await db.from("mkt_cards")
+          .select("id, title, description, position, start_date, due_date, is_complete, cover, list_id, board_id, is_archived")
+          .in("id", originalIds);
+        const origs = (oRes.data ?? []) as Record<string, unknown>[];
+        for (const o of origs) originalById.set(o.id as string, o);
+        const obIds = [...new Set(origs.map((o) => o.board_id as string))];
+        const olIds = [...new Set(origs.map((o) => o.list_id as string))];
+        const [obRes, olRes] = await Promise.all([
+          obIds.length ? db.from("mkt_boards").select("id, title").in("id", obIds) : Promise.resolve({ data: [] }),
+          olIds.length ? db.from("mkt_lists").select("id, title").in("id", olIds) : Promise.resolve({ data: [] }),
+        ]);
+        for (const b of (obRes.data ?? []) as { id: string; title: string }[]) origBoardTitle.set(b.id, b.title);
+        for (const l of (olRes.data ?? []) as { id: string; title: string }[]) origListTitle.set(l.id, l.title);
+      }
+
+      // Badges são calculados sobre cartões próprios + originais (espelhos herdam do original).
+      const allIds = [...new Set([...cardIds, ...originalIds])];
       let cardLabels: { card_id: string; label_id: string }[] = [];
       let cardMembers: { card_id: string; user_id: string }[] = [];
       let checklists: { id: string; card_id: string }[] = [];
       let comments: { card_id: string }[] = [];
       let attachments: { card_id: string }[] = [];
-      if (cardIds.length > 0) {
+      if (allIds.length > 0) {
         const [clRes, cmRes, ckRes, coRes, atRes] = await Promise.all([
-          db.from("mkt_card_labels").select("card_id, label_id").in("card_id", cardIds),
-          db.from("mkt_card_members").select("card_id, user_id").in("card_id", cardIds),
-          db.from("mkt_checklists").select("id, card_id").in("card_id", cardIds),
-          db.from("mkt_comments").select("card_id").in("card_id", cardIds),
-          db.from("mkt_card_attachments").select("card_id").in("card_id", cardIds),
+          db.from("mkt_card_labels").select("card_id, label_id").in("card_id", allIds),
+          db.from("mkt_card_members").select("card_id, user_id").in("card_id", allIds),
+          db.from("mkt_checklists").select("id, card_id").in("card_id", allIds),
+          db.from("mkt_comments").select("card_id").in("card_id", allIds),
+          db.from("mkt_card_attachments").select("card_id").in("card_id", allIds),
         ]);
         cardLabels = clRes.data ?? [];
         cardMembers = cmRes.data ?? [];
@@ -85,21 +125,24 @@ export function useBoard(boardId: string | null) {
         comments = coRes.data ?? [];
         attachments = atRes.data ?? [];
       }
-      // Progresso de checklist: itens por checklist → agrega por cartão.
+      // Progresso e ATRASO de checklist (item com data vencida e não concluído).
       const checklistIds = checklists.map((c) => c.id);
-      let items: { checklist_id: string; is_done: boolean }[] = [];
+      let items: { checklist_id: string; is_done: boolean; due_date: string | null }[] = [];
       if (checklistIds.length > 0) {
-        const itRes = await db.from("mkt_checklist_items").select("checklist_id, is_done").in("checklist_id", checklistIds);
+        const itRes = await db.from("mkt_checklist_items").select("checklist_id, is_done, due_date").in("checklist_id", checklistIds);
         items = itRes.data ?? [];
       }
       const checklistToCard = new Map(checklists.map((c) => [c.id, c.card_id]));
       const doneByCard = new Map<string, number>();
       const totalByCard = new Map<string, number>();
+      const overdueByCard = new Map<string, boolean>();
+      const now = Date.now();
       for (const it of items) {
         const cid = checklistToCard.get(it.checklist_id);
         if (!cid) continue;
         totalByCard.set(cid, (totalByCard.get(cid) ?? 0) + 1);
         if (it.is_done) doneByCard.set(cid, (doneByCard.get(cid) ?? 0) + 1);
+        else if (it.due_date && new Date(it.due_date).getTime() < now) overdueByCard.set(cid, true);
       }
       const labelsByCard = new Map<string, string[]>();
       for (const cl of cardLabels) (labelsByCard.get(cl.card_id) ?? labelsByCard.set(cl.card_id, []).get(cl.card_id)!).push(cl.label_id);
@@ -110,16 +153,29 @@ export function useBoard(boardId: string | null) {
       const attByCard = new Map<string, number>();
       for (const a of attachments) attByCard.set(a.card_id, (attByCard.get(a.card_id) ?? 0) + 1);
 
-      const cards: CardSummary[] = (cardsRes.data ?? []).map((c: Record<string, unknown>) => ({
-        id: c.id as string, list_id: c.list_id as string, board_id: c.board_id as string,
-        title: (c.title as string) ?? "", description: (c.description as string) ?? null,
-        position: num(c.position), start_date: (c.start_date as string) ?? null,
-        due_date: (c.due_date as string) ?? null, is_complete: !!c.is_complete, cover: (c.cover as string) ?? null,
-        labelIds: labelsByCard.get(c.id as string) ?? [], memberIds: membersByCard.get(c.id as string) ?? [],
-        checklistDone: doneByCard.get(c.id as string) ?? 0, checklistTotal: totalByCard.get(c.id as string) ?? 0,
-        commentCount: commentsByCard.get(c.id as string) ?? 0,
-        attachmentCount: attByCard.get(c.id as string) ?? 0,
-      }));
+      const cards: CardSummary[] = boardCards.map((c) => {
+        const mirrorOf = (c.mirror_of as string | null) ?? null;
+        const original = mirrorOf ? originalById.get(mirrorOf) ?? null : null;
+        const removed = !!mirrorOf && !original;      // espelho de original apagado
+        const src = original ?? c;                     // fonte do conteúdo
+        const contentId = mirrorOf ? mirrorOf : (c.id as string); // id p/ badges
+        return {
+          id: c.id as string, list_id: c.list_id as string, board_id: c.board_id as string,
+          position: num(c.position),
+          title: removed ? "(original removido)" : ((src.title as string) ?? ""),
+          description: removed ? null : ((src.description as string) ?? null),
+          start_date: (src.start_date as string) ?? null,
+          due_date: (src.due_date as string) ?? null, is_complete: !!src.is_complete, cover: (src.cover as string) ?? null,
+          labelIds: labelsByCard.get(contentId) ?? [], memberIds: membersByCard.get(contentId) ?? [],
+          checklistDone: doneByCard.get(contentId) ?? 0, checklistTotal: totalByCard.get(contentId) ?? 0,
+          commentCount: commentsByCard.get(contentId) ?? 0,
+          attachmentCount: attByCard.get(contentId) ?? 0,
+          checklistOverdue: overdueByCard.get(contentId) ?? false,
+          mirrorOf,
+          mirrorSourceBoard: original ? (origBoardTitle.get(original.board_id as string) ?? null) : null,
+          mirrorSourceList: original ? (origListTitle.get(original.list_id as string) ?? null) : null,
+        };
+      });
 
       return { board: boardRes.data as Board, lists: (listsRes.data ?? []) as List[], cards, labels: (labelsRes.data ?? []) as Label[] };
     },

@@ -6,8 +6,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
   Tag, Clock, CheckSquare, User, Archive, Plus, X, Trash2, AlignLeft,
-  Paperclip, ExternalLink, FileText,
+  Paperclip, ExternalLink, FileText, Link2,
 } from "lucide-react";
+import { MirrorDialog } from "@/components/board/MirrorDialog";
 import { toast } from "sonner";
 import { useCardDetail, useCardMutations } from "@/hooks/useCardDetail";
 import { useTeamMembers } from "@/hooks/useTeamMembers";
@@ -97,6 +98,7 @@ export function CardModal({ cardId, boardId, labels, onClose }: {
   const [showLabels, setShowLabels] = useState(false);
   const [showMembers, setShowMembers] = useState(false);
   const [attachUrl, setAttachUrl] = useState("");
+  const [showMirror, setShowMirror] = useState(false);
 
   useEffect(() => {
     if (data) { setTitle(data.card.title); setDesc(data.card.description ?? ""); }
@@ -204,13 +206,28 @@ export function CardModal({ cardId, boardId, labels, onClose }: {
                         <button onClick={() => mut.removeChecklist.mutate({ id: cl.id })} className="p-1 text-muted-foreground hover:text-destructive"><Trash2 className="h-3.5 w-3.5" /></button>
                       </div>
                       <div className="h-1.5 bg-muted rounded-full overflow-hidden"><div className="h-full bg-emerald-500 transition-all" style={{ width: `${pct}%` }} /></div>
-                      {cl.items.map((it) => (
-                        <div key={it.id} className="flex items-center gap-2 group">
-                          <input type="checkbox" checked={it.is_done} onChange={(e) => mut.toggleItem.mutate({ id: it.id, done: e.target.checked })} />
-                          <span className={`text-sm flex-1 ${it.is_done ? "line-through text-muted-foreground" : "text-foreground"}`}>{it.text}</span>
-                          <button onClick={() => mut.removeItem.mutate({ id: it.id })} className="p-0.5 opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive"><X className="h-3.5 w-3.5" /></button>
-                        </div>
-                      ))}
+                      {cl.items.map((it) => {
+                        const itemOverdue = it.due_date && !it.is_done && new Date(it.due_date) < new Date();
+                        return (
+                          <div key={it.id} className="group">
+                            <div className="flex items-center gap-2">
+                              <input type="checkbox" checked={it.is_done} onChange={(e) => mut.toggleItem.mutate({ id: it.id, done: e.target.checked })} />
+                              <span className={`text-sm flex-1 ${it.is_done ? "line-through text-muted-foreground" : "text-foreground"}`}>{it.text}</span>
+                              <button onClick={() => mut.removeItem.mutate({ id: it.id })} className="p-0.5 opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive"><X className="h-3.5 w-3.5" /></button>
+                            </div>
+                            <div className="flex items-center gap-2 pl-6 mt-0.5">
+                              <input type="date" value={it.due_date ? it.due_date.slice(0, 10) : ""}
+                                onChange={(e) => mut.updateItem.mutate({ id: it.id, patch: { due_date: e.target.value ? new Date(e.target.value + "T12:00:00").toISOString() : null } })}
+                                className={`h-6 text-[11px] rounded border border-border bg-card px-1 ${itemOverdue ? "text-red-500 border-red-500/40" : "text-muted-foreground"}`} />
+                              <select value={it.assignee_id ?? ""} onChange={(e) => mut.updateItem.mutate({ id: it.id, patch: { assignee_id: e.target.value || null } })}
+                                className="h-6 text-[11px] rounded border border-border bg-card px-1 text-muted-foreground max-w-[140px]">
+                                <option value="">Responsável…</option>
+                                {team.map((t) => <option key={t.id} value={t.id}>{t.full_name ?? "Usuário"}</option>)}
+                              </select>
+                            </div>
+                          </div>
+                        );
+                      })}
                       {newItemFor === cl.id ? (
                         <div className="flex gap-1.5">
                           <Input autoFocus value={itemText} onChange={(e) => setItemText(e.target.value)}
@@ -320,11 +337,27 @@ export function CardModal({ cardId, boardId, labels, onClose }: {
                 )}
               </div>
 
+              <Button size="sm" variant="outline" className="gap-1.5" onClick={() => setShowMirror(true)}>
+                <Link2 className="h-3.5 w-3.5" /> Espelhar
+              </Button>
+
               <Button size="sm" variant="outline" className="gap-1.5 text-destructive ml-auto"
                 onClick={() => { if (confirm("Arquivar este cartão?")) { mut.updateCard.mutate({ is_archived: true, archived_at: new Date().toISOString() }, { onSuccess: onClose }); toast.success("Cartão arquivado."); } }}>
                 <Archive className="h-3.5 w-3.5" /> Arquivar
               </Button>
             </div>
+
+            {showMirror && (
+              <MirrorDialog
+                onConfirm={(targetListId, targetBoardId) => {
+                  mut.mirrorCard.mutate(
+                    { targetListId, targetBoardId, title: data.card.title, position: Date.now() },
+                    { onSuccess: () => toast.success("Cartão espelhado.") },
+                  );
+                }}
+                onClose={() => setShowMirror(false)}
+              />
+            )}
           </div>
         )}
       </DialogContent>
