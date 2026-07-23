@@ -228,6 +228,8 @@ export function useBoardLive(boardId: string | null) {
     const inval = () => {
       qc.invalidateQueries({ queryKey: ["mkt", "board", boardId] });
       qc.invalidateQueries({ queryKey: ["mkt", "boards"] });
+      qc.invalidateQueries({ queryKey: ["mkt", "field-values", boardId] });
+      qc.invalidateQueries({ queryKey: ["mkt", "custom-fields", boardId] });
     };
     const ch = supabase
       .channel(`mkt-board-${boardId}`)
@@ -238,6 +240,8 @@ export function useBoardLive(boardId: string | null) {
       .on("postgres_changes", { event: "*", schema: "public", table: "mkt_checklist_items" }, inval)
       .on("postgres_changes", { event: "*", schema: "public", table: "mkt_comments" }, inval)
       .on("postgres_changes", { event: "*", schema: "public", table: "mkt_card_attachments" }, inval)
+      .on("postgres_changes", { event: "*", schema: "public", table: "mkt_custom_fields" }, inval)
+      .on("postgres_changes", { event: "*", schema: "public", table: "mkt_card_field_values" }, inval)
       .subscribe();
     return () => { supabase.removeChannel(ch); };
   }, [qc, boardId]);
@@ -341,6 +345,14 @@ export function useBoardMutations(boardId?: string) {
     onSuccess: invBoard,
   });
 
+  const renameCard = useMutation({
+    mutationFn: async ({ id, title }: { id: string; title: string }) => {
+      const res = await db.from("mkt_cards").update({ title }).eq("id", id);
+      if (res.error) throw res.error;
+    },
+    onSuccess: invBoard,
+  });
+
   // Data do cartão (usado ao arrastar no Calendário/Timeline).
   const setCardDates = useMutation({
     mutationFn: async ({ id, due_date, start_date }: { id: string; due_date?: string | null; start_date?: string | null }) => {
@@ -353,7 +365,7 @@ export function useBoardMutations(boardId?: string) {
     onSuccess: invBoard,
   });
 
-  return { createBoard, createList, renameList, moveList, archiveList, setListColor, createCard, moveCard, archiveCard, setCardDates };
+  return { createBoard, createList, renameList, moveList, archiveList, setListColor, createCard, moveCard, archiveCard, renameCard, setCardDates };
 }
 
 export { POS_GAP };

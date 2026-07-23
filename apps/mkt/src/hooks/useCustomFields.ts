@@ -32,6 +32,30 @@ export function useCustomFields(boardId: string | null) {
   });
 }
 
+// Valores de campos de TODOS os cartões do quadro → Map<cardId, {fieldId: value}>.
+// Usado na view de Tabela (D3). Busca os cartões do quadro e depois os valores.
+export function useBoardFieldValues(boardId: string | null) {
+  return useQuery({
+    queryKey: ["mkt", "field-values", boardId],
+    enabled: !!boardId,
+    queryFn: async (): Promise<Map<string, Record<string, unknown>>> => {
+      const cardsRes = await db.from("mkt_cards").select("id").eq("board_id", boardId).eq("is_archived", false);
+      if (cardsRes.error) throw cardsRes.error;
+      const ids: string[] = (cardsRes.data ?? []).map((c: { id: string }) => c.id);
+      const map = new Map<string, Record<string, unknown>>();
+      if (ids.length === 0) return map;
+      const fvRes = await db.from("mkt_card_field_values").select("card_id, field_id, value").in("card_id", ids);
+      if (fvRes.error) throw fvRes.error;
+      for (const r of (fvRes.data ?? []) as { card_id: string; field_id: string; value: unknown }[]) {
+        const rec = map.get(r.card_id) ?? {};
+        rec[r.field_id] = r.value;
+        map.set(r.card_id, rec);
+      }
+      return map;
+    },
+  });
+}
+
 export function useCustomFieldMutations(boardId: string | null) {
   const qc = useQueryClient();
   const inval = () => {
@@ -63,5 +87,20 @@ export function useCustomFieldMutations(boardId: string | null) {
     onSuccess: inval,
   });
 
-  return { createField, updateField, deleteField };
+  // Define o valor de um campo para um cartão QUALQUER (edição inline na Tabela).
+  const setFieldValueFor = useMutation({
+    mutationFn: async ({ cardId, fieldId, value }: { cardId: string; fieldId: string; value: unknown }) => {
+      const empty = value === null || value === undefined || value === "" || (Array.isArray(value) && value.length === 0);
+      if (empty) {
+        const res = await db.from("mkt_card_field_values").delete().eq("card_id", cardId).eq("field_id", fieldId);
+        if (res.error) throw res.error;
+      } else {
+        const res = await db.from("mkt_card_field_values").upsert({ card_id: cardId, field_id: fieldId, value, updated_at: new Date().toISOString() }, { onConflict: "card_id,field_id" });
+        if (res.error) throw res.error;
+      }
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["mkt", "field-values", boardId] }),
+  });
+
+  return { createField, updateField, deleteField, setFieldValueFor };
 }
