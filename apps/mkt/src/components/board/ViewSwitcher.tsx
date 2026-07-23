@@ -6,6 +6,7 @@ const VIEWS: { key: string; label: string; path: (id: string) => string }[] = [
   { key: "calendario", label: "Calendário", path: (id) => `/quadros/${id}/calendario` },
   { key: "timeline", label: "Timeline", path: (id) => `/quadros/${id}/timeline` },
   { key: "tabela", label: "Tabela", path: (id) => `/quadros/${id}/tabela` },
+  { key: "dashboard", label: "Dashboard", path: (id) => `/quadros/${id}/dashboard` },
 ];
 
 export function ViewSwitcher({ boardId, current }: { boardId: string; current: string }) {
