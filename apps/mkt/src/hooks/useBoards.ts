@@ -28,6 +28,7 @@ export interface CardSummary {
   labelIds: string[]; memberIds: string[];
   checklistDone: number; checklistTotal: number; commentCount: number; attachmentCount: number;
   checklistOverdue: boolean;
+  location_lat: number | null; location_lng: number | null; location_name: string | null;
   // Espelho: quando não-nulo, o conteúdo acima vem do cartão ORIGINAL (mirrorOf).
   mirrorOf: string | null; mirrorSourceBoard: string | null; mirrorSourceList: string | null;
 }
@@ -90,7 +91,7 @@ export function useBoard(boardId: string | null) {
       const origListTitle = new Map<string, string>();
       if (originalIds.length > 0) {
         const oRes = await db.from("mkt_cards")
-          .select("id, title, description, position, start_date, due_date, is_complete, cover, list_id, board_id, is_archived")
+          .select("id, title, description, position, start_date, due_date, is_complete, cover, location_lat, location_lng, location_name, list_id, board_id, is_archived")
           .in("id", originalIds);
         const origs = (oRes.data ?? []) as Record<string, unknown>[];
         for (const o of origs) originalById.set(o.id as string, o);
@@ -166,6 +167,7 @@ export function useBoard(boardId: string | null) {
           description: removed ? null : ((src.description as string) ?? null),
           start_date: (src.start_date as string) ?? null,
           due_date: (src.due_date as string) ?? null, is_complete: !!src.is_complete, cover: (src.cover as string) ?? null,
+          location_lat: (src.location_lat as number) ?? null, location_lng: (src.location_lng as number) ?? null, location_name: (src.location_name as string) ?? null,
           labelIds: labelsByCard.get(contentId) ?? [], memberIds: membersByCard.get(contentId) ?? [],
           checklistDone: doneByCard.get(contentId) ?? 0, checklistTotal: totalByCard.get(contentId) ?? 0,
           commentCount: commentsByCard.get(contentId) ?? 0,

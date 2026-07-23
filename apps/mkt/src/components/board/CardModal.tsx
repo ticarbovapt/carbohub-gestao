@@ -6,9 +6,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
   Tag, Clock, CheckSquare, User, Archive, Plus, X, Trash2, AlignLeft,
-  Paperclip, ExternalLink, FileText, Link2,
+  Paperclip, ExternalLink, FileText, Link2, MapPin, Loader2,
 } from "lucide-react";
 import { MirrorDialog } from "@/components/board/MirrorDialog";
+import { geocodeText } from "@/hooks/useGeocode";
 import { toast } from "sonner";
 import { useCardDetail, useCardMutations } from "@/hooks/useCardDetail";
 import { useTeamMembers } from "@/hooks/useTeamMembers";
@@ -53,9 +54,11 @@ export function CardModal({ cardId, boardId, labels, onClose }: {
   const [showMembers, setShowMembers] = useState(false);
   const [attachUrl, setAttachUrl] = useState("");
   const [showMirror, setShowMirror] = useState(false);
+  const [addr, setAddr] = useState("");
+  const [geoLoading, setGeoLoading] = useState(false);
 
   useEffect(() => {
-    if (data) { setTitle(data.card.title); setDesc(data.card.description ?? ""); }
+    if (data) { setTitle(data.card.title); setDesc(data.card.description ?? ""); setAddr(data.card.location_name ?? ""); }
   }, [data?.card.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const saveTitle = () => {
@@ -229,6 +232,29 @@ export function CardModal({ cardId, boardId, labels, onClose }: {
                   </div>
                 ))}
               </div>
+            </Section>
+
+            {/* Localização */}
+            <Section icon={MapPin} title="Localização">
+              <div className="flex gap-1.5">
+                <Input value={addr} onChange={(e) => setAddr(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); (async () => { if (!addr.trim()) return; setGeoLoading(true); const r = await geocodeText(addr); setGeoLoading(false); if (r) mut.updateCard.mutate({ location_name: addr.trim(), location_lat: r.lat, location_lng: r.lng }); else toast.error("Endereço não encontrado."); })(); } }}
+                  placeholder="Endereço ou local…" className="h-8 text-sm" />
+                <Button size="sm" disabled={!addr.trim() || geoLoading}
+                  onClick={async () => { setGeoLoading(true); const r = await geocodeText(addr); setGeoLoading(false); if (r) mut.updateCard.mutate({ location_name: addr.trim(), location_lat: r.lat, location_lng: r.lng }); else toast.error("Endereço não encontrado."); }}>
+                  {geoLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Localizar"}
+                </Button>
+              </div>
+              {data.card.location_lat != null && data.card.location_lng != null ? (
+                <div className="flex items-center gap-2 text-xs text-muted-foreground mt-1">
+                  <MapPin className="h-3.5 w-3.5 text-primary" />
+                  <span>{data.card.location_lat.toFixed(5)}, {data.card.location_lng.toFixed(5)}</span>
+                  <a href={`https://www.openstreetmap.org/?mlat=${data.card.location_lat}&mlon=${data.card.location_lng}#map=16/${data.card.location_lat}/${data.card.location_lng}`} target="_blank" rel="noreferrer" className="text-primary">ver no mapa</a>
+                  <button onClick={() => { mut.updateCard.mutate({ location_name: null, location_lat: null, location_lng: null }); setAddr(""); }} className="text-destructive hover:underline">remover</button>
+                </div>
+              ) : (
+                <p className="text-[11px] text-muted-foreground mt-1">Sem localização — busque um endereço para plotar no Mapa.</p>
+              )}
             </Section>
 
             {/* Comentários */}

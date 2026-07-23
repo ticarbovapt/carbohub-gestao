@@ -10,6 +10,7 @@ import BoardCalendar from "./pages/BoardCalendar";
 import BoardTimeline from "./pages/BoardTimeline";
 import BoardTable from "./pages/BoardTable";
 import BoardDashboard from "./pages/BoardDashboard";
+import BoardMap from "./pages/BoardMap";
 import Profile from "./pages/Profile";
 import MinhaEquipe from "./pages/MinhaEquipe";
 import BugReports from "./pages/BugReports";
@@ -30,6 +31,7 @@ export default function App() {
         <Route path="/quadros/:boardId/timeline" element={<BoardTimeline />} />
         <Route path="/quadros/:boardId/tabela" element={<BoardTable />} />
         <Route path="/quadros/:boardId/dashboard" element={<BoardDashboard />} />
+        <Route path="/quadros/:boardId/mapa" element={<BoardMap />} />
         <Route path="/perfil" element={<Profile />} />
         <Route path="/equipe" element={<MinhaEquipe />} />
         <Route path="/bugs" element={<BugReports />} />

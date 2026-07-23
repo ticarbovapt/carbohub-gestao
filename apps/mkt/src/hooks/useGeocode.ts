@@ -17,6 +17,13 @@ async function query(q: string): Promise<GeocodingResult | null> {
   return null;
 }
 
+// Busca por TEXTO LIVRE (um campo de endereço único) — usado no cartão do
+// Trello. Mesmo provedor (Nominatim/OSM), sem chave.
+export async function geocodeText(q: string): Promise<GeocodingResult | null> {
+  if (!q.trim()) return null;
+  return query(q.trim());
+}
+
 export function useGeocode() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);

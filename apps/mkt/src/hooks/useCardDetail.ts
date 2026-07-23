@@ -14,6 +14,7 @@ const db = supabase as unknown as {
 export interface CardFull {
   id: string; board_id: string; list_id: string; title: string; description: string | null;
   start_date: string | null; due_date: string | null; is_complete: boolean; cover: string | null;
+  location_lat: number | null; location_lng: number | null; location_name: string | null;
 }
 export interface ChecklistItem {
   id: string; checklist_id: string; text: string; is_done: boolean; position: number;
@@ -46,7 +47,7 @@ export function useCardDetail(cardId: string | null) {
     queryKey: ["mkt", "card", cardId],
     enabled: !!cardId,
     queryFn: async (): Promise<CardDetail | null> => {
-      const cardRes = await db.from("mkt_cards").select("id, board_id, list_id, title, description, start_date, due_date, is_complete, cover").eq("id", cardId).maybeSingle();
+      const cardRes = await db.from("mkt_cards").select("id, board_id, list_id, title, description, start_date, due_date, is_complete, cover, location_lat, location_lng, location_name").eq("id", cardId).maybeSingle();
       if (cardRes.error) throw cardRes.error;
       if (!cardRes.data) return null;
 
