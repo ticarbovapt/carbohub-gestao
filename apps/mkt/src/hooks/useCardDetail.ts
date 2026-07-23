@@ -30,6 +30,7 @@ export interface CardDetail {
   checklists: Checklist[];
   comments: Comment[];
   attachments: Attachment[];
+  fieldValues: Record<string, unknown>; // field_id → value (jsonb)
 }
 
 async function uid() {
@@ -46,12 +47,13 @@ export function useCardDetail(cardId: string | null) {
       if (cardRes.error) throw cardRes.error;
       if (!cardRes.data) return null;
 
-      const [clabRes, memRes, ckRes, coRes, attRes] = await Promise.all([
+      const [clabRes, memRes, ckRes, coRes, attRes, fvRes] = await Promise.all([
         db.from("mkt_card_labels").select("label_id").eq("card_id", cardId),
         db.from("mkt_card_members").select("user_id").eq("card_id", cardId),
         db.from("mkt_checklists").select("*").eq("card_id", cardId).order("position"),
         db.from("mkt_comments").select("*").eq("card_id", cardId).order("created_at", { ascending: false }),
         db.from("mkt_card_attachments").select("*").eq("card_id", cardId).order("created_at", { ascending: false }),
+        db.from("mkt_card_field_values").select("field_id, value").eq("card_id", cardId),
       ]);
 
       const checklists = (ckRes.data ?? []) as { id: string; card_id: string; title: string; position: number }[];
@@ -81,6 +83,7 @@ export function useCardDetail(cardId: string | null) {
         checklists: checklists.map((c) => ({ ...c, items: itemsByCl.get(c.id) ?? [] })),
         comments: comments.map((c) => ({ ...c, authorName: nameById.get(c.user_id)?.name ?? null, authorAvatar: nameById.get(c.user_id)?.avatar ?? null })),
         attachments: (attRes.data ?? []) as Attachment[],
+        fieldValues: Object.fromEntries((fvRes.data ?? []).map((r: { field_id: string; value: unknown }) => [r.field_id, r.value])),
       };
     },
   });
@@ -166,6 +169,18 @@ export function useCardMutations(cardId: string | null, boardId?: string) {
     if (res.error) throw res.error;
   });
 
+  // Valor de Campo Personalizado: value null/"" limpa (remove a linha); senão upsert.
+  const setFieldValue = run(async ({ fieldId, value }: { fieldId: string; value: unknown }) => {
+    const empty = value === null || value === undefined || value === "" || (Array.isArray(value) && value.length === 0);
+    if (empty) {
+      const res = await db.from("mkt_card_field_values").delete().eq("card_id", cardId).eq("field_id", fieldId);
+      if (res.error) throw res.error;
+    } else {
+      const res = await db.from("mkt_card_field_values").upsert({ card_id: cardId, field_id: fieldId, value, updated_at: new Date().toISOString() }, { onConflict: "card_id,field_id" });
+      if (res.error) throw res.error;
+    }
+  });
+
   const addComment = useMutation({
     mutationFn: async ({ body }: { body: string }) => {
       const res = await db.from("mkt_comments").insert({ card_id: cardId, user_id: await uid(), body });
@@ -175,5 +190,5 @@ export function useCardMutations(cardId: string | null, boardId?: string) {
     onSuccess: inval,
   });
 
-  return { updateCard, toggleLabel, createLabel, toggleMember, addChecklist, removeChecklist, addItem, toggleItem, removeItem, addAttachment, removeAttachment, addComment };
+  return { updateCard, toggleLabel, createLabel, toggleMember, addChecklist, removeChecklist, addItem, toggleItem, removeItem, addAttachment, removeAttachment, setFieldValue, addComment };
 }

@@ -9,7 +9,7 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Plus, X, GripVertical, MoreHorizontal, Clock, CheckSquare, MessageSquare, AlignLeft, Paperclip } from "lucide-react";
+import { ArrowLeft, Plus, X, GripVertical, MoreHorizontal, Clock, CheckSquare, MessageSquare, AlignLeft, Paperclip, Settings2 } from "lucide-react";
 import { toast } from "sonner";
 import {
   useBoard, useBoardLive, useBoardMutations, POS_GAP,
@@ -18,6 +18,7 @@ import {
 import { positionForIndex } from "@/lib/mktPosition";
 import { BOARD_BG, LABEL_COLORS } from "@/lib/mktTheme";
 import { CardModal } from "@/components/board/CardModal";
+import { BoardFieldsDialog } from "@/components/board/BoardFieldsDialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
@@ -154,6 +155,7 @@ export default function Board() {
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
 
   const [openCardId, setOpenCardId] = useState<string | null>(null);
+  const [fieldsOpen, setFieldsOpen] = useState(false);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [addingList, setAddingList] = useState(false);
   const [newList, setNewList] = useState("");
@@ -239,6 +241,9 @@ export default function Board() {
       <div className="flex items-center gap-3 px-4 py-2.5 bg-black/20 backdrop-blur-sm">
         <button onClick={() => navigate("/quadros")} className="p-1.5 rounded-md hover:bg-white/10 text-white"><ArrowLeft className="h-4 w-4" /></button>
         <h1 className="text-lg font-bold text-white drop-shadow">{board.title}</h1>
+        <button onClick={() => setFieldsOpen(true)} className="ml-auto flex items-center gap-1.5 text-sm text-white/90 hover:text-white bg-white/15 hover:bg-white/25 rounded-md px-2.5 py-1.5" title="Campos personalizados">
+          <Settings2 className="h-4 w-4" /> Campos
+        </button>
       </div>
 
       {/* Colunas */}
@@ -287,6 +292,7 @@ export default function Board() {
       {openCardId && (
         <CardModal cardId={openCardId} boardId={boardId} labels={labels} onClose={() => setOpenCardId(null)} />
       )}
+      {fieldsOpen && <BoardFieldsDialog boardId={boardId} onClose={() => setFieldsOpen(false)} />}
     </div>
   );
 }

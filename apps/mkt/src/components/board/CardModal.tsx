@@ -11,7 +11,9 @@ import {
 import { toast } from "sonner";
 import { useCardDetail, useCardMutations } from "@/hooks/useCardDetail";
 import { useTeamMembers } from "@/hooks/useTeamMembers";
+import { useCustomFields, type CustomField } from "@/hooks/useCustomFields";
 import { LABEL_COLORS, LABEL_COLOR_KEYS } from "@/lib/mktTheme";
+import { ListChecks } from "lucide-react";
 import type { Label } from "@/hooks/useBoards";
 import { diceBearUrl } from "@/components/ui/profile-avatar";
 
@@ -21,6 +23,53 @@ const toLocalInput = (iso: string | null) => {
   const off = d.getTimezoneOffset();
   return new Date(d.getTime() - off * 60000).toISOString().slice(0, 16);
 };
+
+// Input de um Campo Personalizado, renderizado conforme o tipo.
+function CustomFieldInput({ field, value, onSave }: { field: CustomField; value: unknown; onSave: (v: unknown) => void }) {
+  const [local, setLocal] = useState<string>(value == null ? "" : String(value));
+  const commonInput = "h-8 text-sm w-full rounded-md border border-border bg-card px-2";
+
+  if (field.type === "checkbox") {
+    return <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={value === true} onChange={(e) => onSave(e.target.checked)} /> {field.name}</label>;
+  }
+  if (field.type === "select") {
+    return (
+      <select value={(value as string) ?? ""} onChange={(e) => onSave(e.target.value || null)} className={commonInput}>
+        <option value="">—</option>
+        {field.options.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
+      </select>
+    );
+  }
+  if (field.type === "multiselect") {
+    const arr = Array.isArray(value) ? (value as string[]) : [];
+    return (
+      <div className="flex flex-wrap gap-1">
+        {field.options.map((o) => {
+          const on = arr.includes(o.id);
+          return (
+            <button key={o.id} onClick={() => onSave(on ? arr.filter((x) => x !== o.id) : [...arr, o.id])}
+              className={`h-6 px-2 rounded text-xs font-medium ${on ? "text-white" : "text-muted-foreground bg-muted"}`}
+              style={on ? { background: LABEL_COLORS[o.color ?? "blue"] } : undefined}>{o.label}</button>
+          );
+        })}
+        {field.options.length === 0 && <span className="text-xs text-muted-foreground">Sem opções — configure em ⚙️ Campos.</span>}
+      </div>
+    );
+  }
+  if (field.type === "date") {
+    return <input type="date" value={(value as string) ?? ""} onChange={(e) => onSave(e.target.value || null)} className={commonInput} />;
+  }
+  // text / number / url
+  return (
+    <div className="flex items-center gap-1.5">
+      <input type={field.type === "number" ? "number" : "text"} value={local} onChange={(e) => setLocal(e.target.value)}
+        onBlur={() => onSave(field.type === "number" ? (local === "" ? null : Number(local)) : (local || null))}
+        onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
+        placeholder={field.type === "url" ? "https://…" : ""} className={commonInput} />
+      {field.type === "url" && value ? <a href={String(value)} target="_blank" rel="noreferrer" className="text-primary text-xs shrink-0">abrir</a> : null}
+    </div>
+  );
+}
 
 function Section({ icon: Icon, title, children }: { icon: React.ElementType; title: string; children: React.ReactNode }) {
   return (
@@ -37,6 +86,7 @@ export function CardModal({ cardId, boardId, labels, onClose }: {
   const { data, isLoading } = useCardDetail(cardId);
   const mut = useCardMutations(cardId, boardId);
   const { data: team = [] } = useTeamMembers();
+  const { data: fields = [] } = useCustomFields(boardId);
 
   const [title, setTitle] = useState("");
   const [desc, setDesc] = useState("");
@@ -108,6 +158,20 @@ export function CardModal({ cardId, boardId, labels, onClose }: {
                 </label>
               </div>
             </Section>
+
+            {/* Campos Personalizados */}
+            {fields.length > 0 && (
+              <Section icon={ListChecks} title="Campos">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {fields.map((f) => (
+                    <div key={f.id} className="space-y-1">
+                      {f.type !== "checkbox" && <p className="text-[11px] text-muted-foreground">{f.name || "—"}</p>}
+                      <CustomFieldInput field={f} value={data.fieldValues[f.id]} onSave={(v) => mut.setFieldValue.mutate({ fieldId: f.id, value: v })} />
+                    </div>
+                  ))}
+                </div>
+              </Section>
+            )}
 
             {/* Descrição */}
             <Section icon={AlignLeft} title="Descrição">
