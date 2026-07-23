@@ -9,6 +9,8 @@ import {
   Paperclip, ExternalLink, FileText, Link2, MapPin, Loader2,
 } from "lucide-react";
 import { MirrorDialog } from "@/components/board/MirrorDialog";
+import { AIDescriptionTools } from "@/components/board/AIDescriptionTools";
+import { AISummarize } from "@/components/board/AISummarize";
 import { geocodeText } from "@/hooks/useGeocode";
 import { toast } from "sonner";
 import { useCardDetail, useCardMutations } from "@/hooks/useCardDetail";
@@ -138,6 +140,7 @@ export function CardModal({ cardId, boardId, labels, onClose }: {
                 <div className="space-y-1.5">
                   <textarea autoFocus value={desc} onChange={(e) => setDesc(e.target.value)} rows={4}
                     className="w-full text-sm rounded-lg border border-border bg-card p-2 resize-y focus:outline-none focus:ring-1 focus:ring-primary" />
+                  <AIDescriptionTools text={desc} onApply={setDesc} />
                   <div className="flex gap-1.5">
                     <Button size="sm" onClick={() => { mut.updateCard.mutate({ description: desc }); setEditDesc(false); }}>Salvar</Button>
                     <button onClick={() => { setDesc(data.card.description ?? ""); setEditDesc(false); }} className="p-1.5 text-muted-foreground"><X className="h-4 w-4" /></button>
@@ -259,6 +262,30 @@ export function CardModal({ cardId, boardId, labels, onClose }: {
 
             {/* Comentários */}
             <Section icon={AlignLeft} title="Comentários">
+              <AISummarize
+                buildContext={() => {
+                  const parts: string[] = [];
+                  if (data.checklists.length) {
+                    parts.push("CHECKLISTS:");
+                    for (const cl of data.checklists) {
+                      parts.push(`- ${cl.title}:`);
+                      for (const it of cl.items) {
+                        const who = it.assignee_id ? (team.find((t) => t.id === it.assignee_id)?.full_name ?? "") : "";
+                        const due = it.due_date ? ` (vence ${new Date(it.due_date).toLocaleDateString("pt-BR")})` : "";
+                        parts.push(`  [${it.is_done ? "x" : " "}] ${it.text}${due}${who ? ` — resp: ${who}` : ""}`);
+                      }
+                    }
+                  }
+                  if (data.comments.length) {
+                    parts.push("COMENTÁRIOS:");
+                    for (const c of data.comments) {
+                      parts.push(`- ${c.authorName ?? "Usuário"} (${new Date(c.created_at).toLocaleString("pt-BR")}): ${c.body}`);
+                    }
+                  }
+                  return parts.join("\n");
+                }}
+                onPost={(text) => mut.addComment.mutate({ body: `🤖 Resumo por IA:\n${text}` })}
+              />
               <div className="flex gap-1.5">
                 <Input value={comment} onChange={(e) => setComment(e.target.value)}
                   onKeyDown={(e) => { if (e.key === "Enter" && comment.trim()) { mut.addComment.mutate({ body: comment.trim() }); setComment(""); } }}
