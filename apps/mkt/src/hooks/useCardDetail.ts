@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { isDriveUrl, parseDriveFileId, driveThumbUrl, guessNameFromUrl } from "@/lib/mktDrive";
 
 // Detalhe do cartão (modal): campos, etiquetas, membros, checklists+itens,
 // comentários. Mutações granulares. Ao alterar, invalida o cartão E o quadro
@@ -17,12 +18,18 @@ export interface CardFull {
 export interface ChecklistItem { id: string; checklist_id: string; text: string; is_done: boolean; position: number; }
 export interface Checklist { id: string; card_id: string; title: string; position: number; items: ChecklistItem[]; }
 export interface Comment { id: string; card_id: string; user_id: string; body: string; created_at: string; authorName: string | null; authorAvatar: string | null; }
+export interface Attachment {
+  id: string; card_id: string; kind: "drive" | "link"; name: string;
+  external_url: string; drive_file_id: string | null; thumbnail_url: string | null;
+  mime_type: string | null; created_at: string;
+}
 export interface CardDetail {
   card: CardFull;
   labelIds: string[];
   memberIds: string[];
   checklists: Checklist[];
   comments: Comment[];
+  attachments: Attachment[];
 }
 
 async function uid() {
@@ -39,11 +46,12 @@ export function useCardDetail(cardId: string | null) {
       if (cardRes.error) throw cardRes.error;
       if (!cardRes.data) return null;
 
-      const [clabRes, memRes, ckRes, coRes] = await Promise.all([
+      const [clabRes, memRes, ckRes, coRes, attRes] = await Promise.all([
         db.from("mkt_card_labels").select("label_id").eq("card_id", cardId),
         db.from("mkt_card_members").select("user_id").eq("card_id", cardId),
         db.from("mkt_checklists").select("*").eq("card_id", cardId).order("position"),
         db.from("mkt_comments").select("*").eq("card_id", cardId).order("created_at", { ascending: false }),
+        db.from("mkt_card_attachments").select("*").eq("card_id", cardId).order("created_at", { ascending: false }),
       ]);
 
       const checklists = (ckRes.data ?? []) as { id: string; card_id: string; title: string; position: number }[];
@@ -72,6 +80,7 @@ export function useCardDetail(cardId: string | null) {
         memberIds: (memRes.data ?? []).map((r: { user_id: string }) => r.user_id),
         checklists: checklists.map((c) => ({ ...c, items: itemsByCl.get(c.id) ?? [] })),
         comments: comments.map((c) => ({ ...c, authorName: nameById.get(c.user_id)?.name ?? null, authorAvatar: nameById.get(c.user_id)?.avatar ?? null })),
+        attachments: (attRes.data ?? []) as Attachment[],
       };
     },
   });
@@ -136,6 +145,27 @@ export function useCardMutations(cardId: string | null, boardId?: string) {
     if (res.error) throw res.error;
   });
 
+  const addAttachment = run(async ({ url, name }: { url: string; name?: string }) => {
+    const clean = url.trim();
+    if (!clean) throw new Error("Cole um link.");
+    const drive = isDriveUrl(clean);
+    const fileId = drive ? parseDriveFileId(clean) : null;
+    const res = await db.from("mkt_card_attachments").insert({
+      card_id: cardId,
+      kind: fileId ? "drive" : "link",
+      name: (name && name.trim()) || guessNameFromUrl(clean),
+      external_url: clean,
+      drive_file_id: fileId,
+      thumbnail_url: fileId ? driveThumbUrl(fileId) : null,
+      created_by: await uid(),
+    });
+    if (res.error) throw res.error;
+  });
+  const removeAttachment = run(async ({ id }: { id: string }) => {
+    const res = await db.from("mkt_card_attachments").delete().eq("id", id);
+    if (res.error) throw res.error;
+  });
+
   const addComment = useMutation({
     mutationFn: async ({ body }: { body: string }) => {
       const res = await db.from("mkt_comments").insert({ card_id: cardId, user_id: await uid(), body });
@@ -145,5 +175,5 @@ export function useCardMutations(cardId: string | null, boardId?: string) {
     onSuccess: inval,
   });
 
-  return { updateCard, toggleLabel, createLabel, toggleMember, addChecklist, removeChecklist, addItem, toggleItem, removeItem, addComment };
+  return { updateCard, toggleLabel, createLabel, toggleMember, addChecklist, removeChecklist, addItem, toggleItem, removeItem, addAttachment, removeAttachment, addComment };
 }

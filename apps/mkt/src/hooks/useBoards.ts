@@ -26,7 +26,7 @@ export interface CardSummary {
   description: string | null; position: number;
   start_date: string | null; due_date: string | null; is_complete: boolean; cover: string | null;
   labelIds: string[]; memberIds: string[];
-  checklistDone: number; checklistTotal: number; commentCount: number;
+  checklistDone: number; checklistTotal: number; commentCount: number; attachmentCount: number;
 }
 export interface BoardData { board: Board; lists: List[]; cards: CardSummary[]; labels: Label[]; }
 
@@ -70,17 +70,20 @@ export function useBoard(boardId: string | null) {
       let cardMembers: { card_id: string; user_id: string }[] = [];
       let checklists: { id: string; card_id: string }[] = [];
       let comments: { card_id: string }[] = [];
+      let attachments: { card_id: string }[] = [];
       if (cardIds.length > 0) {
-        const [clRes, cmRes, ckRes, coRes] = await Promise.all([
+        const [clRes, cmRes, ckRes, coRes, atRes] = await Promise.all([
           db.from("mkt_card_labels").select("card_id, label_id").in("card_id", cardIds),
           db.from("mkt_card_members").select("card_id, user_id").in("card_id", cardIds),
           db.from("mkt_checklists").select("id, card_id").in("card_id", cardIds),
           db.from("mkt_comments").select("card_id").in("card_id", cardIds),
+          db.from("mkt_card_attachments").select("card_id").in("card_id", cardIds),
         ]);
         cardLabels = clRes.data ?? [];
         cardMembers = cmRes.data ?? [];
         checklists = ckRes.data ?? [];
         comments = coRes.data ?? [];
+        attachments = atRes.data ?? [];
       }
       // Progresso de checklist: itens por checklist → agrega por cartão.
       const checklistIds = checklists.map((c) => c.id);
@@ -104,6 +107,8 @@ export function useBoard(boardId: string | null) {
       for (const cm of cardMembers) (membersByCard.get(cm.card_id) ?? membersByCard.set(cm.card_id, []).get(cm.card_id)!).push(cm.user_id);
       const commentsByCard = new Map<string, number>();
       for (const co of comments) commentsByCard.set(co.card_id, (commentsByCard.get(co.card_id) ?? 0) + 1);
+      const attByCard = new Map<string, number>();
+      for (const a of attachments) attByCard.set(a.card_id, (attByCard.get(a.card_id) ?? 0) + 1);
 
       const cards: CardSummary[] = (cardsRes.data ?? []).map((c: Record<string, unknown>) => ({
         id: c.id as string, list_id: c.list_id as string, board_id: c.board_id as string,
@@ -113,6 +118,7 @@ export function useBoard(boardId: string | null) {
         labelIds: labelsByCard.get(c.id as string) ?? [], memberIds: membersByCard.get(c.id as string) ?? [],
         checklistDone: doneByCard.get(c.id as string) ?? 0, checklistTotal: totalByCard.get(c.id as string) ?? 0,
         commentCount: commentsByCard.get(c.id as string) ?? 0,
+        attachmentCount: attByCard.get(c.id as string) ?? 0,
       }));
 
       return { board: boardRes.data as Board, lists: (listsRes.data ?? []) as List[], cards, labels: (labelsRes.data ?? []) as Label[] };
@@ -137,6 +143,7 @@ export function useBoardLive(boardId: string | null) {
       .on("postgres_changes", { event: "*", schema: "public", table: "mkt_card_members" }, inval)
       .on("postgres_changes", { event: "*", schema: "public", table: "mkt_checklist_items" }, inval)
       .on("postgres_changes", { event: "*", schema: "public", table: "mkt_comments" }, inval)
+      .on("postgres_changes", { event: "*", schema: "public", table: "mkt_card_attachments" }, inval)
       .subscribe();
     return () => { supabase.removeChannel(ch); };
   }, [qc, boardId]);

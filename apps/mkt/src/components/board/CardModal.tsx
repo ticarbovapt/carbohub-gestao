@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
   Tag, Clock, CheckSquare, User, Archive, Plus, X, Trash2, AlignLeft,
+  Paperclip, ExternalLink, FileText,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useCardDetail, useCardMutations } from "@/hooks/useCardDetail";
@@ -45,6 +46,7 @@ export function CardModal({ cardId, boardId, labels, onClose }: {
   const [itemText, setItemText] = useState("");
   const [showLabels, setShowLabels] = useState(false);
   const [showMembers, setShowMembers] = useState(false);
+  const [attachUrl, setAttachUrl] = useState("");
 
   useEffect(() => {
     if (data) { setTitle(data.card.title); setDesc(data.card.description ?? ""); }
@@ -158,6 +160,39 @@ export function CardModal({ cardId, boardId, labels, onClose }: {
                   );
                 })}
                 <button onClick={() => mut.addChecklist.mutate({ title: "Checklist" })} className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1"><Plus className="h-3 w-3" /> Adicionar checklist</button>
+              </div>
+            </Section>
+
+            {/* Anexos (Google Drive / links) */}
+            <Section icon={Paperclip} title="Anexos">
+              <div className="flex gap-1.5">
+                <Input value={attachUrl} onChange={(e) => setAttachUrl(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter" && attachUrl.trim()) { mut.addAttachment.mutate({ url: attachUrl }, { onSuccess: () => setAttachUrl("") }); } }}
+                  placeholder="Colar link do Google Drive ou URL…" className="h-8 text-sm" />
+                <Button size="sm" disabled={!attachUrl.trim()} onClick={() => mut.addAttachment.mutate({ url: attachUrl }, { onSuccess: () => setAttachUrl("") })}>Anexar</Button>
+              </div>
+              <p className="text-[11px] text-muted-foreground">
+                Link do Drive: quando você sobe uma nova versão do arquivo no Drive, o cartão passa a mostrar a versão nova automaticamente.
+              </p>
+              <div className="space-y-1.5 mt-1">
+                {data.attachments.map((a) => (
+                  <div key={a.id} className="flex items-center gap-2.5 rounded-lg border border-border p-1.5 group">
+                    {a.thumbnail_url ? (
+                      <img src={a.thumbnail_url} alt="" className="h-10 w-14 rounded object-cover bg-muted" referrerPolicy="no-referrer"
+                        onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
+                    ) : (
+                      <div className="h-10 w-14 rounded bg-muted flex items-center justify-center text-muted-foreground">
+                        <FileText className="h-5 w-5" />
+                      </div>
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm text-foreground truncate">{a.name}</p>
+                      <span className="text-[10px] text-muted-foreground">{a.kind === "drive" ? "Google Drive" : "Link"}</span>
+                    </div>
+                    <a href={a.external_url} target="_blank" rel="noreferrer" className="p-1.5 text-muted-foreground hover:text-foreground" title="Abrir"><ExternalLink className="h-4 w-4" /></a>
+                    <button onClick={() => mut.removeAttachment.mutate({ id: a.id })} className="p-1.5 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100" title="Remover"><Trash2 className="h-4 w-4" /></button>
+                  </div>
+                ))}
               </div>
             </Section>
 

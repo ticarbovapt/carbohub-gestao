@@ -9,7 +9,7 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Plus, X, GripVertical, MoreHorizontal, Clock, CheckSquare, MessageSquare, AlignLeft } from "lucide-react";
+import { ArrowLeft, Plus, X, GripVertical, MoreHorizontal, Clock, CheckSquare, MessageSquare, AlignLeft, Paperclip } from "lucide-react";
 import { toast } from "sonner";
 import {
   useBoard, useBoardLive, useBoardMutations, POS_GAP,
@@ -55,6 +55,9 @@ function BoardCard({ card, labels, onOpen }: { card: CardSummary; labels: Label[
           </span>
         )}
         {card.description && <AlignLeft className="h-3.5 w-3.5" />}
+        {card.attachmentCount > 0 && (
+          <span className="inline-flex items-center gap-1"><Paperclip className="h-3.5 w-3.5" />{card.attachmentCount}</span>
+        )}
         {card.checklistTotal > 0 && (
           <span className="inline-flex items-center gap-1"><CheckSquare className="h-3.5 w-3.5" />{card.checklistDone}/{card.checklistTotal}</span>
         )}
