@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Trello, Plus, X, Filter, Bookmark, Trash2, Clock } from "lucide-react";
+import { Trello, Plus, X, Filter, Bookmark, Trash2, Clock, CalendarClock, Table2 } from "lucide-react";
 import { useBoards, useBoardMutations, useAllCards } from "@/hooks/useBoards";
 import { useTeamMembers } from "@/hooks/useTeamMembers";
 import { useSavedSearches, useSavedSearchMutations } from "@/hooks/useSavedSearches";
@@ -43,6 +43,17 @@ export default function Quadros() {
           <Trello className="h-6 w-6 text-primary" /> Quadros
         </h1>
         <p className="text-sm text-muted-foreground mt-1">Seus quadros de marketing — listas, cartões, checklists e datas.</p>
+      </div>
+
+      {/* Ver todos os quadros (visão da área de trabalho — cruza todos os quadros) */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <span className="text-sm font-semibold text-foreground">Ver todos os quadros:</span>
+        <Button size="sm" variant="outline" className="h-8 text-xs gap-1.5" onClick={() => navigate("/todos/calendario")}>
+          <CalendarClock className="h-3.5 w-3.5" /> Calendário geral
+        </Button>
+        <Button size="sm" variant="outline" className="h-8 text-xs gap-1.5" onClick={() => navigate("/todos/tabela")}>
+          <Table2 className="h-3.5 w-3.5" /> Tabela geral
+        </Button>
       </div>
 
       {/* Busca entre quadros */}
