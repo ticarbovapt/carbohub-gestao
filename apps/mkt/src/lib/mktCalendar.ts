@@ -13,6 +13,19 @@ export function ymdOfIso(iso: string): string {
   return ymd(new Date(iso));
 }
 
+/** Nº de dias inteiros de `fromYmd` até `toYmd` (pode ser negativo). */
+export function diffDays(fromYmd: string, toYmd: string): number {
+  const [ay, am, ad] = fromYmd.split("-").map(Number);
+  const [by, bm, bd] = toYmd.split("-").map(Number);
+  return Math.round((Date.UTC(by, bm - 1, bd) - Date.UTC(ay, am - 1, ad)) / 86400000);
+}
+
+/** Desloca um YYYY-MM-DD por `n` dias, retornando YYYY-MM-DD. */
+export function shiftYmd(dayYmd: string, n: number): string {
+  const [y, m, d] = dayYmd.split("-").map(Number);
+  return ymd(new Date(y, m - 1, d + n));
+}
+
 export function isSameDay(a: Date, b: Date): boolean {
   return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
 }
