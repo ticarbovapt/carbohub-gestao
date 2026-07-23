@@ -10,7 +10,6 @@ import {
 } from "lucide-react";
 import { MirrorDialog } from "@/components/board/MirrorDialog";
 import { AIDescriptionTools } from "@/components/board/AIDescriptionTools";
-import { AISummarize } from "@/components/board/AISummarize";
 import { geocodeText } from "@/hooks/useGeocode";
 import { toast } from "sonner";
 import { useCardDetail, useCardMutations } from "@/hooks/useCardDetail";
@@ -262,30 +261,6 @@ export function CardModal({ cardId, boardId, labels, onClose }: {
 
             {/* Comentários */}
             <Section icon={AlignLeft} title="Comentários">
-              <AISummarize
-                buildContext={() => {
-                  const parts: string[] = [];
-                  if (data.checklists.length) {
-                    parts.push("CHECKLISTS:");
-                    for (const cl of data.checklists) {
-                      parts.push(`- ${cl.title}:`);
-                      for (const it of cl.items) {
-                        const who = it.assignee_id ? (team.find((t) => t.id === it.assignee_id)?.full_name ?? "") : "";
-                        const due = it.due_date ? ` (vence ${new Date(it.due_date).toLocaleDateString("pt-BR")})` : "";
-                        parts.push(`  [${it.is_done ? "x" : " "}] ${it.text}${due}${who ? ` — resp: ${who}` : ""}`);
-                      }
-                    }
-                  }
-                  if (data.comments.length) {
-                    parts.push("COMENTÁRIOS:");
-                    for (const c of data.comments) {
-                      parts.push(`- ${c.authorName ?? "Usuário"} (${new Date(c.created_at).toLocaleString("pt-BR")}): ${c.body}`);
-                    }
-                  }
-                  return parts.join("\n");
-                }}
-                onPost={(text) => mut.addComment.mutate({ body: `🤖 Resumo por IA:\n${text}` })}
-              />
               <div className="flex gap-1.5">
                 <Input value={comment} onChange={(e) => setComment(e.target.value)}
                   onKeyDown={(e) => { if (e.key === "Enter" && comment.trim()) { mut.addComment.mutate({ body: comment.trim() }); setComment(""); } }}
