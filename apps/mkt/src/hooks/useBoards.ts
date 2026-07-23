@@ -19,7 +19,7 @@ export interface Board {
   id: string; workspace_id: string | null; title: string; background: string;
   position: number; is_archived: boolean; created_at: string;
 }
-export interface List { id: string; board_id: string; title: string; position: number; }
+export interface List { id: string; board_id: string; title: string; position: number; color: string | null; }
 export interface Label { id: string; board_id: string; name: string; color: string; }
 export interface CardSummary {
   id: string; list_id: string; board_id: string; title: string;
@@ -53,7 +53,7 @@ export function useBoardLists(boardId: string | null) {
     queryKey: ["mkt", "board-lists", boardId],
     enabled: !!boardId,
     queryFn: async (): Promise<List[]> => {
-      const res = await db.from("mkt_lists").select("id, board_id, title, position").eq("board_id", boardId).eq("is_archived", false).order("position");
+      const res = await db.from("mkt_lists").select("id, board_id, title, position, color").eq("board_id", boardId).eq("is_archived", false).order("position");
       if (res.error) throw res.error;
       return (res.data ?? []) as List[];
     },
@@ -182,6 +182,44 @@ export function useBoard(boardId: string | null) {
   });
 }
 
+// Todos os cartões (entre quadros) — para a busca da página Quadros.
+export interface AllCard {
+  id: string; title: string; due_date: string | null;
+  labelIds: string[]; memberIds: string[];
+  board_id: string; boardTitle: string; list_id: string; listTitle: string;
+}
+export function useAllCards(enabled: boolean) {
+  return useQuery({
+    queryKey: ["mkt", "all-cards"],
+    enabled,
+    queryFn: async (): Promise<AllCard[]> => {
+      const cardsRes = await db.from("mkt_cards").select("id, title, due_date, board_id, list_id, mirror_of").eq("is_archived", false);
+      if (cardsRes.error) throw cardsRes.error;
+      const cards = ((cardsRes.data ?? []) as Record<string, unknown>[]).filter((c) => !c.mirror_of); // originais (ignora espelhos)
+      const ids = cards.map((c) => c.id as string);
+      if (ids.length === 0) return [];
+      const [clRes, cmRes, bRes, lRes] = await Promise.all([
+        db.from("mkt_card_labels").select("card_id, label_id").in("card_id", ids),
+        db.from("mkt_card_members").select("card_id, user_id").in("card_id", ids),
+        db.from("mkt_boards").select("id, title"),
+        db.from("mkt_lists").select("id, title"),
+      ]);
+      const labelsByCard = new Map<string, string[]>();
+      for (const cl of (clRes.data ?? []) as { card_id: string; label_id: string }[]) (labelsByCard.get(cl.card_id) ?? labelsByCard.set(cl.card_id, []).get(cl.card_id)!).push(cl.label_id);
+      const membersByCard = new Map<string, string[]>();
+      for (const cm of (cmRes.data ?? []) as { card_id: string; user_id: string }[]) (membersByCard.get(cm.card_id) ?? membersByCard.set(cm.card_id, []).get(cm.card_id)!).push(cm.user_id);
+      const boardTitle = new Map((bRes.data ?? []).map((b: { id: string; title: string }) => [b.id, b.title]));
+      const listTitle = new Map((lRes.data ?? []).map((l: { id: string; title: string }) => [l.id, l.title]));
+      return cards.map((c) => ({
+        id: c.id as string, title: (c.title as string) ?? "", due_date: (c.due_date as string) ?? null,
+        labelIds: labelsByCard.get(c.id as string) ?? [], memberIds: membersByCard.get(c.id as string) ?? [],
+        board_id: c.board_id as string, boardTitle: boardTitle.get(c.board_id as string) ?? "—",
+        list_id: c.list_id as string, listTitle: listTitle.get(c.list_id as string) ?? "—",
+      }));
+    },
+  });
+}
+
 // ── Realtime do quadro (colaboração ao vivo) ─────────────────────────────────
 export function useBoardLive(boardId: string | null) {
   const qc = useQueryClient();
@@ -266,6 +304,14 @@ export function useBoardMutations(boardId?: string) {
     onSuccess: invBoard,
   });
 
+  const setListColor = useMutation({
+    mutationFn: async ({ id, color }: { id: string; color: string | null }) => {
+      const res = await db.from("mkt_lists").update({ color }).eq("id", id);
+      if (res.error) throw res.error;
+    },
+    onSuccess: invBoard,
+  });
+
   const createCard = useMutation({
     mutationFn: async ({ listId, title, position }: { listId: string; title: string; position: number }) => {
       if (!boardId) throw new Error("sem quadro");
@@ -295,7 +341,7 @@ export function useBoardMutations(boardId?: string) {
     onSuccess: invBoard,
   });
 
-  return { createBoard, createList, renameList, moveList, archiveList, createCard, moveCard, archiveCard };
+  return { createBoard, createList, renameList, moveList, archiveList, setListColor, createCard, moveCard, archiveCard };
 }
 
 export { POS_GAP };

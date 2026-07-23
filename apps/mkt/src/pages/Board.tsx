@@ -1,5 +1,5 @@
-import { useMemo, useState } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useEffect, useMemo, useState } from "react";
+import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import {
   DndContext, PointerSensor, useSensor, useSensors, closestCorners, DragOverlay,
   type DragStartEvent, type DragEndEvent,
@@ -9,7 +9,7 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Plus, X, GripVertical, MoreHorizontal, Clock, CheckSquare, MessageSquare, AlignLeft, Paperclip, Settings2, Link2 } from "lucide-react";
+import { ArrowLeft, Plus, X, GripVertical, MoreHorizontal, Clock, CheckSquare, MessageSquare, AlignLeft, Paperclip, Settings2, Link2, ChevronLeft, ChevronRight, Filter, Bookmark, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import {
   useBoard, useBoardLive, useBoardMutations, POS_GAP,
@@ -19,6 +19,10 @@ import { positionForIndex } from "@/lib/mktPosition";
 import { BOARD_BG, LABEL_COLORS } from "@/lib/mktTheme";
 import { CardModal } from "@/components/board/CardModal";
 import { BoardFieldsDialog } from "@/components/board/BoardFieldsDialog";
+import { FilterControls } from "@/components/board/FilterControls";
+import { useTeamMembers } from "@/hooks/useTeamMembers";
+import { useSavedSearches, useSavedSearchMutations } from "@/hooks/useSavedSearches";
+import { emptyCriteria, criteriaActive, matchCard, type SearchCriteria } from "@/lib/mktFilter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
@@ -79,14 +83,18 @@ function BoardCard({ card, labels, onOpen }: { card: CardSummary; labels: Label[
 }
 
 // ── Lista (coluna) ───────────────────────────────────────────────────────────
+const LIST_COLOR_KEYS = ["blue", "green", "orange", "red", "purple", "pink", "sky", "gray"];
+
 function BoardColumn({
-  list, cards, labels, onOpenCard, onAddCard, onRename, onArchive,
+  list, cards, labels, collapsed, onOpenCard, onAddCard, onRename, onArchive, onSetColor, onToggleCollapse,
 }: {
-  list: List; cards: CardSummary[]; labels: Label[];
+  list: List; cards: CardSummary[]; labels: Label[]; collapsed: boolean;
   onOpenCard: (id: string) => void;
   onAddCard: (listId: string, title: string) => void;
   onRename: (id: string, title: string) => void;
   onArchive: (id: string) => void;
+  onSetColor: (id: string, color: string | null) => void;
+  onToggleCollapse: (id: string) => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: list.id, data: { type: "list" },
@@ -96,19 +104,37 @@ function BoardColumn({
   const [text, setText] = useState("");
   const [editTitle, setEditTitle] = useState(false);
   const [title, setTitle] = useState(list.title);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const headerBg = list.color ? BOARD_BG[list.color] : undefined;
 
   const submit = () => {
     const t = text.trim();
     if (t) { onAddCard(list.id, t); setText(""); }
   };
 
+  // Recolhida: barra fina vertical com título + contagem.
+  if (collapsed) {
+    return (
+      <div ref={setNodeRef} style={style} className="w-10 shrink-0">
+        <button onClick={() => onToggleCollapse(list.id)} title="Expandir lista"
+          className="w-10 h-full min-h-[120px] rounded-xl flex flex-col items-center gap-2 py-2 text-foreground"
+          style={{ background: headerBg ?? "hsl(var(--muted))" }}>
+          <ChevronRight className="h-4 w-4" />
+          <span className="text-xs font-semibold [writing-mode:vertical-rl] rotate-180 whitespace-nowrap">{list.title}</span>
+          <span className="text-[10px] text-muted-foreground">{cards.length}</span>
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div ref={setNodeRef} style={style} className="w-72 shrink-0 flex flex-col max-h-full">
       <div className="rounded-xl bg-muted/60 backdrop-blur flex flex-col max-h-full">
-        <div className="flex items-center gap-1 px-2 py-2">
+        <div className="flex items-center gap-1 px-2 py-2 rounded-t-xl" style={headerBg ? { background: headerBg } : undefined}>
           <button className="p-1 cursor-grab active:cursor-grabbing text-muted-foreground" {...attributes} {...listeners}>
             <GripVertical className="h-4 w-4" />
           </button>
+          <button onClick={() => onToggleCollapse(list.id)} className="p-1 text-muted-foreground hover:text-foreground" title="Recolher lista"><ChevronLeft className="h-4 w-4" /></button>
           {editTitle ? (
             <Input autoFocus value={title} onChange={(e) => setTitle(e.target.value)}
               onBlur={() => { setEditTitle(false); if (title.trim() && title !== list.title) onRename(list.id, title.trim()); }}
@@ -119,12 +145,28 @@ function BoardColumn({
               {list.title} <span className="text-xs font-normal text-muted-foreground">{cards.length}</span>
             </button>
           )}
-          <button onClick={() => { if (confirm("Arquivar esta lista?")) onArchive(list.id); }} className="p-1 text-muted-foreground hover:text-foreground" title="Arquivar lista">
-            <MoreHorizontal className="h-4 w-4" />
-          </button>
+          <div className="relative">
+            <button onClick={() => setMenuOpen((v) => !v)} className="p-1 text-muted-foreground hover:text-foreground" title="Ações da lista">
+              <MoreHorizontal className="h-4 w-4" />
+            </button>
+            {menuOpen && (
+              <div className="absolute right-0 z-20 mt-1 w-48 rounded-lg border border-border bg-popover shadow-lg p-2 space-y-1.5">
+                <p className="text-[10px] text-muted-foreground">Cor da lista</p>
+                <div className="flex flex-wrap gap-1">
+                  <button onClick={() => { onSetColor(list.id, null); setMenuOpen(false); }} className={`h-6 w-6 rounded border border-border ${!list.color ? "ring-1 ring-primary" : ""}`} title="Sem cor" />
+                  {LIST_COLOR_KEYS.map((k) => (
+                    <button key={k} onClick={() => { onSetColor(list.id, k); setMenuOpen(false); }}
+                      className={`h-6 w-6 rounded ${list.color === k ? "ring-1 ring-offset-1 ring-primary" : ""}`} style={{ background: BOARD_BG[k] }} />
+                  ))}
+                </div>
+                <button onClick={() => { setMenuOpen(false); onToggleCollapse(list.id); }} className="w-full text-left text-sm px-1 py-1 rounded hover:bg-muted">Recolher lista</button>
+                <button onClick={() => { setMenuOpen(false); if (confirm("Arquivar esta lista?")) onArchive(list.id); }} className="w-full text-left text-sm px-1 py-1 rounded hover:bg-muted text-destructive">Arquivar lista</button>
+              </div>
+            )}
+          </div>
         </div>
 
-        <div className="px-2 pb-2 overflow-y-auto space-y-2 flex-1 min-h-[8px]">
+        <div className="px-2 pb-2 pt-2 overflow-y-auto space-y-2 flex-1 min-h-[8px]">
           <SortableContext items={cards.map((c) => c.id)} strategy={verticalListSortingStrategy}>
             {cards.map((c) => (
               <BoardCard key={c.id} card={c} labels={labels} onOpen={() => onOpenCard(c.mirrorOf ?? c.id)} />
@@ -158,10 +200,12 @@ function BoardColumn({
 export default function Board() {
   const { boardId } = useParams();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const qc = useQueryClient();
   const { data, isLoading } = useBoard(boardId ?? null);
   useBoardLive(boardId ?? null);
   const m = useBoardMutations(boardId);
+  const { data: team = [] } = useTeamMembers();
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
 
   const [openCardId, setOpenCardId] = useState<string | null>(null);
@@ -169,6 +213,31 @@ export default function Board() {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [addingList, setAddingList] = useState(false);
   const [newList, setNewList] = useState("");
+
+  // Filtro do quadro + buscas salvas (escopo do quadro).
+  const [criteria, setCriteria] = useState<SearchCriteria>(emptyCriteria());
+  const [filterOpen, setFilterOpen] = useState(false);
+  const filterActive = criteriaActive(criteria);
+  const saved = useSavedSearches("board", boardId);
+  const savedMut = useSavedSearchMutations();
+
+  // Listas recolhidas — preferência PESSOAL por quadro (localStorage).
+  const collapseKey = `mkt:collapsed:${boardId}`;
+  const [collapsed, setCollapsed] = useState<Set<string>>(() => {
+    try { return new Set(JSON.parse(localStorage.getItem(collapseKey) || "[]")); } catch { return new Set(); }
+  });
+  const toggleCollapse = (listId: string) => setCollapsed((prev) => {
+    const n = new Set(prev);
+    if (n.has(listId)) n.delete(listId); else n.add(listId);
+    try { localStorage.setItem(collapseKey, JSON.stringify([...n])); } catch { /* ignore */ }
+    return n;
+  });
+
+  // Abre o cartão vindo da busca entre quadros (?card=…), uma vez, e limpa o param.
+  useEffect(() => {
+    const cid = searchParams.get("card");
+    if (cid) { setOpenCardId(cid); searchParams.delete("card"); setSearchParams(searchParams, { replace: true }); }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const cardsByList = useMemo(() => {
     const map = new Map<string, CardSummary[]>();
@@ -251,7 +320,39 @@ export default function Board() {
       <div className="flex items-center gap-3 px-4 py-2.5 bg-black/20 backdrop-blur-sm">
         <button onClick={() => navigate("/quadros")} className="p-1.5 rounded-md hover:bg-white/10 text-white"><ArrowLeft className="h-4 w-4" /></button>
         <h1 className="text-lg font-bold text-white drop-shadow">{board.title}</h1>
-        <button onClick={() => setFieldsOpen(true)} className="ml-auto flex items-center gap-1.5 text-sm text-white/90 hover:text-white bg-white/15 hover:bg-white/25 rounded-md px-2.5 py-1.5" title="Campos personalizados">
+
+        {/* Filtro + buscas salvas do quadro */}
+        <div className="ml-auto relative">
+          <button onClick={() => setFilterOpen((v) => !v)}
+            className={`flex items-center gap-1.5 text-sm rounded-md px-2.5 py-1.5 ${filterActive ? "bg-white text-slate-900" : "text-white/90 hover:text-white bg-white/15 hover:bg-white/25"}`}>
+            <Filter className="h-4 w-4" /> Filtrar{filterActive ? " •" : ""}
+          </button>
+          {filterOpen && (
+            <div className="absolute right-0 z-30 mt-1 w-72 rounded-xl border border-border bg-popover shadow-xl p-3 space-y-3 text-foreground">
+              <FilterControls value={criteria} onChange={setCriteria} labels={labels} team={team} />
+              <div className="flex items-center gap-2">
+                <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setCriteria(emptyCriteria())}>Limpar</Button>
+                <Button size="sm" className="h-7 text-xs" disabled={!filterActive}
+                  onClick={() => { const name = prompt("Nome da busca salva:"); if (name?.trim()) savedMut.create.mutate({ name: name.trim(), scope: "board", boardId, criteria }); }}>
+                  Salvar busca
+                </Button>
+              </div>
+              {saved.data && saved.data.length > 0 && (
+                <div className="border-t border-border pt-2 space-y-0.5">
+                  <p className="text-[10px] text-muted-foreground flex items-center gap-1"><Bookmark className="h-3 w-3" /> Buscas salvas</p>
+                  {saved.data.map((s) => (
+                    <div key={s.id} className="flex items-center gap-1 group">
+                      <button onClick={() => setCriteria(s.criteria)} className="flex-1 text-left text-sm px-1 py-0.5 rounded hover:bg-muted truncate">{s.name}</button>
+                      <button onClick={() => savedMut.remove.mutate({ id: s.id })} className="p-1 opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive"><Trash2 className="h-3.5 w-3.5" /></button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        <button onClick={() => setFieldsOpen(true)} className="flex items-center gap-1.5 text-sm text-white/90 hover:text-white bg-white/15 hover:bg-white/25 rounded-md px-2.5 py-1.5" title="Campos personalizados">
           <Settings2 className="h-4 w-4" /> Campos
         </button>
       </div>
@@ -262,10 +363,14 @@ export default function Board() {
           <div className="flex gap-3 h-full items-start">
             <SortableContext items={lists.map((l) => l.id)} strategy={horizontalListSortingStrategy}>
               {lists.map((l) => (
-                <BoardColumn key={l.id} list={l} cards={cardsByList.get(l.id) ?? []} labels={labels}
-                  onOpenCard={setOpenCardId} onAddCard={addCard}
+                <BoardColumn key={l.id} list={l}
+                  cards={(cardsByList.get(l.id) ?? []).filter((c) => !filterActive || matchCard(c, criteria))}
+                  labels={labels} collapsed={collapsed.has(l.id)}
+                  onOpenCard={(id) => setOpenCardId(id)} onAddCard={addCard}
                   onRename={(id, title) => m.renameList.mutate({ id, title })}
-                  onArchive={(id) => m.archiveList.mutate({ id })} />
+                  onArchive={(id) => m.archiveList.mutate({ id })}
+                  onSetColor={(id, color) => m.setListColor.mutate({ id, color })}
+                  onToggleCollapse={toggleCollapse} />
               ))}
             </SortableContext>
 
