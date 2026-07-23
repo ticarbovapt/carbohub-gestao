@@ -51,7 +51,7 @@ export function Layout() {
         { to: "/chat", label: "Carbo Chat", icon: MessagesSquare, badge: <ChatBadge /> },
     ] },
     { label: "Produção", items: ["/producao/dashboard", "/producao/ordens", "/producao/produtos", "/producao/skus", "/producao/lotes", "/producao/fornecedores"].map(it) },
-    { label: "Estoque", items: ["/estoque", "/estoque/hub-natal", "/estoque/cd-sp-loghouse", "/estoque/cd-sp-vendas", "/estoque/cd-bling"].map(it) },
+    { label: "Estoque", items: ["/estoque", "/estoque/caderno", "/estoque/hub-natal", "/estoque/cd-sp-loghouse", "/estoque/cd-sp-vendas", "/estoque/cd-bling"].map(it) },
     { label: "Suprimentos", items: ["/suprimentos", "/compras"].map(it) },
     { label: "Logística", items: ["/logistica/dashboard", "/logistica", "/logistica/pos-venda", "/logistica/viagens"].map(it) },
     { label: "Operação de Campo", items: ["/campo/os", "/campo/agendamentos", "/campo/maquinas", "/campo/checklists", "/campo/alertas"].map(it) },

@@ -16,6 +16,7 @@ export interface StockMovement {
   data: string;            // created_at ISO
   produto: string;
   product_code: string;
+  category: string;        // categoria do produto (mrp_products) — insumo vs produto final
   tipo: "entrada" | "saida";
   qtd: number;
   unidade: string;
@@ -35,7 +36,7 @@ export function useStockMovements(limit = 300) {
           .select("id, product_id, warehouse_id, tipo, quantidade, origem, observacoes, created_at, created_by")
           .order("created_at", { ascending: false })
           .limit(limit),
-        db.from("mrp_products").select("id, name, product_code, stock_unit"),
+        db.from("mrp_products").select("id, name, product_code, stock_unit, category"),
         db.from("warehouses").select("id, code"),
         db.from("profiles").select("id, full_name"),
       ]);
@@ -44,8 +45,8 @@ export function useStockMovements(limit = 300) {
       if (warehouses.error) throw warehouses.error;
       // profiles pode ser barrado por RLS — nome cai pra "—" se faltar.
 
-      const prodById = new Map<string, { name: string; code: string; unit: string }>();
-      for (const p of products.data ?? []) prodById.set(p.id, { name: p.name ?? "", code: p.product_code ?? "", unit: p.stock_unit ?? "un" });
+      const prodById = new Map<string, { name: string; code: string; unit: string; category: string }>();
+      for (const p of products.data ?? []) prodById.set(p.id, { name: p.name ?? "", code: p.product_code ?? "", unit: p.stock_unit ?? "un", category: p.category ?? "" });
       const codeById = new Map<string, string>();
       for (const w of warehouses.data ?? []) codeById.set(w.id, w.code);
       const nameById = new Map<string, string>();
@@ -58,6 +59,7 @@ export function useStockMovements(limit = 300) {
           data: m.created_at as string,
           produto: p?.name ?? "—",
           product_code: p?.code ?? "",
+          category: p?.category ?? "",
           tipo: (m.tipo as "entrada" | "saida") ?? "entrada",
           qtd: Number(m.quantidade) || 0,
           unidade: p?.unit ?? "un",

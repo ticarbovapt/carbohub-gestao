@@ -16,6 +16,7 @@ import Lotes from "./pages/producao/Lotes";
 import FornecedoresMrp from "./pages/producao/FornecedoresMrp";
 import SaldosPorHub from "./pages/estoque/SaldosPorHub";
 import EstoqueHub from "./pages/estoque/EstoqueHub";
+import CadernoCaixa from "./pages/estoque/CadernoCaixa";
 import RequisicaoCompra from "./pages/compras/RequisicaoCompra";
 import Suprimentos from "./pages/compras/Suprimentos";
 import BlingIntegracao from "./pages/integracoes/Bling";
@@ -60,6 +61,8 @@ export default function App() {
 
         {/* Estoque — visão geral + subpáginas por hub (somente leitura) */}
         <Route path="/estoque" element={<SaldosPorHub />} />
+        {/* Rota específica ANTES da paramétrica :hub (senão "caderno" vira hub). */}
+        <Route path="/estoque/caderno" element={<CadernoCaixa />} />
         <Route path="/estoque/:hub" element={<EstoqueHub />} />
 
         {/* Compras & Suprimentos */}
