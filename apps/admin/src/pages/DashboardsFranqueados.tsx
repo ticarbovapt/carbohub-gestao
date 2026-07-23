@@ -5,6 +5,7 @@ import {
 } from "recharts";
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
 import { CarboKPI } from "@/components/ui/carbo-kpi";
+import { LicenciadosSubNav } from "@/components/licenciados/LicenciadosSubNav";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useAuth } from "@/contexts/AuthContext";
 import { fmtBRL, monthLabel } from "@/lib/dash-format";
@@ -90,6 +91,8 @@ export default function DashboardsFranqueados() {
         title="Licenciados — Visão Geral"
         description="Rede de descarbonização CarboVapt · consolidado de todas as lojas"
       />
+
+      <LicenciadosSubNav />
 
       {!kLoad && !hasData && <AccessNotice />}
 
