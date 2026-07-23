@@ -27,3 +27,12 @@ export const LABEL_COLORS: Record<string, string> = {
   black: "#4D4D4D",
 };
 export const LABEL_COLOR_KEYS = Object.keys(LABEL_COLORS);
+
+// Cor sólida por chave de fundo de lista (BOARD_BG keys) — p/ pontos/chips.
+export const LIST_DOT: Record<string, string> = {
+  blue: "#0079BF", green: "#519839", orange: "#D29034", red: "#B04632",
+  purple: "#89609E", pink: "#CD5A91", sky: "#00AECC", gray: "#838C91",
+  lime: "#4BBF6B", dark: "#334155",
+};
+// Paleta ciclada p/ colorir listas que não têm cor definida.
+export const LIST_PALETTE = ["#0079BF", "#519839", "#D29034", "#B04632", "#89609E", "#CD5A91", "#00AECC", "#4BBF6B"];

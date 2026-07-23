@@ -6,6 +6,7 @@ import Chat from "./pages/Chat";
 import Campanhas from "./pages/Campanhas";
 import Quadros from "./pages/Quadros";
 import Board from "./pages/Board";
+import BoardCalendar from "./pages/BoardCalendar";
 import Profile from "./pages/Profile";
 import MinhaEquipe from "./pages/MinhaEquipe";
 import BugReports from "./pages/BugReports";
@@ -22,6 +23,7 @@ export default function App() {
         <Route path="/campanhas" element={<Campanhas />} />
         <Route path="/quadros" element={<Quadros />} />
         <Route path="/quadros/:boardId" element={<Board />} />
+        <Route path="/quadros/:boardId/calendario" element={<BoardCalendar />} />
         <Route path="/perfil" element={<Profile />} />
         <Route path="/equipe" element={<MinhaEquipe />} />
         <Route path="/bugs" element={<BugReports />} />

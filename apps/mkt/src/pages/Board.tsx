@@ -20,6 +20,7 @@ import { BOARD_BG, LABEL_COLORS } from "@/lib/mktTheme";
 import { CardModal } from "@/components/board/CardModal";
 import { BoardFieldsDialog } from "@/components/board/BoardFieldsDialog";
 import { FilterControls } from "@/components/board/FilterControls";
+import { ViewSwitcher } from "@/components/board/ViewSwitcher";
 import { useTeamMembers } from "@/hooks/useTeamMembers";
 import { useSavedSearches, useSavedSearchMutations } from "@/hooks/useSavedSearches";
 import { emptyCriteria, criteriaActive, matchCard, type SearchCriteria } from "@/lib/mktFilter";
@@ -320,6 +321,7 @@ export default function Board() {
       <div className="flex items-center gap-3 px-4 py-2.5 bg-black/20 backdrop-blur-sm">
         <button onClick={() => navigate("/quadros")} className="p-1.5 rounded-md hover:bg-white/10 text-white"><ArrowLeft className="h-4 w-4" /></button>
         <h1 className="text-lg font-bold text-white drop-shadow">{board.title}</h1>
+        <ViewSwitcher boardId={boardId} current="kanban" />
 
         {/* Filtro + buscas salvas do quadro */}
         <div className="ml-auto relative">

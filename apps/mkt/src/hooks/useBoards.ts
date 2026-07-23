@@ -341,7 +341,19 @@ export function useBoardMutations(boardId?: string) {
     onSuccess: invBoard,
   });
 
-  return { createBoard, createList, renameList, moveList, archiveList, setListColor, createCard, moveCard, archiveCard };
+  // Data do cartão (usado ao arrastar no Calendário/Timeline).
+  const setCardDates = useMutation({
+    mutationFn: async ({ id, due_date, start_date }: { id: string; due_date?: string | null; start_date?: string | null }) => {
+      const patch: Record<string, unknown> = {};
+      if (due_date !== undefined) patch.due_date = due_date;
+      if (start_date !== undefined) patch.start_date = start_date;
+      const res = await db.from("mkt_cards").update(patch).eq("id", id);
+      if (res.error) throw res.error;
+    },
+    onSuccess: invBoard,
+  });
+
+  return { createBoard, createList, renameList, moveList, archiveList, setListColor, createCard, moveCard, archiveCard, setCardDates };
 }
 
 export { POS_GAP };
