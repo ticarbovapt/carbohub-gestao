@@ -1,4 +1,8 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
+import {
+  DndContext, PointerSensor, useSensor, useSensors, useDraggable, useDroppable, closestCorners,
+  DragOverlay, type DragStartEvent, type DragEndEvent,
+} from "@dnd-kit/core";
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { CarboBadge } from "@/components/ui/carbo-badge";
@@ -21,7 +25,19 @@ import { DeleteConfirmDialog } from "@/components/producao/DeleteConfirmDialog";
 import { MoveOPDialog } from "@/components/producao/MoveOPDialog";
 import { toast } from "sonner";
 import { useProductionOrders, useProductionOrderMutations, useProductionRealtime, useLastOpMoves, type OpRow, type OpStatus as OpStatusT } from "@/hooks/useProductionOrders";
-import { useDragScroll } from "@/hooks/useDragScroll";
+
+// Wrappers dnd-kit por render-prop — mantêm o JSX do card/coluna inline e só
+// injetam os handlers de arraste (a lógica de etapa/estoque fica no componente).
+/* eslint-disable @typescript-eslint/no-explicit-any */
+function DraggableCard({ id, children }: { id: string; children: (d: { setNodeRef: (el: HTMLElement | null) => void; listeners: any; attributes: any; isDragging: boolean }) => ReactNode }) {
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id });
+  return <>{children({ setNodeRef, listeners, attributes, isDragging })}</>;
+}
+function DroppableColumn({ id, children }: { id: string; children: (isOver: boolean, setNodeRef: (el: HTMLElement | null) => void) => ReactNode }) {
+  const { setNodeRef, isOver } = useDroppable({ id });
+  return <>{children(isOver, setNodeRef)}</>;
+}
+/* eslint-enable @typescript-eslint/no-explicit-any */
 
 type OpStatus =
   | "rascunho" | "planejada" | "aguardando_separacao" | "separada" | "aguardando_liberacao"
@@ -117,8 +133,7 @@ export default function OrdensProducao() {
     return null;
   };
   const [dragId, setDragId] = useState<string | null>(null);
-  const [overCol, setOverCol] = useState<string | null>(null);
-  const scrollRef = useDragScroll<HTMLDivElement>();
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
   // Abre no Kanban por padrão e LEMBRA a última escolha (persiste no F5).
   const [viewMode, setViewMode] = useState<"list" | "kanban">(() => {
     const saved = typeof localStorage !== "undefined" ? localStorage.getItem("ops:op-view") : null;
@@ -149,6 +164,23 @@ export default function OrdensProducao() {
   const [pendingMove, setPendingMove] = useState<{ op: OP; toStatus: OpStatusT; fromLabel: string; toLabel: string; skipWarning: boolean } | null>(null);
 
   const colLabel = (status: OpStatus) => KANBAN_COLUMNS.find((c) => c.statuses.includes(status))?.label ?? OP_STATUS_LABELS[status];
+
+  // Fim do arraste → abre o MESMO diálogo de confirmação (MoveOPDialog) via
+  // setPendingMove; NÃO persiste direto e não é otimista (a baixa de insumos e a
+  // trava de concorrência continuam no fluxo do diálogo/mutation).
+  const onDragStart = (e: DragStartEvent) => setDragId(String(e.active.id));
+  const onDragEnd = (e: DragEndEvent) => {
+    setDragId(null);
+    if (!e.over) return;
+    const cur = orders.find((o) => o.id === String(e.active.id));
+    const col = KANBAN_COLUMNS.find((c) => c.id === String(e.over!.id));
+    if (!cur || !col) return;
+    const target = col.statuses[0];
+    if (cur.op_status !== target) {
+      setPendingMove({ op: cur, toStatus: target, fromLabel: colLabel(cur.op_status), toLabel: col.label, skipWarning: skippedColFor(cur) === col.id });
+    }
+  };
+  const activeOp = dragId ? orders.find((o) => o.id === dragId) ?? null : null;
 
   // ── Indicadores (todos calculados a partir das OPs reais) ──────────────────
   const abertas = orders.filter((o) => o.op_status !== "concluida" && o.op_status !== "cancelada");
@@ -405,7 +437,8 @@ export default function OrdensProducao() {
         {isLoading ? (
           <div className="flex items-center justify-center gap-2 py-16 text-muted-foreground"><Loader2 className="h-5 w-5 animate-spin" /> Carregando…</div>
         ) : viewMode === "kanban" ? (
-          <div ref={scrollRef} className="flex gap-3 overflow-x-auto h-[60vh] md:h-[70vh] pb-3">
+          <DndContext sensors={sensors} collisionDetection={closestCorners} onDragStart={onDragStart} onDragEnd={onDragEnd} onDragCancel={() => setDragId(null)}>
+          <div className="flex gap-3 overflow-x-auto overflow-y-hidden h-[60vh] md:h-[70vh] pb-3">
             {KANBAN_COLUMNS.map((col) => {
               // Concluída/Bloqueada acumulam — mostra as recentes e resume o resto.
               const CAP = 12;
@@ -421,27 +454,14 @@ export default function OrdensProducao() {
                 );
               const items = capped ? allItems.slice(0, CAP) : allItems;
               const hiddenCount = allItems.length - items.length;
-              const isOver = overCol === col.id;
               // Durante o arraste, apaga a coluna que a OP arrastada não percorre.
               const draggedOp = dragId ? orders.find((o) => o.id === dragId) : null;
               const isSkipped = !!draggedOp && skippedColFor(draggedOp) === col.id;
-              const dropHere = () => {
-                if (dragId) {
-                  const cur = orders.find((o) => o.id === dragId);
-                  const target = col.statuses[0];
-                  // Não muda direto: abre a confirmação (ciente do estoque na Separação).
-                  if (cur && cur.op_status !== target) {
-                    setPendingMove({ op: cur, toStatus: target, fromLabel: colLabel(cur.op_status), toLabel: col.label, skipWarning: skippedColFor(cur) === col.id });
-                  }
-                }
-                setDragId(null); setOverCol(null);
-              };
               return (
+                <DroppableColumn key={col.id} id={col.id}>
+                {(isOver, setDropRef) => (
                 <div
-                  key={col.id}
-                  onDragOver={(e) => { e.preventDefault(); setOverCol(col.id); }}
-                  onDragLeave={() => setOverCol((c) => (c === col.id ? null : c))}
-                  onDrop={dropHere}
+                  ref={setDropRef}
                   className={cn(
                     "flex-1 min-w-[300px] h-full rounded-2xl border bg-board-surface/40 flex flex-col transition-all",
                     isOver ? "border-primary" : "border-border",
@@ -469,14 +489,15 @@ export default function OrdensProducao() {
                       const age = daysSince(o.created_at);
                       const isDone = o.op_status === "concluida" || o.op_status === "cancelada";
                       return (
+                      <DraggableCard key={o.id} id={o.id}>
+                      {(drag) => (
                       <div
-                        key={o.id}
-                        draggable
-                        onDragStart={(e) => { e.dataTransfer.setData("text/plain", o.id); setDragId(o.id); }}
-                        onDragEnd={() => { setDragId(null); setOverCol(null); }}
+                        ref={drag.setNodeRef}
+                        {...drag.attributes}
+                        {...drag.listeners}
                         className={cn(
                           "rounded-xl border bg-card relative flex flex-col h-[232px] shrink-0",
-                          dragId === o.id ? "opacity-50" : "",
+                          drag.isDragging ? "opacity-50" : "",
                           o.priority <= 2 && !isDone ? "border-red-500/40 ring-1 ring-red-500/20" : "border-border",
                         )}
                       >
@@ -541,6 +562,8 @@ export default function OrdensProducao() {
                           </div>
                         )}
                       </div>
+                      )}
+                      </DraggableCard>
                       );
                     })}
                     {items.length === 0 && <p className="text-[11px] text-muted-foreground/50 text-center py-4">Vazio</p>}
@@ -551,9 +574,23 @@ export default function OrdensProducao() {
                     )}
                   </div>
                 </div>
+                )}
+                </DroppableColumn>
               );
             })}
           </div>
+          <DragOverlay>
+            {activeOp ? (
+              <div className="rounded-xl border border-primary/50 bg-card p-3 shadow-lg w-[280px] pointer-events-none">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-mono text-[11px] font-medium text-blue-500 truncate">{activeOp.op_number}</span>
+                  <CarboBadge variant={PRIORITY_VARIANT[activeOp.priority]} size="sm" className="shrink-0">{PRIORITY_LABELS[activeOp.priority]}</CarboBadge>
+                </div>
+                <p className="text-sm font-semibold mt-1 leading-tight line-clamp-2">{activeOp.sku_name}</p>
+              </div>
+            ) : null}
+          </DragOverlay>
+          </DndContext>
         ) : filtered.length === 0 ? (
           <div className="text-center py-16 text-muted-foreground">
             <Factory className="h-12 w-12 mx-auto mb-4 opacity-30" />
