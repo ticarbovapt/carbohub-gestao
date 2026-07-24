@@ -109,8 +109,8 @@ export default function BoardDashboard() {
         {/* KPIs */}
         <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
           <Tile label="Cartões" value={String(metrics.total)} accent="hsl(var(--accent))" icon={Layers} />
-          <Tile label="Concluídos" value={String(metrics.concluidos)} accent="hsl(var(--primary))" icon={CheckCircle2} />
-          <Tile label="Taxa de conclusão" value={`${metrics.taxa}%`} accent="hsl(var(--primary))" icon={CheckCircle2} />
+          <Tile label="Cartões concluídos" value={String(metrics.concluidos)} sub="marcados como concluído no cartão" accent="hsl(var(--primary))" icon={CheckCircle2} />
+          <Tile label="Taxa de conclusão" value={`${metrics.taxa}%`} sub="pelo checkbox do cartão" accent="hsl(var(--primary))" icon={CheckCircle2} />
           <Tile label="Atrasados" value={String(metrics.atrasadosAll.length)} accent={metrics.atrasadosAll.length ? "hsl(var(--destructive))" : "hsl(var(--border))"} icon={AlertTriangle} />
           <Tile label="Sem data" value={String(metrics.semData)} accent="hsl(var(--warning))" icon={CalendarOff} />
         </div>
