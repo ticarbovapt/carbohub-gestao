@@ -28,11 +28,13 @@ export function FilterControls({ value, onChange, labels, team }: {
           <div className="flex flex-wrap gap-1.5">
             {labels.map((l) => {
               const on = labelIds.includes(l.id);
-              const tinted = tintedLabelStyle(LABEL_COLORS[l.color] ?? l.color);
+              const swatch = l.name
+                ? tintedLabelStyle(LABEL_COLORS[l.color] ?? l.color)
+                : { background: LABEL_COLORS[l.color] ?? l.color };
               return (
-                <button key={l.id} onClick={() => set({ labelIds: on ? labelIds.filter((x) => x !== l.id) : [...labelIds, l.id] })}
-                  className={`inline-flex items-center h-6 px-2 rounded-md border text-xs font-medium transition ${on ? "ring-2 ring-primary/40 ring-offset-1 ring-offset-background" : "opacity-80 hover:opacity-100"}`}
-                  style={tinted}>{l.name || "—"}</button>
+                <button key={l.id} title={l.name || "(sem nome)"} onClick={() => set({ labelIds: on ? labelIds.filter((x) => x !== l.id) : [...labelIds, l.id] })}
+                  className={`inline-flex items-center justify-center h-6 rounded-md text-xs font-medium transition ${l.name ? "px-2 border" : "w-9"} ${on ? "ring-2 ring-primary/40 ring-offset-1 ring-offset-background" : "opacity-80 hover:opacity-100"}`}
+                  style={swatch}>{l.name}</button>
               );
             })}
           </div>
@@ -48,14 +50,14 @@ export function FilterControls({ value, onChange, labels, team }: {
         </select>
       </div>
 
-      <div className="flex gap-3">
-        <div className="flex-1 space-y-1.5">
+      <div className="grid grid-cols-2 gap-3">
+        <div className="min-w-0 space-y-1.5">
           <label className="mkt-meta-label">Entrega de</label>
-          <input type="date" value={value.dueFrom ?? ""} onChange={(e) => set({ dueFrom: e.target.value })} className="mkt-field text-sm w-full" />
+          <input type="date" value={value.dueFrom ?? ""} onChange={(e) => set({ dueFrom: e.target.value })} className="mkt-field text-sm w-full min-w-0 box-border" />
         </div>
-        <div className="flex-1 space-y-1.5">
+        <div className="min-w-0 space-y-1.5">
           <label className="mkt-meta-label">Até</label>
-          <input type="date" value={value.dueTo ?? ""} onChange={(e) => set({ dueTo: e.target.value })} className="mkt-field text-sm w-full" />
+          <input type="date" value={value.dueTo ?? ""} onChange={(e) => set({ dueTo: e.target.value })} className="mkt-field text-sm w-full min-w-0 box-border" />
         </div>
       </div>
     </div>

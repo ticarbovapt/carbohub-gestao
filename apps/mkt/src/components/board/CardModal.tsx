@@ -269,7 +269,9 @@ export function CardModal({ cardId, boardId, labels, onClose }: {
                     <p className="mkt-meta-label flex items-center gap-1.5"><Tag className="h-3.5 w-3.5" /> Etiquetas</p>
                     <div className="flex flex-wrap gap-1.5">
                       {labels.filter((l) => data.labelIds.includes(l.id)).map((l) => (
-                        <span key={l.id} className={`inline-flex items-center h-5 rounded-md border text-xs font-medium ${l.name ? "px-2" : "w-8"}`} style={tintedLabelStyle(LABEL_COLORS[l.color] ?? l.color)}>{l.name}</span>
+                        <span key={l.id} title={l.name || "(sem nome)"}
+                          className={`inline-flex items-center h-5 rounded-md text-xs font-medium ${l.name ? "px-2 border" : "w-8"}`}
+                          style={l.name ? tintedLabelStyle(LABEL_COLORS[l.color] ?? l.color) : { background: LABEL_COLORS[l.color] ?? l.color }}>{l.name}</span>
                       ))}
                     </div>
                   </div>

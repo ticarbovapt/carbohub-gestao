@@ -44,8 +44,9 @@ function CardFace({ card, labels }: { card: CardSummary; labels: Label[] }) {
         <div className="flex flex-wrap gap-1.5">
           {cardLabels.map((l) => (
             <span key={l.id}
-              className="inline-flex items-center h-5 px-2 rounded-md border text-xs font-medium"
-              style={tintedLabelStyle(LABEL_COLORS[l.color] ?? l.color)} title={l.name}>
+              className={`inline-flex items-center h-5 rounded-md text-xs font-medium ${l.name ? "px-2 border" : "w-9"}`}
+              style={l.name ? tintedLabelStyle(LABEL_COLORS[l.color] ?? l.color) : { background: LABEL_COLORS[l.color] ?? l.color }}
+              title={l.name || "(sem nome)"}>
               {l.name}
             </span>
           ))}
@@ -370,7 +371,7 @@ export default function Board() {
             <Filter className="h-4 w-4" /> Filtrar{filterActive ? " •" : ""}
           </button>
           {filterOpen && (
-            <div className="absolute right-0 z-30 mt-1 w-72 rounded-[var(--radius)] border border-border bg-popover shadow-[var(--shadow-elevated)] p-4 space-y-3 text-foreground">
+            <div className="absolute right-0 z-30 mt-1 w-80 max-w-[calc(100vw-2rem)] rounded-[var(--radius)] border border-border bg-popover shadow-[var(--shadow-elevated)] p-4 space-y-3 text-foreground">
               <FilterControls value={criteria} onChange={setCriteria} labels={labels} team={team} />
               <div className="flex items-center gap-2">
                 <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => setCriteria(emptyCriteria())}>Limpar</Button>
