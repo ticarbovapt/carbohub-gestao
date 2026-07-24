@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
-import { DndContext, DragEndEvent, DragStartEvent, MouseSensor, TouchSensor, useSensor, useSensors } from "@dnd-kit/core";
+import { useState, useEffect, useMemo } from "react";
+import { DndContext, DragEndEvent, DragStartEvent, MouseSensor, TouchSensor, useSensor, useSensors, closestCorners } from "@dnd-kit/core";
 import { Badge } from "@/components/ui/badge";
 import { Plus } from "lucide-react";
 import { LeadCard, type LeadOwner } from "./LeadCard";
@@ -22,22 +22,24 @@ const leadOwnerId = (l: CRMLead) => ((l as { assigned_to?: string | null; create
   ?? (l as { created_by?: string | null }).created_by ?? "");
 
 export function KanbanBoard({ leads, funnelType, onAdvance, onMarkLost, onLeadClick, onDragMove, onAddLead, ownersById }: KanbanBoardProps) {
-  const stages = getStagesForFunnel(funnelType);
+  const stages = useMemo(() => getStagesForFunnel(funnelType), [funnelType]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [optimisticMoves, setOptimisticMoves] = useState<Record<string, string>>({});
 
+  // Sensor de mouse com distância menor (5px, como no mkt) = "pega" o card mais
+  // fácil; touch mantém long-press para não brigar com o scroll.
   const sensors = useSensors(
-    useSensor(MouseSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(MouseSensor, { activationConstraint: { distance: 5 } }),
     useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 5 } })
   );
 
-  const leadsByStage = stages.reduce((acc, stage) => {
+  const leadsByStage = useMemo(() => stages.reduce((acc, stage) => {
     acc[stage.id] = leads.filter((l) => {
       const pending = optimisticMoves[l.id];
       return pending ? pending === stage.id : l.stage === stage.id;
     });
     return acc;
-  }, {} as Record<string, CRMLead[]>);
+  }, {} as Record<string, CRMLead[]>), [stages, leads, optimisticMoves]);
 
   useEffect(() => {
     if (Object.keys(optimisticMoves).length === 0) return;
@@ -72,12 +74,13 @@ export function KanbanBoard({ leads, funnelType, onAdvance, onMarkLost, onLeadCl
   return (
     <DndContext
       sensors={sensors}
+      collisionDetection={closestCorners}
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
       onDragCancel={() => setActiveId(null)}
       autoScroll={{ threshold: { x: 0.2, y: 0.2 }, acceleration: 18 }}
     >
-      <div className="flex gap-3 overflow-x-auto pb-4">
+      <div className="flex gap-3 overflow-x-auto overflow-y-hidden pb-4">
         {stages.map((stage) => (
           <KanbanColumn
             key={stage.id}
