@@ -420,15 +420,15 @@ export default function Board() {
             {/* Adicionar lista */}
             <div className="w-80 shrink-0">
               {addingList ? (
-                <div className="mkt-column p-2 space-y-2">
+                <form className="mkt-column p-2 space-y-2" onSubmit={(e) => { e.preventDefault(); addList(); }}>
                   <Input autoFocus value={newList} onChange={(e) => setNewList(e.target.value)}
-                    onKeyDown={(e) => { if (e.key === "Enter") addList(); if (e.key === "Escape") setAddingList(false); }}
+                    onKeyDown={(e) => { if (e.key === "Escape") setAddingList(false); }}
                     placeholder="Título da lista…" className="h-9 text-sm" />
                   <div className="flex items-center gap-2">
-                    <Button size="sm" onClick={addList}>Adicionar lista</Button>
-                    <button onClick={() => setAddingList(false)} className="p-1.5 text-muted-foreground hover:text-foreground"><X className="h-4 w-4" /></button>
+                    <Button type="submit" size="sm">Adicionar lista</Button>
+                    <button type="button" onClick={() => setAddingList(false)} className="p-1.5 text-muted-foreground hover:text-foreground"><X className="h-4 w-4" /></button>
                   </div>
-                </div>
+                </form>
               ) : (
                 <button onClick={() => setAddingList(true)} className="w-full flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground bg-card border border-border rounded-[var(--radius)] px-3 py-2.5 shadow-[var(--shadow-card)] hover:shadow-[var(--shadow-elevated)] transition-shadow">
                   <Plus className="h-4 w-4" /> Adicionar lista
