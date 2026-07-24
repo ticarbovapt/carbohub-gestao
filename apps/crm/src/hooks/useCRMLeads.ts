@@ -334,8 +334,8 @@ export function useAdvanceLeadStage() {
       queryClient.invalidateQueries({ queryKey: ["crm-leads"] });
       queryClient.invalidateQueries({ queryKey: ["crm-lead", variables.id] });
       queryClient.invalidateQueries({ queryKey: ["crm-stats"] });
-      playMoveSuccess();
-      toast.success("Card movido!");
+      // Sucesso: som + toast disparam no gesto (ver Pipelines.notifyMove), para
+      // o áudio não esbarrar na autoplay policy.
     },
     onError: (error: Error) => { playMoveError(); toast.error("Não foi possível mover: " + error.message); },
   });

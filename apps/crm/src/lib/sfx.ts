@@ -22,21 +22,27 @@ if (typeof window !== "undefined") {
   window.addEventListener("touchstart", prime, { passive: true });
 }
 
-function beep(freqs: number[], { dur = 0.09, type = "sine" as OscillatorType, gain = 0.05 } = {}) {
+function beep(freqs: number[], { dur = 0.09, type = "sine" as OscillatorType, gain = 0.07 } = {}) {
   const ac = audioCtx();
   if (!ac) return;
-  let t = ac.currentTime;
-  for (const f of freqs) {
-    const osc = ac.createOscillator();
-    const g = ac.createGain();
-    osc.type = type;
-    osc.frequency.value = f;
-    g.gain.setValueAtTime(gain, t);
-    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-    osc.connect(g); g.connect(ac.destination);
-    osc.start(t); osc.stop(t + dur);
-    t += dur * 0.9;
-  }
+  // Agenda os osciladores só quando o contexto estiver de fato "running" — se
+  // ainda estiver "suspended", agendar no currentTime congelado não toca.
+  const render = () => {
+    let t = ac.currentTime + 0.01;
+    for (const f of freqs) {
+      const osc = ac.createOscillator();
+      const g = ac.createGain();
+      osc.type = type;
+      osc.frequency.value = f;
+      g.gain.setValueAtTime(gain, t);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      osc.connect(g); g.connect(ac.destination);
+      osc.start(t); osc.stop(t + dur);
+      t += dur * 0.9;
+    }
+  };
+  if (ac.state === "suspended") ac.resume().then(render).catch(() => {});
+  else render();
 }
 
 // "Encaixou" — duas notas ascendentes rápidas.

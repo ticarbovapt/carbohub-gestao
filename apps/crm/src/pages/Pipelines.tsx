@@ -21,6 +21,8 @@ import { LeadForm } from "@/components/crm/LeadForm";
 import { DealDetail } from "@/components/crm/DealDetail";
 import { FUNNEL_CONFIG, getStagesForFunnel, getNextStage, LOSS_REASONS } from "@/types/crm";
 import type { FunnelType, CRMLead } from "@/types/crm";
+import { toast } from "sonner";
+import { playMoveSuccess } from "@/lib/sfx";
 
 const FUNNELS = Object.values(FUNNEL_CONFIG);
 
@@ -194,18 +196,30 @@ export default function Pipelines() {
     );
   });
 
+  // Feedback do movimento disparado NO GESTO do usuário (clique/soltar) para o
+  // som não esbarrar na autoplay policy e a confirmação ser instantânea. O toast
+  // mostra ORIGEM → DESTINO para facilitar desfazer se mover errado. Em caso de
+  // falha, o onError da mutation reverte e avisa.
+  const notifyMove = (fromId: string, toId: string, funnel: FunnelType) => {
+    playMoveSuccess();
+    const stgs = getStagesForFunnel(funnel);
+    const nameOf = (id: string) => stgs.find((s) => s.id === id)?.label ?? id;
+    toast.success("Card movido", { description: `${nameOf(fromId)}  →  ${nameOf(toId)}` });
+  };
+
   const handleAdvance = (lead: CRMLead) => {
     const next = getNextStage(ft, lead.stage);
-    if (next) advanceLead.mutate({ id: lead.id, newStage: next, funnelType: ft, currentStage: lead.stage });
+    if (next) { advanceLead.mutate({ id: lead.id, newStage: next, funnelType: ft, currentStage: lead.stage }); notifyMove(lead.stage, next, ft); }
   };
   // Na visão "Todos", cada card avança no SEU próprio funil (não no `ft` ativo).
   const handleAdvanceAny = (lead: CRMLead) => {
     const lf = lead.funnel_type as FunnelType;
     const next = getNextStage(lf, lead.stage);
-    if (next) advanceLead.mutate({ id: lead.id, newStage: next, funnelType: lf, currentStage: lead.stage });
+    if (next) { advanceLead.mutate({ id: lead.id, newStage: next, funnelType: lf, currentStage: lead.stage }); notifyMove(lead.stage, next, lf); }
   };
   const handleDragMove = (lead: CRMLead, toStage: string) => {
     advanceLead.mutate({ id: lead.id, newStage: toStage, funnelType: ft, currentStage: lead.stage });
+    notifyMove(lead.stage, toStage, ft);
   };
   const confirmLost = () => {
     if (lostDialogLead) {
