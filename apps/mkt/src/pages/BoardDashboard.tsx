@@ -7,7 +7,7 @@ import {
 import { ArrowLeft, LayoutDashboard, CheckCircle2, AlertTriangle, CalendarOff, Layers } from "lucide-react";
 import { useBoard, useBoardLive, type CardSummary } from "@/hooks/useBoards";
 import { useTeamMembers } from "@/hooks/useTeamMembers";
-import { LIST_DOT, LIST_PALETTE } from "@/lib/mktTheme";
+import { LIST_DOT, LIST_PALETTE, getAccent } from "@/lib/mktTheme";
 import { ymd, ymdOfIso, diffDays } from "@/lib/mktCalendar";
 import { CardModal } from "@/components/board/CardModal";
 import { ViewSwitcher } from "@/components/board/ViewSwitcher";
@@ -17,7 +17,10 @@ const TOOLTIP_STYLE = { background: "hsl(var(--popover))", border: "1px solid va
 
 function Tile({ label, value, sub, accent, icon: Icon }: { label: string; value: string; sub?: string; accent: string; icon: React.ElementType }) {
   return (
-    <div className={`rounded-xl bg-card p-4 border border-border border-l-4 ${accent}`}>
+    <div
+      className="rounded-[var(--radius)] bg-card p-4 border border-border border-l-[3px] shadow-[var(--shadow-card)]"
+      style={{ borderLeftColor: accent }}
+    >
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <p className="text-xs font-medium text-muted-foreground truncate">{label}</p>
@@ -70,31 +73,51 @@ export default function BoardDashboard() {
   }, [data, memberName]);
 
   if (!boardId) return null;
-  if (isLoading || !data) return <div className="p-6 text-sm text-muted-foreground">Carregando dashboard…</div>;
+  if (isLoading || !data) return (
+    <div className="fixed inset-0 top-14 flex flex-col bg-background">
+      <div className="flex items-center gap-3 px-4 min-h-14 border-b border-border">
+        <div className="mkt-skeleton h-7 w-7 rounded-md" />
+        <div className="mkt-skeleton h-5 w-40 rounded-md" />
+      </div>
+      <div className="flex-1 overflow-auto p-4 space-y-4 max-w-[1200px] w-full mx-auto">
+        <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+          {Array.from({ length: 5 }).map((_, i) => <div key={i} className="mkt-skeleton h-24 rounded-[var(--radius)]" />)}
+        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          <div className="mkt-skeleton h-64 rounded-[var(--radius)] lg:col-span-2" />
+          <div className="mkt-skeleton h-64 rounded-[var(--radius)]" />
+        </div>
+      </div>
+    </div>
+  );
   const { board } = data;
+  const boardAccent = getAccent(board.background);
   const conclData = [{ name: "Concluídos", value: metrics.concluidos }, { name: "Em aberto", value: metrics.total - metrics.concluidos }];
 
   return (
     <div className="fixed inset-0 top-14 flex flex-col bg-background">
-      <div className="flex items-center gap-3 px-4 py-2.5 border-b border-border flex-wrap">
-        <button onClick={() => navigate("/quadros")} className="p-1.5 rounded-md hover:bg-muted"><ArrowLeft className="h-4 w-4" /></button>
-        <h1 className="text-lg font-bold text-foreground flex items-center gap-2"><LayoutDashboard className="h-5 w-5 text-primary" /> {board.title}</h1>
+      <div className="flex items-center gap-2 px-4 min-h-14 border-b border-border bg-card header-depth-glow flex-wrap">
+        <button onClick={() => navigate("/quadros")} className="p-1.5 rounded-md text-muted-foreground hover:bg-muted"><ArrowLeft className="h-4 w-4" /></button>
+        <h1 className="mkt-view-title flex items-center gap-2">
+          <span className="h-2 w-2 rounded-full shrink-0" style={{ background: boardAccent }} />
+          <LayoutDashboard className="h-5 w-5 text-primary" /> {board.title}
+        </h1>
         <ViewSwitcher boardId={boardId} current="dashboard" />
       </div>
 
       <div className="flex-1 overflow-auto p-4 space-y-4 max-w-[1200px] w-full mx-auto">
         {/* KPIs */}
         <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
-          <Tile label="Cartões" value={String(metrics.total)} accent="border-l-blue-400" icon={Layers} />
-          <Tile label="Concluídos" value={String(metrics.concluidos)} accent="border-l-emerald-400" icon={CheckCircle2} />
-          <Tile label="Taxa de conclusão" value={`${metrics.taxa}%`} accent="border-l-emerald-400" icon={CheckCircle2} />
-          <Tile label="Atrasados" value={String(metrics.atrasadosAll.length)} accent={metrics.atrasadosAll.length ? "border-l-red-500" : "border-l-border"} icon={AlertTriangle} />
-          <Tile label="Sem data" value={String(metrics.semData)} accent="border-l-amber-400" icon={CalendarOff} />
+          <Tile label="Cartões" value={String(metrics.total)} accent="hsl(var(--accent))" icon={Layers} />
+          <Tile label="Concluídos" value={String(metrics.concluidos)} accent="hsl(var(--primary))" icon={CheckCircle2} />
+          <Tile label="Taxa de conclusão" value={`${metrics.taxa}%`} accent="hsl(var(--primary))" icon={CheckCircle2} />
+          <Tile label="Atrasados" value={String(metrics.atrasadosAll.length)} accent={metrics.atrasadosAll.length ? "hsl(var(--destructive))" : "hsl(var(--border))"} icon={AlertTriangle} />
+          <Tile label="Sem data" value={String(metrics.semData)} accent="hsl(var(--warning))" icon={CalendarOff} />
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
           {/* Cartões por lista */}
-          <Card className="lg:col-span-2 rounded-2xl border-0 shadow-sm">
+          <Card className="lg:col-span-2 rounded-[var(--radius)] border border-border shadow-[var(--shadow-card)]">
             <CardHeader className="pb-1 pt-5 px-5"><CardTitle className="text-base font-semibold">Cartões por lista</CardTitle></CardHeader>
             <CardContent className="px-2 pb-4">
               {metrics.porLista.length === 0 ? <p className="py-16 text-center text-sm text-muted-foreground">Sem listas.</p> : (
@@ -115,14 +138,14 @@ export default function BoardDashboard() {
           </Card>
 
           {/* Taxa de conclusão */}
-          <Card className="rounded-2xl border-0 shadow-sm">
+          <Card className="rounded-[var(--radius)] border border-border shadow-[var(--shadow-card)]">
             <CardHeader className="pb-1 pt-5 px-5"><CardTitle className="text-base font-semibold">Conclusão</CardTitle></CardHeader>
             <CardContent className="px-2 pb-4">
               {metrics.total === 0 ? <p className="py-16 text-center text-sm text-muted-foreground">Sem cartões.</p> : (
                 <ResponsiveContainer width="100%" height={220}>
                   <PieChart>
                     <Pie data={conclData} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={50} outerRadius={80} paddingAngle={2}>
-                      <Cell fill="#22c55e" /><Cell fill="#cbd5e1" />
+                      <Cell fill="hsl(var(--primary))" /><Cell fill="hsl(var(--muted))" />
                     </Pie>
                     <Tooltip contentStyle={TOOLTIP_STYLE} />
                   </PieChart>
@@ -135,7 +158,7 @@ export default function BoardDashboard() {
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           {/* Carga por membro */}
-          <Card className="rounded-2xl border-0 shadow-sm">
+          <Card className="rounded-[var(--radius)] border border-border shadow-[var(--shadow-card)]">
             <CardHeader className="pb-1 pt-5 px-5"><CardTitle className="text-base font-semibold">Carga por membro</CardTitle></CardHeader>
             <CardContent className="px-2 pb-4">
               {metrics.porMembro.length === 0 ? <p className="py-16 text-center text-sm text-muted-foreground">Sem cartões.</p> : (
@@ -145,7 +168,7 @@ export default function BoardDashboard() {
                     <XAxis type="number" allowDecimals={false} tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
                     <YAxis type="category" dataKey="name" width={130} tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
                     <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v: number) => [v, "Cartões"]} />
-                    <Bar dataKey="value" fill="#6366f1" radius={[0, 4, 4, 0]}>
+                    <Bar dataKey="value" fill="hsl(var(--accent))" radius={[0, 4, 4, 0]}>
                       <LabelList dataKey="value" position="right" style={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} />
                     </Bar>
                   </BarChart>
@@ -155,20 +178,20 @@ export default function BoardDashboard() {
           </Card>
 
           {/* Atrasados */}
-          <Card className={`rounded-2xl shadow-sm ${metrics.atrasadosAll.length ? "border-2 border-destructive/30" : "border-0"}`}>
+          <Card className={`rounded-[var(--radius)] shadow-[var(--shadow-card)] ${metrics.atrasadosAll.length ? "border border-destructive/30" : "border border-border"}`}>
             <CardHeader className="pb-1 pt-5 px-5">
-              <CardTitle className="text-base font-semibold flex items-center gap-2"><AlertTriangle className="h-4 w-4 text-red-500" /> Atrasados ({metrics.atrasadosAll.length})</CardTitle>
+              <CardTitle className="text-base font-semibold flex items-center gap-2"><AlertTriangle className="h-4 w-4 text-destructive" /> Atrasados ({metrics.atrasadosAll.length})</CardTitle>
             </CardHeader>
             <CardContent className="px-5 pb-5">
               {metrics.atrasadosAll.length === 0 ? <p className="text-sm text-muted-foreground text-center py-8">Nenhum cartão atrasado. 🎉</p> : (
                 <div className="divide-y divide-border -mx-1 max-h-[280px] overflow-y-auto">
                   {metrics.atrasadosAll.map(({ card, diasAtraso }) => (
-                    <button key={card.id} onClick={() => setOpenCardId(card.mirrorOf ?? card.id)} className="w-full flex items-center justify-between gap-2 py-2 px-1 text-left hover:bg-muted/40 rounded">
+                    <button key={card.id} onClick={() => setOpenCardId(card.mirrorOf ?? card.id)} className="w-full flex items-center justify-between gap-2 py-2 px-1 text-left hover:bg-muted/40 rounded-md">
                       <div className="min-w-0">
                         <p className="text-sm font-medium text-foreground truncate">{card.title}</p>
-                        <p className="text-[11px] text-muted-foreground">{data.lists.find((l) => l.id === card.list_id)?.title ?? "—"} · entrega {new Date(card.due_date!).toLocaleDateString("pt-BR")}</p>
+                        <p className="text-xs text-muted-foreground">{data.lists.find((l) => l.id === card.list_id)?.title ?? "—"} · entrega {new Date(card.due_date!).toLocaleDateString("pt-BR")}</p>
                       </div>
-                      <span className="text-xs font-bold text-red-500 shrink-0">{diasAtraso}d</span>
+                      <span className="text-xs font-bold text-destructive shrink-0 rounded-md bg-destructive/10 px-1.5 py-0.5">{diasAtraso}d</span>
                     </button>
                   ))}
                 </div>

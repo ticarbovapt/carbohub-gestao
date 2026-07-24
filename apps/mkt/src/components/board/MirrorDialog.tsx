@@ -17,30 +17,38 @@ export function MirrorDialog({ onConfirm, onClose }: {
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-sm">
-        <DialogHeader><DialogTitle className="flex items-center gap-2"><Link2 className="h-4 w-4" /> Espelhar cartão</DialogTitle></DialogHeader>
-        <p className="text-xs text-muted-foreground">
-          O espelho reflete título, descrição, etiquetas, checklists e membros do original. A edição continua só no cartão original.
-        </p>
-        <div className="space-y-2">
-          <div>
-            <label className="text-xs text-muted-foreground">Quadro</label>
+      <DialogContent className="max-w-sm gap-4">
+        <DialogHeader>
+          <DialogTitle className="mkt-view-title flex items-center gap-2 text-base">
+            <span className="flex h-8 w-8 items-center justify-center rounded-[var(--input-radius)] bg-accent/10 text-accent">
+              <Link2 className="h-4 w-4" />
+            </span>
+            Espelhar cartão
+          </DialogTitle>
+        </DialogHeader>
+        <div className="flex items-start gap-2 rounded-[var(--input-radius)] border border-border bg-muted/40 p-3 text-xs leading-relaxed text-muted-foreground">
+          <Link2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-accent" />
+          <span>O espelho reflete título, descrição, etiquetas, checklists e membros do original. A edição continua só no cartão original.</span>
+        </div>
+        <div className="space-y-4">
+          <div className="space-y-1.5">
+            <label className="mkt-meta-label">Quadro</label>
             <Select value={boardId} onValueChange={(v) => { setBoardId(v); setListId(""); }}>
-              <SelectTrigger className="h-9"><SelectValue placeholder="Escolher quadro" /></SelectTrigger>
+              <SelectTrigger className="h-9 rounded-[var(--input-radius)] border-border bg-card"><SelectValue placeholder="Escolher quadro" /></SelectTrigger>
               <SelectContent>{boards.map((b) => <SelectItem key={b.id} value={b.id}>{b.title}</SelectItem>)}</SelectContent>
             </Select>
           </div>
-          <div>
-            <label className="text-xs text-muted-foreground">Lista</label>
+          <div className="space-y-1.5">
+            <label className="mkt-meta-label">Lista</label>
             <Select value={listId} onValueChange={setListId} disabled={!boardId}>
-              <SelectTrigger className="h-9"><SelectValue placeholder={boardId ? "Escolher lista" : "Escolha o quadro primeiro"} /></SelectTrigger>
+              <SelectTrigger className="h-9 rounded-[var(--input-radius)] border-border bg-card"><SelectValue placeholder={boardId ? "Escolher lista" : "Escolha o quadro primeiro"} /></SelectTrigger>
               <SelectContent>{lists.map((l) => <SelectItem key={l.id} value={l.id}>{l.title}</SelectItem>)}</SelectContent>
             </Select>
           </div>
         </div>
-        <div className="flex justify-end gap-2">
-          <Button variant="outline" size="sm" onClick={onClose}>Cancelar</Button>
-          <Button size="sm" disabled={!listId} onClick={() => { onConfirm(listId, boardId); onClose(); }}>Espelhar aqui</Button>
+        <div className="flex justify-end gap-2 border-t border-border pt-4">
+          <Button variant="ghost" size="sm" className="text-muted-foreground hover:bg-muted" onClick={onClose}>Cancelar</Button>
+          <Button size="sm" disabled={!listId} className="shadow-[var(--shadow-carbo)]" onClick={() => { onConfirm(listId, boardId); onClose(); }}>Espelhar aqui</Button>
         </div>
       </DialogContent>
     </Dialog>

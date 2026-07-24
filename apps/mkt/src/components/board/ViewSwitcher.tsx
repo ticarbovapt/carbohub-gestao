@@ -13,10 +13,11 @@ const VIEWS: { key: string; label: string; path: (id: string) => string }[] = [
 export function ViewSwitcher({ boardId, current }: { boardId: string; current: string }) {
   const navigate = useNavigate();
   return (
-    <div className="flex gap-0.5 bg-white/15 rounded-md p-0.5">
+    <div className="mkt-segmented">
       {VIEWS.map((v) => (
         <button key={v.key} onClick={() => navigate(v.path(boardId))}
-          className={`px-2.5 py-1 text-xs font-semibold rounded ${current === v.key ? "bg-white text-slate-900" : "text-white/90 hover:text-white"}`}>
+          data-active={current === v.key}
+          className={`mkt-segmented-item ${current === v.key ? "is-active" : ""}`}>
           {v.label}
         </button>
       ))}

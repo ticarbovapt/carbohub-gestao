@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { ArrowLeft, ChevronLeft, ChevronRight, CalendarClock, Table2, LayoutGrid } from "lucide-react";
 import { useBoardMutations, type CardSummary } from "@/hooks/useBoards";
 import { useDefaultWorkspace, useWorkspaceData, useWorkspaceLive } from "@/hooks/useWorkspace";
-import { BOARD_BG, LABEL_COLORS, LIST_PALETTE } from "@/lib/mktTheme";
+import { LABEL_COLORS, LIST_PALETTE, getAccent } from "@/lib/mktTheme";
 import { addMonths, addDays, fmtMonthYear, isoForDay } from "@/lib/mktCalendar";
 import { CardModal } from "@/components/board/CardModal";
 import { CalendarGrid } from "@/components/board/CalendarGrid";
@@ -40,7 +40,19 @@ export default function WorkspaceCalendar() {
     [openCard, data?.labels],
   );
 
-  if (isLoading || !data) return <div className="p-6 text-sm text-muted-foreground">Carregando calendário…</div>;
+  if (isLoading || !data) {
+    return (
+      <div className="mkt-canvas fixed inset-0 top-14 flex flex-col">
+        <div className="mkt-toolbar">
+          <div className="mkt-skeleton h-6 w-6 !rounded-md" />
+          <div className="mkt-skeleton h-5 w-56 !rounded-md" />
+        </div>
+        <div className="flex-1 p-4 md:p-6">
+          <div className="mkt-skeleton h-full w-full" />
+        </div>
+      </div>
+    );
+  }
 
   const onSetDay = (cardId: string, dayYmd: string | null) => {
     const card = cardById.get(cardId);
@@ -50,32 +62,34 @@ export default function WorkspaceCalendar() {
   const step = (dir: number) => setRef((r) => mode === "month" ? addMonths(r, dir) : addDays(r, dir * 7));
 
   return (
-    <div className="fixed inset-0 top-14 flex flex-col" style={{ background: BOARD_BG.blue }}>
+    <div className="mkt-canvas fixed inset-0 top-14 flex flex-col">
       {/* Cabeçalho */}
-      <div className="flex items-center gap-3 px-4 py-2.5 bg-black/20 backdrop-blur-sm flex-wrap">
-        <button onClick={() => navigate("/quadros")} className="p-1.5 rounded-md hover:bg-white/10 text-white"><ArrowLeft className="h-4 w-4" /></button>
-        <h1 className="text-lg font-bold text-white drop-shadow flex items-center gap-2"><CalendarClock className="h-5 w-5" /> Todos os quadros · Calendário</h1>
+      <div className="mkt-toolbar header-depth-glow flex-wrap gap-2 py-2.5">
+        <button onClick={() => navigate("/quadros")} className="p-1.5 rounded-md hover:bg-muted text-muted-foreground"><ArrowLeft className="h-4 w-4" /></button>
+        <span className="mkt-dot" style={{ ["--mkt-accent" as any]: getAccent("blue") }} />
+        <CalendarClock className="h-5 w-5 text-primary" />
+        <h1 className="mkt-view-title flex items-center gap-2">Todos os quadros · Calendário</h1>
         {/* alternar entre as views gerais */}
-        <div className="flex gap-0.5 bg-white/15 rounded-md p-0.5">
-          <button className="px-2.5 py-1 text-xs font-semibold rounded bg-white text-slate-900 inline-flex items-center gap-1"><CalendarClock className="h-3.5 w-3.5" /> Calendário</button>
-          <button onClick={() => navigate("/todos/tabela")} className="px-2.5 py-1 text-xs font-semibold rounded text-white/90 hover:text-white inline-flex items-center gap-1"><Table2 className="h-3.5 w-3.5" /> Tabela</button>
+        <div className="mkt-segmented ml-1">
+          <button className="mkt-segmented-item is-active"><CalendarClock className="h-3.5 w-3.5" /> Calendário</button>
+          <button onClick={() => navigate("/todos/tabela")} className="mkt-segmented-item"><Table2 className="h-3.5 w-3.5" /> Tabela</button>
         </div>
 
         <div className="ml-auto flex items-center gap-2 flex-wrap">
-          <div className="flex items-center gap-1 text-white">
-            <button onClick={() => step(-1)} className="p-1.5 rounded hover:bg-white/15"><ChevronLeft className="h-4 w-4" /></button>
-            <span className="text-sm font-semibold capitalize min-w-[130px] text-center">{fmtMonthYear(ref)}</span>
-            <button onClick={() => step(1)} className="p-1.5 rounded hover:bg-white/15"><ChevronRight className="h-4 w-4" /></button>
-            <button onClick={() => setRef(new Date())} className="text-xs bg-white/15 hover:bg-white/25 rounded px-2 py-1">Hoje</button>
+          <div className="flex items-center gap-1 text-foreground">
+            <button onClick={() => step(-1)} className="p-1.5 rounded-md hover:bg-muted text-muted-foreground"><ChevronLeft className="h-4 w-4" /></button>
+            <span className="text-sm font-semibold capitalize min-w-[130px] text-center text-foreground">{fmtMonthYear(ref)}</span>
+            <button onClick={() => step(1)} className="p-1.5 rounded-md hover:bg-muted text-muted-foreground"><ChevronRight className="h-4 w-4" /></button>
+            <button onClick={() => setRef(new Date())} className="text-xs h-8 rounded-md border border-border bg-card px-2.5 hover:bg-muted text-foreground">Hoje</button>
           </div>
-          <div className="flex gap-0.5 bg-white/15 rounded-md p-0.5">
+          <div className="mkt-segmented">
             {(["month", "week"] as const).map((mo) => (
-              <button key={mo} onClick={() => setMode(mo)} className={`px-2.5 py-1 text-xs font-semibold rounded ${mode === mo ? "bg-white text-slate-900" : "text-white/90"}`}>{mo === "month" ? "Mês" : "Semana"}</button>
+              <button key={mo} onClick={() => setMode(mo)} className={`mkt-segmented-item ${mode === mo ? "is-active" : ""}`}>{mo === "month" ? "Mês" : "Semana"}</button>
             ))}
           </div>
-          <div className="flex gap-0.5 bg-white/15 rounded-md p-0.5">
+          <div className="mkt-segmented">
             {(["board", "label"] as const).map((cb) => (
-              <button key={cb} onClick={() => setColorBy(cb)} className={`px-2.5 py-1 text-xs font-semibold rounded ${colorBy === cb ? "bg-white text-slate-900" : "text-white/90"}`}>{cb === "board" ? "Cor: quadro" : "Cor: etiqueta"}</button>
+              <button key={cb} onClick={() => setColorBy(cb)} className={`mkt-segmented-item ${colorBy === cb ? "is-active" : ""}`}>{cb === "board" ? "Cor: quadro" : "Cor: etiqueta"}</button>
             ))}
           </div>
         </div>
@@ -83,19 +97,23 @@ export default function WorkspaceCalendar() {
 
       {/* Legenda de quadros (quando cor = quadro) */}
       {colorBy === "board" && data.boards.length > 0 && (
-        <div className="flex items-center gap-3 px-4 py-1.5 bg-black/10 flex-wrap">
-          <LayoutGrid className="h-3.5 w-3.5 text-white/70" />
+        <div className="flex items-center gap-3 px-4 py-2 bg-card/60 border-b border-border flex-wrap">
+          <LayoutGrid className="h-3.5 w-3.5 text-muted-foreground" />
           {data.boards.map((b) => (
-            <button key={b.id} onClick={() => navigate(`/quadros/${b.id}/calendario`)} className="inline-flex items-center gap-1.5 text-[11px] text-white/90 hover:text-white">
-              <span className="h-2.5 w-2.5 rounded-full" style={{ background: boardColor(b.id) }} /> {b.title}
+            <button key={b.id} onClick={() => navigate(`/quadros/${b.id}/calendario`)} className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors">
+              <span className="h-2 w-2 rounded-full" style={{ background: boardColor(b.id) }} /> {b.title}
             </button>
           ))}
         </div>
       )}
 
       {data.boards.length === 0 ? (
-        <div className="flex-1 flex items-center justify-center">
-          <p className="bg-card/90 border border-border rounded-lg px-4 py-2 text-sm text-muted-foreground">Nenhum quadro nesta área de trabalho.</p>
+        <div className="flex-1 flex items-center justify-center px-4">
+          <div className="mkt-empty">
+            <div className="mkt-empty-icon"><LayoutGrid className="h-6 w-6" /></div>
+            <div className="mkt-empty-title">Nenhum quadro por aqui</div>
+            <p className="mkt-empty-subcopy">Esta área de trabalho ainda não tem quadros. Crie um quadro para começar a organizar o calendário.</p>
+          </div>
         </div>
       ) : (
         <CalendarGrid

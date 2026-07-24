@@ -1,10 +1,10 @@
 import { useMemo, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, Table2, ArrowUp, ArrowDown, Maximize2 } from "lucide-react";
+import { ArrowLeft, Table2, ArrowUp, ArrowDown, Maximize2, SearchX } from "lucide-react";
 import { useBoard, useBoardLive, useBoardMutations, type CardSummary, type List, type Label } from "@/hooks/useBoards";
 import { useCustomFields, useBoardFieldValues, useCustomFieldMutations, type CustomField } from "@/hooks/useCustomFields";
 import { useTeamMembers } from "@/hooks/useTeamMembers";
-import { LABEL_COLORS } from "@/lib/mktTheme";
+import { LABEL_COLORS, getAccent, tintedLabelStyle } from "@/lib/mktTheme";
 import { matchCard, type SearchCriteria } from "@/lib/mktFilter";
 import { ymdOfIso } from "@/lib/mktCalendar";
 import { CardModal } from "@/components/board/CardModal";
@@ -73,22 +73,41 @@ export default function BoardTable() {
   }, [data?.cards, text, labelId, memberId, sort, fieldValues, fields]);
 
   if (!boardId) return null;
-  if (isLoading || !data) return <div className="p-6 text-sm text-muted-foreground">Carregando tabela…</div>;
+  if (isLoading || !data) {
+    return (
+      <div className="fixed inset-0 top-14 flex flex-col bg-background">
+        <div className="flex items-center gap-3 min-h-14 px-4 border-b border-border">
+          <div className="mkt-skeleton h-8 w-8 rounded-md" />
+          <div className="mkt-skeleton h-5 w-40 rounded-md" />
+        </div>
+        <div className="flex-1 overflow-hidden p-4 md:p-6 space-y-2">
+          {Array.from({ length: 8 }).map((_, i) => (
+            <div key={i} className="mkt-skeleton h-11 w-full rounded-[var(--radius)]" />
+          ))}
+        </div>
+      </div>
+    );
+  }
   const { board } = data;
+  const accent = getAccent((board as { background?: string }).background);
 
   const toggleSort = (key: string) => setSort((s) => s.key === key ? { key, dir: s.dir === "asc" ? "desc" : "asc" } : { key, dir: "asc" });
   const Th = ({ label, k, className }: { label: string; k: string; className?: string }) => (
-    <th className={`px-2 py-2 text-left font-semibold text-muted-foreground whitespace-nowrap cursor-pointer select-none hover:text-foreground ${className ?? ""}`} onClick={() => toggleSort(k)}>
-      <span className="inline-flex items-center gap-1">{label}{sort.key === k && (sort.dir === "asc" ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />)}</span>
+    <th className={`px-3 py-2.5 text-left text-xs font-semibold text-muted-foreground whitespace-nowrap cursor-pointer select-none hover:text-foreground transition-colors ${className ?? ""}`} onClick={() => toggleSort(k)}>
+      <span className="inline-flex items-center gap-1">{label}{sort.key === k && (sort.dir === "asc" ? <ArrowUp className="h-3 w-3 text-primary" /> : <ArrowDown className="h-3 w-3 text-primary" />)}</span>
     </th>
   );
 
   return (
     <div className="fixed inset-0 top-14 flex flex-col bg-background">
       {/* Cabeçalho */}
-      <div className="flex items-center gap-3 px-4 py-2.5 border-b border-border flex-wrap">
-        <button onClick={() => navigate("/quadros")} className="p-1.5 rounded-md hover:bg-muted"><ArrowLeft className="h-4 w-4" /></button>
-        <h1 className="text-lg font-bold text-foreground flex items-center gap-2"><Table2 className="h-5 w-5 text-primary" /> {board.title}</h1>
+      <div className="flex items-center gap-3 min-h-14 px-4 py-2 bg-card border-b border-border header-depth-glow flex-wrap">
+        <button onClick={() => navigate("/quadros")} className="p-1.5 rounded-md text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"><ArrowLeft className="h-4 w-4" /></button>
+        <h1 className="mkt-view-title flex items-center gap-2 text-foreground">
+          <span className="h-2 w-2 rounded-full shrink-0" style={{ background: accent }} />
+          <Table2 className="h-5 w-5 text-primary" />
+          {board.title}
+        </h1>
         <ViewSwitcher boardId={boardId} current="tabela" />
         <div className="ml-auto flex items-center gap-2 flex-wrap">
           <Input value={text} onChange={(e) => setText(e.target.value)} placeholder="Buscar título…" className="h-8 text-sm w-44" />
@@ -104,15 +123,16 @@ export default function BoardTable() {
       </div>
 
       {/* Tabela */}
-      <div className="flex-1 overflow-auto">
+      <div className="flex-1 overflow-auto p-4 md:p-6">
+        <div className="min-w-max overflow-hidden rounded-[var(--radius)] border border-border bg-card shadow-[var(--shadow-card)]">
         <table className="text-sm border-collapse min-w-max">
-          <thead className="sticky top-0 z-10 bg-muted">
+          <thead className="sticky top-0 z-10 bg-muted/70 backdrop-blur">
             <tr className="border-b border-border">
-              <th className="px-2 py-2 w-8" />
+              <th className="px-3 py-2.5 w-8" />
               <Th label="Título" k="title" />
               <Th label="Lista" k="list" />
-              <th className="px-2 py-2 text-left font-semibold text-muted-foreground">Etiquetas</th>
-              <th className="px-2 py-2 text-left font-semibold text-muted-foreground">Membros</th>
+              <th className="px-3 py-2.5 text-left text-xs font-semibold text-muted-foreground">Etiquetas</th>
+              <th className="px-3 py-2.5 text-left text-xs font-semibold text-muted-foreground">Membros</th>
               <Th label="Início" k="start" />
               <Th label="Entrega" k="due" />
               <Th label="Checklist" k="checklist" />
@@ -121,43 +141,66 @@ export default function BoardTable() {
           </thead>
           <tbody>
             {rows.map((c) => (
-              <tr key={c.id} className="border-b border-border/60 hover:bg-muted/30">
-                <td className="px-2 py-1">
-                  <button onClick={() => setOpenCardId(c.mirrorOf ?? c.id)} className="p-1 text-muted-foreground hover:text-foreground" title="Abrir cartão"><Maximize2 className="h-3.5 w-3.5" /></button>
+              <tr key={c.id} className="border-b border-border/60 transition-colors hover:bg-muted/40">
+                <td className="px-3 py-1.5">
+                  <button onClick={() => setOpenCardId(c.mirrorOf ?? c.id)} className="p-1 rounded-md text-muted-foreground hover:bg-muted hover:text-foreground transition-colors" title="Abrir cartão"><Maximize2 className="h-3.5 w-3.5" /></button>
                 </td>
-                <td className="px-1 py-1"><EditableTitle value={c.title} onSave={(t) => m.renameCard.mutate({ id: c.id, title: t })} /></td>
-                <td className="px-2 py-1 whitespace-nowrap"><CarboBadge variant="secondary" size="sm">{listById.get(c.list_id)?.title ?? "—"}</CarboBadge></td>
-                <td className="px-2 py-1">
+                <td className="px-2 py-1.5"><EditableTitle value={c.title} onSave={(t) => m.renameCard.mutate({ id: c.id, title: t })} /></td>
+                <td className="px-3 py-1.5 whitespace-nowrap"><CarboBadge variant="secondary" size="sm">{listById.get(c.list_id)?.title ?? "—"}</CarboBadge></td>
+                <td className="px-3 py-1.5">
                   <div className="flex flex-wrap gap-1">
-                    {c.labelIds.map((id) => { const l = labelById.get(id); return l ? <span key={id} className="h-2.5 w-6 rounded-full" style={{ background: LABEL_COLORS[l.color] ?? l.color }} title={l.name} /> : null; })}
+                    {c.labelIds.map((id) => {
+                      const l = labelById.get(id);
+                      if (!l) return null;
+                      const hex = LABEL_COLORS[l.color] ?? l.color;
+                      return (
+                        <span key={id} className="inline-flex items-center gap-1 h-5 px-2 rounded-md border text-xs font-medium whitespace-nowrap" style={tintedLabelStyle(hex)} title={l.name}>
+                          <span className="h-1.5 w-1.5 rounded-full" style={{ background: hex }} />
+                          {l.name || "—"}
+                        </span>
+                      );
+                    })}
                   </div>
                 </td>
-                <td className="px-2 py-1">
+                <td className="px-3 py-1.5">
                   <div className="flex -space-x-1.5">
-                    {c.memberIds.map((id) => { const p = memberById.get(id); return <img key={id} src={p?.avatar_url || diceBearUrl(id)} title={p?.full_name ?? ""} className="h-6 w-6 rounded-full ring-2 ring-background object-cover" />; })}
+                    {c.memberIds.map((id) => { const p = memberById.get(id); return <img key={id} src={p?.avatar_url || diceBearUrl(id)} title={p?.full_name ?? ""} className="h-6 w-6 rounded-full ring-2 ring-card object-cover" />; })}
                   </div>
                 </td>
-                <td className="px-2 py-1">
+                <td className="px-3 py-1.5">
                   <input type="date" value={c.start_date ? ymdOfIso(c.start_date) : ""} onChange={(e) => m.setCardDates.mutate({ id: c.id, start_date: e.target.value ? new Date(e.target.value + "T12:00:00").toISOString() : null })}
-                    className="h-8 text-xs rounded-md border border-transparent hover:border-border bg-transparent px-1" />
+                    className="h-8 text-xs rounded-[var(--input-radius)] border border-transparent hover:border-border focus:border-border bg-transparent px-1.5 transition-colors" />
                 </td>
-                <td className="px-2 py-1">
+                <td className="px-3 py-1.5">
                   <input type="date" value={c.due_date ? ymdOfIso(c.due_date) : ""} onChange={(e) => m.setCardDates.mutate({ id: c.id, due_date: e.target.value ? new Date(e.target.value + "T12:00:00").toISOString() : null })}
-                    className="h-8 text-xs rounded-md border border-transparent hover:border-border bg-transparent px-1" />
+                    className="h-8 text-xs rounded-[var(--input-radius)] border border-transparent hover:border-border focus:border-border bg-transparent px-1.5 transition-colors" />
                 </td>
-                <td className="px-2 py-1 whitespace-nowrap text-muted-foreground">{c.checklistTotal > 0 ? `${c.checklistDone}/${c.checklistTotal}` : "—"}</td>
+                <td className="px-3 py-1.5 whitespace-nowrap text-xs text-muted-foreground">{c.checklistTotal > 0 ? `${c.checklistDone}/${c.checklistTotal}` : "—"}</td>
                 {fields.map((f: CustomField) => (
-                  <td key={f.id} className="px-2 py-1 min-w-[140px]">
+                  <td key={f.id} className="px-3 py-1.5 min-w-[140px]">
                     <CustomFieldInput field={f} value={fvOf(c.id, f.id)} onSave={(v) => fm.setFieldValueFor.mutate({ cardId: c.id, fieldId: f.id, value: v })} />
                   </td>
                 ))}
               </tr>
             ))}
             {rows.length === 0 && (
-              <tr><td colSpan={8 + fields.length} className="px-2 py-10 text-center text-sm text-muted-foreground">Nenhum cartão.</td></tr>
+              <tr>
+                <td colSpan={8 + fields.length} className="px-2 py-16">
+                  <div className="mx-auto max-w-sm py-6 text-center flex flex-col items-center gap-3">
+                    <span className="h-12 w-12 rounded-full bg-muted flex items-center justify-center">
+                      <SearchX className="h-5 w-5 text-muted-foreground" />
+                    </span>
+                    <div className="space-y-1">
+                      <p className="text-base font-semibold text-foreground">Nenhum resultado</p>
+                      <p className="text-sm text-muted-foreground">Ajuste a busca ou os filtros de etiqueta e membro.</p>
+                    </div>
+                  </div>
+                </td>
+              </tr>
             )}
           </tbody>
         </table>
+        </div>
       </div>
 
       {openCardId && <CardModal cardId={openCardId} boardId={boardId} labels={data.labels} onClose={() => setOpenCardId(null)} />}

@@ -1,5 +1,5 @@
 import { Input } from "@/components/ui/input";
-import { LABEL_COLORS } from "@/lib/mktTheme";
+import { LABEL_COLORS, tintedLabelStyle } from "@/lib/mktTheme";
 import type { SearchCriteria } from "@/lib/mktFilter";
 import type { Label } from "@/hooks/useBoards";
 import type { TeamMember } from "@/hooks/useTeamMembers";
@@ -16,45 +16,46 @@ export function FilterControls({ value, onChange, labels, team }: {
   const labelIds = value.labelIds ?? [];
 
   return (
-    <div className="space-y-2.5">
-      <div>
-        <label className="text-[11px] text-muted-foreground">Texto</label>
-        <Input value={value.text ?? ""} onChange={(e) => set({ text: e.target.value })} placeholder="Buscar no título…" className="h-8 text-sm" />
+    <div className="space-y-3">
+      <div className="space-y-1">
+        <label className="mkt-meta-label">Texto</label>
+        <Input value={value.text ?? ""} onChange={(e) => set({ text: e.target.value })} placeholder="Buscar no título…" className="mkt-field text-sm" />
       </div>
 
       {labels && labels.length > 0 && (
-        <div>
-          <label className="text-[11px] text-muted-foreground">Etiquetas</label>
-          <div className="flex flex-wrap gap-1 mt-0.5">
+        <div className="space-y-1">
+          <label className="mkt-meta-label">Etiquetas</label>
+          <div className="flex flex-wrap gap-1.5">
             {labels.map((l) => {
               const on = labelIds.includes(l.id);
+              const tinted = tintedLabelStyle(LABEL_COLORS[l.color] ?? l.color);
               return (
                 <button key={l.id} onClick={() => set({ labelIds: on ? labelIds.filter((x) => x !== l.id) : [...labelIds, l.id] })}
-                  className={`h-6 px-2 rounded text-xs font-medium ${on ? "text-white ring-1 ring-offset-1 ring-primary" : "text-white/80"}`}
-                  style={{ background: LABEL_COLORS[l.color] ?? l.color }}>{l.name || "—"}</button>
+                  className={`inline-flex items-center h-6 px-2 rounded-md border text-xs font-medium transition ${on ? "ring-2 ring-primary/40 ring-offset-1 ring-offset-background" : "opacity-80 hover:opacity-100"}`}
+                  style={tinted}>{l.name || "—"}</button>
               );
             })}
           </div>
         </div>
       )}
 
-      <div>
-        <label className="text-[11px] text-muted-foreground">Membro</label>
+      <div className="space-y-1">
+        <label className="mkt-meta-label">Membro</label>
         <select value={value.memberId ?? ""} onChange={(e) => set({ memberId: e.target.value })}
-          className="h-8 text-sm w-full rounded-md border border-border bg-card px-2">
+          className="mkt-field text-sm w-full">
           <option value="">Qualquer</option>
           {team.map((t) => <option key={t.id} value={t.id}>{t.full_name ?? "Usuário"}</option>)}
         </select>
       </div>
 
       <div className="flex gap-2">
-        <div className="flex-1">
-          <label className="text-[11px] text-muted-foreground">Entrega de</label>
-          <input type="date" value={value.dueFrom ?? ""} onChange={(e) => set({ dueFrom: e.target.value })} className="h-8 text-sm w-full rounded-md border border-border bg-card px-2" />
+        <div className="flex-1 space-y-1">
+          <label className="mkt-meta-label">Entrega de</label>
+          <input type="date" value={value.dueFrom ?? ""} onChange={(e) => set({ dueFrom: e.target.value })} className="mkt-field text-sm w-full" />
         </div>
-        <div className="flex-1">
-          <label className="text-[11px] text-muted-foreground">até</label>
-          <input type="date" value={value.dueTo ?? ""} onChange={(e) => set({ dueTo: e.target.value })} className="h-8 text-sm w-full rounded-md border border-border bg-card px-2" />
+        <div className="flex-1 space-y-1">
+          <label className="mkt-meta-label">até</label>
+          <input type="date" value={value.dueTo ?? ""} onChange={(e) => set({ dueTo: e.target.value })} className="mkt-field text-sm w-full" />
         </div>
       </div>
     </div>

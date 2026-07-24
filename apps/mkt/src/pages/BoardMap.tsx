@@ -10,6 +10,7 @@ import { ArrowLeft, MapPin } from "lucide-react";
 import { useBoard, useBoardLive, type CardSummary } from "@/hooks/useBoards";
 import { CardModal } from "@/components/board/CardModal";
 import { ViewSwitcher } from "@/components/board/ViewSwitcher";
+import { getAccent } from "@/lib/mktTheme";
 
 // Fix clássico do ícone default do Leaflet com bundlers (Vite): aponta os PNGs
 // importados em vez de caminhos relativos quebrados.
@@ -42,26 +43,45 @@ export default function BoardMap() {
   const semLoc = (data?.cards.length ?? 0) - located.length;
 
   if (!boardId) return null;
-  if (isLoading || !data) return <div className="p-6 text-sm text-muted-foreground">Carregando mapa…</div>;
+  if (isLoading || !data)
+    return (
+      <div className="fixed inset-0 top-14 flex flex-col bg-background">
+        <div className="mkt-toolbar flex-wrap">
+          <div className="mkt-skeleton h-8 w-8 rounded-md" />
+          <div className="mkt-skeleton h-5 w-40 rounded-md" />
+          <div className="mkt-skeleton h-8 w-48 rounded-md" />
+        </div>
+        <div className="flex-1 p-4 md:p-6">
+          <div className="mkt-skeleton h-full w-full rounded-[var(--radius)]" />
+        </div>
+      </div>
+    );
   const { board } = data;
+  const accent = getAccent(board.background);
   const center: [number, number] = points[0] ?? [-14.235, -51.925]; // Brasil
 
   return (
     <div className="fixed inset-0 top-14 flex flex-col bg-background">
-      <div className="flex items-center gap-3 px-4 py-2.5 border-b border-border flex-wrap">
-        <button onClick={() => navigate("/quadros")} className="p-1.5 rounded-md hover:bg-muted"><ArrowLeft className="h-4 w-4" /></button>
-        <h1 className="text-lg font-bold text-foreground flex items-center gap-2"><MapPin className="h-5 w-5 text-primary" /> {board.title}</h1>
+      <div className="mkt-toolbar header-depth-glow flex-wrap">
+        <button onClick={() => navigate("/quadros")} className="p-1.5 rounded-md text-muted-foreground hover:bg-muted hover:text-foreground transition"><ArrowLeft className="h-4 w-4" /></button>
+        <span className="mkt-dot shrink-0" style={{ ["--mkt-accent" as any]: accent }} />
+        <MapPin className="h-5 w-5 text-primary shrink-0" />
+        <h1 className="mkt-view-title truncate">{board.title}</h1>
         <ViewSwitcher boardId={boardId} current="mapa" />
         <span className="ml-auto text-xs text-muted-foreground">{located.length} com localização{semLoc > 0 ? ` · ${semLoc} sem localização` : ""}</span>
       </div>
 
       <div className="flex-1 relative">
         {located.length === 0 && (
-          <div className="absolute inset-0 z-[500] flex items-center justify-center pointer-events-none">
-            <p className="bg-card/90 border border-border rounded-lg px-4 py-2 text-sm text-muted-foreground">Nenhum cartão com localização — defina um endereço no cartão.</p>
+          <div className="absolute inset-0 z-[500] flex items-center justify-center p-6 pointer-events-none">
+            <div className="mkt-empty pointer-events-auto max-w-sm rounded-[var(--radius)] border border-border bg-card/95 backdrop-blur px-6 py-8 shadow-[var(--shadow-card)]">
+              <div className="mkt-empty-icon"><MapPin className="h-5 w-5" /></div>
+              <p className="mkt-empty-title">Nenhum cartão com localização</p>
+              <p className="mkt-empty-subcopy">Defina um endereço em um cartão para vê-lo aparecer aqui no mapa.</p>
+            </div>
           </div>
         )}
-        <MapContainer center={center} zoom={points.length ? 12 : 4} className="h-full w-full" style={{ background: "#e5e7eb" }}>
+        <MapContainer center={center} zoom={points.length ? 12 : 4} className="h-full w-full" style={{ background: "hsl(var(--muted))" }}>
           <TileLayer attribution='&copy; OpenStreetMap' url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
           <FitBounds points={points} />
           {located.map((c: CardSummary) => (

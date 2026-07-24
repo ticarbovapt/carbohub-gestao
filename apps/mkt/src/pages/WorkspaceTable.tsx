@@ -1,10 +1,10 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Table2, CalendarClock, ArrowUp, ArrowDown, Maximize2 } from "lucide-react";
+import { ArrowLeft, Table2, CalendarClock, ArrowUp, ArrowDown, Maximize2, Search } from "lucide-react";
 import { useBoardMutations } from "@/hooks/useBoards";
 import { useDefaultWorkspace, useWorkspaceData, useWorkspaceLive, type WorkspaceCard } from "@/hooks/useWorkspace";
 import { useTeamMembers } from "@/hooks/useTeamMembers";
-import { LABEL_COLORS } from "@/lib/mktTheme";
+import { LABEL_COLORS, getAccent, tintedLabelStyle } from "@/lib/mktTheme";
 import { matchCard, type SearchCriteria } from "@/lib/mktFilter";
 import { ymdOfIso } from "@/lib/mktCalendar";
 import { CardModal } from "@/components/board/CardModal";
@@ -34,6 +34,7 @@ export default function WorkspaceTable() {
 
   const labelById = useMemo(() => new Map((data?.labels ?? []).map((l) => [l.id, l])), [data?.labels]);
   const memberById = useMemo(() => new Map(team.map((t) => [t.id, t])), [team]);
+  const boardById = useMemo(() => new Map((data?.boards ?? []).map((b) => [b.id, b])), [data?.boards]);
   const boardOrder = useMemo(() => new Map((data?.boards ?? []).map((b, i) => [b.id, i])), [data?.boards]);
 
   const sortValue = (c: WorkspaceCard, key: string): string | number => {
@@ -67,7 +68,21 @@ export default function WorkspaceTable() {
     [openCard, data?.labels],
   );
 
-  if (isLoading || !data) return <div className="p-6 text-sm text-muted-foreground">Carregando tabela…</div>;
+  if (isLoading || !data) {
+    return (
+      <div className="fixed inset-0 top-14 flex flex-col bg-background">
+        <div className="mkt-toolbar flex items-center gap-2 min-h-14 px-4 border-b border-border bg-card">
+          <div className="mkt-skeleton h-6 w-6 rounded-md" />
+          <div className="mkt-skeleton h-6 w-56 rounded-md" />
+        </div>
+        <div className="flex-1 p-4 md:p-6 space-y-2">
+          {Array.from({ length: 8 }).map((_, i) => (
+            <div key={i} className="mkt-skeleton h-10 w-full rounded-[var(--radius)]" />
+          ))}
+        </div>
+      </div>
+    );
+  }
 
   const toggleSort = (key: string) => setSort((s) => s.key === key ? { key, dir: s.dir === "asc" ? "desc" : "asc" } : { key, dir: "asc" });
   const Th = ({ label, k }: { label: string; k: string }) => (
@@ -79,12 +94,12 @@ export default function WorkspaceTable() {
   return (
     <div className="fixed inset-0 top-14 flex flex-col bg-background">
       {/* Cabeçalho */}
-      <div className="flex items-center gap-3 px-4 py-2.5 border-b border-border flex-wrap">
-        <button onClick={() => navigate("/quadros")} className="p-1.5 rounded-md hover:bg-muted"><ArrowLeft className="h-4 w-4" /></button>
-        <h1 className="text-lg font-bold text-foreground flex items-center gap-2"><Table2 className="h-5 w-5 text-primary" /> Todos os quadros · Tabela</h1>
-        <div className="flex gap-0.5 bg-muted rounded-md p-0.5">
-          <button onClick={() => navigate("/todos/calendario")} className="px-2.5 py-1 text-xs font-semibold rounded text-muted-foreground hover:text-foreground inline-flex items-center gap-1"><CalendarClock className="h-3.5 w-3.5" /> Calendário</button>
-          <button className="px-2.5 py-1 text-xs font-semibold rounded bg-card shadow-sm text-foreground inline-flex items-center gap-1"><Table2 className="h-3.5 w-3.5" /> Tabela</button>
+      <div className="mkt-toolbar header-depth-glow flex items-center gap-2 min-h-14 px-4 border-b border-border bg-card flex-wrap">
+        <button onClick={() => navigate("/quadros")} className="p-1.5 rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"><ArrowLeft className="h-4 w-4" /></button>
+        <h1 className="mkt-view-title text-lg font-bold text-foreground tracking-tight flex items-center gap-2"><Table2 className="h-5 w-5 text-primary" /> Todos os quadros · Tabela</h1>
+        <div className="mkt-segmented flex gap-0.5 bg-muted rounded-md p-0.5">
+          <button onClick={() => navigate("/todos/calendario")} className="mkt-segmented-item px-2.5 py-1 text-xs font-semibold rounded text-muted-foreground hover:text-foreground inline-flex items-center gap-1"><CalendarClock className="h-3.5 w-3.5" /> Calendário</button>
+          <button className="mkt-segmented-item is-active px-2.5 py-1 text-xs font-semibold rounded bg-card shadow-[var(--shadow-card)] text-foreground inline-flex items-center gap-1"><Table2 className="h-3.5 w-3.5" /> Tabela</button>
         </div>
         <div className="ml-auto flex items-center gap-2 flex-wrap">
           <Input value={text} onChange={(e) => setText(e.target.value)} placeholder="Buscar título…" className="h-8 text-sm w-40" />
@@ -127,12 +142,22 @@ export default function WorkspaceTable() {
                 </td>
                 <td className="px-1 py-1"><EditableTitle value={c.title} onSave={(t) => m.renameCard.mutate({ id: c.id, title: t })} /></td>
                 <td className="px-2 py-1 whitespace-nowrap">
-                  <button onClick={() => navigate(`/quadros/${c.board_id}`)} className="hover:underline"><CarboBadge variant="outline" size="sm">{c.boardTitle}</CarboBadge></button>
+                  <button onClick={() => navigate(`/quadros/${c.board_id}`)} className="inline-flex items-center gap-1.5 hover:underline">
+                    <span className="h-2 w-2 rounded-full shrink-0" style={{ background: getAccent(boardById.get(c.board_id)?.background) }} />
+                    <CarboBadge variant="outline" size="sm">{c.boardTitle}</CarboBadge>
+                  </button>
                 </td>
                 <td className="px-2 py-1 whitespace-nowrap"><CarboBadge variant="secondary" size="sm">{c.listTitle}</CarboBadge></td>
                 <td className="px-2 py-1">
                   <div className="flex flex-wrap gap-1">
-                    {c.labelIds.map((id) => { const l = labelById.get(id); return l ? <span key={id} className="h-2.5 w-6 rounded-full" style={{ background: LABEL_COLORS[l.color] ?? l.color }} title={l.name} /> : null; })}
+                    {c.labelIds.map((id) => {
+                      const l = labelById.get(id);
+                      if (!l) return null;
+                      const hex = LABEL_COLORS[l.color] ?? l.color;
+                      return l.name
+                        ? <span key={id} className="inline-flex items-center h-5 px-2 rounded-md border text-xs font-medium" style={tintedLabelStyle(hex)} title={l.name}>{l.name}</span>
+                        : <span key={id} className="inline-flex items-center h-5 px-2 rounded-md border" style={tintedLabelStyle(hex)} title="(sem nome)"><span className="h-2 w-2 rounded-full" style={{ background: hex }} /></span>;
+                    })}
                   </div>
                 </td>
                 <td className="px-2 py-1">
@@ -152,7 +177,17 @@ export default function WorkspaceTable() {
               </tr>
             ))}
             {rows.length === 0 && (
-              <tr><td colSpan={9} className="px-2 py-10 text-center text-sm text-muted-foreground">Nenhum cartão.</td></tr>
+              <tr>
+                <td colSpan={9} className="px-2 py-12">
+                  <div className="mkt-empty mx-auto max-w-sm text-center">
+                    <div className="mkt-empty-icon mx-auto h-12 w-12 rounded-full bg-muted flex items-center justify-center">
+                      <Search className="h-5 w-5 text-muted-foreground" />
+                    </div>
+                    <div className="mkt-empty-title mt-3 text-base font-semibold text-foreground">Nenhum cartão encontrado</div>
+                    <div className="mkt-empty-subcopy mt-1 text-sm text-muted-foreground">Ajuste a busca ou os filtros de quadro, etiqueta e membro para ver mais resultados.</div>
+                  </div>
+                </td>
+              </tr>
             )}
           </tbody>
         </table>

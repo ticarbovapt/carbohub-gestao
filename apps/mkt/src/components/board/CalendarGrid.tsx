@@ -12,10 +12,15 @@ import type { CardSummary } from "@/hooks/useBoards";
 
 function CalCard({ card, color, onOpen }: { card: CardSummary; color: string; onOpen: () => void }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: card.id });
-  const style = { transform: CSS.Translate.toString(transform), opacity: isDragging ? 0.4 : 1, borderLeftColor: color };
+  const style = {
+    transform: CSS.Translate.toString(transform),
+    opacity: isDragging ? 0.4 : 1,
+    borderLeftColor: color,
+    boxShadow: "var(--shadow-card)",
+  };
   return (
     <div ref={setNodeRef} style={style} {...attributes} {...listeners} onClick={onOpen}
-      className="rounded-md bg-card border border-border border-l-[3px] shadow-sm hover:border-primary/40 cursor-pointer px-1.5 py-1 text-[11px] leading-tight text-foreground truncate">
+      className="rounded-[var(--radius)] bg-card border border-border border-l-2 hover:shadow-[var(--shadow-elevated)] hover:-translate-y-px transition cursor-pointer px-2 py-1.5 text-xs font-medium leading-relaxed text-foreground truncate">
       {card.title}
     </div>
   );
@@ -27,9 +32,9 @@ function DayCell({ dayId, isToday, isOther, dayNum, tall, children }: {
   const { setNodeRef, isOver } = useDroppable({ id: dayId });
   return (
     <div ref={setNodeRef}
-      className={`border border-border/60 rounded-md p-1 flex flex-col gap-1 overflow-hidden ${tall ? "min-h-[220px]" : "min-h-[92px]"} ${isOther ? "bg-muted/20" : "bg-card"} ${isOver ? "ring-2 ring-primary" : ""}`}>
-      <span className={`text-[11px] font-semibold self-end h-5 w-5 flex items-center justify-center rounded-full ${isToday ? "bg-primary text-primary-foreground" : isOther ? "text-muted-foreground" : "text-foreground"}`}>{dayNum}</span>
-      <div className="flex flex-col gap-1 overflow-y-auto">{children}</div>
+      className={`border border-border rounded-[var(--radius)] p-2 flex flex-col gap-2 overflow-hidden transition ${tall ? "min-h-[220px]" : "min-h-[104px]"} ${isOther ? "bg-muted/40" : "bg-card"} ${isOver ? "ring-2 ring-primary shadow-[var(--shadow-elevated)]" : "shadow-[var(--shadow-card)]"}`}>
+      <span className={`text-xs font-semibold self-end h-6 w-6 flex items-center justify-center rounded-full ${isToday ? "bg-primary text-primary-foreground" : isOther ? "text-muted-foreground" : "text-foreground"}`}>{dayNum}</span>
+      <div className="flex flex-col gap-1.5 overflow-y-auto">{children}</div>
     </div>
   );
 }
@@ -37,11 +42,11 @@ function DayCell({ dayId, isToday, isOther, dayNum, tall, children }: {
 function NoDateTray({ cards, color, onOpen }: { cards: CardSummary[]; color: (c: CardSummary) => string; onOpen: (c: CardSummary) => void }) {
   const { setNodeRef, isOver } = useDroppable({ id: "no-date" });
   return (
-    <div ref={setNodeRef} className={`shrink-0 border-t border-border bg-muted/30 px-3 py-2 ${isOver ? "ring-2 ring-primary ring-inset" : ""}`}>
-      <p className="text-[11px] font-semibold text-muted-foreground mb-1">Sem data ({cards.length}) — arraste para um dia; ou solte aqui para remover a data</p>
+    <div ref={setNodeRef} className={`shrink-0 border-t border-border bg-muted/40 px-4 py-3 ${isOver ? "ring-2 ring-primary ring-inset" : ""}`}>
+      <p className="text-xs font-medium text-muted-foreground mb-2">Sem data ({cards.length}) — arraste para um dia; ou solte aqui para remover a data</p>
       <div className="flex gap-2 overflow-x-auto pb-1">
         {cards.length === 0 && <span className="text-xs text-muted-foreground">Nenhum cartão sem data.</span>}
-        {cards.map((c) => <div key={c.id} className="w-40 shrink-0"><CalCard card={c} color={color(c)} onOpen={() => onOpen(c)} /></div>)}
+        {cards.map((c) => <div key={c.id} className="w-44 shrink-0"><CalCard card={c} color={color(c)} onOpen={() => onOpen(c)} /></div>)}
       </div>
     </div>
   );
@@ -84,11 +89,11 @@ export function CalendarGrid({ cards, refDate, mode, color, onOpenCard, onSetDay
 
   return (
     <DndContext sensors={sensors} onDragStart={(e) => setActiveId(String(e.active.id))} onDragEnd={onDragEnd}>
-      <div className="flex-1 overflow-auto p-3">
-        <div className="grid grid-cols-7 gap-1 mb-1">
-          {WEEKDAY_LABELS.map((w) => <div key={w} className="text-center text-xs font-semibold text-white/90 drop-shadow">{w}</div>)}
+      <div className="flex-1 overflow-auto p-4 md:p-6">
+        <div className="grid grid-cols-7 gap-2 mb-2">
+          {WEEKDAY_LABELS.map((w) => <div key={w} className="text-center text-xs font-semibold uppercase tracking-wide text-muted-foreground">{w}</div>)}
         </div>
-        <div className="grid gap-1" style={{ gridTemplateColumns: "repeat(7, minmax(0, 1fr))" }}>
+        <div className="grid gap-2" style={{ gridTemplateColumns: "repeat(7, minmax(0, 1fr))" }}>
           {weeks.flat().map((day) => {
             const key = ymd(day);
             const dayCards = byDay.get(key) ?? [];
@@ -104,7 +109,7 @@ export function CalendarGrid({ cards, refDate, mode, color, onOpenCard, onSetDay
       <NoDateTray cards={undated} color={color} onOpen={onOpenCard} />
 
       <DragOverlay>
-        {activeCard ? <div className="rounded-md bg-card border border-primary/50 shadow-lg px-1.5 py-1 text-[11px] w-40 truncate">{activeCard.title}</div> : null}
+        {activeCard ? <div className="rounded-[var(--radius)] bg-card border border-border ring-1 ring-primary/40 shadow-[var(--shadow-elevated)] rotate-[2deg] scale-[1.02] px-2 py-1.5 text-xs font-medium w-44 truncate text-foreground">{activeCard.title}</div> : null}
       </DragOverlay>
     </DndContext>
   );

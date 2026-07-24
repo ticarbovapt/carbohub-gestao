@@ -730,4 +730,317 @@
     color: hsl(var(--carbo-green));
     transition: color 0.15s ease-out;
   }
+
+  /* ============================================================
+     🗂️  MARKETING BOARD — PREMIUM  (clean premium + acentos Carbo)
+     Utilitários compartilhados do redesign do quadro (Trello interno).
+     Tudo referencia tokens já existentes. Cor do quadro/lista entra só
+     como ACENTO (dot/faixa/borda) — nunca como fundo de superfície.
+     Convenção: passe a cor de acento via `style={{ '--mkt-accent': hex }}`
+     (helper getAccent() em src/lib/mktTheme.ts).
+     ============================================================ */
+
+  /* Fallback do acento quando a var não é informada */
+  .mkt-canvas,
+  .mkt-column,
+  .mkt-card,
+  .mkt-accent-bar,
+  .mkt-accent-left,
+  .mkt-dot,
+  .mkt-board-card {
+    --mkt-accent: hsl(var(--muted-foreground));
+  }
+
+  /* CANVAS — superfície neutra das 6 views (substitui BOARD_BG full-bleed).
+     Use em containers `fixed inset-0`. Combine com .bg-dot-grid p/ depth. */
+  .mkt-canvas {
+    background: hsl(var(--board-bg));
+    color: hsl(var(--foreground));
+  }
+
+  /* TOOLBAR / VIEW-HEADER — cabeçalho de view único, dialeto neutro.
+     bg-card + borda inferior + altura fixa 56px. .mkt-view-header = alias. */
+  .mkt-toolbar,
+  .mkt-view-header {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    min-height: 3.5rem; /* 56px */
+    padding-inline: var(--space-md);
+    background: hsl(var(--card));
+    border-bottom: 1px solid hsl(var(--border));
+  }
+
+  /* Título de view/quadro — IBM Plex, sem drop-shadow */
+  .mkt-view-title {
+    font-family: 'IBM Plex Sans', 'Inter', system-ui, sans-serif;
+    font-size: 1.125rem; /* text-lg */
+    line-height: 1.75rem;
+    font-weight: 700;
+    letter-spacing: -0.015em;
+    color: hsl(var(--foreground));
+  }
+
+  /* COLUNA (Kanban) — superfície sobre o canvas neutro */
+  .mkt-column {
+    background: hsl(var(--card));
+    border: 1px solid hsl(var(--border));
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-card);
+  }
+
+  /* Coluna recolhida — neutra (nunca gradiente de fundo) */
+  .mkt-column-collapsed {
+    background: hsl(var(--muted) / 0.4);
+    border: 1px solid hsl(var(--border));
+    border-radius: var(--radius);
+    color: hsl(var(--foreground));
+  }
+
+  /* HEADER DA COLUNA — transparente, cor entra via dot/.mkt-accent-bar */
+  .mkt-column-header {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    padding: 0.625rem 0.75rem; /* py-2.5 px-3 */
+    color: hsl(var(--foreground));
+  }
+
+  .mkt-column-title {
+    font-family: 'IBM Plex Sans', 'Inter', system-ui, sans-serif;
+    font-size: 0.875rem; /* text-sm */
+    font-weight: 600;
+    color: hsl(var(--foreground));
+  }
+
+  .mkt-column-count {
+    font-size: 0.75rem; /* text-xs — piso */
+    color: hsl(var(--muted-foreground));
+  }
+
+  /* CARTÃO — repouso card, hover-lift elevated. Respeita reduced-motion. */
+  .mkt-card {
+    padding: 0.75rem; /* p-3 */
+    background: hsl(var(--card));
+    border: 1px solid hsl(var(--border));
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-card);
+    transition: box-shadow 0.18s ease-out, transform 0.18s ease-out,
+      border-color 0.18s ease-out;
+  }
+  .mkt-card > * + * {
+    margin-top: var(--space-sm); /* space-y-2 */
+  }
+  .mkt-card:hover {
+    box-shadow: var(--shadow-elevated);
+    transform: translateY(-2px); /* -translate-y-0.5 */
+    border-color: hsl(var(--mkt-accent) / 0.4);
+  }
+
+  /* Título de cartão */
+  .mkt-card-title {
+    font-size: 0.8125rem; /* 13px */
+    line-height: 1.625;
+    font-weight: 500;
+    color: hsl(var(--foreground));
+  }
+
+  /* Meta-row do cartão (due/checklist/badges) */
+  .mkt-meta-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    font-size: 0.75rem;
+    color: hsl(var(--muted-foreground));
+  }
+
+  /* Placeholder da origem do drag (NÃO usar opacity 0.4) */
+  .mkt-card-placeholder {
+    border: 1px dashed hsl(var(--border));
+    background: hsl(var(--muted) / 0.3);
+    border-radius: var(--radius);
+  }
+  /* Overlay do drag = próprio cartão, apenas elevado + leve rotação */
+  .mkt-card-overlay {
+    box-shadow: var(--shadow-elevated);
+    transform: rotate(2deg) scale(1.02);
+    outline: 1px solid hsl(var(--primary) / 0.4);
+    outline-offset: 0;
+  }
+
+  /* ACENTO — faixa de 3px no topo (variante "faixa") */
+  .mkt-accent-bar {
+    height: 3px;
+    border-top-left-radius: var(--radius);
+    border-top-right-radius: var(--radius);
+    background: var(--mkt-accent);
+  }
+  /* ACENTO — borda lateral 2px (variante "borda") */
+  .mkt-accent-left {
+    border-left: 2px solid var(--mkt-accent);
+  }
+  /* ACENTO — dot 8px (variante "dot") */
+  .mkt-dot {
+    display: inline-block;
+    height: 0.5rem;
+    width: 0.5rem;
+    border-radius: 9999px;
+    background: var(--mkt-accent);
+    flex: none;
+  }
+
+  /* CARD DE QUADRO (home) — base neutra + acento faixa/borda, radius 16px ok */
+  .mkt-board-card {
+    background: hsl(var(--card));
+    border: 1px solid hsl(var(--border));
+    border-radius: var(--card-radius);
+    box-shadow: var(--shadow-card);
+    transition: box-shadow 0.18s ease-out, transform 0.18s ease-out,
+      border-color 0.18s ease-out;
+  }
+  .mkt-board-card:hover {
+    box-shadow: var(--shadow-elevated);
+    transform: translateY(-2px);
+    border-color: hsl(var(--mkt-accent) / 0.4);
+  }
+
+  /* VIEWSWITCHER / SEGMENTED — trilho neutro, ativo em card */
+  .mkt-segmented {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.125rem;
+    padding: 0.125rem; /* p-0.5 */
+    background: hsl(var(--muted));
+    border-radius: 0.375rem; /* rounded-md */
+  }
+  .mkt-segmented-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    padding: 0.25rem 0.625rem;
+    border-radius: 0.375rem;
+    font-size: 0.8125rem;
+    font-weight: 500;
+    color: hsl(var(--muted-foreground));
+    transition: color 0.15s ease-out, background-color 0.15s ease-out;
+  }
+  .mkt-segmented-item:hover {
+    color: hsl(var(--foreground));
+  }
+  .mkt-segmented-item[data-active="true"],
+  .mkt-segmented-item.is-active {
+    background: hsl(var(--card));
+    color: hsl(var(--foreground));
+    box-shadow: var(--shadow-card);
+  }
+
+  /* FIELD — sistema único de input (datas/anexos/localização/comentário) */
+  .mkt-field {
+    height: 2.25rem; /* h-9 */
+    border-radius: var(--input-radius);
+    border: 1px solid hsl(var(--border));
+    background: hsl(var(--card));
+    padding-inline: 0.625rem;
+    color: hsl(var(--foreground));
+  }
+  .mkt-field:focus,
+  .mkt-field:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px hsl(var(--primary) / 0.4);
+    border-color: hsl(var(--primary) / 0.5);
+  }
+
+  /* Bloco de conteúdo do modal (Descrição/Checklist/Comentários) */
+  .mkt-content-block {
+    background: hsl(var(--card));
+    border: 1px solid hsl(var(--border));
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-card);
+    transition: box-shadow 0.18s ease-out;
+  }
+  .mkt-content-block:hover {
+    box-shadow: var(--shadow-elevated);
+  }
+
+  /* ESTADO VAZIO — estrutura canônica premium (nunca texto solto) */
+  .mkt-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    max-width: 24rem; /* max-w-sm */
+    margin-inline: auto;
+    padding-block: 3rem; /* py-12 */
+    gap: 0.5rem;
+  }
+  .mkt-empty-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 3rem;
+    width: 3rem;
+    border-radius: 9999px;
+    background: hsl(var(--muted));
+    color: hsl(var(--muted-foreground));
+    margin-bottom: 0.25rem;
+  }
+  .mkt-empty-title {
+    font-family: 'IBM Plex Sans', 'Inter', system-ui, sans-serif;
+    font-size: 1rem; /* text-base */
+    font-weight: 600;
+    color: hsl(var(--foreground));
+  }
+  .mkt-empty-subcopy {
+    font-size: 0.875rem;
+    color: hsl(var(--muted-foreground));
+  }
+
+  /* SKELETON — placeholder no formato dos cards (sem layout shift) */
+  .mkt-skeleton {
+    background: hsl(var(--muted));
+    border-radius: var(--radius);
+    animation: mktPulse 1.6s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
+
+  @keyframes mktPulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+  }
+
+  /* Barra de progresso de checklist — verde Carbo (não emerald cru) */
+  .mkt-progress {
+    height: 0.5rem;
+    border-radius: 9999px;
+    background: hsl(var(--muted));
+    overflow: hidden;
+  }
+  .mkt-progress-fill {
+    height: 100%;
+    border-radius: 9999px;
+    background: hsl(var(--primary));
+    transition: width 0.25s ease-out;
+  }
+
+  /* Rótulo de metadado (único caso permitido de <12px — caixa-alta) */
+  .mkt-meta-label {
+    font-size: 0.6875rem; /* 11px */
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: hsl(var(--muted-foreground));
+  }
+
+  /* Reduced motion — desabilita translate/scale dos lifts e do overlay */
+  @media (prefers-reduced-motion: reduce) {
+    .mkt-card:hover,
+    .mkt-board-card:hover {
+      transform: none;
+    }
+    .mkt-card-overlay {
+      transform: none;
+    }
+    .mkt-skeleton {
+      animation: none;
+    }
+  }
 }

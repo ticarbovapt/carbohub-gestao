@@ -7,7 +7,7 @@ import {
 import { ArrowLeft, GanttChartSquare } from "lucide-react";
 import { useBoard, useBoardLive, useBoardMutations, type CardSummary } from "@/hooks/useBoards";
 import { useTeamMembers } from "@/hooks/useTeamMembers";
-import { BOARD_BG, LIST_DOT, LIST_PALETTE } from "@/lib/mktTheme";
+import { LIST_DOT, LIST_PALETTE, getAccent, tintedLabelStyle } from "@/lib/mktTheme";
 import { ymd, ymdOfIso, diffDays, shiftYmd, isoForDay, addDays } from "@/lib/mktCalendar";
 import { CardModal } from "@/components/board/CardModal";
 import { ViewSwitcher } from "@/components/board/ViewSwitcher";
@@ -51,19 +51,21 @@ function Bar({ card, rangeStart, dayWidth, color, preview, onOpen }: {
   const hasBoth = !!card.start_date && !!card.due_date;
 
   return (
-    <div className="absolute top-1 h-6 rounded-md shadow-sm flex items-stretch overflow-hidden text-white text-[11px]"
-      style={{ left, width, background: color }}>
+    <div className="absolute top-1 h-6 rounded-md border flex items-stretch overflow-hidden text-xs shadow-[var(--shadow-card)] transition-shadow hover:shadow-[var(--shadow-elevated)]"
+      style={{ left, width, ...tintedLabelStyle(color) }}>
       {hasBoth && (
         <div ref={startZone.setNodeRef} {...startZone.attributes} {...startZone.listeners}
-          className="w-1.5 shrink-0 cursor-ew-resize bg-black/20 hover:bg-black/40" title="Ajustar início" />
+          className="w-1.5 shrink-0 cursor-ew-resize opacity-60 hover:opacity-100 transition-opacity"
+          style={{ background: color }} title="Ajustar início" />
       )}
       <div ref={moveZone.setNodeRef} {...moveZone.attributes} {...moveZone.listeners}
-        onClick={onOpen} className="flex-1 min-w-0 cursor-grab active:cursor-grabbing px-1.5 flex items-center truncate">
+        onClick={onOpen} className="flex-1 min-w-0 cursor-grab active:cursor-grabbing px-2 flex items-center truncate font-medium">
         {card.title}
       </div>
       {hasBoth && (
         <div ref={endZone.setNodeRef} {...endZone.attributes} {...endZone.listeners}
-          className="w-1.5 shrink-0 cursor-ew-resize bg-black/20 hover:bg-black/40" title="Ajustar entrega" />
+          className="w-1.5 shrink-0 cursor-ew-resize opacity-60 hover:opacity-100 transition-opacity"
+          style={{ background: color }} title="Ajustar entrega" />
       )}
     </div>
   );
@@ -111,7 +113,13 @@ export default function BoardTimeline() {
   }, [data?.cards]);
 
   if (!boardId) return null;
-  if (isLoading || !data) return <div className="p-6 text-sm text-muted-foreground">Carregando timeline…</div>;
+  if (isLoading || !data) return (
+    <div className="fixed inset-0 top-14 mkt-canvas p-4 md:p-6 space-y-3">
+      {Array.from({ length: 6 }).map((_, i) => (
+        <div key={i} className="mkt-skeleton h-8" style={{ width: `${40 + (i % 3) * 20}%`, marginLeft: `${(i % 4) * 8}%` }} />
+      ))}
+    </div>
+  );
   const { board, cards, lists, labels } = data;
 
   // Grupos (lista ou membro) + cartões sem data.
@@ -179,51 +187,61 @@ export default function BoardTimeline() {
   const preview = drag ? { ...drag, delta } : null;
 
   return (
-    <div className="fixed inset-0 top-14 flex flex-col" style={{ background: BOARD_BG[board.background] ?? BOARD_BG.blue }}>
-      <div className="flex items-center gap-3 px-4 py-2.5 bg-black/20 backdrop-blur-sm flex-wrap">
-        <button onClick={() => navigate("/quadros")} className="p-1.5 rounded-md hover:bg-white/10 text-white"><ArrowLeft className="h-4 w-4" /></button>
-        <h1 className="text-lg font-bold text-white drop-shadow flex items-center gap-2"><GanttChartSquare className="h-5 w-5" /> {board.title}</h1>
+    <div className="fixed inset-0 top-14 flex flex-col mkt-canvas">
+      <div className="mkt-toolbar header-depth-glow flex-wrap">
+        <button onClick={() => navigate("/quadros")} className="p-1.5 rounded-md hover:bg-muted text-muted-foreground transition-colors"><ArrowLeft className="h-4 w-4" /></button>
+        <span className="mkt-dot" style={{ ["--mkt-accent" as string]: getAccent(board.background) }} />
+        <GanttChartSquare className="h-5 w-5 text-primary" />
+        <h1 className="mkt-view-title">{board.title}</h1>
         <ViewSwitcher boardId={boardId} current="timeline" />
         <div className="ml-auto flex items-center gap-2 flex-wrap">
-          <div className="flex gap-0.5 bg-white/15 rounded-md p-0.5">
+          <div className="mkt-segmented">
             {(["list", "member"] as const).map((g) => (
-              <button key={g} onClick={() => setGroupBy(g)} className={`px-2.5 py-1 text-xs font-semibold rounded ${groupBy === g ? "bg-white text-slate-900" : "text-white/90"}`}>{g === "list" ? "Por lista" : "Por membro"}</button>
+              <button key={g} onClick={() => setGroupBy(g)} data-active={groupBy === g} className="mkt-segmented-item font-semibold">{g === "list" ? "Por lista" : "Por membro"}</button>
             ))}
           </div>
-          <div className="flex gap-0.5 bg-white/15 rounded-md p-0.5">
+          <div className="mkt-segmented">
             {(["dia", "semana", "mes"] as const).map((z) => (
-              <button key={z} onClick={() => setZoom(z)} className={`px-2.5 py-1 text-xs font-semibold rounded capitalize ${zoom === z ? "bg-white text-slate-900" : "text-white/90"}`}>{z === "mes" ? "Mês" : z}</button>
+              <button key={z} onClick={() => setZoom(z)} data-active={zoom === z} className="mkt-segmented-item font-semibold capitalize">{z === "mes" ? "Mês" : z}</button>
             ))}
           </div>
         </div>
       </div>
 
-      <div className="flex-1 overflow-auto bg-background/95">
+      <div className="flex-1 overflow-auto bg-dot-grid">
         <DndContext sensors={sensors} onDragStart={onDragStart} onDragMove={onDragMove} onDragEnd={onDragEnd}>
           <div style={{ width: gridW, minWidth: "100%" }} className="relative">
             {/* Cabeçalho de meses */}
-            <div className="sticky top-0 z-20 h-7 bg-muted border-b border-border" style={{ width: gridW }}>
-              <div className="absolute left-0 top-0 h-7 bg-muted border-r border-border flex items-center px-2 text-xs font-semibold text-muted-foreground" style={{ width: LEFT_W }}>Cartão</div>
+            <div className="sticky top-0 z-20 h-7 bg-card border-b border-border" style={{ width: gridW }}>
+              <div className="absolute left-0 top-0 h-7 bg-card border-r border-border flex items-center px-2 text-xs font-semibold text-muted-foreground" style={{ width: LEFT_W }}>Cartão</div>
               {monthSegs.map((seg, i) => (
-                <div key={i} className="absolute top-0 h-7 border-r border-border/60 flex items-center px-1 text-[11px] font-semibold text-muted-foreground capitalize" style={{ left: seg.left, width: seg.width }}>{seg.label}</div>
+                <div key={i} className="absolute top-0 h-7 border-r border-border/60 flex items-center px-2 text-xs font-semibold text-muted-foreground capitalize" style={{ left: seg.left, width: seg.width }}>{seg.label}</div>
               ))}
             </div>
 
             {/* Linha do hoje */}
             {todayLeft >= LEFT_W && todayLeft <= gridW && (
-              <div className="absolute top-7 bottom-0 w-px bg-red-500/70 z-10" style={{ left: todayLeft }} />
+              <div className="absolute top-7 bottom-0 w-0.5 bg-destructive/70 z-10" style={{ left: todayLeft }} />
             )}
 
             {/* Grupos */}
             {visibleGroups.length === 0 && (
-              <div className="p-6 text-sm text-muted-foreground">Nenhum cartão com datas para exibir.</div>
+              <div className="mkt-empty">
+                <div className="mkt-empty-icon"><GanttChartSquare className="h-5 w-5" /></div>
+                <p className="mkt-empty-title">Nada na linha do tempo</p>
+                <p className="mkt-empty-subcopy">Defina início e/ou entrega nos cartões para que apareçam aqui como barras.</p>
+              </div>
             )}
             {visibleGroups.map((g) => (
-              <div key={g.key}>
-                <div className="sticky left-0 z-10 bg-muted/60 border-b border-border px-2 py-1 text-xs font-semibold text-foreground" style={{ width: LEFT_W }}>{g.label} <span className="text-muted-foreground">({g.cards.length})</span></div>
+              <div key={g.key} className="board-fade-in">
+                <div className="sticky left-0 z-10 bg-muted/60 border-b border-border px-3 py-1.5 flex items-center gap-2 text-sm font-semibold text-foreground" style={{ width: LEFT_W }}>
+                  {groupBy === "list" && <span className="mkt-dot" style={{ ["--mkt-accent" as string]: listColor(g.key) }} />}
+                  <span className="truncate">{g.label}</span>
+                  <span className="mkt-column-count">({g.cards.length})</span>
+                </div>
                 {g.cards.map((c) => (
-                  <div key={c.id} className="relative h-8 border-b border-border/40">
-                    <div className="sticky left-0 z-10 bg-card h-8 border-r border-border px-2 flex items-center text-xs text-foreground truncate" style={{ width: LEFT_W }}>{c.title}</div>
+                  <div key={c.id} className="relative h-8 border-b border-border/40 hover:bg-muted/30 transition-colors">
+                    <div className="sticky left-0 z-10 bg-card h-8 border-r border-border px-3 flex items-center text-xs text-foreground truncate" style={{ width: LEFT_W }}>{c.title}</div>
                     <Bar card={c} rangeStart={rangeStart} dayWidth={dayWidth} color={listColor(c.list_id)} preview={preview} onOpen={() => setOpenCardId(c.mirrorOf ?? c.id)} />
                   </div>
                 ))}
@@ -234,11 +252,11 @@ export default function BoardTimeline() {
 
         {/* Sem datas */}
         {undated.length > 0 && (
-          <div className="border-t border-border bg-muted/30 px-3 py-2">
-            <p className="text-[11px] font-semibold text-muted-foreground mb-1">Sem datas ({undated.length}) — defina início/entrega no cartão para aparecer na timeline</p>
+          <div className="border-t border-border bg-card px-4 py-3">
+            <p className="mkt-meta-label mb-2">Sem datas ({undated.length}) — defina início/entrega no cartão para aparecer na timeline</p>
             <div className="flex gap-2 flex-wrap">
               {undated.map((c) => (
-                <button key={c.id} onClick={() => setOpenCardId(c.mirrorOf ?? c.id)} className="text-xs rounded-md border border-border bg-card px-2 py-1 hover:border-primary/40">{c.title}</button>
+                <button key={c.id} onClick={() => setOpenCardId(c.mirrorOf ?? c.id)} className="text-xs rounded-md border border-border bg-card px-2.5 py-1 text-foreground shadow-[var(--shadow-card)] hover:border-primary/40 hover:shadow-[var(--shadow-elevated)] transition">{c.title}</button>
               ))}
             </div>
           </div>
