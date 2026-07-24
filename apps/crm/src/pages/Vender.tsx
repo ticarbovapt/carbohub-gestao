@@ -26,6 +26,7 @@ import { generateQuotePdf } from "@/lib/quotePdf";
 import { useCreateVenda, useUpdateVendaFull } from "@/hooks/useVendas";
 import { useConvertQuote } from "@/hooks/useCarbozeVendas";
 import { useProdutos } from "@/hooks/useProdutos";
+import { useCreateOS } from "@/hooks/useOS";
 import { useDiscountTiersPublic } from "@/hooks/useDiscountTiers";
 import { computeLineDiscount, resolveTier } from "@/lib/discount";
 import { usePrazoConfigPublic } from "@/hooks/usePrazoConfig";
@@ -112,6 +113,7 @@ export default function Vender() {
   const createVenda = useCreateVenda();
   const updateVenda = useUpdateVendaFull();
   const convertQuote = useConvertQuote();
+  const createOS = useCreateOS();
   const [searchParams] = useSearchParams();
   const editId = searchParams.get("edit");
   const { data: produtos = [] } = useProdutos();
@@ -620,6 +622,30 @@ export default function Vender() {
     } finally { setEmailing(false); }
   }
 
+  // Descarbonização vira OS (pendente, sem veículo) na fonte de verdade e é
+  // vinculada à venda (descarb_os_id). A previsão de execução vira o agendamento
+  // (scheduled_at → calendário). Falha aqui NÃO derruba a venda (já salva).
+  async function createDescarbOSForSale(orderId: string) {
+    if (validServiceItems().length === 0) return;
+    const digits = doc.replace(/\D/g, "");
+    const pj = digits.length > 11;
+    try {
+      const { id: osId, numero } = await createOS.mutateAsync({
+        service_type: pj ? "b2b" : "b2c",
+        person_type: pj ? "pj" : "pf",
+        customer_name: customerName.trim() || "Cliente",
+        phone: phone.trim() || null,
+        federal_code: pj ? (digits || null) : null,
+        email: email.trim() || null,
+        scheduled_at: executionDate ? new Date(executionDate + "T00:00:00").toISOString() : null,
+      });
+      await (supabase as any).from("carboze_orders").update({ descarb_os_id: osId }).eq("id", orderId);
+      toast.success(`OS ${numero ?? ""} de descarbonização criada.`);
+    } catch {
+      toast.error("Venda salva, mas houve erro ao criar a OS de descarbonização. Crie manualmente em Descarbonização › OS.");
+    }
+  }
+
   async function handleSell() {
     if (validItems().length === 0 && validServiceItems().length === 0) { toast.error("Adicione ao menos um item."); return; }
     if (validItems().some((i) => !(i.unit_price > 0))) { toast.error("Informe o preço unitário de todos os itens."); return; }
@@ -630,9 +656,11 @@ export default function Vender() {
         await updateVenda.mutateAsync({ id: editId, input: buildPayload("orcamento") });
         await convertQuote.mutateAsync(editId);
         toast.success("Orçamento editado e convertido em venda!");
+        if (!editOrder?.descarb_os_id) await createDescarbOSForSale(editId);
       } else {
-        const { numero } = await createVenda.mutateAsync(buildPayload("pedido"));
-        toast.success(`Venda ${numero ?? ""} registrada!`);
+        const created = await createVenda.mutateAsync(buildPayload("pedido"));
+        toast.success(`Venda ${created.numero ?? ""} registrada!`);
+        await createDescarbOSForSale(created.id);
       }
       resetForm();
       navigate("/pedidos");

@@ -38,6 +38,7 @@ export interface NovaVendaInput {
   desconto_percent?: number; // % efetivo
   desconto_motivo?: string;
   agreed_delivery_date?: string;  // data de entrega combinada; banco calcula PPF/PPE
+  execution_date?: string;   // previsão de execução da descarbonização (serviço)
   internal_notes?: string;   // dados estratégicos + notas internas (nada é descartado)
   vendedor_id?: string;      // gestor pode lançar a venda por outro vendedor
   vendedor_name?: string;
@@ -262,6 +263,7 @@ async function buildOrderFields(input: NovaVendaInput) {
     discount_reason: input.desconto_motivo ?? null,
     discount_requested_by: vendedorId,
     agreed_delivery_date: input.agreed_delivery_date ?? null,
+    execution_date: input.execution_date ?? null,
     notes: input.notes || null, internal_notes: input.internal_notes || null,
     vendedor_id: vendedorId, vendedor_name: vendedorName,
     quote_form_snapshot: input.form_snapshot ?? null,
