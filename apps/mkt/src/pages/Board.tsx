@@ -374,7 +374,7 @@ export default function Board() {
               <FilterControls value={criteria} onChange={setCriteria} labels={labels} team={team} />
               <div className="flex items-center gap-2">
                 <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => setCriteria(emptyCriteria())}>Limpar</Button>
-                <Button size="sm" className="h-8 text-xs" disabled={!filterActive}
+                <Button size="sm" className="h-8 text-xs disabled:bg-transparent disabled:text-muted-foreground disabled:border disabled:border-border disabled:opacity-100 disabled:shadow-none" disabled={!filterActive}
                   onClick={() => { const name = prompt("Nome da busca salva:"); if (name?.trim()) savedMut.create.mutate({ name: name.trim(), scope: "board", boardId, criteria }); }}>
                   Salvar busca
                 </Button>

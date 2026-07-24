@@ -106,14 +106,14 @@ export function CardModal({ cardId, boardId, labels, onClose }: {
                 {editDesc ? (
                   <div className="space-y-2">
                     <textarea autoFocus value={desc} onChange={(e) => setDesc(e.target.value)} rows={4}
-                      className="w-full text-sm rounded-[var(--input-radius)] border border-border bg-card p-2.5 resize-y focus:outline-none focus:ring-2 focus:ring-primary/40" />
+                      className="w-full text-sm rounded-[var(--input-radius)] border border-border bg-card p-2.5 resize-y break-words focus:outline-none focus:ring-2 focus:ring-primary/40" />
                     <div className="flex gap-2 items-center">
                       <Button size="sm" onClick={() => { mut.updateCard.mutate({ description: desc }); setEditDesc(false); }}>Salvar</Button>
                       <button onClick={() => { setDesc(data.card.description ?? ""); setEditDesc(false); }} className="p-1.5 text-muted-foreground hover:text-foreground rounded-md hover:bg-muted/60"><X className="h-4 w-4" /></button>
                     </div>
                   </div>
                 ) : (
-                  <button onClick={() => setEditDesc(true)} className="w-full text-left text-sm rounded-[var(--radius)] bg-muted/40 hover:bg-muted/60 transition-colors p-3 min-h-[48px] text-foreground whitespace-pre-wrap">
+                  <button onClick={() => setEditDesc(true)} className="w-full min-w-0 text-left text-sm rounded-[var(--radius)] bg-muted/40 hover:bg-muted/60 transition-colors p-3 min-h-[48px] text-foreground whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
                     {data.card.description || <span className="text-muted-foreground">Adicionar uma descrição…</span>}
                   </button>
                 )}
@@ -122,17 +122,23 @@ export function CardModal({ cardId, boardId, labels, onClose }: {
               {/* Checklists */}
               <div className="border-t border-border pt-5">
                 <Section icon={CheckSquare} title="Checklists">
-                  <div className="space-y-4">
+                  <div className="space-y-3">
                     {data.checklists.map((cl) => {
                       const done = cl.items.filter((i) => i.is_done).length;
                       const pct = cl.items.length ? Math.round((done / cl.items.length) * 100) : 0;
                       return (
-                        <div key={cl.id} className="space-y-2">
-                          <div className="flex items-center justify-between">
-                            <p className="text-sm font-medium text-foreground">{cl.title}</p>
-                            <button onClick={() => mut.removeChecklist.mutate({ id: cl.id })} className="p-1 text-muted-foreground hover:text-destructive rounded-md hover:bg-muted/60"><Trash2 className="h-3.5 w-3.5" /></button>
+                        <div key={cl.id} className="rounded-[var(--radius)] border border-border bg-muted/40 p-3 space-y-2.5">
+                          <div className="flex items-center justify-between gap-2">
+                            <p className="text-sm font-medium text-foreground truncate">{cl.title}</p>
+                            <button onClick={() => mut.removeChecklist.mutate({ id: cl.id })} className="shrink-0 p-1 text-muted-foreground hover:text-destructive rounded-md hover:bg-muted/60"><Trash2 className="h-3.5 w-3.5" /></button>
                           </div>
-                          <div className="mkt-progress"><div className="mkt-progress-fill" style={{ width: `${pct}%` }} /></div>
+                          <div className="flex items-center gap-2.5">
+                            <span className="mkt-meta-label shrink-0 tabular-nums">{done}/{cl.items.length}</span>
+                            <div className="mkt-progress flex-1"><div className="mkt-progress-fill" style={{ width: `${pct}%` }} /></div>
+                          </div>
+                          {cl.items.length === 0 && newItemFor !== cl.id && (
+                            <p className="text-xs text-muted-foreground italic">Nenhum item ainda</p>
+                          )}
                           {cl.items.map((it) => {
                             const itemOverdue = it.due_date && !it.is_done && new Date(it.due_date) < new Date();
                             return (
@@ -162,12 +168,12 @@ export function CardModal({ cardId, boardId, labels, onClose }: {
                                 placeholder="Adicionar item…" className="h-8 text-sm" />
                             </div>
                           ) : (
-                            <button onClick={() => { setNewItemFor(cl.id); setItemText(""); }} className="text-xs text-muted-foreground hover:text-primary transition-colors flex items-center gap-1"><Plus className="h-3 w-3" /> Adicionar item</button>
+                            <button onClick={() => { setNewItemFor(cl.id); setItemText(""); }} className="w-full flex items-center gap-1.5 text-xs text-muted-foreground hover:text-primary hover:border-primary/40 transition-colors rounded-md border border-dashed border-border bg-card/60 px-2.5 py-1.5"><Plus className="h-3 w-3" /> Adicionar item</button>
                           )}
                         </div>
                       );
                     })}
-                    <button onClick={() => mut.addChecklist.mutate({ title: "Checklist" })} className="text-xs text-muted-foreground hover:text-primary transition-colors flex items-center gap-1"><Plus className="h-3 w-3" /> Adicionar checklist</button>
+                    <button onClick={() => mut.addChecklist.mutate({ title: "Checklist" })} className="w-full flex items-center justify-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-primary hover:border-primary/40 transition-colors rounded-[var(--radius)] border border-dashed border-border px-3 py-2"><Plus className="h-3.5 w-3.5" /> Adicionar checklist</button>
                   </div>
                 </Section>
               </div>
@@ -263,7 +269,7 @@ export function CardModal({ cardId, boardId, labels, onClose }: {
                     <p className="mkt-meta-label flex items-center gap-1.5"><Tag className="h-3.5 w-3.5" /> Etiquetas</p>
                     <div className="flex flex-wrap gap-1.5">
                       {labels.filter((l) => data.labelIds.includes(l.id)).map((l) => (
-                        <span key={l.id} className="inline-flex items-center h-5 px-2 rounded-md border text-xs font-medium" style={tintedLabelStyle(LABEL_COLORS[l.color] ?? l.color)}>{l.name || "—"}</span>
+                        <span key={l.id} className={`inline-flex items-center h-5 rounded-md border text-xs font-medium ${l.name ? "px-2" : "w-8"}`} style={tintedLabelStyle(LABEL_COLORS[l.color] ?? l.color)}>{l.name}</span>
                       ))}
                     </div>
                   </div>
@@ -319,7 +325,7 @@ export function CardModal({ cardId, boardId, labels, onClose }: {
                       {labels.map((l) => (
                         <label key={l.id} className="flex items-center gap-2 px-1 py-1 rounded-md hover:bg-muted cursor-pointer">
                           <input type="checkbox" checked={data.labelIds.includes(l.id)} onChange={(e) => mut.toggleLabel.mutate({ labelId: l.id, on: e.target.checked })} className="h-4 w-4 rounded border-border accent-[hsl(var(--primary))]" />
-                          <span className="inline-flex items-center h-5 flex-1 rounded-md border px-2 text-xs font-medium" style={tintedLabelStyle(LABEL_COLORS[l.color] ?? l.color)}>{l.name || "—"}</span>
+                          <span className="inline-flex items-center h-5 flex-1 rounded-md border px-2 text-xs font-medium" style={tintedLabelStyle(LABEL_COLORS[l.color] ?? l.color)}>{l.name || <span className="opacity-50">Sem nome</span>}</span>
                         </label>
                       ))}
                       <div className="border-t border-border pt-1">

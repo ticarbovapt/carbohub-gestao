@@ -154,9 +154,9 @@ export default function BoardTable() {
                       if (!l) return null;
                       const hex = LABEL_COLORS[l.color] ?? l.color;
                       return (
-                        <span key={id} className="inline-flex items-center gap-1 h-5 px-2 rounded-md border text-xs font-medium whitespace-nowrap" style={tintedLabelStyle(hex)} title={l.name}>
+                        <span key={id} className="inline-flex items-center gap-1 h-5 px-2 rounded-md border text-xs font-medium whitespace-nowrap" style={tintedLabelStyle(hex)} title={l.name || "(sem nome)"}>
                           <span className="h-1.5 w-1.5 rounded-full" style={{ background: hex }} />
-                          {l.name || "—"}
+                          {l.name && <span>{l.name}</span>}
                         </span>
                       );
                     })}
@@ -169,11 +169,11 @@ export default function BoardTable() {
                 </td>
                 <td className="px-3 py-1.5">
                   <input type="date" value={c.start_date ? ymdOfIso(c.start_date) : ""} onChange={(e) => m.setCardDates.mutate({ id: c.id, start_date: e.target.value ? new Date(e.target.value + "T12:00:00").toISOString() : null })}
-                    className="h-8 text-xs rounded-[var(--input-radius)] border border-transparent hover:border-border focus:border-border bg-transparent px-1.5 transition-colors" />
+                    className={`h-8 text-xs rounded-[var(--input-radius)] border border-transparent bg-transparent px-1.5 transition-colors hover:border-border hover:text-foreground focus:border-border focus:text-foreground ${c.start_date ? "text-foreground" : "text-muted-foreground/50"}`} />
                 </td>
                 <td className="px-3 py-1.5">
                   <input type="date" value={c.due_date ? ymdOfIso(c.due_date) : ""} onChange={(e) => m.setCardDates.mutate({ id: c.id, due_date: e.target.value ? new Date(e.target.value + "T12:00:00").toISOString() : null })}
-                    className="h-8 text-xs rounded-[var(--input-radius)] border border-transparent hover:border-border focus:border-border bg-transparent px-1.5 transition-colors" />
+                    className={`h-8 text-xs rounded-[var(--input-radius)] border border-transparent bg-transparent px-1.5 transition-colors hover:border-border hover:text-foreground focus:border-border focus:text-foreground ${c.due_date ? "text-foreground" : "text-muted-foreground/50"}`} />
                 </td>
                 <td className="px-3 py-1.5 whitespace-nowrap text-xs text-muted-foreground">{c.checklistTotal > 0 ? `${c.checklistDone}/${c.checklistTotal}` : "—"}</td>
                 {fields.map((f: CustomField) => (

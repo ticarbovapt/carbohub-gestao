@@ -16,14 +16,14 @@ export function FilterControls({ value, onChange, labels, team }: {
   const labelIds = value.labelIds ?? [];
 
   return (
-    <div className="space-y-3">
-      <div className="space-y-1">
+    <div className="space-y-4">
+      <div className="space-y-1.5">
         <label className="mkt-meta-label">Texto</label>
-        <Input value={value.text ?? ""} onChange={(e) => set({ text: e.target.value })} placeholder="Buscar no título…" className="mkt-field text-sm" />
+        <Input value={value.text ?? ""} onChange={(e) => set({ text: e.target.value })} placeholder="Buscar no título…" className="mkt-field text-sm w-full" />
       </div>
 
       {labels && labels.length > 0 && (
-        <div className="space-y-1">
+        <div className="space-y-1.5">
           <label className="mkt-meta-label">Etiquetas</label>
           <div className="flex flex-wrap gap-1.5">
             {labels.map((l) => {
@@ -39,7 +39,7 @@ export function FilterControls({ value, onChange, labels, team }: {
         </div>
       )}
 
-      <div className="space-y-1">
+      <div className="space-y-1.5">
         <label className="mkt-meta-label">Membro</label>
         <select value={value.memberId ?? ""} onChange={(e) => set({ memberId: e.target.value })}
           className="mkt-field text-sm w-full">
@@ -48,13 +48,13 @@ export function FilterControls({ value, onChange, labels, team }: {
         </select>
       </div>
 
-      <div className="flex gap-2">
-        <div className="flex-1 space-y-1">
+      <div className="flex gap-3">
+        <div className="flex-1 space-y-1.5">
           <label className="mkt-meta-label">Entrega de</label>
           <input type="date" value={value.dueFrom ?? ""} onChange={(e) => set({ dueFrom: e.target.value })} className="mkt-field text-sm w-full" />
         </div>
-        <div className="flex-1 space-y-1">
-          <label className="mkt-meta-label">até</label>
+        <div className="flex-1 space-y-1.5">
+          <label className="mkt-meta-label">Até</label>
           <input type="date" value={value.dueTo ?? ""} onChange={(e) => set({ dueTo: e.target.value })} className="mkt-field text-sm w-full" />
         </div>
       </div>

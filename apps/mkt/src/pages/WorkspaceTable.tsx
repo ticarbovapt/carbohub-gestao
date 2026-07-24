@@ -167,11 +167,11 @@ export default function WorkspaceTable() {
                 </td>
                 <td className="px-2 py-1">
                   <input type="date" value={c.start_date ? ymdOfIso(c.start_date) : ""} onChange={(e) => m.setCardDates.mutate({ id: c.id, start_date: e.target.value ? new Date(e.target.value + "T12:00:00").toISOString() : null })}
-                    className="h-8 text-xs rounded-md border border-transparent hover:border-border bg-transparent px-1" />
+                    className={`h-8 text-xs rounded-[var(--input-radius)] border border-transparent bg-transparent px-1.5 transition-colors hover:border-border hover:text-foreground focus:border-border focus:text-foreground ${c.start_date ? "text-foreground" : "text-muted-foreground/50"}`} />
                 </td>
                 <td className="px-2 py-1">
                   <input type="date" value={c.due_date ? ymdOfIso(c.due_date) : ""} onChange={(e) => m.setCardDates.mutate({ id: c.id, due_date: e.target.value ? new Date(e.target.value + "T12:00:00").toISOString() : null })}
-                    className="h-8 text-xs rounded-md border border-transparent hover:border-border bg-transparent px-1" />
+                    className={`h-8 text-xs rounded-[var(--input-radius)] border border-transparent bg-transparent px-1.5 transition-colors hover:border-border hover:text-foreground focus:border-border focus:text-foreground ${c.due_date ? "text-foreground" : "text-muted-foreground/50"}`} />
                 </td>
                 <td className="px-2 py-1 whitespace-nowrap text-muted-foreground">{c.checklistTotal > 0 ? `${c.checklistDone}/${c.checklistTotal}` : "—"}</td>
               </tr>

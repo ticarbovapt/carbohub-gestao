@@ -148,7 +148,7 @@ export default function Quadros() {
         <FilterControls value={criteria} onChange={setCriteria} team={team} />
         <div className="flex items-center gap-2 flex-wrap">
           <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => setCriteria(emptyCriteria())}>Limpar</Button>
-          <Button size="sm" className="h-8 text-xs" disabled={!active}
+          <Button size="sm" className="h-8 text-xs disabled:bg-transparent disabled:text-muted-foreground disabled:border disabled:border-border disabled:opacity-100 disabled:shadow-none" disabled={!active}
             onClick={() => { const name = prompt("Nome da busca salva:"); if (name?.trim()) savedMut.create.mutate({ name: name.trim(), scope: "all", criteria }); }}>
             Salvar busca
           </Button>

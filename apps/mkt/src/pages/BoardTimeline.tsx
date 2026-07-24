@@ -4,7 +4,7 @@ import {
   DndContext, PointerSensor, useSensor, useSensors, useDraggable,
   type DragStartEvent, type DragMoveEvent, type DragEndEvent,
 } from "@dnd-kit/core";
-import { ArrowLeft, GanttChartSquare } from "lucide-react";
+import { ArrowLeft, GanttChartSquare, CalendarOff } from "lucide-react";
 import { useBoard, useBoardLive, useBoardMutations, type CardSummary } from "@/hooks/useBoards";
 import { useTeamMembers } from "@/hooks/useTeamMembers";
 import { LIST_DOT, LIST_PALETTE, getAccent, tintedLabelStyle } from "@/lib/mktTheme";
@@ -210,7 +210,7 @@ export default function BoardTimeline() {
 
       <div className="flex-1 overflow-auto bg-dot-grid">
         <DndContext sensors={sensors} onDragStart={onDragStart} onDragMove={onDragMove} onDragEnd={onDragEnd}>
-          <div style={{ width: gridW, minWidth: "100%" }} className="relative">
+          <div style={{ width: gridW, minWidth: "100%" }} className="relative flex flex-col min-h-full">
             {/* Cabeçalho de meses */}
             <div className="sticky top-0 z-20 h-7 bg-card border-b border-border" style={{ width: gridW }}>
               <div className="absolute left-0 top-0 h-7 bg-card border-r border-border flex items-center px-2 text-xs font-semibold text-muted-foreground" style={{ width: LEFT_W }}>Cartão</div>
@@ -225,38 +225,50 @@ export default function BoardTimeline() {
             )}
 
             {/* Grupos */}
-            {visibleGroups.length === 0 && (
-              <div className="mkt-empty">
-                <div className="mkt-empty-icon"><GanttChartSquare className="h-5 w-5" /></div>
-                <p className="mkt-empty-title">Nada na linha do tempo</p>
-                <p className="mkt-empty-subcopy">Defina início e/ou entrega nos cartões para que apareçam aqui como barras.</p>
-              </div>
-            )}
-            {visibleGroups.map((g) => (
-              <div key={g.key} className="board-fade-in">
-                <div className="sticky left-0 z-10 bg-muted/60 border-b border-border px-3 py-1.5 flex items-center gap-2 text-sm font-semibold text-foreground" style={{ width: LEFT_W }}>
-                  {groupBy === "list" && <span className="mkt-dot" style={{ ["--mkt-accent" as string]: listColor(g.key) }} />}
-                  <span className="truncate">{g.label}</span>
-                  <span className="mkt-column-count">({g.cards.length})</span>
-                </div>
-                {g.cards.map((c) => (
-                  <div key={c.id} className="relative h-8 border-b border-border/40 hover:bg-muted/30 transition-colors">
-                    <div className="sticky left-0 z-10 bg-card h-8 border-r border-border px-3 flex items-center text-xs text-foreground truncate" style={{ width: LEFT_W }}>{c.title}</div>
-                    <Bar card={c} rangeStart={rangeStart} dayWidth={dayWidth} color={listColor(c.list_id)} preview={preview} onOpen={() => setOpenCardId(c.mirrorOf ?? c.id)} />
+            <div className="flex-1">
+              {visibleGroups.length === 0 ? (
+                <div className="h-full flex items-center justify-center px-4 py-10">
+                  <div className="mkt-empty">
+                    <div className="mkt-empty-icon"><GanttChartSquare className="h-5 w-5" /></div>
+                    <p className="mkt-empty-title">Nenhum cartão com data ainda</p>
+                    <p className="mkt-empty-subcopy">Defina início e/ou entrega nos cartões para vê-los aqui na linha do tempo como barras.</p>
                   </div>
-                ))}
-              </div>
-            ))}
+                </div>
+              ) : (
+                visibleGroups.map((g) => (
+                  <div key={g.key} className="board-fade-in">
+                    <div className="sticky left-0 z-10 bg-muted/60 border-y border-border px-3 py-2 flex items-center gap-2 text-sm font-semibold text-foreground" style={{ width: LEFT_W }}>
+                      {groupBy === "list" && <span className="mkt-dot" style={{ ["--mkt-accent" as string]: listColor(g.key) }} />}
+                      <span className="truncate">{g.label}</span>
+                      <span className="mkt-column-count">({g.cards.length})</span>
+                    </div>
+                    {g.cards.map((c) => (
+                      <div key={c.id} className="relative h-9 border-b border-border/40 hover:bg-muted/30 transition-colors">
+                        <div className="sticky left-0 z-10 bg-card h-9 border-r border-border px-3 flex items-center text-xs text-foreground truncate" style={{ width: LEFT_W }}>{c.title}</div>
+                        <Bar card={c} rangeStart={rangeStart} dayWidth={dayWidth} color={listColor(c.list_id)} preview={preview} onOpen={() => setOpenCardId(c.mirrorOf ?? c.id)} />
+                      </div>
+                    ))}
+                  </div>
+                ))
+              )}
+            </div>
           </div>
         </DndContext>
 
         {/* Sem datas */}
         {undated.length > 0 && (
-          <div className="border-t border-border bg-card px-4 py-3">
-            <p className="mkt-meta-label mb-2">Sem datas ({undated.length}) — defina início/entrega no cartão para aparecer na timeline</p>
+          <div className="border-t border-border bg-card px-4 py-3 space-y-2.5">
+            <div className="flex items-center gap-1.5">
+              <CalendarOff className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+              <p className="mkt-meta-label">Sem datas ({undated.length})</p>
+              <span className="text-xs text-muted-foreground truncate">— defina início/entrega no cartão para posicioná-lo na linha do tempo</span>
+            </div>
             <div className="flex gap-2 flex-wrap">
               {undated.map((c) => (
-                <button key={c.id} onClick={() => setOpenCardId(c.mirrorOf ?? c.id)} className="text-xs rounded-md border border-border bg-card px-2.5 py-1 text-foreground shadow-[var(--shadow-card)] hover:border-primary/40 hover:shadow-[var(--shadow-elevated)] transition">{c.title}</button>
+                <button key={c.id} onClick={() => setOpenCardId(c.mirrorOf ?? c.id)} className="inline-flex items-center gap-1.5 text-xs rounded-md border border-border bg-card px-2.5 py-1.5 text-foreground shadow-[var(--shadow-card)] hover:border-primary/40 hover:shadow-[var(--shadow-elevated)] transition-all">
+                  <span className="mkt-dot" style={{ ["--mkt-accent" as string]: listColor(c.list_id) }} />
+                  <span className="truncate max-w-[12rem]">{c.title}</span>
+                </button>
               ))}
             </div>
           </div>
