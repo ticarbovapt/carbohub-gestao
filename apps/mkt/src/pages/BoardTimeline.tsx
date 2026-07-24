@@ -211,6 +211,12 @@ export default function BoardTimeline() {
       <div className="flex-1 overflow-auto bg-dot-grid">
         <DndContext sensors={sensors} onDragStart={onDragStart} onDragMove={onDragMove} onDragEnd={onDragEnd}>
           <div style={{ width: gridW, minWidth: "100%" }} className="relative flex flex-col min-h-full">
+            {/* Colunas verticais semanais — estrutura de "canvas de Gantt" que
+                elimina o vazião branco quando há poucos cartões. */}
+            <div className="absolute top-7 bottom-0 pointer-events-none z-0" style={{
+              left: LEFT_W, right: 0,
+              backgroundImage: `repeating-linear-gradient(to right, hsl(var(--border) / 0.45), hsl(var(--border) / 0.45) 1px, transparent 1px, transparent ${dayWidth * 7}px)`,
+            }} />
             {/* Cabeçalho de meses */}
             <div className="sticky top-0 z-20 h-7 bg-card border-b border-border" style={{ width: gridW }}>
               <div className="absolute left-0 top-0 h-7 bg-card border-r border-border flex items-center px-2 text-xs font-semibold text-muted-foreground" style={{ width: LEFT_W }}>Cartão</div>
