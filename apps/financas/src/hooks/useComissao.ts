@@ -38,6 +38,25 @@ export function useComissaoAgregado(from: string, to: string, enabled = true) {
   });
 }
 
+/** Total de DESCARBONIZAÇÃO (serviço, sem NF) por vendedor no período. Conta já
+ *  na venda — base separada da de produto (RPC crm_comissao_descarb). */
+export function useComissaoDescarb(from: string, to: string, enabled = true) {
+  return useQuery({
+    queryKey: ["comissao_descarb", from, to],
+    enabled: enabled && !!from && !!to,
+    queryFn: async (): Promise<ComissaoAgregado[]> => {
+      const { data, error } = await db.rpc("crm_comissao_descarb", { p_from: from, p_to: to });
+      if (error) throw error;
+      return ((data ?? []) as any[]).map((r) => ({
+        vendedor_id: r.vendedor_id,
+        vendedor_name: r.vendedor_name ?? null,
+        total: Number(r.total || 0),
+        qtd: Number(r.qtd || 0),
+      }));
+    },
+  });
+}
+
 export interface CommissionStatement {
   id: string;
   vendedor_id: string;

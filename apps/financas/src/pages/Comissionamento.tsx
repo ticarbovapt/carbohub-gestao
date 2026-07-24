@@ -18,7 +18,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { useAuth } from "@/contexts/AuthContext";
 import { AlertCircle } from "lucide-react";
 import {
-  useComissaoAgregado, useCommissionStatements, useCreateStatement, useAddPayment,
+  useComissaoAgregado, useComissaoDescarb, useCommissionStatements, useCreateStatement, useAddPayment,
   useCommissionRules, useUpsertCommissionRule, useStatementItems,
   type CommissionStatement,
 } from "@/hooks/useComissao";
@@ -83,6 +83,7 @@ function CalcularTab() {
   const [showRegras, setShowRegras] = useState(false);
 
   const { data: agg = [], isLoading } = useComissaoAgregado(from, to);
+  const { data: descarb = [], isLoading: loadingDescarb } = useComissaoDescarb(from, to);
   const { data: regras = [] } = useCommissionRules();
   const create = useCreateStatement();
 
@@ -90,19 +91,35 @@ function CalcularTab() {
   const defaultRate = regras.find((r) => r.vendedor_id === null)?.rate_pct ?? 0;
   const rateFor = (vid: string) => regras.find((r) => r.vendedor_id === vid)?.rate_pct ?? defaultRate;
 
+  // Une produto (com NF) + descarbonização (sem NF) por vendedor. Ambos entram
+  // na base de comissão; a descarbonização aparece em coluna própria.
+  const merged = useMemo(() => {
+    const map = new Map<string, { vendedor_id: string; vendedor_name: string | null; prod: number; prodQtd: number; descarb: number; descarbQtd: number }>();
+    const ensure = (id: string, name: string | null) => {
+      let e = map.get(id);
+      if (!e) { e = { vendedor_id: id, vendedor_name: name, prod: 0, prodQtd: 0, descarb: 0, descarbQtd: 0 }; map.set(id, e); }
+      if (!e.vendedor_name && name) e.vendedor_name = name;
+      return e;
+    };
+    for (const a of agg) { const e = ensure(a.vendedor_id, a.vendedor_name); e.prod += a.total; e.prodQtd += a.qtd; }
+    for (const d of descarb) { const e = ensure(d.vendedor_id, d.vendedor_name); e.descarb += d.total; e.descarbQtd += d.qtd; }
+    return Array.from(map.values()).sort((x, y) => (y.prod + y.descarb) - (x.prod + x.descarb));
+  }, [agg, descarb]);
+
   // Pré-preenche o % a partir das regras (sem sobrescrever o que já foi digitado).
   useEffect(() => {
     setPcts((prev) => {
       const next = { ...prev };
-      for (const a of agg) if (next[a.vendedor_id] == null) next[a.vendedor_id] = rateFor(a.vendedor_id);
+      for (const a of merged) if (next[a.vendedor_id] == null) next[a.vendedor_id] = rateFor(a.vendedor_id);
       return next;
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [agg, regras]);
+  }, [merged, regras]);
 
-  const vendedores = useMemo(() => agg.map((a) => ({ id: a.vendedor_id, name: a.vendedor_name || "—" })), [agg]);
-  const rows = vendFilter === "__all__" ? agg : agg.filter((a) => a.vendedor_id === vendFilter);
-  const totalBase = rows.reduce((s, r) => s + r.total, 0);
+  const vendedores = useMemo(() => merged.map((a) => ({ id: a.vendedor_id, name: a.vendedor_name || "—" })), [merged]);
+  const rows = vendFilter === "__all__" ? merged : merged.filter((a) => a.vendedor_id === vendFilter);
+  const totalBase = rows.reduce((s, r) => s + r.prod + r.descarb, 0);
+  const totalDescarb = rows.reduce((s, r) => s + r.descarb, 0);
 
   return (
     <div className="space-y-4">
@@ -127,7 +144,10 @@ function CalcularTab() {
             </Select>
           </div>
           <div className="md:ml-auto flex items-center gap-3">
-            <span className="text-sm text-muted-foreground">Base faturada: <strong className="text-foreground">{brl(totalBase)}</strong></span>
+            <span className="text-sm text-muted-foreground">
+              Base total: <strong className="text-foreground">{brl(totalBase)}</strong>
+              {totalDescarb > 0 && <span className="text-muted-foreground"> · descarb. {brl(totalDescarb)}</span>}
+            </span>
             <CarboButton size="sm" variant="outline" onClick={() => setShowRegras(true)}>Regras de %</CarboButton>
           </div>
         </CarboCardContent>
@@ -137,19 +157,21 @@ function CalcularTab() {
       <CarboCard>
         <CarboCardContent className="pt-6">
           <p className="text-xs text-muted-foreground mb-3">
-            Base = vendas <strong>faturadas (com NF)</strong> do vendedor no período. Digite o % e clique em <strong>Gerar comissão</strong> — ela vai pra aba Pagamentos.
+            Base = vendas <strong>faturadas (com NF)</strong> + <strong>descarbonização (serviço, sem NF)</strong> do vendedor no período.
+            A descarbonização entra na base já no momento da venda. Digite o % e clique em <strong>Gerar comissão</strong> — ela vai pra aba Pagamentos.
           </p>
-          {isLoading ? (
+          {isLoading || loadingDescarb ? (
             <div className="space-y-2">{Array.from({ length: 4 }).map((_, i) => <CarboSkeleton key={i} className="h-12 w-full" />)}</div>
           ) : rows.length === 0 ? (
-            <CarboEmptyState icon={DollarSign} title="Sem vendas faturadas" description="Nenhum vendedor com venda faturada (com NF) neste período." />
+            <CarboEmptyState icon={DollarSign} title="Sem vendas no período" description="Nenhum vendedor com venda faturada (com NF) ou descarbonização neste período." />
           ) : (
             <CarboTable>
               <CarboTableHeader>
                 <CarboTableRow>
                   <CarboTableHead>Vendedor</CarboTableHead>
                   <CarboTableHead className="text-right">Vendas faturadas</CarboTableHead>
-                  <CarboTableHead className="text-center">Qtd</CarboTableHead>
+                  <CarboTableHead className="text-right">Descarbonização<span className="text-[10px] font-normal text-muted-foreground"> (sem NF)</span></CarboTableHead>
+                  <CarboTableHead className="text-right">Base total</CarboTableHead>
                   <CarboTableHead className="w-28">%</CarboTableHead>
                   <CarboTableHead className="text-right">Comissão</CarboTableHead>
                   <CarboTableHead className="text-right">Ação</CarboTableHead>
@@ -158,12 +180,25 @@ function CalcularTab() {
               <CarboTableBody>
                 {rows.map((r) => {
                   const pct = pcts[r.vendedor_id] ?? 0;
-                  const comissao = Math.round(r.total * (pct / 100) * 100) / 100;
+                  const base = r.prod + r.descarb;
+                  const qtd = r.prodQtd + r.descarbQtd;
+                  const comissao = Math.round(base * (pct / 100) * 100) / 100;
                   return (
                     <CarboTableRow key={r.vendedor_id}>
                       <CarboTableCell className="font-medium">{r.vendedor_name || "—"}</CarboTableCell>
-                      <CarboTableCell className="text-right font-medium">{brl(r.total)}</CarboTableCell>
-                      <CarboTableCell className="text-center">{r.qtd}</CarboTableCell>
+                      <CarboTableCell className="text-right">
+                        {brl(r.prod)}
+                        <span className="block text-[11px] text-muted-foreground">{r.prodQtd} NF(s)</span>
+                      </CarboTableCell>
+                      <CarboTableCell className="text-right">
+                        {r.descarb > 0 ? (
+                          <>
+                            <span className="text-carbo-green font-medium">{brl(r.descarb)}</span>
+                            <span className="block text-[11px] text-muted-foreground">{r.descarbQtd} serviço(s)</span>
+                          </>
+                        ) : <span className="text-muted-foreground">—</span>}
+                      </CarboTableCell>
+                      <CarboTableCell className="text-right font-medium">{brl(base)}</CarboTableCell>
                       <CarboTableCell>
                         <div className="flex items-center gap-1">
                           <DecimalInput value={pct} onValueChange={(v) => setPcts((p) => ({ ...p, [r.vendedor_id]: v }))} min={0} max={100} className="h-9" placeholder="0" />
@@ -178,7 +213,7 @@ function CalcularTab() {
                           onClick={() => create.mutate({
                             vendedor_id: r.vendedor_id, vendedor_name: r.vendedor_name,
                             period_start: from, period_end: to,
-                            base_sales: r.total, sales_count: r.qtd, rate_pct: pct,
+                            base_sales: base, sales_count: qtd, rate_pct: pct,
                           })}
                         >
                           Gerar comissão
