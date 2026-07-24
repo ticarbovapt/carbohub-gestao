@@ -226,12 +226,16 @@ export async function generateQuotePdf(order: QuotePdfData, opts?: { download?: 
   const items = (Array.isArray(order.items) ? order.items : []) as QuoteItem[];
   const body = items
     .filter((it) => (it.name || it.product_code) && (it.quantity ?? 0) > 0)
-    .map((it) => {
+    .flatMap((it) => {
       const qty = it.quantity ?? 0;
       const unit = it.unit_price ?? 0;
       const bonus = it.bonus_quantity ?? 0;
-      const nome = (it.name || it.product_code || "—") + (bonus > 0 ? `  (+${bonus} bonif.)` : "");
-      return [nome, String(qty), brl(unit), brl(qty * unit)];
+      const nome = it.name || it.product_code || "—";
+      // Linha paga + (quando houver) linha da bonificação, separada e a R$ 0,00,
+      // pra deixar claro que a qtd bonificada é grátis e não faz parte da paga.
+      const rows: string[][] = [[nome, String(qty), brl(unit), brl(qty * unit)]];
+      if (bonus > 0) rows.push([`${nome} (bonificação)`, String(bonus), brl(0), brl(0)]);
+      return rows;
     });
 
   autoTable(doc, {
