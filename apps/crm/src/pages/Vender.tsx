@@ -569,8 +569,8 @@ export default function Vender() {
         ie: ie || undefined,
         endereco,
         endereco_faturamento: fatMesmo ? null : fatEndereco,
-        vendedor_name: vendedor || undefined, items,
-        subtotal: subtotalBruto, discount: descontoTotal, discount_percent: percentAgregado, total,
+        vendedor_name: vendedor || undefined, items: [...items, ...validServiceItems()],
+        subtotal: orderSubtotal, discount: orderDesconto, discount_percent: percentAgregado, total: orderTotal,
         payment_terms: pagamentoLabel || undefined,
         notes: obsPublica || undefined, created_at: new Date().toISOString(), validityDays: 7,
       });
@@ -599,8 +599,8 @@ export default function Vender() {
         ie: ie || undefined,
         endereco,
         endereco_faturamento: fatMesmo ? null : fatEndereco,
-        vendedor_name: vendedor || undefined, items,
-        subtotal: subtotalBruto, discount: descontoTotal, discount_percent: percentAgregado, total,
+        vendedor_name: vendedor || undefined, items: [...items, ...validServiceItems()],
+        subtotal: orderSubtotal, discount: orderDesconto, discount_percent: percentAgregado, total: orderTotal,
         payment_terms: pagamentoLabel || undefined,
         notes: obsPublica || undefined, created_at: new Date().toISOString(), validityDays: 7,
       }, { download: false });

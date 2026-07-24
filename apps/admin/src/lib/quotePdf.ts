@@ -236,7 +236,7 @@ export async function generateQuotePdf(order: QuotePdfData, opts?: { download?: 
 
   autoTable(doc, {
     startY: y,
-    head: [["Produto", "Qtd", "Valor Unit.", "Total"]],
+    head: [["Descrição", "Qtd", "Valor Unit.", "Total"]],
     body: body.length ? body : [["Nenhum item", "", "", ""]],
     theme: "striped",
     headStyles: { fillColor: GREEN, halign: "left", fontSize: 9 },
