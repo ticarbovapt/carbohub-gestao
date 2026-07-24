@@ -22,6 +22,8 @@ export interface VendaItemInput {
   discount_type?: string;    // 'percent' | 'value' | 'none'
   discount_value?: number;   // número digitado (% ou R$)
   discount_amount?: number;  // R$ efetivamente abatido na linha
+  kind?: string;             // 'product' (default) | 'service' (descarbonização)
+  modalidade?: string;       // P | M | G — só para itens de serviço
 }
 
 export interface NovaVendaInput {
@@ -218,7 +220,8 @@ async function buildOrderFields(input: NovaVendaInput) {
     .map((i) => {
       const bruto = i.quantidade * i.preco_unitario;
       const descLinha = Math.min(Math.max(0, i.discount_amount ?? 0), round2(bruto));
-      return {
+      const isService = i.kind === "service";
+      const base = {
         name: i.produto, quantity: i.quantidade, unit_price: i.preco_unitario,
         bonificacao: i.bonificacao ?? 0,
         discount_type: (i.discount_amount ?? 0) > 0 ? (i.discount_type ?? "value") : "none",
@@ -227,6 +230,10 @@ async function buildOrderFields(input: NovaVendaInput) {
         total: round2(bruto - descLinha),
         product_id: i.product_id ?? null, product_code: i.product_code ?? null,
       };
+      // Itens de produto continuam EXATAMENTE como antes; serviço leva kind/modality e product_id nulo.
+      return isService
+        ? { ...base, product_id: null, kind: "service", modality: i.modalidade ?? null }
+        : base;
     });
   const { data: u } = await supabase.auth.getUser();
   const vendedorId = input.vendedor_id || u?.user?.id || null;

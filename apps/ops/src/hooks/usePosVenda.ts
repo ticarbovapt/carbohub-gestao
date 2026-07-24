@@ -304,7 +304,11 @@ async function ensureProductionOrderForOrder(orderId: string): Promise<boolean> 
   // UMA OP por item do pedido — cada uma com seu produto (BOM/checagem de material
   // funcionam) e sua quantidade. Pedido sem itens → uma OP genérica (sem vínculo).
   // O pedido só fica "produzido" quando TODAS as OPs concluírem (trigger op_conclude).
-  const source: (any | null)[] = items.length ? items : [null];
+  // Itens de serviço (descarbonização) NÃO geram OP — pulam a produção.
+  const producible = items.filter((it) => it?.kind !== "service");
+  // Pedido só de serviço (sem item produzível) não cria OP nenhuma.
+  if (items.length > 0 && producible.length === 0) return false;
+  const source: (any | null)[] = producible.length ? producible : [null];
   const rows = source.map((it) => {
     const qty = it ? (Number(it.quantity) || 1) : 1;
     const label = it ? String(it.name ?? "Produto") : `Pedido ${ord.data.order_number ?? ""}`.trim();

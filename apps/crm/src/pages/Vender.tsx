@@ -5,7 +5,7 @@ import { Mail } from "lucide-react";
 import { UserCog, Users } from "lucide-react";
 import {
   ShoppingCart, Plus, Trash2, Building2, MapPin, Package, Gift, FileText, Search, Target, ChevronDown,
-  Loader2, CheckCircle2, AlertCircle, CreditCard, Percent, Tag, CalendarClock,
+  Loader2, CheckCircle2, AlertCircle, CreditCard, Percent, Tag, CalendarClock, Sparkles,
 } from "lucide-react";
 import { CarboCard, CarboCardContent } from "@/components/ui/carbo-card";
 import { CarboButton } from "@/components/ui/carbo-button";
@@ -55,6 +55,23 @@ interface ItemRow {
   discType: "percent" | "value"; discValue: number;
 }
 const emptyRow = (): ItemRow => ({ id: crypto.randomUUID(), productId: "", qty: 1, unitPrice: 0, unitPriceStr: "", hasBonus: false, bonusQty: 0, discType: "percent", discValue: 0 });
+
+// ── Itens de Serviço (descarbonizações): preço FIXO por modalidade ──
+const DESCARB_MODALIDADES = [
+  { key: "P", label: "Descarbonização P", price: 400 },
+  { key: "M", label: "Descarbonização M", price: 700 },
+  { key: "G", label: "Descarbonização G", price: 1400 },
+] as const;
+
+// Linha de serviço: separada da de produto. Preço vem fixo da modalidade.
+interface ServiceRow {
+  id: string; modality: "" | "P" | "M" | "G"; qty: number; hasBonus: boolean; bonusQty: number;
+  discType: "percent" | "value"; discValue: number;
+}
+const emptyServiceRow = (): ServiceRow => ({ id: crypto.randomUUID(), modality: "", qty: 1, hasBonus: false, bonusQty: 0, discType: "percent", discValue: 0 });
+// Preço fixo da modalidade selecionada (0 se ainda não escolheu).
+const modalidadePrice = (m: ServiceRow["modality"]): number => DESCARB_MODALIDADES.find((x) => x.key === m)?.price ?? 0;
+const modalidadeLabel = (m: ServiceRow["modality"]): string => DESCARB_MODALIDADES.find((x) => x.key === m)?.label ?? "Serviço";
 
 // Preço em pt-BR: aceita vírgula como decimal ("1,50") ou ponto ("1.50"); com
 // vírgula, os pontos são separador de milhar. String vazia → 0.
@@ -128,6 +145,8 @@ export default function Vender() {
   const [phone, setPhone] = useState("");
   const [isLicenciado, setIsLicenciado] = useState(false);
   const [rows, setRows] = useState<ItemRow[]>([emptyRow()]);
+  // Itens de serviço (descarbonizações) — opcional, começa VAZIO.
+  const [serviceRows, setServiceRows] = useState<ServiceRow[]>([]);
   const [obsPublica, setObsPublica] = useState("");
   const [notasInternas, setNotasInternas] = useState("");
   const [tipoPonto, setTipoPonto] = useState("");
@@ -172,6 +191,9 @@ export default function Vender() {
   // ── Prazo de entrega + PPF/PPE (opcional; banco recalcula de forma autoritativa) ──
   const [deliveryDate, setDeliveryDate] = useState("");
   const [dateOpen, setDateOpen] = useState(false);
+  // Previsão de execução da descarbonização (serviço) — independente da entrega.
+  const [executionDate, setExecutionDate] = useState("");
+  const [execDateOpen, setExecDateOpen] = useState(false);
   const { data: prazoCfg = { enabled: false, minBusinessDays: 3, shipOffsetDays: 1 } } = usePrazoConfigPublic();
   const prazos = useMemo(
     () => (deliveryDate ? computePrazos(new Date(), new Date(deliveryDate + "T00:00:00"), prazoCfg) : null),
@@ -236,6 +258,25 @@ export default function Vender() {
     };
   }, [rows]);
   const discTier = useMemo(() => resolveTier(percentAgregado, discountCfg), [percentAgregado, discountCfg]);
+
+  // Totais dos itens de SERVIÇO (preço fixo por modalidade). Separado da alçada de produto.
+  const { servSubtotal, servDesconto, servTotal } = useMemo(() => {
+    let bruto = 0, desc = 0;
+    for (const s of serviceRows) {
+      const g = s.qty * modalidadePrice(s.modality);
+      const line = computeLineDiscount(g, { type: s.discType, value: s.discValue });
+      bruto += g;
+      desc += line.amount;
+    }
+    bruto = round2(bruto);
+    desc = round2(desc);
+    return { servSubtotal: bruto, servDesconto: desc, servTotal: round2(Math.max(0, bruto - desc)) };
+  }, [serviceRows]);
+
+  // Totais do PEDIDO = produto + serviço (usados no rodapé e no buildPayload).
+  const orderSubtotal = round2(subtotalBruto + servSubtotal);
+  const orderDesconto = round2(descontoTotal + servDesconto);
+  const orderTotal = round2(total + servTotal);
 
   // Formata CPF (≤11 díg.) ou CNPJ (12+).
   function formatDoc(v: string) {
@@ -305,6 +346,9 @@ export default function Vender() {
   function updateRow(id: string, patch: Partial<ItemRow>) {
     setRows((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch } : r)));
   }
+  function updateServiceRow(id: string, patch: Partial<ServiceRow>) {
+    setServiceRows((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch } : r)));
+  }
   function onProduct(id: string, productId: string) {
     // O catálogo (mrp_products) não tem preço de venda; o vendedor informa o preço.
     updateRow(id, { productId });
@@ -326,6 +370,33 @@ export default function Vender() {
         total: line.net,
       };
     });
+
+  // Itens de serviço válidos (com modalidade e qtd). Preço fixo da modalidade.
+  const validServiceItems = () =>
+    serviceRows.filter((s) => s.modality && s.qty > 0).map((s) => {
+      const price = modalidadePrice(s.modality);
+      const bruto = s.qty * price;
+      const line = computeLineDiscount(bruto, { type: s.discType, value: s.discValue });
+      return {
+        name: modalidadeLabel(s.modality),
+        kind: "service" as const,
+        modality: s.modality as "P" | "M" | "G",
+        product_id: null,
+        product_code: null,
+        quantity: s.qty,
+        unit_price: price,
+        bonus_quantity: s.hasBonus ? s.bonusQty : 0,
+        discount_type: line.amount > 0 ? s.discType : "none",
+        discount_value: s.discValue,
+        discount_amount: line.amount,
+        total: line.net,
+      };
+    });
+
+  // Há ao menos um item válido de produto? (habilita a data de entrega combinada.)
+  const hasValidProduct = rows.some((r) => r.productId && r.qty > 0);
+  // Há ao menos um item válido de serviço? (habilita a previsão de execução.)
+  const hasValidService = serviceRows.some((s) => s.modality && s.qty > 0);
 
   // Junta notas internas + dados estratégicos num bloco (coluna internal_notes),
   // pra nada ser digitado e descartado.
@@ -351,12 +422,14 @@ export default function Vender() {
     endereco: typeof endereco; fatMesmo: boolean; fatEndereco: typeof fatEndereco;
     ie: string; ieUf: string; pagModalidade: string; pagParcelas: string; pagFaturamento: string;
     discReason: string; deliveryDate: string;
+    serviceRows: ServiceRow[]; executionDate: string;
   };
   function formSnapshot(): FormSnapshot {
     return {
       mode, doc, customerName, email, phone, isLicenciado, rows, obsPublica, notasInternas,
       tipoPonto, classificacao, volumeMedio, atuaDiesel, atuaFrotas, vendedorId, endereco, fatMesmo,
       fatEndereco, ie, ieUf, pagModalidade, pagParcelas, pagFaturamento, discReason, deliveryDate,
+      serviceRows, executionDate,
     };
   }
 
@@ -376,6 +449,7 @@ export default function Vender() {
       setIe(snap.ie ?? ""); setIeUf(snap.ieUf ?? "");
       setPagModalidade(snap.pagModalidade ?? ""); setPagParcelas(snap.pagParcelas ?? "1"); setPagFaturamento(snap.pagFaturamento ?? "");
       setDiscReason(snap.discReason ?? ""); setDeliveryDate(snap.deliveryDate ?? "");
+      setServiceRows(snap.serviceRows ?? []); setExecutionDate(snap.executionDate ?? "");
       if (snap.tipoPonto || snap.classificacao || snap.volumeMedio || snap.atuaDiesel || snap.atuaFrotas) setShowEstrategicos(true);
       if (snap.obsPublica || snap.notasInternas) setShowObs(true);
     } else {
@@ -400,6 +474,33 @@ export default function Vender() {
 
   // Monta o payload de gravação (cabeçalho + itens) a partir do estado da tela.
   function buildPayload(status: "orcamento" | "pedido") {
+    // Itens combinados: produto (como sempre) + serviço (chaves pt + kind/modalidade).
+    const itens = [
+      ...validItems().map((i) => ({
+        produto: i.name,
+        product_id: i.product_id as string | null,
+        product_code: i.product_code as string | null,
+        quantidade: i.quantity,
+        preco_unitario: i.unit_price,
+        bonificacao: i.bonus_quantity,
+        discount_type: i.discount_type,
+        discount_value: i.discount_value,
+        discount_amount: i.discount_amount,
+      })),
+      ...validServiceItems().map((i) => ({
+        produto: i.name,
+        kind: "service",
+        modalidade: i.modality,
+        product_id: null as string | null,
+        product_code: null as string | null,
+        quantidade: i.quantity,
+        preco_unitario: i.unit_price,
+        bonificacao: i.bonus_quantity,
+        discount_type: i.discount_type,
+        discount_value: i.discount_value,
+        discount_amount: i.discount_amount,
+      })),
+    ];
     return {
       form_snapshot: formSnapshot(),
       tipo: mode,
@@ -415,26 +516,18 @@ export default function Vender() {
       payment_terms: pagamentoLabel || undefined,
       endereco: (endereco.logradouro || endereco.cidade || endereco.cep) ? endereco : null,
       endereco_faturamento: fatMesmo ? null : ((fatEndereco.logradouro || fatEndereco.cidade || fatEndereco.cep) ? fatEndereco : null),
-      subtotal_bruto: subtotalBruto,
+      // Totais do PEDIDO = produto + serviço (combinados).
+      subtotal_bruto: orderSubtotal,
       // Desconto do pedido = agregado dos itens; tipo 'value' (R$) quando há desconto.
-      desconto_tipo: descontoTotal > 0 ? "value" : undefined,
-      desconto_valor: descontoTotal,
+      desconto_tipo: orderDesconto > 0 ? "value" : undefined,
+      desconto_valor: orderDesconto,
       desconto_percent: percentAgregado,
-      desconto_motivo: descontoTotal > 0 ? (discReason.trim() || undefined) : undefined,
+      desconto_motivo: orderDesconto > 0 ? (discReason.trim() || undefined) : undefined,
       agreed_delivery_date: deliveryDate || undefined,
-      total,
+      execution_date: executionDate || undefined,
+      total: orderTotal,
       notes: obsPublica || undefined,
-      itens: validItems().map((i) => ({
-        produto: i.name,
-        product_id: i.product_id,
-        product_code: i.product_code,
-        quantidade: i.quantity,
-        preco_unitario: i.unit_price,
-        bonificacao: i.bonus_quantity,
-        discount_type: i.discount_type,
-        discount_value: i.discount_value,
-        discount_amount: i.discount_amount,
-      })),
+      itens,
     } as const;
   }
 
@@ -451,11 +544,12 @@ export default function Vender() {
     setPagModalidade(""); setPagParcelas("1"); setPagFaturamento("");
     setDiscReason("");
     setDeliveryDate("");
+    setServiceRows([]); setExecutionDate("");
   }
 
   async function handleQuote() {
     const items = validItems();
-    if (items.length === 0) { toast.error("Adicione ao menos um item."); return; }
+    if (items.length === 0 && validServiceItems().length === 0) { toast.error("Adicione ao menos um item."); return; }
     if (items.some((i) => !(i.unit_price > 0))) { toast.error("Informe o preço unitário de todos os itens."); return; }
     if (!pagamentoValido) { toast.error("Selecione a forma de pagamento."); return; }
     setGenerating(true);
@@ -487,7 +581,7 @@ export default function Vender() {
 
   async function handleEmailQuote() {
     const items = validItems();
-    if (items.length === 0) { toast.error("Adicione ao menos um item."); return; }
+    if (items.length === 0 && validServiceItems().length === 0) { toast.error("Adicione ao menos um item."); return; }
     if (items.some((i) => !(i.unit_price > 0))) { toast.error("Informe o preço unitário de todos os itens."); return; }
     if (!pagamentoValido) { toast.error("Selecione a forma de pagamento."); return; }
     if (!email || !email.includes("@")) { toast.error("Informe o e-mail do cliente para enviar o orçamento."); return; }
@@ -527,7 +621,7 @@ export default function Vender() {
   }
 
   async function handleSell() {
-    if (validItems().length === 0) { toast.error("Adicione ao menos um item."); return; }
+    if (validItems().length === 0 && validServiceItems().length === 0) { toast.error("Adicione ao menos um item."); return; }
     if (validItems().some((i) => !(i.unit_price > 0))) { toast.error("Informe o preço unitário de todos os itens."); return; }
     if (!pagamentoValido) { toast.error("Selecione a forma de pagamento."); return; }
     try {
@@ -935,6 +1029,103 @@ export default function Vender() {
         </CarboCardContent>
       </CarboCard>
 
+      {/* Itens de Serviço (descarbonizações) — preço fixo por modalidade */}
+      <CarboCard>
+        <CarboCardContent className="p-4 space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="font-semibold flex items-center gap-2"><Sparkles className="h-4 w-4 text-carbo-green" /> Itens de Serviço <span className="text-xs text-muted-foreground font-normal">(opcional)</span></h3>
+            <Button variant="outline" size="sm" onClick={() => setServiceRows((p) => [...p, emptyServiceRow()])}>
+              <Plus className="h-4 w-4 mr-1" /> Adicionar Serviço
+            </Button>
+          </div>
+
+          {serviceRows.length === 0 && (
+            <p className="text-xs text-muted-foreground">Nenhum serviço adicionado. Use “Adicionar Serviço” para incluir descarbonizações.</p>
+          )}
+
+          {serviceRows.map((s) => {
+            const price = modalidadePrice(s.modality);
+            const bruto = s.qty * price;
+            const line = computeLineDiscount(bruto, { type: s.discType, value: s.discValue });
+            return (
+              <div key={s.id} className="rounded-xl border p-3 space-y-3">
+                <div className="grid grid-cols-1 sm:grid-cols-[1fr_90px_120px_auto] gap-3 items-end">
+                  <div className="space-y-1.5">
+                    <Label>Modalidade</Label>
+                    <Select value={s.modality} onValueChange={(v) => updateServiceRow(s.id, { modality: v as ServiceRow["modality"] })}>
+                      <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
+                      <SelectContent>{DESCARB_MODALIDADES.map((m) => <SelectItem key={m.key} value={m.key}>{m.label} — {brl(m.price)}</SelectItem>)}</SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Quantidade</Label>
+                    <Input type="number" min={1} value={s.qty} onChange={(e) => updateServiceRow(s.id, { qty: Number(e.target.value) })} />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Preço Unit. (R$)</Label>
+                    <Input type="text" value={s.modality ? brl(price) : ""} readOnly disabled placeholder="—" />
+                  </div>
+                  <div className="flex items-center justify-between sm:justify-end gap-3 sm:pb-2">
+                    <div className="text-right">
+                      <p className="text-xs text-muted-foreground">Total</p>
+                      <p className="font-semibold">{brl(line.net)}</p>
+                      {line.amount > 0 && (
+                        <p className="text-[11px] text-destructive tabular-nums">
+                          − {brl(line.amount)}{s.discType === "percent" ? ` (${line.percent}%)` : ""}
+                        </p>
+                      )}
+                    </div>
+                    <button onClick={() => setServiceRows((p) => p.filter((x) => x.id !== s.id))}
+                      className="p-1.5 rounded hover:bg-destructive/10 text-destructive"><Trash2 className="h-4 w-4" /></button>
+                  </div>
+                </div>
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-3">
+                  <label className="flex items-center gap-2">
+                    <Switch checked={s.hasBonus} onCheckedChange={(v) => updateServiceRow(s.id, { hasBonus: v })} />
+                    <span className="text-sm flex items-center gap-1"><Gift className="h-3.5 w-3.5 text-carbo-green" /> Tem bonificação</span>
+                  </label>
+                  {s.hasBonus && (
+                    <div className="flex items-center gap-2">
+                      <Label className="text-xs">Qtd bonificada</Label>
+                      <Input type="number" min={0} value={s.bonusQty} onChange={(e) => updateServiceRow(s.id, { bonusQty: Number(e.target.value) })} className="w-24" />
+                    </div>
+                  )}
+                  {/* Desconto POR ITEM: toggle % | R$ + valor */}
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm flex items-center gap-1"><Tag className="h-3.5 w-3.5 text-carbo-green" /> Desconto</span>
+                    <div className="grid grid-cols-2 gap-1 w-[92px] shrink-0">
+                      {([["percent", "%", Percent], ["value", "R$", Tag]] as const).map(([v, label, Ico]) => (
+                        <button key={v} type="button" onClick={() => updateServiceRow(s.id, { discType: v })}
+                          className={`rounded-md border px-1.5 py-1 text-xs font-medium flex items-center justify-center gap-0.5 transition-all ${
+                            s.discType === v ? "border-carbo-green bg-carbo-green/5 text-foreground" : "bg-card text-muted-foreground hover:bg-muted"}`}>
+                          <Ico className="h-3 w-3" /> {label}
+                        </button>
+                      ))}
+                    </div>
+                    <Input type="number" min={0} step="0.01" className="w-28"
+                      value={s.discValue || ""} onChange={(e) => updateServiceRow(s.id, { discValue: Number(e.target.value) })}
+                      placeholder={s.discType === "percent" ? "ex.: 5" : "ex.: 100,00"} />
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+
+          {/* Resumo dos serviços: subtotal · desconto · total */}
+          {serviceRows.length > 0 && (
+            <div className="flex justify-end border-t pt-3">
+              <div className="w-full sm:w-64 space-y-1 text-sm">
+                <div className="flex justify-between"><span className="text-muted-foreground">Subtotal serviços</span><span className="tabular-nums">{brl(servSubtotal)}</span></div>
+                {servDesconto > 0 && (
+                  <div className="flex justify-between text-destructive"><span>Desconto</span><span className="tabular-nums">− {brl(servDesconto)}</span></div>
+                )}
+                <div className="flex justify-between border-t pt-1 font-bold text-base"><span>Total serviços</span><span className="tabular-nums">{brl(servTotal)}</span></div>
+              </div>
+            </div>
+          )}
+        </CarboCardContent>
+      </CarboCard>
+
       {/* Prazo de Entrega e Fabricação (opcional) */}
       <CarboCard>
         <CarboCardContent className="p-4 space-y-3">
@@ -942,9 +1133,9 @@ export default function Vender() {
           <div className="grid md:grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label>Data de entrega combinada</Label>
-              <Popover open={dateOpen} onOpenChange={setDateOpen}>
+              <Popover open={dateOpen} onOpenChange={(o) => { if (hasValidProduct) setDateOpen(o); }}>
                 <PopoverTrigger asChild>
-                  <Button type="button" variant="outline" className="w-full justify-start font-normal">
+                  <Button type="button" variant="outline" disabled={!hasValidProduct} className="w-full justify-start font-normal">
                     <CalendarClock className="h-4 w-4 mr-2 text-muted-foreground" />
                     {deliveryDate ? fmtBr(new Date(deliveryDate + "T00:00:00")) : <span className="text-muted-foreground">Selecionar data</span>}
                   </Button>
@@ -972,6 +1163,41 @@ export default function Vender() {
                 </PopoverContent>
               </Popover>
               <p className="text-[11px] text-muted-foreground">Combine com o cliente. O prazo de fábrica (PPF/PPE) é calculado em dias úteis.</p>
+            </div>
+
+            {/* Previsão de execução (serviço) — habilita só com item de serviço válido */}
+            <div className="space-y-1.5">
+              <Label>Previsão de execução</Label>
+              <Popover open={execDateOpen} onOpenChange={(o) => { if (hasValidService) setExecDateOpen(o); }}>
+                <PopoverTrigger asChild>
+                  <Button type="button" variant="outline" disabled={!hasValidService} className="w-full justify-start font-normal">
+                    <CalendarClock className="h-4 w-4 mr-2 text-muted-foreground" />
+                    {executionDate ? fmtBr(new Date(executionDate + "T00:00:00")) : <span className="text-muted-foreground">Selecionar data</span>}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar
+                    mode="single"
+                    locale={ptBR}
+                    captionLayout="dropdown-buttons"
+                    fromYear={new Date().getFullYear()}
+                    toYear={new Date().getFullYear() + 3}
+                    selected={executionDate ? new Date(executionDate + "T00:00:00") : undefined}
+                    defaultMonth={executionDate ? new Date(executionDate + "T00:00:00") : new Date()}
+                    disabled={(d) => d < new Date(new Date().setHours(0, 0, 0, 0))}
+                    onSelect={(d) => { setExecutionDate(d ? toISO(d) : ""); setExecDateOpen(false); }}
+                    classNames={{
+                      caption: "flex justify-center pt-1 relative items-center gap-1",
+                      caption_dropdowns: "flex gap-1",
+                      caption_label: "hidden",
+                      vhidden: "sr-only",
+                      dropdown: "bg-background border rounded-md text-sm px-2 py-1 outline-none",
+                    }}
+                    initialFocus
+                  />
+                </PopoverContent>
+              </Popover>
+              <p className="text-[11px] text-muted-foreground">Estimativa da data de execução da descarbonização.</p>
             </div>
           </div>
           {prazos && (
@@ -1091,7 +1317,7 @@ export default function Vender() {
       <div className="sticky bottom-0 bg-background/95 backdrop-blur border-t -mx-4 md:-mx-6 px-4 md:px-6 py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div className="flex items-center justify-between sm:block">
           <p className="text-xs text-muted-foreground">Total</p>
-          <p className="text-xl font-bold">{brl(total)}</p>
+          <p className="text-xl font-bold">{brl(orderTotal)}</p>
         </div>
         <div className="flex items-center gap-2 w-full sm:w-auto">
           <Button variant="ghost" className="hidden sm:inline-flex" onClick={() => navigate("/pedidos")}>Cancelar</Button>
