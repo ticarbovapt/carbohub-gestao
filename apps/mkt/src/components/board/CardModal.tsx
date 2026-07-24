@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Dialog, DialogContent,
 } from "@/components/ui/dialog";
@@ -58,10 +58,26 @@ export function CardModal({ cardId, boardId, labels, onClose }: {
   const [showMirror, setShowMirror] = useState(false);
   const [addr, setAddr] = useState("");
   const [geoLoading, setGeoLoading] = useState(false);
+  const [newLabelName, setNewLabelName] = useState("");
+  const [newLabelColor, setNewLabelColor] = useState<string>(LABEL_COLOR_KEYS[0]);
+  const labelsRef = useRef<HTMLDivElement>(null);
+  const membersRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (data) { setTitle(data.card.title); setDesc(data.card.description ?? ""); setAddr(data.card.location_name ?? ""); }
   }, [data?.card.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Fecha os popovers (Etiquetas/Membros) ao clicar fora deles.
+  useEffect(() => {
+    if (!showLabels && !showMembers) return;
+    const onDown = (e: MouseEvent) => {
+      const t = e.target as Node;
+      if (showLabels && labelsRef.current && !labelsRef.current.contains(t)) setShowLabels(false);
+      if (showMembers && membersRef.current && !membersRef.current.contains(t)) setShowMembers(false);
+    };
+    document.addEventListener("mousedown", onDown);
+    return () => document.removeEventListener("mousedown", onDown);
+  }, [showLabels, showMembers]);
 
   const saveTitle = () => {
     const t = title.trim();
@@ -320,21 +336,36 @@ export function CardModal({ cardId, boardId, labels, onClose }: {
               {/* Ações */}
               <div className="space-y-2">
                 <p className="mkt-meta-label">Ações</p>
-                <div className="relative">
+                <div className="relative" ref={labelsRef}>
                   <Button size="sm" variant="outline" className="w-full justify-start gap-2" onClick={() => setShowLabels((v) => !v)}><Tag className="h-3.5 w-3.5" /> Etiquetas</Button>
                   {showLabels && (
-                    <div className="absolute z-10 mt-1 w-56 right-0 rounded-[var(--radius)] border border-border bg-popover shadow-[var(--shadow-elevated)] p-2 space-y-1">
-                      {labels.map((l) => (
-                        <label key={l.id} className="flex items-center gap-2 px-1 py-1 rounded-md hover:bg-muted cursor-pointer">
-                          <input type="checkbox" checked={data.labelIds.includes(l.id)} onChange={(e) => mut.toggleLabel.mutate({ labelId: l.id, on: e.target.checked })} className="h-4 w-4 rounded border-border accent-[hsl(var(--primary))]" />
-                          <span className="inline-flex items-center h-5 flex-1 rounded-md border px-2 text-xs font-medium" style={tintedLabelStyle(LABEL_COLORS[l.color] ?? l.color)}>{l.name || <span className="opacity-50">Sem nome</span>}</span>
-                        </label>
-                      ))}
-                      <div className="border-t border-border pt-1">
-                        <p className="text-xs text-muted-foreground px-1">Criar etiqueta</p>
-                        <div className="flex flex-wrap gap-1 p-1">
+                    <div className="absolute z-20 mt-1 w-72 right-0 rounded-[var(--radius)] border border-border bg-popover shadow-[var(--shadow-elevated)] p-2.5 space-y-2">
+                      <p className="mkt-meta-label">Etiquetas do quadro</p>
+                      <div className="space-y-1 max-h-52 overflow-y-auto">
+                        {labels.length === 0 && <p className="text-xs text-muted-foreground px-1 py-1">Nenhuma etiqueta ainda — crie abaixo.</p>}
+                        {labels.map((l) => (
+                          <div key={l.id} className="flex items-center gap-2">
+                            <input type="checkbox" checked={data.labelIds.includes(l.id)} onChange={(e) => mut.toggleLabel.mutate({ labelId: l.id, on: e.target.checked })} className="h-4 w-4 shrink-0 rounded border-border accent-[hsl(var(--primary))]" title="Aplicar ao cartão" />
+                            <span className="h-4 w-4 shrink-0 rounded" style={{ background: LABEL_COLORS[l.color] ?? l.color }} />
+                            <input defaultValue={l.name ?? ""} placeholder="Nome da etiqueta…"
+                              onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
+                              onBlur={(e) => { const v = e.target.value.trim(); if (v !== (l.name ?? "")) mut.updateLabel.mutate({ id: l.id, name: v }); }}
+                              className="flex-1 min-w-0 h-7 text-xs rounded-md border border-transparent hover:border-border focus:border-border focus:outline-none bg-transparent px-1.5 text-foreground" />
+                            <button onClick={() => mut.deleteLabel.mutate({ id: l.id })} className="shrink-0 p-1 text-muted-foreground hover:text-destructive rounded-md hover:bg-muted" title="Excluir etiqueta"><Trash2 className="h-3.5 w-3.5" /></button>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="border-t border-border pt-2 space-y-1.5">
+                        <p className="mkt-meta-label">Criar etiqueta</p>
+                        <div className="flex items-center gap-1.5">
+                          <input value={newLabelName} onChange={(e) => setNewLabelName(e.target.value)}
+                            onKeyDown={(e) => { if (e.key === "Enter" && newLabelName.trim()) mut.createLabel.mutate({ name: newLabelName.trim(), color: newLabelColor }, { onSuccess: () => setNewLabelName("") }); }}
+                            placeholder="Nome…" className="flex-1 min-w-0 h-7 text-xs rounded-md border border-border bg-card px-1.5 focus:outline-none focus:ring-1 focus:ring-primary" />
+                          <Button size="sm" className="h-7 px-2.5 text-xs shrink-0" disabled={!newLabelName.trim()} onClick={() => mut.createLabel.mutate({ name: newLabelName.trim(), color: newLabelColor }, { onSuccess: () => setNewLabelName("") })}>Criar</Button>
+                        </div>
+                        <div className="flex flex-wrap gap-1">
                           {LABEL_COLOR_KEYS.map((k) => (
-                            <button key={k} onClick={() => mut.createLabel.mutate({ name: "", color: k })} className="h-6 w-6 rounded-md" style={{ background: LABEL_COLORS[k] }} title={`Criar ${k}`} />
+                            <button key={k} onClick={() => setNewLabelColor(k)} className={`h-6 w-6 rounded-md transition ${newLabelColor === k ? "ring-2 ring-offset-1 ring-offset-popover ring-primary" : "ring-1 ring-border"}`} style={{ background: LABEL_COLORS[k] }} title={k} />
                           ))}
                         </div>
                       </div>
@@ -342,7 +373,7 @@ export function CardModal({ cardId, boardId, labels, onClose }: {
                   )}
                 </div>
 
-                <div className="relative">
+                <div className="relative" ref={membersRef}>
                   <Button size="sm" variant="outline" className="w-full justify-start gap-2" onClick={() => setShowMembers((v) => !v)}><User className="h-3.5 w-3.5" /> Membros</Button>
                   {showMembers && (
                     <div className="absolute z-10 mt-1 w-64 right-0 max-h-64 overflow-y-auto rounded-[var(--radius)] border border-border bg-popover shadow-[var(--shadow-elevated)] p-2 space-y-0.5">

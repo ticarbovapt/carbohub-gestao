@@ -124,7 +124,7 @@ export default function BoardDashboard() {
                 <ResponsiveContainer width="100%" height={Math.max(200, metrics.porLista.length * 40)}>
                   <BarChart data={metrics.porLista} layout="vertical" margin={{ top: 4, right: 32, left: 0, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" className="stroke-border/50" horizontal={false} />
-                    <XAxis type="number" allowDecimals={false} tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
+                    <XAxis type="number" allowDecimals={false} domain={[0, "dataMax"]} tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
                     <YAxis type="category" dataKey="name" width={120} tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
                     <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v: number) => [v, "Cartões"]} />
                     <Bar dataKey="value" radius={[0, 4, 4, 0]}>
@@ -165,7 +165,7 @@ export default function BoardDashboard() {
                 <ResponsiveContainer width="100%" height={Math.max(200, metrics.porMembro.length * 40)}>
                   <BarChart data={metrics.porMembro} layout="vertical" margin={{ top: 4, right: 32, left: 0, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" className="stroke-border/50" horizontal={false} />
-                    <XAxis type="number" allowDecimals={false} tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
+                    <XAxis type="number" allowDecimals={false} domain={[0, "dataMax"]} tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
                     <YAxis type="category" dataKey="name" width={130} tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
                     <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v: number) => [v, "Cartões"]} />
                     <Bar dataKey="value" fill="hsl(var(--accent))" radius={[0, 4, 4, 0]}>

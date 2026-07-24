@@ -151,7 +151,8 @@ export default function BoardTimeline() {
       const y = d0.getFullYear(), mo = d0.getMonth();
       let j = i;
       while (j < totalDays) { const dj = addDays(new Date(rangeStart + "T12:00:00"), j); if (dj.getFullYear() !== y || dj.getMonth() !== mo) break; j++; }
-      monthSegs.push({ label: d0.toLocaleDateString("pt-BR", { month: "short", year: "2-digit" }), left: LEFT_W + i * dayWidth, width: (j - i) * dayWidth });
+      const mLbl = d0.toLocaleDateString("pt-BR", { month: "short" }).replace(".", "");
+      monthSegs.push({ label: `${mLbl} ${d0.getFullYear()}`, left: LEFT_W + i * dayWidth, width: (j - i) * dayWidth });
       i = j;
     }
   }

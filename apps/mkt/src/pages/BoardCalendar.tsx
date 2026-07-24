@@ -71,7 +71,7 @@ export default function BoardCalendar() {
           {/* navegação */}
           <div className="flex items-center gap-1 text-foreground">
             <button onClick={() => step(-1)} className="p-1.5 rounded-md hover:bg-muted text-muted-foreground"><ChevronLeft className="h-4 w-4" /></button>
-            <span className="text-sm font-semibold capitalize min-w-[130px] text-center text-foreground">{fmtMonthYear(ref)}</span>
+            <span className="text-sm font-semibold first-letter:uppercase min-w-[130px] text-center text-foreground">{fmtMonthYear(ref)}</span>
             <button onClick={() => step(1)} className="p-1.5 rounded-md hover:bg-muted text-muted-foreground"><ChevronRight className="h-4 w-4" /></button>
             <button onClick={() => setRef(new Date())} className="text-xs h-8 rounded-md border border-border bg-card hover:bg-muted px-2.5 text-foreground">Hoje</button>
           </div>

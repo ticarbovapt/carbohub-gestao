@@ -121,6 +121,16 @@ export function useCardMutations(cardId: string | null, boardId?: string) {
     if (res.error) throw res.error;
   });
 
+  const updateLabel = run(async ({ id, name }: { id: string; name: string }) => {
+    const res = await db.from("mkt_labels").update({ name }).eq("id", id);
+    if (res.error) throw res.error;
+  });
+
+  const deleteLabel = run(async ({ id }: { id: string }) => {
+    const res = await db.from("mkt_labels").delete().eq("id", id);
+    if (res.error) throw res.error;
+  });
+
   const toggleMember = run(async ({ userId, on }: { userId: string; on: boolean }) => {
     if (on) {
       const res = await db.from("mkt_card_members").insert({ card_id: cardId, user_id: userId });
@@ -213,5 +223,5 @@ export function useCardMutations(cardId: string | null, boardId?: string) {
     onSuccess: inval,
   });
 
-  return { updateCard, toggleLabel, createLabel, toggleMember, addChecklist, removeChecklist, addItem, toggleItem, updateItem, removeItem, addAttachment, removeAttachment, setFieldValue, mirrorCard, addComment };
+  return { updateCard, toggleLabel, createLabel, updateLabel, deleteLabel, toggleMember, addChecklist, removeChecklist, addItem, toggleItem, updateItem, removeItem, addAttachment, removeAttachment, setFieldValue, mirrorCard, addComment };
 }
