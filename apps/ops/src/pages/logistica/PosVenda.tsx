@@ -1,4 +1,8 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
+import {
+  DndContext, PointerSensor, useSensor, useSensors, useDraggable, useDroppable, closestCorners,
+  DragOverlay, type DragStartEvent, type DragEndEvent,
+} from "@dnd-kit/core";
 import { toast } from "sonner";
 import { ShoppingBag, Loader2, User, Calendar, MapPin, Phone, Mail, Package, FileText, CreditCard, Truck, Boxes, Weight, Tag, Pencil, CheckCircle2 } from "lucide-react";
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
@@ -13,7 +17,6 @@ import {
   useHubRnStock, useOpsBySource, fetchNfFiles,
   POSVENDA_STAGES, type FulfillmentStage, type PosVendaOrder,
 } from "@/hooks/usePosVenda";
-import { useDragScroll } from "@/hooks/useDragScroll";
 import { gerarEtiquetaPDF, type EtiquetaData } from "@/lib/etiquetaPdf";
 
 const brl = (v: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v || 0);
@@ -43,6 +46,19 @@ function VendedorTag({ name, avatar }: { name: string; avatar: string | null }) 
   );
 }
 
+// Wrappers dnd-kit por render-prop — mantêm o JSX do card/coluna inline e só
+// injetam os handlers de arraste (a lógica de etapa/portão fica no PosVenda).
+/* eslint-disable @typescript-eslint/no-explicit-any */
+function DraggableCard({ id, children }: { id: string; children: (d: { setNodeRef: (el: HTMLElement | null) => void; listeners: any; attributes: any; isDragging: boolean }) => ReactNode }) {
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id });
+  return <>{children({ setNodeRef, listeners, attributes, isDragging })}</>;
+}
+function DroppableColumn({ id, children }: { id: string; children: (isOver: boolean, setNodeRef: (el: HTMLElement | null) => void) => ReactNode }) {
+  const { setNodeRef, isOver } = useDroppable({ id });
+  return <>{children(isOver, setNodeRef)}</>;
+}
+/* eslint-enable @typescript-eslint/no-explicit-any */
+
 export default function PosVenda() {
   // Janela dos FINALIZADOS (entregue/cancelado). Ativos sempre carregam 100%.
   const [terminalDays, setTerminalDays] = useState<number | "all">(30);
@@ -53,8 +69,7 @@ export default function PosVenda() {
   const updateStage = useUpdateFulfillmentStage();
   const updateShipInfo = useUpdateShipmentInfo();
   const [dragId, setDragId] = useState<string | null>(null);
-  const [overStage, setOverStage] = useState<FulfillmentStage | null>(null);
-  const scrollRef = useDragScroll<HTMLDivElement>();
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
   const [detail, setDetail] = useState<PosVendaOrder | null>(null);
   // Edição RÁPIDA de expedição no detalhe — só operacional (volumes/peso/
   // transportadora). Fiscal (CNPJ/IE/pagamento/faturamento) NÃO é editável aqui.
@@ -238,14 +253,16 @@ export default function PosVenda() {
     }
   }
 
-  const drop = (stage: FulfillmentStage) => {
-    if (dragId) {
-      const cur = orders.find((o) => o.id === dragId);
-      if (cur) requestStage(cur, stage);
-    }
+  // Fim do arraste → roteia pelo MESMO portão (requestStage). Sem update
+  // otimista: quem confirma/persiste é o requestStage (trava fiscal/estoque).
+  const onDragStart = (e: DragStartEvent) => setDragId(String(e.active.id));
+  const onDragEnd = (e: DragEndEvent) => {
     setDragId(null);
-    setOverStage(null);
+    if (!e.over) return;
+    const cur = orders.find((o) => o.id === String(e.active.id));
+    if (cur) requestStage(cur, String(e.over.id) as FulfillmentStage);
   };
+  const activeOrder = dragId ? orders.find((o) => o.id === dragId) ?? null : null;
 
   return (
     <div className="p-4 md:p-6 h-[calc(100dvh-3.5rem)] flex flex-col overflow-hidden">
@@ -279,16 +296,15 @@ export default function PosVenda() {
             <Loader2 className="h-5 w-5 animate-spin" /> Carregando…
           </div>
         ) : (
-          <div ref={scrollRef} className="flex flex-col md:flex-row gap-3 overflow-y-auto md:overflow-x-auto flex-1 min-h-0">
+          <DndContext sensors={sensors} collisionDetection={closestCorners} onDragStart={onDragStart} onDragEnd={onDragEnd} onDragCancel={() => setDragId(null)}>
+          <div className="flex flex-col md:flex-row gap-3 overflow-y-auto md:overflow-y-hidden md:overflow-x-auto flex-1 min-h-0">
             {POSVENDA_STAGES.map((stage) => {
               const items = byStage[stage.key] ?? [];
-              const isOver = overStage === stage.key;
               return (
+                <DroppableColumn key={stage.key} id={stage.key}>
+                {(isOver, setDropRef) => (
                 <div
-                  key={stage.key}
-                  onDragOver={(e) => { e.preventDefault(); setOverStage(stage.key); }}
-                  onDragLeave={() => setOverStage((s) => (s === stage.key ? null : s))}
-                  onDrop={() => drop(stage.key)}
+                  ref={setDropRef}
                   className={`w-full md:flex-1 md:min-w-[280px] md:h-full rounded-2xl border flex flex-col transition-colors ${
                     isOver ? "border-carbo-green bg-carbo-green/5" : "border-border bg-board-surface/40"
                   }`}
@@ -312,14 +328,15 @@ export default function PosVenda() {
                       <p className="text-xs text-muted-foreground/60 text-center py-6">Vazio</p>
                     ) : (
                       items.map((o) => (
+                        <DraggableCard key={o.id} id={o.id}>
+                        {(drag) => (
                         <div
-                          key={o.id}
-                          draggable
-                          onDragStart={(e) => { e.dataTransfer.setData("text/plain", o.id); setDragId(o.id); }}
-                          onDragEnd={() => { setDragId(null); setOverStage(null); }}
+                          ref={drag.setNodeRef}
+                          {...drag.attributes}
+                          {...drag.listeners}
                           onClick={() => setDetail(o)}
                           className={`rounded-xl border border-border bg-card p-4 space-y-3 cursor-pointer hover:border-carbo-green/40 transition ${
-                            dragId === o.id ? "opacity-50" : ""
+                            drag.isDragging ? "opacity-50" : ""
                           }`}
                         >
                           <div className="flex items-start justify-between gap-2">
@@ -372,13 +389,29 @@ export default function PosVenda() {
                             </Select>
                           </div>
                         </div>
+                        )}
+                        </DraggableCard>
                       ))
                     )}
                   </div>
                 </div>
+                )}
+                </DroppableColumn>
               );
             })}
           </div>
+          <DragOverlay>
+            {activeOrder ? (
+              <div className="rounded-xl border border-carbo-green/50 bg-card p-4 shadow-lg w-[260px] pointer-events-none">
+                <div className="flex items-start justify-between gap-2">
+                  <span className="font-semibold text-[15px] leading-snug line-clamp-2">{activeOrder.customer_name}</span>
+                  <span className="text-sm font-semibold tabular-nums shrink-0">{brl(Number(activeOrder.total))}</span>
+                </div>
+                <p className="text-xs text-muted-foreground font-mono mt-1">{activeOrder.order_number || "—"}</p>
+              </div>
+            ) : null}
+          </DragOverlay>
+          </DndContext>
         )}
 
         <p className="text-xs text-muted-foreground">
