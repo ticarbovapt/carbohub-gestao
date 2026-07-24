@@ -47,6 +47,6 @@ function beep(freqs: number[], { dur = 0.09, type = "sine" as OscillatorType, ga
 
 // "Encaixou" — duas notas ascendentes rápidas.
 // gain = volume (escala Web Audio 0..1). 0.30 = audível sem ser estridente.
-export function playMoveSuccess() { beep([587.33, 880], { dur: 0.1, type: "sine", gain: 0.3 }); }
+export function playMoveSuccess() { beep([587.33, 880], { dur: 0.1, type: "sine", gain: 0.5 }); }
 // Erro — descida grave.
-export function playMoveError() { beep([220, 155], { dur: 0.16, type: "square", gain: 0.3 }); }
+export function playMoveError() { beep([220, 155], { dur: 0.16, type: "square", gain: 0.5 }); }
