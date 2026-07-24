@@ -24,6 +24,8 @@ export interface VendaItemInput {
   discount_type?: string;    // 'percent' | 'value' | 'none'
   discount_value?: number;   // número digitado (% ou R$)
   discount_amount?: number;  // R$ efetivamente abatido na linha
+  kind?: string;             // 'product' (default) | 'service' (descarbonização)
+  modalidade?: string;       // P | M | G — só para itens de serviço
 }
 
 export interface NovaVendaInput {
@@ -45,6 +47,7 @@ export interface NovaVendaInput {
   desconto_percent?: number;    // % efetivo
   desconto_motivo?: string;
   agreed_delivery_date?: string;  // data de entrega combinada; banco calcula PPF/PPE
+  execution_date?: string;        // previsão de execução da descarbonização (serviço)
   total: number;                // total líquido (já com desconto)
   notes?: string;
   internal_notes?: string;
@@ -69,7 +72,8 @@ export function useCreateVenda() {
         .map((i) => {
           const bruto = i.quantidade * i.preco_unitario;
           const descLinha = Math.min(Math.max(0, i.discount_amount ?? 0), round2(bruto));
-          return {
+          const isService = i.kind === "service";
+          const base = {
             name: i.produto,
             quantity: i.quantidade,
             unit_price: i.preco_unitario,
@@ -84,6 +88,11 @@ export function useCreateVenda() {
             product_id: i.product_id ?? null,
             product_code: i.product_code ?? null,
           };
+          // Descarbonização (serviço): sem produto do catálogo; marca kind/modality
+          // pra não gerar NF/produção e alimentar a comissão de serviço.
+          return isService
+            ? { ...base, product_id: null, product_code: null, kind: "service", modality: i.modalidade ?? null }
+            : base;
         });
 
       const { data: u } = await supabase.auth.getUser();
@@ -123,6 +132,8 @@ export function useCreateVenda() {
           discount_requested_by: vendedorId,
           // Prazo: só a data combinada; PPF/PPE/status são calculados pelo trigger.
           agreed_delivery_date: input.agreed_delivery_date ?? null,
+          // Previsão de execução da descarbonização (serviço) → agendamento/calendário.
+          execution_date: input.execution_date ?? null,
           status: input.status === "orcamento" ? "quote" : "pending",
           notes: input.notes || null,
           internal_notes: input.internal_notes || null,
