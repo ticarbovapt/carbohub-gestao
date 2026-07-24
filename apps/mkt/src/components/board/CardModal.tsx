@@ -70,7 +70,7 @@ export function CardModal({ cardId, boardId, labels, onClose }: {
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-4xl w-[calc(100%-1.5rem)] max-h-[90vh] overflow-y-auto p-0">
+      <DialogContent className="max-w-4xl sm:max-w-4xl w-[calc(100%-1.5rem)] max-h-[90vh] overflow-y-auto p-0">
         {isLoading || !data ? (
           <div className="p-5 grid md:grid-cols-[1fr_260px] gap-5">
             <div className="space-y-4">
