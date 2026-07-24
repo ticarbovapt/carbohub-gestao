@@ -9,7 +9,6 @@ import {
   Paperclip, ExternalLink, FileText, Link2, MapPin, Loader2,
 } from "lucide-react";
 import { MirrorDialog } from "@/components/board/MirrorDialog";
-import { AIDescriptionTools } from "@/components/board/AIDescriptionTools";
 import { geocodeText } from "@/hooks/useGeocode";
 import { toast } from "sonner";
 import { useCardDetail, useCardMutations } from "@/hooks/useCardDetail";
@@ -139,7 +138,6 @@ export function CardModal({ cardId, boardId, labels, onClose }: {
                 <div className="space-y-1.5">
                   <textarea autoFocus value={desc} onChange={(e) => setDesc(e.target.value)} rows={4}
                     className="w-full text-sm rounded-lg border border-border bg-card p-2 resize-y focus:outline-none focus:ring-1 focus:ring-primary" />
-                  <AIDescriptionTools text={desc} onApply={setDesc} />
                   <div className="flex gap-1.5">
                     <Button size="sm" onClick={() => { mut.updateCard.mutate({ description: desc }); setEditDesc(false); }}>Salvar</Button>
                     <button onClick={() => { setDesc(data.card.description ?? ""); setEditDesc(false); }} className="p-1.5 text-muted-foreground"><X className="h-4 w-4" /></button>
