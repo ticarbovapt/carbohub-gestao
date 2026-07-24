@@ -174,6 +174,15 @@ export function usePosVendaOrders(terminalDays: number | "all" = 30) {
         term.data = (term.data || []).map((r: any) => ({ ...r, production_done: false }));
       }
 
+      // Vendas SÓ de serviço (descarbonização) NÃO entram no rastreio/logística —
+      // elas seguem pelo caminho de OS/agendamento. Mistas (com produto) ficam.
+      const notServiceOnly = (r: any) => {
+        const its = Array.isArray(r.items) ? r.items : [];
+        return !(its.length > 0 && its.every((it: any) => it?.kind === "service"));
+      };
+      act.data = (act.data || []).filter(notServiceOnly);
+      term.data = (term.data || []).filter(notServiceOnly);
+
       // Total de finalizados (para o "há mais N ocultos"). Só quando há janela.
       let terminalTotal = (term.data || []).length;
       if (cutoff) {
