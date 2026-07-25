@@ -31,10 +31,14 @@ values ('bug-attachments', 'bug-attachments', false)
 on conflict (id) do update set public = false;
 
 -- ── BLOCO 3 — policies: rode UMA DE CADA VEZ ────────────────────────────────
+-- Sem a cláusula `TO authenticated` de propósito: o autocomplete do SQL Editor
+-- troca "authenticated" por "authentication_method" e quebra o create. Sem TO,
+-- a policy vale pra public — mas as expressões já barram anônimo, porque
+-- auth.uid() é null e a comparação nunca dá true. Comportamento idêntico.
 -- Qualquer autenticado ENVIA o próprio anexo (a pasta é o id do usuário).
 drop policy if exists bug_anexos_insert on storage.objects;
 create policy bug_anexos_insert on storage.objects
-  for insert to authenticated
+  for insert
   with check (
     bucket_id = 'bug-attachments'
     and (storage.foldername(name))[1] = auth.uid()::text
@@ -43,7 +47,7 @@ create policy bug_anexos_insert on storage.objects
 -- Leitura: o dono do anexo e o time de TI (que precisa ver pra resolver).
 drop policy if exists bug_anexos_select on storage.objects;
 create policy bug_anexos_select on storage.objects
-  for select to authenticated
+  for select
   using (
     bucket_id = 'bug-attachments'
     and ( (storage.foldername(name))[1] = auth.uid()::text or public.carbo_is_ti() )
@@ -52,7 +56,7 @@ create policy bug_anexos_select on storage.objects
 -- Apagar: o dono ou o TI.
 drop policy if exists bug_anexos_delete on storage.objects;
 create policy bug_anexos_delete on storage.objects
-  for delete to authenticated
+  for delete
   using (
     bucket_id = 'bug-attachments'
     and ( (storage.foldername(name))[1] = auth.uid()::text or public.carbo_is_ti() )
