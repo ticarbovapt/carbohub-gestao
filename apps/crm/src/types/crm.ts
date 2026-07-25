@@ -220,6 +220,37 @@ export const SEGMENTS: SegmentConfig[] = [
 export const segmentOf = (id: string | null | undefined): SegmentConfig | null =>
   id ? SEGMENTS.find((s) => s.id === id) ?? null : null;
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Rótulos de TODA etapa que já existiu, inclusive as que saíram de cena.
+// A timeline (crm_sales_lead_activities) guarda o id da etapa no momento do
+// evento. Depois da consolidação, um registro antigo mostraria "visita_agendada
+// → em_negociacao" cru. Reescrever o histórico seria falsificar auditoria — o
+// certo é ter este dicionário e traduzir na leitura.
+// ─────────────────────────────────────────────────────────────────────────────
+export const LEGACY_STAGE_LABELS: Record<string, string> = {
+  a_contatar: "A Contatar", novo: "Novo Lead", prospeccao: "Prospecção", a_reativar: "A Reativar",
+  contato: "Contato Feito", contatado: "Contatado", conectado: "Conectado", cadencia: "Cadência",
+  tentativa_1: "Tentativa 1", tentativa_2: "Tentativa 2", reagendar: "Reagendar",
+  qualificado: "Qualificado", diagnostico: "Diagnóstico", poc: "POC",
+  apresentacao: "Apresentação", visita_agendada: "Visita Agendada", reuniao: "Reunião Agendada",
+  proposta: "Proposta Enviada", proposta_tecnica: "Proposta Técnica", oferta: "Oferta Enviada",
+  negociacao: "Negociação", em_negociacao: "Em Negociação", contrato: "Contrato",
+  pedido_inicial: "Pedido Inicial", reengajado: "Reengajado",
+  convertido: "Convertido", parceiro: "Parceiro", fechamento: "Fechamento",
+  ganho: "Ganho", recomprou: "Recomprou", repassado: "Passado ao Closer",
+  perdido: "Perdido", descartado: "Descartado", sem_interesse: "Sem Interesse",
+};
+
+/** Rótulo de uma etapa: primeiro no funil atual, senão no dicionário legado. */
+export const stageLabelAnywhere = (stageId: string | null | undefined, ft?: FunnelType): string => {
+  if (!stageId) return "?";
+  if (ft) {
+    const found = getStagesForFunnel(ft).find((s) => s.id === stageId);
+    if (found) return found.label;
+  }
+  return LEGACY_STAGE_LABELS[stageId] ?? stageId;
+};
+
 export const LOSS_REASONS = [
   "Preço", "Concorrente", "Timing / Momento inadequado", "Não atende telefone",
   "Sem interesse no produto", "Já usa produto similar", "Empresa fechou",

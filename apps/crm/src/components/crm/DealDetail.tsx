@@ -12,7 +12,7 @@ import { ProfileAvatar } from "@/components/ui/profile-avatar";
 import type { CRMLead, FunnelType } from "@/types/crm";
 import {
   FUNNEL_CONFIG, LOSS_REASONS, getStagesForFunnel, getNextStage, getLostStage,
-  isTerminalStage, getDaysSinceUpdate, SEGMENTS, segmentOf,
+  isTerminalStage, getDaysSinceUpdate, SEGMENTS, segmentOf, stageLabelAnywhere,
 } from "@/types/crm";
 import {
   useAdvanceLeadStage, useMarkLeadLost, useTransferLead, useLeadOwnerLog,
@@ -437,7 +437,7 @@ export function DealDetail({ lead, funnelType, onClose }: DealDetailProps) {
                   const u = id ? dir.find((d) => d.id === id) : undefined;
                   return { avatar_url: u?.avatar_url, full_name: u?.full_name };
                 }}
-                stageLabel={(sid) => (sid ? (stages.find((s) => s.id === sid)?.label ?? sid) : "?")}
+                stageLabel={(sid) => stageLabelAnywhere(sid, funnelType)}
               />
             </div>
           </div>

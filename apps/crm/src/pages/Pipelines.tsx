@@ -23,16 +23,25 @@ import { FUNNEL_CONFIG, getStagesForFunnel, getNextStage, LOSS_REASONS } from "@
 import type { FunnelType, CRMLead } from "@/types/crm";
 import { toast } from "sonner";
 import { playMoveSuccess } from "@/lib/sfx";
+import { SEGMENTS, segmentOf } from "@/types/crm";
 
 const FUNNELS = Object.values(FUNNEL_CONFIG);
 
 // Estágios normalizados para a visão "Todos" (funis têm estágios diferentes).
 const NORMALIZED = [
-  { id: "novo", label: "Novos", color: "#94A3B8", match: ["a_contatar"] },
-  { id: "andamento", label: "Em andamento", color: "#F59E0B", match: ["tentativa_1", "tentativa_2", "contatado", "qualificado", "apresentacao", "diagnostico", "poc", "visita_agendada", "reagendar"] },
-  { id: "negociacao", label: "Negociação / Proposta", color: "#3B82F6", match: ["em_negociacao", "proposta", "proposta_tecnica", "contrato", "pedido_inicial", "fechamento"] },
-  { id: "ganho", label: "Ganhos", color: "#22C55E", match: ["convertido", "parceiro"] },
-  { id: "perdido", label: "Perdidos", color: "#EF4444", match: ["sem_interesse", "descartado"] },
+  { id: "novo", label: "Novos", color: "#94A3B8",
+    match: ["a_contatar", "novo", "prospeccao", "a_reativar"] },
+  { id: "andamento", label: "Em andamento", color: "#F59E0B",
+    match: ["tentativa_1", "tentativa_2", "contatado", "contato", "qualificado", "apresentacao",
+            "diagnostico", "poc", "visita_agendada", "reagendar", "cadencia", "conectado",
+            "reuniao", "reengajado"] },
+  { id: "negociacao", label: "Negociação / Proposta", color: "#3B82F6",
+    match: ["em_negociacao", "negociacao", "proposta", "proposta_tecnica", "contrato",
+            "pedido_inicial", "oferta"] },
+  { id: "ganho", label: "Ganhos", color: "#22C55E",
+    match: ["convertido", "parceiro", "fechamento", "ganho", "recomprou", "repassado"] },
+  { id: "perdido", label: "Perdidos", color: "#EF4444",
+    match: ["sem_interesse", "descartado", "perdido"] },
 ];
 const normalizeStage = (stage: string) => NORMALIZED.find((n) => n.match.includes(stage))?.id ?? "andamento";
 
@@ -153,6 +162,28 @@ export default function Pipelines() {
   const [drawerLead, setDrawerLead] = useState<CRMLead | null>(null);
   const [viewMode, setViewMode] = useState<"kanban" | "list">("kanban");
   const [vendedorFilter, setVendedorFilter] = useState("all");
+  // Segmento: multi-seleção. O vendedor que só cuida de PDV volta ao CRM já no
+  // mundo dele — é o que faz a fusão das pipelines não parecer perda de foco.
+  const SEG_KEY = "crm:segmentos";
+  const [segFilter, setSegFilter] = useState<string[]>(() => {
+    const fromUrl = searchParams.get("seg");
+    if (fromUrl) return fromUrl.split(",").filter(Boolean);
+    try { return JSON.parse(localStorage.getItem(SEG_KEY) || "[]") as string[]; } catch { return []; }
+  });
+  const toggleSeg = (id: string) => setSegFilter((prev) => {
+    const next = prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id];
+    try { localStorage.setItem(SEG_KEY, JSON.stringify(next)); } catch { /* ok */ }
+    const sp = new URLSearchParams(searchParams);
+    next.length ? sp.set("seg", next.join(",")) : sp.delete("seg");
+    setSearchParams(sp, { replace: true });
+    return next;
+  });
+  const limparSeg = () => {
+    setSegFilter([]);
+    try { localStorage.setItem(SEG_KEY, "[]"); } catch { /* ok */ }
+    const sp = new URLSearchParams(searchParams); sp.delete("seg");
+    setSearchParams(sp, { replace: true });
+  };
   const { isGestor } = useAuth();
   const { data: vendedoresDir = [] } = useVendedoresDir();
   const ownersById = useMemo(
@@ -179,7 +210,34 @@ export default function Pipelines() {
   // uma edição (ex.: nome fantasia) aparece na hora, sem precisar de F5.
   const liveDrawerLead = drawerLead ? (baseLeads.find((l) => l.id === drawerLead.id) ?? drawerLead) : null;
 
+  const passaBuscaEVendedor = (lead: CRMLead) => {
+    if (vendedorFilter !== "all") {
+      const l = lead as { assigned_to?: string | null; created_by?: string | null };
+      if (l.assigned_to !== vendedorFilter && l.created_by !== vendedorFilter) return false;
+    }
+    if (!searchQuery) return true;
+    const q = searchQuery.toLowerCase();
+    return (
+      (lead.contact_name || "").toLowerCase().includes(q) ||
+      (lead.legal_name || "").toLowerCase().includes(q) ||
+      (lead.trade_name || "").toLowerCase().includes(q) ||
+      (lead.city || "").toLowerCase().includes(q) ||
+      (lead.cnpj || "").includes(q)
+    );
+  };
+  const countBySegment = useMemo(() => {
+    const m: Record<string, number> = {};
+    for (const l of baseLeads) {
+      if (!passaBuscaEVendedor(l)) continue;
+      const k = l.lead_segment ?? "a_definir";
+      m[k] = (m[k] ?? 0) + 1;
+    }
+    return m;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [baseLeads, vendedorFilter, searchQuery]);
+
   const filteredLeads = baseLeads.filter((lead) => {
+    if (segFilter.length && !segFilter.includes(lead.lead_segment ?? "a_definir")) return false;
     if (!isAll && stageFilter !== "all" && lead.stage !== stageFilter) return false;
     if (vendedorFilter !== "all") {
       const l = lead as { assigned_to?: string | null; created_by?: string | null };
@@ -279,6 +337,29 @@ export default function Pipelines() {
             <FunnelTab key={f.id} active={funil === f.id} onClick={() => setFunil(f.id)}
               icon={f.icon} label={f.shortName} count={countByFunnel[f.id] ?? 0} color={f.color} loading={l2} />
           ))}
+        </div>
+
+        {/* Segmento — o que o lead É. Substitui as pipelines por tipo: o
+            vendedor filtra sem precisar trocar de quadro. */}
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="text-[11px] text-muted-foreground mr-1">Segmento:</span>
+          {SEGMENTS.filter((sg) => (countBySegment[sg.id] ?? 0) > 0 || segFilter.includes(sg.id)).map((sg) => {
+            const on = segFilter.includes(sg.id);
+            return (
+              <button key={sg.id} onClick={() => toggleSeg(sg.id)} title={sg.label}
+                className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium transition-colors ${
+                  on ? "text-foreground" : "border-input text-muted-foreground hover:bg-muted"}`}
+                style={on ? { borderColor: sg.color, background: sg.color + "1a", color: sg.color } : undefined}>
+                <span>{sg.icon}</span> {sg.shortName}
+                <span className="opacity-70">{countBySegment[sg.id] ?? 0}</span>
+              </button>
+            );
+          })}
+          {segFilter.length > 0 && (
+            <button onClick={limparSeg} className="text-[11px] text-muted-foreground hover:text-foreground underline underline-offset-2 ml-1">
+              limpar
+            </button>
+          )}
         </div>
 
         {/* Filtros */}
