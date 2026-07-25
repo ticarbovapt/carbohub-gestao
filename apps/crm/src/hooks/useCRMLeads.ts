@@ -227,16 +227,51 @@ export function useCRMAllStats() {
     queryFn: async () => {
       const { data, error } = await db
         .from("crm_sales_leads")
-        .select("funnel_type, stage, temperature, updated_at");
+        .select("funnel_type, lead_segment, stage, temperature, estimated_revenue, updated_at");
       if (error) throw error;
-      const leads = data || [];
+      const leads = (data || []) as {
+        funnel_type: string; lead_segment: string | null; stage: string;
+        temperature: string; estimated_revenue: number | null; updated_at: string;
+      }[];
       const now = Date.now();
       const day3 = 3 * 24 * 60 * 60 * 1000;
+
+      // Etapas encerradas — o mesmo critério em todo o CRM (win/loss).
+      const FIM = new Set([
+        "convertido", "parceiro", "fechamento", "ganho", "recomprou", "repassado",
+        "sem_interesse", "descartado", "perdido",
+      ]);
+      const GANHO = new Set(["convertido", "parceiro", "fechamento", "ganho", "recomprou", "repassado"]);
+
+      // Agregado por SEGMENTO — é o recorte que substituiu as 9 pipelines.
+      const bySegment: Record<string, {
+        total: number; abertos: number; ganhos: number; perdidos: number;
+        quentes: number; parados: number; receita: number;
+      }> = {};
+      for (const l of leads) {
+        const k = l.lead_segment || "a_definir";
+        const e = bySegment[k] ?? { total: 0, abertos: 0, ganhos: 0, perdidos: 0, quentes: 0, parados: 0, receita: 0 };
+        e.total++;
+        if (GANHO.has(l.stage)) { e.ganhos++; e.receita += Number(l.estimated_revenue || 0); }
+        else if (FIM.has(l.stage)) e.perdidos++;
+        else {
+          e.abertos++;
+          if (l.temperature === "quente") e.quentes++;
+          if (now - new Date(l.updated_at).getTime() > day3) e.parados++;
+        }
+        bySegment[k] = e;
+      }
+
       return {
         total: leads.length,
         byFunnel: leads.reduce((acc, l) => { acc[l.funnel_type] = (acc[l.funnel_type] || 0) + 1; return acc; }, {} as Record<string, number>),
-        stale: leads.filter((l) => now - new Date(l.updated_at).getTime() > day3).length,
-        hot: leads.filter((l) => l.temperature === "quente").length,
+        bySegment,
+        // "Sem atividade" e "quentes" só fazem sentido para o que está em aberto:
+        // cobrar follow-up de negócio já ganho ou perdido é ruído.
+        stale: leads.filter((l) => !FIM.has(l.stage) && now - new Date(l.updated_at).getTime() > day3).length,
+        hot: leads.filter((l) => !FIM.has(l.stage) && l.temperature === "quente").length,
+        abertos: leads.filter((l) => !FIM.has(l.stage)).length,
+        ganhos: leads.filter((l) => GANHO.has(l.stage)).length,
       };
     },
   });

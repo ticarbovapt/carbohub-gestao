@@ -1,36 +1,49 @@
 import { useNavigate } from "react-router-dom";
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
-import { Users, TrendingUp, AlertTriangle, Flame, ArrowRight, BarChart3, KanbanSquare } from "lucide-react";
+import { Users, AlertTriangle, Flame, Trophy, BarChart3, KanbanSquare, ArrowRight } from "lucide-react";
 import { useCRMAllStats } from "@/hooks/useCRMLeads";
-import { FUNNEL_CONFIG } from "@/types/crm";
+import { FUNNEL_CONFIG, FUNIS_VISIVEIS, SEGMENTS } from "@/types/crm";
 
-// PORT FIEL ao Controle (/crm → CRMDashboard) — visão geral dos funis (dashboard de atalhos).
+// Visão geral do CRM. Depois da consolidação das pipelines, o recorte principal
+// deixou de ser "funil" e passou a ser SEGMENTO (o que o lead É) — as 9
+// pipelines antigas viraram etiqueta, e contá-las aqui só mostraria zeros.
 const KPI_CARDS = [
-  { key: "total", title: "Total de Leads", icon: Users, accent: "#3b82f6", sub: "em todos os funis" },
+  { key: "abertos", title: "Leads em aberto", icon: Users, accent: "#3b82f6", sub: "ainda em negociação" },
   { key: "hot", title: "Leads Quentes", icon: Flame, accent: "#f59e0b", sub: "prioridade de contato" },
   { key: "stale", title: "Sem Atividade > 3d", icon: AlertTriangle, accent: "#f43f5e", sub: "precisam de follow-up" },
-  { key: "funnels", title: "Funis Ativos", icon: TrendingUp, accent: "#22c55e", sub: "com leads em aberto" },
+  { key: "ganhos", title: "Ganhos", icon: Trophy, accent: "#22c55e", sub: "negócios fechados" },
 ] as const;
+
+const brl = (v: number) =>
+  v >= 1000
+    ? `R$ ${(v / 1000).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}k`
+    : `R$ ${v.toLocaleString("pt-BR", { maximumFractionDigits: 0 })}`;
 
 export default function CRM() {
   const navigate = useNavigate();
   const { data: stats, isLoading } = useCRMAllStats();
-  const funnels = Object.values(FUNNEL_CONFIG);
-  const totalLeads = stats?.total || 0;
 
   const kpiValue = (key: string) => {
-    if (key === "total") return stats?.total || 0;
-    if (key === "hot") return stats?.hot || 0;
-    if (key === "stale") return stats?.stale || 0;
-    return Object.keys(stats?.byFunnel || {}).length;
+    if (key === "abertos") return stats?.abertos ?? 0;
+    if (key === "hot") return stats?.hot ?? 0;
+    if (key === "stale") return stats?.stale ?? 0;
+    return stats?.ganhos ?? 0;
   };
+
+  // Só segmentos com lead, do maior pro menor — a tela não nasce poluída de zeros.
+  const segmentos = SEGMENTS
+    .map((sg) => ({ cfg: sg, d: stats?.bySegment?.[sg.id] }))
+    .filter((x) => (x.d?.total ?? 0) > 0)
+    .sort((a, b) => (b.d!.abertos - a.d!.abertos) || (b.d!.total - a.d!.total));
+
+  const maxAbertos = Math.max(1, ...segmentos.map((s) => s.d!.abertos));
 
   return (
     <div className="p-4 md:p-6">
       <div className="space-y-6 max-w-[1500px] mx-auto">
         <CarboPageHeader
-          title="CRM — Funis de Venda"
-          description="Gestão de leads, prospecção e pipeline comercial"
+          title="CRM — Visão Geral"
+          description="Leads por segmento, prospecção e pipeline comercial"
           icon={BarChart3}
         />
 
@@ -55,72 +68,100 @@ export default function CRM() {
           ))}
         </div>
 
-        {/* Cards de funil */}
+        {/* Por segmento — o recorte que substituiu as pipelines por tipo */}
         <div>
           <div className="flex items-center justify-between mb-3">
-            <h3 className="text-sm font-semibold uppercase text-muted-foreground tracking-wider">Funis de Venda</h3>
+            <div>
+              <h3 className="text-sm font-semibold uppercase text-muted-foreground tracking-wider">Por segmento</h3>
+              <p className="text-[11px] text-muted-foreground mt-0.5">
+                Clique para abrir o quadro já filtrado
+              </p>
+            </div>
             <button onClick={() => navigate("/crm/pipelines")} className="text-xs font-semibold text-primary hover:underline inline-flex items-center gap-1">
-              <KanbanSquare className="h-3.5 w-3.5" /> Ver todas as pipelines
+              <KanbanSquare className="h-3.5 w-3.5" /> Ver pipelines
             </button>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            {funnels.map((funnel) => {
-              const count = stats?.byFunnel?.[funnel.id] || 0;
-              const share = totalLeads > 0 ? Math.round((count / totalLeads) * 100) : 0;
-              return (
-                <button
-                  key={funnel.id}
-                  onClick={() => navigate(`/crm/pipelines?funil=${funnel.id}`)}
-                  className="group relative overflow-hidden rounded-2xl border border-border bg-board-surface p-4 text-left transition-all hover:-translate-y-1 hover:shadow-lg"
-                >
-                  {/* faixa de cor no topo */}
-                  <div className="absolute inset-x-0 top-0 h-1" style={{ background: funnel.color }} />
-                  <div className="flex items-start justify-between mb-4">
-                    <div className="flex items-center gap-2.5">
-                      <div className="h-11 w-11 rounded-xl flex items-center justify-center text-xl" style={{ background: funnel.color + "1a" }}>
-                        {funnel.icon}
-                      </div>
-                      <div className="min-w-0">
-                        <p className="font-semibold text-sm leading-tight">{funnel.shortName}</p>
-                        <p className="text-[10px] text-muted-foreground">ciclo {funnel.cycleLabel}</p>
-                      </div>
-                    </div>
-                    <ArrowRight className="h-4 w-4 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-foreground" />
-                  </div>
 
-                  <div className="flex items-end justify-between mb-2">
-                    <div>
-                      <p className="text-3xl font-bold tabular-nums leading-none" style={{ color: funnel.color }}>{count}</p>
-                      <p className="text-[10px] text-muted-foreground mt-1">leads ativos</p>
+          {isLoading ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              {Array.from({ length: 4 }).map((_, i) => <div key={i} className="h-32 rounded-2xl bg-muted/40 animate-pulse" />)}
+            </div>
+          ) : segmentos.length === 0 ? (
+            <div className="rounded-2xl border border-dashed p-10 text-center text-sm text-muted-foreground">
+              Nenhum lead ainda.
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              {segmentos.map(({ cfg, d }) => {
+                const s = d!;
+                const share = Math.round((s.abertos / maxAbertos) * 100);
+                const conv = s.ganhos + s.perdidos > 0
+                  ? Math.round((s.ganhos / (s.ganhos + s.perdidos)) * 100) : null;
+                return (
+                  <button
+                    key={cfg.id}
+                    onClick={() => navigate(`/crm/pipelines?funil=f13&seg=${cfg.id}`)}
+                    className="group relative overflow-hidden rounded-2xl border border-border bg-board-surface p-4 text-left transition-all hover:-translate-y-1 hover:shadow-lg"
+                  >
+                    <div className="absolute top-0 left-0 h-1 w-full" style={{ background: cfg.color }} />
+
+                    <div className="flex items-start justify-between gap-2 mb-3">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="text-lg shrink-0">{cfg.icon}</span>
+                        <span className="text-sm font-semibold truncate">{cfg.shortName}</span>
+                      </div>
+                      <ArrowRight className="h-3.5 w-3.5 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
                     </div>
-                    <span className="text-[11px] font-semibold text-muted-foreground tabular-nums">{share}%</span>
-                  </div>
-                  {/* barra de participação */}
-                  <div className="h-1.5 rounded-full bg-muted overflow-hidden">
-                    <div className="h-full rounded-full transition-all" style={{ width: `${share}%`, background: funnel.color }} />
-                  </div>
-                  <p className="mt-2 text-[10px] text-muted-foreground truncate">{funnel.description}</p>
-                </button>
-              );
-            })}
-          </div>
+
+                    <div className="flex items-baseline gap-1.5">
+                      <span className="text-3xl font-bold tabular-nums leading-none" style={{ color: cfg.color }}>
+                        {s.abertos}
+                      </span>
+                      <span className="text-[11px] text-muted-foreground">em aberto</span>
+                    </div>
+
+                    <div className="mt-2 h-1.5 w-full rounded-full bg-muted overflow-hidden">
+                      <div className="h-full rounded-full transition-all" style={{ width: `${share}%`, background: cfg.color }} />
+                    </div>
+
+                    <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
+                      {s.quentes > 0 && (
+                        <span className="text-amber-500 font-medium">🔥 {s.quentes}</span>
+                      )}
+                      {s.parados > 0 && (
+                        <span className="text-destructive font-medium">⚠ {s.parados} parado(s)</span>
+                      )}
+                      <span className="ml-auto">
+                        {s.ganhos} ganho(s){conv !== null ? ` · ${conv}%` : ""}
+                      </span>
+                    </div>
+
+                    {s.receita > 0 && (
+                      <p className="mt-1.5 text-[11px] text-muted-foreground border-t pt-1.5">
+                        Receita ganha: <strong className="text-foreground">{brl(s.receita)}</strong>
+                      </p>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          )}
         </div>
 
-        {/* Ações rápidas */}
-        <div className="rounded-2xl border border-border bg-board-surface p-4">
-          <h3 className="text-sm font-semibold mb-3">Ações Rápidas</h3>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            {([["f4", "🏪", "PDVs CarboZé"], ["f2", "🏢", "Licenciados"], ["f1", "🛒", "B2C"], ["f3", "🚛", "Frotistas"]] as const).map(([id, icon, label]) => {
+        {/* Pipelines vivas — atalho, com a contagem real */}
+        <div>
+          <h3 className="text-sm font-semibold uppercase text-muted-foreground tracking-wider mb-3">Pipelines</h3>
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            {FUNIS_VISIVEIS.map((id) => {
               const cfg = FUNNEL_CONFIG[id];
               return (
-                <button
-                  key={id}
-                  onClick={() => navigate(`/crm/pipelines?funil=${id}`)}
-                  className="flex flex-col items-center gap-1 rounded-xl border border-border py-3.5 transition-all hover:-translate-y-0.5 hover:shadow-md"
-                >
-                  <span className="text-2xl">{icon}</span>
-                  <span className="text-xs font-medium">{label}</span>
-                  <span className="text-[10px] font-semibold tabular-nums" style={{ color: cfg.color }}>{stats?.byFunnel?.[id] || 0} leads</span>
+                <button key={id} onClick={() => navigate(`/crm/pipelines?funil=${id}`)}
+                  className="flex items-center gap-2 rounded-xl border border-border bg-board-surface px-3 py-2.5 text-left transition-all hover:-translate-y-0.5 hover:shadow">
+                  <span className="text-base shrink-0">{cfg.icon}</span>
+                  <span className="text-xs font-medium truncate flex-1">{cfg.shortName}</span>
+                  <span className="text-[11px] font-semibold tabular-nums shrink-0" style={{ color: cfg.color }}>
+                    {stats?.byFunnel?.[id] ?? 0}
+                  </span>
                 </button>
               );
             })}
