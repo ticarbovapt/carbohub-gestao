@@ -36,35 +36,71 @@ const STATUS: Record<string, { label: string; variant: "success" | "warning" | "
 };
 
 // ── Dialog: regras de % (padrão + por vendedor) ──────────────────────────────
-function RegrasDialog({ open, onClose, vendedores, regras, defaultRate, rateFor }: {
+function RegrasDialog({ open, onClose, vendedores, defaultRate, defaultRateDesc, rateFor, rateDescFor }: {
   open: boolean; onClose: () => void; vendedores: { id: string; name: string }[];
-  regras: { vendedor_id: string | null; rate_pct: number }[]; defaultRate: number; rateFor: (id: string) => number;
+  defaultRate: number; defaultRateDesc: number;
+  rateFor: (id: string) => number; rateDescFor: (id: string) => number;
 }) {
   const upsert = useUpsertCommissionRule();
   const [padrao, setPadrao] = useState(defaultRate);
+  const [padraoDesc, setPadraoDesc] = useState(defaultRateDesc);
   const [porVend, setPorVend] = useState<Record<string, number>>({});
+  const [porVendDesc, setPorVendDesc] = useState<Record<string, number>>({});
   const [lastOpen, setLastOpen] = useState(false);
-  if (open && !lastOpen) { setLastOpen(true); setPadrao(defaultRate); setPorVend(Object.fromEntries(vendedores.map((v) => [v.id, rateFor(v.id)]))); }
+  if (open && !lastOpen) {
+    setLastOpen(true);
+    setPadrao(defaultRate); setPadraoDesc(defaultRateDesc);
+    setPorVend(Object.fromEntries(vendedores.map((v) => [v.id, rateFor(v.id)])));
+    setPorVendDesc(Object.fromEntries(vendedores.map((v) => [v.id, rateDescFor(v.id)])));
+  }
   if (!open && lastOpen) setLastOpen(false);
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
-        <DialogHeader><DialogTitle>Regras de comissão (%)</DialogTitle></DialogHeader>
+      <DialogContent className="max-w-xl max-h-[85vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Regras de comissão (%)</DialogTitle>
+          <DialogDescription>
+            Produto e descarbonização comissionam diferente — cada um tem o seu percentual.
+          </DialogDescription>
+        </DialogHeader>
+
         <div className="space-y-3">
-          <div className="flex items-end justify-between gap-3 border-b border-border pb-3">
-            <div className="space-y-1.5 flex-1"><Label>% padrão (todos sem regra própria)</Label>
-              <DecimalInput value={padrao} onValueChange={setPadrao} min={0} max={100} />
-            </div>
-            <CarboButton size="sm" onClick={() => upsert.mutate({ vendedor_id: null, rate_pct: padrao })} disabled={upsert.isPending}>Salvar padrão</CarboButton>
+          {/* Cabeçalho das colunas */}
+          <div className="grid grid-cols-[1fr_110px_110px_auto] gap-3 items-end border-b border-border pb-3">
+            <Label className="text-xs text-muted-foreground">Padrão (sem regra própria)</Label>
+            <span className="text-[11px] font-medium text-muted-foreground text-center">Produto (NF)</span>
+            <span className="text-[11px] font-medium text-muted-foreground text-center">Descarb.</span>
+            <span />
           </div>
+
+          <div className="grid grid-cols-[1fr_110px_110px_auto] gap-3 items-center border-b border-border pb-3">
+            <Label>% padrão</Label>
+            <DecimalInput value={padrao} onValueChange={setPadrao} min={0} max={100} />
+            <DecimalInput value={padraoDesc} onValueChange={setPadraoDesc} min={0} max={100} />
+            <CarboButton size="sm" disabled={upsert.isPending}
+              onClick={() => upsert.mutate({ vendedor_id: null, rate_pct: padrao, rate_descarb_pct: padraoDesc })}>
+              Salvar
+            </CarboButton>
+          </div>
+
           <p className="text-xs text-muted-foreground">Regra por vendedor (sobrepõe o padrão):</p>
-          {vendedores.length === 0 ? <p className="text-sm text-muted-foreground">Sem vendedores no período.</p> : vendedores.map((v) => (
-            <div key={v.id} className="flex items-end justify-between gap-3">
-              <div className="space-y-1.5 flex-1"><Label>{v.name}</Label>
-                <DecimalInput value={porVend[v.id] ?? 0} onValueChange={(val) => setPorVend((p) => ({ ...p, [v.id]: val }))} min={0} max={100} />
-              </div>
-              <CarboButton size="sm" variant="outline" onClick={() => upsert.mutate({ vendedor_id: v.id, vendedor_name: v.name, rate_pct: porVend[v.id] ?? 0 })} disabled={upsert.isPending}>Salvar</CarboButton>
+          {vendedores.length === 0 ? (
+            <p className="text-sm text-muted-foreground">Sem vendedores no período.</p>
+          ) : vendedores.map((v) => (
+            <div key={v.id} className="grid grid-cols-[1fr_110px_110px_auto] gap-3 items-center">
+              <Label className="truncate">{v.name}</Label>
+              <DecimalInput value={porVend[v.id] ?? 0} min={0} max={100}
+                onValueChange={(val) => setPorVend((p) => ({ ...p, [v.id]: val }))} />
+              <DecimalInput value={porVendDesc[v.id] ?? 0} min={0} max={100}
+                onValueChange={(val) => setPorVendDesc((p) => ({ ...p, [v.id]: val }))} />
+              <CarboButton size="sm" variant="outline" disabled={upsert.isPending}
+                onClick={() => upsert.mutate({
+                  vendedor_id: v.id, vendedor_name: v.name,
+                  rate_pct: porVend[v.id] ?? 0, rate_descarb_pct: porVendDesc[v.id] ?? 0,
+                })}>
+                Salvar
+              </CarboButton>
             </div>
           ))}
         </div>
@@ -79,7 +115,8 @@ function CalcularTab() {
   const [from, setFrom] = useState(monthStart());
   const [to, setTo] = useState(monthEnd());
   const [vendFilter, setVendFilter] = useState("__all__");
-  const [pcts, setPcts] = useState<Record<string, number>>({});
+  const [pcts, setPcts] = useState<Record<string, number>>({});        // produto (com NF)
+  const [pctsDesc, setPctsDesc] = useState<Record<string, number>>({}); // descarbonização
   const [showRegras, setShowRegras] = useState(false);
 
   const { data: agg = [], isLoading } = useComissaoAgregado(from, to);
@@ -90,6 +127,10 @@ function CalcularTab() {
   // Resolve o % de cada vendedor: regra específica > regra padrão > 0.
   const defaultRate = regras.find((r) => r.vendedor_id === null)?.rate_pct ?? 0;
   const rateFor = (vid: string) => regras.find((r) => r.vendedor_id === vid)?.rate_pct ?? defaultRate;
+  // Descarbonização tem percentual PRÓPRIO — comissiona diferente do produto.
+  const defaultRateDesc = regras.find((r) => r.vendedor_id === null)?.rate_descarb_pct ?? 0;
+  const rateDescFor = (vid: string) =>
+    regras.find((r) => r.vendedor_id === vid)?.rate_descarb_pct ?? defaultRateDesc;
 
   // Une produto (com NF) + descarbonização (sem NF) por vendedor. Ambos entram
   // na base de comissão; a descarbonização aparece em coluna própria.
@@ -111,6 +152,11 @@ function CalcularTab() {
     setPcts((prev) => {
       const next = { ...prev };
       for (const a of merged) if (next[a.vendedor_id] == null) next[a.vendedor_id] = rateFor(a.vendedor_id);
+      return next;
+    });
+    setPctsDesc((prev) => {
+      const next = { ...prev };
+      for (const a of merged) if (next[a.vendedor_id] == null) next[a.vendedor_id] = rateDescFor(a.vendedor_id);
       return next;
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -152,13 +198,16 @@ function CalcularTab() {
           </div>
         </CarboCardContent>
       </CarboCard>
-      <RegrasDialog open={showRegras} onClose={() => setShowRegras(false)} vendedores={vendedores} regras={regras} defaultRate={defaultRate} rateFor={rateFor} />
+      <RegrasDialog open={showRegras} onClose={() => setShowRegras(false)} vendedores={vendedores}
+        defaultRate={defaultRate} defaultRateDesc={defaultRateDesc}
+        rateFor={rateFor} rateDescFor={rateDescFor} />
 
       <CarboCard>
         <CarboCardContent className="pt-6">
           <p className="text-xs text-muted-foreground mb-3">
-            Base = vendas <strong>faturadas (com NF)</strong> + <strong>descarbonização (serviço, sem NF)</strong> do vendedor no período.
-            A descarbonização entra na base já no momento da venda. Digite o % e clique em <strong>Gerar comissão</strong> — ela vai pra aba Pagamentos.
+            Duas bases, <strong>dois percentuais</strong>: produto entra quando a <strong>NF é emitida</strong>;
+            descarbonização entra <strong>já no momento da venda</strong> (não gera NF) e comissiona com o seu próprio %.
+            Digite os percentuais e clique em <strong>Gerar comissão</strong> — ela vai pra aba Pagamentos.
           </p>
           {isLoading || loadingDescarb ? (
             <div className="space-y-2">{Array.from({ length: 4 }).map((_, i) => <CarboSkeleton key={i} className="h-12 w-full" />)}</div>
@@ -171,8 +220,8 @@ function CalcularTab() {
                   <CarboTableHead>Vendedor</CarboTableHead>
                   <CarboTableHead className="text-right">Vendas faturadas</CarboTableHead>
                   <CarboTableHead className="text-right">Descarbonização<span className="text-[10px] font-normal text-muted-foreground"> (sem NF)</span></CarboTableHead>
-                  <CarboTableHead className="text-right">Base total</CarboTableHead>
-                  <CarboTableHead className="w-28">%</CarboTableHead>
+                  <CarboTableHead className="w-24 text-center">% NF</CarboTableHead>
+                  <CarboTableHead className="w-24 text-center">% descarb.</CarboTableHead>
                   <CarboTableHead className="text-right">Comissão</CarboTableHead>
                   <CarboTableHead className="text-right">Ação</CarboTableHead>
                 </CarboTableRow>
@@ -180,9 +229,13 @@ function CalcularTab() {
               <CarboTableBody>
                 {rows.map((r) => {
                   const pct = pcts[r.vendedor_id] ?? 0;
-                  const base = r.prod + r.descarb;
+                  const pctD = pctsDesc[r.vendedor_id] ?? 0;
                   const qtd = r.prodQtd + r.descarbQtd;
-                  const comissao = Math.round(base * (pct / 100) * 100) / 100;
+                  // Cada base com o seu percentual.
+                  const cent = (n: number) => Math.round(n * 100) / 100;
+                  const comProd = cent(r.prod * (pct / 100));
+                  const comDesc = cent(r.descarb * (pctD / 100));
+                  const comissao = cent(comProd + comDesc);
                   return (
                     <CarboTableRow key={r.vendedor_id}>
                       <CarboTableCell className="font-medium">{r.vendedor_name || "—"}</CarboTableCell>
@@ -198,22 +251,32 @@ function CalcularTab() {
                           </>
                         ) : <span className="text-muted-foreground">—</span>}
                       </CarboTableCell>
-                      <CarboTableCell className="text-right font-medium">{brl(base)}</CarboTableCell>
                       <CarboTableCell>
-                        <div className="flex items-center gap-1">
-                          <DecimalInput value={pct} onValueChange={(v) => setPcts((p) => ({ ...p, [r.vendedor_id]: v }))} min={0} max={100} className="h-9" placeholder="0" />
-                          <Percent className="h-3.5 w-3.5 text-muted-foreground" />
-                        </div>
+                        <DecimalInput value={pct} onValueChange={(v) => setPcts((p) => ({ ...p, [r.vendedor_id]: v }))}
+                          min={0} max={100} className="h-9" placeholder="0" />
                       </CarboTableCell>
-                      <CarboTableCell className="text-right font-semibold text-carbo-green">{brl(comissao)}</CarboTableCell>
+                      <CarboTableCell>
+                        <DecimalInput value={pctD} onValueChange={(v) => setPctsDesc((p) => ({ ...p, [r.vendedor_id]: v }))}
+                          min={0} max={100} className="h-9" placeholder="0"
+                          disabled={r.descarb <= 0} />
+                      </CarboTableCell>
+                      <CarboTableCell className="text-right">
+                        <span className="font-semibold text-carbo-green">{brl(comissao)}</span>
+                        {r.descarb > 0 && (comProd > 0 || comDesc > 0) && (
+                          <span className="block text-[11px] text-muted-foreground">
+                            {brl(comProd)} + {brl(comDesc)}
+                          </span>
+                        )}
+                      </CarboTableCell>
                       <CarboTableCell className="text-right">
                         <CarboButton
                           size="sm"
-                          disabled={pct <= 0 || create.isPending}
+                          disabled={comissao <= 0 || create.isPending}
                           onClick={() => create.mutate({
                             vendedor_id: r.vendedor_id, vendedor_name: r.vendedor_name,
                             period_start: from, period_end: to,
-                            base_sales: base, sales_count: qtd, rate_pct: pct,
+                            base_produto: r.prod, base_descarb: r.descarb,
+                            sales_count: qtd, rate_pct: pct, rate_descarb_pct: pctD,
                           })}
                         >
                           Gerar comissão
@@ -326,8 +389,22 @@ function PagamentosTab() {
                     <CarboTableRow key={s.id}>
                       <CarboTableCell className="font-medium">{s.vendedor_name || "—"}</CarboTableCell>
                       <CarboTableCell className="whitespace-nowrap">{fmtDate(s.period_start)} – {fmtDate(s.period_end)}</CarboTableCell>
-                      <CarboTableCell className="text-right">{brl(s.base_sales)}</CarboTableCell>
-                      <CarboTableCell className="text-center">{Number(s.rate_pct)}%</CarboTableCell>
+                      <CarboTableCell className="text-right">
+                        {brl(s.base_sales)}
+                        {Number(s.base_descarb) > 0 && (
+                          <span className="block text-[11px] text-muted-foreground">
+                            NF {brl(s.base_produto)} · descarb. {brl(s.base_descarb)}
+                          </span>
+                        )}
+                      </CarboTableCell>
+                      <CarboTableCell className="text-center">
+                        {Number(s.rate_pct)}%
+                        {Number(s.base_descarb) > 0 && (
+                          <span className="block text-[11px] text-muted-foreground">
+                            {Number(s.rate_descarb_pct)}% descarb.
+                          </span>
+                        )}
+                      </CarboTableCell>
                       <CarboTableCell className="text-right font-medium">{brl(s.amount_due)}</CarboTableCell>
                       <CarboTableCell className="text-right">{brl(s.amount_paid)}</CarboTableCell>
                       <CarboTableCell className="text-right font-medium">{brl(saldo)}</CarboTableCell>
@@ -365,8 +442,32 @@ function MemoriaDialog({ st, onClose }: { st: CommissionStatement | null; onClos
       <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Memória de cálculo — {st.vendedor_name || "Vendedor"}</DialogTitle>
-          <DialogDescription>{fmtDate(st.period_start)} – {fmtDate(st.period_end)} · Base {brl(st.base_sales)} · {Number(st.rate_pct)}% = {brl(st.amount_due)}</DialogDescription>
+          <DialogDescription>
+            {fmtDate(st.period_start)} – {fmtDate(st.period_end)} · Total {brl(st.amount_due)}
+          </DialogDescription>
         </DialogHeader>
+
+        {/* Composição: cada base com o seu percentual */}
+        <div className="rounded-lg border divide-y text-sm">
+          <div className="flex items-center justify-between px-3 py-2">
+            <span className="text-muted-foreground">
+              Faturado (com NF) · {Number(st.rate_pct)}%
+            </span>
+            <span className="tabular-nums">
+              {brl(st.base_produto)} → <strong>{brl(st.amount_produto)}</strong>
+            </span>
+          </div>
+          {Number(st.base_descarb) > 0 && (
+            <div className="flex items-center justify-between px-3 py-2">
+              <span className="text-muted-foreground">
+                Descarbonização (sem NF) · {Number(st.rate_descarb_pct)}%
+              </span>
+              <span className="tabular-nums">
+                {brl(st.base_descarb)} → <strong>{brl(st.amount_descarb)}</strong>
+              </span>
+            </div>
+          )}
+        </div>
         {isLoading ? <p className="text-sm text-muted-foreground py-4">Carregando…</p>
           : items.length === 0 ? <p className="text-sm text-muted-foreground py-4">Sem itens registrados (fechamento anterior à memória de cálculo).</p>
           : (
@@ -383,6 +484,12 @@ function MemoriaDialog({ st, onClose }: { st: CommissionStatement | null; onClos
               <div className="flex items-center justify-between pt-1 text-sm font-semibold">
                 <span>{items.length} NF(s)</span><span>{brl(soma)}</span>
               </div>
+              {Number(st.base_descarb) > 0 && (
+                <p className="text-[11px] text-muted-foreground pt-1">
+                  A lista acima cobre só a parte faturada. A descarbonização não gera NF —
+                  o valor dela está na composição no topo.
+                </p>
+              )}
             </div>
           )}
         <DialogFooter><CarboButton variant="outline" onClick={onClose}>Fechar</CarboButton></DialogFooter>

@@ -63,9 +63,14 @@ export interface CommissionStatement {
   vendedor_name: string | null;
   period_start: string;
   period_end: string;
-  base_sales: number;
+  base_sales: number;        // total (produto + descarbonização)
+  base_produto: number;
+  base_descarb: number;
   sales_count: number;
-  rate_pct: number;
+  rate_pct: number;          // % do produto faturado
+  rate_descarb_pct: number;  // % da descarbonização
+  amount_produto: number;
+  amount_descarb: number;
   amount_due: number;
   amount_paid: number;
   status: "aberto" | "parcial" | "pago";
@@ -96,19 +101,29 @@ export function useCreateStatement() {
     mutationFn: async (s: {
       vendedor_id: string; vendedor_name: string | null;
       period_start: string; period_end: string;
-      base_sales: number; sales_count: number; rate_pct: number;
+      base_produto: number; base_descarb: number; sales_count: number;
+      rate_pct: number; rate_descarb_pct: number;
     }) => {
       const { data: u } = await supabase.auth.getUser();
-      const amount_due = Math.round(s.base_sales * (s.rate_pct / 100) * 100) / 100;
+      // Cada base tem o SEU percentual — produto faturado e descarbonização
+      // comissionam diferente.
+      const cent = (n: number) => Math.round(n * 100) / 100;
+      const amount_produto = cent(s.base_produto * (s.rate_pct / 100));
+      const amount_descarb = cent(s.base_descarb * (s.rate_descarb_pct / 100));
       const { data: stmt, error } = await db.from("commission_statements").insert({
         vendedor_id: s.vendedor_id,
         vendedor_name: s.vendedor_name,
         period_start: s.period_start,
         period_end: s.period_end,
-        base_sales: s.base_sales,
+        base_sales: cent(s.base_produto + s.base_descarb),
+        base_produto: s.base_produto,
+        base_descarb: s.base_descarb,
         sales_count: s.sales_count,
         rate_pct: s.rate_pct,
-        amount_due,
+        rate_descarb_pct: s.rate_descarb_pct,
+        amount_produto,
+        amount_descarb,
+        amount_due: cent(amount_produto + amount_descarb),
         created_by: u?.user?.id ?? null,
       }).select("id").single();
       if (error) throw error;
@@ -137,7 +152,10 @@ export function useCreateStatement() {
 
 // ── Regras de % de comissão (por vendedor / padrão) ───────────────────────────
 export interface CommissionRule {
-  id: string; vendedor_id: string | null; vendedor_name: string | null; rate_pct: number; active: boolean;
+  id: string; vendedor_id: string | null; vendedor_name: string | null;
+  rate_pct: number;          // produto faturado (com NF)
+  rate_descarb_pct: number;  // descarbonização (serviço, sem NF)
+  active: boolean;
 }
 export function useCommissionRules() {
   return useQuery({
@@ -152,9 +170,17 @@ export function useCommissionRules() {
 export function useUpsertCommissionRule() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (r: { vendedor_id: string | null; vendedor_name?: string | null; rate_pct: number }) => {
+    mutationFn: async (r: {
+      vendedor_id: string | null; vendedor_name?: string | null;
+      rate_pct: number; rate_descarb_pct: number;
+    }) => {
       const { data: u } = await supabase.auth.getUser();
-      const payload = { vendedor_name: r.vendedor_name ?? null, rate_pct: r.rate_pct, active: true, updated_at: new Date().toISOString() };
+      const payload = {
+        vendedor_name: r.vendedor_name ?? null,
+        rate_pct: r.rate_pct,
+        rate_descarb_pct: r.rate_descarb_pct,
+        active: true, updated_at: new Date().toISOString(),
+      };
       if (r.vendedor_id) {
         const { error } = await db.from("commission_rules").upsert(
           { vendedor_id: r.vendedor_id, created_by: u?.user?.id ?? null, ...payload }, { onConflict: "vendedor_id" });
