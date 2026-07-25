@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import {
-  MessageSquarePlus, Bug, Lightbulb, Plus, CheckCircle2, ImagePlus, X, Paperclip,
+  Bug, Lightbulb, Plus, CheckCircle2, ImagePlus, X, Paperclip,
   ChevronDown, ArrowRight,
 } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
@@ -223,9 +223,9 @@ export function BugButton() {
         <PopoverTrigger asChild>
           <button
             className="relative h-9 w-9 flex items-center justify-center rounded-md hover:bg-muted transition-colors"
-            title="Reportar um problema ou dar uma ideia"
+            title="Reportar bug ou sugestão"
           >
-            <MessageSquarePlus className="h-4 w-4" />
+            <Bug className="h-4 w-4" />
             {precisamDeVoce > 0 && (
               <span className="absolute -top-0.5 -right-0.5 h-4 w-4 rounded-full bg-destructive text-[10px] font-bold text-destructive-foreground flex items-center justify-center leading-none">
                 {precisamDeVoce > 9 ? "9+" : precisamDeVoce}
@@ -235,19 +235,22 @@ export function BugButton() {
         </PopoverTrigger>
 
         <PopoverContent align="end" className="w-80 p-0">
-          <div className="px-4 pt-3 pb-2.5 border-b space-y-2.5">
-            <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between gap-2 px-4 py-3 border-b">
+            <div className="flex items-center gap-2 min-w-0">
+              <Bug className="h-4 w-4 text-muted-foreground shrink-0" />
               <span className="font-semibold text-sm">Meus reportes</span>
-              {abertos > 0 && <span className="text-[11px] text-muted-foreground">{abertos} em andamento</span>}
+              {abertos > 0 && (
+                <span className="text-[10px] text-muted-foreground shrink-0">{abertos} em andamento</span>
+              )}
             </div>
-            <Button size="sm" className="w-full gap-1.5" onClick={abrirDialog}>
-              <Plus className="h-3.5 w-3.5" /> Reportar algo
+            <Button size="sm" className="h-7 text-xs gap-1 shrink-0" onClick={abrirDialog}>
+              <Plus className="h-3 w-3" /> Reportar
             </Button>
           </div>
 
           {bugs.length === 0 ? (
             <div className="px-4 py-8 text-center space-y-1.5">
-              <MessageSquarePlus className="h-8 w-8 mx-auto text-muted-foreground/25" />
+              <Bug className="h-8 w-8 mx-auto text-muted-foreground/25" />
               <p className="text-sm font-medium">Nada reportado ainda</p>
               <p className="text-xs text-muted-foreground">
                 Achou algo estranho ou teve uma ideia? Conta pra gente.
@@ -394,15 +397,32 @@ export function BugButton() {
               {/* ── O contexto ── */}
               <div className="space-y-3 border-t pt-4">
                 {/* min-h fixo: trocar bug↔sugestão não pode fazer o diálogo pular. */}
-                <div className="rounded-lg border bg-muted/30 p-3 space-y-2.5 min-h-[112px]">
-                  <div className="flex items-center justify-between gap-2">
-                    <Label className="text-xs font-medium">
-                      {kind === "sugestao" ? "Quem ganharia com isso?" : "Qual o tamanho disso?"}
-                    </Label>
-                    {consequencia && <span className="text-[10px] text-muted-foreground">{consequencia}</span>}
+                {/* Duas perguntas distintas, cada uma com o seu rótulo. Antes as
+                    duas fileiras dividiam um título só e liam como 6 opções de
+                    uma pergunta só. min-h fixo: trocar o tipo não faz pular. */}
+                <div className="rounded-lg border bg-muted/30 p-3 space-y-3 min-h-[116px]">
+                  {kind === "bug" && (
+                    <div className="space-y-1.5">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                          Isso te impede de trabalhar?
+                        </span>
+                        <span className="text-[10px] text-muted-foreground">opcional</span>
+                      </div>
+                      <ChipRow value={bloqueio} onChange={setBloqueio} options={BLOQUEIOS} />
+                    </div>
+                  )}
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                        {kind === "sugestao" ? "Quem ganharia com isso?" : "Além de você, quem mais sente?"}
+                      </span>
+                      {consequencia
+                        ? <span className="text-[10px] text-carbo-green">{consequencia}</span>
+                        : <span className="text-[10px] text-muted-foreground">opcional</span>}
+                    </div>
+                    <ChipRow value={alcance} onChange={setAlcance} options={ALCANCES} />
                   </div>
-                  {kind === "bug" && <ChipRow value={bloqueio} onChange={setBloqueio} options={BLOQUEIOS} />}
-                  <ChipRow value={alcance} onChange={setAlcance} options={ALCANCES} />
                 </div>
 
                 <div className="space-y-2">
