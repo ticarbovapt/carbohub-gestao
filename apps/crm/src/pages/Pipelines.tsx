@@ -23,9 +23,11 @@ import { FUNNEL_CONFIG, getStagesForFunnel, getNextStage, LOSS_REASONS } from "@
 import type { FunnelType, CRMLead } from "@/types/crm";
 import { toast } from "sonner";
 import { playMoveSuccess } from "@/lib/sfx";
-import { SEGMENTS, segmentOf } from "@/types/crm";
+import { SEGMENTS, segmentOf, FUNIS_VISIVEIS } from "@/types/crm";
 
-const FUNNELS = Object.values(FUNNEL_CONFIG);
+// Só as pipelines vivas viram aba. As antigas seguem em FUNNEL_CONFIG para
+// resolver nome/ícone de histórico e links antigos.
+const FUNNELS = FUNIS_VISIVEIS.map((id) => FUNNEL_CONFIG[id]);
 
 // Estágios normalizados para a visão "Todos" (funis têm estágios diferentes).
 const NORMALIZED = [
@@ -143,12 +145,14 @@ function FunnelTab({ active, onClick, icon, label, count, color, loading }: {
 
 export default function Pipelines() {
   // Funil ativo vem da URL (?funil=…): "todos" mostra o consolidado, ou um funil
-  // específico (f1 = jornada do cliente, etc.). Default: f1.
+  // específico. Default: f13 (Comercial Expansão), que absorveu as 9 antigas.
   const [searchParams, setSearchParams] = useSearchParams();
   const funilParam = searchParams.get("funil");
+  // Link antigo (?funil=f3) apontaria pra uma pipeline sem aba e sem leads —
+  // cai na Comercial Expansão, que é pra onde aqueles leads foram.
   const funil = (funilParam === "todos" || (funilParam && FUNNEL_IDS.includes(funilParam))
     ? funilParam
-    : "f1") as FunnelType | "todos";
+    : "f13") as FunnelType | "todos";
   const setFunil = (v: string) => {
     setSearchParams((prev) => { prev.set("funil", v); return prev; }, { replace: true });
   };
@@ -192,7 +196,7 @@ export default function Pipelines() {
   );
 
   const isAll = funil === "todos";
-  const ft = (isAll ? "f1" : funil) as FunnelType;
+  const ft = (isAll ? "f13" : funil) as FunnelType;
 
   const { data: funnelLeads = [], isLoading: l1 } = useCRMLeads(ft);
   const { data: allLeads = [], isLoading: l2 } = useAllCRMLeads();

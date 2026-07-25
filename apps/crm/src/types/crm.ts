@@ -192,6 +192,15 @@ export const FUNNEL_CONFIG: Record<FunnelType, FunnelConfig> = {
   f13:{ id: "f13", name: "Comercial Expansão",               shortName: "Comercial Expansão", description: "PDVs, frotistas, licenciados e contas com motores/estoque", icon: "🚀", color: "#3BC770", cycleLabel: "7-60 dias", stages: STAGES_EXPANSAO },
 };
 
+/**
+ * Pipelines que aparecem na tela. As 9 antigas (f1..f9) viraram SEGMENTO dentro
+ * da Comercial Expansão, mas continuam definidas em FUNNEL_CONFIG de propósito:
+ * links antigos, o histórico da timeline e qualquer lead remanescente ainda
+ * resolvem o nome/ícone. Apagá-las deixaria o detalhe do lead em tela branca.
+ */
+export const FUNIS_VISIVEIS: FunnelType[] = ["f13", "f12", "f11", "f10"];
+export const funilVisivel = (id: FunnelType) => FUNIS_VISIVEIS.includes(id);
+
 // ─────────────────────────────────────────────────────────────────────────────
 // SEGMENTO — o que o lead É. Substitui as 9 pipelines que viraram uma só:
 // o recorte continua existindo, mas como etiqueta filtrável no card.

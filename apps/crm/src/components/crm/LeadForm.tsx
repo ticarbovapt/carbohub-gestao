@@ -3,10 +3,12 @@ import { X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { FunnelType } from "@/types/crm";
-import { SOURCE_OPTIONS, FUNNEL_CONFIG, SEGMENTS } from "@/types/crm";
+import { SOURCE_OPTIONS, FUNNEL_CONFIG, SEGMENTS, FUNIS_VISIVEIS } from "@/types/crm";
 import { useCreateCRMLead } from "@/hooks/useCRMLeads";
 
-const FUNNELS = Object.values(FUNNEL_CONFIG);
+// Só as pipelines vivas — ninguém deve conseguir criar lead numa das 9 que
+// foram consolidadas.
+const FUNNELS = FUNIS_VISIVEIS.map((id) => FUNNEL_CONFIG[id]);
 
 interface LeadFormProps {
   funnelType: FunnelType;
