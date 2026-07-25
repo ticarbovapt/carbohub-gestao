@@ -27,6 +27,9 @@ export interface BugReport {
   department: string | null;
   status: BugStatus;
   admin_notes: string | null;
+  /** Quem do TI assumiu (só leitura aqui — quem edita é o app do TI). */
+  assignee_name: string | null;
+  attachments: { path: string; name: string; size: number }[] | null;
   created_at: string;
   updated_at: string;
 }
@@ -36,6 +39,10 @@ export interface SubmitBugReportPayload {
   /** Impacto declarado por quem reporta — o TI usa pra calcular a prioridade. */
   bloqueio?: string | null;
   pessoas_afetadas?: string | null;
+  /** Prints anexados (bucket privado bug-attachments). */
+  attachments?: { path: string; name: string; size: number }[];
+  /** Tela/navegador/viewport capturados sem perguntar nada. */
+  client_context?: Record<string, unknown>;
   title: string;
   description: string;
   url: string;
@@ -54,6 +61,7 @@ export function useMyBugReports(userId: string | undefined) {
       const { data, error } = await db
         .from("carbo_bug_reports")
         .select("*")
+        .is("archived_at", null)
         .eq("reporter_id", userId!)
         .order("created_at", { ascending: false });
       if (error) throw error;
@@ -70,6 +78,7 @@ export function useAllBugReports() {
       const { data, error } = await db
         .from("carbo_bug_reports")
         .select("*")
+        .is("archived_at", null)
         .order("created_at", { ascending: false });
       if (error) throw error;
       return (data ?? []) as BugReport[];
@@ -105,11 +114,15 @@ export function useResolveBugReport() {
   const { toast } = useToast();
   return useMutation({
     mutationFn: async ({ id, admin_notes }: { id: string; admin_notes?: string }) => {
-      const { error } = await db
+      const { data, error } = await db
         .from("carbo_bug_reports")
-        .update({ status: "resolved", admin_notes: admin_notes ?? null, updated_at: new Date().toISOString() })
-        .eq("id", id);
+        .update({ status: "resolved", admin_notes: admin_notes ?? null })
+        .eq("id", id)
+        .select("id");
       if (error) throw error;
+      if (!data || data.length === 0) {
+        throw new Error("Sem permissão para alterar este report (fale com o TI).");
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["bug_reports"] });
@@ -125,11 +138,15 @@ export function useDeclineBugReport() {
   const { toast } = useToast();
   return useMutation({
     mutationFn: async ({ id, admin_notes }: { id: string; admin_notes?: string }) => {
-      const { error } = await db
+      const { data, error } = await db
         .from("carbo_bug_reports")
-        .update({ status: "declined", admin_notes: admin_notes ?? null, updated_at: new Date().toISOString() })
-        .eq("id", id);
+        .update({ status: "declined", admin_notes: admin_notes ?? null })
+        .eq("id", id)
+        .select("id");
       if (error) throw error;
+      if (!data || data.length === 0) {
+        throw new Error("Sem permissão para alterar este report (fale com o TI).");
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["bug_reports"] });
@@ -145,11 +162,15 @@ export function useReopenBugReport() {
   const { toast } = useToast();
   return useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await db
+      const { data, error } = await db
         .from("carbo_bug_reports")
-        .update({ status: "open", updated_at: new Date().toISOString() })
-        .eq("id", id);
+        .update({ status: "open" })
+        .eq("id", id)
+        .select("id");
       if (error) throw error;
+      if (!data || data.length === 0) {
+        throw new Error("Sem permissão para alterar este report (fale com o TI).");
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["bug_reports"] });
@@ -159,19 +180,26 @@ export function useReopenBugReport() {
   });
 }
 
-/** Apaga um report (gestor). */
+/** Arquiva um report — substitui o excluir (o histórico é auditoria). */
 export function useDeleteBugReport() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   return useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await db.from("carbo_bug_reports").delete().eq("id", id);
+      const { data, error } = await db
+        .from("carbo_bug_reports")
+        .update({ archived_at: new Date().toISOString() })
+        .eq("id", id)
+        .select("id");
       if (error) throw error;
+      if (!data || data.length === 0) {
+        throw new Error("Sem permissão para arquivar este report (fale com o TI).");
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["bug_reports"] });
-      toast({ title: "Report removido" });
+      toast({ title: "Report arquivado" });
     },
-    onError: (err: Error) => toast({ title: "Erro ao remover", description: err.message, variant: "destructive" }),
+    onError: (err: Error) => toast({ title: "Erro ao arquivar", description: err.message, variant: "destructive" }),
   });
 }

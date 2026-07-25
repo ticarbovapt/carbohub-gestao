@@ -20,6 +20,7 @@ import {
   type StageConfig,
 } from "@/lib/demandas";
 import { StageProgressBar } from "./StageProgressBar";
+import { AnexosDaDemanda } from "./AnexosDaDemanda";
 
 const ACT_TYPES = [
   { id: "note", label: "Comentário", icon: <StickyNote className="h-4 w-4" /> },
@@ -211,6 +212,12 @@ export function DemandaModal({ demanda, onClose }: { demanda: BugReport; onClose
               <p className="whitespace-pre-wrap break-words text-sm text-foreground">{demanda.description}</p>
             </Bloco>
 
+            {!!demanda.attachments?.length && (
+              <Bloco title="Prints">
+                <AnexosDaDemanda anexos={demanda.attachments} />
+              </Bloco>
+            )}
+
             <Bloco title="Origem">
               <Field label="Reportado por" value={demanda.reporter_name} />
               <Field label="E-mail" value={demanda.reporter_email} />
@@ -218,8 +225,8 @@ export function DemandaModal({ demanda, onClose }: { demanda: BugReport; onClose
               <Field label="Sistema" value={demanda.app?.toUpperCase()} />
               <Field label="Tipo" value={demanda.kind === "sugestao" ? "Sugestão" : "Bug"} />
               <Field label="Quando" value={dtFmt(demanda.created_at)} />
-              <Field label="Impacto" value={bloqueioLabel(demanda.bloqueio)} />
-              <Field label="Alcance" value={alcanceLabel(demanda.pessoas_afetadas)} />
+              <Field label="Impacto" value={bloqueioLabel(demanda.bloqueio) ?? "— não informado"} />
+              <Field label="Alcance" value={alcanceLabel(demanda.pessoas_afetadas) ?? "— não informado"} />
               {demanda.reopen_count > 0 && <Field label="Reaberturas" value={String(demanda.reopen_count)} />}
               <Field label="Resposta do TI" value={demanda.admin_notes} />
               {demanda.url && (
