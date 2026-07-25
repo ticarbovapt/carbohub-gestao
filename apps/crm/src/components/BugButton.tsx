@@ -18,15 +18,31 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 function StatusIcon({ status }: { status: BugStatus }) {
   if (status === "resolved") return <CheckCircle2 className="h-3.5 w-3.5 text-success shrink-0" />;
   if (status === "declined") return <XCircle className="h-3.5 w-3.5 text-muted-foreground shrink-0" />;
+  if (status === "aguardando") return <Clock className="h-3.5 w-3.5 text-amber-500 shrink-0" />;
   return <Clock className="h-3.5 w-3.5 text-warning shrink-0" />;
 }
 
+// Rótulos em linguagem de quem pediu (o TI tem outro vocabulário no quadro).
+const STATUS_LABEL: Record<string, string> = {
+  open: "Recebido",
+  priorizada: "Na fila",
+  in_progress: "Sendo resolvido",
+  aguardando: "Aguardando você",
+  em_teste: "Em validação",
+  resolved: "Resolvido",
+  declined: "Recusado",
+};
 function statusLabel(status: BugStatus) {
-  return status === "resolved" ? "Resolvido" : status === "declined" ? "Recusado" : "Em aberto";
+  return STATUS_LABEL[status] ?? "Em andamento";
 }
 function statusColor(status: BugStatus) {
-  return status === "resolved" ? "text-success" : status === "declined" ? "text-muted-foreground" : "text-warning";
+  if (status === "resolved") return "text-success";
+  if (status === "declined") return "text-muted-foreground";
+  if (status === "aguardando") return "text-amber-500";
+  return "text-warning";
 }
+/** Ainda em aberto = tudo que não foi encerrado. */
+const emAberto = (s: string) => s !== "resolved" && s !== "declined";
 
 function dtFmt(s: string) {
   return new Date(s).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "2-digit" });
@@ -38,6 +54,7 @@ export function BugButton() {
   const [open, setOpen] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [kind, setKind] = useState<BugKind>("bug");
+  const [bloqueio, setBloqueio] = useState<string>("");
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -47,11 +64,12 @@ export function BugButton() {
 
   if (!user) return null;
 
-  const openCount = bugs.filter((b) => b.status === "open").length;
+  const openCount = bugs.filter((b) => emAberto(b.status)).length;
 
   function handleOpenDialog() {
     setOpen(false);
     setKind("bug");
+    setBloqueio("");
     setTitle("");
     setDescription("");
     setDialogOpen(true);
@@ -62,6 +80,7 @@ export function BugButton() {
     submit.mutate(
       {
         kind,
+        bloqueio: kind === "bug" ? (bloqueio || null) : null,
         title: title.trim(),
         description: description.trim(),
         url: window.location.href,
@@ -74,6 +93,7 @@ export function BugButton() {
         onSuccess: () => {
           setTitle("");
           setDescription("");
+          setBloqueio("");
           setDialogOpen(false);
         },
       }
@@ -207,6 +227,27 @@ export function BugButton() {
                 onChange={(e) => setDescription(e.target.value)}
               />
             </div>
+            {kind === "bug" && (
+              <div className="space-y-1.5">
+                <Label>Isso te impede de trabalhar?</Label>
+                <div className="grid grid-cols-3 gap-2">
+                  {([
+                    ["travado", "Estou travado"],
+                    ["contorno", "Tenho um jeitinho"],
+                    ["incomoda", "Só incomoda"],
+                  ] as const).map(([v, label]) => (
+                    <button key={v} type="button" onClick={() => setBloqueio(bloqueio === v ? "" : v)}
+                      className={`rounded-lg border px-2 py-2 text-xs font-medium transition-colors ${
+                        bloqueio === v ? "border-carbo-green bg-carbo-green/10 text-foreground" : "text-muted-foreground hover:bg-muted"}`}>
+                      {label}
+                    </button>
+                  ))}
+                </div>
+                <p className="text-[11px] text-muted-foreground">
+                  Ajuda o TI a saber o que resolver primeiro.
+                </p>
+              </div>
+            )}
             <p className="text-xs text-muted-foreground">
               A tela atual ({location.pathname}) será registrada automaticamente.
             </p>

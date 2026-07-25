@@ -18,9 +18,23 @@ type StatusTab = "open" | "resolved" | "declined" | "all";
 function StatusIcon({ status }: { status: BugStatus }) {
   if (status === "resolved") return <CheckCircle2 className="h-4 w-4 text-success mt-0.5 shrink-0" />;
   if (status === "declined") return <XCircle className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />;
+  if (status === "aguardando") return <Clock className="h-4 w-4 text-amber-500 mt-0.5 shrink-0" />;
   return <Clock className="h-4 w-4 text-warning mt-0.5 shrink-0" />;
 }
-const statusText = (s: BugStatus) => (s === "resolved" ? "Resolvido" : s === "declined" ? "Recusado" : "Em aberto");
+// Rótulos em linguagem de quem pediu — o TI tem outro vocabulário no quadro.
+const STATUS_TEXT: Record<string, string> = {
+  open: "Recebido",
+  priorizada: "Na fila",
+  in_progress: "Sendo resolvido",
+  aguardando: "Aguardando você",
+  em_teste: "Em validação",
+  resolved: "Resolvido",
+  declined: "Recusado",
+};
+const statusText = (s: BugStatus) => STATUS_TEXT[s] ?? "Em andamento";
+/** Em aberto = tudo que ainda não foi encerrado (antes só contava 'open', então
+ *  a demanda sumia da vista assim que o TI triava). */
+const emAberto = (s: string) => s !== "resolved" && s !== "declined";
 
 export default function BugReports() {
   // Gestor: crm expõe `isGestor`; ops/admin expõem `canAdmin`. Cobre os dois.
@@ -42,14 +56,14 @@ export default function BugReports() {
   const byKind = useMemo(() => all.filter((b) => b.kind === kind), [all, kind]);
 
   const counts = useMemo(() => ({
-    open: byKind.filter((b) => b.status === "open").length,
+    open: byKind.filter((b) => emAberto(b.status)).length,
     resolved: byKind.filter((b) => b.status === "resolved").length,
     declined: byKind.filter((b) => b.status === "declined").length,
     all: byKind.length,
   }), [byKind]);
 
   const list = useMemo(
-    () => byKind.filter((b) => (tab === "all" ? true : b.status === tab)),
+    () => byKind.filter((b) => (tab === "all" ? true : tab === "open" ? emAberto(b.status) : b.status === tab)),
     [byKind, tab],
   );
 
@@ -87,7 +101,7 @@ export default function BugReports() {
 
         {/* Sub-filtro por status */}
         <div className="flex gap-1 border-b border-border flex-wrap">
-          {([["open", "Abertos", counts.open], ["resolved", kind === "sugestao" ? "Feitas" : "Resolvidos", counts.resolved], ["declined", "Recusados", counts.declined], ["all", "Todos", counts.all]] as [StatusTab, string, number][]).map(([k, label, n]) => (
+          {([["open", "Em andamento", counts.open], ["resolved", kind === "sugestao" ? "Feitas" : "Resolvidos", counts.resolved], ["declined", "Recusados", counts.declined], ["all", "Todos", counts.all]] as [StatusTab, string, number][]).map(([k, label, n]) => (
             <button key={k} onClick={() => setTab(k)}
               className={`px-4 py-2 text-sm font-semibold rounded-t-md transition-colors border-b-2 -mb-px ${
                 tab === k ? "border-carbo-green text-carbo-green bg-carbo-green/5" : "border-transparent text-muted-foreground hover:text-foreground"
@@ -114,7 +128,7 @@ export default function BugReports() {
                     <div className="flex items-center gap-2 flex-wrap">
                       <p className="font-semibold text-sm truncate">{b.title}</p>
                       <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-muted text-muted-foreground uppercase">{b.app}</span>
-                      <span className={`text-[10px] font-medium ${b.status === "resolved" ? "text-success" : b.status === "declined" ? "text-muted-foreground" : "text-warning"}`}>{statusText(b.status)}</span>
+                      <span className={`text-[10px] font-medium ${b.status === "resolved" ? "text-success" : b.status === "declined" ? "text-muted-foreground" : b.status === "aguardando" ? "text-amber-500" : "text-warning"}`}>{statusText(b.status)}</span>
                     </div>
                     <p className="text-xs text-muted-foreground truncate">{b.description}</p>
                     <div className="flex items-center gap-3 mt-1 text-[11px] text-muted-foreground">
@@ -125,7 +139,7 @@ export default function BugReports() {
                   </button>
                   {isGestor && (
                     <div className="flex gap-1 shrink-0">
-                      {b.status === "open" ? (
+                      {emAberto(b.status) ? (
                         <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={() => openDetail(b)}>
                           <CheckCircle2 className="h-3 w-3" /> Avaliar
                         </Button>
@@ -185,7 +199,7 @@ export default function BugReports() {
               </div>
               {isGestor && (
                 <DialogFooter className="gap-2 flex-wrap">
-                  {detail.status === "open" ? (
+                  {emAberto(detail.status) ? (
                     <>
                       <Button variant="outline" onClick={() => decline.mutate({ id: detail.id, admin_notes: nota.trim() || undefined }, { onSuccess: () => setDetail(null) })} disabled={decline.isPending} className="gap-1">
                         <XCircle className="h-4 w-4" /> Recusar

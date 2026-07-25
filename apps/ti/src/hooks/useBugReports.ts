@@ -16,7 +16,7 @@ export type BugKind = "bug" | "sugestao";
 //   open → Entrada · priorizada → Priorizada · in_progress → Em andamento
 //   em_teste → Em teste · resolved → Concluída · declined → Recusada
 export type BugStatus =
-  | "open" | "priorizada" | "in_progress" | "em_teste" | "resolved" | "declined";
+  | "open" | "priorizada" | "in_progress" | "aguardando" | "em_teste" | "resolved" | "declined";
 export type BugPriority = "baixa" | "media" | "alta" | "critica";
 
 export interface BugReport {
@@ -35,7 +35,13 @@ export interface BugReport {
   // Execução (app do TI): quem resolve + prioridade.
   assignee_id: string | null;
   assignee_name: string | null;
-  priority: BugPriority;
+  priority: BugPriority | null;   // null = ainda não triada
+  // Impacto declarado por quem reportou (alimenta a prioridade calculada).
+  bloqueio: string | null;
+  pessoas_afetadas: string | null;
+  stage_since: string | null;     // quando entrou na etapa atual
+  archived_at: string | null;
+  reopen_count: number;
   created_at: string;
   updated_at: string;
 }
@@ -76,6 +82,7 @@ export function useAllBugReports() {
       const { data, error } = await db
         .from("carbo_bug_reports")
         .select("*")
+        .is("archived_at", null)
         .order("created_at", { ascending: false });
       if (error) throw error;
       return (data ?? []) as BugReport[];
@@ -165,8 +172,12 @@ export function useReopenBugReport() {
   });
 }
 
-/** Atualiza a EXECUÇÃO de uma demanda no app do TI: status, responsável,
- *  prioridade e/ou nota — tudo num patch só (gestor/TI, via RLS crm_is_gestor). */
+/** Atualiza a EXECUÇÃO de uma demanda: status, responsável, prioridade, nota.
+ *
+ *  ⚠️ A RLS pode recusar a linha SEM devolver erro (update que casa 0 linhas
+ *  retorna 204). Por isso pedimos `.select("id")` de volta e tratamos "nenhuma
+ *  linha afetada" como falha explícita — senão a tela cantava vitória e o card
+ *  voltava sozinho no refetch seguinte. */
 export function useUpdateDemanda() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -176,20 +187,76 @@ export function useUpdateDemanda() {
       status?: BugStatus;
       assignee_id?: string | null;
       assignee_name?: string | null;
-      priority?: BugPriority;
+      priority?: BugPriority | null;
       admin_notes?: string | null;
+      archived_at?: string | null;
     }) => {
       const { id, ...fields } = patch;
-      const { error } = await db
+      const { data, error } = await db
         .from("carbo_bug_reports")
         .update({ ...fields, updated_at: new Date().toISOString() })
-        .eq("id", id);
+        .eq("id", id)
+        .select("id");
       if (error) throw error;
+      if (!data || data.length === 0) {
+        throw new Error("Sem permissão para alterar esta demanda (fale com o TI).");
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["bug_reports"] });
     },
     onError: (err: Error) => toast({ title: "Erro ao atualizar demanda", description: err.message, variant: "destructive" }),
+  });
+}
+
+/** Arquiva a demanda — substitui o excluir. Chamado não se apaga: sai do quadro
+ *  mas o registro e a timeline continuam auditáveis. */
+export function useArquivarDemanda() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { data, error } = await db
+        .from("carbo_bug_reports")
+        .update({ archived_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+        .eq("id", id)
+        .select("id");
+      if (error) throw error;
+      if (!data || data.length === 0) throw new Error("Sem permissão para arquivar esta demanda.");
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["bug_reports"] });
+      toast({ title: "Demanda arquivada", description: "Sai do quadro, mas o histórico fica guardado." });
+    },
+    onError: (err: Error) => toast({ title: "Erro ao arquivar", description: err.message, variant: "destructive" }),
+  });
+}
+
+/** Cria uma demanda direto pelo TI (pedido que chegou por telefone/pessoalmente). */
+export function useCriarDemanda() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  return useMutation({
+    mutationFn: async (d: {
+      title: string; description: string; kind: BugKind; app: string;
+      priority?: BugPriority | null;
+      reporter_id?: string | null; reporter_name?: string | null; department?: string | null;
+      bloqueio?: string | null; pessoas_afetadas?: string | null;
+    }) => {
+      const { error } = await db.from("carbo_bug_reports").insert({
+        title: d.title, description: d.description, kind: d.kind, app: d.app,
+        priority: d.priority ?? null, status: "open",
+        reporter_id: d.reporter_id ?? null, reporter_name: d.reporter_name ?? null,
+        department: d.department ?? null,
+        bloqueio: d.bloqueio ?? null, pessoas_afetadas: d.pessoas_afetadas ?? null,
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["bug_reports"] });
+      toast({ title: "Demanda criada!" });
+    },
+    onError: (err: Error) => toast({ title: "Erro ao criar demanda", description: err.message, variant: "destructive" }),
   });
 }
 
@@ -234,16 +301,13 @@ export function useDemandaCounts() {
   return useQuery({
     queryKey: ["demanda_counts"],
     queryFn: async (): Promise<Record<string, { notes: number; tasksPendentes: number }>> => {
-      const { data, error } = await db
-        .from("carbo_demanda_activities")
-        .select("demanda_id, activity_type, status");
+      // Agregado no banco (antes puxava a tabela inteira de atividades, que
+      // estoura o teto de linhas do PostgREST e some com os badges).
+      const { data, error } = await (supabase as any).rpc("carbo_demanda_counts");
       if (error) throw error;
       const acc: Record<string, { notes: number; tasksPendentes: number }> = {};
-      for (const a of (data ?? []) as { demanda_id: string; activity_type: string; status: string | null }[]) {
-        const e = acc[a.demanda_id] ?? { notes: 0, tasksPendentes: 0 };
-        if (a.activity_type === "note") e.notes++;
-        if (a.activity_type === "task" && a.status !== "done") e.tasksPendentes++;
-        acc[a.demanda_id] = e;
+      for (const r of (data ?? []) as { demanda_id: string; notes: number; tasks_pendentes: number }[]) {
+        acc[r.demanda_id] = { notes: Number(r.notes || 0), tasksPendentes: Number(r.tasks_pendentes || 0) };
       }
       return acc;
     },
@@ -270,6 +334,9 @@ export function useAddDemandaActivity() {
         nome = (prof as { full_name?: string } | null)?.full_name ?? null;
       }
       const tipo = a.activity_type ?? "note";
+      // status_change agora é gravado por TRIGGER no banco (vale pra qualquer
+      // origem, inclusive os murais dos outros apps) — não duplicar aqui.
+      if (tipo === "status_change") return;
       const { error } = await db.from("carbo_demanda_activities").insert({
         demanda_id: a.demanda_id,
         activity_type: tipo,
@@ -315,8 +382,10 @@ export function useToggleActivityTask() {
         .eq("id", id);
       if (error) throw error;
     },
-    onSuccess: (_d, vars) =>
-      queryClient.invalidateQueries({ queryKey: ["demanda_activities", vars.demanda_id] }),
+    onSuccess: (_d, vars) => {
+      queryClient.invalidateQueries({ queryKey: ["demanda_activities", vars.demanda_id] });
+      queryClient.invalidateQueries({ queryKey: ["demanda_counts"] });
+    },
   });
 }
 
@@ -331,11 +400,22 @@ export function useAssumirDemanda() {
       if (!uid) throw new Error("Sessão expirada.");
       const { data: prof } = await db.from("profiles").select("full_name").eq("id", uid).maybeSingle();
       const nome = (prof as { full_name?: string } | null)?.full_name ?? null;
-      const { error } = await db
+      // Só puxa pra "Em andamento" quem ainda não passou disso — assumir uma
+      // demanda que já está em teste não deve fazê-la retroceder.
+      const { data: atual } = await db.from("carbo_bug_reports").select("status").eq("id", id).maybeSingle();
+      const st = (atual as { status?: string } | null)?.status;
+      const avanca = st === "open" || st === "priorizada";
+      const { data, error } = await db
         .from("carbo_bug_reports")
-        .update({ assignee_id: uid, assignee_name: nome, status: "in_progress", updated_at: new Date().toISOString() })
-        .eq("id", id);
+        .update({
+          assignee_id: uid, assignee_name: nome,
+          ...(avanca ? { status: "in_progress" } : {}),
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", id)
+        .select("id");
       if (error) throw error;
+      if (!data || data.length === 0) throw new Error("Sem permissão para assumir esta demanda.");
       return { nome };
     },
     onSuccess: () => {
@@ -360,10 +440,12 @@ export function useTimeTI() {
   return useQuery({
     queryKey: ["time_ti"],
     queryFn: async (): Promise<PessoaTI[]> => {
-      const { data } = await (supabase as any).rpc("carbo_all_profiles");
+      const { data, error } = await (supabase as any).rpc("carbo_all_profiles");
+      if (error) throw error;   // engolir isso fazia a tela dizer "ninguém do TI cadastrado"
       const todos = (data ?? []) as PessoaTI[];
       return todos.filter(
-        (p) => p.department === "ti_suporte" || p.secondary_department === "ti_suporte",
+        (p) => p.department === "ti_suporte" || p.secondary_department === "ti_suporte"
+            || p.department === "command" || p.secondary_department === "command",
       );
     },
   });
@@ -374,7 +456,8 @@ export function useAllProfiles() {
   return useQuery({
     queryKey: ["all_profiles_ti"],
     queryFn: async (): Promise<PessoaTI[]> => {
-      const { data } = await (supabase as any).rpc("carbo_all_profiles");
+      const { data, error } = await (supabase as any).rpc("carbo_all_profiles");
+      if (error) throw error;
       return (data ?? []) as PessoaTI[];
     },
   });

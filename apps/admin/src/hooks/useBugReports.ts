@@ -10,7 +10,9 @@ const db = supabase as unknown as { from: (t: string) => any };
 const APP = "admin";
 
 export type BugKind = "bug" | "sugestao";
-export type BugStatus = "open" | "resolved" | "declined";
+// Fluxo do TI (ti.carbohub.com.br). Os apps só LEEM esses estados.
+export type BugStatus =
+  | "open" | "priorizada" | "in_progress" | "aguardando" | "em_teste" | "resolved" | "declined";
 
 export interface BugReport {
   id: string;
@@ -31,6 +33,9 @@ export interface BugReport {
 
 export interface SubmitBugReportPayload {
   kind: BugKind;
+  /** Impacto declarado por quem reporta — o TI usa pra calcular a prioridade. */
+  bloqueio?: string | null;
+  pessoas_afetadas?: string | null;
   title: string;
   description: string;
   url: string;

@@ -15,7 +15,7 @@ import { CarboEmptyState } from "@/components/ui/carbo-empty-state";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
 import { useAllBugReports, type BugReport } from "@/hooks/useBugReports";
-import { STAGES, PRIOS, prioOf, stageLabel, isAberta, daysSince, agingOf, dFmt } from "@/lib/demandas";
+import { STAGES, PRIOS, prioOf, stageLabel, isAberta, isFilaTI, stageDays, agingOf, dFmt } from "@/lib/demandas";
 
 const brandTip = {
   contentStyle: { background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8, fontSize: 12 },
@@ -24,7 +24,7 @@ const brandTip = {
 // Linha compacta de demanda — usada nas listas operacionais.
 function DemandaLine({ d, onClick }: { d: BugReport; onClick: () => void }) {
   const p = prioOf(d.priority);
-  const aging = agingOf(d.updated_at || d.created_at);
+  const aging = agingOf(d);
   return (
     <button onClick={onClick}
       className="w-full text-left flex items-center gap-2.5 px-3 py-2 rounded-lg hover:bg-muted/60 transition-colors">
@@ -38,7 +38,7 @@ function DemandaLine({ d, onClick }: { d: BugReport; onClick: () => void }) {
       </span>
       {aging && (
         <span className={`text-[11px] shrink-0 ${aging === "red" ? "text-destructive" : "text-amber-500"}`}>
-          {daysSince(d.updated_at || d.created_at)}d
+          {stageDays(d)}d
         </span>
       )}
       {d.kind === "sugestao"
@@ -77,10 +77,12 @@ export default function Home() {
   const abertas = useMemo(() => all.filter((d) => isAberta(d.status)), [all]);
 
   const kpis = useMemo(() => ({
-    fila: abertas.length,
+    fila: abertas.filter((d) => isFilaTI(d.status)).length,
     andamento: all.filter((d) => d.status === "in_progress").length,
-    semDono: abertas.filter((d) => !d.assignee_id).length,
+    semDono: abertas.filter((d) => !d.assignee_id && isFilaTI(d.status)).length,
     criticas: abertas.filter((d) => d.priority === "critica").length,
+    aguardando: all.filter((d) => d.status === "aguardando").length,
+    aTriar: all.filter((d) => d.status === "open" && !d.priority).length,
   }), [all, abertas]);
 
   // "O que falta": fila priorizada (mais urgente e mais antiga primeiro).
@@ -90,10 +92,10 @@ export default function Home() {
   }), [abertas]);
 
   const minhas = useMemo(() => fila.filter((d) => d.assignee_id === user?.id), [fila, user?.id]);
-  const semDono = useMemo(() => fila.filter((d) => !d.assignee_id), [fila]);
+  const semDono = useMemo(() => fila.filter((d) => !d.assignee_id && isFilaTI(d.status)), [fila]);
+  // "Parada" só conta o que depende do TI — espera por terceiro não é atraso nosso.
   const paradas = useMemo(
-    () => fila.filter((d) => daysSince(d.updated_at || d.created_at) > 7)
-      .sort((a, b) => daysSince(b.updated_at || b.created_at) - daysSince(a.updated_at || a.created_at)),
+    () => fila.filter((d) => agingOf(d) === "red").sort((a, b) => stageDays(b) - stageDays(a)),
     [fila],
   );
   const recentes = useMemo(
@@ -121,13 +123,26 @@ export default function Home() {
     return Array.from(m.values()).sort((a, b) => b.total - a.total);
   }, [all]);
 
-  // Tempo médio de resolução (dias) das concluídas.
+  // Tempo médio até concluir: usa stage_since (quando entrou em Concluída), não
+  // updated_at — que era tocado por qualquer edição posterior e inflava o número.
   const tempoMedio = useMemo(() => {
-    const done = all.filter((d) => d.status === "resolved");
+    const done = all.filter((d) => d.status === "resolved" && d.stage_since);
     if (!done.length) return null;
-    const soma = done.reduce((s, d) => s + Math.max(0, (+new Date(d.updated_at) - +new Date(d.created_at)) / 86_400_000), 0);
+    const soma = done.reduce((s, d) =>
+      s + Math.max(0, (+new Date(d.stage_since!) - +new Date(d.created_at)) / 86_400_000), 0);
     return (soma / done.length).toFixed(1);
   }, [all]);
+
+  // Vazão da semana: entraram × saíram (a fila cresce ou diminui?)
+  const semana = useMemo(() => {
+    const corte = Date.now() - 7 * 86_400_000;
+    const entraram = all.filter((d) => +new Date(d.created_at) >= corte).length;
+    const sairam = all.filter((d) =>
+      (d.status === "resolved" || d.status === "declined") && d.stage_since && +new Date(d.stage_since) >= corte).length;
+    return { entraram, sairam };
+  }, [all]);
+
+  const reabertas = useMemo(() => all.filter((d) => (d.reopen_count ?? 0) > 0).length, [all]);
 
   const irParaDemandas = () => navigate("/demandas");
   const primeiroNome = (profile?.full_name ?? "").split(" ")[0];
@@ -165,6 +180,33 @@ export default function Home() {
           <CarboKPI title="Sem responsável" value={kpis.semDono} icon={UserX} iconColor={kpis.semDono > 0 ? "destructive" : "muted"} onClick={irParaDemandas} />
           <CarboKPI title="Críticas abertas" value={kpis.criticas} icon={AlertTriangle} iconColor={kpis.criticas > 0 ? "destructive" : "muted"} onClick={irParaDemandas} />
         </div>
+
+        {/* Fluxo da semana — a fila está crescendo ou diminuindo? */}
+        <CarboCard>
+          <CarboCardContent className="p-4 flex flex-wrap items-center gap-x-8 gap-y-3 text-sm">
+            <span className="flex items-center gap-2">
+              <Inbox className="h-4 w-4 text-muted-foreground" />
+              Últimos 7 dias: <strong className="text-foreground">{semana.entraram}</strong> entraram ·{" "}
+              <strong className="text-foreground">{semana.sairam}</strong> saíram
+              <span className={`text-xs font-semibold px-1.5 py-0.5 rounded ${
+                semana.entraram > semana.sairam ? "bg-destructive/10 text-destructive" : "bg-carbo-green/10 text-carbo-green"}`}>
+                {semana.entraram > semana.sairam ? "fila crescendo" : "fila diminuindo"}
+              </span>
+            </span>
+            {kpis.aTriar > 0 && (
+              <span className="text-muted-foreground">A triar: <strong className="text-foreground">{kpis.aTriar}</strong></span>
+            )}
+            {kpis.aguardando > 0 && (
+              <span className="text-muted-foreground">Aguardando solicitante: <strong className="text-foreground">{kpis.aguardando}</strong></span>
+            )}
+            {reabertas > 0 && (
+              <span className="text-muted-foreground">Já reabertas: <strong className="text-foreground">{reabertas}</strong></span>
+            )}
+            {tempoMedio && (
+              <span className="text-muted-foreground">Tempo médio até concluir: <strong className="text-foreground">{tempoMedio}d</strong></span>
+            )}
+          </CarboCardContent>
+        </CarboCard>
 
         {/* ── Operacional: o que fazer agora ── */}
         <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
@@ -242,11 +284,6 @@ export default function Home() {
                     </div>
                   );
                 })}
-                {tempoMedio && (
-                  <p className="text-[11px] text-muted-foreground pt-2 border-t">
-                    Tempo médio de resolução: <strong className="text-foreground">{tempoMedio} dias</strong>
-                  </p>
-                )}
               </div>
             )}
           </Bloco>

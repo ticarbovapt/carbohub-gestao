@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import {
-  X, Trash2, ChevronRight, Hand, AlertTriangle, Pin, PinOff, ArrowRight,
+  X, Archive, ChevronRight, Hand, AlertTriangle, Pin, PinOff, ArrowRight,
   StickyNote, CheckSquare, Clock, GitBranch, MessageSquare, UserCog, ExternalLink,
   Bug, Lightbulb,
 } from "lucide-react";
@@ -11,11 +11,14 @@ import { ProfileAvatar } from "@/components/ui/profile-avatar";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useAuth } from "@/contexts/AuthContext";
 import {
-  useUpdateDemanda, useDeleteBugReport, useAssumirDemanda, useTimeTI, useAllProfiles,
+  useUpdateDemanda, useArquivarDemanda, useAssumirDemanda, useTimeTI, useAllProfiles,
   useDemandaActivities, useAddDemandaActivity, useToggleActivityPin, useToggleActivityTask,
   type BugReport, type BugStatus, type BugPriority, type DemandaActivity,
 } from "@/hooks/useBugReports";
-import { STAGES, PRIOS, stageLabel, prioOf, daysSince, dtFmt, type StageConfig } from "@/lib/demandas";
+import {
+  STAGES, PRIOS, stageLabel, prioOf, stageDays, dtFmt, bloqueioLabel, alcanceLabel,
+  type StageConfig,
+} from "@/lib/demandas";
 import { StageProgressBar } from "./StageProgressBar";
 
 const ACT_TYPES = [
@@ -27,7 +30,7 @@ export function DemandaModal({ demanda, onClose }: { demanda: BugReport; onClose
   const { user, profile } = useAuth();
   const update = useUpdateDemanda();
   const assumir = useAssumirDemanda();
-  const remove = useDeleteBugReport();
+  const arquivar = useArquivarDemanda();
   const { data: timeTI = [] } = useTimeTI();
   const { data: dir = [] } = useAllProfiles();
   const { data: activities = [] } = useDemandaActivities(demanda.id);
@@ -42,27 +45,47 @@ export function DemandaModal({ demanda, onClose }: { demanda: BugReport; onClose
   const [actType, setActType] = useState("note");
   const [actText, setActText] = useState("");
   const [actDue, setActDue] = useState("");
-  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [confirmArquivar, setConfirmArquivar] = useState(false);
+  const [fechando, setFechando] = useState<null | "resolved" | "declined">(null);
+  const [notaFecho, setNotaFecho] = useState("");
 
   const p = prioOf(demanda.priority);
   const souEu = demanda.assignee_id === user?.id;
-  const dias = daysSince(demanda.updated_at || demanda.created_at);
-  const idx = STAGES.findIndex((s) => s.id === stage);
-  const proxima = idx >= 0 && idx < 4 ? STAGES[idx + 1] : null; // até "Concluída"
-  const terminal = stage === "resolved" || stage === "declined";
-
-  function registrarMudanca(to: BugStatus, from: BugStatus) {
-    addActivity.mutate({
-      demanda_id: demanda.id, activity_type: "status_change",
-      body: `${stageLabel(from)} → ${stageLabel(to)}`, status_from: from, status_to: to,
-    });
-  }
+  const dias = stageDays(demanda);
+  const cfgAtual = STAGES.find((s) => s.id === stage);
+  const terminal = !!cfgAtual?.final;
+  // Próxima etapa = a seguinte entre as NÃO finais (imune a acrescentar etapas).
+  const fluxo = STAGES.filter((s) => !s.final);
+  const idxFluxo = fluxo.findIndex((s) => s.id === stage);
+  const proxima: StageConfig | null =
+    idxFluxo >= 0 && idxFluxo < fluxo.length - 1 ? fluxo[idxFluxo + 1]
+    : idxFluxo === fluxo.length - 1 ? STAGES.find((s) => s.id === "resolved") ?? null
+    : null;
+  const stageResolved = STAGES.find((s) => s.id === "resolved")!;
+  const stageDeclined = STAGES.find((s) => s.id === "declined")!;
+  const stageEntrada = STAGES.find((s) => s.id === "open")!;
 
   function irParaEtapa(target: StageConfig) {
     const from = stage;
     if (target.id === from) return;
+    // Fechar (concluir/recusar) exige explicação — é o que o solicitante recebe.
+    if (target.id === "resolved" || target.id === "declined") {
+      setNotaFecho(demanda.admin_notes ?? "");
+      setFechando(target.id);
+      return;
+    }
     setStage(target.id);
-    update.mutate({ id: demanda.id, status: target.id }, { onSuccess: () => registrarMudanca(target.id, from) });
+    update.mutate({ id: demanda.id, status: target.id }, { onError: () => setStage(from) });
+  }
+
+  function confirmarFecho() {
+    if (!fechando || !notaFecho.trim()) return;
+    const from = stage;
+    setStage(fechando);
+    update.mutate(
+      { id: demanda.id, status: fechando, admin_notes: notaFecho.trim() },
+      { onError: () => setStage(from), onSuccess: () => { setFechando(null); setNotaFecho(""); } },
+    );
   }
 
   function atribuir(v: string) {
@@ -115,8 +138,8 @@ export function DemandaModal({ demanda, onClose }: { demanda: BugReport; onClose
             </div>
           </div>
           <div className="flex items-center gap-1 shrink-0">
-            <button onClick={() => setConfirmDelete(true)} className="text-muted-foreground hover:text-destructive p-1.5" title="Excluir demanda">
-              <Trash2 className="h-4 w-4" />
+            <button onClick={() => setConfirmArquivar(true)} className="text-muted-foreground hover:text-foreground p-1.5" title="Arquivar demanda">
+              <Archive className="h-4 w-4" />
             </button>
             <button onClick={onClose} className="text-muted-foreground hover:text-foreground p-1.5" title="Fechar">
               <X className="h-5 w-5" />
@@ -168,13 +191,20 @@ export function DemandaModal({ demanda, onClose }: { demanda: BugReport; onClose
             </Bloco>
 
             <Bloco title="Prioridade">
-              <Select value={demanda.priority}
-                onValueChange={(v) => update.mutate({ id: demanda.id, priority: v as BugPriority })}>
-                <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+              <Select value={demanda.priority ?? "__none__"}
+                onValueChange={(v) => update.mutate({ id: demanda.id, priority: v === "__none__" ? null : (v as BugPriority) })}>
+                <SelectTrigger className="h-9"><SelectValue placeholder="A triar" /></SelectTrigger>
                 <SelectContent>
+                  <SelectItem value="__none__">A triar</SelectItem>
                   {PRIOS.map((x) => <SelectItem key={x.key} value={x.key}>{x.label}</SelectItem>)}
                 </SelectContent>
               </Select>
+              {demanda.bloqueio && (
+                <p className="text-[11px] text-muted-foreground mt-1.5">
+                  Sugerida pelo impacto informado: <strong>{bloqueioLabel(demanda.bloqueio)}</strong>
+                  {demanda.pessoas_afetadas ? ` · afeta ${alcanceLabel(demanda.pessoas_afetadas)}` : ""}
+                </p>
+              )}
             </Bloco>
 
             <Bloco title="Descrição">
@@ -188,6 +218,10 @@ export function DemandaModal({ demanda, onClose }: { demanda: BugReport; onClose
               <Field label="Sistema" value={demanda.app?.toUpperCase()} />
               <Field label="Tipo" value={demanda.kind === "sugestao" ? "Sugestão" : "Bug"} />
               <Field label="Quando" value={dtFmt(demanda.created_at)} />
+              <Field label="Impacto" value={bloqueioLabel(demanda.bloqueio)} />
+              <Field label="Alcance" value={alcanceLabel(demanda.pessoas_afetadas)} />
+              {demanda.reopen_count > 0 && <Field label="Reaberturas" value={String(demanda.reopen_count)} />}
+              <Field label="Resposta do TI" value={demanda.admin_notes} />
               {demanda.url && (
                 <div>
                   <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Tela</p>
@@ -255,33 +289,67 @@ export function DemandaModal({ demanda, onClose }: { demanda: BugReport; onClose
                 </Button>
               )}
               <Button variant="outline" className="flex-1 text-destructive hover:text-destructive sm:flex-none"
-                onClick={() => irParaEtapa(STAGES[5])} disabled={update.isPending}>
+                onClick={() => irParaEtapa(stageDeclined)} disabled={update.isPending}>
                 Recusar
               </Button>
+              {stage !== "resolved" && proxima?.id !== "resolved" && (
+                <Button variant="outline" className="flex-1 sm:flex-none"
+                  onClick={() => irParaEtapa(stageResolved)} disabled={update.isPending}>
+                  Concluir
+                </Button>
+              )}
             </div>
           </DialogFooter>
         ) : (
           <DialogFooter className="border-t p-3 sm:justify-start">
-            <Button variant="outline" onClick={() => irParaEtapa(STAGES[0])} disabled={update.isPending}>
+            <Button variant="outline" onClick={() => irParaEtapa(stageEntrada)} disabled={update.isPending}>
               Reabrir demanda
             </Button>
           </DialogFooter>
         )}
 
-        {/* Confirmação de exclusão */}
-        <Dialog open={confirmDelete} onOpenChange={setConfirmDelete}>
+        {/* Arquivar (substitui excluir: chamado não se apaga) */}
+        <Dialog open={confirmArquivar} onOpenChange={setConfirmArquivar}>
           <DialogContent className="sm:max-w-sm">
             <DialogHeader>
-              <DialogTitle>Excluir demanda</DialogTitle>
+              <DialogTitle>Arquivar demanda</DialogTitle>
               <DialogDescription>
-                Tem certeza que deseja excluir <strong>{demanda.title}</strong>? Esta ação não pode ser desfeita.
+                <strong>{demanda.title}</strong> sai do quadro, mas o registro e todo o histórico
+                continuam guardados para auditoria.
               </DialogDescription>
             </DialogHeader>
             <DialogFooter className="gap-2">
-              <Button variant="outline" onClick={() => setConfirmDelete(false)}>Cancelar</Button>
-              <Button variant="destructive" disabled={remove.isPending}
-                onClick={() => remove.mutate(demanda.id, { onSuccess: () => { setConfirmDelete(false); onClose(); } })}>
-                {remove.isPending ? "Excluindo..." : "Excluir"}
+              <Button variant="outline" onClick={() => setConfirmArquivar(false)}>Cancelar</Button>
+              <Button disabled={arquivar.isPending}
+                onClick={() => arquivar.mutate(demanda.id, { onSuccess: () => { setConfirmArquivar(false); onClose(); } })}>
+                {arquivar.isPending ? "Arquivando..." : "Arquivar"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Fechar exige explicação — é o texto que chega pra quem reportou */}
+        <Dialog open={!!fechando} onOpenChange={(o) => { if (!o) { setFechando(null); setNotaFecho(""); } }}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>{fechando === "resolved" ? "Concluir demanda" : "Recusar demanda"}</DialogTitle>
+              <DialogDescription>
+                {fechando === "resolved"
+                  ? "O que foi feito? Quem reportou recebe esta resposta na notificação."
+                  : "Por que não será feita? Quem reportou recebe esta explicação."}
+              </DialogDescription>
+            </DialogHeader>
+            <textarea
+              value={notaFecho}
+              onChange={(e) => setNotaFecho(e.target.value)}
+              autoFocus
+              placeholder={fechando === "resolved" ? "Ex.: corrigido o cálculo do frete e publicado." : "Ex.: já existe outra tela que faz isso."}
+              className="min-h-[100px] w-full resize-y rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+            />
+            <DialogFooter className="gap-2">
+              <Button variant="outline" onClick={() => { setFechando(null); setNotaFecho(""); }}>Cancelar</Button>
+              <Button onClick={confirmarFecho} disabled={!notaFecho.trim() || update.isPending}>
+                {fechando === "resolved" ? "Concluir" : "Recusar"}
               </Button>
             </DialogFooter>
           </DialogContent>

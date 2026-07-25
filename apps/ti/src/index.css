@@ -843,3 +843,25 @@
     .ti-card-overlay { transform: none; }
   }
 }
+
+@layer components {
+  /* Prioridade vira a borda esquerda do cartão (em vez de repetir badge+dot) */
+  .ti-card-prio { border-left: 3px solid var(--ti-prio, hsl(var(--border))); }
+
+  /* Coluna recolhida — trilho fino, continua sendo alvo de drop */
+  .ti-column-collapsed {
+    background: hsl(var(--muted) / 0.4);
+    border: 1px solid hsl(var(--border));
+    border-radius: var(--radius);
+    color: hsl(var(--foreground));
+  }
+
+  /* Títulos longos (URLs coladas) não podem estourar a coluna */
+  .ti-card-title {
+    overflow-wrap: anywhere;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+}

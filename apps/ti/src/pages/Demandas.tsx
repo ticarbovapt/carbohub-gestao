@@ -1,5 +1,5 @@
-import { useMemo, useState } from "react";
-import { LifeBuoy, Search, Hand } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { LifeBuoy, Search, Hand, Plus, X, Inbox } from "lucide-react";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { Input } from "@/components/ui/input";
@@ -7,11 +7,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
 import {
-  useAllBugReports, useUpdateDemanda, useAddDemandaActivity, useDemandaCounts, useAllProfiles,
+  useAllBugReports, useUpdateDemanda, useDemandaCounts, useAllProfiles, useAssumirDemanda,
   type BugReport, type BugStatus,
 } from "@/hooks/useBugReports";
 import { DemandaBoard } from "@/components/demandas/DemandaBoard";
 import { DemandaModal } from "@/components/demandas/DemandaModal";
+import { NovaDemandaDialog } from "@/components/demandas/NovaDemandaDialog";
 import { PRIOS, stageLabel } from "@/lib/demandas";
 import { playMoveSuccess } from "@/lib/sfx";
 
@@ -22,7 +23,7 @@ export default function Demandas() {
   const { data: counts = {} } = useDemandaCounts();
   const { data: dir = [] } = useAllProfiles();
   const update = useUpdateDemanda();
-  const addAct = useAddDemandaActivity();
+  const assumir = useAssumirDemanda();
 
   // Foto do responsável no cartão (resolvida pelo diretório).
   const avatarOf = (id: string | null) => (id ? dir.find((x) => x.id === id)?.avatar_url : null);
@@ -33,6 +34,7 @@ export default function Demandas() {
   const [fPrio, setFPrio] = useState("all");
   const [soMinhas, setSoMinhas] = useState(false);
   const [detail, setDetail] = useState<BugReport | null>(null);
+  const [novaAberta, setNovaAberta] = useState(false);
 
   const apps = useMemo(() => Array.from(new Set(all.map((b) => b.app).filter(Boolean))).sort(), [all]);
 
@@ -42,30 +44,48 @@ export default function Demandas() {
       if (soMinhas && b.assignee_id !== user?.id) return false;
       if (fKind !== "all" && b.kind !== fKind) return false;
       if (fApp !== "all" && b.app !== fApp) return false;
-      if (fPrio !== "all" && b.priority !== fPrio) return false;
+      if (fPrio === "__none__" ? !!b.priority : fPrio !== "all" && b.priority !== fPrio) return false;
       if (term && !`${b.title} ${b.description} ${b.reporter_name ?? ""} ${b.assignee_name ?? ""}`.toLowerCase().includes(term)) return false;
       return true;
     });
   }, [all, q, fKind, fApp, fPrio, soMinhas, user?.id]);
 
-  // Mantém o drawer em sincronia com o dado recarregado.
-  const detailLive = detail ? all.find((d) => d.id === detail.id) ?? detail : null;
+  const filtroAtivo = !!q.trim() || soMinhas || fKind !== "all" || fApp !== "all" || fPrio !== "all";
+  const limparFiltros = () => { setQ(""); setSoMinhas(false); setFKind("all"); setFApp("all"); setFPrio("all"); };
 
-  // Mover card = mudar etapa. Otimista no cache (não "volta"), som + toast
-  // disparados DENTRO do gesto — senão a política de autoplay bloqueia o som.
-  function handleMove(d: BugReport, to: BugStatus) {
+  // Mantém o modal em sincronia com o dado recarregado. Se a demanda sumiu
+  // (arquivada por outra pessoa), fecha em vez de operar sobre um fantasma.
+  const detailLive = detail ? all.find((d) => d.id === detail.id) ?? null : null;
+  useEffect(() => { if (detail && !isLoading && !detailLive) setDetail(null); }, [detail, detailLive, isLoading]);
+
+  // Mover card = mudar etapa.
+  //  • cache otimista pra não "voltar" no meio do gesto;
+  //  • o SOM toca no gesto (política de autoplay), mas o TOAST de sucesso só
+  //    depois que o banco confirma — antes a tela cantava vitória mesmo quando
+  //    a RLS recusava a escrita;
+  //  • em erro, desfaz a mudança no cache.
+  //  A atividade de troca de etapa é gravada por trigger no banco.
+  function handleMove(d: BugReport, to: BugStatus, undo = false) {
+    const from = d.status;
+    const anterior = qc.getQueryData<BugReport[]>(["bug_reports", "all"]);
     qc.setQueryData(["bug_reports", "all"], (old: BugReport[] | undefined) =>
       (old ?? []).map((x) => (x.id === d.id ? { ...x, status: to } : x)));
-
     playMoveSuccess();
-    toast.success("Demanda movida", { description: `${stageLabel(d.status)}  →  ${stageLabel(to)}` });
 
     update.mutate({ id: d.id, status: to }, {
-      onSuccess: () => addAct.mutate({
-        demanda_id: d.id, activity_type: "status_change",
-        body: `${stageLabel(d.status)} → ${stageLabel(to)}`,
-        status_from: d.status, status_to: to,
-      }),
+      onSuccess: () => {
+        toast.success("Demanda movida", {
+          description: `${stageLabel(from)}  →  ${stageLabel(to)}`,
+          action: undo ? undefined : {
+            label: "Desfazer",
+            onClick: () => handleMove({ ...d, status: to }, from, true),
+          },
+        });
+      },
+      onError: () => {
+        if (anterior) qc.setQueryData(["bug_reports", "all"], anterior);
+      },
+      onSettled: () => qc.invalidateQueries({ queryKey: ["bug_reports"] }),
     });
   }
 
@@ -78,7 +98,12 @@ export default function Demandas() {
         <div className="flex items-center gap-2 shrink-0">
           <LifeBuoy className="h-5 w-5 text-carbo-green" />
           <h1 className="font-bold text-lg">Demandas</h1>
-          <span className="text-xs text-muted-foreground">({filtered.length})</span>
+          <span className="text-xs text-muted-foreground">
+            ({filtered.length}{filtroAtivo ? ` de ${all.length}` : ""})
+          </span>
+          <Button size="sm" className="h-8 gap-1.5 ml-1" onClick={() => setNovaAberta(true)}>
+            <Plus className="h-3.5 w-3.5" /> Nova
+          </Button>
         </div>
 
         <div className="relative flex-1 min-w-0 lg:max-w-sm">
@@ -110,9 +135,15 @@ export default function Demandas() {
             <SelectTrigger className="w-36 h-9"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Toda prioridade</SelectItem>
+              <SelectItem value="__none__">A triar</SelectItem>
               {PRIOS.map((p) => <SelectItem key={p.key} value={p.key}>{p.label}</SelectItem>)}
             </SelectContent>
           </Select>
+          {filtroAtivo && (
+            <Button variant="ghost" size="sm" className="h-9 gap-1 text-muted-foreground" onClick={limparFiltros}>
+              <X className="h-3.5 w-3.5" /> Limpar
+            </Button>
+          )}
         </div>
       </div>
 
@@ -124,13 +155,24 @@ export default function Demandas() {
               <div key={i} className="w-80 shrink-0 h-64 rounded-xl bg-muted/40 animate-pulse" />
             ))}
           </div>
+        ) : filtered.length === 0 && filtroAtivo ? (
+          <div className="h-full flex flex-col items-center justify-center gap-3 text-center">
+            <Inbox className="h-10 w-10 text-muted-foreground/30" />
+            <div>
+              <p className="font-medium">Nenhuma demanda com esses filtros</p>
+              <p className="text-sm text-muted-foreground">Ajuste a busca ou limpe os filtros.</p>
+            </div>
+            <Button variant="outline" size="sm" onClick={limparFiltros}>Limpar filtros</Button>
+          </div>
         ) : (
           <DemandaBoard demandas={filtered} onCardClick={setDetail} onMove={handleMove}
-            counts={counts} avatarOf={avatarOf} />
+            counts={counts} avatarOf={avatarOf}
+            onAssumir={(d) => assumir.mutate(d.id)} />
         )}
       </div>
 
       {detailLive && <DemandaModal demanda={detailLive} onClose={() => setDetail(null)} />}
+      <NovaDemandaDialog open={novaAberta} onClose={() => setNovaAberta(false)} />
     </div>
   );
 }
