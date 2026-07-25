@@ -1,4 +1,4 @@
-export type FunnelType = "f1" | "f2" | "f3" | "f4" | "f5" | "f6" | "f7" | "f8" | "f9" | "f10" | "f11" | "f12";
+export type FunnelType = "f1" | "f2" | "f3" | "f4" | "f5" | "f6" | "f7" | "f8" | "f9" | "f10" | "f11" | "f12" | "f13";
 
 export type LeadStage =
   | "a_contatar" | "tentativa_1" | "tentativa_2"
@@ -112,6 +112,25 @@ const STAGES_PDV: StageConfig[] = [
   { id: "sem_interesse", label: "Sem Interesse",   icon: "❌", color: "#EF4444" },
 ];
 
+// ─────────────────────────────────────────────────────────────────────────────
+// COMERCIAL EXPANSÃO (f13) — pipeline única que absorve Vendas, Licenciados,
+// Frotistas, PDVs, Motores, Estoque Comb. e Subdistribuidor. O que o lead É
+// virou SEGMENTO (etiqueta no card), não pipeline separada.
+//
+// Os ids abaixo foram escolhidos de propósito entre os mais usados nas 9
+// pipelines de origem: quanto mais id repetido, menos linha precisa de UPDATE
+// de etapa na virada (a_contatar já é a 1ª etapa de 8 delas).
+// ─────────────────────────────────────────────────────────────────────────────
+const STAGES_EXPANSAO: StageConfig[] = [
+  { id: "a_contatar",     label: "A Contatar",           icon: "📋", color: "#94A3B8" },
+  { id: "contato",        label: "Em Contato",           icon: "📞", color: "#F59E0B" },
+  { id: "qualificado",    label: "Qualificado",          icon: "🎯", color: "#3B82F6" },
+  { id: "visita_agendada",label: "Reunião / Visita",     icon: "📍", color: "#8B5CF6" },
+  { id: "em_negociacao",  label: "Proposta / Negociação",icon: "🤝", color: "#06B6D4" },
+  { id: "convertido",     label: "Ganho",                icon: "✅", color: "#22C55E" },
+  { id: "sem_interesse",  label: "Perdido",              icon: "❌", color: "#EF4444" },
+];
+
 // Jornada do cliente — pipeline ÚNICA ativa de Vendas (vendedores começam por aqui).
 const STAGES_VENDAS: StageConfig[] = [
   { id: "novo",        label: "Novo Lead",        icon: "🆕", color: "#94A3B8" },
@@ -170,7 +189,36 @@ export const FUNNEL_CONFIG: Record<FunnelType, FunnelConfig> = {
   f10:{ id: "f10", name: "Follow up",                        shortName: "Follow up",     description: "Recompra da base de clientes", icon: "🔁", color: "#EAB308", cycleLabel: "recorrente", stages: STAGES_FOLLOWUP },
   f11:{ id: "f11", name: "Inbound",                          shortName: "Inbound",       description: "Closers — anúncios e qualificados", icon: "🎯", color: "#3BC770", cycleLabel: "1-15 dias", stages: STAGES_INBOUND },
   f12:{ id: "f12", name: "Outbound",                         shortName: "Outbound",      description: "SDR — prospecção ativa",    icon: "🔎", color: "#6366F1", cycleLabel: "1-30 dias", stages: STAGES_OUTBOUND },
+  f13:{ id: "f13", name: "Comercial Expansão",               shortName: "Comercial Expansão", description: "PDVs, frotistas, licenciados e contas com motores/estoque", icon: "🚀", color: "#3BC770", cycleLabel: "7-60 dias", stages: STAGES_EXPANSAO },
 };
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SEGMENTO — o que o lead É. Substitui as 9 pipelines que viraram uma só:
+// o recorte continua existindo, mas como etiqueta filtrável no card.
+// Ícones e cores vêm dos funis de origem, de propósito: a identidade visual de
+// cada pipeline sobrevive à fusão, que é o que faz a mudança não parecer perda.
+// ─────────────────────────────────────────────────────────────────────────────
+export type LeadSegment =
+  | "venda_direta" | "licenciado" | "frotista" | "pdv_carboze" | "pdv_carbopro"
+  | "frotista_lic" | "motores" | "estoque_comb" | "subdistribuidor" | "a_definir";
+
+export interface SegmentConfig { id: LeadSegment; label: string; shortName: string; icon: string; color: string }
+
+export const SEGMENTS: SegmentConfig[] = [
+  { id: "pdv_carboze",     label: "PDV CarboZé",             shortName: "PDV CarboZé",     icon: "🏪", color: "#3B82F6" },
+  { id: "pdv_carbopro",    label: "PDV CarboPRO",            shortName: "PDV CarboPRO",    icon: "⭐", color: "#06B6D4" },
+  { id: "frotista",        label: "Frotista Direto",         shortName: "Frotista",        icon: "🚛", color: "#F59E0B" },
+  { id: "frotista_lic",    label: "Frotista via Licenciado", shortName: "Frotista Lic.",   icon: "🔗", color: "#F97316" },
+  { id: "licenciado",      label: "Licenciado",              shortName: "Licenciado",      icon: "🏢", color: "#8B5CF6" },
+  { id: "motores",         label: "Empresa c/ Motores",      shortName: "Motores",         icon: "⚙️", color: "#EF4444" },
+  { id: "estoque_comb",    label: "Estoque de Combustível",  shortName: "Estoque Comb.",   icon: "⛽", color: "#10B981" },
+  { id: "subdistribuidor", label: "Subdistribuidor",         shortName: "Subdistribuidor", icon: "🏬", color: "#14B8A6" },
+  { id: "venda_direta",    label: "Venda Direta",            shortName: "Venda Direta",    icon: "💼", color: "#3BC770" },
+  { id: "a_definir",       label: "A definir",               shortName: "A definir",       icon: "❓", color: "#94A3B8" },
+];
+
+export const segmentOf = (id: string | null | undefined): SegmentConfig | null =>
+  id ? SEGMENTS.find((s) => s.id === id) ?? null : null;
 
 export const LOSS_REASONS = [
   "Preço", "Concorrente", "Timing / Momento inadequado", "Não atende telefone",

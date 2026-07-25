@@ -3,7 +3,7 @@ import { X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { FunnelType } from "@/types/crm";
-import { SOURCE_OPTIONS, FUNNEL_CONFIG } from "@/types/crm";
+import { SOURCE_OPTIONS, FUNNEL_CONFIG, SEGMENTS } from "@/types/crm";
 import { useCreateCRMLead } from "@/hooks/useCRMLeads";
 
 const FUNNELS = Object.values(FUNNEL_CONFIG);
@@ -39,6 +39,7 @@ export function LeadForm({ funnelType, initialStage, onClose }: LeadFormProps) {
     state: "",
     source: "Prospecção ativa",
     temperature: "frio",
+    lead_segment: "a_definir",
     notes: "",
     estimated_revenue: "",
   });
@@ -54,6 +55,7 @@ export function LeadForm({ funnelType, initialStage, onClose }: LeadFormProps) {
     if (!canSave) return;
     await create.mutateAsync({
       funnel_type: funnel,
+      lead_segment: form.lead_segment,
       stage,
       contact_name: form.contact_name.trim() || null,
       contact_phone: form.contact_phone || null,
@@ -84,6 +86,14 @@ export function LeadForm({ funnelType, initialStage, onClose }: LeadFormProps) {
             <select className="w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-sm"
               value={funnel} onChange={(e) => setFunnel(e.target.value as FunnelType)}>
               {FUNNELS.map((f) => <option key={f.id} value={f.id}>{f.icon} {f.name}</option>)}
+            </select>
+          </Field>
+
+          {/* Segmento — o que o lead É (substitui as pipelines por tipo) */}
+          <Field label="Segmento" required>
+            <select className="w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-sm"
+              value={form.lead_segment} onChange={(e) => set("lead_segment", e.target.value)}>
+              {SEGMENTS.map((sg) => <option key={sg.id} value={sg.id}>{sg.icon} {sg.label}</option>)}
             </select>
           </Field>
 

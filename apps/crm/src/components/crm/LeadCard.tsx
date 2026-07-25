@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ProfileAvatar } from "@/components/ui/profile-avatar";
 import type { CRMLead, FunnelType } from "@/types/crm";
-import { getDaysSinceUpdate } from "@/types/crm";
+import { getDaysSinceUpdate, segmentOf } from "@/types/crm";
 
 export interface LeadOwner { id: string; name: string | null; avatar_url: string | null }
 
@@ -29,6 +29,7 @@ export function LeadCard({ lead, funnelType: _funnelType, owner, onAdvance, onMa
   const daysSince = getDaysSinceUpdate(lead.updated_at);
   const aging: "red" | "amber" | null = daysSince > 7 ? "red" : daysSince > 3 ? "amber" : null;
   const displayName = lead.legal_name || lead.trade_name || lead.contact_name || "Sem nome";
+  const seg = segmentOf(lead.lead_segment);
   // Nome fantasia aparece como linha secundária só quando difere da razão social exibida.
   const secondaryTradeName = lead.trade_name && lead.trade_name !== displayName ? lead.trade_name : null;
   const waLink = lead.contact_phone ? `https://wa.me/55${lead.contact_phone.replace(/\D/g, "")}` : null;
@@ -42,6 +43,20 @@ export function LeadCard({ lead, funnelType: _funnelType, owner, onAdvance, onMa
       }`}
       onClick={() => onClick?.(lead)}
     >
+      {/* Segmento — o que o lead É. Aparece sempre; é o que substitui as
+          pipelines separadas por PDV/frotista/licenciado. */}
+      {seg && (
+        <div className="mb-2">
+          <span
+            className="inline-flex items-center gap-1 text-[10px] font-medium rounded-full px-1.5 py-0.5"
+            style={{ background: seg.color + "1a", color: seg.color }}
+            title={seg.label}
+          >
+            <span>{seg.icon}</span> {seg.shortName}
+          </span>
+        </div>
+      )}
+
       {/* Origem (visão "Todos os funis") — de qual pipeline o card veio */}
       {originFunnel && (
         <div className="mb-2">

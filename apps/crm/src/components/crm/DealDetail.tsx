@@ -12,7 +12,7 @@ import { ProfileAvatar } from "@/components/ui/profile-avatar";
 import type { CRMLead, FunnelType } from "@/types/crm";
 import {
   FUNNEL_CONFIG, LOSS_REASONS, getStagesForFunnel, getNextStage, getLostStage,
-  isTerminalStage, getDaysSinceUpdate,
+  isTerminalStage, getDaysSinceUpdate, SEGMENTS, segmentOf,
 } from "@/types/crm";
 import {
   useAdvanceLeadStage, useMarkLeadLost, useTransferLead, useLeadOwnerLog,
@@ -213,6 +213,12 @@ export function DealDetail({ lead, funnelType, onClose }: DealDetailProps) {
             <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
               <Badge variant="outline" className="text-xs">{funnelCfg.icon} {funnelCfg.shortName}</Badge>
               {stageCfg && <Badge variant="outline" className="text-xs">{stageCfg.icon} {stageCfg.label}</Badge>}
+              {segmentOf(lead.lead_segment) && (
+                <span className="text-xs font-medium rounded-full px-2 py-0.5"
+                  style={{ background: segmentOf(lead.lead_segment)!.color + "1a", color: segmentOf(lead.lead_segment)!.color }}>
+                  {segmentOf(lead.lead_segment)!.icon} {segmentOf(lead.lead_segment)!.shortName}
+                </span>
+              )}
               <Badge variant={TEMP_VARIANT[lead.temperature]} className="text-xs">{TEMP_LABEL[lead.temperature]}</Badge>
               {daysSince > 3 && (
                 <Badge variant="destructive" className="text-xs">
@@ -262,6 +268,19 @@ export function DealDetail({ lead, funnelType, onClose }: DealDetailProps) {
 
             <Card title="Sobre o negócio">
               <Field label="Etapa" value={stageCfg ? `${stageCfg.icon} ${stageCfg.label}` : stage} />
+              {/* Segmento — editável: quem tagueou errado precisa poder corrigir */}
+              <div>
+                <p className="mb-1 text-[11px] uppercase tracking-wide text-muted-foreground">Segmento</p>
+                <select
+                  className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm text-foreground"
+                  value={lead.lead_segment ?? "a_definir"}
+                  onChange={(e) => updateLead.mutate({ id: lead.id, lead_segment: e.target.value })}
+                >
+                  {SEGMENTS.map((sg) => (
+                    <option key={sg.id} value={sg.id}>{sg.icon} {sg.label}</option>
+                  ))}
+                </select>
+              </div>
               <div>
                 <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Valor</p>
                 <p className="text-2xl font-semibold text-foreground">{brl(lead.estimated_revenue)}</p>
