@@ -15,6 +15,7 @@ import { CarboEmptyState } from "@/components/ui/carbo-empty-state";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
 import { useAllBugReports, type BugReport } from "@/hooks/useBugReports";
+import { RankingTI } from "@/components/demandas/RankingTI";
 import { STAGES, PRIOS, prioOf, stageLabel, isAberta, isFilaTI, stageDays, agingOf, dFmt } from "@/lib/demandas";
 
 const brandTip = {
@@ -312,6 +313,9 @@ export default function Home() {
               </div>
             )}
         </Bloco>
+
+        {/* Ranking do time — depois das entradas recentes, como pedido. */}
+        <RankingTI />
       </div>
     </div>
   );
