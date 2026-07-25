@@ -7,7 +7,7 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import type { BugReport, BugStatus } from "@/hooks/useBugReports";
 import { STAGES, prioOf } from "@/lib/demandas";
-import { DemandaCardFace } from "./DemandaCard";
+import { DemandaCardFace, type CardCounts } from "./DemandaCard";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Quadro de demandas — mesma fluidez do quadro do Marketing e dos pipelines do
@@ -16,7 +16,9 @@ import { DemandaCardFace } from "./DemandaCard";
 // tracejado na origem (preserva a altura, não "pula").
 // ─────────────────────────────────────────────────────────────────────────────
 
-function DraggableCard({ d, onClick }: { d: BugReport; onClick: (d: BugReport) => void }) {
+function DraggableCard({ d, onClick, counts, avatarUrl }: {
+  d: BugReport; onClick: (d: BugReport) => void; counts?: CardCounts; avatarUrl?: string | null;
+}) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: d.id,
     data: { entity: d },
@@ -24,7 +26,7 @@ function DraggableCard({ d, onClick }: { d: BugReport; onClick: (d: BugReport) =
 
   if (isDragging) {
     // Mantém o espaço da coluna estável enquanto arrasta.
-    return <div ref={setNodeRef} className="ti-card-placeholder h-[132px]" />;
+    return <div ref={setNodeRef} className="ti-card-placeholder h-[150px]" />;
   }
 
   return (
@@ -36,7 +38,7 @@ function DraggableCard({ d, onClick }: { d: BugReport; onClick: (d: BugReport) =
       onClick={() => onClick(d)}
       className="ti-card cursor-pointer select-none touch-none"
     >
-      <DemandaCardFace d={d} />
+      <DemandaCardFace d={d} counts={counts} avatarUrl={avatarUrl} />
     </div>
   );
 }
@@ -56,12 +58,14 @@ function DroppableColumn({ id, children }: { id: string; children: React.ReactNo
 }
 
 export function DemandaBoard({
-  demandas, onCardClick, onMove,
+  demandas, onCardClick, onMove, counts = {}, avatarOf,
 }: {
   demandas: BugReport[];
   onCardClick: (d: BugReport) => void;
   /** Chamado no fim do gesto: (demanda, etapa destino). */
   onMove: (d: BugReport, to: BugStatus) => void;
+  counts?: Record<string, CardCounts>;
+  avatarOf?: (userId: string | null) => string | null | undefined;
 }) {
   const [active, setActive] = useState<BugReport | null>(null);
 
@@ -130,7 +134,10 @@ export function DemandaBoard({
                     Nada aqui.
                   </p>
                 ) : (
-                  items.map((d) => <DraggableCard key={d.id} d={d} onClick={onCardClick} />)
+                  items.map((d) => (
+                    <DraggableCard key={d.id} d={d} onClick={onCardClick}
+                      counts={counts[d.id]} avatarUrl={avatarOf?.(d.assignee_id)} />
+                  ))
                 )}
               </DroppableColumn>
             </div>
@@ -141,7 +148,7 @@ export function DemandaBoard({
       <DragOverlay dropAnimation={null}>
         {active ? (
           <div className="ti-card ti-card-overlay w-80 cursor-grabbing pointer-events-none">
-            <DemandaCardFace d={active} />
+            <DemandaCardFace d={active} counts={counts[active.id]} avatarUrl={avatarOf?.(active.assignee_id)} />
           </div>
         ) : null}
       </DragOverlay>

@@ -7,11 +7,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
 import {
-  useAllBugReports, useUpdateDemanda, useAddDemandaActivity,
+  useAllBugReports, useUpdateDemanda, useAddDemandaActivity, useDemandaCounts, useAllProfiles,
   type BugReport, type BugStatus,
 } from "@/hooks/useBugReports";
 import { DemandaBoard } from "@/components/demandas/DemandaBoard";
-import { DemandaDrawer } from "@/components/demandas/DemandaDrawer";
+import { DemandaModal } from "@/components/demandas/DemandaModal";
 import { PRIOS, stageLabel } from "@/lib/demandas";
 import { playMoveSuccess } from "@/lib/sfx";
 
@@ -19,8 +19,13 @@ export default function Demandas() {
   const { user } = useAuth();
   const qc = useQueryClient();
   const { data: all = [], isLoading } = useAllBugReports();
+  const { data: counts = {} } = useDemandaCounts();
+  const { data: dir = [] } = useAllProfiles();
   const update = useUpdateDemanda();
   const addAct = useAddDemandaActivity();
+
+  // Foto do responsável no cartão (resolvida pelo diretório).
+  const avatarOf = (id: string | null) => (id ? dir.find((x) => x.id === id)?.avatar_url : null);
 
   const [q, setQ] = useState("");
   const [fKind, setFKind] = useState("all");
@@ -120,11 +125,12 @@ export default function Demandas() {
             ))}
           </div>
         ) : (
-          <DemandaBoard demandas={filtered} onCardClick={setDetail} onMove={handleMove} />
+          <DemandaBoard demandas={filtered} onCardClick={setDetail} onMove={handleMove}
+            counts={counts} avatarOf={avatarOf} />
         )}
       </div>
 
-      {detailLive && <DemandaDrawer demanda={detailLive} onClose={() => setDetail(null)} />}
+      {detailLive && <DemandaModal demanda={detailLive} onClose={() => setDetail(null)} />}
     </div>
   );
 }

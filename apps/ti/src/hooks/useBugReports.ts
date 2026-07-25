@@ -195,7 +195,7 @@ export function useUpdateDemanda() {
 
 // ── Timeline da demanda (anotações / histórico) ──────────────────────────────
 // Mesmo padrão do CRM (crm_sales_lead_activities): tudo numa tabela só.
-export type DemandaActivityType = "note" | "status_change" | "assign";
+export type DemandaActivityType = "note" | "task" | "status_change" | "assign";
 
 export interface DemandaActivity {
   id: string;
@@ -204,6 +204,9 @@ export interface DemandaActivity {
   body: string | null;
   status_from: string | null;
   status_to: string | null;
+  due_at: string | null;
+  status: string | null;      // tarefa: pending | done
+  pinned: boolean;
   created_by: string | null;
   created_by_name: string | null;
   created_at: string;
@@ -226,6 +229,27 @@ export function useDemandaActivities(demandaId: string | null) {
   });
 }
 
+/** Contadores de atividade por demanda (uma query só, pro badge do card). */
+export function useDemandaCounts() {
+  return useQuery({
+    queryKey: ["demanda_counts"],
+    queryFn: async (): Promise<Record<string, { notes: number; tasksPendentes: number }>> => {
+      const { data, error } = await db
+        .from("carbo_demanda_activities")
+        .select("demanda_id, activity_type, status");
+      if (error) throw error;
+      const acc: Record<string, { notes: number; tasksPendentes: number }> = {};
+      for (const a of (data ?? []) as { demanda_id: string; activity_type: string; status: string | null }[]) {
+        const e = acc[a.demanda_id] ?? { notes: 0, tasksPendentes: 0 };
+        if (a.activity_type === "note") e.notes++;
+        if (a.activity_type === "task" && a.status !== "done") e.tasksPendentes++;
+        acc[a.demanda_id] = e;
+      }
+      return acc;
+    },
+  });
+}
+
 /** Registra uma atividade (anotação, troca de etapa, atribuição). */
 export function useAddDemandaActivity() {
   const queryClient = useQueryClient();
@@ -237,6 +261,7 @@ export function useAddDemandaActivity() {
       body?: string | null;
       status_from?: string | null;
       status_to?: string | null;
+      due_at?: string | null;
     }) => {
       const { data: u } = await supabase.auth.getUser();
       let nome: string | null = null;
@@ -244,12 +269,15 @@ export function useAddDemandaActivity() {
         const { data: prof } = await db.from("profiles").select("full_name").eq("id", u.user.id).maybeSingle();
         nome = (prof as { full_name?: string } | null)?.full_name ?? null;
       }
+      const tipo = a.activity_type ?? "note";
       const { error } = await db.from("carbo_demanda_activities").insert({
         demanda_id: a.demanda_id,
-        activity_type: a.activity_type ?? "note",
+        activity_type: tipo,
         body: a.body ?? null,
         status_from: a.status_from ?? null,
         status_to: a.status_to ?? null,
+        due_at: a.due_at ?? null,
+        status: tipo === "task" ? "pending" : null,
         created_by: u?.user?.id ?? null,
         created_by_name: nome,
       });
@@ -257,8 +285,38 @@ export function useAddDemandaActivity() {
     },
     onSuccess: (_d, vars) => {
       queryClient.invalidateQueries({ queryKey: ["demanda_activities", vars.demanda_id] });
+      queryClient.invalidateQueries({ queryKey: ["demanda_counts"] });
     },
     onError: (err: Error) => toast({ title: "Erro ao registrar", description: err.message, variant: "destructive" }),
+  });
+}
+
+/** Fixa/desafixa um registro no topo da timeline. */
+export function useToggleActivityPin() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, pinned }: { id: string; pinned: boolean; demanda_id: string }) => {
+      const { error } = await db.from("carbo_demanda_activities").update({ pinned }).eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: (_d, vars) =>
+      queryClient.invalidateQueries({ queryKey: ["demanda_activities", vars.demanda_id] }),
+  });
+}
+
+/** Conclui (ou reabre) uma tarefa da timeline. */
+export function useToggleActivityTask() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, done }: { id: string; done: boolean; demanda_id: string }) => {
+      const { error } = await db
+        .from("carbo_demanda_activities")
+        .update({ status: done ? "done" : "pending" })
+        .eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: (_d, vars) =>
+      queryClient.invalidateQueries({ queryKey: ["demanda_activities", vars.demanda_id] }),
   });
 }
 
@@ -288,13 +346,36 @@ export function useAssumirDemanda() {
   });
 }
 
-/** Lista de pessoas (para escolher o responsável pela demanda). */
+export interface PessoaTI {
+  id: string;
+  full_name: string | null;
+  avatar_url: string | null;
+  department: string | null;
+  secondary_department: string | null;
+}
+
+/** Time de TI — só quem é do setor pode assumir/receber demanda. A RPC já
+ *  devolve o departamento, então o filtro é feito aqui (sem migration). */
+export function useTimeTI() {
+  return useQuery({
+    queryKey: ["time_ti"],
+    queryFn: async (): Promise<PessoaTI[]> => {
+      const { data } = await (supabase as any).rpc("carbo_all_profiles");
+      const todos = (data ?? []) as PessoaTI[];
+      return todos.filter(
+        (p) => p.department === "ti_suporte" || p.secondary_department === "ti_suporte",
+      );
+    },
+  });
+}
+
+/** Diretório completo (só para resolver nome/foto de quem aparece na timeline). */
 export function useAllProfiles() {
   return useQuery({
     queryKey: ["all_profiles_ti"],
-    queryFn: async (): Promise<{ id: string; full_name: string | null }[]> => {
+    queryFn: async (): Promise<PessoaTI[]> => {
       const { data } = await (supabase as any).rpc("carbo_all_profiles");
-      return (data ?? []) as { id: string; full_name: string | null }[];
+      return (data ?? []) as PessoaTI[];
     },
   });
 }
