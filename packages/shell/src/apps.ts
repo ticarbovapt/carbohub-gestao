@@ -3,13 +3,13 @@
 // acesso = coluna profiles.allowed_interfaces (text[]) + regra "vê tudo" (Admin).
 // Mantido sem dependências além de lucide-react (só ícones).
 import {
-  Home, Building2, TrendingUp, Boxes, Handshake, Store, Wallet, ShieldCheck, Megaphone,
+  Home, Building2, TrendingUp, Boxes, Handshake, Store, Wallet, ShieldCheck, Megaphone, LifeBuoy,
   type LucideIcon,
 } from "lucide-react";
 
 export const HUB_URL = "https://carbohub.com.br";
 
-export type AppKey = "controle" | "crm" | "ops" | "licenciados" | "lojas" | "financas" | "mkt" | "admin";
+export type AppKey = "controle" | "crm" | "ops" | "licenciados" | "lojas" | "financas" | "mkt" | "admin" | "ti";
 
 export interface EcoApp {
   key: AppKey;
@@ -30,6 +30,7 @@ export const HUB_APPS: EcoApp[] = [
   { key: "lojas",       name: "Portal de Vendas",  tag: "Lojas",                       href: "https://lojas.carbohub.com.br",       icon: Store,       accent: "#22C55E" },
   { key: "financas",    name: "Carbo Finanças",    tag: "Financeiro · NF e faturamento", href: "https://finance.carbohub.com.br",   icon: Wallet,      accent: "#14B8A6" },
   { key: "mkt",         name: "Carbo Marketing",   tag: "Marketing · Campanhas",       href: "https://mkt.carbohub.com.br",         icon: Megaphone,   accent: "#EC4899" },
+  { key: "ti",          name: "Carbo TI",          tag: "Suporte · Demandas",          href: "https://ti.carbohub.com.br",          icon: LifeBuoy,    accent: "#0EA5E9" },
 ];
 
 // Admin não depende de interface — aparece só p/ quem "manda" (ver seesEverything).
@@ -47,6 +48,7 @@ const INTERFACE_TO_APPS: Record<string, AppKey[]> = {
   portal_pdv: ["lojas"],
   carbo_financas: ["financas"],
   carbo_mkt: ["mkt"],
+  carbo_ti: ["ti"],
 };
 
 export function resolveAllowedApps(allowedInterfaces?: string[] | null): EcoApp[] {
