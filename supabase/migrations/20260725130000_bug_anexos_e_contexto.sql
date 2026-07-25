@@ -7,8 +7,15 @@
 --
 -- ⚠️ O bucket é PRIVADO: prints do CRM/Finanças contêm nome de cliente e valor.
 -- A leitura é sempre por URL assinada, nunca por link público adivinhável.
+--
+-- ⚠️ NO SQL EDITOR DO SUPABASE, RODE EM BLOCOS SEPARADOS. O editor executa tudo
+-- numa transação só, e as policies de storage.objects pedem lock exclusivo numa
+-- tabela que o serviço de Storage usa o tempo todo → "deadlock detected".
+-- Ordem: (1) as colunas abaixo · (2) o bucket · (3) cada policy sozinha.
+-- (Aplicado pelo CLI/migração normal, isso não acontece.)
 -- ─────────────────────────────────────────────────────────────────────────────
 
+-- ── BLOCO 1 ─────────────────────────────────────────────────────────────────
 alter table public.carbo_bug_reports
   add column if not exists attachments    jsonb not null default '[]'::jsonb,
   add column if not exists client_context jsonb;
@@ -18,11 +25,12 @@ comment on column public.carbo_bug_reports.attachments is
 comment on column public.carbo_bug_reports.client_context is
   'Capturado automaticamente: tela, navegador, viewport, fuso, build.';
 
--- Bucket privado dos anexos ---------------------------------------------------
+-- ── BLOCO 2 — bucket (ou crie pela interface: Storage › New bucket, sem Public)
 insert into storage.buckets (id, name, public)
 values ('bug-attachments', 'bug-attachments', false)
 on conflict (id) do update set public = false;
 
+-- ── BLOCO 3 — policies: rode UMA DE CADA VEZ ────────────────────────────────
 -- Qualquer autenticado ENVIA o próprio anexo (a pasta é o id do usuário).
 drop policy if exists bug_anexos_insert on storage.objects;
 create policy bug_anexos_insert on storage.objects
