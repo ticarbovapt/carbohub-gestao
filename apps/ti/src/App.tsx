@@ -2,6 +2,7 @@ import { Routes, Route, Navigate } from "react-router-dom";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import { Layout } from "./components/Layout";
 import Login from "./pages/Login";
+import Home from "./pages/Home";
 import Demandas from "./pages/Demandas";
 import BugReports from "./pages/BugReports";
 import Profile from "./pages/Profile";
@@ -26,7 +27,8 @@ export default function App() {
     <Routes>
       <Route path="/login" element={<LoginRoute />} />
       <Route element={<ProtectedRoute><Layout /></ProtectedRoute>}>
-        <Route path="/" element={<Demandas />} />
+        <Route path="/" element={<Home />} />
+        <Route path="/demandas" element={<Demandas />} />
         <Route path="/bugs" element={<BugReports />} />
         <Route path="/vender" element={<Vender />} />
         <Route path="/chat" element={<Chat />} />

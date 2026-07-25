@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { Outlet, useNavigate } from "react-router-dom";
 import {
-  LifeBuoy, MessagesSquare, ShoppingCart, Bug, Gauge, Users as UsersIcon,
+  LifeBuoy, MessagesSquare, ShoppingCart, Bug, Gauge, Users as UsersIcon, LayoutDashboard,
 } from "lucide-react";
 import { TopBar } from "@/components/TopBar";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -38,7 +38,8 @@ export function Layout() {
   // Navegação padronizada: topo = item principal + Carbo Chat; depois seções por domínio.
   const sections: ShellNavSection[] = [
     { items: [
-        { to: "/", label: "Demandas", icon: LifeBuoy, end: true },
+        { to: "/", label: "Visão geral", icon: LayoutDashboard, end: true },
+        { to: "/demandas", label: "Demandas", icon: LifeBuoy },
         { to: "/chat", label: "Carbo Chat", icon: MessagesSquare, badge: <ChatBadge /> },
     ] },
     { label: "TI", items: [

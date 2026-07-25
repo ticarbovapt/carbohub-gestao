@@ -11,7 +11,12 @@ const APP = "ti";
 
 export type BugKind = "bug" | "sugestao";
 // 'in_progress' (em andamento) é usado no app do TI pra organizar a execução.
-export type BugStatus = "open" | "in_progress" | "resolved" | "declined";
+// Fluxo do TI (6 etapas). Os 4 status originais foram preservados e ganharam o
+// significado da etapa — por isso nada precisou ser migrado no banco.
+//   open → Entrada · priorizada → Priorizada · in_progress → Em andamento
+//   em_teste → Em teste · resolved → Concluída · declined → Recusada
+export type BugStatus =
+  | "open" | "priorizada" | "in_progress" | "em_teste" | "resolved" | "declined";
 export type BugPriority = "baixa" | "media" | "alta" | "critica";
 
 export interface BugReport {
@@ -185,6 +190,101 @@ export function useUpdateDemanda() {
       queryClient.invalidateQueries({ queryKey: ["bug_reports"] });
     },
     onError: (err: Error) => toast({ title: "Erro ao atualizar demanda", description: err.message, variant: "destructive" }),
+  });
+}
+
+// ── Timeline da demanda (anotações / histórico) ──────────────────────────────
+// Mesmo padrão do CRM (crm_sales_lead_activities): tudo numa tabela só.
+export type DemandaActivityType = "note" | "status_change" | "assign";
+
+export interface DemandaActivity {
+  id: string;
+  demanda_id: string;
+  activity_type: DemandaActivityType;
+  body: string | null;
+  status_from: string | null;
+  status_to: string | null;
+  created_by: string | null;
+  created_by_name: string | null;
+  created_at: string;
+}
+
+/** Atividades de uma demanda (mais recentes primeiro). */
+export function useDemandaActivities(demandaId: string | null) {
+  return useQuery({
+    queryKey: ["demanda_activities", demandaId],
+    enabled: !!demandaId,
+    queryFn: async (): Promise<DemandaActivity[]> => {
+      const { data, error } = await db
+        .from("carbo_demanda_activities")
+        .select("*")
+        .eq("demanda_id", demandaId!)
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      return (data ?? []) as DemandaActivity[];
+    },
+  });
+}
+
+/** Registra uma atividade (anotação, troca de etapa, atribuição). */
+export function useAddDemandaActivity() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  return useMutation({
+    mutationFn: async (a: {
+      demanda_id: string;
+      activity_type?: DemandaActivityType;
+      body?: string | null;
+      status_from?: string | null;
+      status_to?: string | null;
+    }) => {
+      const { data: u } = await supabase.auth.getUser();
+      let nome: string | null = null;
+      if (u?.user?.id) {
+        const { data: prof } = await db.from("profiles").select("full_name").eq("id", u.user.id).maybeSingle();
+        nome = (prof as { full_name?: string } | null)?.full_name ?? null;
+      }
+      const { error } = await db.from("carbo_demanda_activities").insert({
+        demanda_id: a.demanda_id,
+        activity_type: a.activity_type ?? "note",
+        body: a.body ?? null,
+        status_from: a.status_from ?? null,
+        status_to: a.status_to ?? null,
+        created_by: u?.user?.id ?? null,
+        created_by_name: nome,
+      });
+      if (error) throw error;
+    },
+    onSuccess: (_d, vars) => {
+      queryClient.invalidateQueries({ queryKey: ["demanda_activities", vars.demanda_id] });
+    },
+    onError: (err: Error) => toast({ title: "Erro ao registrar", description: err.message, variant: "destructive" }),
+  });
+}
+
+/** Assumir a demanda pra si (vira responsável e entra em andamento). */
+export function useAssumirDemanda() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { data: u } = await supabase.auth.getUser();
+      const uid = u?.user?.id;
+      if (!uid) throw new Error("Sessão expirada.");
+      const { data: prof } = await db.from("profiles").select("full_name").eq("id", uid).maybeSingle();
+      const nome = (prof as { full_name?: string } | null)?.full_name ?? null;
+      const { error } = await db
+        .from("carbo_bug_reports")
+        .update({ assignee_id: uid, assignee_name: nome, status: "in_progress", updated_at: new Date().toISOString() })
+        .eq("id", id);
+      if (error) throw error;
+      return { nome };
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["bug_reports"] });
+      toast({ title: "Demanda assumida!", description: "Ela foi pra Em andamento com você como responsável." });
+    },
+    onError: (err: Error) => toast({ title: "Erro ao assumir", description: err.message, variant: "destructive" }),
   });
 }
 
