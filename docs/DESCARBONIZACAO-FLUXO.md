@@ -4,6 +4,34 @@ Dois apps, um banco. Este documento mapeia o que existe hoje entre **Carbo Sales
 (`carbohub-gestao/apps/*`) e **Licenciados/Carbox** (`carbohub-licenciados`), e
 propõe o plano para os dois coexistirem sem quebrar.
 
+> **Este arquivo é a fonte de verdade do andamento.** Toda entrega marca o passo
+> na tabela abaixo, no mesmo commit em que o código vai. Se não está marcado,
+> não foi feito.
+
+---
+
+## 0. Placar
+
+Legenda: ⬜ não começou · 🟡 em andamento · ✅ entregue · ⏸️ adiado
+
+| # | Fase | Onde | Estado |
+|---|---|---|---|
+| **0** | Mapeamento e decisão de modelagem | `docs/` | ✅ |
+| **1** | Comissão dobrada em venda mista | gestão (SQL) | ⬜ |
+| **2** | Banco da OS: porte, vagas e elo com a venda | licenciados (SQL) | ⬜ |
+| **3** | `/vender` grava a OS certa | gestão (5 apps) | ⬜ |
+| **4** | Sales lê a OS de volta | gestão (crm) | ⬜ |
+| **5** | Fechar o ciclo OS ↔ venda | ambos | ⬜ |
+| **6** | Execução compartilhada nos dois apps | ambos | ⬜ |
+
+Detalhe de cada fase, com os passos individuais, na seção 4.
+
+### Registro de entregas
+
+| Data | Fase | O que entrou | Commit |
+|---|---|---|---|
+| 2026-07-25 | 0 | Mapeamento das 4 telas + 12 defeitos + modelo de vagas | `7706c41` |
+
 ---
 
 ## 1. Mapa atual
@@ -157,6 +185,10 @@ executada sem `services` e `services` sem OS.
 
 5P + 3M + 1G + 2 bonificadas P = **1 OS com 11 vagas** (7×P, 3×M, 1×G).
 
+**Vale para todo tipo de serviço, sem exceção** (decidido em 2026-07-25): B2C que
+compra 3 unidades também gera 1 OS com 3 vagas. Não há regra especial por B2C /
+B2B / frota — a quantidade vendida manda, sempre.
+
 Por que assim, e não N OSs:
 
 - é o que o `OSDetailPage` já faz — `os_vehicles` é uma lista, com fotos,
@@ -171,71 +203,112 @@ faz hoje — só que agora a quantidade certa já está lá esperando.
 
 ## 4. Plano
 
-### Fase 1 — Banco (repo `carbohub-licenciados`)
-
-1. `os_vehicles` ganha `porte text check (porte in ('P','M','G'))` e
-   `fuel_type` (nullable — o operador confirma na execução).
-2. `service_orders` ganha o elo de volta: `sale_order_id uuid`,
-   `sale_order_number text`, `sale_total numeric`.
-3. Nova RPC **`licenciados.os_create_from_sale(...)`** — recebe cliente + tipo +
-   agendamento + `p_items jsonb` (`[{porte, qty, bonus}]`) e cria a OS com
-   `sum(qty + bonus)` linhas em `os_vehicles`, `position` 1..N, cada uma com o
-   seu porte. Reaproveita `os_upsert_customer`. Permissão:
-   `can_use_os() OR is_carbo_sales()`.
-4. Índice em `service_orders(sale_order_id)`.
-
-*Reversível: colunas novas + função nova, nada é reescrito.*
-
-### Fase 2 — Sales grava direito (5 cópias do `/vender`)
-
-1. Trocar `os_create` por `os_create_from_sale`, passando os itens de serviço
-   **com bonificação**.
-2. Seletor explícito de **tipo de serviço** (B2C / B2B / Frota) no bloco de
-   serviço, com default derivado do documento. Frota exige previsão de execução
-   (`os_create` já levanta exceção sem `scheduled_at`).
-3. Enviar `sale_order_id` / `order_number` / total.
-4. Extrair `DESCARB_MODALIDADES` para um único módulo compartilhado e alinhar
-   com `PRECOS` do Licenciados (**D9**).
-5. Avisar no formulário quando a combinação de portes for inexecutável (**D10**).
-
-### Fase 3 — Sales lê de volta
-
-1. `/descarbonizacao/os`: card mostra **progresso de veículos** (`3/11
-   executados`), portes, nº do pedido e valor, com link para o pedido.
-2. `/descarbonizacao/agendamentos`: evento mostra quantos carros e o porte.
-3. `/pedidos`: pedido só de serviço passa a exibir o estágio da **OS**, não o de
-   logística (**D7**).
-4. Tela/aba de reconciliação: **"Vendas de descarbonização sem OS"** — mata a
-   falha silenciosa do **D8**.
-
-### Fase 4 — Comissão e financeiro
-
-1. Corrigir `crm_comissao_agregado`: somar só itens `kind != 'service'` em vez de
-   `o.total` (**D1**). *Independe de todo o resto — pode ir primeiro.*
-2. Decidir se descarbonização entra na meta (`crm_metas_board` hoje só conta com NF).
-
-### Fase 5 — Execução compartilhada (o pedido de "os dois executam")
-
-Hoje o Sales é read-only por policy. Para executar dos dois lados:
-
-1. Trocar a guarda de `os_advance_stage`, `os_cancel`, `os_vehicle_*` e upload de
-   fotos para `can_use_os() OR is_carbo_sales()`.
-2. Policies de INSERT/UPDATE em `os_vehicles` e `os_photos` para o Sales.
-3. Portar o `VehicleCard` do `OSDetailPage` para o Sales (é o arquivo mais
-   pesado dos dois repos — 563 linhas, com OCR, storage e PDF).
-4. Realtime no board do Licenciados (**D11**), senão os dois lados divergem na tela.
-
-*Esta fase é a maior e a mais arriscada. As fases 1–4 já entregam o fluxo
-correto com a execução onde ela está hoje.*
-
-### Fase 6 — Fechar o ciclo
-
-1. `licenciados.services` passa a exigir OS quando a OS veio de venda (**D12**).
-2. OS concluída marca a venda; venda cancelada cancela a OS (**D8**).
+As fases estão na ordem de execução. Cada uma só depende das anteriores, e cada
+uma é entregável sozinha — dá pra parar entre duas sem deixar o sistema pior do
+que estava.
 
 ---
 
-## 5. Ordem sugerida
+### Fase 1 — Comissão dobrada ⬜
 
-`Fase 4.1` (bug de dinheiro, isolado) → `Fase 1` → `Fase 2` → `Fase 3` →
-`Fase 6` → `Fase 5`.
+**Repo:** `carbohub-gestao` · **Tipo:** SQL · **Depende de:** nada
+**Resolve:** D1
+
+- [ ] 1.1 `crm_comissao_agregado` passa a somar só os itens `kind != 'service'`
+      de `items[]`, em vez de `o.total`
+- [ ] 1.2 Conferir se `crm_metas_board` deve seguir a mesma regra (hoje soma
+      `o.total` das faturadas — mesma inflação, só que na meta)
+- [ ] 1.3 Rodar em produção e conferir um período fechado antes/depois
+
+*Isolada de propósito: é dinheiro saindo errado hoje e não depende de nenhuma
+decisão de modelagem.*
+
+---
+
+### Fase 2 — Banco da OS ⬜
+
+**Repo:** `carbohub-licenciados` · **Tipo:** SQL · **Depende de:** nada
+**Resolve:** base de D2, D3, D4, D5
+
+- [ ] 2.1 `os_vehicles` ganha `porte text check (porte in ('P','M','G'))` e
+      `fuel_type text` (nullable — o operador confirma na execução)
+- [ ] 2.2 `service_orders` ganha o elo de volta: `sale_order_id uuid`,
+      `sale_order_number text`, `sale_total numeric`
+- [ ] 2.3 Índice em `service_orders(sale_order_id)`
+- [ ] 2.4 RPC `licenciados.os_create_from_sale(...)` — cliente + tipo +
+      agendamento + `p_items jsonb` (`[{porte, qty, bonus}]`); cria a OS e
+      `sum(qty + bonus)` linhas em `os_vehicles`, `position` 1..N, cada uma com
+      o seu porte. Reaproveita `os_upsert_customer`.
+      Permissão: `can_use_os() OR is_carbo_sales()`
+- [ ] 2.5 Policy de SELECT do Sales em `os_photos` (hoje só `service_orders`,
+      `os_customers` e `os_vehicles`) — necessária pra fase 4 mostrar progresso
+
+*Só adiciona colunas e uma função nova. `os_create` continua existindo intacta,
+então o `/vender` atual segue funcionando enquanto a fase 3 não sobe.*
+
+---
+
+### Fase 3 — `/vender` grava a OS certa ⬜
+
+**Repo:** `carbohub-gestao` · **Tipo:** front, **5 cópias**
+(`crm`, `ops`, `admin`, `financas`, `ti`) · **Depende de:** fase 2
+**Resolve:** D2, D3, D5, D6, D9, D10
+
+- [ ] 3.1 Extrair `DESCARB_MODALIDADES` para um módulo único compartilhado,
+      alinhado com `PRECOS` do Licenciados
+- [ ] 3.2 Seletor explícito de tipo de serviço (B2C / B2B / Frota), com default
+      derivado do documento. Frota exige previsão de execução
+- [ ] 3.3 Aviso quando a combinação de portes for inexecutável
+      (`G` só existe em diesel, `P` só em flex)
+- [ ] 3.4 Trocar `os_create` por `os_create_from_sale`, passando os itens de
+      serviço **com bonificação** e o `sale_order_id` / número / total
+- [ ] 3.5 Replicar nas 5 cópias e conferir uma a uma (o CRM tem modo de edição;
+      as outras quatro só criam)
+
+---
+
+### Fase 4 — Sales lê a OS de volta ⬜
+
+**Repo:** `carbohub-gestao` (`apps/crm`) · **Depende de:** fase 3
+**Resolve:** D4, D7, D8 (parte)
+
+- [ ] 4.1 `/descarbonizacao/os`: card com progresso de veículos (`3/11`),
+      portes, nº do pedido e valor, com link pro pedido
+- [ ] 4.2 `/descarbonizacao/agendamentos`: evento mostra quantos carros e o porte
+- [ ] 4.3 `/pedidos`: pedido só de serviço exibe o estágio da **OS**, não o de
+      logística
+- [ ] 4.4 Reconciliação "Vendas de descarbonização sem OS" — mata a falha
+      silenciosa de hoje (toast perdido = venda sem OS pra sempre)
+
+---
+
+### Fase 5 — Fechar o ciclo ⬜
+
+**Repos:** ambos · **Depende de:** fase 4
+**Resolve:** D8, D12
+
+- [ ] 5.1 OS concluída marca a venda (trigger ou coluna derivada)
+- [ ] 5.2 Venda cancelada cancela a OS
+- [ ] 5.3 `licenciados.services` (baixa de estoque) passa a exigir OS quando a
+      OS veio de venda — hoje o vínculo é opcional e os dois divergem
+
+---
+
+### Fase 6 — Execução compartilhada ⬜
+
+**Repos:** ambos · **Depende de:** fase 5 · **A maior e a mais arriscada**
+**Resolve:** D11, e o pedido de "executar pelos dois lados"
+
+Hoje o Sales é read-only por policy — `os_advance_stage`, `os_cancel`,
+`os_vehicle_*` e upload de fotos exigem `can_use_os()`.
+
+- [ ] 6.1 Realtime no board do Licenciados (hoje só o Sales assina; sem isso os
+      dois lados divergem na tela assim que os dois executarem)
+- [ ] 6.2 Guardas das RPCs de execução → `can_use_os() OR is_carbo_sales()`
+- [ ] 6.3 Policies de INSERT/UPDATE em `os_vehicles` e `os_photos` para o Sales
+- [ ] 6.4 Portar o `VehicleCard` do `OSDetailPage` (563 linhas: OCR, storage,
+      PDF, medições, painel) para o Sales
+- [ ] 6.5 Bucket de fotos acessível aos dois apps
+
+*As fases 1–5 já entregam o fluxo correto com a execução onde ela está hoje.
+Esta fase é sobre onde o trabalho pode ser feito, não sobre o dado estar certo.*
