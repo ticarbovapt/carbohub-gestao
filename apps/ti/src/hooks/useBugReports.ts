@@ -293,6 +293,7 @@ export interface DemandaActivity {
   body: string | null;
   status_from: string | null;
   status_to: string | null;
+  assignee_id: string | null;   // em atividades assign: quem passou a ser dono
   due_at: string | null;
   status: string | null;      // tarefa: pending | done
   pinned: boolean;
@@ -356,9 +357,9 @@ export function useAddDemandaActivity() {
         nome = (prof as { full_name?: string } | null)?.full_name ?? null;
       }
       const tipo = a.activity_type ?? "note";
-      // status_change agora é gravado por TRIGGER no banco (vale pra qualquer
-      // origem, inclusive os murais dos outros apps) — não duplicar aqui.
-      if (tipo === "status_change") return;
+      // status_change e assign são gravados por TRIGGER no banco (valem pra
+      // qualquer origem, inclusive os murais dos outros apps) — não duplicar.
+      if (tipo === "status_change" || tipo === "assign") return;
       const { error } = await db.from("carbo_demanda_activities").insert({
         demanda_id: a.demanda_id,
         activity_type: tipo,

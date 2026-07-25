@@ -89,19 +89,15 @@ export function DemandaModal({ demanda, onClose }: { demanda: BugReport; onClose
     );
   }
 
+  // A atividade de troca de responsável é gravada por TRIGGER no banco — aqui
+  // só o patch, senão a timeline duplicaria.
   function atribuir(v: string) {
     if (v === "__none__") {
-      update.mutate({ id: demanda.id, assignee_id: null, assignee_name: null }, {
-        onSuccess: () => addActivity.mutate({ demanda_id: demanda.id, activity_type: "assign", body: "Responsável removido" }),
-      });
+      update.mutate({ id: demanda.id, assignee_id: null, assignee_name: null });
       return;
     }
     const pes = timeTI.find((x) => x.id === v);
-    update.mutate({ id: demanda.id, assignee_id: v, assignee_name: pes?.full_name ?? null }, {
-      onSuccess: () => addActivity.mutate({
-        demanda_id: demanda.id, activity_type: "assign", body: `Responsável: ${pes?.full_name ?? "—"}`,
-      }),
-    });
+    update.mutate({ id: demanda.id, assignee_id: v, assignee_name: pes?.full_name ?? null });
   }
 
   function handleAddActivity() {
