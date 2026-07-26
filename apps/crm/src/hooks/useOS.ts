@@ -75,7 +75,9 @@ export interface OSRow {
   // ── Vagas de veículo (fase 2/3) ──
   /** Quantos veículos esta OS tem para executar. */
   vagas: number;
-  /** Quantos já foram identificados (placa preenchida no Carbox). */
+  /** Quantos já foram executados (descarbonização registrada no Carbox). */
+  vagasExecutadas: number;
+  /** Quantos já têm placa — sinal de que o carro foi identificado. */
   vagasComPlaca: number;
   /** Quebra por porte, ex.: { P: 5, M: 3, G: 1 }. Vaga sem porte cai em "—". */
   portes: Record<string, number>;
@@ -106,8 +108,10 @@ function mapRow(o: any): OSRow {
     observacoes: o.description ?? null,
     created_at: o.created_at,
     updated_at: o.updated_at,
-    vagas: vehicles.length,
-    vagasComPlaca: vehicles.filter((v: any) => !!v.plate).length,
+    // Vaga cancelada saiu do escopo da OS (cliente não trouxe o carro).
+    vagas: vehicles.filter((v: any) => !v.cancelled_at).length,
+    vagasExecutadas: vehicles.filter((v: any) => !v.cancelled_at && !!v.executed_at).length,
+    vagasComPlaca: vehicles.filter((v: any) => !v.cancelled_at && !!v.plate).length,
     portes: vehicles.reduce((acc: Record<string, number>, v: any) => {
       const k = v.porte || "—";
       acc[k] = (acc[k] ?? 0) + 1;
@@ -124,7 +128,7 @@ const SELECT_COLS =
   "vehicle_plate, vehicle_model, created_at, updated_at, " +
   "sale_order_id, sale_order_number, sale_total, " +
   "customer:os_customers(name, phone, federal_code), " +
-  "vehicles:os_vehicles(position, plate, model, porte)";
+  "vehicles:os_vehicles(position, plate, model, porte, executed_at, cancelled_at)";
 
 /** Lista de OS (espelho ao vivo). RLS: o Sales enxerga via is_carbo_sales(). */
 export function useOS() {

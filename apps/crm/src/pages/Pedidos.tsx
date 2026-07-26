@@ -45,7 +45,7 @@ interface OrderRow {
   id: string; order_number: string; invoice_number: string | null; linha: string;
   vendedor_id: string; vendedor_name: string; customer_name: string; customer_email: string | null;
   created_at: string; qty: number; items: number; total: number; status: OrderStatus;
-  soServico: boolean; osNumero: string | null; osStage: string | null; osVagas: number; osComPlaca: number;
+  soServico: boolean; osNumero: string | null; osStage: string | null; osVagas: number; osExecutadas: number;
 }
 
 // Pedido 100% descarbonização não tem NF nem expedição: o "status" dele é o
@@ -76,9 +76,9 @@ export default function Pedidos() {
   // execução em vez de ficar "Pendente" para sempre.
   const { data: osList = [] } = useOS();
   const osPorVenda = useMemo(() => {
-    const m = new Map<string, { numero: string | null; stage: string; vagas: number; comPlaca: number }>();
+    const m = new Map<string, { numero: string | null; stage: string; vagas: number; executadas: number }>();
     for (const o of osList) {
-      if (o.saleOrderId) m.set(o.saleOrderId, { numero: o.numero, stage: o.stage, vagas: o.vagas, comPlaca: o.vagasComPlaca });
+      if (o.saleOrderId) m.set(o.saleOrderId, { numero: o.numero, stage: o.stage, vagas: o.vagas, executadas: o.vagasExecutadas });
     }
     return m;
   }, [osList]);
@@ -109,7 +109,7 @@ export default function Pedidos() {
         osNumero: os?.numero ?? null,
         osStage: os?.stage ?? null,
         osVagas: os?.vagas ?? 0,
-        osComPlaca: os?.comPlaca ?? 0,
+        osExecutadas: os?.executadas ?? 0,
       };
     }), [vendas, nomes, osPorVenda]);
 
@@ -387,7 +387,7 @@ export default function Pedidos() {
                               )}
                               {order.osVagas > 0 && (
                                 <p className="text-[10px] text-muted-foreground">
-                                  {order.osComPlaca}/{order.osVagas} veículo(s)
+                                  {order.osExecutadas}/{order.osVagas} executado(s)
                                 </p>
                               )}
                             </div>

@@ -29,7 +29,7 @@ const TIPO_LABEL: Record<string, string> = { b2c: "B2C", b2b: "B2B", frota: "Fro
 interface OSView {
   id: string; numero: string; cliente: string; tipo: string; veiculo: string;
   agendamento: string | null; stage: string;
-  vagas: number; vagasComPlaca: number; portes: string;
+  vagas: number; vagasExecutadas: number; portes: string;
   pedido: string | null; valor: number | null;
 }
 
@@ -52,7 +52,7 @@ function toView(o: OSRow): OSView {
     agendamento: o.data_prevista,
     stage: o.stage,
     vagas: o.vagas,
-    vagasComPlaca: o.vagasComPlaca,
+    vagasExecutadas: o.vagasExecutadas,
     portes: portesLabel(o.portes),
     pedido: o.saleOrderNumber,
     valor: o.saleTotal,
@@ -203,7 +203,7 @@ export default function OrdensServico() {
                             <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px]">
                               <span className="inline-flex items-center gap-1 font-medium">
                                 <Car className="h-3 w-3" />
-                                {o.vagasComPlaca}/{o.vagas} identificado(s)
+                                {o.vagasExecutadas}/{o.vagas} executado(s)
                               </span>
                               {o.portes && <span className="text-muted-foreground">{o.portes}</span>}
                             </div>
@@ -211,7 +211,7 @@ export default function OrdensServico() {
                           {o.vagas > 1 && (
                             <div className="mt-1 h-1 w-full rounded-full bg-muted overflow-hidden">
                               <div className="h-full rounded-full bg-purple-500 transition-all"
-                                style={{ width: `${Math.round((o.vagasComPlaca / o.vagas) * 100)}%` }} />
+                                style={{ width: `${Math.round((o.vagasExecutadas / o.vagas) * 100)}%` }} />
                             </div>
                           )}
 
@@ -250,7 +250,7 @@ export default function OrdensServico() {
                       <td className="px-4 py-3 text-muted-foreground">{o.tipo}</td>
                       <td className="px-4 py-3 text-muted-foreground">
                         {o.vagas > 0
-                          ? <span>{o.vagasComPlaca}/{o.vagas}{o.portes ? ` · ${o.portes}` : ""}</span>
+                          ? <span>{o.vagasExecutadas}/{o.vagas}{o.portes ? ` · ${o.portes}` : ""}</span>
                           : o.veiculo}
                       </td>
                       <td className="px-4 py-3 text-muted-foreground">{dt(o.agendamento)}</td>

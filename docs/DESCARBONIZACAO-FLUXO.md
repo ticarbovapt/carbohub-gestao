@@ -21,7 +21,7 @@ Legenda: ⬜ não começou · 🟡 em andamento · ✅ entregue · ⏸️ adiado
 | **2** | Banco da OS: porte, vagas e elo com a venda | licenciados (SQL) | ✅ |
 | **3** | `/vender` grava a OS certa | gestão (5 apps) | ✅ |
 | **4** | Sales lê a OS de volta | gestão (crm) | 🟡 |
-| **5** | Fechar o ciclo OS ↔ venda | ambos | ⬜ |
+| **5** | Execução parcial: a OS sabe quando acabou | ambos | 🟡 |
 | **6** | Execução compartilhada nos dois apps | ambos | ⬜ |
 
 Detalhe de cada fase, com os passos individuais, na seção 4.
@@ -34,7 +34,8 @@ Detalhe de cada fase, com os passos individuais, na seção 4.
 | 2026-07-26 | 1 | Comissão: base de produto sem os itens de serviço | `e21457a` |
 | 2026-07-26 | 2 | OS com vagas por unidade vendida + elo com a venda | `ea3b5ca` (lic.) |
 | 2026-07-26 | 3 | /vender manda quantidade, bonificação e tipo de serviço | `f85e3ab` |
-| 2026-07-26 | 4 | Sales lê a OS: progresso, portes, elo e reconciliação | (este commit) |
+| 2026-07-26 | 4 | Sales lê a OS: progresso, portes, elo e reconciliação | `f55e64c` |
+| 2026-07-26 | 5 | Execução parcial: vaga executada, OS fecha sozinha, saldo vira OS nova | (este commit) |
 
 ---
 
@@ -180,6 +181,14 @@ não. "Reflete ao vivo" hoje só vale num sentido.
 e `service_orders` (execução) se ligam por vínculo **opcional**. Existe OS
 executada sem `services` e `services` sem OS.
 
+**D14 — Nada fechava a OS.** (achado na fase 5) `attach_os_to_service` movia
+para `em_execucao` no primeiro carro e parava; o único caminho para `concluida`
+era o botão "Avançar", manual, que não sabia quantos carros a OS tinha. Uma OS
+de 9 carros executada ao longo de dias ou ficava pendente para sempre, ou era
+fechada no primeiro dia levando 6 carros junto. E `services.service_order_id`
+apontava para a OS, não para a vaga — com 9 vagas e 3 serviços, ninguém sabia
+quais 3. **Corrigido na fase 5.**
+
 **D13 — A criação da OS pela venda provavelmente nunca funcionou.**
 (achado na fase 2) `os_create` aceita `is_carbo_sales()`, mas chama
 `os_upsert_customer` por dentro — e essa guarda com `can_use_os()`, que **não**
@@ -324,15 +333,49 @@ propósito. Uma flag por veículo entra na fase 5 ou 6.
 
 ---
 
-### Fase 5 — Fechar o ciclo ⬜
+### Fase 5 — Execução parcial: a OS sabe quando acabou 🟡
 
 **Repos:** ambos · **Depende de:** fase 4
-**Resolve:** D8, D12
+**Resolve:** D8, D11, D12 · **+ D14** (achado durante a fase)
+**Migration:** `20260729100000_os_execucao_parcial.sql` (licenciados)
 
-- [ ] 5.1 OS concluída marca a venda (trigger ou coluna derivada)
-- [ ] 5.2 Venda cancelada cancela a OS
-- [ ] 5.3 `licenciados.services` (baixa de estoque) passa a exigir OS quando a
-      OS veio de venda — hoje o vínculo é opcional e os dois divergem
+**Reescopada.** O plano dizia "OS concluída marca a venda". Ao mapear a
+execução apareceu um problema maior: **uma OS de 9 carros é executada ao longo
+de dias**, e nada no sistema sabia disso.
+
+- [x] 5.0 **D14 — nada fechava a OS.** `attach_os_to_service` movia para
+      `em_execucao` no primeiro carro e parava. O único caminho para
+      `concluida` era o botão "Avançar", manual, que não sabia quantos carros
+      existiam — clicar nele no primeiro dia fechava a OS com 6 carros por
+      fazer. E `services` apontava para a OS, não para a vaga: com 9 vagas e 3
+      serviços, ninguém sabia *quais* 3
+- [x] 5.1 `os_vehicles` ganha `executed_at`, `service_id`, `cancelled_at`,
+      `cancel_reason`
+- [x] 5.2 **O estágio da OS passa a ser derivado das vagas** (`os_recalc_stage`
+      + trigger): 0 executadas → nova · parcial → em execução · todas →
+      concluída. A OS fecha sozinha quando o trabalho acaba
+- [x] 5.3 RPC `os_vehicle_execute` — **executar a vaga É registrar a
+      descarbonização**: grava o veículo, cria o `services` e baixa o reagente
+      da loja da OS, num ato só. Usa a loja da OS e não `current_user_loja()`,
+      que é nula para admin
+- [x] 5.4 RPC `os_close_with_balance` — fecha com o que foi feito e **move** as
+      vagas pendentes para uma OS nova ligada à mesma venda (o porte vai junto,
+      a contagem continua batendo com o pedido)
+- [x] 5.5 `os_advance_stage` recusa concluir com vaga pendente e aponta o
+      fechamento com saldo — era o botão que apagava 6 carros num clique
+- [x] 5.6 Licenciados: barra de progresso na OS, badge de porte por veículo,
+      bloco "Executar descarbonização" (combustível + frascos + valor, com
+      prefill pela combinação vendida e aviso quando porte e combustível não
+      batem), botão "Fechar com saldo"
+- [x] 5.7 **D11 — Realtime no board do Licenciados.** O Sales recebia push
+      desde a integração; aqui faltava. Com os dois lados executando, sem isso
+      as telas divergem na hora
+- [x] 5.8 Sales troca "identificado" por **executado** de verdade nas três
+      telas, e passa a ignorar vagas canceladas
+- [ ] 5.9 Rodar a migration em produção
+
+**Adiado para a fase 6:** venda cancelada cancelar a OS. Depende de o Sales
+poder escrever na OS, que é justamente o que a fase 6 abre.
 
 ---
 
