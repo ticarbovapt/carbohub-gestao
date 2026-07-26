@@ -1,9 +1,12 @@
-import { Phone, ChevronRight, AlertTriangle } from "lucide-react";
+import { Phone, ChevronRight, AlertTriangle, ArrowLeftRight, Megaphone } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ProfileAvatar } from "@/components/ui/profile-avatar";
 import type { CRMLead, FunnelType } from "@/types/crm";
-import { getDaysSinceUpdate, segmentOf } from "@/types/crm";
+import { getDaysSinceUpdate, segmentOf, sourceLabel, FUNNEL_CONFIG } from "@/types/crm";
+
+const funilCurto = (id: string | null | undefined) =>
+  (id ? FUNNEL_CONFIG[id as FunnelType]?.shortName : null) ?? "outro funil";
 
 export interface LeadOwner { id: string; name: string | null; avatar_url: string | null }
 
@@ -16,6 +19,8 @@ interface LeadCardProps {
   onClick?: (lead: CRMLead) => void;
   // Na visão "Todos os funis": mostra de qual pipeline o card veio.
   originFunnel?: { icon?: string; name: string; color: string };
+  /** Nome de quem repassou o card (o SDR). Resolvido pelo board. */
+  repassadoPor?: string | null;
 }
 
 const TEMP_VARIANT = {
@@ -25,7 +30,7 @@ const TEMP_VARIANT = {
 };
 const TEMP_LABEL = { quente: "🔥 Quente", morno: "🌡️ Morno", frio: "❄️ Frio" };
 
-export function LeadCard({ lead, funnelType: _funnelType, owner, onAdvance, onMarkLost, onClick, originFunnel }: LeadCardProps) {
+export function LeadCard({ lead, funnelType: _funnelType, owner, onAdvance, onMarkLost, onClick, originFunnel, repassadoPor }: LeadCardProps) {
   const daysSince = getDaysSinceUpdate(lead.updated_at);
   const aging: "red" | "amber" | null = daysSince > 7 ? "red" : daysSince > 3 ? "amber" : null;
   const displayName = lead.legal_name || lead.trade_name || lead.contact_name || "Sem nome";
@@ -56,6 +61,33 @@ export function LeadCard({ lead, funnelType: _funnelType, owner, onAdvance, onMa
           </span>
         </div>
       )}
+
+      {/* PROCEDÊNCIA — de onde este lead veio.
+          Duas coisas diferentes moram aqui: o card que chegou por REPASSE
+          mostra o funil de origem e QUEM repassou (é o que permite medir qual
+          SDR entrega mais); o card que entrou por outro caminho mostra a
+          origem (anúncio, indicação, formulário). Sem isso o closer olha a
+          fila e não sabe se está falando com um lead de frota trabalhado pelo
+          SDR ou com alguém que clicou num anúncio. */}
+      {lead.origin_lead_id ? (
+        <div className="mb-2 flex flex-wrap items-center gap-1">
+          <span className="inline-flex items-center gap-1 text-[10px] font-medium rounded-full px-1.5 py-0.5 bg-[#6366F1]/15 text-[#818CF8]">
+            <ArrowLeftRight className="h-2.5 w-2.5" />
+            {funilCurto(lead.origin_funnel_type)}
+          </span>
+          {repassadoPor && (
+            <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground">
+              por <strong className="font-medium text-foreground/80">{repassadoPor}</strong>
+            </span>
+          )}
+        </div>
+      ) : lead.source && lead.source !== "prospeccao_ativa" ? (
+        <div className="mb-2">
+          <span className="inline-flex items-center gap-1 text-[10px] font-medium rounded-full px-1.5 py-0.5 bg-muted text-muted-foreground">
+            <Megaphone className="h-2.5 w-2.5" /> {sourceLabel(lead.source)}
+          </span>
+        </div>
+      ) : null}
 
       {/* Origem (visão "Todos os funis") — de qual pipeline o card veio */}
       {originFunnel && (

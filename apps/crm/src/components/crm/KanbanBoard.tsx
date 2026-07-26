@@ -157,7 +157,15 @@ function KanbanColumn({
                   <LeadCard
                     lead={lead}
                     funnelType={funnelType}
-                    owner={ownersById?.[leadOwnerId(lead)]}
+                    // Card de repasse ainda na fila NÃO tem dono. Mostrar o SDR
+                    // como dono daria a entender que ele está tocando o negócio,
+                    // quando ele já entregou — o crédito dele aparece no "por".
+                    owner={lead.origin_lead_id && !lead.assigned_to
+                      ? undefined
+                      : ownersById?.[leadOwnerId(lead)]}
+                    repassadoPor={lead.origin_lead_id
+                      ? (ownersById?.[lead.created_by ?? ""]?.name ?? null)
+                      : null}
                     onAdvance={onAdvance}
                     onMarkLost={onMarkLost}
                     onClick={onLeadClick}

@@ -96,7 +96,12 @@ function AllFunnelsBoard({ leads, ownersById, onLeadClick, onAdvance, onMarkLost
                     key={lead.id}
                     lead={lead}
                     funnelType={lead.funnel_type as FunnelType}
-                    owner={ownersById[leadOwnerId(lead)]}
+                    owner={lead.origin_lead_id && !lead.assigned_to
+                      ? undefined
+                      : ownersById[leadOwnerId(lead)]}
+                    repassadoPor={lead.origin_lead_id
+                      ? (ownersById[lead.created_by ?? ""]?.name ?? null)
+                      : null}
                     originFunnel={cfg ? { icon: cfg.icon, name: cfg.shortName, color: cfg.color } : undefined}
                     onClick={onLeadClick}
                     onAdvance={onAdvance}

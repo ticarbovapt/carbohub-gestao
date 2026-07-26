@@ -14,7 +14,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from "@/components/ui/dialog";
 import {
-  useAcompanhamento, useStageSlas, useSaveStageSla,
+  useAcompanhamento, useStageSlas, useSaveStageSla, useRepasses,
   TRILHA_INICIO, DIAS_SUBCONTADOS,
 } from "@/hooks/useAcompanhamento";
 import { useVendedoresDir } from "@/hooks/useVendedoresDir";
@@ -47,6 +47,7 @@ export default function Acompanhamento() {
 
   const { data, isLoading, error } = useAcompanhamento(desde, ate);
   const { data: dir = [] } = useVendedoresDir();
+  const { data: repasses } = useRepasses(desde, ate);
   const nomeDe = (id: string | null) =>
     (id ? dir.find((d) => d.id === id)?.full_name : null) ?? "Sem dono";
 
@@ -255,6 +256,56 @@ export default function Acompanhamento() {
               </CarboCardContent>
             </CarboCard>
           </div>
+
+          {/* Repasse Outbound → Inbound — volume E qualidade lado a lado.
+              Medir só "quantos repassou" premiaria quem empurra tudo adiante. */}
+          {repasses && repasses.total.repassados > 0 && (
+            <CarboCard>
+              <CarboCardContent className="p-4">
+                <div className="flex items-baseline justify-between mb-3">
+                  <h2 className="text-sm font-bold">Repasses ao closer</h2>
+                  {repasses.total.na_fila_agora > 0 && (
+                    <span className="text-xs" style={{ color: "#F59E0B" }}>
+                      {repasses.total.na_fila_agora} na fila sem dono agora
+                    </span>
+                  )}
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs">
+                    <thead className="text-muted-foreground">
+                      <tr className="border-b">
+                        <th className="text-left font-medium py-1.5">SDR</th>
+                        <th className="text-right font-medium">Repassou</th>
+                        <th className="text-right font-medium">Ganhos</th>
+                        <th className="text-right font-medium">Perdidos</th>
+                        <th className="text-right font-medium">Na fila</th>
+                        <th className="text-right font-medium">Sem qualif.</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {repasses.por_sdr.map((r) => (
+                        <tr key={r.sdr} className="border-b last:border-0">
+                          <td className="py-1.5 truncate max-w-[160px]">{nomeDe(r.sdr)}</td>
+                          <td className="text-right tabular-nums font-semibold">{r.repassados}</td>
+                          <td className="text-right tabular-nums" style={{ color: r.ganhos > 0 ? "#22C55E" : undefined }}>{r.ganhos}</td>
+                          <td className="text-right tabular-nums text-muted-foreground">{r.perdidos}</td>
+                          <td className="text-right tabular-nums text-muted-foreground">{r.na_fila}</td>
+                          <td className="text-right tabular-nums font-semibold"
+                              style={{ color: r.sem_qualificacao > 0 ? "#F59E0B" : undefined }}>
+                            {r.sem_qualificacao}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <p className="text-[11px] text-muted-foreground mt-2">
+                  "Sem qualif." = repassado sem volume, dor, decisor ou prazo — o closer recebe o
+                  card cego. Volume alto com essa coluna alta é entrega ruim, não produtividade.
+                </p>
+              </CarboCardContent>
+            </CarboCard>
+          )}
 
           {/* Motivos — descarte de SDR e perda de closer são coisas diferentes */}
           <CarboCard>

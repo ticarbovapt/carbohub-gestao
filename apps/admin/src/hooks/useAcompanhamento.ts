@@ -105,3 +105,31 @@ export function useSaveStageSla() {
     onError: (e: Error) => toast.error(e.message),
   });
 }
+
+export interface RepasseSdr {
+  sdr: string;
+  repassados: number;
+  na_fila: number;
+  ganhos: number;
+  perdidos: number;
+  sem_qualificacao: number;
+}
+
+export interface Repasses {
+  por_sdr: RepasseSdr[];
+  total: { repassados: number; na_fila_agora: number };
+}
+
+/** Placar do repasse Outbound → Inbound: quem entrega, e o que vira. */
+export function useRepasses(desde: string, ate: string) {
+  return useQuery({
+    queryKey: ["crm-repasses", desde, ate],
+    queryFn: async (): Promise<Repasses> => {
+      const { data, error } = await db.rpc("crm_acompanhamento_repasses", {
+        p_desde: desde, p_ate: ate,
+      });
+      if (error) throw error;
+      return data as Repasses;
+    },
+  });
+}
