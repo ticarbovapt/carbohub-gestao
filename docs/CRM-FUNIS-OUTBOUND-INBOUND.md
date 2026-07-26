@@ -20,9 +20,9 @@ Todo achado abaixo foi verificado direto no código antes de entrar aqui.
 | # | Fase | O que resolve | Estado |
 |---|---|---|---|
 | **0** | Diagnóstico | este documento | ✅ |
-| **1** | Bugs que corrompem número (B2, B3, B4, B7) | sem isso a tela da fase 4 mede errado | ⬜ |
-| **2** | Unificar as listas de etapa terminal | dívida que morde em toda fase seguinte | ⬜ |
-| **3** | Trilha de movimentação no servidor | o alicerce da tela — hoje é frágil | ⬜ |
+| **1** | Bugs que corrompem número (B2, B3, B4, B7, **B9**) | sem isso a tela da fase 4 mede errado | ✅ |
+| **2** | Unificar as listas de etapa terminal | dívida que morde em toda fase seguinte | ✅ |
+| **3** | Trilha de movimentação no servidor | o alicerce da tela — hoje é frágil | 🟡 código no ar, **SQL pendente** |
 | **4** | 🆕 **Tela de acompanhamento (gestor)** | gerir a operação — e a linha de base antes de mexer no funil | ⬜ |
 | **5** | O cadastro do SDR | origem limpa + campos de qualificação | ⬜ |
 | **6** | Coluna `nutricao` no Outbound | a rotina diária do SDR | ⬜ |
@@ -100,6 +100,19 @@ Mesmo problema em `LeadDrawer.tsx:152`.
 `DealDetail.tsx:191` e `LeadDrawer.tsx:44` já mandam `id: lead.id` no
 `state.fromLead`. O tipo inline em `Vender.tsx:223` **não declara `id`** e o
 efeito nunca o lê. Metade do elo já existe e é descartada em silêncio.
+
+### B9 — Arrastar para "Perdido" não pedia motivo nem carimbava data 🆕 ✅
+
+`handleDragMove` (`Pipelines.tsx:283`) mandava o card direto para a coluna de
+perda via `useAdvanceLeadStage`, que **não carimbava `lost_at` nem `lost_reason`**.
+O diálogo de motivo só existia no botão "Perdido" do card e do detalhe.
+
+Ou seja: **quem arrastava — que é o gesto natural do kanban — fechava o negócio
+sem motivo e sem data.** A tela da fase 4 conta perda por `lost_at`; esses
+leads simplesmente não apareceriam na estatística de nenhum dia.
+
+Corrigido em duas pontas: o arrasto para coluna de perda **abre o diálogo de
+motivo** em vez de mover, e `lost_at` passa a ser carimbado em qualquer caminho.
 
 ### B7 — O motivo de descarte não serve para prospecção 🆕
 
@@ -324,19 +337,15 @@ código do cliente perde os dois `insert` e fica mais simples.
 Para o item 3, a decisão honesta é **parar de apagar**: `deleted_at` em vez de
 `DELETE`. Um CRM que é fonte de indicador não pode ter linha sumindo do passado.
 
-### ⚠️ O histórico anterior não existe
+### ⚠️ O histórico anterior não existe — medido
 
-A trilha só existe desde que aquele `insert` do cliente entrou no ar. **Todo dia
-anterior a isso vai aparecer com movimentação zero** — e a tela vai dar a
-impressão de que a operação estava morta. Rode antes de montar o gráfico:
+**A trilha começa em 06/07/2026, com 159 movimentações registradas** (conferido
+em 26/07). Todo dia anterior a essa data aparece com movimentação zero, e a tela
+daria a impressão de que a operação estava morta.
 
-```sql
-select min(created_at) as primeira_trilha, count(*)
-  from public.crm_sales_lead_activities where activity_type = 'stage_change';
-```
-
-A série diária só é honesta a partir dessa data. **A tela precisa dizer isso na
-cara**, não deixar o gestor concluir sozinho.
+**A tela precisa dizer isso na cara** — um aviso quando o período escolhido
+começa antes de 06/07 — em vez de deixar o gestor concluir sozinho que a equipe
+não trabalhou em junho.
 
 ---
 
