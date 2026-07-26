@@ -1,19 +1,22 @@
 import type { StageConfig } from "@/types/crm";
+import { isWonStage, isLostStage, isHandoffStage } from "@/types/crm";
 
-type StageGroup = "win" | "loss" | "progress";
+type StageGroup = "win" | "loss" | "handoff" | "progress";
 
-const LOSS_IDS = ["perdido", "descartado", "sem_interesse"];
-const WIN_IDS = ["convertido", "parceiro", "fechamento", "ganho", "recomprou", "repassado"];
-
+// As listas que ficavam aqui viraram fonte única em types/crm.ts.
 export function getStageGroup(stageId: string): StageGroup {
-  if (LOSS_IDS.includes(stageId)) return "loss";
-  if (WIN_IDS.includes(stageId)) return "win";
+  if (isLostStage(stageId)) return "loss";
+  if (isWonStage(stageId)) return "win";
+  if (isHandoffStage(stageId)) return "handoff";
   return "progress";
 }
 
 const GROUP_COLOR: Record<StageGroup, string> = {
   win: "#22C55E",
   loss: "#EF4444",
+  // Repasse ao closer é fim de linha no funil do SDR, mas não é venda — por isso
+  // não usa o verde de ganho. Roxo é a cor do próprio "Passado ao Closer".
+  handoff: "#8B5CF6",
   progress: "#3B82F6",
 };
 

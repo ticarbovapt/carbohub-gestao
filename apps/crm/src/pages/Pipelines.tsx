@@ -19,7 +19,10 @@ import { KanbanBoard } from "@/components/crm/KanbanBoard";
 import { LeadCard, type LeadOwner } from "@/components/crm/LeadCard";
 import { LeadForm } from "@/components/crm/LeadForm";
 import { DealDetail } from "@/components/crm/DealDetail";
-import { FUNNEL_CONFIG, getStagesForFunnel, getNextStage, LOSS_REASONS } from "@/types/crm";
+import {
+  FUNNEL_CONFIG, getStagesForFunnel, getNextStage, getCloseReasons,
+  WON_STAGES, LOST_STAGES, HANDOFF_STAGES, isLostStage,
+} from "@/types/crm";
 import type { FunnelType, CRMLead } from "@/types/crm";
 import { toast } from "sonner";
 import { playMoveSuccess } from "@/lib/sfx";
@@ -40,10 +43,11 @@ const NORMALIZED = [
   { id: "negociacao", label: "Negociação / Proposta", color: "#3B82F6",
     match: ["em_negociacao", "negociacao", "proposta", "proposta_tecnica", "contrato",
             "pedido_inicial", "oferta"] },
-  { id: "ganho", label: "Ganhos", color: "#22C55E",
-    match: ["convertido", "parceiro", "fechamento", "ganho", "recomprou", "repassado"] },
-  { id: "perdido", label: "Perdidos", color: "#EF4444",
-    match: ["sem_interesse", "descartado", "perdido"] },
+  { id: "ganho", label: "Ganhos", color: "#22C55E", match: [...WON_STAGES] },
+  { id: "perdido", label: "Perdidos", color: "#EF4444", match: [...LOST_STAGES] },
+  // `repassado` tinha balde próprio nenhum e caía em "Ganhos": o card do SDR
+  // contava como venda fechada. Agora tem o seu.
+  { id: "repassado", label: "Repassados", color: "#8B5CF6", match: [...HANDOFF_STAGES] },
 ];
 const normalizeStage = (stage: string) => NORMALIZED.find((n) => n.match.includes(stage))?.id ?? "andamento";
 
@@ -162,7 +166,10 @@ export default function Pipelines() {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [formStage, setFormStage] = useState<string | undefined>(undefined);
   const [lostDialogLead, setLostDialogLead] = useState<CRMLead | null>(null);
-  const [lostReason, setLostReason] = useState<string>(LOSS_REASONS[0]);
+  // Começa VAZIO de propósito. Vinha pré-marcado como "Preço" — o primeiro item
+  // da lista — e quem só clicava em "Confirmar" gravava Preço sem ter escolhido.
+  // A base de motivos de perda estava sendo fabricada por inércia de clique.
+  const [lostReason, setLostReason] = useState<string>("");
   const [drawerLead, setDrawerLead] = useState<CRMLead | null>(null);
   const [viewMode, setViewMode] = useState<"kanban" | "list">("kanban");
   const [vendedorFilter, setVendedorFilter] = useState("all");
@@ -271,24 +278,36 @@ export default function Pipelines() {
 
   const handleAdvance = (lead: CRMLead) => {
     const next = getNextStage(ft, lead.stage);
-    if (next) { advanceLead.mutate({ id: lead.id, newStage: next, funnelType: ft, currentStage: lead.stage }); notifyMove(lead.stage, next, ft); }
+    if (next) { advanceLead.mutate({ id: lead.id, newStage: next, funnelType: ft }); notifyMove(lead.stage, next, ft); }
   };
   // Na visão "Todos", cada card avança no SEU próprio funil (não no `ft` ativo).
   const handleAdvanceAny = (lead: CRMLead) => {
     const lf = lead.funnel_type as FunnelType;
     const next = getNextStage(lf, lead.stage);
-    if (next) { advanceLead.mutate({ id: lead.id, newStage: next, funnelType: lf, currentStage: lead.stage }); notifyMove(lead.stage, next, lf); }
+    if (next) { advanceLead.mutate({ id: lead.id, newStage: next, funnelType: lf }); notifyMove(lead.stage, next, lf); }
   };
   const handleDragMove = (lead: CRMLead, toStage: string) => {
-    advanceLead.mutate({ id: lead.id, newStage: toStage, funnelType: ft, currentStage: lead.stage });
+    // Soltar na coluna de perda abre o diálogo de motivo em vez de mover direto.
+    // Antes o card ia para "Perdido" sem motivo nenhum — e o motivo é justamente
+    // o dado que diz se a prospecção está errada ou se o produto é que não serve.
+    if (isLostStage(toStage)) {
+      setLostReason("");
+      setLostDialogLead(lead);
+      return;
+    }
+    advanceLead.mutate({ id: lead.id, newStage: toStage, funnelType: ft });
     notifyMove(lead.stage, toStage, ft);
   };
   const confirmLost = () => {
-    if (lostDialogLead) {
+    if (lostDialogLead && lostReason) {
       markLost.mutate({ id: lostDialogLead.id, reason: lostReason, funnelType: lostDialogLead.funnel_type as FunnelType });
       setLostDialogLead(null);
     }
   };
+  // Motivos e rótulos seguem o funil DO CARD — na visão "Todos" o diálogo pode
+  // abrir para um lead de funil diferente do que está selecionado na aba.
+  const closeReasons = getCloseReasons((lostDialogLead?.funnel_type ?? ft) as FunnelType);
+  const isOutboundLost = (lostDialogLead?.funnel_type ?? ft) === "f12";
 
   // Contagem de leads por funil (respeita o escopo: membro vê os seus, gestor vê todos).
   const countByFunnel = useMemo(() => {
@@ -414,14 +433,14 @@ export default function Pipelines() {
             ownersById={ownersById}
             onLeadClick={(lead) => setDrawerLead(lead)}
             onAdvance={handleAdvanceAny}
-            onMarkLost={(lead) => { setLostReason(LOSS_REASONS[0]); setLostDialogLead(lead); }}
+            onMarkLost={(lead) => { setLostReason(""); setLostDialogLead(lead); }}
           />
         ) : viewMode === "kanban" ? (
           <KanbanBoard
             leads={filteredLeads}
             funnelType={ft}
             onAdvance={handleAdvance}
-            onMarkLost={(lead) => { setLostReason(LOSS_REASONS[0]); setLostDialogLead(lead); }}
+            onMarkLost={(lead) => { setLostReason(""); setLostDialogLead(lead); }}
             onLeadClick={(lead) => setDrawerLead(lead)}
             onDragMove={handleDragMove}
             onAddLead={(stageId) => { setFormStage(stageId); setIsFormOpen(true); }}
@@ -454,17 +473,27 @@ export default function Pipelines() {
 
       <Dialog open={!!lostDialogLead} onOpenChange={(o) => { if (!o) setLostDialogLead(null); }}>
         <DialogContent className="sm:max-w-sm">
-          <DialogHeader><DialogTitle>Marcar lead como perdido</DialogTitle></DialogHeader>
+          <DialogHeader>
+            <DialogTitle>{isOutboundLost ? "Descartar lead" : "Marcar lead como perdido"}</DialogTitle>
+          </DialogHeader>
           <div className="py-2 space-y-2">
-            <p className="text-sm text-muted-foreground">Motivo da perda:</p>
+            <p className="text-sm text-muted-foreground">
+              {isOutboundLost ? "Motivo do descarte:" : "Motivo da perda:"}
+            </p>
+            {/* Motivos vêm do funil: o SDR descarta por "fora do perfil", o closer
+                perde por "preço". Uma lista só não servia para nenhum dos dois. */}
             <Select value={lostReason} onValueChange={setLostReason}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>{LOSS_REASONS.map((r) => <SelectItem key={r} value={r}>{r}</SelectItem>)}</SelectContent>
+              <SelectTrigger><SelectValue placeholder="Selecione o motivo…" /></SelectTrigger>
+              <SelectContent>
+                {closeReasons.map((r) => <SelectItem key={r} value={r}>{r}</SelectItem>)}
+              </SelectContent>
             </Select>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setLostDialogLead(null)}>Cancelar</Button>
-            <Button variant="destructive" onClick={confirmLost}>Confirmar perda</Button>
+            <Button variant="destructive" onClick={confirmLost} disabled={!lostReason}>
+              {isOutboundLost ? "Confirmar descarte" : "Confirmar perda"}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

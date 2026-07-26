@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { ProfileAvatar } from "@/components/ui/profile-avatar";
 import type { CRMLead, FunnelType } from "@/types/crm";
-import { FUNNEL_CONFIG, LOSS_REASONS, getDaysSinceUpdate, getNextStage, isTerminalStage } from "@/types/crm";
+import { FUNNEL_CONFIG, getCloseReasons, getDaysSinceUpdate, getNextStage, isTerminalStage } from "@/types/crm";
 import { useAdvanceLeadStage, useMarkLeadLost, useTransferLead, useLeadOwnerLog, useLeadActivities, useAddLeadActivity, useDeleteLead } from "@/hooks/useCRMLeads";
 import { useVendedoresDir } from "@/hooks/useVendas";
 import { useAuth } from "@/contexts/AuthContext";
@@ -22,7 +22,11 @@ const TEMP_LABEL   = { quente: "🔥 Quente", morno: "🌡️ Morno", frio: "❄
 
 export function LeadDrawer({ lead, funnelType, onClose }: LeadDrawerProps) {
   const [showLostForm, setShowLostForm] = useState(false);
-  const [lostReason, setLostReason] = useState(LOSS_REASONS[0] as string);
+  // Vazio de propósito — vinha pré-marcado no primeiro item ("Preço").
+  const [lostReason, setLostReason] = useState("");
+  // O SDR descarta ("fora do perfil"), o closer perde ("preço"). Listas distintas.
+  const closeReasons = getCloseReasons(funnelType);
+  const isOutbound = funnelType === "f12";
 
   const navigate = useNavigate();
   const advance  = useAdvanceLeadStage();
@@ -94,12 +98,12 @@ export function LeadDrawer({ lead, funnelType, onClose }: LeadDrawerProps) {
 
   async function handleAdvance() {
     if (!nextStage) return;
-    await advance.mutateAsync({ id: lead.id, newStage: nextStage, funnelType, currentStage: lead.stage });
+    await advance.mutateAsync({ id: lead.id, newStage: nextStage, funnelType });
     onClose();
   }
 
   async function handleLost() {
-    await markLost.mutateAsync({ id: lead.id, reason: lostReason, funnelType, currentStage: lead.stage });
+    await markLost.mutateAsync({ id: lead.id, reason: lostReason, funnelType });
     onClose();
   }
 
@@ -315,13 +319,14 @@ export function LeadDrawer({ lead, funnelType, onClose }: LeadDrawerProps) {
               </div>
             ) : (
               <div className="space-y-2">
-                <p className="text-xs font-medium">Motivo da perda:</p>
+                <p className="text-xs font-medium">{isOutbound ? "Motivo do descarte:" : "Motivo da perda:"}</p>
                 <select
                   className="w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-sm"
                   value={lostReason}
                   onChange={(e) => setLostReason(e.target.value)}
                 >
-                  {LOSS_REASONS.map((r) => <option key={r} value={r}>{r}</option>)}
+                  <option value="">Selecione o motivo…</option>
+                  {closeReasons.map((r) => <option key={r} value={r}>{r}</option>)}
                 </select>
                 <div className="flex gap-2">
                   <Button variant="outline" className="flex-1" onClick={() => setShowLostForm(false)}>
@@ -330,9 +335,9 @@ export function LeadDrawer({ lead, funnelType, onClose }: LeadDrawerProps) {
                   <Button
                     variant="destructive" className="flex-1"
                     onClick={handleLost}
-                    disabled={markLost.isPending}
+                    disabled={markLost.isPending || !lostReason}
                   >
-                    Confirmar perda
+                    {isOutbound ? "Confirmar descarte" : "Confirmar perda"}
                   </Button>
                 </div>
               </div>

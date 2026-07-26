@@ -27,7 +27,7 @@ export default function Leads() {
   function handleAdvance(lead: CRMLead) {
     const next = getNextStage(funnel, lead.stage);
     if (!next) return;
-    advance.mutate({ id: lead.id, newStage: next, funnelType: funnel, currentStage: lead.stage });
+    advance.mutate({ id: lead.id, newStage: next, funnelType: funnel });
   }
 
   const funnelCfg = FUNNEL_CONFIG[funnel];
@@ -114,7 +114,7 @@ export default function Leads() {
             onMarkLost={(lead) => setSelectedLead(lead)}
             onLeadClick={(lead) => setSelectedLead(lead)}
             onDragMove={(lead, toStage) =>
-              advance.mutate({ id: lead.id, newStage: toStage, funnelType: funnel, currentStage: lead.stage })
+              advance.mutate({ id: lead.id, newStage: toStage, funnelType: funnel })
             }
           />
         )}

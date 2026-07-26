@@ -260,11 +260,68 @@ export const stageLabelAnywhere = (stageId: string | null | undefined, ft?: Funn
   return LEGACY_STAGE_LABELS[stageId] ?? stageId;
 };
 
+// ─────────────────────────────────────────────────────────────────────────────
+// ETAPAS TERMINAIS — FONTE ÚNICA.
+//
+// Estas listas viviam DUPLICADAS em três lugares (useCRMLeads.GANHO,
+// StageProgressBar.WIN_IDS e isTerminalStage), e as três discordavam entre si.
+// Qualquer coluna nova exigia lembrar dos três. Agora só existe aqui.
+//
+// A distinção que importa: `repassado` É terminal (encerra o funil do SDR) mas
+// NÃO é ganho — repassar ao closer não é vender. Enquanto ele esteve no balde
+// de ganhos, o mesmo negócio somava receita duas vezes: uma no card do SDR e
+// outra no card do closer.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Ganho de verdade: o negócio virou receita. Carimba `won_at`. */
+export const WON_STAGES = ["convertido", "parceiro", "fechamento", "ganho", "recomprou"] as const;
+
+/** Perda ou descarte: o negócio morreu. Carimba `lost_at` e exige motivo. */
+export const LOST_STAGES = ["sem_interesse", "descartado", "perdido"] as const;
+
+/** Repasse do SDR ao closer. Terminal no funil de origem, sem receita nenhuma. */
+export const HANDOFF_STAGES = ["repassado"] as const;
+
+export const TERMINAL_STAGES: readonly string[] = [
+  ...WON_STAGES, ...LOST_STAGES, ...HANDOFF_STAGES,
+];
+
+export const isWonStage     = (s: string | null | undefined) => !!s && (WON_STAGES as readonly string[]).includes(s);
+export const isLostStage    = (s: string | null | undefined) => !!s && (LOST_STAGES as readonly string[]).includes(s);
+export const isHandoffStage = (s: string | null | undefined) => !!s && (HANDOFF_STAGES as readonly string[]).includes(s);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MOTIVOS DE ENCERRAMENTO — separados por natureza do funil.
+//
+// A lista única anterior foi escrita para perda de NEGOCIAÇÃO (Preço,
+// Concorrente, Já usa produto similar). O SDR descarta por outro motivo
+// inteiramente: não é o perfil, não tem frota, não achei o decisor. Ele não
+// tinha nenhuma opção verdadeira e caía em "Outro" — e aí o descarte, que é
+// justamente a métrica que corrige a lista prospectada, não dizia nada.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Perda depois de haver negociação — funil do closer. */
 export const LOSS_REASONS = [
   "Preço", "Concorrente", "Timing / Momento inadequado", "Não atende telefone",
   "Sem interesse no produto", "Já usa produto similar", "Empresa fechou",
   "Mudou de região", "Outro",
 ] as const;
+
+/** Descarte na prospecção — funil do SDR. */
+export const DISCARD_REASONS = [
+  "Fora do perfil (ICP)", "Não tem frota / volume", "Não achei o decisor",
+  "Sem canal de contato válido", "Não respondeu à cadência",
+  "Já é cliente da base", "É concorrente", "Empresa fechou / inativa",
+  "Cadastro duplicado", "Outro",
+] as const;
+
+/**
+ * Motivos válidos para o funil. O Outbound descarta; o resto perde.
+ * Usar sempre isto — nunca `LOSS_REASONS` direto numa tela.
+ */
+export function getCloseReasons(funnelType: FunnelType): readonly string[] {
+  return funnelType === "f12" ? DISCARD_REASONS : LOSS_REASONS;
+}
 
 export const SOURCE_OPTIONS = [
   "Prospecção ativa", "Indicação", "Evento", "Meta Ads", "Google Ads",
@@ -281,18 +338,18 @@ export function getNextStage(funnelType: FunnelType, currentStage: string): stri
   const idx = stages.findIndex((s) => s.id === currentStage);
   if (idx === -1 || idx >= stages.length - 1) return null;
   const next = stages[idx + 1];
-  if (next.id === "sem_interesse" || next.id === "descartado" || next.id === "perdido") return null;
+  if (isLostStage(next.id)) return null;
   return next.id;
 }
 
 export function isTerminalStage(stageId: string): boolean {
-  return ["convertido", "sem_interesse", "parceiro", "descartado", "fechamento", "ganho", "perdido", "recomprou", "repassado"].includes(stageId);
+  return TERMINAL_STAGES.includes(stageId);
 }
 
 /** Estágio de "perda" do funil (varia por funil). Vendas usa 'perdido'. */
 export function getLostStage(funnelType: FunnelType): string {
   const stages = getStagesForFunnel(funnelType);
-  const found = stages.find((s) => ["perdido", "descartado", "sem_interesse"].includes(s.id));
+  const found = stages.find((s) => isLostStage(s.id));
   return found?.id ?? "sem_interesse";
 }
 

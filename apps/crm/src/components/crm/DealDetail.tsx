@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogTitle, DialogDescription, DialogHeader, Di
 import { ProfileAvatar } from "@/components/ui/profile-avatar";
 import type { CRMLead, FunnelType } from "@/types/crm";
 import {
-  FUNNEL_CONFIG, LOSS_REASONS, getStagesForFunnel, getNextStage, getLostStage,
+  FUNNEL_CONFIG, getCloseReasons, getStagesForFunnel, getNextStage, getLostStage,
   isTerminalStage, getDaysSinceUpdate, SEGMENTS, segmentOf, stageLabelAnywhere,
 } from "@/types/crm";
 import {
@@ -79,7 +79,8 @@ export function DealDetail({ lead, funnelType, onClose }: DealDetailProps) {
   useEffect(() => { setStage(lead.stage); }, [lead.id, lead.stage]);
 
   const [showLostForm, setShowLostForm] = useState(false);
-  const [lostReason, setLostReason] = useState(LOSS_REASONS[0] as string);
+  // Vazio de propósito — vinha pré-marcado no primeiro item ("Preço").
+  const [lostReason, setLostReason] = useState("");
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [transferTo, setTransferTo] = useState("");
   const [showHistory, setShowHistory] = useState(false);
@@ -128,6 +129,9 @@ export function DealDetail({ lead, funnelType, onClose }: DealDetailProps) {
   const stageCfg = stages.find((s) => s.id === stage);
   const nextStage = getNextStage(funnelType, stage);
   const terminal = isTerminalStage(stage);
+  // O SDR descarta ("fora do perfil"), o closer perde ("preço"). Listas distintas.
+  const closeReasons = getCloseReasons(funnelType);
+  const isOutbound = funnelType === "f12";
   const daysSince = getDaysSinceUpdate(lead.updated_at);
   const displayName = lead.trade_name || lead.legal_name || lead.contact_name || "Sem nome";
 
@@ -145,18 +149,18 @@ export function DealDetail({ lead, funnelType, onClose }: DealDetailProps) {
       setShowLostForm(true);
       return;
     }
-    await advance.mutateAsync({ id: lead.id, newStage: target.id, funnelType, currentStage: stage });
+    await advance.mutateAsync({ id: lead.id, newStage: target.id, funnelType });
     setStage(target.id);
   }
 
   async function handleAdvance() {
     if (!nextStage) return;
-    await advance.mutateAsync({ id: lead.id, newStage: nextStage, funnelType, currentStage: stage });
+    await advance.mutateAsync({ id: lead.id, newStage: nextStage, funnelType });
     setStage(nextStage);
   }
 
   async function handleLost() {
-    await markLost.mutateAsync({ id: lead.id, reason: lostReason, funnelType, currentStage: stage });
+    await markLost.mutateAsync({ id: lead.id, reason: lostReason, funnelType });
     setStage(getLostStage(funnelType));
     setShowLostForm(false);
   }
@@ -459,16 +463,21 @@ export function DealDetail({ lead, funnelType, onClose }: DealDetailProps) {
               </div>
             ) : (
               <div className="flex w-full flex-col gap-2 sm:flex-row sm:items-center">
-                <span className="text-xs font-medium">Motivo da perda:</span>
+                <span className="text-xs font-medium">
+                  {isOutbound ? "Motivo do descarte:" : "Motivo da perda:"}
+                </span>
                 <select
                   className="h-9 rounded-md border border-input bg-background px-3 py-1 text-sm sm:flex-1"
                   value={lostReason} onChange={(e) => setLostReason(e.target.value)}
                 >
-                  {LOSS_REASONS.map((r) => <option key={r} value={r}>{r}</option>)}
+                  <option value="">Selecione o motivo…</option>
+                  {closeReasons.map((r) => <option key={r} value={r}>{r}</option>)}
                 </select>
                 <div className="flex gap-2">
                   <Button variant="outline" onClick={() => setShowLostForm(false)}>Voltar</Button>
-                  <Button variant="destructive" onClick={handleLost} disabled={markLost.isPending}>Confirmar perda</Button>
+                  <Button variant="destructive" onClick={handleLost} disabled={markLost.isPending || !lostReason}>
+                    {isOutbound ? "Confirmar descarte" : "Confirmar perda"}
+                  </Button>
                 </div>
               </div>
             )}

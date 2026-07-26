@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import type { CRMLead, FunnelType } from "@/types/crm";
-import { getStagesForFunnel, getLostStage } from "@/types/crm";
+import { getStagesForFunnel, getLostStage, isWonStage, isLostStage, isHandoffStage, isTerminalStage } from "@/types/crm";
 import { useAuth } from "@/contexts/AuthContext";
 import { playMoveSuccess, playMoveError } from "@/lib/sfx";
 
@@ -236,24 +236,23 @@ export function useCRMAllStats() {
       const now = Date.now();
       const day3 = 3 * 24 * 60 * 60 * 1000;
 
-      // Etapas encerradas — o mesmo critério em todo o CRM (win/loss).
-      const FIM = new Set([
-        "convertido", "parceiro", "fechamento", "ganho", "recomprou", "repassado",
-        "sem_interesse", "descartado", "perdido",
-      ]);
-      const GANHO = new Set(["convertido", "parceiro", "fechamento", "ganho", "recomprou", "repassado"]);
+      // Ganho / perda / repasse vêm de types/crm.ts — fonte única.
+      // `repassado` tem balde PRÓPRIO: não é ganho (não virou receita) nem perda
+      // (o negócio segue vivo no funil do closer). Antes ele somava em `ganhos`
+      // E em `receita`, contando o mesmo negócio duas vezes.
 
       // Agregado por SEGMENTO — é o recorte que substituiu as 9 pipelines.
       const bySegment: Record<string, {
         total: number; abertos: number; ganhos: number; perdidos: number;
-        quentes: number; parados: number; receita: number;
+        repassados: number; quentes: number; parados: number; receita: number;
       }> = {};
       for (const l of leads) {
         const k = l.lead_segment || "a_definir";
-        const e = bySegment[k] ?? { total: 0, abertos: 0, ganhos: 0, perdidos: 0, quentes: 0, parados: 0, receita: 0 };
+        const e = bySegment[k] ?? { total: 0, abertos: 0, ganhos: 0, perdidos: 0, repassados: 0, quentes: 0, parados: 0, receita: 0 };
         e.total++;
-        if (GANHO.has(l.stage)) { e.ganhos++; e.receita += Number(l.estimated_revenue || 0); }
-        else if (FIM.has(l.stage)) e.perdidos++;
+        if (isWonStage(l.stage)) { e.ganhos++; e.receita += Number(l.estimated_revenue || 0); }
+        else if (isLostStage(l.stage)) e.perdidos++;
+        else if (isHandoffStage(l.stage)) e.repassados++;
         else {
           e.abertos++;
           if (l.temperature === "quente") e.quentes++;
@@ -268,10 +267,11 @@ export function useCRMAllStats() {
         bySegment,
         // "Sem atividade" e "quentes" só fazem sentido para o que está em aberto:
         // cobrar follow-up de negócio já ganho ou perdido é ruído.
-        stale: leads.filter((l) => !FIM.has(l.stage) && now - new Date(l.updated_at).getTime() > day3).length,
-        hot: leads.filter((l) => !FIM.has(l.stage) && l.temperature === "quente").length,
-        abertos: leads.filter((l) => !FIM.has(l.stage)).length,
-        ganhos: leads.filter((l) => GANHO.has(l.stage)).length,
+        stale: leads.filter((l) => !isTerminalStage(l.stage) && now - new Date(l.updated_at).getTime() > day3).length,
+        hot: leads.filter((l) => !isTerminalStage(l.stage) && l.temperature === "quente").length,
+        abertos: leads.filter((l) => !isTerminalStage(l.stage)).length,
+        ganhos: leads.filter((l) => isWonStage(l.stage)).length,
+        repassados: leads.filter((l) => isHandoffStage(l.stage)).length,
       };
     },
   });
@@ -323,8 +323,8 @@ export function useAdvanceLeadStage() {
 
   return useMutation({
     mutationFn: async ({
-      id, newStage, funnelType, currentStage,
-    }: { id: string; newStage: string; funnelType: FunnelType; currentStage?: string }) => {
+      id, newStage,
+    }: { id: string; newStage: string; funnelType: FunnelType }) => {
       const updates: Record<string, unknown> = { stage: newStage };
 
       if (newStage === "tentativa_1") updates.contact_attempts = 1;
@@ -337,32 +337,26 @@ export function useAdvanceLeadStage() {
       } else if (["qualificado", "apresentacao", "diagnostico", "poc", "visita_agendada"].includes(newStage)) {
         updates.temperature = "morno";
       }
-      if (["convertido", "parceiro", "fechamento"].includes(newStage)) {
-        updates.won_at = new Date().toISOString();
-      }
+      // Carimba a data de fechamento. A lista literal daqui esquecia `ganho` e
+      // `recomprou` — todo negócio fechado no Inbound e no Follow up ficava sem
+      // data, o que inviabiliza qualquer série de "ganhos por dia".
+      if (isWonStage(newStage)) updates.won_at = new Date().toISOString();
+
+      // Arrastar direto para a coluna de perda nunca carimbava `lost_at`. A tela
+      // de gestão conta perda pela data, então o card sumia da estatística. O
+      // MOTIVO continua sendo pedido pelo diálogo (useMarkLeadLost) — aqui só
+      // garantimos que a data nunca falte, inclusive vindo de arrasto.
+      if (isLostStage(newStage)) updates.lost_at = new Date().toISOString();
 
       const { data, error } = await db
         .from("crm_sales_leads").update(updates).eq("id", id).select().single();
       if (error) throw error;
 
-      // Record stage-change activity
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user?.id) {
-        const { data: profile } = await supabase
-          .from("profiles").select("full_name, username").eq("id", user.id).single();
-        await db.from("crm_sales_lead_activities").insert({
-          lead_id: id,
-          activity_type: "stage_change",
-          subject: `${currentStage || "?"} → ${newStage}`,
-          status: "done",
-          done_at: new Date().toISOString(),
-          stage_from: currentStage || null,
-          stage_to: newStage,
-          created_by: user.id,
-          created_by_name: profile?.full_name || profile?.username || null,
-        });
-      }
-
+      // A atividade de mudança de etapa NÃO é mais gravada aqui: virou trigger
+      // no banco (20260731000000_crm_trilha_stage_change.sql). Escrever pelo
+      // cliente, num segundo insert fora de transação, deixava o card movido e
+      // a história inexistente quando o insert falhava — e só valia para os dois
+      // hooks que lembrassem de fazê-lo.
       return data;
     },
     onSuccess: (_, variables) => {
@@ -405,8 +399,8 @@ export function useMarkLeadLost() {
 
   return useMutation({
     mutationFn: async ({
-      id, reason, funnelType, currentStage,
-    }: { id: string; reason: string; funnelType: FunnelType; currentStage?: string }) => {
+      id, reason, funnelType,
+    }: { id: string; reason: string; funnelType: FunnelType }) => {
       const lostStage = getLostStage(funnelType);
       const { data, error } = await db
         .from("crm_sales_leads")
@@ -414,24 +408,10 @@ export function useMarkLeadLost() {
         .eq("id", id).select().single();
       if (error) throw error;
 
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user?.id) {
-        const { data: profile } = await supabase
-          .from("profiles").select("full_name, username").eq("id", user.id).single();
-        await db.from("crm_sales_lead_activities").insert({
-          lead_id: id,
-          activity_type: "stage_change",
-          subject: `Perdido: ${reason}`,
-          status: "done",
-          done_at: new Date().toISOString(),
-          stage_from: currentStage || null,
-          stage_to: lostStage,
-          created_by: user.id,
-          created_by_name: profile?.full_name || profile?.username || null,
-          meta: { lost_reason: reason },
-        });
-      }
-
+      // Trilha gravada pelo trigger — inclusive o motivo, que ele lê do próprio
+      // `lost_reason` da linha. Antes o `stage_from` vinha do parâmetro
+      // `currentStage`, que a tela de Pipelines não passava: metade dos
+      // registros de perda nascia com a etapa de origem nula.
       return data;
     },
     onSuccess: () => {
