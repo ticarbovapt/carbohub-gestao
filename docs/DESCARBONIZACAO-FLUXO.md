@@ -17,7 +17,7 @@ Legenda: ⬜ não começou · 🟡 em andamento · ✅ entregue · ⏸️ adiado
 | # | Fase | Onde | Estado |
 |---|---|---|---|
 | **0** | Mapeamento e decisão de modelagem | `docs/` | ✅ |
-| **1** | Comissão dobrada em venda mista | gestão (SQL) | ⬜ |
+| **1** | Comissão dobrada em venda mista | gestão (SQL) | 🟡 |
 | **2** | Banco da OS: porte, vagas e elo com a venda | licenciados (SQL) | ⬜ |
 | **3** | `/vender` grava a OS certa | gestão (5 apps) | ⬜ |
 | **4** | Sales lê a OS de volta | gestão (crm) | ⬜ |
@@ -209,16 +209,24 @@ que estava.
 
 ---
 
-### Fase 1 — Comissão dobrada ⬜
+### Fase 1 — Comissão dobrada 🟡
 
 **Repo:** `carbohub-gestao` · **Tipo:** SQL · **Depende de:** nada
 **Resolve:** D1
+**Migration:** `20260728000000_comissao_base_produto_sem_servico.sql`
 
-- [ ] 1.1 `crm_comissao_agregado` passa a somar só os itens `kind != 'service'`
-      de `items[]`, em vez de `o.total`
-- [ ] 1.2 Conferir se `crm_metas_board` deve seguir a mesma regra (hoje soma
-      `o.total` das faturadas — mesma inflação, só que na meta)
-- [ ] 1.3 Rodar em produção e conferir um período fechado antes/depois
+- [x] 1.1 `crm_comissao_agregado`: base de produto vira
+      `o.total − carboze_valor_servico(o.items)`. Pedido que zerar (era 100%
+      serviço) sai da base e da contagem
+- [x] 1.2 `crm_metas_board` recebe a mesma correção — a migration
+      `20260715160000` alinhou meta e comissão de propósito, e sem isso o
+      alinhamento quebraria
+- [ ] 1.3 Rodar em produção e conferir o impacto (query de verificação no fim
+      da migration)
+
+**Aberto, não decidido nesta fase:** se descarbonização *deve* contar na meta do
+vendedor. Hoje não conta (meta exige NF, serviço não tem NF); a correção só
+removeu a inclusão acidental que acontecia no pedido misto.
 
 *Isolada de propósito: é dinheiro saindo errado hoje e não depende de nenhuma
 decisão de modelagem.*
