@@ -353,6 +353,33 @@ daria a impressão de que a operação estava morta.
 começa antes de 06/07 — em vez de deixar o gestor concluir sozinho que a equipe
 não trabalhou em junho.
 
+### ⚠️ Lacuna conhecida: 24 e 25/07 estão subcontados
+
+Ao ligar o trigger (26/07), o front antigo ainda estava no ar e por alguns
+minutos os dois gravaram — duas linhas por movimento. Na limpeza dessas
+duplicatas **eu escrevi um DELETE com filtro errado**: ele particionava por
+`(lead_id, stage_from, stage_to)`, então comparava cada movimento com o ciclo
+*anterior* da mesma transição em vez de com a linha imediatamente anterior. Num
+lead que foi movido `novo ↔ contato` repetidamente em segundos, ida e volta
+legítimas casaram com o filtro.
+
+**Resultado: 32 linhas apagadas em vez de 2.** As 2 duplicatas reais mais ~30
+movimentos do lead `674ba199` nos dias 24 e 25 — que pelo padrão (alternância a
+cada 1-3 segundos) era teste de kanban, não operação. A trilha caiu de 163 para
+131. Nenhum outro lead foi afetado; os leads em si estão intactos, só o log de
+movimentação daquele se perdeu.
+
+Não foi restaurado: o PITR traria o banco inteiro de volta, revertendo também as
+migrações da descarbonização. Desproporcional para 30 linhas de teste.
+
+**Para a tela:** 24 e 25/07 mostram menos movimentação do que houve. Vale a mesma
+faixa de aviso do começo da trilha.
+
+**A regra correta**, para quando for preciso de novo: duplicata é a mesma
+transição repetida **consecutivamente na linha do tempo do lead** — particionar
+só por `lead_id`, ordenar por `created_at` e comparar com o `lag` imediato. Ida e
+volta tem a transição oposta no meio e nunca casa.
+
 ---
 
 ## 3-C. A tela de acompanhamento (fase 4)
