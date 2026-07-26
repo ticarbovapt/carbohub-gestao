@@ -12,16 +12,26 @@ Todo achado abaixo foi verificado direto no código antes de entrar aqui.
 
 ⬜ não começou · 🟡 em andamento · ✅ entregue · ⏸️ adiado
 
+> **Reordenado em 26/07 a pedido do usuário.** O Chatwoot **não está conectado** —
+> é coisa de futuro. Logo o Inbound automático não existe ainda: no começo os
+> leads entram **manualmente, pelo SDR**. O Outbound passa a ser o caminho
+> crítico e a fase de canais desce para o fim.
+
 | # | Fase | O que resolve | Estado |
 |---|---|---|---|
 | **0** | Diagnóstico | este documento | ✅ |
-| **1** | Consertar o que já mente | 6 bugs ativos em produção | ⬜ |
-| **2** | Unificar as listas de etapa terminal | dívida que morde na fase 3 | ⬜ |
-| **3** | Colunas novas (rótulos + `orcamento`, `formalizacao`, `nutricao`) | o pedido de desenho | ⬜ |
-| **4** | Flag `waiting_on` — o "parado" | a dor principal | ⬜ |
-| **5** | Elo card ↔ orçamento (`/vender`) | "o sistema todo se conversar" | ⬜ |
-| **6** | Duplicação Outbound → Inbound | o handoff do SDR | ⬜ |
-| **7** | Origem, canais e formulário | a tag de onde veio | ⬜ |
+| **1** | Bugs do Outbound | `repassado` como ganho + motivo de descarte errado | ⬜ |
+| **2** | Unificar as listas de etapa terminal | dívida que morde na fase 4 | ⬜ |
+| **3** | O cadastro do SDR | origem limpa + campos de qualificação | ⬜ |
+| **4** | Colunas do Outbound (`nutricao`) | a rotina diária do SDR | ⬜ |
+| **5** | Duplicação Outbound → Inbound | o handoff do SDR | ⬜ |
+| **6** | Colunas do Inbound (`orcamento`, `formalizacao`) | o funil do closer | ⬜ |
+| **7** | Flag `waiting_on` — o "parado" | a dor da negociação | ⬜ |
+| **8** | Elo card ↔ orçamento (`/vender`) | "o sistema todo se conversar" | ⬜ |
+| **9** | Canais automáticos (webhooks, formulário, Chatwoot) | ⏸️ **adiado** — Chatwoot não existe ainda | ⏸️ |
+
+**Os bugs do Inbound (B3, B5, B6) não sumiram** — foram redistribuídos: B3 entra
+na fase 6, B5 e B6 na fase 8, junto com o código que eles destravam.
 
 ---
 
@@ -30,7 +40,13 @@ Todo achado abaixo foi verificado direto no código antes de entrar aqui.
 Seis defeitos ativos, todos verificados. Nenhum deles dá erro na tela — eles
 **mentem em silêncio**, que é pior, porque ninguém abre chamado.
 
-### B1 — Lead de anúncio e de WhatsApp cai num buraco 🔴
+### B1 — Lead de anúncio e de WhatsApp cai num buraco ⏸️ (fase 9)
+
+> Adiado com o resto da fase 9. O Chatwoot não está conectado, então essa metade
+> do defeito é teórica. **A metade do Meta Ads não é** — se aquele webhook estiver
+> recebendo, tem lead entrando no buraco agora. Conferir com a query no fim desta
+> seção antes de decidir se adianta ou não.
+
 
 `supabase/functions/crm-webhook-meta/index.ts:92` e
 `crm-webhook-chatwoot/index.ts:67` gravam em **`crm_leads`** (tabela do Controle
@@ -74,11 +90,50 @@ Mesmo problema em `LeadDrawer.tsx:152`.
 `state.fromLead`. O tipo inline em `Vender.tsx:223` **não declara `id`** e o
 efeito nunca o lê. Metade do elo já existe e é descartada em silêncio.
 
+### B7 — O motivo de descarte não serve para prospecção 🆕
+
+`LOSS_REASONS` (`types/crm.ts:263`) foi escrita para **perda de negociação**:
+Preço, Concorrente, Já usa produto similar, Timing.
+
+O SDR descarta por outra coisa inteira: *não é ICP*, *não tem frota*, *não achei
+o decisor*, *não existe canal de contato*, *é cliente da base*, *é concorrente*.
+**Nada disso está na lista.** Somado ao B4 (vem pré-marcado como "Preço"), o
+resultado é previsível: **todo descarte do Outbound vira "Preço" ou "Outro"**, e
+o SDR nunca consegue responder a única pergunta que importa pra ele — *estou
+prospectando a lista errada?*
+
+Como o descarte do SDR é a métrica que corrige a prospecção, isso entra na
+fase 1 junto com o B4, e não depois.
+
+### B8 — O `source` já nasce sujo no cadastro manual 🆕
+
+`LeadForm.tsx:42` inicializa `source: "Prospecção ativa"` (com acento e espaço),
+enquanto o **default do banco é `prospeccao_ativa`**. As duas convenções gravam
+na mesma coluna. Todo lead criado pelo formulário e todo lead criado por qualquer
+outro caminho **já caem em categorias diferentes num `group by source`** — antes
+mesmo de existir integração de anúncio.
+
+É barato consertar agora e caro depois: cada dia de prospecção manual são mais
+linhas para normalizar.
+
 ### Bônus de segurança
 
 Os dois webhooks rodam com `verify_jwt = false` e o secret é **opcional no
 código**. Se `CHATWOOT_WEBHOOK_SECRET` não estiver setado no Supabase, qualquer
-um na internet cria lead no banco. **Conferir.**
+um na internet cria lead no banco. Fica com a fase 9, **exceto** se a query
+abaixo mostrar que o Meta já está recebendo.
+
+### Query para decidir se o B1 pode mesmo esperar
+
+```sql
+select funnel_type, stage, source, count(*), max(created_at) as ultimo
+  from public.crm_leads
+ where created_at > now() - interval '90 days'
+ group by 1,2,3 order by ultimo desc;
+```
+
+Vazio → o B1 é teórico e espera. Com linhas → tem lead real preso lá, e a
+correção sobe para a fase 1.
 
 ---
 
@@ -171,6 +226,59 @@ Daí `formalizacao`.
 
 Com critério de entrada duro (*o cliente respondeu com uma objeção*), ela deixa
 de ser depósito e vira a lista de brigas ativas.
+
+---
+
+## 3-A. O cadastro do SDR — onde o Outbound realmente começa
+
+Com o Chatwoot fora, **`LeadForm.tsx` é a única porta de entrada de lead do
+sistema.** Ele foi escrito para um vendedor anotando um contato, não para um SDR
+prospectando em volume. Três coisas faltam.
+
+### O critério de saída de `qualificado` não tem onde ser gravado
+
+A tabela definiu que o lead sai de Qualificado quando *volume, dor, decisor e
+prazo* estão preenchidos. **Nenhum desses quatro existe como campo.** O que
+existe é `notes` (texto livre), `fleet_size` (número) e `custom_fields jsonb`
+(vazio, nada lê).
+
+Isso não é detalhe de tela — é o que decide se a fase 5 funciona. Se a
+qualificação mora num parágrafo de `notes`, o closer recebe **um card com um
+texto corrido** e vai ter que ligar de novo para perguntar o que o SDR já
+perguntou. O handoff perde o sentido.
+
+**Recomendado:** quatro colunas de verdade, não `custom_fields`.
+
+```sql
+qual_volume    text   -- frota / consumo declarado
+qual_dor       text   -- o problema que ele contou
+qual_decisor   text   -- nome e cargo de quem assina
+qual_prazo     text   -- quando pretende resolver
+```
+
+Colunas, e não `jsonb`, porque **isso vai virar relatório** ("quantos SQL sem
+decisor identificado?") e porque a duplicação da fase 5 precisa copiar campo a
+campo. `custom_fields` é bom para o que varia por cliente; esses quatro são fixos.
+
+Na tela: um bloco *Qualificação* que **só aparece quando o funil é o Outbound** —
+o vendedor do f13 não deve ver isso.
+
+### A origem precisa virar valor fechado
+
+O B8 acima. `source` passa a gravar em snake_case, com o rótulo bonito só na
+tela, e as linhas antigas são normalizadas na mesma migração.
+
+### O cadastro é lento demais para prospecção em volume
+
+Hoje são 11 campos, e o SDR abre esse modal dezenas de vezes por dia. Para um
+lead recém-prospectado, **nome + telefone + segmento já bastam** — cidade, UF,
+receita estimada e temperatura são coisa de depois da conversa.
+
+**Recomendado:** no Outbound, o formulário abre curto (nome, contato, segmento,
+origem) com o resto atrás de *"mais detalhes"*. Nada é removido — só sai da
+frente. E a temperatura sai de vez do cadastro: **um lead que acabou de ser
+prospectado é frio por definição**, e deixar o campo lá só convida a mentir para
+o próprio funil.
 
 ---
 
@@ -358,22 +466,29 @@ segundo está bloqueado por credenciais e por uma instância de Chatwoot que
 3. **9 colunas no Inbound é demais?** Se quiser 8, o corte é `contato` (funde em
    `novo` com contador de tentativas). **Não cortar `orcamento` nem
    `formalizacao`** — são os dois que resolvem a dor.
-4. **Existe instância de Chatwoot rodando?** Muda completamente o tamanho da
-   fase 7.
+4. ~~**Existe instância de Chatwoot rodando?**~~ **Respondido em 26/07: não.** É
+   coisa de futuro. A fase 9 fica adiada até existir instância.
 
 ---
 
 ## 9. Ordem de execução
 
-**Fases 1 e 2 não dependem de nenhuma decisão sua** e já melhoram o que está no
-ar hoje. As 3 a 7 são o pedido.
+A régua: **primeiro o Outbound funcionar de ponta a ponta** (cadastrar →
+qualificar → repassar), porque é por ali que todo lead entra enquanto não há
+canal automático. Só depois o funil do closer.
 
 | Fase | Por que nessa ordem |
 |---|---|
-| 1 — bugs | `repassado` como ganho **inviabiliza** a fase 6; webhooks no lugar errado inviabilizam a 7 |
-| 2 — unificar `WIN_IDS`/`GANHO`/`isTerminalStage` | **três listas duplicadas do mesmo conceito**; mexer nas colunas sem unificar é errar em três lugares |
-| 3 — colunas | zero SQL, zero migração de dado |
-| 4 — `waiting_on` | resolve a dor principal; independente da 5 e da 6 |
-| 5 — orçamento | 90% já existe |
-| 6 — duplicação | depende da 1 (métrica) e de decisão sua |
-| 7 — canais | a parte barata depende da 1; a cara depende de infra não confirmada |
+| 1 — bugs do Outbound (B2, B4, B7) | `repassado` como ganho **inviabiliza a fase 5**; e o motivo de descarte é a métrica que corrige a prospecção — cada dia sem ele é dado perdido que não volta |
+| 2 — unificar `WIN_IDS`/`GANHO`/`isTerminalStage` | **três listas duplicadas do mesmo conceito**; mexer em coluna sem unificar é errar em três lugares. Sai de graça junto com a 1 |
+| 3 — cadastro do SDR (B8 + qualificação) | é a única porta de entrada do sistema hoje. Precisa vir **antes** da 5: sem campo estruturado, o handoff entrega texto corrido |
+| 4 — coluna `nutricao` | zero SQL, zero migração. Fecha a rotina diária do SDR |
+| 5 — duplicação → Inbound | fecha o ciclo do Outbound. Depende da 1, da 3 e de **uma decisão sua** (a quem atribuir) |
+| 6 — colunas do Inbound + B3 | a partir daqui é o funil do closer |
+| 7 — `waiting_on` | a dor da negociação, que é etapa de closer |
+| 8 — orçamento + B5 + B6 | 90% já existe; é o acabamento |
+| 9 — canais ⏸️ | **adiado** — Chatwoot não conectado. Reabrir quando a instância existir |
+
+**As fases 1 e 2 não dependem de nenhuma decisão sua.** A 3 e a 4 dependem de
+concordância com o desenho acima, não de informação que só você tem. A 5 é a
+primeira que trava numa pergunta em aberto.
