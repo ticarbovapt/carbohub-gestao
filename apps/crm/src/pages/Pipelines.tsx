@@ -210,7 +210,7 @@ export default function Pipelines() {
     const sp = new URLSearchParams(searchParams); sp.delete("seg");
     setSearchParams(sp, { replace: true });
   };
-  const { isGestor } = useAuth();
+  const { isGestor, user } = useAuth();
   const { data: vendedoresDir = [] } = useVendedoresDir();
   const ownersById = useMemo(
     () => Object.fromEntries(vendedoresDir.map((v) => [v.id, { id: v.id, name: v.full_name, avatar_url: v.avatar_url }])),
