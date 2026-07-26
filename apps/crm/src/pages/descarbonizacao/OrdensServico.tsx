@@ -33,7 +33,13 @@ interface OSView {
   pedido: string | null; valor: number | null;
 }
 
-const dt = (s: string | null) => (s ? new Date(s).toLocaleDateString("pt-BR") : "—");
+// Coluna DATE volta como "2026-07-30". new Date() parseia isso como meia-noite
+// UTC, que no Brasil é 21h do dia anterior — a data aparecia um dia atrás.
+const dt = (s: string | null) => {
+  if (!s) return "—";
+  const d = /^\d{4}-\d{2}-\d{2}$/.test(s) ? new Date(`${s}T00:00:00`) : new Date(s);
+  return d.toLocaleDateString("pt-BR");
+};
 const brl = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
 
 // "5P · 3M · 1G" — a leitura mais rápida do que a OS tem para fazer.

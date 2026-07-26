@@ -698,11 +698,19 @@ export default function Vender() {
         toast.success(`OS ${numero ?? ""} criada com ${n} veículo(s) para executar.`);
       }
     } catch (e) {
+      // O erro do Supabase NÃO é instanceof Error — é um objeto com
+      // message/details/hint/code. Testar por instanceof engolia justamente a
+      // causa que esta mensagem existe para mostrar.
+      const err = e as { message?: string; details?: string; hint?: string; code?: string } | null;
+      const motivo = [err?.message, err?.details, err?.hint].filter(Boolean).join(" · ")
+        || (typeof e === "string" ? e : "causa desconhecida");
+      // No console fica o objeto inteiro, para o TI ver code/status.
+      console.error("[descarb] falha ao criar a OS", e);
       toast.error(
-        `Venda ${orderNumber ?? ""} salva, mas a OS de descarbonização NÃO foi criada` +
-        (e instanceof Error ? `: ${e.message}` : ".") +
-        " Abra em Descarbonização › OS e crie manualmente.",
-        { duration: 12000 },
+        `Venda ${orderNumber ?? ""} salva, mas a OS NÃO foi criada — ${motivo}` +
+        (err?.code ? ` (${err.code})` : "") +
+        ". Ela aparece no aviso de reconciliação em Descarbonização › OS.",
+        { duration: 20000 },
       );
     }
   }
