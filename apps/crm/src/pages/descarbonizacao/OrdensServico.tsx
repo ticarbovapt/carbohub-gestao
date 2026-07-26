@@ -1,9 +1,9 @@
 import { useMemo, useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { ClipboardList, Calendar, Zap, CheckCircle2, Search, LayoutGrid, List, Plus, RefreshCw, Loader2 } from "lucide-react";
+import { ClipboardList, Calendar, Zap, CheckCircle2, Search, LayoutGrid, List, Plus, RefreshCw, Loader2, AlertTriangle, Car } from "lucide-react";
 import { NovaDescarbonizacaoDialog } from "@/components/NovaDescarbonizacaoDialog";
-import { useOS, type OSRow } from "@/hooks/useOS";
+import { useOS, useVendasSemOS, type OSRow } from "@/hooks/useOS";
 
 // Acompanhamento das descarbonizações (B2C · B2B · Frota). ESPELHO ao vivo da
 // OS do Carbox/Licenciados (fonte de verdade). O Sales cria e acompanha; a
@@ -26,9 +26,19 @@ const STAGE_META: Record<string, { label: string; emoji: string; color: string }
 
 const TIPO_LABEL: Record<string, string> = { b2c: "B2C", b2b: "B2B", frota: "Frota" };
 
-interface OSView { id: string; numero: string; cliente: string; tipo: string; veiculo: string; agendamento: string | null; stage: string; }
+interface OSView {
+  id: string; numero: string; cliente: string; tipo: string; veiculo: string;
+  agendamento: string | null; stage: string;
+  vagas: number; vagasComPlaca: number; portes: string;
+  pedido: string | null; valor: number | null;
+}
 
 const dt = (s: string | null) => (s ? new Date(s).toLocaleDateString("pt-BR") : "—");
+const brl = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
+
+// "5P · 3M · 1G" — a leitura mais rápida do que a OS tem para fazer.
+const portesLabel = (p: Record<string, number>) =>
+  ["P", "M", "G", "—"].filter((k) => p[k]).map((k) => `${p[k]}${k === "—" ? "" : k}`).join(" · ");
 
 function toView(o: OSRow): OSView {
   const veiculo = [o.placa, o.modelo].filter(Boolean).join(" · ") || "—";
@@ -41,6 +51,11 @@ function toView(o: OSRow): OSView {
     veiculo,
     agendamento: o.data_prevista,
     stage: o.stage,
+    vagas: o.vagas,
+    vagasComPlaca: o.vagasComPlaca,
+    portes: portesLabel(o.portes),
+    pedido: o.saleOrderNumber,
+    valor: o.saleTotal,
   };
 }
 
@@ -50,6 +65,7 @@ export default function OrdensServico() {
   const [createOpen, setCreateOpen] = useState(false);
 
   const { data, isLoading, isError, refetch, isFetching } = useOS();
+  const { data: semOS = [] } = useVendasSemOS();
   const all = useMemo(() => (data ?? []).map(toView), [data]);
 
   const filtered = useMemo(() => all.filter((o) => {
@@ -91,6 +107,56 @@ export default function OrdensServico() {
           <div className="rounded-xl border bg-card p-4 space-y-1"><div className="flex items-center gap-2 text-green-500 text-sm"><CheckCircle2 className="h-4 w-4" /><span>Concluídas (mês)</span></div><p className="text-2xl font-bold text-green-600">{stats.concluidasMes}</p></div>
         </div>
 
+        {/* Vendas de descarbonização que não geraram OS. Sem isto, uma falha na
+            criação vira um toast que some e o serviço nunca é executado. */}
+        {semOS.length > 0 && (
+          <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 overflow-hidden">
+            <div className="flex items-start gap-3 p-4">
+              <AlertTriangle className="h-5 w-5 shrink-0 text-amber-500 mt-0.5" />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-amber-600">
+                  {semOS.length} venda(s) de descarbonização sem OS
+                </p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Foram vendidas mas não têm ordem de serviço — ninguém vai executar. Abra a OS manualmente em “Nova Descarbonização”.
+                </p>
+                <div className="mt-3 overflow-x-auto">
+                  <table className="w-full text-xs">
+                    <thead className="text-muted-foreground">
+                      <tr>
+                        {["Pedido", "Cliente", "Vendedor", "Valor", "Venda", "Execução"].map((h) => (
+                          <th key={h} className="text-left font-medium pb-1 pr-4 whitespace-nowrap">{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {semOS.slice(0, 8).map((v) => (
+                        <tr key={v.order_id} className="border-t border-amber-500/20">
+                          <td className="py-1.5 pr-4 font-mono whitespace-nowrap">{v.order_number ?? "—"}</td>
+                          <td className="py-1.5 pr-4 font-medium truncate max-w-[180px]">{v.customer_name ?? "—"}</td>
+                          <td className="py-1.5 pr-4 text-muted-foreground whitespace-nowrap">{v.vendedor_name ?? "—"}</td>
+                          <td className="py-1.5 pr-4 tabular-nums whitespace-nowrap">{brl(v.valor_descarb)}</td>
+                          <td className="py-1.5 pr-4 text-muted-foreground whitespace-nowrap">{dt(v.sale_date)}</td>
+                          <td className="py-1.5 pr-4 text-muted-foreground whitespace-nowrap">{dt(v.execution_date)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  {semOS.length > 8 && (
+                    <p className="text-[11px] text-muted-foreground mt-2">
+                      e mais {semOS.length - 8}…
+                    </p>
+                  )}
+                </div>
+              </div>
+              <Button size="sm" onClick={() => setCreateOpen(true)}
+                className="shrink-0 gap-1.5 bg-amber-500 hover:bg-amber-600 text-white">
+                <Plus className="h-3.5 w-3.5" /> Abrir OS
+              </Button>
+            </div>
+          </div>
+        )}
+
         <div className="flex items-center gap-3">
           <div className="relative flex-1 max-w-sm">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -129,7 +195,32 @@ export default function OrdensServico() {
                         <div className="pl-1.5">
                           <span className="font-mono text-xs font-medium text-purple-500">{o.numero}</span>
                           <p className="text-sm font-semibold mt-0.5 truncate">{o.cliente}</p>
-                          <p className="text-xs text-muted-foreground">{o.tipo} · {o.veiculo}</p>
+                          <p className="text-xs text-muted-foreground">{o.tipo}{o.veiculo !== "—" ? ` · ${o.veiculo}` : ""}</p>
+
+                          {/* Quantos carros e de que porte — o que o Carbox
+                              precisa saber antes de abrir a OS. */}
+                          {o.vagas > 0 && (
+                            <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px]">
+                              <span className="inline-flex items-center gap-1 font-medium">
+                                <Car className="h-3 w-3" />
+                                {o.vagasComPlaca}/{o.vagas} identificado(s)
+                              </span>
+                              {o.portes && <span className="text-muted-foreground">{o.portes}</span>}
+                            </div>
+                          )}
+                          {o.vagas > 1 && (
+                            <div className="mt-1 h-1 w-full rounded-full bg-muted overflow-hidden">
+                              <div className="h-full rounded-full bg-purple-500 transition-all"
+                                style={{ width: `${Math.round((o.vagasComPlaca / o.vagas) * 100)}%` }} />
+                            </div>
+                          )}
+
+                          {o.pedido && (
+                            <p className="mt-1.5 text-[10px] text-muted-foreground">
+                              Pedido <span className="font-mono">{o.pedido}</span>
+                              {o.valor != null && o.valor > 0 ? ` · ${brl(o.valor)}` : ""}
+                            </p>
+                          )}
                           {o.agendamento && <p className="text-[10px] text-muted-foreground mt-1">📅 {dt(o.agendamento)}</p>}
                         </div>
                       </div>
@@ -144,7 +235,7 @@ export default function OrdensServico() {
           <div className="rounded-xl border bg-card overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="bg-muted/50"><tr>
-                {["OS #", "Cliente", "Tipo", "Veículo", "Agendamento", "Etapa"].map((h) => <th key={h} className="px-4 py-3 text-left font-medium">{h}</th>)}
+                {["OS #", "Pedido", "Cliente", "Tipo", "Veículos", "Agendamento", "Etapa"].map((h) => <th key={h} className="px-4 py-3 text-left font-medium">{h}</th>)}
               </tr></thead>
               <tbody className="divide-y">
                 {filtered.map((o) => {
@@ -152,9 +243,16 @@ export default function OrdensServico() {
                   return (
                     <tr key={o.id} className="hover:bg-muted/30">
                       <td className="px-4 py-3 font-mono text-purple-500 font-medium">{o.numero}</td>
+                      <td className="px-4 py-3 font-mono text-xs text-muted-foreground">
+                        {o.pedido ?? <span className="italic">manual</span>}
+                      </td>
                       <td className="px-4 py-3 font-medium">{o.cliente}</td>
                       <td className="px-4 py-3 text-muted-foreground">{o.tipo}</td>
-                      <td className="px-4 py-3 text-muted-foreground">{o.veiculo}</td>
+                      <td className="px-4 py-3 text-muted-foreground">
+                        {o.vagas > 0
+                          ? <span>{o.vagasComPlaca}/{o.vagas}{o.portes ? ` · ${o.portes}` : ""}</span>
+                          : o.veiculo}
+                      </td>
                       <td className="px-4 py-3 text-muted-foreground">{dt(o.agendamento)}</td>
                       <td className="px-4 py-3"><span className="text-xs font-medium px-2 py-0.5 rounded-full" style={{ background: st.color + "20", color: st.color }}>{st.emoji} {st.label}</span></td>
                     </tr>

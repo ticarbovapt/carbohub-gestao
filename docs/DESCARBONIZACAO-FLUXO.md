@@ -20,7 +20,7 @@ Legenda: ⬜ não começou · 🟡 em andamento · ✅ entregue · ⏸️ adiado
 | **1** | Comissão dobrada em venda mista | gestão (SQL) | 🟡 |
 | **2** | Banco da OS: porte, vagas e elo com a venda | licenciados (SQL) | ✅ |
 | **3** | `/vender` grava a OS certa | gestão (5 apps) | ✅ |
-| **4** | Sales lê a OS de volta | gestão (crm) | ⬜ |
+| **4** | Sales lê a OS de volta | gestão (crm) | 🟡 |
 | **5** | Fechar o ciclo OS ↔ venda | ambos | ⬜ |
 | **6** | Execução compartilhada nos dois apps | ambos | ⬜ |
 
@@ -33,7 +33,8 @@ Detalhe de cada fase, com os passos individuais, na seção 4.
 | 2026-07-25 | 0 | Mapeamento das 4 telas + 12 defeitos + modelo de vagas | `7706c41` |
 | 2026-07-26 | 1 | Comissão: base de produto sem os itens de serviço | `e21457a` |
 | 2026-07-26 | 2 | OS com vagas por unidade vendida + elo com a venda | `ea3b5ca` (lic.) |
-| 2026-07-26 | 3 | /vender manda quantidade, bonificação e tipo de serviço | (este commit) |
+| 2026-07-26 | 3 | /vender manda quantidade, bonificação e tipo de serviço | `f85e3ab` |
+| 2026-07-26 | 4 | Sales lê a OS: progresso, portes, elo e reconciliação | (este commit) |
 
 ---
 
@@ -295,18 +296,31 @@ decisão de modelagem.*
 
 ---
 
-### Fase 4 — Sales lê a OS de volta ⬜
+### Fase 4 — Sales lê a OS de volta 🟡
 
 **Repo:** `carbohub-gestao` (`apps/crm`) · **Depende de:** fase 3
 **Resolve:** D4, D7, D8 (parte)
 
-- [ ] 4.1 `/descarbonizacao/os`: card com progresso de veículos (`3/11`),
-      portes, nº do pedido e valor, com link pro pedido
-- [ ] 4.2 `/descarbonizacao/agendamentos`: evento mostra quantos carros e o porte
-- [ ] 4.3 `/pedidos`: pedido só de serviço exibe o estágio da **OS**, não o de
-      logística
-- [ ] 4.4 Reconciliação "Vendas de descarbonização sem OS" — mata a falha
-      silenciosa de hoje (toast perdido = venda sem OS pra sempre)
+**Migration:** `20260729000000_descarb_vendas_sem_os.sql`
+
+- [x] 4.1 `/descarbonizacao/os`: card e lista mostram `3/9 identificado(s)`,
+      quebra de portes (`5P · 3M · 1G`), barra de progresso, nº do pedido e
+      valor. **Ver ressalva sobre "identificado" abaixo**
+- [x] 4.2 `/descarbonizacao/agendamentos`: evento do calendário mostra `9×`,
+      "Próximos" traz veículos + portes + nº do pedido, rodapé soma os veículos
+      do mês
+- [x] 4.3 `/pedidos`: pedido 100% serviço exibe o estágio da OS
+      (OS aberta / Em execução / Executada) e `3/9 veículo(s)`, com badge
+      vermelho **Sem OS** quando não há vínculo
+- [x] 4.4 Aviso de reconciliação no topo de `/descarbonizacao/os` com a lista
+      de vendas sem OS (pedido, cliente, vendedor, valor, datas)
+- [ ] 4.5 Rodar a migration em produção
+
+**Ressalva — não existe "executado" por veículo.** `os_vehicles` não tem flag de
+conclusão: o estágio (nova / em execução / concluída) é da OS inteira. O
+progresso mostrado é **quantas vagas já têm placa**, que é o sinal real de que
+alguém pegou aquele carro. Rotulado como "identificado", não "executado", de
+propósito. Uma flag por veículo entra na fase 5 ou 6.
 
 ---
 

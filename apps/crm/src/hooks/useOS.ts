@@ -72,6 +72,17 @@ export interface OSRow {
   observacoes: string | null;
   created_at: string;
   updated_at: string;
+  // ── Vagas de veículo (fase 2/3) ──
+  /** Quantos veículos esta OS tem para executar. */
+  vagas: number;
+  /** Quantos já foram identificados (placa preenchida no Carbox). */
+  vagasComPlaca: number;
+  /** Quebra por porte, ex.: { P: 5, M: 3, G: 1 }. Vaga sem porte cai em "—". */
+  portes: Record<string, number>;
+  // ── Elo com a venda ──
+  saleOrderId: string | null;
+  saleOrderNumber: string | null;
+  saleTotal: number | null;
 }
 
 /** Mapeia a linha do schema licenciados para o formato usado pelas telas. */
@@ -95,13 +106,25 @@ function mapRow(o: any): OSRow {
     observacoes: o.description ?? null,
     created_at: o.created_at,
     updated_at: o.updated_at,
+    vagas: vehicles.length,
+    vagasComPlaca: vehicles.filter((v: any) => !!v.plate).length,
+    portes: vehicles.reduce((acc: Record<string, number>, v: any) => {
+      const k = v.porte || "—";
+      acc[k] = (acc[k] ?? 0) + 1;
+      return acc;
+    }, {}),
+    saleOrderId: o.sale_order_id ?? null,
+    saleOrderNumber: o.sale_order_number ?? null,
+    saleTotal: o.sale_total != null ? Number(o.sale_total) : null,
   };
 }
 
 const SELECT_COLS =
   "id, os_number, service_type, os_stage, customer_name, scheduled_at, priority, title, description, " +
   "vehicle_plate, vehicle_model, created_at, updated_at, " +
-  "customer:os_customers(name, phone, federal_code), vehicles:os_vehicles(position, plate, model)";
+  "sale_order_id, sale_order_number, sale_total, " +
+  "customer:os_customers(name, phone, federal_code), " +
+  "vehicles:os_vehicles(position, plate, model, porte)";
 
 /** Lista de OS (espelho ao vivo). RLS: o Sales enxerga via is_carbo_sales(). */
 export function useOS() {
@@ -234,5 +257,43 @@ export function useCreateOS() {
       return { id: id as string, numero };
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["os_sales"] }); },
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Reconciliação: vendas de descarbonização SEM OS.
+//
+// Se a criação da OS falha, o /vender mostra um toast e segue. O toast some, a
+// venda fica registrada e o serviço nunca é executado. Esta lista é o que
+// impede isso de passar em branco.
+// ─────────────────────────────────────────────────────────────────────────────
+export interface VendaSemOS {
+  order_id: string;
+  order_number: string | null;
+  customer_name: string | null;
+  vendedor_name: string | null;
+  valor_descarb: number;
+  sale_date: string | null;
+  execution_date: string | null;
+}
+
+export function useVendasSemOS(dias = 365) {
+  return useQuery({
+    queryKey: ["descarb_vendas_sem_os", dias],
+    queryFn: async (): Promise<VendaSemOS[]> => {
+      const { data, error } = await (supabase as unknown as {
+        rpc: (fn: string, args?: Record<string, unknown>) => any;
+      }).rpc("crm_descarb_vendas_sem_os", { p_dias: dias });
+      if (error) throw error;
+      return ((data ?? []) as any[]).map((r) => ({
+        order_id: r.order_id,
+        order_number: r.order_number ?? null,
+        customer_name: r.customer_name ?? null,
+        vendedor_name: r.vendedor_name ?? null,
+        valor_descarb: Number(r.valor_descarb || 0),
+        sale_date: r.sale_date ?? null,
+        execution_date: r.execution_date ?? null,
+      }));
+    },
   });
 }

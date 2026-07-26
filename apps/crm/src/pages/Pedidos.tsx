@@ -21,6 +21,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { useVendas, useVendedorNomes, useVendedoresDir } from "@/hooks/useVendas";
+import { useOS } from "@/hooks/useOS";
 import { useAuth } from "@/contexts/AuthContext";
 import { VendaDetailsDialog } from "@/components/VendaDetailsDialog";
 
@@ -44,7 +45,17 @@ interface OrderRow {
   id: string; order_number: string; invoice_number: string | null; linha: string;
   vendedor_id: string; vendedor_name: string; customer_name: string; customer_email: string | null;
   created_at: string; qty: number; items: number; total: number; status: OrderStatus;
+  soServico: boolean; osNumero: string | null; osStage: string | null; osVagas: number; osComPlaca: number;
 }
+
+// Pedido 100% descarbonização não tem NF nem expedição: o "status" dele é o
+// estágio da OS, não o da logística. Sem isto ele fica "Pendente" para sempre.
+const OS_STAGE_LABEL: Record<string, { label: string; variant: "secondary" | "info" | "warning" | "success" | "destructive" }> = {
+  nova:        { label: "OS aberta",   variant: "secondary" },
+  em_execucao: { label: "Em execução", variant: "warning" },
+  concluida:   { label: "Executada",   variant: "success" },
+  cancelada:   { label: "OS cancelada", variant: "destructive" },
+};
 
 const LINHA_LABELS: Record<string, string> = {
   carboze_100ml: "CarboZé 100ml", carboze_1l: "CarboZé 1L", carboze_sache: "CarboZé Sachê",
@@ -61,6 +72,16 @@ export default function Pedidos() {
   // ── Dados reais: vendas salvas (status "pedido") ──
   const { data: vendas = [], refetch, isFetching } = useVendas("all");
   const { data: nomes = {} } = useVendedorNomes();
+  // Espelho das OS, para o pedido só de serviço mostrar o estágio REAL da
+  // execução em vez de ficar "Pendente" para sempre.
+  const { data: osList = [] } = useOS();
+  const osPorVenda = useMemo(() => {
+    const m = new Map<string, { numero: string | null; stage: string; vagas: number; comPlaca: number }>();
+    for (const o of osList) {
+      if (o.saleOrderId) m.set(o.saleOrderId, { numero: o.numero, stage: o.stage, vagas: o.vagas, comPlaca: o.vagasComPlaca });
+    }
+    return m;
+  }, [osList]);
   const [detailId, setDetailId] = useState<string | null>(null);
 
   const allOrders: OrderRow[] = useMemo(() => vendas
@@ -69,6 +90,7 @@ export default function Pedidos() {
       const itens = v.itens ?? [];
       const qty = itens.reduce((s, i) => s + (i.quantidade || 0), 0);
       const firstProd = itens[0]?.produto ?? "—";
+      const os = osPorVenda.get(v.id);
       return {
         id: v.id,
         order_number: v.numero ?? `PED-${v.id.slice(0, 8).toUpperCase()}`,
@@ -83,8 +105,13 @@ export default function Pedidos() {
         items: itens.length,
         total: Number(v.total) || 0,
         status: (v.status === "cancelado" ? "cancelled" : "pending") as OrderStatus,
+        soServico: v.so_servico,
+        osNumero: os?.numero ?? null,
+        osStage: os?.stage ?? null,
+        osVagas: os?.vagas ?? 0,
+        osComPlaca: os?.comPlaca ?? 0,
       };
-    }), [vendas, nomes]);
+    }), [vendas, nomes, osPorVenda]);
 
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<OrderStatus | "all">("all");
@@ -348,7 +375,26 @@ export default function Pedidos() {
                         <CarboTableCell><p className="text-sm">{format(new Date(order.created_at), "dd/MM/yyyy", { locale: ptBR })}</p><p className="text-xs text-muted-foreground">{format(new Date(order.created_at), "HH:mm", { locale: ptBR })}</p></CarboTableCell>
                         <CarboTableCell className="text-center"><div className="flex flex-col items-center"><span className="font-bold text-lg">{order.qty}</span><span className="text-xs text-muted-foreground">{order.items} {order.items === 1 ? "item" : "itens"}</span></div></CarboTableCell>
                         <CarboTableCell><span className="font-medium">{fmtBRL(order.total)}</span></CarboTableCell>
-                        <CarboTableCell><CarboBadge variant={STATUS_VARIANTS[order.status]} dot>{ORDER_STATUS_LABELS[order.status]}</CarboBadge></CarboTableCell>
+                        <CarboTableCell>
+                          {order.soServico && order.status !== "cancelled" ? (
+                            <div className="space-y-0.5">
+                              {order.osStage ? (
+                                <CarboBadge variant={OS_STAGE_LABEL[order.osStage]?.variant ?? "secondary"} dot>
+                                  {OS_STAGE_LABEL[order.osStage]?.label ?? order.osStage}
+                                </CarboBadge>
+                              ) : (
+                                <CarboBadge variant="destructive" dot>Sem OS</CarboBadge>
+                              )}
+                              {order.osVagas > 0 && (
+                                <p className="text-[10px] text-muted-foreground">
+                                  {order.osComPlaca}/{order.osVagas} veículo(s)
+                                </p>
+                              )}
+                            </div>
+                          ) : (
+                            <CarboBadge variant={STATUS_VARIANTS[order.status]} dot>{ORDER_STATUS_LABELS[order.status]}</CarboBadge>
+                          )}
+                        </CarboTableCell>
                         {canManageOrders && <CarboTableCell><button onClick={(e) => { e.stopPropagation(); setDetailId(order.id); }} className="p-2 hover:bg-muted rounded-md transition-colors" title="Ver detalhes"><Pencil className="h-4 w-4" /></button></CarboTableCell>}
                         <CarboTableCell><ChevronRight className="h-4 w-4 text-muted-foreground" /></CarboTableCell>
                       </CarboTableRow>

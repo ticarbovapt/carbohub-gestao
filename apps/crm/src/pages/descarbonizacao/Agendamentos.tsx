@@ -15,6 +15,10 @@ const TIPO_COLOR: Record<string, string> = { b2c: "#10b981", b2b: "#3b82f6", fro
 const osLabel = (o: OSRow) =>
   o.titulo?.trim() || o.cliente_nome?.trim() || `OS-${o.id.slice(0, 8)}`;
 
+// "5P · 3M · 1G" — quantos carros e de que porte naquele dia.
+const portesLabel = (p: Record<string, number>) =>
+  ["P", "M", "G", "—"].filter((k) => p[k]).map((k) => `${p[k]}${k === "—" ? "" : k}`).join(" · ");
+
 export default function Agendamentos() {
   const [createOpen, setCreateOpen] = useState(false);
   const [ref, setRef] = useState(() => new Date());
@@ -38,12 +42,12 @@ export default function Agendamentos() {
 
   // Eventos do mês exibido, indexados por dia
   const eventsByDay = useMemo(() => {
-    const map: Record<number, { label: string; color: string }[]> = {};
+    const map: Record<number, { label: string; color: string; vagas: number }[]> = {};
     for (const o of agendadas) {
       const d = new Date(o.data_prevista!);
       if (d.getFullYear() !== year || d.getMonth() !== month) continue;
       const day = d.getDate();
-      (map[day] ??= []).push({ label: osLabel(o), color: TIPO_COLOR[o.tipo] ?? "#8b5cf6" });
+      (map[day] ??= []).push({ label: osLabel(o), color: TIPO_COLOR[o.tipo] ?? "#8b5cf6", vagas: o.vagas });
     }
     return map;
   }, [agendadas, year, month]);
@@ -90,7 +94,11 @@ export default function Agendamentos() {
                         <p className="text-xs text-muted-foreground mb-1">{d}</p>
                         <div className="space-y-0.5">
                           {(eventsByDay[d] ?? []).map((e, j) => (
-                            <div key={j} className="text-[9px] truncate rounded px-1 py-0.5 font-medium" style={{ background: e.color + "20", color: e.color }} title={e.label}>{e.label}</div>
+                            <div key={j} className="text-[9px] truncate rounded px-1 py-0.5 font-medium"
+                              style={{ background: e.color + "20", color: e.color }}
+                              title={`${e.label}${e.vagas > 0 ? ` — ${e.vagas} veículo(s)` : ""}`}>
+                              {e.vagas > 1 ? `${e.vagas}× ` : ""}{e.label}
+                            </div>
                           ))}
                         </div>
                       </>
@@ -115,7 +123,16 @@ export default function Agendamentos() {
                       <div key={o.id} className="rounded-lg border p-2.5">
                         <p className="text-xs font-semibold text-muted-foreground">{d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })}</p>
                         <p className="text-sm font-medium leading-tight mt-0.5">{osLabel(o)}</p>
-                        <p className="text-[10px] text-muted-foreground mt-0.5">Descarbonização · {TIPO_LABEL[o.tipo] ?? o.tipo}</p>
+                        <p className="text-[10px] text-muted-foreground mt-0.5">
+                          {TIPO_LABEL[o.tipo] ?? o.tipo}
+                          {o.vagas > 0 && <> · <strong className="text-foreground">{o.vagas} veículo(s)</strong></>}
+                        </p>
+                        {o.vagas > 0 && portesLabel(o.portes) && (
+                          <p className="text-[10px] text-muted-foreground">{portesLabel(o.portes)}</p>
+                        )}
+                        {o.saleOrderNumber && (
+                          <p className="text-[10px] text-muted-foreground font-mono mt-0.5">{o.saleOrderNumber}</p>
+                        )}
                       </div>
                     );
                   })}
@@ -125,7 +142,10 @@ export default function Agendamentos() {
           </CarboCard>
         </div>
         )}
-        <p className="text-xs text-muted-foreground text-center">{agendadas.length} agendamento(s) com data prevista.</p>
+        <p className="text-xs text-muted-foreground text-center">
+          {agendadas.length} agendamento(s) com data prevista ·{" "}
+          {agendadas.reduce((n, o) => n + o.vagas, 0)} veículo(s) para executar.
+        </p>
       </div>
 
       <NovaDescarbonizacaoDialog open={createOpen} onOpenChange={setCreateOpen} />

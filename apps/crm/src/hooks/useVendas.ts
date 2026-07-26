@@ -46,7 +46,7 @@ export interface NovaVendaInput {
   form_snapshot?: unknown;   // snapshot do formulário (JSON) p/ reabrir/editar fielmente
 }
 
-export interface VendaItemRow { produto: string | null; quantidade: number; preco_unitario: number; bonificacao: number; }
+export interface VendaItemRow { produto: string | null; quantidade: number; preco_unitario: number; bonificacao: number; kind?: string | null; }
 
 export interface VendaRow {
   id: string; numero: string | null; vendedor_id: string; tipo: VendaTipo; status: VendaStatus;
@@ -54,6 +54,10 @@ export interface VendaRow {
   is_licenciado: boolean; endereco: Record<string, unknown> | null; endereco_faturamento: Record<string, unknown> | null;
   payment_terms: string | null; freight_type: string | null; total: number; notes: string | null;
   sale_date: string | null; extra: Record<string, unknown> | null; created_at: string; updated_at: string; itens?: VendaItemRow[];
+  /** Pedido 100% descarbonização: não tem NF, nem produção, nem expedição. */
+  so_servico: boolean;
+  /** OS de descarbonização vinculada (fase 2/3). */
+  descarb_os_id: string | null;
 }
 
 export interface UpdateVendaInput {
@@ -91,7 +95,12 @@ function toVenda(row: any): VendaRow {
       quantidade: Number(i.quantity ?? i.quantidade ?? 0),
       preco_unitario: Number(i.unit_price ?? i.preco_unitario ?? 0),
       bonificacao: Number(i.bonificacao ?? 0),
+      kind: i.kind ?? null,
     })),
+    // Só serviço = todo item é descarbonização. Esse pedido nunca vai ser
+    // faturado nem expedido, então o vocabulário de logística não se aplica.
+    so_servico: items.length > 0 && items.every((i: any) => i?.kind === "service"),
+    descarb_os_id: row.descarb_os_id ?? null,
   };
 }
 
