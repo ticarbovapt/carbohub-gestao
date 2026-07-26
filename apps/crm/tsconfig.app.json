@@ -36,9 +36,11 @@
     "skipLibCheck": true,
     "strict": false,
     "target": "ES2020",
-    "types": [
-      "vitest/globals"
-    ],
+    // "vitest/globals" saiu daqui: o vitest não é dependência do app e não há
+    // nenhum teste. Com ele, `tsc` falhava logo na entrada — o que fazia o
+    // typecheck simplesmente nunca rodar, e um `user` inexistente foi para
+    // produção sem ninguém ver. `vite build` NÃO typechecka: ele remove os
+    // tipos com esbuild.
     "useDefineForClassFields": true
   },
   "include": [
