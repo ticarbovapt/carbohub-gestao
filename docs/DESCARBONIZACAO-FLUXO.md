@@ -36,6 +36,7 @@ Detalhe de cada fase, com os passos individuais, na seção 4.
 | 2026-07-26 | 3 | /vender manda quantidade, bonificação e tipo de serviço | `f85e3ab` |
 | 2026-07-26 | 4 | Sales lê a OS: progresso, portes, elo e reconciliação | `f55e64c` |
 | 2026-07-26 | 5 | Execução parcial: vaga executada, OS fecha sozinha, saldo vira OS nova | `1e7dd1a` (lic.) |
+| 2026-07-26 | — | **D15**: OS nasce na fila (4 operações internas travavam toda venda) | `f66e3ba` (lic.) |
 
 ---
 
@@ -180,6 +181,17 @@ não. "Reflete ao vivo" hoje só vale num sentido.
 **D12 — Dupla contagem operacional.** `licenciados.services` (baixa de estoque)
 e `service_orders` (execução) se ligam por vínculo **opcional**. Existe OS
 executada sem `services` e `services` sem OS.
+
+**D15 — A venda NUNCA conseguiu criar OS.** (achado no teste ponta a ponta)
+`os_create` e `os_create_from_sale` tentavam adivinhar a operação interna e
+levantavam `'Há mais de uma operação interna. Selecione a loja da OS.'` quando
+havia mais de uma. Existem quatro (Carbox, PAP BA, PAP RN, PAP SP), então toda
+venda de descarbonização falhava — provavelmente desde o dia em que a segunda
+foi cadastrada. Os zero OS no banco confirmam. Ficou invisível porque o `catch`
+do `/vender` testava `e instanceof Error`, e o erro do Supabase não é: a causa
+era descartada e o toast dizia só "a OS NÃO foi criada.".
+**Corrigido:** a OS nasce sem operação, numa fila que o Carbox pega; e o toast
+passa a mostrar `message · details · hint (code)`.
 
 **D14 — Nada fechava a OS.** (achado na fase 5) `attach_os_to_service` movia
 para `em_execucao` no primeiro carro e parava; o único caminho para `concluida`
