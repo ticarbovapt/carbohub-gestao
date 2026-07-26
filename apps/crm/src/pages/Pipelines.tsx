@@ -366,6 +366,17 @@ export default function Pipelines() {
       setLostDialogLead(lead);
       return;
     }
+    // Mover para Orçamento passa a significar "PRECISA de orçamento": a coluna
+    // vira fila de trabalho legítima. Espera a mutation ANTES de abrir o card —
+    // navegar de dentro do drop desmontaria a árvore com a mutation em voo, e
+    // se ela falhasse depois do unmount o estágio no banco ficaria diferente do
+    // que o usuário viu, com o toast de erro órfão.
+    if (toStage === "orcamento") {
+      advanceLead.mutateAsync({ id: lead.id, newStage: toStage, funnelType: ft })
+        .then(() => { notifyMove(lead.stage, toStage, ft); setDrawerLead({ ...lead, stage: toStage }); })
+        .catch(() => { /* o onError da mutation já avisa e reverte */ });
+      return;
+    }
     advanceLead.mutate({ id: lead.id, newStage: toStage, funnelType: ft });
     notifyMove(lead.stage, toStage, ft);
   };

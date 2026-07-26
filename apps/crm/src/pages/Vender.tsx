@@ -25,6 +25,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { generateQuotePdf } from "@/lib/quotePdf";
 import { useCreateVenda, useUpdateVendaFull } from "@/hooks/useVendas";
 import { useConvertQuote } from "@/hooks/useCarbozeVendas";
+import { useVincularOrcamento } from "@/hooks/useLeadOrcamento";
 import { useProdutos } from "@/hooks/useProdutos";
 import { useCreateOSFromSale } from "@/hooks/useOS";
 import {
@@ -113,6 +114,7 @@ export default function Vender() {
   const createVenda = useCreateVenda();
   const updateVenda = useUpdateVendaFull();
   const convertQuote = useConvertQuote();
+  const vincular = useVincularOrcamento();
   const createOSFromSale = useCreateOSFromSale();
   const [searchParams] = useSearchParams();
   const editId = searchParams.get("edit");
@@ -218,10 +220,16 @@ export default function Vender() {
   }, [pagModalidade, pagParcelas, pagFaturamento]);
   const pagamentoValido = pagModalidade !== "" && !(pagModalidade === "boleto_faturado" && !pagFaturamento.trim());
 
+  // Id do lead de origem. O CRM JÁ mandava isto no state e o tipo inline não
+  // declarava `id` — então o efeito nunca lia, e metade do elo era descartada
+  // em silêncio. Guardado em estado para sobreviver ao salvar.
+  const [leadOrigemId, setLeadOrigemId] = useState<string | null>(null);
+
   // Prefill quando vem de um lead (Tunnel do CRM). Não acopla — venda direta segue normal.
   useEffect(() => {
-    const fl = (location.state as { fromLead?: { name?: string; cnpj?: string; phone?: string; email?: string; city?: string; state?: string; address?: string; bairro?: string } } | null)?.fromLead;
+    const fl = (location.state as { fromLead?: { id?: string; name?: string; cnpj?: string; phone?: string; email?: string; city?: string; state?: string; address?: string; bairro?: string } } | null)?.fromLead;
     if (!fl) return;
+    if (fl.id) setLeadOrigemId(fl.id);
     if (fl.name) setCustomerName(fl.name);
     if (fl.cnpj) setDoc(fl.cnpj);
     if (fl.phone) setPhone(fl.phone);
@@ -597,9 +605,15 @@ export default function Vender() {
       // 1) Salva/atualiza o orçamento — no create o banco atribui o número (atômico);
       //    na edição mantém o mesmo número (nova verdade).
       const payload = buildPayload("orcamento");
-      const { numero } = editId
+      const salvo = editId
         ? await updateVenda.mutateAsync({ id: editId, input: payload })
         : await createVenda.mutateAsync(payload);
+      const { numero } = salvo;
+      // 1b) Amarra ao card do CRM que originou. É o que permite reabrir este
+      //     mesmo orçamento quando o closer mover o card para Ganho, em vez de
+      //     redigitar tudo.
+      const idSalvo = editId ?? (salvo as { id?: string }).id;
+      if (leadOrigemId && idSalvo) vincular.mutate({ leadId: leadOrigemId, orderId: idSalvo });
       // 2) Gera o PDF já com o número do pedido (orçamento fica atrelado a ele).
       await generateQuotePdf({
         order_number: numero ?? undefined,
@@ -726,10 +740,12 @@ export default function Vender() {
         await updateVenda.mutateAsync({ id: editId, input: buildPayload("orcamento") });
         await convertQuote.mutateAsync(editId);
         toast.success("Orçamento editado e convertido em venda!");
+        if (leadOrigemId) vincular.mutate({ leadId: leadOrigemId, orderId: editId });
         if (!editOrder?.descarb_os_id) await createDescarbOSForSale(editId, editOrder?.order_number ?? null);
       } else {
         const created = await createVenda.mutateAsync(buildPayload("pedido"));
         toast.success(`Venda ${created.numero ?? ""} registrada!`);
+        if (leadOrigemId) vincular.mutate({ leadId: leadOrigemId, orderId: created.id });
         await createDescarbOSForSale(created.id, created.numero);
       }
       resetForm();

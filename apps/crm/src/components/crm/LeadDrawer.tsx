@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { ProfileAvatar } from "@/components/ui/profile-avatar";
 import type { CRMLead, FunnelType } from "@/types/crm";
-import { FUNNEL_CONFIG, getCloseReasons, getDaysSinceUpdate, getNextStage, isTerminalStage, isHandoffStage, sourceLabel } from "@/types/crm";
+import { FUNNEL_CONFIG, getCloseReasons, getDaysSinceUpdate, getNextStage, isTerminalStage, isHandoffStage, isWonStage, sourceLabel } from "@/types/crm";
 import { useAdvanceLeadStage, useMarkLeadLost, useTransferLead, useLeadOwnerLog, useLeadActivities, useAddLeadActivity } from "@/hooks/useCRMLeads";
 import { useArquivarLead } from "@/hooks/useArquivarLead";
 import { useVendedoresDir } from "@/hooks/useVendas";
@@ -161,7 +161,9 @@ export function LeadDrawer({ lead, funnelType, onClose }: LeadDrawerProps) {
           </div>
 
           {/* Tunnel → Vendas (lead ganho vira venda; atalho opcional) */}
-          {lead.stage === "ganho" && (
+          {/* Antes exigia stage === "ganho", e o id do Ganho no funil ativo
+              (f13) é "convertido" — o botão nunca aparecia. */}
+          {isWonStage(lead.stage) && (
             <Button className="w-full gap-1.5 bg-carbo-green hover:bg-carbo-green/90 text-white" onClick={handleGerarVenda}>
               <ShoppingCart className="h-4 w-4" /> Gerar venda deste lead
             </Button>

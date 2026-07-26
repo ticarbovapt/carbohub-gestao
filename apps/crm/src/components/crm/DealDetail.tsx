@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import {
   X, ChevronRight, ArrowRightLeft, ShoppingCart, History,
   StickyNote, Phone, CheckSquare, Clock, GitBranch, AlertTriangle, Pin, PinOff, Archive, Hourglass,
+  FileText,
   MessageSquare, ArrowRight, Pencil,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -12,7 +13,7 @@ import { ProfileAvatar } from "@/components/ui/profile-avatar";
 import type { CRMLead, FunnelType } from "@/types/crm";
 import {
   FUNNEL_CONFIG, getCloseReasons, getStagesForFunnel, getNextStage, getLostStage,
-  isTerminalStage, isHandoffStage, getDaysSinceUpdate, SEGMENTS, segmentOf,
+  isTerminalStage, isHandoffStage, isWonStage, getDaysSinceUpdate, SEGMENTS, segmentOf,
   stageLabelAnywhere, sourceLabel, WAITING_OPTIONS, waitingLabel, esperaVencida,
 } from "@/types/crm";
 
@@ -23,6 +24,7 @@ import {
 } from "@/hooks/useCRMLeads";
 import { useArquivarLead } from "@/hooks/useArquivarLead";
 import { useRepassarLead, usePegarLead } from "@/hooks/useRepasse";
+import { useOrcamentoVigente } from "@/hooks/useLeadOrcamento";
 import { useVendedoresDir } from "@/hooks/useVendas";
 import { useAuth } from "@/contexts/AuthContext";
 import { StageProgressBar, getStageGroup } from "./StageProgressBar";
@@ -86,6 +88,7 @@ export function DealDetail({ lead, funnelType, onClose }: DealDetailProps) {
   const { data: activities = [] } = useLeadActivities(lead.id);
   const { data: dir = [] } = useVendedoresDir();
   const { data: ownerLog = [] } = useLeadOwnerLog(lead.id);
+  const { data: orcamento } = useOrcamentoVigente(lead.id);
 
   // Etapa local (otimista): a barra e o cabeçalho refletem a mudança sem depender
   // do drawerLead (snapshot) do pai. As atividades vêm por invalidação de query.
@@ -284,6 +287,16 @@ export function DealDetail({ lead, funnelType, onClose }: DealDetailProps) {
     onClose();
   }
 
+  // Reabre o orçamento vigente já preenchido. `?edit=` só é oferecido para
+  // orçamento de verdade — a RPC filtra por status = 'quote' porque o modo de
+  // edição do /vender não valida status, e reabrir um pedido já convertido e
+  // salvar o rebaixaria de volta a orçamento.
+  function abrirOrcamento() {
+    if (!orcamento) return;
+    navigate(`/vender?edit=${orcamento.order_id}`, { state: { fromLead: { id: lead.id } } });
+    onClose();
+  }
+
   const contactCity = [lead.city, lead.state].filter(Boolean).join(" / ") || null;
   const docDigits = (lead.cnpj || "").replace(/\D/g, "");
   const docLabel = docDigits.length > 0 && docDigits.length <= 11 ? "CPF" : "CNPJ";
@@ -449,10 +462,42 @@ export function DealDetail({ lead, funnelType, onClose }: DealDetailProps) {
               </div>
             )}
 
-            {stage === "ganho" && (
-              <Button className="w-full gap-1.5 bg-carbo-green hover:bg-carbo-green/90 text-white" onClick={handleGerarVenda}>
-                <ShoppingCart className="h-4 w-4" /> Gerar venda deste lead
-              </Button>
+            {/* BLOCO DO ORÇAMENTO — o elo com o /vender.
+                Antes este botão exigia stage === "ganho", e o id do Ganho no
+                funil ativo (f13) é "convertido": ele NUNCA aparecia. Agora usa
+                isWonStage, que vale para os dois. */}
+            {(isWonStage(stage) || stage === "orcamento" || orcamento) && (
+              <div className="rounded-lg border border-border p-3 space-y-2">
+                <p className="flex items-center gap-1.5 text-xs font-medium">
+                  <FileText className="h-3.5 w-3.5" /> Orçamento
+                </p>
+
+                {orcamento ? (
+                  <>
+                    <p className="text-sm">
+                      <strong>{orcamento.order_number ?? "sem número"}</strong> · {brl(orcamento.total)}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {isWonStage(stage)
+                        ? "Reabra preenchido para virar venda — sem redigitar nada."
+                        : "Já montado e ligado a este card."}
+                    </p>
+                    <Button size="sm" className="w-full gap-1.5" onClick={abrirOrcamento}>
+                      <ShoppingCart className="h-4 w-4" />
+                      {isWonStage(stage) ? "Reabrir e gerar a venda" : "Abrir orçamento"}
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-xs text-muted-foreground">
+                      Nenhum orçamento montado para este card ainda.
+                    </p>
+                    <Button size="sm" className="w-full gap-1.5" onClick={handleGerarVenda}>
+                      <ShoppingCart className="h-4 w-4" /> Montar orçamento
+                    </Button>
+                  </>
+                )}
+              </div>
             )}
 
             <Card title="Sobre o negócio">
