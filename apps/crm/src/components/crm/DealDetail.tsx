@@ -12,7 +12,8 @@ import { ProfileAvatar } from "@/components/ui/profile-avatar";
 import type { CRMLead, FunnelType } from "@/types/crm";
 import {
   FUNNEL_CONFIG, getCloseReasons, getStagesForFunnel, getNextStage, getLostStage,
-  isTerminalStage, getDaysSinceUpdate, SEGMENTS, segmentOf, stageLabelAnywhere, sourceLabel,
+  isTerminalStage, isHandoffStage, getDaysSinceUpdate, SEGMENTS, segmentOf,
+  stageLabelAnywhere, sourceLabel,
 } from "@/types/crm";
 import {
   useAdvanceLeadStage, useMarkLeadLost, useTransferLead, useLeadOwnerLog,
@@ -20,6 +21,7 @@ import {
   useToggleActivityPin, type LeadActivity,
 } from "@/hooks/useCRMLeads";
 import { useArquivarLead } from "@/hooks/useArquivarLead";
+import { useRepassarLead, usePegarLead } from "@/hooks/useRepasse";
 import { useVendedoresDir } from "@/hooks/useVendas";
 import { useAuth } from "@/contexts/AuthContext";
 import { StageProgressBar, getStageGroup } from "./StageProgressBar";
@@ -66,6 +68,8 @@ export function DealDetail({ lead, funnelType, onClose }: DealDetailProps) {
   const markLost = useMarkLeadLost();
   const transfer = useTransferLead();
   const arquivar = useArquivarLead();
+  const repassar = useRepassarLead();
+  const pegar = usePegarLead();
   const addActivity = useAddLeadActivity();
   const updateLead = useUpdateCRMLead();
   const togglePin = useToggleActivityPin();
@@ -80,6 +84,8 @@ export function DealDetail({ lead, funnelType, onClose }: DealDetailProps) {
   useEffect(() => { setStage(lead.stage); }, [lead.id, lead.stage]);
 
   const [showLostForm, setShowLostForm] = useState(false);
+  const [showRepasse, setShowRepasse] = useState(false);
+  const [repasseNota, setRepasseNota] = useState("");
   // Vazio de propósito — vinha pré-marcado no primeiro item ("Preço").
   const [lostReason, setLostReason] = useState("");
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -184,6 +190,8 @@ export function DealDetail({ lead, funnelType, onClose }: DealDetailProps) {
       setShowLostForm(true);
       return;
     }
+    // Repassar cria um card no Inbound — não é um avanço de etapa comum.
+    if (isHandoffStage(target.id)) { setShowRepasse(true); return; }
     await advance.mutateAsync({ id: lead.id, newStage: target.id, funnelType });
     setStage(target.id);
   }
@@ -303,6 +311,23 @@ export function DealDetail({ lead, funnelType, onClose }: DealDetailProps) {
         <div className="flex flex-1 flex-col overflow-hidden lg:flex-row">
           {/* Esquerda — campos (~40%) */}
           <div className="w-full space-y-4 overflow-y-auto border-b p-5 lg:w-2/5 lg:border-b-0 lg:border-r">
+            {/* Card que chegou por repasse e ainda não tem dono: fila aberta. */}
+            {lead.origin_lead_id && !lead.assigned_to && (
+              <div className="rounded-lg border border-primary/40 bg-primary/5 p-3 space-y-2">
+                <p className="flex items-center gap-1.5 text-sm font-medium">
+                  <ArrowRight className="h-4 w-4 text-primary" /> Veio do Outbound, sem dono
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Todo o histórico abaixo foi herdado do card do SDR. Assuma para começar a
+                  trabalhar — enquanto ninguém pegar, ele fica visível para todos.
+                </p>
+                <Button size="sm" className="w-full" disabled={pegar.isPending}
+                  onClick={() => pegar.mutate(lead.id)}>
+                  {pegar.isPending ? "Assumindo…" : "Pegar este card"}
+                </Button>
+              </div>
+            )}
+
             {stage === "ganho" && (
               <Button className="w-full gap-1.5 bg-carbo-green hover:bg-carbo-green/90 text-white" onClick={handleGerarVenda}>
                 <ShoppingCart className="h-4 w-4" /> Gerar venda deste lead
@@ -565,6 +590,44 @@ export function DealDetail({ lead, funnelType, onClose }: DealDetailProps) {
             )}
           </DialogFooter>
         )}
+
+        {/* Passar ao closer — cria o card no Inbound com a timeline junto */}
+        <Dialog open={showRepasse} onOpenChange={setShowRepasse}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>Passar ao closer</DialogTitle>
+              <DialogDescription>
+                Um card novo nasce no Inbound, na fila, com todo o histórico e os comentários
+                deste aqui. Este card fica em "Passado ao Closer" — conta como SQL entregue,
+                nunca como receita.
+              </DialogDescription>
+            </DialogHeader>
+            {faltamQual.length > 0 && (
+              <div className="rounded-lg border border-amber-500/40 bg-amber-500/5 p-2.5 flex items-start gap-2">
+                <AlertTriangle className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
+                <p className="text-xs">
+                  Falta <strong>{faltamQual.join(", ")}</strong> na qualificação. Dá para repassar
+                  assim mesmo, mas o closer recebe o card sem isso.
+                </p>
+              </div>
+            )}
+            <textarea
+              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm resize-y min-h-[64px] focus:outline-none focus:ring-2 focus:ring-ring"
+              placeholder="Recado ao closer (opcional)"
+              value={repasseNota} onChange={(e) => setRepasseNota(e.target.value)}
+            />
+            <DialogFooter className="gap-2">
+              <Button variant="outline" onClick={() => setShowRepasse(false)}>Cancelar</Button>
+              <Button disabled={repassar.isPending} onClick={async () => {
+                await repassar.mutateAsync({ id: lead.id, nota: repasseNota.trim() || undefined });
+                setShowRepasse(false);
+                setStage("repassado");
+              }}>
+                {repassar.isPending ? "Repassando…" : "Passar ao closer"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
         {/* Confirmação de exclusão */}
         <Dialog open={confirmDelete} onOpenChange={setConfirmDelete}>

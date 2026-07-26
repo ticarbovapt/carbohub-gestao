@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/dialog";
 import { Plus, Users, TrendingUp, AlertTriangle, Flame, LayoutGrid, List, KanbanSquare } from "lucide-react";
 import { useCRMLeads, useAllCRMLeads, useCRMStats, useAdvanceLeadStage, useMarkLeadLost, useCRMLeadsRealtime } from "@/hooks/useCRMLeads";
+import { useRepassarLead } from "@/hooks/useRepasse";
 import { useVendedoresDir } from "@/hooks/useVendas";
 import { useAuth } from "@/contexts/AuthContext";
 import { KanbanBoard } from "@/components/crm/KanbanBoard";
@@ -21,7 +22,7 @@ import { LeadForm } from "@/components/crm/LeadForm";
 import { DealDetail } from "@/components/crm/DealDetail";
 import {
   FUNNEL_CONFIG, getStagesForFunnel, getNextStage, getCloseReasons,
-  WON_STAGES, LOST_STAGES, HANDOFF_STAGES, isLostStage,
+  WON_STAGES, LOST_STAGES, HANDOFF_STAGES, isLostStage, isHandoffStage,
 } from "@/types/crm";
 import type { FunnelType, CRMLead } from "@/types/crm";
 import { toast } from "sonner";
@@ -170,6 +171,8 @@ export default function Pipelines() {
   // da lista — e quem só clicava em "Confirmar" gravava Preço sem ter escolhido.
   // A base de motivos de perda estava sendo fabricada por inércia de clique.
   const [lostReason, setLostReason] = useState<string>("");
+  const [repasseLead, setRepasseLead] = useState<CRMLead | null>(null);
+  const [repasseNota, setRepasseNota] = useState("");
   const [drawerLead, setDrawerLead] = useState<CRMLead | null>(null);
   const [viewMode, setViewMode] = useState<"kanban" | "list">("kanban");
   const [vendedorFilter, setVendedorFilter] = useState("all");
@@ -211,6 +214,7 @@ export default function Pipelines() {
   useCRMLeadsRealtime(); // board ao vivo (ver os vendedores movimentando os cards)
   const advanceLead = useAdvanceLeadStage();
   const markLost = useMarkLeadLost();
+  const repassar = useRepassarLead();
   const stages = getStagesForFunnel(ft);
 
   const baseLeads = isAll ? allLeads : funnelLeads;
@@ -276,6 +280,21 @@ export default function Pipelines() {
     toast.success("Card movido", { description: `${nameOf(fromId)}  →  ${nameOf(toId)}` });
   };
 
+  const confirmRepasse = () => {
+    if (!repasseLead) return;
+    repassar.mutate({ id: repasseLead.id, nota: repasseNota.trim() || undefined });
+    setRepasseLead(null);
+  };
+  // Falta de qualificação não BLOQUEIA o repasse — o time ainda está se
+  // formando e travar o fluxo por campo vazio seria pior que avisar. Mas o SDR
+  // vê exatamente o que o closer NÃO vai receber.
+  const faltaNoRepasse = repasseLead ? ([
+    !repasseLead.qual_volume  && "volume",
+    !repasseLead.qual_dor     && "dor",
+    !repasseLead.qual_decisor && "decisor",
+    !repasseLead.qual_prazo   && "prazo",
+  ].filter(Boolean) as string[]) : [];
+
   const handleAdvance = (lead: CRMLead) => {
     const next = getNextStage(ft, lead.stage);
     if (next) { advanceLead.mutate({ id: lead.id, newStage: next, funnelType: ft }); notifyMove(lead.stage, next, ft); }
@@ -287,6 +306,9 @@ export default function Pipelines() {
     if (next) { advanceLead.mutate({ id: lead.id, newStage: next, funnelType: lf }); notifyMove(lead.stage, next, lf); }
   };
   const handleDragMove = (lead: CRMLead, toStage: string) => {
+    // Repassar não é mover: cria um card no Inbound com toda a timeline junto.
+    // Por isso passa por um diálogo, e não pelo advance normal.
+    if (isHandoffStage(toStage)) { setRepasseNota(""); setRepasseLead(lead); return; }
     // Soltar na coluna de perda abre o diálogo de motivo em vez de mover direto.
     // Antes o card ia para "Perdido" sem motivo nenhum — e o motivo é justamente
     // o dado que diz se a prospecção está errada ou se o produto é que não serve.
@@ -470,6 +492,42 @@ export default function Pipelines() {
 
       {isFormOpen && <LeadForm funnelType={ft} initialStage={isAll ? undefined : formStage} onClose={() => setIsFormOpen(false)} />}
       {liveDrawerLead && <DealDetail lead={liveDrawerLead} funnelType={liveDrawerLead.funnel_type as FunnelType} onClose={() => setDrawerLead(null)} />}
+
+      <Dialog open={!!repasseLead} onOpenChange={(o) => { if (!o) setRepasseLead(null); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader><DialogTitle>Passar ao closer</DialogTitle></DialogHeader>
+          <div className="py-2 space-y-3">
+            <p className="text-sm text-muted-foreground">
+              Um card novo nasce no <strong>Inbound</strong>, na fila, com todo o histórico e os
+              comentários deste aqui. O seu card fica em "Passado ao Closer" — ele conta como
+              SQL entregue, nunca como receita.
+            </p>
+            {faltaNoRepasse.length > 0 && (
+              <div className="rounded-lg border border-amber-500/40 bg-amber-500/5 p-2.5 flex items-start gap-2">
+                <AlertTriangle className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
+                <p className="text-xs">
+                  Falta <strong>{faltaNoRepasse.join(", ")}</strong> na qualificação. Dá para
+                  repassar assim mesmo, mas o closer vai receber o card sem isso.
+                </p>
+              </div>
+            )}
+            <div className="space-y-1">
+              <p className="text-xs font-medium text-muted-foreground">Recado ao closer (opcional)</p>
+              <textarea
+                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm resize-y min-h-[64px] focus:outline-none focus:ring-2 focus:ring-ring"
+                placeholder="ex.: prefere ser chamado à tarde; já conhece o produto pelo primo"
+                value={repasseNota} onChange={(e) => setRepasseNota(e.target.value)}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRepasseLead(null)}>Cancelar</Button>
+            <Button onClick={confirmRepasse} disabled={repassar.isPending}>
+              {repassar.isPending ? "Repassando…" : "Passar ao closer"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={!!lostDialogLead} onOpenChange={(o) => { if (!o) setLostDialogLead(null); }}>
         <DialogContent className="sm:max-w-sm">

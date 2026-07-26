@@ -26,7 +26,7 @@ Todo achado abaixo foi verificado direto no código antes de entrar aqui.
 | **4** | 🆕 **Tela de acompanhamento (gestor)** | gerir a operação — e a linha de base antes de mexer no funil | ✅ no **Admin** (`/acompanhamento`) |
 | **5** | O cadastro do SDR | origem limpa + campos de qualificação | ✅ |
 | **6** | Coluna `nutricao` no Outbound | a rotina diária do SDR | ✅ |
-| **7** | Duplicação Outbound → Inbound | o handoff do SDR | ⬜ |
+| **7** | Duplicação Outbound → Inbound | o handoff do SDR | 🟡 código no ar, **SQL pendente** |
 | **8** | Colunas do Inbound (`orcamento`, `formalizacao`) | o funil do closer | ⬜ |
 | **9** | Flag `waiting_on` — o "parado" | separa "aguardando" de "esquecido" na tela | ⬜ |
 | **10** | Elo card ↔ orçamento (`/vender`) + B5, B6 | "o sistema todo se conversar" | ⬜ |
@@ -657,8 +657,11 @@ segundo está bloqueado por credenciais e por uma instância de Chatwoot que
 
 ## 8. Decisões que dependem de você
 
-1. **A cópia é atribuída a quem?** Não existe "time de closers" no banco. Um
-   closer fixo? Rodízio? O SDR escolhe na hora de repassar?
+1. ~~**A cópia é atribuída a quem?**~~ **Respondido em 26/07: fila aberta, sem
+   dono.** O time ainda não foi contratado — vai ser 1 SDR e 1 closer, com a
+   ideia de que cada SDR tenha o seu. A cópia nasce sem `assigned_to` e o closer
+   **pega** o card, como na fila de OS da descarbonização. Quando o time existir,
+   muda-se só o `assigned_to` do INSERT.
 2. **O card do SDR conta o quê?** A proposta é "SQL entregue", nunca receita.
    Confirma?
 3. **9 colunas no Inbound é demais?** Se quiser 8, o corte é `contato` (funde em

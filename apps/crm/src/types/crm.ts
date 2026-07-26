@@ -55,6 +55,11 @@ export interface CRMLead {
   qual_dor: string | null;
   qual_decisor: string | null;
   qual_prazo: string | null;
+  // Vínculo do repasse Outbound → Inbound. Relatório de receita filtra por
+  // `origin_lead_id is null` para não contar o mesmo negócio duas vezes.
+  origin_lead_id: string | null;
+  origin_funnel_type: string | null;
+  assigned_to_nome?: string | null;
   tags: string[];
   custom_fields: Record<string, unknown>;
   created_by: string | null;
