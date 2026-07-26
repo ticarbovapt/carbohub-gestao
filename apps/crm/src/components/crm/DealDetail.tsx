@@ -19,7 +19,7 @@ import {
   useLeadActivities, useAddLeadActivity, useUpdateCRMLead,
   useToggleActivityPin, type LeadActivity,
 } from "@/hooks/useCRMLeads";
-import { useArquivarLead } from "@/hooks/useAcompanhamento";
+import { useArquivarLead } from "@/hooks/useArquivarLead";
 import { useVendedoresDir } from "@/hooks/useVendas";
 import { useAuth } from "@/contexts/AuthContext";
 import { StageProgressBar, getStageGroup } from "./StageProgressBar";

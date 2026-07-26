@@ -8,7 +8,7 @@ import { ProfileAvatar } from "@/components/ui/profile-avatar";
 import type { CRMLead, FunnelType } from "@/types/crm";
 import { FUNNEL_CONFIG, getCloseReasons, getDaysSinceUpdate, getNextStage, isTerminalStage } from "@/types/crm";
 import { useAdvanceLeadStage, useMarkLeadLost, useTransferLead, useLeadOwnerLog, useLeadActivities, useAddLeadActivity } from "@/hooks/useCRMLeads";
-import { useArquivarLead } from "@/hooks/useAcompanhamento";
+import { useArquivarLead } from "@/hooks/useArquivarLead";
 import { useVendedoresDir } from "@/hooks/useVendas";
 import { useAuth } from "@/contexts/AuthContext";
 

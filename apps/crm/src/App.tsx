@@ -9,7 +9,6 @@ import Vender from "./pages/Vender";
 import Chat from "./pages/Chat";
 import Pedidos from "./pages/Pedidos";
 import DashboardComercial from "./pages/DashboardComercial";
-import Acompanhamento from "./pages/Acompanhamento";
 import Vendas from "./pages/Vendas";
 import Metas from "./pages/Metas";
 import Profile from "./pages/Profile";
@@ -54,7 +53,6 @@ export default function App() {
         <Route path="/vendas" element={<Vendas />} />
         <Route path="/metas" element={<Metas />} />
         <Route path="/comercial" element={<DashboardComercial />} />
-        <Route path="/acompanhamento" element={<RequireGestor><Acompanhamento /></RequireGestor>} />
         {/* Descarbonização — acompanhamento (pra onde o "+ Nova Descarbonização" leva) */}
         <Route path="/descarbonizacao/os" element={<DescOrdensServico />} />
         <Route path="/descarbonizacao/agendamentos" element={<DescAgendamentos />} />

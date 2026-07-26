@@ -68,6 +68,7 @@ export function Layout() {
     ] },
     { label: "Auditoria", items: [
         { to: "/auditoria", label: "Central de Auditoria", icon: ShieldCheck },
+        { to: "/acompanhamento", label: "Acompanhamento Comercial", icon: Gauge },
         { to: "/ultimo-acesso", label: "Último acesso", icon: Activity },
         { to: "/chat/adocao", label: "Adoção do Carbo Chat", icon: Gauge },
     ] },

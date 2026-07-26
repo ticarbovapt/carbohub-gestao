@@ -1,10 +1,9 @@
 import { useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import {
   ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
 } from "recharts";
 import {
-  AlertTriangle, Activity, UserPlus, Trophy, XCircle, Clock, Settings2, Info, ArrowRight,
+  AlertTriangle, Activity, UserPlus, Trophy, XCircle, Clock, Settings2, Info, ExternalLink,
 } from "lucide-react";
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
 import { CarboCard, CarboCardContent } from "@/components/ui/carbo-card";
@@ -18,8 +17,8 @@ import {
   useAcompanhamento, useStageSlas, useSaveStageSla,
   TRILHA_INICIO, DIAS_SUBCONTADOS,
 } from "@/hooks/useAcompanhamento";
-import { useVendedoresDir } from "@/hooks/useVendas";
-import { FUNNEL_CONFIG, stageLabelAnywhere, type FunnelType } from "@/types/crm";
+import { useVendedoresDir } from "@/hooks/useVendedoresDir";
+import { funilNome, etapaNome } from "@/lib/funis";
 
 const PERIODOS = [
   { dias: 7, label: "7 dias" },
@@ -36,7 +35,6 @@ const brDate = (s: string) => {
 };
 
 export default function Acompanhamento() {
-  const navigate = useNavigate();
   const [dias, setDias] = useState(30);
   const [slaAberto, setSlaAberto] = useState(false);
 
@@ -237,9 +235,9 @@ export default function Acompanhamento() {
                           <tr key={`${e.funnel_type}-${e.stage}`} className="border-b last:border-0">
                             <td className="py-1.5">
                               <span className="text-muted-foreground">
-                                {FUNNEL_CONFIG[e.funnel_type as FunnelType]?.shortName ?? e.funnel_type}
+                                {funilNome(e.funnel_type)}
                               </span>{" · "}
-                              {stageLabelAnywhere(e.stage, e.funnel_type as FunnelType)}
+                              {etapaNome(e.stage)}
                             </td>
                             <td className="text-right tabular-nums">{e.leads}</td>
                             <td className="text-right tabular-nums font-semibold"
@@ -270,7 +268,7 @@ export default function Acompanhamento() {
                     <span key={`${m.funnel_type}-${m.motivo}`}
                       className="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs">
                       <span className="text-muted-foreground">
-                        {FUNNEL_CONFIG[m.funnel_type as FunnelType]?.shortName ?? m.funnel_type}
+                        {funilNome(m.funnel_type)}
                       </span>
                       {m.motivo}
                       <span className="font-bold tabular-nums">{m.n}</span>
@@ -293,17 +291,19 @@ export default function Acompanhamento() {
               ) : (
                 <div className="divide-y">
                   {data.lista_esquecidos.map((l) => (
-                    <button
+                    <a
                       key={l.id}
-                      onClick={() => navigate(`/crm/pipelines?funil=${l.funnel_type}&lead=${l.id}`)}
+                      href={`https://sales.carbohub.com.br/crm/pipelines?funil=${l.funnel_type}&lead=${l.id}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
                       className="w-full flex items-center gap-3 py-2 text-left hover:bg-muted/50 rounded px-1"
                     >
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium truncate">{l.nome}</p>
                         <p className="text-xs text-muted-foreground">
-                          {FUNNEL_CONFIG[l.funnel_type as FunnelType]?.shortName ?? l.funnel_type}
+                          {funilNome(l.funnel_type)}
                           {" · "}
-                          {stageLabelAnywhere(l.stage, l.funnel_type as FunnelType)}
+                          {etapaNome(l.stage)}
                           {" · "}
                           {nomeDe(l.dono)}
                         </p>
@@ -314,8 +314,8 @@ export default function Acompanhamento() {
                         {l.dias_parado}d
                         <span className="text-muted-foreground font-normal">/ {l.prazo_dias}d</span>
                       </span>
-                      <ArrowRight className="h-4 w-4 text-muted-foreground shrink-0" />
-                    </button>
+                      <ExternalLink className="h-4 w-4 text-muted-foreground shrink-0" />
+                    </a>
                   ))}
                 </div>
               )}
@@ -386,7 +386,7 @@ function SlaDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
             {Object.entries(porFunil).map(([funil, itens]) => (
               <div key={funil}>
                 <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-1.5">
-                  {FUNNEL_CONFIG[funil as FunnelType]?.name ?? funil}
+                  {funilNome(funil)}
                 </p>
                 <div className="space-y-1.5">
                   {itens.map((s) => {
@@ -398,7 +398,7 @@ function SlaDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
                     return (
                       <div key={k} className="flex items-center gap-2">
                         <span className="flex-1 text-sm truncate">
-                          {stageLabelAnywhere(s.stage, s.funnel_type as FunnelType)}
+                          {etapaNome(s.stage)}
                         </span>
                         <Input
                           className="w-20 h-8 text-sm"

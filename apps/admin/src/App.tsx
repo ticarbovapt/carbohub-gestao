@@ -26,6 +26,7 @@ import DashboardsMetas from "./pages/DashboardsMetas";
 import DashboardsEstrategico from "./pages/DashboardsEstrategico";
 import Suprimentos from "./pages/Suprimentos";
 import Auditoria from "./pages/Auditoria";
+import Acompanhamento from "./pages/Acompanhamento";
 import Chat from "./pages/Chat";
 import ChatAdocao from "./pages/ChatAdocao";
 import CallTest from "./pages/CallTest";
@@ -59,6 +60,7 @@ export default function App() {
         <Route path="/vender" element={<Vender />} />
         <Route path="/ultimo-acesso" element={<UltimoAcesso />} />
         <Route path="/auditoria" element={<Auditoria />} />
+        <Route path="/acompanhamento" element={<Acompanhamento />} />
         <Route path="/chat" element={<Chat />} />
         <Route path="/chat/adocao" element={<ChatAdocao />} />
         <Route path="/call-test" element={<CallTest />} />
