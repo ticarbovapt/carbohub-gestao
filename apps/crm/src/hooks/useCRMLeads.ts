@@ -325,6 +325,18 @@ export function useAdvanceLeadStage() {
     mutationFn: async ({
       id, newStage,
     }: { id: string; newStage: string; funnelType: FunnelType }) => {
+      // Repassar NÃO é avançar etapa: cria um card no Inbound com a timeline
+      // junto (crm_sales_lead_repassar). Deixar passar por aqui move o card do
+      // SDR e não cria nada — foi exatamente o que aconteceu no primeiro teste,
+      // porque o botão "Avançar" não tinha o desvio que o arrastar tinha.
+      // A guarda fica no hook, e não só nas telas, para que nenhum caminho novo
+      // repita o erro em silêncio.
+      if (isHandoffStage(newStage)) {
+        throw new Error(
+          'Use "Passar ao closer" — repassar cria o card no Inbound, não é um avanço de etapa.',
+        );
+      }
+
       const updates: Record<string, unknown> = { stage: newStage };
 
       if (newStage === "tentativa_1") updates.contact_attempts = 1;

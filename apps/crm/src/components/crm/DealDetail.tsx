@@ -198,6 +198,7 @@ export function DealDetail({ lead, funnelType, onClose }: DealDetailProps) {
 
   async function handleAdvance() {
     if (!nextStage) return;
+    if (isHandoffStage(nextStage)) { setShowRepasse(true); return; }
     await advance.mutateAsync({ id: lead.id, newStage: nextStage, funnelType });
     setStage(nextStage);
   }

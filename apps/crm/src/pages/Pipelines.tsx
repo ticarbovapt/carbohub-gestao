@@ -297,13 +297,19 @@ export default function Pipelines() {
 
   const handleAdvance = (lead: CRMLead) => {
     const next = getNextStage(ft, lead.stage);
-    if (next) { advanceLead.mutate({ id: lead.id, newStage: next, funnelType: ft }); notifyMove(lead.stage, next, ft); }
+    if (!next) return;
+    if (isHandoffStage(next)) { setRepasseNota(""); setRepasseLead(lead); return; }
+    advanceLead.mutate({ id: lead.id, newStage: next, funnelType: ft });
+    notifyMove(lead.stage, next, ft);
   };
   // Na visão "Todos", cada card avança no SEU próprio funil (não no `ft` ativo).
   const handleAdvanceAny = (lead: CRMLead) => {
     const lf = lead.funnel_type as FunnelType;
     const next = getNextStage(lf, lead.stage);
-    if (next) { advanceLead.mutate({ id: lead.id, newStage: next, funnelType: lf }); notifyMove(lead.stage, next, lf); }
+    if (!next) return;
+    if (isHandoffStage(next)) { setRepasseNota(""); setRepasseLead(lead); return; }
+    advanceLead.mutate({ id: lead.id, newStage: next, funnelType: lf });
+    notifyMove(lead.stage, next, lf);
   };
   const handleDragMove = (lead: CRMLead, toStage: string) => {
     // Repassar não é mover: cria um card no Inbound com toda a timeline junto.

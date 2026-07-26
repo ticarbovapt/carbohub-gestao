@@ -9,7 +9,8 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useCRMLeads, useAdvanceLeadStage } from "@/hooks/useCRMLeads";
 import { can } from "@/lib/access";
 import type { CRMLead, FunnelType } from "@/types/crm";
-import { FUNNEL_CONFIG, getNextStage } from "@/types/crm";
+import { FUNNEL_CONFIG, isHandoffStage, getNextStage } from "@/types/crm";
+import { toast } from "sonner";
 
 const FUNNELS: FunnelType[] = ["f1", "f2", "f3", "f4", "f5", "f6", "f7", "f8", "f9"];
 
@@ -27,6 +28,15 @@ export default function Leads() {
   function handleAdvance(lead: CRMLead) {
     const next = getNextStage(funnel, lead.stage);
     if (!next) return;
+    // O repasse vive no board de Pipelines, onde está o diálogo com o recado ao
+    // closer e o aviso do que falta na qualificação. Aqui só aponta para lá, em
+    // vez de duplicar a tela.
+    if (isHandoffStage(next)) {
+      toast.info("Passe ao closer pelo board", {
+        description: "Abra o card em Pipelines — o repasse leva o histórico junto.",
+      });
+      return;
+    }
     advance.mutate({ id: lead.id, newStage: next, funnelType: funnel });
   }
 

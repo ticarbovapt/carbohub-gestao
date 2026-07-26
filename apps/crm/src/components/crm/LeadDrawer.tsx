@@ -6,11 +6,12 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { ProfileAvatar } from "@/components/ui/profile-avatar";
 import type { CRMLead, FunnelType } from "@/types/crm";
-import { FUNNEL_CONFIG, getCloseReasons, getDaysSinceUpdate, getNextStage, isTerminalStage, sourceLabel } from "@/types/crm";
+import { FUNNEL_CONFIG, getCloseReasons, getDaysSinceUpdate, getNextStage, isTerminalStage, isHandoffStage, sourceLabel } from "@/types/crm";
 import { useAdvanceLeadStage, useMarkLeadLost, useTransferLead, useLeadOwnerLog, useLeadActivities, useAddLeadActivity } from "@/hooks/useCRMLeads";
 import { useArquivarLead } from "@/hooks/useArquivarLead";
 import { useVendedoresDir } from "@/hooks/useVendas";
 import { useAuth } from "@/contexts/AuthContext";
+import { toast } from "sonner";
 
 interface LeadDrawerProps {
   lead: CRMLead;
@@ -99,6 +100,12 @@ export function LeadDrawer({ lead, funnelType, onClose }: LeadDrawerProps) {
 
   async function handleAdvance() {
     if (!nextStage) return;
+    if (isHandoffStage(nextStage)) {
+      toast.info("Passe ao closer pelo board", {
+        description: "Abra o card em Pipelines — o repasse leva o histórico junto.",
+      });
+      return;
+    }
     await advance.mutateAsync({ id: lead.id, newStage: nextStage, funnelType });
     onClose();
   }
