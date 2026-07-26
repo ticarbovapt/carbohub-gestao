@@ -17,11 +17,11 @@ Legenda: ⬜ não começou · 🟡 em andamento · ✅ entregue · ⏸️ adiado
 | # | Fase | Onde | Estado |
 |---|---|---|---|
 | **0** | Mapeamento e decisão de modelagem | `docs/` | ✅ |
-| **1** | Comissão dobrada em venda mista | gestão (SQL) | 🟡 |
+| **1** | Comissão dobrada em venda mista | gestão (SQL) | ✅ |
 | **2** | Banco da OS: porte, vagas e elo com a venda | licenciados (SQL) | ✅ |
 | **3** | `/vender` grava a OS certa | gestão (5 apps) | ✅ |
 | **4** | Sales lê a OS de volta | gestão (crm) | 🟡 |
-| **5** | Execução parcial: a OS sabe quando acabou | ambos | 🟡 |
+| **5** | Execução parcial: a OS sabe quando acabou | ambos | ✅ |
 | **6** | Execução compartilhada nos dois apps | ambos | ⬜ |
 
 Detalhe de cada fase, com os passos individuais, na seção 4.
@@ -35,7 +35,7 @@ Detalhe de cada fase, com os passos individuais, na seção 4.
 | 2026-07-26 | 2 | OS com vagas por unidade vendida + elo com a venda | `ea3b5ca` (lic.) |
 | 2026-07-26 | 3 | /vender manda quantidade, bonificação e tipo de serviço | `f85e3ab` |
 | 2026-07-26 | 4 | Sales lê a OS: progresso, portes, elo e reconciliação | `f55e64c` |
-| 2026-07-26 | 5 | Execução parcial: vaga executada, OS fecha sozinha, saldo vira OS nova | (este commit) |
+| 2026-07-26 | 5 | Execução parcial: vaga executada, OS fecha sozinha, saldo vira OS nova | `1e7dd1a` (lic.) |
 
 ---
 
@@ -230,7 +230,7 @@ que estava.
 
 ---
 
-### Fase 1 — Comissão dobrada 🟡
+### Fase 1 — Comissão dobrada ✅
 
 **Repo:** `carbohub-gestao` · **Tipo:** SQL · **Depende de:** nada
 **Resolve:** D1
@@ -242,8 +242,7 @@ que estava.
 - [x] 1.2 `crm_metas_board` recebe a mesma correção — a migration
       `20260715160000` alinhou meta e comissão de propósito, e sem isso o
       alinhamento quebraria
-- [ ] 1.3 Rodar em produção e conferir o impacto (query de verificação no fim
-      da migration)
+- [x] 1.3 Rodado em produção 2026-07-26
 
 **Aberto, não decidido nesta fase:** se descarbonização *deve* contar na meta do
 vendedor. Hoje não conta (meta exige NF, serviço não tem NF); a correção só
@@ -333,7 +332,7 @@ propósito. Uma flag por veículo entra na fase 5 ou 6.
 
 ---
 
-### Fase 5 — Execução parcial: a OS sabe quando acabou 🟡
+### Fase 5 — Execução parcial: a OS sabe quando acabou ✅
 
 **Repos:** ambos · **Depende de:** fase 4
 **Resolve:** D8, D11, D12 · **+ D14** (achado durante a fase)
@@ -372,7 +371,7 @@ de dias**, e nada no sistema sabia disso.
       as telas divergem na hora
 - [x] 5.8 Sales troca "identificado" por **executado** de verdade nas três
       telas, e passa a ignorar vagas canceladas
-- [ ] 5.9 Rodar a migration em produção
+- [x] 5.9 Rodado em produção 2026-07-26 — conferência `4 · 3 · 1`
 
 **Adiado para a fase 6:** venda cancelada cancelar a OS. Depende de o Sales
 poder escrever na OS, que é justamente o que a fase 6 abre.
