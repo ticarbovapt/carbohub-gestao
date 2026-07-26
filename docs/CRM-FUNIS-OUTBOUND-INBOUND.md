@@ -26,8 +26,8 @@ Todo achado abaixo foi verificado direto no código antes de entrar aqui.
 | **4** | 🆕 **Tela de acompanhamento (gestor)** | gerir a operação — e a linha de base antes de mexer no funil | ✅ no **Admin** (`/acompanhamento`) |
 | **5** | O cadastro do SDR | origem limpa + campos de qualificação | ✅ |
 | **6** | Coluna `nutricao` no Outbound | a rotina diária do SDR | ✅ |
-| **7** | Duplicação Outbound → Inbound | o handoff do SDR | 🟡 código no ar, **SQL pendente** |
-| **8** | Colunas do Inbound (`orcamento`, `formalizacao`) | o funil do closer | ⬜ |
+| **7** | Duplicação Outbound → Inbound | o handoff do SDR | ✅ |
+| **8** | Colunas do Inbound (`orcamento`, `formalizacao`) | o funil do closer | 🟡 código no ar, **SQL pendente** |
 | **9** | Flag `waiting_on` — o "parado" | separa "aguardando" de "esquecido" na tela | ⬜ |
 | **10** | Elo card ↔ orçamento (`/vender`) + B5, B6 | "o sistema todo se conversar" | ⬜ |
 | **11** | Canais automáticos (webhooks, formulário, Chatwoot) | ⏸️ **adiado** — Chatwoot não existe ainda | ⏸️ |
@@ -477,6 +477,26 @@ Três razões:
 ⚠️ `SECURITY DEFINER` **não muda `auth.uid()`** — o `crm_is_gestor()` lá dentro
 continua avaliando quem chamou. É o que torna o gate seguro, e é a mesma armadilha
 já documentada nas migrações da descarbonização.
+
+---
+
+## 3-D. Defeito da fase 4 corrigido na fase 8: tarefa vencida mascarava o abandono
+
+A regra de "esquecido" contava **qualquer** tarefa pendente como "tem próximo
+passo" — inclusive uma vencida há três semanas.
+
+Isso é inofensivo em teoria e grave na prática, porque existe uma automação
+(`crm_sales_lead_auto_task`) que cria uma tarefa pendente **a cada mudança de
+etapa**. Ou seja: todo card que se moveu alguma vez ficava com uma tarefa
+pendente para sempre, e **quase nenhum card do Inbound conseguiria ser
+classificado como esquecido**. A tela mostraria zero com a operação parada — o
+pior resultado possível para uma tela de gestão.
+
+Tarefa vencida não é próximo passo: é o sintoma de que ninguém foi atrás.
+Corrigido em `20260804000000` com `due_at >= current_date`.
+
+**Efeito esperado ao rodar:** o número de esquecidos SOBE. Não é regressão — é
+o que sempre esteve lá.
 
 ---
 

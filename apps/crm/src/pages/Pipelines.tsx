@@ -40,10 +40,10 @@ const NORMALIZED = [
   { id: "andamento", label: "Em andamento", color: "#F59E0B",
     match: ["tentativa_1", "tentativa_2", "contatado", "contato", "qualificado", "apresentacao",
             "diagnostico", "poc", "visita_agendada", "reagendar", "cadencia", "conectado",
-            "reuniao", "reengajado"] },
+            "reuniao", "nutricao", "reengajado"] },
   { id: "negociacao", label: "Negociação / Proposta", color: "#3B82F6",
-    match: ["em_negociacao", "negociacao", "proposta", "proposta_tecnica", "contrato",
-            "pedido_inicial", "oferta"] },
+    match: ["em_negociacao", "negociacao", "orcamento", "proposta", "proposta_tecnica",
+            "formalizacao", "contrato", "pedido_inicial", "oferta"] },
   { id: "ganho", label: "Ganhos", color: "#22C55E", match: [...WON_STAGES] },
   { id: "perdido", label: "Perdidos", color: "#EF4444", match: [...LOST_STAGES] },
   // `repassado` tinha balde próprio nenhum e caía em "Ganhos": o card do SDR

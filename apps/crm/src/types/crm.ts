@@ -173,8 +173,20 @@ const STAGES_INBOUND: StageConfig[] = [
   { id: "novo",        label: "Lead Recebido",    icon: "📥", color: "#94A3B8" },
   { id: "contato",     label: "Contato Feito",    icon: "📞", color: "#F59E0B" },
   { id: "qualificado", label: "Qualificado",      icon: "🎯", color: "#3B82F6" },
+  // ORÇAMENTO separado de PROPOSTA responde metade da dor de "por que parou?"
+  // sem campo novo nenhum: card parado em Orçamento = o closer não montou o
+  // preço. Card parado em Proposta = o cliente não respondeu. Culpados
+  // diferentes, colunas diferentes.
+  { id: "orcamento",   label: "Orçamento",        icon: "🧮", color: "#0EA5E9" },
   { id: "proposta",    label: "Proposta Enviada", icon: "📄", color: "#8B5CF6" },
   { id: "negociacao",  label: "Negociação",       icon: "🤝", color: "#06B6D4" },
+  // FORMALIZAÇÃO extraído de NEGOCIAÇÃO: "estamos negociando" e "já fechamos,
+  // falta papel" têm probabilidade, ação e previsão de receita completamente
+  // diferentes. Enquanto moravam juntos, o forecast era ficção.
+  //
+  // ⚠️ NÃO usar o id `fechamento` para esta coluna: ele está em WON_STAGES e
+  // carimba won_at — um card aqui contaria como venda antes de haver pedido.
+  { id: "formalizacao",label: "Formalização",     icon: "📝", color: "#14B8A6" },
   { id: "ganho",       label: "Ganho",            icon: "✅", color: "#22C55E" },
   { id: "perdido",     label: "Perdido",          icon: "❌", color: "#EF4444" },
 ];
