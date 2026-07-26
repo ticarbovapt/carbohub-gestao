@@ -24,8 +24,8 @@ Todo achado abaixo foi verificado direto no código antes de entrar aqui.
 | **2** | Unificar as listas de etapa terminal | dívida que morde em toda fase seguinte | ✅ |
 | **3** | Trilha de movimentação no servidor | o alicerce da tela — hoje é frágil | ✅ |
 | **4** | 🆕 **Tela de acompanhamento (gestor)** | gerir a operação — e a linha de base antes de mexer no funil | ✅ no **Admin** (`/acompanhamento`) |
-| **5** | O cadastro do SDR | origem limpa + campos de qualificação | 🟡 código no ar, **SQL pendente** |
-| **6** | Coluna `nutricao` no Outbound | a rotina diária do SDR | 🟡 código no ar, **SQL pendente** |
+| **5** | O cadastro do SDR | origem limpa + campos de qualificação | ✅ |
+| **6** | Coluna `nutricao` no Outbound | a rotina diária do SDR | ✅ |
 | **7** | Duplicação Outbound → Inbound | o handoff do SDR | ⬜ |
 | **8** | Colunas do Inbound (`orcamento`, `formalizacao`) | o funil do closer | ⬜ |
 | **9** | Flag `waiting_on` — o "parado" | separa "aguardando" de "esquecido" na tela | ⬜ |
@@ -129,7 +129,24 @@ prospectando a lista errada?*
 Como o descarte do SDR é a métrica que corrige a prospecção, isso entra na
 fase 1 junto com o B4, e não depois.
 
-### B8 — O `source` já nasce sujo no cadastro manual 🆕
+### B8 — O `source` já nasce sujo no cadastro manual 🆕 ✅
+
+> **Normalizado em 26/07.** 95 leads, cinco categorias, nenhum órfão:
+> `prospeccao_ativa` 39 · `meta_ads` 35 · `followup_base` 15 · `indicacao` 4 ·
+> `formulario` 2. O `followup_base` foi **descoberto ao medir antes de mexer** —
+> era um lote importado que nenhum código conhecia e que teria virado "outro".
+> O valor original de cada linha ficou em `custom_fields.source_original`.
+>
+> **O que a base revelou sobre o negócio:** os 35 do Meta Ads são pessoa física
+> (Weydner, Paulo César, Jorge Braga); a prospecção ativa é empresa
+> (Transportadora Esmeralda, JDX, Brisanet, Posto Interlagos). São **dois
+> negócios diferentes no mesmo funil** — anúncio traz dono de um carro,
+> prospecção traz frota. Reforça o desenho Outbound/Inbound.
+>
+> **Pendência aberta:** 8 dos 15 `followup_base` estão com `contact_name` nulo.
+> Lead sem nome de contato ninguém trabalha — vão morar na lista de esquecidos
+> para sempre. Decidir entre arquivar ou completar da origem da importação.
+
 
 `LeadForm.tsx:42` inicializa `source: "Prospecção ativa"` (com acento e espaço),
 enquanto o **default do banco é `prospeccao_ativa`**. As duas convenções gravam
