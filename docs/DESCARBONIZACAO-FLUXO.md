@@ -18,7 +18,7 @@ Legenda: ⬜ não começou · 🟡 em andamento · ✅ entregue · ⏸️ adiado
 |---|---|---|---|
 | **0** | Mapeamento e decisão de modelagem | `docs/` | ✅ |
 | **1** | Comissão dobrada em venda mista | gestão (SQL) | 🟡 |
-| **2** | Banco da OS: porte, vagas e elo com a venda | licenciados (SQL) | 🟡 |
+| **2** | Banco da OS: porte, vagas e elo com a venda | licenciados (SQL) | ✅ |
 | **3** | `/vender` grava a OS certa | gestão (5 apps) | ⬜ |
 | **4** | Sales lê a OS de volta | gestão (crm) | ⬜ |
 | **5** | Fechar o ciclo OS ↔ venda | ambos | ⬜ |
@@ -32,7 +32,7 @@ Detalhe de cada fase, com os passos individuais, na seção 4.
 |---|---|---|---|
 | 2026-07-25 | 0 | Mapeamento das 4 telas + 12 defeitos + modelo de vagas | `7706c41` |
 | 2026-07-26 | 1 | Comissão: base de produto sem os itens de serviço | `e21457a` |
-| 2026-07-26 | 2 | OS com vagas por unidade vendida + elo com a venda | licenciados |
+| 2026-07-26 | 2 | OS com vagas por unidade vendida + elo com a venda | `ea3b5ca` (lic.) |
 
 ---
 
@@ -243,7 +243,7 @@ decisão de modelagem.*
 
 ---
 
-### Fase 2 — Banco da OS 🟡
+### Fase 2 — Banco da OS ✅
 
 **Repo:** `carbohub-licenciados` · **Tipo:** SQL · **Depende de:** nada
 **Resolve:** base de D2, D3, D4, D5 · **+ D13** (achado durante a fase)
@@ -263,7 +263,7 @@ decisão de modelagem.*
       (`[{porte, qty, bonus}]`) gera `sum(qty + bonus)` vagas em `os_vehicles`,
       `position` 1..N, cada uma com o seu porte. Recusa zero vagas e mais de 200
 - [x] 2.5 Policy aditiva de SELECT do Sales em `os_photos`
-- [ ] 2.6 Rodar em produção e conferir (queries no fim da migration)
+- [x] 2.6 Rodado em produção 2026-07-26 — conferência `2 · 3 · 1 · 1`
 
 *Só adiciona colunas e uma função nova. `os_create` continua intacta, então o
 `/vender` atual segue funcionando enquanto a fase 3 não sobe.*
