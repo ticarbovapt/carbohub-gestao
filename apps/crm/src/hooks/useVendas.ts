@@ -301,12 +301,33 @@ export function useCreateVenda() {
 }
 
 // Edição COMPLETA de um orçamento (reescreve itens + todos os campos e o
-// snapshot). Mantém o mesmo order_number = a "nova verdade". Só faz sentido
-// enquanto está como orçamento (a UI só libera editar em status 'quote').
+// snapshot). Mantém o mesmo order_number = a "nova verdade".
+//
+// Só vale enquanto a linha AINDA é orçamento. Antes isto era só um comentário
+// e a proteção era a disciplina da tela — mas `?edit=<id>` por URL direta, uma
+// aba esquecida aberta ou uma corrida (abre como orçamento, alguém converte,
+// salva depois) rebaixavam uma venda de volta a 'quote'. E 'quote' é o que
+// EXCLUI o pedido da comissão do vendedor, do realizado das metas e do
+// faturamento: a venda sumia do dinheiro de alguém, sem erro na tela.
+//
+// A trava de verdade é o trigger trg_carboze_orders_no_downgrade, no banco,
+// porque é o único lugar que os cinco apps atravessam. A checagem abaixo existe
+// para dar uma mensagem decente em vez de uma exceção crua do Postgres.
 export function useUpdateVendaFull() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ id, input }: { id: string; input: NovaVendaInput }): Promise<{ id: string; numero: string | null }> => {
+      if (input.status === "orcamento") {
+        const { data: atual, error: errStatus } = await db
+          .from("carboze_orders").select("status, order_number").eq("id", id).maybeSingle();
+        if (errStatus) throw errStatus;
+        if (atual && atual.status !== "quote") {
+          throw new Error(
+            `O pedido ${atual.order_number ?? ""} já foi convertido em venda e não pode voltar a ser orçamento. ` +
+            "Se precisar refazer, cancele o pedido e gere um orçamento novo.",
+          );
+        }
+      }
       const fields = await buildOrderFields(input);
       const { data: result, error } = await db
         .from("carboze_orders")
