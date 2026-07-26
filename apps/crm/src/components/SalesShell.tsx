@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Outlet, useNavigate } from "react-router-dom";
 import {
   KanbanSquare, ClipboardList, TrendingUp, Target, BarChart3, LayoutDashboard,
-  Wind, CalendarDays, MapPinned, Map, Share2, ShoppingCart, ShoppingBag, MessagesSquare,
+  Wind, CalendarDays, MapPinned, Map, Share2, ShoppingCart, ShoppingBag, MessagesSquare, Activity,
 } from "lucide-react";
 import { ChatBadge, ChatProvider } from "@carbo/chat";
 import { Sidebar, type ShellNavSection } from "@carbo/shell";
@@ -41,6 +41,7 @@ export function SalesShell() {
     ] },
     { label: "Comercial", items: [
         { to: "/comercial", label: "Dashboard Comercial", icon: BarChart3 },
+        ...(isGestor ? [{ to: "/acompanhamento", label: "Acompanhamento", icon: Activity }] : []),
         { to: "/crm/pipelines", label: "Pipelines", icon: KanbanSquare },
         { to: "/vendas", label: "Vendas", icon: TrendingUp },
         { to: "/metas", label: "Metas de Vendedores", icon: Target },

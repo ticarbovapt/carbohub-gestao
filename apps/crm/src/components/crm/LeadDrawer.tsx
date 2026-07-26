@@ -1,13 +1,14 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { X, Phone, Mail, MapPin, Calendar, Tag, ChevronRight, AlertTriangle, ArrowRightLeft, History, ShoppingCart, Trash2 } from "lucide-react";
+import { X, Phone, Mail, MapPin, Calendar, Tag, ChevronRight, AlertTriangle, ArrowRightLeft, History, ShoppingCart, Archive } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { ProfileAvatar } from "@/components/ui/profile-avatar";
 import type { CRMLead, FunnelType } from "@/types/crm";
 import { FUNNEL_CONFIG, getCloseReasons, getDaysSinceUpdate, getNextStage, isTerminalStage } from "@/types/crm";
-import { useAdvanceLeadStage, useMarkLeadLost, useTransferLead, useLeadOwnerLog, useLeadActivities, useAddLeadActivity, useDeleteLead } from "@/hooks/useCRMLeads";
+import { useAdvanceLeadStage, useMarkLeadLost, useTransferLead, useLeadOwnerLog, useLeadActivities, useAddLeadActivity } from "@/hooks/useCRMLeads";
+import { useArquivarLead } from "@/hooks/useAcompanhamento";
 import { useVendedoresDir } from "@/hooks/useVendas";
 import { useAuth } from "@/contexts/AuthContext";
 
@@ -32,11 +33,11 @@ export function LeadDrawer({ lead, funnelType, onClose }: LeadDrawerProps) {
   const advance  = useAdvanceLeadStage();
   const markLost = useMarkLeadLost();
   const transfer = useTransferLead();
-  const deleteLead = useDeleteLead();
+  const arquivar = useArquivarLead();
   const [confirmDelete, setConfirmDelete] = useState(false);
 
   async function handleDelete() {
-    await deleteLead.mutateAsync(lead.id);
+    await arquivar.mutateAsync({ id: lead.id });
     setConfirmDelete(false);
     onClose();
   }
@@ -123,8 +124,8 @@ export function LeadDrawer({ lead, funnelType, onClose }: LeadDrawerProps) {
           </div>
           <div className="flex items-center gap-1">
             {isGestor && (
-              <button onClick={() => setConfirmDelete(true)} className="text-muted-foreground hover:text-destructive p-1" title="Excluir lead">
-                <Trash2 className="h-4 w-4" />
+              <button onClick={() => setConfirmDelete(true)} className="text-muted-foreground hover:text-destructive p-1" title="Arquivar lead">
+                <Archive className="h-4 w-4" />
               </button>
             )}
             <button onClick={onClose} className="text-muted-foreground hover:text-foreground p-1">
@@ -347,17 +348,21 @@ export function LeadDrawer({ lead, funnelType, onClose }: LeadDrawerProps) {
       </div>
     </div>
 
-    {/* Confirmação de exclusão — diálogo do sistema (não o nativo do navegador) */}
+    {/* Arquivamento — o lead sai das telas mas permanece no histórico */}
     <Dialog open={confirmDelete} onOpenChange={setConfirmDelete}>
       <DialogContent className="sm:max-w-sm">
         <DialogHeader>
-          <DialogTitle>Excluir lead</DialogTitle>
-          <DialogDescription>Tem certeza que deseja excluir <strong>{displayName}</strong>? Esta ação não pode ser desfeita.</DialogDescription>
+          <DialogTitle>Arquivar lead</DialogTitle>
+          <DialogDescription>
+            <strong>{displayName}</strong> sai das pipelines e das buscas, mas continua no
+            histórico — as datas em que ele foi criado e movido não mudam depois do fato.
+            A gestão pode desarquivar.
+          </DialogDescription>
         </DialogHeader>
         <DialogFooter className="gap-2">
           <Button variant="outline" onClick={() => setConfirmDelete(false)}>Cancelar</Button>
-          <Button variant="destructive" onClick={handleDelete} disabled={deleteLead.isPending}>
-            {deleteLead.isPending ? "Excluindo..." : "Excluir"}
+          <Button variant="destructive" onClick={handleDelete} disabled={arquivar.isPending}>
+            {arquivar.isPending ? "Arquivando..." : "Arquivar"}
           </Button>
         </DialogFooter>
       </DialogContent>

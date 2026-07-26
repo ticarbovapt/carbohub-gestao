@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  X, Trash2, ChevronRight, ArrowRightLeft, ShoppingCart, History,
-  StickyNote, Phone, CheckSquare, Clock, GitBranch, AlertTriangle, Pin, PinOff,
+  X, ChevronRight, ArrowRightLeft, ShoppingCart, History,
+  StickyNote, Phone, CheckSquare, Clock, GitBranch, AlertTriangle, Pin, PinOff, Archive,
   MessageSquare, ArrowRight, Pencil,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -16,9 +16,10 @@ import {
 } from "@/types/crm";
 import {
   useAdvanceLeadStage, useMarkLeadLost, useTransferLead, useLeadOwnerLog,
-  useLeadActivities, useAddLeadActivity, useDeleteLead, useUpdateCRMLead,
+  useLeadActivities, useAddLeadActivity, useUpdateCRMLead,
   useToggleActivityPin, type LeadActivity,
 } from "@/hooks/useCRMLeads";
+import { useArquivarLead } from "@/hooks/useAcompanhamento";
 import { useVendedoresDir } from "@/hooks/useVendas";
 import { useAuth } from "@/contexts/AuthContext";
 import { StageProgressBar, getStageGroup } from "./StageProgressBar";
@@ -64,7 +65,7 @@ export function DealDetail({ lead, funnelType, onClose }: DealDetailProps) {
   const advance = useAdvanceLeadStage();
   const markLost = useMarkLeadLost();
   const transfer = useTransferLead();
-  const deleteLead = useDeleteLead();
+  const arquivar = useArquivarLead();
   const addActivity = useAddLeadActivity();
   const updateLead = useUpdateCRMLead();
   const togglePin = useToggleActivityPin();
@@ -138,8 +139,9 @@ export function DealDetail({ lead, funnelType, onClose }: DealDetailProps) {
   const nameById = (id: string | null) => (id ? (dir.find((d) => d.id === id)?.full_name ?? "—") : "—");
   const ownerId = lead.assigned_to ?? lead.created_by ?? "";
   const owner = dir.find((d) => d.id === ownerId);
-  // Gestor pode excluir qualquer card; o criador só o próprio (a policy de DELETE
-  // no banco confirma; toda exclusão é registrada por trigger de auditoria).
+  // Gestor arquiva qualquer card; o criador só o próprio. O guard de verdade
+  // está na RPC crm_sales_lead_arquivar — aqui é só para não mostrar botão que
+  // vai falhar.
   const canDelete = isGestor || (!!user?.id && lead.created_by === user.id);
 
   // Clique numa etapa: se for etapa de PERDA, abre o fluxo "Perdido" (motivo);
@@ -171,8 +173,12 @@ export function DealDetail({ lead, funnelType, onClose }: DealDetailProps) {
     setTransferTo("");
   }
 
+  // Arquivar, não excluir. Apagar cascateava a trilha de atividades junto e
+  // reescrevia o passado dos indicadores: o "criados" de uma terça do mês
+  // passado mudava depois do fato, e a tela de acompanhamento nunca fechava
+  // com o número visto ontem. Arquivado some das telas e permanece no histórico.
   async function handleDelete() {
-    await deleteLead.mutateAsync(lead.id);
+    await arquivar.mutateAsync({ id: lead.id });
     setConfirmDelete(false);
     onClose();
   }
@@ -233,8 +239,8 @@ export function DealDetail({ lead, funnelType, onClose }: DealDetailProps) {
           </div>
           <div className="flex items-center gap-1 shrink-0">
             {canDelete && (
-              <button onClick={() => setConfirmDelete(true)} className="text-muted-foreground hover:text-destructive p-1.5" title="Excluir lead">
-                <Trash2 className="h-4 w-4" />
+              <button onClick={() => setConfirmDelete(true)} className="text-muted-foreground hover:text-destructive p-1.5" title="Arquivar lead">
+                <Archive className="h-4 w-4" />
               </button>
             )}
             <button onClick={onClose} className="text-muted-foreground hover:text-foreground p-1.5" title="Fechar">
@@ -488,13 +494,17 @@ export function DealDetail({ lead, funnelType, onClose }: DealDetailProps) {
         <Dialog open={confirmDelete} onOpenChange={setConfirmDelete}>
           <DialogContent className="sm:max-w-sm">
             <DialogHeader>
-              <DialogTitle>Excluir lead</DialogTitle>
-              <DialogDescription>Tem certeza que deseja excluir <strong>{displayName}</strong>? Esta ação não pode ser desfeita.</DialogDescription>
+              <DialogTitle>Arquivar lead</DialogTitle>
+              <DialogDescription>
+                <strong>{displayName}</strong> sai das pipelines e das buscas, mas continua no
+                histórico — ele foi criado, movido e talvez ganho ou perdido em datas que não
+                mudam depois do fato. A gestão pode desarquivar.
+              </DialogDescription>
             </DialogHeader>
             <DialogFooter className="gap-2">
               <Button variant="outline" onClick={() => setConfirmDelete(false)}>Cancelar</Button>
-              <Button variant="destructive" onClick={handleDelete} disabled={deleteLead.isPending}>
-                {deleteLead.isPending ? "Excluindo..." : "Excluir"}
+              <Button variant="destructive" onClick={handleDelete} disabled={arquivar.isPending}>
+                {arquivar.isPending ? "Arquivando..." : "Arquivar"}
               </Button>
             </DialogFooter>
           </DialogContent>
