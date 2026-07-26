@@ -157,6 +157,56 @@ mesmo de existir integração de anúncio.
 É barato consertar agora e caro depois: cada dia de prospecção manual são mais
 linhas para normalizar.
 
+### B10 — Uma venda podia voltar a ser orçamento, e sumir da comissão 🔴 ✅
+
+Achado ao explicar a fase 10, e **o mais sério da sessão.**
+
+`useUpdateVendaFull` (`hooks/useVendas.ts:313`) gravava
+`status = (input.status === 'orcamento' ? 'quote' : 'pending')` **sem olhar o
+status atual da linha**. A única proteção era a disciplina da tela — o próprio
+comentário dizia *"a UI só libera editar em status 'quote'"*.
+
+**Por que é grave:** `status = 'quote'` é o que EXCLUI o pedido do realizado das
+metas, do placar, do **faturamento** e da **comissão do vendedor** (seis
+migrações filtram `status not in ('quote','cancelled')`). Uma venda rebaixada
+**sumia do dinheiro de alguém, sem erro nenhum na tela**.
+
+Caminhos: URL direta `/vender?edit=<id>` de um pedido já convertido; corrida
+(abre como orçamento, alguém converte, salva depois); aba esquecida aberta. O
+menu de `Vendas.tsx` já era protegido por `isQuote` — o buraco era o resto.
+
+**Verificado na base: nenhuma linha afetada.** Era exposição, não estrago.
+
+Corrigido com trigger `trg_carboze_orders_no_downgrade` **no banco**, não no
+front: é o único lugar que os cinco apps, as edge functions e o SQL Editor
+atravessam. Editar orçamento de verdade (`quote → quote`) segue livre.
+
+> **O padrão que se repetiu três vezes nesta sessão:** eu pus a proteção onde o
+> *usuário* passa em vez de onde o *dado* passa. Aconteceu com o registro de
+> trilha (ficou no cliente, §3-B), com o repasse (interceptado só no arrastar) e
+> aqui. Nos três casos a correção foi a mesma: descer a guarda para o banco.
+
+### B11 — `vite build` não typechecka, e o `tsc` estava quebrado 🔴 ✅
+
+Em 26/07 o `sales.carbohub.com.br` **ficou com tela preta em produção**:
+`ReferenceError: user is not defined`, de um `user?.id` que eu usei em
+`Pipelines.tsx` sem destruturar do `useAuth()`.
+
+O `npm run build` passou limpo — porque `vite build` remove os tipos com esbuild
+e **não faz typecheck nenhum**. E o `tsc` estava quebrado desde antes: o
+`tsconfig.app.json` pedia `types: ["vitest/globals"]` com o vitest fora das
+dependências e **sem nenhum teste no app**, então o comando falhava na entrada.
+Resultado: ninguém typechecava, e ninguém sabia.
+
+Corrigido nos dois apps, com script `npm run typecheck`. Ao ligar, apareceu o
+mesmo defeito num arquivo alheio: `NotificationBell` declarava `onOpen` no tipo
+e não destruturava — clicar numa notificação derrubava a tela igual.
+
+**Baseline honesto:** `apps/crm` tem **144 erros de tipo pré-existentes** (o tipo
+`CRMLead` nunca teve `lead_segment`, assets sem declaração, variantes de
+`Badge`). Não foram tocados — é dívida acumulada, não regressão. O que está em
+zero nos dois apps é a classe que derruba a tela (`TS2304`/`TS2552`).
+
 ### Bônus de segurança
 
 Os dois webhooks rodam com `verify_jwt = false` e o secret é **opcional no
