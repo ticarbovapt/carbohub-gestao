@@ -41,9 +41,11 @@ as $$
 declare
   v_nome text;
 begin
-  -- Só reage a mudança REAL de etapa. Editar telefone não é movimentação —
-  -- se fosse, a tela contaria como "tocou no lead" quem só corrigiu um e-mail.
-  if new.stage is not distinct from old.stage then
+  -- Só reage a mudança REAL de etapa ou de funil. Editar telefone não é
+  -- movimentação — se fosse, a tela contaria como "tocou no lead" quem só
+  -- corrigiu um e-mail.
+  if new.stage is not distinct from old.stage
+     and new.funnel_type is not distinct from old.funnel_type then
     return new;
   end if;
 
@@ -54,6 +56,34 @@ begin
     into v_nome
     from public.profiles p
    where p.id = auth.uid();
+
+  -- Troca de funil ganha registro PRÓPRIO. Sem ele, a trilha de um lead que
+  -- mudou de pipeline fica com etapas de um funil que ele não habita mais, e
+  -- não há nada explicando o salto — foi assim que o lead de teste apareceu no
+  -- Comercial Expansão com histórico de `novo ↔ contato`, que são etapas do
+  -- Inbound. Vira obrigatório na fase 7 (duplicação Outbound → Inbound).
+  if new.funnel_type is distinct from old.funnel_type then
+    insert into public.crm_sales_lead_activities (
+      lead_id, activity_type, subject, status, done_at,
+      stage_from, stage_to, created_by, created_by_name, meta
+    ) values (
+      new.id,
+      'funnel_change',
+      coalesce(old.funnel_type, '?') || ' → ' || new.funnel_type,
+      'done',
+      now(),
+      old.stage,
+      new.stage,
+      auth.uid(),
+      v_nome,
+      jsonb_build_object('funnel_from', old.funnel_type, 'funnel_to', new.funnel_type)
+    );
+  end if;
+
+  -- Etapa igual + funil diferente = só a troca de funil, sem falso movimento.
+  if new.stage is not distinct from old.stage then
+    return new;
+  end if;
 
   insert into public.crm_sales_lead_activities (
     lead_id, activity_type, subject, status, done_at,
@@ -100,7 +130,7 @@ set lock_timeout = '5s';
 drop trigger if exists trg_crm_sales_lead_stage_change on public.crm_sales_leads;
 
 create trigger trg_crm_sales_lead_stage_change
-  after update of stage on public.crm_sales_leads
+  after update of stage, funnel_type on public.crm_sales_leads
   for each row
   execute function public.crm_sales_lead_log_stage_change();
 
