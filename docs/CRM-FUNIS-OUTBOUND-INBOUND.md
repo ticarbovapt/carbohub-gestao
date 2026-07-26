@@ -20,18 +20,29 @@ Todo achado abaixo foi verificado direto no código antes de entrar aqui.
 | # | Fase | O que resolve | Estado |
 |---|---|---|---|
 | **0** | Diagnóstico | este documento | ✅ |
-| **1** | Bugs do Outbound | `repassado` como ganho + motivo de descarte errado | ⬜ |
-| **2** | Unificar as listas de etapa terminal | dívida que morde na fase 4 | ⬜ |
-| **3** | O cadastro do SDR | origem limpa + campos de qualificação | ⬜ |
-| **4** | Colunas do Outbound (`nutricao`) | a rotina diária do SDR | ⬜ |
-| **5** | Duplicação Outbound → Inbound | o handoff do SDR | ⬜ |
-| **6** | Colunas do Inbound (`orcamento`, `formalizacao`) | o funil do closer | ⬜ |
-| **7** | Flag `waiting_on` — o "parado" | a dor da negociação | ⬜ |
-| **8** | Elo card ↔ orçamento (`/vender`) | "o sistema todo se conversar" | ⬜ |
-| **9** | Canais automáticos (webhooks, formulário, Chatwoot) | ⏸️ **adiado** — Chatwoot não existe ainda | ⏸️ |
+| **1** | Bugs que corrompem número (B2, B3, B4, B7) | sem isso a tela da fase 4 mede errado | ⬜ |
+| **2** | Unificar as listas de etapa terminal | dívida que morde em toda fase seguinte | ⬜ |
+| **3** | Trilha de movimentação no servidor | o alicerce da tela — hoje é frágil | ⬜ |
+| **4** | 🆕 **Tela de acompanhamento (gestor)** | gerir a operação — e a linha de base antes de mexer no funil | ⬜ |
+| **5** | O cadastro do SDR | origem limpa + campos de qualificação | ⬜ |
+| **6** | Coluna `nutricao` no Outbound | a rotina diária do SDR | ⬜ |
+| **7** | Duplicação Outbound → Inbound | o handoff do SDR | ⬜ |
+| **8** | Colunas do Inbound (`orcamento`, `formalizacao`) | o funil do closer | ⬜ |
+| **9** | Flag `waiting_on` — o "parado" | separa "aguardando" de "esquecido" na tela | ⬜ |
+| **10** | Elo card ↔ orçamento (`/vender`) + B5, B6 | "o sistema todo se conversar" | ⬜ |
+| **11** | Canais automáticos (webhooks, formulário, Chatwoot) | ⏸️ **adiado** — Chatwoot não existe ainda | ⏸️ |
 
-**Os bugs do Inbound (B3, B5, B6) não sumiram** — foram redistribuídos: B3 entra
-na fase 6, B5 e B6 na fase 8, junto com o código que eles destravam.
+**Por que a tela é a fase 4 e não a 1:** ela mede ganhos, perdas e movimentação.
+Os três estão quebrados hoje (B2, B3) ou sem registro confiável (fase 3). Uma
+tela de gestão construída sobre isso **mente com autoridade** — que é pior do que
+não ter tela. As fases 1 a 3 são baratas e existem para que a 4 seja verdade.
+
+**Por que a tela vem antes de mexer no funil:** ela é a linha de base. Sem ela,
+não há como afirmar que `nutricao`, `orcamento` e a duplicação melhoraram
+alguma coisa.
+
+**Os bugs do Inbound foram redistribuídos:** B3 subiu para a fase 1 (a tela
+precisa dele), B5 e B6 ficam na 10, junto com o código que eles destravam.
 
 ---
 
@@ -282,6 +293,134 @@ o próprio funil.
 
 ---
 
+## 3-B. A trilha de movimentação (fase 3) — alicerce da tela
+
+**A boa notícia: o histórico existe.** `crm_sales_lead_activities` já grava
+`activity_type = 'stage_change'` com `stage_from` e `stage_to`
+(`useCRMLeads.ts:349-360` e `:421-432`). É exatamente a matéria-prima de
+"quantos receberam movimentação" e "quantos ficaram parados". Não precisa
+inventar tabela.
+
+**A má notícia: o registro é frágil em três pontos.**
+
+1. **É escrito pelo cliente, depois do UPDATE, sem transação.** A etapa muda
+   primeiro; a atividade é gravada num segundo `insert`. Se ele falhar — rede,
+   RLS, aba fechada no meio — **o card moveu e a história não existe.** Ninguém
+   percebe, porque não há erro na tela.
+2. **É escrito em dois lugares, e só nesses dois.** `useAdvanceLeadStage` e
+   `useMarkLeadLost`. Já `useUpdateCRMLead` aceita `Partial<CRMLead>` — o que
+   **inclui `stage`** — e não registra nada. Hoje ninguém chama com `stage`
+   (conferido), então não há buraco aberto; mas basta um `mutate({ id, stage })`
+   em qualquer tela futura para abrir um, em silêncio.
+3. **Apagar o lead apaga a história junto** (`on delete cascade`,
+   `20260611000014:23`). Um lead excluído hoje **muda o "criados" de uma
+   terça-feira do mês passado.** A tela nunca fecha com o que foi visto antes.
+
+**Recomendado: mover o registro para um trigger `AFTER UPDATE` na tabela.**
+Passa a valer para todo caminho — tela, RPC, correção manual no SQL Editor — e
+morre junto com o UPDATE se der errado, em vez de deixar rastro pela metade. O
+código do cliente perde os dois `insert` e fica mais simples.
+
+Para o item 3, a decisão honesta é **parar de apagar**: `deleted_at` em vez de
+`DELETE`. Um CRM que é fonte de indicador não pode ter linha sumindo do passado.
+
+### ⚠️ O histórico anterior não existe
+
+A trilha só existe desde que aquele `insert` do cliente entrou no ar. **Todo dia
+anterior a isso vai aparecer com movimentação zero** — e a tela vai dar a
+impressão de que a operação estava morta. Rode antes de montar o gráfico:
+
+```sql
+select min(created_at) as primeira_trilha, count(*)
+  from public.crm_sales_lead_activities where activity_type = 'stage_change';
+```
+
+A série diária só é honesta a partir dessa data. **A tela precisa dizer isso na
+cara**, não deixar o gestor concluir sozinho.
+
+---
+
+## 3-C. A tela de acompanhamento (fase 4)
+
+Rota nova em `apps/crm`, **só para gestor** — o `RequireGestor` e o
+`crm_is_gestor()` já existem, e o modelo de acesso dos apps novos é por
+capability, **não pela Role Matrix** (regra do `CLAUDE.md`).
+
+### As seis perguntas, e o que cada uma exige para ser verdade
+
+| Pergunta | Base | Depende de |
+|---|---|---|
+| Quantos leads criados por dia | `created_at` | nada — funciona hoje |
+| Quantos ganhos | `won_at` | **B2 e B3** — hoje `repassado` conta como ganho e o `ganho` do Inbound não carimba data |
+| Quantos perdidos | `lost_at` + `lost_reason` | **B4 e B7** — hoje o motivo é ficção |
+| Quantos receberam movimentação | atividades `stage_change` | **fase 3** |
+| Quantos ficaram parados | ausência de `stage_change` | fase 3 + **SLA por etapa** (abaixo) |
+| Quantos foram esquecidos | parado **sem** próximo passo | fase 3 + fase 9 (`waiting_on`) |
+
+### "Parado" não é um número só — é SLA por etapa
+
+Um lead em Nutrição sem toque há 20 dias **é o comportamento correto**. Um lead
+em Negociação sem toque há 5 dias é um problema sério. Um número global de
+"parados" mistura os dois e vira ruído que o gestor aprende a ignorar.
+
+Cada etapa recebe um prazo próprio, em tabela de configuração editável na
+própria tela — nunca no código:
+
+```
+prospeccao 2d · cadencia 3d · conectado 3d · qualificado 2d · reuniao 1d
+nutricao 30d · novo 1d · contato 2d · orcamento 2d · proposta 4d
+negociacao 3d · formalizacao 3d
+```
+
+Números iniciais, para serem discutidos com quem vende — não são lei.
+
+### "Esquecido" é o número que importa, e é diferente de "parado"
+
+- **Parado** = não mudou de etapa dentro do SLA. Pode ser legítimo.
+- **Esquecido** = parado **e** sem `next_follow_up_at`, **e** sem tarefa aberta,
+  **e** (a partir da fase 9) sem `waiting_on` com prazo válido.
+
+Esse segundo é o que responde *"a negociação está parada porque depende do
+decisor, ou porque o closer não foi atrás?"* — a pergunta que você levantou. É
+por isso que a fase 9 melhora a tela em vez de duplicá-la: **`waiting_on` é o que
+tira um card da lista de esquecidos com uma justificativa datada.** Enquanto ela
+não existir, a tela mostra "sem próximo passo", que já é 80% do valor.
+
+### O que a tela mostra
+
+1. **Faixa do dia** — criados · movimentados · ganhos · perdidos · **esquecidos**.
+   O último em destaque: é o único acionável agora.
+2. **Série diária** (7/30/90 dias) — criados, ganhos e perdidos empilhados, com
+   a linha de movimentação por cima. É onde se enxerga o dia em que a operação
+   parou.
+3. **Por pessoa** — a tabela que responde *quem*. Leads ativos, movimentados
+   hoje, parados, esquecidos, e **maior tempo sem toque**. Sem isso a tela
+   informa e não permite agir.
+4. **Funil hoje** — quantos em cada etapa e **há quanto tempo em média**, por
+   pipeline. Etapa que acumula é gargalo.
+5. **Motivos de perda e descarte** — separados por funil, porque descarte de SDR
+   e perda de closer são coisas diferentes (B7).
+6. **A lista clicável dos esquecidos** — nome, dono, etapa, dias parado, e o card
+   abre. Uma tela de gestão que não leva à ação vira relatório que ninguém abre.
+
+### Como buscar — RPC, não query no cliente
+
+Uma `SECURITY DEFINER` gated em `crm_is_gestor()`, devolvendo a série pronta.
+Três razões:
+
+- **A RLS atrapalha justamente aqui.** O gestor vê tudo, mas montar "por pessoa"
+  no cliente exigiria puxar todos os leads e todas as atividades para o
+  navegador e agregar lá. Não escala e é lento já no primeiro semestre de uso.
+- **Um roundtrip em vez de N.** A tela é para ser aberta todo dia de manhã.
+- **A regra de "esquecido" mora num lugar só.** Se ela viver no front, vai
+  divergir do dia em que outro app precisar do mesmo número.
+
+⚠️ `SECURITY DEFINER` **não muda `auth.uid()`** — o `crm_is_gestor()` lá dentro
+continua avaliando quem chamou. É o que torna o gate seguro, e é a mesma armadilha
+já documentada nas migrações da descarbonização.
+
+---
+
 ## 4. O "parado" — flag, não coluna
 
 Três caminhos avaliados. **Coluna dedicada foi rejeitada**: "aguardando" é
@@ -467,7 +606,12 @@ segundo está bloqueado por credenciais e por uma instância de Chatwoot que
    `novo` com contador de tentativas). **Não cortar `orcamento` nem
    `formalizacao`** — são os dois que resolvem a dor.
 4. ~~**Existe instância de Chatwoot rodando?**~~ **Respondido em 26/07: não.** É
-   coisa de futuro. A fase 9 fica adiada até existir instância.
+   coisa de futuro. A fase 11 fica adiada até existir instância.
+5. **Lead pode continuar sendo apagado?** A proposta é `deleted_at` em vez de
+   `DELETE` — hoje apagar um lead **reescreve o passado da tela**. Trocar por
+   arquivamento é a única forma de o número de ontem continuar valendo amanhã.
+6. **Os prazos por etapa da §3-C** — os números que propus são chute informado.
+   Valem para começar; quem vende ajusta na própria tela depois.
 
 ---
 
@@ -479,16 +623,18 @@ canal automático. Só depois o funil do closer.
 
 | Fase | Por que nessa ordem |
 |---|---|
-| 1 — bugs do Outbound (B2, B4, B7) | `repassado` como ganho **inviabiliza a fase 5**; e o motivo de descarte é a métrica que corrige a prospecção — cada dia sem ele é dado perdido que não volta |
-| 2 — unificar `WIN_IDS`/`GANHO`/`isTerminalStage` | **três listas duplicadas do mesmo conceito**; mexer em coluna sem unificar é errar em três lugares. Sai de graça junto com a 1 |
-| 3 — cadastro do SDR (B8 + qualificação) | é a única porta de entrada do sistema hoje. Precisa vir **antes** da 5: sem campo estruturado, o handoff entrega texto corrido |
-| 4 — coluna `nutricao` | zero SQL, zero migração. Fecha a rotina diária do SDR |
-| 5 — duplicação → Inbound | fecha o ciclo do Outbound. Depende da 1, da 3 e de **uma decisão sua** (a quem atribuir) |
-| 6 — colunas do Inbound + B3 | a partir daqui é o funil do closer |
-| 7 — `waiting_on` | a dor da negociação, que é etapa de closer |
-| 8 — orçamento + B5 + B6 | 90% já existe; é o acabamento |
-| 9 — canais ⏸️ | **adiado** — Chatwoot não conectado. Reabrir quando a instância existir |
+| 1 — bugs (B2, B3, B4, B7) | são os que **corrompem número**. Enquanto `repassado` contar como ganho e o `ganho` do Inbound não carimbar data, a tela da fase 4 mente. E o motivo de descarte é dado que **não volta**: cada dia sem ele é prospecção que não dá para corrigir depois |
+| 2 — unificar `WIN_IDS`/`GANHO`/`isTerminalStage` | **três listas duplicadas do mesmo conceito**; a RPC da tela vai precisar da mesma definição pela quarta vez. Unificar antes evita nascer torto |
+| 3 — trilha no servidor | sem ela, "movimentação" e "parado" são chute. É a fase mais barata e a de maior efeito |
+| 4 — **tela de acompanhamento** | passa a existir com número verdadeiro, e vira a linha de base para julgar tudo o que vem depois |
+| 5 — cadastro do SDR (B8 + qualificação) | única porta de entrada do sistema hoje. Vem **antes** da 7: sem campo estruturado, o handoff entrega texto corrido |
+| 6 — coluna `nutricao` | zero SQL, zero migração de dado. Fecha a rotina diária do SDR |
+| 7 — duplicação → Inbound | fecha o ciclo do Outbound. Depende da 1, da 5 e de **uma decisão sua** |
+| 8 — colunas do Inbound | a partir daqui é o funil do closer |
+| 9 — `waiting_on` | **melhora a tela**: é o que separa "aguardando decisor" de "esquecido" |
+| 10 — orçamento + B5 + B6 | 90% já existe; é o acabamento |
+| 11 — canais ⏸️ | **adiado** — Chatwoot não conectado. Reabrir quando a instância existir |
 
-**As fases 1 e 2 não dependem de nenhuma decisão sua.** A 3 e a 4 dependem de
-concordância com o desenho acima, não de informação que só você tem. A 5 é a
-primeira que trava numa pergunta em aberto.
+**As fases 1, 2 e 3 não dependem de nenhuma decisão sua** e são pré-requisito da
+tela. A 4 depende de concordância com o desenho, não de informação que só você
+tem. A 7 é a primeira que trava numa pergunta em aberto.
