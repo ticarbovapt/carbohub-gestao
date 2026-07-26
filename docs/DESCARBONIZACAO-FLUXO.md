@@ -18,7 +18,7 @@ Legenda: ⬜ não começou · 🟡 em andamento · ✅ entregue · ⏸️ adiado
 |---|---|---|---|
 | **0** | Mapeamento e decisão de modelagem | `docs/` | ✅ |
 | **1** | Comissão dobrada em venda mista | gestão (SQL) | 🟡 |
-| **2** | Banco da OS: porte, vagas e elo com a venda | licenciados (SQL) | ⬜ |
+| **2** | Banco da OS: porte, vagas e elo com a venda | licenciados (SQL) | 🟡 |
 | **3** | `/vender` grava a OS certa | gestão (5 apps) | ⬜ |
 | **4** | Sales lê a OS de volta | gestão (crm) | ⬜ |
 | **5** | Fechar o ciclo OS ↔ venda | ambos | ⬜ |
@@ -31,6 +31,8 @@ Detalhe de cada fase, com os passos individuais, na seção 4.
 | Data | Fase | O que entrou | Commit |
 |---|---|---|---|
 | 2026-07-25 | 0 | Mapeamento das 4 telas + 12 defeitos + modelo de vagas | `7706c41` |
+| 2026-07-26 | 1 | Comissão: base de produto sem os itens de serviço | `e21457a` |
+| 2026-07-26 | 2 | OS com vagas por unidade vendida + elo com a venda | licenciados |
 
 ---
 
@@ -176,6 +178,14 @@ não. "Reflete ao vivo" hoje só vale num sentido.
 e `service_orders` (execução) se ligam por vínculo **opcional**. Existe OS
 executada sem `services` e `services` sem OS.
 
+**D13 — A criação da OS pela venda provavelmente nunca funcionou.**
+(achado na fase 2) `os_create` aceita `is_carbo_sales()`, mas chama
+`os_upsert_customer` por dentro — e essa guarda com `can_use_os()`, que **não**
+inclui o Sales. `SECURITY DEFINER` não troca o `auth.uid()`, então o vendedor
+levava exceção no meio da criação. Só passava quem fosse admin ou tivesse
+`portal_licenciado`. Combinado com o D8 (falha só emite toast), o efeito é uma
+venda sem OS e ninguém sabendo. **Corrigido na fase 2.**
+
 ---
 
 ## 3. A decisão de modelagem
@@ -233,26 +243,30 @@ decisão de modelagem.*
 
 ---
 
-### Fase 2 — Banco da OS ⬜
+### Fase 2 — Banco da OS 🟡
 
 **Repo:** `carbohub-licenciados` · **Tipo:** SQL · **Depende de:** nada
-**Resolve:** base de D2, D3, D4, D5
+**Resolve:** base de D2, D3, D4, D5 · **+ D13** (achado durante a fase)
+**Migration:** `20260728100000_os_from_sale_vagas.sql`
 
-- [ ] 2.1 `os_vehicles` ganha `porte text check (porte in ('P','M','G'))` e
-      `fuel_type text` (nullable — o operador confirma na execução)
-- [ ] 2.2 `service_orders` ganha o elo de volta: `sale_order_id uuid`,
-      `sale_order_number text`, `sale_total numeric`
-- [ ] 2.3 Índice em `service_orders(sale_order_id)`
-- [ ] 2.4 RPC `licenciados.os_create_from_sale(...)` — cliente + tipo +
-      agendamento + `p_items jsonb` (`[{porte, qty, bonus}]`); cria a OS e
-      `sum(qty + bonus)` linhas em `os_vehicles`, `position` 1..N, cada uma com
-      o seu porte. Reaproveita `os_upsert_customer`.
-      Permissão: `can_use_os() OR is_carbo_sales()`
-- [ ] 2.5 Policy de SELECT do Sales em `os_photos` (hoje só `service_orders`,
-      `os_customers` e `os_vehicles`) — necessária pra fase 4 mostrar progresso
+- [x] 2.0 **D13 — `os_upsert_customer` guardava com `can_use_os()`**, que não
+      inclui `is_carbo_sales()`. Como `os_create` chama essa função por dentro,
+      e `SECURITY DEFINER` não troca o `auth.uid()`, o vendedor do Sales levava
+      exceção no meio da criação. Guarda passa a aceitar o Sales
+- [x] 2.1 `os_vehicles` ganha `porte` (check P/M/G) e `fuel_type`
+      (check flex/diesel) — ambos nullable
+- [x] 2.2 `service_orders` ganha `sale_order_id`, `sale_order_number`,
+      `sale_total`. Sem FK: `carboze_orders` é de outro schema e produto, e uma
+      venda apagada não pode derrubar OS já executada
+- [x] 2.3 Índice em `service_orders(sale_order_id)`
+- [x] 2.4 RPC `licenciados.os_create_from_sale(...)` — `p_items jsonb`
+      (`[{porte, qty, bonus}]`) gera `sum(qty + bonus)` vagas em `os_vehicles`,
+      `position` 1..N, cada uma com o seu porte. Recusa zero vagas e mais de 200
+- [x] 2.5 Policy aditiva de SELECT do Sales em `os_photos`
+- [ ] 2.6 Rodar em produção e conferir (queries no fim da migration)
 
-*Só adiciona colunas e uma função nova. `os_create` continua existindo intacta,
-então o `/vender` atual segue funcionando enquanto a fase 3 não sobe.*
+*Só adiciona colunas e uma função nova. `os_create` continua intacta, então o
+`/vender` atual segue funcionando enquanto a fase 3 não sobe.*
 
 ---
 
