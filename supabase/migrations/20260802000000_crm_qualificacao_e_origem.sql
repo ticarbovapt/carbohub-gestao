@@ -18,6 +18,13 @@
 --      já foi inserida na fase 4. Este bloco existe para o caso de ela não ter
 --      entrado, e é idempotente.
 --
+-- Retrato ANTES de normalizar (medido em 26/07, 95 leads):
+--   Prospecção ativa            39
+--   Meta Ads                    35
+--   Follow up (base comercial)  15   ← não vinha do formulário; lote importado
+--   Indicação                    4
+--   Formulário CarboVapt         2
+--
 -- ⚠️ RODAR EM BLOCOS SEPARADOS no SQL Editor, um por vez.
 -- =====================================================================
 
@@ -63,7 +70,7 @@ update public.crm_sales_leads
    and source not in (
      'prospeccao_ativa','indicacao','evento','meta_ads','google_ads','tiktok_ads',
      'ml_ads','shopee_ads','linkedin_ads','landing_page','whatsapp','formulario',
-     'google_merchant','organico','bling','outro'
+     'google_merchant','organico','bling','followup_base','outro'
    );
 
 update public.crm_sales_leads
@@ -73,6 +80,10 @@ update public.crm_sales_leads
      when 'indicação'             then 'indicacao'
      when 'indicacao'             then 'indicacao'
      when 'evento'                then 'evento'
+     -- Lote importado da base comercial. Descoberto ao medir a coluna antes de
+     -- normalizar; não vinha do formulário nem de webhook.
+     when 'follow up (base comercial)' then 'followup_base'
+     when 'followup_base'              then 'followup_base'
      when 'meta ads'              then 'meta_ads'
      when 'google ads'            then 'google_ads'
      when 'tiktok ads'            then 'tiktok_ads'
@@ -129,7 +140,7 @@ alter table public.crm_sales_leads
     source is null or source in (
       'prospeccao_ativa','indicacao','evento','meta_ads','google_ads','tiktok_ads',
       'ml_ads','shopee_ads','linkedin_ads','landing_page','whatsapp','formulario',
-      'google_merchant','organico','bling','outro'
+      'google_merchant','organico','bling','followup_base','outro'
     )
   ) not valid;
 

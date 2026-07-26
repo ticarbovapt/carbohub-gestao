@@ -353,6 +353,10 @@ export const SOURCES = [
   { id: "prospeccao_ativa", label: "Prospecção ativa" },
   { id: "indicacao",        label: "Indicação" },
   { id: "evento",           label: "Evento" },
+  // Veio de importação da base comercial, não do formulário — descoberto ao
+  // medir a coluna antes de normalizar (15 leads). Sem esta entrada eles
+  // virariam "outro" e a origem de um lote inteiro se perderia de vista.
+  { id: "followup_base",    label: "Follow up (base comercial)" },
   { id: "meta_ads",         label: "Meta Ads" },
   { id: "google_ads",       label: "Google Ads" },
   { id: "tiktok_ads",       label: "TikTok Ads" },
