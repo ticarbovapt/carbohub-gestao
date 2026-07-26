@@ -33,27 +33,55 @@ export interface SerieDia {
   receita: number;
 }
 
+export interface Valores {
+  estimado_aberto: number;
+  orcado_aberto: number;
+  orcado_qtd: number;
+  na_etapa_orcamento: number;
+  na_etapa_orcamento_valor: number;
+  sem_orcamento: number;
+  ganho_periodo: number;
+  ganho_qtd: number;
+  perdido_periodo: number;
+  perdido_qtd: number;
+}
+
 export interface Acompanhamento {
-  periodo: { desde: string; ate: string };
+  periodo: { desde: string; ate: string; vendedor: string | null };
+  valores: Valores;
+  aguardando_por: { motivo: string; n: number; vencidos: number }[];
+  lista_espera_vencida: {
+    id: string; nome: string; funnel_type: string; stage: string; dono: string | null;
+    waiting_on: string; waiting_until: string; waiting_note: string | null; valor: number;
+  }[];
   serie: SerieDia[];
   hoje: {
     criados: number; ganhos: number; perdidos: number; movimentados: number;
     abertos: number; parados: number; esquecidos: number;
+    aguardando: number; espera_vencida: number;
   };
-  por_pessoa: { dono: string; abertos: number; parados: number; esquecidos: number; pior_dias: number }[];
-  por_etapa: { funnel_type: string; stage: string; prazo_dias: number; leads: number; parados: number; dias_medio: number }[];
-  motivos: { funnel_type: string; motivo: string; n: number }[];
+  por_pessoa: {
+    dono: string; abertos: number; parados: number; esquecidos: number;
+    aguardando: number; pior_dias: number; valor_aberto: number; valor_ganho: number;
+  }[];
+  por_etapa: {
+    funnel_type: string; stage: string; prazo_dias: number; leads: number;
+    parados: number; dias_medio: number; valor: number; com_orcamento: number;
+  }[];
+  motivos: { funnel_type: string; motivo: string; n: number; valor: number }[];
   lista_esquecidos: {
     id: string; nome: string; funnel_type: string; stage: string;
-    dono: string | null; dias_parado: number; prazo_dias: number;
+    dono: string | null; dias_parado: number; prazo_dias: number; valor: number;
   }[];
 }
 
-export function useAcompanhamento(desde: string, ate: string) {
+export function useAcompanhamento(desde: string, ate: string, vendedor?: string | null) {
   return useQuery({
-    queryKey: ["crm-acompanhamento", desde, ate],
+    queryKey: ["crm-acompanhamento", desde, ate, vendedor ?? "todos"],
     queryFn: async (): Promise<Acompanhamento> => {
-      const { data, error } = await db.rpc("crm_acompanhamento", { p_desde: desde, p_ate: ate });
+      const { data, error } = await db.rpc("crm_acompanhamento", {
+        p_desde: desde, p_ate: ate, p_vendedor: vendedor || null,
+      });
       if (error) throw error;
       return data as Acompanhamento;
     },

@@ -20,10 +20,11 @@ import { KanbanBoard } from "@/components/crm/KanbanBoard";
 import { LeadCard, type LeadOwner } from "@/components/crm/LeadCard";
 import { LeadForm } from "@/components/crm/LeadForm";
 import { DealDetail } from "@/components/crm/DealDetail";
+import { AcaoPosMove } from "@/components/crm/AcaoPosMove";
 import {
   FUNNEL_CONFIG, getStagesForFunnel, getNextStage, getCloseReasons,
   WON_STAGES, LOST_STAGES, HANDOFF_STAGES, isLostStage, isHandoffStage,
-  isTerminalStage, esperaValida, esperaVencida,
+  isTerminalStage, isWonStage, esperaValida, esperaVencida,
 } from "@/types/crm";
 
 const hojeISO = () => new Date().toISOString().slice(0, 10);
@@ -179,6 +180,7 @@ export default function Pipelines() {
   // da lista — e quem só clicava em "Confirmar" gravava Preço sem ter escolhido.
   // A base de motivos de perda estava sendo fabricada por inércia de clique.
   const [lostReason, setLostReason] = useState<string>("");
+  const [acao, setAcao] = useState<{ lead: CRMLead; tipo: "orcamento" | "ganho" } | null>(null);
   const [repasseLead, setRepasseLead] = useState<CRMLead | null>(null);
   const [repasseNota, setRepasseNota] = useState("");
   const [drawerLead, setDrawerLead] = useState<CRMLead | null>(null);
@@ -344,6 +346,7 @@ export default function Pipelines() {
     if (isHandoffStage(next)) { setRepasseNota(""); setRepasseLead(lead); return; }
     advanceLead.mutate({ id: lead.id, newStage: next, funnelType: ft });
     notifyMove(lead.stage, next, ft);
+    ofereceAcao(lead, next, ft);
   };
   // Na visão "Todos", cada card avança no SEU próprio funil (não no `ft` ativo).
   const handleAdvanceAny = (lead: CRMLead) => {
@@ -353,6 +356,7 @@ export default function Pipelines() {
     if (isHandoffStage(next)) { setRepasseNota(""); setRepasseLead(lead); return; }
     advanceLead.mutate({ id: lead.id, newStage: next, funnelType: lf });
     notifyMove(lead.stage, next, lf);
+    ofereceAcao(lead, next, lf);
   };
   const handleDragMove = (lead: CRMLead, toStage: string) => {
     // Repassar não é mover: cria um card no Inbound com toda a timeline junto.
@@ -366,19 +370,23 @@ export default function Pipelines() {
       setLostDialogLead(lead);
       return;
     }
-    // Mover para Orçamento passa a significar "PRECISA de orçamento": a coluna
-    // vira fila de trabalho legítima. Espera a mutation ANTES de abrir o card —
-    // navegar de dentro do drop desmontaria a árvore com a mutation em voo, e
-    // se ela falhasse depois do unmount o estágio no banco ficaria diferente do
-    // que o usuário viu, com o toast de erro órfão.
-    if (toStage === "orcamento") {
-      advanceLead.mutateAsync({ id: lead.id, newStage: toStage, funnelType: ft })
-        .then(() => { notifyMove(lead.stage, toStage, ft); setDrawerLead({ ...lead, stage: toStage }); })
-        .catch(() => { /* o onError da mutation já avisa e reverte */ });
-      return;
-    }
     advanceLead.mutate({ id: lead.id, newStage: toStage, funnelType: ft });
     notifyMove(lead.stage, toStage, ft);
+    ofereceAcao(lead, toStage, ft);
+  };
+
+  // Depois de mover para Orçamento ou Ganho, oferece o próximo passo na hora.
+  // Antes a ação existia só dentro do card, e quem arrastava não tinha como
+  // adivinhar que precisava abrir o detalhe — "não fica intuitivo que se clicar
+  // no card vai estar lá para fazer as ações".
+  //
+  // Dispara DEPOIS da mutation, nunca de dentro dela: navegar com a mutation em
+  // voo desmontaria a árvore, e uma falha posterior deixaria o estágio no banco
+  // diferente do que o usuário viu, com o toast de erro órfão.
+  const ofereceAcao = (lead: CRMLead, toStage: string, funil: FunnelType) => {
+    const alvo = { ...lead, stage: toStage, funnel_type: funil };
+    if (toStage === "orcamento") { setAcao({ lead: alvo, tipo: "orcamento" }); return; }
+    if (isWonStage(toStage))     { setAcao({ lead: alvo, tipo: "ganho" }); }
   };
   const confirmLost = () => {
     if (lostDialogLead && lostReason) {
@@ -575,6 +583,8 @@ export default function Pipelines() {
           </CarboCard>
         )}
       </div>
+
+      {acao && <AcaoPosMove lead={acao.lead} tipo={acao.tipo} onClose={() => setAcao(null)} />}
 
       {isFormOpen && <LeadForm funnelType={ft} initialStage={isAll ? undefined : formStage} onClose={() => setIsFormOpen(false)} />}
       {liveDrawerLead && <DealDetail lead={liveDrawerLead} funnelType={liveDrawerLead.funnel_type as FunnelType} onClose={() => setDrawerLead(null)} />}

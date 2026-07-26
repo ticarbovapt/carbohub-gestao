@@ -36,6 +36,7 @@ const brDate = (s: string) => {
 
 export default function Acompanhamento() {
   const [dias, setDias] = useState(30);
+  const [vendedor, setVendedor] = useState<string>("");
   const [slaAberto, setSlaAberto] = useState(false);
 
   const { desde, ate } = useMemo(() => {
@@ -45,7 +46,7 @@ export default function Acompanhamento() {
     return { desde: iso(ini), ate: iso(hoje) };
   }, [dias]);
 
-  const { data, isLoading, error } = useAcompanhamento(desde, ate);
+  const { data, isLoading, error } = useAcompanhamento(desde, ate, vendedor || null);
   const { data: dir = [] } = useVendedoresDir();
   const { data: repasses } = useRepasses(desde, ate);
   const nomeDe = (id: string | null) =>
@@ -95,6 +96,13 @@ export default function Acompanhamento() {
                 {p.label}
               </Button>
             ))}
+            <select
+              className="h-8 rounded-md border border-input bg-background px-2 text-xs max-w-[180px]"
+              value={vendedor} onChange={(e) => setVendedor(e.target.value)}
+            >
+              <option value="">Todos os vendedores</option>
+              {dir.map((v) => <option key={v.id} value={v.id}>{v.full_name ?? v.id}</option>)}
+            </select>
             <Button variant="outline" size="sm" onClick={() => setSlaAberto(true)}>
               <Settings2 className="h-4 w-4 mr-1.5" /> Prazos
             </Button>
@@ -148,6 +156,42 @@ export default function Acompanhamento() {
             />
           </div>
 
+          {/* DINHEIRO — duas fontes de valor, lado a lado e nunca somadas:
+              "estimado" é o palpite de quem cadastrou o lead (existe sempre,
+              vale pouco); "orçado" é o preço realmente montado no /vender (só
+              existe depois que alguém sentou e fez). Uma soma única dos dois
+              produziria um número que ninguém sabe ler. */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            <Valor
+              label="Em orçamento" cor="#0EA5E9"
+              valor={data.valores.na_etapa_orcamento_valor}
+              hint={`${data.valores.na_etapa_orcamento} card(s) na fila de preço`}
+            />
+            <Valor
+              label="Pipeline com preço montado" cor="#8B5CF6"
+              valor={data.valores.orcado_aberto}
+              hint={`${data.valores.orcado_qtd} de ${data.hoje.abertos} abertos · ${data.valores.sem_orcamento} sem orçamento`}
+            />
+            <Valor
+              label="Ganho no período" cor="#22C55E"
+              valor={data.valores.ganho_periodo}
+              hint={`${data.valores.ganho_qtd} negócio(s)`}
+            />
+            <Valor
+              label="Perdido no período" cor="#EF4444"
+              valor={data.valores.perdido_periodo}
+              hint={`${data.valores.perdido_qtd} negócio(s)`}
+            />
+          </div>
+
+          {data.valores.estimado_aberto > 0 && (
+            <p className="text-[11px] text-muted-foreground -mt-1">
+              Pipeline aberto por estimativa de quem cadastrou: <strong>{brl(data.valores.estimado_aberto)}</strong>.
+              Onde existe orçamento montado, o valor acima é o real — a estimativa só preenche o que
+              ainda não foi precificado.
+            </p>
+          )}
+
           {/* Série diária */}
           <CarboCard>
             <CarboCardContent className="p-4">
@@ -190,6 +234,8 @@ export default function Acompanhamento() {
                           <th className="text-right font-medium">Abertos</th>
                           <th className="text-right font-medium">Parados</th>
                           <th className="text-right font-medium">Esquecidos</th>
+                          <th className="text-right font-medium">Em aberto</th>
+                          <th className="text-right font-medium">Ganho</th>
                           <th className="text-right font-medium">Pior</th>
                         </tr>
                       </thead>
@@ -202,6 +248,10 @@ export default function Acompanhamento() {
                             <td className="text-right tabular-nums font-semibold"
                                 style={{ color: p.esquecidos > 0 ? "#F59E0B" : undefined }}>
                               {p.esquecidos}
+                            </td>
+                            <td className="text-right tabular-nums">{brl(p.valor_aberto)}</td>
+                            <td className="text-right tabular-nums" style={{ color: p.valor_ganho > 0 ? "#22C55E" : undefined }}>
+                              {brl(p.valor_ganho)}
                             </td>
                             <td className="text-right tabular-nums text-muted-foreground">{p.pior_dias}d</td>
                           </tr>
@@ -227,6 +277,7 @@ export default function Acompanhamento() {
                           <th className="text-left font-medium py-1.5">Etapa</th>
                           <th className="text-right font-medium">Leads</th>
                           <th className="text-right font-medium">Parados</th>
+                          <th className="text-right font-medium">Valor</th>
                           <th className="text-right font-medium">Média</th>
                           <th className="text-right font-medium">Prazo</th>
                         </tr>
@@ -244,6 +295,12 @@ export default function Acompanhamento() {
                             <td className="text-right tabular-nums font-semibold"
                                 style={{ color: e.parados > 0 ? "#F59E0B" : undefined }}>
                               {e.parados}
+                            </td>
+                            <td className="text-right tabular-nums">
+                              {brl(e.valor)}
+                              {e.com_orcamento > 0 && (
+                                <span className="text-muted-foreground"> · {e.com_orcamento} orç.</span>
+                              )}
                             </td>
                             <td className="text-right tabular-nums text-muted-foreground">{e.dias_medio}d</td>
                             <td className="text-right tabular-nums text-muted-foreground">{e.prazo_dias}d</td>
@@ -323,6 +380,7 @@ export default function Acompanhamento() {
                       </span>
                       {m.motivo}
                       <span className="font-bold tabular-nums">{m.n}</span>
+                      {m.valor > 0 && <span className="text-muted-foreground">{brl(m.valor)}</span>}
                     </span>
                   ))}
                 </div>
@@ -359,6 +417,9 @@ export default function Acompanhamento() {
                           {nomeDe(l.dono)}
                         </p>
                       </div>
+                      {l.valor > 0 && (
+                        <span className="text-xs tabular-nums text-muted-foreground shrink-0">{brl(l.valor)}</span>
+                      )}
                       <span className="inline-flex items-center gap-1 text-xs font-semibold tabular-nums shrink-0"
                             style={{ color: "#F59E0B" }}>
                         <Clock className="h-3.5 w-3.5" />
@@ -396,6 +457,21 @@ function Kpi({ icon, label, value, color, destaque, hint }: {
         <p className="text-2xl font-bold tabular-nums mt-1" style={{ color: destaque && value > 0 ? color : undefined }}>
           {value}
         </p>
+        {hint && <p className="text-[11px] text-muted-foreground mt-0.5">{hint}</p>}
+      </CarboCardContent>
+    </CarboCard>
+  );
+}
+
+const brl = (v: number) =>
+  new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 }).format(v || 0);
+
+function Valor({ label, valor, cor, hint }: { label: string; valor: number; cor: string; hint?: string }) {
+  return (
+    <CarboCard>
+      <CarboCardContent className="p-3.5">
+        <p className="text-xs text-muted-foreground">{label}</p>
+        <p className="text-xl font-bold tabular-nums mt-1" style={{ color: cor }}>{brl(valor)}</p>
         {hint && <p className="text-[11px] text-muted-foreground mt-0.5">{hint}</p>}
       </CarboCardContent>
     </CarboCard>

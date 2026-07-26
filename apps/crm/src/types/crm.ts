@@ -49,6 +49,11 @@ export interface CRMLead {
   city: string | null;
   state: string | null;
   segment: Segment | null;
+  // O que o lead É (PDV, frotista, licenciado…). Substituiu as 9 pipelines por
+  // tipo na consolidação f13. Estava faltando aqui — o código todo usava e o
+  // tipo não declarava, gerando 9 erros de compilação que ninguém via porque o
+  // typecheck não rodava.
+  lead_segment: string | null;
   credit_amount: number;
   estimated_revenue: number;
   temperature: Temperature;
