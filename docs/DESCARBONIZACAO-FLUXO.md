@@ -19,7 +19,7 @@ Legenda: ⬜ não começou · 🟡 em andamento · ✅ entregue · ⏸️ adiado
 | **0** | Mapeamento e decisão de modelagem | `docs/` | ✅ |
 | **1** | Comissão dobrada em venda mista | gestão (SQL) | 🟡 |
 | **2** | Banco da OS: porte, vagas e elo com a venda | licenciados (SQL) | ✅ |
-| **3** | `/vender` grava a OS certa | gestão (5 apps) | ⬜ |
+| **3** | `/vender` grava a OS certa | gestão (5 apps) | ✅ |
 | **4** | Sales lê a OS de volta | gestão (crm) | ⬜ |
 | **5** | Fechar o ciclo OS ↔ venda | ambos | ⬜ |
 | **6** | Execução compartilhada nos dois apps | ambos | ⬜ |
@@ -33,6 +33,7 @@ Detalhe de cada fase, com os passos individuais, na seção 4.
 | 2026-07-25 | 0 | Mapeamento das 4 telas + 12 defeitos + modelo de vagas | `7706c41` |
 | 2026-07-26 | 1 | Comissão: base de produto sem os itens de serviço | `e21457a` |
 | 2026-07-26 | 2 | OS com vagas por unidade vendida + elo com a venda | `ea3b5ca` (lic.) |
+| 2026-07-26 | 3 | /vender manda quantidade, bonificação e tipo de serviço | (este commit) |
 
 ---
 
@@ -270,22 +271,27 @@ decisão de modelagem.*
 
 ---
 
-### Fase 3 — `/vender` grava a OS certa ⬜
+### Fase 3 — `/vender` grava a OS certa ✅
 
 **Repo:** `carbohub-gestao` · **Tipo:** front, **5 cópias**
 (`crm`, `ops`, `admin`, `financas`, `ti`) · **Depende de:** fase 2
 **Resolve:** D2, D3, D5, D6, D9, D10
 
-- [ ] 3.1 Extrair `DESCARB_MODALIDADES` para um módulo único compartilhado,
-      alinhado com `PRECOS` do Licenciados
-- [ ] 3.2 Seletor explícito de tipo de serviço (B2C / B2B / Frota), com default
-      derivado do documento. Frota exige previsão de execução
-- [ ] 3.3 Aviso quando a combinação de portes for inexecutável
-      (`G` só existe em diesel, `P` só em flex)
-- [ ] 3.4 Trocar `os_create` por `os_create_from_sale`, passando os itens de
-      serviço **com bonificação** e o `sale_order_id` / número / total
-- [ ] 3.5 Replicar nas 5 cópias e conferir uma a uma (o CRM tem modo de edição;
-      as outras quatro só criam)
+- [x] 3.1 Tabela de preços vai para `packages/shell/src/descarb.ts`
+      (`@carbo/shell`), com faixa de motor e combustível por porte
+- [x] 3.2 Seletor de tipo de serviço (B2C / B2B / Frota); o documento só dá o
+      palpite inicial e para de mandar assim que o vendedor escolhe. Frota sem
+      data é bloqueada antes de salvar
+- [x] 3.3 **Reformulado:** não existe combinação inexecutável — misturar portes
+      numa OS é normal. O risco real é vender P para um caminhão, então cada
+      porte mostra faixa de motor e combustível na opção e na linha
+- [x] 3.4 `os_create_from_sale` no lugar de `os_create`, com bonificação,
+      `sale_order_id`, número e total; resumo "1 OS com N veículo(s)" na tela
+- [x] 3.5 Replicado nas 5 cópias — `ops`/`admin`/`ti` byte a byte idênticos,
+      `financas` difere só na linha do `useAuth`, `crm` no modo de edição
+- [x] 3.6 `useCreateOS` (OS sem vagas) removido dos 4 apps onde ficou órfão;
+      segue só no `crm`, usado pelo "Nova Descarbonização" manual
+- [x] 3.7 Build dos 5 apps passando
 
 ---
 

@@ -136,6 +136,71 @@ export function useOS() {
   });
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// OS a partir da VENDA — uma vaga de veículo por unidade vendida.
+//
+// os_create (abaixo) cria UMA OS com UM veículo: serve para a OS aberta à mão
+// no Carbox, onde o operador tem o carro na frente. A venda é outro caso — ela
+// sabe a quantidade mas não sabe os carros — e por isso usa os_create_from_sale,
+// que gera sum(qty + bonus) vagas vazias, cada uma com o seu porte.
+// ─────────────────────────────────────────────────────────────────────────────
+export interface OSFromSaleInput {
+  service_type: OsTipo;
+  person_type: OsPersonType;
+  customer_name: string;
+  phone?: string | null;
+  federal_code?: string | null;
+  company?: string | null;
+  email?: string | null;
+  scheduled_at?: string | null;
+  /** [{porte, qty, bonus}] — cada unidade vira uma vaga de veículo. */
+  items: { porte: string; qty: number; bonus: number }[];
+  responsibles?: { name: string; phone?: string | null }[];
+  sale_order_id?: string | null;
+  sale_order_number?: string | null;
+  sale_total?: number | null;
+}
+
+export function useCreateOSFromSale() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: OSFromSaleInput) => {
+      const { data: id, error } = await lic().rpc("os_create_from_sale", {
+        p_person_type:       input.person_type,
+        p_customer_name:     input.customer_name.trim(),
+        p_phone:             input.phone?.trim() || null,
+        p_federal_code:      input.federal_code?.trim() || null,
+        p_company:           input.company?.trim() || null,
+        p_email:             input.email?.trim() || null,
+        p_service_type:      input.service_type,
+        p_scheduled_at:      input.scheduled_at ?? null,
+        p_items:             input.items,
+        p_responsibles:      input.responsibles ?? [],
+        p_sale_order_id:     input.sale_order_id ?? null,
+        p_sale_order_number: input.sale_order_number ?? null,
+        p_sale_total:        input.sale_total ?? null,
+        p_priority:          3,
+      });
+      if (error) throw error;
+
+      // Número gerado (OS-AAAA-#####) + quantas vagas nasceram, para o toast.
+      let numero: string | null = null;
+      let vagas = 0;
+      try {
+        const { data: row } = await lic()
+          .from("service_orders")
+          .select("os_number, vehicles:os_vehicles(id)")
+          .eq("id", id).single();
+        numero = (row?.os_number as string) ?? null;
+        vagas = Array.isArray(row?.vehicles) ? row.vehicles.length : 0;
+      } catch { /* cosmético */ }
+
+      return { id: id as string, numero, vagas };
+    },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["os_sales"] }); },
+  });
+}
+
 /** Cria uma OS de descarbonização na fonte de verdade (RPC os_create). */
 export function useCreateOS() {
   const qc = useQueryClient();

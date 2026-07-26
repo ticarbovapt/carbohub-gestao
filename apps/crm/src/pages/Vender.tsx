@@ -26,7 +26,12 @@ import { generateQuotePdf } from "@/lib/quotePdf";
 import { useCreateVenda, useUpdateVendaFull } from "@/hooks/useVendas";
 import { useConvertQuote } from "@/hooks/useCarbozeVendas";
 import { useProdutos } from "@/hooks/useProdutos";
-import { useCreateOS } from "@/hooks/useOS";
+import { useCreateOSFromSale } from "@/hooks/useOS";
+import {
+  DESCARB_MODALIDADES, DESCARB_SERVICE_TYPES,
+  modalidadePrice, modalidadeLabel, modalidadeHint,
+  servicoPadraoPorDoc, type DescarbServiceType,
+} from "@carbo/shell";
 import { useDiscountTiersPublic } from "@/hooks/useDiscountTiers";
 import { computeLineDiscount, resolveTier } from "@/lib/discount";
 import { usePrazoConfigPublic } from "@/hooks/usePrazoConfig";
@@ -57,12 +62,10 @@ interface ItemRow {
 }
 const emptyRow = (): ItemRow => ({ id: crypto.randomUUID(), productId: "", qty: 1, unitPrice: 0, unitPriceStr: "", hasBonus: false, bonusQty: 0, discType: "percent", discValue: 0 });
 
-// ── Itens de Serviço (descarbonizações): preço FIXO por modalidade ──
-const DESCARB_MODALIDADES = [
-  { key: "P", label: "Descarbonização P", price: 400 },
-  { key: "M", label: "Descarbonização M", price: 700 },
-  { key: "G", label: "Descarbonização G", price: 1400 },
-] as const;
+// ── Itens de Serviço (descarbonizações) ──
+// A tabela de preços vive em @carbo/shell: era hardcoded aqui nos 5 apps, e
+// cinco cópias do preço é cinco chances de divergir. O Licenciados tem a dele
+// (NewSalePage.tsx) — repo separado, sem como importar; as duas se espelham.
 
 // Linha de serviço: separada da de produto. Preço vem fixo da modalidade.
 interface ServiceRow {
@@ -70,9 +73,6 @@ interface ServiceRow {
   discType: "percent" | "value"; discValue: number;
 }
 const emptyServiceRow = (): ServiceRow => ({ id: crypto.randomUUID(), modality: "", qty: 1, hasBonus: false, bonusQty: 0, discType: "percent", discValue: 0 });
-// Preço fixo da modalidade selecionada (0 se ainda não escolheu).
-const modalidadePrice = (m: ServiceRow["modality"]): number => DESCARB_MODALIDADES.find((x) => x.key === m)?.price ?? 0;
-const modalidadeLabel = (m: ServiceRow["modality"]): string => DESCARB_MODALIDADES.find((x) => x.key === m)?.label ?? "Serviço";
 
 // Preço em pt-BR: aceita vírgula como decimal ("1,50") ou ponto ("1.50"); com
 // vírgula, os pontos são separador de milhar. String vazia → 0.
@@ -113,7 +113,7 @@ export default function Vender() {
   const createVenda = useCreateVenda();
   const updateVenda = useUpdateVendaFull();
   const convertQuote = useConvertQuote();
-  const createOS = useCreateOS();
+  const createOSFromSale = useCreateOSFromSale();
   const [searchParams] = useSearchParams();
   const editId = searchParams.get("edit");
   const { data: produtos = [] } = useProdutos();
@@ -195,6 +195,11 @@ export default function Vender() {
   const [dateOpen, setDateOpen] = useState(false);
   // Previsão de execução da descarbonização (serviço) — independente da entrega.
   const [executionDate, setExecutionDate] = useState("");
+  // Tipo da OS de descarbonização. Antes era derivado do documento (CNPJ→b2b),
+  // então "frota" nunca era criada nem com 9 carros na venda. Agora o vendedor
+  // escolhe, com o documento só dando o palpite inicial.
+  const [serviceType, setServiceType] = useState<DescarbServiceType>("b2c");
+  const [serviceTypeTocado, setServiceTypeTocado] = useState(false);
   const [execDateOpen, setExecDateOpen] = useState(false);
   const { data: prazoCfg = { enabled: false, minBusinessDays: 3, shipOffsetDays: 1 } } = usePrazoConfigPublic();
   const prazos = useMemo(
@@ -400,6 +405,34 @@ export default function Vender() {
   // Há ao menos um item válido de serviço? (habilita a previsão de execução.)
   const hasValidService = serviceRows.some((s) => s.modality && s.qty > 0);
 
+  // Itens no formato da RPC: cada unidade (paga OU bonificada) vira uma vaga de
+  // veículo na OS. A bonificação entra aqui porque o carro bonificado também é
+  // um carro que alguém vai descarbonizar.
+  const serviceItemsRpc = () =>
+    serviceRows
+      .filter((s) => s.modality && s.qty > 0)
+      .map((s) => ({
+        porte: s.modality as string,
+        qty: s.qty,
+        bonus: s.hasBonus ? Math.max(0, s.bonusQty) : 0,
+      }));
+
+  // Quantos veículos a OS vai ter (pagos + bonificados).
+  const vagasPrevistas = serviceItemsRpc().reduce((n, i) => n + i.qty + i.bonus, 0);
+
+  // Frota exige agendamento — a RPC recusa sem scheduled_at, então é melhor
+  // barrar aqui do que salvar a venda e falhar na OS.
+  const frotaSemData = hasValidService && serviceType === "frota" && !executionDate;
+
+  // Palpite do tipo de serviço pelo documento — só enquanto o vendedor não
+  // tiver escolhido à mão. CNPJ sugere B2B; se ele trocar para Frota, a escolha
+  // dele manda e o documento para de mexer.
+  useEffect(() => {
+    if (serviceTypeTocado) return;
+    setServiceType(servicoPadraoPorDoc(doc));
+  }, [doc, serviceTypeTocado]);
+
+
   // Junta notas internas + dados estratégicos num bloco (coluna internal_notes),
   // pra nada ser digitado e descartado.
   function buildInternalNotes(): string | undefined {
@@ -424,14 +457,14 @@ export default function Vender() {
     endereco: typeof endereco; fatMesmo: boolean; fatEndereco: typeof fatEndereco;
     ie: string; ieUf: string; pagModalidade: string; pagParcelas: string; pagFaturamento: string;
     discReason: string; deliveryDate: string;
-    serviceRows: ServiceRow[]; executionDate: string;
+    serviceRows: ServiceRow[]; executionDate: string; serviceType?: DescarbServiceType;
   };
   function formSnapshot(): FormSnapshot {
     return {
       mode, doc, customerName, email, phone, isLicenciado, rows, obsPublica, notasInternas,
       tipoPonto, classificacao, volumeMedio, atuaDiesel, atuaFrotas, vendedorId, endereco, fatMesmo,
       fatEndereco, ie, ieUf, pagModalidade, pagParcelas, pagFaturamento, discReason, deliveryDate,
-      serviceRows, executionDate,
+      serviceRows, executionDate, serviceType,
     };
   }
 
@@ -452,6 +485,9 @@ export default function Vender() {
       setPagModalidade(snap.pagModalidade ?? ""); setPagParcelas(snap.pagParcelas ?? "1"); setPagFaturamento(snap.pagFaturamento ?? "");
       setDiscReason(snap.discReason ?? ""); setDeliveryDate(snap.deliveryDate ?? "");
       setServiceRows(snap.serviceRows ?? []); setExecutionDate(snap.executionDate ?? "");
+      // Orçamento antigo não tem o campo: cai no palpite pelo documento.
+      if (snap.serviceType) { setServiceType(snap.serviceType); setServiceTypeTocado(true); }
+      else setServiceType(servicoPadraoPorDoc(snap.doc ?? ""));
       if (snap.tipoPonto || snap.classificacao || snap.volumeMedio || snap.atuaDiesel || snap.atuaFrotas) setShowEstrategicos(true);
       if (snap.obsPublica || snap.notasInternas) setShowObs(true);
     } else {
@@ -547,6 +583,7 @@ export default function Vender() {
     setDiscReason("");
     setDeliveryDate("");
     setServiceRows([]); setExecutionDate("");
+    setServiceType("b2c"); setServiceTypeTocado(false);
   }
 
   async function handleQuote() {
@@ -554,6 +591,7 @@ export default function Vender() {
     if (items.length === 0 && validServiceItems().length === 0) { toast.error("Adicione ao menos um item."); return; }
     if (items.some((i) => !(i.unit_price > 0))) { toast.error("Informe o preço unitário de todos os itens."); return; }
     if (!pagamentoValido) { toast.error("Selecione a forma de pagamento."); return; }
+    if (frotaSemData) { toast.error("Frota exige a previsão de execução — a OS não é aberta sem data."); return; }
     setGenerating(true);
     try {
       // 1) Salva/atualiza o orçamento — no create o banco atribui o número (atômico);
@@ -586,6 +624,7 @@ export default function Vender() {
     if (items.length === 0 && validServiceItems().length === 0) { toast.error("Adicione ao menos um item."); return; }
     if (items.some((i) => !(i.unit_price > 0))) { toast.error("Informe o preço unitário de todos os itens."); return; }
     if (!pagamentoValido) { toast.error("Selecione a forma de pagamento."); return; }
+    if (frotaSemData) { toast.error("Frota exige a previsão de execução — a OS não é aberta sem data."); return; }
     if (!email || !email.includes("@")) { toast.error("Informe o e-mail do cliente para enviar o orçamento."); return; }
     setEmailing(true);
     try {
@@ -622,27 +661,49 @@ export default function Vender() {
     } finally { setEmailing(false); }
   }
 
-  // Descarbonização vira OS (pendente, sem veículo) na fonte de verdade e é
-  // vinculada à venda (descarb_os_id). A previsão de execução vira o agendamento
-  // (scheduled_at → calendário). Falha aqui NÃO derruba a venda (já salva).
-  async function createDescarbOSForSale(orderId: string) {
-    if (validServiceItems().length === 0) return;
+  // Descarbonização vira OS na fonte de verdade (licenciados.service_orders),
+  // com UMA VAGA DE VEÍCULO por unidade vendida — pagas e bonificadas. Vender 5P
+  // + 3M + 1G cria uma OS com 9 vagas vazias, cada uma com o seu porte; o Carbox
+  // preenche placa/modelo/ano na execução. A previsão de execução vira o
+  // agendamento (scheduled_at → calendário).
+  //
+  // Falha aqui NÃO derruba a venda (já salva) — mas agora a mensagem diz o
+  // número do pedido, porque o toast some e a reconciliação depende dele.
+  async function createDescarbOSForSale(orderId: string, orderNumber: string | null) {
+    const itens = serviceItemsRpc();
+    if (itens.length === 0) return;
     const digits = doc.replace(/\D/g, "");
-    const pj = digits.length > 11;
+    const pj = serviceType !== "b2c";
     try {
-      const { id: osId, numero } = await createOS.mutateAsync({
-        service_type: pj ? "b2b" : "b2c",
+      const { id: osId, numero, vagas } = await createOSFromSale.mutateAsync({
+        service_type: serviceType,
         person_type: pj ? "pj" : "pf",
         customer_name: customerName.trim() || "Cliente",
         phone: phone.trim() || null,
         federal_code: pj ? (digits || null) : null,
         email: email.trim() || null,
         scheduled_at: executionDate ? new Date(executionDate + "T00:00:00").toISOString() : null,
+        items: itens,
+        sale_order_id: orderId,
+        sale_order_number: orderNumber,
+        sale_total: servTotal,
       });
-      await (supabase as any).from("carboze_orders").update({ descarb_os_id: osId }).eq("id", orderId);
-      toast.success(`OS ${numero ?? ""} de descarbonização criada.`);
-    } catch {
-      toast.error("Venda salva, mas houve erro ao criar a OS de descarbonização. Crie manualmente em Descarbonização › OS.");
+      // O elo de ida (venda → OS). O de volta (OS → venda) a RPC já gravou.
+      const { data: linked } = await (supabase as any)
+        .from("carboze_orders").update({ descarb_os_id: osId }).eq("id", orderId).select("id");
+      if (!linked?.length) {
+        toast.warning(`OS ${numero ?? ""} criada, mas não consegui vinculá-la ao pedido. Avise o TI.`);
+      } else {
+        const n = vagas || itens.reduce((s, i) => s + i.qty + i.bonus, 0);
+        toast.success(`OS ${numero ?? ""} criada com ${n} veículo(s) para executar.`);
+      }
+    } catch (e) {
+      toast.error(
+        `Venda ${orderNumber ?? ""} salva, mas a OS de descarbonização NÃO foi criada` +
+        (e instanceof Error ? `: ${e.message}` : ".") +
+        " Abra em Descarbonização › OS e crie manualmente.",
+        { duration: 12000 },
+      );
     }
   }
 
@@ -650,17 +711,18 @@ export default function Vender() {
     if (validItems().length === 0 && validServiceItems().length === 0) { toast.error("Adicione ao menos um item."); return; }
     if (validItems().some((i) => !(i.unit_price > 0))) { toast.error("Informe o preço unitário de todos os itens."); return; }
     if (!pagamentoValido) { toast.error("Selecione a forma de pagamento."); return; }
+    if (frotaSemData) { toast.error("Frota exige a previsão de execução — a OS não é aberta sem data."); return; }
     try {
       if (editId) {
         // Salva as edições mantendo o orçamento e converte pelo caminho oficial.
         await updateVenda.mutateAsync({ id: editId, input: buildPayload("orcamento") });
         await convertQuote.mutateAsync(editId);
         toast.success("Orçamento editado e convertido em venda!");
-        if (!editOrder?.descarb_os_id) await createDescarbOSForSale(editId);
+        if (!editOrder?.descarb_os_id) await createDescarbOSForSale(editId, editOrder?.order_number ?? null);
       } else {
         const created = await createVenda.mutateAsync(buildPayload("pedido"));
         toast.success(`Venda ${created.numero ?? ""} registrada!`);
-        await createDescarbOSForSale(created.id);
+        await createDescarbOSForSale(created.id, created.numero);
       }
       resetForm();
       navigate("/pedidos");
@@ -1071,6 +1133,27 @@ export default function Vender() {
             <p className="text-xs text-muted-foreground">Nenhum serviço adicionado. Use “Adicionar Serviço” para incluir descarbonizações.</p>
           )}
 
+          {/* Tipo da OS. Define como o Carbox recebe o serviço — e Frota exige
+              data, porque uma ida com vários carros precisa estar agendada. */}
+          {serviceRows.length > 0 && (
+            <div className="space-y-1.5">
+              <Label>Tipo de serviço</Label>
+              <div className="flex flex-wrap gap-2">
+                {DESCARB_SERVICE_TYPES.map((st) => {
+                  const on = serviceType === st.key;
+                  return (
+                    <button key={st.key} type="button"
+                      onClick={() => { setServiceType(st.key); setServiceTypeTocado(true); }}
+                      className={`rounded-lg border px-3 py-2 text-left transition-colors ${on ? "border-carbo-green bg-carbo-green/10" : "hover:bg-muted"}`}>
+                      <span className={`block text-sm font-semibold ${on ? "text-carbo-green" : ""}`}>{st.label}</span>
+                      <span className="block text-[11px] text-muted-foreground">{st.hint}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           {serviceRows.map((s) => {
             const price = modalidadePrice(s.modality);
             const bruto = s.qty * price;
@@ -1082,8 +1165,20 @@ export default function Vender() {
                     <Label>Modalidade</Label>
                     <Select value={s.modality} onValueChange={(v) => updateServiceRow(s.id, { modality: v as ServiceRow["modality"] })}>
                       <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
-                      <SelectContent>{DESCARB_MODALIDADES.map((m) => <SelectItem key={m.key} value={m.key}>{m.label} — {brl(m.price)}</SelectItem>)}</SelectContent>
+                      <SelectContent>
+                        {DESCARB_MODALIDADES.map((m) => (
+                          <SelectItem key={m.key} value={m.key}>
+                            {m.label} — {brl(m.price)}
+                            <span className="text-muted-foreground"> · {m.motor} · {m.fuels.length === 2 ? "flex ou diesel" : m.fuels[0]}</span>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
                     </Select>
+                    {/* O vendedor não vê o veículo — a faixa de motor é o que
+                        evita vender P para um caminhão. */}
+                    {s.modality && (
+                      <p className="text-[11px] text-muted-foreground">{modalidadeHint(s.modality)}</p>
+                    )}
                   </div>
                   <div className="space-y-1.5">
                     <Label>Quantidade</Label>
@@ -1138,6 +1233,21 @@ export default function Vender() {
               </div>
             );
           })}
+
+          {/* Quantas OS-vagas isso vira. É o número que o Carbox vai ver como
+              carros a executar — pagos + bonificados. */}
+          {vagasPrevistas > 0 && (
+            <div className="rounded-xl border border-carbo-green/30 bg-carbo-green/5 px-3 py-2 text-sm">
+              Vai gerar <strong>1 OS com {vagasPrevistas} veículo(s)</strong> para executar
+              {serviceItemsRpc().some((i) => i.bonus > 0) && " (bonificados incluídos)"}.
+            </div>
+          )}
+
+          {frotaSemData && (
+            <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-600">
+              Frota precisa da <strong>previsão de execução</strong> — sem data a OS não é aberta.
+            </div>
+          )}
 
           {/* Resumo dos serviços: subtotal · desconto · total */}
           {serviceRows.length > 0 && (

@@ -9,6 +9,15 @@ export {
 export type { AppKey, EcoApp, SwitcherApp, Identity, SwitcherProfile } from "./apps";
 export type { AppSwitcherProps } from "./AppSwitcher";
 export { cn } from "./cn";
+export {
+  DESCARB_MODALIDADES, DESCARB_SERVICE_TYPES,
+  modalidadePrice, modalidadeLabel, modalidadeHint,
+  servicoPadraoPorDoc, totalVagas,
+} from "./descarb";
+export type {
+  DescarbPorte, DescarbFuel, DescarbModalidade,
+  DescarbServiceType, DescarbItemRpc,
+} from "./descarb";
 export type {
   ShellNavItem,
   ShellNavSection,
