@@ -45,7 +45,8 @@ begin
   -- Editar um orçamento (quote → quote) segue livre, que é o caso legítimo.
   if new.status::text = 'quote' and old.status::text is distinct from 'quote' then
     raise exception
-      'Pedido % já é uma venda (%s) e não volta a ser orçamento. '
+      -- Em PL/pgSQL o placeholder é % — um %s vira "%" mais a letra "s" solta.
+      'Pedido % já é uma venda (%) e não volta a ser orçamento. '
       'Para desfazer, cancele o pedido e gere um novo orçamento.',
       coalesce(old.order_number, old.id::text), old.status
       using errcode = 'check_violation';
@@ -77,7 +78,7 @@ reset lock_timeout;
 --
 --   update public.carboze_orders set status = 'quote'
 --    where id = (select id from public.carboze_orders where status = 'pending' limit 1);
---   → ERROR: Pedido XXX já é uma venda (pending) e não volta a ser orçamento.
+--   → ERROR: Pedido BLING-42 já é uma venda (pending) e não volta a ser orçamento.
 --
 -- E editar um orçamento de verdade tem que continuar funcionando:
 --
