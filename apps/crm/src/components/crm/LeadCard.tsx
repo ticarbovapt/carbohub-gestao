@@ -1,9 +1,19 @@
-import { Phone, ChevronRight, AlertTriangle, ArrowLeftRight, Megaphone } from "lucide-react";
+import { Phone, ChevronRight, AlertTriangle, ArrowLeftRight, Megaphone, Hourglass } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ProfileAvatar } from "@/components/ui/profile-avatar";
 import type { CRMLead, FunnelType } from "@/types/crm";
-import { getDaysSinceUpdate, segmentOf, sourceLabel, FUNNEL_CONFIG } from "@/types/crm";
+import {
+  getDaysSinceUpdate, segmentOf, sourceLabel, FUNNEL_CONFIG,
+  waitingLabel, esperaVencida,
+} from "@/types/crm";
+
+// Data-só é parseada como UTC por new Date("2026-07-30") e volta um dia no
+// fuso do Brasil. Monta a data local componente a componente.
+const dataCurta = (iso: string) => {
+  const [y, m, d] = iso.split("-").map(Number);
+  return new Date(y, m - 1, d).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
+};
 
 const funilCurto = (id: string | null | undefined) =>
   (id ? FUNNEL_CONFIG[id as FunnelType]?.shortName : null) ?? "outro funil";
@@ -88,6 +98,26 @@ export function LeadCard({ lead, funnelType: _funnelType, owner, onAdvance, onMa
           </span>
         </div>
       ) : null}
+
+      {/* AGUARDANDO — de quem o negócio depende, e até quando.
+          Vencida fica vermelha: alguém prometeu uma data e ela passou, o que é
+          cobrança, não abandono. Sem prazo em dia a flag simplesmente não
+          aparece — é o que impede o "aguardando" eterno. */}
+      {lead.waiting_on && lead.waiting_until && (
+        <div className="mb-2">
+          <span
+            className={`inline-flex items-center gap-1 text-[10px] font-medium rounded-full px-1.5 py-0.5 ${
+              esperaVencida(lead)
+                ? "bg-destructive/15 text-destructive"
+                : "bg-amber-500/15 text-amber-500"
+            }`}
+            title={lead.waiting_note ?? undefined}
+          >
+            <Hourglass className="h-2.5 w-2.5" />
+            {waitingLabel(lead.waiting_on)} · {dataCurta(lead.waiting_until)}
+          </span>
+        </div>
+      )}
 
       {/* Origem (visão "Todos os funis") — de qual pipeline o card veio */}
       {originFunnel && (

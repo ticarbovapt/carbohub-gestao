@@ -27,8 +27,8 @@ Todo achado abaixo foi verificado direto no código antes de entrar aqui.
 | **5** | O cadastro do SDR | origem limpa + campos de qualificação | ✅ |
 | **6** | Coluna `nutricao` no Outbound | a rotina diária do SDR | ✅ |
 | **7** | Duplicação Outbound → Inbound | o handoff do SDR | ✅ |
-| **8** | Colunas do Inbound (`orcamento`, `formalizacao`) | o funil do closer | 🟡 código no ar, **SQL pendente** |
-| **9** | Flag `waiting_on` — o "parado" | separa "aguardando" de "esquecido" na tela | ⬜ |
+| **8** | Colunas do Inbound (`orcamento`, `formalizacao`) | o funil do closer | ✅ |
+| **9** | Flag `waiting_on` — o "parado" | separa "aguardando" de "esquecido" na tela | 🟡 código no ar, **SQL pendente** |
 | **10** | Elo card ↔ orçamento (`/vender`) + B5, B6 | "o sistema todo se conversar" | ⬜ |
 | **11** | Canais automáticos (webhooks, formulário, Chatwoot) | ⏸️ **adiado** — Chatwoot não existe ainda | ⏸️ |
 

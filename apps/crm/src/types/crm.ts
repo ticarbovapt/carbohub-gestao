@@ -8,6 +8,28 @@ export type LeadStage =
   | "contatado" | "visita_agendada" | "pedido_inicial";
 
 export type Temperature = "frio" | "morno" | "quente";
+
+export type WaitingOn = "cliente" | "decisor" | "interno" | "credito_doc";
+
+export const WAITING_OPTIONS: { id: WaitingOn; label: string; hint: string }[] = [
+  { id: "cliente",     label: "O cliente",         hint: "recebeu e não respondeu" },
+  { id: "decisor",     label: "O decisor",         hint: "está com quem assina" },
+  { id: "interno",     label: "Nós",               hint: "falta algo do nosso lado" },
+  { id: "credito_doc", label: "Crédito / documento", hint: "cadastro, IE, limite" },
+];
+
+export const waitingLabel = (id: string | null | undefined) =>
+  (id ? WAITING_OPTIONS.find((w) => w.id === id)?.label : null) ?? id ?? "—";
+
+/** A flag só vale enquanto o prazo dela não venceu. */
+export function esperaValida(l: { waiting_on?: string | null; waiting_until?: string | null }): boolean {
+  if (!l.waiting_on || !l.waiting_until) return false;
+  return l.waiting_until >= new Date().toISOString().slice(0, 10);
+}
+export function esperaVencida(l: { waiting_on?: string | null; waiting_until?: string | null }): boolean {
+  if (!l.waiting_on || !l.waiting_until) return false;
+  return l.waiting_until < new Date().toISOString().slice(0, 10);
+}
 export type Segment = "A" | "B" | "C" | "D";
 
 export interface CRMLead {
@@ -55,6 +77,13 @@ export interface CRMLead {
   qual_dor: string | null;
   qual_decisor: string | null;
   qual_prazo: string | null;
+  // "Aguardando" é FLAG e não coluna: aguardar é ortogonal à etapa — dá para
+  // aguardar em Proposta, Negociação e Formalização, e são coisas diferentes.
+  // O prazo é obrigatório (CHECK no banco) e, quando vence, a flag deixa de
+  // valer na leitura. É o que impede o "aguardando" eterno.
+  waiting_on: WaitingOn | null;
+  waiting_until: string | null;
+  waiting_note: string | null;
   // Vínculo do repasse Outbound → Inbound. Relatório de receita filtra por
   // `origin_lead_id is null` para não contar o mesmo negócio duas vezes.
   origin_lead_id: string | null;

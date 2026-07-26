@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   X, ChevronRight, ArrowRightLeft, ShoppingCart, History,
-  StickyNote, Phone, CheckSquare, Clock, GitBranch, AlertTriangle, Pin, PinOff, Archive,
+  StickyNote, Phone, CheckSquare, Clock, GitBranch, AlertTriangle, Pin, PinOff, Archive, Hourglass,
   MessageSquare, ArrowRight, Pencil,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -13,8 +13,9 @@ import type { CRMLead, FunnelType } from "@/types/crm";
 import {
   FUNNEL_CONFIG, getCloseReasons, getStagesForFunnel, getNextStage, getLostStage,
   isTerminalStage, isHandoffStage, getDaysSinceUpdate, SEGMENTS, segmentOf,
-  stageLabelAnywhere, sourceLabel,
+  stageLabelAnywhere, sourceLabel, WAITING_OPTIONS, waitingLabel, esperaVencida,
 } from "@/types/crm";
+
 import {
   useAdvanceLeadStage, useMarkLeadLost, useTransferLead, useLeadOwnerLog,
   useLeadActivities, useAddLeadActivity, useUpdateCRMLead,
@@ -25,6 +26,14 @@ import { useRepassarLead, usePegarLead } from "@/hooks/useRepasse";
 import { useVendedoresDir } from "@/hooks/useVendas";
 import { useAuth } from "@/contexts/AuthContext";
 import { StageProgressBar, getStageGroup } from "./StageProgressBar";
+
+const hojeISO = () => new Date().toISOString().slice(0, 10);
+// Data-só vira UTC em new Date("2026-07-30") e volta um dia no fuso do Brasil.
+const dataBR = (iso: string) => {
+  const [y, m, d] = iso.split("-").map(Number);
+  return new Date(y, m - 1, d).toLocaleDateString("pt-BR");
+};
+
 
 interface DealDetailProps {
   lead: CRMLead;
@@ -85,6 +94,31 @@ export function DealDetail({ lead, funnelType, onClose }: DealDetailProps) {
 
   const [showLostForm, setShowLostForm] = useState(false);
   const [showRepasse, setShowRepasse] = useState(false);
+  const [editEspera, setEditEspera] = useState(false);
+  const [wOn, setWOn] = useState(lead.waiting_on ?? "");
+  const [wUntil, setWUntil] = useState(lead.waiting_until ?? "");
+  const [wNote, setWNote] = useState(lead.waiting_note ?? "");
+  useEffect(() => {
+    setWOn(lead.waiting_on ?? ""); setWUntil(lead.waiting_until ?? "");
+    setWNote(lead.waiting_note ?? ""); setEditEspera(false);
+  }, [lead.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  function startEditEspera() {
+    setWOn(lead.waiting_on ?? ""); setWNote(lead.waiting_note ?? "");
+    // Prazo vencido não é reaproveitado: renovar exige escolher uma data nova,
+    // senão "renovar" viraria um clique que não muda nada.
+    setWUntil(lead.waiting_until && lead.waiting_until >= hojeISO() ? lead.waiting_until : "");
+    setEditEspera(true);
+  }
+  async function salvarEspera() {
+    await updateLead.mutateAsync({
+      id: lead.id,
+      waiting_on: wOn as CRMLead["waiting_on"],
+      waiting_until: wUntil,
+      waiting_note: wNote.trim() || null,
+    });
+    setEditEspera(false);
+  }
   const [repasseNota, setRepasseNota] = useState("");
   // Vazio de propósito — vinha pré-marcado no primeiro item ("Preço").
   const [lostReason, setLostReason] = useState("");
@@ -312,6 +346,92 @@ export function DealDetail({ lead, funnelType, onClose }: DealDetailProps) {
         <div className="flex flex-1 flex-col overflow-hidden lg:flex-row">
           {/* Esquerda — campos (~40%) */}
           <div className="w-full space-y-4 overflow-y-auto border-b p-5 lg:w-2/5 lg:border-b-0 lg:border-r">
+            {/* AGUARDANDO — a resposta para "por que este negócio parou?".
+                Flag, não coluna: aguardar é ortogonal à etapa, e o card
+                continua sendo trabalho do mesmo closer, no mesmo lugar do
+                funil. O prazo é obrigatório e, vencido, o card volta a contar
+                como esquecido — é o que impede o "aguardando" eterno. */}
+            {!terminal && (
+              <div className={`rounded-lg border p-3 space-y-2 ${
+                lead.waiting_on && esperaVencida(lead) ? "border-destructive/40 bg-destructive/5"
+                : lead.waiting_on ? "border-amber-500/40 bg-amber-500/5"
+                : "border-border"
+              }`}>
+                <p className="flex items-center gap-1.5 text-xs font-medium">
+                  <Hourglass className="h-3.5 w-3.5" />
+                  {lead.waiting_on
+                    ? (esperaVencida(lead) ? "A espera venceu" : "Aguardando")
+                    : "Este negócio está parado esperando algo?"}
+                </p>
+
+                {lead.waiting_on && !editEspera ? (
+                  <>
+                    <p className="text-sm">
+                      {waitingLabel(lead.waiting_on)}
+                      {lead.waiting_until && <> · até <strong>{dataBR(lead.waiting_until)}</strong></>}
+                    </p>
+                    {lead.waiting_note && (
+                      <p className="text-xs text-muted-foreground">{lead.waiting_note}</p>
+                    )}
+                    {esperaVencida(lead) && (
+                      <p className="text-xs text-destructive">
+                        O prazo passou. Ou renove com uma data nova, ou volte a tocar o negócio —
+                        enquanto estiver vencido ele conta como esquecido.
+                      </p>
+                    )}
+                    <div className="flex gap-2">
+                      <Button size="sm" variant="outline" onClick={() => startEditEspera()}>
+                        {esperaVencida(lead) ? "Renovar prazo" : "Alterar"}
+                      </Button>
+                      <Button size="sm" variant="ghost" disabled={updateLead.isPending}
+                        onClick={() => updateLead.mutate({
+                          id: lead.id, waiting_on: null, waiting_until: null, waiting_note: null,
+                        })}>
+                        Não estou mais esperando
+                      </Button>
+                    </div>
+                  </>
+                ) : editEspera ? (
+                  <>
+                    <select
+                      className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
+                      value={wOn} onChange={(e) => setWOn(e.target.value)}
+                    >
+                      <option value="">Selecione de quem depende…</option>
+                      {WAITING_OPTIONS.map((w) => (
+                        <option key={w.id} value={w.id}>{w.label} — {w.hint}</option>
+                      ))}
+                    </select>
+                    <div className="space-y-1">
+                      <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                        Até quando (obrigatório)
+                      </p>
+                      <input
+                        type="date" className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
+                        value={wUntil} min={hojeISO()} onChange={(e) => setWUntil(e.target.value)}
+                      />
+                    </div>
+                    <input
+                      className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
+                      placeholder="Ex.: Marcos leva pro sócio na terça"
+                      value={wNote} onChange={(e) => setWNote(e.target.value)}
+                    />
+                    <div className="flex gap-2">
+                      <Button size="sm" disabled={!wOn || !wUntil || updateLead.isPending}
+                        onClick={salvarEspera}>
+                        {updateLead.isPending ? "Salvando…" : "Salvar"}
+                      </Button>
+                      <Button size="sm" variant="outline" onClick={() => setEditEspera(false)}>Cancelar</Button>
+                    </div>
+                  </>
+                ) : (
+                  <Button size="sm" variant="outline" className="w-full" onClick={() => startEditEspera()}>
+                    Marcar como aguardando
+                  </Button>
+                )}
+              </div>
+            )}
+
             {/* Card que chegou por repasse e ainda não tem dono: fila aberta. */}
             {lead.origin_lead_id && !lead.assigned_to && (
               <div className="rounded-lg border border-primary/40 bg-primary/5 p-3 space-y-2">

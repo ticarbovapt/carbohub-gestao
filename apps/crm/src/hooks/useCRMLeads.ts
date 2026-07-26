@@ -344,11 +344,16 @@ export function useAdvanceLeadStage() {
       if (["contatado", "tentativa_1", "tentativa_2"].includes(newStage)) {
         updates.last_contact_at = new Date().toISOString();
       }
-      if (["em_negociacao", "proposta", "proposta_tecnica"].includes(newStage)) {
-        updates.temperature = "quente";
-      } else if (["qualificado", "apresentacao", "diagnostico", "poc", "visita_agendada"].includes(newStage)) {
-        updates.temperature = "morno";
-      }
+      // A temperatura NÃO é mais mexida automaticamente pela etapa.
+      //
+      // Enquanto o sistema pintava de "quente" todo card que entrava em
+      // proposta, o indicador de parado era contradito pela cor: um card
+      // abandonado há três semanas continuava vermelho de urgente. Pior, a
+      // temperatura deixava de significar leitura de quem conversou com o
+      // cliente e passava a ser só um espelho da coluna — informação
+      // duplicada, e a menos confiável das duas.
+      //
+      // Continua editável à mão no detalhe do lead, que é onde ela vale.
       // Carimba a data de fechamento. A lista literal daqui esquecia `ganho` e
       // `recomprou` — todo negócio fechado no Inbound e no Follow up ficava sem
       // data, o que inviabiliza qualquer série de "ganhos por dia".

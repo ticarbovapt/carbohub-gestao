@@ -23,7 +23,10 @@ import { DealDetail } from "@/components/crm/DealDetail";
 import {
   FUNNEL_CONFIG, getStagesForFunnel, getNextStage, getCloseReasons,
   WON_STAGES, LOST_STAGES, HANDOFF_STAGES, isLostStage, isHandoffStage,
+  isTerminalStage, esperaValida, esperaVencida,
 } from "@/types/crm";
+
+const hojeISO = () => new Date().toISOString().slice(0, 10);
 import type { FunnelType, CRMLead } from "@/types/crm";
 import { toast } from "sonner";
 import { playMoveSuccess } from "@/lib/sfx";
@@ -181,6 +184,10 @@ export default function Pipelines() {
   const [drawerLead, setDrawerLead] = useState<CRMLead | null>(null);
   const [viewMode, setViewMode] = useState<"kanban" | "list">("kanban");
   const [vendedorFilter, setVendedorFilter] = useState("all");
+  // Chips de situação. Respondem "o que exige a MINHA atenção agora?", que é
+  // uma pergunta diferente de "em que etapa está?" — por isso filtro, e não
+  // coluna.
+  const [situacao, setSituacao] = useState<"all" | "meus" | "aguardando" | "sem_passo" | "vencido">("all");
   // Segmento: multi-seleção. O vendedor que só cuida de PDV volta ao CRM já no
   // mundo dele — é o que faz a fusão das pipelines não parecer perda de foco.
   const SEG_KEY = "crm:segmentos";
@@ -230,7 +237,25 @@ export default function Pipelines() {
   // uma edição (ex.: nome fantasia) aparece na hora, sem precisar de F5.
   const liveDrawerLead = drawerLead ? (baseLeads.find((l) => l.id === drawerLead.id) ?? drawerLead) : null;
 
+  // "Sem próximo passo" é o sinal de que ninguém está tocando o negócio: nem
+  // follow-up marcado, nem espera declarada com prazo em dia. É a mesma regra
+  // do "esquecido" da tela de acompanhamento, só que aqui sem o critério de
+  // prazo da etapa — no board o closer quer ver TODOS os que estão soltos.
+  const semProximoPasso = (l: CRMLead) =>
+    !esperaValida(l) &&
+    (!l.next_follow_up_at || l.next_follow_up_at.slice(0, 10) < hojeISO());
+
+  const passaSituacao = (lead: CRMLead) => {
+    if (situacao === "all") return true;
+    if (isTerminalStage(lead.stage)) return false;   // encerrado não pede ação
+    if (situacao === "meus") return lead.assigned_to === user?.id;
+    if (situacao === "aguardando") return esperaValida(lead);
+    if (situacao === "vencido") return esperaVencida(lead);
+    return semProximoPasso(lead);
+  };
+
   const passaBuscaEVendedor = (lead: CRMLead) => {
+    if (!passaSituacao(lead)) return false;
     if (vendedorFilter !== "all") {
       const l = lead as { assigned_to?: string | null; created_by?: string | null };
       if (l.assigned_to !== vendedorFilter && l.created_by !== vendedorFilter) return false;
@@ -245,6 +270,18 @@ export default function Pipelines() {
       (lead.cnpj || "").includes(q)
     );
   };
+  // Contagem dos chips: sobre o funil inteiro, ignorando os demais filtros.
+  const contaSituacao = useMemo(() => {
+    const abertos = baseLeads.filter((l) => !isTerminalStage(l.stage));
+    return {
+      meus:       abertos.filter((l) => l.assigned_to === user?.id).length,
+      aguardando: abertos.filter((l) => esperaValida(l)).length,
+      vencido:    abertos.filter((l) => esperaVencida(l)).length,
+      sem_passo:  abertos.filter((l) => semProximoPasso(l)).length,
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [baseLeads, user?.id]);
+
   const countBySegment = useMemo(() => {
     const m: Record<string, number> = {};
     for (const l of baseLeads) {
@@ -254,9 +291,10 @@ export default function Pipelines() {
     }
     return m;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [baseLeads, vendedorFilter, searchQuery]);
+  }, [baseLeads, vendedorFilter, searchQuery, situacao, user?.id]);
 
   const filteredLeads = baseLeads.filter((lead) => {
+    if (!passaSituacao(lead)) return false;
     if (segFilter.length && !segFilter.includes(lead.lead_segment ?? "a_definir")) return false;
     if (!isAll && stageFilter !== "all" && lead.stage !== stageFilter) return false;
     if (vendedorFilter !== "all") {
@@ -393,6 +431,32 @@ export default function Pipelines() {
             <FunnelTab key={f.id} active={funil === f.id} onClick={() => setFunil(f.id)}
               icon={f.icon} label={f.shortName} count={countByFunnel[f.id] ?? 0} color={f.color} loading={l2} />
           ))}
+        </div>
+
+        {/* SITUAÇÃO — "o que exige a minha atenção agora?". É uma pergunta
+            diferente de "em que etapa está?", por isso filtro e não coluna.
+            Contagens sobre o funil inteiro, sem os outros filtros: o chip
+            precisa mostrar quanto existe, senão o usuário não sabe se vale
+            clicar. */}
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="text-[11px] text-muted-foreground mr-1">Situação:</span>
+          {([
+            { id: "all",        label: "Todos",             cor: "#94A3B8", n: baseLeads.length },
+            { id: "meus",       label: "Comigo",            cor: "#3B82F6", n: contaSituacao.meus },
+            { id: "aguardando", label: "Aguardando",        cor: "#F59E0B", n: contaSituacao.aguardando },
+            { id: "vencido",    label: "Espera vencida",    cor: "#EF4444", n: contaSituacao.vencido },
+            { id: "sem_passo",  label: "Sem próximo passo", cor: "#F97316", n: contaSituacao.sem_passo },
+          ] as const).map((c) => {
+            const on = situacao === c.id;
+            return (
+              <button key={c.id} onClick={() => setSituacao(c.id)}
+                className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium transition-colors ${
+                  on ? "text-foreground" : "border-input text-muted-foreground hover:bg-muted"}`}
+                style={on ? { borderColor: c.cor, background: c.cor + "1a", color: c.cor } : undefined}>
+                {c.label} <span className="opacity-70">{c.n}</span>
+              </button>
+            );
+          })}
         </div>
 
         {/* Segmento — o que o lead É. Substitui as pipelines por tipo: o
