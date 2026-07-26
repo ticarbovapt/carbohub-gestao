@@ -325,6 +325,12 @@ inventar tabela.
    **inclui `stage`** — e não registra nada. Hoje ninguém chama com `stage`
    (conferido), então não há buraco aberto; mas basta um `mutate({ id, stage })`
    em qualquer tela futura para abrir um, em silêncio.
+   > **Medido em 26/07:** dos 161 registros da trilha, **nenhum** tem
+   > `stage_from` nulo. O caminho defeituoso existia no código
+   > (`confirmLost` do Pipelines não passava `currentStage`), mas nunca foi
+   > exercido — ninguém marcou perda por ali. O risco era potencial, não
+   > estrago consumado. O trigger elimina o risco de vez, já que lê `OLD.stage`.
+
 3. **Apagar o lead apaga a história junto** (`on delete cascade`,
    `20260611000014:23`). Um lead excluído hoje **muda o "criados" de uma
    terça-feira do mês passado.** A tela nunca fecha com o que foi visto antes.
