@@ -12,7 +12,7 @@ import { ProfileAvatar } from "@/components/ui/profile-avatar";
 import type { CRMLead, FunnelType } from "@/types/crm";
 import {
   FUNNEL_CONFIG, getCloseReasons, getStagesForFunnel, getNextStage, getLostStage,
-  isTerminalStage, getDaysSinceUpdate, SEGMENTS, segmentOf, stageLabelAnywhere,
+  isTerminalStage, getDaysSinceUpdate, SEGMENTS, segmentOf, stageLabelAnywhere, sourceLabel,
 } from "@/types/crm";
 import {
   useAdvanceLeadStage, useMarkLeadLost, useTransferLead, useLeadOwnerLog,
@@ -99,6 +99,32 @@ export function DealDetail({ lead, funnelType, onClose }: DealDetailProps) {
   // dado oficial da empresa (vem da Receita/CNPJ) e não deve ser alterado por
   // aqui para não gerar divergência com o cadastro fiscal.
   const [draftTradeName, setDraftTradeName] = useState(lead.trade_name ?? "");
+
+  // Qualificação — os quatro campos que o closer recebe no repasse.
+  const [editQual, setEditQual] = useState(false);
+  const [qVolume, setQVolume]   = useState(lead.qual_volume ?? "");
+  const [qDor, setQDor]         = useState(lead.qual_dor ?? "");
+  const [qDecisor, setQDecisor] = useState(lead.qual_decisor ?? "");
+  const [qPrazo, setQPrazo]     = useState(lead.qual_prazo ?? "");
+  useEffect(() => {
+    setQVolume(lead.qual_volume ?? ""); setQDor(lead.qual_dor ?? "");
+    setQDecisor(lead.qual_decisor ?? ""); setQPrazo(lead.qual_prazo ?? "");
+    setEditQual(false);
+  }, [lead.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  function startEditQual() {
+    setQVolume(lead.qual_volume ?? ""); setQDor(lead.qual_dor ?? "");
+    setQDecisor(lead.qual_decisor ?? ""); setQPrazo(lead.qual_prazo ?? "");
+    setEditQual(true);
+  }
+  async function saveQual() {
+    await updateLead.mutateAsync({
+      id: lead.id,
+      qual_volume: qVolume.trim() || null, qual_dor: qDor.trim() || null,
+      qual_decisor: qDecisor.trim() || null, qual_prazo: qPrazo.trim() || null,
+    });
+    setEditQual(false);
+  }
   useEffect(() => {
     setDraftName(lead.contact_name ?? "");
     setDraftPhone(lead.contact_phone ?? "");
@@ -133,6 +159,13 @@ export function DealDetail({ lead, funnelType, onClose }: DealDetailProps) {
   // O SDR descarta ("fora do perfil"), o closer perde ("preço"). Listas distintas.
   const closeReasons = getCloseReasons(funnelType);
   const isOutbound = funnelType === "f12";
+  const temQualificacao = !!(lead.qual_volume || lead.qual_dor || lead.qual_decisor || lead.qual_prazo);
+  const faltamQual = [
+    !lead.qual_volume  && "volume",
+    !lead.qual_dor     && "dor",
+    !lead.qual_decisor && "decisor",
+    !lead.qual_prazo   && "prazo",
+  ].filter(Boolean) as string[];
   const daysSince = getDaysSinceUpdate(lead.updated_at);
   const displayName = lead.trade_name || lead.legal_name || lead.contact_name || "Sem nome";
 
@@ -295,11 +328,54 @@ export function DealDetail({ lead, funnelType, onClose }: DealDetailProps) {
                 <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Valor</p>
                 <p className="text-2xl font-semibold text-foreground">{brl(lead.estimated_revenue)}</p>
               </div>
+              <Field label="Origem" value={sourceLabel(lead.source)} />
               <Field label="Criado em" value={new Date(lead.created_at).toLocaleDateString("pt-BR")} />
               {(lead.won_at || lead.lost_at) && (
                 <Field label="Encerrado em" value={new Date((lead.won_at || lead.lost_at)!).toLocaleDateString("pt-BR")} />
               )}
             </Card>
+
+            {/* Qualificação — o que o closer recebe no repasse. Fica sempre
+                visível no Outbound (é o trabalho do SDR) e só aparece nos
+                outros funis quando já tem conteúdo, vindo de um repasse. */}
+            {(isOutbound || temQualificacao) && (
+              <Card
+                title="Qualificação"
+                action={!editQual ? (
+                  <button onClick={startEditQual} className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
+                    <Pencil className="h-3 w-3" /> Editar
+                  </button>
+                ) : null}
+              >
+                {editQual ? (
+                  <>
+                    <LabeledInput label="Volume / frota" value={qVolume} onChange={setQVolume} placeholder="ex.: 40 caminhões" />
+                    <LabeledInput label="Dor / problema" value={qDor} onChange={setQDor} placeholder="o que ele contou" />
+                    <LabeledInput label="Decisor" value={qDecisor} onChange={setQDecisor} placeholder="nome e cargo de quem assina" />
+                    <LabeledInput label="Prazo" value={qPrazo} onChange={setQPrazo} placeholder="quando pretende resolver" />
+                    <div className="flex gap-2 pt-1">
+                      <Button size="sm" onClick={saveQual} disabled={updateLead.isPending}>
+                        {updateLead.isPending ? "Salvando..." : "Salvar"}
+                      </Button>
+                      <Button size="sm" variant="outline" onClick={() => setEditQual(false)}>Cancelar</Button>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <Field label="Volume / frota" value={lead.qual_volume} />
+                    <Field label="Dor / problema" value={lead.qual_dor} />
+                    <Field label="Decisor" value={lead.qual_decisor} />
+                    <Field label="Prazo" value={lead.qual_prazo} />
+                    {isOutbound && faltamQual.length > 0 && (
+                      <p className="flex items-start gap-1.5 text-[11px] text-amber-500">
+                        <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-px" />
+                        Falta {faltamQual.join(", ")} — o closer vai receber o card sem isso.
+                      </p>
+                    )}
+                  </>
+                )}
+              </Card>
+            )}
 
             <Card
               title="Cliente / Contato"

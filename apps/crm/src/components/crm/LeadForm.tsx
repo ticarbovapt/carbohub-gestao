@@ -1,9 +1,9 @@
 import { useState, FormEvent } from "react";
-import { X } from "lucide-react";
+import { X, ChevronDown, ChevronUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { FunnelType } from "@/types/crm";
-import { SOURCE_OPTIONS, FUNNEL_CONFIG, SEGMENTS, FUNIS_VISIVEIS } from "@/types/crm";
+import { SOURCES, FUNNEL_CONFIG, SEGMENTS, FUNIS_VISIVEIS } from "@/types/crm";
 import { useCreateCRMLead } from "@/hooks/useCRMLeads";
 
 // Só as pipelines vivas — ninguém deve conseguir criar lead numa das 9 que
@@ -33,17 +33,29 @@ export function LeadForm({ funnelType, initialStage, onClose }: LeadFormProps) {
   // (vindo do "+" de uma coluna) não vale mais → cai pro estágio inicial do funil.
   const [funnel, setFunnel] = useState<FunnelType>(funnelType);
   const stage = funnel === funnelType ? initialStage : undefined;
+
+  // No Outbound o SDR abre este formulário dezenas de vezes por dia. Pedir 11
+  // campos de um lead recém-prospectado é atrito puro: cidade, UF e receita
+  // estimada são coisa de DEPOIS da conversa. Nada foi removido — só saiu da
+  // frente. Nos outros funis o cadastro nasce completo, como sempre foi.
+  const isOutbound = funnel === "f12";
+  const [maisDetalhes, setMaisDetalhes] = useState(false);
+  const mostrarExtras = !isOutbound || maisDetalhes;
+
   const [form, setForm] = useState({
     contact_name: "",
     contact_phone: "",
     contact_email: "",
     city: "",
     state: "",
-    source: "Prospecção ativa",
-    temperature: "frio",
+    source: "prospeccao_ativa",
     lead_segment: "a_definir",
     notes: "",
     estimated_revenue: "",
+    qual_volume: "",
+    qual_dor: "",
+    qual_decisor: "",
+    qual_prazo: "",
   });
 
   function set(field: string, value: string) {
@@ -65,9 +77,17 @@ export function LeadForm({ funnelType, initialStage, onClose }: LeadFormProps) {
       city: form.city || null,
       state: form.state || null,
       source: form.source || null,
-      temperature: form.temperature as "frio" | "morno" | "quente",
+      // Lead recém-prospectado é FRIO por definição. O campo saiu do cadastro:
+      // deixá-lo aqui só convidava a mentir para o próprio funil antes de haver
+      // qualquer conversa. A temperatura passa a ser mexida no detalhe do lead,
+      // depois de existir alguma evidência.
+      temperature: "frio",
       notes: form.notes || null,
       estimated_revenue: form.estimated_revenue ? Number(onlyDigits(form.estimated_revenue)) : 0,
+      qual_volume: form.qual_volume.trim() || null,
+      qual_dor: form.qual_dor.trim() || null,
+      qual_decisor: form.qual_decisor.trim() || null,
+      qual_prazo: form.qual_prazo.trim() || null,
     });
     onClose();
   }
@@ -116,50 +136,82 @@ export function LeadForm({ funnelType, initialStage, onClose }: LeadFormProps) {
             </Field>
           </div>
 
-          {/* Localização */}
-          <SectionLabel>Localização</SectionLabel>
-          <div className="grid grid-cols-[1fr_80px] gap-3">
-            <Field label="Cidade">
-              <Input placeholder="Cidade" value={form.city} onChange={(e) => set("city", e.target.value)} />
-            </Field>
-            <Field label="UF">
-              <Input placeholder="UF" maxLength={2} value={form.state}
-                onChange={(e) => set("state", e.target.value.toUpperCase())} />
-            </Field>
-          </div>
-
-          {/* Negócio */}
-          <SectionLabel>Negócio</SectionLabel>
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="Origem">
-              <select className="w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-sm"
-                value={form.source} onChange={(e) => set("source", e.target.value)}>
-                {SOURCE_OPTIONS.map((s) => <option key={s} value={s}>{s}</option>)}
-              </select>
-            </Field>
-            <Field label="Temperatura">
-              <select className="w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-sm"
-                value={form.temperature} onChange={(e) => set("temperature", e.target.value)}>
-                <option value="frio">❄️ Frio</option>
-                <option value="morno">🌡️ Morno</option>
-                <option value="quente">🔥 Quente</option>
-              </select>
-            </Field>
-          </div>
-          <Field label="Receita estimada (R$)">
-            <div className="relative">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">R$</span>
-              <Input className="pl-9" inputMode="numeric" placeholder="0" value={fmtMoney(form.estimated_revenue)}
-                onChange={(e) => set("estimated_revenue", onlyDigits(e.target.value))} />
-            </div>
+          <Field label="Origem">
+            <select className="w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-sm"
+              value={form.source} onChange={(e) => set("source", e.target.value)}>
+              {SOURCES.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
+            </select>
           </Field>
 
-          <Field label="Observações">
-            <textarea
-              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm resize-y min-h-[72px] focus:outline-none focus:ring-2 focus:ring-ring"
-              placeholder="Notas sobre este lead…" value={form.notes} onChange={(e) => set("notes", e.target.value)}
-            />
-          </Field>
+          {/* Qualificação — só no Outbound, e é o que o closer vai receber.
+              No f13/f11 o vendedor já é o dono do negócio inteiro; não há
+              handoff, então não há a quem entregar isto. */}
+          {isOutbound && (
+            <>
+              <SectionLabel>Qualificação (o que o closer precisa saber)</SectionLabel>
+              <p className="text-[11px] text-muted-foreground -mt-2">
+                Pode ficar em branco agora e ser preenchido conforme a conversa avança.
+                Sem os quatro, o lead não deveria sair de "Qualificado".
+              </p>
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="Volume / frota">
+                  <Input placeholder="ex.: 40 caminhões" value={form.qual_volume}
+                    onChange={(e) => set("qual_volume", e.target.value)} />
+                </Field>
+                <Field label="Decisor">
+                  <Input placeholder="nome e cargo" value={form.qual_decisor}
+                    onChange={(e) => set("qual_decisor", e.target.value)} />
+                </Field>
+              </div>
+              <Field label="Dor / problema relatado">
+                <Input placeholder="ex.: consumo alto e fumaça na revisão" value={form.qual_dor}
+                  onChange={(e) => set("qual_dor", e.target.value)} />
+              </Field>
+              <Field label="Prazo">
+                <Input placeholder="ex.: quer resolver até o fim do mês" value={form.qual_prazo}
+                  onChange={(e) => set("qual_prazo", e.target.value)} />
+              </Field>
+            </>
+          )}
+
+          {isOutbound && (
+            <button type="button" onClick={() => setMaisDetalhes((v) => !v)}
+              className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
+              {maisDetalhes ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+              {maisDetalhes ? "Menos detalhes" : "Mais detalhes (local, receita, observações)"}
+            </button>
+          )}
+
+          {mostrarExtras && (
+            <>
+              <SectionLabel>Localização</SectionLabel>
+              <div className="grid grid-cols-[1fr_80px] gap-3">
+                <Field label="Cidade">
+                  <Input placeholder="Cidade" value={form.city} onChange={(e) => set("city", e.target.value)} />
+                </Field>
+                <Field label="UF">
+                  <Input placeholder="UF" maxLength={2} value={form.state}
+                    onChange={(e) => set("state", e.target.value.toUpperCase())} />
+                </Field>
+              </div>
+
+              <SectionLabel>Negócio</SectionLabel>
+              <Field label="Receita estimada (R$)">
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">R$</span>
+                  <Input className="pl-9" inputMode="numeric" placeholder="0" value={fmtMoney(form.estimated_revenue)}
+                    onChange={(e) => set("estimated_revenue", onlyDigits(e.target.value))} />
+                </div>
+              </Field>
+
+              <Field label="Observações">
+                <textarea
+                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm resize-y min-h-[72px] focus:outline-none focus:ring-2 focus:ring-ring"
+                  placeholder="Notas sobre este lead…" value={form.notes} onChange={(e) => set("notes", e.target.value)}
+                />
+              </Field>
+            </>
+          )}
 
           <div className="flex gap-2 pt-1">
             <Button type="button" variant="outline" className="flex-1" onClick={onClose}>Cancelar</Button>

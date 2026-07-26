@@ -45,6 +45,16 @@ export interface CRMLead {
   next_follow_up_at: string | null;
   contact_attempts: number;
   notes: string | null;
+  // Qualificação — os quatro campos que definem se o lead vale o tempo do
+  // closer. Antes viviam soltos em `notes`, e o handoff entregava um parágrafo
+  // de texto corrido: o closer tinha que ligar de novo para perguntar o que o
+  // SDR já havia perguntado. São colunas, e não custom_fields, porque viram
+  // relatório ("quantos SQL sem decisor identificado?") e porque a duplicação
+  // da fase 7 precisa copiar campo a campo.
+  qual_volume: string | null;
+  qual_dor: string | null;
+  qual_decisor: string | null;
+  qual_prazo: string | null;
   tags: string[];
   custom_fields: Record<string, unknown>;
   created_by: string | null;
@@ -172,6 +182,10 @@ const STAGES_OUTBOUND: StageConfig[] = [
   { id: "conectado",   label: "Conectado",         icon: "📞", color: "#F97316" },
   { id: "qualificado", label: "Qualificado (SQL)", icon: "🎯", color: "#3B82F6" },
   { id: "reuniao",     label: "Reunião Agendada",  icon: "📅", color: "#8B5CF6" },
+  // Nutrição É coluna (e não flag) porque muda a FILA DE TRABALHO: o lead sai
+  // da rotina diária do SDR e volta numa data. Um "aguardando" que não muda a
+  // fila seria flag — ver waiting_on, na fase 9.
+  { id: "nutricao",    label: "Nutrição",          icon: "🌱", color: "#14B8A6" },
   { id: "repassado",   label: "Passado ao Closer", icon: "➡️", color: "#22C55E" },
   { id: "descartado",  label: "Descartado",        icon: "❌", color: "#EF4444" },
 ];
@@ -239,6 +253,7 @@ export const segmentOf = (id: string | null | undefined): SegmentConfig | null =
 export const LEGACY_STAGE_LABELS: Record<string, string> = {
   a_contatar: "A Contatar", novo: "Novo Lead", prospeccao: "Prospecção", a_reativar: "A Reativar",
   contato: "Contato Feito", contatado: "Contatado", conectado: "Conectado", cadencia: "Cadência",
+  nutricao: "Nutrição", orcamento: "Orçamento", formalizacao: "Formalização",
   tentativa_1: "Tentativa 1", tentativa_2: "Tentativa 2", reagendar: "Reagendar",
   qualificado: "Qualificado", diagnostico: "Diagnóstico", poc: "POC",
   apresentacao: "Apresentação", visita_agendada: "Visita Agendada", reuniao: "Reunião Agendada",
@@ -323,11 +338,42 @@ export function getCloseReasons(funnelType: FunnelType): readonly string[] {
   return funnelType === "f12" ? DISCARD_REASONS : LOSS_REASONS;
 }
 
-export const SOURCE_OPTIONS = [
-  "Prospecção ativa", "Indicação", "Evento", "Meta Ads", "Google Ads",
-  "TikTok Ads", "ML Ads", "Shopee Ads", "LinkedIn Ads", "Landing Page",
-  "ChatWoot / WhatsApp", "Formulário CarboVapt", "Google Merchant", "Orgânico", "Bling", "Outro",
+// ─────────────────────────────────────────────────────────────────────────────
+// ORIGEM — id em snake_case no banco, rótulo bonito só na tela.
+//
+// Antes eram TRÊS convenções gravando na mesma coluna ao mesmo tempo:
+// `prospeccao_ativa` (default do banco), "Prospecção ativa" (o formulário) e
+// "Meta Ads" (o webhook). Um `group by source` já devolvia categoria duplicada
+// antes mesmo de existir integração de anúncio de verdade.
+//
+// Origem é MUTUAMENTE EXCLUSIVA — por isso coluna, e não `tags[]`, que viraria
+// relatório impossível.
+// ─────────────────────────────────────────────────────────────────────────────
+export const SOURCES = [
+  { id: "prospeccao_ativa", label: "Prospecção ativa" },
+  { id: "indicacao",        label: "Indicação" },
+  { id: "evento",           label: "Evento" },
+  { id: "meta_ads",         label: "Meta Ads" },
+  { id: "google_ads",       label: "Google Ads" },
+  { id: "tiktok_ads",       label: "TikTok Ads" },
+  { id: "ml_ads",           label: "Mercado Livre Ads" },
+  { id: "shopee_ads",       label: "Shopee Ads" },
+  { id: "linkedin_ads",     label: "LinkedIn Ads" },
+  { id: "landing_page",     label: "Landing Page" },
+  { id: "whatsapp",         label: "WhatsApp / Chatwoot" },
+  { id: "formulario",       label: "Formulário CarboVapt" },
+  { id: "google_merchant",  label: "Google Merchant" },
+  { id: "organico",         label: "Orgânico" },
+  { id: "bling",            label: "Bling" },
+  { id: "outro",            label: "Outro" },
 ] as const;
+
+/** Rótulo da origem. Valor desconhecido volta cru em vez de sumir da tela. */
+export const sourceLabel = (id: string | null | undefined): string =>
+  id ? (SOURCES.find((s) => s.id === id)?.label ?? id) : "—";
+
+/** @deprecated Use SOURCES. Mantido só para não quebrar import antigo. */
+export const SOURCE_OPTIONS = SOURCES.map((s) => s.label);
 
 export function getStagesForFunnel(funnelType: FunnelType): StageConfig[] {
   return FUNNEL_CONFIG[funnelType]?.stages || STAGES_COMMERCIAL;

@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { ProfileAvatar } from "@/components/ui/profile-avatar";
 import type { CRMLead, FunnelType } from "@/types/crm";
-import { FUNNEL_CONFIG, getCloseReasons, getDaysSinceUpdate, getNextStage, isTerminalStage } from "@/types/crm";
+import { FUNNEL_CONFIG, getCloseReasons, getDaysSinceUpdate, getNextStage, isTerminalStage, sourceLabel } from "@/types/crm";
 import { useAdvanceLeadStage, useMarkLeadLost, useTransferLead, useLeadOwnerLog, useLeadActivities, useAddLeadActivity } from "@/hooks/useCRMLeads";
 import { useArquivarLead } from "@/hooks/useArquivarLead";
 import { useVendedoresDir } from "@/hooks/useVendas";
@@ -204,7 +204,7 @@ export function LeadDrawer({ lead, funnelType, onClose }: LeadDrawerProps) {
                   value={new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 }).format(lead.estimated_revenue)}
                 />
               )}
-              {lead.source && <InfoRow icon={<Calendar />} value={`Origem: ${lead.source}`} />}
+              {lead.source && <InfoRow icon={<Calendar />} value={`Origem: ${sourceLabel(lead.source)}`} />}
             </Section>
           )}
 
