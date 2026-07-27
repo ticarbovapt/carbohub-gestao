@@ -9,8 +9,10 @@ export interface NetworkMachine {
   machine_id: string;
   model: string;
   machine_type: string | null;
-  latitude: number;
-  longitude: number;
+  /** null quando a máquina não tem coordenada nem cidade no dicionário → fica
+   *  fora do mapa, mas continua contando nos totais. */
+  latitude: number | null;
+  longitude: number | null;
   location_city: string | null;
   location_state: string | null;
   status: string;
@@ -247,9 +249,9 @@ export function useNetworkMap() {
           }
         }
 
-        // Skip if we still have no coords
-        if (lat === null || lng === null) continue;
-
+        // NÃO descartamos máquinas sem coordenada: elas continuam contando nos
+        // totais (cidades, tiers, cobertura) e só ficam fora do mapa. Antes o
+        // `continue` aqui fazia os blocos da tela divergirem entre si.
         const lic = licenseeMap.get(m.licensee_id);
         result.push({
           id: m.id,

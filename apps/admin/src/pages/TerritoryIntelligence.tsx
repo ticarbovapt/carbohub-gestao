@@ -3,216 +3,218 @@ import { LicenciadosSubNav } from "@/components/licenciados/LicenciadosSubNav";
 import { useAuth } from "@/contexts/AuthContext";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Loader2, Brain, MapPin, Target, TrendingUp, Users, Search, BarChart3, Map as MapIcon, Table2 } from "lucide-react";
+import { Loader2, Brain, MapPin, Search, Info, Map as MapIcon, Table2 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { useTerritories, useTerritoryExpansion, useNetworkMap, useNetworkStats, BRAZIL_CITIES_COORDS, getCityCoords } from "@/hooks/useNetworkIntelligence";
+import { useNetworkMap, getCityCoords } from "@/hooks/useNetworkIntelligence";
 import "leaflet/dist/leaflet.css";
 
-// ── Bubble Map Component ──────────────────────────────────────────────────────
-interface BubbleMapProps {
-  clusters: Array<{
-    city: string;
-    state: string;
-    machineCount: number;
-    licenseeNames: string[];
-    tier: "A" | "B" | "C" | "D";
-  }>;
+// ─────────────────────────────────────────────────────────────────────────────
+// Inteligência Territorial (espelho read-only).
+//
+// FONTE ÚNICA: tabela `machines` (parque de máquinas CarboVAPT cadastrado no
+// Carbo Controle) + `licensees` para o nome do licenciado. TODOS os blocos
+// desta tela derivam do MESMO conjunto de máquinas, para que os totais fechem
+// entre si (antes, cidades/tiers e cobertura por estado usavam bases distintas).
+//
+// Máquinas sem coordenada continuam contando nos números; elas apenas não
+// aparecem no mapa — e isso é informado explicitamente na tela.
+// ─────────────────────────────────────────────────────────────────────────────
+
+type DensityTier = "A" | "B" | "C";
+
+/** Faixa de densidade por cidade, pela CONTAGEM DE MÁQUINAS instaladas.
+ *  Não existe faixa "sem presença": os clusters nascem das próprias máquinas,
+ *  logo toda cidade listada tem no mínimo 1. */
+function getDensityTier(machineCount: number): DensityTier {
+  if (machineCount >= 5) return "A";
+  if (machineCount >= 3) return "B";
+  return "C";
 }
 
-const TIER_COLORS_MAP: Record<string, string> = {
-  A: "#22c55e",
-  B: "#3b82f6",
-  C: "#f59e0b",
-  D: "#ef4444",
+const DENSITY_CONFIG: Record<DensityTier, { label: string; color: string; bg: string; desc: string }> = {
+  A: { label: "Alta densidade", color: "bg-green-500", bg: "bg-green-500/10 border-green-500/30", desc: "5+ máquinas" },
+  B: { label: "Média densidade", color: "bg-blue-500", bg: "bg-blue-500/10 border-blue-500/30", desc: "3–4 máquinas" },
+  C: { label: "Baixa densidade", color: "bg-yellow-500", bg: "bg-yellow-500/10 border-yellow-500/30", desc: "1–2 máquinas" },
 };
 
-function BubbleMap({ clusters }: BubbleMapProps) {
+const TIER_COLORS_MAP: Record<string, string> = { A: "#22c55e", B: "#3b82f6", C: "#f59e0b" };
+
+interface TerritoryCluster {
+  state: string;
+  city: string;
+  machineCount: number;
+  mappedCount: number;      // máquinas com coordenada (aparecem no mapa)
+  licenseeNames: string[];
+  tier: DensityTier;
+}
+
+/** Rodapé padrão de proveniência — todo bloco declara de onde veio o número. */
+function SourceNote({ children }: { children: React.ReactNode }) {
+  return (
+    <p className="flex items-start gap-1.5 text-[11px] text-muted-foreground mt-2">
+      <Info className="h-3 w-3 mt-0.5 shrink-0" />
+      <span>{children}</span>
+    </p>
+  );
+}
+
+// ── Mapa de bolhas ───────────────────────────────────────────────────────────
+function BubbleMap({ clusters }: { clusters: TerritoryCluster[] }) {
   const mapRef = useRef<HTMLDivElement>(null);
   const leafletMapRef = useRef<any>(null);
+  const layerRef = useRef<any>(null);
+  const LRef = useRef<any>(null);
 
+  // Cria o mapa uma única vez.
   useEffect(() => {
     if (!mapRef.current || leafletMapRef.current) return;
+    let cancelled = false;
 
     import("leaflet").then((L) => {
-      // Fix default icon path issues in bundlers
+      if (cancelled || !mapRef.current) return;
       delete (L.Icon.Default.prototype as any)._getIconUrl;
       L.Icon.Default.mergeOptions({
         iconRetinaUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png",
         iconUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png",
         shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
       });
-
-      const map = L.map(mapRef.current!, {
-        center: [-15.0, -52.0],
-        zoom: 4,
-        zoomControl: true,
-        scrollWheelZoom: false,
+      const map = L.map(mapRef.current, {
+        center: [-15.0, -52.0], zoom: 4, zoomControl: true, scrollWheelZoom: false,
       });
-
       L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
         attribution: "© OpenStreetMap contributors",
       }).addTo(map);
-
-      clusters.forEach((cluster) => {
-        const coords = getCityCoords(cluster.city, cluster.state);
-        if (!coords) return;
-
-        const radius = Math.max(10, cluster.machineCount * 6);
-        const color = TIER_COLORS_MAP[cluster.tier] || "#94a3b8";
-
-        L.circleMarker(coords, {
-          radius,
-          fillColor: color,
-          color: "#fff",
-          weight: 2,
-          opacity: 0.9,
-          fillOpacity: 0.75,
-        })
-          .bindPopup(`
-            <div style="min-width:160px">
-              <strong style="font-size:13px">${cluster.city}, ${cluster.state}</strong><br/>
-              <span style="color:${color};font-weight:600">Tier ${cluster.tier}</span><br/>
-              <span>🔧 ${cluster.machineCount} máquinas</span><br/>
-              ${cluster.licenseeNames.length ? `<span style="font-size:11px;color:#666">${cluster.licenseeNames.slice(0,3).join(", ")}</span>` : ""}
-            </div>
-          `)
-          .addTo(map);
-      });
-
+      LRef.current = L;
+      layerRef.current = L.layerGroup().addTo(map);
       leafletMapRef.current = map;
+      // força o desenho inicial das bolhas
+      setLayerVersion((v) => v + 1);
     });
 
     return () => {
+      cancelled = true;
       if (leafletMapRef.current) {
         leafletMapRef.current.remove();
         leafletMapRef.current = null;
+        layerRef.current = null;
       }
     };
   }, []);
 
-  // Update bubbles when clusters change
+  const [layerVersion, setLayerVersion] = useState(0);
+
+  // Redesenha as bolhas sempre que os clusters (JÁ FILTRADOS) mudarem.
   useEffect(() => {
-    if (!leafletMapRef.current) return;
-    // Re-render handled by full remount via key on parent
-  }, [clusters]);
+    const L = LRef.current;
+    const layer = layerRef.current;
+    if (!L || !layer) return;
+    layer.clearLayers();
+
+    clusters.forEach((cluster) => {
+      const coords = getCityCoords(cluster.city, cluster.state);
+      if (!coords) return;
+      const radius = Math.max(10, cluster.machineCount * 6);
+      const color = TIER_COLORS_MAP[cluster.tier] || "#94a3b8";
+      L.circleMarker(coords, {
+        radius, fillColor: color, color: "#fff", weight: 2, opacity: 0.9, fillOpacity: 0.75,
+      })
+        .bindPopup(`
+          <div style="min-width:160px">
+            <strong style="font-size:13px">${cluster.city}, ${cluster.state}</strong><br/>
+            <span style="color:${color};font-weight:600">Tier ${cluster.tier} · ${DENSITY_CONFIG[cluster.tier].label}</span><br/>
+            <span>🔧 ${cluster.machineCount} máquina(s)</span><br/>
+            ${cluster.licenseeNames.length ? `<span style="font-size:11px;color:#666">${cluster.licenseeNames.slice(0, 3).join(", ")}</span>` : ""}
+          </div>
+        `)
+        .addTo(layer);
+    });
+  }, [clusters, layerVersion]);
 
   return <div ref={mapRef} style={{ height: "440px", borderRadius: "12px", zIndex: 0 }} />;
 }
 
-type DensityTier = "A" | "B" | "C" | "D";
-
-function getDensityTier(machineCount: number): DensityTier {
-  if (machineCount >= 5) return "A";
-  if (machineCount >= 3) return "B";
-  if (machineCount >= 1) return "C";
-  return "D";
-}
-
-const DENSITY_CONFIG: Record<DensityTier, { label: string; color: string; bg: string; desc: string }> = {
-  A: { label: "Alta Densidade", color: "bg-green-500", bg: "bg-green-500/10 border-green-500/30", desc: "5+ máquinas" },
-  B: { label: "Média Densidade", color: "bg-blue-500", bg: "bg-blue-500/10 border-blue-500/30", desc: "3-4 máquinas" },
-  C: { label: "Baixa Densidade", color: "bg-yellow-500", bg: "bg-yellow-500/10 border-yellow-500/30", desc: "1-2 máquinas" },
-  D: { label: "Sem Presença", color: "bg-red-500", bg: "bg-red-500/10 border-red-500/30", desc: "0 máquinas" },
-};
-
-interface TerritoryCluster {
-  state: string;
-  city: string;
-  machineCount: number;
-  licenseeNames: string[];
-  tier: DensityTier;
-  hasLicensee: boolean;
-}
-
 export default function TerritoryIntelligence() {
   const { canAdmin } = useAuth();
-  const { data: machines = [], isLoading: machinesLoading } = useNetworkMap();
-  const { data: territories = [], isLoading: terrLoading } = useTerritories();
-  const { data: opportunities = [], isLoading: oppLoading } = useTerritoryExpansion();
-  const { data: stats, isLoading: statsLoading } = useNetworkStats();
+  const { data: machines = [], isLoading } = useNetworkMap();
 
   const [search, setSearch] = useState("");
   const [tierFilter, setTierFilter] = useState<string>("all");
   const [stateFilter, setStateFilter] = useState<string>("all");
 
-  // Build territory clusters from machine data
-  const clusters = useMemo(() => {
+  // ── Clusters por cidade — base única de toda a tela ──
+  const { clusters, semCidade, semCoordenada } = useMemo(() => {
     const map = new Map<string, TerritoryCluster>();
+    let semCidade = 0;
+    let semCoordenada = 0;
 
     machines.forEach((m) => {
-      const key = `${m.location_city}|${m.location_state}`;
-      if (!m.location_city || !m.location_state) return;
+      const temCoord = m.latitude != null && m.longitude != null;
+      if (!temCoord) semCoordenada++;
+      if (!m.location_city || !m.location_state) { semCidade++; return; }
 
+      const key = `${m.location_city}|${m.location_state}`;
       const existing = map.get(key);
       if (existing) {
         existing.machineCount++;
+        if (temCoord) existing.mappedCount++;
         if (m.licensee_name && !existing.licenseeNames.includes(m.licensee_name)) {
           existing.licenseeNames.push(m.licensee_name);
         }
       } else {
         map.set(key, {
-          state: m.location_state,
-          city: m.location_city,
-          machineCount: 1,
+          state: m.location_state, city: m.location_city,
+          machineCount: 1, mappedCount: temCoord ? 1 : 0,
           licenseeNames: m.licensee_name ? [m.licensee_name] : [],
           tier: "C",
-          hasLicensee: !!m.licensee_name,
         });
       }
     });
 
-    // Assign tiers
-    const result = Array.from(map.values()).map((c) => ({
-      ...c,
-      tier: getDensityTier(c.machineCount),
-    }));
+    const clusters = Array.from(map.values())
+      .map((c) => ({ ...c, tier: getDensityTier(c.machineCount) }))
+      .sort((a, b) => b.machineCount - a.machineCount);
 
-    return result.sort((a, b) => b.machineCount - a.machineCount);
+    return { clusters, semCidade, semCoordenada };
   }, [machines]);
 
-  // Get unique states
-  const uniqueStates = useMemo(() => {
-    const states = new Set<string>();
-    clusters.forEach((c) => states.add(c.state));
-    return Array.from(states).sort();
-  }, [clusters]);
+  const uniqueStates = useMemo(
+    () => Array.from(new Set(clusters.map((c) => c.state))).sort(),
+    [clusters]
+  );
 
-  // Apply filters
-  const filtered = useMemo(() => {
-    return clusters.filter((c) => {
-      if (tierFilter !== "all" && c.tier !== tierFilter) return false;
-      if (stateFilter !== "all" && c.state !== stateFilter) return false;
-      if (search) {
-        const q = search.toLowerCase();
-        if (!c.city.toLowerCase().includes(q) && !c.state.toLowerCase().includes(q) && !c.licenseeNames.some((n) => n.toLowerCase().includes(q))) {
-          return false;
-        }
-      }
-      return true;
-    });
-  }, [clusters, tierFilter, stateFilter, search]);
+  const filtered = useMemo(() => clusters.filter((c) => {
+    if (tierFilter !== "all" && c.tier !== tierFilter) return false;
+    if (stateFilter !== "all" && c.state !== stateFilter) return false;
+    if (search) {
+      const q = search.toLowerCase();
+      if (!c.city.toLowerCase().includes(q) && !c.state.toLowerCase().includes(q)
+        && !c.licenseeNames.some((n) => n.toLowerCase().includes(q))) return false;
+    }
+    return true;
+  }), [clusters, tierFilter, stateFilter, search]);
 
-  // Stats by tier
   const tierStats = useMemo(() => {
-    const counts: Record<DensityTier, number> = { A: 0, B: 0, C: 0, D: 0 };
+    const counts: Record<DensityTier, number> = { A: 0, B: 0, C: 0 };
     clusters.forEach((c) => counts[c.tier]++);
     return counts;
   }, [clusters]);
 
-  // States coverage
+  // Cobertura por estado — derivada dos MESMOS clusters (fecha com os demais blocos).
   const statesCoverage = useMemo(() => {
-    return stats?.machines_by_state || [];
-  }, [stats]);
+    const byState = new Map<string, number>();
+    clusters.forEach((c) => byState.set(c.state, (byState.get(c.state) ?? 0) + c.machineCount));
+    return Array.from(byState.entries())
+      .map(([state, count]) => ({ state, count }))
+      .sort((a, b) => b.count - a.count);
+  }, [clusters]);
 
-  const isLoading = machinesLoading || terrLoading || oppLoading || statsLoading;
+  const totalMaquinasEmCidades = clusters.reduce((s, c) => s + c.machineCount, 0);
+  const totalFiltrado = filtered.reduce((s, c) => s + c.machineCount, 0);
+  const totalLicenciados = new Set(clusters.flatMap((c) => c.licenseeNames)).size;
 
   if (!canAdmin) {
     return (
@@ -246,184 +248,189 @@ export default function TerritoryIntelligence() {
           <div>
             <h1 className="text-2xl font-bold text-foreground">Inteligência Territorial</h1>
             <p className="text-sm text-muted-foreground">
-              Análise de densidade, cobertura e oportunidades de expansão
+              Onde a rede já está: densidade de máquinas CarboVAPT por cidade
             </p>
           </div>
         </div>
 
         <LicenciadosSubNav />
 
-        {/* Density Legend */}
+        {/* Nota de proveniência da tela inteira */}
+        <div className="rounded-xl border border-border bg-muted/30 px-4 py-3">
+          <p className="flex items-start gap-2 text-xs text-muted-foreground">
+            <Info className="h-3.5 w-3.5 mt-0.5 shrink-0 text-primary" />
+            <span>
+              <strong className="text-foreground">Fonte:</strong> cadastro de máquinas do Carbo Controle
+              (tabela <code className="font-mono bg-muted px-1 rounded">machines</code>), agrupado por cidade.
+              Todos os blocos abaixo usam esse mesmo conjunto — os totais fecham entre si.
+              É um retrato <strong className="text-foreground">acumulado do cadastro</strong> (sem recorte de período).
+            </span>
+          </p>
+        </div>
+
+        {/* Legenda de classificação */}
         <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-sm font-medium text-muted-foreground mr-1">Classificação:</span>
-          {(["A", "B", "C", "D"] as DensityTier[]).map((tier) => (
-            <Badge key={tier} className={`${DENSITY_CONFIG[tier].color} text-white border-transparent text-xs`}>
+          <span className="text-sm font-medium text-muted-foreground mr-1">Classificação por densidade:</span>
+          {(["A", "B", "C"] as DensityTier[]).map((tier) => (
+            <Badge key={tier} className={`${DENSITY_CONFIG[tier].color} text-white border-0`}>
               Tier {tier}: {DENSITY_CONFIG[tier].desc}
             </Badge>
           ))}
         </div>
 
-        {/* KPI Cards */}
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-          <div className="rounded-xl border bg-card p-4">
-            <div className="flex items-center gap-2 text-muted-foreground text-xs mb-1">
-              <MapPin className="h-3.5 w-3.5" />
-              <span>Cidades Atendidas</span>
+        {/* KPIs */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <div className="rounded-xl border border-border bg-card p-4">
+            <div className="flex items-center gap-2 text-muted-foreground text-sm">
+              <MapPin className="h-4 w-4" /> <span>Cidades com máquina</span>
             </div>
-            <p className="text-2xl font-bold">{clusters.length}</p>
+            <p className="text-2xl font-bold mt-1">{clusters.length}</p>
+            <p className="text-xs text-muted-foreground">{totalMaquinasEmCidades} máquinas · {totalLicenciados} licenciado(s)</p>
           </div>
-          {(["A", "B", "C", "D"] as DensityTier[]).map((tier) => (
+          {(["A", "B", "C"] as DensityTier[]).map((tier) => (
             <div key={tier} className={`rounded-xl border p-4 ${DENSITY_CONFIG[tier].bg}`}>
-              <div className="flex items-center gap-2 text-xs mb-1">
-                <span className={`inline-block h-2.5 w-2.5 rounded-full ${DENSITY_CONFIG[tier].color}`} />
+              <div className="flex items-center gap-2 text-sm">
+                <span className={`h-2 w-2 rounded-full ${DENSITY_CONFIG[tier].color}`} />
                 <span className="text-muted-foreground">Tier {tier}</span>
               </div>
-              <p className="text-2xl font-bold">{tierStats[tier]}</p>
-              <p className="text-xs text-muted-foreground">{DENSITY_CONFIG[tier].label}</p>
+              <p className="text-2xl font-bold mt-1">{tierStats[tier]}</p>
+              <p className="text-xs text-muted-foreground">{DENSITY_CONFIG[tier].label} · {DENSITY_CONFIG[tier].desc}</p>
             </div>
           ))}
         </div>
 
-        {/* State Coverage */}
-        {statesCoverage.length > 0 && (
-          <div className="rounded-xl border bg-card p-4">
-            <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
-              <BarChart3 className="h-4 w-4 text-blue-500" />
-              Cobertura por Estado
-            </h3>
-            <div className="flex flex-wrap gap-2">
-              {statesCoverage.map((s) => (
-                <div key={s.state} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-muted/50 border">
-                  <span className="text-sm font-medium">{s.state}</span>
-                  <Badge variant="secondary" className="text-xs">{s.count}</Badge>
-                </div>
-              ))}
-            </div>
+        {/* Avisos de qualidade do dado */}
+        {(semCidade > 0 || semCoordenada > 0) && (
+          <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 px-4 py-3 space-y-1">
+            {semCidade > 0 && (
+              <p className="text-xs text-muted-foreground">
+                <strong className="text-amber-500">{semCidade}</strong> máquina(s) sem cidade/UF no cadastro — fora de todos os números desta tela.
+              </p>
+            )}
+            {semCoordenada > 0 && (
+              <p className="text-xs text-muted-foreground">
+                <strong className="text-amber-500">{semCoordenada}</strong> máquina(s) sem coordenada — contam nos números, mas não aparecem no mapa.
+              </p>
+            )}
           </div>
         )}
 
-        {/* Expansion Opportunities */}
-        {opportunities.length > 0 && (
-          <div className="rounded-xl border bg-card p-4">
-            <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
-              <TrendingUp className="h-4 w-4 text-emerald-500" />
-              Top Oportunidades de Expansão ({opportunities.length})
-            </h3>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-              {opportunities.slice(0, 6).map((opp) => (
-                <Card key={opp.id} className="hover:shadow-sm transition-shadow">
-                  <CardHeader className="pb-2 pt-3 px-4">
-                    <div className="flex items-center justify-between">
-                      <CardTitle className="text-sm">{opp.city}, {opp.state}</CardTitle>
-                      <Badge className="bg-emerald-500 text-white border-0 text-xs">
-                        {Math.round(opp.territory_score)}
-                      </Badge>
-                    </div>
-                  </CardHeader>
-                  <CardContent className="px-4 pb-3 text-xs text-muted-foreground space-y-1">
-                    {opp.population && <p>Pop: {opp.population.toLocaleString("pt-BR")}</p>}
-                    {opp.avg_income && <p>Renda: R$ {opp.avg_income.toLocaleString("pt-BR")}</p>}
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          </div>
-        )}
+        {/* Cobertura por estado */}
+        <Card className="rounded-2xl border-0 shadow-sm">
+          <CardHeader className="pb-2 pt-5 px-5">
+            <CardTitle className="text-sm font-semibold">Cobertura por Estado</CardTitle>
+          </CardHeader>
+          <CardContent className="px-5 pb-5">
+            {statesCoverage.length === 0 ? (
+              <p className="py-6 text-center text-sm text-muted-foreground">Nenhuma máquina com UF cadastrada.</p>
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                {statesCoverage.map(({ state, count }) => (
+                  <div key={state} className="flex items-center gap-2 rounded-lg border border-border bg-muted/30 px-3 py-1.5">
+                    <span className="text-sm font-bold text-foreground">{state}</span>
+                    <span className="text-xs text-muted-foreground tabular-nums">{count}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+            <SourceNote>
+              Número de máquinas por UF, somando as mesmas cidades listadas abaixo.
+            </SourceNote>
+          </CardContent>
+        </Card>
 
-        {/* Filters */}
-        <div className="flex flex-col sm:flex-row gap-3">
-          <div className="relative flex-1 min-w-[200px] max-w-sm">
+        {/* Filtros */}
+        <div className="flex flex-col sm:flex-row gap-2">
+          <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Buscar cidade ou licenciado..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="pl-9"
-            />
+            <Input placeholder="Buscar cidade, UF ou licenciado…" value={search}
+              onChange={(e) => setSearch(e.target.value)} className="pl-9" />
           </div>
           <Select value={tierFilter} onValueChange={setTierFilter}>
-            <SelectTrigger className="w-full sm:w-44 h-10 rounded-xl">
-              <SelectValue placeholder="Tier" />
-            </SelectTrigger>
+            <SelectTrigger className="w-full sm:w-52"><SelectValue placeholder="Densidade" /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">Todos os Tiers</SelectItem>
-              {(["A", "B", "C", "D"] as DensityTier[]).map((t) => (
-                <SelectItem key={t} value={t}>Tier {t} — {DENSITY_CONFIG[t].label}</SelectItem>
+              <SelectItem value="all">Todas as densidades</SelectItem>
+              {(["A", "B", "C"] as DensityTier[]).map((t) => (
+                <SelectItem key={t} value={t}>Tier {t} — {DENSITY_CONFIG[t].desc}</SelectItem>
               ))}
             </SelectContent>
           </Select>
           <Select value={stateFilter} onValueChange={setStateFilter}>
-            <SelectTrigger className="w-full sm:w-44 h-10 rounded-xl">
-              <SelectValue placeholder="Estado" />
-            </SelectTrigger>
+            <SelectTrigger className="w-full sm:w-40"><SelectValue placeholder="Estado" /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">Todos os Estados</SelectItem>
-              {uniqueStates.map((s) => (
-                <SelectItem key={s} value={s}>{s}</SelectItem>
-              ))}
+              <SelectItem value="all">Todos os estados</SelectItem>
+              {uniqueStates.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
             </SelectContent>
           </Select>
         </div>
 
-        {/* Map + Table tabs */}
+        {/* Contador do filtro */}
+        <p className="text-xs text-muted-foreground">
+          Mostrando <strong className="text-foreground">{filtered.length}</strong> de {clusters.length} cidades
+          {" · "}<strong className="text-foreground">{totalFiltrado}</strong> máquinas no filtro
+        </p>
+
+        {/* Mapa + tabela (ambos respeitam o filtro) */}
         <Tabs defaultValue="mapa">
-          <TabsList className="mb-4">
-            <TabsTrigger value="mapa" className="gap-2">
-              <MapIcon className="h-4 w-4" /> Mapa de Bolhas
-            </TabsTrigger>
-            <TabsTrigger value="tabela" className="gap-2">
-              <Table2 className="h-4 w-4" /> Tabela
-            </TabsTrigger>
+          <TabsList>
+            <TabsTrigger value="mapa" className="gap-1.5"><MapIcon className="h-4 w-4" /> Mapa</TabsTrigger>
+            <TabsTrigger value="tabela" className="gap-1.5"><Table2 className="h-4 w-4" /> Tabela</TabsTrigger>
           </TabsList>
 
-          <TabsContent value="mapa">
-            <div className="rounded-xl border bg-card overflow-hidden p-2">
-              <BubbleMap key={clusters.length} clusters={clusters} />
-              <p className="text-xs text-muted-foreground text-center mt-2 pb-1">
-                Tamanho da bolha proporcional ao número de máquinas · Cor por Tier de densidade
-              </p>
-            </div>
+          <TabsContent value="mapa" className="mt-4">
+            <Card className="rounded-2xl border-0 shadow-sm">
+              <CardContent className="p-4">
+                <BubbleMap clusters={filtered} />
+                <SourceNote>
+                  O tamanho da bolha é proporcional ao nº de máquinas na cidade; a cor indica o Tier.
+                  As bolhas seguem os filtros acima. Cidades sem coordenada conhecida não são plotadas.
+                </SourceNote>
+              </CardContent>
+            </Card>
           </TabsContent>
 
-          <TabsContent value="tabela">
-            <div className="rounded-xl border bg-card overflow-hidden">
+          <TabsContent value="tabela" className="mt-4">
+            <div className="rounded-2xl border border-border bg-card overflow-hidden">
               <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead className="bg-muted/50">
-                    <tr>
-                      <th className="px-4 py-3 text-left font-medium">Cidade</th>
-                      <th className="px-4 py-3 text-left font-medium">UF</th>
-                      <th className="px-4 py-3 text-left font-medium">Tier</th>
-                      <th className="px-4 py-3 text-right font-medium">Máquinas</th>
-                      <th className="px-4 py-3 text-left font-medium">Licenciados</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filtered.length === 0 ? (
+                {filtered.length === 0 ? (
+                  <p className="px-5 py-10 text-center text-sm text-muted-foreground">
+                    Nenhuma cidade para o filtro selecionado.
+                  </p>
+                ) : (
+                  <table className="w-full text-sm">
+                    <thead className="bg-secondary/30">
                       <tr>
-                        <td colSpan={5} className="px-4 py-8 text-center text-muted-foreground">
-                          Nenhum território encontrado.
-                        </td>
+                        {["Cidade", "UF", "Densidade", "Máquinas", "Licenciados"].map((h) => (
+                          <th key={h} className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">{h}</th>
+                        ))}
                       </tr>
-                    ) : (
-                      filtered.map((c, i) => (
-                        <tr key={`${c.city}-${c.state}-${i}`} className="border-t hover:bg-muted/30">
-                          <td className="px-4 py-3 font-medium">{c.city}</td>
-                          <td className="px-4 py-3">{c.state}</td>
+                    </thead>
+                    <tbody className="divide-y divide-border">
+                      {filtered.map((c) => (
+                        <tr key={`${c.city}|${c.state}`} className="hover:bg-secondary/20 transition-colors">
+                          <td className="px-4 py-3 font-medium text-foreground">{c.city}</td>
+                          <td className="px-4 py-3 text-muted-foreground">{c.state}</td>
                           <td className="px-4 py-3">
-                            <Badge className={`${DENSITY_CONFIG[c.tier].color} text-white border-transparent text-xs`}>
-                              {c.tier}
+                            <Badge className={`${DENSITY_CONFIG[c.tier].color} text-white border-0 text-xs`}>
+                              Tier {c.tier}
                             </Badge>
                           </td>
-                          <td className="px-4 py-3 text-right font-semibold">{c.machineCount}</td>
+                          <td className="px-4 py-3 tabular-nums text-foreground">{c.machineCount}</td>
                           <td className="px-4 py-3 text-muted-foreground">
-                            {c.licenseeNames.length > 0 ? c.licenseeNames.join(", ") : "—"}
+                            {c.licenseeNames.length > 0 ? c.licenseeNames.join(", ") : "Sem licenciado vinculado"}
                           </td>
                         </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
+                      ))}
+                    </tbody>
+                    <tfoot className="bg-secondary/20 border-t border-border">
+                      <tr>
+                        <td className="px-4 py-3 font-semibold text-foreground" colSpan={3}>Total no filtro</td>
+                        <td className="px-4 py-3 font-semibold tabular-nums text-foreground">{totalFiltrado}</td>
+                        <td className="px-4 py-3" />
+                      </tr>
+                    </tfoot>
+                  </table>
+                )}
               </div>
             </div>
           </TabsContent>
