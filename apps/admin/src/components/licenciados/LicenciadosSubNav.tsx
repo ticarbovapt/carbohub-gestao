@@ -1,5 +1,5 @@
 import { NavLink } from "react-router-dom";
-import { Building2, Brain, Target, Wallet } from "lucide-react";
+import { Building2, Brain, Target } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 // Sub-navegação da área de Licenciados no Carbo Admin.
@@ -8,7 +8,6 @@ const TABS = [
   { to: "/dashboards/franqueados", label: "Visão Geral", icon: Building2, end: true },
   { to: "/dashboards/licenciados/inteligencia", label: "Inteligência Territorial", icon: Brain, end: false },
   { to: "/dashboards/licenciados/expansao", label: "Expansão Territorial", icon: Target, end: false },
-  { to: "/dashboards/licenciados/financeiro", label: "Financeiro", icon: Wallet, end: false },
 ] as const;
 
 export function LicenciadosSubNav() {
