@@ -3,7 +3,7 @@ import {
   ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
 } from "recharts";
 import {
-  AlertTriangle, Activity, UserPlus, Trophy, XCircle, Clock, Settings2, Info, ExternalLink,
+  AlertTriangle, Activity, UserPlus, Trophy, XCircle, Clock, Settings2, Info, ChevronRight,
 } from "lucide-react";
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
 import { CarboCard, CarboCardContent } from "@/components/ui/carbo-card";
@@ -18,6 +18,7 @@ import {
   TRILHA_INICIO, DIAS_SUBCONTADOS,
 } from "@/hooks/useAcompanhamento";
 import { useVendedoresDir } from "@/hooks/useVendedoresDir";
+import { LeadPainel } from "@/components/comercial/LeadPainel";
 import { funilNome, etapaNome } from "@/lib/funis";
 
 const PERIODOS = [
@@ -38,6 +39,9 @@ export default function Acompanhamento() {
   const [dias, setDias] = useState(30);
   const [vendedor, setVendedor] = useState<string>("");
   const [slaAberto, setSlaAberto] = useState(false);
+  // Card aberto no painel espelhado. Fica DENTRO do Admin, ao vivo: o gestor lê
+  // o negócio inteiro e comenta sem trocar de sistema.
+  const [painelId, setPainelId] = useState<string | null>(null);
 
   const { desde, ate } = useMemo(() => {
     const hoje = new Date();
@@ -400,11 +404,9 @@ export default function Acompanhamento() {
               ) : (
                 <div className="divide-y">
                   {data.lista_esquecidos.map((l) => (
-                    <a
+                    <button
                       key={l.id}
-                      href={`https://sales.carbohub.com.br/crm/pipelines?funil=${l.funnel_type}&lead=${l.id}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
+                      onClick={() => setPainelId(l.id)}
                       className="w-full flex items-center gap-3 py-2 text-left hover:bg-muted/50 rounded px-1"
                     >
                       <div className="flex-1 min-w-0">
@@ -426,8 +428,8 @@ export default function Acompanhamento() {
                         {l.dias_parado}d
                         <span className="text-muted-foreground font-normal">/ {l.prazo_dias}d</span>
                       </span>
-                      <ExternalLink className="h-4 w-4 text-muted-foreground shrink-0" />
-                    </a>
+                      <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
+                    </button>
                   ))}
                 </div>
               )}
@@ -435,6 +437,44 @@ export default function Acompanhamento() {
           </CarboCard>
         </>
       )}
+
+      {/* Espera vencida — prometeram uma data e ela passou. É COBRANÇA, não
+          abandono, por isso lista à parte dos esquecidos: a conversa com o
+          vendedor é outra ("e aí, o decisor respondeu?" vs "ninguém tocou"). */}
+      {data && data.lista_espera_vencida.length > 0 && (
+        <CarboCard>
+          <CarboCardContent className="p-4">
+            <h2 className="text-sm font-bold mb-1">Esperas vencidas</h2>
+            <p className="text-xs text-muted-foreground mb-3">
+              O prazo que o próprio vendedor marcou já passou. Ou renova com data nova, ou volta a
+              tocar o negócio.
+            </p>
+            <div className="divide-y">
+              {data.lista_espera_vencida.map((l) => (
+                <button key={l.id} onClick={() => setPainelId(l.id)}
+                  className="w-full flex items-center gap-3 py-2 text-left hover:bg-muted/50 rounded px-1">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium truncate">{l.nome}</p>
+                    <p className="text-xs text-muted-foreground truncate">
+                      {funilNome(l.funnel_type)} · {etapaNome(l.stage)} · {nomeDe(l.dono)}
+                      {l.waiting_note && <> · {l.waiting_note}</>}
+                    </p>
+                  </div>
+                  {l.valor > 0 && (
+                    <span className="text-xs tabular-nums text-muted-foreground shrink-0">{brl(l.valor)}</span>
+                  )}
+                  <span className="text-xs font-semibold tabular-nums shrink-0" style={{ color: "#EF4444" }}>
+                    venceu {brDate(l.waiting_until)}
+                  </span>
+                  <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
+                </button>
+              ))}
+            </div>
+          </CarboCardContent>
+        </CarboCard>
+      )}
+
+      {painelId && <LeadPainel leadId={painelId} onClose={() => setPainelId(null)} />}
 
       <SlaDialog open={slaAberto} onClose={() => setSlaAberto(false)} />
     </div>

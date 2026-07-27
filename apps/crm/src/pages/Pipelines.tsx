@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
 import { CarboKPI } from "@/components/ui/carbo-kpi";
@@ -14,6 +14,7 @@ import {
 import { Plus, Users, TrendingUp, AlertTriangle, Flame, LayoutGrid, List, KanbanSquare } from "lucide-react";
 import { useCRMLeads, useAllCRMLeads, useCRMStats, useAdvanceLeadStage, useMarkLeadLost, useCRMLeadsRealtime } from "@/hooks/useCRMLeads";
 import { useRepassarLead } from "@/hooks/useRepasse";
+import { useLeadPorId } from "@/hooks/useLeadPorId";
 import { useVendedoresDir } from "@/hooks/useVendas";
 import { useAuth } from "@/contexts/AuthContext";
 import { KanbanBoard } from "@/components/crm/KanbanBoard";
@@ -162,6 +163,11 @@ export default function Pipelines() {
   // específico. Default: f13 (Comercial Expansão), que absorveu as 9 antigas.
   const [searchParams, setSearchParams] = useSearchParams();
   const funilParam = searchParams.get("funil");
+  // Link direto para um card (a lista de esquecidos do Admin manda assim). O
+  // board só tem em mãos os leads do funil aberto, então um card de outro
+  // funil — ou arquivado, que a RLS esconde — não estaria na lista. Busca pelo
+  // id e abre o detalhe.
+  const leadParam = searchParams.get("lead");
   // Link antigo (?funil=f3) apontaria pra uma pipeline sem aba e sem leads —
   // cai na Comercial Expansão, que é pra onde aqueles leads foram.
   const funil = (funilParam === "todos" || (funilParam && FUNNEL_IDS.includes(funilParam))
@@ -184,6 +190,14 @@ export default function Pipelines() {
   const [repasseLead, setRepasseLead] = useState<CRMLead | null>(null);
   const [repasseNota, setRepasseNota] = useState("");
   const [drawerLead, setDrawerLead] = useState<CRMLead | null>(null);
+  const leadDoLink = useLeadPorId(leadParam);
+  // Abre o card do link assim que ele chega, uma vez só. Limpar o `?lead=` da
+  // URL evita que fechar o card e recarregar a página o reabra sozinho.
+  useEffect(() => {
+    if (!leadParam || !leadDoLink.data?.lead) return;
+    setDrawerLead(leadDoLink.data.lead);
+    setSearchParams((sp) => { const n = new URLSearchParams(sp); n.delete("lead"); return n; }, { replace: true });
+  }, [leadParam, leadDoLink.data]); // eslint-disable-line react-hooks/exhaustive-deps
   const [viewMode, setViewMode] = useState<"kanban" | "list">("kanban");
   const [vendedorFilter, setVendedorFilter] = useState("all");
   // Chips de situação. Respondem "o que exige a MINHA atenção agora?", que é
@@ -583,6 +597,12 @@ export default function Pipelines() {
           </CarboCard>
         )}
       </div>
+
+      {leadParam && leadDoLink.isError && (
+        <div className="fixed bottom-4 right-4 z-50 max-w-sm rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm">
+          Não consegui abrir o card do link: {(leadDoLink.error as Error)?.message ?? "sem permissão"}.
+        </div>
+      )}
 
       {acao && <AcaoPosMove lead={acao.lead} tipo={acao.tipo} onClose={() => setAcao(null)} />}
 
