@@ -6,7 +6,6 @@ import {
 } from "recharts";
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
 import { CarboKPI } from "@/components/ui/carbo-kpi";
-import { LicenciadosSubNav } from "@/components/licenciados/LicenciadosSubNav";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useAuth } from "@/contexts/AuthContext";
 import { fmtBRL, fmtBRLc, delta } from "@/lib/dash-format";
@@ -158,8 +157,6 @@ export default function DashboardsFranqueados() {
         description={`Rede de descarbonização CarboVapt · ${rangeLabel(range)}`}
         actions={<PeriodPicker value={range} onChange={setRange} />}
       />
-
-      <LicenciadosSubNav />
 
       {falhou ? (
         <ErrorNotice onRetry={() => { kpisQ.refetch(); rankingQ.refetch(); dailyQ.refetch(); porteQ.refetch(); }} />
