@@ -29,7 +29,7 @@ Todo achado abaixo foi verificado direto no código antes de entrar aqui.
 | **7** | Duplicação Outbound → Inbound | o handoff do SDR | ✅ |
 | **8** | Colunas do Inbound (`orcamento`, `formalizacao`) | o funil do closer | ✅ |
 | **9** | Flag `waiting_on` — o "parado" | separa "aguardando" de "esquecido" na tela | ✅ |
-| **10** | Elo card ↔ orçamento (`/vender`) + B5, B6 | "o sistema todo se conversar" | 🟡 código no ar, **SQL pendente** |
+| **10** | Elo card ↔ orçamento (`/vender`) + B5, B6 | "o sistema todo se conversar" | ✅ |
 | **11** | Canais automáticos (webhooks, formulário, Chatwoot) | ⏸️ **adiado** — Chatwoot não existe ainda | ⏸️ |
 
 **Por que a tela é a fase 4 e não a 1:** ela mede ganhos, perdas e movimentação.
@@ -40,6 +40,10 @@ não ter tela. As fases 1 a 3 são baratas e existem para que a 4 seja verdade.
 **Por que a tela vem antes de mexer no funil:** ela é a linha de base. Sem ela,
 não há como afirmar que `nutricao`, `orcamento` e a duplicação melhoraram
 alguma coisa.
+
+**Entregue fora do plano, a pedido:** popup de ação ao mover para Orçamento e
+Ganho (a ação estava escondida atrás de abrir o card), valores em R$ e filtro
+por vendedor na tela de acompanhamento, e o placar de repasses por SDR.
 
 **Os bugs do Inbound foram redistribuídos:** B3 subiu para a fase 1 (a tela
 precisa dele), B5 e B6 ficam na 10, junto com o código que eles destravam.
