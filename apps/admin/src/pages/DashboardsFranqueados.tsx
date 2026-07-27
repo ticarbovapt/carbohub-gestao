@@ -1,4 +1,4 @@
-import { Building2, DollarSign, Wrench, CheckCircle2, AlertTriangle, Trophy, Gauge } from "lucide-react";
+import { Building2, DollarSign, Wrench, CheckCircle2, AlertTriangle, Trophy, Gauge, Receipt, Beaker, Users, Store } from "lucide-react";
 import {
   ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LabelList,
   PieChart, Pie, Cell, Legend,
@@ -12,6 +12,7 @@ import { fmtBRL, monthLabel } from "@/lib/dash-format";
 import {
   useFranqueadosKpis, useFranqueadosRevenueMonthly,
   useFranqueadosRanking, useFranqueadosPorte, useFranqueadosRecentServices,
+  useLicenseesOpsKpis, useLojas, useLicenseesTimeseries, usePorteTimeseries,
 } from "@/hooks/useDashFranqueados";
 
 const PORTE_COLORS = ["#22c55e", "#3b82f6", "#8b5cf6", "#f59e0b", "#14b8a6", "#ef4444"];
@@ -67,6 +68,20 @@ export default function DashboardsFranqueados() {
   const { data: ranking = [] } = useFranqueadosRanking();
   const { data: porte = [] } = useFranqueadosPorte();
   const { data: recentes = [] } = useFranqueadosRecentServices(10);
+  const { data: ops } = useLicenseesOpsKpis();
+  const { data: lojas = [] } = useLojas();
+  const { data: daily = [] } = useLicenseesTimeseries(30);
+  const { data: porteTs = [] } = usePorteTimeseries(30);
+
+  // Pivot da série de porte: [{day, porte, total}] → [{dia, <porte>: total, …}]
+  const porteKeys = Array.from(new Set(porteTs.map((p) => p.porte)));
+  const porteSeries = Array.from(new Set(porteTs.map((p) => p.day))).sort().map((day) => {
+    const row: Record<string, string | number> = {
+      dia: new Date(day + "T12:00:00").toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" }),
+    };
+    porteKeys.forEach((k) => { row[k] = porteTs.find((p) => p.day === day && p.porte === k)?.total ?? 0; });
+    return row;
+  });
 
   const chartData = months.map((m) => ({
     mes: monthLabel(m.month_start), faturado: m.revenue, servicos: m.services,
@@ -107,6 +122,64 @@ export default function DashboardsFranqueados() {
         <CarboKPI title="Receita no mês" value={fmtBRL(kpis?.total_revenue ?? 0)} icon={DollarSign}
           iconColor="green" loading={kLoad} />
       </div>
+
+      {/* KPIs operacionais (últimos 12 meses) */}
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+        <CarboKPI title="Ticket médio" value={fmtBRL(ops?.avg_ticket ?? 0)} icon={Receipt} iconColor="green" />
+        <CarboKPI title="Reagente consumido" value={`${(ops?.reagents_consumed ?? 0).toLocaleString("pt-BR")} L`} icon={Beaker} iconColor="blue" />
+        <CarboKPI title="Mecânicos ativos" value={ops?.active_mechanics ?? 0} icon={Users} iconColor="blue" />
+        <CarboKPI title="Estoque baixo" value={ops?.low_stock_items ?? 0} icon={AlertTriangle}
+          iconColor={(ops?.low_stock_items ?? 0) > 0 ? "warning" : "muted"} />
+        <CarboKPI title="Venda direta / OS" value={`${ops?.direct_sales ?? 0} / ${ops?.os_services ?? 0}`} icon={Wrench} iconColor="green" />
+      </div>
+
+      {/* Alerta de estoque de reagente */}
+      {(ops?.low_stock_items ?? 0) > 0 && (
+        <div className="flex items-center gap-3 rounded-2xl border border-amber-500/30 bg-amber-500/5 px-5 py-4">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-500/10 text-amber-500">
+            <AlertTriangle className="h-5 w-5" />
+          </div>
+          <div className="min-w-0">
+            <p className="text-sm font-semibold text-foreground">
+              {ops!.low_stock_items} item(ns) de reagente abaixo do mínimo
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Lojas da rede com estoque de reagente no nível mínimo ou abaixo — risco de parada na operação.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Série diária — últimos 30 dias */}
+      <Card className="rounded-2xl border-0 shadow-sm">
+        <CardHeader className="pb-1 pt-5 px-5">
+          <CardTitle className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
+            Atividade Diária · últimos 30 dias
+          </CardTitle>
+          <p className="text-xs text-muted-foreground mt-0.5">Serviços e receita por dia na rede</p>
+        </CardHeader>
+        <CardContent className="px-2 pb-4">
+          {daily.length === 0 ? (
+            <p className="px-3 py-12 text-center text-sm text-muted-foreground">Sem atividade nos últimos 30 dias.</p>
+          ) : (
+            <ResponsiveContainer width="100%" height={220}>
+              <ComposedChart data={daily.map((d) => ({ ...d, dia: new Date(d.day + "T12:00:00").toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" }) }))}
+                margin={{ top: 16, right: 8, bottom: 0, left: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.08)" vertical={false} />
+                <XAxis dataKey="dia" tick={{ fontSize: 10, fill: "#94a3b8" }} axisLine={false} tickLine={false} />
+                <YAxis yAxisId="l" tick={{ fontSize: 10, fill: "#94a3b8" }} axisLine={false} tickLine={false} width={44}
+                  tickFormatter={(v: number) => v >= 1000 ? `${(v / 1000).toFixed(0)}k` : String(v)} />
+                <YAxis yAxisId="r" orientation="right" allowDecimals={false} tick={{ fontSize: 10, fill: "#94a3b8" }} axisLine={false} tickLine={false} width={28} />
+                <Tooltip contentStyle={{ background: "#1a2234", border: "1px solid rgba(255,255,255,0.14)", borderRadius: 10, fontSize: 12 }}
+                  formatter={(v: number, n: string) => n === "revenue" ? [fmtBRL(v), "Receita"] : [v, "Serviços"]} />
+                <Bar yAxisId="l" dataKey="revenue" fill="rgba(26,122,74,0.35)" radius={[4, 4, 0, 0]} maxBarSize={26} isAnimationActive={false} />
+                <Line yAxisId="r" type="monotoneX" dataKey="total_services" stroke="#3b6ea5" strokeWidth={2}
+                  dot={{ r: 2, fill: "#3b6ea5" }} isAnimationActive={false} />
+              </ComposedChart>
+            </ResponsiveContainer>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Gráficos no estilo do Comercial */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
@@ -241,6 +314,32 @@ export default function DashboardsFranqueados() {
         </Card>
       </div>
 
+      {/* Evolução do mix de porte */}
+      {porteSeries.length > 0 && (
+        <Card className="rounded-2xl border-0 shadow-sm">
+          <CardHeader className="pb-1 pt-5 px-5">
+            <CardTitle className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
+              Evolução do Mix de Porte · últimos 30 dias
+            </CardTitle>
+            <p className="text-xs text-muted-foreground mt-0.5">Serviços por porte de veículo, por dia</p>
+          </CardHeader>
+          <CardContent className="px-2 pb-4">
+            <ResponsiveContainer width="100%" height={220}>
+              <ComposedChart data={porteSeries} margin={{ top: 16, right: 8, bottom: 0, left: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.08)" vertical={false} />
+                <XAxis dataKey="dia" tick={{ fontSize: 10, fill: "#94a3b8" }} axisLine={false} tickLine={false} />
+                <YAxis allowDecimals={false} tick={{ fontSize: 10, fill: "#94a3b8" }} axisLine={false} tickLine={false} width={28} />
+                <Tooltip contentStyle={{ background: "#1a2234", border: "1px solid rgba(255,255,255,0.14)", borderRadius: 10, fontSize: 12 }} />
+                <Legend formatter={(v) => <span className="text-xs capitalize">{v}</span>} />
+                {porteKeys.map((k, i) => (
+                  <Bar key={k} dataKey={k} stackId="porte" fill={PORTE_COLORS[i % PORTE_COLORS.length]} maxBarSize={26} isAnimationActive={false} />
+                ))}
+              </ComposedChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Últimos serviços */}
       <div className="rounded-2xl border border-border bg-card overflow-hidden">
         <div className="flex items-center gap-2 border-b border-border px-5 py-3">
@@ -264,6 +363,47 @@ export default function DashboardsFranqueados() {
               <span className="text-sm font-semibold tabular-nums text-foreground shrink-0">{fmtK(s.total_value)}</span>
             </div>
           ))}
+        </div>
+      </div>
+
+      {/* Lojas da rede */}
+      <div className="rounded-2xl border border-border bg-card overflow-hidden">
+        <div className="flex items-center justify-between border-b border-border px-5 py-3">
+          <div className="flex items-center gap-2">
+            <Store className="h-4 w-4 text-primary" />
+            <h2 className="text-sm font-semibold text-foreground">Lojas</h2>
+          </div>
+          <span className="text-xs text-muted-foreground">{lojas.length} cadastrada{lojas.length !== 1 ? "s" : ""}</span>
+        </div>
+        <div className="overflow-x-auto">
+          {lojas.length === 0 ? (
+            <p className="px-5 py-8 text-center text-sm text-muted-foreground">Nenhuma loja cadastrada.</p>
+          ) : (
+            <table className="w-full text-sm">
+              <thead className="bg-secondary/30">
+                <tr>
+                  <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">Loja</th>
+                  <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">Cidade</th>
+                  <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">UF</th>
+                  <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">Status</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {lojas.map((l) => (
+                  <tr key={l.id} className="hover:bg-secondary/20 transition-colors">
+                    <td className="px-5 py-3 font-medium text-foreground">{l.name}</td>
+                    <td className="px-5 py-3 text-muted-foreground">{l.city || "—"}</td>
+                    <td className="px-5 py-3 text-muted-foreground">{l.state || "—"}</td>
+                    <td className="px-5 py-3">
+                      <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${l.active ? "bg-green-500/10 text-green-500" : "bg-muted text-muted-foreground"}`}>
+                        {l.active ? "Ativa" : "Inativa"}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
         </div>
       </div>
     </main>
