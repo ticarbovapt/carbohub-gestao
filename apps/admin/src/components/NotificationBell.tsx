@@ -26,7 +26,7 @@ const TYPE_CONFIG: Record<string, { Icon: React.ElementType; label: string; colo
 };
 
 function NotificationItem({
-  notification, onRead, onDelete,
+  notification, onRead, onDelete, onOpen,
 }: { notification: Notification; onRead: (id: string) => void; onDelete: (id: string) => void; onOpen: (n: Notification) => void }) {
   const cfg = TYPE_CONFIG[notification.type] || TYPE_CONFIG.message;
   const isUnread = !notification.is_read;

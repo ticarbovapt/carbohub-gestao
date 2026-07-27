@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import { Mail } from "lucide-react";
 import { UserCog, Users } from "lucide-react";
 import {
-  ShoppingCart, Plus, Trash2, Building2, MapPin, Package, Gift, FileText, Search, Target, ChevronDown,
+  ShoppingCart, Plus, Trash2, AlertTriangle, Building2, MapPin, Package, Gift, FileText, Search, Target, ChevronDown,
   Loader2, CheckCircle2, AlertCircle, CreditCard, Percent, Tag, CalendarClock, Sparkles,
 } from "lucide-react";
 import { CarboCard, CarboCardContent } from "@/components/ui/carbo-card";
@@ -302,6 +302,14 @@ export default function Vender() {
       if (d.length <= 9) return `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6)}`;
       return `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6, 9)}-${d.slice(9)}`;
     }
+    // Separador só entra quando JÁ existe dígito depois dele. Antes, com 12
+    // dígitos a máscara devolvia "61.744.398/0001-" com o hífen sobrando: o
+    // backspace tirava o hífen, esta função recolocava, e o campo travava —
+    // era preciso apagar um dígito "por cima" do hífen para destravar.
+    if (d.length <= 2) return d;
+    if (d.length <= 5) return `${d.slice(0, 2)}.${d.slice(2)}`;
+    if (d.length <= 8) return `${d.slice(0, 2)}.${d.slice(2, 5)}.${d.slice(5)}`;
+    if (d.length <= 12) return `${d.slice(0, 2)}.${d.slice(2, 5)}.${d.slice(5, 8)}/${d.slice(8)}`;
     return `${d.slice(0, 2)}.${d.slice(2, 5)}.${d.slice(5, 8)}/${d.slice(8, 12)}-${d.slice(12)}`;
   }
   // Validação de CPF (dígitos verificadores).
@@ -365,8 +373,20 @@ export default function Vender() {
     setServiceRows((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch } : r)));
   }
   function onProduct(id: string, productId: string) {
-    // O catálogo (mrp_products) não tem preço de venda; o vendedor informa o preço.
-    updateRow(id, { productId });
+    // O preço vem da TABELA (Admin › Tabela de preços), não da digitação. Antes
+    // cada vendedor punha o valor no olho, e o mesmo produto saía por preços
+    // diferentes em pedidos diferentes — sem ninguém conseguir auditar.
+    //
+    // Produto sem preço definido entra com 0 e a validação barra o salvamento:
+    // é lacuna de configuração, e precisa aparecer em vez de ser preenchida à
+    // mão por quem não decide preço.
+    const prod = produtos.find((p) => p.id === productId);
+    const preco = prod?.sale_price ?? 0;
+    updateRow(id, {
+      productId,
+      unitPrice: preco,
+      unitPriceStr: preco ? String(preco).replace(".", ",") : "",
+    });
   }
   const validItems = () =>
     rows.filter((r) => r.productId && r.qty > 0).map((r) => {
@@ -597,7 +617,7 @@ export default function Vender() {
   async function handleQuote() {
     const items = validItems();
     if (items.length === 0 && validServiceItems().length === 0) { toast.error("Adicione ao menos um item."); return; }
-    if (items.some((i) => !(i.unit_price > 0))) { toast.error("Informe o preço unitário de todos os itens."); return; }
+    if (items.some((i) => !(i.unit_price > 0))) { toast.error("Há item sem preço na tabela. A gestão precisa cadastrar em Admin › Tabela de preços."); return; }
     if (!pagamentoValido) { toast.error("Selecione a forma de pagamento."); return; }
     if (frotaSemData) { toast.error("Frota exige a previsão de execução — a OS não é aberta sem data."); return; }
     setGenerating(true);
@@ -636,7 +656,7 @@ export default function Vender() {
   async function handleEmailQuote() {
     const items = validItems();
     if (items.length === 0 && validServiceItems().length === 0) { toast.error("Adicione ao menos um item."); return; }
-    if (items.some((i) => !(i.unit_price > 0))) { toast.error("Informe o preço unitário de todos os itens."); return; }
+    if (items.some((i) => !(i.unit_price > 0))) { toast.error("Há item sem preço na tabela. A gestão precisa cadastrar em Admin › Tabela de preços."); return; }
     if (!pagamentoValido) { toast.error("Selecione a forma de pagamento."); return; }
     if (frotaSemData) { toast.error("Frota exige a previsão de execução — a OS não é aberta sem data."); return; }
     if (!email || !email.includes("@")) { toast.error("Informe o e-mail do cliente para enviar o orçamento."); return; }
@@ -731,7 +751,7 @@ export default function Vender() {
 
   async function handleSell() {
     if (validItems().length === 0 && validServiceItems().length === 0) { toast.error("Adicione ao menos um item."); return; }
-    if (validItems().some((i) => !(i.unit_price > 0))) { toast.error("Informe o preço unitário de todos os itens."); return; }
+    if (validItems().some((i) => !(i.unit_price > 0))) { toast.error("Há item sem preço na tabela. A gestão precisa cadastrar em Admin › Tabela de preços."); return; }
     if (!pagamentoValido) { toast.error("Selecione a forma de pagamento."); return; }
     if (frotaSemData) { toast.error("Frota exige a previsão de execução — a OS não é aberta sem data."); return; }
     try {
@@ -1041,8 +1061,17 @@ export default function Vender() {
           {rows.map((r) => {
             const bruto = r.qty * r.unitPrice;
             const line = computeLineDiscount(bruto, { type: r.discType, value: r.discValue });
+            const semPreco = !!r.productId && !r.unitPrice;
             return (
-              <div key={r.id} className="rounded-xl border p-3 space-y-3">
+              <div key={r.id} className={`rounded-xl border p-3 space-y-3 ${semPreco ? "border-destructive/50" : ""}`}>
+                {semPreco && (
+                  <p className="flex items-start gap-1.5 text-xs text-destructive">
+                    <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-px" />
+                    Este produto ainda não tem preço na tabela. Peça à gestão para cadastrar em
+                    <b className="mx-1">Admin › Comercial › Tabela de preços</b> — o valor não é
+                    digitado aqui.
+                  </p>
+                )}
                 <div className="grid grid-cols-1 sm:grid-cols-[1fr_90px_120px_auto] gap-3 items-end">
                   <div className="space-y-1.5">
                     <Label>Produto</Label>
@@ -1057,14 +1086,21 @@ export default function Vender() {
                   </div>
                   <div className="space-y-1.5">
                     <Label>Preço Unit. (R$)</Label>
+                    {/* Somente leitura: o preço é o da tabela mantida pela
+                        gestão. Deixar editável reabriria a porta para o mesmo
+                        produto sair por valores diferentes em cada pedido. */}
                     <Input
-                      type="text" inputMode="decimal"
-                      value={r.unitPriceStr ?? (r.unitPrice ? String(r.unitPrice).replace(".", ",") : "")}
-                      onChange={(e) => {
-                        const raw = e.target.value.replace(/[^\d.,]/g, "");
-                        updateRow(r.id, { unitPriceStr: raw, unitPrice: parsePreco(raw) });
-                      }}
-                      placeholder="0,00" />
+                      readOnly tabIndex={-1}
+                      className={`cursor-default ${r.productId && !r.unitPrice ? "border-destructive/60 text-destructive" : "bg-muted/40"}`}
+                      value={
+                        !r.productId ? ""
+                        : r.unitPrice ? brl(r.unitPrice)
+                        : "sem preço"
+                      }
+                      title={r.productId && !r.unitPrice
+                        ? "Produto sem preço definido — a gestão precisa cadastrar em Admin › Tabela de preços."
+                        : "Preço definido pela gestão em Admin › Tabela de preços."}
+                      placeholder="—" />
                   </div>
                   <div className="flex items-center justify-between sm:justify-end gap-3 sm:pb-2">
                     <div className="text-right">

@@ -36,9 +36,8 @@
     "skipLibCheck": true,
     "strict": false,
     "target": "ES2020",
-    "types": [
-      "vitest/globals"
-    ],
+    // Ver a nota igual no apps/crm: com "vitest/globals" (não instalado, e sem
+    // nenhum teste) o `tsc` falhava na entrada e o typecheck nunca rodava.
     "useDefineForClassFields": true
   },
   "include": [
