@@ -114,9 +114,9 @@ export default function DashboardsFranqueados() {
           iconColor="green" loading={kLoad} />
         <CarboKPI title="Serviços no período" value={kpis?.total_services ?? 0} icon={Wrench}
           iconColor="green" loading={kLoad} />
-        <CarboKPI title="Receita no período" value={fmtBRL(kpis?.total_revenue ?? 0)} icon={DollarSign}
+        <CarboKPI title="Receita no período" value={fmtK(kpis?.total_revenue ?? 0)} icon={DollarSign}
           iconColor="green" loading={kLoad} />
-        <CarboKPI title="Ticket médio" value={fmtBRL(ticketMedio)} icon={Receipt}
+        <CarboKPI title="Ticket médio" value={fmtK(ticketMedio)} icon={Receipt}
           iconColor="green" loading={kLoad} />
       </div>
 
@@ -272,7 +272,7 @@ export default function DashboardsFranqueados() {
             ) : (
               <ResponsiveContainer width="100%" height={240}>
                 <PieChart>
-                  <Pie data={porte} dataKey="total" nameKey="porte" cx="50%" cy="50%" innerRadius={45} outerRadius={80} paddingAngle={2}>
+                  <Pie data={porte} dataKey="total" nameKey="porte" cx="50%" cy="50%" innerRadius={45} outerRadius={80} paddingAngle={2} isAnimationActive={false}>
                     {porte.map((_, i) => <Cell key={i} fill={PORTE_COLORS[i % PORTE_COLORS.length]} />)}
                   </Pie>
                   <Tooltip contentStyle={{ background: "var(--background)", border: "1px solid var(--border)", borderRadius: 10, fontSize: 12 }} formatter={(v: number) => [`${v} serviços`, ""]} />
