@@ -35,12 +35,6 @@ export interface FranqueadosKpis {
   total_services: number;
   total_revenue: number;
 }
-export interface FranqueadosRevenueMonth {
-  month_start: string;
-  revenue: number;
-  services: number;
-}
-
 // ── hooks ─────────────────────────────────────────────────────────────────────
 
 /** KPIs consolidados da rede (lojas, ativas, serviços e receita no período). */
@@ -49,6 +43,26 @@ export function useFranqueadosKpis(range: DateRange) {
     queryKey: ["dash-franqueados-kpis", range.from, range.to],
     queryFn: async (): Promise<FranqueadosKpis | null> => {
       const { data, error } = await licenciadosDb.rpc("get_global_kpis", toTs(range));
+      if (error) throw new Error(error.message);
+      const rows = (data ?? []) as FranqueadosKpis[];
+      return (Array.isArray(rows) ? rows[0] : (rows as unknown as FranqueadosKpis)) ?? null;
+    },
+  });
+}
+
+/** Mesmos KPIs, para o período ANTERIOR — alimenta a variação (trend) dos cards. */
+export function useFranqueadosKpisPrev(range: DateRange) {
+  return useQuery({
+    queryKey: ["dash-franqueados-kpis-prev", range.from, range.to],
+    queryFn: async (): Promise<FranqueadosKpis | null> => {
+      const from = new Date(`${range.from}T00:00:00`);
+      const to = new Date(`${range.to}T23:59:59`);
+      const span = Math.max(1, to.getTime() - from.getTime());
+      const prevTo = new Date(from.getTime() - 1);
+      const prevFrom = new Date(prevTo.getTime() - span);
+      const { data, error } = await licenciadosDb.rpc("get_global_kpis", {
+        p_from: prevFrom.toISOString(), p_to: prevTo.toISOString(),
+      });
       if (error) throw new Error(error.message);
       const rows = (data ?? []) as FranqueadosKpis[];
       return (Array.isArray(rows) ? rows[0] : (rows as unknown as FranqueadosKpis)) ?? null;
@@ -127,32 +141,6 @@ export function useLicenseesTimeseries(range: DateRange) {
   });
 }
 
-export interface LojaRow {
-  id: string; name: string; trade_name: string | null;
-  city: string | null; state: string | null; active: boolean;
-}
-
-/** Lojas ATIVAS da rede licenciada (exclui a interna e as inativas).
- *  Cadastro — sem período. */
-export function useLojas() {
-  return useQuery({
-    queryKey: ["dash-franqueados-lojas"],
-    queryFn: async (): Promise<LojaRow[]> => {
-      const { data, error } = await licenciadosDb
-        .from("lojas")
-        .select("id, name, trade_name, city, state, active, is_internal")
-        .or("is_internal.is.null,is_internal.eq.false")
-        .eq("active", true)
-        .order("name");
-      if (error) throw new Error(error.message);
-      return ((data ?? []) as any[]).map((l) => ({
-        id: l.id, name: l.trade_name || l.name, trade_name: l.trade_name,
-        city: l.city, state: l.state, active: Boolean(l.active),
-      }));
-    },
-  });
-}
-
 export interface RecentServiceRow {
   service_id: string;
   loja_name: string;
@@ -176,28 +164,6 @@ export function useFranqueadosRecentServices(limit = 10) {
         service_id: r.service_id, loja_name: r.loja_name, city: r.city, state: r.state,
         porte: r.porte, fuel_type: r.fuel_type, total_value: Number(r.total_value || 0), performed_at: r.performed_at,
       }));
-    },
-  });
-}
-
-/** Receita por mês da rede (últimos N meses), com meses vazios preenchidos com 0.
- *  Visão histórica fixa — independe do filtro de período da tela. */
-export function useFranqueadosRevenueMonthly(months = 12) {
-  return useQuery({
-    queryKey: ["dash-franqueados-revenue", months],
-    queryFn: async (): Promise<FranqueadosRevenueMonth[]> => {
-      const { data, error } = await licenciadosDb.rpc("get_global_revenue_monthly", { p_months: months });
-      if (error) throw new Error(error.message);
-      const rows = (data ?? []) as FranqueadosRevenueMonth[];
-      const byMonth = new Map(rows.map((r) => [r.month_start.slice(0, 7), r]));
-      const out: FranqueadosRevenueMonth[] = [];
-      const now = new Date();
-      for (let i = months - 1; i >= 0; i--) {
-        const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-        const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-        out.push(byMonth.get(key) ?? { month_start: `${key}-01`, revenue: 0, services: 0 });
-      }
-      return out;
     },
   });
 }
