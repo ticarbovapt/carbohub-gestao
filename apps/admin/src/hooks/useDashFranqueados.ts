@@ -127,32 +127,6 @@ export function useLicenseesTimeseries(range: DateRange) {
   });
 }
 
-export interface LojaRow {
-  id: string; name: string; trade_name: string | null;
-  city: string | null; state: string | null; active: boolean;
-}
-
-/** Lojas ATIVAS da rede licenciada (exclui a interna e as inativas).
- *  Cadastro — sem período. */
-export function useLojas() {
-  return useQuery({
-    queryKey: ["dash-franqueados-lojas"],
-    queryFn: async (): Promise<LojaRow[]> => {
-      const { data, error } = await licenciadosDb
-        .from("lojas")
-        .select("id, name, trade_name, city, state, active, is_internal")
-        .or("is_internal.is.null,is_internal.eq.false")
-        .eq("active", true)
-        .order("name");
-      if (error) throw new Error(error.message);
-      return ((data ?? []) as any[]).map((l) => ({
-        id: l.id, name: l.trade_name || l.name, trade_name: l.trade_name,
-        city: l.city, state: l.state, active: Boolean(l.active),
-      }));
-    },
-  });
-}
-
 export interface RecentServiceRow {
   service_id: string;
   loja_name: string;

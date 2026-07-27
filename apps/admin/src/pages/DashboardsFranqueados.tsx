@@ -14,8 +14,10 @@ import { PeriodPicker, presetRange, rangeLabel, type PeriodRange } from "@/compo
 import {
   useFranqueadosKpis, useFranqueadosRevenueMonthly,
   useFranqueadosRanking, useFranqueadosPorte, useFranqueadosRecentServices,
-  useTicketMedio, useLojas, useLicenseesTimeseries,
+  useTicketMedio, useLicenseesTimeseries,
 } from "@/hooks/useDashFranqueados";
+
+const LOJAS_POR_PAGINA = 10;
 
 const PORTE_COLORS = ["#22c55e", "#3b82f6", "#8b5cf6", "#f59e0b", "#14b8a6", "#ef4444"];
 
@@ -74,8 +76,15 @@ export default function DashboardsFranqueados() {
   const { data: porte = [] } = useFranqueadosPorte(range);
   const { data: recentes = [] } = useFranqueadosRecentServices(10);
   const { data: ticketMedio = 0 } = useTicketMedio(range);
-  const { data: lojas = [] } = useLojas();
   const { data: daily = [] } = useLicenseesTimeseries(range);
+
+  // Lista de lojas ATIVAS derivada do ranking: já vem com a contagem de
+  // descarbonizações do período e ordenada por serviços desc (quem registra
+  // aparece primeiro; quem não registrou fica no fim, com 0). Amostragem
+  // incremental de 10 em 10 para a lista não dominar a tela.
+  const [lojasVisiveis, setLojasVisiveis] = useState(LOJAS_POR_PAGINA);
+  const lojas = ranking.filter((l) => l.active);
+  const lojasSemRegistro = lojas.filter((l) => l.services === 0).length;
 
   const chartData = months.map((m) => ({
     mes: monthLabel(m.month_start), faturado: m.revenue, servicos: m.services,
@@ -317,7 +326,10 @@ export default function DashboardsFranqueados() {
             <Store className="h-4 w-4 text-primary" />
             <h2 className="text-sm font-semibold text-foreground">Lojas ativas</h2>
           </div>
-          <span className="text-xs text-muted-foreground">{lojas.length} loja{lojas.length !== 1 ? "s" : ""}</span>
+          <span className="text-xs text-muted-foreground">
+            {lojas.length} loja{lojas.length !== 1 ? "s" : ""}
+            {lojasSemRegistro > 0 && ` · ${lojasSemRegistro} sem registro no período`}
+          </span>
         </div>
         <div className="overflow-x-auto">
           {lojas.length === 0 ? (
@@ -329,20 +341,51 @@ export default function DashboardsFranqueados() {
                   <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">Loja</th>
                   <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">Cidade</th>
                   <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">UF</th>
+                  <th className="px-5 py-3 text-right text-xs font-semibold uppercase tracking-wider text-muted-foreground">Descarbonizações</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {lojas.map((l) => (
-                  <tr key={l.id} className="hover:bg-secondary/20 transition-colors">
+                {lojas.slice(0, lojasVisiveis).map((l) => (
+                  <tr key={l.loja_id} className="hover:bg-secondary/20 transition-colors">
                     <td className="px-5 py-3 font-medium text-foreground">{l.name}</td>
                     <td className="px-5 py-3 text-muted-foreground">{l.city || "—"}</td>
                     <td className="px-5 py-3 text-muted-foreground">{l.state || "—"}</td>
+                    <td className="px-5 py-3 text-right tabular-nums">
+                      {l.services > 0
+                        ? <span className="font-semibold text-foreground">{l.services}</span>
+                        : <span className="text-xs text-muted-foreground">sem registro</span>}
+                    </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           )}
         </div>
+        {lojas.length > LOJAS_POR_PAGINA && (
+          <div className="flex items-center justify-between gap-3 border-t border-border px-5 py-3">
+            <span className="text-xs text-muted-foreground">
+              Mostrando {Math.min(lojasVisiveis, lojas.length)} de {lojas.length}
+            </span>
+            <div className="flex items-center gap-2">
+              {lojasVisiveis > LOJAS_POR_PAGINA && (
+                <button
+                  onClick={() => setLojasVisiveis(LOJAS_POR_PAGINA)}
+                  className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+                >
+                  Recolher
+                </button>
+              )}
+              {lojasVisiveis < lojas.length && (
+                <button
+                  onClick={() => setLojasVisiveis((n) => n + LOJAS_POR_PAGINA)}
+                  className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-foreground hover:bg-muted transition-colors"
+                >
+                  Mostrar mais {Math.min(LOJAS_POR_PAGINA, lojas.length - lojasVisiveis)}
+                </button>
+              )}
+            </div>
+          </div>
+        )}
       </div>
     </main>
   );
