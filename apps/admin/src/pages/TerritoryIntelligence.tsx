@@ -1,9 +1,11 @@
 import { useMemo, useState, useEffect, useRef } from "react";
 import { LicenciadosSubNav } from "@/components/licenciados/LicenciadosSubNav";
 import { useAuth } from "@/contexts/AuthContext";
-import { Badge } from "@/components/ui/badge";
+import { CarboPageHeader } from "@/components/ui/carbo-page-header";
+import { CarboKPI } from "@/components/ui/carbo-kpi";
+import { CarboBadge } from "@/components/ui/carbo-badge";
 import { Input } from "@/components/ui/input";
-import { Loader2, Brain, MapPin, Search, Info, Map as MapIcon, Table2 } from "lucide-react";
+import { Brain, MapPin, Search, Info, Map as MapIcon, Table2, Gauge } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
@@ -35,10 +37,14 @@ function getDensityTier(machineCount: number): DensityTier {
   return "C";
 }
 
-const DENSITY_CONFIG: Record<DensityTier, { label: string; color: string; bg: string; desc: string }> = {
-  A: { label: "Alta densidade", color: "bg-green-500", bg: "bg-green-500/10 border-green-500/30", desc: "5+ máquinas" },
-  B: { label: "Média densidade", color: "bg-blue-500", bg: "bg-blue-500/10 border-blue-500/30", desc: "3–4 máquinas" },
-  C: { label: "Baixa densidade", color: "bg-yellow-500", bg: "bg-yellow-500/10 border-yellow-500/30", desc: "1–2 máquinas" },
+const DENSITY_CONFIG: Record<DensityTier, {
+  label: string; desc: string;
+  badge: "success" | "info" | "warning";
+  kpi: "green" | "blue" | "warning";
+}> = {
+  A: { label: "Alta densidade", desc: "5+ máquinas", badge: "success", kpi: "green" },
+  B: { label: "Média densidade", desc: "3–4 máquinas", badge: "info", kpi: "blue" },
+  C: { label: "Baixa densidade", desc: "1–2 máquinas", badge: "warning", kpi: "warning" },
 };
 
 const TIER_COLORS_MAP: Record<string, string> = { A: "#22c55e", B: "#3b82f6", C: "#f59e0b" };
@@ -227,31 +233,15 @@ export default function TerritoryIntelligence() {
     );
   }
 
-  if (isLoading) {
-    return (
-      <main className="mx-auto max-w-6xl px-4 sm:px-6 py-8">
-        <div className="flex items-center justify-center min-h-[400px]">
-          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-        </div>
-      </main>
-    );
-  }
-
   return (
     <main className="mx-auto max-w-6xl px-4 sm:px-6 py-8">
       <div className="space-y-6">
-        {/* Header */}
-        <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-violet-500/10">
-            <Brain className="h-5 w-5 text-violet-500" />
-          </div>
-          <div>
-            <h1 className="text-2xl font-bold text-foreground">Inteligência Territorial</h1>
-            <p className="text-sm text-muted-foreground">
-              Onde a rede já está: densidade de máquinas CarboVAPT por cidade
-            </p>
-          </div>
-        </div>
+        <CarboPageHeader
+          icon={Brain}
+          iconColor="blue"
+          title="Inteligência Territorial"
+          description="Onde a rede já está: densidade de máquinas CarboVAPT por cidade"
+        />
 
         <LicenciadosSubNav />
 
@@ -272,30 +262,19 @@ export default function TerritoryIntelligence() {
         <div className="flex items-center gap-2 flex-wrap">
           <span className="text-sm font-medium text-muted-foreground mr-1">Classificação por densidade:</span>
           {(["A", "B", "C"] as DensityTier[]).map((tier) => (
-            <Badge key={tier} className={`${DENSITY_CONFIG[tier].color} text-white border-0`}>
+            <CarboBadge key={tier} variant={DENSITY_CONFIG[tier].badge}>
               Tier {tier}: {DENSITY_CONFIG[tier].desc}
-            </Badge>
+            </CarboBadge>
           ))}
         </div>
 
         {/* KPIs */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          <div className="rounded-xl border border-border bg-card p-4">
-            <div className="flex items-center gap-2 text-muted-foreground text-sm">
-              <MapPin className="h-4 w-4" /> <span>Cidades com máquina</span>
-            </div>
-            <p className="text-2xl font-bold mt-1">{clusters.length}</p>
-            <p className="text-xs text-muted-foreground">{totalMaquinasEmCidades} máquinas · {totalLicenciados} licenciado(s)</p>
-          </div>
+          <CarboKPI title="Cidades com máquina" value={clusters.length} icon={MapPin}
+            iconColor="blue" loading={isLoading} />
           {(["A", "B", "C"] as DensityTier[]).map((tier) => (
-            <div key={tier} className={`rounded-xl border p-4 ${DENSITY_CONFIG[tier].bg}`}>
-              <div className="flex items-center gap-2 text-sm">
-                <span className={`h-2 w-2 rounded-full ${DENSITY_CONFIG[tier].color}`} />
-                <span className="text-muted-foreground">Tier {tier}</span>
-              </div>
-              <p className="text-2xl font-bold mt-1">{tierStats[tier]}</p>
-              <p className="text-xs text-muted-foreground">{DENSITY_CONFIG[tier].label} · {DENSITY_CONFIG[tier].desc}</p>
-            </div>
+            <CarboKPI key={tier} title={`Tier ${tier} · ${DENSITY_CONFIG[tier].label}`}
+              value={tierStats[tier]} icon={Gauge} iconColor={DENSITY_CONFIG[tier].kpi} loading={isLoading} />
           ))}
         </div>
 
@@ -411,9 +390,9 @@ export default function TerritoryIntelligence() {
                           <td className="px-4 py-3 font-medium text-foreground">{c.city}</td>
                           <td className="px-4 py-3 text-muted-foreground">{c.state}</td>
                           <td className="px-4 py-3">
-                            <Badge className={`${DENSITY_CONFIG[c.tier].color} text-white border-0 text-xs`}>
+                            <CarboBadge variant={DENSITY_CONFIG[c.tier].badge} size="sm">
                               Tier {c.tier}
-                            </Badge>
+                            </CarboBadge>
                           </td>
                           <td className="px-4 py-3 tabular-nums text-foreground">{c.machineCount}</td>
                           <td className="px-4 py-3 text-muted-foreground">
