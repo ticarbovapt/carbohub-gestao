@@ -132,7 +132,8 @@ export interface LojaRow {
   city: string | null; state: string | null; active: boolean;
 }
 
-/** Lojas da rede licenciada (exclui a interna). Cadastro — sem período. */
+/** Lojas ATIVAS da rede licenciada (exclui a interna e as inativas).
+ *  Cadastro — sem período. */
 export function useLojas() {
   return useQuery({
     queryKey: ["dash-franqueados-lojas"],
@@ -141,6 +142,7 @@ export function useLojas() {
         .from("lojas")
         .select("id, name, trade_name, city, state, active, is_internal")
         .or("is_internal.is.null,is_internal.eq.false")
+        .eq("active", true)
         .order("name");
       if (error) throw new Error(error.message);
       return ((data ?? []) as any[]).map((l) => ({

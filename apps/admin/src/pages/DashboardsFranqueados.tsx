@@ -315,13 +315,13 @@ export default function DashboardsFranqueados() {
         <div className="flex items-center justify-between border-b border-border px-5 py-3">
           <div className="flex items-center gap-2">
             <Store className="h-4 w-4 text-primary" />
-            <h2 className="text-sm font-semibold text-foreground">Lojas</h2>
+            <h2 className="text-sm font-semibold text-foreground">Lojas ativas</h2>
           </div>
-          <span className="text-xs text-muted-foreground">{lojas.length} cadastrada{lojas.length !== 1 ? "s" : ""}</span>
+          <span className="text-xs text-muted-foreground">{lojas.length} loja{lojas.length !== 1 ? "s" : ""}</span>
         </div>
         <div className="overflow-x-auto">
           {lojas.length === 0 ? (
-            <p className="px-5 py-8 text-center text-sm text-muted-foreground">Nenhuma loja cadastrada.</p>
+            <p className="px-5 py-8 text-center text-sm text-muted-foreground">Nenhuma loja ativa.</p>
           ) : (
             <table className="w-full text-sm">
               <thead className="bg-secondary/30">
@@ -329,7 +329,6 @@ export default function DashboardsFranqueados() {
                   <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">Loja</th>
                   <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">Cidade</th>
                   <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">UF</th>
-                  <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">Status</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
@@ -338,11 +337,6 @@ export default function DashboardsFranqueados() {
                     <td className="px-5 py-3 font-medium text-foreground">{l.name}</td>
                     <td className="px-5 py-3 text-muted-foreground">{l.city || "—"}</td>
                     <td className="px-5 py-3 text-muted-foreground">{l.state || "—"}</td>
-                    <td className="px-5 py-3">
-                      <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${l.active ? "bg-green-500/10 text-green-500" : "bg-muted text-muted-foreground"}`}>
-                        {l.active ? "Ativa" : "Inativa"}
-                      </span>
-                    </td>
                   </tr>
                 ))}
               </tbody>
