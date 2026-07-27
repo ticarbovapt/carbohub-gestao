@@ -147,9 +147,22 @@ fase 1 junto com o B4, e não depois.
 > negócios diferentes no mesmo funil** — anúncio traz dono de um carro,
 > prospecção traz frota. Reforça o desenho Outbound/Inbound.
 >
-> **Pendência aberta:** 8 dos 15 `followup_base` estão com `contact_name` nulo.
-> Lead sem nome de contato ninguém trabalha — vão morar na lista de esquecidos
-> para sempre. Decidir entre arquivar ou completar da origem da importação.
+> ~~**Pendência aberta:** 8 dos 15 `followup_base` estão com `contact_name`
+> nulo, ninguém trabalha esses leads.~~ **RETIRADO em 27/07 — a conclusão
+> estava errada.** Ao olhar os oito de perto: são empresas reais com razão
+> social, CNPJ, cidade e valor (M & D, Bravo Centro Automotivo, Total
+> Parnamirim, Posto Amigo…), no Follow up, criadas por duas pessoas do time.
+>
+> Os dois erros: (a) o card exibe
+> `legal_name || trade_name || contact_name`, então eles **aparecem
+> normalmente** — eu tinha olhado só a coluna `contact_name`; (b) **estão sendo
+> trabalhados**, com 6 a 11 atividades cada. Contato sem pessoa nomeada é o
+> normal numa base de recompra: você tem a empresa que comprou, não quem
+> atendeu.
+>
+> **Lição:** conclusão tirada de uma coluna isolada, sem olhar as vizinhas nem o
+> código que consome o dado. O mesmo padrão do `stage_from` nulo, que também
+> "existia" no código e nunca tinha acontecido na base.
 
 
 `LeadForm.tsx:42` inicializa `source: "Prospecção ativa"` (com acento e espaço),
