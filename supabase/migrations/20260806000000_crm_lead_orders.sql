@@ -19,22 +19,68 @@
 
 
 -- ╔═══════════════════════════════════════════════════════════════════╗
--- ║ BLOCO 1 — a tabela de ligação                                     ║
+-- ║ BLOCO 1a — a tabela, SEM as FKs                                   ║
 -- ╚═══════════════════════════════════════════════════════════════════╝
+-- As FKs entram uma a uma nos blocos seguintes, e não aqui, porque criar a
+-- tabela com `references` para carboze_orders num único statement pega lock
+-- numa tabela que o app está lendo AO VIVO — e deu deadlock 40P01 na primeira
+-- tentativa. Separadas, cada uma abre e fecha o lock em milissegundos.
 create table if not exists public.crm_lead_orders (
   id         uuid primary key default gen_random_uuid(),
-  lead_id    uuid not null references public.crm_sales_leads(id) on delete cascade,
-  order_id   uuid not null references public.carboze_orders(id)  on delete cascade,
-  created_by uuid references public.profiles(id),
+  lead_id    uuid not null,
+  order_id   uuid not null,
+  created_by uuid,
   created_at timestamptz not null default now(),
   -- Um pedido pertence a UM lead. O contrário é livre: o lead pode ter vários
   -- orçamentos, que é justamente o motivo desta tabela existir.
   unique (order_id)
 );
 
+
+-- ╔═══════════════════════════════════════════════════════════════════╗
+-- ║ BLOCO 1b — FK para os leads                                       ║
+-- ╚═══════════════════════════════════════════════════════════════════╝
+set lock_timeout = '5s';
+
+alter table public.crm_lead_orders drop constraint if exists crm_lead_orders_lead_fk;
+alter table public.crm_lead_orders
+  add constraint crm_lead_orders_lead_fk
+  foreign key (lead_id) references public.crm_sales_leads(id) on delete cascade;
+
+reset lock_timeout;
+
+
+-- ╔═══════════════════════════════════════════════════════════════════╗
+-- ║ BLOCO 1c — FK para os pedidos (a que deu deadlock)                ║
+-- ╚═══════════════════════════════════════════════════════════════════╝
+-- Se este bloco falhar por lock_timeout, é só REENVIAR: o `drop constraint if
+-- exists` torna o bloco repetível, e o timeout curto faz ele desistir limpo em
+-- vez de travar quem está usando o sistema.
+set lock_timeout = '5s';
+
+alter table public.crm_lead_orders drop constraint if exists crm_lead_orders_order_fk;
+alter table public.crm_lead_orders
+  add constraint crm_lead_orders_order_fk
+  foreign key (order_id) references public.carboze_orders(id) on delete cascade;
+
+reset lock_timeout;
+
+
+-- ╔═══════════════════════════════════════════════════════════════════╗
+-- ║ BLOCO 1d — FK do autor e índice                                   ║
+-- ╚═══════════════════════════════════════════════════════════════════╝
+alter table public.crm_lead_orders drop constraint if exists crm_lead_orders_created_by_fk;
+alter table public.crm_lead_orders
+  add constraint crm_lead_orders_created_by_fk
+  foreign key (created_by) references public.profiles(id);
+
 create index if not exists idx_crm_lead_orders_lead
   on public.crm_lead_orders (lead_id, created_at desc);
 
+
+-- ╔═══════════════════════════════════════════════════════════════════╗
+-- ║ BLOCO 1e — RLS                                                    ║
+-- ╚═══════════════════════════════════════════════════════════════════╝
 alter table public.crm_lead_orders enable row level security;
 
 -- Quem enxerga o LEAD enxerga o vínculo. Sem duplicar regra de acesso: a
