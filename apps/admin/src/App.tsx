@@ -14,7 +14,6 @@ import Vender from "./pages/Vender";
 import UltimoAcesso from "./pages/UltimoAcesso";
 import DashboardsLojas from "./pages/DashboardsLojas";
 import DashboardsFranqueados from "./pages/DashboardsFranqueados";
-import TerritoryIntelligence from "./pages/TerritoryIntelligence";
 import DashboardsComercial from "./pages/DashboardsComercial";
 import ComercialVendas from "./pages/ComercialVendas";
 import DescontoAprovacoes from "./pages/DescontoAprovacoes";
@@ -67,7 +66,6 @@ export default function App() {
         {/* Dashboards espelhados dos sistemas do ecossistema */}
         <Route path="/dashboards/lojas" element={<DashboardsLojas />} />
         <Route path="/dashboards/franqueados" element={<DashboardsFranqueados />} />
-        <Route path="/dashboards/licenciados/inteligencia" element={<TerritoryIntelligence />} />
         <Route path="/dashboards/comercial" element={<DashboardsComercial />} />
         <Route path="/comercial/vendas" element={<ComercialVendas />} />
         <Route path="/comercial/dashboard" element={<DashboardComercial />} />

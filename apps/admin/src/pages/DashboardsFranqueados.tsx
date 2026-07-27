@@ -6,7 +6,6 @@ import {
 } from "recharts";
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
 import { CarboKPI } from "@/components/ui/carbo-kpi";
-import { LicenciadosSubNav } from "@/components/licenciados/LicenciadosSubNav";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useAuth } from "@/contexts/AuthContext";
 import { fmtBRL, fmtBRLc, delta } from "@/lib/dash-format";
@@ -19,6 +18,15 @@ import {
 
 const LOJAS_POR_PAGINA = 10;
 const PORTE_COLORS = ["#22c55e", "#3b82f6", "#8b5cf6", "#f59e0b", "#14b8a6", "#ef4444"];
+
+// Porte do MOTOR, por cilindrada — define preço e consumo de reagente.
+// O enum no banco guarda só a letra ('P' | 'M' | 'G'), ilegível na legenda.
+const PORTE_LABELS: Record<string, { nome: string; motor: string }> = {
+  P: { nome: "Pequeno", motor: "até 2.5L" },
+  M: { nome: "Médio", motor: "2.6L a 3.9L" },
+  G: { nome: "Grande", motor: "acima de 4.0L" },
+};
+const porteInfo = (p: string) => PORTE_LABELS[p?.toUpperCase?.()] ?? { nome: p || "Não informado", motor: "" };
 
 // Compacto — só para eixos e rótulos DENTRO de gráfico. Valores de card e de
 // lista usam fmtBRL/fmtBRLc, para não perder precisão (um ticket de R$1.480
@@ -91,6 +99,14 @@ export default function DashboardsFranqueados() {
   // "Top" só faz sentido para quem registrou algo no período.
   const topLicenciados = ranking.filter((r) => r.services > 0);
   const porte = porteQ.data ?? [];
+  // O RPC de porte ignora serviços com porte nulo (a coluna só existe desde
+  // jun/2026), então esses somem do gráfico. Contamos a diferença para avisar.
+  const porteData = porte.map((p) => {
+    const info = porteInfo(p.porte);
+    return { ...p, label: info.nome, motor: info.motor };
+  });
+  const servicosComPorte = porte.reduce((s, p) => s + p.total, 0);
+  const servicosSemPorte = Math.max(0, (kpisQ.data?.total_services ?? 0) - servicosComPorte);
   const recentes = recentesQ.data ?? [];
   const daily = dailyQ.data ?? [];
 
@@ -158,8 +174,6 @@ export default function DashboardsFranqueados() {
         description={`Rede de descarbonização CarboVapt · ${rangeLabel(range)}`}
         actions={<PeriodPicker value={range} onChange={setRange} />}
       />
-
-      <LicenciadosSubNav />
 
       {falhou ? (
         <ErrorNotice onRetry={() => { kpisQ.refetch(); rankingQ.refetch(); dailyQ.refetch(); porteQ.refetch(); }} />
@@ -284,6 +298,9 @@ export default function DashboardsFranqueados() {
                 <CardTitle className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest flex items-center gap-2">
                   <Gauge className="h-3.5 w-3.5 text-primary" /> Serviços por Porte
                 </CardTitle>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Porte do motor por cilindrada — define o preço e o consumo de reagente
+                </p>
               </CardHeader>
               <CardContent className="px-2 pb-4 h-[280px]">
                 {porteQ.isLoading ? (
@@ -293,14 +310,24 @@ export default function DashboardsFranqueados() {
                 ) : (
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
-                      <Pie data={porte} dataKey="total" nameKey="porte" cx="50%" cy="50%"
+                      <Pie data={porteData} dataKey="total" nameKey="label" cx="50%" cy="50%"
                         innerRadius={48} outerRadius={82} paddingAngle={2} isAnimationActive={false}>
-                        {porte.map((_, i) => <Cell key={i} fill={PORTE_COLORS[i % PORTE_COLORS.length]} />)}
+                        {porteData.map((_, i) => <Cell key={i} fill={PORTE_COLORS[i % PORTE_COLORS.length]} />)}
                       </Pie>
-                      <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v: number) => [`${v} serviços`, ""]} />
-                      <Legend formatter={(v) => <span className="text-xs capitalize">{v}</span>} />
+                      <Tooltip contentStyle={TOOLTIP_STYLE}
+                        formatter={(v: number, _n: string, item: any) => {
+                          const motor = item?.payload?.motor;
+                          return [`${v} serviço${v !== 1 ? "s" : ""}${motor ? ` · motor ${motor}` : ""}`, ""];
+                        }} />
+                      <Legend formatter={(v) => <span className="text-xs">{v}</span>} />
                     </PieChart>
                   </ResponsiveContainer>
+                )}
+                {!porteQ.isLoading && servicosSemPorte > 0 && (
+                  <p className="px-3 -mt-2 text-[11px] text-muted-foreground text-center">
+                    {servicosSemPorte} serviço{servicosSemPorte !== 1 ? "s" : ""} sem porte informado
+                    {" "}não {servicosSemPorte !== 1 ? "entram" : "entra"} neste gráfico
+                  </p>
                 )}
               </CardContent>
             </Card>
