@@ -246,13 +246,18 @@ export function useStatementPayments(statementId: string | null) {
 export function useAddPayment() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (p: { statement_id: string; amount: number; method?: string; notes?: string }) => {
+    mutationFn: async (p: { statement_id: string; amount: number; method?: string; notes?: string; paid_at?: string }) => {
       const { data: u } = await supabase.auth.getUser();
       const { error } = await db.from("commission_payments").insert({
         statement_id: p.statement_id,
         amount: p.amount,
-        method: p.method ?? null,
-        notes: p.notes ?? null,
+        method: p.method?.trim() || null,
+        notes: p.notes?.trim() || null,
+        // Data informada na tela. Sem ela o banco usa now(), o que datava
+        // errado todo pagamento lançado depois do dia em que aconteceu.
+        // Meio-dia para a conversão de fuso não jogar o registro para o dia
+        // anterior — a coluna é timestamptz e o Brasil está atrás de UTC.
+        paid_at: p.paid_at ? new Date(`${p.paid_at}T12:00:00`).toISOString() : new Date().toISOString(),
         paid_by: u?.user?.id ?? null,
       });
       if (error) throw error;

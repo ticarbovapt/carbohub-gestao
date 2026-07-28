@@ -19,7 +19,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { AlertCircle } from "lucide-react";
 import {
   useComissaoAgregado, useComissaoDescarb, useCommissionStatements, useCreateStatement, useAddPayment,
-  useCommissionRules, useUpsertCommissionRule, useStatementItems,
+  useCommissionRules, useUpsertCommissionRule, useStatementItems, useStatementPayments,
   type CommissionStatement,
 } from "@/hooks/useComissao";
 
@@ -294,19 +294,51 @@ function CalcularTab() {
   );
 }
 
+// Formas de pagamento — lista fechada para o dado sair padronizado. Antes era
+// texto livre, e "PIX", "pix" e "Pix Bradesco" viravam três formas diferentes
+// na hora de somar. "Outro" segue existindo com campo aberto: fechar a lista
+// sem escape faria alguém registrar errado só para conseguir salvar.
+const FORMAS_PAGAMENTO = [
+  "PIX",
+  "Transferência (TED/DOC)",
+  "Dinheiro",
+  "Boleto",
+  "Cartão",
+  "Cheque",
+  "Desconto em folha",
+] as const;
+const OUTRO = "__outro__";
+
 // ── Diálogo de pagamento ─────────────────────────────────────────────────────
 function PayDialog({ st, onClose }: { st: CommissionStatement | null; onClose: () => void }) {
   const add = useAddPayment();
   const saldo = st ? Math.max(0, Number(st.amount_due) - Number(st.amount_paid)) : 0;
   const [amount, setAmount] = useState(0);
   const [method, setMethod] = useState("");
+  const [methodOutro, setMethodOutro] = useState("");
+  // Data em que o dinheiro saiu — nem sempre é hoje. Quem lança na segunda o
+  // PIX feito na sexta precisa registrar sexta, senão o histórico mente.
+  const [paidAt, setPaidAt] = useState(() => iso(new Date()));
   const [notes, setNotes] = useState("");
   // Reinicia o valor sugerido quando abre outro fechamento
   const [lastId, setLastId] = useState<string | null>(null);
-  if (st && st.id !== lastId) { setLastId(st.id); setAmount(saldo); setMethod(""); setNotes(""); }
+  if (st && st.id !== lastId) {
+    setLastId(st.id); setAmount(saldo);
+    setMethod(""); setMethodOutro(""); setPaidAt(iso(new Date())); setNotes("");
+  }
 
   if (!st) return null;
-  const submit = () => add.mutate({ statement_id: st.id, amount, method, notes }, { onSuccess: onClose });
+
+  const metodoFinal = method === OUTRO ? methodOutro.trim() : method;
+  const hoje = iso(new Date());
+  // Pagamento no futuro não é pagamento — é promessa, e o saldo ficaria errado.
+  const dataInvalida = !paidAt || paidAt > hoje;
+  const outroVazio = method === OUTRO && !methodOutro.trim();
+
+  const submit = () => add.mutate(
+    { statement_id: st.id, amount, method: metodoFinal, notes, paid_at: paidAt },
+    { onSuccess: onClose },
+  );
 
   return (
     <Dialog open={!!st} onOpenChange={(o) => !o && onClose()}>
@@ -326,8 +358,31 @@ function PayDialog({ st, onClose }: { st: CommissionStatement | null; onClose: (
             </div>
           </div>
           <div className="space-y-1.5">
+            <Label>Data do pagamento</Label>
+            <DatePickerInput value={paidAt} onChange={setPaidAt} disableFuture clearable={false} />
+            {dataInvalida && (
+              <p className="text-xs text-destructive">
+                {paidAt ? "A data não pode ser futura." : "Informe a data do pagamento."}
+              </p>
+            )}
+          </div>
+          <div className="space-y-1.5">
             <Label>Forma de pagamento (opcional)</Label>
-            <CarboInput value={method} onChange={(e) => setMethod(e.target.value)} placeholder="PIX, transferência…" />
+            <Select value={method} onValueChange={setMethod}>
+              <SelectTrigger><SelectValue placeholder="Selecione…" /></SelectTrigger>
+              <SelectContent>
+                {FORMAS_PAGAMENTO.map((f) => <SelectItem key={f} value={f}>{f}</SelectItem>)}
+                <SelectItem value={OUTRO}>Outro…</SelectItem>
+              </SelectContent>
+            </Select>
+            {method === OUTRO && (
+              <CarboInput
+                value={methodOutro}
+                onChange={(e) => setMethodOutro(e.target.value)}
+                placeholder="Qual forma?"
+                autoFocus
+              />
+            )}
           </div>
           <div className="space-y-1.5">
             <Label>Observação (opcional)</Label>
@@ -336,7 +391,7 @@ function PayDialog({ st, onClose }: { st: CommissionStatement | null; onClose: (
         </div>
         <DialogFooter>
           <CarboButton variant="outline" onClick={onClose}>Cancelar</CarboButton>
-          <CarboButton onClick={submit} disabled={amount <= 0 || amount > saldo + 0.01 || add.isPending}>{add.isPending ? "Registrando…" : "Registrar pagamento"}</CarboButton>
+          <CarboButton onClick={submit} disabled={amount <= 0 || amount > saldo + 0.01 || dataInvalida || outroVazio || add.isPending}>{add.isPending ? "Registrando…" : "Registrar pagamento"}</CarboButton>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -435,6 +490,9 @@ function PagamentosTab() {
 // ── Dialog: memória de cálculo (NFs que compõem o fechamento) ─────────────────
 function MemoriaDialog({ st, onClose }: { st: CommissionStatement | null; onClose: () => void }) {
   const { data: items = [], isLoading } = useStatementItems(st?.id ?? null);
+  // Pagamentos já lançados. A data e a forma eram gravadas e não apareciam em
+  // lugar nenhum — dado que ninguém vê não serve para conferir nada.
+  const { data: pagamentos = [] } = useStatementPayments(st?.id ?? null);
   if (!st) return null;
   const soma = items.reduce((s, i) => s + Number(i.total), 0);
   return (
@@ -468,6 +526,28 @@ function MemoriaDialog({ st, onClose }: { st: CommissionStatement | null; onClos
             </div>
           )}
         </div>
+        {pagamentos.length > 0 && (
+          <div className="space-y-1.5">
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Pagamentos lançados
+            </p>
+            <div className="rounded-lg border divide-y text-sm">
+              {pagamentos.map((p) => (
+                <div key={p.id} className="flex items-start justify-between gap-3 px-3 py-2">
+                  <span className="min-w-0">
+                    <span className="block">{fmtDate(p.paid_at)}</span>
+                    <span className="block text-xs text-muted-foreground">
+                      {p.method || "forma não informada"}
+                      {p.notes ? ` · ${p.notes}` : ""}
+                    </span>
+                  </span>
+                  <strong className="tabular-nums shrink-0">{brl(Number(p.amount))}</strong>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {isLoading ? <p className="text-sm text-muted-foreground py-4">Carregando…</p>
           : items.length === 0 ? <p className="text-sm text-muted-foreground py-4">Sem itens registrados (fechamento anterior à memória de cálculo).</p>
           : (
