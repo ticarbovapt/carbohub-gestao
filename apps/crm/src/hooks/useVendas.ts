@@ -173,7 +173,7 @@ export function useUpdateVenda() {
         upd.delivery_address = [e.logradouro, e.numero].filter(Boolean).join(", ") + (e.bairro ? ` - ${e.bairro}` : "");
         upd.delivery_city = e.cidade ?? null;
         upd.delivery_state = e.uf ?? e.estado ?? null;
-        upd.delivery_zip = e.cep ?? null;
+        upd.delivery_zip = (e.cep || "").replace(/\D/g, "") || null;
       }
       const { error } = await db.from("carboze_orders").update(upd).eq("id", id);
       if (error) throw error;
@@ -261,7 +261,8 @@ async function buildOrderFields(input: NovaVendaInput) {
     delivery_address: deliveryAddr || null,
     delivery_city: e.cidade || null,
     delivery_state: e.uf || e.estado || null,
-    delivery_zip: e.cep || null,
+    // Só dígitos no banco — a máscara é da tela, não do dado.
+    delivery_zip: (e.cep || "").replace(/\D/g, "") || null,
     billing_address: input.endereco_faturamento ?? null,
     payment_terms: input.payment_terms || null,
     freight_type: input.freight_type || null,

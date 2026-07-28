@@ -40,6 +40,7 @@ import { computePrazos } from "@/lib/prazos";
 import { validateInscricaoEstadual } from "@/lib/inscricaoEstadual";
 import { useGeocode } from "@/hooks/useGeocode";
 import { ClienteDocInput } from "@/components/vender/ClienteDocInput";
+import { CepInput, maskCep } from "@/components/vender/CepInput";
 import type { ClienteSugestao } from "@/hooks/useClienteBusca";
 import { MapContainer, TileLayer, CircleMarker, Popup } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
@@ -341,7 +342,7 @@ export default function Vender() {
       bairro: e.bairro || "",
       cidade: e.cidade || c.cidade || "",
       uf: e.uf || c.uf || "",
-      cep: e.cep || (c.cep || "").replace(/\D/g, ""),
+      cep: e.cep || maskCep(c.cep || ""),
     }));
     setDocFeedback({
       kind: "ok",
@@ -377,7 +378,7 @@ export default function Vender() {
         bairro: raw.bairro || "",
         cidade: raw.municipio || "",
         uf: raw.uf || "",
-        cep: (raw.cep || "").replace(/\D/g, ""),
+        cep: maskCep(raw.cep || ""),
       });
       setDocFeedback({ kind: "ok", msg: "Dados do CNPJ carregados com sucesso!" });
       // Localiza no mapa automaticamente após o CNPJ.
@@ -1008,7 +1009,24 @@ export default function Vender() {
               {geoLoading ? "Localizando..." : "Localizar no mapa"}
             </Button>
           </div>
+          {/* CEP PRIMEIRO: ele traz rua, bairro, cidade e UF de graça. Deixá-lo
+              por último obrigava a digitar tudo à mão antes de chegar no campo
+              que teria evitado a digitação. */}
           <div className="grid md:grid-cols-3 gap-3">
+            <CepInput
+              value={endereco.cep}
+              onChange={(cep) => setEnd({ cep })}
+              onEndereco={(e) => setEndereco((prev) => ({
+                ...prev,
+                // O que o CEP devolve manda: se o vendedor trocou o CEP, é
+                // porque o endereço anterior estava errado. Rua e bairro que
+                // vierem vazios não apagam o que já estava lá.
+                logradouro: e.logradouro || prev.logradouro,
+                bairro: e.bairro || prev.bairro,
+                cidade: e.cidade || prev.cidade,
+                uf: e.uf || prev.uf,
+              }))}
+            />
             <div className="space-y-1.5 md:col-span-2"><Label>Logradouro</Label><Input placeholder="Rua, Avenida, etc." value={endereco.logradouro} onChange={(e) => setEnd({ logradouro: e.target.value })} /></div>
             <div className="space-y-1.5">
               <Label>Número</Label>
@@ -1026,7 +1044,6 @@ export default function Vender() {
                 <SelectContent>{UFS.map((u) => <SelectItem key={u} value={u}>{u}</SelectItem>)}</SelectContent>
               </Select>
             </div>
-            <div className="space-y-1.5"><Label>CEP</Label><Input placeholder="00000-000" value={endereco.cep} onChange={(e) => setEnd({ cep: e.target.value })} /></div>
           </div>
           {coords ? (
             <div className="space-y-1.5">
@@ -1057,6 +1074,19 @@ export default function Vender() {
             </div>
             {!fatMesmo && (
               <div className="grid md:grid-cols-3 gap-3">
+                {/* Mesma regra do endereço de entrega: CEP primeiro. */}
+                <CepInput
+                  id="cep-faturamento"
+                  value={fatEndereco.cep}
+                  onChange={(cep) => setFat({ cep })}
+                  onEndereco={(e) => setFatEndereco((prev) => ({
+                    ...prev,
+                    logradouro: e.logradouro || prev.logradouro,
+                    bairro: e.bairro || prev.bairro,
+                    cidade: e.cidade || prev.cidade,
+                    uf: e.uf || prev.uf,
+                  }))}
+                />
                 <div className="space-y-1.5 md:col-span-2"><Label>Logradouro</Label><Input placeholder="Rua, Avenida, etc." value={fatEndereco.logradouro} onChange={(e) => setFat({ logradouro: e.target.value })} /></div>
                 <div className="space-y-1.5"><Label>Número</Label><Input placeholder="Nº" value={fatEndereco.numero} onChange={(e) => setFat({ numero: e.target.value })} /></div>
                 <div className="space-y-1.5"><Label>Bairro</Label><Input placeholder="Bairro" value={fatEndereco.bairro} onChange={(e) => setFat({ bairro: e.target.value })} /></div>
@@ -1068,7 +1098,6 @@ export default function Vender() {
                     <SelectContent>{UFS.map((u) => <SelectItem key={u} value={u}>{u}</SelectItem>)}</SelectContent>
                   </Select>
                 </div>
-                <div className="space-y-1.5"><Label>CEP</Label><Input placeholder="00000-000" value={fatEndereco.cep} onChange={(e) => setFat({ cep: e.target.value })} /></div>
               </div>
             )}
           </div>

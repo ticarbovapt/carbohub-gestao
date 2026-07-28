@@ -116,7 +116,10 @@ export function useCreateVenda() {
           delivery_address: deliveryAddr || null,
           delivery_city: e.cidade || null,
           delivery_state: e.uf || e.estado || null,
-          delivery_zip: e.cep || null,
+          // Só dígitos no banco: o campo agora mostra "59575-000" na tela, mas
+          // quem consome (frete, etiqueta) espera o CEP limpo. Guardar os dois
+          // formatos na mesma coluna quebraria a busca por CEP mais tarde.
+          delivery_zip: (e.cep || "").replace(/\D/g, "") || null,
           billing_address: input.endereco_faturamento ?? null,
           payment_terms: input.payment_terms || null,
           freight_type: input.freight_type || null,
