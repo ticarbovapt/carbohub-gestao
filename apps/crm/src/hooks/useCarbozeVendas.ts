@@ -73,16 +73,32 @@ interface Params {
   vendedorFilter?: string;        // "__all__" | profile id
   isGestor: boolean;
   userId?: string;
+  /** Busca global. Com termo, MANDA: varre todo o histórico e ignora mês e
+   *  vendedor. Sem termo, o comportamento é o de sempre (mês + vendedor). */
+  search?: string;
 }
 
 /** Lê carboze_orders no período. RLS já limita o colaborador ao próprio escopo;
  *  o filtro por vendedor só é aplicado para gestor. */
-export function useCarbozeVendas({ month, customFrom, customTo, vendedorFilter, isGestor, userId }: Params) {
+export function useCarbozeVendas({ month, customFrom, customTo, vendedorFilter, isGestor, userId, search }: Params) {
   const hasCustom = !!(customFrom || customTo);
+  const termo = (search ?? "").trim();
+  // Mesmo piso da função no banco: com 1 caractere a busca traria a base toda.
+  const buscando = termo.replace(/\D/g, "").length >= 3 || termo.length >= 2;
+
   return useQuery({
-    queryKey: ["carboze_vendas", month.toISOString().slice(0, 7), customFrom, customTo, vendedorFilter, isGestor, userId],
+    queryKey: ["carboze_vendas", month.toISOString().slice(0, 7), customFrom, customTo, vendedorFilter, isGestor, userId, buscando ? termo : ""],
     enabled: !!userId,
     queryFn: async (): Promise<CarbozeVendaRow[]> => {
+      // ── Busca global: manda em cima de mês e vendedor ──────────────────
+      // A RPC é SECURITY INVOKER, então a RLS continua valendo: colaborador
+      // segue vendo só as próprias vendas por mais amplo que seja o termo.
+      if (buscando) {
+        const { data, error } = await db.rpc("carbo_vendas_busca", { p_termo: termo, p_limit: 300 });
+        if (error) throw error;
+        return ((data ?? []) as any[]).map(mapVenda);
+      }
+
       let rangeStart: string, rangeEnd: string, qStart: string, qEnd: string;
       if (hasCustom) {
         rangeStart = customFrom || "2000-01-01";
@@ -120,7 +136,16 @@ export function useCarbozeVendas({ month, customFrom, customTo, vendedorFilter, 
           const eff = (row.sale_date as string | null) ?? (row.created_at as string).substring(0, 10);
           return eff >= rangeStart && eff <= rangeEnd;
         })
-        .map((row): CarbozeVendaRow => ({
+        .map(mapVenda);
+    },
+  });
+}
+
+/** Linha crua de carboze_orders → CarbozeVendaRow. Uma só, para os dois
+ *  caminhos (janela por mês e busca global) devolverem exatamente o mesmo
+ *  formato — senão a tela renderiza diferente dependendo de como chegou. */
+function mapVenda(row: any): CarbozeVendaRow {
+  return ({
           id: row.id,
           order_number: row.order_number,
           created_at: row.created_at,
@@ -157,8 +182,6 @@ export function useCarbozeVendas({ month, customFrom, customTo, vendedorFilter, 
           invoice_number: row.invoice_number ?? null,
           bling_nf_id: row.bling_nf_id ?? null,
           external_ref: row.external_ref ?? null,
-        }));
-    },
   });
 }
 

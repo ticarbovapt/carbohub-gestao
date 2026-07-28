@@ -99,8 +99,11 @@ export default function Vendas() {
   const isCurrentMonth = month.getFullYear() === today.getFullYear() && month.getMonth() === today.getMonth();
 
   // Dados reais — carboze_orders no período (o hook já aplica o filtro de data).
+  // Piso igual ao do hook e ao da função no banco.
+  const buscaAtiva = search.trim().replace(/\D/g, "").length >= 3 || search.trim().length >= 2;
+
   const { data: rows = [], isLoading } = useCarbozeVendas({
-    month, customFrom, customTo, vendedorFilter, isGestor, userId: user?.id,
+    month, customFrom, customTo, vendedorFilter, isGestor, userId: user?.id, search,
   });
   const { data: dir = [] } = useVendedoresDir();
   const convert = useConvertQuote();
@@ -208,13 +211,12 @@ export default function Vendas() {
   }
 
   const filtered = useMemo(() => {
-    return rows.filter((v) => {
-      if (vendedorFilter !== "__all__" && v.vendedor_id !== vendedorFilter) return false;
-      if (!search) return true;
-      const q = search.toLowerCase();
-      return v.customer_name.toLowerCase().includes(q) || (v.order_number ?? "").toLowerCase().includes(q);
-    });
-  }, [rows, search, vendedorFilter]);
+    // Com busca ativa o banco já devolveu o resultado certo (histórico inteiro,
+    // todos os campos). Refiltrar aqui por vendedor desfaria justamente o que
+    // a busca global promete.
+    if (buscaAtiva) return rows;
+    return rows.filter((v) => vendedorFilter === "__all__" || v.vendedor_id === vendedorFilter);
+  }, [rows, vendedorFilter, buscaAtiva]);
 
   const sum = (list: CarbozeVendaRow[]) => list.reduce((s, v) => s + v.total, 0);
   // "Faturado" = já tem NF vinculada OU o pedido já saiu (invoiced/shipped/
@@ -323,7 +325,7 @@ export default function Vendas() {
         <div className="flex gap-2 flex-wrap">
           <div className="relative flex-1 min-w-[200px]">
             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-            <Input placeholder="Buscar por cliente ou nº pedido..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-8" />
+            <Input placeholder="Cliente, cidade, CNPJ/CPF, IE, telefone, CEP, e-mail ou nº do pedido…" value={search} onChange={(e) => setSearch(e.target.value)} className="pl-8" />
           </div>
           {isHead && (
             <Select value={vendedorFilter} onValueChange={setVendedor}>
@@ -345,11 +347,28 @@ export default function Vendas() {
           )}
         </div>
 
+        {/* Busca ativa: os filtros de período e vendedor ficam de fora, e isso
+            precisa estar ESCRITO — senão o KPI muda e parece defeito. */}
+        {buscaAtiva && (
+          <div className="flex items-start gap-2 rounded-lg border border-carbo-green/30 bg-carbo-green/[0.06] px-3 py-2 text-xs">
+            <Search className="h-3.5 w-3.5 shrink-0 mt-0.5 text-carbo-green" />
+            <span className="text-muted-foreground">
+              Buscando <b className="text-foreground">"{search.trim()}"</b> em todo o histórico —
+              os filtros de período e de vendedor estão sendo ignorados.
+              {" "}
+              <button type="button" onClick={() => setSearch("")}
+                className="font-semibold text-carbo-green hover:underline">
+                Limpar busca
+              </button>
+            </span>
+          </div>
+        )}
+
         {/* Tabela */}
         {isLoading ? (
           <CarboCard><CarboCardContent className="py-16 text-center text-muted-foreground">Carregando…</CarboCardContent></CarboCard>
         ) : tableRows.length === 0 ? (
-          <CarboCard><CarboCardContent className="py-16 text-center space-y-3"><TrendingUp className="h-12 w-12 mx-auto text-muted-foreground/30" /><p className="text-muted-foreground">Nenhum registro encontrado neste período.</p></CarboCardContent></CarboCard>
+          <CarboCard><CarboCardContent className="py-16 text-center space-y-3"><TrendingUp className="h-12 w-12 mx-auto text-muted-foreground/30" /><p className="text-muted-foreground">{buscaAtiva ? "Nada encontrado no histórico para essa busca." : "Nenhum registro encontrado neste período."}</p></CarboCardContent></CarboCard>
         ) : (
           <CarboCard padding="none">
             <div className="overflow-x-auto">
