@@ -82,9 +82,12 @@ interface Params {
  *  o filtro por vendedor só é aplicado para gestor. */
 export function useCarbozeVendas({ month, customFrom, customTo, vendedorFilter, isGestor, userId, search }: Params) {
   const hasCustom = !!(customFrom || customTo);
-  const termo = (search ?? "").trim();
-  // Mesmo piso da função no banco: com 1 caractere a busca traria a base toda.
-  const buscando = termo.replace(/\D/g, "").length >= 3 || termo.length >= 2;
+  // NÃO usar trim(): o espaço no fim é significativo — é ele que pede a
+  // palavra inteira ("a " = só onde "a" é palavra sozinha).
+  const termo = search ?? "";
+  // 1 caractere já vale: a busca casa por INÍCIO DE PALAVRA, então "a" traz
+  // quem começa com "a", não todo mundo que tem "a" no meio.
+  const buscando = termo.trim().length >= 1;
 
   return useQuery({
     queryKey: ["carboze_vendas", month.toISOString().slice(0, 7), customFrom, customTo, vendedorFilter, isGestor, userId, buscando ? termo : ""],

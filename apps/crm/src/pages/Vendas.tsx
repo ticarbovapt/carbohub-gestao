@@ -99,8 +99,9 @@ export default function Vendas() {
   const isCurrentMonth = month.getFullYear() === today.getFullYear() && month.getMonth() === today.getMonth();
 
   // Dados reais — carboze_orders no período (o hook já aplica o filtro de data).
-  // Piso igual ao do hook e ao da função no banco.
-  const buscaAtiva = search.trim().replace(/\D/g, "").length >= 3 || search.trim().length >= 2;
+  // Piso igual ao do hook: 1 caractere já busca, porque o casamento é por
+  // início de palavra e não por "contém".
+  const buscaAtiva = search.trim().length >= 1;
 
   const { data: rows = [], isLoading } = useCarbozeVendas({
     month, customFrom, customTo, vendedorFilter, isGestor, userId: user?.id, search,
