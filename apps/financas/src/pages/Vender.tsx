@@ -37,6 +37,8 @@ import { usePrazoConfigPublic } from "@/hooks/usePrazoConfig";
 import { computePrazos } from "@/lib/prazos";
 import { validateInscricaoEstadual } from "@/lib/inscricaoEstadual";
 import { useGeocode } from "@/hooks/useGeocode";
+import { ClienteDocInput } from "@/components/vender/ClienteDocInput";
+import type { ClienteSugestao } from "@/hooks/useClienteBusca";
 import { MapContainer, TileLayer, CircleMarker, Popup } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 
@@ -328,6 +330,31 @@ export default function Vender() {
     };
     return calc(9) === parseInt(d[9]) && calc(10) === parseInt(d[10]);
   }
+  // Cliente escolhido no autocomplete — preenche com o que JÁ temos.
+  // Só sobrescreve campo vazio: se o vendedor já digitou um telefone novo,
+  // o dado antigo do sistema não pode apagar por cima.
+  function aplicarClienteExistente(c: ClienteSugestao) {
+    setDoc(formatDoc(c.doc));
+    if (c.nome) setCustomerName(c.nome);
+    if (c.email && !email) setEmail(c.email);
+    if (c.telefone && !phone) setPhone(String(c.telefone));
+    if (c.ie && !ie) setIe(c.ie);
+    setEndereco((e) => ({
+      ...e,
+      logradouro: e.logradouro || c.endereco || "",
+      bairro: e.bairro || "",
+      cidade: e.cidade || c.cidade || "",
+      uf: e.uf || c.uf || "",
+      cep: e.cep || (c.cep || "").replace(/\D/g, ""),
+    }));
+    setDocFeedback({
+      kind: "ok",
+      msg: c.tipo === "cliente"
+        ? `Cliente da base (${c.pedidos} pedido${c.pedidos > 1 ? "s" : ""}). Confira os dados — "Buscar dados" atualiza pela Receita.`
+        : 'Lead do comercial. Confira os dados — "Buscar dados" completa pela Receita.',
+    });
+  }
+
   // CPF → valida (manual); CNPJ → busca na BrasilAPI e auto-preenche cliente + endereço.
   async function handleBuscarDoc() {
     const digits = doc.replace(/\D/g, "");
@@ -750,14 +777,14 @@ export default function Vender() {
         <CarboCardContent className="p-4 space-y-3">
           <h3 className="font-semibold flex items-center gap-2"><Search className="h-4 w-4 text-carbo-green" /> Busca por CNPJ ou CPF</h3>
           <p className="text-xs text-muted-foreground">
-            CNPJ busca os dados automaticamente. CPF (pessoa física) é validado e segue com preenchimento manual.
+            Comece a digitar: se o cliente já existe na base, ele aparece na lista e os dados vêm junto. Para cliente novo, "Buscar dados" consulta a Receita pelo CNPJ; CPF é validado e segue manual.
           </p>
           <div className="flex flex-col sm:flex-row gap-2">
-            <Input
+            <ClienteDocInput
               value={doc}
-              onChange={(e) => { setDoc(formatDoc(e.target.value)); setDocFeedback(null); }}
-              onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleBuscarDoc(); } }}
-              placeholder="CNPJ ou CPF"
+              onChange={(v) => { setDoc(formatDoc(v)); setDocFeedback(null); }}
+              onEnter={handleBuscarDoc}
+              onPick={aplicarClienteExistente}
               maxLength={18}
               className="font-mono"
             />
