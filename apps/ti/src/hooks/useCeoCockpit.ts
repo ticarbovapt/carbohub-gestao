@@ -20,10 +20,12 @@ const db = supabase as unknown as {
 
 export type SalesPeriod = "semanas" | "meses" | "periodo";
 
-// Lê de carboze_orders_secure; se a view não existir/negar, cai p/ carboze_orders.
+// ⚠️ RECEITA vem de carbo_vendas_metrica, a FONTE ÚNICA.
+// Antes este cockpit somava `total` de carboze_orders_secure com filtro só de
+// DATA: orçamento em aberto e pedido cancelado entravam como receita da
+// diretoria. A view `_secure` mascara PII mas NÃO filtra nada.
 async function fetchOrders(cols: string, apply: (q: any) => any) {
-  let res = await apply(db.from("carboze_orders_secure").select(cols));
-  if (res.error) res = await apply(db.from("carboze_orders").select(cols));
+  const res = await apply(db.from("carbo_vendas_metrica").select(cols).eq("conta_metrica", true));
   return res.error ? [] : (res.data ?? []);
 }
 
@@ -38,7 +40,7 @@ export function useCeoSales(period: SalesPeriod, from: string, to: string) {
       else if (period === "meses") { start = new Date(now.getFullYear(), now.getMonth() - 5, 1); }
       else { start = from ? new Date(from + "T00:00:00") : (() => { const d = new Date(now); d.setDate(now.getDate() - 30); return d; })(); }
 
-      const rows = await fetchOrders("total, created_at", (q: any) => {
+      const rows = await fetchOrders("total, created_at, data_efetiva", (q: any) => {
         let query = q.gte("created_at", start.toISOString()).order("created_at", { ascending: true });
         if (period === "periodo" && to) query = query.lte("created_at", to + "T23:59:59");
         return query;
@@ -103,7 +105,14 @@ export function useCeoAlerts() {
       if (lowStock && lowStock.length > 0)
         list.push({ title: "Estoque baixo", description: `${lowStock.length} máquinas com alerta de reposição`, severity: "medium" });
 
-      const pending = await fetchOrders("id", (q: any) => q.eq("status", "confirmed").is("invoice_number", null));
+      // Aguardando NF é justamente quem NÃO conta — não pode passar pelo
+      // fetchOrders, que filtra conta_metrica. E `motivo_fora` pega pending E
+      // confirmed; antes olhava só `confirmed` com invoice_number nulo, então
+      // pedido pendente sem NF ficava invisível para a diretoria.
+      const { data: pending } = await db
+        .from("carbo_vendas_metrica")
+        .select("id")
+        .eq("motivo_fora", "aguardando_nf");
       if (pending && pending.length > 0)
         list.push({ title: "Faturamento pendente", description: `${pending.length} pedidos aguardando NF`, severity: "low" });
 

@@ -33,6 +33,12 @@ import { Link } from "react-router-dom";
 import { DatePickerInput } from "@/components/ui/date-picker-input";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, PieChart, Pie, Cell } from "recharts";
 
+// A view carbo_vendas_metrica é nova e não está nos tipos gerados do Supabase.
+// Cast pontual — o mesmo padrão usado no resto do repositório para tabelas
+// fora do schema tipado.
+const dbMetrica = supabase as unknown as { from: (t: string) => any };
+
+
 /**
  * Dashboard do CEO - Visão estratégica global
  * Layout otimizado: KPIs + Gráficos (topo) → Mapa (inferior)
@@ -69,13 +75,19 @@ export function CeoDashboard() {
           .from("machines")
           .select("id")
           .eq("status", "operational"),
-        supabase
-          .from("carboze_orders_secure")
+        // ⚠️ FONTE ÚNICA: carbo_vendas_metrica + conta_metrica. Antes somava
+        // `total` da view _secure com filtro só de DATA — a view mascara PII
+        // mas não filtra nada, então ORÇAMENTO e CANCELADO entravam como
+        // receita do mês na tela do CEO.
+        dbMetrica
+          .from("carbo_vendas_metrica")
           .select("total, created_at")
+          .eq("conta_metrica", true)
           .gte("created_at", curMonthStart),
-        supabase
-          .from("carboze_orders_secure")
+        dbMetrica
+          .from("carbo_vendas_metrica")
           .select("total")
+          .eq("conta_metrica", true)
           .gte("created_at", prevMonthStart)
           .lt("created_at", prevMonthSameMoment),
       ]);
@@ -162,9 +174,10 @@ export function CeoDashboard() {
         else from = new Date(periodFrom + "T00:00:00");
       }
 
-      let query = supabase
-        .from("carboze_orders_secure")
+      let query = dbMetrica
+        .from("carbo_vendas_metrica")
         .select("total, created_at")
+        .eq("conta_metrica", true)
         .gte("created_at", from.toISOString())
         .order("created_at", { ascending: true });
 
@@ -263,11 +276,12 @@ export function CeoDashboard() {
         });
       }
 
-      const { data: pendingInvoice } = await supabase
-        .from("carboze_orders_secure")
+      // "aguardando_nf" pega pendente E confirmado sem nota; antes olhava só
+      // `confirmed`, então pedido pendente sem NF não aparecia no alerta.
+      const { data: pendingInvoice } = await dbMetrica
+        .from("carbo_vendas_metrica")
         .select("id")
-        .eq("status", "confirmed")
-        .is("invoice_number", null);
+        .eq("motivo_fora", "aguardando_nf");
 
       if (pendingInvoice && pendingInvoice.length > 0) {
         alertsList.push({

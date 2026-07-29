@@ -68,15 +68,14 @@ export function useDashEstrategico(months = 12) {
       ]);
 
       // ── Receita por mês (view secure; fallback carboze_orders) ────────────
-      const fetchRevenue = async (table: string) =>
-        await supabase
-          .from(table as never)
-          .select("total, created_at")
-          .gte("created_at", chartFrom)
-          .order("created_at", { ascending: true });
-
-      let rev = await fetchRevenue("carboze_orders_secure");
-      if (rev.error) rev = await fetchRevenue("carboze_orders");
+      // ⚠️ FONTE ÚNICA. Antes somava `total` com filtro só de data — orçamento
+      // e cancelado entravam como receita no painel estratégico.
+      const rev = await supabase
+        .from("carbo_vendas_metrica" as never)
+        .select("total, created_at")
+        .eq("conta_metrica", true)
+        .gte("created_at", chartFrom)
+        .order("created_at", { ascending: true });
       const orders = (rev.error ? [] : (rev.data ?? [])) as OrderRow[];
 
       const monthMap: Record<string, { receita: number; vendas: number }> = {};

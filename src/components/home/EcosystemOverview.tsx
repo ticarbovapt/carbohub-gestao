@@ -18,6 +18,12 @@ import { supabase } from "@/integrations/supabase/client";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 
+// A view carbo_vendas_metrica é nova e não está nos tipos gerados do Supabase.
+// Cast pontual — o mesmo padrão usado no resto do repositório para tabelas
+// fora do schema tipado.
+const dbMetrica = supabase as unknown as { from: (t: string) => any };
+
+
 interface KPICardProps {
   title: string;
   value: string | number;
@@ -133,9 +139,12 @@ function useRecentOrderStats() {
       const thirtyDaysAgo = new Date();
       thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
-      const { data, error } = await supabase
-        .from("carboze_orders_secure")
+      // ⚠️ FONTE ÚNICA. Antes somava tudo dos últimos 30 dias sem filtrar
+      // status — orçamento e cancelado entravam no valor da home.
+      const { data, error } = await dbMetrica
+        .from("carbo_vendas_metrica")
         .select("id, status, total, created_at")
+        .eq("conta_metrica", true)
         .gte("created_at", thirtyDaysAgo.toISOString());
 
       if (error) throw error;
