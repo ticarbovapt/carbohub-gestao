@@ -114,7 +114,7 @@ export default function DashboardComercial() {
   const [metasOpen, setMetasOpen] = useState(false);
 
   const vendedorId = filters.vendedor === "all" ? null : filters.vendedor;
-  const { data, isLoading } = useDashComercial(vendedorId, 12, { from: filters.from, to: filters.to, segmento: filters.segmento });
+  const { data, isLoading, error } = useDashComercial(vendedorId, 12, { from: filters.from, to: filters.to, segmento: filters.segmento });
   const { data: canais } = useComercialCanais({ vendedorId, from: filters.from, to: filters.to });
   const year = canais?.year ?? new Date().getFullYear();
   const { data: canalMetas } = useCanalMetas(year);
@@ -154,6 +154,20 @@ export default function DashboardComercial() {
   return (
     <main className="p-4 lg:p-6 board-fade-in">
       <div className="space-y-3 max-w-[1600px] mx-auto">
+        {/* Falha de consulta tem de aparecer. Sem isto, um erro no banco vira
+            um dashboard zerado — indistinguível de "não vendemos nada". */}
+        {error && (
+          <div className="flex items-start gap-2 rounded-lg border border-destructive/40 bg-destructive/[0.06] px-3 py-2.5 text-sm">
+            <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5 text-destructive" />
+            <div>
+              <p className="font-semibold text-destructive">Não foi possível carregar os dados comerciais</p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {(error as { message?: string })?.message ?? "Erro desconhecido"}
+              </p>
+            </div>
+          </div>
+        )}
+
         {/* 1. Header + filtros */}
         <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
           <CarboPageHeader icon={TrendingUp} title="Dashboard — Comercial" description="Licenciados, pedidos e performance de vendas" />

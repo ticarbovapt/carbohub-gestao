@@ -278,7 +278,7 @@ export default function ComercialDados() {
   };
 
   const vendedorId = filters.vendedor === "all" ? null : filters.vendedor;
-  const { data, isLoading } = useComercialOrders({ vendedorId, from: filters.from, to: filters.to, segmento: filters.segmento });
+  const { data, isLoading, error } = useComercialOrders({ vendedorId, from: filters.from, to: filters.to, segmento: filters.segmento });
 
   const rows = useMemo(() => {
     let r = data?.rows ?? [];
@@ -518,6 +518,20 @@ export default function ComercialDados() {
             <Button variant="ghost" size="sm" className="h-8 ml-auto" onClick={() => setSelectedIds(new Set())}>
               Limpar seleção
             </Button>
+          </div>
+        )}
+
+        {/* Falha de consulta NÃO pode virar "nenhum resultado" — foi assim que
+            uma view faltando deixou a tela em branco sem dizer o motivo. */}
+        {error && (
+          <div className="flex items-start gap-2 rounded-lg border border-destructive/40 bg-destructive/[0.06] px-3 py-2.5 text-sm">
+            <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5 text-destructive" />
+            <div>
+              <p className="font-semibold text-destructive">Não foi possível carregar os pedidos</p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {(error as { message?: string })?.message ?? "Erro desconhecido"}
+              </p>
+            </div>
           </div>
         )}
 
