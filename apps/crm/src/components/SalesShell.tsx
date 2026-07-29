@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Outlet, useNavigate } from "react-router-dom";
 import {
   KanbanSquare, ClipboardList, TrendingUp, Target, BarChart3, LayoutDashboard,
-  Wind, CalendarDays, MapPinned, Map, Share2, ShoppingCart, ShoppingBag, MessagesSquare,
+  Wind, CalendarDays, MapPinned, Map, Share2, ShoppingCart, ShoppingBag, MessagesSquare, MapPin,
 } from "lucide-react";
 import { ChatBadge, ChatProvider } from "@carbo/chat";
 import { Sidebar, type ShellNavSection } from "@carbo/shell";
@@ -44,6 +44,7 @@ export function SalesShell() {
         { to: "/crm/pipelines", label: "Pipelines", icon: KanbanSquare },
         { to: "/vendas", label: "Vendas", icon: TrendingUp },
         { to: "/metas", label: "Metas de Vendedores", icon: Target },
+        { to: "/pdvs", label: "Pontos de Venda", icon: MapPin },
     ] },
     { label: "Pedidos", items: [
         { to: "/pedidos", label: "Pedidos", icon: ClipboardList },

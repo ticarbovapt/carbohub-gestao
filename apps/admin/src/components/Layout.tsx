@@ -3,7 +3,7 @@ import { Outlet, useNavigate } from "react-router-dom";
 import {
   Users as UsersIcon, ListTree, Globe, Target, Activity,
   Store, Building2, TrendingUp, LineChart, Trophy, BarChart3, BadgePercent, Tags, ShieldCheck, MessagesSquare,
-  Gauge, Boxes,
+  Gauge, Boxes, MapPin,
 } from "lucide-react";
 import { TopBar } from "@/components/TopBar";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -55,6 +55,7 @@ export function Layout() {
         { to: "/comercial/dashboard", label: "Dashboard Comercial", icon: LineChart },
         { to: "/comercial/vendas", label: "Análise de Vendas", icon: BarChart3 },
         { to: "/comercial/dados", label: "Dados Comerciais (fonte)", icon: Store },
+        { to: "/comercial/pdvs", label: "Pontos de Venda", icon: MapPin },
         { to: "/comercial/descontos", label: "Aprovações", icon: BadgePercent },
         { to: "/comercial/precos", label: "Tabela de preços", icon: Tags },
     ] },

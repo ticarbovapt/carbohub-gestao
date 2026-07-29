@@ -21,6 +21,7 @@ import DescAgendamentos from "./pages/descarbonizacao/Agendamentos";
 import MapaTerritorial from "./pages/territorio/MapaTerritorial";
 import NetworkMap from "./pages/territorio/NetworkMap";
 import TerritoryExpansion from "./pages/territorio/TerritoryExpansion";
+import Pdvs from "./pages/Pdvs";
 import { isCarbohubDomain, goToHubLogin } from "@/lib/sso";
 
 // Login é ÚNICO no Hub: /login direto em produção é redirecionado pra lá.
@@ -53,6 +54,7 @@ export default function App() {
         <Route path="/vendas" element={<Vendas />} />
         <Route path="/metas" element={<Metas />} />
         <Route path="/comercial" element={<DashboardComercial />} />
+        <Route path="/pdvs" element={<Pdvs />} />
         {/* Descarbonização — acompanhamento (pra onde o "+ Nova Descarbonização" leva) */}
         <Route path="/descarbonizacao/os" element={<DescOrdensServico />} />
         <Route path="/descarbonizacao/agendamentos" element={<DescAgendamentos />} />
