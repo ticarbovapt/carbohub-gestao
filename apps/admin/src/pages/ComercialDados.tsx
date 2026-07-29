@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Database, AlertTriangle, Search, Download, ShoppingCart, DollarSign, Target, EyeOff,
   Users, Building2, ListOrdered, ArrowUp, ArrowDown, ChevronsUpDown, Layers, Loader2, CheckCircle2, UserPlus, Pencil,
@@ -144,6 +144,22 @@ export default function ComercialDados() {
 
   const qc = useQueryClient();
 
+  // ── Seleção múltipla (aba Pedidos) ───────────────────────────────────────
+  // Classificar canal e atribuir vendedor um a um em 249 linhas não é
+  // trabalho, é castigo. A seleção some quando o filtro muda: manter ids
+  // escondidos selecionados faria a ação em massa pegar linha que a pessoa
+  // não está mais vendo.
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkSeg, setBulkSeg] = useState("");
+  const [bulkVend, setBulkVend] = useState("");
+  const [bulkBusy, setBulkBusy] = useState(false);
+
+  const toggleId = (id: string) => setSelectedIds((prev) => {
+    const n = new Set(prev);
+    if (n.has(id)) n.delete(id); else n.add(id);
+    return n;
+  });
+
   // Edição de linha (Canal + Origem) — gestor. Grava direto em carboze_orders (RLS de gestor).
   const [editRow, setEditRow] = useState<ComercialOrderRow | null>(null);
   const [editSeg, setEditSeg] = useState<string>("none");
@@ -184,6 +200,49 @@ export default function ComercialDados() {
     }
   };
 
+  /** Aplica a mesma alteração em todos os selecionados, numa chamada só. */
+  async function aplicarEmMassa(patch: Record<string, unknown>, msg: (n: number) => string) {
+    const ids = Array.from(selectedIds);
+    if (!ids.length) return;
+    setBulkBusy(true);
+    try {
+      const { data, error } = await (supabase as any)
+        .from("carboze_orders")
+        .update(patch)
+        .in("id", ids)
+        .select("id");
+      if (error) throw error;
+      // Sem linha devolvida = RLS barrou. Silenciar isso faria a tela dizer
+      // "pronto" enquanto nada mudou no banco.
+      const n = (data as { id: string }[] | null)?.length ?? 0;
+      if (n === 0) throw new Error("Nenhum pedido foi alterado — sem permissão para editar estes registros.");
+      if (n < ids.length) toast.warning(`${n} de ${ids.length} alterados — o restante você não tem permissão para editar.`);
+      else toast.success(msg(n));
+      qc.invalidateQueries({ queryKey: ["comercial-fonte"] });
+      setSelectedIds(new Set());
+      setBulkSeg(""); setBulkVend("");
+    } catch (e) {
+      toast.error("Erro ao aplicar: " + (e instanceof Error ? e.message : "tente de novo"));
+    } finally {
+      setBulkBusy(false);
+    }
+  }
+
+  const aplicarCanal = () => aplicarEmMassa(
+    { segmento: bulkSeg === "none" ? null : bulkSeg },
+    (n) => `Canal aplicado em ${n} pedido${n > 1 ? "s" : ""}.`,
+  );
+
+  const aplicarVendedor = () => {
+    const v = (vendedores ?? []).find((x) => x.id === bulkVend);
+    // Grava o nome junto: a tabela guarda os dois, e deixar o nome antigo
+    // faria a listagem mostrar um vendedor e a métrica contar outro.
+    return aplicarEmMassa(
+      { vendedor_id: bulkVend, vendedor_name: v?.full_name ?? null },
+      (n) => `Vendedor atribuído a ${n} pedido${n > 1 ? "s" : ""}.`,
+    );
+  };
+
   const runCreate = (r: RowVM, override?: string) => {
     setPendingKey(r.key);
     createFollowup.mutate(
@@ -208,6 +267,15 @@ export default function ComercialDados() {
     if (soMetricas) r = r.filter((o) => o.contaMetrica);
     return r;
   }, [data, busca, statusFiltro, soMetricas]);
+
+  // Os 500 que a tabela realmente desenha. "Selecionar todos" tem que marcar
+  // exatamente o que está na tela — nem menos, nem as linhas cortadas pelo
+  // limite, que a pessoa não viu e não conferiu.
+  const visibleIds = useMemo(() => rows.slice(0, 500).map((o) => o.id), [rows]);
+
+  // Filtro mudou → seleção morre. Manter id escondido selecionado faria a
+  // ação em massa alterar pedido que a pessoa não está mais vendo.
+  useEffect(() => { setSelectedIds(new Set()); }, [busca, statusFiltro, soMetricas, filters, view]);
 
   const statuses = useMemo(() => Array.from(new Set((data?.rows ?? []).map((o) => o.status).filter(Boolean))) as string[], [data]);
 
@@ -389,6 +457,48 @@ export default function ComercialDados() {
           <p className="text-xs text-muted-foreground ml-auto">{view === "pedidos" ? `${rows.length} de ${data?.totalRows ?? 0} linhas` : `${rowsSorted.length} ${agrupado ? "grupos" : "clientes"}`}</p>
         </div>
 
+        {/* Ações em massa — só na aba Pedidos e só com algo selecionado. */}
+        {view === "pedidos" && selectedIds.size > 0 && (
+          <div className="flex flex-wrap items-center gap-2 rounded-lg border border-carbo-green/40 bg-carbo-green/[0.06] px-3 py-2">
+            <span className="text-sm font-semibold">
+              {selectedIds.size} pedido{selectedIds.size > 1 ? "s" : ""} selecionado{selectedIds.size > 1 ? "s" : ""}
+            </span>
+
+            <div className="flex items-center gap-1.5">
+              <Select value={bulkSeg} onValueChange={setBulkSeg}>
+                <SelectTrigger className="h-8 w-[170px] text-xs"><SelectValue placeholder="Classificar canal…" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="consumo">Consumo (B2B)</SelectItem>
+                  <SelectItem value="revenda">Revenda (PDV)</SelectItem>
+                  <SelectItem value="online">On-line</SelectItem>
+                  <SelectItem value="none">Não classificado</SelectItem>
+                </SelectContent>
+              </Select>
+              <Button size="sm" className="h-8" disabled={!bulkSeg || bulkBusy} onClick={aplicarCanal}>
+                {bulkBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Aplicar"}
+              </Button>
+            </div>
+
+            <div className="flex items-center gap-1.5">
+              <Select value={bulkVend} onValueChange={setBulkVend}>
+                <SelectTrigger className="h-8 w-[190px] text-xs"><SelectValue placeholder="Atribuir vendedor…" /></SelectTrigger>
+                <SelectContent>
+                  {(vendedores ?? []).filter((v) => v.is_vendedor).map((v) => (
+                    <SelectItem key={v.id} value={v.id}>{v.full_name || v.id}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Button size="sm" className="h-8" disabled={!bulkVend || bulkBusy} onClick={aplicarVendedor}>
+                {bulkBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Aplicar"}
+              </Button>
+            </div>
+
+            <Button variant="ghost" size="sm" className="h-8 ml-auto" onClick={() => setSelectedIds(new Set())}>
+              Limpar seleção
+            </Button>
+          </div>
+        )}
+
         {/* Tabela */}
         <CarboCard>
           <CarboCardContent className="p-0 overflow-x-auto">
@@ -401,6 +511,16 @@ export default function ComercialDados() {
               <table className="w-full text-sm">
                 <thead className="sticky top-0 bg-board-surface">
                   <tr className="border-b text-left text-xs text-muted-foreground">
+                    <th className="pl-3 pr-1 py-2 w-8">
+                      <input
+                        type="checkbox"
+                        aria-label="Selecionar todos os pedidos visíveis"
+                        className="h-4 w-4 cursor-pointer accent-carbo-green align-middle"
+                        checked={visibleIds.length > 0 && visibleIds.every((id) => selectedIds.has(id))}
+                        ref={(el) => { if (el) el.indeterminate = selectedIds.size > 0 && !visibleIds.every((id) => selectedIds.has(id)); }}
+                        onChange={(e) => setSelectedIds(e.target.checked ? new Set(visibleIds) : new Set())}
+                      />
+                    </th>
                     <th className="px-3 py-2 font-medium">Pedido</th>
                     <th className="px-3 py-2 font-medium">Data</th>
                     <th className="px-3 py-2 font-medium">Cliente</th>
@@ -415,7 +535,16 @@ export default function ComercialDados() {
                 </thead>
                 <tbody>
                   {rows.slice(0, 500).map((o) => (
-                    <tr key={o.id} className={`border-b last:border-0 hover:bg-accent/40 ${!o.contaPedido ? "opacity-50" : ""}`}>
+                    <tr key={o.id} className={`border-b last:border-0 hover:bg-accent/40 ${!o.contaPedido ? "opacity-50" : ""} ${selectedIds.has(o.id) ? "bg-carbo-green/[0.07]" : ""}`}>
+                      <td className="pl-3 pr-1 py-2">
+                        <input
+                          type="checkbox"
+                          aria-label={`Selecionar pedido ${o.order_number || ""}`}
+                          className="h-4 w-4 cursor-pointer accent-carbo-green align-middle"
+                          checked={selectedIds.has(o.id)}
+                          onChange={() => toggleId(o.id)}
+                        />
+                      </td>
                       <td className="px-3 py-2 font-mono text-xs whitespace-nowrap">{o.order_number || "—"}</td>
                       <td className="px-3 py-2 text-xs whitespace-nowrap text-muted-foreground">{fmtDateTime(o.created_at)}</td>
                       <td className="px-3 py-2 max-w-[200px] truncate">{o.customer_name || "—"}</td>
