@@ -18,6 +18,7 @@ interface OrderRow {
   segmento: string | null;
   vendedor_id: string | null;
   excluir_metricas: boolean | null;
+  conta_metrica: boolean | null;
 }
 
 export interface CanaisFilters { vendedorId?: string | null; from?: string; to?: string }
@@ -56,14 +57,17 @@ export function useComercialCanais(filters: CanaisFilters = {}) {
     queryFn: async (): Promise<ComercialCanaisData> => {
       const year = new Date().getFullYear();
       const { data, error } = await db
-        .from("carboze_orders")
-        .select("total, status, created_at, customer_name, segmento, vendedor_id, excluir_metricas")
+        .from("carbo_vendas_metrica")
+        .select("total, status, created_at, customer_name, segmento, vendedor_id, excluir_metricas, conta_metrica")
         .order("created_at", { ascending: true });
       if (error) throw error;
       const fromTs = from ? new Date(from + "T00:00:00").getTime() : null;
       const toTs = to ? new Date(to + "T23:59:59").getTime() : null;
       const orders = ((data ?? []) as OrderRow[]).filter((o) => {
-        if (o.excluir_metricas === true) return false;
+        // Mesma regra dos KPIs do topo. Antes esta aba contava ORÇAMENTO como
+        // venda enquanto os KPIs da MESMA tela excluíam — o total e a soma dos
+        // canais não fechavam.
+        if (o.conta_metrica !== true) return false;
         if (vendedorId && o.vendedor_id !== vendedorId) return false;
         if (fromTs || toTs) {
           const t = new Date(o.created_at ?? "").getTime();

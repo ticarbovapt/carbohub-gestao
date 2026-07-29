@@ -77,6 +77,8 @@ interface CarbozeOrderRow {
   customer_name: string | null;
   vendedor_id: string | null;
   segmento: string | null;
+  conta_metrica: boolean | null;
+  data_efetiva: string | null;
 }
 
 export interface ComercialFilters { from?: string; to?: string; segmento?: string }
@@ -97,8 +99,8 @@ export function useDashComercial(vendedorId: string | null = null, months = 12, 
 
       // ── Pedidos (carboze_orders) — mesma base do CRM (useVendas), todos os vendedores.
       const { data: ordersData, error: ordersErr } = await supabase
-        .from("carboze_orders" as never)
-        .select("total, status, created_at, customer_name, vendedor_id, segmento")
+        .from("carbo_vendas_metrica" as never)
+        .select("total, status, created_at, customer_name, vendedor_id, segmento, conta_metrica, data_efetiva")
         .order("created_at", { ascending: false });
       if (ordersErr) throw new Error(ordersErr.message);
 
@@ -107,7 +109,9 @@ export function useDashComercial(vendedorId: string | null = null, months = 12, 
       const rows = (ordersData ?? []) as unknown as CarbozeOrderRow[];
       // "pedido" (status efetivo) + filtros: vendedor, período, canal.
       const pedidos = rows.filter((v) => {
-        if (!isPedido(v.status)) return false;
+        // A REGRA vem da view. Antes este hook usava só "status != quote/cancelled":
+        // contava pedido sem NF como faturamento e ignorava excluir_metricas.
+        if (!v.conta_metrica) return false;
         if (vendedorId && v.vendedor_id !== vendedorId) return false;
         if (segmento && segmento !== "all") {
           if (segmento === "none" ? v.segmento != null : v.segmento !== segmento) return false;

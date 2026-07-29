@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   Database, AlertTriangle, Search, Download, ShoppingCart, DollarSign, Target, EyeOff,
-  Users, Building2, ListOrdered, ArrowUp, ArrowDown, ChevronsUpDown, Layers, Loader2, CheckCircle2, UserPlus, Pencil,
+  Users, Building2, ListOrdered, FileText, ArrowUp, ArrowDown, ChevronsUpDown, Layers, Loader2, CheckCircle2, UserPlus, Pencil,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
@@ -55,6 +55,27 @@ interface RowVM {
 type SortCol = "cnpj" | "nome" | "canal" | "vendedor" | "pedidos" | "total" | "primeira" | "ultima";
 
 const CANAL_LABEL: Record<string, string> = { consumo: "Consumo (B2B)", revenda: "Revenda (PDV)", online: "On-line" };
+// Status do pedido em português — os valores crus do banco (quote, pending…)
+// estavam vazando para a tela. Mesmo vocabulário de apps/crm/src/pages/Pedidos.
+const STATUS_LABEL: Record<string, string> = {
+  quote: "Orçamento", pending: "Pendente", confirmed: "Confirmado",
+  invoiced: "Faturado", shipped: "Enviado", delivered: "Entregue",
+  cancelled: "Cancelado",
+};
+const STATUS_VARIANT: Record<string, "secondary" | "warning" | "info" | "success" | "destructive"> = {
+  quote: "secondary", pending: "warning", confirmed: "info",
+  invoiced: "info", shipped: "info", delivered: "success",
+  cancelled: "destructive",
+};
+// Por que o pedido não conta — em linguagem de gestão, não de banco.
+const MOTIVO_FORA: Record<string, string> = {
+  orcamento: "Orçamento — ainda não é pedido",
+  cancelado: "Pedido cancelado",
+  excluido_manualmente: "Excluído das métricas manualmente",
+  nf_invalida: "NF cancelada/rejeitada — não vale como faturamento",
+  aguardando_nf: "Aguardando emissão da NF",
+};
+
 const canalBadge = (s: string | null) =>
   s === "consumo" ? <CarboBadge variant="default">Consumo</CarboBadge>
   : s === "revenda" ? <CarboBadge variant="warning">Revenda</CarboBadge>
@@ -373,10 +394,11 @@ export default function ComercialDados() {
       download("comercial-clientes.csv", head, lines);
       return;
     }
-    const head = ["pedido", "data", "cliente", "cnpj_cpf", "vendedor", "canal", "status", "total", "conta_pedido", "conta_metrica", "origem"];
+    const head = ["pedido", "data", "cliente", "cnpj_cpf", "vendedor", "canal", "status", "nf", "nf_situacao", "total", "conta_pedido", "conta_metrica", "origem"];
     const lines = rows.map((o: ComercialOrderRow) => [
       o.order_number, o.created_at, o.customer_name, o.cnpj ? fmtDoc(o.cnpj) : "", o.vendedor_name,
-      o.segmento ? (CANAL_LABEL[o.segmento] ?? o.segmento) : "", o.status, o.total,
+      o.segmento ? (CANAL_LABEL[o.segmento] ?? o.segmento) : "",
+      STATUS_LABEL[o.status ?? ""] ?? o.status ?? "", o.nf_numero ?? "", o.nf_situacao ?? "", o.total,
       o.contaPedido ? "sim" : "não", o.contaMetrica ? "sim" : "não",
       origemLabel(o).toLowerCase(),
     ].map(esc).join(","));
@@ -550,10 +572,38 @@ export default function ComercialDados() {
                       <td className="px-3 py-2 max-w-[200px] truncate">{o.customer_name || "—"}</td>
                       <td className="px-3 py-2 max-w-[140px] truncate text-muted-foreground">{o.vendedor_name || "—"}</td>
                       <td className="px-3 py-2">{canalBadge(o.segmento)}</td>
-                      <td className="px-3 py-2 text-xs">{o.status || "—"}</td>
+                      <td className="px-3 py-2">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <CarboBadge variant={STATUS_VARIANT[o.status ?? ""] ?? "secondary"} size="sm">
+                            {STATUS_LABEL[o.status ?? ""] ?? o.status ?? "—"}
+                          </CarboBadge>
+                          {/* NF ao lado do status: é a informação que diz se o
+                              pedido virou faturamento de verdade. */}
+                          {o.nf_numero && (
+                            <span
+                              title={o.nf_situacao ?? undefined}
+                              className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium ${
+                                o.nf_valida
+                                  ? "bg-carbo-green/10 text-carbo-green"
+                                  : "bg-destructive/10 text-destructive"}`}
+                            >
+                              <FileText className="h-3 w-3" />
+                              NF {o.nf_numero}
+                              {!o.nf_valida && ` · ${o.nf_situacao}`}
+                            </span>
+                          )}
+                        </div>
+                        {o.motivoFora && (
+                          <span className="mt-0.5 block text-[10px] text-muted-foreground">
+                            {MOTIVO_FORA[o.motivoFora] ?? o.motivoFora}
+                          </span>
+                        )}
+                      </td>
                       <td className="px-3 py-2 text-right tabular-nums font-medium">{brl(o.total || 0)}</td>
                       <td className="px-3 py-2 text-center">
-                        {o.contaPedido ? (o.contaMetrica ? <CarboBadge variant="success">Métrica</CarboBadge> : <CarboBadge variant="warning">Excl.</CarboBadge>) : <CarboBadge variant="secondary">Fora</CarboBadge>}
+                        {o.contaMetrica
+                          ? <CarboBadge variant="success">Conta</CarboBadge>
+                          : <CarboBadge variant={o.contaPedido ? "warning" : "secondary"}>Não conta</CarboBadge>}
                       </td>
                       <td className="px-3 py-2 text-xs text-muted-foreground">{origemLabel(o)}</td>
                       <td className="px-3 py-2 text-center">
