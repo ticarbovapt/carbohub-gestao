@@ -1,7 +1,7 @@
 import { useNavigate } from "react-router-dom";
 import {
   Factory, ArrowRight, AlertTriangle, MessageSquare, Package, Truck,
-  Wallet, Wrench, Loader2, CheckCircle2, Clock,
+  Wrench, Loader2, CheckCircle2, Clock,
 } from "lucide-react";
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
 import { useConversations } from "@carbo/chat";
@@ -14,15 +14,15 @@ import { OPS_GROUPS } from "@/lib/opsNav";
 // Antes esta tela era um índice das próprias telas: o menu lateral já faz
 // isso, e um índice não conta nada que quem abre o app não saiba. Agora ela
 // responde "o que está me esperando" — fila de produção, estoque furado,
-// remessa parada, conta vencendo, OS do dia e conversa não lida.
+// remessa parada, OS do dia e conversa não lida.
+//
+// Financeiro NÃO entra: o domínio é do Carbo Finanças. Mostrar contas a
+// pagar aqui criaria dois donos para o mesmo número.
 //
 // Regra que vale para TODOS os blocos: zero e falha de consulta não podem
 // parecer a mesma coisa. Zero em "abaixo do mínimo" lê como estoque saudável;
 // se foi erro, é mentira. Por isso cada bloco carrega o próprio estado.
 // ─────────────────────────────────────────────────────────────────────────────
-
-const brl = (v: number) =>
-  new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 }).format(v || 0);
 
 const fmtHora = (iso?: string | null) => {
   if (!iso) return "";
@@ -95,7 +95,7 @@ function Num({ valor, label, alerta }: { valor: number | string; label: string; 
 
 export default function Home() {
   const navigate = useNavigate();
-  const { producao, suprimentos, logistica, financeiro, campo } = useOpsResumo();
+  const { producao, suprimentos, logistica, campo } = useOpsResumo();
   const { data: conversas = [], isLoading: chatLoading, error: chatErro } = useConversations();
 
   const naoLidas = conversas.filter((c) => c.unread > 0);
@@ -107,10 +107,6 @@ export default function Home() {
     suprimentos.zerados > 0 && {
       txt: `${suprimentos.zerados} ${suprimentos.zerados === 1 ? "produto zerado" : "produtos zerados"} em algum hub`,
       to: "/estoque",
-    },
-    financeiro.vencidos > 0 && {
-      txt: `${financeiro.vencidos} ${financeiro.vencidos === 1 ? "conta vencida" : "contas vencidas"} · ${brl(financeiro.valorVencido)}`,
-      to: "/financeiro",
     },
     producao.bloqueadas > 0 && {
       txt: `${producao.bloqueadas} ${producao.bloqueadas === 1 ? "OP bloqueada" : "OPs bloqueadas"}`,
@@ -223,22 +219,6 @@ export default function Home() {
               <Num valor={logistica.prontas} label="prontas" />
               <Num valor={logistica.emTransporte} label="em trânsito" />
             </div>
-          </Bloco>
-
-          {/* ── Financeiro ───────────────────────────────────────────── */}
-          <Bloco titulo="A pagar" icon={Wallet} cor="#f43f5e" estado={financeiro}
-            onClick={() => navigate("/financeiro")}
-            vazio={financeiro.vencidos + financeiro.vencendo === 0 ? "nada vencendo nos próximos 7 dias" : undefined}>
-            <div className="grid grid-cols-2 gap-2">
-              <Num valor={financeiro.vencidos} label={`vencidas · ${brl(financeiro.valorVencido)}`} alerta={financeiro.vencidos > 0} />
-              <Num valor={financeiro.vencendo} label={`vencem em 7d · ${brl(financeiro.valorVencendo)}`} />
-            </div>
-            {financeiro.maisAntigo && (
-              <p className="mt-2.5 truncate text-[11px] text-muted-foreground" title={financeiro.maisAntigo.supplier_name}>
-                mais antiga: {financeiro.maisAntigo.supplier_name} · venceu{" "}
-                {new Date(financeiro.maisAntigo.due_date + "T12:00:00").toLocaleDateString("pt-BR")}
-              </p>
-            )}
           </Bloco>
 
           {/* ── Operação de campo ────────────────────────────────────── */}

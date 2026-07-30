@@ -56,10 +56,6 @@ export function Layout() {
     { label: "Logística", items: ["/logistica/dashboard", "/logistica", "/logistica/pos-venda", "/logistica/viagens"].map(it) },
     { label: "Operação de Campo", items: ["/campo/os", "/campo/agendamentos", "/campo/maquinas", "/campo/checklists", "/campo/alertas"].map(it) },
     { label: "Acompanhamento", items: ["/acompanhamento/comercial", "/acompanhamento/metas"].map(it) },
-    { label: "Financeiro", locked: true, lockedHint: "Domínio migrado para o Carbo Finanças",
-      items: ["/financeiro/dashboard", "/financeiro", "/financeiro/faturamento", "/financeiro/notas-fiscais", "/financeiro/nfse"].map(it) },
-    { label: "Integrações", locked: true, lockedHint: "Domínio migrado para o Carbo Finanças",
-      items: ["/integracoes/bling"].map(it) },
   ];
 
   // Mobile: abre a gaveta. Desktop: recolhe/expande a sidebar (rail).

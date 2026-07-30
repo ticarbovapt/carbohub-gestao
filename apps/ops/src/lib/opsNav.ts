@@ -1,7 +1,7 @@
 import {
   LayoutDashboard, Factory, BarChart3, Package, Boxes, Layers, Building2,
-  Warehouse, ShoppingCart, PackagePlus, Wallet, Receipt, FileText, Truck,
-  Plane, ClipboardList, Calendar, Cog, UserCheck, Bell, TrendingUp, Target, Link2, ShoppingBag,
+  Warehouse, ShoppingCart, PackagePlus, Truck,
+  Plane, ClipboardList, Calendar, Cog, UserCheck, Bell, TrendingUp, Target, ShoppingBag,
   type LucideIcon,
 } from "lucide-react";
 
@@ -92,29 +92,6 @@ export const OPS_GROUPS: OpsNavGroup[] = [
     items: [
       { path: "/acompanhamento/comercial", label: "Dashboard Comercial", icon: TrendingUp, from: "/dashboards/comercial", mirror: true, ready: true },
       { path: "/acompanhamento/metas", label: "Metas de Vendedores", icon: Target, from: "/dashboards/metas/vendedores", mirror: true, ready: true },
-    ],
-  },
-  // ───────────────────────────────────────────────────────────────────────────
-  // Domínio migrado para o Carbo Finanças. Mantido aqui (não apagado), porém
-  // TRAVADO: cadeado, não clicável e no fim da sidebar. Remover quando o
-  // Finanças assumir 100% destas telas.
-  // ───────────────────────────────────────────────────────────────────────────
-  {
-    label: "Financeiro",
-    locked: true,
-    items: [
-      { path: "/financeiro", label: "Financeiro", icon: Wallet, from: "/financeiro", ready: true, locked: true },
-      { path: "/financeiro/faturamento", label: "Fila de Faturamento", icon: Receipt, from: "/financeiro/faturamento", ready: true, locked: true },
-      { path: "/financeiro/notas-fiscais", label: "Notas Fiscais", icon: FileText, from: "/integrations/bling/nfs", ready: true, locked: true },
-      { path: "/financeiro/nfse", label: "NFSe", icon: FileText, from: "/admin/nfse", ready: true, locked: true },
-      { path: "/financeiro/dashboard", label: "Dashboard Financeiro", icon: BarChart3, from: "/dashboards/financeiro", ready: true, locked: true },
-    ],
-  },
-  {
-    label: "Integrações",
-    locked: true,
-    items: [
-      { path: "/integracoes/bling", label: "Bling ERP", icon: Link2, from: "/integrations/bling", ready: true, locked: true },
     ],
   },
 ];

@@ -2,7 +2,6 @@ import { useMemo } from "react";
 import { useProductionOrders } from "./useProductionOrders";
 import { useStock } from "./useStock";
 import { useShipments } from "./useShipments";
-import { usePayables } from "./usePayables";
 import { useOS } from "./useOS";
 import { minForHub } from "@/components/estoque/stockData";
 
@@ -15,7 +14,11 @@ import { minForHub } from "@/components/estoque/stockData";
 // segunda definição para os mesmos números — foi exatamente assim que o
 // faturamento chegou a ter 14 definições de "venda que conta".
 //
-// Custo: 5 consultas. Todas já são feitas pelas telas internas e o
+// Contas a pagar NÃO entra aqui: o domínio financeiro é do Carbo Finanças.
+// Repetir o número numa home de operação criaria dois donos para o mesmo
+// dado, e um deles ficaria para trás.
+//
+// Custo: 4 consultas. Todas já são feitas pelas telas internas e o
 // react-query as compartilha por queryKey, então abrir a home esquenta o
 // cache do resto do app em vez de desperdiçar.
 //
@@ -63,7 +66,6 @@ export function useOpsResumo() {
   const ops = useProductionOrders();
   const estoque = useStock();
   const remessas = useShipments();
-  const pagar = usePayables();
   const os = useOS();
 
   const producao = useMemo(() => {
@@ -115,22 +117,6 @@ export function useOpsResumo() {
     };
   }, [remessas.data, remessas.isLoading, remessas.error]);
 
-  const financeiro = useMemo(() => {
-    const linhas = pagar.data ?? [];
-    const abertos = linhas.filter((p) => p.status !== "pago" && p.status !== "cancelado");
-    const limite = emDias(7);
-    const vencendo = abertos.filter((p) => !p.overdue && p.due_date <= limite);
-    const vencidos = abertos.filter((p) => p.overdue);
-    const soma = (xs: typeof abertos) => xs.reduce((n, p) => n + Number(p.amount || 0), 0);
-    return {
-      ...estado(pagar),
-      vencidos: vencidos.length, valorVencido: soma(vencidos),
-      vencendo: vencendo.length, valorVencendo: soma(vencendo),
-      // Fornecedor mais antigo em atraso — dá nome ao número.
-      maisAntigo: vencidos.sort((a, b) => a.due_date.localeCompare(b.due_date))[0] ?? null,
-    };
-  }, [pagar.data, pagar.isLoading, pagar.error]);
-
   const campo = useMemo(() => {
     const linhas = os.data ?? [];
     const abertas = linhas.filter((o) => OS_ABERTA.has(o.stage));
@@ -153,5 +139,5 @@ export function useOpsResumo() {
     };
   }, [os.data, os.isLoading, os.error]);
 
-  return { producao, suprimentos, logistica, financeiro, campo };
+  return { producao, suprimentos, logistica, campo };
 }

@@ -18,12 +18,6 @@ import SaldosPorHub from "./pages/estoque/SaldosPorHub";
 import EstoqueHub from "./pages/estoque/EstoqueHub";
 import RequisicaoCompra from "./pages/compras/RequisicaoCompra";
 import Suprimentos from "./pages/compras/Suprimentos";
-import BlingIntegracao from "./pages/integracoes/Bling";
-import Financeiro from "./pages/financeiro/Financeiro";
-import Faturamento from "./pages/financeiro/Faturamento";
-import NotasFiscais from "./pages/financeiro/NotasFiscais";
-import NFSe from "./pages/financeiro/NFSe";
-import DashboardFinanceiro from "./pages/financeiro/DashboardFinanceiro";
 import Logistica from "./pages/logistica/Logistica";
 import PosVenda from "./pages/logistica/PosVenda";
 import ViagensLog from "./pages/logistica/Viagens";
@@ -65,14 +59,7 @@ export default function App() {
         {/* Compras & Suprimentos */}
         <Route path="/compras" element={<RequisicaoCompra />} />
         <Route path="/suprimentos" element={<Suprimentos />} />
-        <Route path="/integracoes/bling" element={<BlingIntegracao />} />
 
-        {/* Financeiro */}
-        <Route path="/financeiro" element={<Financeiro />} />
-        <Route path="/financeiro/faturamento" element={<Faturamento />} />
-        <Route path="/financeiro/notas-fiscais" element={<NotasFiscais />} />
-        <Route path="/financeiro/nfse" element={<NFSe />} />
-        <Route path="/financeiro/dashboard" element={<DashboardFinanceiro />} />
 
         {/* Logística */}
         <Route path="/logistica/pos-venda" element={<PosVenda />} />
