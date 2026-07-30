@@ -85,7 +85,7 @@ const UFS = ["AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","P
 const VAZIO: PdvInput = {
   name: "", legal_name: "", cnpj: "", address_city: "", address_state: "",
   address_street: "", address_zip: "", contact_name: "", contact_phone: "",
-  email: "", notes: "", status: "active", opened_at: "", owner_seller_id: "",
+  email: "", notes: "", status: "active", opened_at: "", owner_seller_id: "", is_micro: false, micro_desde: "",
 };
 
 const MIX_VAZIO: Record<PdvProduto, PdvMixItem> = {
@@ -173,6 +173,7 @@ export default function Pdvs() {
       contact_name: p.contact_name ?? "", contact_phone: p.contact_phone ?? "",
       email: p.email ?? "", notes: p.notes ?? "", status: p.status,
       opened_at: p.opened_at ?? "", owner_seller_id: p.owner_seller_id ?? "",
+      is_micro: p.is_micro ?? false, micro_desde: p.micro_desde ?? "",
     });
     // Produto que ainda não tem linha no banco entra como "a confirmar", não
     // como "não vende" — não sabemos, e afirmar que não vende seria inventar.
@@ -310,6 +311,14 @@ export default function Pdvs() {
                           {p.legal_name && p.legal_name.toLowerCase() !== p.name.toLowerCase() && (
                             <span className="block truncate text-[11px] text-muted-foreground">{p.legal_name}</span>
                           )}
+                          {/* Micro é PDV também — por isso etiqueta ao lado do
+                              nome, e não uma coluna "tipo" que sugeriria que
+                              ele deixou de ser ponto de venda. */}
+                          {p.is_micro && (
+                            <span className="mt-0.5 inline-block rounded bg-violet-500/15 px-1.5 py-0.5 text-[10px] font-medium text-violet-400">
+                              Microdistribuidor
+                            </span>
+                          )}
                         </button>
                       </td>
                       <td className="px-3 py-2 font-mono text-xs whitespace-nowrap">
@@ -440,6 +449,28 @@ export default function Pdvs() {
                   Carteira do ponto. Não altera o vendedor das vendas nem a comissão.
                 </p>
               </div>
+              <div className="space-y-1.5 md:col-span-2 rounded-lg border p-3">
+                <label className="flex items-center gap-2 text-sm cursor-pointer">
+                  <input type="checkbox" className="h-4 w-4 accent-violet-500"
+                    checked={form.is_micro ?? false}
+                    onChange={(e) => set({ is_micro: e.target.checked })} />
+                  <span className="font-medium">Também é microdistribuidor</span>
+                </label>
+                {form.is_micro && (
+                  <div className="pt-1">
+                    <Label className="text-xs">Microdistribuidor desde</Label>
+                    <Input type="date" className="mt-1 h-8 max-w-[200px]"
+                      value={form.micro_desde ?? ""}
+                      onChange={(e) => set({ micro_desde: e.target.value })} />
+                  </div>
+                )}
+                {/* Dito na tela: foi confundir as duas datas que fez o Auto
+                    Diesel aparecer aberto em jul/2026 comprando desde dez/2025. */}
+                <p className="text-[11px] text-muted-foreground">
+                  Continua sendo PDV e contando na base de pontos. A data aqui é de virar
+                  microdistribuidor — a abertura do ponto é o campo Abertura.
+                </p>
+              </div>
               <div className="space-y-1.5 md:col-span-2">
                 <Label>Endereço</Label>
                 <Input value={form.address_street ?? ""} onChange={(e) => set({ address_street: e.target.value })}
@@ -559,6 +590,7 @@ function PdvDetalhe({ pdv, onClose }: { pdv: PdvRow | null; onClose: () => void 
             ["Última compra", fmtData(pdv.ultima_compra)],
             ["Abertura", fmtData(pdv.opened_at)],
             ["Vendedor dono", pdv.owner_seller_name ?? "—"],
+            ...(pdv.is_micro ? ([["Microdistribuidor desde", fmtData(pdv.micro_desde)]] as [string, string][]) : []),
             ["Primeira compra", fmtData(pdv.primeira_compra)],
           ] as [string, string][]).map(([l, v]) => (
             <div key={l} className="rounded-lg border bg-card px-3 py-2">

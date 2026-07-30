@@ -84,6 +84,8 @@ export interface PdvRow {
   created_at: string;
   updated_at: string;
   opened_at: string | null;
+  is_micro: boolean;
+  micro_desde: string | null;
   owner_seller_id: string | null;
   owner_seller_name: string | null;
   mix: Partial<Record<PdvProduto, PdvMixItem>>;
@@ -130,6 +132,8 @@ export interface PdvInput {
   notes?: string | null;
   opened_at?: string | null;
   owner_seller_id?: string | null;
+  is_micro?: boolean;
+  micro_desde?: string | null;
 }
 
 /** Guarda o CNPJ só com dígitos — é assim que o trigger de canal compara. */
@@ -157,6 +161,10 @@ function limpar(input: PdvInput) {
     notes: t(input.notes),
     opened_at: t(input.opened_at),
     owner_seller_id: t(input.owner_seller_id),
+    is_micro: input.is_micro ?? false,
+    // Data de virar micro só faz sentido com a flag ligada. Desligar a flag
+    // e manter a data deixaria lixo que reaparece se alguém religar.
+    micro_desde: input.is_micro ? t(input.micro_desde) : null,
   };
 }
 
