@@ -208,8 +208,17 @@ const STAGES_FOLLOWUP: StageConfig[] = [
   { id: "a_reativar",   label: "A Reativar",     icon: "🔁", color: "#94A3B8" },
   { id: "contato",      label: "Contato Feito",  icon: "📞", color: "#F59E0B" },
   { id: "reengajado",   label: "Reengajado",     icon: "🔥", color: "#3B82F6" },
+  // Orçamento ANTES da oferta: aqui "Oferta Enviada" faz o papel da proposta,
+  // e montar o preço vem antes de mandar. Mesma separação do Inbound e da
+  // Expansão — parado em Orçamento é o vendedor, parado em Oferta é o cliente.
+  //
+  // Id exatamente `orcamento`: é ele que Pipelines e DealDetail testam para
+  // abrir o popup e o bloco de orçamento.
+  { id: "orcamento",    label: "Orçamento",      icon: "🧮", color: "#0EA5E9" },
   { id: "oferta",       label: "Oferta Enviada", icon: "🎁", color: "#8B5CF6" },
   { id: "negociacao",   label: "Negociação",     icon: "🤝", color: "#06B6D4" },
+  // `recomprou` está em WON_STAGES — é o que já faz esta coluna abrir o popup
+  // de gerar a venda.
   { id: "recomprou",    label: "Recomprou",      icon: "✅", color: "#22C55E" },
   { id: "sem_interesse",label: "Sem Interesse",  icon: "❌", color: "#EF4444" },
 ];
