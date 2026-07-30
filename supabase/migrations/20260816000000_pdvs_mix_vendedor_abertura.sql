@@ -170,8 +170,12 @@ where regexp_replace(coalesce(p.cnpj, ''), '\D', '', 'g') = pl.cnpj;
 -- Os 2 sem documento: única chave possível é o nome.
 update public.pdvs set opened_at = date '2026-01-01', owner_seller_name = 'Thelis', updated_at = now()
 where name = 'Gilberto Ferreira da Costa' and cnpj is null;
+-- ⚠️ Comparação SEM ACENTO. A carga dos 69 gravou os nomes em ASCII
+-- ('Posto Sao Francisco', 'Alem Mar', 'Arco-iris'). Um `name = 'Posto São
+-- Francisco'` não casa nada — e não casar NÃO dá erro, o update passa
+-- calado. Foi assim que este PDV ficou sem abertura, sem dono e sem mix.
 update public.pdvs set opened_at = date '2026-06-01', owner_seller_name = 'Rodrigo', updated_at = now()
-where name = 'Posto São Francisco' and cnpj is null;
+where translate(name, 'ãáâàéêíóôõúüç', 'aaaaeeiooouuc') = 'Posto Sao Francisco' and cnpj is null;
 
 -- ── 5. Resolver o dono para um profile de verdade ─────────────────────────
 -- A planilha traz só o primeiro nome ("Thelis", "Márcio"), o sistema guarda
@@ -301,7 +305,7 @@ insert into public.pdv_produto_mix (pdv_id, produto, oferece, preco_revenda)
 select p.id, x.produto, x.oferece, null
 from public.pdvs p
 cross join lateral (values ('10ml','sim'),('100ml','sim'),('1l','nao')) as x(produto, oferece)
-where p.name = 'Posto São Francisco' and p.cnpj is null
+where translate(p.name, 'ãáâàéêíóôõúüç', 'aaaaeeiooouuc') = 'Posto Sao Francisco' and p.cnpj is null
 on conflict (pdv_id, produto) do nothing;
 
 -- ── 7. A view enxergando os campos novos ──────────────────────────────────
