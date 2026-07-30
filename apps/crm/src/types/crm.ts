@@ -175,7 +175,19 @@ const STAGES_EXPANSAO: StageConfig[] = [
   { id: "contato",        label: "Em Contato",           icon: "📞", color: "#F59E0B" },
   { id: "qualificado",    label: "Qualificado",          icon: "🎯", color: "#3B82F6" },
   { id: "visita_agendada",label: "Reunião / Visita",     icon: "📍", color: "#8B5CF6" },
+  // ORÇAMENTO antes da proposta, mesma razão do Inbound: card parado aqui é o
+  // vendedor que não montou o preço; parado em Proposta é o cliente que não
+  // respondeu. Culpados diferentes, colunas diferentes.
+  //
+  // O id tem de ser exatamente `orcamento`: é ele que Pipelines.tsx e o
+  // DealDetail testam para abrir o AcaoPosMove e o bloco de orçamento. Um id
+  // novo ("gerar_orcamento") daria a coluna sem nenhum comportamento — e o
+  // vendedor arrastaria o card achando que gerou orçamento.
+  { id: "orcamento",      label: "Orçamento",            icon: "🧮", color: "#0EA5E9" },
   { id: "em_negociacao",  label: "Proposta / Negociação",icon: "🤝", color: "#06B6D4" },
+  // `convertido` está em WON_STAGES — é o que faz mover para cá abrir o
+  // popup de gerar a venda e carimbar won_at. Não trocar por um id fora
+  // de WON_STAGES.
   { id: "convertido",     label: "Ganho",                icon: "✅", color: "#22C55E" },
   { id: "sem_interesse",  label: "Perdido",              icon: "❌", color: "#EF4444" },
 ];
