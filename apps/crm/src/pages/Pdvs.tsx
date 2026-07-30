@@ -300,11 +300,15 @@ export default function Pdvs() {
                 </thead>
                 <tbody>
                   {lista.map((p) => (
-                    <tr key={p.id}
-                      className={`border-b last:border-0 hover:bg-accent/40 ${p.status !== "active" ? "opacity-60" : ""}`}>
+                    // Clique na LINHA inteira, não só no nome: com o handler
+                    // preso ao botão do nome, a maior parte da linha não fazia
+                    // nada e parecia quebrada. A coluna de ações para o clique
+                    // com stopPropagation para não abrir o detalhe junto.
+                    <tr key={p.id} onClick={() => setDetalhe(p)}
+                      className={`border-b last:border-0 hover:bg-accent/40 cursor-pointer ${p.status !== "active" ? "opacity-60" : ""}`}>
                       <td className="px-3 py-2 font-mono text-xs whitespace-nowrap">{p.pdv_code}</td>
                       <td className="px-3 py-2 max-w-[260px]">
-                        <button className="text-left w-full" onClick={() => setDetalhe(p)}>
+                        <div className="text-left w-full">
                           <span className="block truncate font-medium">{p.name}</span>
                           {/* Razão social embaixo: quase nunca é igual ao nome
                               comercial, e é ela que sai na nota. */}
@@ -319,7 +323,7 @@ export default function Pdvs() {
                               Microdistribuidor
                             </span>
                           )}
-                        </button>
+                        </div>
                       </td>
                       <td className="px-3 py-2 font-mono text-xs whitespace-nowrap">
                         {p.sem_documento
@@ -348,7 +352,7 @@ export default function Pdvs() {
                         {fmtData(p.ultima_compra)}
                       </td>
                       {isGestor && (
-                        <td className="px-3 py-2">
+                        <td className="px-3 py-2" onClick={(e) => e.stopPropagation()}>
                           <div className="flex items-center justify-center gap-1">
                             <button onClick={() => abrirEdicao(p)} title="Editar"
                               className="inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground">
@@ -568,9 +572,14 @@ function PdvDetalhe({ pdv, onClose }: { pdv: PdvRow | null; onClose: () => void 
 
   return (
     <Dialog open={!!pdv} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 flex-wrap">
+      {/* w-[calc(100vw-2rem)] antes do sm: o max-w-3xl sozinho não impede o
+          diálogo de passar da viewport em tela estreita. E `min-w-0` nos
+          filhos é o que faz o overflow-x-auto da tabela funcionar: sem ele o
+          grid do DialogContent estica para caber a tabela e o conteúdo sai
+          cortado pela borda, sem barra de rolagem nenhuma. */}
+      <DialogContent className="w-[calc(100vw-2rem)] sm:max-w-3xl max-h-[85vh] overflow-y-auto">
+        <DialogHeader className="min-w-0">
+          <DialogTitle className="flex items-center gap-2 flex-wrap break-words">
             {pdv.name}
             <CarboBadge variant={PDV_STATUS_VARIANT[pdv.status]} size="sm">
               {PDV_STATUS_LABEL[pdv.status]}
@@ -583,7 +592,7 @@ function PdvDetalhe({ pdv, onClose }: { pdv: PdvRow | null; onClose: () => void 
           </DialogDescription>
         </DialogHeader>
 
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 min-w-0">
           {([
             ["Pedidos", String(pdv.pedidos)],
             ["Comprado", brl(pdv.total_comprado)],
@@ -593,19 +602,19 @@ function PdvDetalhe({ pdv, onClose }: { pdv: PdvRow | null; onClose: () => void 
             ...(pdv.is_micro ? ([["Microdistribuidor desde", fmtData(pdv.micro_desde)]] as [string, string][]) : []),
             ["Primeira compra", fmtData(pdv.primeira_compra)],
           ] as [string, string][]).map(([l, v]) => (
-            <div key={l} className="rounded-lg border bg-card px-3 py-2">
-              <p className="text-[11px] text-muted-foreground">{l}</p>
-              <p className="text-sm font-semibold tabular-nums">{v}</p>
+            <div key={l} className="rounded-lg border bg-card px-3 py-2 min-w-0">
+              <p className="text-[11px] text-muted-foreground truncate">{l}</p>
+              <p className="text-sm font-semibold tabular-nums truncate" title={v}>{v}</p>
             </div>
           ))}
         </div>
 
         {/* Mix — o que este ponto revende e por quanto. */}
-        <div>
+        <div className="min-w-0">
           <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
             <Package className="inline h-3.5 w-3.5 mr-1" /> Mix de produto
           </p>
-          <div className="grid sm:grid-cols-3 gap-2">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 min-w-0">
             {PRODUTOS.map((k) => {
               const it = pdv.mix?.[k];
               return (
@@ -638,7 +647,7 @@ function PdvDetalhe({ pdv, onClose }: { pdv: PdvRow | null; onClose: () => void 
           </div>
         )}
 
-        <div>
+        <div className="min-w-0">
           <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
             <ShoppingCart className="inline h-3.5 w-3.5 mr-1" /> Pedidos
           </p>
@@ -649,8 +658,8 @@ function PdvDetalhe({ pdv, onClose }: { pdv: PdvRow | null; onClose: () => void 
               {pdv.sem_documento ? "Sem documento — não há como localizar os pedidos." : "Nenhum pedido registrado."}
             </p>
           ) : (
-            <div className="rounded-lg border overflow-x-auto">
-              <table className="w-full text-sm">
+            <div className="rounded-lg border overflow-x-auto min-w-0">
+              <table className="w-full text-sm min-w-[560px]">
                 <thead>
                   <tr className="border-b bg-muted/30 text-left text-xs text-muted-foreground">
                     <th className="px-3 py-2 font-medium">Pedido</th>
