@@ -221,7 +221,7 @@ export default function DashboardComercial() {
               <h2 className="text-base font-bold text-board-text flex items-center gap-2"><BarChart3 className="h-4 w-4 text-primary" /> Evolução Mensal de Vendas</h2>
               <p className="text-xs text-board-muted mt-0.5">Via Bling · <span className="font-semibold text-board-text">{k?.totalVendas ?? 0} pedidos</span> · <span className="font-semibold text-green-500">{brl(k?.totalBRL ?? 0)} acumulado</span></p>
             </div>
-            <Link to="/comercial/vendas" className="text-xs font-semibold text-primary hover:underline shrink-0">Ver vendas →</Link>
+            <Link to="/comercial/dados" className="text-xs font-semibold text-primary hover:underline shrink-0">Ver pedidos →</Link>
           </div>
           {isLoading ? (
             <div className="flex items-center justify-center h-72"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
@@ -342,7 +342,7 @@ export default function DashboardComercial() {
           <div className="rounded-2xl border border-border bg-board-surface overflow-hidden">
             <div className="border-b border-border px-6 py-3">
               <h2 className="text-base font-bold text-board-text flex items-center gap-2"><BarChart3 className="h-4 w-4 text-blue-400" /> Vendas por Canal</h2>
-              <p className="text-xs text-board-muted mt-0.5">Consumo (B2B) vs Revenda (Ponto de Venda) · classifique cada pedido em <Link to="/comercial/vendas" className="font-semibold text-primary hover:underline">Pedidos</Link></p>
+              <p className="text-xs text-board-muted mt-0.5">Consumo (B2B) vs Revenda (Ponto de Venda) · classifique cada pedido em <Link to="/comercial/dados" className="font-semibold text-primary hover:underline">Pedidos</Link></p>
             </div>
             <div className="grid grid-cols-2 gap-3 p-4">
               {seg && CANAL_CARDS.map((c) => {
@@ -454,7 +454,7 @@ export default function DashboardComercial() {
 
         {/* 9. Footer */}
         <div className="flex items-center justify-end gap-4 pb-1">
-          <Link to="/comercial/vendas" className="text-xs text-board-muted hover:text-primary transition-colors flex items-center gap-1">Ver vendas detalhadas →</Link>
+          <Link to="/comercial/dados" className="text-xs text-board-muted hover:text-primary transition-colors flex items-center gap-1">Ver pedidos detalhados →</Link>
         </div>
       </div>
 

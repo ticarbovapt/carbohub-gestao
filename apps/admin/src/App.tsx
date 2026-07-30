@@ -15,7 +15,6 @@ import UltimoAcesso from "./pages/UltimoAcesso";
 import DashboardsLojas from "./pages/DashboardsLojas";
 import DashboardsFranqueados from "./pages/DashboardsFranqueados";
 import DashboardsComercial from "./pages/DashboardsComercial";
-import ComercialVendas from "./pages/ComercialVendas";
 import DescontoAprovacoes from "./pages/DescontoAprovacoes";
 import ProdutosPrecos from "./pages/ProdutosPrecos";
 import DashboardComercial from "./pages/DashboardComercial";
@@ -68,7 +67,6 @@ export default function App() {
         <Route path="/dashboards/lojas" element={<DashboardsLojas />} />
         <Route path="/dashboards/franqueados" element={<DashboardsFranqueados />} />
         <Route path="/dashboards/comercial" element={<DashboardsComercial />} />
-        <Route path="/comercial/vendas" element={<ComercialVendas />} />
         <Route path="/comercial/dashboard" element={<DashboardComercial />} />
         <Route path="/comercial/dados" element={<ComercialDados />} />
         <Route path="/comercial/pdvs" element={<Pdvs />} />

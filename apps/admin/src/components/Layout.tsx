@@ -53,7 +53,6 @@ export function Layout() {
     ] },
     { label: "Comercial", items: [
         { to: "/comercial/dashboard", label: "Dashboard Comercial", icon: LineChart },
-        { to: "/comercial/vendas", label: "Análise de Vendas", icon: BarChart3 },
         { to: "/comercial/dados", label: "Dados Comerciais (fonte)", icon: Store },
         { to: "/comercial/pdvs", label: "Pontos de Venda", icon: MapPin },
         { to: "/comercial/descontos", label: "Aprovações", icon: BadgePercent },
