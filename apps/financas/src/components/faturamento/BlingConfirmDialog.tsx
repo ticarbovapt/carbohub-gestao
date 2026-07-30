@@ -121,7 +121,12 @@ export function BlingConfirmDialog({
 
   return (
     <Dialog open={!!order} onOpenChange={(o) => { if (!o) onOpenChange(false); }}>
-      <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto">
+      {/* w-[calc(100vw-2rem)] antes do sm: o max-w sozinho não impede o diálogo
+          de passar da viewport em tela estreita. E `min-w-0` nos blocos é o
+          que impede o conteúdo largo (nome de produto, razão social) de
+          esticar a faixa do grid do DialogContent e sair cortado pela borda —
+          filho de grid tem min-width auto por padrão. */}
+      <DialogContent className="w-[calc(100vw-2rem)] sm:max-w-xl max-h-[90vh] overflow-y-auto overflow-x-hidden">
         <DialogHeader>
           <DialogTitle>Criar pedido no Bling</DialogTitle>
           <DialogDescription>
@@ -143,11 +148,12 @@ export function BlingConfirmDialog({
         )}
 
         {data && (
-          <div className="space-y-4 py-1 text-sm">
-            <div className="flex items-center justify-between rounded-lg border bg-muted/20 px-3 py-2">
-              <div>
-                <p className="font-semibold">{data.order_number}</p>
-                <p className="text-xs text-muted-foreground">{data.customer_name}</p>
+          <div className="space-y-4 py-1 text-sm min-w-0">
+            <div className="flex items-center justify-between gap-2 rounded-lg border bg-muted/20 px-3 py-2 min-w-0">
+              <div className="min-w-0">
+                <p className="font-semibold truncate">{data.order_number}</p>
+                {/* Razão social longa quebra em vez de empurrar a borda. */}
+                <p className="text-xs text-muted-foreground break-words">{data.customer_name}</p>
               </div>
             </div>
 
@@ -162,13 +168,13 @@ export function BlingConfirmDialog({
               </div>
             ) : form ? (
               /* Cliente novo — formulário editável para conferir/corrigir */
-              <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 space-y-3">
+              <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 space-y-3 min-w-0">
                 <div className="flex items-center gap-2">
                   <UserPlus className="h-4 w-4 text-amber-500 shrink-0" />
                   <p className="font-medium text-amber-600">Cliente novo — confira e ajuste o cadastro</p>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 min-w-0">
                   <div className="sm:col-span-2 space-y-1">
                     <Label className="text-xs">Nome / Razão social *</Label>
                     <Input className={fieldCls} value={form.nome} onChange={(e) => set("nome", e.target.value)} />
@@ -218,7 +224,7 @@ export function BlingConfirmDialog({
                     <Label className="text-xs">Cidade *</Label>
                     <Input className={fieldCls} value={form.municipio} onChange={(e) => set("municipio", e.target.value)} />
                   </div>
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="grid grid-cols-2 gap-2 min-w-0">
                     <div className="space-y-1">
                       <Label className="text-xs">UF *</Label>
                       <Input className={`${fieldCls} uppercase`} maxLength={2} value={form.uf} onChange={(e) => set("uf", e.target.value.toUpperCase())} />
@@ -243,11 +249,14 @@ export function BlingConfirmDialog({
               <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">Itens</p>
               <div className="space-y-1">
                 {data.items_summary.map((it, i) => (
-                  <div key={i} className="flex items-center gap-2 text-xs">
+                  <div key={i} className="flex items-center gap-2 text-xs min-w-0">
                     {it.matched
                       ? <CarboBadge variant="success" className="shrink-0">catálogo</CarboBadge>
                       : <CarboBadge variant="warning" className="shrink-0">descrição livre</CarboBadge>}
-                    <span className="truncate">{it.name}</span>
+                    {/* title: o nome do produto é o que diz se casou com o
+                        item certo do catálogo — truncado sem tooltip, some
+                        justamente a informação que se veio conferir. */}
+                    <span className="truncate min-w-0" title={it.name}>{it.name}</span>
                   </div>
                 ))}
               </div>
@@ -257,11 +266,11 @@ export function BlingConfirmDialog({
             {data.payment_summary?.escolhido && (
               <div>
                 <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">Pagamento</p>
-                <div className="flex items-center gap-2 text-xs">
+                <div className="flex items-center gap-2 text-xs min-w-0">
                   {data.payment_summary.forma_bling
                     ? <CarboBadge variant="success" className="shrink-0">Bling: {data.payment_summary.forma_bling}</CarboBadge>
                     : <CarboBadge variant="warning" className="shrink-0">sem forma no Bling</CarboBadge>}
-                  <span className="truncate">
+                  <span className="truncate min-w-0">
                     {data.payment_summary.escolhido}
                     {data.payment_summary.parcelas > 1 ? ` · ${data.payment_summary.parcelas}x` : ""}
                   </span>
@@ -290,7 +299,7 @@ export function BlingConfirmDialog({
           </div>
         )}
 
-        <DialogFooter>
+        <DialogFooter className="gap-2 sm:gap-0">
           <CarboButton variant="outline" onClick={() => onOpenChange(false)} disabled={createBling.isPending}>
             Cancelar
           </CarboButton>
