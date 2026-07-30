@@ -43,19 +43,24 @@ where regexp_replace(coalesce(cnpj, ''), '\D', '', 'g') in ('08533625000120', '1
 -- A primeira compra é um limite superior da abertura real: o ponto abriu
 -- naquele mês ou antes. É o melhor dado disponível, e é melhor que uma data
 -- comprovadamente errada.
+-- ⚠️ Agregado independente, NÃO `from lateral`. Em UPDATE, o lateral do FROM
+-- não enxerga a tabela que está sendo atualizada — "invalid reference to
+-- FROM-clause entry for table p". Nas outras migrações o lateral funcionou
+-- porque eram INSERT ... SELECT, onde ele é válido.
 update public.pdvs p
 set opened_at  = c.primeira_compra,
     updated_at = now()
-from lateral (
-  select min(coalesce(o.sale_date, o.created_at::date)) as primeira_compra
-  from public.carboze_orders o
-  where coalesce(p.cnpj, '') <> ''
-    and regexp_replace(coalesce(o.cnpj, ''), '\D', '', 'g')
-      = regexp_replace(p.cnpj, '\D', '', 'g')
-    and o.status not in ('quote', 'cancelled')
-    and coalesce(o.excluir_metricas, false) = false
+from (
+  select regexp_replace(coalesce(cnpj, ''), '\D', '', 'g') as doc,
+         min(coalesce(sale_date, created_at::date))        as primeira_compra
+  from public.carboze_orders
+  where status not in ('quote', 'cancelled')
+    and coalesce(excluir_metricas, false) = false
+    and length(regexp_replace(coalesce(cnpj, ''), '\D', '', 'g')) in (11, 14)
+  group by 1
 ) c
-where c.primeira_compra is not null
+where coalesce(p.cnpj, '') <> ''
+  and regexp_replace(coalesce(p.cnpj, ''), '\D', '', 'g') = c.doc
   and (p.opened_at is null or c.primeira_compra < p.opened_at);
 
 -- ── A view expõe as colunas novas ─────────────────────────────────────────
