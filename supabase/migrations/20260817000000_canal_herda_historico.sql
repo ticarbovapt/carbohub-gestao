@@ -83,13 +83,27 @@ end $$;
 comment on function public.carbo_set_segmento_pdv is
   'BEFORE INSERT em carboze_orders. Canal vazio: (1) CNPJ em pdvs → revenda; (2) senão, herda o canal se TODO o histórico do CNPJ for unânime. Nunca sobrescreve classificação existente.';
 
--- O trigger já existe e aponta para esta função; o create or replace acima
--- basta. Recriado por segurança caso a migração anterior não tenha rodado.
-drop trigger if exists trg_carbo_set_segmento_pdv on public.carboze_orders;
-create trigger trg_carbo_set_segmento_pdv
-  before insert on public.carboze_orders
-  for each row
-  execute function public.carbo_set_segmento_pdv();
+-- ⚠️ NÃO recriar o trigger incondicionalmente.
+-- O `create or replace function` acima já troca o corpo no lugar, e o trigger
+-- existente continua apontando para ela — não há nada a recriar no caso
+-- normal. Um `drop trigger` pede AccessExclusiveLock em carboze_orders e
+-- entra em deadlock com o cron do Bling, que insere pedido a qualquer hora.
+-- Foi exatamente o que aconteceu na primeira tentativa desta migração.
+-- Só cria se realmente não existir.
+do $$
+begin
+  if not exists (
+    select 1 from pg_trigger
+    where tgname = 'trg_carbo_set_segmento_pdv'
+      and tgrelid = 'public.carboze_orders'::regclass
+      and not tgisinternal
+  ) then
+    create trigger trg_carbo_set_segmento_pdv
+      before insert on public.carboze_orders
+      for each row
+      execute function public.carbo_set_segmento_pdv();
+  end if;
+end $$;
 
 -- ── O M & D é consumo ─────────────────────────────────────────────────────
 -- Locadora comprando de forma recorrente para a frota própria. Confirmado
