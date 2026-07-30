@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useNavigate, useParams } from "react-router-dom";
 import {
   Database, AlertTriangle, Search, Download, ShoppingCart, DollarSign, Target, EyeOff,
   Users, Building2, ListOrdered, FileText, ArrowUp, ArrowDown, ChevronsUpDown, Layers, Loader2, CheckCircle2, UserPlus, Pencil,
@@ -155,7 +156,19 @@ export default function ComercialDados() {
   const [busca, setBusca] = useState("");
   const [statusFiltro, setStatusFiltro] = useState("all");
   const [soMetricas, setSoMetricas] = useState(false);
-  const [view, setView] = useState<"pedidos" | "clientes">("pedidos");
+  // A aba vive na URL: /comercial/dados/pedidos e /comercial/dados/clientes.
+  // Assim o link é compartilhável, o F5 volta na mesma aba e o voltar do
+  // navegador funciona. Aba inválida cai em "pedidos".
+  const { aba } = useParams<{ aba?: string }>();
+  const navigate = useNavigate();
+  const view: "pedidos" | "clientes" = aba === "clientes" ? "clientes" : "pedidos";
+  const setView = (v: "pedidos" | "clientes") => navigate(`/comercial/dados/${v}`);
+
+  // /comercial/dados sem aba, ou com aba inválida, vira a canônica. `replace`
+  // para não empilhar no histórico — senão o voltar ficaria preso aqui.
+  useEffect(() => {
+    if (aba !== view) navigate(`/comercial/dados/${view}`, { replace: true });
+  }, [aba, view, navigate]);
   const [agrupado, setAgrupado] = useState(false);
   const [detail, setDetail] = useState<RowVM | null>(null);
   const [sort, setSort] = useState<{ col: SortCol; dir: "asc" | "desc" }>({ col: "ultima", dir: "desc" });

@@ -69,6 +69,8 @@ export default function App() {
         <Route path="/dashboards/comercial" element={<DashboardsComercial />} />
         <Route path="/comercial/dashboard" element={<DashboardComercial />} />
         <Route path="/comercial/dados" element={<ComercialDados />} />
+        {/* Aba como segmento da URL — ver a nota em ComercialDados. */}
+        <Route path="/comercial/dados/:aba" element={<ComercialDados />} />
         <Route path="/comercial/pdvs" element={<Pdvs />} />
         <Route path="/comercial/descontos" element={<DescontoAprovacoes />} />
         <Route path="/comercial/precos" element={<ProdutosPrecos />} />
