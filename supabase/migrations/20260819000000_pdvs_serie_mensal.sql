@@ -29,6 +29,34 @@ with limites as (
 meses as (
   select generate_series(ini, fim, interval '1 month')::date as mes from limites
 ),
+-- Abertura efetiva de cada PDV.
+--
+-- 4 PDVs não têm `opened_at`: são os que nasceram de pedido faturado (Auto
+-- Diesel, Bravo, ARTCAR, Sound Mix), descobertos pelo canal e não pela
+-- planilha do comercial. Sem tratar isso eles ficariam FORA da base e DENTRO
+-- de "ativos no mês" — e o gráfico mostraria mais pontos comprando do que
+-- pontos existindo.
+--
+-- A queda é para a PRIMEIRA COMPRA, não para hoje: um ponto que comprou em
+-- abril existia em abril. Fica na view e não na tabela de propósito —
+-- `opened_at` continua nulo em `pdvs`, sinalizando "ninguém informou", e a
+-- tela segue pedindo o dado. Gravar a data deduzida apagaria essa pendência.
+abertura as (
+  select
+    p.id,
+    p.status,
+    coalesce(
+      p.opened_at,
+      (select min(coalesce(o.sale_date, o.created_at::date))
+       from public.carboze_orders o
+       where coalesce(p.cnpj, '') <> ''
+         and regexp_replace(coalesce(o.cnpj, ''), '\D', '', 'g')
+           = regexp_replace(p.cnpj, '\D', '', 'g')
+         and o.status not in ('quote', 'cancelled')
+         and coalesce(o.excluir_metricas, false) = false)
+    ) as abriu
+  from public.pdvs p
+),
 -- Um PDV "ativo no mês" é o que COMPROU no mês. Casa por CNPJ só-dígitos dos
 -- dois lados, como todo o resto do módulo.
 compras as (
@@ -52,15 +80,15 @@ select
   -- PDV o apaga também do passado do gráfico. Foi a escolha consciente entre
   -- errar o histórico e errar o número de hoje, que é o que a diretoria lê.
   -- Se um dia isso incomodar, o conserto é uma coluna `deactivated_at`.
-  (select count(*) from public.pdvs p
-    where p.opened_at is not null
-      and date_trunc('month', p.opened_at)::date <= m.mes
-      and p.status <> 'inactive')                                as base,
+  (select count(*) from abertura a
+    where a.abriu is not null
+      and date_trunc('month', a.abriu)::date <= m.mes
+      and a.status <> 'inactive')                                as base,
   -- Novos no mês: abriram neste mês.
-  (select count(*) from public.pdvs p
-    where p.opened_at is not null
-      and date_trunc('month', p.opened_at)::date = m.mes
-      and p.status <> 'inactive')                                as novos,
+  (select count(*) from abertura a
+    where a.abriu is not null
+      and date_trunc('month', a.abriu)::date = m.mes
+      and a.status <> 'inactive')                                as novos,
   -- Ativos no mês: compraram neste mês.
   (select count(*) from compras c where c.mes = m.mes)           as ativos
 from meses m
@@ -72,13 +100,19 @@ comment on view public.carbo_pdvs_serie_mensal is
 grant select on public.carbo_pdvs_serie_mensal to authenticated;
 
 -- ── Conferência ───────────────────────────────────────────────────────────
--- O `base` do mês corrente tem de bater com os PDVs não-inativos que já
--- abriram. Green Lub abre em out/2026, então fica de fora até lá.
+-- Esperado: `base` do mês corrente = 72 (73 menos a Green Lub, que abre em
+-- out/2026), e `ativos` nunca maior que `base` em nenhum mês.
 select * from public.carbo_pdvs_serie_mensal order by mes desc limit 12;
 
-select count(*) filter (where status <> 'inactive' and opened_at is not null
-                          and opened_at <= current_date)          as base_hoje,
-       count(*) filter (where opened_at is null)                  as sem_abertura,
-       count(*) filter (where opened_at > current_date)           as abertura_futura,
-       count(*)                                                   as total
-from public.pdvs;
+-- Coerência: ativos <= base em todo mês. Qualquer linha aqui é bug.
+select mes, base, ativos
+from public.carbo_pdvs_serie_mensal
+where ativos > base
+order by mes;
+
+-- Quem ainda está sem data informada (a view deduz pela 1ª compra, mas o
+-- cadastro segue incompleto e a tela continua pedindo).
+select name, cnpj, opened_at, status
+from public.pdvs
+where opened_at is null
+order by name;
