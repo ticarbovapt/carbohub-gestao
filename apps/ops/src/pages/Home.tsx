@@ -106,7 +106,7 @@ export default function Home() {
   const urgencias = [
     suprimentos.zerados > 0 && {
       txt: `${suprimentos.zerados} ${suprimentos.zerados === 1 ? "produto zerado" : "produtos zerados"} em algum hub`,
-      to: "/estoque",
+      to: "/suprimentos",
     },
     producao.bloqueadas > 0 && {
       txt: `${producao.bloqueadas} ${producao.bloqueadas === 1 ? "OP bloqueada" : "OPs bloqueadas"}`,
@@ -186,7 +186,7 @@ export default function Home() {
 
           {/* ── Estoque ──────────────────────────────────────────────── */}
           <Bloco titulo="Estoque" icon={Package} cor="#f59e0b" estado={suprimentos}
-            onClick={() => navigate("/estoque")}
+            onClick={() => navigate("/suprimentos")}
             vazio={suprimentos.zerados + suprimentos.abaixo === 0 ? "tudo acima do mínimo" : undefined}>
             <div className="grid grid-cols-2 gap-2">
               <Num valor={suprimentos.zerados} label="zerados em algum hub" alerta={suprimentos.zerados > 0} />

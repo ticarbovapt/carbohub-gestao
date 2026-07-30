@@ -1,6 +1,6 @@
 import {
   LayoutDashboard, Factory, BarChart3, Package, Boxes, Layers, Building2,
-  Warehouse, ShoppingCart, PackagePlus, Truck,
+  ShoppingCart, PackagePlus, Truck,
   Plane, ClipboardList, Calendar, Cog, UserCheck, Bell, TrendingUp, Target, ShoppingBag,
   type LucideIcon,
 } from "lucide-react";
@@ -51,13 +51,12 @@ export const OPS_GROUPS: OpsNavGroup[] = [
     ],
   },
   {
-    label: "Estoque",
+    // As telas por hub saíram: a de Suprimentos mostra o mesmo saldo e ainda
+    // traz movimentações, transferências e estatísticas — é superconjunto,
+    // não equivalente. Cinco entradas na sidebar para um dado que já cabe
+    // numa só era ruído.
+    label: "Suprimentos",
     items: [
-      { path: "/estoque", label: "Todos os Hubs", icon: Warehouse, from: "warehouse_stock", ready: true },
-      { path: "/estoque/hub-natal", label: "Hub Natal", icon: Warehouse, from: "warehouse_stock", ready: true },
-      { path: "/estoque/cd-sp-loghouse", label: "CD SP LogHouse", icon: Warehouse, from: "warehouse_stock", ready: true },
-      { path: "/estoque/cd-sp-vendas", label: "CD SP Vendas", icon: Warehouse, from: "warehouse_stock", ready: true },
-      { path: "/estoque/cd-bling", label: "CD Bling", icon: Warehouse, from: "warehouse_stock", ready: true },
       { path: "/suprimentos", label: "Suprimentos", icon: PackagePlus, from: "/suprimentos", ready: true },
     ],
   },

@@ -14,8 +14,6 @@ import ProdutosMrp from "./pages/producao/ProdutosMrp";
 import Skus from "./pages/producao/Skus";
 import Lotes from "./pages/producao/Lotes";
 import FornecedoresMrp from "./pages/producao/FornecedoresMrp";
-import SaldosPorHub from "./pages/estoque/SaldosPorHub";
-import EstoqueHub from "./pages/estoque/EstoqueHub";
 import RequisicaoCompra from "./pages/compras/RequisicaoCompra";
 import Suprimentos from "./pages/compras/Suprimentos";
 import Logistica from "./pages/logistica/Logistica";
@@ -52,9 +50,6 @@ export default function App() {
         <Route path="/producao/lotes" element={<Lotes />} />
         <Route path="/producao/fornecedores" element={<FornecedoresMrp />} />
 
-        {/* Estoque — visão geral + subpáginas por hub (somente leitura) */}
-        <Route path="/estoque" element={<SaldosPorHub />} />
-        <Route path="/estoque/:hub" element={<EstoqueHub />} />
 
         {/* Compras & Suprimentos */}
         <Route path="/compras" element={<RequisicaoCompra />} />
