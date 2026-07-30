@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import {
   Store, Search, Plus, Pencil, PauseCircle, PlayCircle, XCircle,
-  ShoppingCart, AlertTriangle, FileText, Package,
+  ShoppingCart, AlertTriangle, FileText, Package, ArrowUp, ArrowDown, ChevronsUpDown,
 } from "lucide-react";
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
 import { CarboCard, CarboCardContent } from "@/components/ui/carbo-card";
@@ -80,6 +80,35 @@ function MixChips({ mix }: { mix: Partial<Record<PdvProduto, PdvMixItem>> }) {
   );
 }
 
+type PdvCol = "codigo" | "nome" | "cnpj" | "cidade" | "dono" | "mix" | "status" | "pedidos" | "comprado" | "ultima";
+
+function SortTh({ col, label, sort, onSort, align = "left" }: {
+  col: PdvCol; label: string; sort: { col: PdvCol; dir: "asc" | "desc" };
+  onSort: (c: PdvCol) => void; align?: "left" | "center" | "right";
+}) {
+  const active = sort.col === col;
+  const justify = align === "right" ? "justify-end" : align === "center" ? "justify-center" : "justify-start";
+  return (
+    <th className="px-3 py-2 font-medium">
+      <button onClick={() => onSort(col)}
+        className={`flex items-center gap-1 w-full ${justify} hover:text-foreground transition-colors ${active ? "text-foreground" : ""}`}>
+        {label}
+        {active
+          ? (sort.dir === "asc" ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />)
+          : <ChevronsUpDown className="h-3 w-3 opacity-40" />}
+      </button>
+    </th>
+  );
+}
+
+/** Quantos produtos o PDV declara vender — é por isso que se ordena o Mix. */
+const mixVendidos = (p: PdvRow) => PRODUTOS.filter((k) => p.mix?.[k]?.oferece === "sim").length;
+
+/** Status por relevância operacional, não alfabética: ativo primeiro,
+ *  inativo por último. Ordenar 'Ativo/Cadastrado/Inativo/Pausado' pelo
+ *  alfabeto não ajuda ninguém. */
+const ORDEM_STATUS: Record<string, number> = { active: 0, registered: 1, suspended: 2, inactive: 3 };
+
 const UFS = ["AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"];
 
 const VAZIO: PdvInput = {
@@ -111,6 +140,14 @@ export default function Pdvs() {
   const [fStatus, setFStatus] = useState<string>("all");
   const [fUf, setFUf] = useState<string>("all");
   const [fDono, setFDono] = useState<string>("all");
+  // Começa por nome, que é como a tela já vinha.
+  const [sort, setSort] = useState<{ col: PdvCol; dir: "asc" | "desc" }>({ col: "nome", dir: "asc" });
+  // Primeiro clique numa coluna nova: texto sobe (A→Z), número e data descem
+  // (maior/mais recente primeiro) — é o que se quer ver em "quem comprou mais".
+  const toggleSort = (c: PdvCol) =>
+    setSort((s) => s.col === c
+      ? { col: c, dir: s.dir === "asc" ? "desc" : "asc" }
+      : { col: c, dir: ["pedidos", "comprado", "ultima", "mix"].includes(c) ? "desc" : "asc" });
 
   const [form, setForm] = useState<PdvInput | null>(null);
   const [editId, setEditId] = useState<string | null>(null);
@@ -144,6 +181,38 @@ export default function Pdvs() {
       );
     });
   }, [pdvs, busca, fStatus, fUf, fDono]);
+
+  const listaOrdenada = useMemo(() => {
+    const dir = sort.dir === "asc" ? 1 : -1;
+    // localeCompare com pt-BR: sem isso "Área" cairia depois de "Zona" e
+    // acentuada nenhuma ordenaria direito.
+    const txt = (a: string, b: string) => a.localeCompare(b, "pt-BR") * dir;
+    const num = (a: number, b: number) => (a - b) * dir;
+    // Vazio SEMPRE por último, nos dois sentidos: PDV sem compra não deve
+    // encabeçar "última compra" só porque a ordem é crescente.
+    const dt = (a: string | null, b: string | null) =>
+      !a && !b ? 0 : !a ? 1 : !b ? -1 : a.localeCompare(b) * dir;
+
+    return [...lista].sort((a, b) => {
+      switch (sort.col) {
+        case "codigo":   return txt(a.pdv_code ?? "", b.pdv_code ?? "");
+        case "nome":     return txt(a.name ?? "", b.name ?? "");
+        // Por dígitos: o CNPJ formatado ordenaria pela pontuação.
+        case "cnpj":     return txt(a.cnpj_digits ?? "", b.cnpj_digits ?? "");
+        // UF primeiro, cidade depois — é como se lê um mapa comercial.
+        case "cidade":   return txt(
+          `${a.address_state ?? ""} ${a.address_city ?? ""}`,
+          `${b.address_state ?? ""} ${b.address_city ?? ""}`);
+        case "dono":     return txt(a.owner_seller_name ?? "", b.owner_seller_name ?? "");
+        case "mix":      return num(mixVendidos(a), mixVendidos(b));
+        case "status":   return num(ORDEM_STATUS[a.status] ?? 9, ORDEM_STATUS[b.status] ?? 9);
+        case "pedidos":  return num(a.pedidos, b.pedidos);
+        case "comprado": return num(a.total_comprado, b.total_comprado);
+        case "ultima":   return dt(a.ultima_compra, b.ultima_compra);
+        default:         return 0;
+      }
+    });
+  }, [lista, sort]);
 
   const donos = useMemo(
     () => Array.from(new Set(pdvs.map((p) => p.owner_seller_name).filter(Boolean))).sort() as string[],
@@ -285,21 +354,21 @@ export default function Pdvs() {
               <table className="w-full text-sm">
                 <thead className="sticky top-0 bg-board-surface">
                   <tr className="border-b text-left text-xs text-muted-foreground">
-                    <th className="px-3 py-2 font-medium">Código</th>
-                    <th className="px-3 py-2 font-medium">PDV</th>
-                    <th className="px-3 py-2 font-medium">CNPJ</th>
-                    <th className="px-3 py-2 font-medium">Cidade / UF</th>
-                    <th className="px-3 py-2 font-medium">Dono</th>
-                    <th className="px-3 py-2 font-medium text-center">Mix</th>
-                    <th className="px-3 py-2 font-medium text-center">Status</th>
-                    <th className="px-3 py-2 font-medium text-right">Pedidos</th>
-                    <th className="px-3 py-2 font-medium text-right">Comprado</th>
-                    <th className="px-3 py-2 font-medium">Última</th>
+                    <SortTh col="codigo"   label="Código"      sort={sort} onSort={toggleSort} />
+                    <SortTh col="nome"     label="PDV"         sort={sort} onSort={toggleSort} />
+                    <SortTh col="cnpj"     label="CNPJ"        sort={sort} onSort={toggleSort} />
+                    <SortTh col="cidade"   label="Cidade / UF" sort={sort} onSort={toggleSort} />
+                    <SortTh col="dono"     label="Dono"        sort={sort} onSort={toggleSort} />
+                    <SortTh col="mix"      label="Mix"         sort={sort} onSort={toggleSort} align="center" />
+                    <SortTh col="status"   label="Status"      sort={sort} onSort={toggleSort} align="center" />
+                    <SortTh col="pedidos"  label="Pedidos"     sort={sort} onSort={toggleSort} align="right" />
+                    <SortTh col="comprado" label="Comprado"    sort={sort} onSort={toggleSort} align="right" />
+                    <SortTh col="ultima"   label="Última"      sort={sort} onSort={toggleSort} />
                     {isGestor && <th className="px-3 py-2 font-medium text-center">Ações</th>}
                   </tr>
                 </thead>
                 <tbody>
-                  {lista.map((p) => (
+                  {listaOrdenada.map((p) => (
                     // Clique na LINHA inteira, não só no nome: com o handler
                     // preso ao botão do nome, a maior parte da linha não fazia
                     // nada e parecia quebrada. A coluna de ações para o clique
