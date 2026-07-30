@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useNavigate, useParams } from "react-router-dom";
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
 import { CarboCard, CarboCardContent, CarboCardHeader, CarboCardTitle } from "@/components/ui/carbo-card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -7,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { CarboBadge } from "@/components/ui/carbo-badge";
-import { Truck, Calculator, BarChart3, Plus, Loader2, Clock, AlertCircle, MapPin, Sparkles } from "lucide-react";
+import { Truck, Calculator, BarChart3, Plus, Loader2, Clock, AlertCircle, MapPin, Sparkles, Package } from "lucide-react";
 import { toast } from "sonner";
 import { LogisticsKpis, ShipmentsKanban, type Shipment } from "@/components/logistica/shipments";
 import { ShipmentDetailsDialog } from "@/components/logistica/ShipmentDetailsDialog";
@@ -25,14 +26,34 @@ const prazoFrete = (min: number | null, max: number | null) => {
   return `${max ?? min} dia(s) úteis`;
 };
 
+// Ordem e rótulos das abas em um lugar só — é daqui que sai a TabsList e é
+// contra esta lista que a URL é validada. Duas listas divergiriam.
+const ABAS = [
+  { id: "frete",       label: "Frete",       icon: Truck },
+  { id: "gestao",      label: "Gestão",      icon: Package },
+  { id: "estrategico", label: "Estratégico", icon: BarChart3 },
+] as const;
+const ABA_PADRAO = ABAS[0].id;
+
 export default function Logistica() {
   const { data: shipments = [], isLoading: shipmentsLoading } = useShipments();
   const [shipment, setShipment] = useState<Shipment | null>(null);
   const calc = useCalculateFreight();
   const jamef = useJamefQuote();
-  // Lembra a aba ativa entre recarregamentos.
-  const [tab, setTab] = useState(() => localStorage.getItem("ops-logistica-tab") || "gestao");
-  const changeTab = (v: string) => { setTab(v); localStorage.setItem("ops-logistica-tab", v); };
+  // A aba vive na URL, não em estado local nem em localStorage: assim o link
+  // é compartilhável, o F5 volta no mesmo lugar e o voltar do navegador
+  // funciona. O localStorage que fazia isso antes brigava com a URL — dois
+  // donos para a mesma informação.
+  const { aba } = useParams<{ aba?: string }>();
+  const navigate = useNavigate();
+  const tab = ABAS.some((a) => a.id === aba) ? (aba as string) : ABA_PADRAO;
+  const changeTab = (v: string) => navigate(`/logistica/${v}`);
+
+  // /logistica sem aba, ou com aba inválida, vira a canônica. `replace` para
+  // não empilhar no histórico: senão o botão voltar ficaria preso aqui.
+  useEffect(() => {
+    if (aba !== tab) navigate(`/logistica/${tab}`, { replace: true });
+  }, [aba, tab, navigate]);
   const [originId, setOriginId] = useState(FREIGHT_ORIGINS[0].id); // Natal por padrão
   const [originCepCustom, setOriginCepCustom] = useState("");
   const [cep, setCep] = useState("");
@@ -163,9 +184,11 @@ export default function Logistica() {
 
         <Tabs value={tab} onValueChange={changeTab} className="w-full">
           <TabsList>
-            <TabsTrigger value="gestao">Gestão</TabsTrigger>
-            <TabsTrigger value="frete" className="gap-1.5"><Truck className="h-3.5 w-3.5" /> Frete</TabsTrigger>
-            <TabsTrigger value="estrategico">Estratégico</TabsTrigger>
+            {ABAS.map((a) => (
+              <TabsTrigger key={a.id} value={a.id} className="gap-1.5">
+                <a.icon className="h-3.5 w-3.5" /> {a.label}
+              </TabsTrigger>
+            ))}
           </TabsList>
 
           <TabsContent value="gestao" className="space-y-4 mt-4">

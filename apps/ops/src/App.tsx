@@ -57,6 +57,10 @@ export default function App() {
         {/* Logística */}
         <Route path="/logistica/pos-venda" element={<PosVenda />} />
         <Route path="/logistica" element={<Logistica />} />
+        {/* A aba vira segmento da URL. As rotas estáticas acima (/pos-venda,
+            /viagens) ganham desta no ranking do react-router, então não há
+            risco de /logistica/viagens cair aqui. */}
+        <Route path="/logistica/:aba" element={<Logistica />} />
         <Route path="/logistica/viagens" element={<ViagensLog />} />
 
         {/* Operação de Campo */}
