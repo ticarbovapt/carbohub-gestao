@@ -22,7 +22,6 @@ import ViagensLog from "./pages/logistica/Viagens";
 import OrdensServico from "./pages/campo/OrdensServico";
 import Agendamentos from "./pages/campo/Agendamentos";
 import Maquinas from "./pages/campo/Maquinas";
-import Checklists from "./pages/campo/Checklists";
 import Alertas from "./pages/campo/Alertas";
 import AcompMetasVendedores from "./pages/acompanhamento/MetasVendedores";
 import { OPS_ALL_ITEMS } from "@/lib/opsNav";
@@ -67,7 +66,6 @@ export default function App() {
         <Route path="/campo/os" element={<OrdensServico />} />
         <Route path="/campo/agendamentos" element={<Agendamentos />} />
         <Route path="/campo/maquinas" element={<Maquinas />} />
-        <Route path="/campo/checklists" element={<Checklists />} />
         <Route path="/campo/alertas" element={<Alertas />} />
 
         {/* Acompanhamento (Vendas) — espelho do Sales, visualização */}

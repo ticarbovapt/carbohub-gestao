@@ -1,7 +1,7 @@
 import {
   LayoutDashboard, Factory, BarChart3, Package, Boxes, Layers, Building2,
   ShoppingCart, PackagePlus, Truck,
-  Plane, ClipboardList, Calendar, Cog, UserCheck, Bell, Target, ShoppingBag,
+  Plane, ClipboardList, Calendar, Cog, Bell, Target, ShoppingBag,
   type LucideIcon,
 } from "lucide-react";
 
@@ -81,7 +81,6 @@ export const OPS_GROUPS: OpsNavGroup[] = [
       { path: "/campo/os", label: "OS Descarbonização", icon: ClipboardList, from: "/os", ready: true },
       { path: "/campo/agendamentos", label: "Agendamentos", icon: Calendar, from: "/scheduling", ready: true },
       { path: "/campo/maquinas", label: "Máquinas", icon: Cog, from: "/machines", ready: true },
-      { path: "/campo/checklists", label: "Checklists", icon: UserCheck, from: "/checklist", ready: true },
       { path: "/campo/alertas", label: "Alertas Operacionais", icon: Bell, from: "/ops/alerts", ready: true },
     ],
   },
