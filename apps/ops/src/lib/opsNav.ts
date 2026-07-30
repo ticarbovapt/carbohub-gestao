@@ -1,7 +1,7 @@
 import {
   LayoutDashboard, Factory, BarChart3, Package, Boxes, Layers, Building2,
   ShoppingCart, PackagePlus, Truck,
-  Plane, ClipboardList, Calendar, Cog, UserCheck, Bell, TrendingUp, Target, ShoppingBag,
+  Plane, ClipboardList, Calendar, Cog, UserCheck, Bell, Target, ShoppingBag,
   type LucideIcon,
 } from "lucide-react";
 
@@ -89,7 +89,6 @@ export const OPS_GROUPS: OpsNavGroup[] = [
   {
     label: "Acompanhamento (Vendas)",
     items: [
-      { path: "/acompanhamento/comercial", label: "Dashboard Comercial", icon: TrendingUp, from: "/dashboards/comercial", mirror: true, ready: true },
       { path: "/acompanhamento/metas", label: "Metas de Vendedores", icon: Target, from: "/dashboards/metas/vendedores", mirror: true, ready: true },
     ],
   },

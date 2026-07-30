@@ -54,7 +54,7 @@ export function Layout() {
     { label: "Suprimentos", items: ["/suprimentos", "/compras"].map(it) },
     { label: "Logística", items: ["/logistica/dashboard", "/logistica", "/logistica/pos-venda", "/logistica/viagens"].map(it) },
     { label: "Operação de Campo", items: ["/campo/os", "/campo/agendamentos", "/campo/maquinas", "/campo/checklists", "/campo/alertas"].map(it) },
-    { label: "Acompanhamento", items: ["/acompanhamento/comercial", "/acompanhamento/metas"].map(it) },
+    { label: "Acompanhamento", items: ["/acompanhamento/metas"].map(it) },
   ];
 
   // Mobile: abre a gaveta. Desktop: recolhe/expande a sidebar (rail).

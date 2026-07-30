@@ -25,7 +25,6 @@ import Agendamentos from "./pages/campo/Agendamentos";
 import Maquinas from "./pages/campo/Maquinas";
 import Checklists from "./pages/campo/Checklists";
 import Alertas from "./pages/campo/Alertas";
-import AcompDashboardComercial from "./pages/acompanhamento/DashboardComercial";
 import AcompMetasVendedores from "./pages/acompanhamento/MetasVendedores";
 import { OPS_ALL_ITEMS } from "@/lib/opsNav";
 
@@ -70,7 +69,6 @@ export default function App() {
         <Route path="/campo/alertas" element={<Alertas />} />
 
         {/* Acompanhamento (Vendas) — espelho do Sales, visualização */}
-        <Route path="/acompanhamento/comercial" element={<AcompDashboardComercial />} />
         <Route path="/acompanhamento/metas" element={<AcompMetasVendedores />} />
 
         {/* Demais áreas: placeholder até o port (telas com ready=false) */}
