@@ -19,7 +19,6 @@ import Suprimentos from "./pages/compras/Suprimentos";
 import Logistica from "./pages/logistica/Logistica";
 import PosVenda from "./pages/logistica/PosVenda";
 import ViagensLog from "./pages/logistica/Viagens";
-import DashboardLogistica from "./pages/logistica/DashboardLogistica";
 import OrdensServico from "./pages/campo/OrdensServico";
 import Agendamentos from "./pages/campo/Agendamentos";
 import Maquinas from "./pages/campo/Maquinas";
@@ -59,7 +58,6 @@ export default function App() {
         <Route path="/logistica/pos-venda" element={<PosVenda />} />
         <Route path="/logistica" element={<Logistica />} />
         <Route path="/logistica/viagens" element={<ViagensLog />} />
-        <Route path="/logistica/dashboard" element={<DashboardLogistica />} />
 
         {/* Operação de Campo */}
         <Route path="/campo/os" element={<OrdensServico />} />
