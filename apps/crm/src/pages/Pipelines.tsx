@@ -82,7 +82,7 @@ function AllFunnelsBoard({ leads, ownersById, onLeadClick, onAdvance, onMarkLost
       {NORMALIZED.map((col) => {
         const items = byCol[col.id] ?? [];
         return (
-          <div key={col.id} className="rounded-2xl border border-border bg-board-surface/40 flex flex-col min-h-[200px] max-h-[calc(100vh-280px)]">
+          <div key={col.id} className="rounded-2xl border border-border bg-[hsl(var(--kanban-col))] flex flex-col min-h-[200px] max-h-[calc(100vh-280px)]">
             {/* Header da coluna com faixa de cor */}
             <div className="rounded-t-2xl px-3 py-2.5 border-b border-border" style={{ background: col.color + "12" }}>
               <div className="flex items-center justify-between">

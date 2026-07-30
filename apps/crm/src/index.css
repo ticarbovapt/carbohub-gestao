@@ -58,6 +58,14 @@
 
     /* === LAYER TOKENS === */
     
+    /* Kanban — o card PRECISA destoar da coluna.
+       Antes os dois eram branco puro (--card e --board-surface), então não
+       havia contraste nenhum no tema claro. Aqui a coluna recua e o card
+       fica branco. Tokens próprios: mexer em --card afetaria toda a UI. */
+    --kanban-col: 214 24% 95%;
+    --kanban-card: 0 0% 100%;
+    --kanban-card-border: 214 20% 87%;
+
     /* Board Layer - Professional Confidence */
     --board-bg: 210 20% 98%;
     --board-surface: 0 0% 100%;
@@ -199,6 +207,12 @@
     --border: 220 20% 18%;
     --input: 220 20% 18%;
     --ring: 145 55% 51%;
+
+    /* No escuro o card era MAIS ESCURO que a coluna (10% contra 12%) e ficava
+       a 2% do fundo da tela. Invertido: coluna recua, card avança. */
+    --kanban-col: 220 22% 10%;
+    --kanban-card: 220 18% 17%;
+    --kanban-card-border: 220 16% 24%;
 
     --board-bg: 220 20% 8%;
     --board-surface: 220 20% 12%;
