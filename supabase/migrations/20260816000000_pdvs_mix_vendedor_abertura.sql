@@ -308,7 +308,16 @@ on conflict (pdv_id, produto) do nothing;
 -- Sem isto a tela continua cega: ela lê carbo_pdvs_painel, não a `pdvs`.
 -- O mix vem agregado em JSON numa coluna só — três linhas por PDV viradas
 -- em objeto — para a tela não precisar de uma segunda consulta por linha.
-create or replace view public.carbo_pdvs_painel
+--
+-- DROP + CREATE, não CREATE OR REPLACE: o replace só aceita ACRESCENTAR
+-- coluna no fim. As novas entram no meio (opened_at antes de pedidos), e o
+-- Postgres recusa com "cannot change name of view column".
+-- Sem CASCADE de propósito: se algo depender desta view, quero o erro em vez
+-- de derrubar o dependente em silêncio. carbo_pdv_pedidos não depende — ela
+-- retorna setof carbo_vendas_metrica, que é outra view.
+drop view if exists public.carbo_pdvs_painel;
+
+create view public.carbo_pdvs_painel
 with (security_invoker = true) as
 select
   p.id, p.pdv_code, p.name, p.legal_name, p.cnpj,
