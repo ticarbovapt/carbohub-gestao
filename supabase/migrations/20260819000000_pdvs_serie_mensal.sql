@@ -37,15 +37,22 @@ meses as (
 -- de "ativos no mês" — e o gráfico mostraria mais pontos comprando do que
 -- pontos existindo.
 --
--- A queda é para a PRIMEIRA COMPRA, não para hoje: um ponto que comprou em
--- abril existia em abril. Fica na view e não na tabela de propósito —
--- `opened_at` continua nulo em `pdvs`, sinalizando "ninguém informou", e a
--- tela segue pedindo o dado. Gravar a data deduzida apagaria essa pendência.
+-- A queda é para a PRIMEIRA COMPRA: um ponto que comprou em abril existia em
+-- abril. Fica na view e não na tabela de propósito — `opened_at` continua
+-- nulo em `pdvs`, sinalizando "ninguém informou", e a tela segue pedindo o
+-- dado. Gravar a data deduzida apagaria essa pendência.
+--
+-- ⚠️ LEAST, não COALESCE. Existem PDVs cuja abertura na planilha é POSTERIOR
+-- à primeira compra deles — em dez/2025 isso dava 12 pontos comprando com
+-- base de 10, ponto comprando antes de existir. Pedido faturado é fato; data
+-- de planilha é digitação, e o fato ganha. O LEAST do Postgres já ignora
+-- nulo, então ele cobre os dois casos de uma vez: sem data informada, e data
+-- informada tarde demais.
 abertura as (
   select
     p.id,
     p.status,
-    coalesce(
+    least(
       p.opened_at,
       (select min(coalesce(o.sale_date, o.created_at::date))
        from public.carboze_orders o
@@ -116,3 +123,22 @@ select name, cnpj, opened_at, status
 from public.pdvs
 where opened_at is null
 order by name;
+
+-- PDVs cuja abertura na planilha é POSTERIOR à primeira compra. A view já
+-- usa a compra, mas a data do cadastro continua errada e vale corrigir na
+-- tela — é o comercial informando abertura depois do ponto já vender.
+select p.name, p.cnpj, p.opened_at as abertura_planilha, c.primeira_compra
+from public.pdvs p
+join lateral (
+  select min(coalesce(o.sale_date, o.created_at::date)) as primeira_compra
+  from public.carboze_orders o
+  where coalesce(p.cnpj, '') <> ''
+    and regexp_replace(coalesce(o.cnpj, ''), '\D', '', 'g')
+      = regexp_replace(p.cnpj, '\D', '', 'g')
+    and o.status not in ('quote', 'cancelled')
+    and coalesce(o.excluir_metricas, false) = false
+) c on true
+where p.opened_at is not null
+  and c.primeira_compra is not null
+  and c.primeira_compra < p.opened_at
+order by c.primeira_compra;
