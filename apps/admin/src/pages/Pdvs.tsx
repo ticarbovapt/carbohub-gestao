@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import {
   Store, Search, Plus, Pencil, PauseCircle, PlayCircle, XCircle,
-  ShoppingCart, AlertTriangle, FileText,
+  ShoppingCart, AlertTriangle, FileText, Package,
 } from "lucide-react";
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
 import { CarboCard, CarboCardContent } from "@/components/ui/carbo-card";
@@ -17,8 +17,10 @@ import {
 import { useAuth } from "@/contexts/AuthContext";
 import {
   usePdvs, useCreatePdv, useUpdatePdv, useSetPdvStatus, usePdvPedidos,
-  PDV_STATUS_LABEL, PDV_STATUS_VARIANT,
+  useUpsertPdvMix, usePdvVendedores,
+  PDV_STATUS_LABEL, PDV_STATUS_VARIANT, PDV_PRODUTO_LABEL, PDV_OFERECE_LABEL,
   type PdvRow, type PdvStatus, type PdvInput,
+  type PdvProduto, type PdvOferece, type PdvMixItem,
 } from "@/hooks/usePdvs";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -47,12 +49,49 @@ const fmtDoc = (d?: string | null) => {
 const fmtData = (d?: string | null) =>
   d ? new Date(d + "T12:00:00").toLocaleDateString("pt-BR") : "—";
 
+/** Ordem fixa do catálogo — não depender da ordem das chaves do JSON. */
+const PRODUTOS: PdvProduto[] = ["10ml", "100ml", "1l"];
+
+const PRODUTO_CURTO: Record<PdvProduto, string> = { "10ml": "10ml", "100ml": "100ml", "1l": "1L" };
+
+/** Mix compacto na linha da tabela: verde vende, cinza não, âmbar a confirmar.
+ *  O âmbar é o que interessa — é onde falta alguém ir no ponto conferir. */
+function MixChips({ mix }: { mix: Partial<Record<PdvProduto, PdvMixItem>> }) {
+  const cor: Record<PdvOferece, string> = {
+    sim: "bg-carbo-green/15 text-carbo-green",
+    nao: "bg-muted text-muted-foreground/70",
+    a_confirmar: "bg-amber-500/15 text-amber-500",
+  };
+  return (
+    <div className="flex items-center justify-center gap-1">
+      {PRODUTOS.map((k) => {
+        const it = mix?.[k];
+        if (!it) return null;
+        return (
+          <span key={k}
+            title={`${PDV_PRODUTO_LABEL[k]} — ${PDV_OFERECE_LABEL[it.oferece]}${
+              it.preco != null ? ` · ${brl(it.preco)}` : ""}`}
+            className={`rounded px-1.5 py-0.5 text-[10px] font-medium whitespace-nowrap ${cor[it.oferece]}`}>
+            {PRODUTO_CURTO[k]}
+          </span>
+        );
+      })}
+    </div>
+  );
+}
+
 const UFS = ["AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"];
 
 const VAZIO: PdvInput = {
   name: "", legal_name: "", cnpj: "", address_city: "", address_state: "",
   address_street: "", address_zip: "", contact_name: "", contact_phone: "",
-  email: "", notes: "", status: "active",
+  email: "", notes: "", status: "active", opened_at: "", owner_seller_id: "",
+};
+
+const MIX_VAZIO: Record<PdvProduto, PdvMixItem> = {
+  "10ml": { oferece: "a_confirmar", preco: null },
+  "100ml": { oferece: "a_confirmar", preco: null },
+  "1l": { oferece: "a_confirmar", preco: null },
 };
 
 export default function Pdvs() {
@@ -64,10 +103,14 @@ export default function Pdvs() {
   const criar = useCreatePdv();
   const atualizar = useUpdatePdv();
   const mudarStatus = useSetPdvStatus();
+  const salvarMix = useUpsertPdvMix();
+  const { data: vendedores = [] } = usePdvVendedores();
+  const [mix, setMix] = useState<Record<PdvProduto, PdvMixItem> | null>(null);
 
   const [busca, setBusca] = useState("");
   const [fStatus, setFStatus] = useState<string>("all");
   const [fUf, setFUf] = useState<string>("all");
+  const [fDono, setFDono] = useState<string>("all");
 
   const [form, setForm] = useState<PdvInput | null>(null);
   const [editId, setEditId] = useState<string | null>(null);
@@ -86,29 +129,41 @@ export default function Pdvs() {
     return pdvs.filter((p) => {
       if (fStatus !== "all" && p.status !== fStatus) return false;
       if (fUf !== "all" && p.address_state !== fUf) return false;
+      if (fDono !== "all" && (p.owner_seller_name ?? "") !== fDono) return false;
       if (!t) return true;
-      // Busca por nome comercial, razão social, cidade e CNPJ — a razão social
-      // entra porque quase nunca é igual ao nome comercial.
+      // Busca por nome comercial, razão social, cidade, CNPJ e dono — a razão
+      // social entra porque quase nunca é igual ao nome comercial, e o dono
+      // porque "quais são os pontos do Márcio" é a pergunta mais comum aqui.
       return (
         p.name.toLowerCase().includes(t) ||
         (p.legal_name ?? "").toLowerCase().includes(t) ||
         (p.address_city ?? "").toLowerCase().includes(t) ||
         (p.pdv_code ?? "").toLowerCase().includes(t) ||
+        (p.owner_seller_name ?? "").toLowerCase().includes(t) ||
         (dig.length >= 3 && p.cnpj_digits.includes(dig))
       );
     });
-  }, [pdvs, busca, fStatus, fUf]);
+  }, [pdvs, busca, fStatus, fUf, fDono]);
+
+  const donos = useMemo(
+    () => Array.from(new Set(pdvs.map((p) => p.owner_seller_name).filter(Boolean))).sort() as string[],
+    [pdvs],
+  );
 
   const kpi = useMemo(() => ({
     total: pdvs.length,
     ativos: pdvs.filter((p) => p.status === "active").length,
+    // "Cadastrado" fica em card próprio, FORA de Ativos: ponto que ainda não
+    // vendeu não pode inflar o número de pontos operando.
+    cadastrados: pdvs.filter((p) => p.status === "registered").length,
     pausados: pdvs.filter((p) => p.status === "suspended").length,
     inativos: pdvs.filter((p) => p.status === "inactive").length,
     semDoc: pdvs.filter((p) => p.sem_documento).length,
     compraram: pdvs.filter((p) => p.pedidos > 0).length,
+    semDono: pdvs.filter((p) => !p.owner_seller_name).length,
   }), [pdvs]);
 
-  const abrirNovo = () => { setEditId(null); setForm({ ...VAZIO }); };
+  const abrirNovo = () => { setEditId(null); setForm({ ...VAZIO }); setMix({ ...MIX_VAZIO }); };
   const abrirEdicao = (p: PdvRow) => {
     setEditId(p.id);
     setForm({
@@ -117,14 +172,23 @@ export default function Pdvs() {
       address_street: p.address_street ?? "", address_zip: p.address_zip ?? "",
       contact_name: p.contact_name ?? "", contact_phone: p.contact_phone ?? "",
       email: p.email ?? "", notes: p.notes ?? "", status: p.status,
+      opened_at: p.opened_at ?? "", owner_seller_id: p.owner_seller_id ?? "",
     });
+    // Produto que ainda não tem linha no banco entra como "a confirmar", não
+    // como "não vende" — não sabemos, e afirmar que não vende seria inventar.
+    setMix({ ...MIX_VAZIO, ...(p.mix ?? {}) } as Record<PdvProduto, PdvMixItem>);
   };
 
   const salvar = () => {
     if (!form?.name.trim()) return;
-    const done = { onSuccess: () => { setForm(null); setEditId(null); } };
-    if (editId) atualizar.mutate({ id: editId, ...form }, done);
-    else criar.mutate(form, done);
+    // O mix mora em outra tabela e só pode ser gravado com o PDV já existindo:
+    // na edição o id está na mão, na criação vem do insert.
+    const gravarMix = (id: string) => {
+      if (mix) salvarMix.mutate({ pdvId: id, mix });
+      setForm(null); setEditId(null); setMix(null);
+    };
+    if (editId) atualizar.mutate({ id: editId, ...form }, { onSuccess: () => gravarMix(editId) });
+    else criar.mutate(form, { onSuccess: (novoId: string) => gravarMix(novoId) });
   };
 
   const salvando = criar.isPending || atualizar.isPending;
@@ -159,10 +223,11 @@ export default function Pdvs() {
         )}
 
         {/* KPIs — clicar filtra */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
           {([
             ["all", "Total", kpi.total, "text-foreground"],
             ["active", "Ativos", kpi.ativos, "text-carbo-green"],
+            ["registered", "Cadastrados", kpi.cadastrados, "text-sky-500"],
             ["suspended", "Pausados", kpi.pausados, "text-amber-500"],
             ["inactive", "Inativos", kpi.inativos, "text-muted-foreground"],
           ] as [string, string, number, string][]).map(([k, label, valor, cor]) => (
@@ -189,9 +254,17 @@ export default function Pdvs() {
               {ufs.map((u) => <SelectItem key={u} value={u}>{u}</SelectItem>)}
             </SelectContent>
           </Select>
+          <Select value={fDono} onValueChange={setFDono}>
+            <SelectTrigger className="w-[170px]"><SelectValue placeholder="Vendedor dono" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos os donos</SelectItem>
+              {donos.map((d) => <SelectItem key={d} value={d}>{d}</SelectItem>)}
+            </SelectContent>
+          </Select>
           <p className="text-xs text-muted-foreground ml-auto self-center">
             {lista.length} de {pdvs.length} · {kpi.compraram} já compraram
             {kpi.semDoc > 0 && ` · ${kpi.semDoc} sem documento`}
+            {kpi.semDono > 0 && ` · ${kpi.semDono} sem dono`}
           </p>
         </div>
 
@@ -215,6 +288,8 @@ export default function Pdvs() {
                     <th className="px-3 py-2 font-medium">PDV</th>
                     <th className="px-3 py-2 font-medium">CNPJ</th>
                     <th className="px-3 py-2 font-medium">Cidade / UF</th>
+                    <th className="px-3 py-2 font-medium">Dono</th>
+                    <th className="px-3 py-2 font-medium text-center">Mix</th>
                     <th className="px-3 py-2 font-medium text-center">Status</th>
                     <th className="px-3 py-2 font-medium text-right">Pedidos</th>
                     <th className="px-3 py-2 font-medium text-right">Comprado</th>
@@ -244,6 +319,12 @@ export default function Pdvs() {
                       </td>
                       <td className="px-3 py-2 text-xs whitespace-nowrap">
                         {[p.address_city, p.address_state].filter(Boolean).join("/") || "—"}
+                      </td>
+                      <td className="px-3 py-2 text-xs whitespace-nowrap">
+                        {p.owner_seller_name ?? <span className="text-muted-foreground">—</span>}
+                      </td>
+                      <td className="px-3 py-2">
+                        <MixChips mix={p.mix} />
                       </td>
                       <td className="px-3 py-2 text-center">
                         <CarboBadge variant={PDV_STATUS_VARIANT[p.status]} size="sm">
@@ -330,10 +411,34 @@ export default function Pdvs() {
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="active">Ativo</SelectItem>
+                    <SelectItem value="registered">Cadastrado (ainda não vende)</SelectItem>
                     <SelectItem value="suspended">Pausado</SelectItem>
                     <SelectItem value="inactive">Inativo</SelectItem>
                   </SelectContent>
                 </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Abertura</Label>
+                <Input type="date" value={form.opened_at ?? ""}
+                  onChange={(e) => set({ opened_at: e.target.value })} />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Vendedor dono</Label>
+                <Select value={form.owner_seller_id || "—"}
+                  onValueChange={(v) => set({ owner_seller_id: v === "—" ? "" : v })}>
+                  <SelectTrigger><SelectValue placeholder="Sem dono" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="—">Sem dono</SelectItem>
+                    {vendedores.map((v) => (
+                      <SelectItem key={v.id} value={v.id}>{v.full_name ?? "(sem nome)"}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {/* Dito na tela, não só no código: senão alguém troca o dono
+                    achando que está corrigindo a comissão de uma venda. */}
+                <p className="text-[11px] text-muted-foreground">
+                  Carteira do ponto. Não altera o vendedor das vendas nem a comissão.
+                </p>
               </div>
               <div className="space-y-1.5 md:col-span-2">
                 <Label>Endereço</Label>
@@ -373,6 +478,41 @@ export default function Pdvs() {
               <div className="space-y-1.5 md:col-span-2">
                 <Label>Observação</Label>
                 <Input value={form.notes ?? ""} onChange={(e) => set({ notes: e.target.value })} />
+              </div>
+
+              {/* Mix de produto */}
+              <div className="md:col-span-2 space-y-2 rounded-lg border p-3">
+                <div className="flex items-baseline justify-between gap-2">
+                  <Label className="text-sm">Mix de produto</Label>
+                  <span className="text-[11px] text-muted-foreground">preço de revenda ao consumidor</span>
+                </div>
+                {mix && PRODUTOS.map((k) => (
+                  <div key={k} className="grid grid-cols-[1fr_140px_120px] gap-2 items-center">
+                    <span className="text-sm">{PDV_PRODUTO_LABEL[k]}</span>
+                    <Select value={mix[k].oferece}
+                      onValueChange={(v) => setMix((m) => m && { ...m, [k]: { ...m[k], oferece: v as PdvOferece } })}>
+                      <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="sim">Vende</SelectItem>
+                        <SelectItem value="nao">Não vende</SelectItem>
+                        <SelectItem value="a_confirmar">A confirmar</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Input className="h-8" type="number" step="0.01" min="0" placeholder="R$"
+                      value={mix[k].preco ?? ""}
+                      onChange={(e) => setMix((m) => m && {
+                        ...m,
+                        // Campo vazio guarda NULO, nunca 0 — zero diria que o
+                        // PDV revende de graça, e o "menor preço" da tela iria
+                        // para R$ 0,00 sem ninguém entender por quê.
+                        [k]: { ...m[k], preco: e.target.value === "" ? null : Number(e.target.value) },
+                      })} />
+                  </div>
+                ))}
+                <p className="text-[11px] text-muted-foreground">
+                  Preço em branco fica vazio, não R$ 0,00. "A confirmar" marca o que ainda
+                  ninguém checou no ponto.
+                </p>
               </div>
             </div>
           )}
@@ -417,12 +557,43 @@ function PdvDetalhe({ pdv, onClose }: { pdv: PdvRow | null; onClose: () => void 
             ["Pedidos", String(pdv.pedidos)],
             ["Comprado", brl(pdv.total_comprado)],
             ["Última compra", fmtData(pdv.ultima_compra)],
+            ["Abertura", fmtData(pdv.opened_at)],
+            ["Vendedor dono", pdv.owner_seller_name ?? "—"],
+            ["Primeira compra", fmtData(pdv.primeira_compra)],
           ] as [string, string][]).map(([l, v]) => (
             <div key={l} className="rounded-lg border bg-card px-3 py-2">
               <p className="text-[11px] text-muted-foreground">{l}</p>
               <p className="text-sm font-semibold tabular-nums">{v}</p>
             </div>
           ))}
+        </div>
+
+        {/* Mix — o que este ponto revende e por quanto. */}
+        <div>
+          <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            <Package className="inline h-3.5 w-3.5 mr-1" /> Mix de produto
+          </p>
+          <div className="grid sm:grid-cols-3 gap-2">
+            {PRODUTOS.map((k) => {
+              const it = pdv.mix?.[k];
+              return (
+                <div key={k} className="rounded-lg border bg-card px-3 py-2">
+                  <p className="text-[11px] text-muted-foreground">{PDV_PRODUTO_LABEL[k]}</p>
+                  <p className={`text-sm font-semibold ${
+                    it?.oferece === "sim" ? "text-carbo-green"
+                    : it?.oferece === "a_confirmar" ? "text-amber-500"
+                    : "text-muted-foreground"}`}>
+                    {it ? PDV_OFERECE_LABEL[it.oferece] : "A confirmar"}
+                  </p>
+                  {/* Preço só aparece quando existe: nulo é "não registrado",
+                      e mostrar R$ 0,00 aqui viraria informação falsa. */}
+                  <p className="text-xs tabular-nums text-muted-foreground">
+                    {it?.preco != null ? brl(it.preco) : "preço não registrado"}
+                  </p>
+                </div>
+              );
+            })}
+          </div>
         </div>
 
         {pdv.sem_documento && (
