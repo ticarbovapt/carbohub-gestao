@@ -367,7 +367,13 @@ export default function DashboardComercial() {
             <div className="flex items-center justify-between border-b border-border px-6 py-3">
               <div>
                 <h2 className="text-base font-bold text-board-text flex items-center gap-2"><Repeat2 className="h-4 w-4 text-blue-400" /> Crescimento de Clientes por Canal</h2>
-                <p className="text-xs text-board-muted mt-0.5">{MODO_LABEL[modoClientes]} — B2B (Consumo) vs PDV (Revenda) vs On-line</p>
+                {/* Dito na tela: a linha PDV sai do CADASTRO de pontos, as
+                    outras duas saem de pedido. São perguntas diferentes e
+                    misturá-las foi o que fez o gráfico mostrar 110 PDVs
+                    existindo 73. */}
+                <p className="text-xs text-board-muted mt-0.5">
+                  {MODO_LABEL[modoClientes]} — B2B (Consumo) e On-line por cliente único (CNPJ/CPF); PDV pelo cadastro de pontos
+                </p>
                 {pdvDelta && (
                   <div className="mt-1.5 inline-flex items-center gap-1.5 rounded-md bg-amber-400/10 px-2 py-1">
                     <span className="text-[10px] font-semibold uppercase tracking-wider text-amber-500">PDV {pdvDelta.curLabel} vs {pdvDelta.prevLabel}</span>

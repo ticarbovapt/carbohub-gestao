@@ -14,12 +14,36 @@ interface OrderRow {
   total: number | null;
   status: string | null;
   created_at: string | null;
+  sale_date: string | null;
   customer_name: string | null;
+  cnpj: string | null;
   segmento: string | null;
   vendedor_id: string | null;
   excluir_metricas: boolean | null;
   conta_metrica: boolean | null;
 }
+
+interface PdvSerieRow {
+  mes: string;          // 'YYYY-MM-01'
+  base: number;         // PDVs abertos até o mês
+  novos: number;        // abriram no mês
+  ativos: number;       // compraram no mês
+}
+
+/** Identidade do cliente = DOCUMENTO, nunca o nome.
+ *  Contar por nome inflava a base: "Emmily Pereira da Silva Moreira" e
+ *  "Emmily Moreira" são o mesmo CPF e contavam como duas clientes. Sem
+ *  documento cai no nome, que é o melhor disponível. */
+const chaveCliente = (o: OrderRow) => {
+  const doc = (o.cnpj ?? "").replace(/\D/g, "");
+  if (doc.length === 11 || doc.length === 14) return doc;
+  return "nome:" + (o.customer_name ?? "").trim().toLowerCase();
+};
+
+/** Mês da venda: sale_date quando existe, senão created_at. Mesma regra de
+ *  `data_efetiva` da carbo_vendas_metrica — o gráfico usava só created_at e
+ *  jogava a venda no mês em que o pedido foi digitado, não no da venda. */
+const mesDaVenda = (o: OrderRow) => (o.sale_date ?? o.created_at ?? "").slice(0, 7);
 
 export interface CanaisFilters { vendedorId?: string | null; from?: string; to?: string }
 
@@ -58,9 +82,23 @@ export function useComercialCanais(filters: CanaisFilters = {}) {
       const year = new Date().getFullYear();
       const { data, error } = await db
         .from("carbo_vendas_metrica")
-        .select("total, status, created_at, customer_name, segmento, vendedor_id, excluir_metricas, conta_metrica")
+        .select("total, status, created_at, sale_date, customer_name, cnpj, segmento, vendedor_id, excluir_metricas, conta_metrica")
         .order("created_at", { ascending: true });
       if (error) throw error;
+
+      // A linha PDV do gráfico NÃO sai de pedido: sai da tabela `pdvs`, com a
+      // data de abertura real. Contar "cliente com pedido revenda" dava 110
+      // onde existem 73 pontos — o backfill de canal etiqueta revendedor que
+      // nunca foi cadastrado como PDV.
+      const { data: pdvSerie, error: errPdv } = await db
+        .from("carbo_pdvs_serie_mensal")
+        .select("mes, base, novos, ativos")
+        .order("mes", { ascending: true });
+      if (errPdv) throw errPdv;
+      const porMesPdv = new Map<string, PdvSerieRow>();
+      for (const r of (pdvSerie ?? []) as PdvSerieRow[]) {
+        porMesPdv.set(String(r.mes).slice(0, 7), r);
+      }
       const fromTs = from ? new Date(from + "T00:00:00").getTime() : null;
       const toTs = to ? new Date(to + "T23:59:59").getTime() : null;
       const orders = ((data ?? []) as OrderRow[]).filter((o) => {
@@ -107,24 +145,35 @@ export function useComercialCanais(filters: CanaisFilters = {}) {
       }
 
       // ── 13) Clientes por canal (ativos/novos/acumulado), últimos 12 meses ──
-      const channels: CanalKey[] = ["consumo", "revenda", "online"];
-      const activeSet: Record<CanalKey, Record<string, Set<string>>> = { consumo: {}, revenda: {}, online: {} };
-      const firstMonth: Record<CanalKey, Record<string, string>> = { consumo: {}, revenda: {}, online: {} };
+      //
+      // Consumo e On-line saem do pedido, agregados por DOCUMENTO. Revenda
+      // NÃO: sai da view carbo_pdvs_serie_mensal, porque a pergunta ali é
+      // "quantos pontos de venda temos", e ponto de venda é uma coisa que se
+      // cadastra — não se deduz de um pedido etiquetado.
+      const channels: CanalKey[] = ["consumo", "online"];
+      const activeSet: Record<string, Record<string, Set<string>>> = { consumo: {}, online: {} };
+      const firstMonth: Record<string, Record<string, string>> = { consumo: {}, online: {} };
       for (const o of active) {
-        if (!o.created_at || !o.segmento) continue;
         const ch = o.segmento as CanalKey;
-        if (!channels.includes(ch)) continue;
-        const name = (o.customer_name || "").trim().toLowerCase();
-        if (!name) continue;
-        const key = o.created_at.slice(0, 7);
-        (activeSet[ch][key] ??= new Set()).add(name);
-        const fm = firstMonth[ch][name];
-        if (!fm || key < fm) firstMonth[ch][name] = key;
+        if (!o.segmento || !channels.includes(ch)) continue;
+        const key = mesDaVenda(o);
+        if (!key) continue;
+        const id = chaveCliente(o);
+        if (id === "nome:") continue;
+        (activeSet[ch][key] ??= new Set()).add(id);
+        const fm = firstMonth[ch][id];
+        if (!fm || key < fm) firstMonth[ch][id] = key;
       }
-      const novos: Record<CanalKey, Record<string, number>> = { consumo: {}, revenda: {}, online: {} };
+      const novos: Record<string, Record<string, number>> = { consumo: {}, online: {} };
       for (const ch of channels) for (const fm of Object.values(firstMonth[ch])) novos[ch][fm] = (novos[ch][fm] ?? 0) + 1;
-      const allKeys = Array.from(new Set(channels.flatMap((ch) => Object.keys(activeSet[ch])))).sort();
-      const cumul: Record<CanalKey, number> = { consumo: 0, revenda: 0, online: 0 };
+
+      // Os meses vêm da união dos dois lados: um mês em que só houve abertura
+      // de PDV (sem venda nenhuma) tem de aparecer no gráfico do mesmo jeito.
+      const allKeys = Array.from(new Set([
+        ...channels.flatMap((ch) => Object.keys(activeSet[ch])),
+        ...porMesPdv.keys(),
+      ])).sort();
+      const cumul: Record<string, number> = { consumo: 0, online: 0 };
       const clientes: ClientesRow[] = allKeys.map((key) => {
         const [y, m] = key.split("-").map(Number);
         const row: any = { mes: mesLbl(y, m) };
@@ -134,6 +183,11 @@ export function useComercialCanais(filters: CanaisFilters = {}) {
           row[`${ch}_novos`] = novos[ch][key] ?? 0;
           row[`${ch}_acum`] = cumul[ch];
         }
+        // `base` já é acumulado no banco — não somar aqui.
+        const p = porMesPdv.get(key);
+        row.revenda_ativos = p?.ativos ?? 0;
+        row.revenda_novos = p?.novos ?? 0;
+        row.revenda_acum = p?.base ?? 0;
         return row as ClientesRow;
       }).slice(-12);
 
