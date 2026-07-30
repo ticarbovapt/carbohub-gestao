@@ -36,8 +36,8 @@ select
   v.nome,
   o.customer_name,
   v.cnpj,
-  o.city,
-  o.state,
+  o.delivery_city,
+  o.delivery_state,
   'active'
 from (values
   ('Centro Automotivo Auto Diesel', '54927081000107'),
@@ -48,7 +48,10 @@ from (values
 -- Pedido mais recente daquele CNPJ: é dele que sai a razão social do
 -- faturamento e o endereço de entrega mais atual.
 left join lateral (
-  select customer_name, city, state
+  -- delivery_city/delivery_state: é o endereço de ENTREGA do pedido, o único
+  -- endereço que carboze_orders guarda. Pode ficar nulo, e nesse caso o PDV
+  -- entra sem cidade para alguém completar na tela.
+  select customer_name, delivery_city, delivery_state
   from public.carboze_orders
   where regexp_replace(coalesce(cnpj, ''), '\D', '', 'g') = v.cnpj
     and status not in ('quote', 'cancelled')
