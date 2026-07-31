@@ -1368,6 +1368,13 @@ async function syncNFe(
       if (pdfLink) upd.pdf_url = pdfLink;
       const valor = extractValorNota(d);
       if (valor != null) upd.valor_total = valor;
+      // ⚠️ A SITUAÇÃO TEM DE VIR JUNTO. Este bloco grava o `raw_data` fresco
+      // do detalhe e, sem esta linha, deixava a coluna `situacao` com o valor
+      // ANTIGO — o JSON dizia "2" (Cancelada) e a coluna seguia "Emitida
+      // DANFE". Tudo que lê situação (métrica, fila de faturamento, aviso)
+      // acreditava numa nota cancelada como se fosse válida.
+      const situBackfill = nfeSituacaoLabel(d.situacao);
+      if (situBackfill) upd.situacao = situBackfill;
       // NÃO mexe em match_status/order_id — preserva o vínculo manual.
       await supabaseAdmin.from("bling_nfe").update(upd).eq("id", nf.id);
       backfilled++;
@@ -2258,6 +2265,10 @@ Deno.serve(async (req: Request): Promise<Response> => {
           if (pdfLink) upd.pdf_url = pdfLink;
           const valor = extractValorNota(d);
           if (valor != null) upd.valor_total = valor;
+          // Mesma armadilha do outro backfill: grava raw_data novo e deixava
+          // a coluna `situacao` velha. Ver a nota completa em nfeObsBackfill.
+          const situBf = nfeSituacaoLabel(d.situacao);
+          if (situBf) upd.situacao = situBf;
           // Só reabre p/ casamento as NÃO vinculadas ainda (preserva manual/matched).
           if (hasCode && !nf.order_id && nf.match_status !== "manual" && nf.match_status !== "matched") {
             upd.match_status = "pending";
