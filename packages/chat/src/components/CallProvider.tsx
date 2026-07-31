@@ -52,6 +52,9 @@ export function CallProvider({ loadCallEngine, children }: { loadCallEngine?: Lo
   const phaseRef = useRef<Phase>("idle");
   const kindRef = useRef<CallKind | null>(null);
   const timeoutRef = useRef<number | undefined>(undefined);
+  // Trava de reentrância. `phase` é estado do React e só muda DEPOIS do
+  // await — não serve de guarda contra corrida. Este ref muda na hora.
+  const conectandoRef = useRef(false);
   useEffect(() => { phaseRef.current = phase; }, [phase]);
   useEffect(() => { kindRef.current = callKind; }, [callKind]);
 
@@ -66,6 +69,7 @@ export function CallProvider({ loadCallEngine, children }: { loadCallEngine?: Lo
     stopAllCallSounds();
     engineRef.current?.disconnect().catch(() => {});
     engineRef.current = null;
+    conectandoRef.current = false;
     sessionRef.current = null;
     setPhase("idle"); setCallKind(null); setActiveChannelId(null);
     setPeer(null); setMuted(false); setOngoingSince(null); setElapsed(0); setParticipants([]);
@@ -73,16 +77,41 @@ export function CallProvider({ loadCallEngine, children }: { loadCallEngine?: Lo
 
   const connectMedia = useCallback(async (room: string) => {
     if (!loadCallEngine) throw new Error("chamada indisponível");
-    const { data, error } = await supabase.functions.invoke("call-token", { body: { room } });
-    if (error) throw error;
-    const { url, token } = data as { url: string; token: string };
-    const mod = await loadCallEngine();
-    const engine = new mod.CallEngine({
-      onParticipants: (p) => setParticipants(p),
-      onError: () => { toast.error("Erro na chamada"); cleanup(); },
-    });
-    engineRef.current = engine;
-    await engine.connect(url, token);
+
+    // ⚠️ GUARDA DE REENTRÂNCIA — não remover.
+    //
+    // Sem ela, dois caminhos conectam a MESMA identidade na MESMA sala e o
+    // LiveKit derruba a sessão anterior: a chamada trava com o áudio morto.
+    //
+    // Como acontecia: o handler de UPDATE do realtime chama connectMedia e
+    // só faz `setPhase("ongoing")` DEPOIS do await. Enquanto a primeira
+    // conexão está em voo, `phase` ainda é "outgoing", então um segundo
+    // UPDATE da mesma sessão (o Postgres emite um por alteração de linha,
+    // não um por transição de status) passa pela guarda e abre a segunda.
+    // O mesmo vale para dois cliques em "Entrar" numa chamada de grupo.
+    if (conectandoRef.current || engineRef.current) return;
+    conectandoRef.current = true;
+    try {
+      const { data, error } = await supabase.functions.invoke("call-token", { body: { room } });
+      if (error) throw error;
+      const { url, token } = data as { url: string; token: string };
+      const mod = await loadCallEngine();
+      const engine = new mod.CallEngine({
+        onParticipants: (p) => setParticipants(p),
+        onError: () => { toast.error("Erro na chamada"); cleanup(); },
+      });
+      engineRef.current = engine;
+      await engine.connect(url, token);
+    } catch (e) {
+      // Engine meio-construída não pode ficar de pé: ela seguraria o
+      // WebSocket e a próxima tentativa cairia na guarda achando que já
+      // há conexão viva.
+      engineRef.current?.disconnect().catch(() => {});
+      engineRef.current = null;
+      throw e;
+    } finally {
+      conectandoRef.current = false;
+    }
   }, [loadCallEngine, supabase, cleanup]);
 
   // ── Voz 1:1 (DM) ──
@@ -130,16 +159,26 @@ export function CallProvider({ loadCallEngine, children }: { loadCallEngine?: Lo
 
   // ── Voz em grupo (huddle) ──
   const joinGroupCall = useCallback(async (channelId: string) => {
-    if (!callsEnabled || phaseRef.current !== "idle") return;
+    // conectandoRef entra aqui também: `phase` só sai de "idle" depois do
+    // await, então dois cliques rápidos em "Entrar" disparariam dois
+    // group_call_join antes de qualquer guarda de estado valer.
+    if (!callsEnabled || phaseRef.current !== "idle" || conectandoRef.current) return;
+    conectandoRef.current = true;
     try {
       const { data, error } = await supabase.rpc("group_call_join", { p_channel: channelId });
       if (error) throw error;
       const s = data as { session_id: string; room: string };
       sessionRef.current = { id: s.session_id, room: s.room, channelId };
       setCallKind("group"); setActiveChannelId(channelId);
+      // Libera a trava para o connectMedia poder assumi-la.
+      conectandoRef.current = false;
       await connectMedia(s.room);
       setPhase("ongoing"); setOngoingSince(Date.now());
-    } catch (e) { toast.error((e as Error)?.message || "Não foi possível entrar na chamada"); cleanup(); }
+    } catch (e) {
+      conectandoRef.current = false;
+      toast.error((e as Error)?.message || "Não foi possível entrar na chamada");
+      cleanup();
+    }
   }, [callsEnabled, supabase, connectMedia, cleanup]);
 
   // Desligar/Sair — decide pela natureza da chamada.
