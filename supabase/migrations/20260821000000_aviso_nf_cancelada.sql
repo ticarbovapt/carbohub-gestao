@@ -98,6 +98,8 @@ order by o.total desc;
 select order_number, customer_name, total, status, fulfillment_stage,
        coalesce(sale_date, created_at::date) as data
 from public.carboze_orders
+-- `is distinct from`, não coalesce: `status` é o enum order_status e
+-- comparar com '' é erro de tipo. O `is distinct from` já trata o nulo.
 where fulfillment_stage = 'cancelado'
-  and coalesce(status, '') <> 'cancelled'
+  and status is distinct from 'cancelled'
 order by total desc;
