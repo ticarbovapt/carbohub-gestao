@@ -61,6 +61,11 @@ export interface CarbozeVendaRow {
   // "Notas Internas"). Nunca saiu na tela de Vendas — o vendedor escrevia e
   // não conseguia reler.
   internal_notes: string | null;
+  /** A REGRA: esta venda conta como faturamento? Vem da carbo_vendas_metrica. */
+  conta_metrica: boolean;
+  /** Por que não conta: orcamento | cancelado | excluido_manualmente |
+   *  nf_invalida | aguardando_nf. Null quando conta. */
+  motivo_fora: string | null;
   status: string;             // quote | pending | confirmed | invoiced | shipped | delivered | cancelled
   fulfillment_stage: string | null; // etapa no kanban de rastreio (Pós-venda/Ops)
   vendedor_id: string | null;
@@ -122,7 +127,19 @@ export function useCarbozeVendas({ month, customFrom, customTo, vendedorFilter, 
       }
 
       let query = db
-        .from("carboze_orders")
+        // ⚠️ carbo_vendas_metrica, NÃO carboze_orders.
+        //
+        // A view devolve todas as colunas do pedido MAIS `conta_metrica` — a
+        // regra única de "esta venda conta como faturamento". Antes esta tela
+        // tinha regra própria (NF vinculada OU invoice_number OU status
+        // entregue) que era mais frouxa que a do resto do sistema: contava
+        // pedido com nota Pendente ou Rejeitada. Resultado: o Total Faturado
+        // do Sales dava R$ 51.274 e o Dashboard do Admin, R$ 48 mil, no mesmo
+        // mês. Duas telas, dois números, nenhum errado por bug — errado por
+        // haver duas definições.
+        //
+        // A view é security_invoker: a RLS de carboze_orders continua valendo.
+        .from("carbo_vendas_metrica")
         .select("*")
         .neq("excluir_metricas", true)
         .gte("created_at", qStart)
@@ -183,6 +200,8 @@ function mapVenda(row: any): CarbozeVendaRow {
           buyer_notes: row.buyer_notes ?? null,
           general_notes: row.general_notes ?? null,
           internal_notes: row.internal_notes ?? null,
+          conta_metrica: row.conta_metrica === true,
+          motivo_fora: row.motivo_fora ?? null,
           status: row.status,
           fulfillment_stage: row.fulfillment_stage ?? null,
           vendedor_id: row.vendedor_id ?? null,

@@ -251,12 +251,20 @@ export default function Vendas() {
   }, [rows, vendedorFilter, buscaAtiva]);
 
   const sum = (list: CarbozeVendaRow[]) => list.reduce((s, v) => s + v.total, 0);
-  // "Faturado" = já tem NF vinculada OU o pedido já saiu (invoiced/shipped/
-  // delivered) — quem foi enviado/entregue necessariamente já tem NF (só não
-  // linkada aqui). Assim um pedido ENTREGUE não cai em "aguardando faturamento".
+
+  // "Faturado" NÃO é regra desta tela — é `conta_metrica`, da view
+  // carbo_vendas_metrica, a mesma que o Dashboard Comercial do Admin usa.
+  //
+  // Antes daqui era: NF vinculada OU invoice_number OU status entregue. Mais
+  // frouxo que o resto do sistema: contava pedido cuja nota estava Pendente
+  // ou Rejeitada, e ignorava excluir_metricas. Por isso esta tela mostrava
+  // R$ 51.274 e o Admin, R$ 48 mil, no mesmo mês de julho.
+  //
+  // A view existe justamente para isso — o comentário dela abre dizendo que
+  // havia 14 definições de "venda que conta" em 26 lugares. Esta era uma das
+  // que sobraram. Se a regra mudar, muda lá e todas as telas acompanham.
   const isActive = (v: CarbozeVendaRow) => !estaCancelada(v) && v.status !== "quote";
-  const FATURADO_STATUS = new Set(["invoiced", "shipped", "delivered"]);
-  const isFaturada = (v: CarbozeVendaRow) => isActive(v) && (!!v.bling_nf_id || !!v.invoice_number || FATURADO_STATUS.has(v.status));
+  const isFaturada = (v: CarbozeVendaRow) => v.conta_metrica;
   const isAguardando = (v: CarbozeVendaRow) => isActive(v) && !isFaturada(v);
 
   const quotes = filtered.filter((v) => v.status === "quote");
