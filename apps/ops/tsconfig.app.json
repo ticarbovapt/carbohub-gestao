@@ -29,6 +29,9 @@
       "@carbo/call": [
         "../../packages/call/src/index.ts"
       ],
+      "@carbo/posvenda": [
+        "../../packages/posvenda/src/index.ts"
+      ],
       "livekit-client": [
         "./node_modules/livekit-client"
       ]

@@ -15,6 +15,7 @@ export default defineConfig({
       "@carbo/chat": path.resolve(__dirname, "../../packages/chat/src"),
       "@carbo/shell": path.resolve(__dirname, "../../packages/shell/src"),
       "@carbo/call": path.resolve(__dirname, "../../packages/call/src"),
+      "@carbo/posvenda": path.resolve(__dirname, "../../packages/posvenda/src"),
       "livekit-client": path.resolve(__dirname, "node_modules/livekit-client"),
       // @carbo/chat é source fora do app e importa react-easy-crop no
       // visualizador de imagem. Sem o alias a resolução sobe de

@@ -14,24 +14,13 @@ const db = supabase as unknown as {
   rpc: (fn: string, args?: Record<string, unknown>) => Promise<{ data: any; error: any }>;
 };
 
-export type FulfillmentStage =
-  | "nova_venda" | "separacao_pendente" | "criar_op" | "separando" | "separado"
-  | "gerar_nf" | "nf_finalizada" | "emitir_etiqueta"
-  | "em_transporte" | "entregue" | "cancelado";
-
-export const POSVENDA_STAGES: { key: FulfillmentStage; label: string; color: string }[] = [
-  { key: "nova_venda",          label: "Nova Venda",              color: "#9333ea" },
-  { key: "separacao_pendente",  label: "Pedido Recebido",         color: "#f59e0b" },
-  { key: "criar_op",            label: "Criar Ordem de Produção", color: "#ec4899" },
-  { key: "separando",           label: "Em Separação",            color: "#3b82f6" },
-  { key: "separado",            label: "Separado",                color: "#8b5cf6" },
-  { key: "gerar_nf",            label: "Gerar Nota Fiscal",       color: "#f43f5e" },
-  { key: "nf_finalizada",       label: "NF Finalizada",           color: "#14b8a6" },
-  { key: "emitir_etiqueta",     label: "Emitir Etiqueta",         color: "#0ea5e9" },
-  { key: "em_transporte",       label: "Em Transporte",           color: "#06b6d4" },
-  { key: "entregue",            label: "Entregue",                color: "#10b981" },
-  { key: "cancelado",           label: "Cancelado",               color: "#ef4444" },
-];
+// Etapas: fonte única em @carbo/posvenda, compartilhada com o Sales. Este app
+// CONTROLA as etapas; o Sales só acompanha. Etapa nova entra lá, e o CHECK de
+// fulfillment_stage em carboze_orders tem que aceitar antes.
+export { POSVENDA_STAGES, stageIndex } from "@carbo/posvenda";
+export type { FulfillmentStage, PosVendaStage } from "@carbo/posvenda";
+import { POSVENDA_STAGES } from "@carbo/posvenda";
+import type { FulfillmentStage } from "@carbo/posvenda";
 
 // Arquivos/metadados da NF vinculada (Bling) — best-effort para a etiqueta.
 // A chave de acesso vira o código de barras da etiqueta quando disponível.

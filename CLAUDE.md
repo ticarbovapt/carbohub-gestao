@@ -9,8 +9,17 @@ Layout atual:
 / (raiz)        = sistema ATUAL "controle" (monólito, VIVO no ar). src/, supabase/.
 apps/crm/       = sistema novo CRM (app standalone, próprio package.json/build).
 apps/erp/       = (futuro)
-packages/       = (futuro) core, ui, supabase compartilhados
+packages/       = compartilhados entre apps:
+                  chat, call, shell (UI/infra)
+                  posvenda (etapas do Rastreio de venda — Ops + Sales)
 ```
+
+### `packages/posvenda` — etapas do pós-venda
+Fonte ÚNICA da lista de etapas do Rastreio. Ops **controla** as etapas, Sales só
+**acompanha**; antes cada um declarava a sua lista e o Sales tinha 7 das 11 —
+pedido parado numa etapa ausente **sumia do quadro** em vez de aparecer numa
+coluna vazia. Etapa nova entra aqui **e** no CHECK de `fulfillment_stage` em
+`carboze_orders` (migração), nesta ordem.
 
 ### Regras anti-confusão (OBRIGATÓRIAS)
 1. **Todo pedido nomeia o alvo.** "no CRM" → `apps/crm`; "no controle"/"atual" → raiz (`src/`).

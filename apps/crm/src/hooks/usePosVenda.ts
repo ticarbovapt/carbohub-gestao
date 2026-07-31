@@ -4,42 +4,25 @@ import { supabase } from "@/integrations/supabase/client";
 // ─────────────────────────────────────────────────────────────────────────────
 // Pós-venda (Sales) — SOMENTE LEITURA, espelho do Rastreio do Carbo Ops.
 //
-// ⚠️ ESTE ARQUIVO ESPELHA apps/ops/src/hooks/usePosVenda.ts.
-// Se lá mudar a lista de etapas, o filtro de quais pedidos entram, ou as
-// colunas lidas — MUDE AQUI JUNTO. A divergência não dá erro; ela ESCONDE.
-//
-// Foi o que aconteceu: o Ops tinha 11 etapas e aqui havia 7. As quatro que
+// As ETAPAS vêm de @carbo/posvenda — as mesmas que o Ops usa, num arquivo só.
+// Antes cada app declarava a sua: o Ops tinha 11 e este aqui, 7. As quatro que
 // faltavam (criar_op, gerar_nf, nf_finalizada, emitir_etiqueta) não viravam
-// coluna vazia — o pedido parado numa delas SUMIA do quadro. O vendedor não
-// via a coluna nem o pedido, e o dado seguia existindo no banco. Informação
-// suprimida é pior que informação ausente, porque ninguém vai procurar o que
-// não sabe que existe.
+// coluna vazia — o pedido parado numa delas SUMIA do quadro. Informação
+// suprimida é pior que ausente: ninguém procura o que não sabe que existe.
+//
+// ⚠️ O QUE AINDA PRECISA DE ATENÇÃO MANUAL: o filtro de quais pedidos entram
+// (o .or abaixo) e as colunas lidas. Se mudarem no Ops, mude aqui junto.
 //
 // Quem controla a etapa é o time de operações, no Carbo Ops. Aqui nada move.
 // ─────────────────────────────────────────────────────────────────────────────
 
 const db = supabase as unknown as { from: (t: string) => any };
 
-export type FulfillmentStage =
-  | "nova_venda" | "separacao_pendente" | "criar_op" | "separando" | "separado"
-  | "gerar_nf" | "nf_finalizada" | "emitir_etiqueta"
-  | "em_transporte" | "entregue" | "cancelado";
-
-// Mesma lista, mesma ordem e mesmos rótulos do Ops. O vendedor e a operação
-// falando de colunas diferentes com o mesmo nome seria pior que não ter tela.
-export const POSVENDA_STAGES: { key: FulfillmentStage; label: string; color: string }[] = [
-  { key: "nova_venda",          label: "Nova Venda",              color: "#9333ea" },
-  { key: "separacao_pendente",  label: "Pedido Recebido",         color: "#f59e0b" },
-  { key: "criar_op",            label: "Criar Ordem de Produção", color: "#ec4899" },
-  { key: "separando",           label: "Em Separação",            color: "#3b82f6" },
-  { key: "separado",            label: "Separado",                color: "#8b5cf6" },
-  { key: "gerar_nf",            label: "Gerar Nota Fiscal",       color: "#f43f5e" },
-  { key: "nf_finalizada",       label: "NF Finalizada",           color: "#14b8a6" },
-  { key: "emitir_etiqueta",     label: "Emitir Etiqueta",         color: "#0ea5e9" },
-  { key: "em_transporte",       label: "Em Transporte",           color: "#06b6d4" },
-  { key: "entregue",            label: "Entregue",                color: "#10b981" },
-  { key: "cancelado",           label: "Cancelado",               color: "#ef4444" },
-];
+// Etapas: fonte única em @carbo/posvenda, compartilhada com o Ops. Reexporta
+// para as telas seguirem importando daqui e nada mais precisar mudar.
+export { POSVENDA_STAGES, stageLabel, stageIndex } from "@carbo/posvenda";
+export type { FulfillmentStage, PosVendaStage } from "@carbo/posvenda";
+import type { FulfillmentStage } from "@carbo/posvenda";
 
 export interface PosVendaItem {
   name?: string; quantity?: number; unit_price?: number; total?: number;

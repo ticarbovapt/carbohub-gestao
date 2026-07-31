@@ -1,0 +1,9 @@
+{
+  "name": "@carbo/posvenda",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Definição das etapas do pós-venda (Rastreio de venda). Fonte única para Ops e Sales.",
+  "type": "module",
+  "main": "src/index.ts",
+  "types": "src/index.ts"
+}
