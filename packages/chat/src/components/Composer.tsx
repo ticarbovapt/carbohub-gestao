@@ -8,6 +8,7 @@ import { AudioRecorder } from "./AudioRecorder";
 import { EmojiPicker } from "./EmojiPicker";
 import { ScheduleDialog } from "./ScheduleDialog";
 import { PollDialog } from "./PollDialog";
+import { ImagePreview, type ImagemPendente } from "./ImagePreview";
 import { Avatar } from "./Avatar";
 import type { ChatMessage } from "../types";
 
@@ -135,9 +136,40 @@ export function Composer({
     setMention(null);
   }
 
+  // Imagens vão para o VISUALIZADOR, não direto para a fila de anexos: é
+  // onde se confere o que foi colado e onde o arquivo é tratado antes de
+  // subir. Documento e vídeo seguem o caminho antigo (etiqueta simples) —
+  // não há o que pré-visualizar nem o que comprimir neles aqui.
+  const [imagens, setImagens] = useState<ImagemPendente[]>([]);
+
+  const novaPendente = (f: File): ImagemPendente => ({
+    // Sem crypto.randomUUID: nem todo navegador em contexto não-seguro tem.
+    id: `${f.name}-${f.size}-${f.lastModified}-${Math.random().toString(36).slice(2, 8)}`,
+    arquivo: f,
+    url: URL.createObjectURL(f),
+  });
+
+  function receberImagens(arquivos: File[]) {
+    if (arquivos.length === 0) return;
+    setImagens((prev) => {
+      const junto = [...prev, ...arquivos.map(novaPendente)];
+      if (junto.length > 10) toast.warning("Máximo de 10 imagens por mensagem.");
+      // As que passarem do teto precisam ter a URL revogada agora — elas
+      // nunca chegam à tela e ninguém mais teria a referência para liberar.
+      junto.slice(10).forEach((i) => URL.revokeObjectURL(i.url));
+      return junto.slice(0, 10);
+    });
+  }
+
+  const descartarImagens = (lista: ImagemPendente[]) => lista.forEach((i) => URL.revokeObjectURL(i.url));
+
   function pickFiles(list: FileList | null) {
     if (!list) return;
-    setFiles((prev) => [...prev, ...Array.from(list)].slice(0, 10));
+    const todos = Array.from(list);
+    receberImagens(todos.filter((f) => f.type.startsWith("image/") && f.type !== "image/gif"));
+    // GIF vai como arquivo comum: recomprimir mataria a animação.
+    const outros = todos.filter((f) => !f.type.startsWith("image/") || f.type === "image/gif");
+    if (outros.length) setFiles((prev) => [...prev, ...outros].slice(0, 10));
     if (fileRef.current) fileRef.current.value = "";
   }
 
@@ -145,11 +177,7 @@ export function Composer({
   function colar(dt: DataTransfer | null): boolean {
     const imgs = imagensDaAreaDeTransferencia(dt);
     if (imgs.length === 0) return false;   // texto puro segue o caminho normal
-    setFiles((prev) => {
-      const junto = [...prev, ...imgs];
-      if (junto.length > 10) toast.warning("Máximo de 10 arquivos por mensagem.");
-      return junto.slice(0, 10);
-    });
+    receberImagens(imgs);
     return true;
   }
 
@@ -190,6 +218,36 @@ export function Composer({
   // Revoga as anteriores quando a lista muda e na desmontagem: object URL não
   // some sozinha e segura a imagem inteira na memória.
   useEffect(() => () => { miniaturas.forEach((u) => u && URL.revokeObjectURL(u)); }, [miniaturas]);
+
+  // Sair da conversa com o visualizador aberto não pode vazar as URLs.
+  // `imagensRef` porque o cleanup de um efeito com [] enxerga o estado do
+  // primeiro render — sem ele, revogaria uma lista vazia.
+  const imagensRef = useRef<ImagemPendente[]>([]);
+  useEffect(() => { imagensRef.current = imagens; }, [imagens]);
+  useEffect(() => () => { imagensRef.current.forEach((i) => URL.revokeObjectURL(i.url)); }, []);
+
+  /** Envio disparado pelo visualizador: arquivos JÁ tratados + legenda. */
+  async function enviarImagens(arquivos: File[], legenda: string) {
+    const attachments: OutgoingAttachment[] = arquivos.map((f) => ({
+      file: f, filename: f.name, kind: kindFromMime(f.type),
+    }));
+    const pendentes = imagens;
+    // Fecha ANTES do await: manter o visualizador aberto durante um upload
+    // longo dá a impressão de travado e convida ao segundo clique.
+    setImagens([]);
+    descartarImagens(pendentes);
+    setText("");
+    onClearReply();
+    stopTyping();
+    try {
+      await send.mutateAsync({ body: legenda, attachments, replyToId: replyTo?.id ?? null });
+    } catch {
+      toast.error("Não foi possível enviar a imagem.");
+      // O texto volta; os arquivos não — as URLs já foram liberadas e
+      // ressuscitá-las daria imagem quebrada na tela.
+      setText(legenda);
+    }
+  }
 
   async function submit() {
     const body = text.trim();
@@ -238,6 +296,20 @@ export function Composer({
 
   return (
     <div className="relative border-t">
+      {imagens.length > 0 && (
+        <ImagePreview
+          itens={imagens}
+          legendaInicial={text}
+          onCancelar={() => { descartarImagens(imagens); setImagens([]); }}
+          onAdicionarMais={() => fileRef.current?.click()}
+          onRemover={(id) => setImagens((prev) => {
+            const alvo = prev.find((i) => i.id === id);
+            if (alvo) URL.revokeObjectURL(alvo.url);
+            return prev.filter((i) => i.id !== id);
+          })}
+          onEnviar={enviarImagens}
+        />
+      )}
       {/* barra de resposta */}
       {replyTo && (
         <div className="flex items-center gap-2 border-b bg-muted/40 px-3 py-2">
