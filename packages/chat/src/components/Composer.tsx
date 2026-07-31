@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Send, Paperclip, X, CornerUpLeft, Users, Smile, Clock, BarChart3, Plus, Image as ImageIcon } from "lucide-react";
 import { useSendMessage, useScheduleMessage, useDirectory, kindFromMime, type OutgoingAttachment } from "../hooks";
@@ -14,6 +14,30 @@ import type { ChatMessage } from "../types";
 const kindLabel = (k: string) =>
   k === "image" ? "📷 Foto" : k === "audio" ? "🎤 Áudio" : k === "video" ? "🎬 Vídeo" : k === "file" ? "📎 Arquivo" : "Mensagem";
 const ALL_ID = "__all__";
+
+/** Print colado vem sem nome (ou como "image.png"). Sem um nome próprio, dez
+ *  prints numa conversa viram dez "image.png" e ninguém acha nada depois. */
+const nomeDoPrint = (mime: string) => {
+  const ext = (mime.split("/")[1] || "png").split("+")[0].replace("jpeg", "jpg");
+  const d = new Date();
+  const dd = (n: number) => String(n).padStart(2, "0");
+  return `print-${d.getFullYear()}-${dd(d.getMonth() + 1)}-${dd(d.getDate())}-${dd(d.getHours())}${dd(d.getMinutes())}${dd(d.getSeconds())}.${ext}`;
+};
+
+/** Extrai as imagens de um ClipboardEvent. Devolve [] quando é texto puro. */
+const imagensDaAreaDeTransferencia = (dt: DataTransfer | null): File[] => {
+  if (!dt) return [];
+  const saida: File[] = [];
+  for (const item of Array.from(dt.items ?? [])) {
+    if (item.kind !== "file") continue;
+    const f = item.getAsFile();
+    if (!f || !f.type.startsWith("image/")) continue;
+    // Copiar do explorador de arquivos traz nome de verdade — esse a gente
+    // preserva. Print da tela vem sem nome útil e ganha um.
+    saida.push(f.name && f.name !== "image.png" ? f : new File([f], nomeDoPrint(f.type), { type: f.type }));
+  }
+  return saida;
+};
 
 export function Composer({
   channelId, isGroup, replyTo, onClearReply, replyToName, onEditLast,
@@ -117,6 +141,52 @@ export function Composer({
     if (fileRef.current) fileRef.current.value = "";
   }
 
+  /** Ctrl+V com print na área de transferência. Devolve true se pegou algo. */
+  function colar(dt: DataTransfer | null): boolean {
+    const imgs = imagensDaAreaDeTransferencia(dt);
+    if (imgs.length === 0) return false;   // texto puro segue o caminho normal
+    setFiles((prev) => {
+      const junto = [...prev, ...imgs];
+      if (junto.length > 10) toast.warning("Máximo de 10 arquivos por mensagem.");
+      return junto.slice(0, 10);
+    });
+    return true;
+  }
+
+  // Colar imagem funciona mesmo SEM o cursor estar no campo de texto — que é o
+  // caso mais comum: tirar o print, clicar na conversa, Ctrl+V. O evento de
+  // paste só dispara em elemento focável, então um listener preso ao textarea
+  // perderia justamente esse caminho.
+  //
+  // A guarda existe para não roubar o Ctrl+V de outro campo: se o foco está
+  // num input/textarea/editável que NÃO é o nosso, deixa passar.
+  useEffect(() => {
+    const onPasteJanela = (e: ClipboardEvent) => {
+      const alvo = document.activeElement as HTMLElement | null;
+      if (alvo && alvo !== textRef.current) {
+        const tag = alvo.tagName;
+        if (tag === "INPUT" || tag === "TEXTAREA" || alvo.isContentEditable) return;
+      }
+      if (colar(e.clipboardData)) {
+        e.preventDefault();
+        textRef.current?.focus();
+      }
+    };
+    window.addEventListener("paste", onPasteJanela);
+    return () => window.removeEventListener("paste", onPasteJanela);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Miniatura do que vai ser enviado. Print sem preview é uma etiqueta
+  // "print-2026-07-31-082810.png" — não dá para conferir se colou o certo.
+  const miniaturas = useMemo(
+    () => files.map((f) => (f.type.startsWith("image/") ? URL.createObjectURL(f) : null)),
+    [files],
+  );
+  // Revoga as anteriores quando a lista muda e na desmontagem: object URL não
+  // some sozinha e segura a imagem inteira na memória.
+  useEffect(() => () => { miniaturas.forEach((u) => u && URL.revokeObjectURL(u)); }, [miniaturas]);
+
   async function submit() {
     const body = text.trim();
     if ((!body && files.length === 0) || send.isPending) return;
@@ -196,8 +266,14 @@ export function Composer({
           <div className="mb-2 flex flex-wrap gap-2">
             {files.map((f, i) => (
               <span key={i} className="flex items-center gap-1.5 rounded-md border bg-muted/40 px-2 py-1 text-xs">
-                <span className="max-w-[160px] truncate">{f.name}</span>
-                <button onClick={() => setFiles((prev) => prev.filter((_, j) => j !== i))} className="text-muted-foreground hover:text-destructive"><X className="h-3 w-3" /></button>
+                {miniaturas[i] && (
+                  <img src={miniaturas[i] as string} alt=""
+                    className="h-8 w-8 rounded object-cover border" />
+                )}
+                <span className="max-w-[160px] truncate" title={f.name}>{f.name}</span>
+                <button onClick={() => setFiles((prev) => prev.filter((_, j) => j !== i))}
+                  aria-label={`Remover ${f.name}`}
+                  className="text-muted-foreground hover:text-destructive"><X className="h-3 w-3" /></button>
               </span>
             ))}
           </div>
@@ -250,6 +326,7 @@ export function Composer({
             ref={textRef}
             value={text}
             onChange={onType}
+            onPaste={(e) => { if (colar(e.clipboardData)) e.preventDefault(); }}
             onBlur={stopTyping}
             onKeyDown={(e) => {
               if (e.key === "Escape") { if (mention) setMention(null); else if (replyTo) onClearReply(); stopTyping(); return; }
@@ -258,7 +335,11 @@ export function Composer({
               if (e.key === "ArrowUp" && !text && !mention && onEditLast) { e.preventDefault(); onEditLast(); }
             }}
             aria-label="Escrever mensagem"
-            placeholder={isGroup ? "Mensagem…  @ menciona · Enter envia" : "Mensagem…  Enter envia"}
+            // A dica de Ctrl+V fica no placeholder porque colar print é
+            // invisível: sem alguém contar, ninguém tenta.
+            placeholder={isGroup
+              ? "Mensagem…  @ menciona · Ctrl+V cola print · Enter envia"
+              : "Mensagem…  Ctrl+V cola print · Enter envia"}
             rows={1}
             className="max-h-40 min-h-[40px] flex-1 resize-none overflow-y-auto rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
           />
