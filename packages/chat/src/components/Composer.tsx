@@ -153,13 +153,17 @@ export function Composer({
     return true;
   }
 
-  // Colar imagem funciona mesmo SEM o cursor estar no campo de texto — que é o
-  // caso mais comum: tirar o print, clicar na conversa, Ctrl+V. O evento de
-  // paste só dispara em elemento focável, então um listener preso ao textarea
-  // perderia justamente esse caminho.
+  // ⚠️ UM handler só, na janela. NÃO adicionar onPaste no textarea também:
+  // o evento de paste BORBULHA do campo até a janela, então os dois disparam
+  // para a mesma colagem e o print entra duas vezes. O listener da janela já
+  // cobre os dois casos — com o cursor no campo e sem.
   //
-  // A guarda existe para não roubar o Ctrl+V de outro campo: se o foco está
-  // num input/textarea/editável que NÃO é o nosso, deixa passar.
+  // Ele existe justamente porque o caso mais comum é tirar o print, clicar na
+  // conversa e apertar Ctrl+V SEM clicar no campo; e paste só dispara em
+  // elemento focável, então um handler preso ao textarea perderia esse.
+  //
+  // A guarda evita roubar o Ctrl+V de outro campo: se o foco está num
+  // input/textarea/editável que NÃO é o nosso, deixa passar.
   useEffect(() => {
     const onPasteJanela = (e: ClipboardEvent) => {
       const alvo = document.activeElement as HTMLElement | null;
@@ -326,7 +330,6 @@ export function Composer({
             ref={textRef}
             value={text}
             onChange={onType}
-            onPaste={(e) => { if (colar(e.clipboardData)) e.preventDefault(); }}
             onBlur={stopTyping}
             onKeyDown={(e) => {
               if (e.key === "Escape") { if (mention) setMention(null); else if (replyTo) onClearReply(); stopTyping(); return; }
@@ -335,11 +338,7 @@ export function Composer({
               if (e.key === "ArrowUp" && !text && !mention && onEditLast) { e.preventDefault(); onEditLast(); }
             }}
             aria-label="Escrever mensagem"
-            // A dica de Ctrl+V fica no placeholder porque colar print é
-            // invisível: sem alguém contar, ninguém tenta.
-            placeholder={isGroup
-              ? "Mensagem…  @ menciona · Ctrl+V cola print · Enter envia"
-              : "Mensagem…  Ctrl+V cola print · Enter envia"}
+            placeholder={isGroup ? "Mensagem…  @ menciona · Enter envia" : "Mensagem…  Enter envia"}
             rows={1}
             className="max-h-40 min-h-[40px] flex-1 resize-none overflow-y-auto rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
           />
