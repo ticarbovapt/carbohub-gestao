@@ -1043,6 +1043,26 @@ function mapBlingStatus(situacaoId: number | null, situacaoValor: string | null)
   return "pending";
 }
 
+// Etapa do Rastreio coerente com o status. Pedido NASCIDO no Bling nunca passa
+// pelo kanban do Ops — ninguém arrasta o card —, então sem isto ele fica preso
+// no padrão 'nova_venda' da coluna para sempre, inclusive já entregue.
+//
+// ⚠️ Só vale para pedido BLING-*. Venda manual ('V…') que ganhou external_ref ao
+// ir pro Bling emitir NF TEM etapa de verdade, tocada pelo Ops — sobrescrever
+// ali apagaria o trabalho de quem arrastou o card.
+//
+// Mesmo mapa do backfill de 20260630120000_carboze_orders_fulfillment_stage.
+function estagioDoStatus(status: string): string {
+  switch (status) {
+    case "delivered": return "entregue";
+    case "shipped":   return "em_transporte";
+    case "invoiced":  return "separado";
+    case "confirmed": return "separacao_pendente";
+    case "cancelled": return "cancelado";
+    default:          return "nova_venda";
+  }
+}
+
 // ── syncStock: busca saldo de estoque por produto (lotes de 40) ────────────
 async function syncStock(
   supabaseAdmin: ReturnType<typeof createClient>,
@@ -1684,7 +1704,7 @@ async function bridgeOrdersToCarbohub(
       // Check if exists by external_ref
       const { data: existing } = await supabaseAdmin
         .from("carboze_orders")
-        .select("id, status, items, cnpj, customer_ie, customer_email, customer_phone, delivery_address")
+        .select("id, order_number, status, fulfillment_stage, items, cnpj, customer_ie, customer_email, customer_phone, delivery_address")
         .eq("external_ref", externalRef)
         .single();
       const contatoInfo: any = contatoMap.get(bo.contato_id) || null;
@@ -1700,6 +1720,13 @@ async function bridgeOrdersToCarbohub(
         };
         const updatePayload: Record<string, any> = {};
         if (existing.status !== status) updatePayload.status = status;
+        // Etapa acompanha o status — só em pedido nascido no Bling (ver
+        // `estagioDoStatus`). Recalcula toda rodada, não só quando o status
+        // muda: é o que conserta o pedido que já entrou torto.
+        if (String(existing.order_number || "").startsWith("BLING-")) {
+          const etapa = estagioDoStatus(status);
+          if (existing.fulfillment_stage !== etapa) updatePayload.fulfillment_stage = etapa;
+        }
         if (carboItems.length > 0 && (!existing.items || (existing.items as any[]).length === 0)) updatePayload.items = carboItems;
         setIfEmpty(updatePayload, "cnpj", existing.cnpj, docCliente);
         setIfEmpty(updatePayload, "customer_ie", existing.customer_ie, contatoInfo?.ie);
@@ -1740,6 +1767,7 @@ async function bridgeOrdersToCarbohub(
           discount: Number(bo.total_desconto) || 0,
           total: Number(bo.total) || 0,
           status,
+          fulfillment_stage: estagioDoStatus(status),
           licensee_id: licenseeId,
           external_ref: externalRef,
           notes: bo.observacoes || null,
