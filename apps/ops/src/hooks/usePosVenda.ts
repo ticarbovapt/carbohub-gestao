@@ -109,6 +109,7 @@ export interface PosVendaOrder {
   shipment_volumes: number | null;    // volumes informados na expedição (etiqueta)
   shipment_weight_kg: number | null;  // peso bruto (kg) informado na expedição (etiqueta)
   shipment_carrier: string | null;    // transportadora do envio (etiqueta)
+  shipment_quote_value: number | null; // valor cotado com a transportadora (opcional)
 }
 
 const SELECT_BASE =
@@ -116,7 +117,7 @@ const SELECT_BASE =
   "freight_type, agreed_delivery_date, ppf_date, ppe_date, delivery_address, delivery_city, " +
   "delivery_state, delivery_zip, vendedor_name, vendedor_id, subtotal, shipping_cost, discount, total, " +
   "notes, items, created_at, updated_at, stage_changed_at, fulfillment_stage, linha, bling_nf_id, invoice_number, " +
-  "shipment_volumes, shipment_weight_kg, shipment_carrier, status";
+  "shipment_volumes, shipment_weight_kg, shipment_carrier, shipment_quote_value, status";
 const SELECT_COLS = SELECT_BASE + ", production_done";
 
 // Etapas terminais do rastreio (colunas que só acumulam).
@@ -484,11 +485,16 @@ export function useUpdateFulfillmentStage() {
 export function useUpdateShipmentInfo() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, volumes, weightKg, carrier }: { id: string; volumes?: number | null; weightKg?: number | null; carrier?: string | null }) => {
+    mutationFn: async ({ id, volumes, weightKg, carrier, quoteValue }: { id: string; volumes?: number | null; weightKg?: number | null; carrier?: string | null; quoteValue?: number | null }) => {
       const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };
+      // `undefined` = campo não veio nesta chamada (não mexe). `null` = veio
+      // vazio de propósito (limpa). A distinção importa porque os dados de
+      // expedição agora são preenchidos em DOIS momentos: volumes/peso ao
+      // separar, transportadora/cotação ao gerar a NF.
       if (volumes !== undefined) patch.shipment_volumes = volumes;
       if (weightKg !== undefined) patch.shipment_weight_kg = weightKg;
       if (carrier !== undefined) patch.shipment_carrier = carrier;
+      if (quoteValue !== undefined) patch.shipment_quote_value = quoteValue;
       const { error } = await db.from("carboze_orders").update(patch).eq("id", id);
       if (error) throw error;
     },

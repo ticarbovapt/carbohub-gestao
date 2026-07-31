@@ -34,6 +34,11 @@ const stageLabel = (k: FulfillmentStage) => POSVENDA_STAGES.find((s) => s.key ==
 // Normaliza volumes (≥1) e peso (aceita vírgula) dos campos de expedição.
 const parseVolumes = (v: string): number => { const n = Math.round(Number(v.trim())); return v.trim() !== "" && Number.isFinite(n) && n > 0 ? n : 1; };
 const parsePesoKg = (p: string): number | null => { const s = p.trim().replace(",", "."); if (s === "") return null; const n = Number(s); return Number.isFinite(n) && n >= 0 ? n : null; };
+// Cotação de frete: campo OPCIONAL. Vazio vira null, nunca zero — zero parece
+// "frete grátis" e é indistinguível de "ninguém informou".
+const parseCotacao = (v: string): number | null => { const s = v.trim().replace(/\./g, "").replace(",", "."); if (s === "") return null; const n = Number(s); return Number.isFinite(n) && n >= 0 ? n : null; };
+const fmtBRLopt = (v: number | null | undefined) =>
+  v == null ? "—" : v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
 function VendedorTag({ name, avatar }: { name: string; avatar: string | null }) {
   return (
@@ -77,6 +82,7 @@ export default function PosVenda() {
   const [edVolumes, setEdVolumes] = useState("");
   const [edPeso, setEdPeso] = useState("");
   const [edCarrier, setEdCarrier] = useState("");
+  const [edCotacao, setEdCotacao] = useState("");
   const [savingEdit, setSavingEdit] = useState(false);
   useEffect(() => { setEditShip(false); }, [detail?.id]);
   const startEditShip = () => {
@@ -84,6 +90,7 @@ export default function PosVenda() {
     setEdVolumes(detail.shipment_volumes != null ? String(detail.shipment_volumes) : "");
     setEdPeso(detail.shipment_weight_kg != null ? String(detail.shipment_weight_kg).replace(".", ",") : "");
     setEdCarrier(detail.shipment_carrier ?? "");
+    setEdCotacao(detail.shipment_quote_value != null ? String(detail.shipment_quote_value).replace(".", ",") : "");
     setEditShip(true);
   };
   async function saveEditShip() {
@@ -93,8 +100,9 @@ export default function PosVenda() {
       const volumes = edVolumes.trim() === "" ? null : parseVolumes(edVolumes);
       const weightKg = parsePesoKg(edPeso);
       const carrier = edCarrier.trim() || null;
-      await updateShipInfo.mutateAsync({ id: detail.id, volumes, weightKg, carrier });
-      setDetail((d) => (d ? { ...d, shipment_volumes: volumes, shipment_weight_kg: weightKg, shipment_carrier: carrier } : d));
+      const quoteValue = parseCotacao(edCotacao);
+      await updateShipInfo.mutateAsync({ id: detail.id, volumes, weightKg, carrier, quoteValue });
+      setDetail((d) => (d ? { ...d, shipment_volumes: volumes, shipment_weight_kg: weightKg, shipment_carrier: carrier, shipment_quote_value: quoteValue } : d));
       setEditShip(false);
     } finally {
       setSavingEdit(false);
@@ -102,18 +110,42 @@ export default function PosVenda() {
   }
   // Pedido + destino aguardando confirmação (Em Separação OU Criar Ordem de Produção).
   const [pending, setPending] = useState<{ order: PosVendaOrder; target: FulfillmentStage } | null>(null);
-  // ── Dados de expedição ao ir p/ "Gerar Nota Fiscal" (Separado → Gerar NF) ──
-  // Volumes, peso bruto e TRANSPORTADORA — salvos no card e usados na etiqueta.
+  // ── Expedição em DOIS momentos ────────────────────────────────────────────
+  //
+  // Antes tudo era perguntado de uma vez ao ir para "Gerar Nota Fiscal":
+  // volumes, peso e transportadora. Só que quem sabe cada coisa é gente
+  // diferente, em hora diferente.
+  //
+  // Volumes e peso saem da BANCADA, no momento em que o pedido é fechado —
+  // quem separa acabou de contar as caixas e pesar. Transportadora e valor da
+  // cotação vêm DEPOIS, de quem cota o frete, e dependem justamente do peso
+  // e do volume já conhecidos. Perguntar tudo junto obrigava a adivinhar
+  // metade ou a voltar no card para corrigir.
+  //
+  //   Em Separação → Separado   : volumes + peso
+  //   Separado     → Gerar NF   : transportadora + valor da cotação (opcional)
+
+  // 1º momento: ao SEPARAR.
+  const [sepOrder, setSepOrder] = useState<PosVendaOrder | null>(null);
+  const [sepVolumes, setSepVolumes] = useState("");
+  const [sepPeso, setSepPeso] = useState("");
+  const [sepSaving, setSepSaving] = useState(false);
+  useEffect(() => {
+    if (sepOrder) {
+      setSepVolumes(sepOrder.shipment_volumes != null ? String(sepOrder.shipment_volumes) : "1");
+      setSepPeso(sepOrder.shipment_weight_kg != null ? String(sepOrder.shipment_weight_kg).replace(".", ",") : "");
+    }
+  }, [sepOrder]);
+
+  // 2º momento: ao ir para "Gerar Nota Fiscal".
   const [gnfOrder, setGnfOrder] = useState<PosVendaOrder | null>(null);
-  const [gnfVolumes, setGnfVolumes] = useState("");
-  const [gnfPeso, setGnfPeso] = useState("");
   const [gnfCarrier, setGnfCarrier] = useState("");
+  const [gnfCotacao, setGnfCotacao] = useState("");
   const [gnfSaving, setGnfSaving] = useState(false);
   useEffect(() => {
     if (gnfOrder) {
-      setGnfVolumes(gnfOrder.shipment_volumes != null ? String(gnfOrder.shipment_volumes) : "1");
-      setGnfPeso(gnfOrder.shipment_weight_kg != null ? String(gnfOrder.shipment_weight_kg).replace(".", ",") : "");
       setGnfCarrier(gnfOrder.shipment_carrier ?? "");
+      setGnfCotacao(gnfOrder.shipment_quote_value != null ? String(gnfOrder.shipment_quote_value).replace(".", ",") : "");
     }
   }, [gnfOrder]);
 
@@ -230,21 +262,41 @@ export default function PosVenda() {
   }
 
   // Aplica a etapa escolhida na caixa de conferência de estoque e fecha.
+  // "Separado" não vai direto: encadeia na caixa de volumes/peso, porque é o
+  // momento em que quem separou tem as caixas contadas e pesadas na mão.
   function commitStage(stage: FulfillmentStage) {
-    if (pending) updateStage.mutate({ id: pending.order.id, stage });
+    const order = pending?.order;
     setPending(null);
+    if (!order) return;
+    if (stage === "separado") { setSepOrder(order); return; }
+    updateStage.mutate({ id: order.id, stage });
   }
 
-  // Confirma a expedição: salva volumes/peso/transportadora no card e move p/ Gerar NF.
+  // 1º momento: salva volumes/peso e move p/ Separado (que deduz o estoque).
+  async function confirmSeparado() {
+    if (!sepOrder) return;
+    setSepSaving(true);
+    try {
+      const volumes = parseVolumes(sepVolumes);
+      const weightKg = parsePesoKg(sepPeso);
+      // Vão junto no updateStage: é ele que grava volumes/peso ao separar, e
+      // fazer numa tacada só evita o card piscar com dado pela metade.
+      updateStage.mutate({ id: sepOrder.id, stage: "separado", volumes, weightKg });
+      setSepOrder(null);
+    } finally {
+      setSepSaving(false);
+    }
+  }
+
+  // 2º momento: salva transportadora/cotação e move p/ Gerar NF.
   async function confirmGerarNf() {
     if (!gnfOrder) return;
     setGnfSaving(true);
     try {
       await updateShipInfo.mutateAsync({
         id: gnfOrder.id,
-        volumes: parseVolumes(gnfVolumes),
-        weightKg: parsePesoKg(gnfPeso),
         carrier: gnfCarrier.trim() || null,
+        quoteValue: parseCotacao(gnfCotacao),
       });
       updateStage.mutate({ id: gnfOrder.id, stage: "gerar_nf" });
       setGnfOrder(null);
@@ -591,11 +643,55 @@ export default function PosVenda() {
         </DialogContent>
       </Dialog>
 
-      {/* Expedição: volumes/peso/transportadora ao ir p/ Gerar Nota Fiscal */}
+      {/* 1º momento — Em Separação → Separado: volumes e peso, medidos na bancada */}
+      <Dialog open={!!sepOrder} onOpenChange={(o) => !o && setSepOrder(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><Boxes className="h-4 w-4 text-carbo-blue" /> Volumes e peso</DialogTitle>
+          </DialogHeader>
+          {sepOrder && (
+            <div className="space-y-3 text-sm">
+              <div className="rounded-lg border border-border p-3 space-y-1">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-semibold text-sm">{sepOrder.customer_name}</span>
+                  <span className="font-mono text-xs text-muted-foreground shrink-0">{sepOrder.order_number}</span>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Conte as caixas e pese o pedido fechado. Ao confirmar, o card vai para{" "}
+                  <strong>Separado</strong> e o estoque é deduzido do HUB-RN.
+                </p>
+              </div>
+              <div className="grid grid-cols-2 gap-3 rounded-lg border border-border p-3">
+                <div className="space-y-1.5">
+                  <Label className="text-xs flex items-center gap-1.5"><Boxes className="h-3.5 w-3.5 text-muted-foreground" /> Volumes</Label>
+                  <Input type="number" min={1} inputMode="numeric" value={sepVolumes}
+                    onChange={(e) => setSepVolumes(e.target.value)} placeholder="1" autoFocus />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs flex items-center gap-1.5"><Weight className="h-3.5 w-3.5 text-muted-foreground" /> Peso bruto (kg)</Label>
+                  <Input type="text" inputMode="decimal" value={sepPeso}
+                    onChange={(e) => setSepPeso(e.target.value)} placeholder="ex.: 12,5" />
+                </div>
+              </div>
+              <p className="text-[11px] text-muted-foreground">
+                A transportadora e o valor do frete são informados depois, ao gerar a nota.
+              </p>
+              <div className="flex flex-col gap-2 pt-1">
+                <Button className="w-full gap-1.5" disabled={sepSaving} onClick={confirmSeparado}>
+                  {sepSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : null} Confirmar → Separado
+                </Button>
+                <Button className="w-full" variant="ghost" disabled={sepSaving} onClick={() => setSepOrder(null)}>Cancelar</Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* 2º momento — Separado → Gerar NF: transportadora e cotação do frete */}
       <Dialog open={!!gnfOrder} onOpenChange={(o) => !o && setGnfOrder(null)}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2"><Truck className="h-4 w-4 text-carbo-blue" /> Dados de expedição</DialogTitle>
+            <DialogTitle className="flex items-center gap-2"><Truck className="h-4 w-4 text-carbo-blue" /> Frete</DialogTitle>
           </DialogHeader>
           {gnfOrder && (
             <div className="space-y-3 text-sm">
@@ -604,25 +700,38 @@ export default function PosVenda() {
                   <span className="font-semibold text-sm">{gnfOrder.customer_name}</span>
                   <span className="font-mono text-xs text-muted-foreground shrink-0">{gnfOrder.order_number}</span>
                 </div>
-                <p className="text-xs text-muted-foreground">Informe os dados do envio — vão para a etiqueta. Ao confirmar, o card segue para <strong>Gerar Nota Fiscal</strong>.</p>
+                <p className="text-xs text-muted-foreground">Ao confirmar, o card segue para <strong>Gerar Nota Fiscal</strong>.</p>
               </div>
-              <div className="grid grid-cols-2 gap-3 rounded-lg border border-border p-3">
+
+              {/* Volumes e peso já vieram da separação — mostrados só para conferir,
+                  porque são eles que fundamentam a cotação. Editar é no detalhe. */}
+              <div className="flex items-center gap-4 rounded-lg border border-border bg-muted/30 px-3 py-2 text-xs">
+                <span className="flex items-center gap-1.5">
+                  <Boxes className="h-3.5 w-3.5 text-muted-foreground" />
+                  <strong>{gnfOrder.shipment_volumes ?? "—"}</strong> volume(s)
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <Weight className="h-3.5 w-3.5 text-muted-foreground" />
+                  <strong>{gnfOrder.shipment_weight_kg != null ? `${String(gnfOrder.shipment_weight_kg).replace(".", ",")} kg` : "—"}</strong>
+                </span>
+              </div>
+
+              <div className="space-y-3 rounded-lg border border-border p-3">
                 <div className="space-y-1.5">
-                  <Label className="text-xs flex items-center gap-1.5"><Boxes className="h-3.5 w-3.5 text-muted-foreground" /> Volumes</Label>
-                  <Input type="number" min={1} inputMode="numeric" value={gnfVolumes}
-                    onChange={(e) => setGnfVolumes(e.target.value)} placeholder="1" />
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs flex items-center gap-1.5"><Weight className="h-3.5 w-3.5 text-muted-foreground" /> Peso bruto (kg)</Label>
-                  <Input type="text" inputMode="decimal" value={gnfPeso}
-                    onChange={(e) => setGnfPeso(e.target.value)} placeholder="ex.: 12,5" />
-                </div>
-                <div className="space-y-1.5 col-span-2">
                   <Label className="text-xs flex items-center gap-1.5"><Truck className="h-3.5 w-3.5 text-muted-foreground" /> Transportadora</Label>
                   <Input type="text" value={gnfCarrier}
-                    onChange={(e) => setGnfCarrier(e.target.value)} placeholder="Nome da transportadora" />
+                    onChange={(e) => setGnfCarrier(e.target.value)} placeholder="Nome da transportadora" autoFocus />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs flex items-center gap-1.5">
+                    <Weight className="h-3.5 w-3.5 text-muted-foreground" /> Valor da cotação (R$)
+                    <span className="text-muted-foreground font-normal">— opcional</span>
+                  </Label>
+                  <Input type="text" inputMode="decimal" value={gnfCotacao}
+                    onChange={(e) => setGnfCotacao(e.target.value)} placeholder="ex.: 180,00" />
                 </div>
               </div>
+
               <div className="flex flex-col gap-2 pt-1">
                 <Button className="w-full gap-1.5" disabled={gnfSaving} onClick={confirmGerarNf}>
                   {gnfSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : null} Confirmar → Gerar Nota Fiscal
@@ -723,6 +832,12 @@ export default function PosVenda() {
                         <p className="flex items-center gap-1.5 text-muted-foreground mb-0.5"><Truck className="h-3.5 w-3.5" /> Transportadora</p>
                         <p className="font-medium">{detail.shipment_carrier || "—"}</p>
                       </div>
+                      {/* Cotação do frete: o que a transportadora cobrou. Não confundir
+                          com o frete repassado ao cliente (shipping_cost, na venda). */}
+                      <div>
+                        <p className="flex items-center gap-1.5 text-muted-foreground mb-0.5"><Truck className="h-3.5 w-3.5" /> Cotação do frete</p>
+                        <p className="font-medium">{fmtBRLopt(detail.shipment_quote_value)}</p>
+                      </div>
                     </div>
                   ) : (
                     <div className="grid grid-cols-3 gap-3">
@@ -737,6 +852,13 @@ export default function PosVenda() {
                       <div className="space-y-1">
                         <Label className="text-[11px] flex items-center gap-1"><Truck className="h-3 w-3" /> Transportadora</Label>
                         <Input type="text" value={edCarrier} onChange={(e) => setEdCarrier(e.target.value)} placeholder="Nome" className="h-8" />
+                      </div>
+                      <div className="space-y-1 col-span-3">
+                        <Label className="text-[11px] flex items-center gap-1">
+                          <Truck className="h-3 w-3" /> Cotação do frete (R$)
+                          <span className="text-muted-foreground font-normal">— opcional</span>
+                        </Label>
+                        <Input type="text" inputMode="decimal" value={edCotacao} onChange={(e) => setEdCotacao(e.target.value)} placeholder="ex.: 180,00" className="h-8" />
                       </div>
                     </div>
                   )}
