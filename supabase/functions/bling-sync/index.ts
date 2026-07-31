@@ -1214,6 +1214,9 @@ async function syncNFe(
   logId: string
 ): Promise<{ synced: number; failed: number }> {
   let page = 1, totalSynced = 0, totalFailed = 0, hasMore = true;
+  // Marca o início: tudo que a LISTA tocar nesta rodada fica com synced_at
+  // maior que isto. O que sobrar para trás é justamente o que sumiu da lista.
+  const inicioDaRodada = new Date().toISOString();
 
   // ── Passo 1: lista ────────────────────────────────────────────────────────
   while (hasMore) {
@@ -1250,6 +1253,56 @@ async function syncNFe(
     await new Promise((r) => setTimeout(r, 350));
     page++;
     if (nfes.length < 100) hasMore = false;
+  }
+
+  // ── Passo 1b: as que SUMIRAM da lista ─────────────────────────────────────
+  //
+  // ⚠️ O endpoint /nfe NÃO devolve nota cancelada. Quando o Bling cancela, a
+  // nota simplesmente desaparece da listagem — e o sync interpretava esse
+  // sumiço como "nada mudou", deixando a situação congelada em "Emitida
+  // DANFE" para sempre. Foi assim que uma nota cancelada continuou contando
+  // como faturamento: a última vez que o sistema a viu, ela ainda era válida.
+  //
+  // O detalhe (/nfe/{id}) FUNCIONA para nota cancelada. Então: quem ficou
+  // para trás nesta rodada é reconsultado um a um.
+  //
+  // O filtro de situação é o que faz isto convergir: nota já sabidamente
+  // inválida não precisa ser reconsultada nunca mais. Sem ele, toda nota
+  // cancelada voltaria a ser buscada de hora em hora, para sempre.
+  try {
+    const { data: sumidas } = await supabaseAdmin
+      .from("bling_nfe")
+      .select("id, bling_id, numero, situacao")
+      .lt("synced_at", inicioDaRodada)
+      .not("situacao", "in", '("Cancelada","Denegada","Rejeitada","Bloqueada")')
+      .order("synced_at", { ascending: false })
+      .limit(40);   // teto de tempo: 40 × 350ms ≈ 14s
+
+    for (const nf of (sumidas || [])) {
+      try {
+        const detail = await blingFetch(token, `/nfe/${nf.bling_id}`, 1, 1);
+        const d = detail.data || {};
+        const situ = nfeSituacaoLabel(d.situacao);
+        if (situ && situ !== nf.situacao) {
+          console.log(`[bling-sync] NF ${nf.numero}: ${nf.situacao} → ${situ} (sumiu da lista)`);
+        }
+        await supabaseAdmin.from("bling_nfe").update({
+          situacao:   situ ?? nf.situacao,
+          raw_data:   d,
+          synced_at:  new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        }).eq("id", nf.id);
+        totalSynced++;
+      } catch (e) {
+        // Nota que o Bling não devolve nem por id: pode ter sido excluída de
+        // vez. Não é falha do sync — registra e segue.
+        console.error(`[bling-sync] detalhe da NF sumida ${nf.numero} falhou:`, e);
+      }
+      await new Promise((r) => setTimeout(r, 350));
+    }
+  } catch (e) {
+    // Reconsulta é complemento: se ela falhar, o sync da lista continua valendo.
+    console.error("[bling-sync] etapa de NFs sumidas falhou:", e);
   }
 
   // ── Passo 2: enriquecer com detalhe (observação + valor + CNPJ + situação) ─
