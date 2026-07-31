@@ -1,16 +1,33 @@
 import { useMemo, useState } from "react";
-import { ShoppingBag, Loader2, Calendar, Eye, MapPin, Phone, Mail, Package } from "lucide-react";
+import { ShoppingBag, Loader2, Calendar, Eye, MapPin, Phone, Mail, Package, User, Users, FileText, CreditCard, Truck, Boxes, Weight } from "lucide-react";
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { CarboBadge } from "@/components/ui/carbo-badge";
-import { useMyPosVenda, POSVENDA_STAGES, type FulfillmentStage, type PosVendaOrder } from "@/hooks/usePosVenda";
+import { useAuth } from "@/contexts/AuthContext";
+import { useVendedoresDir } from "@/hooks/useVendas";
+import { usePosVendaOrders, POSVENDA_STAGES, type FulfillmentStage, type PosVendaOrder } from "@/hooks/usePosVenda";
 
 const brl = (v: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v || 0);
 const fmtDate = (s: string) => new Date(s).toLocaleDateString("pt-BR");
+// Data-only (yyyy-mm-dd) sem shift de fuso.
+const fmtDay = (s: string | null) => (s ? new Date(s + "T00:00:00").toLocaleDateString("pt-BR") : "—");
 const stageLabel = (k: FulfillmentStage) => POSVENDA_STAGES.find((s) => s.key === k)?.label ?? k;
+// Mesma formatação do Ops: o vendedor confere o documento contra o pedido.
+const fmtDoc = (v: string | null) => {
+  const d = (v ?? "").replace(/\D/g, "");
+  if (d.length === 14) return d.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, "$1.$2.$3/$4-$5");
+  if (d.length === 11) return d.replace(/^(\d{3})(\d{3})(\d{3})(\d{2})$/, "$1.$2.$3-$4");
+  return v?.trim() || "—";
+};
 
 export default function PosVenda() {
-  const { data: orders = [], isLoading } = useMyPosVenda();
+  const { user, isGestor } = useAuth();
+  const [vendedorFilter, setVendedorFilter] = useState("__all__");
+  const { data: orders = [], isLoading } = usePosVendaOrders({
+    isGestor, userId: user?.id, vendedorFilter,
+  });
+  const { data: dir = [] } = useVendedoresDir();
   const [detail, setDetail] = useState<PosVendaOrder | null>(null);
 
   const byStage = useMemo(() => {
@@ -24,14 +41,34 @@ export default function PosVenda() {
     <div className="p-4 md:p-6 h-[calc(100dvh-3.5rem)] flex flex-col overflow-hidden">
       <div className="max-w-[1700px] mx-auto w-full flex flex-col flex-1 min-h-0 gap-4">
         <CarboPageHeader
-          title="Pós-venda — Meus Pedidos"
-          description="Acompanhe a jornada dos seus pedidos (somente leitura — quem controla é a operação)"
+          title={isGestor ? "Pós-venda — Rastreio de venda" : "Pós-venda — Meus Pedidos"}
+          description="Acompanhe a jornada dos pedidos (somente leitura — quem controla é a operação)"
           icon={ShoppingBag}
         />
 
-        <div className="flex items-center gap-2 px-3 py-2 rounded-md bg-blue-500/10 border border-blue-500/20 text-sm text-blue-500">
-          <Eye className="h-4 w-4 shrink-0" />
-          <span>Visualização. As etapas são atualizadas pelo time de operações no Carbo Ops. Clique no card para ver os detalhes.</span>
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex items-center gap-2 px-3 py-2 rounded-md bg-blue-500/10 border border-blue-500/20 text-sm text-blue-500 flex-1 min-w-[280px]">
+            <Eye className="h-4 w-4 shrink-0" />
+            <span>Visualização. As etapas são atualizadas pelo time de operações no Carbo Ops. Clique no card para ver os detalhes.</span>
+          </div>
+          {/* Filtro só para gestor: o vendedor já vê apenas o que é dele, pela
+              RLS. Oferecer o seletor a ele prometeria dado que não vem. */}
+          {isGestor && (
+            <Select value={vendedorFilter} onValueChange={setVendedorFilter}>
+              <SelectTrigger className="h-9 w-[230px] text-sm">
+                <span className="flex items-center gap-1.5 truncate">
+                  <Users className="h-3.5 w-3.5 shrink-0" />
+                  <SelectValue placeholder="Todos os vendedores" />
+                </span>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__all__">Todos os vendedores</SelectItem>
+                {dir.map((v) => (
+                  <SelectItem key={v.id} value={v.id}>{v.full_name || "—"}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
         </div>
 
         {isLoading ? (
@@ -39,7 +76,11 @@ export default function PosVenda() {
             <Loader2 className="h-5 w-5 animate-spin" /> Carregando…
           </div>
         ) : orders.length === 0 ? (
-          <p className="py-16 text-center text-sm text-muted-foreground">Você ainda não tem pedidos manuais em acompanhamento.</p>
+          <p className="py-16 text-center text-sm text-muted-foreground">
+            {isGestor && vendedorFilter !== "__all__"
+              ? "Este vendedor não tem pedidos em acompanhamento."
+              : "Nenhum pedido manual em acompanhamento."}
+          </p>
         ) : (
           <div className="flex gap-3 overflow-x-auto flex-1 min-h-0">
             {POSVENDA_STAGES.map((stage) => {
@@ -69,6 +110,12 @@ export default function PosVenda() {
                           </div>
                           <p className="text-[11px] text-muted-foreground font-mono">{o.order_number || "—"}</p>
                           <p className="text-[11px] text-muted-foreground flex items-center gap-1"><Calendar className="h-3 w-3" /> {fmtDate(o.created_at)}</p>
+                          {/* Com o quadro de todos, sem o nome o card fica anônimo. */}
+                          {isGestor && o.vendedor_name && (
+                            <p className="text-[11px] text-muted-foreground flex items-center gap-1 truncate">
+                              <User className="h-3 w-3 shrink-0" /> {o.vendedor_name}
+                            </p>
+                          )}
                         </div>
                       ))
                     )}
@@ -93,6 +140,9 @@ export default function PosVenda() {
               <div className="space-y-4 text-sm">
                 <div className="flex flex-wrap gap-x-6 gap-y-1 text-xs text-muted-foreground">
                   <span className="font-mono">{detail.order_number || "—"}</span>
+                  {detail.vendedor_name && (
+                    <span className="flex items-center gap-1"><User className="h-3 w-3" /> {detail.vendedor_name}</span>
+                  )}
                   <span className="flex items-center gap-1"><Calendar className="h-3 w-3" /> {fmtDate(detail.created_at)}</span>
                 </div>
 
@@ -135,6 +185,71 @@ export default function PosVenda() {
                   {Number(detail.discount) > 0 && <div className="flex justify-between"><span className="text-muted-foreground">Desconto</span><span className="tabular-nums">- {brl(Number(detail.discount))}</span></div>}
                   <div className="flex justify-between font-semibold text-sm pt-1"><span>Total</span><span className="tabular-nums">{brl(Number(detail.total))}</span></div>
                 </div>
+
+                {/* Dados fiscais e de pagamento — existiam no pedido e nunca
+                    chegavam ao vendedor. É ele quem o cliente liga a cobrar. */}
+                <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-xs rounded-lg border border-border p-3">
+                  <div>
+                    <p className="flex items-center gap-1.5 text-muted-foreground mb-0.5"><FileText className="h-3.5 w-3.5" /> CNPJ / CPF</p>
+                    <p className="font-medium">{fmtDoc(detail.cnpj)}</p>
+                  </div>
+                  <div>
+                    <p className="flex items-center gap-1.5 text-muted-foreground mb-0.5"><FileText className="h-3.5 w-3.5" /> Inscrição Estadual</p>
+                    <p className="font-medium">{detail.customer_ie?.trim() || "Isento / não informado"}</p>
+                  </div>
+                  <div>
+                    <p className="flex items-center gap-1.5 text-muted-foreground mb-0.5"><CreditCard className="h-3.5 w-3.5" /> Forma de pagamento</p>
+                    <p className="font-medium">{detail.payment_terms || "—"}</p>
+                  </div>
+                  <div>
+                    <p className="flex items-center gap-1.5 text-muted-foreground mb-0.5"><Truck className="h-3.5 w-3.5" /> Frete</p>
+                    <p className="font-medium">{detail.freight_type || "—"}</p>
+                  </div>
+                  {detail.invoice_number && (
+                    <div>
+                      <p className="flex items-center gap-1.5 text-muted-foreground mb-0.5"><FileText className="h-3.5 w-3.5" /> Nota fiscal</p>
+                      <p className="font-medium">{detail.invoice_number}</p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Prazos combinados na venda. O vendedor prometeu a data; ele
+                    precisa ver se ela ainda está de pé. */}
+                {(detail.agreed_delivery_date || detail.ppf_date || detail.ppe_date) && (
+                  <div className="grid grid-cols-3 gap-x-4 text-xs rounded-lg border border-border p-3">
+                    <div>
+                      <p className="text-muted-foreground mb-0.5">Entrega combinada</p>
+                      <p className="font-medium">{fmtDay(detail.agreed_delivery_date)}</p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground mb-0.5">Fabricar até (PPF)</p>
+                      <p className="font-medium">{fmtDay(detail.ppf_date)}</p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground mb-0.5">Expedir até (PPE)</p>
+                      <p className="font-medium">{fmtDay(detail.ppe_date)}</p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Expedição. Só aparece quando a operação já preencheu — bloco
+                    vazio em todo pedido novo seria ruído. */}
+                {(detail.shipment_volumes != null || detail.shipment_weight_kg != null || detail.shipment_carrier) && (
+                  <div className="grid grid-cols-3 gap-x-4 text-xs rounded-lg border border-border p-3">
+                    <div>
+                      <p className="flex items-center gap-1.5 text-muted-foreground mb-0.5"><Boxes className="h-3.5 w-3.5" /> Volumes</p>
+                      <p className="font-medium">{detail.shipment_volumes ?? "—"}</p>
+                    </div>
+                    <div>
+                      <p className="flex items-center gap-1.5 text-muted-foreground mb-0.5"><Weight className="h-3.5 w-3.5" /> Peso bruto</p>
+                      <p className="font-medium">{detail.shipment_weight_kg != null ? `${String(detail.shipment_weight_kg).replace(".", ",")} kg` : "—"}</p>
+                    </div>
+                    <div>
+                      <p className="flex items-center gap-1.5 text-muted-foreground mb-0.5"><Truck className="h-3.5 w-3.5" /> Transportadora</p>
+                      <p className="font-medium">{detail.shipment_carrier || "—"}</p>
+                    </div>
+                  </div>
+                )}
 
                 {detail.notes && (
                   <div className="text-xs"><span className="text-muted-foreground">Observações: </span>{detail.notes}</div>
