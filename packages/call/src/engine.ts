@@ -1,14 +1,23 @@
-// Engine de chamada sobre o LiveKit (SFU self-host da Carbo). ÁUDIO só nesta
+// Engine de chamada sobre o LiveKit Cloud. ÁUDIO só nesta
 // rodada — a estrutura já prevê vídeo/tela (métodos marcados como futuro).
 //
 // Este arquivo é o ÚNICO que importa `livekit-client`. Ele é carregado por
 // dynamic import (via index.ts / hooks.ts), então a lib pesada NÃO entra no
 // bundle de quem não usa chamada.
 import {
-  Room, RoomEvent, Track,
+  Room, RoomEvent, Track, setLogLevel,
   type RemoteTrack, type RemoteTrackPublication, type RemoteParticipant,
 } from "livekit-client";
 import type { CallEngineEvents, CallParticipant, CallStateValue } from "./types";
+
+// O livekit-client assume nível `info` e narra tudo que faz: cada mudança de
+// estado, cada track publicada, cada handshake. Em produção isso ENTERRA o que
+// importa — um erro de verdade some no meio de vinte linhas de rotina.
+//
+// Em desenvolvimento o barulho é útil (foi com ele que se achou a conexão
+// duplicada), então o nível só cai no build de produção.
+const ehDev = Boolean((import.meta as { env?: { DEV?: boolean } })?.env?.DEV);
+setLogLevel(ehDev ? "debug" : "warn");
 
 export class CallEngine {
   private room: Room | null = null;
