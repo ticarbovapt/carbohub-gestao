@@ -186,7 +186,17 @@ export default function Faturamento() {
                   <CarboTableCell onClick={(e) => e.stopPropagation()}>
                     {hasNF ? (
                       <div className="flex items-center gap-2">
-                        <CarboBadge variant="success" className="gap-1"><FileText className="h-3 w-3" /> NF {o.invoice_number || o.bling_nf_id}</CarboBadge>
+                        {/* A cor vem da SITUAÇÃO da nota, não do fato de existir
+                            uma. Antes era `variant="success"` fixo: nota
+                            cancelada aparecia verde, igual a faturamento bom. */}
+                        <CarboBadge
+                          variant={o.nf_valida ? "success" : "destructive"}
+                          className="gap-1"
+                          title={o.nf_situacao ?? undefined}
+                        >
+                          <FileText className="h-3 w-3" /> NF {o.invoice_number || o.bling_nf_id}
+                          {!o.nf_valida && o.nf_situacao ? ` · ${o.nf_situacao}` : ""}
+                        </CarboBadge>
                         <BaixarNFButton blingNfId={o.bling_nf_id as number} label="Baixar" />
                       </div>
                     ) : (
@@ -247,6 +257,9 @@ export default function Faturamento() {
                         <div className="text-xs">
                           <span className="text-muted-foreground">Nota Fiscal: </span>
                           <span className="font-medium">{o.invoice_number || `#${o.bling_nf_id}`}</span>
+                          {!o.nf_valida && o.nf_situacao && (
+                            <span className="ml-1.5 font-semibold text-destructive">{o.nf_situacao}</span>
+                          )}
                         </div>
                       )}
 

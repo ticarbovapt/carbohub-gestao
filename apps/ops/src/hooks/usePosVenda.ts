@@ -395,6 +395,22 @@ export function useUpdateFulfillmentStage() {
         if (volumes !== undefined) patch.shipment_volumes = volumes;
         if (weightKg !== undefined) patch.shipment_weight_kg = weightKg;
       }
+      // ⚠️ CANCELAR AQUI PRECISA CANCELAR O PEDIDO, não só mover o card.
+      //
+      // `fulfillment_stage` é a etapa logística; `status` é o que TODA a
+      // métrica lê — carbo_vendas_metrica filtra `status not in
+      // ('quote','cancelled')`. Mexer só na etapa deixava a venda cancelada
+      // na tela e VIVA no faturamento: uma de R$ 19.468 aparecia como
+      // "Cancelado" no Rastreio e continuava somando no Dashboard Comercial.
+      if (stage === "cancelado") {
+        patch.status = "cancelled";
+      } else {
+        // Reabrir devolve o pedido para a fila — mas SÓ se ele estava
+        // cancelado. Sem essa leitura, arrastar um pedido já faturado o
+        // rebaixaria para 'pending' e apagaria o faturamento dele.
+        const atual = await db.from("carboze_orders").select("status").eq("id", id).maybeSingle();
+        if (atual.data?.status === "cancelled") patch.status = "pending";
+      }
       const { error } = await db
         .from("carboze_orders")
         .update(patch)

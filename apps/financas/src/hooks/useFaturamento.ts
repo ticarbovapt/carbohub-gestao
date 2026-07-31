@@ -72,6 +72,10 @@ export interface FaturamentoOrder {
   bling_nf_id: number | null;
   nf_access_key: string | null;
   invoice_number: string | null;
+  // Situação da nota NO BLING. Sem isto a tela pintava toda NF de verde e
+  // uma nota cancelada aparecia como faturamento normal.
+  nf_situacao: string | null;
+  nf_valida: boolean;
   // Etapa no funil de Pós-venda (Carbo Ops). O botão "Criar no Bling" só libera
   // quando o card chega em "gerar_nf"; antes disso mostramos onde ele está.
   fulfillment_stage: string | null;
@@ -92,7 +96,11 @@ export function useFaturamento({ month, search = "", showAll = false }: Faturame
     queryKey: ["faturamento", monthKey, term, showAll],
     queryFn: async () => {
       let query = supabase
-        .from("carboze_orders")
+        // carbo_vendas_metrica em vez de carboze_orders: ela já traz a
+        // situação da NF resolvida (nf_situacao / nf_valida). Ler a tabela
+        // crua obrigaria a repetir aqui a regra de "nota que vale", que é a
+        // mesma que o resto do sistema usa — e regra repetida diverge.
+        .from("carbo_vendas_metrica")
         .select("*")
         .in("status", ["pending", "confirmed", "invoiced", "shipped", "delivered"])
         .order("created_at", { ascending: false });
