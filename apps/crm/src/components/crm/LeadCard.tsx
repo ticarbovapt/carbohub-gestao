@@ -8,21 +8,29 @@ import {
 } from "@/types/crm";
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Card do lead no kanban.
+// Card do lead no kanban — ALTURA FIXA de 184px.
 //
-// A ordem aqui é deliberada: NOME PRIMEIRO. Antes o card abria com duas
-// pílulas coloridas (segmento e origem) e o nome só vinha na terceira linha —
-// o olho lia "Licenciado" e "Formulário CarboVapt" antes de saber com quem
-// estava falando, e o nome é justamente o que identifica o card.
+// Fixa, não mínima. Card que cresce com o conteúdo faz a coluna serrilhar e
+// o botão "Avançar" dançar de altura em altura — o alvo do clique se move a
+// cada card. Aqui todo card mede o mesmo, cheio ou vazio.
 //
-// Segmento, origem, repasse e ramo continuam todos aqui, mas como ponto de
-// 6px + texto cinza em vez de pílula preenchida. A informação não sumiu:
-// parou de competir com o nome.
+// Como se trava: reservando o espaço de quem pode não existir. As zonas de
+// identidade (50), do-que-o-lead-é (16) e estado (16) ocupam altura mesmo
+// vazias.
 //
-// O card usa --kanban-card, não bg-card. Motivo em index.css: no tema escuro
-// o card era MAIS ESCURO que a coluna e ficava a 2% do fundo; no claro, card
-// e coluna eram os dois branco puro. Não havia contraste nenhum.
+//   padding 24 + topo 50 + meta 16 + estado 16 + dono 26 + ações 28
+//   + 4 espaços de 6 = 184
+//
+// ⚠️ `overflow-hidden` em CADA zona não é enfeite. Zona de altura fixa NÃO
+// esconde o excesso por padrão: ele vaza POR CIMA das linhas de baixo. Um
+// nome fantasia inesperado ou um ramo longo embolariam o card inteiro.
+//
+// A ordem é deliberada: NOME PRIMEIRO. Antes o card abria com duas pílulas
+// coloridas e o nome só vinha na terceira linha — o olho lia "Licenciado"
+// antes de saber com quem estava falando.
 // ─────────────────────────────────────────────────────────────────────────────
+
+const ALTURA = 184;
 
 // Data-só é parseada como UTC por new Date("2026-07-30") e volta um dia no
 // fuso do Brasil. Monta a data local componente a componente.
@@ -63,15 +71,11 @@ const TEMP_COR = {
 } as const;
 const TEMP_LABEL = { quente: "Quente", morno: "Morno", frio: "Frio" };
 
-/** Item da linha de metadados: ponto colorido + texto discreto. */
-function Meta({ cor, children, title }: { cor?: string; children: React.ReactNode; title?: string }) {
-  return (
-    <span className="inline-flex items-center gap-1.5 min-w-0" title={title}>
-      {cor && <span className="h-1.5 w-1.5 rounded-full shrink-0" style={{ background: cor }} />}
-      <span className="truncate">{children}</span>
-    </span>
-  );
-}
+/** Quantos itens de metadado cabem na linha de 16px sem apertar. O resto
+ *  vira "+N" com a lista no tooltip — corte determinístico, sem medir DOM. */
+const META_VISIVEIS = 2;
+
+interface MetaItem { chave: string; cor?: string; texto: string; icone?: "repasse" | "origem" }
 
 export function LeadCard({ lead, funnelType: _funnelType, owner, onAdvance, onMarkLost, onClick, originFunnel, repassadoPor }: LeadCardProps) {
   const daysSince = getDaysSinceUpdate(lead.updated_at);
@@ -83,16 +87,34 @@ export function LeadCard({ lead, funnelType: _funnelType, owner, onAdvance, onMa
   const waLink = lead.contact_phone ? `https://wa.me/55${lead.contact_phone.replace(/\D/g, "")}` : null;
   const local = [lead.city, lead.state].filter(Boolean).join(", ");
 
+  // Ordem de prioridade: o que o lead É vem antes de onde ele veio, e o ramo
+  // por último — é o que menos muda a decisão de quem olha a fila.
+  const metas: MetaItem[] = [];
+  if (seg) metas.push({ chave: "seg", cor: seg.color, texto: seg.shortName });
+  if (lead.origin_lead_id) {
+    metas.push({
+      chave: "repasse", cor: "#6366F1", icone: "repasse",
+      texto: `${funilCurto(lead.origin_funnel_type)}${repassadoPor ? ` · ${repassadoPor}` : ""}`,
+    });
+  } else if (lead.source && lead.source !== "prospeccao_ativa") {
+    metas.push({ chave: "origem", icone: "origem", texto: sourceLabel(lead.source) });
+  }
+  if (originFunnel) metas.push({ chave: "funil", cor: originFunnel.color, texto: originFunnel.name });
+  if (lead.ramo) metas.push({ chave: "ramo", texto: lead.ramo });
+
+  const metasVisiveis = metas.slice(0, META_VISIVEIS);
+  const metasOcultas = metas.slice(META_VISIVEIS);
+
   return (
     <div
-      className="relative overflow-hidden p-3 rounded-xl border cursor-pointer flex flex-col gap-2
+      style={{ height: ALTURA }}
+      className="relative overflow-hidden p-3 rounded-xl border cursor-pointer flex flex-col gap-1.5
                  bg-[hsl(var(--kanban-card))] border-[hsl(var(--kanban-card-border))]
                  shadow-sm hover:shadow-md transition-shadow"
       onClick={() => onClick?.(lead)}
     >
       {/* Atraso vira FAIXA lateral, não fundo tingido: pintar o card inteiro
-          brigava com a leitura do texto e apagava o contraste que a cor
-          própria do card acabou de ganhar. */}
+          brigava com a leitura do texto e apagava o contraste do card. */}
       {aging && (
         <span
           aria-hidden
@@ -100,40 +122,42 @@ export function LeadCard({ lead, funnelType: _funnelType, owner, onAdvance, onMa
         />
       )}
 
-      {/* ── Topo: temperatura, nome, valor ─────────────────────────────── */}
-      <div className="flex items-start gap-2">
+      {/* ── Zona 1 · identidade (50px) ─────────────────────────────────── */}
+      <div className="flex items-start gap-2 h-[50px] overflow-hidden">
         <span
           className={`h-2 w-2 rounded-full shrink-0 mt-1.5 ${TEMP_COR[lead.temperature]}`}
           title={TEMP_LABEL[lead.temperature]}
         />
-        <div className="min-w-0 flex-1">
-          <p className="text-[15px] font-semibold leading-tight truncate" title={displayName}>
+        <div className="min-w-0 flex-1 overflow-hidden">
+          <p className="text-[15px] font-semibold leading-[1.2] truncate" title={displayName}>
             {displayName}
           </p>
           {secondaryTradeName && (
-            <p className="text-xs text-muted-foreground truncate">{secondaryTradeName}</p>
+            <p className="text-xs text-muted-foreground leading-[1.35] truncate">{secondaryTradeName}</p>
           )}
           {/* Cidade e telefone na MESMA linha — antes eram duas, empurrando
               todo o resto do card para baixo. */}
-          <p className="text-xs text-muted-foreground truncate">
-            {local}
-            {local && lead.contact_phone && " · "}
-            {lead.contact_phone && (
-              <a
-                href={waLink ?? undefined}
-                target="_blank"
-                rel="noreferrer"
-                onClick={(e) => e.stopPropagation()}
-                className="hover:text-emerald-500 inline-flex items-center gap-1"
-                title="Abrir no WhatsApp"
-              >
-                <Phone className="h-3 w-3 inline shrink-0" />{lead.contact_phone}
-              </a>
-            )}
-          </p>
+          {(local || lead.contact_phone) && (
+            <p className="text-xs text-muted-foreground leading-[1.35] truncate">
+              {local}
+              {local && lead.contact_phone && " · "}
+              {lead.contact_phone && (
+                <a
+                  href={waLink ?? undefined}
+                  target="_blank"
+                  rel="noreferrer"
+                  onClick={(e) => e.stopPropagation()}
+                  className="hover:text-emerald-500 inline-flex items-center gap-1"
+                  title="Abrir no WhatsApp"
+                >
+                  <Phone className="h-3 w-3 inline shrink-0" />{lead.contact_phone}
+                </a>
+              )}
+            </p>
+          )}
         </div>
-        {/* Valor sobe para o topo: é o dado que decide prioridade. Antes ficava
-            no rodapé, misturado com a contagem de dias. */}
+        {/* Valor no topo: é o dado que decide prioridade. Antes ficava no
+            rodapé, misturado com a contagem de dias. */}
         {lead.estimated_revenue > 0 && (
           <span className="text-xs font-semibold tabular-nums shrink-0">
             {brlCurto(lead.estimated_revenue)}
@@ -141,34 +165,30 @@ export function LeadCard({ lead, funnelType: _funnelType, owner, onAdvance, onMa
         )}
       </div>
 
-      {/* ── Metadados: tudo que antes era pílula colorida ───────────────── */}
-      <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[11px] text-muted-foreground">
-        {seg && <Meta cor={seg.color} title={seg.label}>{seg.shortName}</Meta>}
-
-        {/* Procedência: repasse mostra o funil de origem e QUEM repassou (é o
-            que permite medir qual SDR entrega mais); o resto mostra a origem. */}
-        {lead.origin_lead_id ? (
-          <Meta cor="#6366F1" title={repassadoPor ? `Repassado por ${repassadoPor}` : undefined}>
-            <ArrowLeftRight className="h-2.5 w-2.5 inline mr-1" />
-            {funilCurto(lead.origin_funnel_type)}{repassadoPor ? ` · ${repassadoPor}` : ""}
-          </Meta>
-        ) : lead.source && lead.source !== "prospeccao_ativa" ? (
-          <Meta title={sourceLabel(lead.source)}>
-            <Megaphone className="h-2.5 w-2.5 inline mr-1" />{sourceLabel(lead.source)}
-          </Meta>
-        ) : null}
-
-        {originFunnel && (
-          <Meta cor={originFunnel.color} title={originFunnel.name}>{originFunnel.name}</Meta>
+      {/* ── Zona 2 · o que o lead é (16px, sempre reservada) ───────────── */}
+      <div className="h-4 flex items-center gap-2.5 text-[11px] text-muted-foreground overflow-hidden whitespace-nowrap">
+        {metasVisiveis.map((m) => (
+          <span key={m.chave} className="inline-flex items-center gap-1.5 min-w-0" title={m.texto}>
+            {m.cor && <span className="h-1.5 w-1.5 rounded-full shrink-0" style={{ background: m.cor }} />}
+            {m.icone === "repasse" && <ArrowLeftRight className="h-2.5 w-2.5 shrink-0" />}
+            {m.icone === "origem" && <Megaphone className="h-2.5 w-2.5 shrink-0" />}
+            <span className="truncate">{m.texto}</span>
+          </span>
+        ))}
+        {metasOcultas.length > 0 && (
+          <span className="font-semibold shrink-0" title={metasOcultas.map((m) => m.texto).join(" · ")}>
+            +{metasOcultas.length}
+          </span>
         )}
+      </div>
 
-        {lead.ramo && <Meta title={lead.ramo}>{lead.ramo}</Meta>}
-
-        {/* Aguardando: só aparece com prazo definido — é o que impede o
+      {/* ── Zona 3 · estado (16px, reservada mesmo vazia) ──────────────── */}
+      <div className="h-4 flex items-center gap-2.5 text-[11px] font-medium overflow-hidden whitespace-nowrap">
+        {/* Aguardando só aparece com prazo definido — é o que impede o
             "aguardando" eterno. Vencido é cobrança, não abandono. */}
         {lead.waiting_on && lead.waiting_until && (
           <span
-            className={`inline-flex items-center gap-1 font-medium ${
+            className={`inline-flex items-center gap-1 shrink-0 ${
               esperaVencida(lead) ? "text-destructive" : "text-amber-500"}`}
             title={lead.waiting_note ?? undefined}
           >
@@ -176,28 +196,31 @@ export function LeadCard({ lead, funnelType: _funnelType, owner, onAdvance, onMa
             {waitingLabel(lead.waiting_on)} · {dataCurta(lead.waiting_until)}
           </span>
         )}
-
         {aging && (
-          <span className={`inline-flex items-center gap-1 font-medium ${
+          <span className={`inline-flex items-center gap-1 min-w-0 ${
             aging === "red" ? "text-destructive" : "text-amber-500"}`}>
-            <AlertTriangle className="h-2.5 w-2.5 shrink-0" />{daysSince} dias sem atividade
+            <AlertTriangle className="h-2.5 w-2.5 shrink-0" />
+            <span className="truncate">{daysSince} dias sem atividade</span>
           </span>
         )}
       </div>
 
-      {/* ── Rodapé: dono e idade do card ───────────────────────────────── */}
-      <div className="flex items-center gap-2 pt-2 border-t border-[hsl(var(--kanban-card-border))]">
+      {/* ── Zona 4 · responsável (encostada no rodapé) ─────────────────── */}
+      <div className="mt-auto flex items-center gap-2 pt-[7px] border-t border-[hsl(var(--kanban-card-border))]">
         {owner ? (
           <>
             <ProfileAvatar userId={owner.id} avatarUrl={owner.avatar_url} fullName={owner.name} size={18} />
             <span className="text-[11px] text-muted-foreground truncate">{owner.name || "—"}</span>
           </>
         ) : (
+          // Lead órfão precisa APARECER, não sumir: esconder a linha faria o
+          // card sem dono parecer igual ao que tem dono.
           <span className="text-[11px] text-muted-foreground">sem responsável</span>
         )}
         <span className="ml-auto text-[11px] text-muted-foreground tabular-nums shrink-0">{daysSince}d</span>
       </div>
 
+      {/* ── Zona 5 · ações (mesma altura em todo card) ─────────────────── */}
       {(onAdvance || onMarkLost) && (
         <div className="flex gap-1">
           {onAdvance && (
