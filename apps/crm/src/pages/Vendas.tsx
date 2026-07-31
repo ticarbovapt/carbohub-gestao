@@ -10,8 +10,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import {
   ChevronLeft, ChevronRight, Search, ShoppingBag, TrendingUp,
   Package, Users, ArrowRightCircle, CalendarDays, X, Trash2, Loader2, FileDown,
-  ChevronDown, Pencil, FileText,
+  ChevronDown, Pencil, FileText, Lock, Ban,
 } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
@@ -23,7 +24,7 @@ import {
 import { useVendedoresDir } from "@/hooks/useVendas";
 import {
   useCarbozeVendas, useConvertQuote, useBulkAssignVendedor, useDeleteVenda,
-  fetchNfFiles, type CarbozeVendaRow,
+  useCancelVenda, fetchNfFiles, type CarbozeVendaRow,
 } from "@/hooks/useCarbozeVendas";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
@@ -111,8 +112,13 @@ export default function Vendas() {
   const navigate = useNavigate();
   const bulkAssign = useBulkAssignVendedor();
   const deleteVenda = useDeleteVenda();
+  const cancelVenda = useCancelVenda();
   const [assigning, setAssigning] = useState(false);
   const [toDelete, setToDelete] = useState<CarbozeVendaRow | null>(null);
+  const [toCancel, setToCancel] = useState<CarbozeVendaRow | null>(null);
+  // Motivo é OBRIGATÓRIO no cancelamento. Sem ele o histórico registra que a
+  // venda caiu e não registra por quê — que é a única informação útil depois.
+  const [cancelReason, setCancelReason] = useState("");
   const [nfLoadingId, setNfLoadingId] = useState<string | null>(null);
 
   // Baixa a NF já vinculada (o faturamento/emissão é no Finanças). Abre o PDF;
@@ -145,6 +151,15 @@ export default function Vendas() {
       await deleteVenda.mutateAsync({ id: toDelete.id });
       if (expandedId === toDelete.id) setExpandedId(null);
       setToDelete(null);
+    } catch { /* toast no hook */ }
+  }
+
+  async function cancelarVenda() {
+    if (!toCancel || !cancelReason.trim()) return;
+    try {
+      await cancelVenda.mutateAsync({ id: toCancel.id, reason: cancelReason.trim() });
+      setToCancel(null);
+      setCancelReason("");
     } catch { /* toast no hook */ }
   }
 
@@ -591,17 +606,64 @@ export default function Vendas() {
                                 </div>
                               )}
 
+                              {/* Observações EXTERNAS — o que o cliente vê (vai pro orçamento
+                                  em PDF e pra NF). `whitespace-pre-line` porque o campo é
+                                  textarea: sem isso as quebras de linha somem e vira parede. */}
                               {(venda.notes || buyerNotes || generalNotes) && (
                                 <div className="space-y-1">
-                                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">Observações</p>
-                                  {venda.notes && <p className="text-xs">{venda.notes}</p>}
-                                  {buyerNotes && <p className="text-xs"><span className="text-muted-foreground">Comprador:</span> {buyerNotes}</p>}
-                                  {generalNotes && <p className="text-xs"><span className="text-muted-foreground">Gerais:</span> {generalNotes}</p>}
+                                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">Observações (o cliente vê)</p>
+                                  {venda.notes && <p className="text-xs whitespace-pre-line">{venda.notes}</p>}
+                                  {buyerNotes && <p className="text-xs whitespace-pre-line"><span className="text-muted-foreground">Comprador:</span> {buyerNotes}</p>}
+                                  {generalNotes && <p className="text-xs whitespace-pre-line"><span className="text-muted-foreground">Gerais:</span> {generalNotes}</p>}
                                 </div>
                               )}
 
-                              {/* Exclusão — só gestor. Registra log auditável e libera o número. */}
-                              {isHead && (
+                              {/* Notas internas — gravadas pela tela Vender em `internal_notes`
+                                  (notas + dados estratégicos do ponto) e que NUNCA apareciam
+                                  aqui: quem escrevia não conseguia reler.
+
+                                  Fundo âmbar e o aviso não são enfeite. Este bloco é o único
+                                  do painel que não pode ser lido para o cliente, e o painel
+                                  inteiro é o que o vendedor vira pra tela numa visita. */}
+                              {venda.internal_notes && (
+                                <div className="space-y-1 rounded-lg border border-amber-500/25 bg-amber-500/5 p-2.5">
+                                  <p className="text-xs font-semibold text-amber-600 dark:text-amber-500 uppercase tracking-wide flex items-center gap-1.5">
+                                    <Lock className="h-3 w-3" /> Notas internas — não mostrar ao cliente
+                                  </p>
+                                  <p className="text-xs whitespace-pre-line">{venda.internal_notes}</p>
+                                </div>
+                              )}
+
+                              {/* Ações destrutivas.
+                                  CANCELAR (gestor ou o vendedor dono) mantém o registro, tira
+                                  do faturamento e estorna o estoque — é o caso comum.
+                                  EXCLUIR (só gestor) apaga a linha e libera o número — só
+                                  serve para venda lançada errada.
+                                  Cancelar vem primeiro e com peso visual maior justamente
+                                  porque é o que quase sempre se quer. */}
+                              {(isHead || venda.vendedor_id === user?.id) && venda.status !== "cancelled" && (
+                                <div className="flex justify-end gap-1 pt-2 border-t border-border/60">
+                                  <Button
+                                    variant="outline" size="sm"
+                                    className="h-8 text-xs text-amber-600 dark:text-amber-500 border-amber-500/40 hover:bg-amber-500/10"
+                                    onClick={() => setToCancel(venda)}
+                                  >
+                                    <Ban className="h-3.5 w-3.5 mr-1.5" /> Cancelar venda
+                                  </Button>
+                                  {isHead && (
+                                    <Button
+                                      variant="ghost" size="sm"
+                                      className="h-8 text-xs text-destructive hover:text-destructive hover:bg-destructive/10"
+                                      onClick={() => setToDelete(venda)}
+                                    >
+                                      <Trash2 className="h-3.5 w-3.5 mr-1.5" /> Excluir venda
+                                    </Button>
+                                  )}
+                                </div>
+                              )}
+                              {/* Venda já cancelada: só gestor, e só excluir. Reabrir é no
+                                  Rastreio do Ops, que sabe estornar/rededuzir a etapa certa. */}
+                              {isHead && venda.status === "cancelled" && (
                                 <div className="flex justify-end pt-2 border-t border-border/60">
                                   <Button
                                     variant="ghost" size="sm"
@@ -659,6 +721,11 @@ export default function Vendas() {
                   <strong>{toDelete?.customer_name}</strong> ({toDelete ? fmtBRL(toDelete.total) : ""}) será
                   removida do sistema. O número volta a ficar livre e as próximas vendas seguem a sequência.
                 </p>
+                <p className="text-muted-foreground">
+                  Excluir some com o histórico. Se a venda existiu e caiu (cliente desistiu, boleto não
+                  pagou, NF cancelada), o certo é <strong>Cancelar venda</strong> — tira do faturamento,
+                  estorna o estoque e mantém o registro.
+                </p>
                 <p className="text-muted-foreground">Esta ação não pode ser desfeita.</p>
               </div>
             </AlertDialogDescription>
@@ -671,6 +738,59 @@ export default function Vendas() {
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
               {deleteVenda.isPending ? <><Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> Excluindo…</> : <><Trash2 className="h-3.5 w-3.5 mr-1.5" /> Excluir</>}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Confirmação de cancelamento (gestor ou vendedor dono) */}
+      <AlertDialog
+        open={!!toCancel}
+        onOpenChange={(o) => { if (!o) { setToCancel(null); setCancelReason(""); } }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Cancelar esta venda?</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-3 text-sm">
+                <p>
+                  A venda <strong className="font-mono">{toCancel?.order_number}</strong> de{" "}
+                  <strong>{toCancel?.customer_name}</strong> ({toCancel ? fmtBRL(toCancel.total) : ""}) sai
+                  do faturamento e vai para "Cancelado" no rastreio.
+                </p>
+                {/* Dito antes de confirmar, não depois: se o pedido já foi separado, o
+                    estoque volta pro HUB-RN e alguém precisa saber que o número mudou. */}
+                <p className="text-muted-foreground">
+                  Se o estoque já tinha sido deduzido (pedido separado), ele é{" "}
+                  <strong>devolvido ao HUB-RN</strong> automaticamente. A venda continua no
+                  histórico — para apagar de vez, use Excluir.
+                </p>
+                <div className="space-y-1.5">
+                  <label htmlFor="cancel-reason" className="text-xs font-medium">
+                    Motivo do cancelamento <span className="text-destructive">*</span>
+                  </label>
+                  <Textarea
+                    id="cancel-reason"
+                    value={cancelReason}
+                    onChange={(e) => setCancelReason(e.target.value)}
+                    placeholder="Ex.: cliente desistiu; boleto não pago; NF cancelada no Bling"
+                    rows={2}
+                    autoFocus
+                  />
+                </div>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={cancelVenda.isPending}>Voltar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => { e.preventDefault(); cancelarVenda(); }}
+              disabled={cancelVenda.isPending || !cancelReason.trim()}
+              className="bg-amber-600 text-white hover:bg-amber-600/90"
+            >
+              {cancelVenda.isPending
+                ? <><Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> Cancelando…</>
+                : <><Ban className="h-3.5 w-3.5 mr-1.5" /> Cancelar venda</>}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

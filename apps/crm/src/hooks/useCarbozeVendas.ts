@@ -57,7 +57,11 @@ export interface CarbozeVendaRow {
   po_number: string | null;
   buyer_notes: string | null;
   general_notes: string | null;
-  status: string;                 // quote | pending | confirmed | invoiced | shipped | delivered | cancelled
+  // Notas internas + dados estratégicos (o que a tela Vender grava no bloco
+  // "Notas Internas"). Nunca saiu na tela de Vendas — o vendedor escrevia e
+  // não conseguia reler.
+  internal_notes: string | null;
+  status: string;             // quote | pending | confirmed | invoiced | shipped | delivered | cancelled
   fulfillment_stage: string | null; // etapa no kanban de rastreio (Pós-venda/Ops)
   vendedor_id: string | null;
   vendedor_name: string | null;
@@ -178,6 +182,7 @@ function mapVenda(row: any): CarbozeVendaRow {
           po_number: row.po_number ?? null,
           buyer_notes: row.buyer_notes ?? null,
           general_notes: row.general_notes ?? null,
+          internal_notes: row.internal_notes ?? null,
           status: row.status,
           fulfillment_stage: row.fulfillment_stage ?? null,
           vendedor_id: row.vendedor_id ?? null,
@@ -228,6 +233,33 @@ export function useDeleteVenda() {
       toast.success("Venda excluída.");
     },
     onError: (e: Error) => toast.error("Erro ao excluir venda: " + e.message),
+  });
+}
+
+/**
+ * Cancela uma venda sem apagá-la.
+ *
+ * A diferença que importa: EXCLUIR apaga a linha e libera o número — serve
+ * para venda lançada errada, que nunca deveria ter existido. CANCELAR mantém
+ * o registro, tira do faturamento e ESTORNA o estoque que já tinha sido
+ * deduzido. É o caso comum: cliente desistiu, boleto não pagou, NF caiu.
+ *
+ * Toda a lógica vive na RPC `carboze_order_cancel` (permissão, estorno,
+ * status + etapa, histórico) porque é a única forma de os cinco apps se
+ * comportarem igual — e de o estorno e a mudança de status serem atômicos.
+ */
+export function useCancelVenda() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, reason }: { id: string; reason?: string }) => {
+      const { error } = await db.rpc("carboze_order_cancel", { p_id: id, p_reason: reason ?? null });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["carboze_vendas"] });
+      toast.success("Venda cancelada. Saiu do faturamento e o estoque foi estornado.");
+    },
+    onError: (e: Error) => toast.error("Erro ao cancelar venda: " + e.message),
   });
 }
 
