@@ -50,9 +50,25 @@ const STAGE_VARIANT: Record<string, BadgeVariant> = {
   nf_finalizada: "warning", emitir_etiqueta: "warning", em_transporte: "default",
   entregue: "success", cancelado: "destructive",
 };
+/**
+ * Está cancelada? Lê OS DOIS campos.
+ *
+ * `status` é o que as contas de dinheiro usam; `fulfillment_stage` é o que a
+ * etiqueta mostra. Enquanto cada pedaço da tela escolhia um dos dois, um
+ * pedido divergente aparecia com etiqueta "Cancelado" e continuava somando no
+ * Total Faturado — foi o que aconteceu com o V2026070049.
+ *
+ * O trigger trg_carbo_sincroniza_cancelamento impede a divergência de nascer
+ * no banco. Esta função é a garantia de que, se alguma linha antiga escapar, a
+ * tela ainda assim se contradiga em NADA: badge, KPI e filtro passam todos por
+ * aqui. Uma pergunta, uma resposta.
+ */
+const estaCancelada = (v: CarbozeVendaRow) =>
+  v.status === "cancelled" || v.fulfillment_stage === "cancelado";
+
 function statusBadge(v: CarbozeVendaRow): { label: string; variant: BadgeVariant } {
   if (v.status === "quote") return { label: "Orçamento", variant: "secondary" };
-  if (v.status === "cancelled") return { label: "Cancelado", variant: "destructive" };
+  if (estaCancelada(v)) return { label: "Cancelado", variant: "destructive" };
   const stage = v.fulfillment_stage || "nova_venda";
   return { label: STAGE_LABEL[stage] ?? stage, variant: STAGE_VARIANT[stage] ?? "secondary" };
 }
@@ -238,7 +254,7 @@ export default function Vendas() {
   // "Faturado" = já tem NF vinculada OU o pedido já saiu (invoiced/shipped/
   // delivered) — quem foi enviado/entregue necessariamente já tem NF (só não
   // linkada aqui). Assim um pedido ENTREGUE não cai em "aguardando faturamento".
-  const isActive = (v: CarbozeVendaRow) => v.status !== "cancelled" && v.status !== "quote";
+  const isActive = (v: CarbozeVendaRow) => !estaCancelada(v) && v.status !== "quote";
   const FATURADO_STATUS = new Set(["invoiced", "shipped", "delivered"]);
   const isFaturada = (v: CarbozeVendaRow) => isActive(v) && (!!v.bling_nf_id || !!v.invoice_number || FATURADO_STATUS.has(v.status));
   const isAguardando = (v: CarbozeVendaRow) => isActive(v) && !isFaturada(v);
@@ -250,7 +266,7 @@ export default function Vendas() {
   const totalFaturado = sum(faturadas);
   const totalAguardando = sum(aguardando);
   const totalOrcamento = sum(quotes);
-  const cancelled = filtered.filter((v) => v.status === "cancelled").length;
+  const cancelled = filtered.filter(estaCancelada).length;
 
   // Filtro do card clicado — só sobre a TABELA (os totais dos KPIs seguem no total).
   const tableRows = filtered.filter((v) => {
@@ -258,7 +274,7 @@ export default function Vendas() {
     if (kpiFilter === "faturado") return isFaturada(v);
     if (kpiFilter === "aguardando") return isAguardando(v);
     if (kpiFilter === "orcamento") return v.status === "quote";
-    return v.status === "cancelled";
+    return estaCancelada(v);
   });
   const toggleKpi = (k: NonNullable<typeof kpiFilter>) => setKpiFilter((cur) => (cur === k ? null : k));
   const KPI_LABEL: Record<NonNullable<typeof kpiFilter>, string> = {
@@ -425,7 +441,7 @@ export default function Vendas() {
                     return (
                       <Fragment key={venda.id}>
                         <tr
-                          className={`border-b transition-colors cursor-pointer hover:bg-muted/20 ${isQuote ? "bg-amber-500/3 border-l-2 border-l-amber-500/30" : venda.status === "cancelled" ? "opacity-50" : ""} ${expandedId === venda.id ? "bg-muted/20" : ""} ${selectedIds.has(venda.id) ? "bg-carbo-green/5" : ""}`}
+                          className={`border-b transition-colors cursor-pointer hover:bg-muted/20 ${isQuote ? "bg-amber-500/3 border-l-2 border-l-amber-500/30" : estaCancelada(venda) ? "opacity-50" : ""} ${expandedId === venda.id ? "bg-muted/20" : ""} ${selectedIds.has(venda.id) ? "bg-carbo-green/5" : ""}`}
                           onClick={() => setExpandedId(expandedId === venda.id ? null : venda.id)}
                         >
                           {isHead && (
@@ -641,7 +657,7 @@ export default function Vendas() {
                                   serve para venda lançada errada.
                                   Cancelar vem primeiro e com peso visual maior justamente
                                   porque é o que quase sempre se quer. */}
-                              {(isHead || venda.vendedor_id === user?.id) && venda.status !== "cancelled" && (
+                              {(isHead || venda.vendedor_id === user?.id) && !estaCancelada(venda) && (
                                 <div className="flex justify-end gap-1 pt-2 border-t border-border/60">
                                   <Button
                                     variant="outline" size="sm"
@@ -663,7 +679,7 @@ export default function Vendas() {
                               )}
                               {/* Venda já cancelada: só gestor, e só excluir. Reabrir é no
                                   Rastreio do Ops, que sabe estornar/rededuzir a etapa certa. */}
-                              {isHead && venda.status === "cancelled" && (
+                              {isHead && estaCancelada(venda) && (
                                 <div className="flex justify-end pt-2 border-t border-border/60">
                                   <Button
                                     variant="ghost" size="sm"
