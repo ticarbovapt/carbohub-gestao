@@ -11,6 +11,12 @@ import { Pager, useUrlPage, paginate } from "./Pager";
 import { useAllNFes } from "@/hooks/useNfeLinking";
 
 const fmtBRL = (v: number | null) => (v ?? 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+
+// Espelha carbo_nf_invalida do banco. Nota nestes estados NÃO é faturamento —
+// vale para a que está vinculada a um pedido e para a órfã: cancelada é
+// cancelada, tenha vínculo ou não.
+const NF_INVALIDA = new Set(["Cancelada", "Denegada", "Rejeitada", "Bloqueada"]);
+const nfInvalida = (situacao?: string | null) => NF_INVALIDA.has((situacao ?? "").trim());
 const fmtDate = (s: string | null) => {
   if (!s) return "—";
   const d = s.slice(0, 10).split("-");
@@ -48,6 +54,7 @@ export function TodasNFsTab() {
               <CarboTableRow>
                 <CarboTableHead>NF</CarboTableHead>
                 <CarboTableHead>Cliente</CarboTableHead>
+                <CarboTableHead>Situação</CarboTableHead>
                 <CarboTableHead>Emissão</CarboTableHead>
                 <CarboTableHead className="text-right">Valor</CarboTableHead>
                 <CarboTableHead>Vínculo</CarboTableHead>
@@ -55,14 +62,25 @@ export function TodasNFsTab() {
               </CarboTableRow>
             </CarboTableHeader>
             <CarboTableBody>
-              {pag.slice.map((n) => (
-                <CarboTableRow key={n.id}>
+              {pag.slice.map((n) => {
+                const morta = nfInvalida(n.situacao);
+                return (
+                // Nota inválida fica APAGADA na linha inteira, não só com uma
+                // etiqueta: quem varre a lista precisa descartar de relance,
+                // sem ler cada célula.
+                <CarboTableRow key={n.id} className={morta ? "opacity-55" : undefined}>
                   <CarboTableCell>
-                    <CarboBadge variant="secondary" className="gap-1"><FileText className="h-3 w-3" /> {n.numero || n.bling_id}{n.serie ? `/${n.serie}` : ""}</CarboBadge>
+                    <CarboBadge variant="secondary" className={`gap-1 ${morta ? "line-through" : ""}`}><FileText className="h-3 w-3" /> {n.numero || n.bling_id}{n.serie ? `/${n.serie}` : ""}</CarboBadge>
                   </CarboTableCell>
                   <CarboTableCell className="max-w-[240px] truncate">{n.contato_nome || "—"}</CarboTableCell>
+                  <CarboTableCell>
+                    {n.situacao
+                      ? <CarboBadge variant={morta ? "destructive" : "success"}>{n.situacao}</CarboBadge>
+                      : <span className="text-xs text-muted-foreground">—</span>}
+                  </CarboTableCell>
                   <CarboTableCell>{fmtDate(n.data_emissao)}</CarboTableCell>
-                  <CarboTableCell className="text-right font-medium">{fmtBRL(n.valor_total)}</CarboTableCell>
+                  {/* Valor riscado: a nota existe, o dinheiro não. */}
+                  <CarboTableCell className={`text-right font-medium ${morta ? "line-through text-muted-foreground" : ""}`}>{fmtBRL(n.valor_total)}</CarboTableCell>
                   <CarboTableCell>
                     {n.order_id ? (
                       <CarboBadge variant="success">{n.matched_order_number || "Vinculada"}</CarboBadge>
@@ -76,7 +94,8 @@ export function TodasNFsTab() {
                     </div>
                   </CarboTableCell>
                 </CarboTableRow>
-              ))}
+                );
+              })}
             </CarboTableBody>
           </CarboTable>
         )}

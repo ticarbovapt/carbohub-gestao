@@ -151,6 +151,7 @@ export interface OrphanNFe {
   contato_nome: string | null;
   valor_total: number | null;
   data_emissao: string | null;
+  situacao: string | null;
 }
 
 /** NFs do Bling ainda SEM pedido vinculado (para baixar o PDF ou vincular na mão). */
@@ -161,9 +162,14 @@ export function useOrphanNFes(search = "") {
     queryFn: async (): Promise<OrphanNFe[]> => {
       const { data, error } = await supabase
         .from("bling_nfe")
-        .select("id, bling_id, numero, serie, contato_nome, valor_total, data_emissao")
+        .select("id, bling_id, numero, serie, contato_nome, valor_total, data_emissao, situacao")
         .is("order_id", null)
         .neq("match_status", "ignored")
+        // Nota cancelada/denegada/rejeitada/bloqueada NÃO entra na fila de
+        // vincular. Vincular uma nota morta a um pedido só criaria um pedido
+        // que parece faturado — é o oposto do que essa tela existe para fazer.
+        // Espelha carbo_nf_invalida do banco.
+        .not("situacao", "in", '("Cancelada","Denegada","Rejeitada","Bloqueada")')
         .order("data_emissao", { ascending: false })
         .limit(500);
       if (error) throw error;
@@ -186,6 +192,8 @@ export interface AllNFe {
   match_status: string | null;
   matched_order_number: string | null;
   order_id: string | null;
+  /** Situação no Bling. Nula quando o sync ainda não trouxe. */
+  situacao: string | null;
 }
 
 /** TODAS as NFs do Bling (vinculadas ou não) — pra localizar e baixar qualquer uma. */
@@ -196,7 +204,7 @@ export function useAllNFes(search = "") {
     queryFn: async (): Promise<AllNFe[]> => {
       const { data, error } = await supabase
         .from("bling_nfe")
-        .select("id, bling_id, numero, serie, contato_nome, valor_total, data_emissao, match_status, matched_order_number, order_id")
+        .select("id, bling_id, numero, serie, contato_nome, valor_total, data_emissao, match_status, matched_order_number, order_id, situacao")
         .order("data_emissao", { ascending: false })
         .limit(1000);
       if (error) throw error;
