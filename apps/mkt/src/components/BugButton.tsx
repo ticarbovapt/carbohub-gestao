@@ -6,6 +6,7 @@ import {
 import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { useMyBugReports, useSubmitBugReport, type BugKind, type BugStatus } from "@/hooks/useBugReports";
+import { KINDS, kindOf, kindUi } from "@carbo/demandas";
 import { captureClientContext, uploadBugAttachments, type BugAttachment } from "@/lib/bugContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -95,6 +96,23 @@ function StageBar({ status }: { status: BugStatus }) {
     </div>
   );
 }
+
+// Exemplo e rótulo por tipo. Um pedido de cabo com placeholder "Botão de
+// salvar não funciona" faz a pessoa achar que está no lugar errado.
+const PLACEHOLDER_RESUMO: Record<string, string> = {
+  bug:      "Ex: Botão de salvar não funciona",
+  sugestao: "Ex: Poderia ter filtro por data",
+  infra:    "Ex: Falta cabo HDMI no monitor da recepção",
+  acesso:   "Ex: Preciso de acesso ao Bling",
+  ajuda:    "Ex: Como emito a segunda via da NF?",
+};
+const ROTULO_DESCRICAO: Record<string, string> = {
+  bug:      "O que aconteceu",
+  sugestao: "Sua ideia",
+  infra:    "O que você precisa",
+  acesso:   "O que você precisa acessar",
+  ajuda:    "Sua dúvida",
+};
 
 export function BugButton() {
   const { user, profile } = useAuth();
@@ -199,7 +217,9 @@ export function BugButton() {
         reporter_name: profile?.full_name ?? null,
         reporter_email: user!.email ?? null,
         department: (profile as { department?: string } | null)?.department ?? null,
-        bloqueio: kind === "bug" ? (bloqueio || null) : null,
+        // Sugestão é o único tipo que não bloqueia ninguém por definição —
+        // perguntar ali soaria como convite a inflar a prioridade.
+        bloqueio: kindOf(kind).bloqueia ? (bloqueio || null) : null,
         pessoas_afetadas: alcance || null,
         attachments,
         client_context: captureClientContext(),
@@ -263,9 +283,8 @@ export function BugButton() {
                   <div key={b.id}
                     className={`px-4 py-2.5 space-y-1.5 ${precisaDeVoce(b.status) ? "border-l-2 border-amber-500 bg-amber-500/5" : ""}`}>
                     <div className="flex items-start gap-2">
-                      {b.kind === "sugestao"
-                        ? <Lightbulb className="h-3.5 w-3.5 text-amber-500 shrink-0 mt-0.5" />
-                        : <Bug className="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-0.5" />}
+                      {(() => { const { Icon, className } = kindUi(b.kind);
+                        return <Icon className={`h-3.5 w-3.5 shrink-0 mt-0.5 ${className}`} />; })()}
                       <p className="text-sm leading-snug flex-1 min-w-0 break-words">{b.title}</p>
                     </div>
                     <StageBar status={b.status} />
@@ -328,16 +347,22 @@ export function BugButton() {
             <>
               <DialogHeader className="space-y-3">
                 <DialogTitle className="text-base">O que você quer nos contar?</DialogTitle>
-                <div className="inline-flex rounded-lg bg-muted p-0.5 w-fit">
-                  {([["bug", Bug, "Algo está errado"], ["sugestao", Lightbulb, "Tenho uma ideia"]] as const).map(
-                    ([v, Icon, label]) => (
-                      <button key={v} type="button" onClick={() => setKind(v)}
-                        className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-all ${
-                          kind === v ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}>
-                        <Icon className="h-3.5 w-3.5" /> {label}
+                {/* Cinco tipos não cabem numa fileira só como as duas antigas
+                    cabiam — daí o flex-wrap em vez do segmented control. O
+                    rótulo é o `acao` (voz de quem pede: "Algo está errado"),
+                    não o `label` (voz de quem conserta: "Bug"): rótulo errado
+                    faz a pessoa escolher a caixa errada. */}
+                <div className="flex flex-wrap gap-1 rounded-lg bg-muted p-0.5">
+                  {KINDS.map((k) => {
+                    const { Icon } = kindUi(k.key);
+                    return (
+                      <button key={k.key} type="button" onClick={() => setKind(k.key as BugKind)} title={k.hint}
+                        className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium transition-all ${
+                          kind === k.key ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}>
+                        <Icon className="h-3.5 w-3.5" /> {k.acao}
                       </button>
-                    ),
-                  )}
+                    );
+                  })}
                 </div>
               </DialogHeader>
 
@@ -355,7 +380,7 @@ export function BugButton() {
                   <Input
                     id="bug-title"
                     autoFocus
-                    placeholder={kind === "sugestao" ? "Ex: Poderia ter filtro por data" : "Ex: Botão de salvar não funciona"}
+                    placeholder={PLACEHOLDER_RESUMO[kind] ?? "Ex: Botão de salvar não funciona"}
                     value={title}
                     onChange={(e) => setTitle(e.target.value)}
                   />
@@ -367,7 +392,7 @@ export function BugButton() {
                 <div className="space-y-1.5">
                   <div className="flex items-center justify-between gap-2">
                     <Label htmlFor="bug-desc">
-                      {kind === "sugestao" ? "Sua ideia" : "O que aconteceu"} <span className="text-destructive">*</span>
+                      {ROTULO_DESCRICAO[kind] ?? "O que aconteceu"} <span className="text-destructive">*</span>
                     </Label>
                     {kind === "bug" && !description && (
                       <button type="button"
@@ -401,7 +426,7 @@ export function BugButton() {
                     duas fileiras dividiam um título só e liam como 6 opções de
                     uma pergunta só. min-h fixo: trocar o tipo não faz pular. */}
                 <div className="rounded-lg border bg-muted/30 p-3 space-y-3 min-h-[116px]">
-                  {kind === "bug" && (
+                  {kindOf(kind).bloqueia && (
                     <div className="space-y-1.5">
                       <div className="flex items-center justify-between gap-2">
                         <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">

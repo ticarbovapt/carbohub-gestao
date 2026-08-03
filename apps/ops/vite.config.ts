@@ -13,6 +13,7 @@ export default defineConfig({
     alias: {
       "@": path.resolve(__dirname, "./src"),
       "@carbo/chat": path.resolve(__dirname, "../../packages/chat/src"),
+      "@carbo/demandas": path.resolve(__dirname, "../../packages/demandas/src"),
       "@carbo/shell": path.resolve(__dirname, "../../packages/shell/src"),
       "@carbo/call": path.resolve(__dirname, "../../packages/call/src"),
       "@carbo/posvenda": path.resolve(__dirname, "../../packages/posvenda/src"),

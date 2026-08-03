@@ -1,0 +1,12 @@
+{
+  "name": "@carbo/demandas",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Tipos de demanda do Carbo TI. Fonte única para o quadro do TI e o botão de reporte de todos os apps.",
+  "type": "module",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "peerDependencies": {
+    "lucide-react": "*"
+  }
+}

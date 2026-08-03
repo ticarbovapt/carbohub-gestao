@@ -12,6 +12,7 @@ apps/erp/       = (futuro)
 packages/       = compartilhados entre apps:
                   chat, call, shell (UI/infra)
                   posvenda (etapas do Rastreio de venda — Ops + Sales)
+                  demandas (tipos de demanda do TI — os 6 apps + quadro do TI)
 ```
 
 ### `packages/posvenda` — etapas do pós-venda
@@ -20,6 +21,14 @@ Fonte ÚNICA da lista de etapas do Rastreio. Ops **controla** as etapas, Sales s
 pedido parado numa etapa ausente **sumia do quadro** em vez de aparecer numa
 coluna vazia. Etapa nova entra aqui **e** no CHECK de `fulfillment_stage` em
 `carboze_orders` (migração), nesta ordem.
+
+### `packages/demandas` — tipos de demanda do TI
+Fonte ÚNICA de `KINDS`. O `BugButton.tsx` existe nos **seis** apps (arquivos byte
+a byte idênticos) e o quadro do TI é o sétimo consumidor — sete cópias divergem, e
+divergir aqui tira a opção da tela de alguém sem dar erro. Tipo novo entra aqui,
+**e** no CHECK de `kind` em `carbo_bug_reports`, **e** em `carbo_bug_kind_label`
+(senão a notificação chega como "novo bug"). Ao editar o `BugButton`, edite o do
+`apps/ti` e copie para os outros cinco — eles devem continuar idênticos.
 
 ### Regras anti-confusão (OBRIGATÓRIAS)
 1. **Todo pedido nomeia o alvo.** "no CRM" → `apps/crm`; "no controle"/"atual" → raiz (`src/`).

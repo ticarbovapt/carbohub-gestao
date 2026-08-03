@@ -9,7 +9,10 @@ const db = supabase as unknown as { from: (t: string) => any };
 // Identifica de qual app veio o report (sales | ops | admin).
 const APP = "financas";
 
-export type BugKind = "bug" | "sugestao";
+// Os cinco tipos de @carbo/demandas. Antes eram só bug e sugestao — o TI
+// recebe muito mais que software (cabo, acesso, dúvida) e tudo isso virava
+// "bug", estragando a métrica de qualidade do sistema.
+export type BugKind = "bug" | "sugestao" | "infra" | "acesso" | "ajuda";
 // Fluxo do TI (ti.carbohub.com.br). Os apps só LEEM esses estados.
 export type BugStatus =
   | "open" | "priorizada" | "in_progress" | "aguardando" | "em_teste" | "resolved" | "declined";
