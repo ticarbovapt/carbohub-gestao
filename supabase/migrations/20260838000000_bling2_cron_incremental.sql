@@ -31,8 +31,14 @@
 -- "Entity desconhecida" no log — não quebra nada, mas não adianta.
 -- ═══════════════════════════════════════════════════════════════════════════
 
-create extension if not exists pg_cron with schema extensions;
-create extension if not exists pg_net  with schema extensions;
+-- ⚠️ Sem `create extension`: ver a nota em 20260837000000. Recriar dispara um
+-- script interno do Supabase que falha com `2BP01: dependent privileges exist`.
+do $$
+begin
+  if not exists (select 1 from pg_extension where extname = 'pg_cron') then
+    raise exception 'pg_cron não instalado.';
+  end if;
+end $$;
 
 do $$
 declare j record;

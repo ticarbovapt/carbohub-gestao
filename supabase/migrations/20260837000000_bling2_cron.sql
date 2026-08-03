@@ -23,8 +23,20 @@
 -- atualize nos dois lugares.
 -- ═══════════════════════════════════════════════════════════════════════════
 
-create extension if not exists pg_cron with schema extensions;
-create extension if not exists pg_net  with schema extensions;
+-- ⚠️ NÃO usar `create extension if not exists pg_cron`. As extensões já estão
+-- instaladas (os crons do Bling 1 rodam nelas), e mesmo com IF NOT EXISTS o
+-- Supabase dispara um script interno de pós-criação que hoje falha com
+-- `2BP01: dependent privileges exist`. A migração do Bling 1 tem essas linhas
+-- e rodou em 2026-06 — hoje ela também falharia. Aqui só conferimos.
+do $$
+begin
+  if not exists (select 1 from pg_extension where extname = 'pg_cron') then
+    raise exception 'pg_cron não instalado. Habilite em Database > Extensions antes de rodar.';
+  end if;
+  if not exists (select 1 from pg_extension where extname = 'pg_net') then
+    raise exception 'pg_net não instalado. Habilite em Database > Extensions antes de rodar.';
+  end if;
+end $$;
 
 -- Idempotente: remove versões anteriores pelo nome antes de reagendar.
 do $$
