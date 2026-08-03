@@ -16,7 +16,7 @@ import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
 import { useAllBugReports, type BugReport } from "@/hooks/useBugReports";
 import { RankingTI } from "@/components/demandas/RankingTI";
-import { STAGES, PRIOS, prioOf, stageLabel, isAberta, isFilaTI, stageDays, agingOf, dFmt } from "@/lib/demandas";
+import { STAGES, PRIOS, prioOf, stageLabel, isAberta, isFilaTI, stageDays, agingOf, dFmt, kindUi } from "@/lib/demandas";
 
 const brandTip = {
   contentStyle: { background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8, fontSize: 12 },
@@ -42,9 +42,10 @@ function DemandaLine({ d, onClick }: { d: BugReport; onClick: () => void }) {
           {stageDays(d)}d
         </span>
       )}
-      {d.kind === "sugestao"
-        ? <Lightbulb className="h-3.5 w-3.5 text-amber-500 shrink-0" />
-        : <Bug className="h-3.5 w-3.5 text-destructive shrink-0" />}
+      {/* Ícone vem do kindUi: com as categorias novas (equipamento, acesso,
+          ajuda), o "se não é sugestão então é bug" mostraria ícone de bug num
+          pedido de cabo. */}
+      {(() => { const { Icon, className } = kindUi(d.kind); return <Icon className={`h-3.5 w-3.5 shrink-0 ${className}`} />; })()}
     </button>
   );
 }
