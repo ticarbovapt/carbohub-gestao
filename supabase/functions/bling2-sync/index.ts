@@ -345,12 +345,42 @@ async function syncStock(admin: Admin, token: string, logId: string): Promise<Sy
   const ids = produtos.map((p: any) => p.bling_id);
   const LOTE = 40;
   let synced = 0, failed = 0;
+  let ultimoErro = "";
+
+  // ── Qual é o endpoint de saldo, afinal ──────────────────────────────────
+  // O Bling 1 usa `/estoques?idsProdutos=`. Na primeira execução do Bling 2
+  // esse caminho falhou para os 6 produtos, e a documentação da v3 também
+  // descreve `/estoques/saldos?idsProdutos[]=`. Em vez de adivinhar qual é o
+  // certo, tentamos o primeiro e, se ele falhar, o segundo — e registramos no
+  // log QUAL funcionou. Uma chamada extra só no caminho de erro.
+  const CAMINHOS = [
+    (lote: number[]) => `/estoques?idsProdutos=${lote.join(",")}`,
+    (lote: number[]) => `/estoques/saldos?${lote.map((id) => `idsProdutos[]=${id}`).join("&")}`,
+  ];
+  let caminhoBom = -1;   // fixa no primeiro que responder, para não repetir a tentativa
+
+  const buscarSaldos = async (lote: number[]): Promise<any[]> => {
+    const tentar = caminhoBom >= 0 ? [caminhoBom] : CAMINHOS.map((_, i) => i);
+    for (const i of tentar) {
+      try {
+        const data = await blingFetch(token, CAMINHOS[i](lote), 1, 100);
+        if (caminhoBom < 0) {
+          caminhoBom = i;
+          console.log(`[bling2-sync] estoque: endpoint que respondeu = ${CAMINHOS[i]([0])}`);
+        }
+        return data.data || [];
+      } catch (e) {
+        ultimoErro = e instanceof Error ? e.message : String(e);
+        console.error(`[bling2-sync] estoque via ${CAMINHOS[i]([0])} falhou:`, ultimoErro);
+      }
+    }
+    throw new Error(ultimoErro || "estoque: nenhum endpoint respondeu");
+  };
 
   for (let i = 0; i < ids.length; i += LOTE) {
     const lote = ids.slice(i, i + LOTE);
     try {
-      const data = await blingFetch(token, `/estoques?idsProdutos=${lote.join(",")}`, 1, 100);
-      for (const est of (data.data || [])) {
+      for (const est of (await buscarSaldos(lote))) {
         const produtoId = est.produto?.id;
         if (!produtoId) continue;
         try {
@@ -370,6 +400,13 @@ async function syncStock(admin: Admin, token: string, logId: string): Promise<Sy
       failed += lote.length;
     }
     await sleep(RATE_MS);
+  }
+
+  // Falhou TUDO? Então isto não é "completed com 0" — é falha, e o log tem de
+  // dizer isso com o motivo. Foi assim que a primeira execução marcou
+  // `completed` com 0 sincronizados e 6 falhas, e a tela mostrou sucesso.
+  if (synced === 0 && failed > 0) {
+    throw new Error(`estoque: nenhum dos ${failed} produtos foi atualizado. Último erro: ${ultimoErro || "desconhecido"}`);
   }
 
   await fecharLog(admin, logId, { synced, failed });
@@ -765,7 +802,7 @@ async function syncNFe(admin: Admin, token: string, logId: string): Promise<Sync
       .lt("synced_at", inicioDaRodada)
       .not("situacao", "in", '("Cancelada","Denegada","Rejeitada","Bloqueada")')
       .order("synced_at", { ascending: false })
-      .limit(40);                                  // teto de tempo: 40 × 350ms ≈ 14s
+      .limit(20);   // ver TETOS abaixo
 
     for (const nf of (sumidas || [])) {
       try {
@@ -798,7 +835,17 @@ async function syncNFe(admin: Admin, token: string, logId: string): Promise<Sync
     .select("id, bling_id")
     .is("valor_total", null)
     .order("data_emissao", { ascending: false })
-    .limit(120);
+    // ── TETOS: por que 40, e não 120 ──────────────────────────────────────
+    // A conta de tempo que eu tinha feito estava errada: contei só os 350ms de
+    // pausa entre chamadas e esqueci a latência da própria API. Cada detalhe
+    // custa ~1s de verdade, não 350ms. Com 120 + 40 da etapa das sumidas, a
+    // rodada passava dos 150s do edge function e MORRIA — sem nunca fechar o
+    // log, que ficava preso em `running` para sempre.
+    //
+    // 40 detalhes + 20 sumidas ≈ 60s, com folga. O que sobra vai na próxima
+    // rodada: as notas do dia já chegam pela incremental de :15/:45, então a
+    // completa não precisa ter pressa com o histórico.
+    .limit(40);
 
   let enriquecidas = 0;
   for (const nf of semvalorSeguro(semDetalhe)) {
@@ -1077,6 +1124,20 @@ Deno.serve(async (req: Request): Promise<Response> => {
       }
     };
 
+    // ── Rodadas que morreram sem fechar o log ───────────────────────────────
+    // Quando a function estoura o tempo, ela some no meio: a linha fica em
+    // `running` para sempre e a tela mostra um spinner eterno. Aconteceu duas
+    // vezes com o `nfe` na primeira execução. Nenhuma rodada honesta passa de
+    // 3 minutos, então o que estiver `running` há mais de 10 é cadáver.
+    await admin.from("bling2_sync_log")
+      .update({
+        status: "failed",
+        error_message: "sem retorno — a função provavelmente estourou o tempo",
+        finished_at: nowIso(),
+      })
+      .eq("status", "running")
+      .lt("started_at", new Date(Date.now() - 10 * 60 * 1000).toISOString());
+
     const results: Record<string, unknown> = {};
 
     for (const nome of aRodar) {
@@ -1089,10 +1150,18 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
       try {
         const result = await rodarComRetry(nome, SYNCS[nome], logId);
+        // ⚠️ Zero sucessos com pelo menos uma falha NÃO é "completed". Na
+        // primeira execução o `stock` gravou completed com 0 sincronizados e 6
+        // falhas — a tela mostrou sucesso enquanto nenhum produto tinha saldo.
+        // Status que mente é pior que erro: ninguém vai olhar.
+        const tudoFalhou = result.synced === 0 && result.failed > 0;
         await admin.from("bling2_sync_log").update({
-          status: "completed",
+          status: tudoFalhou ? "failed" : "completed",
           records_synced: result.synced,
           records_failed: result.failed,
+          error_message: tudoFalhou
+            ? `nenhum dos ${result.failed} registros foi gravado — veja os logs da function`
+            : null,
           finished_at: nowIso(),
         }).eq("id", logId);
         results[nome] = result;
