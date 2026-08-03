@@ -1,5 +1,5 @@
 -- ═══════════════════════════════════════════════════════════════════════════
--- Bling 2 — rodada INCREMENTAL de 30 em 30 minutos
+-- Bling 2 — rodada INCREMENTAL a cada 30 minutos (:15 e :45)
 --
 -- Motivo: as vendas on-line faturam sozinhas e emitem NF várias vezes por dia.
 -- Com o cron só duas vezes ao dia, uma nota emitida às 09:00 só apareceria às
@@ -22,7 +22,7 @@
 -- continua sendo detectado pela rodada completa diária, que segue de pé.
 --
 -- ── Os três jobs, e o que cada um cobre ───────────────────────────────────
---   bling2-sync-incremental  */30 * * * *   NF-e e pedidos dos últimos 7 dias
+--   bling2-sync-incremental  15,45 * * * *   NF-e e pedidos dos últimos 7 dias
 --   bling2-sync-rapido       30 11 * * *    cadastros (produtos, contatos…)
 --   bling2-sync-pesado       30 17 * * *    varredura completa + cancelamentos
 --
@@ -50,11 +50,14 @@ begin
   end loop;
 end $$;
 
--- A cada 30 minutos, o dia inteiro. A rodada é barata por construção: uma
--- listagem filtrada por data (teto de 5 páginas) + no máximo 40 detalhes.
+-- Duas vezes por hora, o dia inteiro. Barata por construção: uma listagem
+-- filtrada por data (teto de 5 páginas) + no máximo 40 detalhes.
+-- ⚠️ :15 e :45, NÃO :00 e :30. O `bling-nfe-sync` do Bling 1 roda de hora em
+-- hora no minuto :00 e é o job pesado (uma chamada à API por nota). Em */30 as
+-- duas colidiriam uma vez por hora, disputando o mesmo projeto Supabase.
 select cron.schedule(
   'bling2-sync-incremental',
-  '*/30 * * * *',
+  '15,45 * * * *',
   $cmd$
   select net.http_post(
     url     := 'https://wpkfirmapxevzpxjovjr.supabase.co/functions/v1/bling2-auto-sync',
