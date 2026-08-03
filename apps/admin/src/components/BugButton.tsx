@@ -106,11 +106,14 @@ const PLACEHOLDER_RESUMO: Record<string, string> = {
   acesso:   "Ex: Preciso de acesso ao Bling",
   ajuda:    "Ex: Como emito a segunda via da NF?",
 };
+// ⚠️ CURTOS de propósito. Este rótulo divide a linha com o botão "usar
+// modelo"; um texto longo ("O que você precisa acessar") quebrava em duas
+// linhas em alguns tipos e o diálogo mudava de altura ao trocar de tipo.
 const ROTULO_DESCRICAO: Record<string, string> = {
   bug:      "O que aconteceu",
   sugestao: "Sua ideia",
   infra:    "O que você precisa",
-  acesso:   "O que você precisa acessar",
+  acesso:   "O que você precisa",
   ajuda:    "Sua dúvida",
 };
 
@@ -347,23 +350,34 @@ export function BugButton() {
             <>
               <DialogHeader className="space-y-3">
                 <DialogTitle className="text-base">O que você quer nos contar?</DialogTitle>
-                {/* Cinco tipos não cabem numa fileira só como as duas antigas
-                    cabiam — daí o flex-wrap em vez do segmented control. O
-                    rótulo é o `acao` (voz de quem pede: "Algo está errado"),
-                    não o `label` (voz de quem conserta: "Bug"): rótulo errado
-                    faz a pessoa escolher a caixa errada. */}
-                <div className="flex flex-wrap gap-1 rounded-lg bg-muted p-0.5">
+                {/* GRADE de largura igual, não flex-wrap.
+                    Com frases de tamanhos diferentes ("Algo está errado" ×
+                    "Não sei usar") o wrap produzia duas fileiras irregulares,
+                    com sobra à direita — parecia quebrado, não intencional.
+                    Cinco células iguais lêem como um controle só.
+
+                    Ícone em cima do rótulo: lado a lado, "Equipamento" não
+                    cabe em 1/5 da largura do diálogo e truncava.
+
+                    A dica fica numa linha FIXA abaixo (h-4) em vez de dentro do
+                    botão. É ela que traduz "Bug" para quem reporta — e a altura
+                    fixa é o que impede o diálogo de pular ao trocar de tipo. */}
+                <div className="grid grid-cols-5 gap-1 rounded-lg bg-muted p-1">
                   {KINDS.map((k) => {
-                    const { Icon } = kindUi(k.key);
+                    const { Icon, className } = kindUi(k.key);
+                    const ativo = kind === k.key;
                     return (
                       <button key={k.key} type="button" onClick={() => setKind(k.key as BugKind)} title={k.hint}
-                        className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium transition-all ${
-                          kind === k.key ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}>
-                        <Icon className="h-3.5 w-3.5" /> {k.acao}
+                        aria-pressed={ativo}
+                        className={`flex flex-col items-center justify-center gap-1 rounded-md px-1 py-2 text-[11px] font-medium leading-none transition-all ${
+                          ativo ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:bg-background/50"}`}>
+                        <Icon className={`h-4 w-4 ${ativo ? className : ""}`} />
+                        <span className="truncate max-w-full">{k.label}</span>
                       </button>
                     );
                   })}
                 </div>
+                <p className="h-4 truncate text-[11px] text-muted-foreground">{kindOf(kind).hint}</p>
               </DialogHeader>
 
               {rascunhoRecuperado && (
@@ -391,7 +405,7 @@ export function BugButton() {
 
                 <div className="space-y-1.5">
                   <div className="flex items-center justify-between gap-2">
-                    <Label htmlFor="bug-desc">
+                    <Label htmlFor="bug-desc" className="whitespace-nowrap">
                       {ROTULO_DESCRICAO[kind] ?? "O que aconteceu"} <span className="text-destructive">*</span>
                     </Label>
                     {kind === "bug" && !description && (

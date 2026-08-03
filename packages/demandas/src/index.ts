@@ -30,14 +30,13 @@ export interface KindConfig {
   key: string;
   /** Rótulo neutro — usado no quadro do TI, filtros e relatórios. */
   label: string;
-  /** Explicação curta, para quem está escolhendo. */
-  hint: string;
   /**
-   * O mesmo tipo na VOZ DE QUEM PEDE, para o botão de reporte. "Bug" é palavra
-   * de quem conserta; quem reporta pensa "algo está errado". A distinção não é
-   * preciosismo — o rótulo errado faz a pessoa escolher a caixa errada.
+   * Explicação curta, na voz de quem PEDE. Não é enfeite: "Bug" é palavra de
+   * quem conserta, e a dica é o que traduz o rótulo para quem está reportando.
+   * O botão de reporte mostra a dica do tipo selecionado numa linha fixa —
+   * por isso ela precisa caber em UMA linha.
    */
-  acao: string;
+  hint: string;
   /** true = demanda de software (pede o campo Sistema/app). */
   software: boolean;
   /**
@@ -49,18 +48,18 @@ export interface KindConfig {
 }
 
 export const KINDS: KindConfig[] = [
-  { key: "bug",      label: "Bug",         acao: "Algo está errado",   hint: "Algo do sistema está errado",                    software: true,  bloqueia: true },
-  { key: "sugestao", label: "Sugestão",    acao: "Tenho uma ideia",    hint: "Ideia de melhoria no sistema",                   software: true,  bloqueia: false },
+  { key: "bug",      label: "Bug",         hint: "Algo do sistema está errado",                    software: true,  bloqueia: true },
+  { key: "sugestao", label: "Sugestão",    hint: "Ideia de melhoria no sistema",                   software: true,  bloqueia: false },
   // O pedido de dia a dia que não tem tela nenhuma — o exemplo real foi
   // "buscar um cabo pro monitor".
-  { key: "infra",    label: "Equipamento", acao: "Equipamento",        hint: "Cabo, monitor, periférico, máquina, rede",       software: false, bloqueia: true },
+  { key: "infra",    label: "Equipamento", hint: "Cabo, monitor, periférico, máquina, rede",       software: false, bloqueia: true },
   // Alto volume, resolução rápida, ciclo de vida próprio. Não pede Sistema
   // porque o alvo tanto pode ser um app nosso quanto Bling, e-mail ou rede —
   // obrigar a escolher entre nossos apps só induziria resposta errada.
-  { key: "acesso",   label: "Acesso",      acao: "Preciso de acesso",  hint: "Criar login, liberar permissão, resetar senha",  software: false, bloqueia: true },
+  { key: "acesso",   label: "Acesso",      hint: "Criar login, liberar permissão, resetar senha",  software: false, bloqueia: true },
   // Separa "não sei usar" de "está quebrado" — a confusão entre os dois é o
   // que mais distorce a contagem de bugs.
-  { key: "ajuda",    label: "Ajuda",       acao: "Não sei usar",       hint: "Dúvida de uso, \"me ensina a…\"",                software: true,  bloqueia: true },
+  { key: "ajuda",    label: "Ajuda",       hint: "Dúvida de uso, \"me ensina a…\"",                software: true,  bloqueia: true },
 ];
 
 /** Tipo desconhecido cai em Bug — o default histórico da coluna. */
