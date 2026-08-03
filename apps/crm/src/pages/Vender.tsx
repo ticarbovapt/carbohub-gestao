@@ -222,6 +222,14 @@ export default function Vender() {
     }
   }, [pagModalidade, pagParcelas, pagFaturamento]);
   const pagamentoValido = pagModalidade !== "" && !(pagModalidade === "boleto_faturado" && !pagFaturamento.trim());
+  // Cliente é obrigatório. Antes o gate só olhava o pagamento, e a venda salvava
+  // com nome vazio — o buildOrderFields faz `customer_name: input.customer_name || ""`
+  // e grava a string vazia. Aconteceu de verdade: o V2026080004 nasceu de R$ 400
+  // sem nome e sem CNPJ. Pedido sem cliente não fatura, não cobra e não se acha.
+  const nomeValido = customerName.trim().length > 0;
+  const podeSalvar = pagamentoValido && nomeValido;
+  // Por que não vale para o orçamento também? Vale: orçamento sem nome de
+  // cliente não pode ser enviado a ninguém, e o PDF sai com o cabeçalho vazio.
 
   // Id do lead de origem. O CRM JÁ mandava isto no state e o tipo inline não
   // declarava `id` — então o efeito nunca lia, e metade do elo era descartada
@@ -949,8 +957,12 @@ export default function Vender() {
           <h3 className="font-semibold flex items-center gap-2"><Building2 className="h-4 w-4 text-carbo-green" /> Informações do Cliente</h3>
           <div className="grid md:grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <Label>Nome / Razão Social *</Label>
-              <Input value={customerName} onChange={(e) => setCustomerName(e.target.value)} placeholder="Nome do cliente" />
+              <Label>Nome / Razão Social <span className="text-destructive">*</span></Label>
+              <Input value={customerName} onChange={(e) => setCustomerName(e.target.value)} placeholder="Nome do cliente"
+                className={!nomeValido ? "border-destructive/50 focus-visible:ring-destructive/40" : undefined} />
+              {!nomeValido && (
+                <p className="text-[11px] text-destructive">Obrigatório — sem o nome o pedido não fatura nem se acha depois.</p>
+              )}
             </div>
             <div className="space-y-1.5">
               <Label>Email</Label>
@@ -1492,7 +1504,7 @@ export default function Vender() {
           </h3>
           <div className="grid md:grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <Label>Modalidade *</Label>
+              <Label>Modalidade <span className="text-destructive">*</span></Label>
               <Select value={pagModalidade} onValueChange={setPagModalidade}>
                 <SelectTrigger><SelectValue placeholder="Selecione a forma de pagamento" /></SelectTrigger>
                 <SelectContent>
@@ -1506,7 +1518,7 @@ export default function Vender() {
             </div>
             {pagModalidade === "credito" && (
               <div className="space-y-1.5">
-                <Label>Parcelas *</Label>
+                <Label>Parcelas <span className="text-destructive">*</span></Label>
                 <Select value={pagParcelas} onValueChange={setPagParcelas}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
@@ -1519,7 +1531,7 @@ export default function Vender() {
             )}
             {pagModalidade === "boleto_faturado" && (
               <div className="space-y-1.5">
-                <Label>Prazo do faturamento *</Label>
+                <Label>Prazo do faturamento <span className="text-destructive">*</span></Label>
                 <Input value={pagFaturamento} onChange={(e) => setPagFaturamento(e.target.value)} placeholder="ex.: 30/60/90" />
               </div>
             )}
@@ -1582,13 +1594,13 @@ export default function Vender() {
         </div>
         <div className="flex items-center gap-2 w-full sm:w-auto">
           <Button variant="ghost" className="hidden sm:inline-flex" onClick={() => navigate("/pedidos")}>Cancelar</Button>
-          <Button variant="outline" className="flex-1 sm:flex-none" onClick={handleQuote} disabled={generating || !pagamentoValido}>
+          <Button variant="outline" className="flex-1 sm:flex-none" onClick={handleQuote} disabled={generating || !podeSalvar}>
             <FileText className="h-4 w-4 mr-1" /> {generating ? "Gerando..." : (editId ? (<><span className="hidden sm:inline">Salvar e&nbsp;</span>Gerar PDF</>) : (<><span className="hidden sm:inline">Gerar&nbsp;</span>Orçamento</>))}
           </Button>
-          <Button variant="outline" className="flex-1 sm:flex-none" onClick={handleEmailQuote} disabled={emailing || !pagamentoValido} title="Salvar, gerar o PDF e enviar ao e-mail do cliente">
+          <Button variant="outline" className="flex-1 sm:flex-none" onClick={handleEmailQuote} disabled={emailing || !podeSalvar} title="Salvar, gerar o PDF e enviar ao e-mail do cliente">
             <Mail className="h-4 w-4 mr-1" /> {emailing ? "Enviando..." : (<><span className="hidden sm:inline">Enviar por&nbsp;</span>E-mail</>)}
           </Button>
-          <CarboButton onClick={handleSell} className="flex-1 sm:flex-none sm:min-w-[150px]" disabled={!pagamentoValido}>
+          <CarboButton onClick={handleSell} className="flex-1 sm:flex-none sm:min-w-[150px]" disabled={!podeSalvar}>
             <ShoppingCart className="h-4 w-4 mr-1" /> {editId ? "Salvar e Vender" : "Gerar Venda"}
           </CarboButton>
         </div>
