@@ -36,7 +36,12 @@ begin
   where p.allowed_interfaces is not null
     and exists (
       select 1 from unnest(p.allowed_interfaces) x
-      where lower(x) in ('carbo_admin','carbo_sales','carbo_crm','carbo_ops',
+      -- ⚠️ Lista conferida contra os perfis REAIS, não contra o nome dos apps.
+      -- O Ops aparece como `carbo_ops_app` em quase todo mundo e como
+      -- `carbo_ops` num perfil — os dois valem. `carbo_sales` NÃO existe: o
+      -- Sales é `carbo_crm`. Interface interna nova precisa entrar aqui, senão
+      -- a pessoa some do alerta sem erro nenhum.
+      where lower(x) in ('carbo_admin','carbo_crm','carbo_ops','carbo_ops_app',
                          'carbo_financas','carbo_mkt','carbo_ti')
     )
     and (p_exceto is null or p.id is distinct from p_exceto);
@@ -128,7 +133,7 @@ from public.profiles p
 where p.allowed_interfaces is not null
   and exists (
     select 1 from unnest(p.allowed_interfaces) x
-    where lower(x) in ('carbo_admin','carbo_sales','carbo_crm','carbo_ops',
+    where lower(x) in ('carbo_admin','carbo_crm','carbo_ops','carbo_ops_app',
                        'carbo_financas','carbo_mkt','carbo_ti')
   );
 
