@@ -429,27 +429,39 @@ export function useAssumirDemanda() {
       if (!uid) throw new Error("Sessão expirada.");
       const { data: prof } = await db.from("profiles").select("full_name").eq("id", uid).maybeSingle();
       const nome = (prof as { full_name?: string } | null)?.full_name ?? null;
-      // Só puxa pra "Em andamento" quem ainda não passou disso — assumir uma
-      // demanda que já está em teste não deve fazê-la retroceder.
+      // Assumir é dizer "essa é minha", NÃO "estou começando agora". Antes isto
+      // mandava a demanda de Entrada direto para "Em andamento", pulando a fila
+      // — e o quadro passava a mentir: mostrava como trabalho em curso o que
+      // ainda nem tinha começado, e a coluna Em andamento inchava com coisa
+      // parada. Quem assume às 9h pode só ir mexer na quinta.
+      //
+      // Agora só tira da Entrada (triagem) e põe em "Na fila". Começar é um
+      // gesto separado: arrastar para Em andamento.
       const { data: atual } = await db.from("carbo_bug_reports").select("status").eq("id", id).maybeSingle();
       const st = (atual as { status?: string } | null)?.status;
-      const avanca = st === "open" || st === "priorizada";
       const { data, error } = await db
         .from("carbo_bug_reports")
         .update({
           assignee_id: uid, assignee_name: nome,
-          ...(avanca ? { status: "in_progress" } : {}),
+          // Só a Entrada avança. De "Na fila" em diante a etapa é de quem
+          // trabalha, não um efeito colateral de virar responsável.
+          ...(st === "open" ? { status: "priorizada" } : {}),
           updated_at: new Date().toISOString(),
         })
         .eq("id", id)
         .select("id");
       if (error) throw error;
       if (!data || data.length === 0) throw new Error("Sem permissão para assumir esta demanda.");
-      return { nome };
+      return { nome, moveu: st === "open" };
     },
-    onSuccess: () => {
+    onSuccess: (r) => {
       queryClient.invalidateQueries({ queryKey: ["bug_reports"] });
-      toast({ title: "Demanda assumida!", description: "Ela foi pra Em andamento com você como responsável." });
+      toast({
+        title: "Demanda assumida!",
+        description: r?.moveu
+          ? "Foi pra Na fila com você como responsável. Mova pra Em andamento quando começar."
+          : "Você é o responsável. A etapa não mudou.",
+      });
     },
     onError: (err: Error) => toast({ title: "Erro ao assumir", description: err.message, variant: "destructive" }),
   });
