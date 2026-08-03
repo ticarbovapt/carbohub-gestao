@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { toast } from "sonner";
 import {
   X, ChevronRight, ArrowRightLeft, ShoppingCart, History,
-  StickyNote, Phone, CheckSquare, Clock, GitBranch, AlertTriangle, Pin, PinOff, Archive, Hourglass,
+  StickyNote, Phone, CheckSquare, Clock, GitBranch, AlertTriangle, Pin, PinOff, Archive, Hourglass, Link2, Check,
   FileText,
   MessageSquare, ArrowRight, Pencil,
 } from "lucide-react";
@@ -72,6 +73,24 @@ function formatDoc(v: string | null): string | null {
 }
 
 export function DealDetail({ lead, funnelType, onClose }: DealDetailProps) {
+  // Link do card. Monta a partir do funil DO LEAD, não do que está aberto na
+  // tela: na visão "Todos os funis" o card pode ser de outro funil, e mandar o
+  // link do funil errado abriria a aba errada antes de achar o card.
+  const [linkCopiado, setLinkCopiado] = useState(false);
+  const copiarLink = async () => {
+    const url = `${window.location.origin}/crm/pipelines?funil=${lead.funnel_type}&lead=${lead.id}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      setLinkCopiado(true);
+      toast.success("Link do card copiado.");
+      setTimeout(() => setLinkCopiado(false), 2000);
+    } catch {
+      // clipboard exige HTTPS e permissão; sem isso, mostra o link pra copiar
+      // na mão em vez de falhar em silêncio.
+      toast.info(url, { duration: 15000, description: "Copie o endereço acima." });
+    }
+  };
+
   const navigate = useNavigate();
   const { isGestor, user, profile } = useAuth();
 
@@ -327,6 +346,13 @@ export function DealDetail({ lead, funnelType, onClose }: DealDetailProps) {
             </div>
           </div>
           <div className="flex items-center gap-1 shrink-0">
+            {/* Copiar o link do card. A URL já é única (?funil=…&lead=<id>), mas
+                depender de a pessoa saber olhar a barra de endereço é depender
+                demais — e o gestor que quer mandar o card pro vendedor está
+                justamente com o card aberto, não com a barra em foco. */}
+            <button onClick={copiarLink} className="text-muted-foreground hover:text-foreground p-1.5" title="Copiar link deste card">
+              {linkCopiado ? <Check className="h-4 w-4 text-carbo-green" /> : <Link2 className="h-4 w-4" />}
+            </button>
             {canDelete && (
               <button onClick={() => setConfirmDelete(true)} className="text-muted-foreground hover:text-destructive p-1.5" title="Arquivar lead">
                 <Archive className="h-4 w-4" />

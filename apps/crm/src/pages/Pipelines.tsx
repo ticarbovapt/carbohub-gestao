@@ -191,12 +191,35 @@ export default function Pipelines() {
   const [repasseNota, setRepasseNota] = useState("");
   const [drawerLead, setDrawerLead] = useState<CRMLead | null>(null);
   const leadDoLink = useLeadPorId(leadParam);
-  // Abre o card do link assim que ele chega, uma vez só. Limpar o `?lead=` da
-  // URL evita que fechar o card e recarregar a página o reabra sozinho.
-  useEffect(() => {
-    if (!leadParam || !leadDoLink.data?.lead) return;
-    setDrawerLead(leadDoLink.data.lead);
+
+  // ── Todo card tem endereço próprio ────────────────────────────────────────
+  //
+  // O card aberto vira `?lead=<id>` na URL, e a URL é a fonte da verdade sobre
+  // qual card está aberto. Isso é o que permite copiar o endereço da barra e
+  // mandar para alguém: quem abrir cai no MESMO card, mesmo que ele esteja em
+  // outro funil ou arquivado (o useLeadPorId busca por id, sem depender de o
+  // card estar na lista carregada).
+  //
+  // Antes o `?lead=` só era LIDO — quem clicava num card não ganhava endereço
+  // nenhum, e o efeito ainda APAGAVA o parâmetro depois de abrir. O apagamento
+  // existia para que fechar o card e recarregar não o reabrisse; agora isso é
+  // resolvido na origem, porque fechar remove o parâmetro.
+  //
+  // `replace: false` de propósito: o Voltar do navegador fecha o card, que é o
+  // que qualquer pessoa espera depois de abrir uma coisa.
+  const abrirCard = (lead: CRMLead) => {
+    setDrawerLead(lead);
+    setSearchParams((sp) => { const n = new URLSearchParams(sp); n.set("lead", lead.id); return n; });
+  };
+  const fecharCard = () => {
+    setDrawerLead(null);
     setSearchParams((sp) => { const n = new URLSearchParams(sp); n.delete("lead"); return n; }, { replace: true });
+  };
+  // Link direto (ou Voltar/Avançar do navegador) → abre o card que a URL pede.
+  useEffect(() => {
+    if (!leadParam) { setDrawerLead(null); return; }
+    if (drawerLead?.id === leadParam) return;
+    if (leadDoLink.data?.lead) setDrawerLead(leadDoLink.data.lead);
   }, [leadParam, leadDoLink.data]); // eslint-disable-line react-hooks/exhaustive-deps
   const [viewMode, setViewMode] = useState<"kanban" | "list">("kanban");
   const [vendedorFilter, setVendedorFilter] = useState("all");
@@ -561,7 +584,7 @@ export default function Pipelines() {
           <AllFunnelsBoard
             leads={filteredLeads}
             ownersById={ownersById}
-            onLeadClick={(lead) => setDrawerLead(lead)}
+            onLeadClick={abrirCard}
             onAdvance={handleAdvanceAny}
             onMarkLost={(lead) => { setLostReason(""); setLostDialogLead(lead); }}
           />
@@ -571,7 +594,7 @@ export default function Pipelines() {
             funnelType={ft}
             onAdvance={handleAdvance}
             onMarkLost={(lead) => { setLostReason(""); setLostDialogLead(lead); }}
-            onLeadClick={(lead) => setDrawerLead(lead)}
+            onLeadClick={abrirCard}
             onDragMove={handleDragMove}
             onAddLead={(stageId) => { setFormStage(stageId); setIsFormOpen(true); }}
             ownersById={ownersById}
@@ -583,7 +606,7 @@ export default function Pipelines() {
                 {filteredLeads.map((lead) => {
                   const st = stages.find((s) => s.id === lead.stage);
                   return (
-                    <div key={lead.id} className="flex items-center justify-between p-3 hover:bg-muted/50 cursor-pointer" onClick={() => setDrawerLead(lead)}>
+                    <div key={lead.id} className="flex items-center justify-between p-3 hover:bg-muted/50 cursor-pointer" onClick={() => abrirCard(lead)}>
                       <div className="flex-1 min-w-0">
                         <p className="font-medium text-sm truncate">{lead.trade_name || lead.legal_name || lead.contact_name}</p>
                         <p className="text-xs text-muted-foreground">{lead.city} · {lead.contact_phone}</p>
@@ -607,7 +630,7 @@ export default function Pipelines() {
       {acao && <AcaoPosMove lead={acao.lead} tipo={acao.tipo} onClose={() => setAcao(null)} />}
 
       {isFormOpen && <LeadForm funnelType={ft} initialStage={isAll ? undefined : formStage} onClose={() => setIsFormOpen(false)} />}
-      {liveDrawerLead && <DealDetail lead={liveDrawerLead} funnelType={liveDrawerLead.funnel_type as FunnelType} onClose={() => setDrawerLead(null)} />}
+      {liveDrawerLead && <DealDetail lead={liveDrawerLead} funnelType={liveDrawerLead.funnel_type as FunnelType} onClose={fecharCard} />}
 
       <Dialog open={!!repasseLead} onOpenChange={(o) => { if (!o) setRepasseLead(null); }}>
         <DialogContent className="sm:max-w-md">
