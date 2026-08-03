@@ -230,14 +230,21 @@ export default function Vender() {
 
   // Prefill quando vem de um lead (Tunnel do CRM). Não acopla — venda direta segue normal.
   useEffect(() => {
-    const fl = (location.state as { fromLead?: { id?: string; name?: string; cnpj?: string; phone?: string; email?: string; city?: string; state?: string; address?: string; bairro?: string } } | null)?.fromLead;
+    const fl = (location.state as { fromLead?: { id?: string; name?: string; cnpj?: string; phone?: string; email?: string; city?: string; state?: string; address?: string; bairro?: string; numero?: string; cep?: string; ie?: string; legalName?: string } } | null)?.fromLead;
     if (!fl) return;
     if (fl.id) setLeadOrigemId(fl.id);
-    if (fl.name) setCustomerName(fl.name);
+    // Razão social manda sobre o nome do card: é ela que sai na nota.
+    if (fl.legalName || fl.name) setCustomerName(fl.legalName || fl.name || "");
     if (fl.cnpj) setDoc(fl.cnpj);
     if (fl.phone) setPhone(fl.phone);
     if (fl.email) setEmail(fl.email);
-    setEndereco((e) => ({ ...e, logradouro: fl.address || e.logradouro, bairro: fl.bairro || e.bairro, cidade: fl.city || e.cidade, uf: fl.state || e.uf }));
+    if (fl.ie) setIe(fl.ie);
+    setEndereco((e) => ({
+      ...e,
+      logradouro: fl.address || e.logradouro, numero: fl.numero || e.numero,
+      bairro: fl.bairro || e.bairro, cidade: fl.city || e.cidade,
+      uf: fl.state || e.uf, cep: fl.cep || e.cep,
+    }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const [mapMsg, setMapMsg] = useState<string | null>(null);

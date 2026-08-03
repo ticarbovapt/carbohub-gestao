@@ -56,7 +56,18 @@ export function LeadForm({ funnelType, initialStage, onClose }: LeadFormProps) {
     qual_dor: "",
     qual_decisor: "",
     qual_prazo: "",
+    // Faturamento — opcional em qualquer funil. Quem já chega com o CNPJ na
+    // mão preenche agora e não digita de novo na hora do orçamento; quem não
+    // tem, ignora. Nada aqui bloqueia a criação do lead.
+    cnpj: "",
+    legal_name: "",
+    customer_ie: "",
+    address: "",
+    numero: "",
+    bairro: "",
+    cep: "",
   });
+  const [faturamentoAberto, setFaturamentoAberto] = useState(false);
 
   function set(field: string, value: string) {
     setForm((prev) => ({ ...prev, [field]: value }));
@@ -88,6 +99,15 @@ export function LeadForm({ funnelType, initialStage, onClose }: LeadFormProps) {
       qual_dor: form.qual_dor.trim() || null,
       qual_decisor: form.qual_decisor.trim() || null,
       qual_prazo: form.qual_prazo.trim() || null,
+      // Só dígitos no banco — a máscara é da tela, não do dado (mesma regra da
+      // tela de venda).
+      cnpj: onlyDigits(form.cnpj) || null,
+      legal_name: form.legal_name.trim() || null,
+      customer_ie: form.customer_ie.trim() || null,
+      address: form.address.trim() || null,
+      numero: form.numero.trim() || null,
+      bairro: form.bairro.trim() || null,
+      cep: onlyDigits(form.cep) || null,
     });
     onClose();
   }
@@ -210,6 +230,52 @@ export function LeadForm({ funnelType, initialStage, onClose }: LeadFormProps) {
                   placeholder="Notas sobre este lead…" value={form.notes} onChange={(e) => set("notes", e.target.value)}
                 />
               </Field>
+
+              {/* Faturamento — RECOLHIDO por padrão. Cadastro de lead novo
+                  raramente tem CNPJ e endereço fiscal; abrir sete campos na
+                  cara de quem só quer registrar um contato é atrito puro. Quem
+                  já tem os dados abre e preenche, e não digita de novo quando
+                  gerar o orçamento. */}
+              <button type="button" onClick={() => setFaturamentoAberto((v) => !v)}
+                className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
+                {faturamentoAberto ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+                Dados de faturamento (opcional)
+              </button>
+
+              {faturamentoAberto && (
+                <>
+                  <div className="grid grid-cols-2 gap-3">
+                    <Field label="CNPJ / CPF">
+                      <Input placeholder="00.000.000/0000-00" value={form.cnpj} onChange={(e) => set("cnpj", e.target.value)} />
+                    </Field>
+                    <Field label="Inscrição Estadual">
+                      <Input placeholder="Isento, se não tiver" value={form.customer_ie} onChange={(e) => set("customer_ie", e.target.value)} />
+                    </Field>
+                  </div>
+                  <Field label="Razão social">
+                    <Input placeholder="Nome na Receita Federal" value={form.legal_name} onChange={(e) => set("legal_name", e.target.value)} />
+                  </Field>
+                  <div className="grid grid-cols-[1fr_90px] gap-3">
+                    <Field label="Endereço">
+                      <Input placeholder="Rua, avenida…" value={form.address} onChange={(e) => set("address", e.target.value)} />
+                    </Field>
+                    <Field label="Número">
+                      <Input placeholder="123" value={form.numero} onChange={(e) => set("numero", e.target.value)} />
+                    </Field>
+                  </div>
+                  <div className="grid grid-cols-[1fr_120px] gap-3">
+                    <Field label="Bairro">
+                      <Input placeholder="Bairro" value={form.bairro} onChange={(e) => set("bairro", e.target.value)} />
+                    </Field>
+                    <Field label="CEP">
+                      <Input placeholder="00000-000" inputMode="numeric" value={form.cep} onChange={(e) => set("cep", e.target.value)} />
+                    </Field>
+                  </div>
+                  <p className="text-[11px] text-muted-foreground">
+                    Cidade e UF vêm de Localização, acima. Estes campos são reaproveitados ao gerar o orçamento.
+                  </p>
+                </>
+              )}
             </>
           )}
 

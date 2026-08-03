@@ -36,7 +36,12 @@ export function AcaoPosMove({
       cnpj: lead.cnpj || "",
       phone: lead.contact_phone || "",
       email: lead.contact_email || "",
-      city: lead.city || "", state: lead.state || "", address: "", bairro: "",
+      city: lead.city || "", state: lead.state || "",
+      // Antes estes dois iam como string vazia FIXA no código: o cano existia,
+      // mas o lead não tinha onde guardar endereço. Agora tem.
+      address: lead.address || "", bairro: lead.bairro || "",
+      numero: lead.numero || "", cep: lead.cep || "", ie: lead.customer_ie || "",
+      legalName: lead.legal_name || "",
     } } });
     onClose();
   }

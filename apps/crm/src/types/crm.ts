@@ -48,6 +48,14 @@ export interface CRMLead {
   ramo: string | null;
   city: string | null;
   state: string | null;
+  // Endereço fiscal. `address` e `bairro` existem no banco desde a criação da
+  // tabela e nunca tinham sido declarados aqui — por isso nenhuma tela os
+  // mostrava e o repasse para a venda mandava string vazia.
+  address: string | null;
+  bairro: string | null;
+  numero: string | null;
+  cep: string | null;
+  customer_ie: string | null;
   segment: Segment | null;
   // O que o lead É (PDV, frotista, licenciado…). Substituiu as 9 pipelines por
   // tipo na consolidação f13. Estava faltando aqui — o código todo usava e o

@@ -162,6 +162,53 @@ export function DealDetail({ lead, funnelType, onClose }: DealDetailProps) {
   // aqui para não gerar divergência com o cadastro fiscal.
   const [draftTradeName, setDraftTradeName] = useState(lead.trade_name ?? "");
 
+  // ── Faturamento ────────────────────────────────────────────────────────
+  // O que o vendedor precisa ter em mãos para emitir a nota. Antes isso só
+  // existia dentro do pedido: quem abria o card não via, e na venda seguinte
+  // para o mesmo cliente digitava tudo de novo.
+  //
+  // Vive num bloco separado do Cliente/Contato de propósito — contato é quem
+  // se fala, faturamento é para quem se emite. Misturar os dois fazia o bloco
+  // de contato virar um formulário de dez linhas.
+  const [editFat, setEditFat] = useState(false);
+  const [fCnpj, setFCnpj]         = useState(lead.cnpj ?? "");
+  const [fRazao, setFRazao]       = useState(lead.legal_name ?? "");
+  const [fIe, setFIe]             = useState(lead.customer_ie ?? "");
+  const [fEndereco, setFEndereco] = useState(lead.address ?? "");
+  const [fNumero, setFNumero]     = useState(lead.numero ?? "");
+  const [fBairro, setFBairro]     = useState(lead.bairro ?? "");
+  const [fCep, setFCep]           = useState(lead.cep ?? "");
+  const startEditFat = () => {
+    setFCnpj(lead.cnpj ?? ""); setFRazao(lead.legal_name ?? ""); setFIe(lead.customer_ie ?? "");
+    setFEndereco(lead.address ?? ""); setFNumero(lead.numero ?? "");
+    setFBairro(lead.bairro ?? ""); setFCep(lead.cep ?? "");
+    setEditFat(true);
+  };
+  async function saveFat() {
+    await updateLead.mutateAsync({
+      id: lead.id,
+      // Só dígitos no banco; a máscara é da tela.
+      cnpj: fCnpj.replace(/\D/g, "") || null,
+      legal_name: fRazao.trim() || null,
+      customer_ie: fIe.trim() || null,
+      address: fEndereco.trim() || null,
+      numero: fNumero.trim() || null,
+      bairro: fBairro.trim() || null,
+      cep: fCep.replace(/\D/g, "") || null,
+    });
+    setEditFat(false);
+  }
+  // Card novo → sai do modo edição, senão o rascunho de um lead vaza no outro.
+  useEffect(() => { setEditFat(false); }, [lead.id]);
+
+  const enderecoCompleto = [
+    [lead.address, lead.numero].filter(Boolean).join(", "),
+    lead.bairro,
+    [lead.city, lead.state].filter(Boolean).join("/"),
+    lead.cep ? `CEP ${lead.cep}` : "",
+  ].filter(Boolean).join(" — ") || null;
+  const temFaturamento = !!(lead.cnpj || lead.legal_name || lead.address || lead.customer_ie);
+
   // Qualificação — os quatro campos que o closer recebe no repasse.
   const [editQual, setEditQual] = useState(false);
   const [qVolume, setQVolume]   = useState(lead.qual_volume ?? "");
@@ -635,6 +682,50 @@ export function DealDetail({ lead, funnelType, onClose }: DealDetailProps) {
                     <p className="text-xs text-muted-foreground">Nenhum contato cadastrado. Clique em <span className="font-medium">Editar</span> para adicionar.</p>
                   )}
                 </>
+              )}
+            </Card>
+
+            {/* Faturamento — só aparece preenchido ou em edição. Bloco vazio em
+                todo lead novo seria ruído; o botão Editar dá o caminho. */}
+            <Card
+              title="Dados de faturamento"
+              action={!editFat ? (
+                <button onClick={startEditFat} className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
+                  <Pencil className="h-3 w-3" /> {temFaturamento ? "Editar" : "Preencher"}
+                </button>
+              ) : null}
+            >
+              {editFat ? (
+                <>
+                  <LabeledInput label="CNPJ / CPF" value={fCnpj} onChange={setFCnpj} placeholder="00.000.000/0000-00" />
+                  <LabeledInput label="Razão social" value={fRazao} onChange={setFRazao} placeholder="Nome na Receita Federal" />
+                  <LabeledInput label="Inscrição Estadual" value={fIe} onChange={setFIe} placeholder="Isento, se não tiver" />
+                  <LabeledInput label="Endereço" value={fEndereco} onChange={setFEndereco} placeholder="Rua, avenida…" />
+                  <LabeledInput label="Número" value={fNumero} onChange={setFNumero} placeholder="123" />
+                  <LabeledInput label="Bairro" value={fBairro} onChange={setFBairro} placeholder="Bairro" />
+                  <LabeledInput label="CEP" value={fCep} onChange={setFCep} placeholder="00000-000" />
+                  <div className="flex gap-2 pt-1">
+                    <Button size="sm" onClick={saveFat} disabled={updateLead.isPending}>
+                      {updateLead.isPending ? "Salvando..." : "Salvar"}
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={() => setEditFat(false)} disabled={updateLead.isPending}>Cancelar</Button>
+                  </div>
+                  <p className="mt-1 text-[11px] text-muted-foreground">
+                    Cidade e UF ficam em Cliente / Contato.
+                  </p>
+                </>
+              ) : temFaturamento ? (
+                <>
+                  <Field label={docLabel} value={formatDoc(lead.cnpj)} />
+                  <Field label="Razão social" value={lead.legal_name} />
+                  <Field label="Inscrição Estadual" value={lead.customer_ie} />
+                  <Field label="Endereço" value={enderecoCompleto} />
+                </>
+              ) : (
+                <p className="text-xs text-muted-foreground">
+                  Ainda sem dados fiscais. Preencha aqui, ou gere o orçamento e eles
+                  voltam preenchidos para cá sozinhos.
+                </p>
               )}
             </Card>
 
