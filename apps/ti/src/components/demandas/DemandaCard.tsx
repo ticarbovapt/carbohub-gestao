@@ -1,7 +1,7 @@
-import { Bug, Lightbulb, MessageSquare, CheckSquare, UserPlus, PauseCircle } from "lucide-react";
+import { MessageSquare, CheckSquare, UserPlus, PauseCircle } from "lucide-react";
 import { ProfileAvatar } from "@/components/ui/profile-avatar";
 import type { BugReport } from "@/hooks/useBugReports";
-import { prioOf, agingOf, stageDays, dtFmt, stageOf } from "@/lib/demandas";
+import { prioOf, agingOf, stageDays, dtFmt, stageOf, kindOf, kindUi } from "@/lib/demandas";
 
 export interface CardCounts {
   notes: number;
@@ -29,15 +29,17 @@ export function DemandaCardFace({
   const semDono = !d.assignee_id;
   const alerta = d.priority === "critica" || d.priority === "alta";
   const aTriar = !d.priority;
+  const kind = kindOf(d.kind);
+  const { Icon: KindIcon, className: kindColor } = kindUi(d.kind);
 
   return (
     <>
       {/* Título + tipo */}
       <div className="flex items-start gap-2">
         <p className="ti-card-title flex-1 min-w-0">{d.title}</p>
-        {d.kind === "sugestao"
-          ? <Lightbulb className="h-3.5 w-3.5 text-amber-500 shrink-0 mt-0.5" title="Sugestão" />
-          : <Bug className="h-3.5 w-3.5 text-destructive shrink-0 mt-0.5" title="Bug" />}
+        <span title={kind.label} className="shrink-0 mt-0.5">
+          <KindIcon className={`h-3.5 w-3.5 ${kindColor}`} />
+        </span>
       </div>
 
       {/* Quem pediu — durante a triagem é o dado que falta */}
@@ -45,9 +47,13 @@ export function DemandaCardFace({
         <p className="text-[11px] text-muted-foreground truncate">por {d.reporter_name}</p>
       )}
 
-      {/* Etiquetas: app + prioridade só quando pesa */}
+      {/* Etiquetas: sistema (ou a categoria, quando não é software) + prioridade
+          só quando pesa. Num pedido de cabo o app não diz nada — a categoria é
+          que orienta quem vai pegar o card. */}
       <div className="flex items-center gap-1.5 flex-wrap">
-        <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-muted text-muted-foreground uppercase">{d.app}</span>
+        <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-muted text-muted-foreground uppercase">
+          {kind.software ? d.app : kind.label}
+        </span>
         {alerta && <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${p.badge}`}>{p.label}</span>}
         {aTriar && <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-muted text-muted-foreground">a triar</span>}
       </div>

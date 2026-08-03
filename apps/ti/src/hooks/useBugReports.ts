@@ -9,7 +9,10 @@ const db = supabase as unknown as { from: (t: string) => any };
 // Identifica de qual app veio o report (sales | ops | admin | ti).
 const APP = "ti";
 
-export type BugKind = "bug" | "sugestao";
+// Tipos da demanda. 'bug' e 'sugestao' são os originais e continuam iguais; os
+// demais cobrem o que o TI atende fora de software (ver KINDS em lib/demandas).
+// O CHECK de `kind` no banco tem que aceitar os mesmos valores.
+export type BugKind = "bug" | "sugestao" | "infra" | "acesso" | "ajuda";
 // 'in_progress' (em andamento) é usado no app do TI pra organizar a execução.
 // Fluxo do TI (6 etapas). Os 4 status originais foram preservados e ganharam o
 // significado da etapa — por isso nada precisou ser migrado no banco.
@@ -112,7 +115,10 @@ export function useSubmitBugReport() {
     onSuccess: (_d, vars) => {
       queryClient.invalidateQueries({ queryKey: ["bug_reports"] });
       toast({
-        title: vars.kind === "sugestao" ? "Sugestão enviada!" : "Bug reportado!",
+        title:
+          vars.kind === "sugestao" ? "Sugestão enviada!"
+          : vars.kind === "bug"    ? "Bug reportado!"
+          : "Pedido registrado!",   // equipamento/acesso/ajuda não são "bug"
         description: "Obrigado. Nossa equipe vai analisar.",
       });
     },

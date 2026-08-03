@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
-import { LifeBuoy, Search, Hand, Plus, X, Inbox } from "lucide-react";
+import { LifeBuoy, Search, Hand, Plus, X, Inbox, UserRound } from "lucide-react";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectSeparator, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
 import {
@@ -13,8 +15,30 @@ import {
 import { DemandaBoard } from "@/components/demandas/DemandaBoard";
 import { DemandaModal } from "@/components/demandas/DemandaModal";
 import { NovaDemandaDialog } from "@/components/demandas/NovaDemandaDialog";
-import { PRIOS, stageLabel } from "@/lib/demandas";
+import { KINDS, PRIOS, kindLabel, stageLabel } from "@/lib/demandas";
 import { playMoveSuccess } from "@/lib/sfx";
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Filtro por pessoa — UM controle, dois papéis.
+//
+// "Demandas do Fulano" é ambíguo: pode ser o que ele ESTÁ RESOLVENDO
+// (assignee) ou o que ele PEDIU (reporter). O gestor faz as duas perguntas, e
+// as duas precisam caber numa barra que já tem busca + 3 selects + 1 botão.
+//
+// Descartado: um select de pessoa + um alternador responsável/solicitante ao
+// lado. São dois controles pra uma pergunta só, e o alternador fica sem sentido
+// enquanto nenhuma pessoa está escolhida (estado morto ocupando espaço).
+//
+// Escolhido: um único select com as pessoas agrupadas por papel. O papel vira
+// parte da própria opção — escolher já é responder "responsável ou
+// solicitante?", sem passo extra. O valor carrega o papel no prefixo e o gatilho
+// fechado sempre mostra "Resp.: X" / "Solic.: X", nunca só o nome solto.
+// ─────────────────────────────────────────────────────────────────────────────
+const PESSOA_TODAS = "all";
+/** Demanda órfã: é justamente a que o gestor caça (o quadro já acusa "sem dono"). */
+const SEM_RESPONSAVEL = "resp:__sem__";
+const papelDe = (v: string) => (v.startsWith("sol:") ? "sol" : "resp");
+const alvoDe = (v: string) => v.slice(v.indexOf(":") + 1);
 
 export default function Demandas() {
   const { user } = useAuth();
@@ -32,26 +56,69 @@ export default function Demandas() {
   const [fKind, setFKind] = useState("all");
   const [fApp, setFApp] = useState("all");
   const [fPrio, setFPrio] = useState("all");
-  const [soMinhas, setSoMinhas] = useState(false);
+  // "Minhas" NÃO é um estado separado: é um atalho que preenche este mesmo
+  // seletor com o usuário logado como responsável. Dois estados no mesmo eixo
+  // (pessoa) se contradiziam — "Minhas" ligado + "Solic.: Marcio" devolvia um
+  // quadro vazio sem o usuário entender por quê.
+  const [fPessoa, setFPessoa] = useState(PESSOA_TODAS);
   const [detail, setDetail] = useState<BugReport | null>(null);
   const [novaAberta, setNovaAberta] = useState(false);
 
   const apps = useMemo(() => Array.from(new Set(all.map((b) => b.app).filter(Boolean))).sort(), [all]);
 
+  // Só quem aparece nas demandas carregadas. O diretório inteiro da empresa no
+  // dropdown seria uma lista de gente que nunca abriu nem recebeu demanda.
+  // O nome vem do diretório (fica atualizado) e cai pro nome gravado na demanda
+  // quando a pessoa já não está no diretório.
+  const pessoas = useMemo(() => {
+    const nomeDe = (id: string, gravado: string | null) =>
+      dir.find((p) => p.id === id)?.full_name ?? gravado ?? "Sem nome";
+    const resp = new Map<string, string>();
+    const sol = new Map<string, string>();
+    let semResponsavel = false;
+    for (const b of all) {
+      if (b.assignee_id) resp.set(b.assignee_id, nomeDe(b.assignee_id, b.assignee_name));
+      else semResponsavel = true;
+      if (b.reporter_id) sol.set(b.reporter_id, nomeDe(b.reporter_id, b.reporter_name));
+    }
+    const ordenar = (m: Map<string, string>) =>
+      [...m].map(([id, nome]) => ({ id, nome })).sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
+    return { resp: ordenar(resp), sol: ordenar(sol), semResponsavel };
+  }, [all, dir]);
+
+  /** Rótulo do filtro ativo — usado no gatilho e no aviso fixo da barra. */
+  const pessoaAtiva = useMemo(() => {
+    if (fPessoa === PESSOA_TODAS) return null;
+    if (fPessoa === SEM_RESPONSAVEL) return { papel: "Sem responsável", nome: "", curto: "Sem responsável" };
+    const papel = papelDe(fPessoa) === "resp" ? "Responsável" : "Solicitante";
+    const id = alvoDe(fPessoa);
+    const lista = papelDe(fPessoa) === "resp" ? pessoas.resp : pessoas.sol;
+    const nome = lista.find((p) => p.id === id)?.nome
+      ?? dir.find((p) => p.id === id)?.full_name
+      ?? "Sem nome";
+    return { papel, nome, curto: `${papel === "Responsável" ? "Resp." : "Solic."}: ${nome}` };
+  }, [fPessoa, pessoas, dir]);
+
   const filtered = useMemo(() => {
     const term = q.trim().toLowerCase();
     return all.filter((b) => {
-      if (soMinhas && b.assignee_id !== user?.id) return false;
+      if (fPessoa === SEM_RESPONSAVEL ? !!b.assignee_id
+        : fPessoa !== PESSOA_TODAS
+          && (papelDe(fPessoa) === "resp" ? b.assignee_id : b.reporter_id) !== alvoDe(fPessoa)) return false;
       if (fKind !== "all" && b.kind !== fKind) return false;
       if (fApp !== "all" && b.app !== fApp) return false;
       if (fPrio === "__none__" ? !!b.priority : fPrio !== "all" && b.priority !== fPrio) return false;
       if (term && !`${b.title} ${b.description} ${b.reporter_name ?? ""} ${b.assignee_name ?? ""}`.toLowerCase().includes(term)) return false;
       return true;
     });
-  }, [all, q, fKind, fApp, fPrio, soMinhas, user?.id]);
+  }, [all, q, fKind, fApp, fPrio, fPessoa]);
 
-  const filtroAtivo = !!q.trim() || soMinhas || fKind !== "all" || fApp !== "all" || fPrio !== "all";
-  const limparFiltros = () => { setQ(""); setSoMinhas(false); setFKind("all"); setFApp("all"); setFPrio("all"); };
+  // "Minhas" é só o atalho pro próprio usuário como responsável.
+  const valorMinhas = user?.id ? `resp:${user.id}` : "";
+  const soMinhas = !!valorMinhas && fPessoa === valorMinhas;
+
+  const filtroAtivo = !!q.trim() || fPessoa !== PESSOA_TODAS || fKind !== "all" || fApp !== "all" || fPrio !== "all";
+  const limparFiltros = () => { setQ(""); setFPessoa(PESSOA_TODAS); setFKind("all"); setFApp("all"); setFPrio("all"); };
 
   // Mantém o modal em sincronia com o dado recarregado. Se a demanda sumiu
   // (arquivada por outra pessoa), fecha em vez de operar sobre um fantasma.
@@ -113,15 +180,57 @@ export default function Demandas() {
 
         <div className="flex gap-2 flex-wrap lg:ml-auto">
           <Button variant={soMinhas ? "default" : "outline"} size="sm" className="h-9 gap-1.5"
-            onClick={() => setSoMinhas((s) => !s)}>
+            disabled={!valorMinhas}
+            onClick={() => setFPessoa(soMinhas ? PESSOA_TODAS : valorMinhas)}>
             <Hand className="h-3.5 w-3.5" /> Minhas
           </Button>
-          <Select value={fKind} onValueChange={setFKind}>
-            <SelectTrigger className="w-36 h-9"><SelectValue /></SelectTrigger>
+
+          <Select value={fPessoa} onValueChange={setFPessoa}>
+            {/* Sem <SelectValue />: o texto da opção é só o nome, e nome solto
+                não diz se o filtro é por quem resolve ou por quem pediu. */}
+            <SelectTrigger className="w-44 h-9">
+              <span className="truncate">{pessoaAtiva?.curto ?? "Qualquer pessoa"}</span>
+            </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">Bugs + Sugestões</SelectItem>
-              <SelectItem value="bug">Só bugs</SelectItem>
-              <SelectItem value="sugestao">Só sugestões</SelectItem>
+              <SelectItem value={PESSOA_TODAS}>Qualquer pessoa</SelectItem>
+              {pessoas.semResponsavel && (
+                <SelectItem value={SEM_RESPONSAVEL}>Sem responsável</SelectItem>
+              )}
+              {pessoas.resp.length > 0 && (
+                <>
+                  <SelectSeparator />
+                  <SelectGroup>
+                    <SelectLabel>Responsável (quem resolve)</SelectLabel>
+                    {pessoas.resp.map((p) => (
+                      <SelectItem key={`resp:${p.id}`} value={`resp:${p.id}`}>{p.nome}</SelectItem>
+                    ))}
+                  </SelectGroup>
+                </>
+              )}
+              {pessoas.sol.length > 0 && (
+                <>
+                  <SelectSeparator />
+                  <SelectGroup>
+                    <SelectLabel>Solicitante (quem pediu)</SelectLabel>
+                    {pessoas.sol.map((p) => (
+                      <SelectItem key={`sol:${p.id}`} value={`sol:${p.id}`}>{p.nome}</SelectItem>
+                    ))}
+                  </SelectGroup>
+                </>
+              )}
+            </SelectContent>
+          </Select>
+
+          <Select value={fKind} onValueChange={setFKind}>
+            <SelectTrigger className="w-36 h-9">
+              <span className="truncate">{fKind === "all" ? "Todos os tipos" : kindLabel(fKind)}</span>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos os tipos</SelectItem>
+              {/* Vem de KINDS pra categoria nova entrar no filtro sozinha. */}
+              {KINDS.map((k) => (
+                <SelectItem key={k.key} value={k.key} title={k.hint}>{k.label}</SelectItem>
+              ))}
             </SelectContent>
           </Select>
           <Select value={fApp} onValueChange={setFApp}>
@@ -147,6 +256,26 @@ export default function Demandas() {
         </div>
       </div>
 
+      {/* Faixa fixa: com o filtro de pessoa ligado o quadro pode ficar quase
+          vazio, e um dropdown fechado não explica isso. Aqui fica claro QUEM e
+          em QUAL papel — e dá pra desfazer sem procurar o controle. */}
+      {pessoaAtiva && (
+        <div className="shrink-0 border-b bg-primary/5 px-4 py-1.5 flex items-center gap-2 text-xs">
+          <UserRound className="h-3.5 w-3.5 text-primary shrink-0" />
+          <span className="text-muted-foreground">
+            Mostrando só as demandas
+            {pessoaAtiva.nome
+              ? <> em que <strong className="text-foreground">{pessoaAtiva.nome}</strong> é <strong className="text-foreground">{pessoaAtiva.papel.toLowerCase()}</strong></>
+              : <> <strong className="text-foreground">sem responsável</strong></>}
+            {" "}({filtered.length} de {all.length})
+          </span>
+          <Button variant="ghost" size="sm" className="h-6 px-2 ml-auto text-xs gap-1"
+            onClick={() => setFPessoa(PESSOA_TODAS)}>
+            <X className="h-3 w-3" /> Remover
+          </Button>
+        </div>
+      )}
+
       {/* Quadro */}
       <div className="flex-1 min-h-0 overflow-x-auto overflow-y-hidden p-4">
         {isLoading ? (
@@ -167,7 +296,8 @@ export default function Demandas() {
         ) : (
           <DemandaBoard demandas={filtered} onCardClick={setDetail} onMove={handleMove}
             counts={counts} avatarOf={avatarOf}
-            onAssumir={(d) => assumir.mutate(d.id)} />
+            onAssumir={(d) => assumir.mutate(d.id)}
+            onFiltrarSemDono={() => setFPessoa(SEM_RESPONSAVEL)} />
         )}
       </div>
 

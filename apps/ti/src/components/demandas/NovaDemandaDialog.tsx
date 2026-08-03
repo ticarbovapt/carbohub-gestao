@@ -5,9 +5,16 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useCriarDemanda, useAllProfiles, type BugKind } from "@/hooks/useBugReports";
-import { BLOQUEIOS, ALCANCES, calcPriority, prioOf } from "@/lib/demandas";
+import { BLOQUEIOS, ALCANCES, KINDS, calcPriority, prioOf, kindOf } from "@/lib/demandas";
 
 const APPS = ["sales", "ops", "admin", "financas", "mkt", "lojas", "licenciados", "ti", "outro"];
+
+/** Demanda que não é de software não tem sistema — mas `app` é NOT NULL e todo
+ *  relatório antigo agrupa por ele. Gravamos 'ti' (o pedido é do próprio setor,
+ *  não de um sistema) em vez de inventar um valor novo que apareceria como
+ *  categoria desconhecida em telas antigas. O quadro não mostra o app nesses
+ *  tipos — mostra a categoria — então o valor é só arquivístico. */
+const APP_SEM_SISTEMA = "ti";
 
 /**
  * Registrar uma demanda que chegou fora do botão de bug (telefone, pessoalmente,
@@ -25,6 +32,8 @@ export function NovaDemandaDialog({ open, onClose }: { open: boolean; onClose: (
   const [bloqueio, setBloqueio] = useState("__none__");
   const [alcance, setAlcance] = useState("__none__");
 
+  const cfgKind = kindOf(kind);
+
   const prioridade = calcPriority(
     bloqueio === "__none__" ? null : bloqueio,
     alcance === "__none__" ? null : alcance,
@@ -39,7 +48,8 @@ export function NovaDemandaDialog({ open, onClose }: { open: boolean; onClose: (
     if (!title.trim() || !description.trim()) return;
     const pes = reporter === "__none__" ? null : dir.find((x) => x.id === reporter);
     criar.mutate({
-      title: title.trim(), description: description.trim(), kind, app,
+      title: title.trim(), description: description.trim(), kind,
+      app: cfgKind.software ? app : APP_SEM_SISTEMA,
       priority: prioridade,
       reporter_id: pes?.id ?? null,
       reporter_name: pes?.full_name ?? null,
@@ -66,30 +76,40 @@ export function NovaDemandaDialog({ open, onClose }: { open: boolean; onClose: (
           <div className="space-y-1.5">
             <Label>Descrição *</Label>
             <textarea value={description} onChange={(e) => setDescription(e.target.value)}
-              placeholder="O que acontece, em qual tela, o que era esperado…"
+              placeholder={cfgKind.software
+                ? "O que acontece, em qual tela, o que era esperado…"
+                : "O que a pessoa precisa, onde ela está e para quando…"}
               className="min-h-[90px] w-full resize-y rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          {/* Sistema some nos tipos não-software: escolher "sales" pra buscar um
+              cabo é ruído que ninguém consegue interpretar depois. */}
+          <div className={cfgKind.software ? "grid grid-cols-2 gap-3" : ""}>
             <div className="space-y-1.5">
               <Label>Tipo</Label>
               <Select value={kind} onValueChange={(v) => setKind(v as BugKind)}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="bug">Bug</SelectItem>
-                  <SelectItem value="sugestao">Sugestão</SelectItem>
+                  {KINDS.map((k) => (
+                    <SelectItem key={k.key} value={k.key}>
+                      <span className="font-medium">{k.label}</span>
+                      <span className="text-muted-foreground"> · {k.hint}</span>
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
-            <div className="space-y-1.5">
-              <Label>Sistema</Label>
-              <Select value={app} onValueChange={setApp}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {APPS.map((a) => <SelectItem key={a} value={a} className="uppercase">{a}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
+            {cfgKind.software && (
+              <div className="space-y-1.5">
+                <Label>Sistema</Label>
+                <Select value={app} onValueChange={setApp}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {APPS.map((a) => <SelectItem key={a} value={a} className="uppercase">{a}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
           </div>
 
           <div className="space-y-1.5">
@@ -103,7 +123,9 @@ export function NovaDemandaDialog({ open, onClose }: { open: boolean; onClose: (
             </Select>
           </div>
 
-          {/* Impacto → prioridade calculada (a mesma régua do banco) */}
+          {/* Impacto → prioridade calculada (a mesma régua do banco). Vale igual
+              pros tipos novos: monitor sem cabo trava a pessoa tanto quanto um
+              bug, e é isso que decide quem o TI atende primeiro. */}
           <div className="rounded-lg border p-3 space-y-3">
             <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Impacto</p>
             <div className="grid grid-cols-2 gap-3">

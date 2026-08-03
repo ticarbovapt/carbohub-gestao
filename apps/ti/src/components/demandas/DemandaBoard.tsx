@@ -65,7 +65,7 @@ function DroppableColumn({ id, children, className }: { id: string; children: Re
 }
 
 export function DemandaBoard({
-  demandas, onCardClick, onMove, counts = {}, avatarOf, onAssumir,
+  demandas, onCardClick, onMove, counts = {}, avatarOf, onAssumir, onFiltrarSemDono,
 }: {
   demandas: BugReport[];
   onCardClick: (d: BugReport) => void;
@@ -73,6 +73,9 @@ export function DemandaBoard({
   counts?: Record<string, CardCounts>;
   avatarOf?: (userId: string | null) => string | null | undefined;
   onAssumir?: (d: BugReport) => void;
+  /** O aviso "N sem dono" é onde o gestor percebe o problema — daqui ele já
+   *  isola as órfãs, em vez de ter que refazer a busca no filtro de pessoa. */
+  onFiltrarSemDono?: () => void;
 }) {
   const [active, setActive] = useState<BugReport | null>(null);
   // Concluída/Recusada nascem recolhidas: 2/3 do acervo não pode ocupar 1/3 da tela.
@@ -179,9 +182,11 @@ export function DemandaBoard({
               {/* Sinal contextual no lugar do texto fixo (que virava ruído) */}
               <div className="px-3 pb-1.5 min-h-[20px] flex gap-1.5 flex-wrap">
                 {semDono > 0 && !stage.final && (
-                  <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-destructive/10 text-destructive">
+                  <button type="button" disabled={!onFiltrarSemDono} onClick={onFiltrarSemDono}
+                    title={onFiltrarSemDono ? "Ver só as demandas sem responsável" : undefined}
+                    className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-destructive/10 text-destructive enabled:hover:bg-destructive/20 disabled:cursor-default">
                     {semDono} sem dono
-                  </span>
+                  </button>
                 )}
                 {paradas > 0 && (
                   <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-600">

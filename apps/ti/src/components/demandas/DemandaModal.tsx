@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import {
   X, Archive, ChevronRight, Hand, AlertTriangle, Pin, PinOff, ArrowRight,
   StickyNote, CheckSquare, Clock, GitBranch, MessageSquare, UserCog, ExternalLink,
-  Bug, Lightbulb,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -17,7 +16,7 @@ import {
 } from "@/hooks/useBugReports";
 import {
   STAGES, PRIOS, stageLabel, prioOf, stageDays, dtFmt, bloqueioLabel, alcanceLabel,
-  type StageConfig,
+  kindOf, kindUi, type StageConfig,
 } from "@/lib/demandas";
 import { StageProgressBar } from "./StageProgressBar";
 import { AnexosDaDemanda } from "./AnexosDaDemanda";
@@ -51,6 +50,8 @@ export function DemandaModal({ demanda, onClose }: { demanda: BugReport; onClose
   const [notaFecho, setNotaFecho] = useState("");
 
   const p = prioOf(demanda.priority);
+  const kind = kindOf(demanda.kind);
+  const { Icon: KindIcon, className: kindColor } = kindUi(demanda.kind);
   const souEu = demanda.assignee_id === user?.id;
   const dias = stageDays(demanda);
   const cfgAtual = STAGES.find((s) => s.id === stage);
@@ -117,14 +118,14 @@ export function DemandaModal({ demanda, onClose }: { demanda: BugReport; onClose
         <div className="flex items-start justify-between gap-3 border-b px-5 py-3">
           <div className="min-w-0">
             <DialogTitle className="truncate text-base flex items-center gap-2">
-              {demanda.kind === "sugestao"
-                ? <Lightbulb className="h-4 w-4 text-amber-500 shrink-0" />
-                : <Bug className="h-4 w-4 text-destructive shrink-0" />}
+              <KindIcon className={`h-4 w-4 shrink-0 ${kindColor}`} />
               {demanda.title}
             </DialogTitle>
             <DialogDescription className="sr-only">Detalhe da demanda</DialogDescription>
             <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-              <Badge variant="outline" className="text-xs uppercase">{demanda.app}</Badge>
+              {/* Tipo sempre visível; o sistema só quando a demanda é de software. */}
+              <Badge variant="outline" className={`text-xs ${kindColor}`}>{kind.label}</Badge>
+              {kind.software && <Badge variant="outline" className="text-xs uppercase">{demanda.app}</Badge>}
               <Badge variant="outline" className="text-xs">{stageLabel(stage)}</Badge>
               <span className={`text-[11px] font-semibold px-2 py-0.5 rounded ${p.badge}`}>{p.label}</span>
               {!terminal && dias > 7 && (
@@ -218,8 +219,8 @@ export function DemandaModal({ demanda, onClose }: { demanda: BugReport; onClose
               <Field label="Reportado por" value={demanda.reporter_name} />
               <Field label="E-mail" value={demanda.reporter_email} />
               <Field label="Departamento" value={demanda.department} />
-              <Field label="Sistema" value={demanda.app?.toUpperCase()} />
-              <Field label="Tipo" value={demanda.kind === "sugestao" ? "Sugestão" : "Bug"} />
+              {kind.software && <Field label="Sistema" value={demanda.app?.toUpperCase()} />}
+              <Field label="Tipo" value={kind.label} />
               <Field label="Quando" value={dtFmt(demanda.created_at)} />
               <Field label="Impacto" value={bloqueioLabel(demanda.bloqueio) ?? "— não informado"} />
               <Field label="Alcance" value={alcanceLabel(demanda.pessoas_afetadas) ?? "— não informado"} />
