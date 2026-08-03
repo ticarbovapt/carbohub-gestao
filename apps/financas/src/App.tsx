@@ -9,6 +9,8 @@ import Orders from "./pages/Orders";
 import Faturamento from "./pages/Faturamento";
 import BlingIntegracao from "./pages/integracoes/Bling";
 import BlingCallback from "./pages/integracoes/BlingCallback";
+import Bling2Integracao from "./pages/integracoes/Bling2";
+import Bling2Callback from "./pages/integracoes/Bling2Callback";
 import Profile from "./pages/Profile";
 import MinhaEquipe from "./pages/MinhaEquipe";
 import BugReports from "./pages/BugReports";
@@ -40,6 +42,9 @@ export default function App() {
         <Route path="/dashboard-financeiro" element={<Navigate to="/compras/dashboard" replace />} />
         <Route path="/integracoes/bling" element={<BlingIntegracao />} />
         <Route path="/integracoes/bling/callback" element={<BlingCallback />} />
+        {/* Segunda conta Bling — base própria, não cruza com a integração acima */}
+        <Route path="/integracoes/bling2" element={<Bling2Integracao />} />
+        <Route path="/integracoes/bling2/callback" element={<Bling2Callback />} />
         <Route path="/perfil" element={<Profile />} />
         <Route path="/equipe" element={<MinhaEquipe />} />
         <Route path="/bugs" element={<BugReports />} />

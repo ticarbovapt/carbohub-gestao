@@ -55,7 +55,7 @@ export function Layout() {
     ] },
     { label: "Financeiro", items: [item("/faturamento"), item("/comissionamento"), item("/pedidos")] },
     { label: "Suprimentos", items: [item("/suprimentos"), item("/compras")] },
-    { label: "Configurações", items: [item("/funcionarios"), item("/integracoes/bling")] },
+    { label: "Configurações", items: [item("/funcionarios"), item("/integracoes/bling"), item("/integracoes/bling2")] },
   ];
 
   // Mobile: abre a gaveta. Desktop: recolhe/expande a sidebar (rail).

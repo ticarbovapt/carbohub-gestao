@@ -20,6 +20,7 @@ const ATALHOS = [
   { to: "/funcionarios", label: "Funcionários", desc: "Dados bancários/PIX e contato de emergência.", icon: Users, color: "text-warning" },
   { to: "/compras/dashboard", label: "Dashboard Financeiro", desc: "Aging, fluxo, curva ABC e indicadores.", icon: BarChart3, color: "text-carbo-blue" },
   { to: "/integracoes/bling", label: "Integração Bling", desc: "Conectar e sincronizar com o Bling ERP.", icon: Link2, color: "text-success" },
+  { to: "/integracoes/bling2", label: "Integração Bling 2", desc: "Segunda conta Bling, em base própria e isolada.", icon: Link2, color: "text-sky-500" },
 ];
 
 function Kpi({ to, icon: Icon, label, value, tone = "", sub }: { to: string; icon: any; label: string; value: string; tone?: string; sub?: string }) {

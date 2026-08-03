@@ -12,4 +12,5 @@ export const FIN_NAV: FinNavItem[] = [
   { path: "/comissionamento", label: "Comissionamento", icon: Percent },
   { path: "/funcionarios", label: "Funcionários", icon: Users },
   { path: "/integracoes/bling", label: "Integração Bling", icon: Link2 },
+  { path: "/integracoes/bling2", label: "Integração Bling 2", icon: Link2 },
 ];
