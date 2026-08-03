@@ -23,6 +23,12 @@ export interface StockMovement {
   observacoes: string | null;
   warehouseCode: string | null;
   por: string | null;      // nome de quem fez
+  // Elo com o card que causou o movimento. Preenchido a partir da etapa 2
+  // (venda) e 3 (produção); null em ajuste e transferência.
+  orderId: string | null;
+  orderNumber: string | null;
+  opId: string | null;
+  opNumber: string | null;
 }
 
 /**
@@ -65,7 +71,7 @@ export function useStockMovements(
 
       let q = db
         .from("stock_movements")
-        .select("id, product_id, warehouse_id, tipo, quantidade, origem, observacoes, created_at, created_by")
+        .select("id, product_id, warehouse_id, tipo, quantidade, origem, observacoes, created_at, created_by, order_id, op_id")
         .eq("warehouse_id", hubId)
         .order("created_at", { ascending: false })
         .limit(limit);
@@ -90,7 +96,26 @@ export function useStockMovements(
       const nameById = new Map<string, string>();
       for (const p of profiles.data ?? []) nameById.set(p.id, p.full_name ?? "");
 
-      return (movs.data ?? []).map((m: Record<string, unknown>) => {
+      // Números do pedido e da OP. Buscados SÓ para os ids que apareceram na
+      // página — o texto da observação já traz o número, mas ele é texto: para
+      // virar link precisa do id, e para o link ter rótulo precisa do número.
+      const linhas = (movs.data ?? []) as Record<string, unknown>[];
+      const orderIds = [...new Set(linhas.map((m) => m.order_id).filter(Boolean))] as string[];
+      const opIds = [...new Set(linhas.map((m) => m.op_id).filter(Boolean))] as string[];
+      const [ords, ops] = await Promise.all([
+        orderIds.length
+          ? db.from("carboze_orders").select("id, order_number").in("id", orderIds)
+          : Promise.resolve({ data: [], error: null }),
+        opIds.length
+          ? db.from("production_orders").select("id, op_number").in("id", opIds)
+          : Promise.resolve({ data: [], error: null }),
+      ]);
+      const ordNum = new Map<string, string>();
+      for (const o of ords.data ?? []) ordNum.set(o.id, o.order_number ?? "");
+      const opNum = new Map<string, string>();
+      for (const o of ops.data ?? []) opNum.set(o.id, o.op_number ?? "");
+
+      return linhas.map((m) => {
         const p = prodById.get(m.product_id as string);
         return {
           id: m.id as string,
@@ -104,6 +129,10 @@ export function useStockMovements(
           observacoes: (m.observacoes as string) ?? null,
           warehouseCode: m.warehouse_id ? codeById.get(m.warehouse_id as string) ?? null : null,
           por: m.created_by ? nameById.get(m.created_by as string) || null : null,
+          orderId: (m.order_id as string) ?? null,
+          orderNumber: m.order_id ? ordNum.get(m.order_id as string) ?? null : null,
+          opId: (m.op_id as string) ?? null,
+          opNumber: m.op_id ? opNum.get(m.op_id as string) ?? null : null,
         };
       });
     },

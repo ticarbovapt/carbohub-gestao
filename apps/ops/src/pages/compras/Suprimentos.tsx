@@ -268,7 +268,7 @@ export default function Suprimentos() {
             ) : movsPeriodo.length === 0 ? <CarboEmptyState title="Nenhuma movimentação neste hub" description="Entradas, saídas e ajustes deste hub aparecem aqui." /> : (
             <div className="rounded-lg border bg-card overflow-x-auto">
               <Table>
-                <TableHeader><TableRow><TableHead>Data</TableHead><TableHead>Produto</TableHead><TableHead>Tipo</TableHead><TableHead className="text-right">Qtd</TableHead><TableHead>Por</TableHead><TableHead>Origem</TableHead></TableRow></TableHeader>
+                <TableHeader><TableRow><TableHead>Data</TableHead><TableHead>Produto</TableHead><TableHead>Tipo</TableHead><TableHead className="text-right">Qtd</TableHead><TableHead>Por</TableHead><TableHead>Origem</TableHead><TableHead>Card</TableHead></TableRow></TableHeader>
                 <TableBody>
                   {movsPeriodo.map((m) => (
                     <TableRow key={m.id}>
@@ -282,6 +282,25 @@ export default function Suprimentos() {
                       <TableCell className="text-right font-semibold tabular-nums">{m.qtd.toLocaleString("pt-BR")} {m.unidade}</TableCell>
                       <TableCell className="text-sm text-muted-foreground">{m.por ?? "—"}</TableCell>
                       <TableCell className="text-sm text-muted-foreground capitalize">{m.origem}{m.observacoes ? <span className="ml-1 text-xs">· {m.observacoes}</span> : ""}</TableCell>
+                      {/* Coluna própria pro card de origem. O número já aparecia
+                          dentro do texto da observação, mas ali é TEXTO: não dá
+                          pra filtrar, ordenar nem copiar sem catar no meio da
+                          frase. Aqui é o dado, vindo de order_id / op_id. */}
+                      <TableCell className="text-xs whitespace-nowrap">
+                        {m.opNumber && (
+                          <span className="inline-flex items-center gap-1 rounded bg-muted px-1.5 py-0.5 font-mono" title="Ordem de produção">
+                            <Layers className="h-3 w-3 shrink-0" />{m.opNumber}
+                          </span>
+                        )}
+                        {m.orderNumber && (
+                          <span className={`inline-flex items-center gap-1 rounded bg-muted px-1.5 py-0.5 font-mono ${m.opNumber ? "ml-1" : ""}`} title="Pedido de venda">
+                            <FileText className="h-3 w-3 shrink-0" />{m.orderNumber}
+                          </span>
+                        )}
+                        {/* Ajuste manual e transferência não vêm de card nenhum —
+                            e o traço diz isso melhor que célula vazia. */}
+                        {!m.opNumber && !m.orderNumber && <span className="text-muted-foreground">—</span>}
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
