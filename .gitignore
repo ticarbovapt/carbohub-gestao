@@ -28,3 +28,7 @@ dist-ssr
 .env
 .vercel
 .claude/worktrees/
+
+# Arquivo temporário que o Vite gera ao carregar o config; some sozinho, mas
+# escapa pro commit se o build for interrompido no meio.
+*.timestamp-*.mjs
