@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
 import { CarboCard, CarboCardContent } from "@/components/ui/carbo-card";
 import { CarboBadge } from "@/components/ui/carbo-badge";
@@ -104,19 +104,72 @@ export default function Suprimentos() {
   const irPara = (h: HubId, a: string) => navigate(`/suprimentos/${slugOf(h)}/${a}`);
   const setActiveTab = (v: string) => irPara(hub, v);
 
+  // ── Período dos KPIs: na URL, com o localStorage rebaixado a PADRÃO ──────
+  //
+  // Hub e aba foram para o caminho porque dizem O QUE se está olhando. O
+  // período diz COMO se está filtrando, e filtro no repo mora em query string
+  // (OSBoard, Pager). Daí `?periodo=`, não um terceiro segmento de caminho.
+  //
+  // O localStorage NÃO virou um segundo dono: ele só fornece o valor inicial
+  // quando a URL não diz nada. A partir daí quem manda é a URL, e o efeito
+  // canonizador escreve o período nela — assim todo endereço copiado da barra
+  // já carrega o filtro, e o colega que recebe o link vê o MESMO período, não
+  // o que estava guardado no navegador dele.
+  //
+  // Continua sendo lembrado entre sessões, que é o que fazia esta tela virar
+  // dashboard: quem abre /suprimentos puro cai no período que usava antes.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const leiaLocal = (k: string) => { try { return localStorage.getItem(k) || ""; } catch { return ""; } };
+  // "YYYY-MM" é valor válido (mês específico do seletor), por isso o regex.
+  const periodoValido = (v: string) => ["7d", "30d", "mes", "custom"].includes(v) || /^\d{4}-\d{2}$/.test(v);
+  const pUrl = searchParams.get("periodo") ?? "";
+  const periodo = periodoValido(pUrl) ? pUrl : (periodoValido(leiaLocal("ops_sup_periodo")) ? leiaLocal("ops_sup_periodo") : "7d");
+  const customFrom = searchParams.get("de") ?? (pUrl ? "" : leiaLocal("ops_sup_from"));
+  const customTo = searchParams.get("ate") ?? (pUrl ? "" : leiaLocal("ops_sup_to"));
+
+  // Escreve na URL (histórico normal: o Voltar desfaz a troca de período) e
+  // lembra a preferência para a próxima sessão.
+  const aplicaPeriodo = (next: { periodo?: string; de?: string; ate?: string }) => {
+    const p = next.periodo ?? periodo;
+    const de = next.de ?? customFrom;
+    const ate = next.ate ?? customTo;
+    const sp = new URLSearchParams(searchParams);
+    sp.set("periodo", p);
+    // `de`/`ate` só existem no modo custom — deixá-los na URL fora dele seria
+    // ruído que ninguém lê e que confunde quem tenta editar o endereço à mão.
+    if (p === "custom") { de ? sp.set("de", de) : sp.delete("de"); ate ? sp.set("ate", ate) : sp.delete("ate"); }
+    else { sp.delete("de"); sp.delete("ate"); }
+    setSearchParams(sp);
+    try {
+      localStorage.setItem("ops_sup_periodo", p);
+      localStorage.setItem("ops_sup_from", p === "custom" ? de : "");
+      localStorage.setItem("ops_sup_to", p === "custom" ? ate : "");
+    } catch { /* ignora */ }
+  };
+  const setPeriodo = (v: string) => aplicaPeriodo({ periodo: v });
+  const setCustomFrom = (v: string) => aplicaPeriodo({ periodo: "custom", de: v });
+  const setCustomTo = (v: string) => aplicaPeriodo({ periodo: "custom", ate: v });
+
   // Canoniza: /suprimentos puro, hub inexistente ou combinação impossível
   // viram o endereço válido. `replace` para não empilhar histórico — senão o
   // Voltar fica preso repetindo o redirecionamento.
   useEffect(() => {
     if (hubSlug !== slugOf(hub) || aba !== activeTab) {
-      navigate(`/suprimentos/${slugOf(hub)}/${activeTab}`, { replace: true });
+      navigate(`/suprimentos/${slugOf(hub)}/${activeTab}?${searchParams}`, { replace: true });
+      return;
     }
-  }, [hubSlug, aba, hub, activeTab, navigate]);
-  // Período dos KPIs — persiste (vira dashboard). Valores: 7d | 30d | mes | custom | "YYYY-MM".
-  const [periodo, setPeriodo] = useState(() => { try { return localStorage.getItem("ops_sup_periodo") || "7d"; } catch { return "7d"; } });
-  const [customFrom, setCustomFrom] = useState(() => { try { return localStorage.getItem("ops_sup_from") || ""; } catch { return ""; } });
-  const [customTo, setCustomTo] = useState(() => { try { return localStorage.getItem("ops_sup_to") || ""; } catch { return ""; } });
-  useEffect(() => { try { localStorage.setItem("ops_sup_periodo", periodo); localStorage.setItem("ops_sup_from", customFrom); localStorage.setItem("ops_sup_to", customTo); } catch { /* ignora */ } }, [periodo, customFrom, customTo]);
+    // Período ausente ou inválido na URL: grava o efetivo, para que o endereço
+    // copiado da barra já leve o filtro junto.
+    if (pUrl !== periodo) {
+      const sp = new URLSearchParams(searchParams);
+      sp.set("periodo", periodo);
+      if (periodo === "custom") {
+        if (customFrom) sp.set("de", customFrom);
+        if (customTo) sp.set("ate", customTo);
+      }
+      setSearchParams(sp, { replace: true });
+    }
+  }, [hubSlug, aba, hub, activeTab, navigate, pUrl, periodo, customFrom, customTo, searchParams, setSearchParams]);
   const [envioOpen, setEnvioOpen] = useState(false);
   const [remessaConfirm, setRemessaConfirm] = useState<{ action: "confirmar" | "estornar"; id: string; produto: string } | null>(null);
 
