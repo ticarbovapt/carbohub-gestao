@@ -16,6 +16,9 @@ const FASES = [
   "products", "variacoes", "stock", "contacts", "vendedores",
   "orders", "order_details", "nfe",
   "contas_pagar", "contas_receber", "pedidos_compra",
+  // Incrementais: só a janela dos últimos dias. São as que rodam de 30 em 30
+  // minutos, para a NF da venda on-line aparecer no mesmo turno.
+  "orders_recente", "nfe_recente",
 ];
 
 Deno.serve(async (req: Request): Promise<Response> => {

@@ -190,8 +190,14 @@ async function blingFetch(
 }
 
 // Percorre um endpoint paginado e entrega os registros em lotes.
+//
+// `maxPages` existe para as rodadas incrementais: se o Bling ignorar o filtro
+// de data que mandamos, sem teto a rodada de 30 em 30 minutos varreria o
+// histórico inteiro. Quando o teto é atingido, avisa no log — teto silencioso
+// se parece com "acabou", e não é.
 async function paginar(
-  token: string, endpoint: string, aoLote: (registros: any[]) => Promise<void>
+  token: string, endpoint: string, aoLote: (registros: any[]) => Promise<void>,
+  maxPages = 0
 ): Promise<void> {
   let page = 1;
   while (true) {
@@ -201,7 +207,38 @@ async function paginar(
     await aoLote(registros);
     await sleep(RATE_MS);
     if (registros.length < 100) return;
+    if (maxPages && page >= maxPages) {
+      console.warn(`[bling2-sync] TETO de ${maxPages} páginas atingido em ${endpoint} — ` +
+        `ainda havia mais. Se isso repetir, o filtro de data não está sendo aplicado.`);
+      return;
+    }
     page++;
+  }
+}
+
+// ── Janela das rodadas incrementais ───────────────────────────────────────
+// 7 dias: cobre com folga qualquer atraso de emissão ou queda de cron do fim
+// de semana. Janela curta demais (1 dia) perderia nota emitida com data
+// retroativa; longa demais devolve o custo que a rodada incremental existe
+// para evitar.
+const JANELA_DIAS = 7;
+
+function dataDeCorte(dias = JANELA_DIAS): string {
+  return new Date(Date.now() - dias * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+}
+
+// Confere se o filtro de data pegou. Se a maioria do primeiro lote é mais
+// velha que a janela, o Bling ignorou o parâmetro — e aí a rodada incremental
+// vira uma varredura truncada do histórico, que é PIOR que não rodar: parece
+// que sincronizou e não olhou o que interessa.
+function alertaFiltroIgnorado(rotulo: string, datas: (string | null)[], corte: string) {
+  const validas = datas.filter(Boolean) as string[];
+  if (validas.length < 10) return;                     // amostra pequena não conclui nada
+  const velhas = validas.filter((d) => d < corte).length;
+  if (velhas > validas.length / 2) {
+    console.warn(`[bling2-sync] ${rotulo}: ${velhas}/${validas.length} registros do 1º lote são ` +
+      `anteriores a ${corte}. O Bling parece estar IGNORANDO o filtro de data — a rodada ` +
+      `completa diária continua cobrindo, mas a incremental está gastando à toa.`);
   }
 }
 
@@ -440,48 +477,72 @@ async function syncVendedores(admin: Admin, token: string, logId: string): Promi
 
 // ── Pedidos de venda (lista) ───────────────────────────────────────────────
 
+// Um pedido da LISTAGEM. Compartilhado pela rodada completa e pela incremental
+// — se as duas gravassem por caminhos diferentes, uma poderia ganhar um campo
+// e a outra não, e o pedido mudaria de conteúdo conforme quem o tocou por
+// último.
+async function upsertPedidoDaLista(admin: Admin, o: any): Promise<void> {
+  const contato = o.contato || {};
+  const situacao = o.situacao || {};
+  // `items` e `observacoes` NÃO entram aqui: a listagem do Bling não os traz,
+  // e mandar null a cada rodada apagaria o que o `order_details` preencheu.
+  // Foi exatamente esse apagão que deixou 38 pedidos do Bling 1 sem item.
+  const { error } = await admin.from("bling2_orders").upsert({
+    bling_id: o.id,
+    numero: o.numero != null ? String(o.numero) : null,
+    numero_loja: o.numeroLoja || null,
+    data: o.data || null,
+    data_saida: o.dataSaida || null,
+    data_prevista: o.dataPrevista || null,
+    total_produtos: toNum(o.totalProdutos) ?? 0,
+    total_desconto: toNum(o.totalDesconto) ?? 0,
+    total_frete: toNum(o.totalFrete) ?? 0,
+    total: toNum(o.total) ?? 0,
+    situacao_id: situacao.id ?? null,
+    situacao_valor: situacao.valor != null ? String(situacao.valor) : null,
+    contato_id: contato.id ?? null,
+    contato_nome: contato.nome || null,
+    vendedor_id: o.vendedor?.id ?? null,
+    loja_id: o.loja?.id ?? null,
+    raw_data: o,
+    synced_at: nowIso(),
+    updated_at: nowIso(),
+  }, { onConflict: "bling_id" });
+  if (error) throw error;
+}
+
 async function syncOrders(admin: Admin, token: string, logId: string): Promise<SyncResult> {
   let synced = 0, failed = 0;
 
   await paginar(token, "/pedidos/vendas", async (pedidos) => {
     for (const o of pedidos) {
-      try {
-        const contato = o.contato || {};
-        const situacao = o.situacao || {};
-        // `items` e `observacoes` NÃO entram aqui: a listagem do Bling não os
-        // traz, e mandar null a cada rodada apagaria o que o `order_details`
-        // preencheu. Foi exatamente esse apagão que deixou 38 pedidos do
-        // Bling 1 sem item nenhum.
-        const { error } = await admin.from("bling2_orders").upsert({
-          bling_id: o.id,
-          numero: o.numero != null ? String(o.numero) : null,
-          numero_loja: o.numeroLoja || null,
-          data: o.data || null,
-          data_saida: o.dataSaida || null,
-          data_prevista: o.dataPrevista || null,
-          total_produtos: toNum(o.totalProdutos) ?? 0,
-          total_desconto: toNum(o.totalDesconto) ?? 0,
-          total_frete: toNum(o.totalFrete) ?? 0,
-          total: toNum(o.total) ?? 0,
-          situacao_id: situacao.id ?? null,
-          situacao_valor: situacao.valor != null ? String(situacao.valor) : null,
-          contato_id: contato.id ?? null,
-          contato_nome: contato.nome || null,
-          vendedor_id: o.vendedor?.id ?? null,
-          loja_id: o.loja?.id ?? null,
-          raw_data: o,
-          synced_at: nowIso(),
-          updated_at: nowIso(),
-        }, { onConflict: "bling_id" });
-        if (error) throw error;
-        synced++;
-      } catch (e) {
-        console.error("[bling2-sync] pedido falhou:", e);
-        failed++;
-      }
+      try { await upsertPedidoDaLista(admin, o); synced++; }
+      catch (e) { console.error("[bling2-sync] pedido falhou:", e); failed++; }
     }
   });
 
+  await fecharLog(admin, logId, { synced, failed });
+  return { synced, failed };
+}
+
+// ── Pedidos recentes — rodada de alta frequência ──────────────────────────
+// Só a listagem filtrada por data. Sem nada que varra a tabela inteira.
+async function syncOrdersRecente(admin: Admin, token: string, logId: string): Promise<SyncResult> {
+  const corte = dataDeCorte();
+  let synced = 0, failed = 0, primeiroLote = true;
+
+  await paginar(token, `/pedidos/vendas?dataInicial=${corte}`, async (pedidos) => {
+    if (primeiroLote) {
+      alertaFiltroIgnorado("pedidos", pedidos.map((o: any) => toDate(o.data)), corte);
+      primeiroLote = false;
+    }
+    for (const o of pedidos) {
+      try { await upsertPedidoDaLista(admin, o); synced++; }
+      catch (e) { console.error("[bling2-sync] pedido recente falhou:", e); failed++; }
+    }
+  }, 5);                                            // teto: 500 pedidos por rodada
+
+  console.log(`[bling2-sync] pedidos recentes (desde ${corte}): ${synced} ok, ${failed} falhas`);
   await fecharLog(admin, logId, { synced, failed });
   return { synced, failed };
 }
@@ -565,6 +626,117 @@ function extractValorNota(d: any): number | null {
   return toNum(d?.valorNota ?? d?.valorTotal ?? d?.valor ?? d?.total);
 }
 
+// Uma NF da LISTAGEM. Compartilhado pela rodada completa e pela incremental.
+async function upsertNfeDaLista(admin: Admin, nf: any): Promise<void> {
+  // valor_total e contato_cnpj ficam de fora: a LISTA do Bling não os traz.
+  // Mandá-los aqui apagaria, a cada rodada, o que o detalhe já preencheu.
+  const { error } = await admin.from("bling2_nfe").upsert({
+    bling_id: nf.id,
+    numero: nf.numero != null ? String(nf.numero) : null,
+    serie: nf.serie != null ? String(nf.serie) : null,
+    chave_acesso: nf.chaveAcesso || null,
+    data_emissao: toDate(nf.dataEmissao),
+    contato_nome: nf.contato?.nome || null,
+    situacao: nfeSituacaoLabel(nf.situacao),
+    xml_url: nf.xml || null,
+    pdf_url: nf.pdf || null,
+    raw_data: nf,
+    synced_at: nowIso(),
+    updated_at: nowIso(),
+  }, { onConflict: "bling_id" });
+  if (error) throw error;
+}
+
+// Busca o detalhe de uma NF e grava valor, CNPJ, situação e links.
+// Devolve true se gravou.
+async function detalharNfe(admin: Admin, token: string, nf: any): Promise<boolean> {
+  const detail = await blingFetch(token, `/nfe/${nf.bling_id}`, 1, 1);
+  const d = detail.data || {};
+  const upd: Record<string, unknown> = { raw_data: d, updated_at: nowIso() };
+
+  const valor = extractValorNota(d);
+  const cnpj  = extractContatoDoc(d.contato);
+  const situ  = nfeSituacaoLabel(d.situacao);
+  // 0 é valor legítimo (NF de remessa) e precisa ser gravado — se ficasse
+  // null, esta NF voltaria à fila de detalhe em toda execução, para sempre.
+  if (valor != null) upd.valor_total = valor;
+  if (cnpj) upd.contato_cnpj = cnpj;
+  if (situ) upd.situacao = situ;
+  if (d.contato?.nome) upd.contato_nome = d.contato.nome;
+  if (d.chaveAcesso) upd.chave_acesso = d.chaveAcesso;
+  if (d.observacoes || d.informacoesAdicionais) {
+    upd.informacoes_adicionais = d.informacoesAdicionais || d.observacoes;
+  }
+  const pdf = d.pdf || d.linkPDF || d.linkPdf || d.linkDanfe || d.danfe || null;
+  if (pdf) upd.pdf_url = pdf;
+  if (d.xml) upd.xml_url = d.xml;
+
+  await admin.from("bling2_nfe").update(upd).eq("id", nf.id);
+  return true;
+}
+
+// ── NF-e recentes — rodada de alta frequência ─────────────────────────────
+//
+// É a rodada que faz a NF da venda on-line aparecer em minutos, e não no dia
+// seguinte. Faz DUAS coisas e mais nada: lista a janela e detalha o que veio
+// dela sem valor.
+//
+// ⚠️ O que ela deliberadamente NÃO faz, e o motivo:
+//
+// • O passo das "NFs sumidas" (nota cancelada some do /nfe) compara
+//   `synced_at` contra o início da rodada, sobre a tabela INTEIRA. Numa
+//   rodada que só toca a janela recente, TODO o histórico ficaria para trás e
+//   entraria na fila de reconsulta — 40 chamadas por execução, a cada meia
+//   hora, para sempre, sem achar nada. Cancelamento continua sendo detectado
+//   pela rodada completa diária.
+// • O backfill de detalhe de histórico, pelo mesmo motivo: é varredura de
+//   tabela cheia e não tem o que fazer numa rodada de 30 em 30 minutos.
+async function syncNFeRecente(admin: Admin, token: string, logId: string): Promise<SyncResult> {
+  const corte = dataDeCorte();
+  let synced = 0, failed = 0, primeiroLote = true;
+
+  await paginar(token, `/nfe?dataEmissaoInicial=${corte}`, async (nfes) => {
+    if (primeiroLote) {
+      alertaFiltroIgnorado("NF-e", nfes.map((n: any) => toDate(n.dataEmissao)), corte);
+      primeiroLote = false;
+    }
+    for (const nf of nfes) {
+      try { await upsertNfeDaLista(admin, nf); synced++; }
+      catch (e) { console.error("[bling2-sync] NF-e recente falhou:", e); failed++; }
+    }
+  }, 5);                                            // teto: 500 notas por rodada
+
+  // Detalhe só do que está DENTRO da janela e ainda sem valor. É aqui que a
+  // nota ganha valor, CNPJ e o link do DANFE.
+  const { data: semvalor } = await admin
+    .from("bling2_nfe")
+    .select("id, bling_id")
+    .is("valor_total", null)
+    .gte("data_emissao", corte)
+    .order("data_emissao", { ascending: false })
+    .limit(40);
+
+  let detalhadas = 0;
+  for (const nf of (semvalorSeguro(semvalor))) {
+    try { await detalharNfe(admin, token, nf); detalhadas++; }
+    catch (e) {
+      console.error(`[bling2-sync] detalhe recente da NF ${nf.bling_id} falhou:`, e);
+      failed++;
+    }
+    await sleep(RATE_MS);
+  }
+
+  console.log(`[bling2-sync] NF-e recentes (desde ${corte}): ${synced} listadas, ` +
+    `${detalhadas} detalhadas, ${failed} falhas`);
+  await fecharLog(admin, logId, { synced, failed });
+  return { synced, failed };
+}
+
+// `select` do supabase-js devolve null em erro; sem isto o `for..of` estoura.
+function semvalorSeguro(rows: any): any[] {
+  return Array.isArray(rows) ? rows : [];
+}
+
 async function syncNFe(admin: Admin, token: string, logId: string): Promise<SyncResult> {
   let synced = 0, failed = 0;
   const inicioDaRodada = nowIso();
@@ -572,30 +744,8 @@ async function syncNFe(admin: Admin, token: string, logId: string): Promise<Sync
   // Passo 1 — a listagem.
   await paginar(token, "/nfe", async (nfes) => {
     for (const nf of nfes) {
-      try {
-        // valor_total e contato_cnpj ficam de fora: a LISTA do Bling não os
-        // traz. Mandá-los aqui apagaria, a cada hora, o que o detalhe já
-        // tinha preenchido.
-        const { error } = await admin.from("bling2_nfe").upsert({
-          bling_id: nf.id,
-          numero: nf.numero != null ? String(nf.numero) : null,
-          serie: nf.serie != null ? String(nf.serie) : null,
-          chave_acesso: nf.chaveAcesso || null,
-          data_emissao: toDate(nf.dataEmissao),
-          contato_nome: nf.contato?.nome || null,
-          situacao: nfeSituacaoLabel(nf.situacao),
-          xml_url: nf.xml || null,
-          pdf_url: nf.pdf || null,
-          raw_data: nf,
-          synced_at: nowIso(),
-          updated_at: nowIso(),
-        }, { onConflict: "bling_id" });
-        if (error) throw error;
-        synced++;
-      } catch (e) {
-        console.error("[bling2-sync] NF-e falhou:", e);
-        failed++;
-      }
+      try { await upsertNfeDaLista(admin, nf); synced++; }
+      catch (e) { console.error("[bling2-sync] NF-e falhou:", e); failed++; }
     }
   });
 
@@ -651,32 +801,9 @@ async function syncNFe(admin: Admin, token: string, logId: string): Promise<Sync
     .limit(120);
 
   let enriquecidas = 0;
-  for (const nf of (semDetalhe || [])) {
-    try {
-      const detail = await blingFetch(token, `/nfe/${nf.bling_id}`, 1, 1);
-      const d = detail.data || {};
-      const upd: Record<string, unknown> = { raw_data: d, updated_at: nowIso() };
-
-      const valor = extractValorNota(d);
-      const cnpj  = extractContatoDoc(d.contato);
-      const situ  = nfeSituacaoLabel(d.situacao);
-      // 0 é valor legítimo (NF de remessa) e precisa ser gravado — se ficasse
-      // null, esta NF voltaria à fila de detalhe em toda execução, para sempre.
-      if (valor != null) upd.valor_total = valor;
-      if (cnpj) upd.contato_cnpj = cnpj;
-      if (situ) upd.situacao = situ;
-      if (d.contato?.nome) upd.contato_nome = d.contato.nome;
-      if (d.chaveAcesso) upd.chave_acesso = d.chaveAcesso;
-      if (d.observacoes || d.informacoesAdicionais) {
-        upd.informacoes_adicionais = d.informacoesAdicionais || d.observacoes;
-      }
-      const pdf = d.pdf || d.linkPDF || d.linkPdf || d.linkDanfe || d.danfe || null;
-      if (pdf) upd.pdf_url = pdf;
-      if (d.xml) upd.xml_url = d.xml;
-
-      await admin.from("bling2_nfe").update(upd).eq("id", nf.id);
-      enriquecidas++;
-    } catch (e) {
+  for (const nf of semvalorSeguro(semDetalhe)) {
+    try { await detalharNfe(admin, token, nf); enriquecidas++; }
+    catch (e) {
       console.error(`[bling2-sync] detalhe da NF ${nf.bling_id} falhou:`, e);
       failed++;
     }
@@ -847,6 +974,10 @@ const SYNCS: Record<string, (a: Admin, t: string, l: string) => Promise<SyncResu
   contas_pagar: syncContasPagar,
   contas_receber: syncContasReceber,
   pedidos_compra: syncPedidosCompra,
+  // Rodadas incrementais (alta frequência). Ficam FORA do "all": rodar as duas
+  // versões na mesma passada seria trabalho repetido.
+  orders_recente: syncOrdersRecente,
+  nfe_recente: syncNFeRecente,
 };
 
 // Ordem importa: `variacoes` e `stock` leem `bling2_products`; contas leem
