@@ -223,8 +223,23 @@ async function paginar(
 // para evitar.
 const JANELA_DIAS = 7;
 
+// ⚠️ +1 dia de margem, medido — não suposto.
+//
+// Na primeira execução real (2026-08-03) a rodada trouxe 44 notas enquanto a
+// janela tinha 48. As 4 faltantes eram as de 2026-07-27 — exatamente o dia da
+// borda (hoje − 7) —, todas VÁLIDAS ("Emitida DANFE", com valor), não
+// canceladas. Ou seja: o Bling aplica `dataEmissaoInicial` de forma
+// EXCLUSIVA, devolvendo só a partir do dia seguinte.
+//
+// Sem esta margem a janela efetiva é 6 dias, não 7, e ninguém perceberia: o
+// buraco fica na ponta mais velha, que a rodada completa diária cobre. O
+// prejuízo seria só no dia em que o cron ficasse fora do ar por uma semana —
+// justamente quando a folga precisa existir.
+const MARGEM_BORDA_DIAS = 1;
+
 function dataDeCorte(dias = JANELA_DIAS): string {
-  return new Date(Date.now() - dias * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+  const total = dias + MARGEM_BORDA_DIAS;
+  return new Date(Date.now() - total * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
 }
 
 // Confere se o filtro de data pegou. Se a maioria do primeiro lote é mais
