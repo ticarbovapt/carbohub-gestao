@@ -24,6 +24,12 @@ jobs:
           set -e
           supabase functions deploy bling-auth --project-ref ${{ secrets.SUPABASE_PROJECT_ID }} --no-verify-jwt
           supabase functions deploy bling-sync --project-ref ${{ secrets.SUPABASE_PROJECT_ID }} --no-verify-jwt
+          # Bling 2 — segunda conta. --no-verify-jwt em todas: a auth e a sync
+          # validam o JWT por dentro, e a auto-sync é chamada pelo pg_cron, que
+          # manda só o X-Cron-Secret e nenhum Authorization.
+          supabase functions deploy bling2-auth --project-ref ${{ secrets.SUPABASE_PROJECT_ID }} --no-verify-jwt
+          supabase functions deploy bling2-sync --project-ref ${{ secrets.SUPABASE_PROJECT_ID }} --no-verify-jwt
+          supabase functions deploy bling2-auto-sync --project-ref ${{ secrets.SUPABASE_PROJECT_ID }} --no-verify-jwt
           supabase functions deploy melhor-envio-quote --project-ref ${{ secrets.SUPABASE_PROJECT_ID }} --no-verify-jwt
           supabase functions deploy superfrete-quote --project-ref ${{ secrets.SUPABASE_PROJECT_ID }} --no-verify-jwt
           supabase functions deploy create-team-member --project-ref ${{ secrets.SUPABASE_PROJECT_ID }} --no-verify-jwt
