@@ -257,6 +257,43 @@ function alertaFiltroIgnorado(rotulo: string, datas: (string | null)[], corte: s
   }
 }
 
+// ── Lojas vistas nesta rodada ─────────────────────────────────────────────
+//
+// Toda loja que aparece num pedido ou numa NF é cadastrada em `bling2_lojas`
+// com nome VAZIO, para alguém batizar.
+//
+// É o ponto inteiro do desenho. Se o de-para fosse uma lista fixa no código,
+// no dia em que a Shopee for conectada os pedidos dela cairiam num "outros"
+// ou num traço — e o relatório de faturamento por canal ficaria com um canal
+// faltando, sem nada indicando isso. Com o auto-cadastro, aparece uma linha
+// "(sem nome)" na tela, impossível de não ver.
+//
+// `ignoreDuplicates` para não sobrescrever o nome já preenchido à mão.
+async function registrarLojas(
+  admin: Admin, vistas: Map<number, number | null>
+): Promise<void> {
+  if (!vistas.size) return;
+  const linhas = [...vistas.entries()].map(([id, un]) => ({
+    bling_id: id,
+    unidade_negocio_id: un,
+  }));
+  const { error } = await admin
+    .from("bling2_lojas")
+    .upsert(linhas, { onConflict: "bling_id", ignoreDuplicates: true });
+  if (error) console.error("[bling2-sync] registro de lojas falhou:", error);
+}
+
+// Coleta o par (loja, unidade de negócio) de um registro do Bling.
+function anotarLoja(vistas: Map<number, number | null>, r: any): void {
+  const id = r?.loja?.id;
+  if (id == null) return;
+  const n = Number(id);
+  if (!Number.isFinite(n)) return;
+  // loja 0 = venda sem canal (balcão/manual). Vale cadastrar: some do
+  // relatório se ficar de fora, e "venda direta" é uma resposta legítima.
+  vistas.set(n, Number(r.loja?.unidadeNegocio?.id) || null);
+}
+
 async function fecharLog(admin: Admin, logId: string, r: SyncResult) {
   await admin.from("bling2_sync_log")
     .update({ records_synced: r.synced, records_failed: r.failed })
@@ -556,6 +593,7 @@ async function upsertPedidoDaLista(admin: Admin, o: any): Promise<void> {
     contato_nome: contato.nome || null,
     vendedor_id: o.vendedor?.id ?? null,
     loja_id: o.loja?.id ?? null,
+    unidade_negocio_id: o.loja?.unidadeNegocio?.id ?? null,
     raw_data: o,
     synced_at: nowIso(),
     updated_at: nowIso(),
@@ -565,14 +603,17 @@ async function upsertPedidoDaLista(admin: Admin, o: any): Promise<void> {
 
 async function syncOrders(admin: Admin, token: string, logId: string): Promise<SyncResult> {
   let synced = 0, failed = 0;
+  const lojas = new Map<number, number | null>();
 
   await paginar(token, "/pedidos/vendas", async (pedidos) => {
     for (const o of pedidos) {
+      anotarLoja(lojas, o);
       try { await upsertPedidoDaLista(admin, o); synced++; }
       catch (e) { console.error("[bling2-sync] pedido falhou:", e); failed++; }
     }
   });
 
+  await registrarLojas(admin, lojas);
   await fecharLog(admin, logId, { synced, failed });
   return { synced, failed };
 }
@@ -582,6 +623,7 @@ async function syncOrders(admin: Admin, token: string, logId: string): Promise<S
 async function syncOrdersRecente(admin: Admin, token: string, logId: string): Promise<SyncResult> {
   const corte = dataDeCorte();
   let synced = 0, failed = 0, primeiroLote = true;
+  const lojas = new Map<number, number | null>();
 
   await paginar(token, `/pedidos/vendas?dataInicial=${corte}`, async (pedidos) => {
     if (primeiroLote) {
@@ -589,10 +631,13 @@ async function syncOrdersRecente(admin: Admin, token: string, logId: string): Pr
       primeiroLote = false;
     }
     for (const o of pedidos) {
+      anotarLoja(lojas, o);
       try { await upsertPedidoDaLista(admin, o); synced++; }
       catch (e) { console.error("[bling2-sync] pedido recente falhou:", e); failed++; }
     }
-  }, 5);                                            // teto: 500 pedidos por rodada
+  }, 5);
+
+  await registrarLojas(admin, lojas);                                            // teto: 500 pedidos por rodada
 
   console.log(`[bling2-sync] pedidos recentes (desde ${corte}): ${synced} ok, ${failed} falhas`);
   await fecharLog(admin, logId, { synced, failed });
@@ -689,6 +734,11 @@ async function upsertNfeDaLista(admin: Admin, nf: any): Promise<void> {
     chave_acesso: nf.chaveAcesso || null,
     data_emissao: toDate(nf.dataEmissao),
     contato_nome: nf.contato?.nome || null,
+    // O canal de venda vem na PRÓPRIA nota — é o ícone colorido que a tela do
+    // Bling mostra ao lado de cada NF. Sem isto, R$ 34 mil de faturamento
+    // viram um bolo só, sem saber o que é Shopee, Mercado Livre ou balcão.
+    loja_id: nf.loja?.id ?? null,
+    unidade_negocio_id: nf.loja?.unidadeNegocio?.id ?? null,
     situacao: nfeSituacaoLabel(nf.situacao),
     xml_url: nf.xml || null,
     pdf_url: nf.pdf || null,
@@ -746,6 +796,7 @@ async function detalharNfe(admin: Admin, token: string, nf: any): Promise<boolea
 async function syncNFeRecente(admin: Admin, token: string, logId: string): Promise<SyncResult> {
   const corte = dataDeCorte();
   let synced = 0, failed = 0, primeiroLote = true;
+  const lojasR = new Map<number, number | null>();
 
   await paginar(token, `/nfe?dataEmissaoInicial=${corte}`, async (nfes) => {
     if (primeiroLote) {
@@ -753,10 +804,13 @@ async function syncNFeRecente(admin: Admin, token: string, logId: string): Promi
       primeiroLote = false;
     }
     for (const nf of nfes) {
+      anotarLoja(lojasR, nf);
       try { await upsertNfeDaLista(admin, nf); synced++; }
       catch (e) { console.error("[bling2-sync] NF-e recente falhou:", e); failed++; }
     }
-  }, 5);                                            // teto: 500 notas por rodada
+  }, 5);
+
+  await registrarLojas(admin, lojasR);                                            // teto: 500 notas por rodada
 
   // Detalhe só do que está DENTRO da janela e ainda sem valor. É aqui que a
   // nota ganha valor, CNPJ e o link do DANFE.
@@ -794,12 +848,15 @@ async function syncNFe(admin: Admin, token: string, logId: string): Promise<Sync
   const inicioDaRodada = nowIso();
 
   // Passo 1 — a listagem.
+  const lojas = new Map<number, number | null>();
   await paginar(token, "/nfe", async (nfes) => {
     for (const nf of nfes) {
+      anotarLoja(lojas, nf);
       try { await upsertNfeDaLista(admin, nf); synced++; }
       catch (e) { console.error("[bling2-sync] NF-e falhou:", e); failed++; }
     }
   });
+  await registrarLojas(admin, lojas);
 
   // Passo 2 — as que SUMIRAM da listagem.
   //
