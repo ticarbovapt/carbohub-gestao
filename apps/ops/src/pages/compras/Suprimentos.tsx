@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useNavigate, useParams } from "react-router-dom";
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
 import { CarboCard, CarboCardContent } from "@/components/ui/carbo-card";
 import { CarboBadge } from "@/components/ui/carbo-badge";
@@ -30,11 +31,57 @@ import { MinStockDialog } from "@/components/estoque/MinStockDialog";
 
 // É a versão EDITÁVEL do estoque (gestores). A versão somente leitura vive em Estoque.
 
-type Hub = "rn" | "sp" | "sp-vendas" | "bling";
-// Suprimentos usa "sp-vendas"; o módulo de estoque usa "spv".
-const STOCK_HUB_ID: Record<Hub, string> = { rn: "rn", sp: "sp", "sp-vendas": "spv", bling: "bling" };
-// hub (UI) → código do warehouse no banco (pra filtrar movimentações por hub)
-const HUB_CODE: Record<Hub, string> = { rn: "HUB-RN", sp: "HUB-SP", "sp-vendas": "HUB-SP-VENDAS", bling: "CD-BLING" };
+// ─────────────────────────────────────────────────────────────────────────────
+// HUB e ABA vivem na URL: /suprimentos/{hub}/{aba}
+//
+// Antes eram dois useState e a URL era sempre `/suprimentos`. Não dava para
+// mandar "olha o estoque do CD SP" para ninguém, o F5 voltava pro Hub Natal e
+// o Voltar do navegador saía da tela em vez de voltar de aba. É o mesmo
+// problema que /logistica/:aba já resolveu — e o desenho aqui é cópia dele.
+//
+// A identidade do hub é o `slug` de stockData.ts, que JÁ EXISTIA (com um
+// `hubBySlug` sem nenhum consumidor — resto de um desenho abandonado). Havia
+// três vocabulários para dizer a mesma coisa: o `Hub` local ("sp-vendas"), o
+// `HUBS[].id` ("spv") e o `code` do banco ("HUB-SP-VENDAS"). Agora só o slug
+// atravessa a tela; os outros dois viraram tradução na borda.
+//
+// ⚠️ O `code` do banco NÃO vai na URL: é caixa alta com hífen, e no caso do
+// CD Bling nenhuma migração chega a criar a linha em `warehouses` — o link
+// existe e leva a uma tela naturalmente vazia.
+// ─────────────────────────────────────────────────────────────────────────────
+type HubId = "rn" | "sp" | "spv" | "bling";
+const HUB_PADRAO: HubId = "rn";
+// slug (URL) → id de UI, e id → código do warehouse. Só estas duas traduções.
+const hubIdBySlug = (slug?: string): HubId | null =>
+  (HUBS.find((h) => h.slug === slug)?.id as HubId | undefined) ?? null;
+const slugOf = (id: HubId) => HUBS.find((h) => h.id === id)?.slug ?? "hub-natal";
+const HUB_CODE: Record<HubId, string> = { rn: "HUB-RN", sp: "HUB-SP", spv: "HUB-SP-VENDAS", bling: "CD-BLING" };
+
+// Ordem, rótulo, ícone e RESTRIÇÃO DE HUB das abas num lugar só — é daqui que
+// sai a TabsList e é contra esta lista que a URL é validada.
+//
+// A restrição estava duplicada: as condições `isSP &&` / `isRN &&` na TabsList
+// e as listas spOnly/vendasOnly/rnOnly no changeHub. Duas fontes para a mesma
+// regra, e a URL seria a terceira — validaria contra uma enquanto a tela
+// renderiza pela outra, e a aba existiria no endereço sem existir na tela.
+const ABAS = [
+  { id: "estoque",         label: "Estoque",             icon: Boxes },
+  { id: "movimentacoes",   label: "Movimentações",       icon: ArrowLeftRight },
+  { id: "transito",        label: "Em Trânsito",         icon: Truck,           hubs: ["sp"] },
+  { id: "mapeamento",      label: "Mapeamento SKU",      icon: Link2,           hubs: ["sp"] },
+  { id: "vendas-transito", label: "Remessas",            icon: Truck,           hubs: ["spv"] },
+  { id: "envios-sp",       label: "Envios para SP",      icon: Send,            hubs: ["rn"] },
+  { id: "recebimento",     label: "Recebimento",         icon: ArrowDownToLine, hubs: ["rn"] },
+  { id: "notas",           label: "Notas Fiscais",       icon: FileText,        hubs: ["rn"] },
+  { id: "politica",        label: "Política de Estoque", icon: Settings2 },
+] as const;
+const ABA_PADRAO = ABAS[0].id;
+// Sem `hubs` = vale em todos. "estoque" existe nos quatro, por isso é o refúgio
+// seguro quando a URL pede uma combinação impossível.
+const abaValeNoHub = (abaId: string, hub: HubId) => {
+  const a = ABAS.find((x) => x.id === abaId);
+  return !!a && (!("hubs" in a) || (a.hubs as readonly string[]).includes(hub));
+};
 
 const PERIODOS = [{ v: "7d", label: "Últimos 7 dias" }, { v: "30d", label: "Últimos 30 dias" }, { v: "mes", label: "Este mês" }];
 const fmtDate = (iso: string) => (iso ? new Date(iso).toLocaleDateString("pt-BR") : "—");
@@ -43,8 +90,28 @@ const fmtDate = (iso: string) => (iso ? new Date(iso).toLocaleDateString("pt-BR"
 const SKU_MAP: { sku: string; produto: string }[] = [];
 
 export default function Suprimentos() {
-  const [hub, setHub] = useState<Hub>("rn");
-  const [activeTab, setActiveTab] = useState("estoque");
+  // A URL manda. Valor inválido cai no padrão em silêncio (com `replace`), sem
+  // página de erro: isto é preferência de visualização, não recurso — link
+  // velho ou digitado errado deve mostrar a tela, não um 404.
+  const { hub: hubSlug, aba } = useParams<{ hub?: string; aba?: string }>();
+  const navigate = useNavigate();
+  const hub: HubId = hubIdBySlug(hubSlug) ?? HUB_PADRAO;
+  // A aba precisa ser válida E existir NESTE hub. Sem a segunda checagem,
+  // /suprimentos/hub-natal/transito renderizaria um conteúdo cuja aba não está
+  // na barra — o pedido some da tela sem erro nenhum, que é o modo de falha
+  // que já nos mordeu no pós-venda.
+  const activeTab = abaValeNoHub(aba ?? "", hub) ? (aba as string) : ABA_PADRAO;
+  const irPara = (h: HubId, a: string) => navigate(`/suprimentos/${slugOf(h)}/${a}`);
+  const setActiveTab = (v: string) => irPara(hub, v);
+
+  // Canoniza: /suprimentos puro, hub inexistente ou combinação impossível
+  // viram o endereço válido. `replace` para não empilhar histórico — senão o
+  // Voltar fica preso repetindo o redirecionamento.
+  useEffect(() => {
+    if (hubSlug !== slugOf(hub) || aba !== activeTab) {
+      navigate(`/suprimentos/${slugOf(hub)}/${activeTab}`, { replace: true });
+    }
+  }, [hubSlug, aba, hub, activeTab, navigate]);
   // Período dos KPIs — persiste (vira dashboard). Valores: 7d | 30d | mes | custom | "YYYY-MM".
   const [periodo, setPeriodo] = useState(() => { try { return localStorage.getItem("ops_sup_periodo") || "7d"; } catch { return "7d"; } });
   const [customFrom, setCustomFrom] = useState(() => { try { return localStorage.getItem("ops_sup_from") || ""; } catch { return ""; } });
@@ -65,8 +132,8 @@ export default function Suprimentos() {
   }, []);
   const periodLabel = periodo === "7d" ? "7 dias" : periodo === "30d" ? "30 dias" : periodo === "mes" ? "este mês"
     : periodo === "custom" ? "período" : (monthOptions.find((m) => m.v === periodo)?.label ?? "período");
-  const isRN = hub === "rn", isSP = hub === "sp", isVendas = hub === "sp-vendas", isBling = hub === "bling";
-  const stockHub = HUBS.find((h) => h.id === STOCK_HUB_ID[hub]) ?? HUBS[0];
+  const isRN = hub === "rn", isSP = hub === "sp", isVendas = hub === "spv", isBling = hub === "bling";
+  const stockHub = HUBS.find((h) => h.id === hub) ?? HUBS[0];
 
   useStockLive(); // atualiza ao vivo quando outro usuário mexe no estoque (produção ou manual)
   const { data: products = [] } = useStock();
@@ -78,7 +145,7 @@ export default function Suprimentos() {
   const remessasVendas = useMemo(() => transfers.filter((t) => t.toCode === "HUB-SP-VENDAS"), [transfers]);
 
   // KPIs do hub selecionado
-  const stockId = STOCK_HUB_ID[hub];
+  const stockId = hub;
   const lowStock = useMemo(
     () => products.filter((p) => { const min = minForHub(p, stockId); return min > 0 && (p.hubs[stockId] ?? 0) < min; })
       .map((p) => ({ name: p.name, qty: p.hubs[stockId] ?? 0, unit: p.stock_unit || "un" })),
@@ -118,17 +185,11 @@ export default function Suprimentos() {
     movimentacoes: movStats?.movimentacoes ?? movsPeriodo.length,
   };
 
-  // Ao trocar de hub, volta para "estoque" se a aba ativa não existir no novo hub.
-  const changeHub = (next: Hub) => {
-    const spOnly = ["transito", "mapeamento"];
-    const vendasOnly = ["vendas-transito"];
-    const rnOnly = ["envios-sp", "recebimento", "notas"];
-    const invalid =
-      (next !== "sp" && spOnly.includes(activeTab)) ||
-      (next !== "sp-vendas" && vendasOnly.includes(activeTab)) ||
-      (next !== "rn" && rnOnly.includes(activeTab));
-    if (invalid) setActiveTab("estoque");
-    setHub(next);
+  // Ao trocar de hub, mantém a aba se ela existir no destino; senão cai em
+  // "estoque". A regra vem da lista ABAS — a mesma que a URL valida e a mesma
+  // que desenha a barra.
+  const changeHub = (next: HubId) => {
+    irPara(next, abaValeNoHub(activeTab, next) ? activeTab : ABA_PADRAO);
   };
 
   // Card de transferência (envio/remessa) com ações opcionais de chegada/estorno.
@@ -161,7 +222,7 @@ export default function Suprimentos() {
 
   // Política de Estoque do CD ATUAL (cada CD gerencia só o dele).
   const currentCode = HUB_CODE[hub];
-  const currentHubId = STOCK_HUB_ID[hub];
+  const currentHubId = hub;
   const [politicaSearch, setPoliticaSearch] = useState("");
   const [minTarget, setMinTarget] = useState<{ id: string; name: string; current: number } | null>(null);
   const politicaProducts = useMemo(() => products.filter((p) => {
@@ -182,7 +243,7 @@ export default function Suprimentos() {
         <div className="flex items-center gap-2 flex-wrap">
           <Button variant={isRN ? "default" : "outline"} size="sm" className={cn("gap-2", isRN && "bg-carbo-blue hover:bg-carbo-blue/90 text-white")} onClick={() => changeHub("rn")}><MapPin className="h-4 w-4" /> Hub Natal</Button>
           <Button variant={isSP ? "default" : "outline"} size="sm" className={cn("gap-2", isSP && "bg-carbo-blue hover:bg-carbo-blue/90 text-white")} onClick={() => changeHub("sp")}><MapPin className="h-4 w-4" /> CD SP LogHouse</Button>
-          <Button variant={isVendas ? "default" : "outline"} size="sm" className={cn("gap-2", isVendas && "bg-carbo-blue hover:bg-carbo-blue/90 text-white")} onClick={() => changeHub("sp-vendas")}><Users className="h-4 w-4" /> CD SP Vendas</Button>
+          <Button variant={isVendas ? "default" : "outline"} size="sm" className={cn("gap-2", isVendas && "bg-carbo-blue hover:bg-carbo-blue/90 text-white")} onClick={() => changeHub("spv")}><Users className="h-4 w-4" /> CD SP Vendas</Button>
           <Button variant={isBling ? "default" : "outline"} size="sm" className={cn("gap-2", isBling && "bg-carbo-blue hover:bg-carbo-blue/90 text-white")} onClick={() => changeHub("bling")}><Cloud className="h-4 w-4" /> CD Bling</Button>
           {isRN && <Button size="sm" variant="outline" className="gap-2 ml-auto border-blue-500/30 text-blue-400 hover:bg-blue-500/10" onClick={() => setEnvioOpen(true)}><Send className="h-4 w-4" /> Registrar Envio para CD SP</Button>}
         </div>
@@ -239,16 +300,14 @@ export default function Suprimentos() {
 
         {/* Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab}>
+          {/* Gerada da lista ABAS — a mesma que valida a URL. Ver o comentário
+              dela: manter isto em JSX fixo era a segunda fonte da regra. */}
           <TabsList className="w-full justify-start flex-wrap h-auto gap-1 bg-muted/50 p-1">
-            <TabsTrigger value="estoque" className="gap-1.5"><Boxes className="h-3.5 w-3.5" /> Estoque</TabsTrigger>
-            <TabsTrigger value="movimentacoes" className="gap-1.5"><ArrowLeftRight className="h-3.5 w-3.5" /> Movimentações</TabsTrigger>
-            {isSP && <TabsTrigger value="transito" className="gap-1.5"><Truck className="h-3.5 w-3.5" /> Em Trânsito</TabsTrigger>}
-            {isSP && <TabsTrigger value="mapeamento" className="gap-1.5"><Link2 className="h-3.5 w-3.5" /> Mapeamento SKU</TabsTrigger>}
-            {isVendas && <TabsTrigger value="vendas-transito" className="gap-1.5"><Truck className="h-3.5 w-3.5" /> Remessas</TabsTrigger>}
-            {isRN && <TabsTrigger value="envios-sp" className="gap-1.5"><Send className="h-3.5 w-3.5" /> Envios para SP</TabsTrigger>}
-            {isRN && <TabsTrigger value="recebimento" className="gap-1.5"><ArrowDownToLine className="h-3.5 w-3.5" /> Recebimento</TabsTrigger>}
-            {isRN && <TabsTrigger value="notas" className="gap-1.5"><FileText className="h-3.5 w-3.5" /> Notas Fiscais</TabsTrigger>}
-            <TabsTrigger value="politica" className="gap-1.5"><Settings2 className="h-3.5 w-3.5" /> Política de Estoque</TabsTrigger>
+            {ABAS.filter((a) => abaValeNoHub(a.id, hub)).map((a) => (
+              <TabsTrigger key={a.id} value={a.id} className="gap-1.5">
+                <a.icon className="h-3.5 w-3.5" /> {a.label}
+              </TabsTrigger>
+            ))}
           </TabsList>
 
           <TabsContent value="estoque" className="mt-4 space-y-3">

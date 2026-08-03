@@ -106,7 +106,10 @@ export default function Home() {
   const urgencias = [
     suprimentos.zerados > 0 && {
       txt: `${suprimentos.zerados} ${suprimentos.zerados === 1 ? "produto zerado" : "produtos zerados"} em algum hub`,
-      to: "/suprimentos",
+      // Endereço completo: leva à aba Estoque do Hub Natal em vez de largar a
+      // pessoa na tela e deixá-la procurar. Só é possível desde que hub e aba
+      // passaram a viver na URL.
+      to: "/suprimentos/hub-natal/estoque",
     },
     producao.bloqueadas > 0 && {
       txt: `${producao.bloqueadas} ${producao.bloqueadas === 1 ? "OP bloqueada" : "OPs bloqueadas"}`,
@@ -186,7 +189,7 @@ export default function Home() {
 
           {/* ── Estoque ──────────────────────────────────────────────── */}
           <Bloco titulo="Estoque" icon={Package} cor="#f59e0b" estado={suprimentos}
-            onClick={() => navigate("/suprimentos")}
+            onClick={() => navigate("/suprimentos/hub-natal/estoque")}
             vazio={suprimentos.zerados + suprimentos.abaixo === 0 ? "tudo acima do mínimo" : undefined}>
             <div className="grid grid-cols-2 gap-2">
               <Num valor={suprimentos.zerados} label="zerados em algum hub" alerta={suprimentos.zerados > 0} />

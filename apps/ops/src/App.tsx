@@ -50,7 +50,13 @@ export default function App() {
 
         {/* Compras & Suprimentos */}
         <Route path="/compras" element={<RequisicaoCompra />} />
+        {/* Duas rotas para o mesmo componente: a estática mantém vivo todo
+            link antigo para /suprimentos (sidebar, Home) e o efeito
+            canonizador da tela redireciona para o endereço completo. Mesmo
+            desenho de /logistica e /logistica/:aba. */}
         <Route path="/suprimentos" element={<Suprimentos />} />
+        <Route path="/suprimentos/:hub/:aba" element={<Suprimentos />} />
+        <Route path="/suprimentos/:hub" element={<Suprimentos />} />
 
 
         {/* Logística */}
