@@ -70,7 +70,6 @@ export default function Suprimentos() {
 
   useStockLive(); // atualiza ao vivo quando outro usuário mexe no estoque (produção ou manual)
   const { data: products = [] } = useStock();
-  const { data: movimentacoes = [], isLoading: movLoading } = useStockMovements();
   const { data: transfers = [] } = useStockTransfers();
 
   // Transferências por direção
@@ -101,9 +100,14 @@ export default function Suprimentos() {
     if (y && mth) return { from: new Date(y, mth - 1, 1), to: new Date(y, mth, 0, 23, 59, 59) };
     const f = new Date(); f.setDate(f.getDate() - 7); return { from: f, to: now };
   }, [periodo, customFrom, customTo]);
-  // Movimentações do hub atual (cada tela é independente)
-  const movimentacoesHub = useMemo(() => movimentacoes.filter((m) => m.warehouseCode === HUB_CODE[hub]), [movimentacoes, hub]);
-  const movsPeriodo = useMemo(() => movimentacoesHub.filter((m) => { const d = new Date(m.data); return d >= range.from && d <= range.to; }), [movimentacoesHub, range]);
+  // Movimentações do hub no período — hub e janela filtrados NO SERVIDOR.
+  // Antes vinham as 300 mais recentes de todos os hubs e a tela recortava
+  // depois; bastava um hub movimentar muito para os outros ficarem com a aba
+  // vazia. Com as saídas por venda entrando na tabela, isso deixaria de ser
+  // hipótese.
+  const { data: movsPeriodo = [], isLoading: movLoading } = useStockMovements(
+    HUB_CODE[hub], range.from.toISOString(), range.to.toISOString(),
+  );
   // KPIs de movimentação contados DIRETO no banco (sem o cap de 300 da lista — C10).
   const { data: movStats } = useStockMovementStats(HUB_CODE[hub], range.from.toISOString(), range.to.toISOString());
   const kpis = {
@@ -261,12 +265,12 @@ export default function Suprimentos() {
           <TabsContent value="movimentacoes" className="mt-4">
             {movLoading ? (
               <div className="flex items-center justify-center gap-2 py-16 text-muted-foreground"><Loader2 className="h-5 w-5 animate-spin" /> Carregando…</div>
-            ) : movimentacoesHub.length === 0 ? <CarboEmptyState title="Nenhuma movimentação neste hub" description="Entradas, saídas e ajustes deste hub aparecem aqui." /> : (
+            ) : movsPeriodo.length === 0 ? <CarboEmptyState title="Nenhuma movimentação neste hub" description="Entradas, saídas e ajustes deste hub aparecem aqui." /> : (
             <div className="rounded-lg border bg-card overflow-x-auto">
               <Table>
                 <TableHeader><TableRow><TableHead>Data</TableHead><TableHead>Produto</TableHead><TableHead>Tipo</TableHead><TableHead className="text-right">Qtd</TableHead><TableHead>Por</TableHead><TableHead>Origem</TableHead></TableRow></TableHeader>
                 <TableBody>
-                  {movimentacoesHub.map((m) => (
+                  {movsPeriodo.map((m) => (
                     <TableRow key={m.id}>
                       <TableCell className="text-sm text-muted-foreground">{fmtDate(m.data)}</TableCell>
                       <TableCell className="font-medium">{m.produto}<span className="ml-2 text-xs text-muted-foreground font-mono">{m.product_code}</span></TableCell>

@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 // ─────────────────────────────────────────────────────────────────────────────
 // Movimentações de estoque (Carbo Ops) — LEITURA do banco compartilhado.
 //  • stock_movements = ledger append-only (entrada/saída). Tem warehouse_id →
-//    cada hub mostra só as suas (telas independentes).
+//    cada hub mostra só as suas (telas independentes), FILTRADO NO SERVIDOR.
 //  • created_by → nome de quem fez (profiles.full_name).
 //  RLS: stock_movements liberado por SELECT a autenticado (migration do estoque).
 // ─────────────────────────────────────────────────────────────────────────────
@@ -25,16 +25,55 @@ export interface StockMovement {
   por: string | null;      // nome de quem fez
 }
 
-export function useStockMovements(limit = 300) {
+/**
+ * Movimentações de um hub num período.
+ *
+ * ⚠️ O HUB E O PERÍODO FILTRAM NO SERVIDOR, não na tela.
+ *
+ * Antes esta consulta trazia as 300 mais recentes de TODOS os hubs e a tela
+ * filtrava depois. Funcionava enquanto o volume era baixo — mas basta um hub
+ * movimentar muito para as 300 vagas serem tomadas por ele, e os outros hubs
+ * ficarem com a aba VAZIA. Não é hipótese: as saídas por venda vão entrar
+ * nesta tabela em breve, quase todas no HUB-RN, e afogariam os CDs de SP.
+ *
+ * Filtrar por `warehouse_id` no servidor não muda quem aparece: movimento com
+ * warehouse nulo (rota legada que grava saldo com hub e movimento sem) já não
+ * aparecia em hub nenhum, porque o filtro da tela comparava com o código.
+ *
+ * @param warehouseCode código do hub (HUB-RN, HUB-SP…). Sem ele, não busca.
+ * @param fromISO/toISO  janela; o mesmo período dos KPIs, para lista e cartão
+ *                       não contarem coisas diferentes.
+ */
+export function useStockMovements(
+  warehouseCode: string | null | undefined,
+  fromISO?: string,
+  toISO?: string,
+  limit = 300,
+) {
   return useQuery({
-    queryKey: ["ops", "stock-movements", limit],
+    queryKey: ["ops", "stock-movements", warehouseCode, fromISO, toISO, limit],
+    enabled: !!warehouseCode,
     queryFn: async (): Promise<StockMovement[]> => {
+      // O id do hub tem de ser resolvido antes: stock_movements guarda
+      // warehouse_id, e quem chama conhece o code.
+      const wh = await db.from("warehouses").select("id, code");
+      if (wh.error) throw wh.error;
+      const hubId = (wh.data ?? []).find((w: { code: string }) => w.code === warehouseCode)?.id ?? null;
+      // Hub que não existe na tabela (o CD Bling é um caso real) devolve lista
+      // vazia em vez de trazer o mundo inteiro sem filtro.
+      if (!hubId) return [];
+
+      let q = db
+        .from("stock_movements")
+        .select("id, product_id, warehouse_id, tipo, quantidade, origem, observacoes, created_at, created_by")
+        .eq("warehouse_id", hubId)
+        .order("created_at", { ascending: false })
+        .limit(limit);
+      if (fromISO) q = q.gte("created_at", fromISO);
+      if (toISO) q = q.lte("created_at", toISO);
+
       const [movs, products, warehouses, profiles] = await Promise.all([
-        db
-          .from("stock_movements")
-          .select("id, product_id, warehouse_id, tipo, quantidade, origem, observacoes, created_at, created_by")
-          .order("created_at", { ascending: false })
-          .limit(limit),
+        q,
         db.from("mrp_products").select("id, name, product_code, stock_unit"),
         db.from("warehouses").select("id, code"),
         db.from("profiles").select("id, full_name"),
