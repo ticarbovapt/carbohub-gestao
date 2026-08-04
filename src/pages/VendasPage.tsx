@@ -23,6 +23,7 @@ import { useFetchNfeLinks } from "@/hooks/useBlingNFes";
 import { EditOrderDialog } from "@/components/orders/EditOrderDialog";
 import { BulkVendorAssignDialog } from "@/components/orders/BulkVendorAssignDialog";
 import { toast } from "sonner";
+import { isPedido } from "@/hooks/useCarbozeOrders";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -262,7 +263,7 @@ export default function VendasPage() {
 
   // KPIs separados: orçamentos vs vendas confirmadas
   const quotes     = filtered.filter(v => v.status === "quote");
-  const active     = filtered.filter(v => v.status !== "cancelled" && v.status !== "quote");
+  const active     = filtered.filter(v => isPedido(v.status));
   const totalRevenue = active.reduce((s, v) => s + v.total, 0);
   const cancelled  = filtered.filter(v => v.status === "cancelled").length;
 

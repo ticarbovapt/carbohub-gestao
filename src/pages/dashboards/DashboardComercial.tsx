@@ -17,6 +17,7 @@ import { useCanalMetas } from "@/hooks/useCanalMetas";
 import { CanalMetasDialog } from "@/components/dashboard/CanalMetasDialog";
 import { ExpandableChart } from "@/components/dashboard/ExpandableChart";
 import { Pencil } from "lucide-react";
+import { isPedido } from "@/hooks/useCarbozeOrders";
 
 export default function DashboardComercial() {
   const [filters, setFilters] = useState<DashboardFilters>(EMPTY_FILTERS);
@@ -57,7 +58,7 @@ export default function DashboardComercial() {
 
   // ── KPIs derivados de carboze_orders ────────────────────────────────────────
   const kpis = useMemo(() => {
-    const active = carbozeOrders.filter(o => o.status !== "cancelled" && o.status !== "cancelado");
+    const active = carbozeOrders.filter(o => isPedido(o.status));
     const totalVendas   = active.length;
     const totalBRL      = active.reduce((s, o) => s + Number(o.total ?? 0), 0);
 
@@ -84,7 +85,7 @@ export default function DashboardComercial() {
 
   // ── Segmentação: Consumo (B2B) vs Revenda (PDV) ─────────────────────────────
   const segmentacao = useMemo(() => {
-    const active = carbozeOrders.filter(o => o.status !== "cancelled" && o.status !== "cancelado");
+    const active = carbozeOrders.filter(o => isPedido(o.status));
     const acc = {
       consumo: { qtd: 0, brl: 0 },
       revenda: { qtd: 0, brl: 0 },
@@ -109,7 +110,7 @@ export default function DashboardComercial() {
     const map: Record<string, { consumo: number; revenda: number; online: number; nc: number }> = {};
     for (const o of carbozeOrders) {
       if (!o.created_at) continue;
-      if (o.status === "cancelled" || o.status === "cancelado") continue;
+      if (!isPedido(o.status)) continue;
       const key = o.created_at.slice(0, 7);
       if (!map[key]) map[key] = { consumo: 0, revenda: 0, online: 0, nc: 0 };
       const v = Number(o.total ?? 0);
@@ -160,7 +161,7 @@ export default function DashboardComercial() {
     };
     for (const o of carbozeOrders) {
       if (!o.created_at) continue;
-      if (o.status === "cancelled" || o.status === "cancelado") continue;
+      if (!isPedido(o.status)) continue;
       const [y, m] = o.created_at.slice(0, 7).split("-").map(Number);
       if (y !== year || !m) continue;
       const v = Number(o.total ?? 0);
@@ -192,7 +193,7 @@ export default function DashboardComercial() {
     const firstMonth: Record<string, Record<string, string>> = { consumo: {}, revenda: {}, online: {} };
     for (const o of carbozeOrders) {
       if (!o.created_at || !o.segmento) continue;
-      if (o.status === "cancelled") continue;
+      if (!isPedido(o.status)) continue;
       const ch = o.segmento as "consumo" | "revenda" | "online";
       if (!active[ch]) continue;
       const name = (o.customer_name || "").trim().toLowerCase();
@@ -296,7 +297,7 @@ export default function DashboardComercial() {
     const fullMap: Record<string, { faturado: number; pedidos: number }> = {};
     for (const o of carbozeOrders) {
       if (!o.created_at) continue;
-      if (o.status === "cancelled" || o.status === "cancelado") continue;
+      if (!isPedido(o.status)) continue;
       const key = o.created_at.slice(0, 7);
       if (!fullMap[key]) fullMap[key] = { faturado: 0, pedidos: 0 };
       fullMap[key].pedidos++;
@@ -354,7 +355,7 @@ export default function DashboardComercial() {
     const realMap: Record<string, number> = {};
     for (const o of carbozeOrders) {
       if (!o.created_at) continue;
-      if (o.status === "cancelled" || o.status === "cancelado") continue;
+      if (!isPedido(o.status)) continue;
       const key = o.created_at.slice(0, 7);
       realMap[key] = (realMap[key] ?? 0) + Number(o.total ?? 0);
     }

@@ -186,6 +186,33 @@ export const ORDER_TYPE_LABELS: Record<OrderType, string> = {
   recorrente: "Recorrente",
 };
 
+// ── O que conta como VENDA em carboze_orders ─────────────────────────────────
+// Fonte única. Antes cada tela declarava a sua regra e várias usavam lista negra
+// (`status !== "cancelled"`), que deixa ORÇAMENTO entrar como receita — um
+// documento que o próprio vendedor cria e que não compromete ninguém.
+//
+// ⚠️ Não confundir com o e-commerce: lá `pending` é carrinho não pago e fica de
+// fora. Aqui `pending` é pedido colocado e CONTA. Tabelas diferentes, mesma
+// palavra, significados opostos.
+//
+// Status novo em OrderStatus? Decida aqui também — o `switch` exaustivo abaixo
+// faz o TypeScript apontar o lugar em vez de deixar o status entrar calado.
+export function isPedido(status: string | null | undefined): boolean {
+  switch (status as OrderStatus) {
+    case "pending":
+    case "confirmed":
+    case "invoiced":
+    case "shipped":
+    case "delivered":
+      return true;
+    case "quote":      // orçamento — ninguém se comprometeu
+    case "cancelled":
+      return false;
+    default:
+      return false;    // status desconhecido não é venda
+  }
+}
+
 const ORDER_STATUS_LABELS: Record<OrderStatus, string> = {
   quote: "Orçamento",
   pending: "Pendente",

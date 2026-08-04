@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { isPedido } from "@/hooks/useCarbozeOrders";
 
 export interface SalesTarget {
   id: string;
@@ -112,7 +113,7 @@ export function useSalesTargetsWithProgress(month: string) {
         .lte("created_at", expandedEnd);
 
       const orders = (ordersRaw || []).filter(o => {
-        if (o.status === "cancelled") return false;
+        if (!isPedido(o.status)) return false;
         const effectiveDate = o.sale_date ?? o.created_at.substring(0, 10);
         return effectiveDate >= monthStartStr && effectiveDate <= monthEndStr;
       });
@@ -383,7 +384,7 @@ export function useWeeklyTopVendedores() {
         .gte("created_at", expandedStart.toISOString());
 
       const orders = (ordersRaw || []).filter(o => {
-        if (o.status === "cancelled" || !o.vendedor_id) return false;
+        if (!isPedido(o.status) || !o.vendedor_id) return false;
         const effectiveDate = new Date(o.sale_date ?? o.created_at);
         return effectiveDate >= weekStart;
       });
@@ -471,7 +472,7 @@ export function useWeeklyVendedoresData(teamFilter?: "todos" | "cgc" | "expansao
         .lte("created_at", expandedEnd.toISOString());
 
       const orders = (ordersRaw || []).filter(o => {
-        if (o.status === "cancelled" || !o.vendedor_id) return false;
+        if (!isPedido(o.status) || !o.vendedor_id) return false;
         const eff = new Date((o.sale_date ?? o.created_at.substring(0, 10)) + "T12:00:00");
         return eff >= weekStart && eff <= weekEnd;
       });

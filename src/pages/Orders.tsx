@@ -58,6 +58,7 @@ import { ptBR } from "date-fns/locale";
 import { OrdersAnalytics } from "@/components/orders/OrdersAnalytics";
 import { EditOrderDialog } from "@/components/orders/EditOrderDialog";
 import { Pencil, Check, Tag, Loader2 } from "lucide-react";
+import { isPedido } from "@/hooks/useCarbozeOrders";
 
 const STATUS_VARIANTS: Record<OrderStatus, "secondary" | "info" | "warning" | "success" | "destructive"> = {
   quote: "secondary",
@@ -270,7 +271,7 @@ export default function Orders() {
     pending: cardsBase.filter((o) => o.status === "pending").length,
     shipped: cardsBase.filter((o) => o.status === "shipped").length,
     delivered: cardsBase.filter((o) => o.status === "delivered").length,
-    totalRevenue: cardsBase.filter((o) => o.status !== "cancelled").reduce((s, o) => s + Number(o.total || 0), 0),
+    totalRevenue: cardsBase.filter((o) => isPedido(o.status)).reduce((s, o) => s + Number(o.total || 0), 0),
   }), [cardsBase]);
 
   // ── Sorted orders ────────────────────────────────────────────────────────
