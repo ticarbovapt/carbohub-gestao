@@ -94,23 +94,34 @@ WHERE nf.order_id = o.id
 
 NOTIFY pgrst, 'reload schema';
 
--- ── 3) O que ficou de fora, para gente olhar ────────────────────────────────
--- Nota fora da janela. Duas causas possíveis, e o valor separa as duas:
---   valor_pedido = valor_nf  → vínculo CERTO, data do pedido é que é artefato
---                              (típico de BLING-*, importados). Corrigir mexe
---                              em mês fechado — decisão do negócio.
---   valor_pedido ≠ valor_nf  → aí sim é nota casada com o pedido errado.
--- Em nenhum dos dois a competência foi mexida automaticamente.
+-- ── 3) O que precisa de olho humano ─────────────────────────────────────────
+-- Duas coisas diferentes, e misturá-las faz a lista virar ruído:
+--
+--   valor_pedido ≠ valor_nf  → VÍNCULO ERRADO. Nota casada com o pedido errado.
+--                              Não é problema de competência — é faturamento
+--                              pendurado no lugar errado. Prioridade.
+--
+--   mês diferente            → competência a corrigir, mas fora da janela.
+--                              Típico de BLING-* importado, cujo created_at é a
+--                              data da importação. Corrigir mexe em mês fechado.
+--
+-- De propósito NÃO entra aqui a nota emitida poucos dias antes do pedido
+-- aparecer no sistema: em pedido importado isso é rotina (a nota é anterior ao
+-- sync) e o mês costuma ser o mesmo. Sinalizar isso só ensinava a ignorar a lista.
 CREATE OR REPLACE VIEW public.carbo_competencia_suspeita AS
 SELECT o.order_number,
        o.customer_name,
+       CASE
+         WHEN abs(coalesce(n.valor_total, 0) - coalesce(o.total, 0)) > 0.01
+           THEN 'VÍNCULO ERRADO'
+         ELSE 'competência fora da janela'
+       END                                                           AS problema,
        coalesce(o.sale_date, o.created_at::date)                     AS data_venda,
        n.numero                                                      AS nf,
        n.data_emissao                                                AS data_nf,
        (n.data_emissao - coalesce(o.sale_date, o.created_at::date))  AS dias_de_distancia,
        o.total                                                       AS valor_pedido,
        n.valor_total                                                 AS valor_nf,
-       n.matched_order_number,
        n.match_status
 FROM public.carboze_orders o
 JOIN public.bling_nfe n ON n.order_id = o.id
@@ -118,19 +129,27 @@ WHERE n.data_emissao IS NOT NULL
   AND coalesce(n.situacao, '') NOT ILIKE '%cancel%'
   AND o.status IN ('pending', 'confirmed', 'invoiced', 'shipped', 'delivered')
   AND (
-    -- Nota ANTES da venda existir é impossível, mesmo por um dia.
-    n.data_emissao < coalesce(o.sale_date, o.created_at::date)
-    -- Ou longe demais depois para ser a mesma venda.
-    OR n.data_emissao > coalesce(o.sale_date, o.created_at::date) + 45
+    -- Valor divergente: sempre vale olhar, mesmo com data batendo.
+    abs(coalesce(n.valor_total, 0) - coalesce(o.total, 0)) > 0.01
+    -- Ou a competência mudaria de MÊS e ficou fora da janela.
+    OR (
+      to_char(n.data_emissao, 'YYYY-MM')
+        <> to_char(coalesce(o.sale_date, o.created_at::date), 'YYYY-MM')
+      AND (
+        n.data_emissao < coalesce(o.sale_date, o.created_at::date)
+        OR n.data_emissao > coalesce(o.sale_date, o.created_at::date) + 45
+      )
+    )
   )
-ORDER BY abs(n.data_emissao - coalesce(o.sale_date, o.created_at::date)) DESC;
+ORDER BY (abs(coalesce(n.valor_total, 0) - coalesce(o.total, 0)) > 0.01) DESC,
+         abs(n.data_emissao - coalesce(o.sale_date, o.created_at::date)) DESC;
 
 GRANT SELECT ON public.carbo_competencia_suspeita TO authenticated;
 
 COMMENT ON VIEW public.carbo_competencia_suspeita IS
-  'NF emitida ANTES da venda existir, ou mais de 45 dias depois. Valor igual '
-  'ao do pedido = vínculo certo e data do pedido é artefato de importação; '
-  'valor diferente = nota casada com pedido errado. A competência destes NÃO '
-  'foi mexida — precisa de decisão humana.';
+  'O que a regra de competência não resolve sozinha. problema=VÍNCULO ERRADO: '
+  'nota casada com pedido errado (valores não batem) — faturamento no lugar '
+  'errado, prioridade. problema=competência fora da janela: vínculo certo, mas '
+  'corrigir o mês mexeria em período fechado. Nenhum dos dois foi alterado.';
 
 NOTIFY pgrst, 'reload schema';
