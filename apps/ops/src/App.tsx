@@ -18,6 +18,7 @@ import RequisicaoCompra from "./pages/compras/RequisicaoCompra";
 import Suprimentos from "./pages/compras/Suprimentos";
 import Logistica from "./pages/logistica/Logistica";
 import PosVenda from "./pages/logistica/PosVenda";
+import Recorrencias from "./pages/comercial/Recorrencias";
 import ViagensLog from "./pages/logistica/Viagens";
 import OrdensServico from "./pages/campo/OrdensServico";
 import Agendamentos from "./pages/campo/Agendamentos";
@@ -61,6 +62,7 @@ export default function App() {
 
         {/* Logística */}
         <Route path="/logistica/pos-venda" element={<PosVenda />} />
+        <Route path="/logistica/recorrencias" element={<Recorrencias />} />
         <Route path="/logistica" element={<Logistica />} />
         {/* A aba vira segmento da URL. As rotas estáticas acima (/pos-venda,
             /viagens) ganham desta no ranking do react-router, então não há
