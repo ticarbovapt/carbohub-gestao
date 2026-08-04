@@ -20,7 +20,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 export type FulfillmentStage =
-  | "nova_venda" | "separacao_pendente" | "criar_op" | "separando" | "separado"
+  | "agendado" | "nova_venda" | "separacao_pendente" | "criar_op" | "separando" | "separado"
   | "gerar_nf" | "nf_finalizada" | "emitir_etiqueta"
   | "em_transporte" | "entregue" | "cancelado";
 
@@ -32,6 +32,10 @@ export interface PosVendaStage {
 
 /** Ordem das colunas do quadro. É a jornada real do pedido, da venda à entrega. */
 export const POSVENDA_STAGES: PosVendaStage[] = [
+  // Parcela de recorrência cujo mês ainda não chegou. Card PARADO de propósito:
+  // não é trabalho a fazer hoje, é o que vem pela frente. Sai daqui sozinha
+  // quando o mês dela chega (carboze_ativar_parcelas_devidas).
+  { key: "agendado",            label: "Agendado (recorrência)",  color: "#8b5cf6" },
   { key: "nova_venda",          label: "Nova Venda",              color: "#9333ea" },
   { key: "separacao_pendente",  label: "Pedido Recebido",         color: "#f59e0b" },
   { key: "criar_op",            label: "Criar Ordem de Produção", color: "#ec4899" },

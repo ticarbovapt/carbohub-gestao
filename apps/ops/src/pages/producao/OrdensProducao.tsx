@@ -24,7 +24,7 @@ import { ConfirmOPDialog } from "@/components/producao/ConfirmOPDialog";
 import { DeleteConfirmDialog } from "@/components/producao/DeleteConfirmDialog";
 import { MoveOPDialog } from "@/components/producao/MoveOPDialog";
 import { toast } from "sonner";
-import { useProductionOrders, useProductionOrderMutations, useProductionRealtime, useLastOpMoves, type OpRow, type OpStatus as OpStatusT } from "@/hooks/useProductionOrders";
+import { useProductionOrders, useProductionOrderMutations, useProductionRealtime, useLastOpMoves, type OpRow, type OpStatus as OpStatusT , useParcelasAgendadas } from "@/hooks/useProductionOrders";
 
 // Wrappers dnd-kit por render-prop — mantêm o JSX do card/coluna inline e só
 // injetam os handlers de arraste (a lógica de etapa/estoque fica no componente).
@@ -150,6 +150,7 @@ export default function OrdensProducao() {
   const [priorityFilter, setPriorityFilter] = useState("all");
 
   const [createOpen, setCreateOpen] = useState(false);
+  const { data: parcelas = [] } = useParcelasAgendadas();
   const [createInitial, setCreateInitial] = useState<{ product_id: string; planned_quantity?: number; demand_source?: string } | null>(null);
   const [onlyCritical, setOnlyCritical] = useState(false);
   const [lossOpen, setLossOpen] = useState(false);
@@ -439,6 +440,45 @@ export default function OrdensProducao() {
         ) : viewMode === "kanban" ? (
           <DndContext sensors={sensors} collisionDetection={closestCorners} onDragStart={onDragStart} onDragEnd={onDragEnd} onDragCancel={() => setDragId(null)}>
           <div className="flex gap-3 overflow-x-auto overflow-y-hidden h-[60vh] md:h-[70vh] pb-3">
+            {/* Recorrência: demanda já vendida, ainda não devida. Coluna de LEITURA —
+                não recebe arrasto porque estas parcelas não são OP ainda. A OP
+                nasce quando o mês chega e a parcela vira pedido. */}
+            <div className="w-[260px] shrink-0 flex flex-col rounded-xl border border-dashed bg-muted/20">
+              <div className="px-3 py-2.5 border-b border-dashed flex items-center gap-2">
+                <span>🔁</span>
+                <span className="text-xs font-semibold" style={{ color: "#8b5cf6" }}>Pedidos de Recorrência</span>
+                <span className="ml-auto text-[11px] text-muted-foreground tabular-nums">{parcelas.length}</span>
+              </div>
+              <div className="flex-1 overflow-y-auto p-2 space-y-2">
+                {parcelas.map((p) => {
+                  const mes = new Date(p.scheduled_month + "T12:00:00")
+                    .toLocaleDateString("pt-BR", { month: "short", year: "2-digit" });
+                  return (
+                    <div key={p.id} className="rounded-lg border bg-card p-2.5 space-y-1">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: "#8b5cf6" }}>{mes}</span>
+                        {p.recurrence_index && p.recurrence_total && (
+                          <span className="text-[10px] text-muted-foreground tabular-nums">
+                            {p.recurrence_index}/{p.recurrence_total}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs font-medium leading-tight">{p.customer_name ?? "—"}</p>
+                      <p className="text-[11px] text-muted-foreground tabular-nums">
+                        {p.order_number ?? "—"} · {Number(p.total ?? 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 })}
+                      </p>
+                    </div>
+                  );
+                })}
+                {parcelas.length === 0 && (
+                  <p className="text-[11px] text-muted-foreground/50 text-center py-4">Nenhuma recorrência agendada</p>
+                )}
+              </div>
+              <p className="px-3 py-2 text-[10px] text-muted-foreground border-t border-dashed leading-snug">
+                Vira OP sozinho quando o mês chega.
+              </p>
+            </div>
+
             {KANBAN_COLUMNS.map((col) => {
               // Concluída/Bloqueada acumulam — mostra as recentes e resume o resto.
               const CAP = 12;

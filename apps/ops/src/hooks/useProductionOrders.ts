@@ -349,3 +349,36 @@ export function useProductionOrderMutations() {
 
   return { create, update, confirm, setStatus, conclude, remove };
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Pedidos de recorrência ainda não devidos
+//
+// Vêm de carboze_orders (status 'agendado'), NÃO de production_orders: eles
+// ainda não viraram OP e não devem virar — a OP nasce quando o mês chega. O PCP
+// precisa vê-los mesmo assim, para planejar insumo do que já está vendido.
+// ─────────────────────────────────────────────────────────────────────────────
+export interface ParcelaAgendada {
+  id: string;
+  order_number: string | null;
+  customer_name: string | null;
+  scheduled_month: string;
+  total: number;
+  recurrence_index: number | null;
+  recurrence_total: number | null;
+}
+
+export function useParcelasAgendadas() {
+  return useQuery({
+    queryKey: ["parcelas_agendadas"],
+    queryFn: async (): Promise<ParcelaAgendada[]> => {
+      const { data, error } = await (db as any)
+        .from("carboze_orders")
+        .select("id, order_number, customer_name, scheduled_month, total, recurrence_index, recurrence_total")
+        .eq("status", "agendado")
+        .order("scheduled_month", { ascending: true })
+        .limit(200);
+      if (error) throw error;
+      return (data ?? []) as ParcelaAgendada[];
+    },
+  });
+}
