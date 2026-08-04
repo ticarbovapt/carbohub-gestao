@@ -59,7 +59,7 @@ export function useRecorrencias() {
         .select(
           "id, order_number, customer_name, vendedor_name, status, fulfillment_stage, " +
           "scheduled_month, recurrence_index, recurrence_total, recurrence_period, " +
-          "parent_order_id, total, invoice_number, nf_access_key, bling_nf_id, " +
+          "parent_order_id, recurrence_group_id, total, invoice_number, nf_access_key, bling_nf_id, " +
           "agreed_delivery_date, items",
         )
         .not("recurrence_total", "is", null)
@@ -69,8 +69,14 @@ export function useRecorrencias() {
 
       const porContrato = new Map<string, ContratoRow>();
       for (const r of (data ?? []) as any[]) {
-        // O pai é a parcela 1 e não tem parent_order_id — ele é o próprio contrato.
-        const key = (r.parent_order_id as string | null) ?? (r.id as string);
+        // recurrence_group_id é a identidade do CONTRATO e sobrevive à exclusão
+        // de qualquer parcela. Antes agrupávamos por coalesce(parent_order_id,
+        // id): apagar a parcela 1 disparava o ON DELETE SET NULL da FK e o
+        // contrato se partia em vários de uma parcela cada. Os dois fallbacks
+        // cobrem linha antiga que ainda não passou pelo backfill.
+        const key = (r.recurrence_group_id as string | null)
+          ?? (r.parent_order_id as string | null)
+          ?? (r.id as string);
         const parcela: ParcelaRow = {
           id: r.id,
           order_number: r.order_number ?? null,
