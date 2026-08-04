@@ -50,6 +50,24 @@ Duas armadilhas já pagas, não repita:
    `isManager(profile, fnMap)` — a mesma expressão. O alias `isGestor` existe nos
    seis só para a tela poder ser idêntica. Não duplique a regra.
 
+### ⚠️ Como verificar de verdade (o typecheck que engana)
+Os `tsconfig.json` dos apps são solution-style: `"files": []` + `references`.
+Por isso `tsc --noEmit -p tsconfig.json` **passa sem checar arquivo nenhum** —
+retorna 0 sempre, inclusive com a tela quebrada. Já custou um deploy: uma função
+inexistente (`fmtBRL`) foi para produção com "seis apps OK" no relatório.
+
+Use, dentro de `apps/<app>`:
+```
+npx tsc -b --force     # checa de verdade (segue as references)
+npm run build          # o que de fato vai para o ar
+```
+O repo **não** passa limpo no `tsc -b`: há erros pré-existentes (tipos do Vite
+para `import.meta.env` e `@/assets/*.png`). Filtre pelos arquivos que você mexeu
+em vez de esperar saída vazia.
+
+`npm run build` NÃO substitui o `tsc`: o esbuild não checa tipos e deixa passar
+identificador inexistente numa boa.
+
 ### Regras anti-confusão (OBRIGATÓRIAS)
 1. **Todo pedido nomeia o alvo.** "no CRM" → `apps/crm`; "no controle"/"atual" → raiz (`src/`).
 2. **Na dúvida, PERGUNTE — nunca adivinhe.** Se a tela existe em mais de um app, liste os candidatos antes de mexer.

@@ -1582,11 +1582,11 @@ export default function Vender() {
               <div className="rounded-lg border bg-muted/40 p-3 space-y-1.5 text-sm">
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Valor de cada entrega</span>
-                  <span className="tabular-nums font-medium">{fmtBRL(orderTotal)}</span>
+                  <span className="tabular-nums font-medium">{brl(orderTotal)}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Total do contrato ({recParcelas}×)</span>
-                  <span className="tabular-nums font-bold">{fmtBRL(orderTotal * recParcelas)}</span>
+                  <span className="tabular-nums font-bold">{brl(orderTotal * recParcelas)}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Período</span>
@@ -1595,8 +1595,8 @@ export default function Vender() {
                   </span>
                 </div>
                 <p className="text-xs text-muted-foreground pt-1.5 border-t">
-                  Entra no faturamento <b>mês a mês</b>, {fmtBRL(orderTotal)} por vez — não os{" "}
-                  {fmtBRL(orderTotal * recParcelas)} de uma vez. As entregas futuras ficam como
+                  Entra no faturamento <b>mês a mês</b>, {brl(orderTotal)} por vez — não os{" "}
+                  {brl(orderTotal * recParcelas)} de uma vez. As entregas futuras ficam como
                   <b> Agendado</b> e podem ter a quantidade alterada antes de cada mês.
                 </p>
               </div>
