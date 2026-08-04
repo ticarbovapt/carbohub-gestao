@@ -12,9 +12,6 @@ verify_jwt = false
 [functions.check-low-stock-alerts]
 verify_jwt = false
 
-[functions.process-recurring-orders]
-verify_jwt = false
-
 [functions.process-licensee-checkout]
 verify_jwt = false
 

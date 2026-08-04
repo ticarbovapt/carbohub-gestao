@@ -5,7 +5,7 @@ import type { Json } from "@/integrations/supabase/types";
 import { useAuth } from "@/contexts/AuthContext";
 import { useFunctionAccess, ENFORCEMENT_ACTIVE } from "@/hooks/useFunctionAccess";
 
-export type OrderStatus = "quote" | "pending" | "confirmed" | "invoiced" | "shipped" | "delivered" | "cancelled";
+export type OrderStatus = "quote" | "agendado" | "pending" | "confirmed" | "invoiced" | "shipped" | "delivered" | "cancelled";
 export type OrderType = "spot" | "recorrente";
 
 // Segmentação da venda: consumo = B2B, revenda = Ponto de Venda (PDV), online = On-line
@@ -206,6 +206,7 @@ export function isPedido(status: string | null | undefined): boolean {
     case "delivered":
       return true;
     case "quote":      // orçamento — ninguém se comprometeu
+    case "agendado":   // parcela de recorrência cujo mês ainda não chegou
     case "cancelled":
       return false;
     default:
@@ -215,6 +216,7 @@ export function isPedido(status: string | null | undefined): boolean {
 
 const ORDER_STATUS_LABELS: Record<OrderStatus, string> = {
   quote: "Orçamento",
+  agendado: "Agendado",
   pending: "Pendente",
   confirmed: "Confirmado",
   invoiced: "Faturado",

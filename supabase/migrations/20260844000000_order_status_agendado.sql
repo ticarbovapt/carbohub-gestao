@@ -1,0 +1,19 @@
+-- Adiciona o status 'agendado' ao enum order_status.
+--
+-- Uma parcela de recorrência nasce 'agendado': o pedido JÁ EXISTE no sistema
+-- (para ninguém precisar recadastrar todo mês) mas ainda NÃO é venda — não conta
+-- faturamento, não vira OP, não move estoque. No mês dela vira 'pending' e segue
+-- o caminho normal de qualquer pedido.
+--
+-- Por que fora do faturamento: um contrato semestral de R$ 10 mil/mês cria 6
+-- parcelas. Se elas nascessem 'pending', os R$ 60 mil inteiros entrariam na
+-- receita no dia da assinatura — cinco meses de venda que ainda não aconteceu.
+--
+-- As telas de receita já usam lista BRANCA (isPedido no front, status IN (...)
+-- nas RPCs e em useFaturamento). Por isso 'agendado' fica de fora sozinho, sem
+-- precisar editar cada consulta: status novo não entra em lista branca por
+-- acidente. Era exatamente esse o ganho de ter trocado as listas negras.
+--
+-- OBS: ALTER TYPE ... ADD VALUE precisa rodar fora de um bloco de transação.
+-- No SQL Editor do Supabase, rode esta migração sozinha, antes da 20260845.
+ALTER TYPE public.order_status ADD VALUE IF NOT EXISTS 'agendado';
