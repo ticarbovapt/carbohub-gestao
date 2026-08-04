@@ -42,8 +42,10 @@ export interface EcommerceMetrics {
   totalOrders: number;
   totalUnitsSold: number;
   totalQuantityRaw: number;  // sum(quantity) sem multiplicador — usado na verificação de integridade
-  totalRevenue: number;
-  netRevenue: number;
+  totalRevenue: number;      // receita realizada (paid|shipped|delivered)
+  netRevenue: number;        // idem — mantido para os consumidores existentes
+  cancelledRevenue: number;  // pedido cancelado: dinheiro que voltou
+  pendingRevenue: number;    // pedido não pago: dinheiro que ainda não entrou
   avgTicket: number;
   cancelledOrders: number;
   cancellationRate: number;
@@ -74,7 +76,8 @@ export interface RawCheckMetrics {
   totalOrders: number;
   totalQuantity: number;
   totalUnitsReal: number;
-  totalRevenue: number;
+  totalRevenue: number;      // bruto: tudo, inclusive cancelado e não pago
+  saleRevenue: number;       // lista branca — é este que espelha o Caminho 2
   cancelledOrders: number;
   pendingOrders: number;
   shippedOrders: number;
@@ -114,6 +117,18 @@ interface DBOrder {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// O que conta como venda
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Lista BRANCA — espelha public.ecommerce_status_e_venda() no banco.
+// Status desconhecido NÃO é venda: plataforma nova que chega com vocabulário
+// próprio fica de fora até ser mapeada, em vez de entrar calada na receita.
+// Mudou aqui? Mude lá também (supabase/migrations/*_ecommerce_notifica_so_pago.sql).
+const SALE_STATUSES = new Set(["paid", "shipped", "delivered"]);
+const isSale = (status: string | null | undefined): boolean =>
+  SALE_STATUSES.has((status ?? "").toLowerCase());
+
+// ─────────────────────────────────────────────────────────────────────────────
 // System-logic aggregator (Path 2)
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -134,8 +149,10 @@ function buildMetrics(
     return r.units_real ?? r.quantity;
   };
 
+  // CONTAGENS = todos os pedidos. RECEITA = só os pedidos pagos (saleRows).
+  // Antes as duas receitas usavam lista negra (`!== "cancelled"`), o que punha
+  // pedido pendente — dinheiro que ainda não entrou — dentro do faturamento.
   const totalOrders      = rows.length;
-  const totalRevenue     = rows.reduce((s, r) => s + Number(r.total), 0);
   const totalUnitsSold   = rows.reduce((s, r) => s + displayUnits(r), 0);
   const totalQuantityRaw = rows.reduce((s, r) => s + r.quantity, 0);
 
@@ -145,10 +162,18 @@ function buildMetrics(
   const shipped    = rows.filter(r => r.status === "shipped").length;
   const delivered  = rows.filter(r => r.status === "delivered").length;
 
-  const activeRows       = rows.filter(r => r.status !== "cancelled");
-  const netRevenue       = activeRows.reduce((s, r) => s + Number(r.total), 0);
+  const saleRows         = rows.filter(r => isSale(r.status));
+  const saleOrders       = saleRows.length;
+  const sumTotal         = (rs: DBOrder[]) => rs.reduce((s, r) => s + Number(r.total), 0);
+
+  const totalRevenue     = sumTotal(saleRows);
+  const netRevenue       = totalRevenue;
+  // Receita que NÃO entrou — antes ficava escondida dentro dos números acima.
+  const cancelledRevenue = sumTotal(rows.filter(r => r.status === "cancelled"));
+  const pendingRevenue   = sumTotal(rows.filter(r => !isSale(r.status) && r.status !== "cancelled"));
+
   const cancellationRate = totalOrders > 0 ? (cancelled / totalOrders) * 100 : 0;
-  const commissionTotal  = activeRows.reduce((s, r) => {
+  const commissionTotal  = saleRows.reduce((s, r) => {
     const rate = getRateForDate(rateHistory, platform, r.ordered_at);
     return s + Number(r.total) * rate;
   }, 0);
@@ -165,7 +190,9 @@ function buildMetrics(
       orders:  prev.orders  + r.quantity,         // packs sold
       txns:    prev.txns    + 1,                  // unique orders (kept for reference)
       units:   prev.units   + displayUnits(r),
-      revenue: prev.revenue + Number(r.total),
+      // Contagens acima somam todo pedido; receita só soma o que foi pago,
+      // para bater com o total dos cartões.
+      revenue: prev.revenue + (isSale(r.status) ? Number(r.total) : 0),
     });
   }
 
@@ -187,7 +214,7 @@ function buildMetrics(
     dayMap.set(day, {
       orders:  prev.orders  + 1,
       units:   prev.units   + displayUnits(r),
-      revenue: prev.revenue + Number(r.total),
+      revenue: prev.revenue + (isSale(r.status) ? Number(r.total) : 0),
     });
   }
 
@@ -206,9 +233,13 @@ function buildMetrics(
     totalOrders,
     totalUnitsSold,
     totalQuantityRaw,
-    totalRevenue:    Math.round(totalRevenue * 100) / 100,
-    netRevenue:      Math.round(netRevenue * 100) / 100,
-    avgTicket:       totalOrders > 0 ? Math.round((totalRevenue / totalOrders) * 100) / 100 : 0,
+    totalRevenue:     Math.round(totalRevenue * 100) / 100,
+    netRevenue:       Math.round(netRevenue * 100) / 100,
+    cancelledRevenue: Math.round(cancelledRevenue * 100) / 100,
+    pendingRevenue:   Math.round(pendingRevenue * 100) / 100,
+    // Ticket médio = receita realizada ÷ pedidos que geraram essa receita.
+    // Dividir por totalOrders (que inclui cancelado) rebaixaria o ticket.
+    avgTicket:        saleOrders > 0 ? Math.round((totalRevenue / saleOrders) * 100) / 100 : 0,
     cancelledOrders: cancelled,
     cancellationRate: Math.round(cancellationRate * 10) / 10,
     pendingOrders:   pending,
@@ -243,7 +274,8 @@ function getRateForDate(history: CommissionRate[], platform: EcommercePlatform, 
 function emptyMetrics(platform: EcommercePlatform): EcommerceMetrics {
   return {
     platform,
-    totalOrders: 0, totalUnitsSold: 0, totalQuantityRaw: 0, totalRevenue: 0, netRevenue: 0, avgTicket: 0,
+    totalOrders: 0, totalUnitsSold: 0, totalQuantityRaw: 0, totalRevenue: 0, netRevenue: 0,
+    cancelledRevenue: 0, pendingRevenue: 0, avgTicket: 0,
     cancelledOrders: 0, cancellationRate: 0, pendingOrders: 0, paidOrders: 0, shippedOrders: 0, deliveredOrders: 0,
     commissionTotal: 0, topProduct: null,
     avgRating: null, products: [], dailySales: [],
@@ -277,6 +309,7 @@ export function useEcommerceRawCheck(
           totalQuantity:   r.reduce((s, x) => s + (x.total_quantity  ?? 0), 0),
           totalUnitsReal:  r.reduce((s, x) => s + (x.total_units_real ?? 0), 0),
           totalRevenue:    r.reduce((s, x) => s + Number(x.total_revenue  ?? 0), 0),
+          saleRevenue:     r.reduce((s, x) => s + Number(x.sale_revenue   ?? 0), 0),
           cancelledOrders: r.reduce((s, x) => s + (x.cancelled_orders ?? 0), 0),
           pendingOrders:   r.reduce((s, x) => s + (x.pending_orders  ?? 0), 0),
           shippedOrders:   r.reduce((s, x) => s + (x.shipped_orders  ?? 0), 0),

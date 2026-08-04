@@ -297,7 +297,7 @@ function ReconciliacaoPanel({
     },
     {
       label: "Receita",
-      rawVal: raw.totalRevenue,
+      rawVal: raw.saleRevenue,
       sysVal: m.totalRevenue,
       fmt: fmtBRL,
     },
@@ -398,13 +398,14 @@ function PlatformView({ platform, period }: { platform: EcommercePlatform; perio
           icon={<ShoppingCart className="h-4 w-4" />} accent={cfg.color}
         />
         <MetricCard
-          label="Receita Total" value={fmtBRL(m.totalRevenue)}
+          label="Receita Realizada" value={fmtBRL(m.totalRevenue)}
+          sub="pagos, enviados e entregues"
           icon={<TrendingUp className="h-4 w-4" />} accent={cfg.color}
         />
         <MetricCard
-          label="Receita Líquida" value={fmtBRL(m.netRevenue)}
-          sub="excluindo cancelados"
-          icon={<Wallet className="h-4 w-4" />} accent="#22c55e"
+          label="A Receber" value={fmtBRL(m.pendingRevenue)}
+          sub="pedidos ainda não pagos"
+          icon={<Wallet className="h-4 w-4" />} accent="#a78bfa"
         />
         <CommissionCard platform={platform} commissionTotal={m.commissionTotal} netRevenue={m.netRevenue} />
       </div>
@@ -434,7 +435,7 @@ function PlatformView({ platform, period }: { platform: EcommercePlatform; perio
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <MetricCard
           label="Cancelamentos" value={fmtNum(m.cancelledOrders)}
-          sub={m.totalOrders > 0 ? `${pct(m.cancelledOrders, m.totalOrders)} dos pedidos` : undefined}
+          sub={`${fmtBRL(m.cancelledRevenue)}${m.totalOrders > 0 ? ` · ${pct(m.cancelledOrders, m.totalOrders)} dos pedidos` : ""}`}
           icon={<XCircle className="h-4 w-4" />} accent="#f59e0b"
         />
         <MetricCard
@@ -444,7 +445,7 @@ function PlatformView({ platform, period }: { platform: EcommercePlatform; perio
         />
         <MetricCard
           label="Pedidos Pendentes" value={fmtNum(m.pendingOrders)}
-          sub="aguardando pagamento"
+          sub={`${fmtBRL(m.pendingRevenue)} aguardando pagamento`}
           icon={<Hourglass className="h-4 w-4" />} accent="#a78bfa"
         />
         <MetricCard
