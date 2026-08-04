@@ -29,6 +29,9 @@ interface AuthContextType {
   profile: Profile | null;
   /** Gestor pela flag do Admin (access_level='gestor'). */
   canAdmin: boolean;
+  /** Alias de canAdmin. Existe para o /vender ser idêntico em todos os apps —
+   *  o Vender canônico (CRM) usa este nome. Mesma expressão, não duplique a regra. */
+  isGestor: boolean;
   /** Tem o Finanças liberado (Admin via allowed_interfaces, ou gestão/TI). */
   canAccess: boolean;
   /**
@@ -111,6 +114,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     <AuthContext.Provider value={{
       user, session, profile,
       canAdmin: isManager(profile, fnMap),
+      isGestor: isManager(profile, fnMap),
       canAccess: canAccess(profile),
       // Gestor = flag do Admin (access_level='gestor'). Colaborador = próprio escopo.
       gestor: isManager(profile, fnMap),

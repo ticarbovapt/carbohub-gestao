@@ -27,7 +27,7 @@ import { useCreateVenda, useUpdateVendaFull } from "@/hooks/useVendas";
 import { useConvertQuote } from "@/hooks/useCarbozeVendas";
 import { useVincularOrcamento } from "@/hooks/useLeadOrcamento";
 import { useProdutos } from "@/hooks/useProdutos";
-import { useCreateOSFromSale } from "@/hooks/useOS";
+import { useCreateOSFromSale } from "@/hooks/useDescarbOS";
 import {
   DESCARB_MODALIDADES, DESCARB_SERVICE_TYPES,
   modalidadePrice, modalidadeLabel, modalidadeHint,

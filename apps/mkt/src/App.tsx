@@ -4,6 +4,7 @@ import { Layout } from "./components/Layout";
 import Home from "./pages/Home";
 import Chat from "./pages/Chat";
 import Campanhas from "./pages/Campanhas";
+import Vender from "./pages/Vender";
 import Quadros from "./pages/Quadros";
 import Board from "./pages/Board";
 import BoardCalendar from "./pages/BoardCalendar";
@@ -27,6 +28,7 @@ export default function App() {
         <Route path="/" element={<Home />} />
         <Route path="/chat" element={<Chat />} />
         <Route path="/campanhas" element={<Campanhas />} />
+        <Route path="/vender" element={<Vender />} />
         <Route path="/quadros" element={<Quadros />} />
         <Route path="/quadros/:boardId" element={<Board />} />
         <Route path="/quadros/:boardId/calendario" element={<BoardCalendar />} />

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate, useLocation } from "react-router-dom";
+import { useNavigate, useLocation, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import { Mail } from "lucide-react";
 import { UserCog, Users } from "lucide-react";
@@ -23,14 +23,16 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { generateQuotePdf } from "@/lib/quotePdf";
-import { useCreateVenda } from "@/hooks/useVendas";
+import { useCreateVenda, useUpdateVendaFull } from "@/hooks/useVendas";
+import { useConvertQuote } from "@/hooks/useCarbozeVendas";
+import { useVincularOrcamento } from "@/hooks/useLeadOrcamento";
+import { useProdutos } from "@/hooks/useProdutos";
 import { useCreateOSFromSale } from "@/hooks/useDescarbOS";
 import {
   DESCARB_MODALIDADES, DESCARB_SERVICE_TYPES,
   modalidadePrice, modalidadeLabel, modalidadeHint,
   servicoPadraoPorDoc, type DescarbServiceType,
 } from "@carbo/shell";
-import { useProdutos } from "@/hooks/useProdutos";
 import { useDiscountTiersPublic } from "@/hooks/useDiscountTiers";
 import { computeLineDiscount, resolveTier } from "@/lib/discount";
 import { usePrazoConfigPublic } from "@/hooks/usePrazoConfig";
@@ -110,11 +112,29 @@ function CollapsibleCard({
 export default function Vender() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { profile, canAdmin: gestor } = useAuth();
+  const { profile, isGestor: gestor } = useAuth();
   const vendedorLogado = profile?.full_name ?? profile?.username ?? "";
   const createVenda = useCreateVenda();
+  const updateVenda = useUpdateVendaFull();
+  const convertQuote = useConvertQuote();
+  const vincular = useVincularOrcamento();
   const createOSFromSale = useCreateOSFromSale();
+  const [searchParams] = useSearchParams();
+  const editId = searchParams.get("edit");
   const { data: produtos = [] } = useProdutos();
+
+  // Modo edição: carrega o pedido cru (com o snapshot do formulário) para reabrir.
+  const { data: editOrder } = useQuery({
+    queryKey: ["vender_edit", editId],
+    enabled: !!editId,
+    queryFn: async () => {
+      const { data, error } = await (supabase as any).from("carboze_orders").select("*").eq("id", editId).maybeSingle();
+      if (error) throw error;
+      return data as Record<string, any> | null;
+    },
+  });
+  const [hydrated, setHydrated] = useState(false);
+  const editNumero = (editOrder?.order_number as string | null) ?? null;
   // Lista de vendedores (só pra gestor poder lançar por outro).
   const { data: vendedores = [] } = useQuery({
     queryKey: ["all_profiles_vender"],
@@ -132,6 +152,7 @@ export default function Vender() {
   const [phone, setPhone] = useState("");
   const [isLicenciado, setIsLicenciado] = useState(false);
   const [rows, setRows] = useState<ItemRow[]>([emptyRow()]);
+  // Itens de serviço (descarbonizações) — opcional, começa VAZIO.
   const [serviceRows, setServiceRows] = useState<ServiceRow[]>([]);
   const [obsPublica, setObsPublica] = useState("");
   const [notasInternas, setNotasInternas] = useState("");
@@ -201,16 +222,37 @@ export default function Vender() {
     }
   }, [pagModalidade, pagParcelas, pagFaturamento]);
   const pagamentoValido = pagModalidade !== "" && !(pagModalidade === "boleto_faturado" && !pagFaturamento.trim());
+  // Cliente é obrigatório. Antes o gate só olhava o pagamento, e a venda salvava
+  // com nome vazio — o buildOrderFields faz `customer_name: input.customer_name || ""`
+  // e grava a string vazia. Aconteceu de verdade: o V2026080004 nasceu de R$ 400
+  // sem nome e sem CNPJ. Pedido sem cliente não fatura, não cobra e não se acha.
+  const nomeValido = customerName.trim().length > 0;
+  const podeSalvar = pagamentoValido && nomeValido;
+  // Por que não vale para o orçamento também? Vale: orçamento sem nome de
+  // cliente não pode ser enviado a ninguém, e o PDF sai com o cabeçalho vazio.
+
+  // Id do lead de origem. O CRM JÁ mandava isto no state e o tipo inline não
+  // declarava `id` — então o efeito nunca lia, e metade do elo era descartada
+  // em silêncio. Guardado em estado para sobreviver ao salvar.
+  const [leadOrigemId, setLeadOrigemId] = useState<string | null>(null);
 
   // Prefill quando vem de um lead (Tunnel do CRM). Não acopla — venda direta segue normal.
   useEffect(() => {
-    const fl = (location.state as { fromLead?: { name?: string; cnpj?: string; phone?: string; email?: string; city?: string; state?: string; address?: string; bairro?: string } } | null)?.fromLead;
+    const fl = (location.state as { fromLead?: { id?: string; name?: string; cnpj?: string; phone?: string; email?: string; city?: string; state?: string; address?: string; bairro?: string; numero?: string; cep?: string; ie?: string; legalName?: string } } | null)?.fromLead;
     if (!fl) return;
-    if (fl.name) setCustomerName(fl.name);
+    if (fl.id) setLeadOrigemId(fl.id);
+    // Razão social manda sobre o nome do card: é ela que sai na nota.
+    if (fl.legalName || fl.name) setCustomerName(fl.legalName || fl.name || "");
     if (fl.cnpj) setDoc(fl.cnpj);
     if (fl.phone) setPhone(fl.phone);
     if (fl.email) setEmail(fl.email);
-    setEndereco((e) => ({ ...e, logradouro: fl.address || e.logradouro, bairro: fl.bairro || e.bairro, cidade: fl.city || e.cidade, uf: fl.state || e.uf }));
+    if (fl.ie) setIe(fl.ie);
+    setEndereco((e) => ({
+      ...e,
+      logradouro: fl.address || e.logradouro, numero: fl.numero || e.numero,
+      bairro: fl.bairro || e.bairro, cidade: fl.city || e.cidade,
+      uf: fl.state || e.uf, cep: fl.cep || e.cep,
+    }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const [mapMsg, setMapMsg] = useState<string | null>(null);
@@ -268,37 +310,6 @@ export default function Vender() {
   const orderSubtotal = round2(subtotalBruto + servSubtotal);
   const orderDesconto = round2(descontoTotal + servDesconto);
   const orderTotal = round2(total + servTotal);
-  // Há ao menos um item válido de produto/serviço? (habilita cada campo de data.)
-  const hasValidProduct = rows.some((r) => r.productId && r.qty > 0);
-  const hasValidService = serviceRows.some((s) => s.modality && s.qty > 0);
-
-  // Itens no formato da RPC: cada unidade (paga OU bonificada) vira uma vaga de
-  // veículo na OS. A bonificação entra aqui porque o carro bonificado também é
-  // um carro que alguém vai descarbonizar.
-  const serviceItemsRpc = () =>
-    serviceRows
-      .filter((s) => s.modality && s.qty > 0)
-      .map((s) => ({
-        porte: s.modality as string,
-        qty: s.qty,
-        bonus: s.hasBonus ? Math.max(0, s.bonusQty) : 0,
-      }));
-
-  // Quantos veículos a OS vai ter (pagos + bonificados).
-  const vagasPrevistas = serviceItemsRpc().reduce((n, i) => n + i.qty + i.bonus, 0);
-
-  // Frota exige agendamento — a RPC recusa sem scheduled_at, então é melhor
-  // barrar aqui do que salvar a venda e falhar na OS.
-  const frotaSemData = hasValidService && serviceType === "frota" && !executionDate;
-
-  // Palpite do tipo de serviço pelo documento — só enquanto o vendedor não
-  // tiver escolhido à mão. CNPJ sugere B2B; se ele trocar para Frota, a escolha
-  // dele manda e o documento para de mexer.
-  useEffect(() => {
-    if (serviceTypeTocado) return;
-    setServiceType(servicoPadraoPorDoc(doc));
-  }, [doc, serviceTypeTocado]);
-
 
   // Formata CPF (≤11 díg.) ou CNPJ (12+).
   function formatDoc(v: string) {
@@ -446,14 +457,52 @@ export default function Vender() {
       const line = computeLineDiscount(bruto, { type: s.discType, value: s.discValue });
       return {
         name: modalidadeLabel(s.modality),
+        kind: "service" as const,
         modality: s.modality as "P" | "M" | "G",
-        quantity: s.qty, unit_price: price, bonus_quantity: s.hasBonus ? s.bonusQty : 0,
+        product_id: null,
+        product_code: null,
+        quantity: s.qty,
+        unit_price: price,
+        bonus_quantity: s.hasBonus ? s.bonusQty : 0,
         discount_type: line.amount > 0 ? s.discType : "none",
         discount_value: s.discValue,
         discount_amount: line.amount,
         total: line.net,
       };
     });
+
+  // Há ao menos um item válido de produto? (habilita a data de entrega combinada.)
+  const hasValidProduct = rows.some((r) => r.productId && r.qty > 0);
+  // Há ao menos um item válido de serviço? (habilita a previsão de execução.)
+  const hasValidService = serviceRows.some((s) => s.modality && s.qty > 0);
+
+  // Itens no formato da RPC: cada unidade (paga OU bonificada) vira uma vaga de
+  // veículo na OS. A bonificação entra aqui porque o carro bonificado também é
+  // um carro que alguém vai descarbonizar.
+  const serviceItemsRpc = () =>
+    serviceRows
+      .filter((s) => s.modality && s.qty > 0)
+      .map((s) => ({
+        porte: s.modality as string,
+        qty: s.qty,
+        bonus: s.hasBonus ? Math.max(0, s.bonusQty) : 0,
+      }));
+
+  // Quantos veículos a OS vai ter (pagos + bonificados).
+  const vagasPrevistas = serviceItemsRpc().reduce((n, i) => n + i.qty + i.bonus, 0);
+
+  // Frota exige agendamento — a RPC recusa sem scheduled_at, então é melhor
+  // barrar aqui do que salvar a venda e falhar na OS.
+  const frotaSemData = hasValidService && serviceType === "frota" && !executionDate;
+
+  // Palpite do tipo de serviço pelo documento — só enquanto o vendedor não
+  // tiver escolhido à mão. CNPJ sugere B2B; se ele trocar para Frota, a escolha
+  // dele manda e o documento para de mexer.
+  useEffect(() => {
+    if (serviceTypeTocado) return;
+    setServiceType(servicoPadraoPorDoc(doc));
+  }, [doc, serviceTypeTocado]);
+
 
   // Junta notas internas + dados estratégicos num bloco (coluna internal_notes),
   // pra nada ser digitado e descartado.
@@ -471,9 +520,98 @@ export default function Vender() {
     return [notasInternas.trim(), estrategico].filter(Boolean).join("\n") || undefined;
   }
 
+  // ── Snapshot do formulário: grava tudo (JSON) e reidrata fielmente na edição ──
+  type FormSnapshot = {
+    mode: "venda" | "promo"; doc: string; customerName: string; email: string; phone: string; isLicenciado: boolean;
+    rows: ItemRow[]; obsPublica: string; notasInternas: string; tipoPonto: string; classificacao: string;
+    volumeMedio: string; atuaDiesel: boolean; atuaFrotas: boolean; vendedorId: string;
+    endereco: typeof endereco; fatMesmo: boolean; fatEndereco: typeof fatEndereco;
+    ie: string; ieUf: string; pagModalidade: string; pagParcelas: string; pagFaturamento: string;
+    discReason: string; deliveryDate: string;
+    serviceRows: ServiceRow[]; executionDate: string; serviceType?: DescarbServiceType;
+  };
+  function formSnapshot(): FormSnapshot {
+    return {
+      mode, doc, customerName, email, phone, isLicenciado, rows, obsPublica, notasInternas,
+      tipoPonto, classificacao, volumeMedio, atuaDiesel, atuaFrotas, vendedorId, endereco, fatMesmo,
+      fatEndereco, ie, ieUf, pagModalidade, pagParcelas, pagFaturamento, discReason, deliveryDate,
+      serviceRows, executionDate, serviceType,
+    };
+  }
+
+  // Reidrata o formulário ao abrir em modo edição (?edit=<id>).
+  useEffect(() => {
+    if (!editOrder || hydrated) return;
+    const snap = editOrder.quote_form_snapshot as FormSnapshot | null;
+    if (snap && typeof snap === "object") {
+      setMode(snap.mode ?? "venda"); setDoc(snap.doc ?? ""); setCustomerName(snap.customerName ?? "");
+      setEmail(snap.email ?? ""); setPhone(snap.phone ?? ""); setIsLicenciado(!!snap.isLicenciado);
+      setRows(Array.isArray(snap.rows) && snap.rows.length ? snap.rows : [emptyRow()]);
+      setObsPublica(snap.obsPublica ?? ""); setNotasInternas(snap.notasInternas ?? "");
+      setTipoPonto(snap.tipoPonto ?? ""); setClassificacao(snap.classificacao ?? ""); setVolumeMedio(snap.volumeMedio ?? "");
+      setAtuaDiesel(!!snap.atuaDiesel); setAtuaFrotas(!!snap.atuaFrotas); setVendedorId(snap.vendedorId ?? "");
+      if (snap.endereco) setEndereco(snap.endereco);
+      setFatMesmo(snap.fatMesmo ?? true); if (snap.fatEndereco) setFatEndereco(snap.fatEndereco);
+      setIe(snap.ie ?? ""); setIeUf(snap.ieUf ?? "");
+      setPagModalidade(snap.pagModalidade ?? ""); setPagParcelas(snap.pagParcelas ?? "1"); setPagFaturamento(snap.pagFaturamento ?? "");
+      setDiscReason(snap.discReason ?? ""); setDeliveryDate(snap.deliveryDate ?? "");
+      setServiceRows(snap.serviceRows ?? []); setExecutionDate(snap.executionDate ?? "");
+      // Orçamento antigo não tem o campo: cai no palpite pelo documento.
+      if (snap.serviceType) { setServiceType(snap.serviceType); setServiceTypeTocado(true); }
+      else setServiceType(servicoPadraoPorDoc(snap.doc ?? ""));
+      if (snap.tipoPonto || snap.classificacao || snap.volumeMedio || snap.atuaDiesel || snap.atuaFrotas) setShowEstrategicos(true);
+      if (snap.obsPublica || snap.notasInternas) setShowObs(true);
+    } else {
+      // Best-effort (orçamento antigo, sem snapshot) — restaura o que dá pelas colunas.
+      setCustomerName(editOrder.customer_name ?? ""); setDoc(editOrder.cnpj ?? "");
+      setEmail(editOrder.customer_email ?? ""); setPhone(editOrder.customer_phone ?? ""); setIe(editOrder.customer_ie ?? "");
+      const items = Array.isArray(editOrder.items) ? editOrder.items : [];
+      setRows(items.length ? items.map((it: any) => ({
+        id: crypto.randomUUID(), productId: it.product_id ?? "", qty: it.quantity ?? 1, unitPrice: it.unit_price ?? 0,
+        hasBonus: (it.bonificacao ?? 0) > 0, bonusQty: it.bonificacao ?? 0,
+        discType: it.discount_type === "percent" ? "percent" : "value", discValue: it.discount_value ?? 0,
+      })) : [emptyRow()]);
+      setObsPublica(editOrder.notes ?? ""); setNotasInternas(editOrder.internal_notes ?? "");
+      setEndereco((e) => ({ ...e, logradouro: editOrder.delivery_address ?? "", cidade: editOrder.delivery_city ?? "", uf: editOrder.delivery_state ?? "", cep: editOrder.delivery_zip ?? "" }));
+      if (editOrder.billing_address) { setFatMesmo(false); setFatEndereco(editOrder.billing_address); }
+      setDeliveryDate(editOrder.agreed_delivery_date ? String(editOrder.agreed_delivery_date).slice(0, 10) : "");
+      if (editOrder.vendedor_id) setVendedorId(editOrder.vendedor_id);
+    }
+    setHydrated(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editOrder, hydrated]);
+
   // Monta o payload de gravação (cabeçalho + itens) a partir do estado da tela.
   function buildPayload(status: "orcamento" | "pedido") {
+    // Itens combinados: produto (como sempre) + serviço (chaves pt + kind/modalidade).
+    const itens = [
+      ...validItems().map((i) => ({
+        produto: i.name,
+        product_id: i.product_id as string | null,
+        product_code: i.product_code as string | null,
+        quantidade: i.quantity,
+        preco_unitario: i.unit_price,
+        bonificacao: i.bonus_quantity,
+        discount_type: i.discount_type,
+        discount_value: i.discount_value,
+        discount_amount: i.discount_amount,
+      })),
+      ...validServiceItems().map((i) => ({
+        produto: i.name,
+        kind: "service",
+        modalidade: i.modality,
+        product_id: null as string | null,
+        product_code: null as string | null,
+        quantidade: i.quantity,
+        preco_unitario: i.unit_price,
+        bonificacao: i.bonus_quantity,
+        discount_type: i.discount_type,
+        discount_value: i.discount_value,
+        discount_amount: i.discount_amount,
+      })),
+    ];
     return {
+      form_snapshot: formSnapshot(),
       tipo: mode,
       status,
       vendedor_id: vendedorId || undefined,
@@ -498,40 +636,14 @@ export default function Vender() {
       execution_date: executionDate || undefined,
       total: orderTotal,
       notes: obsPublica || undefined,
-      // Itens combinados: produto (como sempre) + serviço (kind/modalidade).
-      itens: [
-        ...validItems().map((i) => ({
-          produto: i.name,
-          product_id: i.product_id as string | null,
-          product_code: i.product_code as string | null,
-          quantidade: i.quantity,
-          preco_unitario: i.unit_price,
-          bonificacao: i.bonus_quantity,
-          discount_type: i.discount_type,
-          discount_value: i.discount_value,
-          discount_amount: i.discount_amount,
-        })),
-        ...validServiceItems().map((i) => ({
-          produto: i.name,
-          kind: "service",
-          modalidade: i.modality,
-          product_id: null as string | null,
-          product_code: null as string | null,
-          quantidade: i.quantity,
-          preco_unitario: i.unit_price,
-          bonificacao: i.bonus_quantity,
-          discount_type: i.discount_type,
-          discount_value: i.discount_value,
-          discount_amount: i.discount_amount,
-        })),
-      ],
+      itens,
     } as const;
   }
 
   // Limpa o formulário após salvar.
   function resetForm() {
     setMode("venda"); setDoc(""); setCustomerName(""); setEmail(""); setPhone("");
-    setIsLicenciado(false); setRows([emptyRow()]); setServiceRows([]); setObsPublica("");
+    setIsLicenciado(false); setRows([emptyRow()]); setObsPublica("");
     setNotasInternas(""); setTipoPonto(""); setClassificacao(""); setVolumeMedio("");
     setAtuaDiesel(false); setAtuaFrotas(false); setVendedorId("");
     setEndereco({ logradouro: "", numero: "", bairro: "", cidade: "", uf: "", cep: "" });
@@ -540,7 +652,8 @@ export default function Vender() {
     setFatMesmo(true); setFatEndereco({ logradouro: "", numero: "", bairro: "", cidade: "", uf: "", cep: "" });
     setPagModalidade(""); setPagParcelas("1"); setPagFaturamento("");
     setDiscReason("");
-    setDeliveryDate(""); setExecutionDate("");
+    setDeliveryDate("");
+    setServiceRows([]); setExecutionDate("");
     setServiceType("b2c"); setServiceTypeTocado(false);
   }
 
@@ -549,10 +662,21 @@ export default function Vender() {
     if (items.length === 0 && validServiceItems().length === 0) { toast.error("Adicione ao menos um item."); return; }
     if (items.some((i) => !(i.unit_price > 0))) { toast.error("Há item sem preço na tabela. A gestão precisa cadastrar em Admin › Tabela de preços."); return; }
     if (!pagamentoValido) { toast.error("Selecione a forma de pagamento."); return; }
+    if (frotaSemData) { toast.error("Frota exige a previsão de execução — a OS não é aberta sem data."); return; }
     setGenerating(true);
     try {
-      // 1) Salva o orçamento primeiro — o banco atribui o número (atômico).
-      const { numero } = await createVenda.mutateAsync(buildPayload("orcamento"));
+      // 1) Salva/atualiza o orçamento — no create o banco atribui o número (atômico);
+      //    na edição mantém o mesmo número (nova verdade).
+      const payload = buildPayload("orcamento");
+      const salvo = editId
+        ? await updateVenda.mutateAsync({ id: editId, input: payload })
+        : await createVenda.mutateAsync(payload);
+      const { numero } = salvo;
+      // 1b) Amarra ao card do CRM que originou. É o que permite reabrir este
+      //     mesmo orçamento quando o closer mover o card para Ganho, em vez de
+      //     redigitar tudo.
+      const idSalvo = editId ?? (salvo as { id?: string }).id;
+      if (leadOrigemId && idSalvo) vincular.mutate({ leadId: leadOrigemId, orderId: idSalvo });
       // 2) Gera o PDF já com o número do pedido (orçamento fica atrelado a ele).
       await generateQuotePdf({
         order_number: numero ?? undefined,
@@ -565,8 +689,8 @@ export default function Vender() {
         payment_terms: pagamentoLabel || undefined,
         notes: obsPublica || undefined, created_at: new Date().toISOString(), validityDays: 7,
       });
-      toast.success(`Orçamento ${numero ?? ""} gerado e salvo!`);
-      resetForm();
+      toast.success(`Orçamento ${numero ?? ""} ${editId ? "atualizado" : "gerado"} e salvo!`);
+      if (editId) navigate("/pedidos"); else resetForm();
     } catch (e) {
       toast.error("Erro ao gerar/salvar orçamento: " + (e instanceof Error ? e.message : "tente de novo"));
     } finally { setGenerating(false); }
@@ -577,10 +701,14 @@ export default function Vender() {
     if (items.length === 0 && validServiceItems().length === 0) { toast.error("Adicione ao menos um item."); return; }
     if (items.some((i) => !(i.unit_price > 0))) { toast.error("Há item sem preço na tabela. A gestão precisa cadastrar em Admin › Tabela de preços."); return; }
     if (!pagamentoValido) { toast.error("Selecione a forma de pagamento."); return; }
+    if (frotaSemData) { toast.error("Frota exige a previsão de execução — a OS não é aberta sem data."); return; }
     if (!email || !email.includes("@")) { toast.error("Informe o e-mail do cliente para enviar o orçamento."); return; }
     setEmailing(true);
     try {
-      const { numero } = await createVenda.mutateAsync(buildPayload("orcamento"));
+      const payload = buildPayload("orcamento");
+      const { numero } = editId
+        ? await updateVenda.mutateAsync({ id: editId, input: payload })
+        : await createVenda.mutateAsync(payload);
       const { base64, filename } = await generateQuotePdf({
         order_number: numero ?? undefined,
         customer_name: customerName || "Cliente", cnpj: doc || undefined,
@@ -604,7 +732,7 @@ export default function Vender() {
       if (error) throw error;
       if ((out as { error?: string } | null)?.error) throw new Error((out as { error?: string }).error);
       toast.success(`Orçamento ${numero ?? ""} enviado para ${email}!`);
-      resetForm();
+      if (editId) navigate("/pedidos"); else resetForm();
     } catch (e) {
       toast.error("Erro ao enviar por e-mail: " + (e instanceof Error ? e.message : "tente de novo"));
     } finally { setEmailing(false); }
@@ -668,10 +796,21 @@ export default function Vender() {
     if (validItems().length === 0 && validServiceItems().length === 0) { toast.error("Adicione ao menos um item."); return; }
     if (validItems().some((i) => !(i.unit_price > 0))) { toast.error("Há item sem preço na tabela. A gestão precisa cadastrar em Admin › Tabela de preços."); return; }
     if (!pagamentoValido) { toast.error("Selecione a forma de pagamento."); return; }
+    if (frotaSemData) { toast.error("Frota exige a previsão de execução — a OS não é aberta sem data."); return; }
     try {
-      const { id, numero } = await createVenda.mutateAsync(buildPayload("pedido"));
-      toast.success(`Venda ${numero ?? ""} registrada!`);
-      if (id) await createDescarbOSForSale(id, numero);
+      if (editId) {
+        // Salva as edições mantendo o orçamento e converte pelo caminho oficial.
+        await updateVenda.mutateAsync({ id: editId, input: buildPayload("orcamento") });
+        await convertQuote.mutateAsync(editId);
+        toast.success("Orçamento editado e convertido em venda!");
+        if (leadOrigemId) vincular.mutate({ leadId: leadOrigemId, orderId: editId });
+        if (!editOrder?.descarb_os_id) await createDescarbOSForSale(editId, editOrder?.order_number ?? null);
+      } else {
+        const created = await createVenda.mutateAsync(buildPayload("pedido"));
+        toast.success(`Venda ${created.numero ?? ""} registrada!`);
+        if (leadOrigemId) vincular.mutate({ leadId: leadOrigemId, orderId: created.id });
+        await createDescarbOSForSale(created.id, created.numero);
+      }
       resetForm();
       navigate("/pedidos");
     } catch (e) {
@@ -681,6 +820,15 @@ export default function Vender() {
 
   return (
     <div className="p-4 md:p-6 max-w-4xl mx-auto w-full space-y-5 pb-24">
+      {editId && (
+        <div className="flex items-center justify-between gap-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-2.5 text-sm">
+          <span className="flex items-center gap-2 text-amber-700 dark:text-amber-300">
+            <FileText className="h-4 w-4 shrink-0" />
+            Editando o orçamento <b>{editNumero ?? "…"}</b> — ao salvar, ele vira a nova versão (mesmo número).
+          </span>
+          <Button variant="ghost" size="sm" className="shrink-0" onClick={() => navigate("/pedidos")}>Sair</Button>
+        </div>
+      )}
       {gestor && (
         <div
           className={`mb-1 rounded-xl border px-3 py-2.5 transition-colors sm:px-4 ${
@@ -809,8 +957,12 @@ export default function Vender() {
           <h3 className="font-semibold flex items-center gap-2"><Building2 className="h-4 w-4 text-carbo-green" /> Informações do Cliente</h3>
           <div className="grid md:grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <Label>Nome / Razão Social *</Label>
-              <Input value={customerName} onChange={(e) => setCustomerName(e.target.value)} placeholder="Nome do cliente" />
+              <Label>Nome / Razão Social <span className="text-destructive">*</span></Label>
+              <Input value={customerName} onChange={(e) => setCustomerName(e.target.value)} placeholder="Nome do cliente"
+                className={!nomeValido ? "border-destructive/50 focus-visible:ring-destructive/40" : undefined} />
+              {!nomeValido && (
+                <p className="text-[11px] text-destructive">Obrigatório — sem o nome o pedido não fatura nem se acha depois.</p>
+              )}
             </div>
             <div className="space-y-1.5">
               <Label>Email</Label>
@@ -1283,7 +1435,7 @@ export default function Vender() {
                   />
                 </PopoverContent>
               </Popover>
-              <p className="text-[11px] text-muted-foreground">Combine com o cliente. O prazo de fábrica (PPF/PPE) é calculado em dias úteis. Habilita com um produto no pedido.</p>
+              <p className="text-[11px] text-muted-foreground">Combine com o cliente. O prazo de fábrica (PPF/PPE) é calculado em dias úteis.</p>
             </div>
 
             {/* Previsão de execução (serviço) — habilita só com item de serviço válido */}
@@ -1318,7 +1470,7 @@ export default function Vender() {
                   />
                 </PopoverContent>
               </Popover>
-              <p className="text-[11px] text-muted-foreground">Estimativa da data de execução da descarbonização. Habilita com um serviço no pedido.</p>
+              <p className="text-[11px] text-muted-foreground">Estimativa da data de execução da descarbonização.</p>
             </div>
           </div>
           {prazos && (
@@ -1352,7 +1504,7 @@ export default function Vender() {
           </h3>
           <div className="grid md:grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <Label>Modalidade *</Label>
+              <Label>Modalidade <span className="text-destructive">*</span></Label>
               <Select value={pagModalidade} onValueChange={setPagModalidade}>
                 <SelectTrigger><SelectValue placeholder="Selecione a forma de pagamento" /></SelectTrigger>
                 <SelectContent>
@@ -1366,7 +1518,7 @@ export default function Vender() {
             </div>
             {pagModalidade === "credito" && (
               <div className="space-y-1.5">
-                <Label>Parcelas *</Label>
+                <Label>Parcelas <span className="text-destructive">*</span></Label>
                 <Select value={pagParcelas} onValueChange={setPagParcelas}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
@@ -1379,7 +1531,7 @@ export default function Vender() {
             )}
             {pagModalidade === "boleto_faturado" && (
               <div className="space-y-1.5">
-                <Label>Prazo do faturamento *</Label>
+                <Label>Prazo do faturamento <span className="text-destructive">*</span></Label>
                 <Input value={pagFaturamento} onChange={(e) => setPagFaturamento(e.target.value)} placeholder="ex.: 30/60/90" />
               </div>
             )}
@@ -1442,14 +1594,14 @@ export default function Vender() {
         </div>
         <div className="flex items-center gap-2 w-full sm:w-auto">
           <Button variant="ghost" className="hidden sm:inline-flex" onClick={() => navigate("/pedidos")}>Cancelar</Button>
-          <Button variant="outline" className="flex-1 sm:flex-none" onClick={handleQuote} disabled={generating || !pagamentoValido}>
-            <FileText className="h-4 w-4 mr-1" /> {generating ? "Gerando..." : (<><span className="hidden sm:inline">Gerar&nbsp;</span>Orçamento</>)}
+          <Button variant="outline" className="flex-1 sm:flex-none" onClick={handleQuote} disabled={generating || !podeSalvar}>
+            <FileText className="h-4 w-4 mr-1" /> {generating ? "Gerando..." : (editId ? (<><span className="hidden sm:inline">Salvar e&nbsp;</span>Gerar PDF</>) : (<><span className="hidden sm:inline">Gerar&nbsp;</span>Orçamento</>))}
           </Button>
-          <Button variant="outline" className="flex-1 sm:flex-none" onClick={handleEmailQuote} disabled={emailing || !pagamentoValido} title="Salvar, gerar o PDF e enviar ao e-mail do cliente">
+          <Button variant="outline" className="flex-1 sm:flex-none" onClick={handleEmailQuote} disabled={emailing || !podeSalvar} title="Salvar, gerar o PDF e enviar ao e-mail do cliente">
             <Mail className="h-4 w-4 mr-1" /> {emailing ? "Enviando..." : (<><span className="hidden sm:inline">Enviar por&nbsp;</span>E-mail</>)}
           </Button>
-          <CarboButton onClick={handleSell} className="flex-1 sm:flex-none sm:min-w-[150px]" disabled={!pagamentoValido}>
-            <ShoppingCart className="h-4 w-4 mr-1" /> Gerar Venda
+          <CarboButton onClick={handleSell} className="flex-1 sm:flex-none sm:min-w-[150px]" disabled={!podeSalvar}>
+            <ShoppingCart className="h-4 w-4 mr-1" /> {editId ? "Salvar e Vender" : "Gerar Venda"}
           </CarboButton>
         </div>
       </div>

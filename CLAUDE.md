@@ -30,6 +30,26 @@ divergir aqui tira a opção da tela de alguém sem dar erro. Tipo novo entra aq
 (senão a notificação chega como "novo bug"). Ao editar o `BugButton`, edite o do
 `apps/ti` e copie para os outros cinco — eles devem continuar idênticos.
 
+### Tela `/vender` — o CRM é a base, os outros copiam
+O `pages/Vender.tsx` existe nos **seis** apps e deve ser byte a byte idêntico.
+A raiz (`controle`) está fora — ela tem `/orders/new`, outra tela, congelada.
+
+**Fonte da verdade = `apps/crm`** (o app do Sales). Edite lá e copie para
+`admin`, `ops`, `ti`, `financas`, `mkt`. Junto vão os hooks que a tela usa:
+`useVendas`, `useCarbozeVendas`, `useLeadOrcamento`, `useDescarbOS` — também
+idênticos nos seis.
+
+Duas armadilhas já pagas, não repita:
+1. **`useOS` significa duas coisas.** No `crm` é `licenciados.service_orders` via
+   RPC `os_create`; no `ops` é `crm_os` no schema public. Copiar um por cima do
+   outro quebra `Alertas`, `Agendamentos` e `OrdensServico` do Ops **sem erro de
+   compilação**. Por isso o Vender importa `useCreateOSFromSale` de
+   `@/hooks/useDescarbOS` (nome neutro, idêntico nos seis), nunca de `useOS`.
+2. **`isGestor` é alias.** O Vender canônico usa `isGestor`; fora do CRM o
+   `AuthContext` chamava isso de `canAdmin` (e `gestor` no financas). Os três são
+   `isManager(profile, fnMap)` — a mesma expressão. O alias `isGestor` existe nos
+   seis só para a tela poder ser idêntica. Não duplique a regra.
+
 ### Regras anti-confusão (OBRIGATÓRIAS)
 1. **Todo pedido nomeia o alvo.** "no CRM" → `apps/crm`; "no controle"/"atual" → raiz (`src/`).
 2. **Na dúvida, PERGUNTE — nunca adivinhe.** Se a tela existe em mais de um app, liste os candidatos antes de mexer.

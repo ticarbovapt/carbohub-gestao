@@ -16,6 +16,9 @@ interface AuthContextType {
   profile: Profile | null;
   /** Gestor pela flag do Admin (access_level='gestor') — telas de gestão (ex: bugs). */
   canAdmin: boolean;
+  /** Alias de canAdmin. Existe para o /vender ser idêntico em todos os apps —
+   *  o Vender canônico (CRM) usa este nome. Mesma expressão, não duplique a regra. */
+  isGestor: boolean;
   /** Gate de ENTRADA no Admin: precisa da flag carbo_admin liberada no próprio Admin. */
   hasAdminInterface: boolean;
   isLoading: boolean;
@@ -92,6 +95,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     <AuthContext.Provider value={{
       user, session, profile,
       canAdmin: isManager(profile, fnMap),
+      isGestor: isManager(profile, fnMap),
       hasAdminInterface: (profile?.allowed_interfaces ?? []).includes("carbo_admin"),
       isLoading, signIn, signOut,
     }}>
