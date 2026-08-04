@@ -148,7 +148,12 @@ export default function Logistica() {
         cep,
         peso_kg: pesoNum,
         altura_cm: alt, largura_cm: larg, comprimento_cm: comp,
-        qtd_volumes: qtd,
+        // ⚠️ 1, não `qtd`. A cubagem da Jamef é (A×L×C) × qtd_volumes × 300, e
+        // as dimensões acima já são as do pacote EQUIVALENTE — o volume das 12
+        // caixas somado. Mandar 12 aqui multiplicava o volume total por 12 de
+        // novo: 0,4285 m³ viravam 5,14 m³ e o cubado dava 1.542 kg num pedido
+        // de 154 kg, inflando o frete em ~10×.
+        qtd_volumes: 1,
         valor_nf: nf,
         origem_uf: originUf ?? "—",
       }),
