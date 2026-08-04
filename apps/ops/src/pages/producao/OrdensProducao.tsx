@@ -70,6 +70,17 @@ const DEMAND_SOURCE_LABELS: Record<string, string> = { venda: "Venda", recorrenc
 
 // Ao soltar o card numa coluna, aplica statuses[0] (o status "canônico" da coluna).
 // Soltar em "Separação" → separada → deduz os insumos do HUB-RN (ver useProductionOrders).
+/** "CarboZé 100ml × 100" — o que a parcela manda produzir. */
+function itensResumo(items: unknown): string {
+  if (!Array.isArray(items) || items.length === 0) return "";
+  const parte = (i: any) => {
+    const nome = i?.produto ?? i?.name ?? "item";
+    const qtd = Number(i?.quantidade ?? i?.quantity ?? 0);
+    return qtd > 0 ? `${nome} × ${qtd}` : String(nome);
+  };
+  return items.length === 1 ? parte(items[0]) : `${parte(items[0])} +${items.length - 1}`;
+}
+
 const KANBAN_COLUMNS: { id: string; label: string; emoji: string; color: string; statuses: OpStatus[] }[] = [
   { id: "pedidos", label: "Pedidos", emoji: "📋", color: "#64748b", statuses: ["rascunho"] },
   { id: "planejada", label: "Planejada", emoji: "📅", color: "#3b82f6", statuses: ["planejada"] },
@@ -463,10 +474,18 @@ export default function OrdensProducao() {
                           </span>
                         )}
                       </div>
-                      <p className="text-xs font-medium leading-tight">{p.customer_name ?? "—"}</p>
-                      <p className="text-[11px] text-muted-foreground tabular-nums">
-                        {p.order_number ?? "—"} · {Number(p.total ?? 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 })}
-                      </p>
+                      {/* O que produzir vem antes de quem comprou: esta coluna é
+                          para o PCP planejar insumo, não para consultar cliente. */}
+                      {itensResumo(p.items) && (
+                        <p className="text-xs font-semibold leading-tight">{itensResumo(p.items)}</p>
+                      )}
+                      <p className="text-[11px] text-muted-foreground leading-tight truncate">{p.customer_name ?? "—"}</p>
+                      <div className="flex items-center justify-between gap-2 pt-1 border-t border-dashed">
+                        <span className="text-[10px] text-muted-foreground font-mono truncate">{p.order_number ?? "—"}</span>
+                        <span className="text-[11px] tabular-nums font-medium">
+                          {Number(p.total ?? 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 })}
+                        </span>
+                      </div>
                     </div>
                   );
                 })}

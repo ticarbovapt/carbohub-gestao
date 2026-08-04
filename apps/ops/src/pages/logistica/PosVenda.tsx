@@ -13,7 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { CarboBadge } from "@/components/ui/carbo-badge";
 import {
-  usePosVendaOrders, usePosVendaRealtime, useUpdateFulfillmentStage, useUpdateShipmentInfo,
+  usePosVendaOrders, usePosVendaRealtime, useUpdateFulfillmentStage, useUpdateShipmentInfo, useUpdateItemQuantities, pedidoFaturado,
   useHubRnStock, useOpsBySource, fetchNfFiles,
   POSVENDA_STAGES, type FulfillmentStage, type PosVendaOrder,
 } from "@/hooks/usePosVenda";
@@ -39,6 +39,41 @@ const parsePesoKg = (p: string): number | null => { const s = p.trim().replace("
 const parseCotacao = (v: string): number | null => { const s = v.trim().replace(/\./g, "").replace(",", "."); if (s === "") return null; const n = Number(s); return Number.isFinite(n) && n >= 0 ? n : null; };
 const fmtBRLopt = (v: number | null | undefined) =>
   v == null ? "—" : v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+
+/** "CarboZé 100ml × 100" — o essencial do pedido em uma linha. */
+function resumoItens(items: PosVendaOrder["items"] | null | undefined): string {
+  if (!Array.isArray(items) || items.length === 0) return "";
+  const parte = (i: any) => {
+    const nome = i?.produto ?? i?.name ?? "item";
+    const qtd = Number(i?.quantidade ?? i?.quantity ?? 0);
+    return qtd > 0 ? `${nome} × ${qtd}` : String(nome);
+  };
+  if (items.length === 1) return parte(items[0]);
+  return `${parte(items[0])} +${items.length - 1}`;
+}
+
+/** "set/26" — mês devido da parcela. */
+function fmtMes(d: string): string {
+  return new Date(d + "T12:00:00").toLocaleDateString("pt-BR", { month: "short", year: "2-digit" });
+}
+
+/** Dias até a entrega combinada. Vermelho quando venceu, âmbar na semana. */
+function diasAte(d: string): number {
+  const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
+  return Math.round((new Date(d + "T12:00:00").getTime() - hoje.getTime()) / 86400000);
+}
+function prazoTexto(d: string): string {
+  const n = diasAte(d);
+  if (n < 0) return `${Math.abs(n)}d atrasado`;
+  if (n === 0) return "hoje";
+  return `${n}d`;
+}
+function prazoCor(d: string): string {
+  const n = diasAte(d);
+  if (n < 0) return "text-destructive";
+  if (n <= 3) return "text-amber-500";
+  return "text-muted-foreground";
+}
 
 function VendedorTag({ name, avatar }: { name: string; avatar: string | null }) {
   return (
@@ -84,6 +119,31 @@ export default function PosVenda() {
   const [edCarrier, setEdCarrier] = useState("");
   const [edCotacao, setEdCotacao] = useState("");
   const [savingEdit, setSavingEdit] = useState(false);
+  // Edição de quantidades — só enquanto não houver NF (o banco recusa depois).
+  const [editItens, setEditItens] = useState(false);
+  const [edQtds, setEdQtds] = useState<string[]>([]);
+  const updateItens = useUpdateItemQuantities();
+  const startEditItens = () => {
+    const its = Array.isArray(detail?.items) ? detail!.items : [];
+    setEdQtds(its.map((i: any) => String(i?.quantidade ?? i?.quantity ?? 0)));
+    setEditItens(true);
+  };
+  async function saveEditItens() {
+    if (!detail) return;
+    setSavingEdit(true);
+    try {
+      const its = (Array.isArray(detail.items) ? detail.items : []).map((i: any, idx) => {
+        const q = Math.max(0, Number(edQtds[idx]) || 0);
+        const pu = Number(i?.preco_unitario ?? i?.unit_price ?? 0);
+        return { ...i, quantidade: q, quantity: q, total: q * pu };
+      });
+      const { subtotal } = await updateItens.mutateAsync({ id: detail.id, items: its as never });
+      setDetail((d) => (d ? { ...d, items: its as never, subtotal, total: subtotal } : d));
+      setEditItens(false);
+      toast.success("Quantidades atualizadas.");
+    } catch { /* toast já veio do hook */ }
+    finally { setSavingEdit(false); }
+  }
   useEffect(() => { setEditShip(false); }, [detail?.id]);
   const startEditShip = () => {
     if (!detail) return;
@@ -391,11 +451,36 @@ export default function PosVenda() {
                             drag.isDragging ? "opacity-50" : ""
                           }`}
                         >
+                          {/* Recorrência primeiro: o mês devido é a informação que
+                              define este card — sem ela, três parcelas do mesmo
+                              cliente ficam indistinguíveis. */}
+                          {o.recurrence_total && (
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="text-[11px] font-bold uppercase tracking-wide text-violet-400">
+                                {o.scheduled_month ? fmtMes(o.scheduled_month) : "recorrência"}
+                              </span>
+                              <span className="text-[11px] tabular-nums text-muted-foreground">
+                                {o.recurrence_index}/{o.recurrence_total}
+                              </span>
+                            </div>
+                          )}
                           <div className="flex items-start justify-between gap-2">
                             <span className="font-semibold text-[15px] leading-snug line-clamp-2">{o.customer_name}</span>
                             <span className="text-sm font-semibold tabular-nums shrink-0">{brl(Number(o.total))}</span>
                           </div>
-                          <p className="text-xs text-muted-foreground font-mono">{o.order_number || "—"}</p>
+                          {/* O QUE é o pedido. Antes o card só dizia quem e quanto —
+                              a Separação tinha de abrir o detalhe para saber o item. */}
+                          {resumoItens(o.items) && (
+                            <p className="text-xs text-foreground/80 leading-snug line-clamp-2">{resumoItens(o.items)}</p>
+                          )}
+                          <div className="flex items-center justify-between gap-2">
+                            <p className="text-xs text-muted-foreground font-mono">{o.order_number || "—"}</p>
+                            {o.status !== "agendado" && o.agreed_delivery_date && (
+                              <span className={`text-[11px] tabular-nums font-medium ${prazoCor(o.agreed_delivery_date)}`}>
+                                {prazoTexto(o.agreed_delivery_date)}
+                              </span>
+                            )}
+                          </div>
                           {o.fulfillment_stage === "criar_op" && (
                             o.production_done ? (
                               <CarboBadge variant="success" className="gap-1">✅ Produzido — mover p/ Em Separação</CarboBadge>
@@ -426,7 +511,14 @@ export default function PosVenda() {
                             {o.vendedor_name && <VendedorTag name={o.vendedor_name} avatar={o.vendedor_avatar} />}
                             <span className="flex items-center gap-1 shrink-0"><Calendar className="h-3.5 w-3.5" /> {fmtDate(o.created_at)}</span>
                           </div>
-                          {/* Mudar etapa sem precisar arrastar (não abre o detalhe) */}
+                          {/* Parcela agendada não muda de etapa à mão: ela entra na
+                              fila sozinha quando o mês chega. Botão aqui só
+                              convidaria a puxar produção de dezembro em agosto. */}
+                          {o.status === "agendado" ? (
+                            <p className="text-[11px] text-muted-foreground leading-snug pt-0.5 border-t border-dashed border-border">
+                              Entra na fila em {o.scheduled_month ? fmtMes(o.scheduled_month) : "seu mês"} · editável até faturar
+                            </p>
+                          ) : (
                           <div onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>
                             <Select
                               value={o.fulfillment_stage}
@@ -440,6 +532,7 @@ export default function PosVenda() {
                               </SelectContent>
                             </Select>
                           </div>
+                          )}
                         </div>
                         )}
                         </DraggableCard>
@@ -883,12 +976,45 @@ export default function PosVenda() {
                 )}
 
                 <div>
-                  <p className="flex items-center gap-2 font-medium mb-1.5"><Package className="h-4 w-4 text-carbo-green" /> Itens</p>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <p className="flex items-center gap-2 font-medium"><Package className="h-4 w-4 text-carbo-green" /> Itens</p>
+                    {/* Enquanto não sair nota, a quantidade é do cliente. Depois
+                        dela o pedido tem de espelhar o que foi para a SEFAZ. */}
+                    {pedidoFaturado(detail) ? (
+                      <span className="text-[11px] text-muted-foreground">
+                        NF {detail.invoice_number || detail.bling_nf_id || "emitida"} — quantidades travadas
+                      </span>
+                    ) : !editItens ? (
+                      <Button size="sm" variant="ghost" className="h-7 gap-1.5 text-xs" onClick={startEditItens}>
+                        <Pencil className="h-3.5 w-3.5" /> Editar quantidades
+                      </Button>
+                    ) : (
+                      <div className="flex gap-1.5">
+                        <Button size="sm" variant="ghost" className="h-7 text-xs" disabled={savingEdit} onClick={() => setEditItens(false)}>Cancelar</Button>
+                        <Button size="sm" className="h-7 gap-1.5 text-xs" disabled={savingEdit} onClick={saveEditItens}>
+                          {savingEdit ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />} Salvar
+                        </Button>
+                      </div>
+                    )}
+                  </div>
                   <div className="rounded-lg border border-border divide-y">
-                    {(Array.isArray(detail.items) ? detail.items : []).map((it, i) => (
-                      <div key={i} className="flex items-center justify-between px-3 py-2 text-xs">
-                        <span className="truncate">{it.name ?? "Item"} <span className="text-muted-foreground">× {it.quantity ?? 1}</span></span>
-                        <span className="tabular-nums">{brl(Number(it.total ?? (it.quantity ?? 0) * (it.unit_price ?? 0)))}</span>
+                    {(Array.isArray(detail.items) ? detail.items : []).map((it: any, i) => (
+                      <div key={i} className="flex items-center justify-between gap-3 px-3 py-2 text-xs">
+                        <span className="truncate flex-1">{it.produto ?? it.name ?? "Item"}</span>
+                        {editItens ? (
+                          <input
+                            type="number" min={0} value={edQtds[i] ?? ""}
+                            onChange={(e) => setEdQtds((q) => q.map((v, idx) => (idx === i ? e.target.value : v)))}
+                            className="w-20 h-8 rounded-md border border-border bg-background px-2 text-xs tabular-nums text-right"
+                          />
+                        ) : (
+                          <span className="text-muted-foreground tabular-nums">× {it.quantidade ?? it.quantity ?? 1}</span>
+                        )}
+                        <span className="tabular-nums w-24 text-right">
+                          {brl(editItens
+                            ? (Number(edQtds[i]) || 0) * Number(it.preco_unitario ?? it.unit_price ?? 0)
+                            : Number(it.total ?? (it.quantidade ?? it.quantity ?? 0) * (it.preco_unitario ?? it.unit_price ?? 0)))}
+                        </span>
                       </div>
                     ))}
                     {(!Array.isArray(detail.items) || detail.items.length === 0) && (

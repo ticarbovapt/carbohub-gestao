@@ -365,6 +365,8 @@ export interface ParcelaAgendada {
   total: number;
   recurrence_index: number | null;
   recurrence_total: number | null;
+  items: unknown;
+  agreed_delivery_date: string | null;
 }
 
 export function useParcelasAgendadas() {
@@ -373,7 +375,7 @@ export function useParcelasAgendadas() {
     queryFn: async (): Promise<ParcelaAgendada[]> => {
       const { data, error } = await (db as any)
         .from("carboze_orders")
-        .select("id, order_number, customer_name, scheduled_month, total, recurrence_index, recurrence_total")
+        .select("id, order_number, customer_name, scheduled_month, total, recurrence_index, recurrence_total, items, agreed_delivery_date")
         .eq("status", "agendado")
         .order("scheduled_month", { ascending: true })
         .limit(200);
