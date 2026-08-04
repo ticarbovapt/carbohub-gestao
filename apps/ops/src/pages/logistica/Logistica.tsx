@@ -19,6 +19,19 @@ import { useCalculateFreight, localEstimate, FREIGHT_ORIGINS, type FreightCarrie
 import { useJamefQuote, type JamefQuote } from "@/hooks/useJamefQuote";
 import { useCepLookup } from "@/hooks/useCepLookup";
 
+interface CaixaLinha {
+  id: number;
+  qtd: string;
+  altura: string;
+  largura: string;
+  comprimento: string;
+}
+
+/** Volume da linha em cm³, já multiplicado pela quantidade de caixas. */
+const volumeLinha = (c: CaixaLinha) =>
+  (Number(c.altura) || 0) * (Number(c.largura) || 0) * (Number(c.comprimento) || 0)
+  * Math.max(Number(c.qtd) || 0, 0);
+
 const brlFrete = (v: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v || 0);
 const prazoFrete = (min: number | null, max: number | null) => {
   if (min == null && max == null) return "—";
@@ -58,10 +71,12 @@ export default function Logistica() {
   const [originCepCustom, setOriginCepCustom] = useState("");
   const [cep, setCep] = useState("");
   const [peso, setPeso] = useState("");
-  const [altura, setAltura] = useState("");
-  const [largura, setLargura] = useState("");
-  const [comprimento, setComprimento] = useState("");
-  const [volumes, setVolumes] = useState("1");
+  // Uma remessa real leva caixas de tamanhos diferentes — o último pedido tinha
+  // 3 de 23×33×40, 7 de 36×29×43 e mais duas avulsas. Com um único trio de
+  // dimensões, a cotação saía do tamanho de UMA caixa.
+  const [caixas, setCaixas] = useState<CaixaLinha[]>([
+    { id: 1, qtd: "1", altura: "", largura: "", comprimento: "" },
+  ]);
   const [valorMerc, setValorMerc] = useState("");
   const [freightResults, setFreightResults] = useState<FreightCarrier[] | null>(null);
   const [freightEstimated, setFreightEstimated] = useState(false);
@@ -87,9 +102,39 @@ export default function Logistica() {
     if (pesoNum <= 0) { toast.error("Informe o peso (kg)."); return; }
     if (originCep.replace(/\D/g, "").length !== 8) { toast.error("Informe um CEP de origem válido (8 dígitos)."); return; }
     if (cep.replace(/\D/g, "").length !== 8) { toast.error("Informe um CEP de destino válido (8 dígitos)."); return; }
-    const alt = Number(altura) || 1, larg = Number(largura) || 1, comp = Number(comprimento) || 1;
-    const qtd = Math.max(Number(volumes) || 1, 1);
+    const linhas = caixas.filter((c) => volumeLinha(c) > 0);
+    if (linhas.length === 0) { toast.error("Informe as dimensões de ao menos uma caixa."); return; }
+    const qtd = linhas.reduce((s2, c) => s2 + (Number(c.qtd) || 0), 0);
+    const volumeTotal = linhas.reduce((s2, c) => s2 + volumeLinha(c), 0);
     const nf = Number(valorMerc) || 0;
+
+    // O peso informado é o TOTAL da remessa; a API espera o peso de UMA caixa e
+    // multiplica pela quantidade. Distribuímos proporcional ao volume de cada
+    // linha — caixa maior leva mais peso, que é o palpite razoável quando só se
+    // sabe o total. Antes o total ia inteiro no campo unitário e era
+    // multiplicado pelos volumes: 154 kg × 12 = 1.848 kg na cotação.
+    const products = linhas.map((c, i) => {
+      const nCaixas = Math.max(Number(c.qtd) || 1, 1);
+      const pesoDaLinha = pesoNum * (volumeLinha(c) / volumeTotal);
+      return {
+        id: String(i + 1),
+        weight: Number((pesoDaLinha / nCaixas).toFixed(3)),
+        height: Number(c.altura) || 1,
+        width: Number(c.largura) || 1,
+        length: Number(c.comprimento) || 1,
+        insurance_value: nf / qtd,
+        quantity: nCaixas,
+      };
+    });
+
+    // A Jamef cota por cubagem total; mandamos o pacote equivalente.
+    const maiorL = Math.max(...linhas.map((c) => Number(c.largura) || 1));
+    const maiorC = Math.max(...linhas.map((c) => Number(c.comprimento) || 1));
+    const alt = Math.max(
+      Math.ceil(volumeTotal / (maiorL * maiorC)),
+      ...linhas.map((c) => Number(c.altura) || 1),
+    );
+    const larg = maiorL, comp = maiorC;
 
     // As duas cotações são independentes: a Jamef vem da tabela de contrato, o
     // resto da API. Uma falhar não pode derrubar a outra.
@@ -97,7 +142,7 @@ export default function Logistica() {
       calc.mutateAsync({
         to_cep: cep,
         from_cep: originCep,
-        products: [{ id: "1", weight: pesoNum, height: alt, width: larg, length: comp, insurance_value: nf, quantity: qtd }],
+        products,
       }),
       jamef.mutateAsync({
         cep,
@@ -248,21 +293,58 @@ export default function Logistica() {
                     <div className="space-y-1.5"><Label>Peso (kg)</Label><Input type="number" min={0.1} step={0.1} placeholder="ex: 12.5" value={peso} onChange={(e) => setPeso(e.target.value)} /></div>
                     <div className="space-y-1.5"><Label>Valor da mercadoria (R$)</Label><Input type="number" min={0} step={0.01} placeholder="valor da NF" value={valorMerc} onChange={(e) => setValorMerc(e.target.value)} /></div>
                   </div>
-                  <div className="grid grid-cols-[1fr_auto] gap-3 items-end">
-                    <div className="space-y-1.5">
-                      <Label>Dimensões da caixa (cm)</Label>
-                      <div className="grid grid-cols-3 gap-2">
-                        <Input type="number" min={1} placeholder="Altura" value={altura} onChange={(e) => setAltura(e.target.value)} />
-                        <Input type="number" min={1} placeholder="Largura" value={largura} onChange={(e) => setLargura(e.target.value)} />
-                        <Input type="number" min={1} placeholder="Compr." value={comprimento} onChange={(e) => setComprimento(e.target.value)} />
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <Label>Caixas (cm)</Label>
+                      <Button
+                        type="button" variant="ghost" size="sm" className="h-7 text-xs gap-1"
+                        onClick={() => setCaixas((cs) => [
+                          ...cs,
+                          { id: Math.max(0, ...cs.map((c) => c.id)) + 1, qtd: "1", altura: "", largura: "", comprimento: "" },
+                        ])}
+                      >
+                        <Plus className="h-3.5 w-3.5" /> Outro tamanho
+                      </Button>
+                    </div>
+                    <div className="grid grid-cols-[3.5rem_1fr_1fr_1fr_2rem] gap-2 text-[11px] text-muted-foreground px-0.5">
+                      <span>Qtd</span><span>Altura</span><span>Largura</span><span>Compr.</span><span />
+                    </div>
+                    {caixas.map((c) => (
+                      <div key={c.id} className="grid grid-cols-[3.5rem_1fr_1fr_1fr_2rem] gap-2 items-center">
+                        <Input type="number" min={1} step={1} value={c.qtd}
+                          onChange={(e) => setCaixas((cs) => cs.map((x) => x.id === c.id ? { ...x, qtd: e.target.value } : x))} />
+                        <Input type="number" min={1} placeholder="—" value={c.altura}
+                          onChange={(e) => setCaixas((cs) => cs.map((x) => x.id === c.id ? { ...x, altura: e.target.value } : x))} />
+                        <Input type="number" min={1} placeholder="—" value={c.largura}
+                          onChange={(e) => setCaixas((cs) => cs.map((x) => x.id === c.id ? { ...x, largura: e.target.value } : x))} />
+                        <Input type="number" min={1} placeholder="—" value={c.comprimento}
+                          onChange={(e) => setCaixas((cs) => cs.map((x) => x.id === c.id ? { ...x, comprimento: e.target.value } : x))} />
+                        <Button
+                          type="button" variant="ghost" size="icon"
+                          className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                          disabled={caixas.length === 1}
+                          onClick={() => setCaixas((cs) => cs.filter((x) => x.id !== c.id))}
+                          title="Remover linha"
+                        >
+                          ×
+                        </Button>
                       </div>
-                    </div>
-                    {/* Volumes entra na cubagem da Jamef (m³ × qtd × 300). Sem
-                        ele, remessa com várias caixas sai barata demais. */}
-                    <div className="space-y-1.5 w-20">
-                      <Label>Volumes</Label>
-                      <Input type="number" min={1} step={1} value={volumes} onChange={(e) => setVolumes(e.target.value)} />
-                    </div>
+                    ))}
+                    {/* O que a transportadora vai receber, antes de cotar. Sem
+                        isso o usuário não tem como perceber que digitou errado. */}
+                    {(() => {
+                      const linhas = caixas.filter((c) => volumeLinha(c) > 0);
+                      if (linhas.length === 0) return null;
+                      const vols = linhas.reduce((s2, c) => s2 + (Number(c.qtd) || 0), 0);
+                      const volTotal = linhas.reduce((s2, c) => s2 + volumeLinha(c), 0);
+                      return (
+                        <p className="text-[11px] text-muted-foreground pt-1">
+                          {vols} volume{vols === 1 ? "" : "s"} ·{" "}
+                          {(volTotal / 1_000_000).toLocaleString("pt-BR", { maximumFractionDigits: 3 })} m³
+                          {peso ? ` · ${peso} kg no total` : ""}
+                        </p>
+                      );
+                    })()}
                   </div>
                   <Button className="w-full gap-1.5" onClick={handleCalcularFrete} disabled={calculando}>
                     {calculando ? <><Loader2 className="h-4 w-4 animate-spin" /> Calculando…</> : <><Calculator className="h-4 w-4" /> Calcular Frete</>}

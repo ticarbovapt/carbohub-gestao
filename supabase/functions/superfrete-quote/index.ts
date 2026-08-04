@@ -113,12 +113,31 @@ Deno.serve(async (req) => {
 
     const baseUrl = env === "sandbox" ? "https://sandbox.superfrete.com" : "https://api.superfrete.com";
 
-    // SuperFrete usa um único "package" (consolida os volumes). Somamos peso e
-    // pegamos as maiores dimensões para um pacote agregado.
+    // SuperFrete cota UM "package" só, então os volumes precisam ser
+    // consolidados aqui. `weight` de cada produto é o peso de UMA caixa — quem
+    // chama tem de mandar assim, porque multiplicamos pela quantidade.
     const totalWeight = body.products.reduce((s, p) => s + (p.weight || 0) * (p.quantity || 1), 0);
-    const maxH = Math.max(...body.products.map((p) => Math.ceil(p.height || 1)), 1);
+
+    // Consolidação por VOLUME, não pela maior de cada dimensão.
+    //
+    // Antes era max(altura), max(largura), max(comprimento): 12 caixas de
+    // 20×20×20 viravam uma caixa de 20×20×20. O pacote agregado ficava com o
+    // tamanho de UMA caixa e o peso de todas — pedido real de 428.504 cm³ era
+    // cotado como 8.000 cm³ pesando 154 kg, e a transportadora recusava.
+    //
+    // Agora empilhamos tudo sobre a maior base: a área é a maior largura ×
+    // maior comprimento, e a altura sai do volume total. É aproximação (não
+    // resolve empacotamento de verdade), mas erra para MAIS, que é o lado
+    // seguro numa cotação.
+    const totalVolume = body.products.reduce(
+      (s, p) => s + (p.height || 1) * (p.width || 1) * (p.length || 1) * (p.quantity || 1), 0);
     const maxW = Math.max(...body.products.map((p) => Math.ceil(p.width || 1)), 1);
     const maxL = Math.max(...body.products.map((p) => Math.ceil(p.length || 1)), 1);
+    const maxH = Math.max(
+      Math.ceil(totalVolume / (maxW * maxL)),
+      ...body.products.map((p) => Math.ceil(p.height || 1)),   // nunca menor que a caixa mais alta
+      1,
+    );
     const insurance = body.products.reduce((s, p) => s + (p.insurance_value || 0) * (p.quantity || 1), 0);
 
     // Sem "services" o SuperFrete retorna só o padrão (Loggi). Listamos os IDs
