@@ -180,8 +180,23 @@ Deno.serve(async (req) => {
       if (apiRes.status === 401 || apiRes.status === 403) {
         return json({ carriers: [], unavailable: [], error: "Token do SuperFrete inválido ou ambiente incorreto.", env }, 200);
       }
-      // Pacote/destino rejeitado: lista todas as transportadoras solicitadas como "não atende".
-      const reason = "não atende este pacote/destino (confira peso/dimensões — Correios vai até 30 kg)";
+      // Pacote/destino rejeitado. A mensagem dizia sempre "Correios vai até
+      // 30 kg", mesmo quando o estouro era de tamanho — e mandava conferir o
+      // peso de uma remessa cujo problema era ter 3,6 metros. Diagnosticamos o
+      // que de fato passou do limite antes de responder.
+      //
+      // Limites do encomendado (PAC/SEDEX/Jadlog/Loggi): 30 kg, 100 cm em
+      // qualquer lado e 200 cm somando as três. Carga acima disso é
+      // transportadora fracionada (Jamef), não encomenda.
+      const somaDim = maxH + maxW + maxL;
+      const maiorDim = Math.max(maxH, maxW, maxL);
+      const estouros: string[] = [];
+      if (totalWeight > 30) estouros.push(`${totalWeight.toFixed(0)} kg (limite 30)`);
+      if (maiorDim > 100)   estouros.push(`${maiorDim} cm de lado (limite 100)`);
+      if (somaDim > 200)    estouros.push(`${somaDim} cm somando os lados (limite 200)`);
+      const reason = estouros.length > 0
+        ? `pacote acima do limite de encomenda: ${estouros.join(" · ")}. Carga deste porte é transportadora fracionada.`
+        : "não atende este destino (a rota, não o pacote — confira o CEP)";
       const unavailable = services.split(",").map((s) => s.trim()).filter(Boolean).map((id) => ({
         company: SERVICE_NAMES[id]?.company ?? `Serviço ${id}`,
         name: SERVICE_NAMES[id]?.name ?? "",
