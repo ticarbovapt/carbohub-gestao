@@ -148,6 +148,15 @@ export default function Vender() {
   });
   const [hydrated, setHydrated] = useState(false);
   const editNumero = (editOrder?.order_number as string | null) ?? null;
+  // Editar orçamento e editar venda usam a MESMA tela — muda só o que acontece
+  // ao salvar. Orçamento salva e converte; venda apenas salva.
+  const editStatus = (editOrder?.status as string | null) ?? null;
+  const editandoVenda = !!editOrder && editStatus !== "quote";
+  // Espelha carbo_pedido_faturado() no banco: com NF, o comercial está travado.
+  const editFaturado = !!editOrder && (
+    !!editOrder.invoice_number || !!editOrder.nf_access_key || !!editOrder.bling_nf_id ||
+    ["invoiced", "shipped", "delivered"].includes(editStatus ?? "")
+  );
   // Lista de vendedores (só pra gestor poder lançar por outro).
   const { data: vendedores = [] } = useQuery({
     queryKey: ["all_profiles_vender"],
@@ -812,7 +821,12 @@ export default function Vender() {
     if (!pagamentoValido) { toast.error("Selecione a forma de pagamento."); return; }
     if (frotaSemData) { toast.error("Frota exige a previsão de execução — a OS não é aberta sem data."); return; }
     try {
-      if (editId) {
+      if (editId && editandoVenda) {
+        // Já é venda: salva as alterações e pronto. Nada de converter — ela não
+        // volta a ser orçamento (o banco recusa) nem gera OS de novo.
+        await updateVenda.mutateAsync({ id: editId, input: buildPayload("pedido") });
+        toast.success(`Venda ${editNumero ?? ""} atualizada!`);
+      } else if (editId) {
         // Salva as edições mantendo o orçamento e converte pelo caminho oficial.
         await updateVenda.mutateAsync({ id: editId, input: buildPayload("orcamento") });
         await convertQuote.mutateAsync(editId);
@@ -853,10 +867,18 @@ export default function Vender() {
   return (
     <div className="p-4 md:p-6 max-w-4xl mx-auto w-full space-y-5 pb-24">
       {editId && (
-        <div className="flex items-center justify-between gap-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-2.5 text-sm">
-          <span className="flex items-center gap-2 text-amber-700 dark:text-amber-300">
+        <div className={`flex items-center justify-between gap-3 rounded-lg border px-4 py-2.5 text-sm ${
+          editFaturado ? "border-destructive/40 bg-destructive/10" : "border-amber-500/30 bg-amber-500/10"
+        }`}>
+          <span className={`flex items-center gap-2 ${editFaturado ? "text-destructive" : "text-amber-700 dark:text-amber-300"}`}>
             <FileText className="h-4 w-4 shrink-0" />
-            Editando o orçamento <b>{editNumero ?? "…"}</b> — ao salvar, ele vira a nova versão (mesmo número).
+            {editFaturado ? (
+              <>A venda <b>{editNumero ?? "…"}</b> já tem nota emitida — itens e valores não podem mais mudar. Para corrigir, cancele e refaça.</>
+            ) : editandoVenda ? (
+              <>Editando a venda <b>{editNumero ?? "…"}</b> — ao salvar, as alterações valem para este mesmo pedido.</>
+            ) : (
+              <>Editando o orçamento <b>{editNumero ?? "…"}</b> — ao salvar, ele vira a nova versão (mesmo número).</>
+            )}
           </span>
           <Button variant="ghost" size="sm" className="shrink-0" onClick={() => navigate("/pedidos")}>Sair</Button>
         </div>
@@ -1703,14 +1725,14 @@ export default function Vender() {
         </div>
         <div className="flex items-center gap-2 w-full sm:w-auto">
           <Button variant="ghost" className="hidden sm:inline-flex" onClick={() => navigate("/pedidos")}>Cancelar</Button>
-          <Button variant="outline" className="flex-1 sm:flex-none" onClick={handleQuote} disabled={generating || !podeSalvar}>
+          <Button variant="outline" className="flex-1 sm:flex-none" onClick={handleQuote} disabled={generating || !podeSalvar || editandoVenda}>
             <FileText className="h-4 w-4 mr-1" /> {generating ? "Gerando..." : (editId ? (<><span className="hidden sm:inline">Salvar e&nbsp;</span>Gerar PDF</>) : (<><span className="hidden sm:inline">Gerar&nbsp;</span>Orçamento</>))}
           </Button>
           <Button variant="outline" className="flex-1 sm:flex-none" onClick={handleEmailQuote} disabled={emailing || !podeSalvar} title="Salvar, gerar o PDF e enviar ao e-mail do cliente">
             <Mail className="h-4 w-4 mr-1" /> {emailing ? "Enviando..." : (<><span className="hidden sm:inline">Enviar por&nbsp;</span>E-mail</>)}
           </Button>
-          <CarboButton onClick={handleSell} className="flex-1 sm:flex-none sm:min-w-[150px]" disabled={!podeSalvar}>
-            <ShoppingCart className="h-4 w-4 mr-1" /> {editId ? "Salvar e Vender" : "Gerar Venda"}
+          <CarboButton onClick={handleSell} className="flex-1 sm:flex-none sm:min-w-[150px]" disabled={!podeSalvar || editFaturado}>
+            <ShoppingCart className="h-4 w-4 mr-1" /> {editFaturado ? "Nota já emitida" : editandoVenda ? "Salvar alterações" : editId ? "Salvar e Vender" : "Gerar Venda"}
           </CarboButton>
         </div>
       </div>

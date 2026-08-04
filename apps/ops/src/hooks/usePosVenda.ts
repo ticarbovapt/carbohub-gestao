@@ -497,35 +497,3 @@ export function useUpdateShipmentInfo() {
     onError: (e: Error) => toast.error("Erro ao salvar dados de expedição: " + e.message),
   });
 }
-
-/** Já saiu nota? Espelha carbo_pedido_faturado() no banco — a trava de verdade
- *  é o trigger; isto aqui só evita oferecer um botão que vai dar erro. */
-export function pedidoFaturado(o: PosVendaOrder): boolean {
-  return !!o.invoice_number || !!o.nf_access_key || !!o.bling_nf_id
-    || ["invoiced", "shipped", "delivered"].includes(o.status ?? "");
-}
-
-/**
- * Altera quantidades do pedido enquanto não houver NF.
- *
- * É o que torna a recorrência útil: o cliente pede mais (ou menos) num mês
- * específico e a parcela daquele mês muda, sem cancelar o contrato. O banco
- * recusa se a nota já saiu (trg_carbo_bloqueia_edicao_pos_nf) — aqui só
- * traduzimos o erro para algo legível.
- */
-export function useUpdateItemQuantities() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async ({ id, items }: { id: string; items: PosVendaItem[] }) => {
-      const subtotal = items.reduce(
-        (s, i: any) => s + Number(i.quantidade ?? i.quantity ?? 0) * Number(i.preco_unitario ?? i.unit_price ?? 0), 0);
-      const { error } = await db.from("carboze_orders")
-        .update({ items, subtotal, total: subtotal, updated_at: new Date().toISOString() })
-        .eq("id", id);
-      if (error) throw error;
-      return { subtotal };
-    },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["ops", "pos-venda"] }),
-    onError: (e: Error) => toast.error(e.message),
-  });
-}

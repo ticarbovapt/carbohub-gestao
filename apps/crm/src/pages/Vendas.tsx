@@ -63,6 +63,12 @@ const STAGE_VARIANT: Record<string, BadgeVariant> = {
  * tela ainda assim se contradiga em NADA: badge, KPI e filtro passam todos por
  * aqui. Uma pergunta, uma resposta.
  */
+/** Já saiu nota? Espelha carbo_pedido_faturado() no banco — a trava real é o
+ *  trigger; aqui só evitamos oferecer um botão que daria erro. */
+const temNota = (v: any): boolean =>
+  !!v?.invoice_number || !!v?.nf_access_key || !!v?.bling_nf_id ||
+  ["invoiced", "shipped", "delivered"].includes(v?.status ?? "");
+
 const estaCancelada = (v: CarbozeVendaRow) =>
   v.status === "cancelled" || v.fulfillment_stage === "cancelado";
 
@@ -667,6 +673,19 @@ export default function Vendas() {
                                   porque é o que quase sempre se quer. */}
                               {(isHead || venda.vendedor_id === user?.id) && !estaCancelada(venda) && (
                                 <div className="flex justify-end gap-1 pt-2 border-t border-border/60">
+                                  {/* Editar usa a MESMA porta do orçamento (/vender?edit=…) —
+                                      a tela de venda já sabe carregar o pedido e salvar. Some
+                                      quando há NF: aí o pedido tem de espelhar a nota, e o
+                                      banco recusaria a alteração de qualquer forma. */}
+                                  {!temNota(venda) && (
+                                    <Button
+                                      variant="outline" size="sm"
+                                      className="h-8 text-xs mr-auto"
+                                      onClick={() => navigate(`/vender?edit=${venda.id}`)}
+                                    >
+                                      <Pencil className="h-3.5 w-3.5 mr-1.5" /> Editar venda
+                                    </Button>
+                                  )}
                                   <Button
                                     variant="outline" size="sm"
                                     className="h-8 text-xs text-amber-600 dark:text-amber-500 border-amber-500/40 hover:bg-amber-500/10"

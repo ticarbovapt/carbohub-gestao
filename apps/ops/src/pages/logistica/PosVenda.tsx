@@ -13,7 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { CarboBadge } from "@/components/ui/carbo-badge";
 import {
-  usePosVendaOrders, usePosVendaRealtime, useUpdateFulfillmentStage, useUpdateShipmentInfo, useUpdateItemQuantities, pedidoFaturado,
+  usePosVendaOrders, usePosVendaRealtime, useUpdateFulfillmentStage, useUpdateShipmentInfo,
   useHubRnStock, useOpsBySource, fetchNfFiles,
   POSVENDA_STAGES, type FulfillmentStage, type PosVendaOrder,
 } from "@/hooks/usePosVenda";
@@ -119,31 +119,6 @@ export default function PosVenda() {
   const [edCarrier, setEdCarrier] = useState("");
   const [edCotacao, setEdCotacao] = useState("");
   const [savingEdit, setSavingEdit] = useState(false);
-  // Edição de quantidades — só enquanto não houver NF (o banco recusa depois).
-  const [editItens, setEditItens] = useState(false);
-  const [edQtds, setEdQtds] = useState<string[]>([]);
-  const updateItens = useUpdateItemQuantities();
-  const startEditItens = () => {
-    const its = Array.isArray(detail?.items) ? detail!.items : [];
-    setEdQtds(its.map((i: any) => String(i?.quantidade ?? i?.quantity ?? 0)));
-    setEditItens(true);
-  };
-  async function saveEditItens() {
-    if (!detail) return;
-    setSavingEdit(true);
-    try {
-      const its = (Array.isArray(detail.items) ? detail.items : []).map((i: any, idx) => {
-        const q = Math.max(0, Number(edQtds[idx]) || 0);
-        const pu = Number(i?.preco_unitario ?? i?.unit_price ?? 0);
-        return { ...i, quantidade: q, quantity: q, total: q * pu };
-      });
-      const { subtotal } = await updateItens.mutateAsync({ id: detail.id, items: its as never });
-      setDetail((d) => (d ? { ...d, items: its as never, subtotal, total: subtotal } : d));
-      setEditItens(false);
-      toast.success("Quantidades atualizadas.");
-    } catch { /* toast já veio do hook */ }
-    finally { setSavingEdit(false); }
-  }
   useEffect(() => { setEditShip(false); }, [detail?.id]);
   const startEditShip = () => {
     if (!detail) return;
@@ -976,44 +951,14 @@ export default function PosVenda() {
                 )}
 
                 <div>
-                  <div className="flex items-center justify-between mb-1.5">
-                    <p className="flex items-center gap-2 font-medium"><Package className="h-4 w-4 text-carbo-green" /> Itens</p>
-                    {/* Enquanto não sair nota, a quantidade é do cliente. Depois
-                        dela o pedido tem de espelhar o que foi para a SEFAZ. */}
-                    {pedidoFaturado(detail) ? (
-                      <span className="text-[11px] text-muted-foreground">
-                        NF {detail.invoice_number || detail.bling_nf_id || "emitida"} — quantidades travadas
-                      </span>
-                    ) : !editItens ? (
-                      <Button size="sm" variant="ghost" className="h-7 gap-1.5 text-xs" onClick={startEditItens}>
-                        <Pencil className="h-3.5 w-3.5" /> Editar quantidades
-                      </Button>
-                    ) : (
-                      <div className="flex gap-1.5">
-                        <Button size="sm" variant="ghost" className="h-7 text-xs" disabled={savingEdit} onClick={() => setEditItens(false)}>Cancelar</Button>
-                        <Button size="sm" className="h-7 gap-1.5 text-xs" disabled={savingEdit} onClick={saveEditItens}>
-                          {savingEdit ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />} Salvar
-                        </Button>
-                      </div>
-                    )}
-                  </div>
+                  <p className="flex items-center gap-2 font-medium mb-1.5"><Package className="h-4 w-4 text-carbo-green" /> Itens</p>
                   <div className="rounded-lg border border-border divide-y">
                     {(Array.isArray(detail.items) ? detail.items : []).map((it: any, i) => (
                       <div key={i} className="flex items-center justify-between gap-3 px-3 py-2 text-xs">
                         <span className="truncate flex-1">{it.produto ?? it.name ?? "Item"}</span>
-                        {editItens ? (
-                          <input
-                            type="number" min={0} value={edQtds[i] ?? ""}
-                            onChange={(e) => setEdQtds((q) => q.map((v, idx) => (idx === i ? e.target.value : v)))}
-                            className="w-20 h-8 rounded-md border border-border bg-background px-2 text-xs tabular-nums text-right"
-                          />
-                        ) : (
-                          <span className="text-muted-foreground tabular-nums">× {it.quantidade ?? it.quantity ?? 1}</span>
-                        )}
+                        <span className="text-muted-foreground tabular-nums">× {it.quantidade ?? it.quantity ?? 1}</span>
                         <span className="tabular-nums w-24 text-right">
-                          {brl(editItens
-                            ? (Number(edQtds[i]) || 0) * Number(it.preco_unitario ?? it.unit_price ?? 0)
-                            : Number(it.total ?? (it.quantidade ?? it.quantity ?? 0) * (it.preco_unitario ?? it.unit_price ?? 0)))}
+                          {brl(Number(it.total ?? (it.quantidade ?? it.quantity ?? 0) * (it.preco_unitario ?? it.unit_price ?? 0)))}
                         </span>
                       </div>
                     ))}
