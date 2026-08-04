@@ -795,6 +795,7 @@ async function detalharNfe(admin: Admin, token: string, nf: any): Promise<boolea
 //   tabela cheia e não tem o que fazer numa rodada de 30 em 30 minutos.
 async function syncNFeRecente(admin: Admin, token: string, logId: string): Promise<SyncResult> {
   const corte = dataDeCorte();
+  const inicioDaRodada = nowIso();
   let synced = 0, failed = 0, primeiroLote = true;
   const lojasR = new Map<number, number | null>();
 
@@ -811,6 +812,61 @@ async function syncNFeRecente(admin: Admin, token: string, logId: string): Promi
   }, 5);
 
   await registrarLojas(admin, lojasR);                                            // teto: 500 notas por rodada
+
+  // ── Cancelamento, DENTRO da janela ──────────────────────────────────────
+  //
+  // O Bling não devolve nota cancelada na listagem: ela simplesmente some. Se
+  // a nota some e a gente não repara, ela fica marcada como válida para
+  // sempre — e continua somando no faturamento por canal. Nota de R$ 16.800
+  // cancelada é metade do faturamento do mês virando ficção.
+  //
+  // Antes isso só era detectado pela rodada completa das 14:30: até 24h
+  // contando venda que não existe.
+  //
+  // ⚠️ O que torna isto barato — e o motivo de eu ter deixado de fora antes —
+  // é o `gte(data_emissao, corte)`. Sem esse filtro, a comparação por
+  // `synced_at` roda contra a tabela INTEIRA e todo o histórico parece ter
+  // "sumido" a cada rodada: 20 reconsultas inúteis a cada 30 minutos, para
+  // sempre. Com a janela, o candidato é só a nota recente que a listagem
+  // desta rodada NÃO trouxe — tipicamente zero, ou a que acabou de ser
+  // cancelada.
+  try {
+    const { data: sumidas } = await admin
+      .from("bling2_nfe")
+      .select("id, bling_id, numero, situacao")
+      .gte("data_emissao", corte)
+      .lt("synced_at", inicioDaRodada)
+      // Nota já sabidamente inválida não precisa ser reconsultada de novo —
+      // é o que faz isto convergir em vez de repetir para sempre.
+      .not("situacao", "in", '("Cancelada","Denegada","Rejeitada","Bloqueada")')
+      .order("data_emissao", { ascending: false })
+      .limit(20);
+
+    for (const nf of semvalorSeguro(sumidas)) {
+      try {
+        const detail = await blingFetch(token, `/nfe/${nf.bling_id}`, 1, 1);
+        const situ = nfeSituacaoLabel(detail.data?.situacao);
+        if (situ && situ !== nf.situacao) {
+          console.log(`[bling2-sync] NF ${nf.numero}: ${nf.situacao} → ${situ} (sumiu da listagem)`);
+        }
+        await admin.from("bling2_nfe").update({
+          situacao: situ ?? nf.situacao,
+          raw_data: detail.data || {},
+          synced_at: nowIso(),
+          updated_at: nowIso(),
+        }).eq("id", nf.id);
+      } catch (e) {
+        // Nota que o Bling não devolve nem por id pode ter sido excluída de
+        // vez. Não é falha do sync.
+        console.error(`[bling2-sync] recheque da NF ${nf.numero} falhou:`, e);
+      }
+      await sleep(RATE_MS);
+    }
+    if (sumidas?.length) console.log(`[bling2-sync] rechecadas ${sumidas.length} notas da janela`);
+  } catch (e) {
+    // Recheque é complemento: falhar aqui não invalida a listagem acima.
+    console.error("[bling2-sync] recheque de cancelamento falhou:", e);
+  }
 
   // Detalhe só do que está DENTRO da janela e ainda sem valor. É aqui que a
   // nota ganha valor, CNPJ e o link do DANFE.
