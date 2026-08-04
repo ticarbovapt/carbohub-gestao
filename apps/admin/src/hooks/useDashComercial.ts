@@ -98,10 +98,21 @@ export function useDashComercial(vendedorId: string | null = null, months = 12, 
       const year = new Date().getFullYear();
 
       // ── Pedidos (carboze_orders) — mesma base do CRM (useVendas), todos os vendedores.
-      const { data: ordersData, error: ordersErr } = await supabase
+          // Data que decide o MÊS da venda. `data_efetiva` vem da view
+      // carbo_vendas_metrica (coalesce(sale_date, created_at)) e carrega a
+      // competência: pedido fechado em 31/07 e faturado em 03/08 conta em
+      // agosto. Este hook buscava o campo e agrupava por created_at assim
+      // mesmo — por isso julho continuava mostrando os R$ 8.640 que já tinham
+      // saído dele nas outras telas.
+      const dataDaVenda = (v: CarbozeOrderRow) =>
+        // slice(0,10): data_efetiva é `date` (YYYY-MM-DD) e created_at é
+        // timestamp completo — sem cortar, concatenar a hora gera data inválida.
+        new Date((v.data_efetiva ?? v.created_at ?? "").slice(0, 10) + "T12:00:00");
+
+  const { data: ordersData, error: ordersErr } = await supabase
         .from("carbo_vendas_metrica" as never)
         .select("total, status, created_at, customer_name, vendedor_id, segmento, conta_metrica, data_efetiva")
-        .order("created_at", { ascending: false });
+        .order("data_efetiva", { ascending: false });
       if (ordersErr) throw new Error(ordersErr.message);
 
       const fromTs = from ? new Date(from + "T00:00:00").getTime() : null;
@@ -117,7 +128,7 @@ export function useDashComercial(vendedorId: string | null = null, months = 12, 
           if (segmento === "none" ? v.segmento != null : v.segmento !== segmento) return false;
         }
         if (fromTs || toTs) {
-          const t = new Date(v.created_at ?? "").getTime();
+          const t = dataDaVenda(v).getTime();
           if (fromTs && t < fromTs) return false;
           if (toTs && t > toTs) return false;
         }
@@ -141,7 +152,7 @@ export function useDashComercial(vendedorId: string | null = null, months = 12, 
       const now = new Date();
       const buckets = new Map<string, { faturado: number; pedidos: number }>();
       for (const v of pedidos) {
-        const d = new Date(v.created_at ?? "");
+        const d = dataDaVenda(v);
         const key = `${d.getFullYear()}-${d.getMonth()}`;
         const b = buckets.get(key) ?? { faturado: 0, pedidos: 0 };
         b.faturado += Number(v.total) || 0;

@@ -108,7 +108,10 @@ export function useComercialCanais(filters: CanaisFilters = {}) {
         if (o.conta_metrica !== true) return false;
         if (vendedorId && o.vendedor_id !== vendedorId) return false;
         if (fromTs || toTs) {
-          const t = new Date(o.created_at ?? "").getTime();
+          // Mesma data que decide o mês nos gráficos — filtrar por created_at
+          // e agrupar por mesDaVenda faria a venda faturada no mês seguinte
+          // entrar no filtro de um mês e no gráfico de outro.
+          const t = new Date(mesDaVenda(o) ? (o.sale_date ?? o.created_at ?? "").slice(0, 10) + "T12:00:00" : "").getTime();
           if (fromTs && t < fromTs) return false;
           if (toTs && t > toTs) return false;
         }
@@ -136,8 +139,9 @@ export function useComercialCanais(filters: CanaisFilters = {}) {
         consumo: Array(13).fill(0), revenda: Array(13).fill(0), online: Array(13).fill(0),
       };
       for (const o of active) {
-        if (!o.created_at) continue;
-        const [y, m] = o.created_at.slice(0, 7).split("-").map(Number);
+        const ym = mesDaVenda(o);
+        if (!ym) continue;
+        const [y, m] = ym.split("-").map(Number);
         if (y !== year || !m) continue;
         if (o.segmento === "consumo" || o.segmento === "revenda" || o.segmento === "online") {
           realByCanal[o.segmento][m] += Number(o.total ?? 0);
