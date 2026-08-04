@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   Repeat, Pencil, Trash2, Ban, ChevronLeft, ChevronRight, Loader2, CalendarDays,
 } from "lucide-react";
@@ -53,7 +53,24 @@ function corPrazo(d: string | null): string {
 export default function Recorrencias() {
   const { data: contratos = [], isLoading, error } = useRecorrencias();
   const navigate = useNavigate();
-  const [ref, setRef] = useState(() => { const d = new Date(); d.setDate(1); return d; });
+  // O mês vive na URL (?mes=2026-09). Sobrevive ao refresh, ao voltar de uma
+  // edição em /vender e permite mandar o link de um mês específico para alguém.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const ref = useMemo(() => {
+    const m = searchParams.get("mes");
+    if (m && /^\d{4}-\d{2}$/.test(m)) {
+      const [y, mm] = m.split("-").map(Number);
+      if (mm >= 1 && mm <= 12) return new Date(y, mm - 1, 1);
+    }
+    const d = new Date(); d.setDate(1); return d;
+  }, [searchParams]);
+  const setRef = (d: Date) => {
+    const p = new URLSearchParams(searchParams);
+    p.set("mes", ymd(d));
+    // replace: navegar meses não deve encher o histórico do navegador — o
+    // "voltar" tem de sair da tela, não desfazer clique a clique no seletor.
+    setSearchParams(p, { replace: true });
+  };
   const excluir = useExcluirParcela();
   const cancelar = useCancelarParcela();
   const [aExcluir, setAExcluir] = useState<ParcelaRow | null>(null);
@@ -91,7 +108,7 @@ export default function Recorrencias() {
   }, [contratos]);
 
   const totalMes = entregas.reduce((s, e) => s + e.parcela.total, 0);
-  const move = (n: number) => setRef((d) => new Date(d.getFullYear(), d.getMonth() + n, 1));
+  const move = (n: number) => setRef(new Date(ref.getFullYear(), ref.getMonth() + n, 1));
 
   return (
     <div className="p-4 md:p-6 space-y-5 max-w-6xl mx-auto">
