@@ -1719,11 +1719,27 @@ async function bridgeOrdersToCarbohub(
           if (val && (cur == null || cur === "")) payload[col] = val;
         };
         const updatePayload: Record<string, any> = {};
-        if (existing.status !== status) updatePayload.status = status;
+        // ⚠️ O status do PEDIDO no Bling não é o status da NOTA.
+        //
+        // Cancelar a NF no Bling não cancela o pedido lá — ele segue "Atendido".
+        // Como esta linha reescrevia o status sem guarda nenhuma, toda venda
+        // cancelada AQUI voltava a aparecer como venda viva na rodada seguinte
+        // do sync. O vendedor cancelava, sincronizava, e ela ressuscitava.
+        // Aconteceu com V2026070049 (R$ 19.468) e V2026070050 (R$ 18.220).
+        //
+        // Duas regras, na mesma linha de raciocínio que já protegia o
+        // fulfillment_stage logo abaixo:
+        const nascidoNoBling = String(existing.order_number || "").startsWith("BLING-");
+        // 1) Venda nativa (V-…) tem o status decidido AQUI. O Bling espelha a
+        //    nota, não manda no ciclo de vida da venda.
+        // 2) Cancelamento é decisão de gente e não se desfaz sozinho — nem em
+        //    pedido nascido no Bling. Reabrir é ação explícita no Rastreio.
+        const podeMexerNoStatus = nascidoNoBling && existing.status !== "cancelled";
+        if (podeMexerNoStatus && existing.status !== status) updatePayload.status = status;
         // Etapa acompanha o status — só em pedido nascido no Bling (ver
         // `estagioDoStatus`). Recalcula toda rodada, não só quando o status
         // muda: é o que conserta o pedido que já entrou torto.
-        if (String(existing.order_number || "").startsWith("BLING-")) {
+        if (nascidoNoBling && existing.status !== "cancelled") {
           const etapa = estagioDoStatus(status);
           if (existing.fulfillment_stage !== etapa) updatePayload.fulfillment_stage = etapa;
         }
