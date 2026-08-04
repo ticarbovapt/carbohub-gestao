@@ -19,6 +19,17 @@ import { ExpandableChart } from "@/components/dashboard/ExpandableChart";
 import { Pencil } from "lucide-react";
 import { isPedido } from "@/hooks/useCarbozeOrders";
 
+/**
+ * Mês em que a venda CONTA. Segue a nota: pedido de 31/07 faturado em 03/08 é
+ * agosto. `sale_date` carrega a data de emissão da NF (trigger
+ * carbo_competencia_da_nf); sem nota, cai na data da venda.
+ *
+ * Esta tela agrupava por created_at e por isso discordava da RPC do Ops e das
+ * metas, que já liam sale_date. Mesmo dado, dois gráficos diferentes.
+ */
+const mesDaVenda = (o: { sale_date?: string | null; created_at: string }): string =>
+  (o.sale_date ?? o.created_at).slice(0, 7);
+
 export default function DashboardComercial() {
   const [filters, setFilters] = useState<DashboardFilters>(EMPTY_FILTERS);
   // Mês selecionado no gráfico de canais (null = todos os meses) — liga barras ↔ rosquinha
@@ -111,7 +122,7 @@ export default function DashboardComercial() {
     for (const o of carbozeOrders) {
       if (!o.created_at) continue;
       if (!isPedido(o.status)) continue;
-      const key = o.created_at.slice(0, 7);
+      const key = mesDaVenda(o);
       if (!map[key]) map[key] = { consumo: 0, revenda: 0, online: 0, nc: 0 };
       const v = Number(o.total ?? 0);
       if (o.segmento === "consumo") map[key].consumo += v;
@@ -162,7 +173,7 @@ export default function DashboardComercial() {
     for (const o of carbozeOrders) {
       if (!o.created_at) continue;
       if (!isPedido(o.status)) continue;
-      const [y, m] = o.created_at.slice(0, 7).split("-").map(Number);
+      const [y, m] = mesDaVenda(o).split("-").map(Number);
       if (y !== year || !m) continue;
       const v = Number(o.total ?? 0);
       if (o.segmento === "consumo") real.consumo[m] += v;
@@ -198,7 +209,7 @@ export default function DashboardComercial() {
       if (!active[ch]) continue;
       const name = (o.customer_name || "").trim().toLowerCase();
       if (!name) continue;
-      const key = o.created_at.slice(0, 7);
+      const key = mesDaVenda(o);
       (active[ch][key] ??= new Set()).add(name);
       const fm = firstMonth[ch][name];
       if (!fm || key < fm) firstMonth[ch][name] = key;
@@ -266,7 +277,7 @@ export default function DashboardComercial() {
     const map: Record<string, { faturado: number; pedidos: number; concluidos: number }> = {};
     for (const o of carbozeOrders) {
       if (!o.created_at) continue;
-      const key = o.created_at.slice(0, 7); // "YYYY-MM"
+      const key = mesDaVenda(o); // "YYYY-MM"
       if (!map[key]) map[key] = { faturado: 0, pedidos: 0, concluidos: 0 };
       map[key].pedidos++;
       map[key].faturado += Number(o.total ?? 0);
@@ -298,7 +309,7 @@ export default function DashboardComercial() {
     for (const o of carbozeOrders) {
       if (!o.created_at) continue;
       if (!isPedido(o.status)) continue;
-      const key = o.created_at.slice(0, 7);
+      const key = mesDaVenda(o);
       if (!fullMap[key]) fullMap[key] = { faturado: 0, pedidos: 0 };
       fullMap[key].pedidos++;
       fullMap[key].faturado += Number(o.total ?? 0);
@@ -356,7 +367,7 @@ export default function DashboardComercial() {
     for (const o of carbozeOrders) {
       if (!o.created_at) continue;
       if (!isPedido(o.status)) continue;
-      const key = o.created_at.slice(0, 7);
+      const key = mesDaVenda(o);
       realMap[key] = (realMap[key] ?? 0) + Number(o.total ?? 0);
     }
 
