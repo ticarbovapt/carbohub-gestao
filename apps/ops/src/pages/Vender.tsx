@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useLocation, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
-import { Mail } from "lucide-react";
+import { Mail, Repeat } from "lucide-react";
 import { UserCog, Users } from "lucide-react";
 import {
   ShoppingCart, Plus, Trash2, AlertTriangle, Building2, MapPin, Package, Gift, FileText, Search, Target, ChevronDown,
@@ -23,7 +23,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { generateQuotePdf } from "@/lib/quotePdf";
-import { useCreateVenda, useUpdateVendaFull } from "@/hooks/useVendas";
+import { useCreateVenda, useUpdateVendaFull, useCriarRecorrencia, RECORRENCIA_PERIODOS, type RecorrenciaPeriodo } from "@/hooks/useVendas";
 import { useConvertQuote } from "@/hooks/useCarbozeVendas";
 import { useVincularOrcamento } from "@/hooks/useLeadOrcamento";
 import { useProdutos } from "@/hooks/useProdutos";
@@ -115,6 +115,19 @@ export default function Vender() {
   const { profile, isGestor: gestor } = useAuth();
   const vendedorLogado = profile?.full_name ?? profile?.username ?? "";
   const createVenda = useCreateVenda();
+  const criarRecorrencia = useCriarRecorrencia();
+  // Recorrência: o vendedor preenche UM mês; o sistema replica N vezes.
+  const [recorrente, setRecorrente] = useState(false);
+  const [recPeriodo, setRecPeriodo] = useState<RecorrenciaPeriodo>("mensal");
+  const [recParcelas, setRecParcelas] = useState(6);
+  const recProximosMeses = useMemo(() => {
+    const step = RECORRENCIA_PERIODOS.find((p) => p.value === recPeriodo)?.meses ?? 1;
+    const base = new Date();
+    return Array.from({ length: recParcelas }, (_, i) => {
+      const d = new Date(base.getFullYear(), base.getMonth() + i * step, 1);
+      return d.toLocaleDateString("pt-BR", { month: "short", year: "2-digit" });
+    });
+  }, [recPeriodo, recParcelas]);
   const updateVenda = useUpdateVendaFull();
   const convertQuote = useConvertQuote();
   const vincular = useVincularOrcamento();
@@ -653,6 +666,7 @@ export default function Vender() {
     setPagModalidade(""); setPagParcelas("1"); setPagFaturamento("");
     setDiscReason("");
     setDeliveryDate("");
+    setRecorrente(false); setRecPeriodo("mensal"); setRecParcelas(6);
     setServiceRows([]); setExecutionDate("");
     setServiceType("b2c"); setServiceTypeTocado(false);
   }
@@ -807,7 +821,25 @@ export default function Vender() {
         if (!editOrder?.descarb_os_id) await createDescarbOSForSale(editId, editOrder?.order_number ?? null);
       } else {
         const created = await createVenda.mutateAsync(buildPayload("pedido"));
-        toast.success(`Venda ${created.numero ?? ""} registrada!`);
+        if (recorrente) {
+          // Falha aqui NÃO desfaz a venda: ela é válida como pedido avulso. O
+          // vendedor precisa saber que o contrato não nasceu, não perder tudo.
+          try {
+            const n = await criarRecorrencia.mutateAsync({
+              orderId: created.id, periodo: recPeriodo, parcelas: recParcelas,
+            });
+            toast.success(`Venda ${created.numero ?? ""} registrada com ${n + 1} parcelas de recorrência!`);
+          } catch (err) {
+            toast.error(
+              `Venda ${created.numero ?? ""} foi registrada, mas as parcelas de recorrência NÃO foram criadas: ` +
+              (err instanceof Error ? err.message : "erro desconhecido") +
+              ". Abra o pedido e repita a recorrência.",
+              { duration: 15000 },
+            );
+          }
+        } else {
+          toast.success(`Venda ${created.numero ?? ""} registrada!`);
+        }
         if (leadOrigemId) vincular.mutate({ leadId: leadOrigemId, orderId: created.id });
         await createDescarbOSForSale(created.id, created.numero);
       }
@@ -1492,6 +1524,83 @@ export default function Vender() {
                 </div>
               )}
             </div>
+          )}
+        </CarboCardContent>
+      </CarboCard>
+
+      {/* Recorrência (opcional) — replica ESTE pedido nos meses seguintes */}
+      <CarboCard>
+        <CarboCardContent className="p-4 space-y-3">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h3 className="font-semibold flex items-center gap-2">
+                <Repeat className="h-4 w-4 text-carbo-green" /> Recorrência
+              </h3>
+              <p className="text-xs text-muted-foreground mt-1">
+                Repete este mesmo pedido nos próximos meses, já gravado no sistema.
+              </p>
+            </div>
+            <Switch
+              checked={recorrente}
+              onCheckedChange={setRecorrente}
+              disabled={!!editId || !hasValidProduct}
+              aria-label="Ativar recorrência"
+            />
+          </div>
+
+          {editId && (
+            <p className="text-xs text-amber-600 dark:text-amber-400">
+              Recorrência não se aplica a orçamento — converta em venda primeiro.
+            </p>
+          )}
+
+          {recorrente && (
+            <>
+              <div className="grid md:grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label>Periodicidade</Label>
+                  <Select value={recPeriodo} onValueChange={(v) => setRecPeriodo(v as RecorrenciaPeriodo)}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {RECORRENCIA_PERIODOS.map((p) => (
+                        <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Quantas entregas no total</Label>
+                  <Input
+                    type="number" min={2} max={60} value={recParcelas}
+                    onChange={(e) => setRecParcelas(Math.max(2, Math.min(60, Number(e.target.value) || 2)))}
+                  />
+                </div>
+              </div>
+
+              {/* O vendedor digitou UM mês. Aqui ele confere o contrato inteiro
+                  sem precisar calcular — e sem digitar o total. */}
+              <div className="rounded-lg border bg-muted/40 p-3 space-y-1.5 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Valor de cada entrega</span>
+                  <span className="tabular-nums font-medium">{fmtBRL(orderTotal)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Total do contrato ({recParcelas}×)</span>
+                  <span className="tabular-nums font-bold">{fmtBRL(orderTotal * recParcelas)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Período</span>
+                  <span className="tabular-nums">
+                    {recProximosMeses[0]} → {recProximosMeses[recProximosMeses.length - 1]}
+                  </span>
+                </div>
+                <p className="text-xs text-muted-foreground pt-1.5 border-t">
+                  Entra no faturamento <b>mês a mês</b>, {fmtBRL(orderTotal)} por vez — não os{" "}
+                  {fmtBRL(orderTotal * recParcelas)} de uma vez. As entregas futuras ficam como
+                  <b> Agendado</b> e podem ter a quantidade alterada antes de cada mês.
+                </p>
+              </div>
+            </>
           )}
         </CarboCardContent>
       </CarboCard>

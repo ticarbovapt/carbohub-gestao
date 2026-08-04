@@ -280,6 +280,40 @@ async function buildOrderFields(input: NovaVendaInput) {
   };
 }
 
+/** Periodicidades aceitas — precisa bater com carbo_recurrence_step() no banco. */
+export const RECORRENCIA_PERIODOS = [
+  { value: "mensal",     label: "Mensal",     meses: 1 },
+  { value: "bimestral",  label: "Bimestral",  meses: 2 },
+  { value: "trimestral", label: "Trimestral", meses: 3 },
+  { value: "semestral",  label: "Semestral",  meses: 6 },
+  { value: "anual",      label: "Anual",      meses: 12 },
+] as const;
+
+export type RecorrenciaPeriodo = typeof RECORRENCIA_PERIODOS[number]["value"];
+
+/**
+ * Transforma um pedido recém-criado em contrato de recorrência.
+ *
+ * A criação das parcelas é feita numa RPC (transação única) e não em N inserts
+ * daqui: se o navegador cair no meio, um contrato pela metade ficaria no banco
+ * sem ninguém saber. Ou nasce inteiro, ou o pedido segue como venda avulsa.
+ */
+export function useCriarRecorrencia() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (p: { orderId: string; periodo: RecorrenciaPeriodo; parcelas: number }) => {
+      const { data, error } = await (db as any).rpc("carboze_criar_recorrencia", {
+        p_parent_id: p.orderId,
+        p_period:    p.periodo,
+        p_total:     p.parcelas,
+      });
+      if (error) throw error;
+      return (data as number) ?? 0;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["crm_vendas"] }),
+  });
+}
+
 export function useCreateVenda() {
   const qc = useQueryClient();
   return useMutation({
