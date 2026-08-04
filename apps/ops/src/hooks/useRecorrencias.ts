@@ -28,6 +28,8 @@ export interface ParcelaRow {
   nf_access_key: string | null;
   bling_nf_id: number | null;
   agreed_delivery_date: string | null;
+  ppf_date: string | null;   // produzir até
+  ppe_date: string | null;   // enviar até
   items: unknown;
 }
 
@@ -60,7 +62,7 @@ export function useRecorrencias() {
           "id, order_number, customer_name, vendedor_name, status, fulfillment_stage, " +
           "scheduled_month, recurrence_index, recurrence_total, recurrence_period, " +
           "parent_order_id, recurrence_group_id, total, invoice_number, nf_access_key, bling_nf_id, " +
-          "agreed_delivery_date, items",
+          "agreed_delivery_date, ppf_date, ppe_date, items",
         )
         .not("recurrence_total", "is", null)
         .order("recurrence_index", { ascending: true })
@@ -89,6 +91,8 @@ export function useRecorrencias() {
           nf_access_key: r.nf_access_key ?? null,
           bling_nf_id: r.bling_nf_id ?? null,
           agreed_delivery_date: r.agreed_delivery_date ?? null,
+          ppf_date: r.ppf_date ?? null,
+          ppe_date: r.ppe_date ?? null,
           items: r.items,
         };
         const cur = porContrato.get(key);
