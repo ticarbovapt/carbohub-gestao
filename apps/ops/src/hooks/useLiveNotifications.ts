@@ -3,6 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
+import { avisarVendaOnline } from "@/lib/sfxVenda";
 
 // Sons via Web Audio (sem asset). O navegador só libera áudio depois de um
 // gesto do usuário, então destravamos o contexto no 1º clique/tecla da página.
@@ -23,15 +24,18 @@ function newMaster(ctx: AudioContext): GainNode {
   return master;
 }
 
-// ⚠️ Venda online NÃO toca som aqui.
+// ⚠️ O som da venda mora num lugar só: src/lib/sfxVenda.ts.
 //
-// Existia um `playCoin()` sintetizado (cascata de tinidos via Web Audio) que
-// disparava na notificação `ecommerce_sale`. Quando o MP3 de caixa registradora
-// entrou (useEcommerceNotifications + sfxVenda), a mesma venda passou a ter dois
-// avisos: o MP3 vindo de ecommerce_orders e a moedinha sintetizada vinda de
-// notifications. Quem ouvia jurava que o arquivo instalado estava errado — não
-// estava; era o sintetizado por cima. O som da venda mora num lugar só:
-// src/lib/sfxVenda.ts.
+// Existia aqui um `playCoin()` sintetizado (cascata de tinidos via Web Audio)
+// disparado na notificação `ecommerce_sale` — era ELE que se ouvia, não o MP3
+// de caixa registradora, o que fez parecer que o arquivo instalado estava
+// errado. Removido.
+//
+// Mas o aviso de venda continua passando por aqui, e de propósito: este canal
+// (notifications, uma linha por admin) é o que sempre chega. Quem toca é o
+// `avisarVendaOnline`, o mesmo que o useEcommerceNotifications chama — ele
+// dedupe pelo id do pedido, então a venda que chega pelos dois canais toca uma
+// vez só, e a que chega por um só continua tocando.
 
 // Ding amigável pras demais notificações (não-venda).
 function playDing() {
@@ -80,13 +84,17 @@ export function useLiveNotifications() {
         (payload: any) => {
           const n = payload.new;
           qc.invalidateQueries({ queryKey: ["notifications", user.id] });
+          // Venda online: som + toast, com dedupe compartilhado. reference_id é
+          // o id do pedido em ecommerce_orders — a mesma chave que o
+          // useEcommerceNotifications usa. Se ele já avisou, aqui sai calado.
           // Financeiro (RC/OC) toca ding + toast. Bug e demais notificações são
           // só sininho (bell), sem barulho.
-          //
-          // `ecommerce_sale` cai aqui só para atualizar o sininho: som e toast
-          // da venda são do useEcommerceNotifications, montado no mesmo Layout.
-          // Tratar aqui também dava som duplo e dois toasts para a mesma venda.
-          if (n?.type === "finance_rc_pendente" || n?.type === "finance_oc_nova") { playDing(); toast(n?.title ?? "Financeiro", { description: n?.body ?? undefined }); }
+          if (n?.type === "ecommerce_sale") {
+            if (avisarVendaOnline(n?.reference_id)) {
+              toast(n?.title ?? "Nova venda", { description: n?.body ?? undefined });
+            }
+          }
+          else if (n?.type === "finance_rc_pendente" || n?.type === "finance_oc_nova") { playDing(); toast(n?.title ?? "Financeiro", { description: n?.body ?? undefined }); }
         },
       )
       .subscribe();

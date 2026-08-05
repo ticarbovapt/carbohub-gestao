@@ -93,6 +93,37 @@ export function playVendaOnline() {
   });
 }
 
+// Uma venda, um aviso — não importa por qual caminho ela chegou.
+//
+// A mesma venda chega por DOIS canais de Realtime, e nem sempre pelos dois:
+//   • ecommerce_orders  → useEcommerceNotifications (toast rico: produto, qtd)
+//   • notifications     → useLiveNotifications / useFinanceRealtime (o sininho)
+//
+// Ligar o som só no primeiro deixava o segundo mudo, e é o segundo que sempre
+// chega: notifications é escrita pelo gatilho para cada admin, com RLS por
+// user_id. Ligar nos dois sem controle tocaria duas vezes na venda de verdade.
+//
+// Por isso o aviso passa por aqui: quem chegar primeiro toca e mostra o toast,
+// o segundo vira no-op. A chave é o id do pedido, que os dois canais têm —
+// notifications guarda em reference_id (reference_type = 'ecommerce_order').
+const jaAvisados = new Set<string>();
+
+/**
+ * Anuncia a venda: toca o som e devolve `true` se este é o primeiro aviso
+ * deste pedido. `false` = outro canal já avisou; o chamador não deve mostrar
+ * toast. Sem id (não deveria acontecer) o aviso passa — errar para o lado de
+ * avisar, nunca para o lado do silêncio.
+ */
+export function avisarVendaOnline(id?: string | null): boolean {
+  const chave = String(id ?? "").trim();
+  if (chave) {
+    if (jaAvisados.has(chave)) return false;
+    jaAvisados.add(chave);
+  }
+  playVendaOnline();
+  return true;
+}
+
 /**
  * Diagnóstico manual, para quando "não tocou" e ninguém sabe por quê.
  * No console de qualquer app: `__somVenda.testar()` toca na hora (o clique no

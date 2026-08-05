@@ -9,7 +9,7 @@
 import { useEffect, useRef } from "react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
-import { playVendaOnline } from "@/lib/sfxVenda";
+import { avisarVendaOnline } from "@/lib/sfxVenda";
 
 const PLATFORM_LABEL: Record<string, string> = {
   mercadolivre: "Mercado Livre",
@@ -33,12 +33,13 @@ function formatCurrency(value: number): string {
 
 export function useEcommerceNotifications() {
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
-  // Cada pedido avisa UMA vez. Sem isto, a mesma venda tocaria de novo a cada
-  // passo do ciclo (paid → shipped → delivered), já que os três estão na lista
-  // branca. O Realtime nem sempre entrega o registro ANTERIOR (depende de
-  // REPLICA IDENTITY FULL), então comparar old/new não é confiável — guardar o
-  // que já avisamos é.
-  const jaAvisados = useRef<Set<string>>(new Set());
+  // Cada pedido avisa UMA vez — o controle está no avisarVendaOnline (sfxVenda),
+  // fora do hook, porque a mesma venda também chega pelo canal de
+  // `notifications`. Sem isso, a venda tocaria de novo a cada passo do ciclo
+  // (paid → shipped → delivered), já que os três estão na lista branca. O
+  // Realtime nem sempre entrega o registro ANTERIOR (depende de REPLICA
+  // IDENTITY FULL), então comparar old/new não é confiável — guardar o que já
+  // avisamos é.
 
   useEffect(() => {
     if (channelRef.current) supabase.removeChannel(channelRef.current);
@@ -71,13 +72,12 @@ export function useEcommerceNotifications() {
           // esta escuta em tempo real continuava avisando cedo demais.
           if (!["paid", "shipped", "delivered"].includes(status.toLowerCase())) return;
 
-          const id = String(order.id ?? "");
-          if (id && jaAvisados.current.has(id)) return;
-          if (id) jaAvisados.current.add(id);
-
           // Som primeiro: o toast fica 8s na tela, mas o som é o que faz alguém
           // olhar. Falha de áudio não derruba a notificação (ver sfxVenda).
-          playVendaOnline();
+          // O dedupe agora vive no avisarVendaOnline, porque a mesma venda
+          // também chega pelo canal de `notifications` — o que responder
+          // primeiro toca, o outro sai calado.
+          if (!avisarVendaOnline(String(order.id ?? ""))) return;
 
           toast.success(`${emoji} Nova venda — ${label}`, {
             description: `${product} · ${qty}x · ${formatCurrency(total)}`,

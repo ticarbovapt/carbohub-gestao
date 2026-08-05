@@ -85,15 +85,23 @@ Dois detalhes que não são óbvios e já custaram bug:
    usuário, e a venda chega por Realtime, fora de qualquer clique. O
    `sfxVenda.ts` destrava no primeiro clique da sessão com um play mudo; sem
    isso o `play()` é recusado **sem erro visível**.
-3. **Um som só, num lugar só.** Havia um segundo aviso de venda: os hooks
-   `useLiveNotifications` (admin/crm/ops/ti) e `useFinanceRealtime`
-   (financas/mkt) escutam `notifications` e, no tipo `ecommerce_sale`, tocavam
-   uma moedinha **sintetizada** (Web Audio) com toast próprio. Como os dois
-   hooks são montados no mesmo Layout do `useEcommerceNotifications`, a mesma
-   venda tocava dois sons e mostrava dois toasts — e parecia que o MP3
-   instalado estava errado, quando era o sintetizado por cima. Hoje o
-   `ecommerce_sale` nesses hooks só atualiza o sininho. **Não volte a tocar som
-   de venda fora do `sfxVenda.ts`.**
+3. **Um som só, num lugar só — mas nos DOIS canais.** A venda chega por duas
+   escutas de Realtime: `ecommerce_orders` (o `useEcommerceNotifications`, toast
+   rico) e `notifications` (o `useLiveNotifications` em admin/crm/ops/ti e o
+   `useFinanceRealtime` em financas/mkt, uma linha por admin, com RLS por
+   `user_id`). Nem sempre as duas chegam — e o canal de `notifications` é o que
+   sempre chega.
+   Nos hooks de `notifications` havia uma moedinha **sintetizada** (Web Audio):
+   era ELA que se ouvia, não o MP3, e por isso parecia que o arquivo instalado
+   estava errado. Hoje os dois caminhos chamam `avisarVendaOnline(idDoPedido)`
+   do `sfxVenda.ts`, que **dedupe pelo id** — em `notifications` o id vem em
+   `reference_id`. Quem chega primeiro toca e mostra o toast; o outro sai
+   calado. **Não volte a tocar som de venda fora do `sfxVenda.ts`.**
+4. **Falha de áudio não pode ser silenciosa.** O `play()` recusado ou um 404 no
+   MP3 davam o mesmo sintoma (nada) porque o `catch` era vazio. Hoje os dois
+   aparecem no console, e há `__somVenda.estado()` / `__somVenda.testar()` para
+   diagnóstico. O destravamento usa `muted = true`, não `volume = 0`: a política
+   de autoplay do Chrome olha a propriedade `muted`.
 
 ### Regras anti-confusão (OBRIGATÓRIAS)
 1. **Todo pedido nomeia o alvo.** "no CRM" → `apps/crm`; "no controle"/"atual" → raiz (`src/`).
