@@ -325,6 +325,46 @@ export default function Faturamento() {
                         </div>
                       )}
 
+                      {/* Expedição — vem do Rastreio de venda (Ops). É o que o
+                          Financeiro confere contra a NF: volumes e peso bruto
+                          vão no corpo da nota, transportadora no transporte. */}
+                      <div>
+                        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">Expedição</p>
+                        {(o.shipment_volumes != null || o.shipment_weight_kg != null || o.shipment_carrier) ? (
+                          <div className="grid sm:grid-cols-4 gap-x-6 gap-y-1 text-xs">
+                            <div>
+                              <span className="text-muted-foreground">Volumes:</span>{" "}
+                              <span className="font-medium">{o.shipment_volumes ?? "—"}</span>
+                            </div>
+                            <div>
+                              <span className="text-muted-foreground">Peso bruto:</span>{" "}
+                              <span className="font-medium">
+                                {o.shipment_weight_kg != null
+                                  ? `${num(o.shipment_weight_kg).toLocaleString("pt-BR", { maximumFractionDigits: 3 })} kg`
+                                  : "—"}
+                              </span>
+                            </div>
+                            <div>
+                              <span className="text-muted-foreground">Transportadora:</span>{" "}
+                              <span className="font-medium">{o.shipment_carrier || "—"}</span>
+                            </div>
+                            <div>
+                              <span className="text-muted-foreground">Cotação do frete:</span>{" "}
+                              <span className="font-medium">
+                                {(o.shipment_quote_value ?? 0) > 0 ? fmtCurrency(num(o.shipment_quote_value)) : "—"}
+                              </span>
+                            </div>
+                          </div>
+                        ) : (
+                          /* Dizer que ainda não foi preenchido é diferente de omitir
+                             o bloco: quem confere precisa saber que o dado falta,
+                             não achar que a tela não mostra. */
+                          <p className="text-xs text-muted-foreground">
+                            Ainda não informada — é preenchida no Rastreio de venda (Carbo Ops) ao separar o pedido.
+                          </p>
+                        )}
+                      </div>
+
                       {/* Prazo de entrega */}
                       {(o.agreed_delivery_date || o.ppf_date || o.ppe_date) && (
                         <div>

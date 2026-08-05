@@ -66,6 +66,13 @@ export interface FaturamentoOrder {
   agreed_delivery_date: string | null;
   ppf_date: string | null;
   ppe_date: string | null;
+  // Expedição — preenchida no Rastreio de venda (Carbo Ops), ao separar e ao
+  // gerar a NF. O Financeiro precisa destes números para conferir contra a
+  // nota: volumes e peso vão no corpo da NF-e e a transportadora no transporte.
+  shipment_volumes: number | null;
+  shipment_weight_kg: number | null;
+  shipment_carrier: string | null;
+  shipment_quote_value: number | null;
   buyer_notes: string | null;
   general_notes: string | null;
   // NF linkage
