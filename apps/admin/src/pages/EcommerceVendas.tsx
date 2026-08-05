@@ -22,6 +22,7 @@ import {
   useEcommerceHistoricoMensal,
   type EcommercePlatform, type EcommercePeriod, type RawCheckMetrics, type EcommerceMetrics,
   type ComparativoMetrics,
+  type EcommerceCustom,
 } from "@/hooks/useDashEcommerce";
 import { cn } from "@/lib/utils";
 
@@ -91,10 +92,12 @@ const fmtNum = (v: number) => v.toLocaleString("pt-BR");
 const pct = (a: number, b: number) => b > 0 ? ((a / b) * 100).toFixed(1) + "%" : "0%";
 
 const PERIOD_OPTIONS: { value: EcommercePeriod; label: string }[] = [
-  { value: "today", label: "Hoje" },
-  { value: "7d",    label: "Últimos 7 dias" },
-  { value: "30d",   label: "Últimos 30 dias" },
-  { value: "month", label: "Este mês" },
+  { value: "today",     label: "Hoje" },
+  { value: "yesterday", label: "Ontem" },
+  { value: "7d",        label: "Últimos 7 dias" },
+  { value: "30d",       label: "Últimos 30 dias" },
+  { value: "month",     label: "Este mês" },
+  { value: "custom",    label: "Por período…" },
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -272,13 +275,15 @@ function DiffBadge({ raw, sys }: { raw: number; sys: number }) {
 function ReconciliacaoPanel({
   platform,
   period,
+  custom,
   m,
 }: {
   platform: EcommercePlatform;
   period: EcommercePeriod;
+  custom?: EcommerceCustom;
   m: EcommerceMetrics;
 }) {
-  const raw: RawCheckMetrics | null = useEcommerceRawCheck(platform, period);
+  const raw: RawCheckMetrics | null = useEcommerceRawCheck(platform, period, custom);
 
   if (!m.isConnected || raw === null) return null;
 
@@ -350,9 +355,9 @@ function ReconciliacaoPanel({
 // Platform view
 // ─────────────────────────────────────────────────────────────────────────────
 
-function PlatformView({ platform, period }: { platform: EcommercePlatform; period: EcommercePeriod }) {
+function PlatformView({ platform, period, custom }: { platform: EcommercePlatform; period: EcommercePeriod; custom?: EcommerceCustom }) {
   const cfg = PMAP[platform];
-  const { data: m } = useDashEcommerce(platform, period);
+  const { data: m } = useDashEcommerce(platform, period, custom);
 
   return (
     <div className="space-y-5">
@@ -479,7 +484,7 @@ function PlatformView({ platform, period }: { platform: EcommercePlatform; perio
       )}
 
       {/* Reconciliation panel — Path 1 vs Path 2 (only shown when connected) */}
-      <ReconciliacaoPanel platform={platform} period={period} m={m} />
+      <ReconciliacaoPanel platform={platform} period={period} custom={custom} m={m} />
 
       {/* Chart — only shown when connected */}
       {m.isConnected && (
@@ -1352,6 +1357,9 @@ const TAB_KEY = "ecommerce_active_tab";
 
 export default function EcommerceVendas() {
   const [period, setPeriod] = useState<EcommercePeriod>("7d");
+  // Período personalizado. Fica fora do `period` de propósito: trocar para
+  // "Hoje" e voltar para "Por período" preserva as datas escolhidas.
+  const [custom, setCustom] = useState<EcommerceCustom>({});
   const [active, setActive] = useState<ActiveView>(() => {
     const saved = localStorage.getItem(TAB_KEY) as ActiveView | null;
     // "lps" (Vindi) foi descontinuado → cai em mercadolivre. tiktok/shopee desabilitados também.
@@ -1379,16 +1387,39 @@ export default function EcommerceVendas() {
             </p>
           </div>
           {active !== "historico" && (
-            <Select value={period} onValueChange={v => setPeriod(v as EcommercePeriod)}>
-              <SelectTrigger className="w-44">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {PERIOD_OPTIONS.map(o => (
-                  <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <div className="flex flex-wrap items-center gap-2">
+              <Select value={period} onValueChange={v => setPeriod(v as EcommercePeriod)}>
+                <SelectTrigger className="w-44">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {PERIOD_OPTIONS.map(o => (
+                    <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {period === "custom" && (
+                <div className="flex items-center gap-1.5">
+                  <input
+                    type="date"
+                    value={custom.from ?? ""}
+                    max={custom.to || undefined}
+                    onChange={e => setCustom(c => ({ ...c, from: e.target.value }))}
+                    className="h-10 rounded-md border border-input bg-background px-2.5 text-sm"
+                    aria-label="Data inicial"
+                  />
+                  <span className="text-muted-foreground text-sm">até</span>
+                  <input
+                    type="date"
+                    value={custom.to ?? ""}
+                    min={custom.from || undefined}
+                    onChange={e => setCustom(c => ({ ...c, to: e.target.value }))}
+                    className="h-10 rounded-md border border-input bg-background px-2.5 text-sm"
+                    aria-label="Data final"
+                  />
+                </div>
+              )}
+            </div>
           )}
         </div>
 
@@ -1457,7 +1488,7 @@ export default function EcommerceVendas() {
         ) : active === "comparativo" ? (
           <ComparativoView period={period} />
         ) : (
-          <PlatformView platform={active as EcommercePlatform} period={period} />
+          <PlatformView platform={active as EcommercePlatform} period={period} custom={custom} />
         )}
       </div>
     </div>

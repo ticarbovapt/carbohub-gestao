@@ -9,7 +9,14 @@ import { toast } from "@/components/ui/sonner";
 // ─────────────────────────────────────────────────────────────────────────────
 
 export type EcommercePlatform = "mercadolivre" | "amazon" | "nuvemshop" | "tiktok" | "shopee";
-export type EcommercePeriod   = "today" | "7d" | "30d" | "month";
+export type EcommercePeriod   =
+  | "today" | "yesterday" | "7d" | "30d" | "month" | "custom";
+
+/** Início e fim do período, em YYYY-MM-DD e ambos INCLUSIVOS. */
+export interface EcommerceRange { from: string; to: string }
+
+/** Datas de um período personalizado. Ignorado fora de period="custom". */
+export interface EcommerceCustom { from?: string; to?: string }
 
 export interface CommissionRate {
   id: string;
@@ -88,10 +95,40 @@ export interface RawCheckMetrics {
 // Date helpers
 // ─────────────────────────────────────────────────────────────────────────────
 
+const ymd = (d: Date) => format(d, "yyyy-MM-dd");
+
+/**
+ * Período completo — início E fim.
+ *
+ * Antes existia só `getRangeStart` e a consulta filtrava apenas por `gte`. Isso
+ * bastava enquanto todo período terminava hoje, mas impede "ontem" (que tem fim
+ * ontem) e qualquer intervalo escolhido à mão. Por isso agora vai um par.
+ */
+export function getRange(period: EcommercePeriod, custom?: EcommerceCustom): EcommerceRange {
+  const today = startOfDay(new Date());
+  switch (period) {
+    case "today":     return { from: ymd(today), to: ymd(today) };
+    case "yesterday": { const d = subDays(today, 1); return { from: ymd(d), to: ymd(d) }; }
+    case "7d":        return { from: ymd(subDays(today, 6)),  to: ymd(today) };
+    case "month":     return { from: ymd(startOfMonth(today)), to: ymd(today) };
+    case "custom": {
+      // Sem data escolhida, cai nos 30 dias — melhor que devolver vazio e
+      // parecer que não há venda nenhuma.
+      const from = custom?.from || ymd(subDays(today, 29));
+      const to   = custom?.to   || ymd(today);
+      // Invertido pelo usuário: ordena em vez de não trazer nada.
+      return from <= to ? { from, to } : { from: to, to: from };
+    }
+    default:          return { from: ymd(subDays(today, 29)), to: ymd(today) };
+  }
+}
+
+/** @deprecated use getRange — mantido porque useVindi ainda chama. */
 export function getRangeStart(period: EcommercePeriod): Date {
   const today = startOfDay(new Date());
   switch (period) {
     case "today": return today;
+    case "yesterday": return subDays(today, 1);
     case "7d":    return subDays(today, 6);
     case "month": return startOfMonth(today);
     default:      return subDays(today, 29);
@@ -289,18 +326,20 @@ function emptyMetrics(platform: EcommercePlatform): EcommerceMetrics {
 
 export function useEcommerceRawCheck(
   platform: EcommercePlatform,
-  period: EcommercePeriod
+  period: EcommercePeriod,
+  custom?: EcommerceCustom,
 ): RawCheckMetrics | null {
   const [data, setData] = useState<RawCheckMetrics | null>(null);
 
   useEffect(() => {
-    const from = getRangeStart(period).toISOString().slice(0, 10);
+    const { from, to } = getRange(period, custom);
 
     supabase
       .from("ecommerce_raw_summary" as never)
       .select("*")
       .eq("platform", platform)
       .gte("day", from)
+      .lte("day", to)
       .then(({ data: rows, error }) => {
         if (error || !rows?.length) { setData(null); return; }
         const r = rows as Record<string, number>[];
@@ -316,7 +355,7 @@ export function useEcommerceRawCheck(
           deliveredOrders: r.reduce((s, x) => s + (x.delivered_orders ?? 0), 0),
         });
       });
-  }, [platform, period]);
+  }, [platform, period, custom?.from, custom?.to]);
 
   return data;
 }
@@ -334,15 +373,24 @@ async function isConnectedViaToken(platform: EcommercePlatform): Promise<boolean
   return data?.is_connected === true;
 }
 
-async function fetchOrders(platform: EcommercePlatform, period: EcommercePeriod): Promise<EcommerceMetrics> {
-  const from = getRangeStart(period).toISOString();
+async function fetchOrders(
+  platform: EcommercePlatform,
+  period: EcommercePeriod,
+  custom?: EcommerceCustom,
+): Promise<EcommerceMetrics> {
+  const r = getRange(period, custom);
+  const from = `${r.from}T00:00:00`;
+  // 23:59:59.999 do último dia: `to` é inclusivo, e sem isso o dia final
+  // ficaria de fora — "ontem" não traria nada.
+  const to   = `${r.to}T23:59:59.999`;
 
   const [{ data, error }, connected, { data: rateData }] = await Promise.all([
     supabase
       .from("ecommerce_orders" as never)
       .select("id,platform,order_id,product_sku,product_name,quantity,units_real,unit_price,total,status,ordered_at")
       .eq("platform", platform)
-      .gte("ordered_at", from),
+      .gte("ordered_at", from)
+      .lte("ordered_at", to),
     isConnectedViaToken(platform),
     supabase
       .from("platform_commission_rates" as never)
@@ -398,7 +446,8 @@ const PLATFORM_LABEL: Record<EcommercePlatform, string> = {
 
 export function useDashEcommerce(
   platform: EcommercePlatform,
-  period: EcommercePeriod
+  period: EcommercePeriod,
+  custom?: EcommerceCustom,
 ): { data: EcommerceMetrics; isLoading: boolean } {
   const [data, setData]         = useState<EcommerceMetrics>(emptyMetrics(platform));
   const [isLoading, setLoading] = useState(true);
@@ -416,7 +465,7 @@ export function useDashEcommerce(
     setLoading(true);
 
     const load = () =>
-      fetchOrders(platform, period).then(async m => {
+      fetchOrders(platform, period, custom).then(async m => {
         if (cancelled) return;
         // Detect disconnection → toast + persistent notification
         if (prevConnected.current === true && !m.isConnected) {
@@ -454,7 +503,7 @@ export function useDashEcommerce(
       .on(
         "postgres_changes" as never,
         { event: "*", schema: "public", table: "ecommerce_orders", filter: `platform=eq.${platform}` },
-        () => fetchOrders(platform, period).then(m => { if (!cancelled) { setData(m); } })
+        () => fetchOrders(platform, period, custom).then(m => { if (!cancelled) { setData(m); } })
       )
       .on(
         "postgres_changes" as never,
@@ -468,7 +517,7 @@ export function useDashEcommerce(
       if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
       if (channelRef.current) { supabase.removeChannel(channelRef.current); channelRef.current = null; }
     };
-  }, [platform, period]);
+  }, [platform, period, custom?.from, custom?.to]);
 
   return { data, isLoading };
 }
