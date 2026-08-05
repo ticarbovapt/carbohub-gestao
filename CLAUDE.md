@@ -126,9 +126,9 @@ esteve certo; o errado era só a contagem.
 **E o dia é o de Brasília.** `ordered_at::date` e `ordered_at.slice(0, 10)` dão
 o dia em UTC: pedido das 21h entra no dia seguinte, e "hoje" traz três horas de
 ontem. A view usa `AT TIME ZONE 'America/Sao_Paulo'` e o front converte com
-`new Date(...)` antes de comparar. ⚠️ `useMetaEcommerce.ts` ainda fatia UTC
-(`slice(0, 10)` e `slice(0, 7)`) — mesma classe de erro, ainda não corrigida:
-venda das 21h do dia 31 conta no mês seguinte.
+`new Date(...)` antes de comparar. O `useMetaEcommerce.ts` usa `diaLocal()` /
+`mesLocal()` pelo mesmo motivo — lá o erro jogava o faturamento do dia 31 para
+o mês seguinte, fechando a meta errada nas duas pontas.
 
 ### Regras anti-confusão (OBRIGATÓRIAS)
 1. **Todo pedido nomeia o alvo.** "no CRM" → `apps/crm`; "no controle"/"atual" → raiz (`src/`).

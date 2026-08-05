@@ -1,7 +1,30 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { startOfMonth, endOfMonth, getDaysInMonth, getDate } from "date-fns";
+import { startOfMonth, endOfMonth, getDaysInMonth, getDate, format } from "date-fns";
 import { toast } from "sonner";
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Dia e mês são os de QUEM VENDE, não os de UTC
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// `ordered_at` é timestamptz e chega como ISO em UTC. Fatiar a string
+// (`slice(0, 10)`, `slice(0, 7)`) devolve a data UTC: venda das 21h de Brasília
+// é 00h UTC do dia seguinte. Num gráfico diário isso troca o dia; na virada do
+// mês, joga o faturamento do dia 31 para o mês seguinte — e a meta do mês fecha
+// errada nas duas pontas.
+//
+// Mesma correção já feita em useDashEcommerce.ts. Ver CLAUDE.md.
+const diaLocal = (iso: string | null | undefined): string | null =>
+  iso ? format(new Date(iso), "yyyy-MM-dd") : null;
+const mesLocal = (iso: string | null | undefined): string | null =>
+  iso ? format(new Date(iso), "yyyy-MM") : null;
+
+// Lista BRANCA de faturamento — espelha public.ecommerce_status_e_venda() e o
+// useDashEcommerce. Era lista negra (`status != 'cancelled'`), que punha pedido
+// PENDENTE — dinheiro que ainda não entrou — dentro do realizado da meta.
+// Status novo de plataforma nova fica de fora até alguém decidir que é venda.
+const VENDA_STATUSES = ["paid", "shipped", "delivered"];
+
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -107,7 +130,7 @@ export function useMetaActuals(month: Date) {
         .select("platform, total, ordered_at, status")
         .gte("ordered_at", start)
         .lte("ordered_at", end)
-        .neq("status", "cancelled");
+        .in("status", VENDA_STATUSES);
 
       if (ordersError) throw ordersError;
 
@@ -150,7 +173,7 @@ export function useMetaDailyActuals(month: Date, platform: MetaPlatform = null) 
         .select("total, ordered_at, platform")
         .gte("ordered_at", start)
         .lte("ordered_at", end)
-        .neq("status", "cancelled");
+        .in("status", VENDA_STATUSES);
 
       if (platform !== null) {
         query = query.eq("platform", platform);
@@ -159,7 +182,7 @@ export function useMetaDailyActuals(month: Date, platform: MetaPlatform = null) 
       const { data: orders, error } = await query;
       if (error) throw error;
       for (const o of orders || []) {
-        const day = o.ordered_at?.slice(0, 10);
+        const day = diaLocal(o.ordered_at);
         if (day) dayMap[day] = (dayMap[day] || 0) + Number(o.total || 0);
       }
 
@@ -293,13 +316,13 @@ export function useMetaMonthlyHistory(platform: MetaPlatform = null) {
       let query = (supabase as any)
         .from("ecommerce_orders")
         .select("total, ordered_at")
-        .neq("status", "cancelled")
+        .in("status", VENDA_STATUSES)
         .not("ordered_at", "is", null);
       if (platform !== null) query = query.eq("platform", platform);
       const { data, error } = await query;
       if (error) throw error;
       for (const o of data || []) {
-        const m = o.ordered_at?.slice(0, 7);
+        const m = mesLocal(o.ordered_at);
         if (m) dayMap[m] = (dayMap[m] || 0) + Number(o.total || 0);
       }
 
