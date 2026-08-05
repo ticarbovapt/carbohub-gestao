@@ -22,32 +22,15 @@ function newMaster(ctx: AudioContext): GainNode {
   master.connect(ctx.destination);
   return master;
 }
-// Um tinido metálico curto de moeda: parcial inarmônica (2.76x) dá o "clink".
-function coinPing(ctx: AudioContext, master: GainNode, t: number, base: number, peak: number) {
-  [1, 2.76].forEach((mult, i) => {
-    const o = ctx.createOscillator(), g = ctx.createGain();
-    o.type = i === 0 ? "square" : "triangle";
-    o.frequency.value = base * mult;
-    o.connect(g); g.connect(master);
-    const p = i === 0 ? peak : peak * 0.4;
-    g.gain.setValueAtTime(0.0001, t);
-    g.gain.exponentialRampToValueAtTime(p, t + 0.006);
-    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.13);
-    o.start(t); o.stop(t + 0.15);
-  });
-}
-// Moedas caindo no cofre (vibe de venda/caixa): cascata de tinidos subindo.
-function playCoin() {
-  const ctx = ensureCtx();
-  if (!ctx || ctx.state !== "running") return;
-  const master = newMaster(ctx);
-  const now = ctx.currentTime;
-  const notes = [1318.51, 1567.98, 1760.0, 2093.0, 1567.98, 1975.53, 2093.0, 2637.02];
-  notes.forEach((f, i) => {
-    const jitter = (i % 3) * 0.011;
-    coinPing(ctx, master, now + i * 0.055 + jitter, f, 0.5);
-  });
-}
+// ⚠️ Venda online NÃO toca som aqui.
+//
+// Existia um `playCoin()` sintetizado (cascata de tinidos via Web Audio) que
+// disparava na notificação `ecommerce_sale`. Quando o MP3 de caixa registradora
+// entrou (useEcommerceNotifications + sfxVenda), a mesma venda passou a ter dois
+// avisos: o MP3 vindo de ecommerce_orders e a moedinha sintetizada vinda de
+// notifications. Quem ouvia jurava que o arquivo instalado estava errado — não
+// estava; era o sintetizado por cima. O som da venda mora num lugar só:
+// src/lib/sfxVenda.ts.
 // Ding amigável pras demais notificações (não-venda).
 function playDing() {
   const ctx = ensureCtx();
@@ -111,10 +94,13 @@ export function useFinanceRealtime() {
         (payload: any) => {
           const n = payload.new;
           qc.invalidateQueries({ queryKey: ["notifications", user.id] });
-          // Só venda (moedinha) e financeiro (RC/OC, ding) tocam som + toast.
-          // Bug e demais notificações são só sininho (bell), sem barulho.
-          if (n?.type === "ecommerce_sale") { playCoin(); toast(n?.title ?? "Nova venda", { description: n?.body ?? undefined }); }
-          else if (n?.type === "finance_rc_pendente" || n?.type === "finance_oc_nova") { playDing(); toast(n?.title ?? "Financeiro", { description: n?.body ?? undefined }); }
+          // Financeiro (RC/OC) toca ding + toast. Bug e demais notificações são
+          // só sininho (bell), sem barulho.
+          //
+          // `ecommerce_sale` cai aqui só para atualizar o sininho: som e toast
+          // da venda são do useEcommerceNotifications, montado no mesmo Layout.
+          // Tratar aqui também dava som duplo e dois toasts para a mesma venda.
+          if (n?.type === "finance_rc_pendente" || n?.type === "finance_oc_nova") { playDing(); toast(n?.title ?? "Financeiro", { description: n?.body ?? undefined }); }
         },
       )
       .subscribe();

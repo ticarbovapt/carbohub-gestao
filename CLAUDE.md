@@ -85,6 +85,15 @@ Dois detalhes que não são óbvios e já custaram bug:
    usuário, e a venda chega por Realtime, fora de qualquer clique. O
    `sfxVenda.ts` destrava no primeiro clique da sessão com um play mudo; sem
    isso o `play()` é recusado **sem erro visível**.
+3. **Um som só, num lugar só.** Havia um segundo aviso de venda: os hooks
+   `useLiveNotifications` (admin/crm/ops/ti) e `useFinanceRealtime`
+   (financas/mkt) escutam `notifications` e, no tipo `ecommerce_sale`, tocavam
+   uma moedinha **sintetizada** (Web Audio) com toast próprio. Como os dois
+   hooks são montados no mesmo Layout do `useEcommerceNotifications`, a mesma
+   venda tocava dois sons e mostrava dois toasts — e parecia que o MP3
+   instalado estava errado, quando era o sintetizado por cima. Hoje o
+   `ecommerce_sale` nesses hooks só atualiza o sininho. **Não volte a tocar som
+   de venda fora do `sfxVenda.ts`.**
 
 ### Regras anti-confusão (OBRIGATÓRIAS)
 1. **Todo pedido nomeia o alvo.** "no CRM" → `apps/crm`; "no controle"/"atual" → raiz (`src/`).
