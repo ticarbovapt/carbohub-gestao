@@ -15,8 +15,11 @@ import logoCarbo from "@/assets/logo-carbo.png";
 import { HUB_URL } from "@/lib/sso";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { useEcommerceNotifications } from "@/hooks/useEcommerceNotifications";
 
 export function Layout() {
+  // Venda online avisa em qualquer app que a pessoa esteja usando.
+  useEcommerceNotifications();
   const isMobile = useIsMobile();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [collapsed, setCollapsed] = useState<boolean>(() => { try { return localStorage.getItem("carbo:sidebar:collapsed") === "1"; } catch { return false; } });

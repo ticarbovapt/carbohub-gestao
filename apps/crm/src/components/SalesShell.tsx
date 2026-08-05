@@ -15,8 +15,11 @@ import { useLiveNotifications } from "@/hooks/useLiveNotifications";
 import { useAuth } from "@/contexts/AuthContext";
 import logoCarbo from "@/assets/logo-carbo.png";
 import { HUB_URL } from "@/lib/sso";
+import { useEcommerceNotifications } from "@/hooks/useEcommerceNotifications";
 
 export function SalesShell() {
+  // Venda online avisa em qualquer app que a pessoa esteja usando.
+  useEcommerceNotifications();
   const isMobile = useIsMobile();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [collapsed, setCollapsed] = useState<boolean>(() => {

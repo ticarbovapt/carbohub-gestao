@@ -68,6 +68,24 @@ em vez de esperar saída vazia.
 `npm run build` NÃO substitui o `tsc`: o esbuild não checa tipos e deixa passar
 identificador inexistente numa boa.
 
+### Notificação de venda online — nos sete
+Venda do e-commerce toca som e mostra toast em QUALQUER app que a pessoa esteja
+usando. Três arquivos, replicados: `public/sounds/venda-online.mp3`,
+`src/lib/sfxVenda.ts` e `src/hooks/useEcommerceNotifications.ts`, montado no
+Layout (no CRM é o `SalesShell`).
+
+Fonte da verdade = **raiz**. Os seis apps são idênticos entre si; a raiz difere
+só pelo link "Ver dashboard" do toast, que aponta para uma rota que só ela tem.
+
+Dois detalhes que não são óbvios e já custaram bug:
+1. **Escuta INSERT *e* UPDATE.** Pedido de PIX nasce `pending` e vira `paid`
+   depois — filtrar só na criação silencia justamente a venda que importa. O
+   dedupe por id evita tocar de novo em `paid → shipped → delivered`.
+2. **O áudio precisa ser destravado.** Navegador só toca depois de um gesto do
+   usuário, e a venda chega por Realtime, fora de qualquer clique. O
+   `sfxVenda.ts` destrava no primeiro clique da sessão com um play mudo; sem
+   isso o `play()` é recusado **sem erro visível**.
+
 ### Regras anti-confusão (OBRIGATÓRIAS)
 1. **Todo pedido nomeia o alvo.** "no CRM" → `apps/crm`; "no controle"/"atual" → raiz (`src/`).
 2. **Na dúvida, PERGUNTE — nunca adivinhe.** Se a tela existe em mais de um app, liste os candidatos antes de mexer.
