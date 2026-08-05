@@ -3,7 +3,6 @@ import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
-import { avisarVendaOnline } from "@/lib/sfxVenda";
 
 // Sons via Web Audio (sem asset). O navegador só libera áudio depois de um
 // gesto do usuário, então destravamos o contexto no 1º clique/tecla da página.
@@ -30,11 +29,10 @@ function newMaster(ctx: AudioContext): GainNode {
 // de caixa registradora, o que fez parecer que o arquivo instalado estava
 // errado. Removido.
 //
-// Mas o aviso de venda continua passando por aqui, e de propósito: este canal
-// (notifications, uma linha por admin) é o que sempre chega. Quem toca é o
-// `avisarVendaOnline`, o mesmo que o useEcommerceNotifications chama — ele
-// dedupe pelo id do pedido, então a venda que chega pelos dois canais toca uma
-// vez só, e a que chega por um só continua tocando.
+// O aviso de venda (som + toast) é do useEcommerceNotifications, que escuta
+// esta mesma tabela `notifications` e é montado no mesmo Layout. Aqui o
+// `ecommerce_sale` só atualiza o sininho — o invalidateQueries lá em cima já
+// faz isso para qualquer tipo.
 // Ding amigável pras demais notificações (não-venda).
 function playDing() {
   const ctx = ensureCtx();
@@ -98,17 +96,10 @@ export function useFinanceRealtime() {
         (payload: any) => {
           const n = payload.new;
           qc.invalidateQueries({ queryKey: ["notifications", user.id] });
-          // Venda online: som + toast, com dedupe compartilhado. reference_id é
-          // o id do pedido em ecommerce_orders — a mesma chave que o
-          // useEcommerceNotifications usa. Se ele já avisou, aqui sai calado.
-          // Financeiro (RC/OC) toca ding + toast. Bug e demais notificações são
-          // só sininho (bell), sem barulho.
-          if (n?.type === "ecommerce_sale") {
-            if (avisarVendaOnline(n?.reference_id)) {
-              toast(n?.title ?? "Nova venda", { description: n?.body ?? undefined });
-            }
-          }
-          else if (n?.type === "finance_rc_pendente" || n?.type === "finance_oc_nova") { playDing(); toast(n?.title ?? "Financeiro", { description: n?.body ?? undefined }); }
+          // Financeiro (RC/OC) toca ding + toast. Venda online é do
+          // useEcommerceNotifications. Bug e demais notificações são só
+          // sininho (bell), sem barulho.
+          if (n?.type === "finance_rc_pendente" || n?.type === "finance_oc_nova") { playDing(); toast(n?.title ?? "Financeiro", { description: n?.body ?? undefined }); }
         },
       )
       .subscribe();

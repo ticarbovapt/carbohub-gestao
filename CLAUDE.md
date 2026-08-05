@@ -75,41 +75,38 @@ usando. Três arquivos, replicados: `public/sounds/venda-online.mp3`,
 Layout (no CRM é o `SalesShell`).
 
 Fonte da verdade = **raiz**. Os seis apps são idênticos entre si; a raiz difere
-só pelo link "Ver dashboard" do toast, que aponta para uma rota que só ela tem.
+só pelo import do `toast` e pelo link "Ver dashboard", que aponta para uma rota
+que só ela tem.
 
-Dois detalhes que não são óbvios e já custaram bug:
-1. **Escuta INSERT *e* UPDATE.** Pedido de PIX nasce `pending` e vira `paid`
-   depois — filtrar só na criação silencia justamente a venda que importa. O
-   dedupe por id evita tocar de novo em `paid → shipped → delivered`.
-2. **O áudio precisa ser destravado.** Navegador só toca depois de um gesto do
+Quem decide o que é venda nova é o **banco**, e só ele:
+1. **O hook escuta `notifications`, NUNCA `ecommerce_orders`.** A versão antiga
+   escutava a tabela de pedidos e julgava sozinha. Não tinha como acertar: o
+   Realtime não entrega o registro ANTERIOR (depende de `REPLICA IDENTITY
+   FULL`), então a tela não distinguia "virou pago" de "o sync de 15 min
+   regravou a linha". Dava três toasts de venda depois de um F5, para pedidos de
+   dias atrás, com o sininho — corretamente — vazio. O gatilho
+   `trg_ecommerce_sale_notify` tem `OLD.status` e a janela de 12h; a tela só
+   reage ao que ele decidiu. Uma regra governa som, toast e sininho.
+2. **Quem recebe: todo o time interno.** O gatilho chama `notify_time_interno`
+   (não `notify_admin_users`, que era só `carbo_admin`) — decisão de deixar todo
+   mundo ver o crescimento. ⚠️ O filtro de interface interna **não é
+   decoração**: o portal de lojas e o de licenciados usam a MESMA tabela
+   `profiles`, e sem ele o lojista recebe o faturamento da Carbo no sininho.
+3. **Um som só, num lugar só.** Havia uma moedinha **sintetizada** (Web Audio)
+   nos hooks do sino (`useLiveNotifications`, `useFinanceRealtime`): era ELA que
+   se ouvia, não o MP3 — e por isso parecia que o arquivo instalado estava
+   errado. Hoje esses hooks só atualizam o sininho no `ecommerce_sale`. O
+   `avisarVendaOnline` (em `sfxVenda.ts`) dedupe pelo id do pedido. **Não volte
+   a tocar som de venda fora do `sfxVenda.ts`.**
+4. **O áudio precisa ser destravado.** Navegador só toca depois de um gesto do
    usuário, e a venda chega por Realtime, fora de qualquer clique. O
    `sfxVenda.ts` destrava no primeiro clique da sessão com um play mudo; sem
-   isso o `play()` é recusado **sem erro visível**.
-3. **Um som só, num lugar só — mas nos DOIS canais.** A venda chega por duas
-   escutas de Realtime: `ecommerce_orders` (o `useEcommerceNotifications`, toast
-   rico) e `notifications` (o `useLiveNotifications` em admin/crm/ops/ti e o
-   `useFinanceRealtime` em financas/mkt, uma linha por admin, com RLS por
-   `user_id`). Nem sempre as duas chegam — e o canal de `notifications` é o que
-   sempre chega.
-   Nos hooks de `notifications` havia uma moedinha **sintetizada** (Web Audio):
-   era ELA que se ouvia, não o MP3, e por isso parecia que o arquivo instalado
-   estava errado. Hoje os dois caminhos chamam `avisarVendaOnline(idDoPedido)`
-   do `sfxVenda.ts`, que **dedupe pelo id** — em `notifications` o id vem em
-   `reference_id`. Quem chega primeiro toca e mostra o toast; o outro sai
-   calado. **Não volte a tocar som de venda fora do `sfxVenda.ts`.**
-4. **A janela de 12h existe nas DUAS pontas.** O gatilho
-   `trg_ecommerce_sale_notify` ignora pedido com `ordered_at` de mais de 12h
-   (sync que puxa histórico não vira tempestade). A escuta no navegador dispara
-   em qualquer `UPDATE` da linha — frete, endereço, o sync de 15 min regravando
-   — e não tinha essa guarda: venda de ontem tocava o alarme hoje **sem nada
-   entrar no sininho**, porque o banco corretamente não notificava. Sintoma
-   clássico de "som e toast sem notificação". Mudou a janela do gatilho? Mude
-   junto no `useEcommerceNotifications`.
-5. **Falha de áudio não pode ser silenciosa.** O `play()` recusado ou um 404 no
-   MP3 davam o mesmo sintoma (nada) porque o `catch` era vazio. Hoje os dois
-   aparecem no console, e há `__somVenda.estado()` / `__somVenda.testar()` para
-   diagnóstico. O destravamento usa `muted = true`, não `volume = 0`: a política
-   de autoplay do Chrome olha a propriedade `muted`.
+   isso o `play()` é recusado **sem erro visível**. Destrava com `muted = true`,
+   não `volume = 0`: a política de autoplay do Chrome olha a propriedade
+   `muted`.
+5. **Falha de áudio não pode ser silenciosa.** `play()` recusado e 404 no MP3
+   davam o mesmo sintoma (nada) porque o `catch` era vazio. Hoje os dois
+   aparecem no console, e há `__somVenda.estado()` / `__somVenda.testar()`.
 
 ### Regras anti-confusão (OBRIGATÓRIAS)
 1. **Todo pedido nomeia o alvo.** "no CRM" → `apps/crm`; "no controle"/"atual" → raiz (`src/`).
