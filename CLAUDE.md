@@ -130,6 +130,27 @@ ontem. A view usa `AT TIME ZONE 'America/Sao_Paulo'` e o front converte com
 `mesLocal()` pelo mesmo motivo — lá o erro jogava o faturamento do dia 31 para
 o mês seguinte, fechando a meta errada nas duas pontas.
 
+### Bling 2 — espelho, MENOS os pedidos faturados
+A segunda conta Bling (`bling2-sync`, tabelas `bling2_*`) é espelho: a função
+não escreve fora de `bling2_*`, não emite pedido, não alimenta faturamento.
+Isso continua valendo — **com uma exceção**, decidida pelo dono do processo
+quando a operação online passou a rodar na conta 2: pedido ATENDIDO
+(`situacao_id = 9`) atravessa para `carboze_orders` pela função
+`bling2_bridge_pedidos_faturados()` (cron :25 e :55, dez minutos depois do sync).
+
+- Namespace `BLING2-*` — os dois Blings numeram do zero; sem isso, colidem.
+- Canal vem de `bling2_lojas`: loja ≠ 0 e não ignorada → `segmento = 'online'`.
+  Loja 0 é venda direta. ⚠️ `'online'` teve de entrar no CHECK de `segmento`,
+  que só aceitava consumo/revenda — valor novo ali é INSERT falhando calado.
+- **NF não é casada.** No Bling 1 o vínculo é o número do pedido na observação
+  da NF; na conta 2 as NFs vêm com observação vazia e sem pedido no `raw_data`.
+  Casar por valor+data erraria em silêncio, então os campos de NF ficam nulos.
+- A ponte é SQL, não código de edge function, porque ela é banco→banco (a do
+  Bling 1 também é). Entra rodando a migração, sem depender de deploy.
+- Cancelamento anda numa direção só: situação 12 cancela aqui; nada tira um
+  pedido de `cancelled`. Mesma lição do `bling-sync`, onde venda cancelada
+  ressuscitava a cada rodada.
+
 ### Regras anti-confusão (OBRIGATÓRIAS)
 1. **Todo pedido nomeia o alvo.** "no CRM" → `apps/crm`; "no controle"/"atual" → raiz (`src/`).
 2. **Na dúvida, PERGUNTE — nunca adivinhe.** Se a tela existe em mais de um app, liste os candidatos antes de mexer.
