@@ -166,6 +166,57 @@ const isSale = (status: string | null | undefined): boolean =>
   SALE_STATUSES.has((status ?? "").toLowerCase());
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Uma linha por ITEM, não por pedido
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// Os normalizadores gravam UMA LINHA POR ITEM do pedido, com
+// `order_id = '<pedido>-<item>'` (ver _shared/nuvemshop.ts, ecommerce-sync e
+// ecommerce-webhook). É de propósito: o par (platform, order_id) é a chave do
+// upsert, então webhook e sync podem rodar em qualquer ordem sem duplicar.
+//
+// O efeito colateral é que `rows.length` conta ITENS. Um pedido da Nuvemshop com
+// dois produtos aparecia como duas vendas: a loja dizia 4 vendas no dia e o
+// painel mostrava 8.
+//
+// Receita e unidades continuam somando linha a linha — isso sempre esteve
+// certo. O que muda é só a CONTAGEM de pedidos.
+//
+// ⚠️ Não dá para cortar no último `-`: o número de pedido da Amazon já tem
+// hífens (`123-4567890-1234567`), e pedido de item único é gravado sem sufixo
+// (`order_id: orderId`). Cortar cegamente transformaria dois pedidos Amazon
+// diferentes no mesmo. Por isso a raiz é reconhecida pelo FORMATO de cada
+// plataforma. Espelha public.ecommerce_pedido_raiz() no banco.
+const RAIZ_AMAZON = /^\d{3}-\d{7}-\d{7}/;
+
+export function pedidoRaiz(platform: string, orderId: string | null | undefined): string {
+  const id = String(orderId ?? "");
+  if (!id) return id;
+  if (platform === "amazon") {
+    const m = id.match(RAIZ_AMAZON);
+    return m ? m[0] : id;
+  }
+  // ML, Nuvemshop, Shopee, TikTok: número do pedido puro, sufixo do item depois
+  // do primeiro hífen.
+  const corte = id.indexOf("-");
+  return corte > 0 ? id.slice(0, corte) : id;
+};
+
+/** Quantos PEDIDOS distintos existem nestas linhas. */
+function contarPedidos(rows: DBOrder[]): number {
+  const vistos = new Set<string>();
+  for (const r of rows) vistos.add(pedidoRaiz(r.platform, r.order_id));
+  return vistos.size;
+}
+
+// Dia em que a venda aconteceu PARA QUEM VENDE — fuso do navegador, não UTC.
+//
+// `ordered_at` é timestamptz e chega como ISO em UTC. O `slice(0, 10)` de antes
+// pegava a data UTC: pedido das 21h de Brasília (00h UTC do dia seguinte)
+// entrava no dia errado, e "hoje" trazia três horas de ontem. Somado à contagem
+// por item, era essa a diferença para o painel da Nuvemshop.
+const diaLocal = (isoUtc: string): string => ymd(new Date(isoUtc));
+
+// ─────────────────────────────────────────────────────────────────────────────
 // System-logic aggregator (Path 2)
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -189,18 +240,21 @@ function buildMetrics(
   // CONTAGENS = todos os pedidos. RECEITA = só os pedidos pagos (saleRows).
   // Antes as duas receitas usavam lista negra (`!== "cancelled"`), o que punha
   // pedido pendente — dinheiro que ainda não entrou — dentro do faturamento.
-  const totalOrders      = rows.length;
+  // PEDIDOS distintos, não linhas — ver pedidoRaiz(). Unidades e receita seguem
+  // somando linha a linha, que é o certo: o pedido de dois itens vendeu os dois.
+  const totalOrders      = contarPedidos(rows);
   const totalUnitsSold   = rows.reduce((s, r) => s + displayUnits(r), 0);
   const totalQuantityRaw = rows.reduce((s, r) => s + r.quantity, 0);
 
-  const cancelled  = rows.filter(r => r.status === "cancelled").length;
-  const pending    = rows.filter(r => r.status === "pending").length;
-  const paid       = rows.filter(r => r.status === "paid").length;
-  const shipped    = rows.filter(r => r.status === "shipped").length;
-  const delivered  = rows.filter(r => r.status === "delivered").length;
+  const porStatus  = (st: string) => contarPedidos(rows.filter(r => r.status === st));
+  const cancelled  = porStatus("cancelled");
+  const pending    = porStatus("pending");
+  const paid       = porStatus("paid");
+  const shipped    = porStatus("shipped");
+  const delivered  = porStatus("delivered");
 
   const saleRows         = rows.filter(r => isSale(r.status));
-  const saleOrders       = saleRows.length;
+  const saleOrders       = contarPedidos(saleRows);
   const sumTotal         = (rs: DBOrder[]) => rs.reduce((s, r) => s + Number(r.total), 0);
 
   const totalRevenue     = sumTotal(saleRows);
@@ -244,12 +298,13 @@ function buildMetrics(
   })).sort((a, b) => b.orders - a.orders || b.revenue - a.revenue);
 
   // Group by day
-  const dayMap = new Map<string, { orders: number; units: number; revenue: number }>();
+  const dayMap = new Map<string, { pedidos: Set<string>; units: number; revenue: number }>();
   for (const r of rows) {
-    const day = r.ordered_at.slice(0, 10);
-    const prev = dayMap.get(day) ?? { orders: 0, units: 0, revenue: 0 };
+    const day = diaLocal(r.ordered_at);
+    const prev = dayMap.get(day) ?? { pedidos: new Set<string>(), units: 0, revenue: 0 };
+    prev.pedidos.add(pedidoRaiz(r.platform, r.order_id));
     dayMap.set(day, {
-      orders:  prev.orders  + 1,
+      pedidos: prev.pedidos,
       units:   prev.units   + displayUnits(r),
       revenue: prev.revenue + (isSale(r.status) ? Number(r.total) : 0),
     });
@@ -260,7 +315,7 @@ function buildMetrics(
     .map(([date, v]) => ({
       date,
       label:   format(new Date(date + "T12:00:00"), "dd/MM", { locale: ptBR }),
-      orders:  v.orders,
+      orders:  v.pedidos.size,
       units:   v.units,
       revenue: Math.round(v.revenue * 100) / 100,
     }));
@@ -379,10 +434,18 @@ async function fetchOrders(
   custom?: EcommerceCustom,
 ): Promise<EcommerceMetrics> {
   const r = getRange(period, custom);
-  const from = `${r.from}T00:00:00`;
+  // ⚠️ Instante, não texto solto.
+  //
+  // Antes ia `"2026-08-05T00:00:00"` cru para o filtro. Sem fuso, o Postgres lê
+  // isso no fuso DELE (UTC no Supabase) — então "hoje" começava às 21h de
+  // ontem em Brasília e terminava às 21h de hoje. O `new Date(...)` interpreta
+  // a string SEM sufixo como hora local e o toISOString() manda o instante
+  // certo; assim o dia do painel é o dia de quem vende.
+  //
   // 23:59:59.999 do último dia: `to` é inclusivo, e sem isso o dia final
   // ficaria de fora — "ontem" não traria nada.
-  const to   = `${r.to}T23:59:59.999`;
+  const from = new Date(`${r.from}T00:00:00`).toISOString();
+  const to   = new Date(`${r.to}T23:59:59.999`).toISOString();
 
   const [{ data, error }, connected, { data: rateData }] = await Promise.all([
     supabase

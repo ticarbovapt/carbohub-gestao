@@ -108,6 +108,28 @@ Quem decide o que é venda nova é o **banco**, e só ele:
    davam o mesmo sintoma (nada) porque o `catch` era vazio. Hoje os dois
    aparecem no console, e há `__somVenda.estado()` / `__somVenda.testar()`.
 
+### E-commerce: a tabela tem uma linha por ITEM, não por pedido
+`ecommerce_orders` grava `order_id = '<pedido>-<item>'` — de propósito, porque
+(platform, order_id) é a chave do upsert e assim webhook e sync podem rodar em
+qualquer ordem sem duplicar. Consequência: **`count(*)` conta itens**. Um pedido
+com dois produtos virava duas vendas — a loja dizia 4 no dia e o painel, 8.
+
+Para contar pedido use `public.ecommerce_pedido_raiz(platform, order_id)` no
+banco ou `pedidoRaiz()` em `useDashEcommerce.ts` (as duas são a mesma regra;
+mudou uma, mude a outra). ⚠️ Não corte no último hífen: o número da Amazon já
+tem hífens (`123-4567890-1234567`) e pedido de item único vai sem sufixo —
+cortar cegamente funde dois pedidos Amazon diferentes.
+
+Receita, quantidade e unidades continuam somando linha a linha. Isso sempre
+esteve certo; o errado era só a contagem.
+
+**E o dia é o de Brasília.** `ordered_at::date` e `ordered_at.slice(0, 10)` dão
+o dia em UTC: pedido das 21h entra no dia seguinte, e "hoje" traz três horas de
+ontem. A view usa `AT TIME ZONE 'America/Sao_Paulo'` e o front converte com
+`new Date(...)` antes de comparar. ⚠️ `useMetaEcommerce.ts` ainda fatia UTC
+(`slice(0, 10)` e `slice(0, 7)`) — mesma classe de erro, ainda não corrigida:
+venda das 21h do dia 31 conta no mês seguinte.
+
 ### Regras anti-confusão (OBRIGATÓRIAS)
 1. **Todo pedido nomeia o alvo.** "no CRM" → `apps/crm`; "no controle"/"atual" → raiz (`src/`).
 2. **Na dúvida, PERGUNTE — nunca adivinhe.** Se a tela existe em mais de um app, liste os candidatos antes de mexer.
