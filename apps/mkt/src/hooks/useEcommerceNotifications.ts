@@ -72,6 +72,20 @@ export function useEcommerceNotifications() {
           // esta escuta em tempo real continuava avisando cedo demais.
           if (!["paid", "shipped", "delivered"].includes(status.toLowerCase())) return;
 
+          // Guarda de 12h, a MESMA do gatilho trg_ecommerce_sale_notify.
+          //
+          // Esta escuta dispara em qualquer UPDATE da linha — mudança de frete,
+          // de endereço, o sync de 15 min regravando o pedido. Sem a guarda, uma
+          // venda de ontem tocava o alarme de novo hoje, enquanto o banco (que
+          // TEM a guarda) não criava notificação nenhuma: som e toast sem nada
+          // no sininho. Foi assim que o pedido de 04/08 18:09 avisou no dia 05.
+          //
+          // As duas pontas precisam usar o mesmo critério; se um dia a janela do
+          // gatilho mudar, muda aqui junto.
+          const ordenadoEm = Date.parse(String(order.ordered_at ?? ""));
+          const DOZE_HORAS = 12 * 60 * 60 * 1000;
+          if (Number.isFinite(ordenadoEm) && Date.now() - ordenadoEm > DOZE_HORAS) return;
+
           // Som primeiro: o toast fica 8s na tela, mas o som é o que faz alguém
           // olhar. Falha de áudio não derruba a notificação (ver sfxVenda).
           // O dedupe agora vive no avisarVendaOnline, porque a mesma venda

@@ -97,7 +97,15 @@ Dois detalhes que não são óbvios e já custaram bug:
    do `sfxVenda.ts`, que **dedupe pelo id** — em `notifications` o id vem em
    `reference_id`. Quem chega primeiro toca e mostra o toast; o outro sai
    calado. **Não volte a tocar som de venda fora do `sfxVenda.ts`.**
-4. **Falha de áudio não pode ser silenciosa.** O `play()` recusado ou um 404 no
+4. **A janela de 12h existe nas DUAS pontas.** O gatilho
+   `trg_ecommerce_sale_notify` ignora pedido com `ordered_at` de mais de 12h
+   (sync que puxa histórico não vira tempestade). A escuta no navegador dispara
+   em qualquer `UPDATE` da linha — frete, endereço, o sync de 15 min regravando
+   — e não tinha essa guarda: venda de ontem tocava o alarme hoje **sem nada
+   entrar no sininho**, porque o banco corretamente não notificava. Sintoma
+   clássico de "som e toast sem notificação". Mudou a janela do gatilho? Mude
+   junto no `useEcommerceNotifications`.
+5. **Falha de áudio não pode ser silenciosa.** O `play()` recusado ou um 404 no
    MP3 davam o mesmo sintoma (nada) porque o `catch` era vazio. Hoje os dois
    aparecem no console, e há `__somVenda.estado()` / `__somVenda.testar()` para
    diagnóstico. O destravamento usa `muted = true`, não `volume = 0`: a política
