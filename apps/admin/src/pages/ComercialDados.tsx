@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
   Database, AlertTriangle, Search, Download, ShoppingCart, DollarSign, Target, EyeOff,
-  Users, Building2, ListOrdered, FileText, ArrowUp, ArrowDown, ChevronsUpDown, Layers, Loader2, CheckCircle2, UserPlus, Pencil,
+  Users, Building2, ListOrdered, Globe, FileText, ArrowUp, ArrowDown, ChevronsUpDown, Layers, Loader2, CheckCircle2, UserPlus, Pencil,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
@@ -156,13 +156,27 @@ export default function ComercialDados() {
   const [busca, setBusca] = useState("");
   const [statusFiltro, setStatusFiltro] = useState("all");
   const [soMetricas, setSoMetricas] = useState(false);
-  // A aba vive na URL: /comercial/dados/pedidos e /comercial/dados/clientes.
-  // Assim o link é compartilhável, o F5 volta na mesma aba e o voltar do
-  // navegador funciona. Aba inválida cai em "pedidos".
+  // A aba vive na URL: /comercial/dados/pedidos, /pedidos-online, /clientes e
+  // /clientes-online. Assim o link é compartilhável, o F5 volta na mesma aba e
+  // o voltar do navegador funciona. Aba inválida cai em "pedidos".
+  //
+  // Interno × online são gestões diferentes: follow-up de marketplace não se
+  // parece com follow-up de cliente B2B, e misturar os dois na mesma lista faz
+  // um esconder o outro.
+  //
+  // ⚠️ O corte é por `segmento = 'online'`, NÃO por origem do dado. O pedido
+  // BLING2-145 (R$ 16.800) veio da segunda conta Bling mas é venda direta de
+  // balcão — separar por "veio do Bling 2" jogaria uma venda B2B desse tamanho
+  // na gestão de marketplace.
   const { aba } = useParams<{ aba?: string }>();
   const navigate = useNavigate();
-  const view: "pedidos" | "clientes" = aba === "clientes" ? "clientes" : "pedidos";
-  const setView = (v: "pedidos" | "clientes") => navigate(`/comercial/dados/${v}`);
+  const ABAS = ["pedidos", "pedidos-online", "clientes", "clientes-online"] as const;
+  type Aba = (typeof ABAS)[number];
+  const view: Aba = (ABAS as readonly string[]).includes(aba ?? "") ? (aba as Aba) : "pedidos";
+  const setView = (v: Aba) => navigate(`/comercial/dados/${v}`);
+  // Duas perguntas separadas: QUAL lista mostrar e QUAL recorte de canal.
+  const lista: "pedidos" | "clientes" = view.startsWith("clientes") ? "clientes" : "pedidos";
+  const canal: "interno" | "online" = view.endsWith("-online") ? "online" : "interno";
 
   // /comercial/dados sem aba, ou com aba inválida, vira a canônica. `replace`
   // para não empilhar no histórico — senão o voltar ficaria preso aqui.
@@ -301,12 +315,35 @@ export default function ComercialDados() {
 
   const rows = useMemo(() => {
     let r = data?.rows ?? [];
+    // Recorte de canal primeiro: tudo o que vem depois (busca, KPIs, lista de
+    // clientes) enxerga só o lado da aba.
+    r = r.filter((o) => (canal === "online" ? o.segmento === "online" : o.segmento !== "online"));
     const t = busca.trim().toLowerCase();
     if (t) r = r.filter((o) => (o.customer_name ?? "").toLowerCase().includes(t) || (o.order_number ?? "").toLowerCase().includes(t));
     if (statusFiltro !== "all") r = r.filter((o) => (o.status ?? "") === statusFiltro);
     if (soMetricas) r = r.filter((o) => o.contaMetrica);
     return r;
-  }, [data, busca, statusFiltro, soMetricas]);
+  }, [data, canal, busca, statusFiltro, soMetricas]);
+
+  // KPIs do que ESTÁ NA TELA.
+  //
+  // Antes vinham do hook, ou seja, do conjunto inteiro — os cards ignoravam
+  // busca e status. Passava despercebido porque a diferença era pequena. Com a
+  // divisão interno × online deixaria de passar: o card diria 401 pedidos com a
+  // aba de online mostrando 174, e quem lesse concluiria (de novo) que o
+  // sistema conta errado.
+  //
+  // Mesma regra do hook: KPI soma o que conta para métrica, não todo pedido.
+  const kpis = useMemo(() => {
+    const contam = rows.filter((r) => r.contaMetrica);
+    const totalBRL = contam.reduce((s, r) => s + (r.total || 0), 0);
+    return {
+      totalPedidos: contam.length,
+      totalBRL,
+      ticketMedio: contam.length ? totalBRL / contam.length : 0,
+      excluidos: rows.filter((r) => r.contaPedido && !r.contaMetrica).length,
+    };
+  }, [rows]);
 
   const togglePedSort = (col: PedCol) =>
     setPedSort((s) => (s.col === col
@@ -435,7 +472,7 @@ export default function ComercialDados() {
   };
   const esc = (v: any) => `"${String(v ?? "").replace(/"/g, '""')}"`;
   const exportCsv = () => {
-    if (view === "clientes") {
+    if (lista === "clientes") {
       const head = ["cnpjs", "cliente", "vendedor(es)", "canal", "pedidos", "total", "primeira_compra", "ultima_compra"];
       const lines = rowsSorted.map((r) => [
         r.cnpjs.map(fmtDoc).join(" | ") || "(sem doc)", r.nome, r.vendedores.join(" | ") || "—",
@@ -478,23 +515,28 @@ export default function ComercialDados() {
 
         {/* Resumo */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <Tile icon={ShoppingCart} label="Pedidos (contam)" value={String(data?.totalPedidos ?? 0)} tone="text-blue-500" />
-          <Tile icon={DollarSign} label="R$ Total (pedidos)" value={brl(data?.totalBRL ?? 0)} tone="text-carbo-green" />
-          <Tile icon={Target} label="Ticket médio" value={brl(data?.ticketMedio ?? 0)} tone="text-violet-500" />
-          <Tile icon={EyeOff} label="Excluídos das métricas" value={String(data?.excluidos ?? 0)} tone="text-amber-500" />
+          <Tile icon={ShoppingCart} label={canal === "online" ? "Pedidos online (contam)" : "Pedidos internos (contam)"} value={String(kpis.totalPedidos)} tone="text-blue-500" />
+          <Tile icon={DollarSign} label="R$ Total (pedidos)" value={brl(kpis.totalBRL)} tone="text-carbo-green" />
+          <Tile icon={Target} label="Ticket médio" value={brl(kpis.ticketMedio)} tone="text-violet-500" />
+          <Tile icon={EyeOff} label="Excluídos das métricas" value={String(kpis.excluidos)} tone="text-amber-500" />
         </div>
 
         {/* Modo de visão */}
         <div className="flex flex-wrap items-center gap-3">
           <div className="inline-flex gap-1 rounded-lg border p-1">
-            {([["pedidos", "Pedidos", ListOrdered], ["clientes", "Clientes", Users]] as const).map(([k, l, Ico]) => (
+            {([
+              ["pedidos",         "Pedidos internos",  ListOrdered],
+              ["pedidos-online",  "Pedidos online",    Globe],
+              ["clientes",        "Clientes internos", Users],
+              ["clientes-online", "Clientes online",   Globe],
+            ] as const).map(([k, l, Ico]) => (
               <button key={k} onClick={() => setView(k)}
                 className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${view === k ? "bg-carbo-green/10 text-carbo-green" : "text-muted-foreground hover:bg-muted"}`}>
                 <Ico className="h-3.5 w-3.5" /> {l}
               </button>
             ))}
           </div>
-          {view === "clientes" && (
+          {lista === "clientes" && (
             <>
               <Button variant={agrupado ? "default" : "outline"} size="sm" className="h-8" onClick={() => setAgrupado((v) => !v)}>
                 <Layers className="h-3.5 w-3.5 mr-1" /> {agrupado ? "Agrupado por nome" : "Agrupar nomes iguais"}
@@ -525,14 +567,14 @@ export default function ComercialDados() {
           <Button variant={soMetricas ? "default" : "outline"} size="sm" className="h-9" onClick={() => setSoMetricas((v) => !v)}>
             <EyeOff className="h-3.5 w-3.5 mr-1" /> Só os que contam métrica
           </Button>
-          <Button variant="outline" size="sm" className="h-9" onClick={exportCsv} disabled={view === "pedidos" ? !rows.length : !rowsSorted.length}>
+          <Button variant="outline" size="sm" className="h-9" onClick={exportCsv} disabled={lista === "pedidos" ? !rows.length : !rowsSorted.length}>
             <Download className="h-3.5 w-3.5 mr-1" /> Exportar CSV
           </Button>
-          <p className="text-xs text-muted-foreground ml-auto">{view === "pedidos" ? `${rows.length} de ${data?.totalRows ?? 0} linhas` : `${rowsSorted.length} ${agrupado ? "grupos" : "clientes"}`}</p>
+          <p className="text-xs text-muted-foreground ml-auto">{lista === "pedidos" ? `${rows.length} de ${data?.totalRows ?? 0} linhas` : `${rowsSorted.length} ${agrupado ? "grupos" : "clientes"}`}</p>
         </div>
 
         {/* Ações em massa — só na aba Pedidos e só com algo selecionado. */}
-        {view === "pedidos" && selectedIds.size > 0 && (
+        {lista === "pedidos" && selectedIds.size > 0 && (
           <div className="flex flex-wrap items-center gap-2 rounded-lg border border-carbo-green/40 bg-carbo-green/[0.06] px-3 py-2">
             <span className="text-sm font-semibold">
               {selectedIds.size} pedido{selectedIds.size > 1 ? "s" : ""} selecionado{selectedIds.size > 1 ? "s" : ""}
@@ -592,7 +634,7 @@ export default function ComercialDados() {
           <CarboCardContent className="p-0 overflow-x-auto">
             {isLoading ? (
               <p className="text-sm text-muted-foreground py-10 text-center">Carregando…</p>
-            ) : view === "pedidos" ? (
+            ) : lista === "pedidos" ? (
               rows.length === 0 ? (
                 <p className="text-sm text-muted-foreground py-10 text-center">Nenhuma linha para os filtros atuais.</p>
               ) : (
@@ -731,8 +773,8 @@ export default function ComercialDados() {
             )}
           </CarboCardContent>
         </CarboCard>
-        {view === "pedidos" && rows.length > 500 && <p className="text-xs text-muted-foreground text-center">Mostrando as 500 primeiras · use os filtros ou o CSV para o resto ({rows.length} no total).</p>}
-        {view === "clientes" && rowsSorted.length > 500 && <p className="text-xs text-muted-foreground text-center">Mostrando os 500 primeiros · use o CSV para o resto ({rowsSorted.length} no total).</p>}
+        {lista === "pedidos" && rows.length > 500 && <p className="text-xs text-muted-foreground text-center">Mostrando as 500 primeiras · use os filtros ou o CSV para o resto ({rows.length} no total).</p>}
+        {lista === "clientes" && rowsSorted.length > 500 && <p className="text-xs text-muted-foreground text-center">Mostrando os 500 primeiros · use o CSV para o resto ({rowsSorted.length} no total).</p>}
       </div>
 
       {/* Detalhe — pedidos, CNPJs do grupo, datas (para follow-up). */}
