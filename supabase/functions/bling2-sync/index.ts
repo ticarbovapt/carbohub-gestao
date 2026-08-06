@@ -674,7 +674,17 @@ async function syncOrderDetails(admin: Admin, token: string, logId: string): Pro
         // não busquei" e faria este pedido voltar para a fila para sempre.
         items: d.itens || [],
         observacoes: d.observacoes || d.observacoesInternas || null,
-        raw_data: d,
+        // ⚠️ `raw_detalhe`, NÃO `raw_data`.
+        //
+        // `raw_data` pertence à listagem, que roda a cada 30 min e sobrescreve.
+        // Enquanto o detalhe era gravado ali, ele durava até a próxima rodada:
+        // uma chamada de API por pedido, buscando transporte, etiqueta e
+        // endereço de entrega — tudo descartado minutos depois. Nenhuma linha
+        // da tabela tinha `itens` dentro do raw_data.
+        //
+        // É o mesmo apagão que `items`/`observacoes` já evitavam ao ficar de
+        // fora do upsert da lista; o raw_data tinha ficado sem essa proteção.
+        raw_detalhe: d,
         updated_at: nowIso(),
       }).eq("bling_id", p.bling_id);
       synced++;
