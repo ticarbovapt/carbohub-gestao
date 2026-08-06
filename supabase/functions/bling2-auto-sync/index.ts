@@ -19,6 +19,10 @@ const FASES = [
   // Incrementais: só a janela dos últimos dias. São as que rodam de 30 em 30
   // minutos, para a NF da venda on-line aparecer no mesmo turno.
   "orders_recente", "nfe_recente",
+  // Reconferência dirigida das notas de pedidos já importados. Sem estar nesta
+  // lista, o auto-sync FILTRA a fase em silêncio: a chamada responde 202, nada
+  // roda e nem log aparece — foi o que aconteceu na primeira tentativa.
+  "nfe_recheck",
 ];
 
 Deno.serve(async (req: Request): Promise<Response> => {
