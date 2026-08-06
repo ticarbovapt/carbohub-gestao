@@ -52,9 +52,23 @@ Deno.serve(async (req: Request): Promise<Response> => {
     const source = (body as any).source || "cron";
     // Permite disparar um subconjunto (ex.: só as fases lentas, num horário
     // de menos movimento) sem precisar de outra função.
-    const fases: string[] = Array.isArray((body as any).fases) && (body as any).fases.length
-      ? (body as any).fases.filter((f: string) => FASES.includes(f))
+    const pedidas: string[] = Array.isArray((body as any).fases) ? (body as any).fases : [];
+    const fases: string[] = pedidas.length
+      ? pedidas.filter((f: string) => FASES.includes(f))
       : FASES;
+
+    // ⚠️ Pediram fases e NENHUMA sobrou do filtro: nome errado, ou fase que
+    // existe no bling2-sync mas ninguém acrescentou a esta lista. Responder
+    // 202 "aceito" aqui é mentira — foi o que aconteceu com `nfe_recheck`:
+    // a chamada respondeu sucesso, nada rodou, e nem linha de log apareceu.
+    // Quem disparou ficou esperando um resultado que nunca viria.
+    if (pedidas.length && !fases.length) {
+      console.warn(`[bling2-auto-sync] fases desconhecidas: ${pedidas.join(",")}`);
+      return new Response(JSON.stringify({
+        success: false,
+        error: `Nenhuma fase válida em [${pedidas.join(", ")}]. Aceitas: ${FASES.join(", ")}`,
+      }), { status: 400, headers: { "Content-Type": "application/json" } });
+    }
 
     console.log(`[bling2-auto-sync] início. Fonte: ${source}, fases: ${fases.join(",")}`);
 
