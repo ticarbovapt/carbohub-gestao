@@ -648,14 +648,25 @@ async function syncOrdersRecente(admin: Admin, token: string, logId: string): Pr
 // ── Itens dos pedidos (detalhe, 1 chamada por pedido) ──────────────────────
 
 async function syncOrderDetails(admin: Admin, token: string, logId: string): Promise<SyncResult> {
-  // Teto por execução: cada pedido é uma chamada + 350ms. Sem teto, a função
-  // morre no tempo limite e o log fica preso em 'running'. O cron vai
-  // completando em rodadas — por isso o teto, e não a lista inteira.
-  const TETO = 200;
+  // ── TETO: 60, não 200 ───────────────────────────────────────────────────
+  // Cada pedido é uma chamada + 350ms de pausa, mas o custo real é ~1s por
+  // causa da latência da própria API. 200 × 1s estoura os 150s do edge
+  // function e a rodada morre no meio, deixando o log preso em `running` —
+  // mesma conta errada que já derrubou a etapa de NF-e. 60 ≈ 70s, com folga.
+  // O que sobra vai na próxima rodada do cron.
+  const TETO = 60;
+  // ⚠️ A fila olha DUAS ausências, não uma.
+  //
+  // Era só `items is null` — "pedido que ainda não foi detalhado". Isso deixa
+  // de fora todo pedido que JÁ tem item, que é a totalidade do histórico. Com
+  // o detalhe passando a morar em `raw_detalhe`, esses pedidos precisam ser
+  // buscados de novo uma vez; sem incluir `raw_detalhe is null` aqui, a coluna
+  // nova nasceria vazia e só se preencheria para pedido novo — a mudança
+  // pareceria funcionar e não faria nada com o histórico.
   const { data: pedidos } = await admin
     .from("bling2_orders")
     .select("bling_id")
-    .is("items", null)
+    .or("items.is.null,raw_detalhe.is.null")
     .order("data", { ascending: false })
     .limit(TETO);
 
@@ -696,7 +707,8 @@ async function syncOrderDetails(admin: Admin, token: string, logId: string): Pro
   }
 
   const { count: faltando } = await admin
-    .from("bling2_orders").select("id", { count: "exact", head: true }).is("items", null);
+    .from("bling2_orders").select("id", { count: "exact", head: true })
+    .or("items.is.null,raw_detalhe.is.null");
   console.log(`[bling2-sync] detalhes: ${synced} ok, ${failed} falhas, ${faltando ?? "?"} pendentes`);
 
   await fecharLog(admin, logId, { synced, failed });
