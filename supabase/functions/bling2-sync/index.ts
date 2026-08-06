@@ -1015,32 +1015,35 @@ async function syncNFe(admin: Admin, token: string, logId: string): Promise<Sync
 
 // ── Recheck das notas ligadas a pedido importado ──────────────────────────
 //
-// ⚠️ Nota cancelada SOME da listagem `/nfe`. O espelho então congela no último
-// valor visto ("Emitida DANFE") e a nota segue parecendo válida para sempre —
-// enquanto a ponte a conta como faturamento. Um cliente tinha 12 pedidos
-// importados com 11 notas canceladas: R$ 1.090 de receita que não existe.
+// ⚠️ Nota cancelada NÃO APARECE na listagem `/nfe` — e isso tem duas
+// consequências, não uma:
 //
-// O passo das "sumidas" já cobre isso, mas 20 por rodada: mais de uma semana
-// para varrer o histórico, com o número errado na tela o tempo todo.
+//   1. a que já foi vista e depois cancelada congela no último valor
+//      ("Emitida DANFE") e segue parecendo válida;
+//   2. a que JÁ ESTAVA cancelada quando o espelho nasceu **nunca entrou**.
 //
-// Esta entidade ataca só o que importa — as notas de pedidos que JÁ viraram
-// venda em `carboze_orders` —, das mais antigas de conferência para as mais
-// novas. `/nfe/{id}` funciona para nota cancelada, que é o que torna isto
-// possível.
+// O caso (2) é o que pega de verdade: 11 pedidos importados de um cliente só
+// tinham nota cancelada, e nenhuma dessas notas existia em `bling2_nfe`. Uma
+// varredura que só relesse a tabela jamais as encontraria — é preciso buscar
+// pelo id que o PEDIDO conhece (`raw_detalhe->notaFiscal->id`).
 //
-// Não tem filtro de situação: ao contrário do passo das sumidas, aqui a
-// intenção é justamente reconferir o que hoje parece válido.
+// `/nfe/{id}` responde para nota cancelada. É o único caminho até ela.
+//
+// Prioridade: primeiro as ausentes (as que o espelho nunca viu, justamente as
+// suspeitas), depois as mais antigas de conferência.
 async function syncNfeRecheck(admin: Admin, token: string, logId: string): Promise<SyncResult> {
-  // 60 × ~1s ≈ 70s. Mesma conta do order_details, pelo mesmo motivo: o teto
-  // existe para a rodada não morrer nos 150s deixando o log preso em running.
+  // 60 × ~1s ≈ 70s. Mesma conta do order_details: o teto existe para a rodada
+  // não morrer nos 150s deixando o log preso em `running`.
   const TETO = 60;
 
   const { data: alvo } = await admin
     .from("bling2_orders")
     .select("nf_bling_id")
-    .not("nf_bling_id", "is", null)
     .eq("situacao_id", 9)
-    .limit(2000);
+    .not("nf_bling_id", "is", null)
+    // `notaFiscal: {id: 0}` = pedido SEM nota. Não há o que reconsultar.
+    .gt("nf_bling_id", 0)
+    .limit(3000);
 
   const ids = [...new Set(semvalorSeguro(alvo).map((o: any) => Number(o.nf_bling_id)))];
   if (!ids.length) {
@@ -1048,40 +1051,72 @@ async function syncNfeRecheck(admin: Admin, token: string, logId: string): Promi
     return { synced: 0, failed: 0 };
   }
 
-  // Mais antigas de conferência primeiro — assim rodadas sucessivas cobrem
-  // tudo sem repetir as mesmas.
-  const { data: notas } = await admin
-    .from("bling2_nfe")
-    .select("id, bling_id, numero, situacao")
-    .in("bling_id", ids)
-    .order("synced_at", { ascending: true })
-    .limit(TETO);
+  // Quais desses ids o espelho já tem. Em lotes: `in` com milhares de ids
+  // estoura o tamanho da URL.
+  const existentes = new Set<number>();
+  for (let i = 0; i < ids.length; i += 200) {
+    const { data } = await admin
+      .from("bling2_nfe").select("bling_id").in("bling_id", ids.slice(i, i + 200));
+    for (const r of semvalorSeguro(data)) existentes.add(Number(r.bling_id));
+  }
 
-  let synced = 0, failed = 0, mudaram = 0;
-  for (const nf of semvalorSeguro(notas)) {
+  const ausentes = ids.filter((id) => !existentes.has(id));
+  const fila: number[] = ausentes.slice(0, TETO);
+
+  // Sobrou espaço? completa com as já conhecidas, das mais antigas de
+  // conferência para as mais novas — assim rodadas sucessivas cobrem tudo.
+  if (fila.length < TETO) {
+    const { data: velhas } = await admin
+      .from("bling2_nfe").select("bling_id")
+      .in("bling_id", ids.slice(0, 200))
+      .order("synced_at", { ascending: true })
+      .limit(TETO - fila.length);
+    for (const r of semvalorSeguro(velhas)) fila.push(Number(r.bling_id));
+  }
+
+  let synced = 0, failed = 0, mudaram = 0, criadas = 0;
+  for (const blingId of fila) {
     try {
-      const detail = await blingFetch(token, `/nfe/${nf.bling_id}`, 1, 1);
+      const detail = await blingFetch(token, `/nfe/${blingId}`, 1, 1);
       const d = detail.data || {};
       const situ = nfeSituacaoLabel(d.situacao);
-      if (situ && situ !== nf.situacao) {
-        console.log(`[bling2-sync] NF ${nf.numero}: ${nf.situacao} → ${situ}`);
+      const novaNoEspelho = !existentes.has(blingId);
+      if (novaNoEspelho) {
+        criadas++;
+        console.log(`[bling2-sync] NF ${d.numero ?? blingId} entrou no espelho como ${situ} (nunca apareceu na listagem)`);
+      } else if (situ) {
         mudaram++;
       }
-      await admin.from("bling2_nfe").update({
-        situacao: situ ?? nf.situacao,
+      // upsert e não update: a nota pode não existir ainda — é exatamente o
+      // caso das canceladas antes do primeiro sync.
+      await admin.from("bling2_nfe").upsert({
+        bling_id: blingId,
+        numero: d.numero != null ? String(d.numero) : null,
+        serie: d.serie != null ? String(d.serie) : null,
+        chave_acesso: d.chaveAcesso || null,
+        data_emissao: toDate(d.dataEmissao),
+        contato_nome: d.contato?.nome || null,
+        contato_cnpj: extractContatoDoc(d.contato),
+        valor_total: extractValorNota(d),
+        loja_id: d.loja?.id ?? null,
+        unidade_negocio_id: d.loja?.unidadeNegocio?.id ?? null,
+        situacao: situ,
+        xml_url: d.xml || null,
+        pdf_url: d.pdf || d.linkPDF || d.linkPdf || d.linkDanfe || null,
         raw_data: d,
         synced_at: nowIso(),
         updated_at: nowIso(),
-      }).eq("id", nf.id);
+      }, { onConflict: "bling_id" });
       synced++;
     } catch (e) {
-      console.error(`[bling2-sync] recheck da NF ${nf.numero} falhou:`, e);
+      console.error(`[bling2-sync] recheck da NF ${blingId} falhou:`, e);
       failed++;
     }
     await sleep(RATE_MS);
   }
 
-  console.log(`[bling2-sync] recheck: ${synced} conferidas, ${mudaram} mudaram de situação, ${failed} falhas`);
+  console.log(`[bling2-sync] recheck: ${synced} conferidas, ${criadas} novas no espelho, ` +
+    `${mudaram} mudaram de situação, ${failed} falhas, ${ausentes.length} ausentes no total`);
   await fecharLog(admin, logId, { synced, failed });
   return { synced, failed };
 }
