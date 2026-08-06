@@ -1013,6 +1013,80 @@ async function syncNFe(admin: Admin, token: string, logId: string): Promise<Sync
 }
 
 
+// ── Recheck das notas ligadas a pedido importado ──────────────────────────
+//
+// ⚠️ Nota cancelada SOME da listagem `/nfe`. O espelho então congela no último
+// valor visto ("Emitida DANFE") e a nota segue parecendo válida para sempre —
+// enquanto a ponte a conta como faturamento. Um cliente tinha 12 pedidos
+// importados com 11 notas canceladas: R$ 1.090 de receita que não existe.
+//
+// O passo das "sumidas" já cobre isso, mas 20 por rodada: mais de uma semana
+// para varrer o histórico, com o número errado na tela o tempo todo.
+//
+// Esta entidade ataca só o que importa — as notas de pedidos que JÁ viraram
+// venda em `carboze_orders` —, das mais antigas de conferência para as mais
+// novas. `/nfe/{id}` funciona para nota cancelada, que é o que torna isto
+// possível.
+//
+// Não tem filtro de situação: ao contrário do passo das sumidas, aqui a
+// intenção é justamente reconferir o que hoje parece válido.
+async function syncNfeRecheck(admin: Admin, token: string, logId: string): Promise<SyncResult> {
+  // 60 × ~1s ≈ 70s. Mesma conta do order_details, pelo mesmo motivo: o teto
+  // existe para a rodada não morrer nos 150s deixando o log preso em running.
+  const TETO = 60;
+
+  const { data: alvo } = await admin
+    .from("bling2_orders")
+    .select("nf_bling_id")
+    .not("nf_bling_id", "is", null)
+    .eq("situacao_id", 9)
+    .limit(2000);
+
+  const ids = [...new Set(semvalorSeguro(alvo).map((o: any) => Number(o.nf_bling_id)))];
+  if (!ids.length) {
+    await fecharLog(admin, logId, { synced: 0, failed: 0 });
+    return { synced: 0, failed: 0 };
+  }
+
+  // Mais antigas de conferência primeiro — assim rodadas sucessivas cobrem
+  // tudo sem repetir as mesmas.
+  const { data: notas } = await admin
+    .from("bling2_nfe")
+    .select("id, bling_id, numero, situacao")
+    .in("bling_id", ids)
+    .order("synced_at", { ascending: true })
+    .limit(TETO);
+
+  let synced = 0, failed = 0, mudaram = 0;
+  for (const nf of semvalorSeguro(notas)) {
+    try {
+      const detail = await blingFetch(token, `/nfe/${nf.bling_id}`, 1, 1);
+      const d = detail.data || {};
+      const situ = nfeSituacaoLabel(d.situacao);
+      if (situ && situ !== nf.situacao) {
+        console.log(`[bling2-sync] NF ${nf.numero}: ${nf.situacao} → ${situ}`);
+        mudaram++;
+      }
+      await admin.from("bling2_nfe").update({
+        situacao: situ ?? nf.situacao,
+        raw_data: d,
+        synced_at: nowIso(),
+        updated_at: nowIso(),
+      }).eq("id", nf.id);
+      synced++;
+    } catch (e) {
+      console.error(`[bling2-sync] recheck da NF ${nf.numero} falhou:`, e);
+      failed++;
+    }
+    await sleep(RATE_MS);
+  }
+
+  console.log(`[bling2-sync] recheck: ${synced} conferidas, ${mudaram} mudaram de situação, ${failed} falhas`);
+  await fecharLog(admin, logId, { synced, failed });
+  return { synced, failed };
+}
+
+
 // ── Contas a pagar / receber ───────────────────────────────────────────────
 //
 // ⚠️ Diferença deliberada em relação ao Bling 1: lá estas contas caem em
@@ -1175,6 +1249,10 @@ const SYNCS: Record<string, (a: Admin, t: string, l: string) => Promise<SyncResu
   // versões na mesma passada seria trabalho repetido.
   orders_recente: syncOrdersRecente,
   nfe_recente: syncNFeRecente,
+  // Reconfere a situação das notas ligadas a pedido importado. Fica fora do
+  // "all": é varredura dirigida, disparada quando se quer certeza sobre o
+  // faturamento, não a cada rodada.
+  nfe_recheck: syncNfeRecheck,
 };
 
 // Ordem importa: `variacoes` e `stock` leem `bling2_products`; contas leem

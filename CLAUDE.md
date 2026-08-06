@@ -142,9 +142,13 @@ quando a operação online passou a rodar na conta 2: pedido ATENDIDO
 - Canal vem de `bling2_lojas`: loja ≠ 0 e não ignorada → `segmento = 'online'`.
   Loja 0 é venda direta. ⚠️ `'online'` teve de entrar no CHECK de `segmento`,
   que só aceitava consumo/revenda — valor novo ali é INSERT falhando calado.
-- **NF não é casada.** No Bling 1 o vínculo é o número do pedido na observação
-  da NF; na conta 2 as NFs vêm com observação vazia e sem pedido no `raw_data`.
-  Casar por valor+data erraria em silêncio, então os campos de NF ficam nulos.
+- **A NF manda, e o vínculo é exato.** Cancelar a NF no Bling NÃO cancela o
+  pedido — ele segue "Atendido". Um cliente tinha 12 pedidos importados com 11
+  notas canceladas. O vínculo está em `raw_detalhe->notaFiscal->id` (coluna
+  gerada `bling2_orders.nf_bling_id`); a ponte exige situação na lista branca
+  (`bling2_nf_e_valida`). ⚠️ Nota cancelada SOME da listagem `/nfe`, então o
+  espelho congela em "Emitida DANFE" — é a entidade `nfe_recheck` que
+  reconfere pelo id, e só `/nfe/{id}` funciona para nota cancelada.
 - A ponte é SQL, não código de edge function, porque ela é banco→banco (a do
   Bling 1 também é). Entra rodando a migração, sem depender de deploy.
 - Cancelamento anda numa direção só: situação 12 cancela aqui; nada tira um
