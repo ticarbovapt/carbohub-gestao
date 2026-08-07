@@ -35,6 +35,10 @@ jobs:
           supabase functions deploy create-team-member --project-ref ${{ secrets.SUPABASE_PROJECT_ID }} --no-verify-jwt
           supabase functions deploy ecommerce-webhook --project-ref ${{ secrets.SUPABASE_PROJECT_ID }} --no-verify-jwt
           supabase functions deploy ecommerce-sync --project-ref ${{ secrets.SUPABASE_PROJECT_ID }} --no-verify-jwt
+          # Rastreio do Melhor Envio (Jadlog + Correios). --no-verify-jwt porque
+          # quem chama é o pg_cron, que manda só o X-Cron-Secret e nenhum
+          # Authorization — a função valida o segredo por dentro.
+          supabase functions deploy rastreio-sync --project-ref ${{ secrets.SUPABASE_PROJECT_ID }} --no-verify-jwt
           supabase functions deploy ml-auth --project-ref ${{ secrets.SUPABASE_PROJECT_ID }} --no-verify-jwt
           supabase functions deploy nuvemshop-auth --project-ref ${{ secrets.SUPABASE_PROJECT_ID }} --no-verify-jwt
           supabase functions deploy nuvemshop-lgpd --project-ref ${{ secrets.SUPABASE_PROJECT_ID }} --no-verify-jwt
