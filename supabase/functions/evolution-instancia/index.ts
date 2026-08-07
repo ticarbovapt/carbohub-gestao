@@ -15,6 +15,13 @@
 // Então o navegador fala com esta função, ela fala com a Evolution, e a chave
 // nunca sai do servidor.
 //
+// ── Versão da Evolution ─────────────────────────────────────────────────────
+//
+// O servidor em uso é 1.8.6 (v1). As rotas de estado, conexão e logout são
+// iguais na v1 e na v2; só o RESTART muda de verbo (PUT na v1, POST na v2), e o
+// código tenta os dois. O formato da resposta também variou entre versões, por
+// isso o estado é lido de três campos possíveis.
+//
 // ⚠️ Esta função é publicada COM verificação de JWT, ao contrário das outras
 // (rastreio-sync, kanban-n8n, webhooks). Aquelas são chamadas por máquina e se
 // defendem com segredo próprio; esta é chamada por gente logada, e derrubar o
@@ -130,8 +137,16 @@ Deno.serve(async (req: Request) => {
     }
 
     // ── Reiniciar (quando fica preso em "conectando") ────────────────────
+    //
+    // ⚠️ O VERBO muda entre versões: PUT na v1 (que é a que está no ar aqui,
+    // 1.8.6) e POST na v2. Tentar os dois custa uma chamada extra só quando a
+    // primeira falha, e evita um "405 Method Not Allowed" que ninguém liga ao
+    // número da versão do servidor.
     if (acao === "reiniciar") {
-      const r = await chamar(`/instance/restart/${INSTANCIA}`, "POST");
+      let r = await chamar(`/instance/restart/${INSTANCIA}`, "PUT");
+      if (r.status === 404 || r.status === 405) {
+        r = await chamar(`/instance/restart/${INSTANCIA}`, "POST");
+      }
       if (!r.ok) return json({ erro: `Evolution ${r.status}`, detalhe: r.corpo }, 502);
       return json({ ok: true, detalhe: r.corpo });
     }
