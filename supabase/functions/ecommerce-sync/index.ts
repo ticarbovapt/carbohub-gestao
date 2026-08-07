@@ -77,7 +77,17 @@ async function pullMercadoLivre(): Promise<Record<string, unknown>[]> {
   const since = lastSyncedAt < maxLookback ? maxLookback : lastSyncedAt;
 
   console.log(`[mercadolivre] Syncing from ${since.toISOString()}`);
-  const url = `https://api.mercadolibre.com/orders/search?seller=${sellerId}&sort=date_desc&date_created.from=${since.toISOString()}`;
+  // ⚠️ Filtra por ATUALIZAÇÃO, não por criação.
+  //
+  // Era `date_created.from`. Com ele, o pedido só é buscado na janela em que
+  // nasceu: despachado ou entregue depois, nunca mais volta — e o status dele
+  // congela para sempre no nosso espelho. Foi assim que 25 pedidos do ML já
+  // entregues ficaram parados em "pago" e a esteira nunca os moveu.
+  //
+  // `order.date_last_updated.from` traz de volta todo pedido que MUDOU desde o
+  // checkpoint, que é exatamente quando há algo novo para gravar.
+  const url = `https://api.mercadolibre.com/orders/search?seller=${sellerId}`
+    + `&sort=date_desc&order.date_last_updated.from=${since.toISOString()}`;
   const res = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
   if (!res.ok) { console.error("[mercadolivre] API error", res.status); return []; }
   const json = await res.json() as { results: Record<string, unknown>[] };
