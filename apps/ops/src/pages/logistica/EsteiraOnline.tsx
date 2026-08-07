@@ -118,9 +118,11 @@ function BotaoCopiar({ texto, oque, className = "" }: {
       type="button"
       onClick={(e) => { e.stopPropagation(); copiar(texto, oque); }}
       title={`Copiar ${oque.toLowerCase()}`}
-      className={`inline-flex items-center gap-1 rounded px-1 py-0.5 hover:bg-muted hover:text-foreground transition-colors ${className}`}
+      className={`inline-flex max-w-full items-center gap-1 rounded px-1 py-0.5 text-left transition-colors hover:bg-muted hover:text-foreground ${className}`}
     >
-      {texto}
+      {/* `break-all`: a chave da NF tem 44 caracteres sem um espaço. Sem isto
+          ela vira uma palavra indivisível que estica o diálogo inteiro. */}
+      <span className="min-w-0 break-all">{texto}</span>
       <Copy className="h-3 w-3 shrink-0 opacity-60" />
     </button>
   );
@@ -300,11 +302,25 @@ function Trajeto({ r }: { r?: RastreioCard }) {
 
 // ── Detalhe ─────────────────────────────────────────────────────────────────
 
-function Linha({ label, valor }: { label: string; valor: React.ReactNode }) {
+/**
+ * ⚠️ Quem encolhe é o RÓTULO, não o valor.
+ *
+ * A primeira versão tinha `shrink-0` no rótulo. Com um item chamado
+ * "Descarbonizante Carbozé Moto 10ml - Tratamento De Combustível E Proteção do
+ * Motor", ele se recusava a encolher, esticava a linha, e a largura vazava para
+ * o diálogo inteiro — que saía da tela pela esquerda com o valor espremido em
+ * uma letra por linha.
+ *
+ * Valor é curto e previsível (moeda, data, número); rótulo é texto de terceiro
+ * e pode ter qualquer tamanho. Então o valor fica firme e o rótulo cede.
+ */
+function Linha({ label, valor }: { label: React.ReactNode; valor: React.ReactNode }) {
   return (
-    <div className="flex items-baseline justify-between gap-4 py-1">
-      <span className="shrink-0 text-[11px] text-muted-foreground">{label}</span>
-      <span className="min-w-0 break-words text-right text-xs">{valor}</span>
+    <div className="flex items-baseline justify-between gap-3 py-1">
+      <span className="min-w-0 flex-1 break-words text-[11px] leading-snug text-muted-foreground">
+        {label}
+      </span>
+      <span className="max-w-[60%] shrink-0 break-words text-right text-xs">{valor}</span>
     </div>
   );
 }
@@ -313,7 +329,7 @@ function Bloco({ titulo, icon: Icon, children }: {
   titulo: string; icon: React.ElementType; children: React.ReactNode;
 }) {
   return (
-    <section className="rounded-lg border bg-muted/20 p-3">
+    <section className="min-w-0 rounded-lg border bg-muted/20 p-3">
       <h4 className="mb-1.5 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
         <Icon className="h-3.5 w-3.5" /> {titulo}
       </h4>
@@ -333,7 +349,9 @@ function Detalhe({ row, rastreio, onClose }: {
 
   return (
     <Dialog open onOpenChange={onClose}>
-      <DialogContent className="max-w-3xl max-h-[88vh] overflow-y-auto p-0">
+      {/* Largura amarrada à janela: `max-w` sozinho não impede um filho de
+          esticar o contêiner, e foi assim que o diálogo saiu da tela. */}
+      <DialogContent className="w-[min(48rem,calc(100vw-2rem))] max-w-none max-h-[88vh] overflow-y-auto overflow-x-hidden p-0">
         {/* Cabeçalho fixo: quem é, em que etapa está e quanto vale. É o que a
             pessoa confere antes de falar com o cliente. */}
         <DialogHeader className="sticky top-0 z-10 border-b bg-background/95 px-5 py-4 backdrop-blur">
@@ -418,7 +436,7 @@ function Detalhe({ row, rastreio, onClose }: {
             </div>
           )}
 
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div className="grid min-w-0 gap-3 sm:grid-cols-2">
             <Bloco titulo="Pedido" icon={Hash}>
               <Linha label="Nº no Bling" valor={row.pedido_numero ?? "—"} />
               <Linha label="Nº na loja" valor={row.pedido_loja ?? "—"} />
@@ -454,11 +472,24 @@ function Detalhe({ row, rastreio, onClose }: {
 
           {itens.length > 0 && (
             <Bloco titulo="Itens" icon={Box}>
-              {itens.map((it, i) => (
-                <Linha key={i}
-                  label={`${it?.quantidade ?? it?.quantity ?? 1}× ${it?.descricao ?? it?.name ?? "Produto"}`}
-                  valor={brl(Number(it?.valor ?? it?.unit_price ?? 0))} />
-              ))}
+              {/* Nome do produto em cima, valor embaixo à direita. Em duas
+                  colunas, um nome de 80 caracteres não cabe em largura
+                  nenhuma — e era ele que estourava o diálogo. */}
+              <ul className="space-y-1.5">
+                {itens.map((it, i) => (
+                  <li key={i} className="min-w-0 border-b border-border/40 pb-1.5 last:border-0 last:pb-0">
+                    <div className="break-words text-xs leading-snug">
+                      <span className="text-muted-foreground">
+                        {it?.quantidade ?? it?.quantity ?? 1}×
+                      </span>{" "}
+                      {it?.descricao ?? it?.name ?? "Produto"}
+                    </div>
+                    <div className="mt-0.5 text-right text-xs font-medium tabular-nums">
+                      {brl(Number(it?.valor ?? it?.unit_price ?? 0))}
+                    </div>
+                  </li>
+                ))}
+              </ul>
             </Bloco>
           )}
         </div>
