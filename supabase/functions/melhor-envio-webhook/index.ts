@@ -114,15 +114,24 @@ Deno.serve(async (req: Request) => {
   }
 
   const codigos = [...extrairCodigos(corpo)];
+  const evento = String((corpo as Record<string, unknown>)?.event ?? "");
+
+  // O ping do Melhor Envio (confirmação de cadastro) vem com `data` vazio e
+  // não tem código — corretamente. Marcá-lo à parte mantém limpa a consulta
+  // "chegou e não virou código nenhum", que é onde se procura formato que eu
+  // não entendo. Sinal de vida não pode ocupar o lugar reservado ao alarme.
+  const ehPing = evento === "webhook.ping";
 
   const { data: registro } = await supabase
     .from("rastreio_webhook_log")
     .insert({
       origem: "melhorenvio",
-      evento: (corpo as Record<string, unknown>)?.event as string ?? null,
+      evento: evento || null,
       codigos,
       payload: corpo,
-      acao: codigos.length ? "disparado" : "sem codigo no payload",
+      acao: ehPing ? "ping (webhook vivo)"
+          : codigos.length ? "disparado"
+          : "sem codigo no payload",
     })
     .select("id")
     .maybeSingle();
