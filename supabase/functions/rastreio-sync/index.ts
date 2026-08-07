@@ -256,6 +256,10 @@ interface ItemFila {
   transportadora: string | null; servico: string | null; fonte_id: string | null;
 }
 
+// Quantos envios entraram pela auto-cura na última montagem de fila. Vai na
+// resposta da função: número que não aparece é número em que ninguém confia.
+let reprocessados = 0;
+
 async function montarFila(): Promise<ItemFila[]> {
   const { data: esteira, error } = await supabase
     .from("bling2_esteira")
@@ -307,15 +311,22 @@ async function montarFila(): Promise<ItemFila[]> {
   //
   // Estes já têm `fonte_id`, então reprocessá-los não custa busca nenhuma:
   // entram na mesma chamada em lote dos outros.
-  const { data: pendentes } = await supabase
-    .from("rastreio_card")
-    .select("codigo,fonte_id,bling_id,transportadora,servico,qtd_eventos")
+  // ⚠️ Filtro por `erro is not null` na TABELA, não por `qtd_eventos = 0` na
+  // view. A primeira versão filtrava pela coluna calculada e voltou vazia sem
+  // dizer por quê — e eu não olhava o erro da consulta, exatamente o descuido
+  // que passei o dia corrigindo em outros lugares. Coluna real, filtro simples,
+  // e o resultado aparece na resposta da função.
+  const { data: pendentes, error: erroPendentes } = await supabase
+    .from("rastreio_envios")
+    .select("codigo,fonte_id,bling_id,transportadora,servico")
     .eq("fonte", "melhorenvio")
-    .eq("qtd_eventos", 0)
+    .not("erro", "is", null)
     .not("fonte_id", "is", null)
     .limit(30);
+  if (erroPendentes) console.error("[rastreio-sync] pendentes:", erroPendentes.message);
 
   const jaNaFila = new Set(fila.map((f) => f.codigo));
+  reprocessados = 0;
   for (const p of pendentes ?? []) {
     if (jaNaFila.has(String(p.codigo))) continue;
     fila.push({
@@ -326,6 +337,7 @@ async function montarFila(): Promise<ItemFila[]> {
       servico: p.servico ?? null,
       fonte_id: p.fonte_id ?? null,
     });
+    reprocessados++;
   }
 
   return fila;
@@ -497,7 +509,10 @@ Deno.serve(async (req: Request) => {
       if (r.ok) { gravados++; novos += r.novos; }
     }
 
-    return json({ ok: true, fila: fila.length, rastreados: gravados, eventos_novos: novos, sem_historico: semHistorico });
+    return json({
+      ok: true, fila: fila.length, reprocessados,
+      rastreados: gravados, eventos_novos: novos, sem_historico: semHistorico,
+    });
   } catch (e) {
     console.error("[rastreio-sync]", e);
     return json({ error: String((e as Error)?.message ?? e) }, 500);
