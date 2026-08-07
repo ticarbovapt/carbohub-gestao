@@ -5,7 +5,6 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
-import { CarboCard, CarboCardContent } from "@/components/ui/carbo-card";
 import { CarboBadge } from "@/components/ui/carbo-badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -534,27 +533,26 @@ function Mini({ rotulo, valor, destaque }: {
 // ── Página ──────────────────────────────────────────────────────────────────
 
 /**
- * Indicadores numa FAIXA, não em quatro cartões.
+ * Indicador inline, na barra de filtros.
  *
- * Quatro cartões gastavam ~110px de altura para mostrar quatro números — e
- * altura é o recurso escasso aqui: cada pixel gasto em cima é um card a menos
- * visível na coluna. Numa tela de operação, o quadro é o conteúdo; o placar é
- * contexto.
+ * ⚠️ Já foi de dois jeitos errados: quatro cartões (110px de altura para quatro
+ * números) e uma faixa de largura total (os quatro itens espalhados por 1850px,
+ * cada um colado à esquerda da sua fatia, com um vão enorme no meio — "esticado
+ * e pouco natural", e com razão).
+ *
+ * O certo é não ocupar largura que não precisa: os números entram na linha que
+ * já existe, encostados à direita. A linha fica equilibrada (controles à
+ * esquerda, leitura à direita), some um bloco inteiro de altura, e o quadro
+ * ganha o espaço — que é o conteúdo desta tela.
  */
 function Indicador({ icon: Icon, cor, rotulo, valor }: {
   icon: React.ElementType; cor: string; rotulo: string; valor: string;
 }) {
   return (
-    <div className="flex min-w-0 flex-1 items-center gap-2 px-3 py-2">
-      <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-md ${cor}`}>
-        <Icon className="h-3.5 w-3.5" />
-      </span>
-      <div className="min-w-0">
-        <div className="truncate text-[10px] uppercase leading-none tracking-wide text-muted-foreground">
-          {rotulo}
-        </div>
-        <div className="mt-1 truncate text-sm font-bold leading-none tabular-nums">{valor}</div>
-      </div>
+    <div className="flex shrink-0 items-center gap-1.5" title={rotulo}>
+      <Icon className={`h-3.5 w-3.5 shrink-0 ${cor}`} />
+      <span className="text-sm font-semibold leading-none tabular-nums">{valor}</span>
+      <span className="hidden text-[11px] leading-none text-muted-foreground xl:inline">{rotulo}</span>
     </div>
   );
 }
@@ -667,20 +665,6 @@ export default function EsteiraOnline() {
         description="Da venda à entrega, direto do Bling e das plataformas. Espelho: nada aqui se arrasta."
       />
 
-      <CarboCard>
-        <CarboCardContent className="flex flex-wrap items-center divide-x divide-border p-0">
-          <Indicador icon={ShoppingCart} cor="bg-blue-500/10 text-blue-500"
-                     rotulo="Em andamento" valor={String(emAndamento.length)} />
-          <Indicador icon={Package} cor="bg-carbo-green/10 text-carbo-green"
-                     rotulo="Valor em trânsito"
-                     valor={brl(emAndamento.reduce((s, r) => s + (r.total || 0), 0))} />
-          <Indicador icon={CheckCircle2} cor="bg-emerald-500/10 text-emerald-500"
-                     rotulo="Entregues" valor={String(porEtapa.get("entregue")?.length ?? 0)} />
-          <Indicador icon={AlertTriangle} cor="bg-amber-500/10 text-amber-500"
-                     rotulo="Precisam de atenção" valor={String(problemas)} />
-        </CarboCardContent>
-      </CarboCard>
-
       <div className="flex flex-wrap items-center gap-2">
         <div className="relative max-w-xs flex-1">
           <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
@@ -710,6 +694,18 @@ export default function EsteiraOnline() {
             <span className="ml-0.5 rounded bg-background/20 px-1 tabular-nums">{problemas}</span>
           )}
         </Button>
+
+        <div className="ml-auto flex flex-wrap items-center gap-x-4 gap-y-2 sm:gap-x-5">
+          <Indicador icon={ShoppingCart} cor="text-blue-500"
+                     rotulo="em andamento" valor={String(emAndamento.length)} />
+          <Indicador icon={Package} cor="text-carbo-green"
+                     rotulo="em trânsito"
+                     valor={brl(emAndamento.reduce((s, r) => s + (r.total || 0), 0))} />
+          <Indicador icon={CheckCircle2} cor="text-emerald-500"
+                     rotulo="entregues" valor={String(porEtapa.get("entregue")?.length ?? 0)} />
+          <Indicador icon={AlertTriangle} cor="text-amber-500"
+                     rotulo="precisam de atenção" valor={String(problemas)} />
+        </div>
       </div>
 
       {isLoading ? (
