@@ -105,6 +105,7 @@ export interface EventoRastreio {
 export interface RastreioCard {
   codigo: string;
   fonte: string;
+  fonte_id: string | null;
   transportadora: string | null;
   servico: string | null;
   status: string | null;
@@ -121,7 +122,26 @@ export interface RastreioCard {
   eventos: EventoRastreio[];
 }
 
-/** Indexado pelo código — é assim que o card acha o dele. */
+/**
+ * O Mercado Livre usa DOIS formatos de código, e o Bling grava o que recebeu:
+ *
+ *   UXFQDCNSVVJETJBI4MBHGRKTVQ   26 caracteres
+ *   MEL47693987878FMDOF01        MEL + id do envio + sufixo
+ *
+ * Os dois são válidos — em parte dos pedidos o próprio `tracking_number` da
+ * API vem no formato MEL. O problema é que, quando os formatos DIFEREM entre
+ * o Bling e a API, o código do card não encontra o trajeto e o pedido aparece
+ * sem nada, sem erro nenhum. Foi o que deixou os 48 em trânsito vazios.
+ *
+ * Os dígitos do meio são o id do envio, que gravamos em `fonte_id`. Por isso o
+ * casamento tenta as duas portas: o código exato e, se falhar, o id extraído.
+ */
+function idDoEnvioML(codigo: string): string | null {
+  return codigo.match(/^MEL(\d+)/)?.[1] ?? null;
+}
+
+/** Indexado pelo código COMO ELE ESTÁ NA ESTEIRA — é assim que o card acha o
+ *  dele, independente de qual dos dois formatos o Bling registrou. */
 export function useRastreios(codigos: string[]) {
   // A chave da query precisa ser estável: `codigos` é um array novo a cada
   // render, e sem ordenar/juntar o TanStack refaria a consulta para sempre.
@@ -131,16 +151,38 @@ export function useRastreios(codigos: string[]) {
     enabled: chave.length > 0,
     queryFn: async (): Promise<Map<string, RastreioCard>> => {
       const lista = chave.split(",").filter(Boolean);
+      const ids = lista.map(idDoEnvioML).filter(Boolean) as string[];
+
+      // O PostgREST monta o `in` na URL; lotes de 200 mantêm isso verdadeiro
+      // quando a operação crescer.
+      const buscar = async (coluna: string, valores: string[]) => {
+        const achados: RastreioCard[] = [];
+        for (let i = 0; i < valores.length; i += 200) {
+          const { data, error } = await (supabase as any)
+            .from("rastreio_card")
+            .select("*")
+            .in(coluna, valores.slice(i, i + 200));
+          if (error) throw error;
+          achados.push(...((data ?? []) as RastreioCard[]));
+        }
+        return achados;
+      };
+
+      const porCodigo = new Map<string, RastreioCard>();
+      for (const r of await buscar("codigo", lista)) porCodigo.set(r.codigo, r);
+
+      const porFonteId = new Map<string, RastreioCard>();
+      if (ids.length) {
+        for (const r of await buscar("fonte_id", ids)) {
+          if (r.fonte_id) porFonteId.set(r.fonte_id, r);
+        }
+      }
+
       const mapa = new Map<string, RastreioCard>();
-      // O PostgREST monta o `in` na URL; 130 códigos de 13 caracteres cabem,
-      // mas em lotes de 200 isso continua verdade quando a operação crescer.
-      for (let i = 0; i < lista.length; i += 200) {
-        const { data, error } = await (supabase as any)
-          .from("rastreio_card")
-          .select("*")
-          .in("codigo", lista.slice(i, i + 200));
-        if (error) throw error;
-        for (const r of (data ?? []) as RastreioCard[]) mapa.set(r.codigo, r);
+      for (const c of lista) {
+        const achado = porCodigo.get(c)
+          ?? (idDoEnvioML(c) ? porFonteId.get(idDoEnvioML(c)!) : undefined);
+        if (achado) mapa.set(c, achado);
       }
       return mapa;
     },
