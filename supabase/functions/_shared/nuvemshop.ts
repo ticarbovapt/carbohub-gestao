@@ -20,6 +20,8 @@ export const NUVEMSHOP_UA = "CarboHub Integracao (ti@grupocarbo.com.br)";
 export interface NuvemshopRow {
   platform: "nuvemshop";
   order_id: string;
+  /** Número do pedido como a LOJA mostra (#276). Não é o id interno. */
+  platform_order_number: string | null;
   product_sku: string | null;
   product_name: string | null;
   quantity: number;
@@ -108,6 +110,15 @@ export function mapNuvemshopOrder(order: any, syncSource = "webhook"): Nuvemshop
   const orderId = String(order?.id ?? "");
   if (!orderId) return [];
 
+  // ⚠️ O NÚMERO da loja é outro campo, e é ele que o Bling guarda em
+  // `numero_loja` — é o #276 do painel da Nuvemshop. O `id` acima é interno e
+  // não aparece em lugar nenhum que o time veja.
+  //
+  // Sem ele não há como ligar o pedido da plataforma ao pedido do Bling, e a
+  // esteira do online não consegue mover o card para "em trânsito"/"entregue",
+  // que é justamente o que a plataforma sabe e o Bling não.
+  const orderNumber = order?.number != null ? String(order.number) : null;
+
   const status    = mapNuvemshopStatus(order);
   const orderedAt = order?.created_at
     ? new Date(order.created_at).toISOString()
@@ -120,6 +131,7 @@ export function mapNuvemshopOrder(order: any, syncSource = "webhook"): Nuvemshop
     return [{
       platform:     "nuvemshop",
       order_id:     orderId,
+      platform_order_number: orderNumber,
       product_sku:  null,
       product_name: null,
       quantity:     1,
@@ -140,6 +152,10 @@ export function mapNuvemshopOrder(order: any, syncSource = "webhook"): Nuvemshop
     return {
       platform:     "nuvemshop" as const,
       order_id:     `${orderId}-${lineId}`,
+      // ⚠️ Aqui `raw` guarda só a LINHA do produto, não o pedido — então este
+      // campo é a ÚNICA cópia do número do pedido nesta linha. Some daqui e
+      // não há de onde recuperar sem re-sincronizar.
+      platform_order_number: orderNumber,
       product_sku:  p?.sku ? String(p.sku) : null,
       product_name: p?.name ? String(p.name) : null,
       quantity:     qty,

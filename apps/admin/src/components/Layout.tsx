@@ -3,7 +3,7 @@ import { Outlet, useNavigate } from "react-router-dom";
 import {
   Users as UsersIcon, ListTree, Globe, Target, Activity,
   Store, Building2, TrendingUp, LineChart, Trophy, BarChart3, BadgePercent, Tags, ShieldCheck, MessagesSquare,
-  Gauge, Boxes, MapPin,
+  Gauge, Boxes, MapPin, Truck,
 } from "lucide-react";
 import { TopBar } from "@/components/TopBar";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -63,6 +63,7 @@ export function Layout() {
     ] },
     { label: "E-commerce", items: [
         { to: "/ecommerce/vendas-online", label: "Vendas Online", icon: Globe },
+        { to: "/ecommerce/esteira", label: "Esteira do On-line", icon: Truck },
         { to: "/ecommerce/metas", label: "Acompanhamento de Metas", icon: Target },
     ] },
     { label: "Configurações", items: [

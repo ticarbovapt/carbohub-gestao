@@ -9,6 +9,7 @@ import BugReports from "./pages/BugReports";
 import MinhaEquipe from "./pages/MinhaEquipe";
 import EcommerceVendas from "./pages/EcommerceVendas";
 import EcommerceMetas from "./pages/EcommerceMetas";
+import EsteiraOnline from "./pages/EsteiraOnline";
 import MetaConfig from "./pages/MetaConfig";
 import Vender from "./pages/Vender";
 import UltimoAcesso from "./pages/UltimoAcesso";
@@ -54,6 +55,7 @@ export default function App() {
         {/* Grupos trazidos do Ops — em organização (conteúdo aos poucos) */}
         <Route path="/ecommerce/vendas-online" element={<EcommerceVendas />} />
         <Route path="/ecommerce/metas" element={<EcommerceMetas />} />
+        <Route path="/ecommerce/esteira" element={<EsteiraOnline />} />
         <Route path="/metas/configurar" element={<MetaConfig />} />
         <Route path="/vender" element={<Vender />} />
         <Route path="/ultimo-acesso" element={<UltimoAcesso />} />
