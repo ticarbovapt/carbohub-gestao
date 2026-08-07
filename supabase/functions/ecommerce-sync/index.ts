@@ -2,6 +2,9 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import {
   getNuvemshopCreds, fetchNuvemshopOrdersSince, mapNuvemshopOrder, enrichUnitsReal,
 } from "../_shared/nuvemshop.ts";
+import {
+  gravarRastreio, type EventoRastreio, type StatusRastreio,
+} from "../_shared/rastreio.ts";
 
 const supabase = createClient(
   Deno.env.get("SUPABASE_URL")!,
@@ -161,11 +164,96 @@ async function fetchMLShipmentStatus(
       headers: { Authorization: `Bearer ${accessToken}` },
     });
     if (!res.ok) { console.error("[mercadolivre] shipment", id, res.status); return null; }
-    const s = await res.json() as { status?: string; substatus?: string };
+    const s = await res.json() as MLShipment;
+
+    // A mesma resposta que já pagávamos traz o rastreio inteiro: número,
+    // previsão e as datas de cada etapa. Antes só o `status` era aproveitado e
+    // o resto ia para o lixo. Gravar aqui não custa uma chamada a mais.
+    await gravarRastreioML(s);
+
     return normalizeMLShipmentStatus(String(s?.status ?? ""));
   } catch (e) {
     console.error("[mercadolivre] shipment", id, "falhou:", e);
     return null;
+  }
+}
+
+interface MLShipment {
+  id?: number | string;
+  status?: string;
+  substatus?: string;
+  tracking_number?: string | null;
+  tracking_method?: string | null;
+  estimated_delivery_time?: { date?: string | null } | null;
+  status_history?: Record<string, string | null> | null;
+}
+
+/**
+ * Mercado Envios → `rastreio_envios` / `rastreio_eventos`.
+ *
+ * O ML não expõe o trajeto do transportador (as bipagens de centro de
+ * distribuição). O que ele dá é o `status_history`: a data em que o envio
+ * entrou em cada etapa. É menos granular que os Correios, mas é o caminho
+ * real, com carimbo de tempo — e é o que dá para prometer ao cliente.
+ *
+ * Sem `tracking_number` não há o que gravar: a chave das nossas tabelas é o
+ * código, e envio Flex/retirada não tem um.
+ */
+async function gravarRastreioML(s: MLShipment): Promise<void> {
+  const codigo = (s.tracking_number ?? "").trim();
+  if (!codigo) return;
+
+  const h = s.status_history ?? {};
+  // Ordem do fluxo, não do objeto: o JSON não garante ordem de chave, e um
+  // trajeto fora de ordem no card parece dado corrompido.
+  const marcos: Array<[keyof typeof h, string, StatusRastreio]> = [
+    ["date_handling",      "Pedido em preparação",           "postado"],
+    ["date_ready_to_ship", "Pronto para envio",              "postado"],
+    ["date_shipped",       "Coletado pela transportadora",   "em_transito"],
+    ["date_first_visit",   "Saiu para entrega",              "saiu_entrega"],
+    ["date_delivered",     "Entregue",                       "entregue"],
+    ["date_not_delivered", "Tentativa de entrega sem sucesso", "problema"],
+    ["date_cancelled",     "Envio cancelado",                "cancelado"],
+  ];
+
+  const eventos: EventoRastreio[] = [];
+  for (const [chave, descricao, status] of marcos) {
+    const quando = h[chave];
+    if (quando) eventos.push({ ocorrido_em: new Date(quando).toISOString(), descricao, status });
+  }
+
+  const entregue = h["date_delivered"] ?? null;
+  await gravarRastreio(supabase, {
+    codigo,
+    fonte: "mercadolivre",
+    transportadora: s.tracking_method ?? "Mercado Envios",
+    status: mapaStatusRastreioML(String(s.status ?? "")),
+    status_descricao: [s.status, s.substatus].filter(Boolean).join(" / ") || null,
+    previsao_entrega: s.estimated_delivery_time?.date
+      ? new Date(s.estimated_delivery_time.date).toISOString().slice(0, 10)
+      : null,
+    postado_em: h["date_shipped"] ? new Date(h["date_shipped"]).toISOString() : null,
+    entregue_em: entregue ? new Date(entregue).toISOString() : null,
+    // Sem link público: o comprador do ML rastreia dentro do próprio app.
+    url_rastreio: null,
+    raw: s,
+  }, eventos);
+}
+
+/** Status do envio → nossa lista branca. Diferente do `normalizeMLShipmentStatus`
+ *  logo abaixo, que responde outra pergunta: aquele decide o status do PEDIDO
+ *  (e devolve null antes da coleta, para o pagamento prevalecer); este descreve
+ *  onde a CAIXA está. Juntar os dois já quebrou coisa em outros lugares deste
+ *  repositório — são vocabulários diferentes com nomes parecidos. */
+function mapaStatusRastreioML(s: string): StatusRastreio | null {
+  switch (s) {
+    case "handling":
+    case "ready_to_ship": return "postado";
+    case "shipped":       return "em_transito";
+    case "delivered":     return "entregue";
+    case "not_delivered": return "problema";
+    case "cancelled":     return "cancelado";
+    default:              return null;
   }
 }
 

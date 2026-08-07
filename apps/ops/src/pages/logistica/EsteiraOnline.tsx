@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import {
   Truck, Package, FileText, CheckCircle2, ShoppingCart, Copy, XCircle, Loader2, MapPin, Phone,
+  CalendarClock, ExternalLink, MessageSquare,
 } from "lucide-react";
 import { toast } from "sonner";
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
@@ -10,7 +11,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { useEsteiraOnline, ETAPAS, type EsteiraRow, type EtapaEsteira } from "@/hooks/useEsteiraOnline";
+import {
+  useEsteiraOnline, useRastreios, ETAPAS,
+  type EsteiraRow, type EtapaEsteira, type RastreioCard,
+} from "@/hooks/useEsteiraOnline";
 
 const brl = (v: number) => (v || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 const dia = (s: string | null) => (s ? new Date(s + "T12:00:00").toLocaleDateString("pt-BR") : "—");
@@ -33,8 +37,40 @@ const copiar = (texto: string, oque: string) => {
     .catch(() => toast.error("Não consegui copiar"));
 };
 
+/** Data curta com o dia da semana — "qui, 14/08". Numa previsão de entrega o
+ *  dia da semana é metade da informação: "chega quinta" é o que o time fala com
+ *  o cliente, e sexta-feira à tarde muda a conversa. */
+const diaCurto = (s: string | null) => {
+  if (!s) return "—";
+  const d = new Date(s.length <= 10 ? `${s}T12:00:00` : s);
+  return d.toLocaleDateString("pt-BR", { weekday: "short", day: "2-digit", month: "2-digit" });
+};
+
+const dataHora = (s: string | null) =>
+  s ? new Date(s).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : "—";
+
+/** Mensagem pronta para o cliente. O time copia e manda pelo canal dele —
+ *  não existe envio automático (ainda), e essa foi a decisão: o disparo é
+ *  manual até termos um canal oficial. */
+function mensagemCliente(row: EsteiraRow, r?: RastreioCard): string {
+  const nome = (row.cliente ?? "").split(" ")[0] || "Olá";
+  const linhas = [
+    `Oi, ${nome}! Aqui é da Carbo 👋`,
+    ``,
+    `Seu pedido${row.pedido_loja ? ` ${row.pedido_loja}` : ""} já está a caminho.`,
+  ];
+  if (row.transportadora) linhas.push(`Transportadora: ${row.transportadora}${row.servico ? ` (${row.servico})` : ""}`);
+  if (row.rastreio) linhas.push(`Código de rastreio: ${row.rastreio}`);
+  if (r?.url_rastreio) linhas.push(`Acompanhe aqui: ${r.url_rastreio}`);
+  if (r?.previsao_entrega) linhas.push(`Previsão de entrega: ${diaCurto(r.previsao_entrega)}`);
+  linhas.push(``, `Qualquer dúvida é só chamar por aqui.`);
+  return linhas.join("\n");
+}
+
 // ── Card ────────────────────────────────────────────────────────────────────
-function Card({ row, onClick }: { row: EsteiraRow; onClick: () => void }) {
+function Card({ row, rastreio, onClick }: {
+  row: EsteiraRow; rastreio?: RastreioCard; onClick: () => void;
+}) {
   return (
     <button
       onClick={onClick}
@@ -63,11 +99,128 @@ function Card({ row, onClick }: { row: EsteiraRow; onClick: () => void }) {
       {row.rastreio && (
         <div className="mt-0.5 font-mono text-[11px] text-carbo-green truncate">{row.rastreio}</div>
       )}
+
+      {/* Previsão e última movimentação: o que o time precisa para responder
+          "onde está?" sem abrir o card nem o site da transportadora. */}
+      {rastreio?.previsao_entrega && (
+        <div className={`mt-1 flex items-center gap-1 text-[11px] font-medium ${
+          rastreio.atrasado ? "text-red-500" : "text-muted-foreground"
+        }`}>
+          <CalendarClock className="h-3 w-3 shrink-0" />
+          {rastreio.entregue_em
+            ? `entregue ${diaCurto(rastreio.entregue_em)}`
+            : `${rastreio.atrasado ? "previa " : "previsão "}${diaCurto(rastreio.previsao_entrega)}`}
+          {rastreio.atrasado && <span className="ml-0.5">· atrasado</span>}
+        </div>
+      )}
+      {rastreio?.eventos?.[0] && (
+        <div className="mt-0.5 flex items-start gap-1 text-[11px] text-muted-foreground">
+          <MapPin className="h-3 w-3 mt-px shrink-0" />
+          <span className="truncate">{rastreio.eventos[0].descricao}</span>
+        </div>
+      )}
+
       <div className="mt-1.5 flex items-center justify-between text-[11px] text-muted-foreground">
         <span>{row.nf_numero ? `NF ${row.nf_numero}` : "sem NF"}</span>
         <span>{dia(row.data_pedido)}</span>
       </div>
     </button>
+  );
+}
+
+// ── Trajeto ─────────────────────────────────────────────────────────────────
+//
+// O caminho do volume, do mais recente para o mais antigo. Quem preenche são o
+// `ecommerce-sync` (Mercado Envios) e o `rastreio-sync` (Melhor Envio — Jadlog
+// e Correios). A tela só desenha: nenhuma etapa é deduzida aqui.
+function Trajeto({ row, r }: { row: EsteiraRow; r?: RastreioCard }) {
+  if (!r) {
+    return (
+      <section>
+        <h4 className="text-[11px] font-semibold uppercase text-muted-foreground mb-1">Trajeto</h4>
+        <p className="text-[11px] text-muted-foreground">
+          Ainda não consultamos este código. A coleta roda de hora em hora e busca
+          primeiro os envios que não chegaram.
+        </p>
+      </section>
+    );
+  }
+
+  return (
+    <section>
+      <div className="flex items-center justify-between mb-1">
+        <h4 className="text-[11px] font-semibold uppercase text-muted-foreground">Trajeto</h4>
+        <span className="text-[10px] text-muted-foreground">
+          consultado {dataHora(r.consultado_em)}
+        </span>
+      </div>
+
+      {r.previsao_entrega && (
+        <Linha
+          label={r.entregue_em ? "Entregue em" : "Previsão de entrega"}
+          valor={
+            <span className={r.atrasado ? "text-red-500 font-medium" : ""}>
+              {diaCurto(r.entregue_em ?? r.previsao_entrega)}
+              {r.atrasado && " · atrasado"}
+            </span>
+          }
+        />
+      )}
+
+      {/* Consulta que falhou não pode virar lista vazia: quem lê precisa saber
+          se o pacote não se moveu ou se nós não conseguimos perguntar. */}
+      {r.erro && (
+        <p className="mt-1 text-[11px] text-amber-500">
+          Não consegui ler o histórico desta transportadora: {r.erro}
+        </p>
+      )}
+
+      {r.eventos.length === 0 && !r.erro && (
+        <p className="mt-1 text-[11px] text-muted-foreground">
+          A transportadora ainda não registrou movimentação neste código.
+        </p>
+      )}
+
+      {r.eventos.length > 0 && (
+        <ol className="mt-2 space-y-0">
+          {r.eventos.map((e, i) => (
+            <li key={`${e.ocorrido_em}-${i}`} className="flex gap-2">
+              {/* Linha do tempo: bolinha cheia no evento mais recente. */}
+              <div className="flex flex-col items-center pt-1">
+                <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${
+                  i === 0 ? "bg-carbo-green" : "bg-muted-foreground/40"
+                }`} />
+                {i < r.eventos.length - 1 && <span className="w-px flex-1 bg-border" />}
+              </div>
+              <div className="pb-2 min-w-0">
+                <div className={`text-xs ${i === 0 ? "font-medium" : "text-muted-foreground"}`}>
+                  {e.descricao}
+                </div>
+                <div className="text-[10px] text-muted-foreground">
+                  {dataHora(e.ocorrido_em)}
+                  {(e.cidade || e.uf) && ` · ${[e.cidade, e.uf].filter(Boolean).join("/")}`}
+                </div>
+              </div>
+            </li>
+          ))}
+        </ol>
+      )}
+
+      <div className="mt-2 flex flex-wrap gap-2">
+        {r.url_rastreio && (
+          <a href={r.url_rastreio} target="_blank" rel="noreferrer"
+             className="inline-flex items-center gap-1 text-xs text-carbo-green hover:underline">
+            <ExternalLink className="h-3.5 w-3.5" /> Abrir na transportadora
+          </a>
+        )}
+        <button
+          onClick={() => copiar(mensagemCliente(row, r), "Mensagem")}
+          className="inline-flex items-center gap-1 text-xs text-carbo-green hover:underline"
+        >
+          <MessageSquare className="h-3.5 w-3.5" /> Copiar mensagem para o cliente
+        </button>
+      </div>
+    </section>
   );
 }
 
@@ -81,7 +234,9 @@ function Linha({ label, valor }: { label: string; valor: React.ReactNode }) {
   );
 }
 
-function Detalhe({ row, onClose }: { row: EsteiraRow; onClose: () => void }) {
+function Detalhe({ row, rastreio, onClose }: {
+  row: EsteiraRow; rastreio?: RastreioCard; onClose: () => void;
+}) {
   const itens = Array.isArray(row.items) ? (row.items as any[]) : [];
   const endereco = [row.entrega_endereco, row.entrega_bairro].filter(Boolean).join(" — ");
   const cidade = [row.entrega_cidade, row.entrega_uf].filter(Boolean).join("/");
@@ -174,6 +329,8 @@ function Detalhe({ row, onClose }: { row: EsteiraRow; onClose: () => void }) {
             )}
           </section>
 
+          {row.rastreio && <Trajeto row={row} r={rastreio} />}
+
           {itens.length > 0 && (
             <section>
               <h4 className="text-[11px] font-semibold uppercase text-muted-foreground mb-1">Itens</h4>
@@ -217,6 +374,14 @@ export default function EsteiraOnline() {
     }
     return r;
   }, [data, canal, busca]);
+
+  // Os códigos visíveis, e só eles: quem some no filtro não precisa de trajeto.
+  const codigos = useMemo(
+    () => linhas.map((x) => x.rastreio).filter(Boolean) as string[],
+    [linhas],
+  );
+  const { data: mapaRastreio } = useRastreios(codigos);
+  const rastreioDe = (c: string | null) => (c ? mapaRastreio?.get(c) : undefined);
 
   const porEtapa = useMemo(() => {
     const m = new Map<EtapaEsteira, EsteiraRow[]>();
@@ -324,7 +489,8 @@ export default function EsteiraOnline() {
                 )}
                 <div className="space-y-2 max-h-[60vh] overflow-y-auto">
                   {cards.map((r) => (
-                    <Card key={r.bling_id} row={r} onClick={() => setAberto(r)} />
+                    <Card key={r.bling_id} row={r} rastreio={rastreioDe(r.rastreio)}
+                          onClick={() => setAberto(r)} />
                   ))}
                   {cards.length === 0 && (
                     <p className="px-1 py-6 text-center text-[11px] text-muted-foreground">vazio</p>
@@ -343,7 +509,8 @@ export default function EsteiraOnline() {
             {cancelados.length} cancelados — {brl(cancelados.reduce((s, r) => s + (r.total || 0), 0))}
           </summary>
           <div className="mt-3 grid grid-cols-1 md:grid-cols-3 xl:grid-cols-5 gap-2">
-            {cancelados.map((r) => <Card key={r.bling_id} row={r} onClick={() => setAberto(r)} />)}
+            {cancelados.map((r) => <Card key={r.bling_id} row={r} rastreio={rastreioDe(r.rastreio)}
+                          onClick={() => setAberto(r)} />)}
           </div>
         </details>
       )}
@@ -354,7 +521,10 @@ export default function EsteiraOnline() {
         A tela atualiza sozinha a cada 2 minutos.
       </p>
 
-      {aberto && <Detalhe row={aberto} onClose={() => setAberto(null)} />}
+      {aberto && (
+        <Detalhe row={aberto} rastreio={rastreioDe(aberto.rastreio)}
+                 onClose={() => setAberto(null)} />
+      )}
     </div>
   );
 }

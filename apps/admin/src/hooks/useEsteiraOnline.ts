@@ -80,3 +80,70 @@ export function useEsteiraOnline(dias = 30) {
     refetchInterval: 120_000,
   });
 }
+
+/* ─── Rastreio ──────────────────────────────────────────────────────────────
+ *
+ * O trajeto vem de `rastreio_card`, uma consulta SEPARADA da esteira e cruzada
+ * pelo código. Não juntei na `bling2_esteira` porque ela foi criada com `o.*`,
+ * o que congelou a lista de colunas — um CREATE OR REPLACE nela já falhou antes
+ * com "cannot change name of view column". Consulta à parte custa uma ida ao
+ * banco e não arrisca a tela que está no ar.
+ *
+ * Quem preenche são duas fontes: o `ecommerce-sync` (Mercado Envios, que ele já
+ * consultava e descartava) e o `rastreio-sync` (Melhor Envio — Jadlog e
+ * Correios). A tela não sabe nem precisa saber qual foi.
+ */
+
+export interface EventoRastreio {
+  ocorrido_em: string;
+  descricao: string;
+  status: string | null;
+  cidade: string | null;
+  uf: string | null;
+}
+
+export interface RastreioCard {
+  codigo: string;
+  fonte: string;
+  transportadora: string | null;
+  servico: string | null;
+  status: string | null;
+  status_descricao: string | null;
+  previsao_entrega: string | null;
+  postado_em: string | null;
+  entregue_em: string | null;
+  ultimo_evento_em: string | null;
+  url_rastreio: string | null;
+  consultado_em: string | null;
+  erro: string | null;
+  atrasado: boolean;
+  qtd_eventos: number;
+  eventos: EventoRastreio[];
+}
+
+/** Indexado pelo código — é assim que o card acha o dele. */
+export function useRastreios(codigos: string[]) {
+  // A chave da query precisa ser estável: `codigos` é um array novo a cada
+  // render, e sem ordenar/juntar o TanStack refaria a consulta para sempre.
+  const chave = [...new Set(codigos)].sort().join(",");
+  return useQuery({
+    queryKey: ["rastreio-card", chave],
+    enabled: chave.length > 0,
+    queryFn: async (): Promise<Map<string, RastreioCard>> => {
+      const lista = chave.split(",").filter(Boolean);
+      const mapa = new Map<string, RastreioCard>();
+      // O PostgREST monta o `in` na URL; 130 códigos de 13 caracteres cabem,
+      // mas em lotes de 200 isso continua verdade quando a operação crescer.
+      for (let i = 0; i < lista.length; i += 200) {
+        const { data, error } = await (supabase as any)
+          .from("rastreio_card")
+          .select("*")
+          .in("codigo", lista.slice(i, i + 200));
+        if (error) throw error;
+        for (const r of (data ?? []) as RastreioCard[]) mapa.set(r.codigo, r);
+      }
+      return mapa;
+    },
+    refetchInterval: 120_000,
+  });
+}
