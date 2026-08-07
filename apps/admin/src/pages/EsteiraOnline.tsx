@@ -229,7 +229,9 @@ function Card({ row, rastreio, cor, onClick }: {
           {row.transportadora && (
             <span className="flex min-w-0 items-center gap-1 text-[10px] leading-4 text-muted-foreground/70">
               <Truck className="h-3 w-3 shrink-0" />
-              <span className="truncate">{row.transportadora}</span>
+              <span className="truncate">
+                {row.transportadora}{row.servico ? ` · ${row.servico}` : ""}
+              </span>
             </span>
           )}
         </div>
@@ -238,16 +240,20 @@ function Card({ row, rastreio, cor, onClick }: {
       {/* Rodapé sem divisória: separado por hierarquia, não por régua. O número
           da NF saiu — é dado de conferência, está no detalhe e na busca. Fica
           só o caso NEGATIVO, que é o que merece atenção. */}
-      {(!row.nf_numero || row.rastreio) && (
-        <div className="mt-1.5 flex items-center justify-between gap-2 text-[10px] leading-4 text-muted-foreground/70">
+      {/* NF, data e rastreio numa linha só. Eu tinha tirado NF e data por
+          recomendação de "reduzir ruído" — foi um corte errado: são o que se
+          confere ao falar com o cliente. Cabem aqui sem custar altura nenhuma,
+          porque dividem a linha que o rastreio já ocupava. */}
+      <div className="mt-1.5 flex items-center justify-between gap-2 text-[10px] leading-4 text-muted-foreground/70">
+        <span className="shrink-0">
           {row.nf_numero
-            ? <span />
-            : <span className="text-amber-500/80">sem NF</span>}
-          {row.rastreio && (
-            <BotaoCopiar texto={row.rastreio} oque="Rastreio" className="min-w-0 font-mono" />
-          )}
-        </div>
-      )}
+            ? <>NF {row.nf_numero} · {dia(row.data_pedido)}</>
+            : <span className="text-amber-500/80">sem NF · {dia(row.data_pedido)}</span>}
+        </span>
+        {row.rastreio && (
+          <BotaoCopiar texto={row.rastreio} oque="Rastreio" className="min-w-0 font-mono" />
+        )}
+      </div>
     </div>
   );
 }
@@ -626,7 +632,13 @@ export default function EsteiraOnline() {
       if (r.etapa === "cancelado") continue;
       m.get(r.etapa)?.push(r);
     }
-    for (const lista of m.values()) {
+    for (const [etapa, lista] of m.entries()) {
+      // "Entregue" é registro, não fila: a entrega mais recente no topo.
+      // Nas filas ativas, o topo é quem está parado há mais tempo.
+      if (etapa === "entregue") {
+        lista.sort((a, b) => (b.data_pedido ?? "").localeCompare(a.data_pedido ?? ""));
+        continue;
+      }
       lista.sort((a, b) => {
         const u = urgencia(a) - urgencia(b);
         if (u !== 0) return u;
@@ -636,22 +648,6 @@ export default function EsteiraOnline() {
     return m;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visiveis, mapaRastreio]);
-
-  /**
-   * "Entregue" NÃO entra no quadro.
-   *
-   * São 81 de 148 pedidos — 55% da tela dedicada a uma fila sobre a qual
-   * ninguém age: pedido entregue está resolvido. Ela ocupava um quinto da
-   * largura e empurrava as quatro filas ativas para colunas estreitas.
-   *
-   * Vira histórico recolhido, no mesmo padrão que "Cancelado" já usa, e o
-   * número continua visível na faixa de indicadores. Aqui a ordem é a natural
-   * de um registro: a entrega mais recente primeiro.
-   */
-  const ETAPAS_ATIVAS = ETAPAS.filter((e) => e.key !== "entregue");
-  const entregues = [...visiveis]
-    .filter((r) => r.etapa === "entregue")
-    .sort((a, b) => (b.data_pedido ?? "").localeCompare(a.data_pedido ?? ""));
 
   const cancelados = visiveis.filter((r) => r.etapa === "cancelado");
   const emAndamento = visiveis.filter((r) => r.etapa !== "cancelado");
@@ -734,12 +730,12 @@ export default function EsteiraOnline() {
            `justify-center` só aparece em monitor muito largo, quando o teto é
            atingido: folga simétrica lê como intenção; buraco só à direita, não. */
         <div className="flex min-h-0 flex-1 justify-center gap-3 overflow-x-auto overscroll-x-contain pb-2">
-          {ETAPAS_ATIVAS.map((etapa) => {
+          {ETAPAS.map((etapa) => {
             const cards = porEtapa.get(etapa.key) ?? [];
             const valor = cards.reduce((s, r) => s + (r.total || 0), 0);
             return (
               <div key={etapa.key}
-                   className="flex min-w-[264px] max-w-[360px] shrink-0 grow basis-0 flex-col overflow-hidden rounded-xl border bg-muted/20">
+                   className="flex min-w-[272px] max-w-[320px] shrink-0 grow basis-0 flex-col overflow-hidden rounded-xl border bg-muted/20">
                 <div className="shrink-0 border-b bg-muted/40 px-3 py-2">
                   <div className="flex items-center justify-between gap-2">
                     <span className="flex min-w-0 items-center gap-1.5">
@@ -775,22 +771,6 @@ export default function EsteiraOnline() {
             );
           })}
         </div>
-      )}
-
-      {entregues.length > 0 && (
-        <details className="shrink-0 rounded-xl border p-3">
-          <summary className="flex cursor-pointer items-center gap-1.5 text-xs font-medium">
-            <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
-            {entregues.length} entregues — {brl(entregues.reduce((s, r) => s + (r.total || 0), 0))}
-            <span className="font-normal text-muted-foreground">· histórico, nada a fazer</span>
-          </summary>
-          <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-3 xl:grid-cols-5">
-            {entregues.map((r) => (
-              <Card key={r.bling_id} row={r} rastreio={rastreioDe(r.rastreio)}
-                    cor="#10b981" onClick={() => setAberto(r)} />
-            ))}
-          </div>
-        </details>
       )}
 
       {cancelados.length > 0 && (
