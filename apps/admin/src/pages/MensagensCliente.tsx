@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
+import { Link, useSearchParams } from "react-router-dom";
 import {
   MessageSquare, Save, Loader2, CheckCircle2, XCircle, Clock, AlertTriangle, Send, Eye,
+  ArrowLeft,
 } from "lucide-react";
 import { toast } from "sonner";
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
@@ -188,6 +190,12 @@ const ICONE_STATUS = {
 };
 
 export default function MensagensCliente() {
+  const [params] = useSearchParams();
+  /* De onde a pessoa veio. A Esteira manda o próprio caminho porque ele muda
+     entre os apps; sem o parâmetro (link direto, favorito), o padrão é o do
+     admin, que é onde esta tela nasceu. */
+  const voltar = params.get("voltar") || "/ecommerce/esteira";
+
   const { data: templates, isLoading } = useTemplatesMsg();
   const { data: envios } = useEnviosMsg();
   const { data: naFila } = useFilaMsg();
@@ -202,6 +210,11 @@ export default function MensagensCliente() {
         description="O que o cliente recebe no WhatsApp a cada avanço da esteira. O texto se monta aqui; o n8n entrega."
         actions={
           <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
+            <Button asChild size="sm" variant="outline" className="h-8 gap-1.5">
+              <Link to={voltar}>
+                <ArrowLeft className="h-3.5 w-3.5" /> Voltar à Esteira
+              </Link>
+            </Button>
             <div className="flex items-center gap-1.5">
               <Send className="h-3.5 w-3.5 text-carbo-green" />
               <span className="text-sm font-semibold tabular-nums">{ligadas}/6</span>

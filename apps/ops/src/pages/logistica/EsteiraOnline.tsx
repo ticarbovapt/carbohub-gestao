@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import {
   Truck, Package, FileText, CheckCircle2, ShoppingCart, Copy, XCircle, Loader2, MapPin, Phone,
   CalendarClock, ExternalLink, MessageSquare, AlertTriangle, Clock, Box, User, Hash, Search,
@@ -569,6 +569,11 @@ export default function EsteiraOnline() {
   const [canal, setCanal] = useState("all");
   const [aberto, setAberto] = useState<EsteiraRow | null>(null);
   const [soProblemas, setSoProblemas] = useState(false);
+  // ⚠️ O caminho da Esteira difere entre os apps (/ecommerce/esteira no admin,
+  // /logistica/esteira no Ops) e este arquivo é byte a byte idêntico nos dois.
+  // Mandar o caminho ATUAL na URL faz o botão "voltar" da outra tela acertar
+  // sozinho, sem o arquivo precisar saber em qual app está rodando.
+  const { pathname } = useLocation();
   const { data, isLoading, error } = useEsteiraOnline(Number(dias));
 
   const canais = useMemo(
@@ -680,7 +685,7 @@ export default function EsteiraOnline() {
                 o que o cliente lê a cada etapa dela. A rota continua valendo
                 para quem tiver o link. */}
             <Button asChild size="sm" variant="outline" className="h-8 gap-1.5">
-              <Link to="/ecommerce/mensagens">
+              <Link to={`/ecommerce/mensagens?voltar=${encodeURIComponent(pathname)}`}>
                 <Settings2 className="h-3.5 w-3.5" /> Mensagens ao cliente
               </Link>
             </Button>
