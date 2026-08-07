@@ -109,8 +109,8 @@ function mensagemCliente(row: EsteiraRow, r?: RastreioCard): string {
 
 /** Botão que não propaga o clique para o card. Existe para copiar o código sem
  *  precisar abrir o detalhe — atendimento faz isso o dia inteiro. */
-function BotaoCopiar({ texto, oque, className = "" }: {
-  texto: string; oque: string; className?: string;
+function BotaoCopiar({ texto, oque, className = "", truncar = false }: {
+  texto: string; oque: string; className?: string; truncar?: boolean;
 }) {
   return (
     <button
@@ -119,9 +119,13 @@ function BotaoCopiar({ texto, oque, className = "" }: {
       title={`Copiar ${oque.toLowerCase()}`}
       className={`inline-flex max-w-full items-center gap-1 rounded px-1 py-0.5 text-left transition-colors hover:bg-muted hover:text-foreground ${className}`}
     >
-      {/* `break-all`: a chave da NF tem 44 caracteres sem um espaço. Sem isto
-          ela vira uma palavra indivisível que estica o diálogo inteiro. */}
-      <span className="min-w-0 break-all">{texto}</span>
+      {/* Dois comportamentos, e a escolha errada quebra a tela.
+          `break-all` no DIÁLOGO: a chave da NF tem 44 caracteres sem espaço e
+          precisa aparecer inteira, senão vira palavra indivisível que estica o
+          contêiner. `truncate` no CARD: em coluna de 243px (1366px de tela) um
+          código de 26 caracteres quebrava em QUATRO linhas e dobrava a altura
+          do card — medido no navegador, não suposto. */}
+      <span className={`min-w-0 ${truncar ? "truncate" : "break-all"}`}>{texto}</span>
       <Copy className="h-3 w-3 shrink-0 opacity-60" />
     </button>
   );
@@ -552,7 +556,7 @@ function Indicador({ icon: Icon, cor, rotulo, valor }: {
     <div className="flex shrink-0 items-center gap-1.5" title={rotulo}>
       <Icon className={`h-3.5 w-3.5 shrink-0 ${cor}`} />
       <span className="text-sm font-semibold leading-none tabular-nums">{valor}</span>
-      <span className="hidden text-[11px] leading-none text-muted-foreground xl:inline">{rotulo}</span>
+      <span className="text-[11px] leading-none text-muted-foreground">{rotulo}</span>
     </div>
   );
 }
@@ -658,11 +662,28 @@ export default function EsteiraOnline() {
        dos indicadores e dos filtros — e quebrava assim que os filtros
        passavam para duas linhas. ⚠️ TODO ancestral do scroller precisa de
        `min-h-0`, senão o `flex-1` para de encolher e o quadro estoura. */
-    <div className="flex h-full min-h-0 flex-col gap-4">
+    <div className="flex h-full min-h-0 flex-col gap-4 p-4 md:p-6">
+      {/* Os números vão no slot `actions` do cabeçalho: aquela faixa à direita
+          do título já existia e estava vazia. Ficavam antes na linha dos
+          filtros, que já tinha quatro controles — e o último item saía cortado
+          na borda, porque a página também não tinha margem lateral. */}
       <CarboPageHeader
         icon={Truck}
         title="Esteira do On-line"
         description="Da venda à entrega, direto do Bling e das plataformas. Espelho: nada aqui se arrasta."
+        actions={
+          <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
+            <Indicador icon={ShoppingCart} cor="text-blue-500"
+                       rotulo="em andamento" valor={String(emAndamento.length)} />
+            <Indicador icon={Package} cor="text-carbo-green"
+                       rotulo="em trânsito"
+                       valor={brl(emAndamento.reduce((s, r) => s + (r.total || 0), 0))} />
+            <Indicador icon={CheckCircle2} cor="text-emerald-500"
+                       rotulo="entregues" valor={String(porEtapa.get("entregue")?.length ?? 0)} />
+            <Indicador icon={AlertTriangle} cor="text-amber-500"
+                       rotulo="precisam de atenção" valor={String(problemas)} />
+          </div>
+        }
       />
 
       <div className="flex flex-wrap items-center gap-2">
@@ -694,18 +715,6 @@ export default function EsteiraOnline() {
             <span className="ml-0.5 rounded bg-background/20 px-1 tabular-nums">{problemas}</span>
           )}
         </Button>
-
-        <div className="ml-auto flex flex-wrap items-center gap-x-4 gap-y-2 sm:gap-x-5">
-          <Indicador icon={ShoppingCart} cor="text-blue-500"
-                     rotulo="em andamento" valor={String(emAndamento.length)} />
-          <Indicador icon={Package} cor="text-carbo-green"
-                     rotulo="em trânsito"
-                     valor={brl(emAndamento.reduce((s, r) => s + (r.total || 0), 0))} />
-          <Indicador icon={CheckCircle2} cor="text-emerald-500"
-                     rotulo="entregues" valor={String(porEtapa.get("entregue")?.length ?? 0)} />
-          <Indicador icon={AlertTriangle} cor="text-amber-500"
-                     rotulo="precisam de atenção" valor={String(problemas)} />
-        </div>
       </div>
 
       {isLoading ? (
@@ -723,15 +732,29 @@ export default function EsteiraOnline() {
            dos tetos (4 × 360 + gaps) passa da largura da tela — então nada
            estica —, e o `grow` divide o que existe — então nada sobra.
 
-           `justify-center` só aparece em monitor muito largo, quando o teto é
-           atingido: folga simétrica lê como intenção; buraco só à direita, não. */
-        <div className="flex min-h-0 flex-1 justify-center gap-3 overflow-x-auto overscroll-x-contain pb-2">
+           Limites MEDIDOS, não chutados (harness com o CSS compilado, de 1280
+           a 2560):
+
+             1366 → 243px   1440 → 258px   1920 → 354px   ← preenche exato
+             2560 → 400px (teto) e o quadro centraliza
+             1280 → 226px seria estreito demais, então o piso força rolagem
+
+           O teto de 400 existe só para o ultrawide: sem ele a coluna iria a
+           481px em 2560 e o card ficaria oco. O piso de 240 é o limite em que
+           o nome do cliente ainda cabe. `justify-center` só age quando o teto
+           morde — folga simétrica lê como intenção, buraco de um lado só não.
+
+           `items-start` + `max-h-full` na coluna: ela ABRAÇA o conteúdo e só
+           cresce até o limite da tela. Com altura fixa, "Confirmado" com um
+           card virava uma caixa de 700px quase toda vazia — e era isso que
+           continuava parecendo esticado depois de a largura já estar certa. */
+        <div className="flex min-h-0 flex-1 items-start justify-center gap-3 overflow-x-auto overscroll-x-contain pb-2">
           {ETAPAS.map((etapa) => {
             const cards = porEtapa.get(etapa.key) ?? [];
             const valor = cards.reduce((s, r) => s + (r.total || 0), 0);
             return (
               <div key={etapa.key}
-                   className="flex min-w-[272px] max-w-[320px] shrink-0 grow basis-0 flex-col overflow-hidden rounded-xl border bg-muted/20">
+                   className="flex max-h-full min-w-[240px] max-w-[400px] shrink-0 grow basis-0 flex-col overflow-hidden rounded-xl border bg-muted/20">
                 <div className="shrink-0 border-b bg-muted/40 px-3 py-2">
                   <div className="flex items-center justify-between gap-2">
                     <span className="flex min-w-0 items-center gap-1.5">
