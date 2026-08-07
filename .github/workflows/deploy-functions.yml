@@ -69,6 +69,9 @@ jobs:
           # OAuth do Melhor Envio. --no-verify-jwt porque quem abre é o
           # NAVEGADOR (a URL de retorno cadastrada no aplicativo), sem JWT.
           dep melhor-envio-auth --no-verify-jwt
+          # Webhook do Melhor Envio: quem chama é ELE, sem JWT. O segredo vai
+          # na query, porque o painel dele só aceita uma URL.
+          dep melhor-envio-webhook --no-verify-jwt
           dep ml-auth --no-verify-jwt
           dep nuvemshop-auth --no-verify-jwt
           dep nuvemshop-lgpd --no-verify-jwt

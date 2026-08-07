@@ -260,14 +260,21 @@ interface ItemFila {
 // resposta da função: número que não aparece é número em que ninguém confia.
 let reprocessados = 0;
 
-async function montarFila(): Promise<ItemFila[]> {
-  const { data: esteira, error } = await supabase
+async function montarFila(alvos?: string[]): Promise<ItemFila[]> {
+  // Com `alvos`, a fila é EXATAMENTE aqueles códigos — é assim que o webhook
+  // pede para atualizar o que acabou de mudar. Sem eles, a fila é a rotina.
+  //
+  // ⚠️ No modo alvo, os filtros de etapa NÃO se aplicam. Um aviso sobre envio
+  // já entregue é justamente o que fecha o ciclo, e descartá-lo por causa do
+  // filtro da rotina deixaria o card parado em "em trânsito" para sempre.
+  let consulta = supabase
     .from("bling2_esteira")
     .select("bling_id,rastreio,nf_chave,transportadora,servico,canal,etapa")
-    .not("rastreio", "is", null)
-    .neq("etapa", "cancelado")
-    .neq("etapa", "entregue")
-    .limit(500);
+    .not("rastreio", "is", null);
+  consulta = alvos?.length
+    ? consulta.in("rastreio", alvos)
+    : consulta.neq("etapa", "cancelado").neq("etapa", "entregue");
+  const { data: esteira, error } = await consulta.limit(500);
   if (error) throw new Error(`esteira: ${error.message}`);
 
   const { data: jaTemos } = await supabase
@@ -301,6 +308,10 @@ async function montarFila(): Promise<ItemFila[]> {
     });
     if (fila.length >= TETO) break;
   }
+
+  // No modo alvo não há auto-cura: o pedido é pontual e a resposta tem que
+  // ser rápida — o Melhor Envio está esperando o 200.
+  if (alvos?.length) { reprocessados = 0; return fila; }
 
   // ── Auto-cura ────────────────────────────────────────────────────────────
   //
@@ -418,8 +429,12 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    const fila = await montarFila();
-    if (!fila.length) return json({ ok: true, fila: 0, nota: "nada a rastrear" });
+    const alvos = (url.searchParams.get("codigos") ?? "")
+      .split(",").map((c) => c.trim()).filter(Boolean);
+    const fila = await montarFila(alvos);
+    if (!fila.length) {
+      return json({ ok: true, fila: 0, alvos, nota: "nada a rastrear" });
+    }
 
     // Uma listagem só resolve todos os que ainda não têm id — e se todo mundo
     // já tem `fonte_id`, nem essa chamada acontece.
