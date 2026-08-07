@@ -72,6 +72,9 @@ jobs:
           # Webhook do Melhor Envio: quem chama é ELE, sem JWT. O segredo vai
           # na query, porque o painel dele só aceita uma URL.
           dep melhor-envio-webhook --no-verify-jwt
+          # Aviso ao cliente a cada movimentação da esteira. Chamada pelo
+          # pg_cron, que manda só o X-Cron-Secret e nenhum Authorization.
+          dep kanban-n8n --no-verify-jwt
           dep ml-auth --no-verify-jwt
           dep nuvemshop-auth --no-verify-jwt
           dep nuvemshop-lgpd --no-verify-jwt
