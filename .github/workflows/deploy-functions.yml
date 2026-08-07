@@ -22,28 +22,55 @@ jobs:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
         run: |
           set -e
-          supabase functions deploy bling-auth --project-ref ${{ secrets.SUPABASE_PROJECT_ID }} --no-verify-jwt
-          supabase functions deploy bling-sync --project-ref ${{ secrets.SUPABASE_PROJECT_ID }} --no-verify-jwt
+
+          # ⚠️ Publicação com repetição.
+          #
+          # Um deploy inteiro já falhou porque o esm.sh devolveu 522 (timeout
+          # do Cloudflare) ao baixar o supabase-js. Como as funções sobem em
+          # SEQUÊNCIA e o `set -e` aborta na primeira falha, um soluço de
+          # alguns segundos numa CDN derrubou tudo que vinha depois — e o pior:
+          # em silêncio, do ponto de vista de quem estava esperando a função
+          # nova aparecer. Ficou parecendo bug de código.
+          #
+          # Três tentativas com espera crescente resolvem a classe inteira
+          # desse problema: falha de rede é transitória, falha de código não.
+          dep() {
+            local fn="$1"; shift
+            local tentativa
+            for tentativa in 1 2 3; do
+              if supabase functions deploy "$fn" \
+                   --project-ref ${{ secrets.SUPABASE_PROJECT_ID }} "$@"; then
+                return 0
+              fi
+              echo "::warning::deploy de $fn falhou (tentativa $tentativa/3)"
+              sleep $((tentativa * 10))
+            done
+            echo "::error::deploy de $fn falhou nas 3 tentativas"
+            return 1
+          }
+
+          dep bling-auth --no-verify-jwt
+          dep bling-sync --no-verify-jwt
           # Bling 2 — segunda conta. --no-verify-jwt em todas: a auth e a sync
           # validam o JWT por dentro, e a auto-sync é chamada pelo pg_cron, que
           # manda só o X-Cron-Secret e nenhum Authorization.
-          supabase functions deploy bling2-auth --project-ref ${{ secrets.SUPABASE_PROJECT_ID }} --no-verify-jwt
-          supabase functions deploy bling2-sync --project-ref ${{ secrets.SUPABASE_PROJECT_ID }} --no-verify-jwt
-          supabase functions deploy bling2-auto-sync --project-ref ${{ secrets.SUPABASE_PROJECT_ID }} --no-verify-jwt
-          supabase functions deploy melhor-envio-quote --project-ref ${{ secrets.SUPABASE_PROJECT_ID }} --no-verify-jwt
-          supabase functions deploy superfrete-quote --project-ref ${{ secrets.SUPABASE_PROJECT_ID }} --no-verify-jwt
-          supabase functions deploy create-team-member --project-ref ${{ secrets.SUPABASE_PROJECT_ID }} --no-verify-jwt
-          supabase functions deploy ecommerce-webhook --project-ref ${{ secrets.SUPABASE_PROJECT_ID }} --no-verify-jwt
-          supabase functions deploy ecommerce-sync --project-ref ${{ secrets.SUPABASE_PROJECT_ID }} --no-verify-jwt
+          dep bling2-auth --no-verify-jwt
+          dep bling2-sync --no-verify-jwt
+          dep bling2-auto-sync --no-verify-jwt
+          dep melhor-envio-quote --no-verify-jwt
+          dep superfrete-quote --no-verify-jwt
+          dep create-team-member --no-verify-jwt
+          dep ecommerce-webhook --no-verify-jwt
+          dep ecommerce-sync --no-verify-jwt
           # Rastreio do Melhor Envio (Jadlog + Correios). --no-verify-jwt porque
           # quem chama é o pg_cron, que manda só o X-Cron-Secret e nenhum
           # Authorization — a função valida o segredo por dentro.
-          supabase functions deploy rastreio-sync --project-ref ${{ secrets.SUPABASE_PROJECT_ID }} --no-verify-jwt
+          dep rastreio-sync --no-verify-jwt
           # OAuth do Melhor Envio. --no-verify-jwt porque quem abre é o
           # NAVEGADOR (a URL de retorno cadastrada no aplicativo), sem JWT.
-          supabase functions deploy melhor-envio-auth --project-ref ${{ secrets.SUPABASE_PROJECT_ID }} --no-verify-jwt
-          supabase functions deploy ml-auth --project-ref ${{ secrets.SUPABASE_PROJECT_ID }} --no-verify-jwt
-          supabase functions deploy nuvemshop-auth --project-ref ${{ secrets.SUPABASE_PROJECT_ID }} --no-verify-jwt
-          supabase functions deploy nuvemshop-lgpd --project-ref ${{ secrets.SUPABASE_PROJECT_ID }} --no-verify-jwt
-          supabase functions deploy ai-chat --project-ref ${{ secrets.SUPABASE_PROJECT_ID }}
-          supabase functions deploy text-enhancer --project-ref ${{ secrets.SUPABASE_PROJECT_ID }}
+          dep melhor-envio-auth --no-verify-jwt
+          dep ml-auth --no-verify-jwt
+          dep nuvemshop-auth --no-verify-jwt
+          dep nuvemshop-lgpd --no-verify-jwt
+          dep ai-chat
+          dep text-enhancer
