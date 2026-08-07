@@ -439,7 +439,16 @@ Deno.serve(async (req: Request) => {
       .split(",").map((c) => c.trim()).filter(Boolean);
     const fila = await montarFila(alvos);
     if (!fila.length) {
-      return json({ ok: true, fila: 0, alvos, nota: "nada a rastrear" });
+      // "Nada a rastrear" e "não conheço este código" são coisas MUITO
+      // diferentes, e a mesma frase para as duas me fez caçar um bug que não
+      // existia: o código do teste simplesmente não estava no sistema, e a
+      // resposta parecia falha de filtro.
+      return json({
+        ok: true, fila: 0, alvos,
+        nota: alvos.length
+          ? "código(s) desconhecido(s): não estão na esteira nem em rastreio_envios"
+          : "nada a rastrear na rotina",
+      });
     }
 
     // Uma listagem só resolve todos os que ainda não têm id — e se todo mundo
