@@ -126,23 +126,32 @@ Deno.serve(async (req: Request) => {
   if (SEGREDO && informado !== SEGREDO) {
     return json({ error: "segredo inválido ou ausente" }, 401);
   }
-  if (!N8N_URL) {
-    return json({
-      error: "Falta o secret N8N_KANBAN_WEBHOOK.",
-      como_resolver: "Supabase > Edge Functions > Secrets > N8N_KANBAN_WEBHOOK = a URL do webhook do n8n (…/webhook/kanban-whatsapp)",
-    }, 500);
-  }
-
   // Ensaio: monta as mensagens e devolve, sem enviar e sem gravar. É como se
   // confere um texto novo antes de ele sair para cliente de verdade.
   const ensaio = url.searchParams.get("ensaio") === "1";
 
+  // ⚠️ A FILA vem antes da checagem do secret, de propósito.
+  //
+  // Ao contrário, e com nenhum texto ligado, esta função devolveria 500 a cada
+  // 10 minutos só por falta de um secret que ainda não é necessário — 144
+  // falhas por dia num lugar que ninguém abre. É literalmente o padrão do
+  // `sync-meta`, que passou 719 rodadas assim antes de alguém notar.
+  //
+  // Sem nada a enviar, não há configuração faltando: há nada a fazer.
   const { data: fila, error } = await supabase
     .from("carbo_msg_fila")
     .select("*")
     .limit(TETO);
   if (error) return json({ error: `fila: ${error.message}` }, 500);
   if (!fila?.length) return json({ ok: true, fila: 0, nota: "nada a avisar" });
+
+  if (!N8N_URL) {
+    return json({
+      error: "Há mensagens na fila, mas falta o secret N8N_KANBAN_WEBHOOK.",
+      fila: fila.length,
+      como_resolver: "Supabase > Edge Functions > Secrets > N8N_KANBAN_WEBHOOK = a URL do webhook do n8n (…/webhook/kanban-whatsapp)",
+    }, 500);
+  }
 
   const agora = Date.now();
   const resultados: unknown[] = [];
