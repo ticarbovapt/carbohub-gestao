@@ -28,20 +28,31 @@ import {
  * uma migração.
  */
 
+/** ⚠️ Os nomes têm de ser os MESMOS da esteira. Eu tinha chamado `em_transito`
+ *  de "Saiu para entrega" — e como sair para entrega é outro fato, dias depois,
+ *  parecia faltar a mensagem do rastreio, que existia com o nome errado. */
 const NOME_ETAPA: Record<EtapaMsg, string> = {
-  confirmado:  "Compra identificada",
-  nf_emitida:  "Nota fiscal emitida",
-  etiqueta:    "Etiqueta gerada",
-  em_transito: "Saiu para entrega",
-  entregue:    "Depois de entregue",
+  confirmado:   "Confirmado",
+  nf_emitida:   "NF emitida",
+  etiqueta:     "Etiqueta gerada",
+  em_transito:  "Em trânsito",
+  saiu_entrega: "Saiu para entrega",
+  entregue:     "Entregue",
 };
 
 const QUANDO: Record<EtapaMsg, string> = {
-  confirmado:  "assim que o pedido é atendido no Bling",
-  nf_emitida:  "quando a nota é autorizada",
-  etiqueta:    "quando o rastreio é gerado, antes da coleta",
-  em_transito: "quando a transportadora confirma o envio",
-  entregue:    "quando a entrega é confirmada",
+  confirmado:   "assim que o pedido é atendido no Bling",
+  nf_emitida:   "quando a nota é autorizada",
+  etiqueta:     "quando o rastreio é gerado, antes da coleta",
+  em_transito:  "quando a transportadora confirma o envio — é aqui que vai o código e o link",
+  saiu_entrega: "quando o rastreio mostra que saiu para o último trecho, no dia da entrega",
+  entregue:     "quando a entrega é confirmada",
+};
+
+/** Etapa que não é coluna da esteira. O aviso explica de onde ela vem, senão
+ *  alguém procura essa coluna no quadro e não acha. */
+const FORA_DO_QUADRO: Partial<Record<EtapaMsg, string>> = {
+  saiu_entrega: "Não é coluna da esteira — vem do rastreio da transportadora.",
 };
 
 function Editor({ t }: { t: TemplateMsg }) {
@@ -79,6 +90,9 @@ function Editor({ t }: { t: TemplateMsg }) {
                 : <CarboBadge variant="secondary">desligada</CarboBadge>}
             </h3>
             <p className="mt-0.5 text-[11px] text-muted-foreground">Dispara {QUANDO[t.etapa]}.</p>
+            {FORA_DO_QUADRO[t.etapa] && (
+              <p className="mt-0.5 text-[11px] text-muted-foreground/70">{FORA_DO_QUADRO[t.etapa]}</p>
+            )}
           </div>
           <div className="flex items-center gap-2">
             <span className="text-[11px] text-muted-foreground">enviar</span>
@@ -189,7 +203,7 @@ export default function MensagensCliente() {
           <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
             <div className="flex items-center gap-1.5">
               <Send className="h-3.5 w-3.5 text-carbo-green" />
-              <span className="text-sm font-semibold tabular-nums">{ligadas}/5</span>
+              <span className="text-sm font-semibold tabular-nums">{ligadas}/6</span>
               <span className="text-[11px] text-muted-foreground">ligadas</span>
             </div>
             <div className="flex items-center gap-1.5">

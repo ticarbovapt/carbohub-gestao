@@ -9,7 +9,8 @@ import { supabase } from "@/integrations/supabase/client";
  * function `kanban-n8n`, e quem entrega é o n8n. A tela não dispara nada.
  */
 
-export type EtapaMsg = "confirmado" | "nf_emitida" | "etiqueta" | "em_transito" | "entregue";
+export type EtapaMsg =
+  | "confirmado" | "nf_emitida" | "etiqueta" | "em_transito" | "saiu_entrega" | "entregue";
 
 export interface TemplateMsg {
   etapa: EtapaMsg;
@@ -31,9 +32,13 @@ export interface EnvioMsg {
   motivo: string | null;
 }
 
-/** Ordem do fluxo, não a alfabética — é a ordem em que o cliente recebe. */
+/** Ordem do fluxo, não a alfabética — é a ordem em que o cliente recebe.
+ *
+ * ⚠️ `saiu_entrega` NÃO é coluna da esteira: ela vai de "Em trânsito" direto
+ * para "Entregue". O fato vem do rastreio (`rastreio_envios.status`), e a fila
+ * no banco tem duas origens por causa disso. */
 export const ORDEM_ETAPAS: EtapaMsg[] =
-  ["confirmado", "nf_emitida", "etiqueta", "em_transito", "entregue"];
+  ["confirmado", "nf_emitida", "etiqueta", "em_transito", "saiu_entrega", "entregue"];
 
 /** As variáveis que os textos aceitam. A lista é a mesma da view
  *  `carbo_msg_fila`; variável fora daqui vira texto vazio na mensagem. */
