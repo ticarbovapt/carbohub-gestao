@@ -293,6 +293,41 @@ async function montarFila(): Promise<ItemFila[]> {
     });
     if (fila.length >= TETO) break;
   }
+
+  // ── Auto-cura ────────────────────────────────────────────────────────────
+  //
+  // A fila acima vem da esteira, que exclui entregue e cancelado. Isso é certo
+  // para o dia a dia, mas cria um buraco: envio que falhou numa rodada e
+  // depois foi entregue SAI da fila e nunca mais é tentado — fica com a
+  // mensagem de erro daquele dia congelada no card, para sempre.
+  //
+  // Aconteceu com 11 envios enquanto eu ainda procurava um campo de histórico
+  // que não existe. Depois de corrigido, eles continuavam errados, porque nada
+  // os traria de volta.
+  //
+  // Estes já têm `fonte_id`, então reprocessá-los não custa busca nenhuma:
+  // entram na mesma chamada em lote dos outros.
+  const { data: pendentes } = await supabase
+    .from("rastreio_card")
+    .select("codigo,fonte_id,bling_id,transportadora,servico,qtd_eventos")
+    .eq("fonte", "melhorenvio")
+    .eq("qtd_eventos", 0)
+    .not("fonte_id", "is", null)
+    .limit(30);
+
+  const jaNaFila = new Set(fila.map((f) => f.codigo));
+  for (const p of pendentes ?? []) {
+    if (jaNaFila.has(String(p.codigo))) continue;
+    fila.push({
+      codigo: String(p.codigo),
+      bling_id: p.bling_id ?? null,
+      nf_chave: null,
+      transportadora: p.transportadora ?? null,
+      servico: p.servico ?? null,
+      fonte_id: p.fonte_id ?? null,
+    });
+  }
+
   return fila;
 }
 
