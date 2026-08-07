@@ -75,6 +75,10 @@ jobs:
           # Aviso ao cliente a cada movimentação da esteira. Chamada pelo
           # pg_cron, que manda só o X-Cron-Secret e nenhum Authorization.
           dep kanban-n8n --no-verify-jwt
+          # Evolution (QR / desconectar). SEM --no-verify-jwt de propósito:
+          # é chamada pelo NAVEGADOR, por gente logada, e derrubar o WhatsApp
+          # da empresa não pode depender de um segredo que anda na URL.
+          dep evolution-instancia
           dep ml-auth --no-verify-jwt
           dep nuvemshop-auth --no-verify-jwt
           dep nuvemshop-lgpd --no-verify-jwt

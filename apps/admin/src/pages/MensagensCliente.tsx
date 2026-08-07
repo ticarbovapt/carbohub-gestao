@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
+import { ConexaoWhatsApp } from "@/components/ConexaoWhatsApp";
 import {
   useTemplatesMsg, useSalvarTemplate, useEnviosMsg, useFilaMsg,
   montarPreview, VARIAVEIS, EXEMPLO,
@@ -214,6 +215,10 @@ export default function MensagensCliente() {
           </div>
         }
       />
+
+      {/* Antes dos textos: de nada adianta a redação estar perfeita se o
+          número que envia está desconectado. */}
+      <ConexaoWhatsApp />
 
       {ligadas === 0 && (
         <div className="flex items-start gap-2 rounded-lg border border-amber-500/40 bg-amber-500/5 px-3 py-2 text-xs text-amber-600 dark:text-amber-500">
