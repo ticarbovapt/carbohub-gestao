@@ -78,31 +78,46 @@ function mapaStatus(s: string): StatusRastreio | null {
   }
 }
 
-/** O histórico já veio com quatro nomes diferentes. Aceita todos; se não
- *  encontrar nenhum, devolve null — que vira `erro` na linha, não silêncio. */
+/**
+ * O trajeto, montado a partir dos MARCOS.
+ *
+ * ⚠️ O Melhor Envio NÃO devolve lista de eventos. A resposta do rastreio tem
+ * exatamente estas chaves:
+ *
+ *   id, protocol, status, tracking, melhorenvio_tracking,
+ *   created_at, paid_at, generated_at, posted_at, delivered_at,
+ *   canceled_at, expired_at
+ *
+ * Nada de `events`, `history` ou `ocorrencias` — eu procurei os quatro nomes e
+ * gravei "sem histórico" em 54 envios até o erro registrado na linha mostrar a
+ * lista real. Não é campo com outro nome: é dado que não existe aqui.
+ *
+ * As bipagens de centro de distribuição são da transportadora, e só a API dela
+ * tem — a dos Correios exige contrato e credencial CWS. O que dá para
+ * prometer, e é honesto, é o caminho por marcos: etiqueta gerada, postado,
+ * entregue. Mesma granularidade do Mercado Envios, que já está no ar.
+ *
+ * Ordem do fluxo, não a do objeto: JSON não garante ordem de chave, e trajeto
+ * fora de ordem parece dado corrompido.
+ */
 // deno-lint-ignore no-explicit-any
-function acharEventos(d: any): any[] | null {
-  for (const chave of ["events", "tracking_events", "history", "ocorrencias"]) {
-    const v = d?.[chave];
-    if (Array.isArray(v)) return v;
+function eventosDosMarcos(d: any): EventoRastreio[] {
+  const marcos: Array<[string, string, StatusRastreio | null]> = [
+    ["generated_at", "Etiqueta gerada",                 null],
+    ["posted_at",    "Postado — coletado pela transportadora", "em_transito"],
+    ["delivered_at", "Entregue",                        "entregue"],
+    ["canceled_at",  "Envio cancelado",                 "cancelado"],
+    ["expired_at",   "Etiqueta expirada sem postagem",  "problema"],
+  ];
+  const eventos: EventoRastreio[] = [];
+  for (const [chave, descricao, status] of marcos) {
+    const quando = d?.[chave];
+    if (!quando) continue;
+    const dt = new Date(String(quando).replace(" ", "T"));
+    if (isNaN(dt.getTime())) continue;
+    eventos.push({ ocorrido_em: dt.toISOString(), descricao, status });
   }
-  return null;
-}
-
-// deno-lint-ignore no-explicit-any
-function mapearEvento(e: any): EventoRastreio | null {
-  const quando = e?.date ?? e?.datetime ?? e?.created_at ?? e?.data ?? e?.occurred_at;
-  const texto  = e?.description ?? e?.status ?? e?.title ?? e?.descricao ?? e?.message;
-  if (!quando || !texto) return null;
-  const d = new Date(quando);
-  if (isNaN(d.getTime())) return null;
-  return {
-    ocorrido_em: d.toISOString(),
-    descricao:   String(texto).trim().slice(0, 300),
-    status:      mapaStatus(String(e?.status ?? "")),
-    cidade:      e?.city ?? e?.cidade ?? e?.location ?? null,
-    uf:          e?.state ?? e?.uf ?? null,
-  };
+  return eventos;
 }
 
 /**
@@ -117,10 +132,24 @@ function mapearEvento(e: any): EventoRastreio | null {
  * da primeira rodada nem isso é preciso, porque o id fica em `fonte_id`.
  */
 // deno-lint-ignore no-explicit-any
+interface InfoEnvioME {
+  prazoMax: number | null;
+  linkBase: string | null;
+  codigoPublico: string | null;
+  transportadora: string | null;
+  servico: string | null;
+}
+
 async function mapearPedidosME(paginas = 10): Promise<{
-  mapa: Map<string, string>; exemplo: any | null; total: number;
+  mapa: Map<string, string>;
+  extras: Map<string, InfoEnvioME>;
+  exemplo: any | null; total: number;
 }> {
   const mapa = new Map<string, string>();
+  // Dados que SÓ existem na listagem: o prazo contratado e o link público da
+  // transportadora. A resposta do rastreio não traz nenhum dos dois, e sem
+  // isto o card ficaria sem previsão e sem link para mandar ao cliente.
+  const extras = new Map<string, InfoEnvioME>();
   // deno-lint-ignore no-explicit-any
   let exemplo: any = null;
   let total = 0;
@@ -156,10 +185,18 @@ async function mapearPedidosME(paginas = 10): Promise<{
       // `self_tracking` e o Melhor Envio lista pelo `tracking`.
       const chaveNf = String(o?.invoice?.key ?? "").trim().toUpperCase();
       if (chaveNf && o?.id) mapa.set(chaveNf, String(o.id));
+
+      if (o?.id) extras.set(String(o.id), {
+        prazoMax:      Number(o?.delivery_max ?? 0) || null,
+        linkBase:      o?.service?.company?.tracking_link ?? null,
+        codigoPublico: o?.tracking ?? null,
+        transportadora: o?.service?.company?.name ?? null,
+        servico:        o?.service?.name ?? null,
+      });
     }
     if (lista.length < 50) break;   // última página
   }
-  return { mapa, exemplo, total };
+  return { mapa, extras, exemplo, total };
 }
 
 /**
@@ -319,7 +356,7 @@ Deno.serve(async (req: Request) => {
         exemplo_da_listagem: exemplo,
         // O que eu preciso ver para corrigir o mapeamento: os nomes dos campos.
         campos_do_envio: d ? Object.keys(d as Record<string, unknown>) : [],
-        onde_esta_o_historico: d ? (acharEventos(d) ? "encontrado" : "NENHUMA das chaves conhecidas") : null,
+        marcos_encontrados: d ? eventosDosMarcos(d).map((e) => e.descricao) : [],
         resposta_crua: bruto,
       });
     }
@@ -330,9 +367,10 @@ Deno.serve(async (req: Request) => {
     // Uma listagem só resolve todos os que ainda não têm id — e se todo mundo
     // já tem `fonte_id`, nem essa chamada acontece.
     const precisaDescobrir = fila.some((f) => !f.fonte_id);
-    const porCodigo = precisaDescobrir
-      ? (await mapearPedidosME()).mapa
-      : new Map<string, string>();
+    const listagem = precisaDescobrir
+      ? await mapearPedidosME()
+      : { mapa: new Map<string, string>(), extras: new Map<string, InfoEnvioME>() };
+    const porCodigo = listagem.mapa;
 
     // Teto de buscas individuais: cada uma é uma chamada HTTP, e a rodada
     // inteira tem que caber no tempo da edge function. Quem sobrar hoje é
@@ -372,36 +410,53 @@ Deno.serve(async (req: Request) => {
       // deno-lint-ignore no-explicit-any
       const dd = d as any;
 
-      const crus = acharEventos(dd);
-      const eventos = (crus ?? []).map(mapearEvento).filter(Boolean) as EventoRastreio[];
-      if (crus === null) semHistorico++;
+      const eventos = eventosDosMarcos(dd);
+      if (!eventos.length) semHistorico++;
 
-      const entregueEm = dd?.delivered_at ?? dd?.tracking_delivered_at ?? null;
+      const dataME = (v: unknown) =>
+        v ? new Date(String(v).replace(" ", "T")).toISOString() : null;
+      const entregueEm = dataME(dd?.delivered_at);
+      const extra = listagem.extras.get(id);
+
+      // Previsão = postagem + prazo contratado. O rastreio não devolve data
+      // prevista; o prazo (`delivery_max`, em dias) vem da listagem.
+      //
+      // ⚠️ `undefined`, NÃO `null`, quando não dá para calcular. O upsert só
+      // grava as colunas presentes no payload, e `undefined` some na
+      // serialização — então o valor calculado numa rodada anterior sobrevive.
+      // Com `null` a gente apagaria a previsão toda vez que a listagem não
+      // fosse consultada, que é justamente o caso comum.
+      const base = dataME(dd?.posted_at) ?? dataME(dd?.generated_at);
+      const previsao = (base && extra?.prazoMax)
+        ? new Date(new Date(base).getTime() + extra.prazoMax * 86400_000)
+            .toISOString().slice(0, 10)
+        : undefined;
       const r = await gravarRastreio(supabase, {
         codigo: item.codigo,
         fonte: "melhorenvio",
         fonte_id: id,
         bling_id: item.bling_id,
-        transportadora: item.transportadora ?? dd?.service?.company?.name ?? dd?.company?.name ?? null,
-        servico: item.servico ?? dd?.service?.name ?? null,
+        transportadora: item.transportadora ?? extra?.transportadora ?? null,
+        servico: item.servico ?? extra?.servico ?? null,
         status: mapaStatus(String(dd?.status ?? "")),
         status_descricao: dd?.status ?? null,
-        previsao_entrega: dd?.delivery_date ?? dd?.estimated_delivery ?? null,
-        postado_em: dd?.posted_at ?? null,
+        previsao_entrega: previsao,
+        postado_em: dataME(dd?.posted_at),
         entregue_em: entregueEm,
         // O próprio Melhor Envio informa a base do rastreio público em
         // `service.company.tracking_link` — usar a dele é melhor que eu
         // adivinhar a URL de cada transportadora. Aqui é `tracking` (o código
         // da transportadora), não o `self_tracking`.
-        url_rastreio: dd?.tracking_url
-          ?? (dd?.service?.company?.tracking_link && dd?.tracking
-                ? `${dd.service.company.tracking_link}${dd.tracking}`
-                : null)
-          ?? urlRastreio(item.transportadora, item.codigo),
-        // Histórico ausente NÃO vira tela vazia: fica escrito o motivo.
-        erro: crus === null
-          ? `sem histórico na resposta (chaves: ${Object.keys(dd ?? {}).join(",").slice(0, 200)})`
-          : null,
+        url_rastreio: (extra?.linkBase && extra?.codigoPublico
+                        ? `${extra.linkBase}${extra.codigoPublico}`
+                        : null)
+          ?? urlRastreio(item.transportadora, dd?.tracking ?? item.codigo)
+          ?? undefined,
+        // Nenhum marco significa etiqueta ainda não gerada — estado legítimo,
+        // não falha. O erro fica escrito só quando há algo de fato errado.
+        erro: eventos.length
+          ? null
+          : `sem marcos ainda (status: ${dd?.status ?? "?"})`,
         raw: dd,
       }, eventos);
       if (r.ok) { gravados++; novos += r.novos; }
