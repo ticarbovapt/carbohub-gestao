@@ -117,7 +117,7 @@ function mapearEvento(e: any): EventoRastreio | null {
  * da primeira rodada nem isso é preciso, porque o id fica em `fonte_id`.
  */
 // deno-lint-ignore no-explicit-any
-async function mapearPedidosME(paginas = 4): Promise<{
+async function mapearPedidosME(paginas = 10): Promise<{
   mapa: Map<string, string>; exemplo: any | null; total: number;
 }> {
   const mapa = new Map<string, string>();
@@ -150,10 +150,48 @@ async function mapearPedidosME(paginas = 4): Promise<{
         const cod = String(o?.[campo] ?? "").trim().toUpperCase();
         if (cod && o?.id) mapa.set(cod, String(o.id));
       }
+      // A CHAVE DA NF é a melhor porta de todas: ela é exata, é a mesma dos
+      // dois lados, e não depende de qual dos dois códigos cada sistema
+      // resolveu guardar. Entrou depois de descobrir que o Bling grava o
+      // `self_tracking` e o Melhor Envio lista pelo `tracking`.
+      const chaveNf = String(o?.invoice?.key ?? "").trim().toUpperCase();
+      if (chaveNf && o?.id) mapa.set(chaveNf, String(o.id));
     }
     if (lista.length < 50) break;   // última página
   }
   return { mapa, exemplo, total };
+}
+
+/**
+ * Busca um envio pelo código, um por vez.
+ *
+ * A listagem cobre os mais recentes (139 na primeira medição) e resolve a
+ * maioria de graça. Mas a cauda existe — envio de dez dias atrás não aparece
+ * lá —, e sem isto ele ficaria sem trajeto para sempre, calado.
+ *
+ * É caro (uma chamada por código), então só roda para quem sobrou e com teto.
+ * Como o id encontrado vai para `fonte_id`, cada envio paga esse custo UMA vez
+ * na vida: nas rodadas seguintes ele já é conhecido.
+ */
+async function buscarPedidoME(codigo: string): Promise<string | null> {
+  try {
+    const res = await fetch(
+      `${BASE}/api/v2/me/orders?q=${encodeURIComponent(codigo)}`,
+      { headers: cabecalhos() },
+    );
+    if (!res.ok) { console.error("[rastreio-sync] busca", codigo, res.status); return null; }
+    const json = await res.json();
+    const lista = Array.isArray(json?.data) ? json.data : Array.isArray(json) ? json : [];
+    const alvo = codigo.trim().toUpperCase();
+    // deno-lint-ignore no-explicit-any
+    const achado = lista.find((o: any) =>
+      [o?.tracking, o?.self_tracking, o?.protocol, o?.invoice?.key]
+        .some((v) => String(v ?? "").trim().toUpperCase() === alvo)) ?? lista[0];
+    return achado?.id ? String(achado.id) : null;
+  } catch (e) {
+    console.error("[rastreio-sync] busca", codigo, "falhou:", e);
+    return null;
+  }
 }
 
 // deno-lint-ignore no-explicit-any
@@ -177,14 +215,14 @@ async function consultarRastreio(ids: string[]): Promise<Record<string, any>> {
 // reconsultar 130 pedidos entregues a cada hora é o tipo de desperdício que
 // ninguém enxerga até estourar o limite da API.
 interface ItemFila {
-  codigo: string; bling_id: number | null;
+  codigo: string; bling_id: number | null; nf_chave: string | null;
   transportadora: string | null; servico: string | null; fonte_id: string | null;
 }
 
 async function montarFila(): Promise<ItemFila[]> {
   const { data: esteira, error } = await supabase
     .from("bling2_esteira")
-    .select("bling_id,rastreio,transportadora,servico,canal,etapa")
+    .select("bling_id,rastreio,nf_chave,transportadora,servico,canal,etapa")
     .not("rastreio", "is", null)
     .neq("etapa", "cancelado")
     .neq("etapa", "entregue")
@@ -211,6 +249,7 @@ async function montarFila(): Promise<ItemFila[]> {
     fila.push({
       codigo,
       bling_id: o.bling_id ?? null,
+      nf_chave: o.nf_chave ?? null,
       transportadora: o.transportadora ?? null,
       servico: o.servico ?? null,
       fonte_id: conhecido?.fonte_id ?? null,
@@ -259,7 +298,9 @@ Deno.serve(async (req: Request) => {
     // acertar o mapeamento de campos sem chutar.
     if (diagnostico) {
       const { mapa, exemplo, total } = await mapearPedidosME();
-      const id = mapa.get(diagnostico.trim().toUpperCase()) ?? null;
+      const alvo = diagnostico.trim().toUpperCase();
+      const idListagem = mapa.get(alvo) ?? null;
+      const id = idListagem ?? await buscarPedidoME(diagnostico);
       const bruto = id ? await consultarRastreio([id]) : null;
       const d = id && bruto ? (bruto as Record<string, unknown>)[id] : null;
       return json({
@@ -267,6 +308,7 @@ Deno.serve(async (req: Request) => {
         codigo: diagnostico,
         pedido_melhor_envio: id,
         achou_pedido: Boolean(id),
+        achou_como: idListagem ? "listagem" : id ? "busca individual" : "não achou",
         envios_na_listagem: total,
         codigos_vistos_na_listagem: mapa.size,
         // Quando `achou_pedido` é false, a pergunta seguinte é sempre "então
@@ -292,9 +334,22 @@ Deno.serve(async (req: Request) => {
       ? (await mapearPedidosME()).mapa
       : new Map<string, string>();
 
+    // Teto de buscas individuais: cada uma é uma chamada HTTP, e a rodada
+    // inteira tem que caber no tempo da edge function. Quem sobrar hoje é
+    // pego na próxima hora — e como o id fica guardado, a fila só encolhe.
+    let buscasRestantes = 15;
+
     const porId = new Map<string, ItemFila>();
     for (const item of fila) {
-      const id = item.fonte_id ?? porCodigo.get(item.codigo.toUpperCase()) ?? null;
+      let id = item.fonte_id
+        ?? porCodigo.get(item.codigo.toUpperCase())
+        ?? (item.nf_chave ? porCodigo.get(item.nf_chave.toUpperCase()) : null)
+        ?? null;
+      // A listagem não cobre a cauda: aí vale pagar a busca individual.
+      if (!id && buscasRestantes > 0) {
+        buscasRestantes--;
+        id = await buscarPedidoME(item.codigo);
+      }
       if (!id) {
         await gravarRastreio(supabase, {
           codigo: item.codigo, fonte: "melhorenvio", bling_id: item.bling_id,
@@ -327,14 +382,21 @@ Deno.serve(async (req: Request) => {
         fonte: "melhorenvio",
         fonte_id: id,
         bling_id: item.bling_id,
-        transportadora: item.transportadora ?? dd?.company?.name ?? null,
+        transportadora: item.transportadora ?? dd?.service?.company?.name ?? dd?.company?.name ?? null,
         servico: item.servico ?? dd?.service?.name ?? null,
         status: mapaStatus(String(dd?.status ?? "")),
         status_descricao: dd?.status ?? null,
         previsao_entrega: dd?.delivery_date ?? dd?.estimated_delivery ?? null,
         postado_em: dd?.posted_at ?? null,
         entregue_em: entregueEm,
+        // O próprio Melhor Envio informa a base do rastreio público em
+        // `service.company.tracking_link` — usar a dele é melhor que eu
+        // adivinhar a URL de cada transportadora. Aqui é `tracking` (o código
+        // da transportadora), não o `self_tracking`.
         url_rastreio: dd?.tracking_url
+          ?? (dd?.service?.company?.tracking_link && dd?.tracking
+                ? `${dd.service.company.tracking_link}${dd.tracking}`
+                : null)
           ?? urlRastreio(item.transportadora, item.codigo),
         // Histórico ausente NÃO vira tela vazia: fica escrito o motivo.
         erro: crus === null
