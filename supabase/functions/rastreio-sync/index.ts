@@ -102,24 +102,38 @@ function mapearEvento(e: any): EventoRastreio | null {
   };
 }
 
-/** Busca o pedido do Melhor Envio pelo código de rastreio. Custa uma chamada,
- *  por isso o id vai para `fonte_id` e a rodada seguinte pula esta etapa. */
-async function acharPedidoME(codigo: string): Promise<string | null> {
-  const res = await fetch(
-    `${BASE}/api/v2/me/orders?q=${encodeURIComponent(codigo)}`,
-    { headers: cabecalhos() },
-  );
-  if (!res.ok) {
-    console.error("[rastreio-sync] busca", codigo, res.status);
-    return null;
+/**
+ * Mapa código de rastreio → id do pedido no Melhor Envio, montado LISTANDO.
+ *
+ * ⚠️ A versão óbvia — uma busca `?q=<codigo>` por código — não sobrevive à
+ * primeira rodada. São ~70 envios abertos do Melhor Envio; 70 chamadas HTTP
+ * sequenciais dentro de uma invocação estouram o tempo da edge function, e o
+ * sintoma seria um timeout sem nada gravado, que parece "a API não respondeu".
+ *
+ * Listar resolve pela raiz: 3 páginas de 50 cobrem a operação inteira. Depois
+ * da primeira rodada nem isso é preciso, porque o id fica em `fonte_id`.
+ */
+async function mapearPedidosME(paginas = 4): Promise<Map<string, string>> {
+  const mapa = new Map<string, string>();
+  for (let p = 1; p <= paginas; p++) {
+    const res = await fetch(
+      `${BASE}/api/v2/me/orders?page=${p}&per_page=50`,
+      { headers: cabecalhos() },
+    );
+    if (!res.ok) {
+      console.error("[rastreio-sync] listagem página", p, res.status);
+      break;
+    }
+    const json = await res.json();
+    const lista = Array.isArray(json?.data) ? json.data : Array.isArray(json) ? json : [];
+    if (!lista.length) break;
+    for (const o of lista) {
+      const cod = String(o?.tracking ?? "").trim().toUpperCase();
+      if (cod && o?.id) mapa.set(cod, String(o.id));
+    }
+    if (lista.length < 50) break;   // última página
   }
-  const json = await res.json();
-  const lista = Array.isArray(json?.data) ? json.data : Array.isArray(json) ? json : [];
-  const achado = lista.find(
-    // deno-lint-ignore no-explicit-any
-    (o: any) => String(o?.tracking ?? "").trim().toUpperCase() === codigo.toUpperCase(),
-  ) ?? lista[0];
-  return achado?.id ? String(achado.id) : null;
+  return mapa;
 }
 
 // deno-lint-ignore no-explicit-any
@@ -207,12 +221,19 @@ Deno.serve(async (req: Request) => {
     // Modo diagnóstico: um código, resposta crua, nada é gravado. Existe para
     // acertar o mapeamento de campos sem chutar.
     if (diagnostico) {
-      const id = await acharPedidoME(diagnostico);
+      const mapa = await mapearPedidosME();
+      const id = mapa.get(diagnostico.trim().toUpperCase()) ?? null;
       const bruto = id ? await consultarRastreio([id]) : null;
+      const d = id && bruto ? (bruto as Record<string, unknown>)[id] : null;
       return json({
-        ambiente: AMBIENTE, codigo: diagnostico, pedido_melhor_envio: id,
+        ambiente: AMBIENTE,
+        codigo: diagnostico,
+        pedido_melhor_envio: id,
         achou_pedido: Boolean(id),
-        chaves_do_retorno: bruto ? Object.keys(bruto) : [],
+        codigos_vistos_na_listagem: mapa.size,
+        // O que eu preciso ver para corrigir o mapeamento: os nomes dos campos.
+        campos_do_envio: d ? Object.keys(d as Record<string, unknown>) : [],
+        onde_esta_o_historico: d ? (acharEventos(d) ? "encontrado" : "NENHUMA das chaves conhecidas") : null,
         resposta_crua: bruto,
       });
     }
@@ -220,10 +241,14 @@ Deno.serve(async (req: Request) => {
     const fila = await montarFila();
     if (!fila.length) return json({ ok: true, fila: 0, nota: "nada a rastrear" });
 
-    // Descobre o id no Melhor Envio de quem ainda não tem, e guarda.
+    // Uma listagem só resolve todos os que ainda não têm id — e se todo mundo
+    // já tem `fonte_id`, nem essa chamada acontece.
+    const precisaDescobrir = fila.some((f) => !f.fonte_id);
+    const porCodigo = precisaDescobrir ? await mapearPedidosME() : new Map<string, string>();
+
     const porId = new Map<string, ItemFila>();
     for (const item of fila) {
-      const id = item.fonte_id ?? await acharPedidoME(item.codigo);
+      const id = item.fonte_id ?? porCodigo.get(item.codigo.toUpperCase()) ?? null;
       if (!id) {
         await gravarRastreio(supabase, {
           codigo: item.codigo, fonte: "melhorenvio", bling_id: item.bling_id,
