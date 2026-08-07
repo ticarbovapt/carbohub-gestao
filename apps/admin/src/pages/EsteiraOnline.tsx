@@ -511,21 +511,29 @@ function Mini({ rotulo, valor, destaque }: {
 
 // ── Página ──────────────────────────────────────────────────────────────────
 
+/**
+ * Indicadores numa FAIXA, não em quatro cartões.
+ *
+ * Quatro cartões gastavam ~110px de altura para mostrar quatro números — e
+ * altura é o recurso escasso aqui: cada pixel gasto em cima é um card a menos
+ * visível na coluna. Numa tela de operação, o quadro é o conteúdo; o placar é
+ * contexto.
+ */
 function Indicador({ icon: Icon, cor, rotulo, valor }: {
   icon: React.ElementType; cor: string; rotulo: string; valor: string;
 }) {
   return (
-    <CarboCard>
-      <CarboCardContent className="flex items-center gap-2.5 p-3">
-        <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${cor}`}>
-          <Icon className="h-4 w-4" />
-        </span>
-        <div className="min-w-0">
-          <div className="text-[11px] leading-none text-muted-foreground">{rotulo}</div>
-          <div className="mt-1 truncate text-base font-bold leading-none tabular-nums">{valor}</div>
+    <div className="flex min-w-0 flex-1 items-center gap-2 px-3 py-2">
+      <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-md ${cor}`}>
+        <Icon className="h-3.5 w-3.5" />
+      </span>
+      <div className="min-w-0">
+        <div className="truncate text-[10px] uppercase leading-none tracking-wide text-muted-foreground">
+          {rotulo}
         </div>
-      </CarboCardContent>
-    </CarboCard>
+        <div className="mt-1 truncate text-sm font-bold leading-none tabular-nums">{valor}</div>
+      </div>
+    </div>
   );
 }
 
@@ -601,17 +609,19 @@ export default function EsteiraOnline() {
         description="Da venda à entrega, direto do Bling e das plataformas. Espelho: nada aqui se arrasta."
       />
 
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Indicador icon={ShoppingCart} cor="bg-blue-500/10 text-blue-500"
-                   rotulo="Em andamento" valor={String(emAndamento.length)} />
-        <Indicador icon={Package} cor="bg-carbo-green/10 text-carbo-green"
-                   rotulo="Valor em trânsito"
-                   valor={brl(emAndamento.reduce((s, r) => s + (r.total || 0), 0))} />
-        <Indicador icon={CheckCircle2} cor="bg-emerald-500/10 text-emerald-500"
-                   rotulo="Entregues" valor={String(porEtapa.get("entregue")?.length ?? 0)} />
-        <Indicador icon={AlertTriangle} cor="bg-amber-500/10 text-amber-500"
-                   rotulo="Precisam de atenção" valor={String(problemas)} />
-      </div>
+      <CarboCard>
+        <CarboCardContent className="flex flex-wrap items-center divide-x divide-border p-0">
+          <Indicador icon={ShoppingCart} cor="bg-blue-500/10 text-blue-500"
+                     rotulo="Em andamento" valor={String(emAndamento.length)} />
+          <Indicador icon={Package} cor="bg-carbo-green/10 text-carbo-green"
+                     rotulo="Valor em trânsito"
+                     valor={brl(emAndamento.reduce((s, r) => s + (r.total || 0), 0))} />
+          <Indicador icon={CheckCircle2} cor="bg-emerald-500/10 text-emerald-500"
+                     rotulo="Entregues" valor={String(porEtapa.get("entregue")?.length ?? 0)} />
+          <Indicador icon={AlertTriangle} cor="bg-amber-500/10 text-amber-500"
+                     rotulo="Precisam de atenção" valor={String(problemas)} />
+        </CarboCardContent>
+      </CarboCard>
 
       <div className="flex flex-wrap items-center gap-2">
         <div className="relative max-w-xs flex-1">
@@ -651,16 +661,23 @@ export default function EsteiraOnline() {
       ) : error ? (
         <p className="text-sm text-red-500">Não consegui carregar: {(error as Error).message}</p>
       ) : (
-        /* Quadro com rolagem horizontal e coluna de largura fixa: é o formato
-           que as pessoas já conhecem de quadro kanban, e evita a coluna
-           espremida em que o texto quebra em cinco linhas. */
-        <div className="flex gap-3 overflow-x-auto pb-2">
+        /* As colunas DIVIDEM a largura disponível (`flex-1`) com um piso de
+           240px. Antes tinham largura fixa de 280px: em tela larga sobravam
+           400px vazios à direita, e em tela estreita o texto espremia.
+           `min-w` preserva a rolagem horizontal quando não couber.
+
+           A altura vem do que sobra da janela, não de um `62vh` chutado — era
+           por isso que o quadro aparecia cortado por baixo com espaço livre
+           embaixo dele. */
+        <div className="flex gap-3 overflow-x-auto pb-2"
+             style={{ height: "calc(100vh - 19rem)", minHeight: "26rem" }}>
           {ETAPAS.map((etapa) => {
             const cards = porEtapa.get(etapa.key) ?? [];
             const valor = cards.reduce((s, r) => s + (r.total || 0), 0);
             return (
-              <div key={etapa.key} className="flex w-[280px] shrink-0 flex-col rounded-xl border bg-muted/20">
-                <div className="sticky top-0 z-10 rounded-t-xl border-b bg-muted/40 px-3 py-2 backdrop-blur">
+              <div key={etapa.key}
+                   className="flex min-w-[240px] flex-1 shrink-0 flex-col overflow-hidden rounded-xl border bg-muted/20">
+                <div className="shrink-0 border-b bg-muted/40 px-3 py-2">
                   <div className="flex items-center justify-between gap-2">
                     <span className="flex min-w-0 items-center gap-1.5">
                       <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: etapa.color }} />
@@ -682,7 +699,7 @@ export default function EsteiraOnline() {
                   </div>
                 </div>
 
-                <div className="max-h-[62vh] space-y-2 overflow-y-auto p-2">
+                <div className="flex-1 space-y-2 overflow-y-auto p-2">
                   {cards.map((r) => (
                     <Card key={r.bling_id} row={r} rastreio={rastreioDe(r.rastreio)}
                           cor={etapa.color} onClick={() => setAberto(r)} />
