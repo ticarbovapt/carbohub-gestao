@@ -285,6 +285,10 @@ async function montarFila(): Promise<ItemFila[]> {
     // Mercado Envios é do `ecommerce-sync`. O canal é o nome da loja no Bling.
     if (/mercado\s*livre|mercadolivre|meli/i.test(String(o.canal ?? ""))) continue;
     if (/amazon/i.test(String(o.canal ?? ""))) continue;
+    // Mandaê tem API própria e não passa pelo Melhor Envio. Sem este corte
+    // ela entra na fila toda hora, gasta uma busca e falha — 48 chamadas por
+    // dia que nunca podem dar certo, e um erro no card que não é erro.
+    if (/mandae|mandaê/i.test(String(o.transportadora ?? ""))) continue;
     const conhecido = conhecidos.get(codigo);
     if (conhecido?.status === "entregue") continue;
     fila.push({
@@ -321,6 +325,9 @@ async function montarFila(): Promise<ItemFila[]> {
     .select("codigo,fonte_id,bling_id,transportadora,servico")
     .eq("fonte", "melhorenvio")
     .not("erro", "is", null)
+    // Quem já foi julgado "de outra conta" não volta: reprocessar isso é
+    // repetir para sempre uma pergunta cuja resposta não muda.
+    .not("erro", "ilike", "%não encontrado%")
     // Sem exigir `fonte_id`: quem não tem id só precisa ser reencontrado pela
     // listagem, como qualquer outro. Exigi-lo aqui foi o que manteve 13 envios
     // presos — a condição extra não protegia de nada e excluía exatamente quem
