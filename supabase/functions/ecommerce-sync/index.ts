@@ -273,7 +273,16 @@ async function fetchAmazonOrders(accessToken: string, since: Date): Promise<Reco
   do {
     const params = new URLSearchParams({
       MarketplaceIds: BRAZIL_MKT_ID,
-      CreatedAfter:   since.toISOString(),
+      // ⚠️ LastUpdatedAfter, não CreatedAfter.
+      //
+      // Com `CreatedAfter` o pedido só é visto na janela em que nasceu: se for
+      // despachado ou entregue depois, nunca mais volta, e o status congela no
+      // espelho para sempre. É o mesmo defeito que deixou 25 pedidos do
+      // Mercado Livre parados em "pago" — aqui ele foi corrigido antes de
+      // aparecer, porque o volume da Amazon é baixo e esconderia o sintoma.
+      //
+      // A SP-API não aceita os dois filtros juntos: é um ou outro.
+      LastUpdatedAfter: since.toISOString(),
       OrderStatuses:  "Unshipped,PartiallyShipped,Shipped,Canceled,Pending",
     });
     if (nextToken) params.set("NextToken", nextToken);
