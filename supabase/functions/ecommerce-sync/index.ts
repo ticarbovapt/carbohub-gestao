@@ -236,6 +236,10 @@ async function gravarRastreioML(accessToken: string, s: MLShipment): Promise<voi
   await gravarRastreio(supabase, {
     codigo,
     fonte: "mercadolivre",
+    // O id do envio no ML. Guardado porque o Bling nem sempre registra o
+    // `tracking_number` como código: em parte dos pedidos ele grava um código
+    // próprio, e o id é o que permite reencontrar o envio nesses casos.
+    fonte_id: s.id != null ? String(s.id) : null,
     transportadora: s.tracking_method ?? "Mercado Envios",
     status: mapaStatusRastreioML(String(s.status ?? "")),
     status_descricao: [s.status, s.substatus].filter(Boolean).join(" / ") || null,
