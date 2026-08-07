@@ -116,8 +116,15 @@ function mapearEvento(e: any): EventoRastreio | null {
  * Listar resolve pela raiz: 3 páginas de 50 cobrem a operação inteira. Depois
  * da primeira rodada nem isso é preciso, porque o id fica em `fonte_id`.
  */
-async function mapearPedidosME(paginas = 4): Promise<Map<string, string>> {
+// deno-lint-ignore no-explicit-any
+async function mapearPedidosME(paginas = 4): Promise<{
+  mapa: Map<string, string>; exemplo: any | null; total: number;
+}> {
   const mapa = new Map<string, string>();
+  // deno-lint-ignore no-explicit-any
+  let exemplo: any = null;
+  let total = 0;
+
   for (let p = 1; p <= paginas; p++) {
     const res = await fetch(
       `${BASE}/api/v2/me/orders?page=${p}&per_page=50`,
@@ -130,13 +137,23 @@ async function mapearPedidosME(paginas = 4): Promise<Map<string, string>> {
     const json = await res.json();
     const lista = Array.isArray(json?.data) ? json.data : Array.isArray(json) ? json : [];
     if (!lista.length) break;
+    if (!exemplo) exemplo = lista[0];
+    total += lista.length;
+
     for (const o of lista) {
-      const cod = String(o?.tracking ?? "").trim().toUpperCase();
-      if (cod && o?.id) mapa.set(cod, String(o.id));
+      // O código de rastreio já apareceu em mais de um campo conforme a
+      // transportadora. `tracking` é o principal; os outros são o mesmo dado
+      // com outro nome, e aceitar todos custa nada. Cada envio entra no mapa
+      // por TODOS os códigos que ele expuser, porque o Bling pode ter guardado
+      // qualquer um deles — e o que não casa some do card sem erro nenhum.
+      for (const campo of ["tracking", "self_tracking", "protocol", "melhorenvio_tracking"]) {
+        const cod = String(o?.[campo] ?? "").trim().toUpperCase();
+        if (cod && o?.id) mapa.set(cod, String(o.id));
+      }
     }
     if (lista.length < 50) break;   // última página
   }
-  return mapa;
+  return { mapa, exemplo, total };
 }
 
 // deno-lint-ignore no-explicit-any
@@ -241,7 +258,7 @@ Deno.serve(async (req: Request) => {
     // Modo diagnóstico: um código, resposta crua, nada é gravado. Existe para
     // acertar o mapeamento de campos sem chutar.
     if (diagnostico) {
-      const mapa = await mapearPedidosME();
+      const { mapa, exemplo, total } = await mapearPedidosME();
       const id = mapa.get(diagnostico.trim().toUpperCase()) ?? null;
       const bruto = id ? await consultarRastreio([id]) : null;
       const d = id && bruto ? (bruto as Record<string, unknown>)[id] : null;
@@ -250,7 +267,14 @@ Deno.serve(async (req: Request) => {
         codigo: diagnostico,
         pedido_melhor_envio: id,
         achou_pedido: Boolean(id),
+        envios_na_listagem: total,
         codigos_vistos_na_listagem: mapa.size,
+        // Quando `achou_pedido` é false, a pergunta seguinte é sempre "então
+        // com o que eu deveria estar comparando?". Estes dois respondem sem
+        // mais uma ida e volta.
+        amostra_de_codigos: [...mapa.keys()].slice(0, 15),
+        campos_de_um_envio_da_listagem: exemplo ? Object.keys(exemplo) : [],
+        exemplo_da_listagem: exemplo,
         // O que eu preciso ver para corrigir o mapeamento: os nomes dos campos.
         campos_do_envio: d ? Object.keys(d as Record<string, unknown>) : [],
         onde_esta_o_historico: d ? (acharEventos(d) ? "encontrado" : "NENHUMA das chaves conhecidas") : null,
@@ -264,7 +288,9 @@ Deno.serve(async (req: Request) => {
     // Uma listagem só resolve todos os que ainda não têm id — e se todo mundo
     // já tem `fonte_id`, nem essa chamada acontece.
     const precisaDescobrir = fila.some((f) => !f.fonte_id);
-    const porCodigo = precisaDescobrir ? await mapearPedidosME() : new Map<string, string>();
+    const porCodigo = precisaDescobrir
+      ? (await mapearPedidosME()).mapa
+      : new Map<string, string>();
 
     const porId = new Map<string, ItemFila>();
     for (const item of fila) {
