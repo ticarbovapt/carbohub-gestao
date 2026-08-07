@@ -297,7 +297,13 @@ async function montarFila(alvos?: string[]): Promise<ItemFila[]> {
     // dia que nunca podem dar certo, e um erro no card que não é erro.
     if (/mandae|mandaê/i.test(String(o.transportadora ?? ""))) continue;
     const conhecido = conhecidos.get(codigo);
-    if (conhecido?.status === "entregue") continue;
+    // ⚠️ "Já entregue, pula" vale para a ROTINA — reconsultar 130 entregues de
+    // hora em hora é desperdício. NÃO vale no modo alvo: ali alguém pediu
+    // explicitamente por este código, e o aviso mais comum do webhook é
+    // justamente o da entrega. Eu já tinha tirado o filtro equivalente da
+    // consulta à esteira e deixei este no laço — o resultado foi `fila: 0`
+    // para um envio que existe, com cara de "nada a fazer".
+    if (!alvos?.length && conhecido?.status === "entregue") continue;
     fila.push({
       codigo,
       bling_id: o.bling_id ?? null,
