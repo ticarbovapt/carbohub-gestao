@@ -104,6 +104,14 @@ async function pullMercadoLivre(): Promise<Record<string, unknown>[]> {
     // O envio manda quando existe; senão vale o status do pagamento.
     const statusFinal = envioPorPedido.get(String(order.id))
       ?? normalizeMLStatus(String(order.status ?? ""));
+    // ⚠️ Quando a compra é um PACK (o cliente levou mais de um anúncio de uma
+    // vez), o ML cria um `pack_id` e é ELE que o Bling registra como número da
+    // loja — não o id do pedido. Compra de anúncio único não tem pack, e aí os
+    // dois números coincidem, que é por isso que parte casava e parte não.
+    //
+    // Sem isto, todo pedido de carrinho fica órfão: existe dos dois lados e
+    // nunca se encontra, e o card não avança na esteira.
+    const numeroDaLoja = String((order as any).pack_id ?? order.id);
     return items.map((item) => ({
       platform:     "mercadolivre",
       order_id:     `${order.id}-${(item.item as Record<string, unknown>)?.id}`,
@@ -114,6 +122,7 @@ async function pullMercadoLivre(): Promise<Record<string, unknown>[]> {
       unit_price:   Number(item.unit_price ?? 0),
       total:        Number(item.unit_price ?? 0) * Number(item.quantity ?? 1),
       status:       statusFinal,
+      platform_order_number: numeroDaLoja,
       ordered_at:   String(order.date_created ?? new Date().toISOString()),
       sync_source:  "cron",
       raw:          order,
