@@ -32,6 +32,27 @@ const supabase = createClient(
 const CLIENT_ID     = Deno.env.get("MELHOR_ENVIO_CLIENT_ID") ?? "";
 const CLIENT_SECRET = Deno.env.get("MELHOR_ENVIO_CLIENT_SECRET") ?? "";
 
+/**
+ * A URL de retorno, montada a partir do `SUPABASE_URL`.
+ *
+ * ⚠️ NÃO derive isto do `req.url`. Foi o que eu fiz primeiro e o Melhor Envio
+ * recusou com `invalid_client`, porque dentro da edge function o request chega
+ * DUAS vezes diferente do que o mundo vê:
+ *
+ *   esquema  http://   — o proxy do Supabase termina o TLS antes de nós
+ *   caminho  /melhor-envio-auth   — o gateway já comeu o /functions/v1
+ *
+ * O resultado era `http://<projeto>.supabase.co/melhor-envio-auth`, que não
+ * bate com a URL cadastrada no aplicativo. E o erro não diz "redirect errado":
+ * diz "Client authentication failed", que manda você conferir client_id e
+ * secret — os dois lugares certos e o problema em outro.
+ *
+ * `SUPABASE_URL` já vem com https e sem barra final. O secret existe para o
+ * caso de um dia isso rodar atrás de domínio próprio.
+ */
+const REDIRECT_URI = Deno.env.get("MELHOR_ENVIO_REDIRECT_URI")
+  ?? `${Deno.env.get("SUPABASE_URL")}/functions/v1/melhor-envio-auth`;
+
 // Escopos: o mínimo para o que usamos hoje.
 //   shipping-tracking  → o histórico de movimentação (a esteira)
 //   orders-read        → listar pedidos para casar código ↔ envio
@@ -58,8 +79,7 @@ function pagina(titulo: string, corpo: string, ok: boolean): Response {
 
 Deno.serve(async (req: Request) => {
   const url = new URL(req.url);
-  // A própria URL desta função, sem query — é ela que vai cadastrada no app.
-  const redirectUri = `${url.origin}${url.pathname}`;
+  const redirectUri = REDIRECT_URI;
 
   if (!CLIENT_ID || !CLIENT_SECRET) {
     return pagina("Faltam credenciais", `
