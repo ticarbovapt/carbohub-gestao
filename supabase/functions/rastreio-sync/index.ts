@@ -206,9 +206,26 @@ async function montarFila(): Promise<ItemFila[]> {
 // ─── Handler ─────────────────────────────────────────────────────────────────
 
 Deno.serve(async (req: Request) => {
+  const url = new URL(req.url);
+
+  // O segredo vale pelo header (é assim que o pg_cron manda) OU pela query.
+  //
+  // A query existe por uma razão prática: navegador não permite definir header,
+  // e quem opera este sistema trabalha pelo navegador — Supabase, GitHub,
+  // Vercel, sem terminal. Sem isso, o modo diagnóstico seria inalcançável
+  // justamente para quem precisa dele.
+  //
+  // O risco é aceitável e limitado: esta função só LÊ rastreio, e o segredo
+  // protege contra disparo anônimo, não contra vazamento de dado. Quando a URL
+  // com segredo entrar num histórico de navegador, o pior caso é alguém
+  // disparar uma sincronização.
   const segredo = Deno.env.get("CRON_SECRET") ?? "";
-  if (segredo && req.headers.get("X-Cron-Secret") !== segredo) {
-    return json({ error: "X-Cron-Secret inválido" }, 401);
+  const informado = req.headers.get("X-Cron-Secret") ?? url.searchParams.get("secret");
+  if (segredo && informado !== segredo) {
+    return json({
+      error: "Segredo inválido ou ausente.",
+      como_resolver: "Header X-Cron-Secret, ou ?secret=... na URL para testar pelo navegador.",
+    }, 401);
   }
   TOKEN = (await getMelhorEnvioToken(supabase)) ?? "";
   if (!TOKEN) {
@@ -218,7 +235,6 @@ Deno.serve(async (req: Request) => {
     }, 500);
   }
 
-  const url = new URL(req.url);
   const diagnostico = url.searchParams.get("diagnostico");
 
   try {
