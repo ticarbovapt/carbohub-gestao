@@ -356,7 +356,20 @@ async function pullNuvemshop(): Promise<Record<string, unknown>[]> {
   const orders = await fetchNuvemshopOrdersSince(accessToken, storeId, since);
 
   // Mesma função de mapeamento do webhook → order_id idêntico, upsert idempotente.
-  const mapped = orders.flatMap((o) => mapNuvemshopOrder(o, "cron"));
+  //
+  // ⚠️ O número do pedido (#276) é gravado AQUI, e não só dentro do
+  // normalizador, de propósito: o painel do Supabase publica uma função por
+  // vez, substituindo o index.ts — o arquivo `_shared` fica para trás. Com a
+  // atribuição aqui, publicar só esta função já faz o vínculo funcionar.
+  //
+  // É o número que o Bling guarda em `numero_loja`, e sem ele a esteira do
+  // on-line não consegue mover o card para "em trânsito"/"entregue", que é
+  // justamente o que a plataforma sabe e o Bling não.
+  const mapped = orders.flatMap((o) => {
+    const num = (o as any)?.number != null ? String((o as any).number) : null;
+    return mapNuvemshopOrder(o, "cron")
+      .map((r) => ({ ...r, platform_order_number: num })) as any[];
+  });
   const rows = await enrichUnitsReal(supabase, mapped);
 
   // Atualiza o checkpoint para a próxima execução.

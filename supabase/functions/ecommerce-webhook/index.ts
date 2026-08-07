@@ -109,6 +109,11 @@ async function normalizeNuvemshop(body: unknown, _platform: Platform): Promise<N
   const order = await fetchNuvemshopOrder(creds.accessToken, creds.storeId, orderId as string | number);
   if (!order) return [];
   const rows = await enrichUnitsReal(supabase, mapNuvemshopOrder(order, "webhook"));
+  // ⚠️ Ver a nota gêmea no ecommerce-sync: o número do pedido é atribuído aqui
+  // para que publicar só esta função baste — o painel do Supabase não leva o
+  // arquivo `_shared` junto.
+  const numeroDaLoja = (order as any)?.number != null ? String((order as any).number) : null;
+  for (const r of rows as any[]) r.platform_order_number = numeroDaLoja;
   return rows as unknown as NormalizedOrder[];
 }
 
