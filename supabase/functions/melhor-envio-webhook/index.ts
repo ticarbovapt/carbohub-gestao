@@ -86,6 +86,22 @@ Deno.serve(async (req: Request) => {
     });
   }
 
+  // Visita de navegador (GET) NÃO é aviso: o Melhor Envio manda POST com
+  // corpo. Sem esta separação, cada vez que alguém abre a URL para conferir se
+  // está de pé nasce uma linha "sem código no payload" — e essa é exatamente a
+  // consulta que precisa ficar limpa para revelar formato que eu não entendo.
+  // Ruído no lugar onde se procura sinal é pior que não ter o registro.
+  if (req.method === "GET") {
+    return new Response(
+      "De pé, aguardando avisos do Melhor Envio.\n\n"
+      + "Esta URL responde a POST. Um GET (como este, do navegador) não é\n"
+      + "registrado de propósito, para não poluir a tabela de análise.\n\n"
+      + "Cadastre em: Área Dev > carbohub > Novo Webhook\n"
+      + "Evento: atualização das etiquetas criadas e editadas\n",
+      { status: 200, headers: { "Content-Type": "text/plain; charset=utf-8" } },
+    );
+  }
+
   // Corpo ilegível também vira linha: se o Melhor Envio um dia mandar form-data
   // em vez de JSON, quero ver isso na tabela, não descobrir por ausência.
   let corpo: unknown = null;
