@@ -133,7 +133,7 @@ function ChipPrevisao({ r }: { r?: RastreioCard }) {
   if (!r) return null;
   if (r.entregue_em) {
     return (
-      <span className="inline-flex items-center gap-1 text-[11px] text-emerald-500">
+      <span className="inline-flex items-center gap-1 text-xs font-medium leading-4 text-emerald-500">
         <CheckCircle2 className="h-3 w-3 shrink-0" />
         entregue {diaCurto(r.entregue_em)}
       </span>
@@ -141,8 +141,8 @@ function ChipPrevisao({ r }: { r?: RastreioCard }) {
   }
   if (!r.previsao_entrega) return null;
   return (
-    <span className={`inline-flex items-center gap-1 text-[11px] ${
-      r.atrasado ? "font-medium text-red-500" : "text-muted-foreground"
+    <span className={`inline-flex items-center gap-1 text-xs font-medium leading-4 ${
+      r.atrasado ? "text-red-500" : "text-foreground"
     }`}>
       <CalendarClock className="h-3 w-3 shrink-0" />
       {r.atrasado ? "previa " : "chega "}{diaCurto(r.previsao_entrega)}
@@ -152,12 +152,27 @@ function ChipPrevisao({ r }: { r?: RastreioCard }) {
 }
 
 // ── Card ────────────────────────────────────────────────────────────────────
+//
+// ⚠️ ALTURA é o orçamento deste componente. A versão anterior tinha ~170px:
+// numa coluna de 700px cabiam 3,5 cards, e era ISSO que fazia a tela parecer
+// esticada e vazia — não a largura, não a fonte. O alvo aqui é ~100px, ou seis
+// cards por coluna. Antes de acrescentar qualquer linha, pergunte de onde ela
+// tira o espaço.
+//
+// A gordura removida: `p-3` → `py-2.5`, duas divisórias → uma, o badge do canal
+// (20px de altura para exibir uma palavra) → texto puro na linha de contexto, e
+// as três linhas do bloco de envio → `flex-wrap`, que junta o que couber lado a
+// lado quando a coluna é larga.
 function Card({ row, rastreio, cor, onClick }: {
   row: EsteiraRow; rastreio?: RastreioCard; cor: string; onClick: () => void;
 }) {
   const atrasado = rastreio?.atrasado && !rastreio?.entregue_em;
   const travado = !row.tem_status_da_plataforma && row.etapa !== "entregue" && row.etapa !== "cancelado";
   const quando = idade(row.data_pedido);
+  const contexto = [
+    row.canal,
+    row.entrega_cidade ? `${row.entrega_cidade}/${row.entrega_uf}` : null,
+  ].filter(Boolean).join(" · ");
 
   return (
     <div
@@ -165,7 +180,7 @@ function Card({ row, rastreio, cor, onClick }: {
       tabIndex={0}
       onClick={onClick}
       onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onClick(); } }}
-      className={`group relative cursor-pointer rounded-lg border bg-card p-3 pl-3.5 transition-all
+      className={`group relative cursor-pointer rounded-lg border bg-card px-3 py-2.5 pl-3.5 transition-all
         hover:border-carbo-green/50 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-carbo-green/40
         ${atrasado ? "border-red-500/40" : ""}`}
     >
@@ -176,8 +191,17 @@ function Card({ row, rastreio, cor, onClick }: {
         style={{ background: atrasado ? "#ef4444" : cor }}
       />
 
-      <div className="flex items-start justify-between gap-2">
-        <span className="text-[13px] font-semibold leading-tight truncate">
+      {/* Nome ELÁSTICO, valor firme. Com `justify-between` sobrava um buraco de
+          180px entre os dois numa coluna larga; com `flex-1` a folga vira nome
+          visível — "Maria Aparecida da Silva Santos" deixa de truncar. */}
+      <div className="flex items-baseline gap-2">
+        {travado && (
+          <AlertTriangle
+            className="h-3 w-3 shrink-0 self-center text-amber-500"
+            aria-label="não avança sozinho — plataforma não vinculada"
+          />
+        )}
+        <span className="min-w-0 flex-1 truncate text-[13px] font-semibold leading-tight">
           {row.cliente ?? "—"}
         </span>
         <span className="shrink-0 text-[13px] font-semibold tabular-nums">
@@ -185,53 +209,45 @@ function Card({ row, rastreio, cor, onClick }: {
         </span>
       </div>
 
-      <div className="mt-1.5 flex items-center justify-between gap-2 text-[11px] text-muted-foreground">
-        <span className="flex min-w-0 items-center gap-1.5">
-          <CarboBadge variant="secondary" className="shrink-0">{row.canal ?? "—"}</CarboBadge>
-          {row.entrega_cidade && (
-            <span className="truncate">{row.entrega_cidade}/{row.entrega_uf}</span>
-          )}
-        </span>
+      <div className="mt-1 flex items-baseline gap-2 text-[11px] leading-4 text-muted-foreground">
+        <span className="min-w-0 flex-1 truncate">{contexto || "—"}</span>
         {quando && <span className="shrink-0 tabular-nums">{quando}</span>}
       </div>
 
-      {/* Bloco do envio: onde está e quando chega — a pergunta que traz alguém
-          a esta tela. Fica junto e separado do resto por uma linha. */}
+      {/* Onde está e quando chega — a razão de a tela existir, e por isso o
+          único bloco em `text-foreground`. A transportadora desce para
+          metadado: ela não muda decisão nenhuma no relance. */}
       {(row.transportadora || rastreio) && (
-        <div className="mt-2 space-y-1 border-t pt-2">
-          {row.transportadora && (
-            <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-              <Truck className="h-3 w-3 shrink-0" />
-              <span className="truncate">
-                {row.transportadora}{row.servico ? ` · ${row.servico}` : ""}
-              </span>
-            </div>
-          )}
+        <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-border/50 pt-2">
           <ChipPrevisao r={rastreio} />
           {rastreio?.eventos?.[0] && (
-            <div className="flex items-start gap-1.5 text-[11px]">
-              <MapPin className="h-3 w-3 mt-px shrink-0 text-muted-foreground" />
-              <span className="truncate font-medium">{rastreio.eventos[0].descricao}</span>
-            </div>
+            <span className="flex min-w-0 items-center gap-1 text-xs font-medium leading-4">
+              <MapPin className="h-3 w-3 shrink-0 text-muted-foreground" />
+              <span className="truncate">{rastreio.eventos[0].descricao}</span>
+            </span>
+          )}
+          {row.transportadora && (
+            <span className="flex min-w-0 items-center gap-1 text-[10px] leading-4 text-muted-foreground/70">
+              <Truck className="h-3 w-3 shrink-0" />
+              <span className="truncate">{row.transportadora}</span>
+            </span>
           )}
         </div>
       )}
 
-      {travado && (
-        <div className="mt-2 flex items-start gap-1.5 rounded bg-amber-500/10 px-1.5 py-1 text-[10px] text-amber-600 dark:text-amber-500">
-          <AlertTriangle className="h-3 w-3 mt-px shrink-0" />
-          <span>não avança sozinho — plataforma não vinculada</span>
+      {/* Rodapé sem divisória: separado por hierarquia, não por régua. O número
+          da NF saiu — é dado de conferência, está no detalhe e na busca. Fica
+          só o caso NEGATIVO, que é o que merece atenção. */}
+      {(!row.nf_numero || row.rastreio) && (
+        <div className="mt-1.5 flex items-center justify-between gap-2 text-[10px] leading-4 text-muted-foreground/70">
+          {row.nf_numero
+            ? <span />
+            : <span className="text-amber-500/80">sem NF</span>}
+          {row.rastreio && (
+            <BotaoCopiar texto={row.rastreio} oque="Rastreio" className="min-w-0 font-mono" />
+          )}
         </div>
       )}
-
-      <div className="mt-2 flex items-center justify-between gap-2 border-t pt-2 text-[10px] text-muted-foreground">
-        <span className="shrink-0">{row.nf_numero ? `NF ${row.nf_numero}` : "sem NF"}</span>
-        {row.rastreio ? (
-          <BotaoCopiar texto={row.rastreio} oque="Rastreio" className="font-mono truncate" />
-        ) : (
-          <span className="tabular-nums">{dia(row.data_pedido)}</span>
-        )}
-      </div>
     </div>
   );
 }
@@ -587,6 +603,22 @@ export default function EsteiraOnline() {
     [linhas, soProblemas, mapaRastreio],
   );
 
+  /**
+   * Ordem dentro da coluna: URGÊNCIA primeiro, data como desempate — e o mais
+   * ANTIGO no topo.
+   *
+   * ⚠️ Era o inverso: data do pedido decrescente, o mais novo em cima. Numa
+   * coluna com 48 cards isso empurra o pedido mais velho — justamente o
+   * problemático — para a posição 48, alcançável só com rolagem. Numa esteira,
+   * o topo tem que ser o que está parado há mais tempo.
+   */
+  const urgencia = (r: EsteiraRow) => {
+    const t = rastreioDe(r.rastreio);
+    if (t?.atrasado && !t?.entregue_em) return 0;   // atrasado
+    if (!r.tem_status_da_plataforma) return 1;      // não anda sozinho
+    return 2;
+  };
+
   const porEtapa = useMemo(() => {
     const m = new Map<EtapaEsteira, EsteiraRow[]>();
     for (const e of ETAPAS) m.set(e.key, []);
@@ -594,15 +626,45 @@ export default function EsteiraOnline() {
       if (r.etapa === "cancelado") continue;
       m.get(r.etapa)?.push(r);
     }
+    for (const lista of m.values()) {
+      lista.sort((a, b) => {
+        const u = urgencia(a) - urgencia(b);
+        if (u !== 0) return u;
+        return (a.data_pedido ?? "").localeCompare(b.data_pedido ?? "");
+      });
+    }
     return m;
-  }, [visiveis]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visiveis, mapaRastreio]);
+
+  /**
+   * "Entregue" NÃO entra no quadro.
+   *
+   * São 81 de 148 pedidos — 55% da tela dedicada a uma fila sobre a qual
+   * ninguém age: pedido entregue está resolvido. Ela ocupava um quinto da
+   * largura e empurrava as quatro filas ativas para colunas estreitas.
+   *
+   * Vira histórico recolhido, no mesmo padrão que "Cancelado" já usa, e o
+   * número continua visível na faixa de indicadores. Aqui a ordem é a natural
+   * de um registro: a entrega mais recente primeiro.
+   */
+  const ETAPAS_ATIVAS = ETAPAS.filter((e) => e.key !== "entregue");
+  const entregues = [...visiveis]
+    .filter((r) => r.etapa === "entregue")
+    .sort((a, b) => (b.data_pedido ?? "").localeCompare(a.data_pedido ?? ""));
 
   const cancelados = visiveis.filter((r) => r.etapa === "cancelado");
   const emAndamento = visiveis.filter((r) => r.etapa !== "cancelado");
   const problemas = linhas.filter(ehProblema).length;
 
   return (
-    <div className="space-y-4">
+    /* `h-full min-h-0 flex-col`: a altura vem do <main>, que já é
+       `flex-1 overflow-y-auto` dentro de um `h-screen overflow-hidden`.
+       O `calc(100vh - 19rem)` anterior presumia a altura exata do cabeçalho,
+       dos indicadores e dos filtros — e quebrava assim que os filtros
+       passavam para duas linhas. ⚠️ TODO ancestral do scroller precisa de
+       `min-h-0`, senão o `flex-1` para de encolher e o quadro estoura. */
+    <div className="flex h-full min-h-0 flex-col gap-4">
       <CarboPageHeader
         icon={Truck}
         title="Esteira do On-line"
@@ -661,22 +723,23 @@ export default function EsteiraOnline() {
       ) : error ? (
         <p className="text-sm text-red-500">Não consegui carregar: {(error as Error).message}</p>
       ) : (
-        /* As colunas DIVIDEM a largura disponível (`flex-1`) com um piso de
-           240px. Antes tinham largura fixa de 280px: em tela larga sobravam
-           400px vazios à direita, e em tela estreita o texto espremia.
-           `min-w` preserva a rolagem horizontal quando não couber.
+        /* PISO + TETO, não uma regra só.
 
-           A altura vem do que sobra da janela, não de um `62vh` chutado — era
-           por isso que o quadro aparecia cortado por baixo com espaço livre
-           embaixo dele. */
-        <div className="flex gap-3 overflow-x-auto pb-2"
-             style={{ height: "calc(100vh - 19rem)", minHeight: "26rem" }}>
-          {ETAPAS.map((etapa) => {
+           "Esticado" e "sobra à direita" eram o mesmo defeito: largura fixa
+           deixava vazio em tela larga, `flex-1` puro esticava a coluna até o
+           card ficar oco no meio. Com `basis-0 grow` entre 264 e 360px, a soma
+           dos tetos (4 × 360 + gaps) passa da largura da tela — então nada
+           estica —, e o `grow` divide o que existe — então nada sobra.
+
+           `justify-center` só aparece em monitor muito largo, quando o teto é
+           atingido: folga simétrica lê como intenção; buraco só à direita, não. */
+        <div className="flex min-h-0 flex-1 justify-center gap-3 overflow-x-auto overscroll-x-contain pb-2">
+          {ETAPAS_ATIVAS.map((etapa) => {
             const cards = porEtapa.get(etapa.key) ?? [];
             const valor = cards.reduce((s, r) => s + (r.total || 0), 0);
             return (
               <div key={etapa.key}
-                   className="flex min-w-[240px] flex-1 shrink-0 flex-col overflow-hidden rounded-xl border bg-muted/20">
+                   className="flex min-w-[264px] max-w-[360px] shrink-0 grow basis-0 flex-col overflow-hidden rounded-xl border bg-muted/20">
                 <div className="shrink-0 border-b bg-muted/40 px-3 py-2">
                   <div className="flex items-center justify-between gap-2">
                     <span className="flex min-w-0 items-center gap-1.5">
@@ -699,13 +762,13 @@ export default function EsteiraOnline() {
                   </div>
                 </div>
 
-                <div className="flex-1 space-y-2 overflow-y-auto p-2">
+                <div className="min-h-0 flex-1 space-y-1.5 overflow-y-auto overscroll-contain p-2">
                   {cards.map((r) => (
                     <Card key={r.bling_id} row={r} rastreio={rastreioDe(r.rastreio)}
                           cor={etapa.color} onClick={() => setAberto(r)} />
                   ))}
                   {cards.length === 0 && (
-                    <p className="py-8 text-center text-[11px] text-muted-foreground">vazio</p>
+                    <p className="px-2 py-4 text-center text-[11px] text-muted-foreground/60">sem pedidos</p>
                   )}
                 </div>
               </div>
@@ -714,8 +777,24 @@ export default function EsteiraOnline() {
         </div>
       )}
 
+      {entregues.length > 0 && (
+        <details className="shrink-0 rounded-xl border p-3">
+          <summary className="flex cursor-pointer items-center gap-1.5 text-xs font-medium">
+            <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
+            {entregues.length} entregues — {brl(entregues.reduce((s, r) => s + (r.total || 0), 0))}
+            <span className="font-normal text-muted-foreground">· histórico, nada a fazer</span>
+          </summary>
+          <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-3 xl:grid-cols-5">
+            {entregues.map((r) => (
+              <Card key={r.bling_id} row={r} rastreio={rastreioDe(r.rastreio)}
+                    cor="#10b981" onClick={() => setAberto(r)} />
+            ))}
+          </div>
+        </details>
+      )}
+
       {cancelados.length > 0 && (
-        <details className="rounded-xl border p-3">
+        <details className="shrink-0 rounded-xl border p-3">
           <summary className="flex cursor-pointer items-center gap-1.5 text-xs font-medium">
             <XCircle className="h-3.5 w-3.5 text-red-500" />
             {cancelados.length} cancelados — {brl(cancelados.reduce((s, r) => s + (r.total || 0), 0))}
@@ -729,7 +808,7 @@ export default function EsteiraOnline() {
         </details>
       )}
 
-      <p className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+      <p className="flex shrink-0 items-center gap-1.5 text-[11px] text-muted-foreground">
         <Clock className="h-3 w-3" />
         As etapas vêm do Bling (pedido, nota, etiqueta) e das plataformas (envio, entrega).
         A tela atualiza sozinha a cada 2 minutos; nenhum card é arrastável de propósito.
