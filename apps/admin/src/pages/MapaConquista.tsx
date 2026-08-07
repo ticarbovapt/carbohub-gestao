@@ -341,8 +341,10 @@ export default function MapaConquista() {
               {cruzamento.naoLocalizadas.length} cidade(s) não localizada(s) na lista do IBGE
             </div>
             <p className="text-xs text-muted-foreground mb-2">
-              Elas contam no placar, mas não têm onde ser pintadas — quase sempre é erro de
-              digitação no cadastro ou UF trocada. Corrigir na origem acende o município.
+              Elas contam no placar, mas não têm onde ser pintadas: é o comprador escrevendo
+              bairro, abreviação ou forma curta no endereço do marketplace. Não adianta corrigir
+              o pedido — o próximo chega igual. Uma linha em <code>carbo_cidade_alias</code>{" "}
+              (nome como chega, UF, nome do IBGE) acende o município e vale daí em diante.
             </p>
             <div className="flex flex-wrap gap-1.5">
               {cruzamento.naoLocalizadas.slice(0, 40).map((c) => (
