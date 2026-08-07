@@ -155,6 +155,18 @@ quando a operação online passou a rodar na conta 2: pedido ATENDIDO
   pedido de `cancelled`. Mesma lição do `bling-sync`, onde venda cancelada
   ressuscitava a cada rodada.
 
+### Esteira do On-line — admin manda, Ops espelha
+`pages/EsteiraOnline.tsx` e `hooks/useEsteiraOnline.ts` existem no **admin** e no
+**ops**, byte a byte idênticos. Fonte da verdade = `apps/admin`; no Ops o arquivo
+mora em `pages/logistica/` e a rota é `/logistica/esteira`.
+
+A tela não calcula etapa: quem calcula é a view `public.bling2_esteira`. Regra
+nova entra lá, e as duas telas mudam juntas.
+
+⚠️ **O menu do Ops tem DOIS lugares** e esquecer um deixa a tela invisível sem
+erro nenhum: o registro em `src/lib/opsNav.ts` **e** a lista de caminhos do
+grupo em `src/components/Layout.tsx`. Já aconteceu antes.
+
 ### Regras anti-confusão (OBRIGATÓRIAS)
 1. **Todo pedido nomeia o alvo.** "no CRM" → `apps/crm`; "no controle"/"atual" → raiz (`src/`).
 2. **Na dúvida, PERGUNTE — nunca adivinhe.** Se a tela existe em mais de um app, liste os candidatos antes de mexer.
