@@ -10,6 +10,7 @@ import MinhaEquipe from "./pages/MinhaEquipe";
 import EcommerceVendas from "./pages/EcommerceVendas";
 import EcommerceMetas from "./pages/EcommerceMetas";
 import EsteiraOnline from "./pages/EsteiraOnline";
+import MapaConquista from "./pages/MapaConquista";
 import MetaConfig from "./pages/MetaConfig";
 import Vender from "./pages/Vender";
 import UltimoAcesso from "./pages/UltimoAcesso";
@@ -78,6 +79,7 @@ export default function App() {
         <Route path="/comercial/precos" element={<ProdutosPrecos />} />
         <Route path="/dashboards/metas" element={<DashboardsMetas />} />
         <Route path="/dashboards/estrategico" element={<DashboardsEstrategico />} />
+        <Route path="/dashboards/mapa-conquista" element={<MapaConquista />} />
         <Route path="/dashboards/suprimentos" element={<Suprimentos />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
