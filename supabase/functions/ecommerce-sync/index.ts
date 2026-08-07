@@ -166,10 +166,9 @@ async function fetchMLShipmentStatus(
     if (!res.ok) { console.error("[mercadolivre] shipment", id, res.status); return null; }
     const s = await res.json() as MLShipment;
 
-    // A mesma resposta que já pagávamos traz o rastreio inteiro: número,
-    // previsão e as datas de cada etapa. Antes só o `status` era aproveitado e
-    // o resto ia para o lixo. Gravar aqui não custa uma chamada a mais.
-    await gravarRastreioML(s);
+    // A mesma resposta que já pagávamos traz o rastreio: número e as datas de
+    // cada etapa. Antes só o `status` era aproveitado e o resto ia para o lixo.
+    await gravarRastreioML(accessToken, s);
 
     return normalizeMLShipmentStatus(String(s?.status ?? ""));
   } catch (e) {
@@ -199,9 +198,20 @@ interface MLShipment {
  * Sem `tracking_number` não há o que gravar: a chave das nossas tabelas é o
  * código, e envio Flex/retirada não tem um.
  */
-async function gravarRastreioML(s: MLShipment): Promise<void> {
+async function gravarRastreioML(accessToken: string, s: MLShipment): Promise<void> {
   const codigo = (s.tracking_number ?? "").trim();
   if (!codigo) return;
+
+  // ⚠️ A previsão de entrega NÃO vem no /shipments/{id} — a primeira carga
+  // trouxe 24 envios e 101 movimentações com `com_previsao = 0`. Ela mora num
+  // recurso à parte, /shipments/{id}/lead_time.
+  //
+  // Só busco para quem ainda não chegou: em envio entregue a previsão não
+  // interessa (o card mostra a data real), e são justamente eles a maioria do
+  // acervo — pedir para todos seria dobrar as chamadas para preencher coluna
+  // que ninguém lê.
+  const jaEntregue = Boolean(s.status_history?.date_delivered);
+  const previsao = jaEntregue ? null : await buscarPrevisaoML(accessToken, s.id);
 
   const h = s.status_history ?? {};
   // Ordem do fluxo, não do objeto: o JSON não garante ordem de chave, e um
@@ -229,15 +239,53 @@ async function gravarRastreioML(s: MLShipment): Promise<void> {
     transportadora: s.tracking_method ?? "Mercado Envios",
     status: mapaStatusRastreioML(String(s.status ?? "")),
     status_descricao: [s.status, s.substatus].filter(Boolean).join(" / ") || null,
+    // O campo do próprio shipment ganha, quando existe; o lead_time é o
+    // fallback que na prática é quem responde.
     previsao_entrega: s.estimated_delivery_time?.date
       ? new Date(s.estimated_delivery_time.date).toISOString().slice(0, 10)
-      : null,
+      : previsao,
     postado_em: h["date_shipped"] ? new Date(h["date_shipped"]).toISOString() : null,
     entregue_em: entregue ? new Date(entregue).toISOString() : null,
     // Sem link público: o comprador do ML rastreia dentro do próprio app.
     url_rastreio: null,
     raw: s,
   }, eventos);
+}
+
+/**
+ * Previsão de entrega do Mercado Envios — `/shipments/{id}/lead_time`.
+ *
+ * Devolve YYYY-MM-DD ou null. Falhar aqui NÃO pode derrubar a gravação do
+ * trajeto: previsão é enfeite perto de saber onde o pacote está, e o pedido
+ * inteiro sumir do card por causa dela seria trocar o principal pelo acessório.
+ * Por isso o catch devolve null em vez de propagar — mas registra no console,
+ * porque falha silenciosa foi o que nos custou dias nesta mesma integração.
+ */
+async function buscarPrevisaoML(
+  accessToken: string, shipmentId: number | string | undefined,
+): Promise<string | null> {
+  if (!shipmentId) return null;
+  try {
+    const res = await fetch(
+      `https://api.mercadolibre.com/shipments/${shipmentId}/lead_time`,
+      { headers: { Authorization: `Bearer ${accessToken}` } },
+    );
+    if (!res.ok) { console.warn("[mercadolivre] lead_time", shipmentId, res.status); return null; }
+    const lt = await res.json() as {
+      estimated_delivery_time?:  { date?: string | null } | null;
+      estimated_delivery_limit?: { date?: string | null } | null;
+      estimated_delivery_final?: { date?: string | null } | null;
+    };
+    // `time` é a estimativa; `limit` é o prazo máximo prometido ao comprador.
+    // Prefiro a estimativa e caio no limite — é o que o cliente vê no anúncio.
+    const d = lt?.estimated_delivery_time?.date
+      ?? lt?.estimated_delivery_final?.date
+      ?? lt?.estimated_delivery_limit?.date;
+    return d ? new Date(d).toISOString().slice(0, 10) : null;
+  } catch (e) {
+    console.warn("[mercadolivre] lead_time", shipmentId, "falhou:", e);
+    return null;
+  }
 }
 
 /** Status do envio → nossa lista branca. Diferente do `normalizeMLShipmentStatus`
