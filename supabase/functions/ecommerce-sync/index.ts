@@ -82,8 +82,18 @@ async function pullMercadoLivre(): Promise<Record<string, unknown>[]> {
   if (!res.ok) { console.error("[mercadolivre] API error", res.status); return []; }
   const json = await res.json() as { results: Record<string, unknown>[] };
 
+  // Status do envio, um por pedido (não por item: o envio é do pedido inteiro).
+  const envioPorPedido = new Map<string, string | null>();
+  for (const order of (json.results ?? [])) {
+    const shippingId = (order.shipping as Record<string, unknown>)?.id;
+    envioPorPedido.set(String(order.id), await fetchMLShipmentStatus(accessToken, shippingId));
+  }
+
   const rows = (json.results ?? []).flatMap((order) => {
     const items = order.order_items as Record<string, unknown>[] ?? [];
+    // O envio manda quando existe; senão vale o status do pagamento.
+    const statusFinal = envioPorPedido.get(String(order.id))
+      ?? normalizeMLStatus(String(order.status ?? ""));
     return items.map((item) => ({
       platform:     "mercadolivre",
       order_id:     `${order.id}-${(item.item as Record<string, unknown>)?.id}`,
@@ -93,7 +103,7 @@ async function pullMercadoLivre(): Promise<Record<string, unknown>[]> {
       units_real:   Number(item.quantity ?? 1),
       unit_price:   Number(item.unit_price ?? 0),
       total:        Number(item.unit_price ?? 0) * Number(item.quantity ?? 1),
-      status:       normalizeMLStatus(String(order.status ?? "")),
+      status:       statusFinal,
       ordered_at:   String(order.date_created ?? new Date().toISOString()),
       sync_source:  "cron",
       raw:          order,
@@ -106,6 +116,51 @@ async function pullMercadoLivre(): Promise<Record<string, unknown>[]> {
     .eq("id", "mercadolivre");
 
   return rows;
+}
+
+// ── Status do ENVIO no Mercado Livre ──────────────────────────────────────
+//
+// ⚠️ `order.status` do ML é o status do PAGAMENTO — ele chega em `paid` e
+// para ali para sempre. O andamento do envio mora noutro recurso, apontado por
+// `order.shipping.id`, e é preciso buscá-lo: GET /shipments/{id}.
+//
+// Sem isto, todo pedido do ML fica eternamente em "paid" no nosso espelho e a
+// esteira do on-line nunca move o card para "em trânsito"/"entregue" — foi
+// exatamente o que aconteceu: 25 pedidos do ML empilhados na etiqueta, todos
+// já entregues na vida real.
+//
+// Uma chamada por pedido, dentro da integração que já existe. Falha em
+// consultar NÃO derruba o pedido: devolve null e o status do pagamento vale,
+// que é o comportamento antigo.
+async function fetchMLShipmentStatus(
+  accessToken: string, shippingId: unknown
+): Promise<string | null> {
+  const id = shippingId != null ? String(shippingId) : "";
+  if (!id) return null;
+  try {
+    const res = await fetch(`https://api.mercadolibre.com/shipments/${id}`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    if (!res.ok) { console.error("[mercadolivre] shipment", id, res.status); return null; }
+    const s = await res.json() as { status?: string; substatus?: string };
+    return normalizeMLShipmentStatus(String(s?.status ?? ""));
+  } catch (e) {
+    console.error("[mercadolivre] shipment", id, "falhou:", e);
+    return null;
+  }
+}
+
+// Vocabulário do recurso /shipments. `pending`, `handling` e `ready_to_ship`
+// são antes da coleta — continuam valendo como "pago, a enviar", e por isso
+// devolvem null (o status do pagamento prevalece).
+function normalizeMLShipmentStatus(s: string): string | null {
+  const map: Record<string, string> = {
+    shipped:       "shipped",
+    delivered:     "delivered",
+    not_delivered: "shipped",   // tentativa falhou: ainda está em trânsito
+    cancelled:     "cancelled",
+  };
+  return map[s] ?? null;
 }
 
 function normalizeMLStatus(s: string): string {
