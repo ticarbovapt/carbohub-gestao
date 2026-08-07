@@ -41,15 +41,18 @@ const CLIENT_SECRET = Deno.env.get("MELHOR_ENVIO_CLIENT_SECRET") ?? "";
 const ESCOPOS = Deno.env.get("MELHOR_ENVIO_SCOPES")
   ?? "shipping-tracking orders-read shipping-calculate";
 
+/**
+ * Resposta em TEXTO PURO, não HTML.
+ *
+ * A primeira versão devolvia HTML com `Content-Type: text/html` e o navegador
+ * exibiu as tags como texto. Não vale caçar o motivo: esta é uma página de
+ * utilidade que uma pessoa abre duas vezes na vida, e HTML aqui só adiciona
+ * uma forma de parecer quebrada. Texto puro renderiza igual em todo lugar.
+ */
 function pagina(titulo: string, corpo: string, ok: boolean): Response {
   return new Response(
-    `<!doctype html><meta charset="utf-8">
-     <title>${titulo}</title>
-     <div style="font:16px/1.6 system-ui;max-width:34rem;margin:12vh auto;padding:0 1.5rem">
-       <h1 style="font-size:1.3rem;color:${ok ? "#16a34a" : "#dc2626"}">${titulo}</h1>
-       ${corpo}
-     </div>`,
-    { status: ok ? 200 : 400, headers: { "Content-Type": "text/html; charset=utf-8" } },
+    `${ok ? "✅" : "⚠️"}  ${titulo}\n${"─".repeat(titulo.length + 4)}\n\n${corpo.trim()}\n`,
+    { status: ok ? 200 : 400, headers: { "Content-Type": "text/plain; charset=utf-8" } },
   );
 }
 
@@ -60,12 +63,14 @@ Deno.serve(async (req: Request) => {
 
   if (!CLIENT_ID || !CLIENT_SECRET) {
     return pagina("Faltam credenciais", `
-      <p>Cadastre nos Secrets das Edge Functions:</p>
-      <pre>MELHOR_ENVIO_CLIENT_ID
-MELHOR_ENVIO_CLIENT_SECRET
-MELHOR_ENVIO_ENV = production</pre>
-      <p>Os dois primeiros aparecem no painel do Melhor Envio depois de
-         cadastrar o aplicativo.</p>`, false);
+Cadastre em Supabase > Edge Functions > Secrets:
+
+    MELHOR_ENVIO_CLIENT_ID
+    MELHOR_ENVIO_CLIENT_SECRET
+    MELHOR_ENVIO_ENV = production
+
+Os dois primeiros ficam no painel do Melhor Envio, em Area Dev >
+Seus aplicativos > carbohub. Depois de salvar, recarregue esta pagina.`, false);
   }
 
   const code = url.searchParams.get("code");
@@ -73,11 +78,13 @@ MELHOR_ENVIO_ENV = production</pre>
 
   if (erro) {
     return pagina("O Melhor Envio recusou", `
-      <p><code>${erro}</code></p>
-      <p>${url.searchParams.get("error_description") ?? ""}</p>
-      <p>Se for <code>redirect_uri_mismatch</code>, a URL cadastrada no
-         aplicativo precisa ser exatamente esta:</p>
-      <pre>${redirectUri}</pre>`, false);
+${erro}
+${url.searchParams.get("error_description") ?? ""}
+
+Se for redirect_uri_mismatch, a URL cadastrada no aplicativo
+precisa ser exatamente esta (sem barra no final):
+
+    ${redirectUri}`, false);
   }
 
   // ── Ida: manda para a tela de autorização ────────────────────────────────
@@ -112,9 +119,10 @@ MELHOR_ENVIO_ENV = production</pre>
 
     if (!res.ok || !t?.access_token) {
       console.error("[melhor-envio-auth] troca falhou:", JSON.stringify(t).slice(0, 500));
-      return pagina("Não consegui trocar o código pelo token", `
-        <pre style="white-space:pre-wrap">${JSON.stringify(t, null, 2).slice(0, 800)}</pre>
-        <p>URL de retorno usada: <code>${redirectUri}</code></p>`, false);
+      return pagina("Nao consegui trocar o codigo pelo token", `
+${JSON.stringify(t, null, 2).slice(0, 800)}
+
+URL de retorno usada: ${redirectUri}`, false);
     }
 
     // O access_token dura ~30 dias; o refresh renova sem intervenção.
@@ -125,13 +133,16 @@ MELHOR_ENVIO_ENV = production</pre>
       expires_at: new Date(Date.now() + (t.expires_in ?? 2592000) * 1000).toISOString(),
     });
 
-    return pagina("Melhor Envio conectado ✅", `
-      <p>O token foi guardado e renova sozinho.</p>
-      <p>Ambiente: <code>${MELHOR_ENVIO_BASE()}</code></p>
-      <p>Pode fechar esta aba. O rastreio de Jadlog e Correios começa na
-         próxima rodada do <code>rastreio-sync</code>.</p>`, true);
+    return pagina("Melhor Envio conectado", `
+O token foi guardado e renova sozinho.
+
+Ambiente: ${MELHOR_ENVIO_BASE()}
+Expira em: ${new Date(Date.now() + (t.expires_in ?? 2592000) * 1000).toLocaleDateString("pt-BR")}
+
+Pode fechar esta aba. O rastreio de Jadlog e Correios comeca na
+proxima rodada do rastreio-sync.`, true);
   } catch (e) {
     console.error("[melhor-envio-auth]", e);
-    return pagina("Erro inesperado", `<pre>${String((e as Error)?.message ?? e)}</pre>`, false);
+    return pagina("Erro inesperado", String((e as Error)?.message ?? e), false);
   }
 });
