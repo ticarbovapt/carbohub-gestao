@@ -1,7 +1,9 @@
 import { useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import {
   Truck, Package, FileText, CheckCircle2, ShoppingCart, Copy, XCircle, Loader2, MapPin, Phone,
   CalendarClock, ExternalLink, MessageSquare, AlertTriangle, Clock, Box, User, Hash, Search,
+  Settings2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
@@ -673,6 +675,15 @@ export default function EsteiraOnline() {
         description="Da venda à entrega, direto do Bling e das plataformas. Espelho: nada aqui se arrasta."
         actions={
           <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
+            {/* A configuração das mensagens automáticas mora aqui dentro, não
+                num item de menu próprio: quem cuida da esteira é quem escreve
+                o que o cliente lê a cada etapa dela. A rota continua valendo
+                para quem tiver o link. */}
+            <Button asChild size="sm" variant="outline" className="h-8 gap-1.5">
+              <Link to="/ecommerce/mensagens">
+                <Settings2 className="h-3.5 w-3.5" /> Mensagens ao cliente
+              </Link>
+            </Button>
             <Indicador icon={ShoppingCart} cor="text-blue-500"
                        rotulo="em andamento" valor={String(emAndamento.length)} />
             <Indicador icon={Package} cor="text-carbo-green"

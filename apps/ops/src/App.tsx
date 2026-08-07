@@ -20,6 +20,7 @@ import Logistica from "./pages/logistica/Logistica";
 import PosVenda from "./pages/logistica/PosVenda";
 import Recorrencias from "./pages/comercial/Recorrencias";
 import EsteiraOnline from "./pages/logistica/EsteiraOnline";
+import MensagensCliente from "./pages/MensagensCliente";
 import ViagensLog from "./pages/logistica/Viagens";
 import OrdensServico from "./pages/campo/OrdensServico";
 import Agendamentos from "./pages/campo/Agendamentos";
@@ -65,6 +66,9 @@ export default function App() {
         <Route path="/logistica/pos-venda" element={<PosVenda />} />
         <Route path="/logistica/recorrencias" element={<Recorrencias />} />
         <Route path="/logistica/esteira" element={<EsteiraOnline />} />
+        {/* Mesmo caminho do admin de propósito: o botão da Esteira é o mesmo
+            arquivo nos dois apps e precisa levar ao mesmo lugar. */}
+        <Route path="/ecommerce/mensagens" element={<MensagensCliente />} />
         <Route path="/logistica" element={<Logistica />} />
         {/* A aba vira segmento da URL. As rotas estáticas acima (/pos-venda,
             /viagens) ganham desta no ranking do react-router, então não há
