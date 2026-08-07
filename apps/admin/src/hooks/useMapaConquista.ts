@@ -66,10 +66,12 @@ export function useCidadesConquistadas() {
   });
 }
 
-export interface MunicipioIBGE { id: number; nomeNorm: string; uf: string }
+export interface MunicipioIBGE { id: number; nome: string; nomeNorm: string; uf: string }
 
-/** Os 5.570 municípios, uma vez só. Serve para dois fins: descobrir o código
- *  IBGE das nossas cidades e saber quantos municípios cada estado tem. */
+/** Os 5.570 municípios, uma vez só. Serve para três fins: descobrir o código
+ *  IBGE das nossas cidades, saber quantos municípios cada estado tem e dar
+ *  NOME aos polígonos — a malha do IBGE só traz `codarea`, sem nome. Sem isto
+ *  o tooltip mostraria "3550308" em vez de "São Paulo". */
 export function useMunicipiosIBGE() {
   return useQuery({
     queryKey: ["ibge-municipios"],
@@ -79,6 +81,7 @@ export function useMunicipiosIBGE() {
       const json = (await res.json()) as any[];
       return json.map((m) => ({
         id: m.id,
+        nome: String(m.nome ?? ""),
         nomeNorm: normalizaCidade(String(m.nome ?? "")),
         uf: String(m?.microrregiao?.mesorregiao?.UF?.sigla
           ?? m?.["regiao-imediata"]?.["regiao-intermediaria"]?.UF?.sigla ?? ""),
@@ -90,16 +93,29 @@ export function useMunicipiosIBGE() {
   });
 }
 
-/** Malha (GeoJSON). Sem `uf` = Brasil dividido por estado; com `uf` = o estado
- *  dividido por município. `qualidade=intermediaria` é o meio-termo entre
- *  arquivo pequeno e contorno reconhecível numa TV. */
-export function useMalha(uf: string | null) {
+/** Granularidade do desenho quando se está olhando o Brasil inteiro. */
+export type Granularidade = "estado" | "municipio";
+
+/** Malha (GeoJSON). Com `uf` = aquele estado por município. Sem `uf`, a
+ *  granularidade escolhe: o Brasil por estado (27 polígonos) ou por município
+ *  (5.570).
+ *
+ * ⚠️ A qualidade muda com o tamanho, de propósito. `intermediaria` dá contorno
+ * bonito quando são dezenas de polígonos; nos 5.570 do Brasil inteiro ela vira
+ * um arquivo enorme para desenhar detalhe que, naquele zoom, cabe em menos de
+ * um pixel. Aí `minima` entrega o mesmo mapa aos olhos por uma fração do peso. */
+export function useMalha(uf: string | null, granularidade: Granularidade = "estado") {
+  const nacionalPorMunicipio = !uf && granularidade === "municipio";
   return useQuery({
-    queryKey: ["ibge-malha", uf ?? "BR"],
+    queryKey: ["ibge-malha", uf ?? (nacionalPorMunicipio ? "BR-mun" : "BR")],
     queryFn: async () => {
+      const q = (qualidade: string, intra: string, alvo: string) =>
+        `${IBGE}/v3/malhas/${alvo}?formato=application/vnd.geo+json&qualidade=${qualidade}&intrarregiao=${intra}`;
       const url = uf
-        ? `${IBGE}/v3/malhas/estados/${uf}?formato=application/vnd.geo+json&qualidade=intermediaria&intrarregiao=municipio`
-        : `${IBGE}/v3/malhas/paises/BR?formato=application/vnd.geo+json&qualidade=intermediaria&intrarregiao=UF`;
+        ? q("intermediaria", "municipio", `estados/${uf}`)
+        : nacionalPorMunicipio
+          ? q("minima", "municipio", "paises/BR")
+          : q("intermediaria", "UF", "paises/BR");
       const res = await fetch(url);
       if (!res.ok) throw new Error("IBGE indisponível (malha)");
       return res.json();

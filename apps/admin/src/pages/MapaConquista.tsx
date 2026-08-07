@@ -6,10 +6,10 @@ import "leaflet/dist/leaflet.css";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Loader2, MapPin, Sparkles, Store, Building2, ShoppingCart, AlertTriangle } from "lucide-react";
+import { ArrowLeft, Loader2, MapPin, Sparkles, Store, Building2, ShoppingCart, AlertTriangle, Grid3x3, Map as MapIcon } from "lucide-react";
 import {
   useCidadesConquistadas, useMunicipiosIBGE, useMalha,
-  UF_POR_CODIGO, type CidadeConquistada, type FiltroPresenca,
+  UF_POR_CODIGO, type CidadeConquistada, type FiltroPresenca, type Granularidade,
 } from "@/hooks/useMapaConquista";
 
 /**
@@ -80,11 +80,17 @@ function Enquadrar({ geo }: { geo: unknown }) {
 
 export default function MapaConquista() {
   const [uf, setUf] = useState<string | null>(null);
+  const [granularidade, setGranularidade] = useState<Granularidade>("estado");
   const [filtro, setFiltro] = useState<FiltroPresenca>("todos");
 
   const cidades = useCidadesConquistadas();
   const municipios = useMunicipiosIBGE();
-  const malha = useMalha(uf);
+  const malha = useMalha(uf, granularidade);
+
+  // Dentro de um estado o desenho é sempre municipal — a granularidade só
+  // escolhe como o BRASIL é fatiado. Ter as duas noções numa variável só
+  // deixava o código perguntando "estou no Brasil?" em cinco lugares.
+  const porMunicipio = uf !== null || granularidade === "municipio";
 
   const carregando = cidades.isLoading || municipios.isLoading || malha.isLoading;
   const erro = cidades.isError || municipios.isError || malha.isError;
@@ -97,8 +103,11 @@ export default function MapaConquista() {
     const totalPorUf = new Map<string, number>();
 
     const indice = new Map<string, number>();
+    // A malha do IBGE só traz `codarea`. O nome vem daqui.
+    const nomePorCodigo = new Map<number, string>();
     for (const m of municipios.data ?? []) {
       indice.set(`${m.nomeNorm}|${m.uf}`, m.id);
+      nomePorCodigo.set(m.id, m.nome);
       totalPorUf.set(m.uf, (totalPorUf.get(m.uf) ?? 0) + 1);
     }
 
@@ -112,7 +121,7 @@ export default function MapaConquista() {
     const conquistadasPorUf = new Map<string, number>();
     for (const c of lista) conquistadasPorUf.set(c.uf, (conquistadasPorUf.get(c.uf) ?? 0) + 1);
 
-    return { lista, porCodigo, naoLocalizadas, totalPorUf, conquistadasPorUf };
+    return { lista, porCodigo, naoLocalizadas, totalPorUf, conquistadasPorUf, nomePorCodigo };
   }, [cidades.data, municipios.data, filtro]);
 
   const placar = useMemo(() => {
@@ -131,9 +140,12 @@ export default function MapaConquista() {
    *  de 2 dígitos); dentro de um estado é um MUNICÍPIO (7 dígitos). */
   const estilo = (feature: any): PathOptions => {
     const cod = String(feature?.properties?.codarea ?? "");
-    const base: PathOptions = { color: BORDA, weight: 1, fillOpacity: 0.85 };
+    // Traço fino no Brasil por município: 5.570 contornos de 1px viram uma
+    // malha cinza que come a cor do preenchimento.
+    const traco = !uf && granularidade === "municipio" ? 0.3 : 1;
+    const base: PathOptions = { color: BORDA, weight: traco, fillOpacity: 0.85 };
 
-    if (!uf) {
+    if (!porMunicipio) {
       const sigla = UF_POR_CODIGO[cod];
       const total = cruzamento.totalPorUf.get(sigla) ?? 0;
       const feitas = cruzamento.conquistadasPorUf.get(sigla) ?? 0;
@@ -145,14 +157,14 @@ export default function MapaConquista() {
 
     const c = cruzamento.porCodigo.get(Number(cod));
     if (!c) return { ...base, fillColor: APAGADO, fillOpacity: 0.55 };
-    if (c.conquista_recente) return { ...base, fillColor: AMBAR, color: "#fbbf24", weight: 2 };
+    if (c.conquista_recente) return { ...base, fillColor: AMBAR, color: "#fbbf24", weight: Math.max(traco, 2) };
     return { ...base, fillColor: VERDE_FORTE };
   };
 
   const aoCriarFeature = (feature: any, layer: Layer) => {
     const cod = String(feature?.properties?.codarea ?? "");
 
-    if (!uf) {
+    if (!porMunicipio) {
       const sigla = UF_POR_CODIGO[cod];
       const total = cruzamento.totalPorUf.get(sigla) ?? 0;
       const feitas = cruzamento.conquistadasPorUf.get(sigla) ?? 0;
@@ -165,8 +177,23 @@ export default function MapaConquista() {
     }
 
     const c = cruzamento.porCodigo.get(Number(cod));
-    const nome = String(feature?.properties?.nome ?? cod);
+    const nome = cruzamento.nomePorCodigo.get(Number(cod))
+      ?? String(feature?.properties?.nome ?? cod);
+
+    // Brasil por município: clicar em qualquer um abre o estado dele. O código
+    // do IBGE começa com o da UF (3550308 → 35 → SP), então não preciso do
+    // cadastro para descobrir para onde ir.
+    if (!uf) {
+      const sigla = UF_POR_CODIGO[cod.slice(0, 2)];
+      if (sigla) layer.on("click", () => setUf(sigla));
+    }
+
     if (!c) {
+      // No Brasil por município são ~5.400 polígonos apagados. Pendurar um
+      // tooltip em cada um custa memória e travamento no pan sem dizer nada
+      // além de "ainda não" — dentro de um estado, onde o número é pequeno,
+      // saber o nome do que falta é justamente o que interessa.
+      if (!uf) return;
       layer.bindTooltip(`<b>${nome}</b><br/>ainda não`, { sticky: true });
       return;
     }
@@ -225,14 +252,28 @@ export default function MapaConquista() {
         <Placar titulo="Faturamento" valor={fmtBRLCompacto(placar.valor)} rodape="nas cidades exibidas" />
       </div>
 
-      {/* Filtro de presença */}
-      <div className="flex flex-wrap gap-2">
+      {/* Filtro de presença + granularidade do Brasil */}
+      <div className="flex flex-wrap items-center gap-2">
         {FILTROS.map((f) => (
           <Button key={f.id} size="sm" variant={filtro === f.id ? "default" : "outline"}
             onClick={() => setFiltro(f.id)} className="gap-1.5">
             {f.icon}{f.label}
           </Button>
         ))}
+
+        {/* Só faz sentido no Brasil: dentro de um estado já é sempre município. */}
+        {!uf && (
+          <div className="flex items-center gap-1 ml-auto rounded-md border p-0.5">
+            <Button size="sm" variant={granularidade === "estado" ? "secondary" : "ghost"}
+              onClick={() => setGranularidade("estado")} className="gap-1.5 h-7">
+              <MapIcon className="h-4 w-4" /> Por estado
+            </Button>
+            <Button size="sm" variant={granularidade === "municipio" ? "secondary" : "ghost"}
+              onClick={() => setGranularidade("municipio")} className="gap-1.5 h-7">
+              <Grid3x3 className="h-4 w-4" /> Por município
+            </Button>
+          </div>
+        )}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
@@ -254,6 +295,10 @@ export default function MapaConquista() {
               minZoom={3}
               scrollWheelZoom
               attributionControl={false}
+              // Canvas em vez de SVG: o Brasil por município são 5.570
+              // polígonos, e um <path> no DOM para cada um trava o pan e o
+              // zoom. No canvas eles são um desenho só.
+              preferCanvas
               style={{ height: "100%", width: "100%", background: "#0b1220" }}
             >
               {malha.data && (
@@ -261,7 +306,7 @@ export default function MapaConquista() {
                   {/* A key força o redesenho: o GeoJSON do react-leaflet não
                       reage a troca de `data` nem de `style` sozinho. */}
                   <GeoJSON
-                    key={`${uf ?? "BR"}-${filtro}-${cruzamento.porCodigo.size}`}
+                    key={`${uf ?? `BR-${granularidade}`}-${filtro}-${cruzamento.porCodigo.size}`}
                     data={malha.data as never}
                     style={estilo as never}
                     onEachFeature={aoCriarFeature}
@@ -272,22 +317,24 @@ export default function MapaConquista() {
             </MapContainer>
 
             {/* Legenda */}
-            <div className="absolute bottom-3 left-3 z-[500] rounded-md bg-background/90 border px-3 py-2 text-xs space-y-1">
-              <div className="flex items-center gap-2">
-                <span className="inline-block h-3 w-3 rounded-sm" style={{ background: VERDE_FORTE }} />
-                {uf ? "Já conquistada" : "Estado com presença (mais forte = mais cidades)"}
+            <div className="absolute bottom-3 left-3 z-[500] max-w-[15rem] rounded-md bg-background/90 border px-3 py-2 text-xs space-y-1">
+              <div className="flex items-start gap-2">
+                <span className="inline-block h-3 w-3 mt-0.5 shrink-0 rounded-sm" style={{ background: VERDE_FORTE }} />
+                {porMunicipio ? "Município conquistado" : "Estado com presença (mais forte = mais cidades)"}
               </div>
-              {uf && (
-                <div className="flex items-center gap-2">
-                  <span className="inline-block h-3 w-3 rounded-sm" style={{ background: AMBAR }} />
-                  Conquistada nos últimos 30 dias
+              {porMunicipio && (
+                <div className="flex items-start gap-2">
+                  <span className="inline-block h-3 w-3 mt-0.5 shrink-0 rounded-sm" style={{ background: AMBAR }} />
+                  Conquistado nos últimos 30 dias
                 </div>
               )}
-              <div className="flex items-center gap-2">
-                <span className="inline-block h-3 w-3 rounded-sm border" style={{ background: APAGADO }} />
+              <div className="flex items-start gap-2">
+                <span className="inline-block h-3 w-3 mt-0.5 shrink-0 rounded-sm border" style={{ background: APAGADO }} />
                 Ainda não
               </div>
-              {!uf && <div className="text-muted-foreground pt-1">Clique num estado para abrir os municípios.</div>}
+              <div className="text-muted-foreground pt-1">
+                {uf ? "Passe o mouse para ver a cidade." : "Clique para abrir o estado."}
+              </div>
             </div>
           </CardContent>
         </Card>
