@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { FILTRO_VENDA_DO_TIME } from "@/lib/vendaDoTime";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Vendas do Carbo Sales — ADAPTADOR para carboze_orders (fonte única).
@@ -109,7 +110,19 @@ export function useVendas(status?: VendaStatus | "all") {
   return useQuery({
     queryKey: ["crm_vendas", status ?? "all"],
     queryFn: async (): Promise<VendaRow[]> => {
-      let q = db.from("carboze_orders").select("*").order("created_at", { ascending: false });
+      // ⚠️ Venda ONLINE do Bling 2 não é venda do time.
+      //
+      // A ponte do Bling 2 traz para carboze_orders os pedidos de marketplace
+      // já faturados — eles precisam existir ali para o Comercial e a esteira.
+      // Mas esta tela é a do VENDEDOR: misturar marketplace aqui infla o
+      // faturamento do mês e apaga a leitura de quem vendeu o quê.
+      //
+      // O corte é por `segmento = 'online'`, não pela origem: pedido do Bling 2
+      // que é venda direta (loja 0, balcão) CONTINUA aparecendo, porque é venda
+      // de gente. O Bling 1 também segue como está.
+      let q = db.from("carboze_orders").select("*")
+        .or(FILTRO_VENDA_DO_TIME)
+        .order("created_at", { ascending: false });
       if (status && status !== "all") {
         if (status === "orcamento") q = q.eq("status", "quote");
         else if (status === "cancelado") q = q.eq("status", "cancelled");

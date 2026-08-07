@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { FILTRO_VENDA_DO_TIME, ehVendaDoTime } from "@/lib/vendaDoTime";
 import { toast } from "sonner";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -108,7 +109,10 @@ export function useCarbozeVendas({ month, customFrom, customTo, vendedorFilter, 
       if (buscando) {
         const { data, error } = await db.rpc("carbo_vendas_busca", { p_termo: termo, p_limit: 300 });
         if (error) throw error;
-        return ((data ?? []) as any[]).map(mapVenda);
+        // A RPC é compartilhada e não conhece esta regra: filtra aqui, senão a
+        // busca traria o marketplace que a lista esconde — e o time acharia
+        // que "sumiu da lista mas está na busca" é bug.
+        return ((data ?? []) as any[]).filter(ehVendaDoTime).map(mapVenda);
       }
 
       let rangeStart: string, rangeEnd: string, qStart: string, qEnd: string;
@@ -141,6 +145,8 @@ export function useCarbozeVendas({ month, customFrom, customTo, vendedorFilter, 
         // A view é security_invoker: a RLS de carboze_orders continua valendo.
         .from("carbo_vendas_metrica")
         .select("*")
+        // Marketplace do Bling 2 não é venda do time — ver lib/vendaDoTime.
+        .or(FILTRO_VENDA_DO_TIME)
         .neq("excluir_metricas", true)
         .gte("created_at", qStart)
         .lte("created_at", qEnd)
