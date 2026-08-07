@@ -31,17 +31,20 @@ import {
   gravarRastreio, urlRastreio,
   type EventoRastreio, type StatusRastreio,
 } from "../_shared/rastreio.ts";
+import {
+  getMelhorEnvioToken, MELHOR_ENVIO_BASE, MELHOR_ENVIO_UA,
+} from "../_shared/melhorEnvio.ts";
 
 const supabase = createClient(
   Deno.env.get("SUPABASE_URL")!,
   Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
 );
 
-const TOKEN = Deno.env.get("MELHOR_ENVIO_TOKEN") ?? "";
+// O token vem do secret OU do OAuth (system_tokens), com renovação — a regra
+// mora no _shared/melhorEnvio.ts. Preenchido no início de cada requisição.
+let TOKEN = "";
 const AMBIENTE = Deno.env.get("MELHOR_ENVIO_ENV") ?? "sandbox";
-const BASE = AMBIENTE === "production"
-  ? "https://melhorenvio.com.br"
-  : "https://sandbox.melhorenvio.com.br";
+const BASE = MELHOR_ENVIO_BASE();
 
 // Teto por rodada. O cron roda de hora em hora; 60 códigos cobrem a fila
 // inteira de hoje com folga e mantêm a execução longe do limite de tempo.
@@ -51,7 +54,7 @@ const cabecalhos = () => ({
   "Authorization": `Bearer ${TOKEN}`,
   "Content-Type": "application/json",
   "Accept": "application/json",
-  "User-Agent": "CarboHub (ti@grupocarbo.com.br)",
+  "User-Agent": MELHOR_ENVIO_UA,
 });
 
 // ─── Vocabulário do Melhor Envio → nossa lista branca ────────────────────────
@@ -207,10 +210,11 @@ Deno.serve(async (req: Request) => {
   if (segredo && req.headers.get("X-Cron-Secret") !== segredo) {
     return json({ error: "X-Cron-Secret inválido" }, 401);
   }
+  TOKEN = (await getMelhorEnvioToken(supabase)) ?? "";
   if (!TOKEN) {
     return json({
-      error: "Falta o secret MELHOR_ENVIO_TOKEN.",
-      como_resolver: "Supabase Dashboard > Edge Functions > Secrets > MELHOR_ENVIO_TOKEN (e MELHOR_ENVIO_ENV=production)",
+      error: "Sem token do Melhor Envio.",
+      como_resolver: "Abra uma vez no navegador: /functions/v1/melhor-envio-auth — ou defina o secret MELHOR_ENVIO_TOKEN. Confira também MELHOR_ENVIO_ENV=production.",
     }, 500);
   }
 

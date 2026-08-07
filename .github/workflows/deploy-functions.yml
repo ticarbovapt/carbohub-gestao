@@ -39,6 +39,9 @@ jobs:
           # quem chama é o pg_cron, que manda só o X-Cron-Secret e nenhum
           # Authorization — a função valida o segredo por dentro.
           supabase functions deploy rastreio-sync --project-ref ${{ secrets.SUPABASE_PROJECT_ID }} --no-verify-jwt
+          # OAuth do Melhor Envio. --no-verify-jwt porque quem abre é o
+          # NAVEGADOR (a URL de retorno cadastrada no aplicativo), sem JWT.
+          supabase functions deploy melhor-envio-auth --project-ref ${{ secrets.SUPABASE_PROJECT_ID }} --no-verify-jwt
           supabase functions deploy ml-auth --project-ref ${{ secrets.SUPABASE_PROJECT_ID }} --no-verify-jwt
           supabase functions deploy nuvemshop-auth --project-ref ${{ secrets.SUPABASE_PROJECT_ID }} --no-verify-jwt
           supabase functions deploy nuvemshop-lgpd --project-ref ${{ secrets.SUPABASE_PROJECT_ID }} --no-verify-jwt
