@@ -321,7 +321,10 @@ async function montarFila(): Promise<ItemFila[]> {
     .select("codigo,fonte_id,bling_id,transportadora,servico")
     .eq("fonte", "melhorenvio")
     .not("erro", "is", null)
-    .not("fonte_id", "is", null)
+    // Sem exigir `fonte_id`: quem não tem id só precisa ser reencontrado pela
+    // listagem, como qualquer outro. Exigi-lo aqui foi o que manteve 13 envios
+    // presos — a condição extra não protegia de nada e excluía exatamente quem
+    // mais precisava voltar.
     .limit(30);
   if (erroPendentes) console.error("[rastreio-sync] pendentes:", erroPendentes.message);
 
