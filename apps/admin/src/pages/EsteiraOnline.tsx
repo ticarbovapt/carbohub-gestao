@@ -1,9 +1,9 @@
 import { useMemo, useState } from "react";
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useSearchParams } from "react-router-dom";
 import {
   Truck, Package, FileText, CheckCircle2, ShoppingCart, Copy, XCircle, Loader2, MapPin, Phone,
   CalendarClock, ExternalLink, MessageSquare, AlertTriangle, Clock, Box, User, Hash, Search,
-  Settings2,
+  Settings2, Link2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
@@ -268,7 +268,24 @@ function Card({ row, rastreio, cor, onClick }: {
 // O caminho do volume, do mais recente para o mais antigo. Quem preenche são o
 // `ecommerce-sync` (Mercado Envios) e o `rastreio-sync` (Melhor Envio). A tela
 // só desenha: nenhuma etapa é deduzida aqui.
-function Trajeto({ r }: { r?: RastreioCard }) {
+// ⚠️ Duas fontes contam a mesma história, e elas discordam.
+//
+// A COLUNA vem da plataforma (a Nuvemshop/ML avisa que entregou). O TRAJETO vem
+// da transportadora, via Melhor Envio — que não expõe lista de eventos, só
+// marcos, e às vezes fica dias atrás do que o site da transportadora já mostra.
+//
+// Um pedido apareceu na coluna "Entregue" com o trajeto parado em "Postado —
+// coletado pela transportadora", em verde, como se fosse o estado atual. O
+// pacote estava entregue desde a véspera. Quem abriu o card não teve como
+// saber qual das duas acreditar, e essa dúvida é pior que informação faltando.
+//
+// A regra passa a ser explícita: a plataforma manda. Quando ela está à frente,
+// o trajeto perde o destaque de "estado atual" e ganha um aviso dizendo que é
+// leitura velha da transportadora — em vez de competir em silêncio.
+function Trajeto({ r, etapa }: { r?: RastreioCard; etapa?: EtapaEsteira }) {
+  const plataformaEntregou = etapa === "entregue";
+  const rastreioAtrasado = plataformaEntregou && !r?.entregue_em;
+
   if (!r) {
     return (
       <p className="text-[11px] text-muted-foreground">
@@ -280,6 +297,17 @@ function Trajeto({ r }: { r?: RastreioCard }) {
 
   return (
     <div className="space-y-2">
+      {rastreioAtrasado && (
+        <div className="flex items-start gap-1.5 rounded bg-carbo-green/10 px-2 py-1.5 text-[11px] text-carbo-green">
+          <CheckCircle2 className="mt-px h-3.5 w-3.5 shrink-0" />
+          <span>
+            <strong>A plataforma já confirmou a entrega.</strong> O histórico abaixo é a
+            última leitura da transportadora e ainda não alcançou — pode ignorar a
+            diferença ao falar com o cliente.
+          </span>
+        </div>
+      )}
+
       {r.erro && (
         <div className="flex items-start gap-1.5 rounded bg-amber-500/10 px-2 py-1.5 text-[11px] text-amber-600 dark:text-amber-500">
           <AlertTriangle className="h-3.5 w-3.5 mt-px shrink-0" />
@@ -296,7 +324,11 @@ function Trajeto({ r }: { r?: RastreioCard }) {
       {r.eventos.length > 0 && (
         <ol className="relative">
           {r.eventos.map((e, i) => {
-            const atual = i === 0;
+            // O ponto verde diz "é aqui que o pedido está". Quando a
+            // plataforma já entregou, nenhum evento da transportadora tem esse
+            // direito — era exatamente o "Postado" em verde num pacote já
+            // entregue que causava a confusão.
+            const atual = i === 0 && !rastreioAtrasado;
             return (
               <li key={`${e.ocorrido_em}-${i}`} className="flex gap-3">
                 <div className="flex flex-col items-center pt-1">
@@ -426,6 +458,18 @@ function Detalhe({ row, rastreio, onClose }: {
                 </a>
               </Button>
             )}
+            {/* O link é montado da barra de endereço, não de uma constante:
+                este arquivo é idêntico no admin e no Ops, e o caminho da tela
+                difere entre os dois (/ecommerce/esteira × /logistica/esteira).
+                Uma constante aqui mandaria metade do time para uma rota que não
+                existe no app dela. */}
+            <Button size="sm" variant="outline" className="h-8 gap-1.5"
+                    onClick={() => copiar(
+                      `${window.location.origin}${window.location.pathname}?card=${row.bling_id}`,
+                      "Link do pedido",
+                    )}>
+              <Link2 className="h-3.5 w-3.5" /> Copiar link
+            </Button>
           </div>
         </DialogHeader>
 
@@ -449,7 +493,7 @@ function Detalhe({ row, rastreio, onClose }: {
                 <span className="text-[11px] text-muted-foreground">Código</span>
                 <BotaoCopiar texto={row.rastreio} oque="Rastreio" className="font-mono text-carbo-green" />
               </div>
-              <Trajeto r={rastreio} />
+              <Trajeto r={rastreio} etapa={row.etapa} />
             </Bloco>
           )}
 
@@ -613,7 +657,22 @@ export default function EsteiraOnline() {
   const [dias, setDias] = useState("30");
   const [busca, setBusca] = useState("");
   const [canal, setCanal] = useState("all");
-  const [aberto, setAberto] = useState<EsteiraRow | null>(null);
+  /* ── O card tem endereço ──────────────────────────────────────────────
+   *
+   * Antes, o detalhe era estado da memória: quem abria um pedido e queria
+   * mostrar para outra pessoa tinha de explicar o caminho ("abre a esteira,
+   * filtra por fulano, clica no card"). Não dava para colar num chat.
+   *
+   * Agora o pedido aberto mora na URL (`?card=<bling_id>`), então a barra de
+   * endereço já É o link — e o botão "Copiar link" existe só para poupar o
+   * Ctrl+L. Abrir e fechar usam `replace`, senão cada card visitado vira uma
+   * parada no botão "voltar" do navegador.
+   *
+   * ⚠️ O parâmetro é acrescentado ao que já existe, nunca substitui: a tela
+   * de mensagens manda `?voltar=` e apagá-lo quebraria a volta.
+   */
+  const [params, setParams] = useSearchParams();
+  const cardParam = params.get("card");
   const [soProblemas, setSoProblemas] = useState(false);
   // ⚠️ O caminho da Esteira difere entre os apps (/ecommerce/esteira no admin,
   // /logistica/esteira no Ops) e este arquivo é byte a byte idêntico nos dois.
@@ -622,6 +681,23 @@ export default function EsteiraOnline() {
   const { pathname } = useLocation();
   const { data, isLoading, error } = useEsteiraOnline(Number(dias));
   const { data: aguardando } = useEcommerceAguardando();
+
+  const abrirCard = (r: EsteiraRow | null) => {
+    setParams((p) => {
+      const n = new URLSearchParams(p);
+      if (r) n.set("card", String(r.bling_id));
+      else n.delete("card");
+      return n;
+    }, { replace: true });
+  };
+
+  // O card aberto sai dos dados, não de um estado paralelo — assim o link
+  // colado por outra pessoa abre o mesmo card, e o refetch de 2 min não
+  // congela uma cópia velha da linha dentro do diálogo.
+  const aberto = useMemo(
+    () => (data ?? []).find((r) => String(r.bling_id) === cardParam) ?? null,
+    [data, cardParam],
+  );
 
   const canais = useMemo(
     () => Array.from(new Set((data ?? []).map((r) => r.canal).filter(Boolean))) as string[],
@@ -795,6 +871,19 @@ export default function EsteiraOnline() {
         </Button>
       </div>
 
+      {/* Link recebido apontando para fora da janela de tempo. Sem este aviso o
+          link "não faz nada" — o pior resultado possível para quem colou um
+          endereço que outra pessoa mandou. */}
+      {cardParam && !isLoading && !aberto && (
+        <div className="flex shrink-0 items-start gap-1.5 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-[11px] text-amber-600 dark:text-amber-500">
+          <AlertTriangle className="mt-px h-3.5 w-3.5 shrink-0" />
+          <span>
+            O pedido deste link não está nos últimos {dias} dias. Aumente o período no
+            filtro acima para encontrá-lo.
+          </span>
+        </div>
+      )}
+
       {isLoading ? (
         <div className="flex items-center justify-center py-16 text-muted-foreground">
           <Loader2 className="mr-2 h-5 w-5 animate-spin" /> Carregando a esteira…
@@ -895,7 +984,7 @@ export default function EsteiraOnline() {
                 <div className="min-h-0 flex-1 space-y-1.5 overflow-y-auto overscroll-contain p-2">
                   {cards.map((r) => (
                     <Card key={r.bling_id} row={r} rastreio={rastreioDe(r.rastreio)}
-                          cor={etapa.color} onClick={() => setAberto(r)} />
+                          cor={etapa.color} onClick={() => abrirCard(r)} />
                   ))}
                   {cards.length === 0 && (
                     <p className="px-2 py-4 text-center text-[11px] text-muted-foreground/60">sem pedidos</p>
@@ -916,7 +1005,7 @@ export default function EsteiraOnline() {
           <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-3 xl:grid-cols-5">
             {cancelados.map((r) => (
               <Card key={r.bling_id} row={r} rastreio={rastreioDe(r.rastreio)}
-                    cor="#ef4444" onClick={() => setAberto(r)} />
+                    cor="#ef4444" onClick={() => abrirCard(r)} />
             ))}
           </div>
         </details>
@@ -931,7 +1020,7 @@ export default function EsteiraOnline() {
 
       {aberto && (
         <Detalhe row={aberto} rastreio={rastreioDe(aberto.rastreio)}
-                 onClose={() => setAberto(null)} />
+                 onClose={() => abrirCard(null)} />
       )}
     </div>
   );
