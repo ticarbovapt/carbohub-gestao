@@ -81,6 +81,54 @@ export function useEsteiraOnline(dias = 30) {
   });
 }
 
+/* ─── Pago, antes do Bling ──────────────────────────────────────────────────
+ *
+ * A esteira do Bling só mostra pedido ATENDIDO (`situacao_id in (9,12)`), e
+ * pedido novo nasce "Em aberto" lá. Por isso a compra podia levar horas para
+ * aparecer no quadro — e não adiantava sincronizar mais vezes: o Bling ainda
+ * não dizia Atendido. Não era latência, era estado de negócio.
+ *
+ * `ecommerce_aguardando_bling` fecha esse buraco lendo a plataforma direto, que
+ * chega em ~2 segundos pelo webhook. O pedido some de lá sozinho quando o Bling
+ * alcança — as duas consultas nunca mostram o mesmo pedido.
+ *
+ * ⚠️ View SEPARADA de propósito. A `bling2_esteira` alimenta `carbo_msg_fila`;
+ * jogar esses pedidos lá dentro seria apertar o gatilho de um envio em massa.
+ */
+
+export interface AguardandoRow {
+  platform: string;
+  pedido_loja: string;
+  canal: string | null;
+  data_pedido: string | null;
+  ordered_at: string;
+  total: number;
+  itens: number;
+  produtos: string | null;
+  cliente: string | null;
+  cliente_fone: string | null;
+  cliente_email: string | null;
+  minutos_parado: number;
+}
+
+export function useEcommerceAguardando() {
+  return useQuery({
+    queryKey: ["ecommerce-aguardando-bling"],
+    queryFn: async (): Promise<AguardandoRow[]> => {
+      const { data, error } = await (supabase as any)
+        .from("ecommerce_aguardando_bling")
+        .select("*")
+        .order("minutos_parado", { ascending: false });
+      if (error) throw error;
+      return (data ?? []) as AguardandoRow[];
+    },
+    // Mais curto que os 2 min das outras: é a coluna que existe justamente
+    // para ser rápida. De nada adianta o webhook gravar em 2s se a tela só
+    // olha de dois em dois minutos.
+    refetchInterval: 30_000,
+  });
+}
+
 /* ─── Rastreio ──────────────────────────────────────────────────────────────
  *
  * O trajeto vem de `rastreio_card`, uma consulta SEPARADA da esteira e cruzada

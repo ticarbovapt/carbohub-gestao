@@ -13,8 +13,8 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
-  useEsteiraOnline, useRastreios, ETAPAS,
-  type EsteiraRow, type EtapaEsteira, type RastreioCard,
+  useEsteiraOnline, useRastreios, useEcommerceAguardando, ETAPAS,
+  type EsteiraRow, type EtapaEsteira, type RastreioCard, type AguardandoRow,
 } from "@/hooks/useEsteiraOnline";
 
 /**
@@ -563,6 +563,52 @@ function Indicador({ icon: Icon, cor, rotulo, valor }: {
   );
 }
 
+// Card da coluna "Pago" — deliberadamente mais magro que o outro.
+//
+// Aqui não existe NF, etiqueta, transportadora nem previsão: o pedido acabou de
+// ser pago e o Bling ainda não o faturou. Repetir a estrutura do card normal
+// com quatro campos vazios daria a impressão de dado faltando, quando é dado
+// que ainda não nasceu.
+//
+// O que importa nesta coluna é uma coisa só: há quanto tempo está parado. Pago
+// há 20 minutos é o fluxo normal; pago há 6 horas é alguém para cutucar — e é
+// por isso que o tempo é o único elemento com cor.
+function CardPago({ row }: { row: AguardandoRow }) {
+  const horas = row.minutos_parado / 60;
+  const tom = horas >= 6 ? "text-red-500" : horas >= 2 ? "text-amber-500" : "text-muted-foreground";
+  const tempo = row.minutos_parado < 60
+    ? `${Math.max(1, Math.round(row.minutos_parado))} min`
+    : `${Math.floor(horas)}h`;
+
+  return (
+    <div className="relative rounded-lg border bg-card px-3 py-2.5 pl-3.5">
+      <span className="absolute left-0 top-2 bottom-2 w-[3px] rounded-full bg-[#f59e0b]" />
+
+      <div className="flex items-baseline gap-2">
+        <span className="min-w-0 flex-1 truncate text-[13px] font-semibold leading-tight">
+          {row.cliente ?? `Pedido ${row.pedido_loja}`}
+        </span>
+        <span className="shrink-0 text-[13px] font-semibold tabular-nums">{brl(row.total)}</span>
+      </div>
+
+      <div className="mt-1 flex items-baseline gap-2 text-[11px] leading-4 text-muted-foreground">
+        <span className="min-w-0 flex-1 truncate">
+          {[row.canal, `#${row.pedido_loja}`].filter(Boolean).join(" · ")}
+        </span>
+        <span className={`shrink-0 font-medium tabular-nums ${tom}`}>{tempo}</span>
+      </div>
+
+      {/* O telefone aparece porque é a diferença entre poder e não poder avisar
+          o cliente agora. Na Nuvemshop ele vem; ML e Amazon não expõem — e a
+          ausência dita, em vez de omitida, evita a pergunta "cadê?". */}
+      <div className="mt-1 flex items-center gap-1 text-[10px] leading-4 text-muted-foreground/70">
+        <Phone className="h-3 w-3 shrink-0" />
+        <span className="truncate">{row.cliente_fone ?? "sem telefone na plataforma"}</span>
+      </div>
+    </div>
+  );
+}
+
 export default function EsteiraOnline() {
   const [dias, setDias] = useState("30");
   const [busca, setBusca] = useState("");
@@ -575,6 +621,7 @@ export default function EsteiraOnline() {
   // sozinho, sem o arquivo precisar saber em qual app está rodando.
   const { pathname } = useLocation();
   const { data, isLoading, error } = useEsteiraOnline(Number(dias));
+  const { data: aguardando } = useEcommerceAguardando();
 
   const canais = useMemo(
     () => Array.from(new Set((data ?? []).map((r) => r.canal).filter(Boolean))) as string[],
@@ -595,6 +642,21 @@ export default function EsteiraOnline() {
     }
     return r;
   }, [data, canal, busca]);
+
+  // Os mesmos filtros da tela valem para a coluna "Pago" — uma busca que
+  // esconde o pedido em cinco colunas e o deixa visível na sexta seria só
+  // confusão.
+  const pagos = useMemo(() => {
+    let r = aguardando ?? [];
+    if (canal !== "all") r = r.filter((x) => x.canal === canal);
+    const t = busca.trim().toLowerCase();
+    if (t) {
+      r = r.filter((x) =>
+        (x.cliente ?? "").toLowerCase().includes(t) ||
+        (x.pedido_loja ?? "").toLowerCase().includes(t));
+    }
+    return r;
+  }, [aguardando, canal, busca]);
 
   // Os códigos visíveis, e só eles: quem some no filtro não precisa de trajeto.
   const codigos = useMemo(
@@ -765,6 +827,43 @@ export default function EsteiraOnline() {
            card virava uma caixa de 700px quase toda vazia — e era isso que
            continuava parecendo esticado depois de a largura já estar certa. */
         <div className="flex min-h-0 flex-1 items-start justify-center gap-3 overflow-x-auto overscroll-x-contain pb-2">
+          {/* "Pago" só existe quando tem alguém dentro.
+              As cinco colunas seguintes têm largura MEDIDA (240–400px) para
+              caber sem rolagem de 1366 a 2560. Uma sexta fixa quebraria essa
+              conta em telas de 1366/1440 — e a regra aqui é servir todos os
+              monitores, não o maior. Como a fila normal é curta (o pedido fica
+              aqui minutos, não dias), na maior parte do tempo o quadro volta
+              exatamente ao que já estava medido; quando uma venda cai, a coluna
+              aparece e ela é justamente a novidade que se quer ver. */}
+          {pagos.length > 0 && (
+            <div className="flex max-h-full min-w-[240px] max-w-[400px] shrink-0 grow basis-0 flex-col overflow-hidden rounded-xl border border-amber-500/30 bg-amber-500/[0.04]">
+              <div className="shrink-0 border-b bg-muted/40 px-3 py-2">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="flex min-w-0 items-center gap-1.5">
+                    <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-[#f59e0b]" />
+                    <span className="truncate text-xs font-semibold">Pago</span>
+                  </span>
+                  <span className="shrink-0 rounded bg-background px-1.5 text-[11px] font-medium tabular-nums">
+                    {pagos.length}
+                  </span>
+                </div>
+                <div className="mt-0.5 flex items-center justify-between gap-2">
+                  <span className="truncate text-[10px] leading-tight text-muted-foreground">
+                    na loja, aguardando faturamento
+                  </span>
+                  <span className="shrink-0 text-[10px] font-medium tabular-nums text-muted-foreground">
+                    {brl(pagos.reduce((s, r) => s + (r.total || 0), 0))}
+                  </span>
+                </div>
+              </div>
+              <div className="min-h-0 flex-1 space-y-1.5 overflow-y-auto overscroll-contain p-2">
+                {pagos.map((r) => (
+                  <CardPago key={`${r.platform}-${r.pedido_loja}`} row={r} />
+                ))}
+              </div>
+            </div>
+          )}
+
           {ETAPAS.map((etapa) => {
             const cards = porEtapa.get(etapa.key) ?? [];
             const valor = cards.reduce((s, r) => s + (r.total || 0), 0);
@@ -825,8 +924,9 @@ export default function EsteiraOnline() {
 
       <p className="flex shrink-0 items-center gap-1.5 text-[11px] text-muted-foreground">
         <Clock className="h-3 w-3" />
-        As etapas vêm do Bling (pedido, nota, etiqueta) e das plataformas (envio, entrega).
-        A tela atualiza sozinha a cada 2 minutos; nenhum card é arrastável de propósito.
+        "Pago" vem direto da loja e aparece segundos depois da compra; as etapas seguintes
+        vêm do Bling (pedido, nota, etiqueta) e das plataformas (envio, entrega).
+        A tela atualiza sozinha; nenhum card é arrastável de propósito.
       </p>
 
       {aberto && (

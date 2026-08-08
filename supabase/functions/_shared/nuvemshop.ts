@@ -31,7 +31,44 @@ export interface NuvemshopRow {
   status: string;
   ordered_at: string;
   sync_source?: string;
+  /** Nome do comprador. Ver `dadosDoCliente` — é a única cópia deste dado. */
+  cliente_nome: string | null;
+  /** Telefone CRU. Quem normaliza é o `kanban-n8n`, e só ele. */
+  cliente_fone: string | null;
+  cliente_email: string | null;
   raw: unknown;
+}
+
+/**
+ * Contato do comprador, tirado do pedido.
+ *
+ * ⚠️ Existe porque as linhas de produto guardam `raw: p` — só o item. O pedido
+ * inteiro (com o contato) é buscado na API, usado e DESCARTADO na gravação.
+ * Enquanto isso valeu, `ecommerce_orders` não tinha um telefone sequer, e a
+ * ideia de avisar o cliente no momento do pagamento parecia impossível quando
+ * na verdade o dado chegava e era jogado fora.
+ *
+ * A Nuvemshop espalha o contato por quatro lugares conforme o checkout usado
+ * (convidado, cadastrado, com endereço de cobrança separado). Aceitar os quatro
+ * custa nada e evita pedido sem telefone por causa da forma de comprar.
+ */
+function dadosDoCliente(order: any): {
+  cliente_nome: string | null; cliente_fone: string | null; cliente_email: string | null;
+} {
+  const limpo = (v: unknown): string | null => {
+    const s = v == null ? "" : String(v).trim();
+    return s === "" ? null : s;
+  };
+  return {
+    cliente_nome:
+      limpo(order?.contact_name) ?? limpo(order?.customer?.name) ??
+      limpo(order?.billing_name) ?? null,
+    cliente_fone:
+      limpo(order?.contact_phone) ?? limpo(order?.customer?.phone) ??
+      limpo(order?.billing_phone) ?? limpo(order?.shipping_address?.phone) ?? null,
+    cliente_email:
+      limpo(order?.contact_email) ?? limpo(order?.customer?.email) ?? null,
+  };
 }
 
 export interface NuvemshopCreds {
@@ -126,6 +163,10 @@ export function mapNuvemshopOrder(order: any, syncSource = "webhook"): Nuvemshop
 
   const products: any[] = Array.isArray(order?.products) ? order.products : [];
 
+  // Lido UMA vez, do pedido, e copiado para todas as linhas. É o único ponto
+  // onde este dado existe antes de virar coluna.
+  const cliente = dadosDoCliente(order);
+
   // Pedido sem linhas detalhadas — registra ao nível do pedido (sem dedução de estoque).
   if (products.length === 0) {
     return [{
@@ -141,6 +182,7 @@ export function mapNuvemshopOrder(order: any, syncSource = "webhook"): Nuvemshop
       status,
       ordered_at:   orderedAt,
       sync_source:  syncSource,
+      ...cliente,
       raw:          order,
     }];
   }
@@ -165,6 +207,7 @@ export function mapNuvemshopOrder(order: any, syncSource = "webhook"): Nuvemshop
       status,
       ordered_at:   orderedAt,
       sync_source:  syncSource,
+      ...cliente,
       raw:          p,
     };
   });
