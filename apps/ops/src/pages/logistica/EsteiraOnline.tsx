@@ -13,7 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
-  useEsteiraOnline, useRastreios, useEcommerceAguardando, ETAPAS,
+  useEsteiraOnline, useRastreios, useEcommerceAguardando, useFontesSaude, ETAPAS,
   type EsteiraRow, type EtapaEsteira, type RastreioCard, type AguardandoRow,
 } from "@/hooks/useEsteiraOnline";
 
@@ -681,6 +681,8 @@ export default function EsteiraOnline() {
   const { pathname } = useLocation();
   const { data, isLoading, error } = useEsteiraOnline(Number(dias));
   const { data: aguardando } = useEcommerceAguardando();
+  const { data: fontes } = useFontesSaude();
+  const paradas = (fontes ?? []).filter((f) => f.atrasada);
 
   const abrirCard = (r: EsteiraRow | null) => {
     setParams((p) => {
@@ -870,6 +872,38 @@ export default function EsteiraOnline() {
           )}
         </Button>
       </div>
+
+      {/* ⚠️ Fonte parada vem ANTES de tudo, inclusive do quadro.
+          A esteira continua desenhando cards com o que tem em mãos — e foi
+          justamente isso que escondeu 25 horas de silêncio: a tela parecia
+          perfeita, só estava contando uma história velha. Um quadro que não
+          avisa que os dados pararam é pior que um quadro em branco, porque
+          o segundo pelo menos levanta a dúvida. */}
+      {paradas.length > 0 && (
+        <div className="shrink-0 rounded-lg border border-red-500/40 bg-red-500/10 px-3 py-2">
+          <div className="flex items-start gap-1.5 text-xs font-semibold text-red-500">
+            <AlertTriangle className="mt-px h-4 w-4 shrink-0" />
+            <span>
+              {paradas.length === 1 ? "Uma fonte parou de atualizar" : `${paradas.length} fontes pararam de atualizar`}
+              {" "}— o que está no quadro pode estar velho, e as mensagens ao cliente não estão saindo.
+            </span>
+          </div>
+          <ul className="mt-1.5 space-y-0.5 pl-5">
+            {paradas.map((f) => (
+              <li key={f.fonte} className="text-[11px] leading-tight text-red-500/90">
+                <strong>{f.fonte}</strong>
+                {" — "}
+                {f.minutos == null
+                  ? "nunca rodou"
+                  : f.minutos >= 120
+                    ? `parada há ${Math.floor(f.minutos / 60)}h`
+                    : `parada há ${f.minutos} min`}
+                {" "}(limite: {f.limite_min >= 120 ? `${Math.floor(f.limite_min / 60)}h` : `${f.limite_min} min`})
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {/* Link recebido apontando para fora da janela de tempo. Sem este aviso o
           link "não faz nada" — o pior resultado possível para quem colou um

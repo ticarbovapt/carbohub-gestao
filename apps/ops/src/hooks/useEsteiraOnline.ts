@@ -129,6 +129,41 @@ export function useEcommerceAguardando() {
   });
 }
 
+/* ─── Fonte parada ──────────────────────────────────────────────────────────
+ *
+ * Os dois espelhos do Bling ficaram 25 horas sem gravar e ninguém percebeu:
+ * oito jobs do pg_cron marcados `succeeded` o tempo todo, porque
+ * `net.http_post` é assíncrono e o sucesso dele é ter POSTADO. Agora que cada
+ * etapa dispara mensagem para cliente, esse silêncio é um dia de gente sem
+ * receber "saiu para entrega".
+ *
+ * A view mede a RODADA, não a última venda — senão a madrugada sem pedido
+ * viraria alarme todo dia, e alarme que grita à toa a equipe aprende a ignorar.
+ */
+
+export interface FonteSaude {
+  fonte: string;
+  ultima_rodada: string | null;
+  minutos: number | null;
+  limite_min: number;
+  atrasada: boolean;
+  observacao: string | null;
+}
+
+export function useFontesSaude() {
+  return useQuery({
+    queryKey: ["fontes-saude"],
+    queryFn: async (): Promise<FonteSaude[]> => {
+      const { data, error } = await (supabase as any)
+        .from("fontes_saude")
+        .select("*");
+      if (error) throw error;
+      return (data ?? []) as FonteSaude[];
+    },
+    refetchInterval: 60_000,
+  });
+}
+
 /* ─── Rastreio ──────────────────────────────────────────────────────────────
  *
  * O trajeto vem de `rastreio_card`, uma consulta SEPARADA da esteira e cruzada
