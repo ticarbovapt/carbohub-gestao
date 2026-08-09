@@ -80,9 +80,38 @@ function extrairCodigos(no: any, achados = new Set<string>(), nivel = 0): Set<st
 Deno.serve(async (req: Request) => {
   const url = new URL(req.url);
 
-  if (SEGREDO && url.searchParams.get("secret") !== SEGREDO) {
-    return new Response(JSON.stringify({ error: "segredo inválido" }), {
-      status: 401, headers: { "Content-Type": "application/json" },
+  // ⚠️ FECHA quando o segredo não existe.
+  //
+  // Era `if (SEGREDO && ...)`: sem o secret configurado a função aceitava
+  // qualquer POST. O `CRON_SECRET` já sumiu uma vez neste projeto (migração
+  // 20260876), e ali a ausência travou tudo — o modo seguro. Aqui abriria.
+  //
+  // ⚠️ A recusa é REGISTRADA, e esse detalhe é o que evita trocar um problema
+  // por outro. Quem chama aqui é o Melhor Envio, com a URL cadastrada no painel
+  // DELE: se essa URL estiver sem `?secret=`, fechar a porta faz os avisos
+  // pararem de entrar — e um webhook que some não avisa ninguém que sumiu. Com
+  // a linha no log, "parou de chegar" e "está sendo recusado" deixam de ter o
+  // mesmo sintoma.
+  //
+  //   select recebido_em, acao from public.rastreio_webhook_log
+  //   where acao like 'RECUSADO%' order by recebido_em desc;
+  if (!SEGREDO || url.searchParams.get("secret") !== SEGREDO) {
+    const motivo = !SEGREDO
+      ? "CRON_SECRET não configurado no projeto"
+      : "segredo ausente ou errado na URL cadastrada no Melhor Envio";
+    console.error(`[melhor-envio-webhook] RECUSADO: ${motivo}`);
+    // Registra só POST: visita de navegador não é aviso e sujaria o log,
+    // pela mesma razão que o GET já era separado mais abaixo.
+    if (req.method === "POST") {
+      const corpo = await req.text().catch(() => "");
+      await supabase.from("rastreio_webhook_log").insert({
+        payload: { recusado: true, motivo, corpo_cru: corpo.slice(0, 2000) },
+        acao: `RECUSADO: ${motivo}`,
+      });
+    }
+    return new Response(JSON.stringify({ error: motivo }), {
+      status: !SEGREDO ? 500 : 401,
+      headers: { "Content-Type": "application/json" },
     });
   }
 

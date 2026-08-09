@@ -386,9 +386,27 @@ Deno.serve(async (req: Request) => {
   // protege contra disparo anônimo, não contra vazamento de dado. Quando a URL
   // com segredo entrar num histórico de navegador, o pior caso é alguém
   // disparar uma sincronização.
+  // ⚠️ FECHA quando o segredo não existe.
+  //
+  // Era `if (segredo && informado !== segredo)`: sem o secret configurado,
+  // `segredo` é "" e a função aceitava qualquer chamada, calada. O secret
+  // `CRON_SECRET` já sumiu uma vez neste projeto (25h de sincronismo morto, ver
+  // a migração 20260876) — lá a ausência travou tudo, que é o jeito seguro de
+  // falhar. Aqui ela abriria.
+  //
+  // As duas recusas são separadas porque têm donos diferentes: 401 é de quem
+  // chamou, 500 é nosso. Devolver 401 para o segundo caso faria a falha de
+  // configuração se passar por chamada indevida.
   const segredo = Deno.env.get("CRON_SECRET") ?? "";
   const informado = req.headers.get("X-Cron-Secret") ?? url.searchParams.get("secret");
-  if (segredo && informado !== segredo) {
+  if (!segredo) {
+    console.error("[rastreio-sync] CRON_SECRET não configurado — recusando por precaução.");
+    return json({
+      error: "CRON_SECRET não está configurado neste projeto.",
+      como_resolver: "Supabase > Edge Functions > Secrets: criar CRON_SECRET.",
+    }, 500);
+  }
+  if (informado !== segredo) {
     return json({
       error: "Segredo inválido ou ausente.",
       como_resolver: "Header X-Cron-Secret, ou ?secret=... na URL para testar pelo navegador.",

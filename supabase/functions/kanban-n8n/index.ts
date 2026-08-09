@@ -120,10 +120,36 @@ function json(body: unknown, status = 200): Response {
   });
 }
 
+/**
+ * Portaria: FECHA quando o segredo não existe.
+ *
+ * ⚠️ A versão anterior era `if (SEGREDO && informado !== SEGREDO)`. Quando o
+ * secret não está configurado no projeto, `SEGREDO` é "" — a condição é falsa e
+ * a função ACEITA QUALQUER CHAMADA, sem erro, sem log, sem sinal nenhum.
+ *
+ * Isso não é hipótese: o secret `CRON_SECRET` já sumiu uma vez neste projeto, e
+ * o efeito foram 25 horas de sincronismo morto (ver a migração
+ * 20260876000000_cron_secret_unificado.sql). Naquela vez a ausência TRAVOU
+ * tudo, que é o modo de falhar seguro. Aqui ela ABRIRIA — e nesta função em
+ * particular isso significa qualquer pessoa na internet disparando WhatsApp
+ * para a base de clientes.
+ *
+ * Os dois motivos de recusa são SEPARADOS de propósito. "Segredo errado" é
+ * problema de quem chama; "segredo ausente no servidor" é problema nosso, e
+ * devolver 401 para os dois faria a segunda causa se disfarçar de primeira —
+ * exatamente o disfarce que custou aquele dia inteiro de diagnóstico.
+ */
 Deno.serve(async (req: Request) => {
   const url = new URL(req.url);
   const informado = req.headers.get("X-Cron-Secret") ?? url.searchParams.get("secret");
-  if (SEGREDO && informado !== SEGREDO) {
+  if (!SEGREDO) {
+    console.error("[portaria] CRON_SECRET não está configurado — recusando por precaução.");
+    return json({
+      error: "CRON_SECRET não está configurado neste projeto.",
+      como_resolver: "Supabase > Edge Functions > Secrets: criar CRON_SECRET.",
+    }, 500);
+  }
+  if (informado !== SEGREDO) {
     return json({ error: "segredo inválido ou ausente" }, 401);
   }
   // Ensaio: monta as mensagens e devolve, sem enviar e sem gravar. É como se
