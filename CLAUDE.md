@@ -136,7 +136,7 @@ não escreve fora de `bling2_*`, não emite pedido, não alimenta faturamento.
 Isso continua valendo — **com uma exceção**, decidida pelo dono do processo
 quando a operação online passou a rodar na conta 2: pedido ATENDIDO
 (`situacao_id = 9`) atravessa para `carboze_orders` pela função
-`bling2_bridge_pedidos_faturados()` (cron :25 e :55, dez minutos depois do sync).
+`bling2_bridge_pedidos_faturados()` (cron a cada 2 min — ver "Cadência" abaixo).
 
 - Namespace `BLING2-*` — os dois Blings numeram do zero; sem isso, colidem.
 - Canal vem de `bling2_lojas`: loja ≠ 0 e não ignorada → `segmento = 'online'`.
@@ -156,16 +156,82 @@ quando a operação online passou a rodar na conta 2: pedido ATENDIDO
   ressuscitava a cada rodada.
 
 ### Esteira do On-line — admin manda, Ops espelha
-`pages/EsteiraOnline.tsx` e `hooks/useEsteiraOnline.ts` existem no **admin** e no
-**ops**, byte a byte idênticos. Fonte da verdade = `apps/admin`; no Ops o arquivo
-mora em `pages/logistica/` e a rota é `/logistica/esteira`.
+**Cinco** arquivos byte a byte idênticos entre `admin` e `ops`, não dois. Fonte
+da verdade = `apps/admin`; no Ops as páginas moram em `pages/logistica/` e a
+rota é `/logistica/esteira`.
+
+```
+pages/EsteiraOnline.tsx          hooks/useEsteiraOnline.ts
+pages/MensagensCliente.tsx       hooks/useMensagensCliente.ts
+components/ConexaoWhatsApp.tsx
+```
+
+⚠️ Os três últimos entraram sem serem registrados aqui, e ficaram meses fora de
+qualquer lista — que é **exatamente** como o `useVendas` divergiu: um arquivo
+que ninguém sabe que precisa ser copiado só é copiado por acaso. Se você editar
+qualquer um dos cinco, copie para o outro app na mesma tarefa.
 
 A tela não calcula etapa: quem calcula é a view `public.bling2_esteira`. Regra
 nova entra lá, e as duas telas mudam juntas.
 
+⚠️ A **primeira** coluna ("Pago") é a exceção: ela NÃO vem da `bling2_esteira`,
+e sim de `ecommerce_aguardando_bling`, que lê a plataforma direto. Existe porque
+a esteira só enxerga pedido `situacao_id in (9,12)` — Atendido — e pedido novo
+nasce "Em aberto" no Bling; nenhuma frequência de sync resolveria isso, porque
+não é latência, é estado de negócio. A view é separada de propósito: a
+`bling2_esteira` alimenta `carbo_msg_fila`, e jogar esses pedidos lá dentro
+seria apertar o gatilho de um envio em massa de WhatsApp.
+
 ⚠️ **O menu do Ops tem DOIS lugares** e esquecer um deixa a tela invisível sem
 erro nenhum: o registro em `src/lib/opsNav.ts` **e** a lista de caminhos do
 grupo em `src/components/Layout.tsx`. Já aconteceu antes.
+
+### Cadência das automações — a esteira dispara mensagem, então ela é ao vivo
+Enquanto a esteira era painel para olhar, meia hora de atraso não custava nada.
+Desde que cada mudança de etapa manda WhatsApp para o cliente, custa: "saiu para
+entrega" chegando 40 min depois é pior que não chegar. E o atraso nunca foi de
+um job — era a **soma de filas em série**, que ninguém mede.
+
+```
+bling2-sync-incremental      * * * * *        orders_recente + nfe_recente
+bling2-order-details-10min   3-59/10 * * * *  order_details  ← sem ele não há NF
+bling2-bridge                */2 * * * *      SQL puro, banco→banco
+ecommerce-sync-5min          */5 * * * *      envio/entrega da plataforma
+rastreio-sync-5min           */5 * * * *      rede de segurança do webhook
+kanban-n8n-1min              * * * * *        o disparo ao cliente
+```
+
+⚠️ **`order_details` é fase separada e não pode entrar no job de 1 min.** Ela é
+uma chamada de API por pedido (teto 60, ~70 s); em cada minuto as rodadas se
+atropelariam e dobrariam as chamadas ao Bling. E ela é indispensável: a listagem
+não traz `raw_detalhe`, e sem ele não existe `nf_bling_id` — a nota chega ao
+espelho órfã e o pedido fica preso em "Confirmado". Rodava 1×/dia e ninguém
+tinha ligado uma coisa à outra.
+
+⚠️ Comentários de migrações antigas explicam horários que **não valem mais**
+(a `20260838` justifica ":15 e :45" para não colidir com o `bling-nfe-sync` do
+minuto :00). O raciocínio era correto na época; a grade acima é a atual. Ao
+mudar agendamento, marque a migração antiga como superada em vez de deixar duas
+explicações vivas.
+
+### Segredo de função: FECHE quando ele não existe
+Padrão obrigatório em toda edge function chamada por máquina:
+
+```ts
+if (!SEGREDO || informado !== SEGREDO) return 401;   // certo
+if (SEGREDO && informado !== SEGREDO) return 401;    // ERRADO: sem secret, aceita tudo
+```
+
+O `CRON_SECRET` já sumiu uma vez neste projeto — 25 h de sincronismo morto, com
+`pg_cron` marcando `succeeded` o tempo todo, porque `net.http_post` é assíncrono
+e o sucesso dele é ter POSTADO. Naquela vez a ausência travou tudo, que é o modo
+seguro. Na forma errada acima ela **abriria** — e no `kanban-n8n` isso é
+qualquer pessoa disparando WhatsApp para a base.
+
+Separe as recusas: **401** para segredo errado (problema de quem chama), **500**
+com mensagem explícita para segredo ausente no servidor (problema nosso). Um 401
+para os dois faz a falha de configuração se disfarçar de chamada indevida — foi
+esse disfarce que custou o dia de diagnóstico.
 
 ### Regras anti-confusão (OBRIGATÓRIAS)
 1. **Todo pedido nomeia o alvo.** "no CRM" → `apps/crm`; "no controle"/"atual" → raiz (`src/`).

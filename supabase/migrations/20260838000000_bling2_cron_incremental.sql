@@ -50,6 +50,19 @@ begin
   end loop;
 end $$;
 
+-- ⚠️⚠️ SUPERADO PELA MIGRAÇÃO 20260880000000_esteira_ao_vivo.sql ⚠️⚠️
+--
+-- Este job roda HOJE a cada minuto (`* * * * *`), não em :15 e :45. A mudança
+-- veio quando a esteira passou a disparar WhatsApp ao cliente e a soma das
+-- filas em série (30 + 30 + 60 + 10 min) virou mais de uma hora de atraso.
+--
+-- O raciocínio abaixo estava certo para o que se sabia na época, e a colisão
+-- que ele evita é real — hoje ela acontece uma vez por hora, como preço
+-- consciente. Está preservado porque explica de onde veio o horário, mas NÃO
+-- descreve o comportamento atual. Para a grade em vigor, veja a seção
+-- "Cadência das automações" no CLAUDE.md.
+--
+-- ── Texto original ────────────────────────────────────────────────────────
 -- Duas vezes por hora, o dia inteiro. Barata por construção: uma listagem
 -- filtrada por data (teto de 5 páginas) + no máximo 40 detalhes.
 -- ⚠️ :15 e :45, NÃO :00 e :30. O `bling-nfe-sync` do Bling 1 roda de hora em
