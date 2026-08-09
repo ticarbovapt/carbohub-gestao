@@ -3,7 +3,7 @@ import { Link, useLocation, useSearchParams } from "react-router-dom";
 import {
   Truck, Package, FileText, CheckCircle2, ShoppingCart, Copy, XCircle, Loader2, MapPin, Phone,
   CalendarClock, ExternalLink, MessageSquare, AlertTriangle, Clock, Box, User, Hash, Search,
-  Settings2, Link2,
+  Settings2, Link2, BellRing, BellOff,
 } from "lucide-react";
 import { toast } from "sonner";
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
@@ -13,9 +13,12 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
-  useEsteiraOnline, useRastreios, useEcommerceAguardando, useFontesSaude, ETAPAS,
+  useEsteiraOnline, useRastreios, useEcommerceAguardando, useFontesSaude,
+  useAvisosDoPedido, ETAPAS,
   type EsteiraRow, type EtapaEsteira, type RastreioCard, type AguardandoRow,
 } from "@/hooks/useEsteiraOnline";
+import { useTemplatesMsg, ORDEM_ETAPAS, type EnvioMsg, type EtapaMsg } from "@/hooks/useMensagensCliente";
+import { DatePickerInput } from "@/components/ui/date-picker-input";
 
 /**
  * Esteira do On-line — quadro de acompanhamento da entrega.
@@ -156,6 +159,48 @@ function ChipPrevisao({ r }: { r?: RastreioCard }) {
   );
 }
 
+/* ── O aviso ao cliente, como sinal visual ─────────────────────────────────
+ *
+ * A pergunta que isto responde é "o cliente foi avisado desta etapa?", e ela
+ * tem MAIS de duas respostas. Reduzir tudo a um ✓/✗ esconderia justamente os
+ * casos que importam: a linha que ficou em `erro` porque o n8n caiu no meio do
+ * envio, e a que virou `ignorado` porque o pedido não tinha telefone. Os dois
+ * são "não recebeu", e cada um se resolve de um jeito diferente.
+ *
+ * ⚠️ A ausência de registro só vira alerta quando o template da etapa está
+ * ATIVO. Com o aviso desligado não se espera envio nenhum, e pintar o quadro
+ * inteiro de âmbar por causa de uma função que ninguém ligou é o tipo de ruído
+ * que ensina a equipe a ignorar a cor — aí ela não serve no dia em que estiver
+ * certa.
+ */
+type Sinal = { tom: string; rotulo: string; Icon: typeof BellRing } | null;
+
+function sinalDoAviso(e: EnvioMsg | undefined, esperado: boolean): Sinal {
+  if (e) {
+    if (e.status === "enviado")  return { tom: "text-emerald-500", rotulo: "avisado",      Icon: BellRing };
+    if (e.status === "erro")     return { tom: "text-red-500",     rotulo: "falhou",       Icon: BellOff  };
+    if (e.status === "pendente") return { tom: "text-amber-500",   rotulo: "na fila",      Icon: Clock    };
+    // `ignorado` é duas coisas. Sem telefone é problema e aparece; marco zero
+    // (pedido que já existia quando o aviso foi ligado) é decisão nossa e some.
+    if ((e.motivo ?? "").startsWith("telefone"))
+      return { tom: "text-amber-500", rotulo: "sem telefone", Icon: BellOff };
+    return null;
+  }
+  return esperado ? { tom: "text-amber-500", rotulo: "sem aviso", Icon: BellOff } : null;
+}
+
+function ChipAviso({ sinal }: { sinal: Sinal }) {
+  if (!sinal) return null;
+  const { tom, rotulo, Icon } = sinal;
+  return (
+    <span className={`inline-flex shrink-0 items-center gap-1 text-[10px] font-medium leading-4 ${tom}`}
+          title={`Aviso ao cliente: ${rotulo}`}>
+      <Icon className="h-3 w-3 shrink-0" />
+      {rotulo}
+    </span>
+  );
+}
+
 // ── Card ────────────────────────────────────────────────────────────────────
 //
 // ⚠️ ALTURA é o orçamento deste componente. A versão anterior tinha ~170px:
@@ -168,8 +213,8 @@ function ChipPrevisao({ r }: { r?: RastreioCard }) {
 // (20px de altura para exibir uma palavra) → texto puro na linha de contexto, e
 // as três linhas do bloco de envio → `flex-wrap`, que junta o que couber lado a
 // lado quando a coluna é larga.
-function Card({ row, rastreio, cor, onClick }: {
-  row: EsteiraRow; rastreio?: RastreioCard; cor: string; onClick: () => void;
+function Card({ row, rastreio, cor, sinal, onClick }: {
+  row: EsteiraRow; rastreio?: RastreioCard; cor: string; sinal: Sinal; onClick: () => void;
 }) {
   const atrasado = rastreio?.atrasado && !rastreio?.entregue_em;
   const travado = !row.tem_status_da_plataforma && row.etapa !== "entregue" && row.etapa !== "cancelado";
@@ -216,6 +261,11 @@ function Card({ row, rastreio, cor, onClick }: {
 
       <div className="mt-1 flex items-baseline gap-2 text-[11px] leading-4 text-muted-foreground">
         <span className="min-w-0 flex-1 truncate">{contexto || "—"}</span>
+        {/* O sinal do aviso mora AQUI, na linha de contexto, e não numa linha
+            própria: o card tem orçamento de ~100px e uma linha nova custaria
+            um sexto dele. Como o chip só aparece quando há o que dizer, na
+            maior parte do tempo esta linha continua exatamente como era. */}
+        <ChipAviso sinal={sinal} />
         {quando && <span className="shrink-0 tabular-nums">{quando}</span>}
       </div>
 
@@ -359,6 +409,53 @@ function Trajeto({ r, etapa }: { r?: RastreioCard; etapa?: EtapaEsteira }) {
   );
 }
 
+/* ── Histórico de avisos, dentro do card ──────────────────────────────────
+ *
+ * Fora do card cabe UM sinal: o da etapa atual. Aqui cabe a série inteira, e
+ * ela é outra pergunta — "o cliente acompanhou o pedido, ou só soube no fim?".
+ * Quem vai falar com um cliente irritado precisa saber o que ele já recebeu
+ * antes de abrir a boca.
+ *
+ * `saiu_entrega` aparece na lista mesmo não sendo coluna da esteira: ela É uma
+ * mensagem, vem do rastreio, e omiti-la aqui faria a série parecer completa
+ * quando não está.
+ */
+function AvisosDoCliente({ row, avisos, templates }: {
+  row: EsteiraRow;
+  avisos?: Map<string, EnvioMsg>;
+  templates?: Array<{ etapa: EtapaMsg; ativo: boolean; titulo: string }>;
+}) {
+  return (
+    <ul className="space-y-1.5">
+      {ORDEM_ETAPAS.map((etapa) => {
+        const e = avisos?.get(`${row.bling_id}:${etapa}`);
+        const t = templates?.find((x) => x.etapa === etapa);
+        const marcoZero = e?.status === "ignorado" && !(e.motivo ?? "").startsWith("telefone");
+
+        // Quatro estados, quatro leituras diferentes — e é por isso que isto
+        // não é uma lista de ✓/✗.
+        const { tom, texto } =
+          e?.status === "enviado"  ? { tom: "text-emerald-500", texto: `enviado ${dataHora(e.enviado_em)}` }
+        : e?.status === "erro"     ? { tom: "text-red-500",     texto: e.motivo ?? "falhou" }
+        : e?.status === "pendente" ? { tom: "text-amber-500",   texto: e.motivo ?? "na fila" }
+        : marcoZero                ? { tom: "text-muted-foreground/60", texto: "antes do aviso existir" }
+        : e                        ? { tom: "text-amber-500",   texto: e.motivo ?? "não enviado" }
+        : t?.ativo                 ? { tom: "text-amber-500",   texto: "sem registro de envio" }
+        :                            { tom: "text-muted-foreground/60", texto: "aviso desligado" };
+
+        return (
+          <li key={etapa} className="flex items-baseline justify-between gap-2 text-[11px]">
+            <span className="min-w-0 flex-1 truncate text-muted-foreground">
+              {t?.titulo ?? etapa}
+            </span>
+            <span className={`shrink-0 ${tom}`}>{texto}</span>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
 // ── Detalhe ─────────────────────────────────────────────────────────────────
 
 /**
@@ -397,8 +494,11 @@ function Bloco({ titulo, icon: Icon, children }: {
   );
 }
 
-function Detalhe({ row, rastreio, onClose }: {
-  row: EsteiraRow; rastreio?: RastreioCard; onClose: () => void;
+function Detalhe({ row, rastreio, avisos, templates, onClose }: {
+  row: EsteiraRow; rastreio?: RastreioCard;
+  avisos?: Map<string, EnvioMsg>;
+  templates?: Array<{ etapa: EtapaMsg; ativo: boolean; titulo: string }>;
+  onClose: () => void;
 }) {
   const itens = Array.isArray(row.items) ? (row.items as any[]) : [];
   const endereco = [row.entrega_endereco, row.entrega_bairro].filter(Boolean).join(" — ");
@@ -496,6 +596,13 @@ function Detalhe({ row, rastreio, onClose }: {
               <Trajeto r={rastreio} etapa={row.etapa} />
             </Bloco>
           )}
+
+          {/* Logo depois do trajeto, e antes dos blocos de cadastro: quem abre
+              este diálogo para falar com um cliente precisa saber o que ele já
+              recebeu ANTES de escrever a mensagem. */}
+          <Bloco titulo="Avisos ao cliente" icon={MessageSquare}>
+            <AvisosDoCliente row={row} avisos={avisos} templates={templates} />
+          </Bloco>
 
           {!row.tem_status_da_plataforma && row.etapa !== "cancelado" && (
             <div className="flex items-start gap-2 rounded-lg border border-amber-500/40 bg-amber-500/5 px-3 py-2 text-[11px] text-amber-600 dark:text-amber-500">
@@ -654,7 +761,35 @@ function CardPago({ row }: { row: AguardandoRow }) {
 }
 
 export default function EsteiraOnline() {
-  const [dias, setDias] = useState("30");
+  /* ── Período: atalho OU intervalo livre ────────────────────────────────
+   *
+   * Antes eram três opções fixas (7/30/90) para uma pergunta com infinitas
+   * respostas. "A primeira semana de julho" não cabia em nenhuma, e quem
+   * precisava disso não tinha saída dentro da tela.
+   *
+   * Os atalhos continuam porque são o uso comum e um clique bate dois campos
+   * de data. `periodo = 'custom'` revela as duas datas — que já são a verdade
+   * usada na consulta nos dois casos, então não existe "modo" nenhum por baixo:
+   * o atalho apenas PREENCHE as datas. Um caminho só, sem estado paralelo para
+   * divergir. */
+  const hojeISO = new Date().toISOString().slice(0, 10);
+  const menosDias = (n: number) => {
+    const d = new Date();
+    d.setDate(d.getDate() - n);
+    return d.toISOString().slice(0, 10);
+  };
+  const [filtroAviso, setFiltroAviso] = useState("all");
+  const [periodo, setPeriodo] = useState("30");
+  const [de, setDe]   = useState(() => menosDias(30));
+  const [ate, setAte] = useState(hojeISO);
+
+  const trocarPeriodo = (v: string) => {
+    setPeriodo(v);
+    if (v !== "custom") {
+      setDe(menosDias(Number(v)));
+      setAte(hojeISO);
+    }
+  };
   const [busca, setBusca] = useState("");
   const [canal, setCanal] = useState("all");
   /* ── O card tem endereço ──────────────────────────────────────────────
@@ -679,10 +814,26 @@ export default function EsteiraOnline() {
   // Mandar o caminho ATUAL na URL faz o botão "voltar" da outra tela acertar
   // sozinho, sem o arquivo precisar saber em qual app está rodando.
   const { pathname } = useLocation();
-  const { data, isLoading, error } = useEsteiraOnline(Number(dias));
+  const { data, isLoading, error } = useEsteiraOnline(de, ate);
   const { data: aguardando } = useEcommerceAguardando();
   const { data: fontes } = useFontesSaude();
   const paradas = (fontes ?? []).filter((f) => f.atrasada);
+
+  // Avisos ao cliente. Os ids saem de `data` inteiro, não do filtrado: filtrar
+  // por "sem aviso" precisa do estado de TODOS para decidir quem entra.
+  const idsPedidos = useMemo(() => (data ?? []).map((r) => r.bling_id), [data]);
+  const { data: avisos } = useAvisosDoPedido(idsPedidos);
+  const { data: templates } = useTemplatesMsg();
+
+  // Etapa da esteira → etapa da mensagem. São quase o mesmo conjunto, menos
+  // `cancelado` (não existe aviso de cancelamento) e `saiu_entrega`, que não é
+  // coluna da esteira — ela vem do rastreio.
+  const sinalDe = (r: EsteiraRow): Sinal => {
+    if (r.etapa === "cancelado") return null;
+    const etapa = r.etapa as unknown as EtapaMsg;
+    const ativo = (templates ?? []).find((t) => t.etapa === etapa)?.ativo ?? false;
+    return sinalDoAviso(avisos?.get(`${r.bling_id}:${etapa}`), ativo);
+  };
 
   const abrirCard = (r: EsteiraRow | null) => {
     setParams((p) => {
@@ -718,8 +869,21 @@ export default function EsteiraOnline() {
         (x.pedido_loja ?? "").toLowerCase().includes(t) ||
         (x.entrega_cidade ?? "").toLowerCase().includes(t));
     }
+    if (filtroAviso !== "all") {
+      r = r.filter((x) => {
+        if (x.etapa === "cancelado") return false;
+        const e = avisos?.get(`${x.bling_id}:${x.etapa}`);
+        if (filtroAviso === "enviado") return e?.status === "enviado";
+        if (filtroAviso === "erro")    return e?.status === "erro";
+        // "sem aviso" inclui a fila e o telefone inválido — as três formas de
+        // o cliente NÃO ter recebido. Marco zero fica de fora: aquilo foi
+        // decisão nossa, não falha.
+        return !e || e.status === "pendente"
+          || (e.status === "ignorado" && (e.motivo ?? "").startsWith("telefone"));
+      });
+    }
     return r;
-  }, [data, canal, busca]);
+  }, [data, canal, busca, filtroAviso, avisos]);
 
   // Os mesmos filtros da tela valem para a coluna "Pago" — uma busca que
   // esconde o pedido em cinco colunas e o deixa visível na sexta seria só
@@ -855,12 +1019,36 @@ export default function EsteiraOnline() {
             {canais.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
           </SelectContent>
         </Select>
-        <Select value={dias} onValueChange={setDias}>
-          <SelectTrigger className="h-9 w-32"><SelectValue /></SelectTrigger>
+        <Select value={periodo} onValueChange={trocarPeriodo}>
+          <SelectTrigger className="h-9 w-36"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="7">7 dias</SelectItem>
             <SelectItem value="30">30 dias</SelectItem>
             <SelectItem value="90">90 dias</SelectItem>
+            <SelectItem value="180">6 meses</SelectItem>
+            <SelectItem value="365">12 meses</SelectItem>
+            <SelectItem value="custom">Escolher datas…</SelectItem>
+          </SelectContent>
+        </Select>
+        {periodo === "custom" && (
+          <div className="flex items-center gap-1.5">
+            <DatePickerInput value={de} onChange={setDe} clearable={false}
+                             disableFuture className="h-9 w-36" />
+            <span className="text-xs text-muted-foreground">até</span>
+            <DatePickerInput value={ate} onChange={setAte} clearable={false}
+                             disableFuture className="h-9 w-36" />
+          </div>
+        )}
+        {/* Filtro de aviso. Fica ao lado do de atraso porque responde a mesma
+            pergunta — "o que está fora do trilho?" — só que do lado do cliente
+            em vez do lado da entrega. */}
+        <Select value={filtroAviso} onValueChange={setFiltroAviso}>
+          <SelectTrigger className="h-9 w-48"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Aviso: todos</SelectItem>
+            <SelectItem value="sem">Sem aviso enviado</SelectItem>
+            <SelectItem value="erro">Aviso com erro</SelectItem>
+            <SelectItem value="enviado">Aviso enviado</SelectItem>
           </SelectContent>
         </Select>
         <Button size="sm" variant={soProblemas ? "default" : "outline"}
@@ -912,7 +1100,7 @@ export default function EsteiraOnline() {
         <div className="flex shrink-0 items-start gap-1.5 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-[11px] text-amber-600 dark:text-amber-500">
           <AlertTriangle className="mt-px h-3.5 w-3.5 shrink-0" />
           <span>
-            O pedido deste link não está nos últimos {dias} dias. Aumente o período no
+            O pedido deste link não está no período selecionado. Amplie as datas no
             filtro acima para encontrá-lo.
           </span>
         </div>
@@ -1018,7 +1206,7 @@ export default function EsteiraOnline() {
                 <div className="min-h-0 flex-1 space-y-1.5 overflow-y-auto overscroll-contain p-2">
                   {cards.map((r) => (
                     <Card key={r.bling_id} row={r} rastreio={rastreioDe(r.rastreio)}
-                          cor={etapa.color} onClick={() => abrirCard(r)} />
+                          cor={etapa.color} sinal={sinalDe(r)} onClick={() => abrirCard(r)} />
                   ))}
                   {cards.length === 0 && (
                     <p className="px-2 py-4 text-center text-[11px] text-muted-foreground/60">sem pedidos</p>
@@ -1039,7 +1227,7 @@ export default function EsteiraOnline() {
           <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-3 xl:grid-cols-5">
             {cancelados.map((r) => (
               <Card key={r.bling_id} row={r} rastreio={rastreioDe(r.rastreio)}
-                    cor="#ef4444" onClick={() => abrirCard(r)} />
+                    cor="#ef4444" sinal={null} onClick={() => abrirCard(r)} />
             ))}
           </div>
         </details>
@@ -1054,6 +1242,7 @@ export default function EsteiraOnline() {
 
       {aberto && (
         <Detalhe row={aberto} rastreio={rastreioDe(aberto.rastreio)}
+                 avisos={avisos} templates={templates}
                  onClose={() => abrirCard(null)} />
       )}
     </div>

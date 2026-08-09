@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import type { EnvioMsg } from "@/hooks/useMensagensCliente";
 
 /**
  * Esteira do e-commerce — espelho puro.
@@ -60,16 +61,28 @@ export const ETAPAS: Array<{ key: EtapaEsteira; label: string; descricao: string
   { key: "entregue",    label: "Entregue",     descricao: "a plataforma confirmou a entrega",   color: "#10b981" },
 ];
 
-export function useEsteiraOnline(dias = 30) {
+/**
+ * ⚠️ Recebe um INTERVALO, não uma quantidade de dias.
+ *
+ * A versão anterior aceitava `dias` e a tela oferecia 7, 30 ou 90 — três
+ * respostas para uma pergunta que tem infinitas. "Quero ver a primeira semana
+ * de julho" não cabia em nenhuma delas, e quem precisava disso não tinha saída
+ * nenhuma dentro da tela.
+ *
+ * Datas explícitas (YYYY-MM-DD, o mesmo formato de `data_pedido`) resolvem os
+ * dois casos com um parâmetro só: os atalhos viram contas de data feitas na
+ * tela, e o intervalo livre passa a ser possível sem nada de especial aqui.
+ */
+export function useEsteiraOnline(de: string, ate: string) {
   return useQuery({
-    queryKey: ["esteira-online", dias],
+    queryKey: ["esteira-online", de, ate],
+    enabled: Boolean(de && ate),
     queryFn: async (): Promise<EsteiraRow[]> => {
-      const desde = new Date();
-      desde.setDate(desde.getDate() - dias);
       const { data, error } = await (supabase as any)
         .from("bling2_esteira")
         .select("*")
-        .gte("data_pedido", desde.toISOString().slice(0, 10))
+        .gte("data_pedido", de)
+        .lte("data_pedido", ate)
         .order("data_pedido", { ascending: false })
         .limit(1000);
       if (error) throw error;
@@ -126,6 +139,49 @@ export function useEcommerceAguardando() {
     // para ser rápida. De nada adianta o webhook gravar em 2s se a tela só
     // olha de dois em dois minutos.
     refetchInterval: 30_000,
+  });
+}
+
+/* ─── O aviso saiu? ────────────────────────────────────────────────────────
+ *
+ * `carbo_msg_envios` tem PK (bling_id, etapa) — uma linha por etapa por pedido,
+ * e é ela que garante uma mensagem só. Aqui essa mesma chave vira a resposta
+ * para "o cliente foi avisado desta etapa?".
+ *
+ * ⚠️ Ausência de linha NÃO é falha. Enquanto o template da etapa está
+ * desligado, não se espera envio nenhum — e pintar a esteira inteira de aviso
+ * vermelho por causa de uma função que ninguém ligou seria ruído puro, do tipo
+ * que ensina a equipe a ignorar a cor. Quem decide se a falta é problema é o
+ * `ativo` do template, não a ausência em si.
+ */
+
+export type StatusAviso = "enviado" | "erro" | "pendente" | "ignorado" | "sem_registro";
+
+export function useAvisosDoPedido(blingIds: number[]) {
+  // A chave precisa ser estável: array novo a cada render refaria a consulta
+  // para sempre. Mesmo cuidado do `useRastreios`.
+  const chave = [...new Set(blingIds)].sort((a, b) => a - b).join(",");
+  return useQuery({
+    queryKey: ["msg-envios-por-pedido", chave],
+    enabled: chave.length > 0,
+    queryFn: async (): Promise<Map<string, EnvioMsg>> => {
+      const ids = chave.split(",").map(Number).filter(Boolean);
+      const achados: EnvioMsg[] = [];
+      // Lotes de 200: o PostgREST monta o `in` na URL, e isso continua
+      // verdadeiro quando a operação crescer.
+      for (let i = 0; i < ids.length; i += 200) {
+        const { data, error } = await (supabase as any)
+          .from("carbo_msg_envios")
+          .select("*")
+          .in("bling_id", ids.slice(i, i + 200));
+        if (error) throw error;
+        achados.push(...((data ?? []) as EnvioMsg[]));
+      }
+      const mapa = new Map<string, EnvioMsg>();
+      for (const e of achados) mapa.set(`${e.bling_id}:${e.etapa}`, e);
+      return mapa;
+    },
+    refetchInterval: 60_000,
   });
 }
 
