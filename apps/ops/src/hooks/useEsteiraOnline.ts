@@ -29,9 +29,15 @@ import type { EnvioMsg } from "@/hooks/useMensagensCliente";
  * lugar nenhum, e a tela parecia exigir F5 para funcionar.
  *
  * Duas consultas que se completam não podem andar em ritmos diferentes. Se um
- * dia isto precisar mudar, mude para as duas.
+ * dia isto precisar mudar, mude para as duas — por isso é uma constante, e não
+ * um número solto em cada `useQuery`.
+ *
+ * 10 s é escolha do dono do processo: a esteira fica aberta numa tela da
+ * logística o dia inteiro, e o card mudando de coluna é o próprio sinal de que
+ * a operação andou. Custo: duas consultas por pessoa a cada 10 s, ambas sobre
+ * views indexadas e com teto de 1000 linhas.
  */
-const RECARGA_MS = 30_000;
+const RECARGA_MS = 10_000;
 
 export type EtapaEsteira =
   | "confirmado" | "nf_emitida" | "etiqueta" | "em_transito" | "entregue" | "cancelado";
