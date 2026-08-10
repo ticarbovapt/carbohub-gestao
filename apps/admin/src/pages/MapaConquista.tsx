@@ -7,7 +7,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ArrowLeft, Loader2, MapPin, Sparkles, Store, Building2, ShoppingCart, AlertTriangle, Grid3x3, Map as MapIcon } from "lucide-react";
+import { ArrowLeft, Loader2, MapPin, Sparkles, Store, Building2, ShoppingCart, AlertTriangle, Grid3x3, Map as MapIcon, Maximize2, Minimize2 } from "lucide-react";
 import {
   useCidadesConquistadas, useMunicipiosIBGE, useMalha,
   UF_POR_CODIGO, type CidadeConquistada, type FiltroPresenca, type Granularidade,
@@ -116,7 +116,7 @@ const fmtBRLCompacto = (v: number) =>
  * aproxima uma região, a sidebar colapsa, e o mapa volta para o Brasil
  * inteiro. Remedir mantém o que está na tela e só corrige a régua.
  */
-function Enquadrar({ geo }: { geo: unknown }) {
+function Enquadrar({ geo, chave }: { geo: unknown; chave: string }) {
   const map = useMap();
 
   // Régua sempre atual: sidebar colapsando, janela mudando, filtro quebrando
@@ -139,13 +139,13 @@ function Enquadrar({ geo }: { geo: unknown }) {
         const b = L.geoJSON(geo as never).getBounds();
         // `maxZoom` impede que um estado pequeno (ou uma malha de um município
         // só) chegue perto demais e perca a referência do entorno.
-        if (b.isValid()) map.fitBounds(b, { padding: [12, 12], maxZoom: 9 });
+        if (b.isValid()) map.fitBounds(b, { padding: [4, 4], maxZoom: 9 });
       } catch {
         /* malha malformada não pode derrubar a tela */
       }
     });
     return () => cancelAnimationFrame(id);
-  }, [geo, map]);
+  }, [geo, map, chave]);
 
   return null;
 }
@@ -155,6 +155,17 @@ export default function MapaConquista() {
   const [granularidade, setGranularidade] = useState<Granularidade>("estado");
   const [filtro, setFiltro] = useState<FiltroPresenca>("todos");
   const [periodo, setPeriodo] = useState("mes");
+  /* Mapa em tela cheia.
+   *
+   * ⚠️ A ÚNICA alavanca do tamanho do Brasil é a ALTURA. O Brasil é quase
+   * quadrado e a caixa é o dobro mais larga que alta, então o `fitBounds`
+   * sempre encosta em cima e embaixo e sobra vazio dos lados. Estreitar a
+   * caixa tira o vazio e não aumenta nada; só mais altura aumenta.
+   *
+   * Daí este modo: some com título, placares e barra lateral e devolve ~200px
+   * ao mapa — cerca de um terço a mais de Brasil. É também o formato para
+   * deixar a tela numa TV, que era a intenção original desta página. */
+  const [telaCheia, setTelaCheia] = useState(false);
 
   const infoPeriodo = PERIODOS.find((p) => p.id === periodo) ?? PERIODOS[0];
   // Comparação em string ISO: `primeira_venda` é 'YYYY-MM-DD', e nesse formato
@@ -347,26 +358,28 @@ export default function MapaConquista() {
        entra (foi o que aconteceu agora, com o seletor de período). Todo
        ancestral do que rola precisa de `min-h-0`, senão o `flex-1` para de
        encolher e o conteúdo estoura para fora da tela. */
-    <div className="flex h-full min-h-0 flex-col gap-4 p-4 md:p-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2">
-            <MapPin className="h-6 w-6 text-emerald-500" />
-            Mapa da conquista
-          </h1>
-          <p className="text-sm text-muted-foreground">
-            Cada município aceso é um lugar onde a Carbo já chegou — venda, PDV ou licenciado.
-          </p>
+    <div className={`flex h-full min-h-0 flex-col ${telaCheia ? "gap-2 p-2" : "gap-4 p-4 md:p-6"}`}>
+      {!telaCheia && (
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h1 className="text-2xl font-bold flex items-center gap-2">
+              <MapPin className="h-6 w-6 text-emerald-500" />
+              Mapa da conquista
+            </h1>
+            <p className="text-sm text-muted-foreground">
+              Cada município aceso é um lugar onde a Carbo já chegou — venda, PDV ou licenciado.
+            </p>
+          </div>
+          {uf && (
+            <Button variant="outline" size="sm" onClick={() => setUf(null)}>
+              <ArrowLeft className="h-4 w-4 mr-1" /> Ver o Brasil
+            </Button>
+          )}
         </div>
-        {uf && (
-          <Button variant="outline" size="sm" onClick={() => setUf(null)}>
-            <ArrowLeft className="h-4 w-4 mr-1" /> Ver o Brasil
-          </Button>
-        )}
-      </div>
+      )}
 
       {/* Placar */}
-      <div className="grid shrink-0 grid-cols-2 gap-3 md:grid-cols-5">
+      <div className={`grid shrink-0 grid-cols-2 gap-3 md:grid-cols-5 ${telaCheia ? "hidden" : ""}`}>
         <Placar titulo="Cidades" valor={placar.cidades.toLocaleString("pt-BR")}
           rodape={placar.municipiosBR ? `de ${placar.municipiosBR.toLocaleString("pt-BR")} no Brasil` : "—"} />
         <Placar titulo="Estados" valor={`${placar.estados}`} rodape="de 27" />
@@ -388,6 +401,18 @@ export default function MapaConquista() {
             placar de novas e a lista lateral. Um seletor que mudasse só a lista
             deixaria o mapa contando outra coisa — que era exatamente o problema
             de "30 dias" pintando o mapa enquanto o painel dizia "do mês". */}
+        <Button size="sm" variant={telaCheia ? "default" : "outline"}
+                className="gap-1.5" onClick={() => setTelaCheia((v) => !v)}>
+          {telaCheia ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+          {telaCheia ? "Sair da tela cheia" : "Tela cheia"}
+        </Button>
+
+        {telaCheia && uf && (
+          <Button variant="outline" size="sm" onClick={() => setUf(null)}>
+            <ArrowLeft className="h-4 w-4 mr-1" /> Ver o Brasil
+          </Button>
+        )}
+
         <Select value={periodo} onValueChange={setPeriodo}>
           <SelectTrigger className="h-8 w-44"><SelectValue /></SelectTrigger>
           <SelectContent>
@@ -413,7 +438,7 @@ export default function MapaConquista() {
       </div>
 
       <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 lg:grid-cols-4">
-        <Card className="flex min-h-0 flex-col overflow-hidden lg:col-span-3">
+        <Card className={`flex min-h-0 flex-col overflow-hidden ${telaCheia ? "lg:col-span-4" : "lg:col-span-3"}`}>
           {/* ⚠️ ALTURA POR FLEX, não por `calc(100vh - 300px)`.
               O número fixo era chute: qualquer linha nova no cabeçalho (o
               seletor de período, por exemplo) roubava altura do mapa sem que
@@ -467,7 +492,10 @@ export default function MapaConquista() {
                     style={estilo as never}
                     onEachFeature={aoCriarFeature}
                   />
-                  <Enquadrar geo={malha.data} />
+                  {/* `chave` reenquadra quando a CAIXA muda de proporção — entrar
+                      e sair da tela cheia troca a largura útil, e sem isto o
+                      Brasil ficaria enquadrado para a caixa anterior. */}
+                  <Enquadrar geo={malha.data} chave={telaCheia ? "cheia" : "normal"} />
                 </>
               )}
             </MapContainer>
@@ -495,7 +523,7 @@ export default function MapaConquista() {
           </CardContent>
         </Card>
 
-        <div className="min-h-0 space-y-4 overflow-y-auto lg:max-h-full">
+        <div className={`min-h-0 space-y-4 overflow-y-auto lg:max-h-full ${telaCheia ? "hidden" : ""}`}>
           <Card>
             <CardContent className="p-4">
               <div className="text-sm font-semibold flex items-center gap-1.5 mb-2">
