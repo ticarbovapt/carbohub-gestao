@@ -20,6 +20,9 @@ const HUB_TO_CODE: Record<string, string> = {
   sp: "HUB-SP",
   spv: "HUB-SP-VENDAS",
   bling: "CD-BLING",
+  // ⚠️ Espelho do CODE_TO_HUB em useStock.ts. Atualizar só um faz a tela LER o
+  // estoque do hub e não conseguir GRAVAR nele — sem erro de compilação.
+  esc: "HUB-ESCRITORIO",
 };
 
 export interface SetStockArgs {

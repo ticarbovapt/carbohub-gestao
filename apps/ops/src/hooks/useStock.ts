@@ -21,6 +21,7 @@ const CODE_TO_HUB: Record<string, string> = {
   "HUB-SP-VENDAS": "spv",
   "CD-BLING": "bling",
   "HUB-BLING": "bling",
+  "HUB-ESCRITORIO": "esc",
 };
 
 // Realtime de estoque: assina as tabelas-fonte e invalida o cache do react-query

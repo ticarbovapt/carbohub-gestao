@@ -9,6 +9,13 @@ export const HUBS: Hub[] = [
   { id: "sp", slug: "cd-sp-loghouse", label: "CD SP LogHouse", city: "São Paulo", state: "SP" },
   { id: "spv", slug: "cd-sp-vendas", label: "CD SP Vendas", city: "São Paulo", state: "SP" },
   { id: "bling", slug: "cd-bling", label: "CD Bling", city: "—", state: "—" },
+  // ⚠️ Hub novo mexe em SEIS lugares, não neste só: a linha em `warehouses`
+  // (migração 20260888), o `HubId`/`HUB_CODE`/botão em Suprimentos.tsx, o
+  // CODE_TO_HUB de useStock.ts, o HUB_TO_CODE de useStockMutations.ts e o
+  // rótulo em useSuprimentosCockpit.ts (admin e ti, idênticos). As duas
+  // traduções são espelhos: atualizar só uma faz a tela LER o estoque e não
+  // conseguir GRAVAR.
+  { id: "esc", slug: "escritorio", label: "Escritório", city: "Natal", state: "RN" },
 ];
 export const hubBySlug = (slug?: string) => HUBS.find((h) => h.slug === slug);
 

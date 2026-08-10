@@ -24,6 +24,7 @@ export const HUB_LABELS: Record<string, string> = {
   "HUB-SP": "CD SP LogHouse",
   "HUB-SP-VENDAS": "CD SP Vendas",
   "CD-BLING": "CD Bling",
+  "HUB-ESCRITORIO": "Escritório",
 };
 // Rede física: Natal produz, SP vende. Usado p/ a leitura de rede e "a remanejar".
 export const PRODUCTION_HUB = "HUB-RN";

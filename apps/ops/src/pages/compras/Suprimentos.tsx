@@ -11,7 +11,7 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 import {
-  Package, MapPin, Users, Cloud, Send, AlertCircle, ArrowLeftRight, Settings2,
+  Package, MapPin, Users, Cloud, Send, AlertCircle, ArrowLeftRight, Settings2, Building2,
   ArrowDownToLine, ArrowUpFromLine, Boxes, Layers, AlertTriangle, Activity, Info, Link2, Truck,
   CheckCircle, XCircle, FileText, Loader2, Search,
 } from "lucide-react";
@@ -49,13 +49,13 @@ import { MinStockDialog } from "@/components/estoque/MinStockDialog";
 // CD Bling nenhuma migração chega a criar a linha em `warehouses` — o link
 // existe e leva a uma tela naturalmente vazia.
 // ─────────────────────────────────────────────────────────────────────────────
-type HubId = "rn" | "sp" | "spv" | "bling";
+type HubId = "rn" | "sp" | "spv" | "bling" | "esc";
 const HUB_PADRAO: HubId = "rn";
 // slug (URL) → id de UI, e id → código do warehouse. Só estas duas traduções.
 const hubIdBySlug = (slug?: string): HubId | null =>
   (HUBS.find((h) => h.slug === slug)?.id as HubId | undefined) ?? null;
 const slugOf = (id: HubId) => HUBS.find((h) => h.id === id)?.slug ?? "hub-natal";
-const HUB_CODE: Record<HubId, string> = { rn: "HUB-RN", sp: "HUB-SP", spv: "HUB-SP-VENDAS", bling: "CD-BLING" };
+const HUB_CODE: Record<HubId, string> = { rn: "HUB-RN", sp: "HUB-SP", spv: "HUB-SP-VENDAS", bling: "CD-BLING", esc: "HUB-ESCRITORIO" };
 
 // Ordem, rótulo, ícone e RESTRIÇÃO DE HUB das abas num lugar só — é daqui que
 // sai a TabsList e é contra esta lista que a URL é validada.
@@ -185,7 +185,7 @@ export default function Suprimentos() {
   }, []);
   const periodLabel = periodo === "7d" ? "7 dias" : periodo === "30d" ? "30 dias" : periodo === "mes" ? "este mês"
     : periodo === "custom" ? "período" : (monthOptions.find((m) => m.v === periodo)?.label ?? "período");
-  const isRN = hub === "rn", isSP = hub === "sp", isVendas = hub === "spv", isBling = hub === "bling";
+  const isRN = hub === "rn", isSP = hub === "sp", isVendas = hub === "spv", isBling = hub === "bling", isEsc = hub === "esc";
   const stockHub = HUBS.find((h) => h.id === hub) ?? HUBS[0];
 
   useStockLive(); // atualiza ao vivo quando outro usuário mexe no estoque (produção ou manual)
@@ -298,6 +298,7 @@ export default function Suprimentos() {
           <Button variant={isSP ? "default" : "outline"} size="sm" className={cn("gap-2", isSP && "bg-carbo-blue hover:bg-carbo-blue/90 text-white")} onClick={() => changeHub("sp")}><MapPin className="h-4 w-4" /> CD SP LogHouse</Button>
           <Button variant={isVendas ? "default" : "outline"} size="sm" className={cn("gap-2", isVendas && "bg-carbo-blue hover:bg-carbo-blue/90 text-white")} onClick={() => changeHub("spv")}><Users className="h-4 w-4" /> CD SP Vendas</Button>
           <Button variant={isBling ? "default" : "outline"} size="sm" className={cn("gap-2", isBling && "bg-carbo-blue hover:bg-carbo-blue/90 text-white")} onClick={() => changeHub("bling")}><Cloud className="h-4 w-4" /> CD Bling</Button>
+          <Button variant={isEsc ? "default" : "outline"} size="sm" className={cn("gap-2", isEsc && "bg-carbo-blue hover:bg-carbo-blue/90 text-white")} onClick={() => changeHub("esc")}><Building2 className="h-4 w-4" /> Escritório</Button>
           {isRN && <Button size="sm" variant="outline" className="gap-2 ml-auto border-blue-500/30 text-blue-400 hover:bg-blue-500/10" onClick={() => setEnvioOpen(true)}><Send className="h-4 w-4" /> Registrar Envio para CD SP</Button>}
         </div>
 
