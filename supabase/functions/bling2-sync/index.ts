@@ -468,6 +468,95 @@ async function syncStock(admin: Admin, token: string, logId: string): Promise<Sy
 
 // ── Contatos ───────────────────────────────────────────────────────────────
 
+/**
+ * Grava UM contato. Existe para que a rodada completa (`contacts`) e a busca
+ * dirigida (abaixo) escrevam pelos MESMOS campos — duas cópias desse mapeamento
+ * divergiriam no dia em que alguém acrescentasse uma coluna em só uma delas, e
+ * o sintoma seria um contato com metade dos dados, sem erro nenhum.
+ *
+ * `is_supplier` / `is_client` / `tipo_contato` ficam de fora de propósito: são
+ * definidos pela marcação por tipo, e mandá-los aqui zeraria o que a rodada
+ * anterior marcou.
+ */
+// deno-lint-ignore no-explicit-any
+async function upsertContato(admin: Admin, c: any): Promise<void> {
+  const { error } = await admin.from("bling2_contacts").upsert({
+    bling_id: c.id,
+    nome: c.nome || "",
+    fantasia: c.fantasia || null,
+    tipo_pessoa: c.tipoPessoa || null,
+    cpf_cnpj: c.numeroDocumento || null,
+    ie: c.ie || null,
+    email: c.email || null,
+    telefone: c.telefone || null,
+    celular: c.celular || null,
+    situacao: c.situacao || null,
+    raw_data: c,
+    synced_at: nowIso(),
+    updated_at: nowIso(),
+  }, { onConflict: "bling_id" });
+  if (error) throw error;
+}
+
+/**
+ * Busca o cadastro dos clientes que acabaram de comprar e que ainda não estão
+ * no espelho.
+ *
+ * ── Por que isto não podia esperar a rodada diária ────────────────────────
+ *
+ * `bling2_esteira.cliente_fone` vem de `bling2_contacts`, e a fase `contacts`
+ * pagina o cadastro INTEIRO — por isso ela roda uma vez por dia. Enquanto a
+ * esteira era um painel, o cliente novo aparecer sem telefone até o dia
+ * seguinte era um incômodo visual.
+ *
+ * Desde que a esteira dispara WhatsApp, deixou de ser: a `carbo_msg_fila` exige
+ * `cliente_fone is not null`, então pedido sem telefone NÃO ENTRA na fila — e,
+ * por não entrar, não gera linha em `carbo_msg_envios`. Não fica marcado como
+ * erro nem como ignorado: fica invisível. Quando o cadastro chega no dia
+ * seguinte, o pedido já passou de "Confirmado" e "NF emitida", e essas
+ * mensagens nunca saem, sem deixar rastro. Medido: 22 de 39 pedidos da esteira
+ * estavam assim.
+ *
+ * Aqui é UMA chamada por cliente NOVO (~20/dia), na mesma passagem que trouxe o
+ * pedido — então o telefone chega no mesmo minuto que ele. O teto existe para o
+ * dia atípico: sem ele, uma importação em massa faria a rodada de um minuto
+ * estourar e as seguintes se atropelarem.
+ */
+async function buscarContatosNovos(
+  admin: Admin, token: string, contatoIds: number[],
+): Promise<number> {
+  const ids = [...new Set(contatoIds.filter((n) => Number.isFinite(n) && n > 0))];
+  if (!ids.length) return 0;
+
+  const { data: existentes } = await admin
+    .from("bling2_contacts").select("bling_id").in("bling_id", ids);
+  const conhecidos = new Set((existentes ?? []).map((r: { bling_id: number }) => r.bling_id));
+  const faltando = ids.filter((id) => !conhecidos.has(id));
+  if (!faltando.length) return 0;
+
+  // Teto por rodada: cabe no minuto e não atropela a rodada seguinte.
+  const TETO = 15;
+  const alvos = faltando.slice(0, TETO);
+  if (faltando.length > TETO) {
+    console.warn(`[bling2-sync] ${faltando.length} contatos novos; buscando ${TETO} nesta rodada.`);
+  }
+
+  let ok = 0;
+  for (const id of alvos) {
+    try {
+      const r = await blingFetch(token, `/contatos/${id}`, 1, 1);
+      if (r?.data) { await upsertContato(admin, r.data); ok++; }
+    } catch (e) {
+      // Contato que falha não pode derrubar a rodada de pedidos: o pedido já
+      // está gravado, e a próxima passagem tenta de novo.
+      console.error(`[bling2-sync] contato ${id} falhou:`, e);
+    }
+    await sleep(RATE_MS);
+  }
+  if (ok) console.log(`[bling2-sync] ${ok} contato(s) novo(s) trazidos junto com os pedidos.`);
+  return ok;
+}
+
 async function syncContacts(admin: Admin, token: string, logId: string): Promise<SyncResult> {
   let synced = 0, failed = 0;
 
@@ -478,22 +567,7 @@ async function syncContacts(admin: Admin, token: string, logId: string): Promise
         // `is_supplier` / `is_client` / `tipo_contato` ficam de fora: são
         // definidos nos passos 2 e 3, e mandá-los aqui zeraria a marcação da
         // rodada anterior a cada sync.
-        const { error } = await admin.from("bling2_contacts").upsert({
-          bling_id: c.id,
-          nome: c.nome || "",
-          fantasia: c.fantasia || null,
-          tipo_pessoa: c.tipoPessoa || null,
-          cpf_cnpj: c.numeroDocumento || null,
-          ie: c.ie || null,
-          email: c.email || null,
-          telefone: c.telefone || null,
-          celular: c.celular || null,
-          situacao: c.situacao || null,
-          raw_data: c,
-          synced_at: nowIso(),
-          updated_at: nowIso(),
-        }, { onConflict: "bling_id" });
-        if (error) throw error;
+        await upsertContato(admin, c);
         synced++;
       } catch (e) {
         console.error("[bling2-sync] contato falhou:", e);
@@ -624,6 +698,8 @@ async function syncOrdersRecente(admin: Admin, token: string, logId: string): Pr
   const corte = dataDeCorte();
   let synced = 0, failed = 0, primeiroLote = true;
   const lojas = new Map<number, number | null>();
+  // Quem comprou nesta janela. O cadastro deles é buscado no fim da rodada.
+  const contatos: number[] = [];
 
   await paginar(token, `/pedidos/vendas?dataInicial=${corte}`, async (pedidos) => {
     if (primeiroLote) {
@@ -632,12 +708,21 @@ async function syncOrdersRecente(admin: Admin, token: string, logId: string): Pr
     }
     for (const o of pedidos) {
       anotarLoja(lojas, o);
+      if (o?.contato?.id) contatos.push(Number(o.contato.id));
       try { await upsertPedidoDaLista(admin, o); synced++; }
       catch (e) { console.error("[bling2-sync] pedido recente falhou:", e); failed++; }
     }
   }, 5);
 
   await registrarLojas(admin, lojas);                                            // teto: 500 pedidos por rodada
+
+  // ⚠️ DEPOIS de gravar os pedidos, nunca antes.
+  //
+  // O pedido é o que a esteira precisa; o contato é enfeite até a hora de
+  // mandar a mensagem. Se a busca de contatos falhar ou estourar o tempo, os
+  // pedidos já estão salvos e a rodada seguinte completa o que faltou. Na
+  // ordem inversa, um contato problemático seguraria o pedido inteiro.
+  await buscarContatosNovos(admin, token, contatos);
 
   console.log(`[bling2-sync] pedidos recentes (desde ${corte}): ${synced} ok, ${failed} falhas`);
   await fecharLog(admin, logId, { synced, failed });
