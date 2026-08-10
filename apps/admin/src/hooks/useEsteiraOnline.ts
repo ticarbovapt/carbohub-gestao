@@ -15,6 +15,24 @@ import type { EnvioMsg } from "@/hooks/useMensagensCliente";
  * mão passaria a mentir no minuto seguinte, quando o sync trouxesse a verdade.
  */
 
+/**
+ * ⚠️ UMA cadência para as duas consultas do quadro, e é obrigatório que seja a
+ * mesma.
+ *
+ * A coluna "Pago" e o resto da esteira mostram fatias COMPLEMENTARES da mesma
+ * realidade: `ecommerce_aguardando_bling` exclui exatamente o que
+ * `bling2_esteira` inclui (`situacao_id in (9,12)`). No banco não há vão.
+ *
+ * Com relógios diferentes (eram 30 s e 120 s), havia: quando o pedido cruzava
+ * para o Bling, a coluna "Pago" percebia em 30 s e SOLTAVA o card, e o quadro
+ * só o recebia até 2 minutos depois. Nesse intervalo o pedido não estava em
+ * lugar nenhum, e a tela parecia exigir F5 para funcionar.
+ *
+ * Duas consultas que se completam não podem andar em ritmos diferentes. Se um
+ * dia isto precisar mudar, mude para as duas.
+ */
+const RECARGA_MS = 30_000;
+
 export type EtapaEsteira =
   | "confirmado" | "nf_emitida" | "etiqueta" | "em_transito" | "entregue" | "cancelado";
 
@@ -88,9 +106,10 @@ export function useEsteiraOnline(de: string, ate: string) {
       if (error) throw error;
       return (data ?? []) as EsteiraRow[];
     },
-    // A esteira anda sozinha (sync :15/:45, ponte :25/:55). Recarregar de 2 em
-    // 2 min mantém a tela viva sem transformar um painel em polling agressivo.
-    refetchInterval: 120_000,
+    // A esteira anda sozinha e agora é ao vivo: sync de 1 min, ponte de 2 min,
+    // disparo de mensagem de 1 min. Um painel que recarrega mais devagar que a
+    // operação que ele mostra atrasa a decisão de quem está olhando.
+    refetchInterval: RECARGA_MS,
   });
 }
 
@@ -135,10 +154,9 @@ export function useEcommerceAguardando() {
       if (error) throw error;
       return (data ?? []) as AguardandoRow[];
     },
-    // Mais curto que os 2 min das outras: é a coluna que existe justamente
-    // para ser rápida. De nada adianta o webhook gravar em 2s se a tela só
-    // olha de dois em dois minutos.
-    refetchInterval: 30_000,
+    // Mesmo relógio do quadro — ver RECARGA_MS. Foi a diferença entre os dois
+    // que fazia o card sumir na travessia.
+    refetchInterval: RECARGA_MS,
   });
 }
 

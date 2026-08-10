@@ -175,7 +175,24 @@ function ChipPrevisao({ r }: { r?: RastreioCard }) {
  */
 type Sinal = { tom: string; rotulo: string; Icon: typeof BellRing } | null;
 
-function sinalDoAviso(e: EnvioMsg | undefined, esperado: boolean): Sinal {
+function sinalDoAviso(e: EnvioMsg | undefined, esperado: boolean, temFone: boolean): Sinal {
+  // ⚠️ "sem telefone" vem ANTES de "sem aviso", e a ordem é a informação.
+  //
+  // Pedido sem telefone não entra na `carbo_msg_fila` — ela exige
+  // `cliente_fone is not null`. Por não entrar, não gera linha em
+  // `carbo_msg_envios`: não fica erro, não fica ignorado, fica INVISÍVEL. Sem
+  // esta distinção o card diria "sem aviso", que manda investigar o disparo
+  // quando o problema é o cadastro.
+  //
+  // No Mercado Livre isso é permanente: a plataforma não expõe o telefone do
+  // comprador, nem para nós nem para o Bling. Dizer o motivo aqui é o que
+  // impede a pergunta "por que o cliente do ML nunca recebe?" ficar sem
+  // resposta dentro do sistema.
+  if (!temFone && !e) {
+    return esperado
+      ? { tom: "text-amber-500", rotulo: "sem telefone", Icon: BellOff }
+      : null;
+  }
   if (e) {
     if (e.status === "enviado")  return { tom: "text-emerald-500", rotulo: "avisado",      Icon: BellRing };
     if (e.status === "erro")     return { tom: "text-red-500",     rotulo: "falhou",       Icon: BellOff  };
@@ -832,7 +849,8 @@ export default function EsteiraOnline() {
     if (r.etapa === "cancelado") return null;
     const etapa = r.etapa as unknown as EtapaMsg;
     const ativo = (templates ?? []).find((t) => t.etapa === etapa)?.ativo ?? false;
-    return sinalDoAviso(avisos?.get(`${r.bling_id}:${etapa}`), ativo);
+    const temFone = Boolean((r.cliente_fone ?? "").trim());
+    return sinalDoAviso(avisos?.get(`${r.bling_id}:${etapa}`), ativo, temFone);
   };
 
   const abrirCard = (r: EsteiraRow | null) => {
@@ -888,6 +906,14 @@ export default function EsteiraOnline() {
   // Os mesmos filtros da tela valem para a coluna "Pago" — uma busca que
   // esconde o pedido em cinco colunas e o deixa visível na sexta seria só
   // confusão.
+  // Quem não tem como ser avisado. Conta sobre o que está VISÍVEL (respeita os
+  // filtros) e ignora cancelado, que não recebe aviso de nenhum jeito.
+  const semTelefone = useMemo(
+    () => linhas.filter((r) => r.etapa !== "cancelado"
+                            && !(r.cliente_fone ?? "").trim()).length,
+    [linhas],
+  );
+
   const pagos = useMemo(() => {
     let r = aguardando ?? [];
     if (canal !== "all") r = r.filter((x) => x.canal === canal);
@@ -1002,6 +1028,15 @@ export default function EsteiraOnline() {
                        rotulo="entregues" valor={String(porEtapa.get("entregue")?.length ?? 0)} />
             <Indicador icon={AlertTriangle} cor="text-amber-500"
                        rotulo="precisam de atenção" valor={String(problemas)} />
+            {/* ⚠️ Contador informativo, não alarme — por isso fica em cinza.
+                Pedido sem telefone não entra na fila de avisos e não deixa
+                registro: some, em vez de falhar. No Mercado Livre a ausência é
+                permanente (a plataforma não expõe o número do comprador), então
+                este número nunca vai a zero — e é justamente por isso que ele
+                precisa estar escrito em algum lugar. Sem ele, "o cliente do ML
+                nunca recebe mensagem" é uma pergunta sem resposta. */}
+            <Indicador icon={Phone} cor="text-muted-foreground"
+                       rotulo="sem telefone" valor={String(semTelefone)} />
           </div>
         }
       />
