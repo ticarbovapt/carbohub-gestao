@@ -6,6 +6,7 @@ import "leaflet/dist/leaflet.css";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ArrowLeft, Loader2, MapPin, Sparkles, Store, Building2, ShoppingCart, AlertTriangle, Grid3x3, Map as MapIcon } from "lucide-react";
 import {
   useCidadesConquistadas, useMunicipiosIBGE, useMalha,
@@ -37,11 +38,43 @@ import {
 
 const VERDE = "#22c55e";
 const VERDE_FORTE = "#16a34a";
-const AMBAR = "#f59e0b";       // conquista dos últimos 30 dias
+const AMBAR = "#f59e0b";       // conquista dentro do período escolhido
 const APAGADO = "#1f2937";
 const BORDA = "#334155";
 
-const ALTURA = "calc(100vh - 300px)";
+/* ── O período do "conquistado agora" ─────────────────────────────────────
+ *
+ * A view expõe `conquista_recente` com uma janela FIXA de 30 dias, e o painel
+ * ao lado se chamava "Conquistas do mês" — duas coisas diferentes com o mesmo
+ * rótulo. Em 10 de agosto, "últimos 30 dias" inclui julho inteiro; quem lê
+ * "do mês" entende agosto. Os dois números nunca iam bater e ninguém saberia
+ * qual estava certo.
+ *
+ * A decisão sai da view e vem para cá porque a view não pode ter opinião sobre
+ * um período que o usuário escolhe. Ela continua entregando `primeira_venda`,
+ * que é o FATO; o recorte é leitura, e leitura é da tela.
+ *
+ * ⚠️ `conquista_recente` continua existindo na view e NÃO é mais usado por esta
+ * tela — quem depender dele em outro lugar segue com os 30 dias fixos, que é o
+ * contrato antigo e não foi quebrado.
+ */
+const PERIODOS: Array<{ id: string; label: string; inicio: () => Date }> = [
+  { id: "mes",  label: "Este mês",       inicio: () => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1); } },
+  { id: "30d",  label: "Últimos 30 dias", inicio: () => { const d = new Date(); d.setDate(d.getDate() - 30); return d; } },
+  { id: "90d",  label: "Últimos 90 dias", inicio: () => { const d = new Date(); d.setDate(d.getDate() - 90); return d; } },
+  { id: "ano",  label: "Este ano",        inicio: () => new Date(new Date().getFullYear(), 0, 1) },
+];
+
+/** "10/08" — dia e mês, na ordem que se lê no Brasil.
+ *
+ *  ⚠️ Antes era `primeira_venda.slice(5)` sobre um `YYYY-MM-DD`, o que devolve
+ *  `MM-DD` e mostrava "08-10" para 10 de agosto. Num painel que lista dias
+ *  seguidos do mesmo mês, ninguém percebe a troca — só quem cruzar com outra
+ *  tela, e aí já virou desconfiança do número. */
+const diaMes = (iso: string | null): string => {
+  if (!iso || iso.length < 10) return "";
+  return `${iso.slice(8, 10)}/${iso.slice(5, 7)}`;
+};
 
 const FILTROS: Array<{ id: FiltroPresenca; label: string; icon: React.ReactNode }> = [
   { id: "todos",      label: "Toda presença", icon: <MapPin className="h-4 w-4" /> },
@@ -82,6 +115,18 @@ export default function MapaConquista() {
   const [uf, setUf] = useState<string | null>(null);
   const [granularidade, setGranularidade] = useState<Granularidade>("estado");
   const [filtro, setFiltro] = useState<FiltroPresenca>("todos");
+  const [periodo, setPeriodo] = useState("mes");
+
+  const infoPeriodo = PERIODOS.find((p) => p.id === periodo) ?? PERIODOS[0];
+  // Comparação em string ISO: `primeira_venda` é 'YYYY-MM-DD', e nesse formato
+  // a ordem lexical É a cronológica. Converter para Date daria fuso de brinde.
+  const inicioISO = useMemo(() => {
+    const d = infoPeriodo.inicio();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  }, [infoPeriodo]);
+
+  const ehRecente = (c: CidadeConquistada): boolean =>
+    Boolean(c.primeira_venda) && c.primeira_venda! >= inicioISO;
 
   const cidades = useCidadesConquistadas();
   const municipios = useMunicipiosIBGE();
@@ -129,7 +174,7 @@ export default function MapaConquista() {
     return {
       cidades: l.length,
       estados: new Set(l.map((c) => c.uf)).size,
-      novas: l.filter((c) => c.conquista_recente).length,
+      novas: l.filter(ehRecente).length,
       pedidos: l.reduce((s, c) => s + (c.pedidos ?? 0), 0),
       valor: l.reduce((s, c) => s + Number(c.valor ?? 0), 0),
       municipiosBR: municipios.data?.length ?? 0,
@@ -157,7 +202,7 @@ export default function MapaConquista() {
 
     const c = cruzamento.porCodigo.get(Number(cod));
     if (!c) return { ...base, fillColor: APAGADO, fillOpacity: 0.55 };
-    if (c.conquista_recente) return { ...base, fillColor: AMBAR, color: "#fbbf24", weight: Math.max(traco, 2) };
+    if (ehRecente(c)) return { ...base, fillColor: AMBAR, color: "#fbbf24", weight: Math.max(traco, 2) };
     return { ...base, fillColor: VERDE_FORTE };
   };
 
@@ -201,16 +246,16 @@ export default function MapaConquista() {
       c.tem_venda ? `${c.pedidos} pedido${c.pedidos === 1 ? "" : "s"} · ${fmtBRLCompacto(Number(c.valor))}` : null,
       c.tem_pdv ? `${c.pdvs} PDV${c.pdvs === 1 ? "" : "s"}` : null,
       c.tem_licenciado ? `${c.licenciados} licenciado${c.licenciados === 1 ? "" : "s"}` : null,
-      c.conquista_recente ? "🆕 conquista deste mês" : null,
+      ehRecente(c) ? `🆕 conquista — ${infoPeriodo.label.toLowerCase()}` : null,
     ].filter(Boolean);
     layer.bindTooltip(`<b>${nome}</b><br/>${partes.join("<br/>")}`, { sticky: true });
     layer.on("mouseover", (e: LeafletMouseEvent) => (e.target as any).setStyle?.({ weight: 3 }));
-    layer.on("mouseout", (e: LeafletMouseEvent) => (e.target as any).setStyle?.({ weight: c.conquista_recente ? 2 : 1 }));
+    layer.on("mouseout", (e: LeafletMouseEvent) => (e.target as any).setStyle?.({ weight: ehRecente(c) ? 2 : 1 }));
   };
 
   const recentes = useMemo(
     () => cruzamento.lista
-      .filter((c) => c.conquista_recente)
+      .filter(ehRecente)
       .sort((a, b) => String(b.primeira_venda).localeCompare(String(a.primeira_venda)))
       .slice(0, 12),
     [cruzamento.lista],
@@ -224,7 +269,14 @@ export default function MapaConquista() {
   );
 
   return (
-    <div className="p-4 md:p-6 space-y-4">
+    /* `h-full min-h-0 flex-col`: a altura vem do <main>, que já é
+       `flex-1 overflow-y-auto` dentro de um `h-screen overflow-hidden`.
+       ⚠️ NÃO usar `calc(100vh - X)` aqui — a Esteira já pagou essa: o número
+       presume a altura exata do cabeçalho e quebra assim que uma linha nova
+       entra (foi o que aconteceu agora, com o seletor de período). Todo
+       ancestral do que rola precisa de `min-h-0`, senão o `flex-1` para de
+       encolher e o conteúdo estoura para fora da tela. */
+    <div className="flex h-full min-h-0 flex-col gap-4 p-4 md:p-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold flex items-center gap-2">
@@ -243,23 +295,36 @@ export default function MapaConquista() {
       </div>
 
       {/* Placar */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+      <div className="grid shrink-0 grid-cols-2 gap-3 md:grid-cols-5">
         <Placar titulo="Cidades" valor={placar.cidades.toLocaleString("pt-BR")}
           rodape={placar.municipiosBR ? `de ${placar.municipiosBR.toLocaleString("pt-BR")} no Brasil` : "—"} />
         <Placar titulo="Estados" valor={`${placar.estados}`} rodape="de 27" />
-        <Placar titulo="Novas (30 dias)" valor={`+${placar.novas}`} rodape="primeira compra no período" destaque />
+        <Placar titulo={`Novas · ${infoPeriodo.label.toLowerCase()}`} valor={`+${placar.novas}`} rodape="primeira compra no período" destaque />
         <Placar titulo="Pedidos" valor={placar.pedidos.toLocaleString("pt-BR")} rodape="nas cidades exibidas" />
         <Placar titulo="Faturamento" valor={fmtBRLCompacto(placar.valor)} rodape="nas cidades exibidas" />
       </div>
 
-      {/* Filtro de presença + granularidade do Brasil */}
-      <div className="flex flex-wrap items-center gap-2">
+      {/* Filtro de presença + período + granularidade do Brasil */}
+      <div className="flex shrink-0 flex-wrap items-center gap-2">
         {FILTROS.map((f) => (
           <Button key={f.id} size="sm" variant={filtro === f.id ? "default" : "outline"}
             onClick={() => setFiltro(f.id)} className="gap-1.5">
             {f.icon}{f.label}
           </Button>
         ))}
+
+        {/* O período manda em TRÊS lugares ao mesmo tempo: o âmbar no mapa, o
+            placar de novas e a lista lateral. Um seletor que mudasse só a lista
+            deixaria o mapa contando outra coisa — que era exatamente o problema
+            de "30 dias" pintando o mapa enquanto o painel dizia "do mês". */}
+        <Select value={periodo} onValueChange={setPeriodo}>
+          <SelectTrigger className="h-8 w-44"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            {PERIODOS.map((p) => (
+              <SelectItem key={p.id} value={p.id}>{p.label}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
 
         {/* Só faz sentido no Brasil: dentro de um estado já é sempre município. */}
         {!uf && (
@@ -276,9 +341,17 @@ export default function MapaConquista() {
         )}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
-        <Card className="lg:col-span-3 overflow-hidden">
-          <CardContent className="p-0 relative" style={{ height: ALTURA }}>
+      <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 lg:grid-cols-4">
+        <Card className="flex min-h-0 flex-col overflow-hidden lg:col-span-3">
+          {/* ⚠️ ALTURA POR FLEX, não por `calc(100vh - 300px)`.
+              O número fixo era chute: qualquer linha nova no cabeçalho (o
+              seletor de período, por exemplo) roubava altura do mapa sem que
+              ninguém percebesse, e o `fitBounds` — que enquadra pela dimensão
+              mais apertada — encolhia o Brasil junto. Era por isso que o mapa
+              parecia "longe demais": não era o zoom, era a caixa.
+              Com `flex-1` + `min-h-0`, o mapa fica com tudo que sobrar e volta
+              a crescer sozinho quando algo sai do cabeçalho. */}
+          <CardContent className="relative min-h-0 flex-1 p-0">
             {carregando && (
               <div className="absolute inset-0 z-[500] flex items-center justify-center bg-background/70">
                 <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
@@ -325,7 +398,7 @@ export default function MapaConquista() {
               {porMunicipio && (
                 <div className="flex items-start gap-2">
                   <span className="inline-block h-3 w-3 mt-0.5 shrink-0 rounded-sm" style={{ background: AMBAR }} />
-                  Conquistado nos últimos 30 dias
+                  Conquistado — {infoPeriodo.label.toLowerCase()}
                 </div>
               )}
               <div className="flex items-start gap-2">
@@ -339,20 +412,20 @@ export default function MapaConquista() {
           </CardContent>
         </Card>
 
-        <div className="space-y-4">
+        <div className="min-h-0 space-y-4 overflow-y-auto lg:max-h-full">
           <Card>
             <CardContent className="p-4">
               <div className="text-sm font-semibold flex items-center gap-1.5 mb-2">
-                <Sparkles className="h-4 w-4 text-amber-500" /> Conquistas do mês
+                <Sparkles className="h-4 w-4 text-amber-500" /> Conquistas · {infoPeriodo.label.toLowerCase()}
               </div>
               {recentes.length === 0 ? (
-                <p className="text-xs text-muted-foreground">Nenhuma cidade nova nos últimos 30 dias.</p>
+                <p className="text-xs text-muted-foreground">Nenhuma cidade nova em {infoPeriodo.label.toLowerCase()}.</p>
               ) : (
                 <div className="space-y-1.5 max-h-64 overflow-y-auto">
                   {recentes.map((c) => (
                     <div key={`${c.cidade}-${c.uf}`} className="flex items-center justify-between text-xs">
                       <span className="truncate">{c.cidade}<span className="text-muted-foreground">/{c.uf}</span></span>
-                      <Badge variant="outline" className="ml-2 shrink-0">{c.primeira_venda?.slice(5) ?? ""}</Badge>
+                      <Badge variant="outline" className="ml-2 shrink-0">{diaMes(c.primeira_venda)}</Badge>
                     </div>
                   ))}
                 </div>
