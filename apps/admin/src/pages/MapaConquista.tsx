@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { MapContainer, GeoJSON, useMap } from "react-leaflet";
 import type { Layer, LeafletMouseEvent, PathOptions } from "leaflet";
 import L from "leaflet";
@@ -95,19 +95,58 @@ const fmtBRLCompacto = (v: number) =>
     ? `R$ ${(v / 1000).toLocaleString("pt-BR", { maximumFractionDigits: 1 })} mil`
     : `R$ ${v.toLocaleString("pt-BR", { maximumFractionDigits: 0 })}`;
 
-/** Enquadra o mapa no que está desenhado. Sem isso o drill-down abre o estado
- *  com o zoom do Brasil e a pessoa acha que a tela travou. */
+/**
+ * Enquadra o mapa no que está desenhado — e garante que o Leaflet SAIBA o
+ * tamanho da caixa antes de calcular o enquadramento.
+ *
+ * ── Por que o mapa aparecia "longe demais" ────────────────────────────────
+ *
+ * O Leaflet mede o container UMA VEZ, na criação do mapa, e guarda esse
+ * tamanho. Com altura por flexbox, o layout só converge depois do primeiro
+ * paint — então, no instante da medição, a caixa ainda podia estar com altura
+ * zero ou intermediária. O `fitBounds` escolhe o zoom com base nesse tamanho
+ * guardado, então ele calculava o enquadramento para uma caixa que não existe
+ * mais e o Brasil saía pequeno no meio de um vazio.
+ *
+ * Não era o zoom nem a malha: era o Leaflet trabalhando com uma régua velha.
+ * `invalidateSize()` remede antes de enquadrar.
+ *
+ * ⚠️ O ResizeObserver NÃO reenquadra, só remede. São coisas diferentes:
+ * reenquadrar a cada resize desfaria o zoom que a pessoa deu na mão — ela
+ * aproxima uma região, a sidebar colapsa, e o mapa volta para o Brasil
+ * inteiro. Remedir mantém o que está na tela e só corrige a régua.
+ */
 function Enquadrar({ geo }: { geo: unknown }) {
   const map = useMap();
+
+  // Régua sempre atual: sidebar colapsando, janela mudando, filtro quebrando
+  // para duas linhas — tudo isso muda a caixa sem trocar a malha.
+  useEffect(() => {
+    const ro = new ResizeObserver(() => map.invalidateSize());
+    ro.observe(map.getContainer());
+    return () => ro.disconnect();
+  }, [map]);
+
   useEffect(() => {
     if (!geo) return;
-    try {
-      const b = L.geoJSON(geo as never).getBounds();
-      if (b.isValid()) map.fitBounds(b, { padding: [16, 16] });
-    } catch {
-      /* malha malformada não pode derrubar a tela */
-    }
+    // ⚠️ Um quadro de espera antes de medir. O efeito roda depois do commit do
+    // React, mas o navegador pode ainda não ter feito o layout do flex; medir
+    // aqui às vezes pegava a caixa no meio do caminho. O rAF garante que a
+    // medição aconteça com a tela já resolvida.
+    const id = requestAnimationFrame(() => {
+      map.invalidateSize();
+      try {
+        const b = L.geoJSON(geo as never).getBounds();
+        // `maxZoom` impede que um estado pequeno (ou uma malha de um município
+        // só) chegue perto demais e perca a referência do entorno.
+        if (b.isValid()) map.fitBounds(b, { padding: [12, 12], maxZoom: 9 });
+      } catch {
+        /* malha malformada não pode derrubar a tela */
+      }
+    });
+    return () => cancelAnimationFrame(id);
   }, [geo, map]);
+
   return null;
 }
 
@@ -125,8 +164,15 @@ export default function MapaConquista() {
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
   }, [infoPeriodo]);
 
-  const ehRecente = (c: CidadeConquistada): boolean =>
-    Boolean(c.primeira_venda) && c.primeira_venda! >= inicioISO;
+  // ⚠️ `useCallback` não é enfeite aqui: esta função entra no array de
+  // dependências dos memos abaixo. Sem ele, a identidade muda a cada render e
+  // os memos recalculariam sempre — com ele, recalculam quando o período muda,
+  // que é exatamente a intenção.
+  const ehRecente = useCallback(
+    (c: CidadeConquistada): boolean =>
+      Boolean(c.primeira_venda) && c.primeira_venda! >= inicioISO,
+    [inicioISO],
+  );
 
   const cidades = useCidadesConquistadas();
   const municipios = useMunicipiosIBGE();
@@ -169,8 +215,24 @@ export default function MapaConquista() {
     return { lista, porCodigo, naoLocalizadas, totalPorUf, conquistadasPorUf, nomePorCodigo };
   }, [cidades.data, municipios.data, filtro]);
 
+  /**
+   * O placar conta o que está NA TELA — inclusive o estado aberto.
+   *
+   * ⚠️ Antes ele somava o Brasil inteiro sempre, mesmo com um estado aberto, e
+   * o rodapé dizia "nas cidades exibidas". Abrir São Paulo mudava o mapa e não
+   * mexia num único número — o faturamento continuava nacional embaixo de um
+   * mapa que mostrava um estado. O rótulo não estava impreciso, estava errado.
+   *
+   * `uf` entra na dependência por isso. A lista lateral usa a mesma base, senão
+   * volta a mesma contradição num canto diferente da tela.
+   */
+  const visiveis = useMemo(
+    () => (uf ? cruzamento.lista.filter((c) => c.uf === uf) : cruzamento.lista),
+    [cruzamento.lista, uf],
+  );
+
   const placar = useMemo(() => {
-    const l = cruzamento.lista;
+    const l = visiveis;
     return {
       cidades: l.length,
       estados: new Set(l.map((c) => c.uf)).size,
@@ -179,7 +241,13 @@ export default function MapaConquista() {
       valor: l.reduce((s, c) => s + Number(c.valor ?? 0), 0),
       municipiosBR: municipios.data?.length ?? 0,
     };
-  }, [cruzamento, municipios.data]);
+    // ⚠️ `ehRecente` PRECISA estar aqui: o card "Novas" depende do período,
+    // e sem esta dependência ele congelava no valor do período anterior.
+  }, [visiveis, municipios.data, ehRecente]);
+
+  /** "no Brasil" ou "em SP" — o rodapé dos placares tem de dizer o que ele de
+   *  fato somou. "nas cidades exibidas" servia para os dois e mentia num. */
+  const escopo = uf ? `em ${uf}` : "no Brasil";
 
   /** Pintura de uma feature da malha. No Brasil a feature é um ESTADO (codarea
    *  de 2 dígitos); dentro de um estado é um MUNICÍPIO (7 dígitos). */
@@ -254,11 +322,14 @@ export default function MapaConquista() {
   };
 
   const recentes = useMemo(
-    () => cruzamento.lista
+    () => visiveis
       .filter(ehRecente)
       .sort((a, b) => String(b.primeira_venda).localeCompare(String(a.primeira_venda)))
       .slice(0, 12),
-    [cruzamento.lista],
+    // ⚠️ `ehRecente` de novo — sem ela a lista lateral mostrava o período
+    // anterior enquanto o título já dizia o novo. E `visiveis` para a lista
+    // acompanhar o estado aberto, como o placar.
+    [visiveis, ehRecente],
   );
 
   const rankingUf = useMemo(
@@ -300,8 +371,8 @@ export default function MapaConquista() {
           rodape={placar.municipiosBR ? `de ${placar.municipiosBR.toLocaleString("pt-BR")} no Brasil` : "—"} />
         <Placar titulo="Estados" valor={`${placar.estados}`} rodape="de 27" />
         <Placar titulo={`Novas · ${infoPeriodo.label.toLowerCase()}`} valor={`+${placar.novas}`} rodape="primeira compra no período" destaque />
-        <Placar titulo="Pedidos" valor={placar.pedidos.toLocaleString("pt-BR")} rodape="nas cidades exibidas" />
-        <Placar titulo="Faturamento" valor={fmtBRLCompacto(placar.valor)} rodape="nas cidades exibidas" />
+        <Placar titulo="Pedidos" valor={placar.pedidos.toLocaleString("pt-BR")} rodape={escopo} />
+        <Placar titulo="Faturamento" valor={fmtBRLCompacto(placar.valor)} rodape={escopo} />
       </div>
 
       {/* Filtro de presença + período + granularidade do Brasil */}
@@ -366,6 +437,12 @@ export default function MapaConquista() {
               center={[-14.8, -52.5]}
               zoom={4}
               minZoom={3}
+              // ⚠️ Sem isto o `fitBounds` calcula o zoom ideal (fracionário) e
+              // ARREDONDA PARA BAIXO até o inteiro mais próximo — o que pode
+              // custar quase um nível inteiro, ou seja, o dobro de distância.
+              // Em passos de 0,25 o enquadramento fica justo.
+              zoomSnap={0.25}
+              zoomDelta={0.25}
               scrollWheelZoom
               attributionControl={false}
               // Canvas em vez de SVG: o Brasil por município são 5.570
@@ -379,7 +456,13 @@ export default function MapaConquista() {
                   {/* A key força o redesenho: o GeoJSON do react-leaflet não
                       reage a troca de `data` nem de `style` sozinho. */}
                   <GeoJSON
-                    key={`${uf ?? `BR-${granularidade}`}-${filtro}-${cruzamento.porCodigo.size}`}
+                    // ⚠️ `periodo` FAZ PARTE da key, e essa foi a falha central.
+                    // O comentário acima já dizia que o react-leaflet não
+                    // reage a troca de `style` — mas a key não incluía o
+                    // período, então trocar de "este mês" para "90 dias" não
+                    // remontava nada e o mapa mantinha as cores antigas. A
+                    // regra é: tudo que muda a COR entra aqui.
+                    key={`${uf ?? `BR-${granularidade}`}-${filtro}-${periodo}-${cruzamento.porCodigo.size}`}
                     data={malha.data as never}
                     style={estilo as never}
                     onEachFeature={aoCriarFeature}
@@ -417,6 +500,13 @@ export default function MapaConquista() {
             <CardContent className="p-4">
               <div className="text-sm font-semibold flex items-center gap-1.5 mb-2">
                 <Sparkles className="h-4 w-4 text-amber-500" /> Conquistas · {infoPeriodo.label.toLowerCase()}
+                {/* ⚠️ O placar diz "+105" e a lista mostra 12. Sem este
+                    contador, parecia que 93 cidades tinham sumido. */}
+                {placar.novas > recentes.length && (
+                  <span className="ml-auto text-[11px] font-normal text-muted-foreground">
+                    {recentes.length} de {placar.novas}
+                  </span>
+                )}
               </div>
               {recentes.length === 0 ? (
                 <p className="text-xs text-muted-foreground">Nenhuma cidade nova em {infoPeriodo.label.toLowerCase()}.</p>
