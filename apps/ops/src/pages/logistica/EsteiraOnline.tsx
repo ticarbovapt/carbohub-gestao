@@ -3,7 +3,7 @@ import { Link, useLocation, useSearchParams } from "react-router-dom";
 import {
   Truck, Package, FileText, CheckCircle2, ShoppingCart, Copy, XCircle, Loader2, MapPin, Phone,
   CalendarClock, ExternalLink, MessageSquare, AlertTriangle, Clock, Box, User, Hash, Search,
-  Settings2, Link2, BellRing, BellOff,
+  Settings2, Link2, BellRing, BellOff, Repeat2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
@@ -14,8 +14,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   useEsteiraOnline, useRastreios, useEcommerceAguardando, useFontesSaude,
-  useAvisosDoPedido, ETAPAS,
+  useAvisosDoPedido, useRecompraPipeline, useRecompraConfig,
+  ETAPAS, COLUNAS_RECOMPRA,
   type EsteiraRow, type EtapaEsteira, type RastreioCard, type AguardandoRow,
+  type RecompraRow, type ColunaRecompra,
 } from "@/hooks/useEsteiraOnline";
 import { useTemplatesMsg, ORDEM_ETAPAS, type EnvioMsg, type EtapaMsg } from "@/hooks/useMensagensCliente";
 import { DatePickerInput } from "@/components/ui/date-picker-input";
@@ -777,6 +779,48 @@ function CardPago({ row }: { row: AguardandoRow }) {
   );
 }
 
+// ── Card da régua de recompra ───────────────────────────────────────────────
+//
+// Deliberadamente diferente do card de entrega: aqui não há NF, transportadora
+// nem previsão — o pedido acabou. O que importa é quem é a pessoa, quanto tempo
+// faz que ela recebeu, e se dá para falar com ela.
+function CardRecompra({ row, cor }: { row: RecompraRow; cor: string }) {
+  const dias = row.dias_desde_entrega;
+  return (
+    <div className="relative rounded-lg border bg-card px-3 py-2.5 pl-3.5">
+      <span className="absolute left-0 top-2 bottom-2 w-[3px] rounded-full" style={{ background: cor }} />
+
+      <div className="flex items-baseline gap-2">
+        <span className="min-w-0 flex-1 truncate text-[13px] font-semibold leading-tight">
+          {row.cliente ?? `Pedido ${row.pedido_loja}`}
+        </span>
+        <span className="shrink-0 text-[13px] font-semibold tabular-nums">{brl(row.total)}</span>
+      </div>
+
+      <div className="mt-1 flex items-baseline gap-2 text-[11px] leading-4 text-muted-foreground">
+        <span className="min-w-0 flex-1 truncate">
+          {[row.canal, row.entrega_cidade ? `${row.entrega_cidade}/${row.entrega_uf}` : null]
+            .filter(Boolean).join(" · ")}
+        </span>
+        <span className="shrink-0 tabular-nums">
+          {dias === 0 ? "hoje" : `há ${dias}d`}
+        </span>
+      </div>
+
+      <div className="mt-1 flex items-center gap-2 text-[10px] leading-4 text-muted-foreground/70">
+        <Phone className="h-3 w-3 shrink-0" />
+        <span className="min-w-0 flex-1 truncate">{row.cliente_fone ?? "sem telefone"}</span>
+        {/* ⚠️ A origem da data aparece porque "estimada" e "confirmada" não
+            podem ter a mesma cara. Um card cujo relógio é chute não pode
+            parecer tão firme quanto um que veio da transportadora. */}
+        {row.origem_da_data === "historico" && (
+          <span className="shrink-0 text-amber-500">data estimada</span>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function EsteiraOnline() {
   /* ── Período: atalho OU intervalo livre ────────────────────────────────
    *
@@ -795,6 +839,15 @@ export default function EsteiraOnline() {
     d.setDate(d.getDate() - n);
     return d.toISOString().slice(0, 10);
   };
+  /* Duas pipelines na mesma tela.
+   *
+   * "entrega" é o quadro de sempre (da venda à entrega). "recompra" é a régua
+   * do que vem DEPOIS: o cliente recebeu, descansa, é ofertado, volta ou não.
+   *
+   * São quadros de naturezas diferentes — um anda em minutos, o outro em dias —
+   * e por isso não cabem lado a lado: dividir a largura faria os dois ficarem
+   * apertados para servir a duas perguntas que ninguém faz ao mesmo tempo. */
+  const [pipeline, setPipeline] = useState<"entrega" | "recompra">("entrega");
   const [filtroAviso, setFiltroAviso] = useState("all");
   const [periodo, setPeriodo] = useState("30");
   const [de, setDe]   = useState(() => menosDias(30));
@@ -833,6 +886,8 @@ export default function EsteiraOnline() {
   const { pathname } = useLocation();
   const { data, isLoading, error } = useEsteiraOnline(de, ate);
   const { data: aguardando } = useEcommerceAguardando();
+  const { data: recompra = [] } = useRecompraPipeline();
+  const { data: cfgRecompra } = useRecompraConfig();
   const { data: fontes } = useFontesSaude();
   const paradas = (fontes ?? []).filter((f) => f.atrasada);
 
@@ -912,6 +967,23 @@ export default function EsteiraOnline() {
     () => linhas.filter((r) => r.etapa !== "cancelado"
                             && !(r.cliente_fone ?? "").trim()).length,
     [linhas],
+  );
+
+  // Régua: agrupa por coluna. `historico` fica FORA do quadro — ele não é
+  // etapa da régua, é a base que existia antes dela, com data estimada.
+  const porColunaRecompra = useMemo(() => {
+    const m = new Map<ColunaRecompra, RecompraRow[]>();
+    for (const c of COLUNAS_RECOMPRA) m.set(c.key, []);
+    for (const r of recompra) {
+      if (r.coluna === "historico") continue;
+      m.get(r.coluna)?.push(r);
+    }
+    return m;
+  }, [recompra]);
+
+  const historico = useMemo(
+    () => recompra.filter((r) => r.coluna === "historico"),
+    [recompra],
   );
 
   const pagos = useMemo(() => {
@@ -1041,7 +1113,26 @@ export default function EsteiraOnline() {
         }
       />
 
-      <div className="flex flex-wrap items-center gap-2">
+      {/* O seletor de pipeline vem ANTES da busca e fica sozinho na sua linha:
+          ele troca o quadro inteiro, e um controle desse peso misturado aos
+          filtros pareceria mais um filtro. */}
+      <div className="flex shrink-0 flex-wrap items-center gap-2">
+        <Select value={pipeline} onValueChange={(v) => setPipeline(v as "entrega" | "recompra")}>
+          <SelectTrigger className="h-9 w-52"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="entrega">Da venda à entrega</SelectItem>
+            <SelectItem value="recompra">Régua de recompra</SelectItem>
+          </SelectContent>
+        </Select>
+        {pipeline === "recompra" && cfgRecompra && (
+          <span className="text-[11px] text-muted-foreground">
+            oferta {cfgRecompra.dias_para_ofertar} dias após a entrega ·
+            {" "}desiste {cfgRecompra.dias_para_desistir} dias após a oferta
+          </span>
+        )}
+      </div>
+
+      <div className={`flex flex-wrap items-center gap-2 ${pipeline === "recompra" ? "hidden" : ""}`}>
         <div className="relative max-w-xs flex-1">
           <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
           <Input value={busca} onChange={(e) => setBusca(e.target.value)}
@@ -1141,7 +1232,85 @@ export default function EsteiraOnline() {
         </div>
       )}
 
-      {isLoading ? (
+      {/* ── Quadro da régua de recompra ─────────────────────────────────── */}
+      {pipeline === "recompra" ? (
+        <>
+          <div className="flex min-h-0 flex-1 items-start justify-center gap-3 overflow-x-auto overscroll-x-contain pb-2">
+            {COLUNAS_RECOMPRA.map((col) => {
+              const cards = porColunaRecompra.get(col.key) ?? [];
+              const valor = cards.reduce((s, r) => s + (r.total || 0), 0);
+              return (
+                <div key={col.key}
+                     className="flex max-h-full min-w-[240px] max-w-[400px] shrink-0 grow basis-0 flex-col overflow-hidden rounded-xl border bg-muted/20">
+                  <div className="shrink-0 border-b bg-muted/40 px-3 py-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="flex min-w-0 items-center gap-1.5">
+                        <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: col.color }} />
+                        <span className="truncate text-xs font-semibold">{col.label}</span>
+                      </span>
+                      <span className="shrink-0 rounded bg-background px-1.5 text-[11px] font-medium tabular-nums">
+                        {cards.length}
+                      </span>
+                    </div>
+                    <div className="mt-0.5 flex items-center justify-between gap-2">
+                      <span className="truncate text-[10px] leading-tight text-muted-foreground">{col.descricao}</span>
+                      {cards.length > 0 && (
+                        <span className="shrink-0 text-[10px] font-medium tabular-nums text-muted-foreground">
+                          {brl(valor)}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="min-h-0 flex-1 space-y-1.5 overflow-y-auto overscroll-contain p-2">
+                    {cards.map((r) => (
+                      <CardRecompra key={r.bling_id} row={r} cor={col.color} />
+                    ))}
+                    {cards.length === 0 && (
+                      <p className="px-2 py-4 text-center text-[11px] text-muted-foreground/60">ninguém aqui</p>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* ⚠️ O histórico fica fechado e fora do quadro de propósito. São
+              pedidos entregues ANTES da régua existir, com data ESTIMADA — e
+              eram todos eles que receberiam a oferta no mesmo segundo se
+              entrassem no fluxo automático. Ofertar a essa base tem de ser uma
+              decisão, não um efeito colateral de ligar uma função. */}
+          {historico.length > 0 && (
+            <details className="shrink-0 rounded-xl border p-3">
+              <summary className="flex cursor-pointer items-center gap-1.5 text-xs font-medium">
+                <Clock className="h-3.5 w-3.5 text-muted-foreground" />
+                {historico.length} entregues antes da régua —{" "}
+                {brl(historico.reduce((s, r) => s + (r.total || 0), 0))}
+              </summary>
+              <p className="mt-2 text-[11px] text-muted-foreground">
+                A data de entrega destes é <strong>estimada</strong> (a régua nasceu depois deles),
+                por isso ficam fora do disparo automático. Ofertar a esta base é uma campanha à parte.
+              </p>
+              <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-3 xl:grid-cols-5">
+                {historico.slice(0, 30).map((r) => (
+                  <CardRecompra key={r.bling_id} row={r} cor="#64748b" />
+                ))}
+              </div>
+              {historico.length > 30 && (
+                <p className="mt-2 text-[11px] text-muted-foreground">
+                  mostrando 30 de {historico.length}
+                </p>
+              )}
+            </details>
+          )}
+
+          <p className="flex shrink-0 items-center gap-1.5 text-[11px] text-muted-foreground">
+            <Repeat2 className="h-3 w-3" />
+            A coluna é calculada: dias desde a entrega e existência de venda nova do mesmo CPF.
+            {" "}<strong>Recomprou</strong> é observação, não atribuição — o sistema vê que o cliente
+            voltou, não que voltou por causa da oferta.
+          </p>
+        </>
+      ) : isLoading ? (
         <div className="flex items-center justify-center py-16 text-muted-foreground">
           <Loader2 className="mr-2 h-5 w-5 animate-spin" /> Carregando a esteira…
         </div>

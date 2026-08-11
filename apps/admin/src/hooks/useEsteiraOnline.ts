@@ -209,6 +209,90 @@ export function useAvisosDoPedido(blingIds: number[]) {
   });
 }
 
+/* ─── Régua de recompra ─────────────────────────────────────────────────────
+ *
+ * Segunda pipeline da mesma tela: o cliente recebeu, descansa X dias, recebe a
+ * oferta, e volta (ou não). A coluna é CALCULADA pela view
+ * `carbo_recompra_pipeline` — nada se arrasta aqui pelo mesmo motivo da esteira
+ * de entrega: um card movido à mão mentiria assim que a próxima venda chegasse.
+ *
+ * ⚠️ `historico` é pedido que já estava entregue quando a régua nasceu, com
+ * DATA ESTIMADA. Ele fica fora do disparo automático de propósito — eram 85
+ * pessoas que receberiam a oferta no mesmo segundo em que a mensagem fosse
+ * ligada. Aparece na tela num bloco à parte, para a decisão de ofertar a essa
+ * base ser deliberada em vez de acidental.
+ */
+
+export type ColunaRecompra =
+  | "entregue" | "ofertar" | "ofertado" | "recomprou" | "sem_retorno" | "historico";
+
+export interface RecompraRow {
+  bling_id: number;
+  pedido_loja: string | null;
+  canal: string | null;
+  cliente: string | null;
+  cliente_fone: string | null;
+  cpf_cnpj: string | null;
+  total: number;
+  entrega_cidade: string | null;
+  entrega_uf: string | null;
+  entregue_em: string;
+  origem_da_data: "rastreio" | "carimbo" | "historico";
+  ofertado_em: string | null;
+  recomprou: boolean;
+  dias_desde_entrega: number;
+  coluna: ColunaRecompra;
+}
+
+/** As colunas da régua, na ordem do fluxo. `historico` fica fora: não é etapa,
+ *  é a base anterior à régua, e vai num bloco separado. */
+export const COLUNAS_RECOMPRA: Array<{ key: ColunaRecompra; label: string; descricao: string; color: string }> = [
+  { key: "entregue",    label: "Entregue",         descricao: "descansando até a janela",        color: "#10b981" },
+  { key: "ofertar",     label: "Hora de ofertar",  descricao: "passou a janela, sem oferta",     color: "#f59e0b" },
+  { key: "ofertado",    label: "Ofertado",         descricao: "mensagem enviada, aguardando",    color: "#0ea5e9" },
+  { key: "recomprou",   label: "Recomprou",        descricao: "voltou a comprar após a entrega", color: "#9333ea" },
+  { key: "sem_retorno", label: "Sem retorno",      descricao: "não voltou — base de campanha",   color: "#64748b" },
+];
+
+export function useRecompraPipeline() {
+  return useQuery({
+    queryKey: ["recompra-pipeline"],
+    queryFn: async (): Promise<RecompraRow[]> => {
+      const { data, error } = await (supabase as any)
+        .from("carbo_recompra_pipeline")
+        .select("*")
+        .order("dias_desde_entrega", { ascending: false });
+      if (error) throw error;
+      return (data ?? []) as RecompraRow[];
+    },
+    // A régua anda em DIAS. Recarregar no ritmo da esteira de entrega (10 s)
+    // seria consulta à toa: nada aqui muda de coluna dentro de um minuto.
+    refetchInterval: 5 * 60_000,
+  });
+}
+
+/** Os ajustes da régua, para a tela poder dizer QUAL janela está valendo em vez
+ *  de deixar o número implícito. */
+export interface RecompraConfig {
+  dias_para_ofertar: number;
+  dias_para_desistir: number;
+}
+
+export function useRecompraConfig() {
+  return useQuery({
+    queryKey: ["recompra-config"],
+    queryFn: async (): Promise<RecompraConfig | null> => {
+      const { data, error } = await (supabase as any)
+        .from("carbo_recompra_config")
+        .select("dias_para_ofertar, dias_para_desistir")
+        .maybeSingle();
+      if (error) throw error;
+      return (data ?? null) as RecompraConfig | null;
+    },
+    staleTime: 5 * 60_000,
+  });
+}
+
 /* ─── Fonte parada ──────────────────────────────────────────────────────────
  *
  * Os dois espelhos do Bling ficaram 25 horas sem gravar e ninguém percebeu:
