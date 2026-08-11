@@ -41,6 +41,7 @@ const NOME_ETAPA: Record<EtapaMsg, string> = {
   em_transito:  "Em trânsito",
   saiu_entrega: "Saiu para entrega",
   entregue:     "Entregue",
+  recompra:     "Recompra",
 };
 
 const QUANDO: Record<EtapaMsg, string> = {
@@ -50,6 +51,9 @@ const QUANDO: Record<EtapaMsg, string> = {
   em_transito:  "quando a transportadora confirma o envio — é aqui que vai o código e o link",
   saiu_entrega: "quando o rastreio mostra que saiu para o último trecho, no dia da entrega",
   entregue:     "quando a entrega é confirmada",
+  // A única que não é etapa da esteira: dispara pela régua da segunda
+  // pipeline, contando dias a partir do carimbo de entrega.
+  recompra:     "dias após a entrega, para o cliente repor — ver a régua de recompra",
 };
 
 /** Etapa que não é coluna da esteira. O aviso explica de onde ela vem, senão

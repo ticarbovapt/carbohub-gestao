@@ -10,7 +10,8 @@ import { supabase } from "@/integrations/supabase/client";
  */
 
 export type EtapaMsg =
-  | "confirmado" | "nf_emitida" | "etiqueta" | "em_transito" | "saiu_entrega" | "entregue";
+  | "confirmado" | "nf_emitida" | "etiqueta" | "em_transito" | "saiu_entrega" | "entregue"
+  | "recompra";
 
 export interface TemplateMsg {
   etapa: EtapaMsg;
@@ -38,7 +39,11 @@ export interface EnvioMsg {
  * para "Entregue". O fato vem do rastreio (`rastreio_envios.status`), e a fila
  * no banco tem duas origens por causa disso. */
 export const ORDEM_ETAPAS: EtapaMsg[] =
-  ["confirmado", "nf_emitida", "etiqueta", "em_transito", "saiu_entrega", "entregue"];
+  ["confirmado", "nf_emitida", "etiqueta", "em_transito", "saiu_entrega", "entregue",
+   // ⚠️ `recompra` fecha a lista porque é a única que não pertence à entrega:
+   // ela dispara DIAS depois, pela régua da segunda pipeline, contando a
+   // partir do carimbo de entrega — não pela etapa da esteira.
+   "recompra"];
 
 /** As variáveis que os textos aceitam. A lista é a mesma da view
  *  `carbo_msg_fila`; variável fora daqui vira texto vazio na mensagem. */
