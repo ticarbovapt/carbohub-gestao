@@ -233,27 +233,47 @@ export async function generateQuotePdf(order: QuotePdfData, opts?: { download?: 
    * valor de cada linha, que é a única divisão defensável: quem pesa mais no
    * pedido absorve mais desconto.
    *
-   * ⚠️ O centavo da sobra vai para a ÚLTIMA linha. Arredondar cada linha
-   * separadamente faz a soma das partes divergir do total em um ou dois
-   * centavos — e um orçamento em que as linhas não fecham com o total é um
-   * orçamento que o cliente confere, acha errado, e devolve para o vendedor
-   * explicar. O ajuste é invisível e mantém a conta exata.
+   * ⚠️ O que se arredonda é o UNITÁRIO, não o total da linha. Distribuindo
+   * pelo total, o "Unit. c/ desc." vinha de uma divisão e não fechava com a
+   * própria linha: R$ 133,68 × 10 dá 1.336,80, mas o total impresso era
+   * 1.336,78 — dois centavos que o cliente acha com a calculadora do celular
+   * e devolve para o vendedor explicar. Arredondando o unitário primeiro,
+   * unitário × qtd fecha EXATO em toda linha.
+   *
+   * Sobra centavo, e ele TEM de cair em algum lugar: o desconto da linha é
+   * sempre um múltiplo da quantidade (em centavos), então nem todo desconto de
+   * pedido é alcançável mantendo todas as linhas exatas — com qtds 10, 6 e 4,
+   * por exemplo, só se chega a valores pares. Não é arredondamento mal feito,
+   * é aritmética.
+   *
+   * Então a sobra vai para UMA linha, e essa linha é a de MENOR quantidade:
+   * o erro máximo é (qtd − 1) centavos, e some de vez quando existe um item de
+   * 1 unidade. As demais fecham exato, e a soma dos descontos bate com o do
+   * pedido — orçamento cujas linhas não fecham com o total é orçamento que
+   * volta para o vendedor explicar.
    */
   const descontoPedido = Number(order.discount ?? 0);
   const brutoTotal = pagos.reduce((s, it) => s + (it.quantity ?? 0) * (it.unit_price ?? 0), 0);
   const temDesconto = descontoPedido > 0 && brutoTotal > 0;
 
-  const descPorLinha: number[] = [];
+  const centavos = (n: number) => Math.round(n * 100) / 100;
+  const descUnit: number[] = [];   // desconto de UMA unidade, já em centavos redondos
+  const descLinha: number[] = [];  // desconto da linha inteira
   if (temDesconto) {
-    let acumulado = 0;
-    pagos.forEach((it, i) => {
-      const bruto = (it.quantity ?? 0) * (it.unit_price ?? 0);
-      const d = i === pagos.length - 1
-        ? descontoPedido - acumulado                       // a última fecha a conta
-        : Math.round(bruto * (descontoPedido / brutoTotal) * 100) / 100;
-      descPorLinha.push(d);
-      acumulado += d;
+    const fator = descontoPedido / brutoTotal;
+    pagos.forEach((it) => {
+      const du = Math.min(it.unit_price ?? 0, centavos((it.unit_price ?? 0) * fator));
+      descUnit.push(du);                                   // nunca abaixo de zero
+      descLinha.push(centavos(du * (it.quantity ?? 0)));
     });
+    // A linha que absorve a sobra: a de menor quantidade.
+    let absorve = 0;
+    pagos.forEach((it, i) => {
+      if ((it.quantity ?? 0) < (pagos[absorve].quantity ?? 0)) absorve = i;
+    });
+    const sobra = centavos(descontoPedido - descLinha.reduce((s, d) => s + d, 0));
+    const bruto = (pagos[absorve].quantity ?? 0) * (pagos[absorve].unit_price ?? 0);
+    descLinha[absorve] = Math.min(bruto, Math.max(0, centavos(descLinha[absorve] + sobra)));
   }
 
   // Quais linhas do corpo levam preço riscado — o índice muda por causa das
@@ -269,9 +289,9 @@ export async function generateQuotePdf(order: QuotePdfData, opts?: { download?: 
     const bruto = qty * unit;
 
     if (temDesconto) {
-      const d = descPorLinha[i];
-      const unitCom = qty > 0 ? (bruto - d) / qty : 0;
-      body.push([nome, String(qty), brl(unit), `- ${brl(d)}`, brl(unitCom), brl(bruto - d)]);
+      const d = descLinha[i];
+      const unitCom = unit - descUnit[i];
+      body.push([nome, String(qty), brl(unit), `- ${brl(d)}`, brl(unitCom), brl(centavos(bruto - d))]);
       riscar.push(d > 0);
     } else {
       body.push([nome, String(qty), brl(unit), brl(bruto)]);
