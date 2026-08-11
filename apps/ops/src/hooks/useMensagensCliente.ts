@@ -181,10 +181,21 @@ export function montarPreview(texto: string, vars: Record<string, string>): stri
 
 /** Exemplo realista para a pré-visualização — dados de um pedido de verdade
  *  desta operação, não "João da Silva". */
+/**
+ * Valores de exemplo da pré-visualização.
+ *
+ * ⚠️ Precisam refletir o FORMATO REAL, não um valor plausível qualquer. O
+ * `pedido` ficou meses como "278" — o número cru da loja — e continuou assim
+ * depois de o sistema passar a mandar `CZAAAAMMXXXX`. Quem escrevia o texto via
+ * um número na tela e o cliente recebia outro, o que é o pior tipo de
+ * pré-visualização: a que parece conferir e não confere.
+ *
+ * Ao mudar o formato de qualquer variável na `carbo_msg_fila`, mude aqui junto.
+ */
 export const EXEMPLO: Record<string, string> = {
   primeiro_nome: "Ana",
   nome: "Ana Cristina Dantas",
-  pedido: "278",
+  pedido: "CZ2026080042",
   canal: "Nuvemshop",
   valor: "R$ 149,50",
   nf: "000199",
