@@ -24,6 +24,18 @@ export function StockView({ hub, editable }: { hub: Hub; editable: boolean }) {
   const { data: products = [], isLoading, error } = useStock();
 
   const filtered = useMemo(() => products.filter((p) => {
+    // ── Produto que não faz parte deste hub ────────────────────────────────
+    //
+    // ⚠️ COM UMA EXCEÇÃO INEGOCIÁVEL: se houver saldo, ele aparece de
+    // qualquer jeito. Esconder um produto marcado como ausente que tem 40
+    // unidades no galpão é fazer inventário sumir da tela — e inventário que
+    // some da tela é inventário que ninguém confere. A marcação é sobre o que
+    // DEVERIA estar ali; o saldo é sobre o que ESTÁ, e o que está sempre ganha.
+    //
+    // Quando isso acontece, a linha aparece sinalizada (ver `estranho` abaixo),
+    // porque é justamente o caso que alguém precisa resolver.
+    if (p.foraDoHub[hub.id] && (p.hubs[hub.id] ?? 0) === 0) return false;
+
     // Case-insensitive: produtos com categoria "insumo" (minúscula/typo) não somem
     // ao filtrar por "Insumo".
     if (category !== "all" && (p.category || "").toLowerCase() !== category.toLowerCase()) return false;
@@ -34,7 +46,13 @@ export function StockView({ hub, editable }: { hub: Hub; editable: boolean }) {
     }
     return true;
   }), [products, search, category, onlyLow, hub.id]);
-  const lowTotal = useMemo(() => products.filter((p) => (p.hubs[hub.id] ?? 0) < minForHub(p, hub.id)).length, [products, hub.id]);
+  // Mesmo recorte da lista: contar produto que não é deste hub como "abaixo do
+  // mínimo" encheria o alerta de itens que ninguém vai repor aqui.
+  const lowTotal = useMemo(
+    () => products.filter((p) => !(p.foraDoHub[hub.id] && (p.hubs[hub.id] ?? 0) === 0)
+                              && (p.hubs[hub.id] ?? 0) < minForHub(p, hub.id)).length,
+    [products, hub.id],
+  );
 
   // ── Agrupamento por categoria (Insumo, Produto Final, …) ───────────────────
   // Mesmas categorias do catálogo MRP (MrpProductFormDialog). "Matéria-Prima" não
@@ -137,6 +155,15 @@ export function StockView({ hub, editable }: { hub: Hub; editable: boolean }) {
                     <div className="flex items-center gap-2 mb-0.5 flex-wrap">
                       <h3 className="font-semibold text-sm text-foreground leading-tight truncate">{p.name}</h3>
                       <CarboBadge variant={status.variant} size="sm">{status.label}</CarboBadge>
+                      {/* ⚠️ Só aparece no caso contraditório: o produto está
+                          marcado como fora deste hub E mesmo assim tem saldo.
+                          A lista NÃO o esconde nessa situação — inventário que
+                          some da tela é inventário que ninguém confere — mas
+                          quem olha precisa saber que a linha não deveria
+                          existir, senão o dado errado passa por normal. */}
+                      {p.foraDoHub[hub.id] && (
+                        <CarboBadge variant="warning" size="sm">não é deste hub</CarboBadge>
+                      )}
                     </div>
                     <p className="text-[11px] text-muted-foreground font-mono tracking-wide">{p.product_code}<span className="ml-2 font-sans">· {p.category}</span></p>
                   </div>

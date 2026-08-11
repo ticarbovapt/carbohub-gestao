@@ -55,7 +55,7 @@ export function useStock() {
   return useQuery({
     queryKey: ["ops", "stock"],
     queryFn: async (): Promise<ProdEstoque[]> => {
-      const [products, stock, mins] = await Promise.all([
+      const [products, stock, mins, exclusoes] = await Promise.all([
         db
           .from("mrp_products")
           .select("id, product_code, name, category, stock_unit, safety_stock_qty")
@@ -63,11 +63,20 @@ export function useStock() {
           .order("product_code"),
         db.from("warehouse_stock").select("product_id, quantity, warehouse:warehouses(code)"),
         db.from("ops_stock_min").select("product_id, min_qty, warehouse:warehouses(code)"),
+        // Exceções de catálogo por hub. AUSÊNCIA de linha = o produto existe
+        // no hub — por isso só o que está desligado é buscado.
+        db.from("mrp_product_hubs")
+          .select("product_id, ativo, warehouse:warehouses(code)")
+          .eq("ativo", false),
       ]);
 
       if (products.error) throw products.error;
       if (stock.error) throw stock.error;
       if (mins.error) throw mins.error;
+      // ⚠️ Erro AQUI não derruba a tela. Se a tabela de exceções falhar, o
+      // certo é mostrar o catálogo inteiro (o comportamento de sempre) e não
+      // uma tela vazia: excesso de produto é incômodo, ausência é engano.
+      if (exclusoes.error) console.warn("[useStock] exceções por hub indisponíveis:", exclusoes.error);
 
       // product_id → { hubId: quantidade }
       const hubsByProduct = new Map<string, Record<string, number>>();
@@ -78,6 +87,17 @@ export function useStock() {
         const rec = hubsByProduct.get(row.product_id) ?? {};
         rec[hubId] = (rec[hubId] ?? 0) + (Number(row.quantity) || 0);
         hubsByProduct.set(row.product_id, rec);
+      }
+
+      // product_id → { hubId: false } para os hubs de que ele NÃO faz parte.
+      const foraDoHub = new Map<string, Record<string, boolean>>();
+      for (const row of exclusoes.data ?? []) {
+        const code = row.warehouse?.code as string | undefined;
+        const hubId = code ? CODE_TO_HUB[code] : undefined;
+        if (!hubId) continue;
+        const rec = foraDoHub.get(row.product_id) ?? {};
+        rec[hubId] = true;
+        foraDoHub.set(row.product_id, rec);
       }
 
       // product_id → { hubId: mínimo (override) }
@@ -100,6 +120,7 @@ export function useStock() {
         safety_stock_qty: Number(p.safety_stock_qty) || 0,
         hubs: hubsByProduct.get(p.id as string) ?? {},
         mins: minsByProduct.get(p.id as string) ?? {},
+        foraDoHub: foraDoHub.get(p.id as string) ?? {},
       }));
     },
   });

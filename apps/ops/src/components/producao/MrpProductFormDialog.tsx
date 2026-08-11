@@ -10,6 +10,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { useMrpProductMutations } from "@/hooks/useMrpProductMutations";
+import { useProdutoHubs, useSalvarProdutoHubs } from "@/hooks/useProdutoHubs";
+import { HUBS } from "@/components/estoque/stockData";
+import { Checkbox } from "@/components/ui/checkbox";
+import { useEffect } from "react";
 
 // "Semi-acabado" = etapa intermediária (ex.: garrafa envasada sem rótulo). Tem BOM
 // própria (garrafa+líquido+tampa) e é consumida pelo Produto Final na hora de rotular.
@@ -65,7 +69,22 @@ export function MrpProductFormDialog({ open, onOpenChange, mode, id, initial }: 
   const [unitCost, setUnitCost] = useState(String(initial?.unit_cost ?? 0));
   const [notes, setNotes] = useState(initial?.notes ?? "");
 
-  const pending = create.isPending || update.isPending;
+  /* ── Em quais hubs este produto existe ────────────────────────────────
+   *
+   * Começa com TODOS marcados. Isso não é preguiça: a tabela guarda exceção,
+   * não permissão, e "sem informação" significa "existe em todos" no resto do
+   * sistema. Se aqui começasse desmarcado, criar um produto o esconderia de
+   * toda a operação — e o cadastro pareceria ter funcionado. */
+  const hubsSalvos = useProdutoHubs(mode === "edit" ? id : undefined);
+  const salvarHubs = useSalvarProdutoHubs();
+  const [hubsMarcados, setHubsMarcados] = useState<Record<string, boolean>>(
+    () => Object.fromEntries(HUBS.map((h) => [h.id, true])),
+  );
+  useEffect(() => {
+    if (hubsSalvos.data) setHubsMarcados(hubsSalvos.data);
+  }, [hubsSalvos.data]);
+
+  const pending = create.isPending || update.isPending || salvarHubs.isPending;
 
   const handleSubmit = async () => {
     const payload = {
@@ -75,8 +94,26 @@ export function MrpProductFormDialog({ open, onOpenChange, mode, id, initial }: 
       notes,
     };
     try {
+      let productId = id;
       if (mode === "edit" && id) await update.mutateAsync({ id, ...payload });
-      else await create.mutateAsync(payload);
+      else {
+        const criado = await create.mutateAsync(payload);
+        // No modo criar o id só existe DEPOIS de gravar — os hubs vão numa
+        // segunda etapa por isso, não por descuido.
+        productId = criado?.id;
+      }
+
+      // ⚠️ Falha aqui NÃO desfaz o produto. O cadastro é o que importa; a
+      // marcação de hub é organização de tela e o padrão dela (todos) é
+      // seguro. Avisar e seguir é melhor que perder o produto digitado.
+      if (productId) {
+        try {
+          await salvarHubs.mutateAsync({ productId, marcado: hubsMarcados });
+        } catch {
+          toast.warning("Produto salvo, mas não consegui gravar os hubs. Edite o produto para tentar de novo.");
+        }
+      }
+
       toast.success(mode === "create" ? "Produto criado." : "Produto atualizado.");
       onOpenChange(false);
     } catch (e) {
@@ -137,6 +174,28 @@ export function MrpProductFormDialog({ open, onOpenChange, mode, id, initial }: 
             <Label>Custo unitário (R$)</Label>
             <Input type="number" step="0.01" min="0" placeholder="0,00" value={unitCost} onChange={(e) => setUnitCost(e.target.value)} />
             <p className="text-[11px] text-muted-foreground">Usado para calcular o valor mobilizado em estoque (visível no Carbo Admin → Estoque &amp; Custos).</p>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Onde este produto existe</Label>
+            <div className="grid grid-cols-2 gap-2 rounded-lg border p-3 sm:grid-cols-3">
+              {HUBS.map((h) => (
+                <label key={h.id} className="flex cursor-pointer items-center gap-2 text-sm">
+                  <Checkbox
+                    checked={hubsMarcados[h.id] !== false}
+                    onCheckedChange={(v) =>
+                      setHubsMarcados((m) => ({ ...m, [h.id]: v === true }))}
+                  />
+                  <span className="truncate">{h.label}</span>
+                </label>
+              ))}
+            </div>
+            <p className="text-[11px] text-muted-foreground">
+              Desmarcar tira o produto da tela de estoque daquele hub.
+              {" "}
+              <strong>Produto com saldo continua aparecendo</strong>, sinalizado — esconder
+              estoque que existe seria pior que a poluição da lista.
+            </p>
           </div>
 
           <div className="space-y-2">

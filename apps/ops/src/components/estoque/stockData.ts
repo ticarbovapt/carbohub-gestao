@@ -24,6 +24,9 @@ export interface ProdEstoque {
   safety_stock_qty: number; hubs: Record<string, number>;
   // mínimo por hub (override); cai no safety_stock_qty quando não definido.
   mins: Record<string, number>;
+  // hubs de que o produto NÃO faz parte. Ausência = faz parte (padrão), para
+  // que ligar a curadoria não esvazie tela nenhuma.
+  foraDoHub: Record<string, boolean>;
 }
 export const MOCK_ESTOQUE: ProdEstoque[] = [];
 

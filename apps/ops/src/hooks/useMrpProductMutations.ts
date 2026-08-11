@@ -42,8 +42,14 @@ export function useMrpProductMutations() {
         notes: p.notes?.trim() || null,
         is_active: true,
         created_by: auth?.user?.id ?? null,
-      });
+      })
+        // ⚠️ `select().single()` para DEVOLVER o id. Sem ele o insert responde
+        // vazio, e quem precisa gravar algo ligado ao produto recém-criado
+        // (os hubs em que ele existe, por exemplo) não tem a que se ligar.
+        .select("id")
+        .single();
       if (res.error) throw res.error;
+      return res.data as { id: string };
     },
     onSuccess: invalidate,
   });
