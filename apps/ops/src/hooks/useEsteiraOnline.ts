@@ -73,6 +73,9 @@ export interface EsteiraRow {
   carboze_order_number: string | null;
   etapa: EtapaEsteira;
   tem_status_da_plataforma: boolean;
+  /** O número que o CLIENTE vê (CZAAAAMMXXXX). Não substitui o do Bling: a
+   *  operação fala com o Bling pelo `pedido_numero`, e com o cliente por este. */
+  pedido_codigo: string | null;
 }
 
 /** As colunas do quadro, na ordem do fluxo. `cancelado` fica fora: não é etapa

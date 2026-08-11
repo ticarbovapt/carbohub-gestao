@@ -635,6 +635,15 @@ function Detalhe({ row, rastreio, avisos, templates, onClose }: {
 
           <div className="grid min-w-0 gap-3 sm:grid-cols-2">
             <Bloco titulo="Pedido" icon={Hash}>
+              {/* Primeiro o do CLIENTE: é este que vai na mensagem e é por ele
+                  que a pessoa vai perguntar no atendimento. Os outros dois
+                  continuam porque a operação fala com o Bling e com a loja por
+                  eles — três números para três interlocutores. */}
+              {row.pedido_codigo && (
+                <Linha label="Nº do cliente"
+                       valor={<BotaoCopiar texto={row.pedido_codigo} oque="Nº do cliente"
+                                           className="font-mono text-carbo-green" />} />
+              )}
               <Linha label="Nº no Bling" valor={row.pedido_numero ?? "—"} />
               <Linha label="Nº na loja" valor={row.pedido_loja ?? "—"} />
               {row.carboze_order_number && (
