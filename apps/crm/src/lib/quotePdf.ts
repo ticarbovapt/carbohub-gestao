@@ -224,33 +224,118 @@ export async function generateQuotePdf(order: QuotePdfData, opts?: { download?: 
   // ── Itens ──────────────────────────────────────────────────────────────────
   y = Math.max(ly, ry) + 4;
   const items = (Array.isArray(order.items) ? order.items : []) as QuoteItem[];
-  const body = items
-    .filter((it) => (it.name || it.product_code) && (it.quantity ?? 0) > 0)
-    .flatMap((it) => {
-      const qty = it.quantity ?? 0;
-      const unit = it.unit_price ?? 0;
-      const bonus = it.bonus_quantity ?? 0;
-      const nome = it.name || it.product_code || "—";
-      // Linha paga + (quando houver) linha da bonificação, separada e a R$ 0,00,
-      // pra deixar claro que a qtd bonificada é grátis e não faz parte da paga.
-      const rows: string[][] = [[nome, String(qty), brl(unit), brl(qty * unit)]];
-      if (bonus > 0) rows.push([`${nome} (bonificação)`, String(bonus), brl(0), brl(0)]);
-      return rows;
+  const pagos = items.filter((it) => (it.name || it.product_code) && (it.quantity ?? 0) > 0);
+
+  /* ── O desconto, linha a linha ──────────────────────────────────────────
+   *
+   * O desconto é do PEDIDO, não do item — `QuoteItem` não tem campo de
+   * desconto. Para mostrá-lo por produto ele é distribuído na proporção do
+   * valor de cada linha, que é a única divisão defensável: quem pesa mais no
+   * pedido absorve mais desconto.
+   *
+   * ⚠️ O centavo da sobra vai para a ÚLTIMA linha. Arredondar cada linha
+   * separadamente faz a soma das partes divergir do total em um ou dois
+   * centavos — e um orçamento em que as linhas não fecham com o total é um
+   * orçamento que o cliente confere, acha errado, e devolve para o vendedor
+   * explicar. O ajuste é invisível e mantém a conta exata.
+   */
+  const descontoPedido = Number(order.discount ?? 0);
+  const brutoTotal = pagos.reduce((s, it) => s + (it.quantity ?? 0) * (it.unit_price ?? 0), 0);
+  const temDesconto = descontoPedido > 0 && brutoTotal > 0;
+
+  const descPorLinha: number[] = [];
+  if (temDesconto) {
+    let acumulado = 0;
+    pagos.forEach((it, i) => {
+      const bruto = (it.quantity ?? 0) * (it.unit_price ?? 0);
+      const d = i === pagos.length - 1
+        ? descontoPedido - acumulado                       // a última fecha a conta
+        : Math.round(bruto * (descontoPedido / brutoTotal) * 100) / 100;
+      descPorLinha.push(d);
+      acumulado += d;
     });
+  }
+
+  // Quais linhas do corpo levam preço riscado — o índice muda por causa das
+  // linhas de bonificação, que entram no meio e não têm desconto.
+  const riscar: boolean[] = [];
+  const body: string[][] = [];
+
+  pagos.forEach((it, i) => {
+    const qty = it.quantity ?? 0;
+    const unit = it.unit_price ?? 0;
+    const bonus = it.bonus_quantity ?? 0;
+    const nome = it.name || it.product_code || "—";
+    const bruto = qty * unit;
+
+    if (temDesconto) {
+      const d = descPorLinha[i];
+      const unitCom = qty > 0 ? (bruto - d) / qty : 0;
+      body.push([nome, String(qty), brl(unit), `- ${brl(d)}`, brl(unitCom), brl(bruto - d)]);
+      riscar.push(d > 0);
+    } else {
+      body.push([nome, String(qty), brl(unit), brl(bruto)]);
+      riscar.push(false);
+    }
+
+    // Linha da bonificação, separada e a R$ 0,00, pra deixar claro que a qtd
+    // bonificada é grátis e não faz parte da paga.
+    if (bonus > 0) {
+      body.push(temDesconto
+        ? [`${nome} (bonificação)`, String(bonus), brl(0), "—", brl(0), brl(0)]
+        : [`${nome} (bonificação)`, String(bonus), brl(0), brl(0)]);
+      riscar.push(false);
+    }
+  });
+
+  const vazio = temDesconto ? ["Nenhum item", "", "", "", "", ""] : ["Nenhum item", "", "", ""];
 
   autoTable(doc, {
     startY: y,
-    head: [["Descrição", "Qtd", "Valor Unit.", "Total"]],
-    body: body.length ? body : [["Nenhum item", "", "", ""]],
+    head: [temDesconto
+      ? ["Descrição", "Qtd", "Valor Unit.", "Desconto", "Unit. c/ desc.", "Total"]
+      : ["Descrição", "Qtd", "Valor Unit.", "Total"]],
+    body: body.length ? body : [vazio],
     theme: "striped",
     headStyles: { fillColor: GREEN, halign: "left", fontSize: 9 },
-    columnStyles: {
-      1: { halign: "center", cellWidth: 20 },
-      2: { halign: "right", cellWidth: 34 },
-      3: { halign: "right", cellWidth: 34 },
-    },
+    // ⚠️ As colunas de desconto só existem QUANDO há desconto. Um orçamento
+    // sem desconto com duas colunas vazias parece formulário mal preenchido —
+    // e a maioria dos orçamentos não tem desconto nenhum.
+    // O tipo do autoTable exige um mapa homogêneo; o ternário produzia duas
+    // formas diferentes e o TS recusava a união.
+    columnStyles: (temDesconto
+      ? {
+          1: { halign: "center", cellWidth: 12 },
+          2: { halign: "right",  cellWidth: 24, textColor: [130, 130, 130] },
+          3: { halign: "right",  cellWidth: 24, textColor: GREEN as unknown as number[] },
+          4: { halign: "right",  cellWidth: 26 },
+          5: { halign: "right",  cellWidth: 28, fontStyle: "bold" },
+        }
+      : {
+          1: { halign: "center", cellWidth: 20 },
+          2: { halign: "right",  cellWidth: 34 },
+          3: { halign: "right",  cellWidth: 34 },
+        }) as Record<string, Partial<Record<string, unknown>>>,
     styles: { fontSize: 9, cellPadding: 3 },
     margin: { left: M, right: M },
+    // ⚠️ O jsPDF não tem "riscado": o traço é DESENHADO sobre o texto depois
+    // que a célula existe. Fica na coluna do valor cheio, e só nas linhas que
+    // de fato têm desconto — riscar a bonificação (que já é R$ 0,00) seria
+    // dizer que ela ficou mais barata.
+    didDrawCell: (data: any) => {
+      if (!temDesconto) return;
+      if (data.section !== "body" || data.column.index !== 2) return;
+      if (!riscar[data.row.index]) return;
+      const txt = String(data.cell.raw ?? "");
+      if (!txt) return;
+      const larg = doc.getTextWidth(txt);
+      const xFim = data.cell.x + data.cell.width - data.cell.padding("right");
+      const yMeio = data.cell.y + data.cell.height / 2;
+      doc.setDrawColor(140);
+      doc.setLineWidth(0.35);
+      doc.line(xFim - larg, yMeio, xFim, yMeio);
+      doc.setDrawColor(0);
+    },
   });
 
   // ── Total (com Subtotal + Desconto, quando houver) ──────────────────────────
