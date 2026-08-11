@@ -1422,7 +1422,11 @@ export default function EsteiraOnline() {
         </div>
       )}
 
-      {cancelados.length > 0 && (
+      {/* ⚠️ Estes dois blocos são da esteira de ENTREGA. Ficavam fora do
+          ternário e vazavam para a régua de recompra — um bloco de cancelados
+          e um rodapé sobre a coluna "Pago" numa tela que não tem nem uma coisa
+          nem outra. */}
+      {pipeline === "entrega" && cancelados.length > 0 && (
         <details className="shrink-0 rounded-xl border p-3">
           <summary className="flex cursor-pointer items-center gap-1.5 text-xs font-medium">
             <XCircle className="h-3.5 w-3.5 text-red-500" />
@@ -1437,12 +1441,14 @@ export default function EsteiraOnline() {
         </details>
       )}
 
+      {pipeline === "entrega" && (
       <p className="flex shrink-0 items-center gap-1.5 text-[11px] text-muted-foreground">
         <Clock className="h-3 w-3" />
         "Pago" vem direto da loja e aparece segundos depois da compra; as etapas seguintes
         vêm do Bling (pedido, nota, etiqueta) e das plataformas (envio, entrega).
         A tela atualiza sozinha; nenhum card é arrastável de propósito.
       </p>
+      )}
 
       {aberto && (
         <Detalhe row={aberto} rastreio={rastreioDe(aberto.rastreio)}

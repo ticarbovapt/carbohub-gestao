@@ -15,6 +15,8 @@ export type EtapaMsg =
 
 export interface TemplateMsg {
   etapa: EtapaMsg;
+  /** Instância da Evolution por onde a mensagem sai. null = a padrão. */
+  instancia: string | null;
   ativo: boolean;
   titulo: string;
   texto: string;
@@ -44,6 +46,33 @@ export const ORDEM_ETAPAS: EtapaMsg[] =
    // ela dispara DIAS depois, pela régua da segunda pipeline, contando a
    // partir do carimbo de entrega — não pela etapa da esteira.
    "recompra"];
+
+/**
+ * A que GRUPO cada mensagem pertence.
+ *
+ * ⚠️ Não é organização visual — são conversas de naturezas opostas, e é por
+ * isso que elas saem de números diferentes.
+ *
+ *   entrega   serviço. O cliente QUER receber, responder ali é atendimento.
+ *   recompra  comercial. Pode ser ignorada, pode incomodar, e quem responde
+ *             está comprando.
+ *
+ * Empilhar a recompra no fim da lista de entrega, como estava, fazia parecer
+ * que ela era a sétima etapa do mesmo fluxo. Não é: ela dispara dias depois da
+ * entrega, pela régua da segunda pipeline, e sai por outro número.
+ */
+export type GrupoMsg = "entrega" | "recompra";
+
+export const GRUPO_DA_ETAPA: Record<EtapaMsg, GrupoMsg> = {
+  confirmado: "entrega", nf_emitida: "entrega", etiqueta: "entrega",
+  em_transito: "entrega", saiu_entrega: "entrega", entregue: "entrega",
+  recompra: "recompra",
+};
+
+export const GRUPOS: Array<{ id: GrupoMsg; label: string; descricao: string }> = [
+  { id: "entrega",  label: "Da venda à entrega", descricao: "avisos de serviço, do pedido à entrega" },
+  { id: "recompra", label: "Recompra",           descricao: "oferta comercial, dias depois da entrega" },
+];
 
 /** As variáveis que os textos aceitam. A lista é a mesma da view
  *  `carbo_msg_fila`; variável fora daqui vira texto vazio na mensagem. */

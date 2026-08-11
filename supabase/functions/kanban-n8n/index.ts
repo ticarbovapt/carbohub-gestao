@@ -45,6 +45,9 @@ const TETO = 20;
 
 interface LinhaFila {
   bling_id: number; etapa: string; titulo: string; texto: string; atraso_min: number;
+  /** Instância da Evolution por onde ESTA mensagem sai. null = a padrão.
+   *  Quem roteia é o n8n; aqui só se diz qual função está falando. */
+  instancia: string | null;
   telefone: string | null; nome: string | null; primeiro_nome: string | null;
   pedido: string | null; canal: string | null; valor: number | null; nf: string | null;
   transportadora: string | null; servico: string | null; rastreio: string | null;
@@ -247,6 +250,12 @@ Deno.serve(async (req: Request) => {
           },
           origem: "carbohub/esteira",
           etapa_titulo: l.titulo,
+          // ⚠️ Aviso de entrega e oferta de recompra saem por números
+          // DIFERENTES: quem bloqueia o número por causa da campanha não pode
+          // perder o "seu pedido saiu para entrega" junto. Quem escolhe o
+          // número é o n8n; aqui só se diz qual FUNÇÃO está falando.
+          // null = instância padrão, que é o comportamento de sempre.
+          instancia: l.instancia ?? null,
         }),
       });
       const corpo = await res.text();

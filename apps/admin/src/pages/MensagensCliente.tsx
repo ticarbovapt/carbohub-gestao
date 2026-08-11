@@ -17,6 +17,7 @@ import {
   useTemplatesMsg, useSalvarTemplate, useEnviosMsg, useFilaMsg,
   montarPreview, VARIAVEIS, EXEMPLO,
   type TemplateMsg, type EtapaMsg,
+  GRUPOS, GRUPO_DA_ETAPA, type GrupoMsg,
 } from "@/hooks/useMensagensCliente";
 
 /**
@@ -204,6 +205,13 @@ export default function MensagensCliente() {
   const { data: envios } = useEnviosMsg();
   const { data: naFila } = useFilaMsg();
 
+  /* Grupo selecionado. A recompra não é a sétima etapa da entrega — é outra
+     conversa, de outro número — e empilhá-la no fim da mesma lista fazia
+     parecer continuação do mesmo fluxo. */
+  const [grupo, setGrupo] = useState<GrupoMsg>("entrega");
+  const doGrupo = (templates ?? []).filter((t) => GRUPO_DA_ETAPA[t.etapa] === grupo);
+  const ligadasNoGrupo = doGrupo.filter((t) => t.ativo).length;
+
   const ligadas = (templates ?? []).filter((t) => t.ativo).length;
 
   return (
@@ -255,7 +263,41 @@ export default function MensagensCliente() {
         </div>
       ) : (
         <div className="space-y-3">
-          {(templates ?? []).map((t) => <Editor key={t.etapa} t={t} />)}
+          {/* Seletor de grupo ANTES da lista: ele troca o conjunto inteiro, e
+              quem chega precisa saber em qual conversa está mexendo antes de
+              ler qualquer texto. */}
+          <div className="flex flex-wrap items-center gap-2">
+            {GRUPOS.map((g) => {
+              const n = (templates ?? []).filter(
+                (t) => GRUPO_DA_ETAPA[t.etapa] === g.id && t.ativo).length;
+              return (
+                <Button key={g.id} size="sm"
+                        variant={grupo === g.id ? "default" : "outline"}
+                        className="gap-1.5" onClick={() => setGrupo(g.id)}>
+                  {g.label}
+                  {n > 0 && (
+                    <span className="rounded bg-background/20 px-1 text-[11px] tabular-nums">{n}</span>
+                  )}
+                </Button>
+              );
+            })}
+            <span className="text-[11px] text-muted-foreground">
+              {GRUPOS.find((g) => g.id === grupo)?.descricao}
+            </span>
+          </div>
+
+          {/* ⚠️ De qual número este grupo sai. Sem isto escrito, ligar a
+              recompra e ver a mensagem chegar pelo número de atendimento seria
+              descoberto pelo cliente, não por nós. */}
+          {doGrupo.length > 0 && (
+            <p className="text-[11px] text-muted-foreground">
+              Sai pelo número{" "}
+              <strong>{doGrupo[0].instancia ?? "padrão (atendimento)"}</strong>
+              {ligadasNoGrupo === 0 && " · nenhuma mensagem ligada neste grupo"}
+            </p>
+          )}
+
+          {doGrupo.map((t) => <Editor key={t.etapa} t={t} />)}
         </div>
       )}
 
