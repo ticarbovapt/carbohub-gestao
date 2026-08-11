@@ -51,6 +51,8 @@ interface LinhaFila {
   telefone: string | null; nome: string | null; primeiro_nome: string | null;
   pedido: string | null; canal: string | null; valor: number | null; nf: string | null;
   transportadora: string | null; servico: string | null; rastreio: string | null;
+  /** PDF da NF. Vai como variável no texto E como anexo no payload. */
+  link_nota: string | null;
   cidade: string | null; uf: string | null;
   link_rastreio: string | null; previsao: string | null;
 }
@@ -111,6 +113,7 @@ function variaveis(l: LinhaFila): Record<string, string> {
     servico:        l.servico ?? "",
     rastreio:       l.rastreio ?? "",
     link_rastreio:  l.link_rastreio ?? "",
+    link_nota:      l.link_nota ?? "",
     previsao:       dataCurta(l.previsao),
     cidade:         l.cidade ?? "",
     uf:             l.uf ?? "",
@@ -256,6 +259,17 @@ Deno.serve(async (req: Request) => {
           // número é o n8n; aqui só se diz qual FUNÇÃO está falando.
           // null = instância padrão, que é o comportamento de sempre.
           instancia: l.instancia ?? null,
+          // ⚠️ O PDF vai SEPARADO do texto, não só dentro dele.
+          //
+          // Colar uma URL na mensagem é pedir que o cliente saia do WhatsApp,
+          // abra o navegador e volte. Mandar o arquivo anexado entrega a nota
+          // ali, e ela fica salva na conversa — que é onde ele vai procurar
+          // quando precisar dela daqui a três meses.
+          //
+          // Quem decide se anexa é o n8n: aqui só se diz que existe documento
+          // e qual é. Null quando a nota ainda não tem PDF.
+          anexo_url: l.link_nota ?? null,
+          anexo_nome: l.nf ? `NF-${l.nf}.pdf` : null,
         }),
       });
       const corpo = await res.text();
