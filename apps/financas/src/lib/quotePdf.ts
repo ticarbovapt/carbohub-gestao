@@ -224,33 +224,138 @@ export async function generateQuotePdf(order: QuotePdfData, opts?: { download?: 
   // ── Itens ──────────────────────────────────────────────────────────────────
   y = Math.max(ly, ry) + 4;
   const items = (Array.isArray(order.items) ? order.items : []) as QuoteItem[];
-  const body = items
-    .filter((it) => (it.name || it.product_code) && (it.quantity ?? 0) > 0)
-    .flatMap((it) => {
-      const qty = it.quantity ?? 0;
-      const unit = it.unit_price ?? 0;
-      const bonus = it.bonus_quantity ?? 0;
-      const nome = it.name || it.product_code || "—";
-      // Linha paga + (quando houver) linha da bonificação, separada e a R$ 0,00,
-      // pra deixar claro que a qtd bonificada é grátis e não faz parte da paga.
-      const rows: string[][] = [[nome, String(qty), brl(unit), brl(qty * unit)]];
-      if (bonus > 0) rows.push([`${nome} (bonificação)`, String(bonus), brl(0), brl(0)]);
-      return rows;
+  const pagos = items.filter((it) => (it.name || it.product_code) && (it.quantity ?? 0) > 0);
+
+  /* ── O desconto, linha a linha ──────────────────────────────────────────
+   *
+   * O desconto é do PEDIDO, não do item — `QuoteItem` não tem campo de
+   * desconto. Para mostrá-lo por produto ele é distribuído na proporção do
+   * valor de cada linha, que é a única divisão defensável: quem pesa mais no
+   * pedido absorve mais desconto.
+   *
+   * ⚠️ O que se arredonda é o UNITÁRIO, não o total da linha. Distribuindo
+   * pelo total, o "Unit. c/ desc." vinha de uma divisão e não fechava com a
+   * própria linha: R$ 133,68 × 10 dá 1.336,80, mas o total impresso era
+   * 1.336,78 — dois centavos que o cliente acha com a calculadora do celular
+   * e devolve para o vendedor explicar. Arredondando o unitário primeiro,
+   * unitário × qtd fecha EXATO em toda linha.
+   *
+   * Sobra centavo, e ele TEM de cair em algum lugar: o desconto da linha é
+   * sempre um múltiplo da quantidade (em centavos), então nem todo desconto de
+   * pedido é alcançável mantendo todas as linhas exatas — com qtds 10, 6 e 4,
+   * por exemplo, só se chega a valores pares. Não é arredondamento mal feito,
+   * é aritmética.
+   *
+   * Então a sobra vai para UMA linha, e essa linha é a de MENOR quantidade:
+   * o erro máximo é (qtd − 1) centavos, e some de vez quando existe um item de
+   * 1 unidade. As demais fecham exato, e a soma dos descontos bate com o do
+   * pedido — orçamento cujas linhas não fecham com o total é orçamento que
+   * volta para o vendedor explicar.
+   */
+  const descontoPedido = Number(order.discount ?? 0);
+  const brutoTotal = pagos.reduce((s, it) => s + (it.quantity ?? 0) * (it.unit_price ?? 0), 0);
+  const temDesconto = descontoPedido > 0 && brutoTotal > 0;
+
+  const centavos = (n: number) => Math.round(n * 100) / 100;
+  const descUnit: number[] = [];   // desconto de UMA unidade, já em centavos redondos
+  const descLinha: number[] = [];  // desconto da linha inteira
+  if (temDesconto) {
+    const fator = descontoPedido / brutoTotal;
+    pagos.forEach((it) => {
+      const du = Math.min(it.unit_price ?? 0, centavos((it.unit_price ?? 0) * fator));
+      descUnit.push(du);                                   // nunca abaixo de zero
+      descLinha.push(centavos(du * (it.quantity ?? 0)));
     });
+    // A linha que absorve a sobra: a de menor quantidade.
+    let absorve = 0;
+    pagos.forEach((it, i) => {
+      if ((it.quantity ?? 0) < (pagos[absorve].quantity ?? 0)) absorve = i;
+    });
+    const sobra = centavos(descontoPedido - descLinha.reduce((s, d) => s + d, 0));
+    const bruto = (pagos[absorve].quantity ?? 0) * (pagos[absorve].unit_price ?? 0);
+    descLinha[absorve] = Math.min(bruto, Math.max(0, centavos(descLinha[absorve] + sobra)));
+  }
+
+  // Quais linhas do corpo levam preço riscado — o índice muda por causa das
+  // linhas de bonificação, que entram no meio e não têm desconto.
+  const riscar: boolean[] = [];
+  const body: string[][] = [];
+
+  pagos.forEach((it, i) => {
+    const qty = it.quantity ?? 0;
+    const unit = it.unit_price ?? 0;
+    const bonus = it.bonus_quantity ?? 0;
+    const nome = it.name || it.product_code || "—";
+    const bruto = qty * unit;
+
+    if (temDesconto) {
+      const d = descLinha[i];
+      const unitCom = unit - descUnit[i];
+      body.push([nome, String(qty), brl(unit), `- ${brl(d)}`, brl(unitCom), brl(centavos(bruto - d))]);
+      riscar.push(d > 0);
+    } else {
+      body.push([nome, String(qty), brl(unit), brl(bruto)]);
+      riscar.push(false);
+    }
+
+    // Linha da bonificação, separada e a R$ 0,00, pra deixar claro que a qtd
+    // bonificada é grátis e não faz parte da paga.
+    if (bonus > 0) {
+      body.push(temDesconto
+        ? [`${nome} (bonificação)`, String(bonus), brl(0), "—", brl(0), brl(0)]
+        : [`${nome} (bonificação)`, String(bonus), brl(0), brl(0)]);
+      riscar.push(false);
+    }
+  });
+
+  const vazio = temDesconto ? ["Nenhum item", "", "", "", "", ""] : ["Nenhum item", "", "", ""];
 
   autoTable(doc, {
     startY: y,
-    head: [["Descrição", "Qtd", "Valor Unit.", "Total"]],
-    body: body.length ? body : [["Nenhum item", "", "", ""]],
+    head: [temDesconto
+      ? ["Descrição", "Qtd", "Valor Unit.", "Desconto", "Unit. c/ desc.", "Total"]
+      : ["Descrição", "Qtd", "Valor Unit.", "Total"]],
+    body: body.length ? body : [vazio],
     theme: "striped",
     headStyles: { fillColor: GREEN, halign: "left", fontSize: 9 },
-    columnStyles: {
-      1: { halign: "center", cellWidth: 20 },
-      2: { halign: "right", cellWidth: 34 },
-      3: { halign: "right", cellWidth: 34 },
-    },
+    // ⚠️ As colunas de desconto só existem QUANDO há desconto. Um orçamento
+    // sem desconto com duas colunas vazias parece formulário mal preenchido —
+    // e a maioria dos orçamentos não tem desconto nenhum.
+    // O tipo do autoTable exige um mapa homogêneo; o ternário produzia duas
+    // formas diferentes e o TS recusava a união.
+    columnStyles: (temDesconto
+      ? {
+          1: { halign: "center", cellWidth: 12 },
+          2: { halign: "right",  cellWidth: 24, textColor: [130, 130, 130] },
+          3: { halign: "right",  cellWidth: 24, textColor: GREEN as unknown as number[] },
+          4: { halign: "right",  cellWidth: 26 },
+          5: { halign: "right",  cellWidth: 28, fontStyle: "bold" },
+        }
+      : {
+          1: { halign: "center", cellWidth: 20 },
+          2: { halign: "right",  cellWidth: 34 },
+          3: { halign: "right",  cellWidth: 34 },
+        }) as Record<string, Partial<Record<string, unknown>>>,
     styles: { fontSize: 9, cellPadding: 3 },
     margin: { left: M, right: M },
+    // ⚠️ O jsPDF não tem "riscado": o traço é DESENHADO sobre o texto depois
+    // que a célula existe. Fica na coluna do valor cheio, e só nas linhas que
+    // de fato têm desconto — riscar a bonificação (que já é R$ 0,00) seria
+    // dizer que ela ficou mais barata.
+    didDrawCell: (data: any) => {
+      if (!temDesconto) return;
+      if (data.section !== "body" || data.column.index !== 2) return;
+      if (!riscar[data.row.index]) return;
+      const txt = String(data.cell.raw ?? "");
+      if (!txt) return;
+      const larg = doc.getTextWidth(txt);
+      const xFim = data.cell.x + data.cell.width - data.cell.padding("right");
+      const yMeio = data.cell.y + data.cell.height / 2;
+      doc.setDrawColor(140);
+      doc.setLineWidth(0.35);
+      doc.line(xFim - larg, yMeio, xFim, yMeio);
+      doc.setDrawColor(0);
+    },
   });
 
   // ── Total (com Subtotal + Desconto, quando houver) ──────────────────────────

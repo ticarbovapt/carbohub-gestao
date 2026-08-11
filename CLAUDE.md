@@ -50,6 +50,25 @@ Duas armadilhas já pagas, não repita:
    `isManager(profile, fnMap)` — a mesma expressão. O alias `isGestor` existe nos
    seis só para a tela poder ser idêntica. Não duplique a regra.
 
+### `lib/quotePdf.ts` — o PDF do orçamento, nos seis
+Byte a byte idêntico nos **seis** apps. Fonte da verdade = `apps/crm`. A raiz
+está fora: o `controle` tem outro template, mais simples e antigo, sem desconto
+no tipo — e está congelado.
+
+⚠️ O arquivo ficou fora de qualquer lista e o `mkt` **divergiu sozinho**: passou
+meses com a bonificação como sufixo no nome do produto (`(+2 bonif.)`) enquanto
+os outros cinco já mostravam linha separada a R$ 0,00. Ninguém percebeu porque
+divergir aqui não dá erro — dá um PDF diferente na mão do cliente.
+
+O desconto do orçamento é do **pedido**, não do item (`QuoteItem` não tem campo
+de desconto): ele é rateado por linha na proporção do valor. ⚠️ O arredondamento
+é do **unitário**, nunca do total da linha — ratear pelo total faz o "Unit. c/
+desc." sair de uma divisão e não fechar com a própria linha (R$ 133,68 × 10 =
+1.336,80 contra um total impresso de 1.336,78). E sobra centavo: o desconto de
+uma linha é sempre múltiplo da quantidade, então nem todo desconto de pedido é
+alcançável com todas as linhas exatas. A sobra cai na linha de **menor
+quantidade** — erro máximo (qtd − 1) centavos, zero quando há item de 1 unidade.
+
 ### ⚠️ Como verificar de verdade (o typecheck que engana)
 Os `tsconfig.json` dos apps são solution-style: `"files": []` + `references`.
 Por isso `tsc --noEmit -p tsconfig.json` **passa sem checar arquivo nenhum** —
