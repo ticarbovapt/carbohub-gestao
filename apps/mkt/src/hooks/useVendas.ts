@@ -42,6 +42,10 @@ export interface NovaVendaInput {
   internal_notes?: string;   // dados estratégicos + notas internas (nada é descartado)
   vendedor_id?: string;      // gestor pode lançar a venda por outro vendedor
   vendedor_name?: string;
+  /** 'pronta_entrega' sai da caixa física do vendedor AGORA e o pedido nasce em
+   *  "Gerar NF". 'producao' (ou vazio) segue a esteira normal. Quem deduz e
+   *  quem BLOQUEIA por falta de saldo é o banco — a tela só informa. */
+  entrega_modalidade?: "pronta_entrega" | "producao";
   itens: VendaItemInput[];
   form_snapshot?: unknown;   // snapshot do formulário (JSON) p/ reabrir/editar fielmente
 }
@@ -276,6 +280,9 @@ async function buildOrderFields(input: NovaVendaInput) {
     execution_date: input.execution_date ?? null,
     notes: input.notes || null, internal_notes: input.internal_notes || null,
     vendedor_id: vendedorId, vendedor_name: vendedorName,
+    // Nulo = produção. Todo o histórico, o Bling e o e-commerce ficam nulos, e
+    // o gatilho do banco trata nulo como produção — o de sempre.
+    entrega_modalidade: input.entrega_modalidade ?? null,
     quote_form_snapshot: input.form_snapshot ?? null,
   };
 }

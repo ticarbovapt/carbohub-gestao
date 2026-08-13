@@ -50,6 +50,46 @@ Duas armadilhas já pagas, não repita:
    `isManager(profile, fnMap)` — a mesma expressão. O alias `isGestor` existe nos
    seis só para a tela poder ser idêntica. Não duplique a regra.
 
+### Estoque do vendedor / pronta entrega
+Cada vendedor tem uma caixa física: um `warehouse` com `kind='vendedor'` e
+`owner_id`. Reusar `warehouses` (e não criar tabela nova) é o que faz o fluxo
+já vir pronto — `warehouse_stock`, `stock_movements`, `stock_transfers` e
+`ops_stock_min` giram todos em torno de `warehouse_id`.
+
+```
+supabase/migrations/20260898000000_estoque_vendedor.sql   caixas, trigger, view (BLOCOS)
+supabase/migrations/20260899000000_pronta_entrega.sql     dedução/estorno/esteira (BLOCOS)
+apps/ops/src/pages/compras/EstoqueVendedores.tsx          ver e abastecer
+apps/*/src/hooks/useMeuEstoque.ts                         saldo do vendedor (nos SEIS)
+```
+
+1. **As caixas ficam FORA da lista `HUBS`** do `stockData.ts`, de propósito:
+   ela vira uma coluna cada na grade de Suprimentos, e quinze vendedores a
+   tornariam ilegível. O `useStock.ts` ignora código desconhecido
+   (`if (!hubId) continue`), então elas não aparecem lá — e não devem.
+2. **O envio tem duas etapas.** `ops_transfer_register` tira de Natal e põe em
+   trânsito; só `ops_transfer_confirm` credita a caixa. Creditar na saída faria
+   o vendedor vender a pronta entrega o que ainda está na estrada.
+3. **O estorno lê `estoque_warehouse_id`**, com fallback no HUB-RN para o
+   histórico. Antes tinha `'HUB-RN'` escrito no código — cancelar uma venda de
+   pronta entrega devolveria a Natal um produto que está na van do vendedor.
+4. **A dedução trava a linha (`FOR UPDATE`) antes de conferir saldo.** Sem
+   isso, duas vendas simultâneas do mesmo vendedor leem o mesmo saldo e as
+   duas passam: estoque negativo, sem erro.
+5. **`carbo_itens_para_estoque` soma `bonificacao`.** O caminho antigo
+   (`pos_venda_deduct_stock`, HUB-RN) lê só `quantity` e ainda tem esse furo —
+   medido: 1 pedido, 40 unidades. Corrigir isso é passo separado, porque mexe
+   no saldo de todas as vendas normais.
+6. **A regra mora no BANCO, não na tela**, porque o `/vender` existe em seis
+   apps — na tela seriam seis cópias para divergir. A tela só avisa antes do
+   clique; quem recusa é a RPC.
+
+⚠️ **`useVendas.ts` NÃO é idêntico nos seis.** O CRM filtra venda de
+marketplace da tela do vendedor (`FILTRO_VENDA_DO_TIME`), e `lib/vendaDoTime.ts`
+só existe lá. A divergência é intencional: copiar o do CRM por cima dos outros
+quebra o build deles e muda o que mostram. Edite os seis com a MESMA alteração
+mínima, em vez de sobrescrever.
+
 ### RTM (Route to Market) — só no `apps/crm`, e por enquanto Fase 1
 Base: o briefing de domínio "Carbo Core · Comercial NE · v1". As fases são
 ordenadas e **antecipar produz tela sem dado**. Fase 1 = registro de visita

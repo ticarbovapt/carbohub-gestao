@@ -6,6 +6,7 @@ import { UserCog, Users } from "lucide-react";
 import {
   ShoppingCart, Plus, Trash2, AlertTriangle, Building2, MapPin, Package, Gift, FileText, Search, Target, ChevronDown,
   Loader2, CheckCircle2, AlertCircle, CreditCard, Percent, Tag, CalendarClock, Sparkles,
+  PackageCheck,
 } from "lucide-react";
 import { CarboCard, CarboCardContent } from "@/components/ui/carbo-card";
 import { CarboButton } from "@/components/ui/carbo-button";
@@ -24,6 +25,7 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { generateQuotePdf } from "@/lib/quotePdf";
 import { useCreateVenda, useUpdateVendaFull, useCriarRecorrencia, RECORRENCIA_PERIODOS, type RecorrenciaPeriodo } from "@/hooks/useVendas";
+import { useMeuEstoque } from "@/hooks/useMeuEstoque";
 import { useConvertQuote } from "@/hooks/useCarbozeVendas";
 import { useVincularOrcamento } from "@/hooks/useLeadOrcamento";
 import { useProdutos } from "@/hooks/useProdutos";
@@ -219,6 +221,28 @@ export default function Vender() {
 
   // ── Prazo de entrega + PPF/PPE (opcional; banco recalcula de forma autoritativa) ──
   const [deliveryDate, setDeliveryDate] = useState("");
+  // Como o produto sai. Padrão 'producao' = o comportamento de sempre; a
+  // pronta entrega é opt-in explícito, nunca o default.
+  const [modalidade, setModalidade] = useState<"producao" | "pronta_entrega">("producao");
+  // A caixa é a de QUEM VENDE, não a de quem digita: o gestor pode lançar por
+  // outro vendedor, e nesse caso o produto sai da caixa dele.
+  const { data: meuEstoque } = useMeuEstoque(vendedorId || profile?.id || null);
+  // Itens que a caixa não cobre. Some quantidade + bonificação porque o produto
+  // bonificado também sai da prateleira — é a mesma conta do banco.
+  const faltaNaCaixa = useMemo(() => {
+    if (modalidade !== "pronta_entrega") return [];
+    const pedido = new Map<string, { nome: string; qtd: number }>();
+    for (const i of validItems()) {
+      if (!i.product_id) continue;
+      const a = pedido.get(i.product_id) ?? { nome: i.name, qtd: 0 };
+      a.qtd += (i.quantity || 0) + (i.bonus_quantity || 0);
+      pedido.set(i.product_id, a);
+    }
+    const saldo = meuEstoque?.saldo ?? {};
+    return [...pedido.entries()]
+      .map(([id, a]) => ({ id, nome: a.nome, pedido: a.qtd, tem: saldo[id] ?? 0 }))
+      .filter((x) => x.pedido > x.tem);
+  }, [modalidade, rows, meuEstoque]);
   const [dateOpen, setDateOpen] = useState(false);
   // Previsão de execução da descarbonização (serviço) — independente da entrega.
   const [executionDate, setExecutionDate] = useState("");
@@ -550,6 +574,7 @@ export default function Vender() {
     endereco: typeof endereco; fatMesmo: boolean; fatEndereco: typeof fatEndereco;
     ie: string; ieUf: string; pagModalidade: string; pagParcelas: string; pagFaturamento: string;
     discReason: string; deliveryDate: string;
+    modalidade?: "producao" | "pronta_entrega";
     serviceRows: ServiceRow[]; executionDate: string; serviceType?: DescarbServiceType;
   };
   function formSnapshot(): FormSnapshot {
@@ -558,6 +583,7 @@ export default function Vender() {
       tipoPonto, classificacao, volumeMedio, atuaDiesel, atuaFrotas, vendedorId, endereco, fatMesmo,
       fatEndereco, ie, ieUf, pagModalidade, pagParcelas, pagFaturamento, discReason, deliveryDate,
       serviceRows, executionDate, serviceType,
+      modalidade,
     };
   }
 
@@ -577,6 +603,8 @@ export default function Vender() {
       setIe(snap.ie ?? ""); setIeUf(snap.ieUf ?? "");
       setPagModalidade(snap.pagModalidade ?? ""); setPagParcelas(snap.pagParcelas ?? "1"); setPagFaturamento(snap.pagFaturamento ?? "");
       setDiscReason(snap.discReason ?? ""); setDeliveryDate(snap.deliveryDate ?? "");
+      // Orçamento antigo não tem o campo: produção, que é o de sempre.
+      setModalidade(snap.modalidade ?? "producao");
       setServiceRows(snap.serviceRows ?? []); setExecutionDate(snap.executionDate ?? "");
       // Orçamento antigo não tem o campo: cai no palpite pelo documento.
       if (snap.serviceType) { setServiceType(snap.serviceType); setServiceTypeTocado(true); }
@@ -654,6 +682,7 @@ export default function Vender() {
       desconto_valor: orderDesconto,
       desconto_percent: percentAgregado,
       desconto_motivo: orderDesconto > 0 ? (discReason.trim() || undefined) : undefined,
+      entrega_modalidade: modalidade,
       agreed_delivery_date: deliveryDate || undefined,
       execution_date: executionDate || undefined,
       total: orderTotal,
@@ -1452,6 +1481,72 @@ export default function Vender() {
           )}
         </CarboCardContent>
       </CarboCard>
+
+      {/* ── Como o produto sai ───────────────────────────────────────────────
+          Só aparece com produto físico no pedido: serviço de descarbonização
+          não sai de caixa nenhuma, e mostrar a pergunta ali seria pedir uma
+          decisão que não existe.
+
+          ⚠️ O padrão é PRODUÇÃO — o comportamento de sempre. A pronta entrega
+          é escolha explícita, porque ela deduz estoque na hora e manda o
+          pedido direto para a NF: efeito grande demais para ser default. */}
+      {hasValidProduct && (
+        <CarboCard>
+          <CarboCardContent className="p-4 space-y-3">
+            <h3 className="font-semibold flex items-center gap-2">
+              <PackageCheck className="h-4 w-4 text-carbo-green" /> Como o produto sai
+            </h3>
+
+            <div className="grid sm:grid-cols-2 gap-2">
+              <button type="button" onClick={() => setModalidade("producao")}
+                className={`rounded-lg border px-3 py-2.5 text-left transition ${
+                  modalidade === "producao" ? "border-carbo-green bg-carbo-green/10" : "hover:bg-muted"}`}>
+                <p className="text-sm font-medium">Precisa produzir</p>
+                <p className="text-[11px] text-muted-foreground">Segue a esteira normal: produção, separação e envio.</p>
+              </button>
+
+              <button type="button" onClick={() => setModalidade("pronta_entrega")}
+                disabled={!meuEstoque?.temCaixa}
+                className={`rounded-lg border px-3 py-2.5 text-left transition ${
+                  modalidade === "pronta_entrega" ? "border-carbo-green bg-carbo-green/10" : "hover:bg-muted"
+                } ${!meuEstoque?.temCaixa ? "opacity-50 cursor-not-allowed" : ""}`}>
+                <p className="text-sm font-medium">Pronta entrega</p>
+                <p className="text-[11px] text-muted-foreground">
+                  {meuEstoque?.temCaixa
+                    ? "Sai do seu estoque agora e vai direto para a NF."
+                    : "Você não tem caixa de estoque."}
+                </p>
+              </button>
+            </div>
+
+            {modalidade === "pronta_entrega" && (
+              <div className="rounded-lg border bg-muted/40 p-3 space-y-2">
+                <p className="text-[11px] text-muted-foreground">
+                  O produto sai da sua caixa assim que a venda for salva, e o pedido
+                  nasce em <strong>Gerar Nota Fiscal</strong> — sem passar por produção.
+                </p>
+
+                {/* ⚠️ O aviso é da TELA, mas quem recusa é o BANCO. Os dois números
+                    podem divergir por segundos se o Ops confirmar uma chegada agora;
+                    por isso a decisão final não é daqui. */}
+                {faltaNaCaixa.length > 0 ? (
+                  <div className="text-xs text-red-600 space-y-0.5">
+                    <p className="font-medium">Não vai dar para salvar — falta na sua caixa:</p>
+                    {faltaNaCaixa.map((f) => (
+                      <p key={f.id}>• {f.nome}: você tem {f.tem}, o pedido pede {f.pedido}</p>
+                    ))}
+                    <p className="text-muted-foreground pt-1">
+                      Se você tem o produto em mãos, a contagem está errada — peça ao Ops para acertar.
+                    </p>
+                  </div>
+                ) : (
+                  <p className="text-xs text-emerald-600">Sua caixa cobre este pedido.</p>
+                )}
+              </div>
+            )}
+          </CarboCardContent>
+        </CarboCard>
+      )}
 
       {/* Prazo de Entrega e Fabricação (opcional) */}
       <CarboCard>
