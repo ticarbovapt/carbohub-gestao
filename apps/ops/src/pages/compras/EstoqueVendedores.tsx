@@ -13,12 +13,13 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import {
-  PackageCheck, Truck, Send, Loader2, ChevronDown, ChevronRight, Check, TriangleAlert,
+  PackageCheck, Truck, Send, Loader2, ChevronDown, ChevronRight, Check, TriangleAlert, Pencil,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
   useVendedorEstoque, useSaldoNatal, useEnviarParaVendedor,
   useEnviosEmTransito, useConfirmarChegadaVendedor,
+  useAjustarCaixa, MOTIVOS_AJUSTE,
   type CaixaVendedor,
 } from "@/hooks/useVendedorEstoque";
 
@@ -45,6 +46,9 @@ export default function EstoqueVendedores() {
   const { data: transito } = useEnviosEmTransito();
   const confirmar = useConfirmarChegadaVendedor();
   const [envioPara, setEnvioPara] = useState<CaixaVendedor | null>(null);
+  const [ajuste, setAjuste] = useState<
+    { caixa: CaixaVendedor; item: CaixaVendedor["itens"][number] } | null
+  >(null);
   const [abertos, setAbertos] = useState<Record<string, boolean>>({});
   const [soComSaldo, setSoComSaldo] = useState(true);
 
@@ -143,6 +147,7 @@ export default function EstoqueVendedores() {
                 aberto={!!abertos[c.warehouse_id]}
                 onToggle={() => setAbertos((a) => ({ ...a, [c.warehouse_id]: !a[c.warehouse_id] }))}
                 onEnviar={() => setEnvioPara(c)}
+                onAjustar={(item) => setAjuste({ caixa: c, item })}
               />
             ))}
           </div>
@@ -150,6 +155,7 @@ export default function EstoqueVendedores() {
       </div>
 
       <DialogEnviar caixa={envioPara} onClose={() => setEnvioPara(null)} />
+      <DialogAjuste alvo={ajuste} onClose={() => setAjuste(null)} />
     </div>
   );
 }
@@ -164,10 +170,11 @@ function Kpi({ label, valor }: { label: string; valor: number }) {
 }
 
 function Caixa({
-  c, soComSaldo, aberto, onToggle, onEnviar,
+  c, soComSaldo, aberto, onToggle, onEnviar, onAjustar,
 }: {
   c: CaixaVendedor; soComSaldo: boolean; aberto: boolean;
   onToggle: () => void; onEnviar: () => void;
+  onAjustar: (item: CaixaVendedor["itens"][number]) => void;
 }) {
   const itens = soComSaldo ? c.itens.filter((i) => i.quantidade > 0) : c.itens;
   const vazia = c.total_unidades === 0;
@@ -219,6 +226,10 @@ function Caixa({
                       i.quantidade > 0 ? "" : "text-muted-foreground"}`}>
                       {i.quantidade} <span className="text-[11px] font-normal">{i.stock_unit ?? "un"}</span>
                     </span>
+                    <button onClick={() => onAjustar(i)} title="Corrigir saldo"
+                      className="p-1 rounded hover:bg-muted text-muted-foreground shrink-0">
+                      <Pencil className="h-3.5 w-3.5" />
+                    </button>
                   </div>
                 ))}
               </div>
@@ -328,6 +339,113 @@ function DialogEnviar({ caixa, onClose }: { caixa: CaixaVendedor | null; onClose
           <Button onClick={salvar} disabled={enviar.isPending || excede || !escolhido || quantidade <= 0}>
             {enviar.isPending && <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />}
             Enviar
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Corrigir o saldo de um produto na caixa.
+//
+// ⚠️ Pede a quantidade CONTADA, não o quanto tirar ou pôr. É o que a pessoa
+// tem na mão depois de abrir a caixa; converter contagem em delta de cabeça é
+// onde o erro entra.
+//
+// ⚠️ E manda junto o saldo que esta tela está exibindo. Se ele não bater com o
+// do banco na hora de gravar, a RPC RECUSA — significa que houve venda ou
+// chegada enquanto a conferência acontecia, e ajustar com o número velho
+// apagaria essa movimentação.
+// ─────────────────────────────────────────────────────────────────────────────
+function DialogAjuste({
+  alvo, onClose,
+}: {
+  alvo: { caixa: CaixaVendedor; item: CaixaVendedor["itens"][number] } | null;
+  onClose: () => void;
+}) {
+  const ajustar = useAjustarCaixa();
+  const [contado, setContado] = useState("");
+  const [motivo, setMotivo] = useState<string>("contagem");
+  const [obs, setObs] = useState("");
+
+  const atual = alvo?.item.quantidade ?? 0;
+  const novo = contado === "" ? null : Number(contado);
+  const delta = novo == null ? 0 : novo - atual;
+
+  function fechar() { setContado(""); setMotivo("contagem"); setObs(""); onClose(); }
+
+  function salvar() {
+    if (!alvo || novo == null || !Number.isFinite(novo) || novo < 0) {
+      toast.error("Informe a quantidade contada."); return;
+    }
+    ajustar.mutate(
+      {
+        warehouseId: alvo.caixa.warehouse_id,
+        productId: alvo.item.product_id,
+        qtdContada: novo,
+        motivo,
+        obs: obs.trim() || null,
+        saldoEsperado: atual,
+      },
+      {
+        onSuccess: () => { toast.success("Saldo corrigido."); fechar(); },
+        onError: (e: Error) => toast.error(e.message),
+      },
+    );
+  }
+
+  return (
+    <Dialog open={!!alvo} onOpenChange={(v) => { if (!v) fechar(); }}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Corrigir saldo</DialogTitle>
+        </DialogHeader>
+
+        <div className="space-y-3">
+          <div className="rounded-lg border bg-muted/40 p-3">
+            <p className="text-sm font-medium">{alvo?.item.product_name}</p>
+            <p className="text-[11px] text-muted-foreground">
+              {alvo?.caixa.vendedor_nome} · sistema diz <strong>{atual}</strong>
+            </p>
+          </div>
+
+          <div>
+            <Label className="text-xs">Quantidade contada</Label>
+            <Input type="number" inputMode="numeric" min={0} value={contado} autoFocus
+              onChange={(e) => setContado(e.target.value)} className="h-9" />
+            {novo != null && delta !== 0 && (
+              <p className={`text-[11px] mt-1 ${delta < 0 ? "text-red-600" : "text-emerald-600"}`}>
+                {delta < 0 ? `Baixa de ${Math.abs(delta)}` : `Entrada de ${delta}`} — o
+                movimento fica registrado no histórico.
+              </p>
+            )}
+          </div>
+
+          <div>
+            <Label className="text-xs">Motivo</Label>
+            <Select value={motivo} onValueChange={setMotivo}>
+              <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {MOTIVOS_AJUSTE.map((m) => (
+                  <SelectItem key={m.v} value={m.v}>{m.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div>
+            <Label className="text-xs">Observação (opcional)</Label>
+            <Textarea rows={2} value={obs} onChange={(e) => setObs(e.target.value)}
+              placeholder="Caiu na entrega de terça, cliente devolveu..." />
+          </div>
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={fechar}>Cancelar</Button>
+          <Button onClick={salvar} disabled={ajustar.isPending || novo == null || delta === 0}>
+            {ajustar.isPending && <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />}
+            Corrigir
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -200,3 +200,53 @@ export function useConfirmarChegadaVendedor() {
     },
   });
 }
+
+/**
+ * Corrige o saldo de uma caixa a partir do que foi CONTADO.
+ *
+ * ⚠️ Manda também o `saldoEsperado` — o número que a tela estava exibindo. Se
+ * ele não bater com o do banco, a RPC RECUSA: significa que houve venda ou
+ * chegada enquanto a pessoa conferia, e ajustar com o número velho apagaria
+ * essa movimentação. Recusar custa um clique; gravar em cima custa um
+ * inventário.
+ *
+ * ⚠️ NÃO use `useSetStockQty` para caixa de vendedor. Ele grava valor absoluto
+ * lido da tela, em duas requisições separadas, e apaga venda concorrente.
+ */
+export function useAjustarCaixa() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (p: {
+      warehouseId: string; productId: string; qtdContada: number;
+      motivo: string; obs?: string | null; saldoEsperado: number;
+    }) => {
+      const rr = await db.rpc("carbo_ajustar_estoque", {
+        p_warehouse_id: p.warehouseId,
+        p_product_id: p.productId,
+        p_qty_contada: p.qtdContada,
+        p_motivo: p.motivo,
+        p_obs: p.obs || null,
+        p_saldo_esperado: p.saldoEsperado,
+      });
+      if (rr.error) throw rr.error;
+      return rr.data as number;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["ops", "vendedor-estoque"] });
+      qc.invalidateQueries({ queryKey: ["ops", "stock"] });
+      qc.invalidateQueries({ queryKey: ["ops", "stock-movements"] });
+      // O vendedor vê o próprio saldo no /vender e no Meu Estoque.
+      qc.invalidateQueries({ queryKey: ["meu_estoque"] });
+    },
+  });
+}
+
+/** Motivos aceitos pelo banco. Lista fechada — ver o CHECK em stock_movements. */
+export const MOTIVOS_AJUSTE = [
+  { v: "contagem",          label: "Erro de contagem" },
+  { v: "quebra",            label: "Quebra / avaria" },
+  { v: "perda",             label: "Perda / extravio" },
+  { v: "amostra",           label: "Amostra / degustação" },
+  { v: "devolucao_cliente", label: "Devolução de cliente" },
+  { v: "outro",             label: "Outro" },
+] as const;
