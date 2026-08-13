@@ -435,8 +435,13 @@ async function createBlingPedido(
   token: string,
   orderId: string,
   dryRun = false,
-  contactOverride: Record<string, any> | null = null
+  contactOverride: Record<string, any> | null = null,
+  conta: ContaBling = 1,
 ): Promise<any> {
+  // ⚠️ TODA consulta de apoio abaixo é da CONTA escolhida. Produto e contato
+  // têm id próprio em cada Bling; consultar o catálogo errado emitiria a nota
+  // com o produto — ou o cliente — de outra empresa.
+  const C = CONTAS[conta];
   const warnings: string[] = [];
 
   // 1. Busca o pedido
