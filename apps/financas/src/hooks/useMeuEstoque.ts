@@ -72,3 +72,51 @@ export function useMeuEstoque(vendedorId?: string | null) {
     },
   });
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// O que está a caminho.
+//
+// ⚠️ Existe porque a mercadoria em trânsito NÃO aparece em saldo nenhum: já
+// saiu de Natal e ainda não foi creditada na caixa. Sem esta lista o vendedor
+// vê o produto sumir do sistema entre o envio e a chegada, e a conclusão
+// natural é que alguém errou.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface ACaminho {
+  id: string;
+  product_code: string;
+  quantidade: number;
+  enviado_em: string;
+  notes: string | null;
+}
+
+export function useACaminho(vendedorId?: string | null) {
+  return useQuery({
+    enabled: !!vendedorId,
+    queryKey: ["meu_estoque_transito", vendedorId],
+    staleTime: 30_000,
+    queryFn: async (): Promise<ACaminho[]> => {
+      const wh = await db.from("warehouses").select("id")
+        .eq("owner_id", vendedorId).eq("kind", "vendedor").maybeSingle();
+      if (wh.error) throw wh.error;
+      if (!wh.data?.id) return [];
+
+      // 'approved' = saiu de Natal, ainda não confirmado. É o vocabulário da
+      // stock_transfers; 'executed' já foi creditado e não é mais trânsito.
+      const { data, error } = await db.from("stock_transfers")
+        .select("id, product_code, quantity, created_at, notes")
+        .eq("to_hub", wh.data.id)
+        .eq("status", "approved")
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+
+      return ((data ?? []) as Record<string, any>[]).map((t) => ({
+        id: t.id as string,
+        product_code: (t.product_code as string) ?? "",
+        quantidade: Number(t.quantity) || 0,
+        enviado_em: t.created_at as string,
+        notes: (t.notes as string) ?? null,
+      }));
+    },
+  });
+}

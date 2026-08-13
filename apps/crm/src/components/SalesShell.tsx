@@ -3,7 +3,7 @@ import { Outlet, useNavigate } from "react-router-dom";
 import {
   KanbanSquare, ClipboardList, TrendingUp, Target, BarChart3, LayoutDashboard,
   Wind, CalendarDays, MapPinned, Map, Share2, ShoppingCart, ShoppingBag, MessagesSquare, MapPin,
-  CalendarCheck,
+  CalendarCheck, PackageCheck,
 } from "lucide-react";
 import { ChatBadge, ChatProvider } from "@carbo/chat";
 import { Sidebar, type ShellNavSection } from "@carbo/shell";
@@ -56,6 +56,7 @@ export function SalesShell() {
         // "meus pedidos" mentia para o gestor, que vê o quadro inteiro. O que a
         // tela é para os dois é rastreio — quem é dono de quê já aparece no card.
         { to: "/pos-venda", label: "Rastreio de venda", icon: ShoppingBag },
+        { to: "/meu-estoque", label: "Meu Estoque", icon: PackageCheck },
         { to: "/compras", label: "Requisição de Compra", icon: ShoppingCart },
     ] },
     { label: "Descarbonização", icon: Wind, items: [

@@ -22,6 +22,7 @@ import MapaTerritorial from "./pages/territorio/MapaTerritorial";
 import NetworkMap from "./pages/territorio/NetworkMap";
 import TerritoryExpansion from "./pages/territorio/TerritoryExpansion";
 import Pdvs from "./pages/Pdvs";
+import MeuEstoque from "./pages/MeuEstoque";
 import RtmAgenda from "./pages/rtm/Agenda";
 import RtmVisita from "./pages/rtm/Visita";
 import { isCarbohubDomain, goToHubLogin } from "@/lib/sso";
@@ -57,6 +58,7 @@ export default function App() {
         <Route path="/metas" element={<Metas />} />
         <Route path="/comercial" element={<DashboardComercial />} />
         <Route path="/pdvs" element={<Pdvs />} />
+        <Route path="/meu-estoque" element={<MeuEstoque />} />
 
         {/* RTM · Fase 1 — registro de visita. A visita fica FORA da agenda de
             propósito: em campo o vendedor precisa de uma URL que abra direto
