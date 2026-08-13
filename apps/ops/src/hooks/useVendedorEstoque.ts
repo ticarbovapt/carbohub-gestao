@@ -250,3 +250,82 @@ export const MOTIVOS_AJUSTE = [
   { v: "devolucao_cliente", label: "Devolução de cliente" },
   { v: "outro",             label: "Outro" },
 ] as const;
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// O caminho de VOLTA
+//
+// ⚠️ Estas duas funções não são conveniência — são o que impede perda
+// silenciosa. Toda lista de trânsito do sistema filtra por `to_hub`, então uma
+// devolução sairia da caixa do vendedor e não apareceria para NINGUÉM
+// confirmar: presa em `approved` para sempre, debitada de quem devolveu e
+// nunca creditada no destino.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Devolve produto da caixa para outro armazém. Mesma RPC do envio, com a
+ *  origem invertida — ela debita a caixa, trava a linha e confere saldo. */
+export function useDevolverDaCaixa() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (p: {
+      productId: string; productCode: string;
+      fromCode: string; toCode: string;
+      quantity: number; notes?: string | null;
+    }) => {
+      if (!Number.isFinite(p.quantity) || p.quantity <= 0) throw new Error("Quantidade inválida.");
+      const { data: auth } = await db.auth.getUser();
+      const rr = await db.rpc("ops_transfer_register", {
+        p_product_id: p.productId,
+        p_product_code: p.productCode,
+        p_from_code: p.fromCode,
+        p_to_code: p.toCode,
+        p_qty: p.quantity,
+        p_notes: p.notes || null,
+        p_user: auth?.user?.id ?? null,
+      });
+      if (rr.error) throw rr.error;
+      return rr.data as string;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["ops", "vendedor-estoque"] });
+      qc.invalidateQueries({ queryKey: ["ops", "devolucoes-transito"] });
+      qc.invalidateQueries({ queryKey: ["ops", "saldo-natal"] });
+      qc.invalidateQueries({ queryKey: ["ops", "stock"] });
+      qc.invalidateQueries({ queryKey: ["meu_estoque"] });
+    },
+  });
+}
+
+/** O que está VOLTANDO: transferências que SAÍRAM de uma caixa de vendedor e
+ *  ainda não foram confirmadas no destino. É a fila que faltava. */
+export function useDevolucoesEmTransito() {
+  return useQuery({
+    queryKey: ["ops", "devolucoes-transito"],
+    queryFn: async () => {
+      const whs = await db.from("warehouses").select("id, name, kind");
+      if (whs.error) throw whs.error;
+      const todos = (whs.data ?? []) as { id: string; name: string; kind: string }[];
+      const caixas = todos.filter((w) => w.kind === "vendedor").map((w) => w.id);
+      const nome = new Map(todos.map((w) => [w.id, w.name]));
+      if (caixas.length === 0) return [];
+
+      const { data, error } = await db
+        .from("stock_transfers")
+        .select("id, product_code, quantity, notes, created_at, from_hub, to_hub")
+        .in("from_hub", caixas)
+        .eq("status", "approved")
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+
+      return ((data ?? []) as Record<string, any>[]).map((t) => ({
+        id: t.id as string,
+        product_code: (t.product_code as string) ?? "",
+        quantidade: Number(t.quantity) || 0,
+        origem: nome.get(t.from_hub as string) ?? "—",
+        destino: nome.get(t.to_hub as string) ?? "—",
+        notes: (t.notes as string) ?? null,
+        created_at: t.created_at as string,
+      }));
+    },
+  });
+}

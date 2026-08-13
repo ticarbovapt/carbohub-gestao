@@ -120,3 +120,42 @@ export function useACaminho(vendedorId?: string | null) {
     },
   });
 }
+
+
+/**
+ * O que está SAINDO da minha caixa — devolução ou repasse ainda não confirmado
+ * no destino.
+ *
+ * ⚠️ Espelho do `useACaminho`, e existe pela mesma razão, invertida: a
+ * devolução debita a caixa NA HORA, mas o destino só credita na confirmação.
+ * Sem esta lista o vendedor vê o produto sumir do saldo dele e não encontra em
+ * lugar nenhum — a leitura natural é "o sistema comeu meu estoque".
+ */
+export function useSaindoDaMinhaCaixa(vendedorId?: string | null) {
+  return useQuery({
+    enabled: !!vendedorId,
+    queryKey: ["meu_estoque_saindo", vendedorId],
+    staleTime: 30_000,
+    queryFn: async (): Promise<ACaminho[]> => {
+      const wh = await db.from("warehouses").select("id")
+        .eq("owner_id", vendedorId).eq("kind", "vendedor").maybeSingle();
+      if (wh.error) throw wh.error;
+      if (!wh.data?.id) return [];
+
+      const { data, error } = await db.from("stock_transfers")
+        .select("id, product_code, quantity, created_at, notes")
+        .eq("from_hub", wh.data.id)
+        .eq("status", "approved")
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+
+      return ((data ?? []) as Record<string, any>[]).map((t) => ({
+        id: t.id as string,
+        product_code: (t.product_code as string) ?? "",
+        quantidade: Number(t.quantity) || 0,
+        enviado_em: t.created_at as string,
+        notes: (t.notes as string) ?? null,
+      }));
+    },
+  });
+}

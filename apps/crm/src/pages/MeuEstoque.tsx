@@ -7,9 +7,9 @@ import { Badge } from "@/components/ui/badge";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { PackageCheck, Truck, Loader2, Search, PackageX } from "lucide-react";
+import { PackageCheck, Truck, Loader2, Search, PackageX, Undo2 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
-import { useMeuEstoque, useACaminho } from "@/hooks/useMeuEstoque";
+import { useMeuEstoque, useACaminho, useSaindoDaMinhaCaixa } from "@/hooks/useMeuEstoque";
 import { useVendedoresDir } from "@/hooks/useVendas";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -33,6 +33,7 @@ export default function MeuEstoque() {
   const { data: vendedores } = useVendedoresDir();
   const { data: estoque, isLoading } = useMeuEstoque(alvo || profile?.id);
   const { data: aCaminho } = useACaminho(alvo || profile?.id);
+  const { data: saindo } = useSaindoDaMinhaCaixa(alvo || profile?.id);
   const [busca, setBusca] = useState("");
   const [soComSaldo, setSoComSaldo] = useState(true);
 
@@ -123,6 +124,36 @@ export default function MeuEstoque() {
                     Recebeu? Avise o time de Operações para confirmar a chegada —
                     o saldo só entra aqui depois disso.
                   </p>
+                </CarboCardContent>
+              </CarboCard>
+            )}
+
+            {/* ── Saindo ─────────────────────────────────────────────────────
+                Espelho de "A caminho", invertido. A devolução debita a caixa na
+                hora, mas o destino só credita na confirmação — sem esta lista o
+                produto some do saldo e não aparece em lugar nenhum, e a leitura
+                natural é "o sistema comeu meu estoque". */}
+            {(saindo ?? []).length > 0 && (
+              <CarboCard>
+                <CarboCardContent className="p-4 space-y-2">
+                  <div className="flex items-center gap-2">
+                    <Undo2 className="h-4 w-4 text-sky-600" />
+                    <h2 className="text-sm font-semibold">Saindo da sua caixa</h2>
+                    <span className="text-[11px] text-muted-foreground">
+                      já saiu do seu saldo — aguardando confirmação
+                    </span>
+                  </div>
+                  <div className="divide-y">
+                    {(saindo ?? []).map((t) => (
+                      <div key={t.id} className="py-1.5">
+                        <p className="text-sm"><strong>{t.quantidade}</strong> × {t.product_code}</p>
+                        <p className="text-[11px] text-muted-foreground">
+                          Registrado em {new Date(t.enviado_em).toLocaleDateString("pt-BR")}
+                          {t.notes ? ` · ${t.notes}` : ""}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
                 </CarboCardContent>
               </CarboCard>
             )}

@@ -13,13 +13,14 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import {
-  PackageCheck, Truck, Send, Loader2, ChevronDown, ChevronRight, Check, TriangleAlert, Pencil,
+  PackageCheck, Truck, Send, Loader2, ChevronDown, ChevronRight, Check, TriangleAlert, Pencil, Undo2,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
   useVendedorEstoque, useSaldoNatal, useEnviarParaVendedor,
   useEnviosEmTransito, useConfirmarChegadaVendedor,
   useAjustarCaixa, MOTIVOS_AJUSTE,
+  useDevolverDaCaixa, useDevolucoesEmTransito,
   type CaixaVendedor,
 } from "@/hooks/useVendedorEstoque";
 
@@ -44,8 +45,10 @@ import {
 export default function EstoqueVendedores() {
   const { data: caixas, isLoading } = useVendedorEstoque();
   const { data: transito } = useEnviosEmTransito();
+  const { data: voltando } = useDevolucoesEmTransito();
   const confirmar = useConfirmarChegadaVendedor();
   const [envioPara, setEnvioPara] = useState<CaixaVendedor | null>(null);
+  const [devolverDe, setDevolverDe] = useState<CaixaVendedor | null>(null);
   const [ajuste, setAjuste] = useState<
     { caixa: CaixaVendedor; item: CaixaVendedor["itens"][number] } | null
   >(null);
@@ -116,6 +119,51 @@ export default function EstoqueVendedores() {
           </CarboCard>
         )}
 
+        {/* ── Voltando ───────────────────────────────────────────────────────
+            ⚠️ Esta lista é o que impede perda silenciosa. A devolução debita a
+            caixa do vendedor na hora, e sem uma fila de confirmação ela ficaria
+            para sempre em trânsito: fora do saldo dele e nunca creditada no
+            destino. Todas as outras listas do sistema filtram por DESTINO e
+            nunca enxergariam isto. */}
+        {(voltando ?? []).length > 0 && (
+          <CarboCard>
+            <CarboCardContent className="p-4 space-y-2">
+              <div className="flex items-center gap-2">
+                <Undo2 className="h-4 w-4 text-sky-600" />
+                <h2 className="text-sm font-semibold">
+                  Voltando ({(voltando ?? []).length})
+                </h2>
+                <span className="text-[11px] text-muted-foreground">
+                  saiu da caixa do vendedor, ainda não chegou ao destino
+                </span>
+              </div>
+              <div className="divide-y">
+                {(voltando ?? []).map((t) => (
+                  <div key={t.id} className="flex items-center gap-3 py-2">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm truncate">
+                        <strong>{t.quantidade}</strong> × {t.product_code} · {t.origem} → {t.destino}
+                      </p>
+                      <p className="text-[11px] text-muted-foreground">
+                        {new Date(t.created_at).toLocaleString("pt-BR")}
+                        {t.notes ? ` · ${t.notes}` : ""}
+                      </p>
+                    </div>
+                    <Button size="sm" variant="outline" className="h-8 gap-1.5 shrink-0"
+                      disabled={confirmar.isPending}
+                      onClick={() => confirmar.mutate(t.id, {
+                        onSuccess: () => toast.success("Recebimento confirmado."),
+                        onError: (e: Error) => toast.error("Falhou: " + e.message),
+                      })}>
+                      <Check className="h-3.5 w-3.5" /> Recebi
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            </CarboCardContent>
+          </CarboCard>
+        )}
+
         <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
           <Kpi label="Vendedores com caixa" valor={lista.length} />
           <Kpi label="Unidades em campo" valor={totalGeral} />
@@ -147,6 +195,7 @@ export default function EstoqueVendedores() {
                 aberto={!!abertos[c.warehouse_id]}
                 onToggle={() => setAbertos((a) => ({ ...a, [c.warehouse_id]: !a[c.warehouse_id] }))}
                 onEnviar={() => setEnvioPara(c)}
+                onDevolver={() => setDevolverDe(c)}
                 onAjustar={(item) => setAjuste({ caixa: c, item })}
               />
             ))}
@@ -156,6 +205,7 @@ export default function EstoqueVendedores() {
 
       <DialogEnviar caixa={envioPara} onClose={() => setEnvioPara(null)} />
       <DialogAjuste alvo={ajuste} onClose={() => setAjuste(null)} />
+      <DialogDevolver caixa={devolverDe} caixas={lista} onClose={() => setDevolverDe(null)} />
     </div>
   );
 }
@@ -170,10 +220,10 @@ function Kpi({ label, valor }: { label: string; valor: number }) {
 }
 
 function Caixa({
-  c, soComSaldo, aberto, onToggle, onEnviar, onAjustar,
+  c, soComSaldo, aberto, onToggle, onEnviar, onDevolver, onAjustar,
 }: {
   c: CaixaVendedor; soComSaldo: boolean; aberto: boolean;
-  onToggle: () => void; onEnviar: () => void;
+  onToggle: () => void; onEnviar: () => void; onDevolver: () => void;
   onAjustar: (item: CaixaVendedor["itens"][number]) => void;
 }) {
   const itens = soComSaldo ? c.itens.filter((i) => i.quantidade > 0) : c.itens;
@@ -202,6 +252,11 @@ function Caixa({
             <Badge variant="outline" className="text-[10px] gap-1 border-amber-400 text-amber-700">
               <TriangleAlert className="h-3 w-3" /> não vende a pronta entrega
             </Badge>
+          )}
+          {c.total_unidades > 0 && (
+            <Button size="sm" variant="outline" className="h-8 gap-1.5 shrink-0" onClick={onDevolver}>
+              <Undo2 className="h-3.5 w-3.5" /> Devolver
+            </Button>
           )}
           <Button size="sm" className="h-8 gap-1.5 shrink-0" onClick={onEnviar}>
             <Send className="h-3.5 w-3.5" /> Enviar
@@ -446,6 +501,138 @@ function DialogAjuste({
           <Button onClick={salvar} disabled={ajustar.isPending || novo == null || delta === 0}>
             {ajustar.isPending && <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />}
             Corrigir
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Devolver produto da caixa.
+//
+// ⚠️ O destino é escolhido: Natal (o caso comum — vendedor devolve o que não
+// vendeu) ou outra caixa (passar produto entre vendedores em campo, sem a
+// mercadoria dar a volta por Natal).
+//
+// ⚠️ Sai da caixa NA HORA e entra em trânsito. Só é creditado no destino
+// quando alguém confirmar — o painel "Voltando" no topo desta tela existe
+// exatamente para isso não ficar esquecido.
+// ─────────────────────────────────────────────────────────────────────────────
+function DialogDevolver({
+  caixa, caixas, onClose,
+}: { caixa: CaixaVendedor | null; caixas: CaixaVendedor[]; onClose: () => void }) {
+  const devolver = useDevolverDaCaixa();
+  const [produtoId, setProdutoId] = useState("");
+  const [destino, setDestino] = useState("HUB-RN");
+  const [qtd, setQtd] = useState("");
+  const [nota, setNota] = useState("");
+
+  // Só o que TEM saldo: não dá para devolver o que não está na caixa, e
+  // oferecer a lista inteira só produz erro depois do clique.
+  const comSaldo = (caixa?.itens ?? []).filter((i) => i.quantidade > 0);
+  const escolhido = comSaldo.find((p) => p.product_id === produtoId) ?? null;
+  const quantidade = Number(qtd) || 0;
+  const excede = !!escolhido && quantidade > escolhido.quantidade;
+
+  function fechar() { setProdutoId(""); setDestino("HUB-RN"); setQtd(""); setNota(""); onClose(); }
+
+  function salvar() {
+    if (!caixa || !escolhido) { toast.error("Escolha o produto."); return; }
+    if (quantidade <= 0) { toast.error("Informe a quantidade."); return; }
+    devolver.mutate(
+      {
+        productId: escolhido.product_id,
+        productCode: escolhido.product_code ?? "",
+        fromCode: caixa.warehouse_code,
+        toCode: destino,
+        quantity: quantidade,
+        notes: nota.trim() || null,
+      },
+      {
+        onSuccess: () => {
+          toast.success("Registrado. Confirme o recebimento quando a mercadoria chegar.");
+          fechar();
+        },
+        onError: (e: Error) => toast.error(e.message),
+      },
+    );
+  }
+
+  const outras = caixas.filter((c) => c.warehouse_id !== caixa?.warehouse_id && c.is_active);
+
+  return (
+    <Dialog open={!!caixa} onOpenChange={(v) => { if (!v) fechar(); }}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Devolver da caixa de {caixa?.vendedor_nome ?? ""}</DialogTitle>
+        </DialogHeader>
+
+        <div className="space-y-3">
+          <p className="text-xs text-muted-foreground">
+            Sai da caixa agora e fica <strong>em trânsito</strong>. O saldo só entra
+            no destino quando alguém confirmar o recebimento.
+          </p>
+
+          <div>
+            <Label className="text-xs">Produto</Label>
+            <Select value={produtoId} onValueChange={setProdutoId}>
+              <SelectTrigger className="h-9"><SelectValue placeholder="Escolha o produto" /></SelectTrigger>
+              <SelectContent>
+                {comSaldo.map((p) => (
+                  <SelectItem key={p.product_id} value={p.product_id}>
+                    {p.product_name}
+                    <span className="text-muted-foreground"> · tem {p.quantidade}</span>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {comSaldo.length === 0 && (
+              <p className="text-[11px] text-muted-foreground mt-1">Esta caixa está vazia.</p>
+            )}
+          </div>
+
+          <div>
+            <Label className="text-xs">Para onde vai</Label>
+            <Select value={destino} onValueChange={setDestino}>
+              <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="HUB-RN">Hub Natal (devolução)</SelectItem>
+                {outras.map((c) => (
+                  <SelectItem key={c.warehouse_id} value={c.warehouse_code}>
+                    {c.vendedor_nome ?? c.warehouse_name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div>
+            <Label className="text-xs">Quantidade</Label>
+            <Input type="number" inputMode="numeric" min={1} value={qtd}
+              onChange={(e) => setQtd(e.target.value)} className="h-9" />
+            {escolhido && (
+              <p className={`text-[11px] mt-1 ${excede ? "text-red-600" : "text-muted-foreground"}`}>
+                {excede
+                  ? `A caixa só tem ${escolhido.quantidade}.`
+                  : `Na caixa hoje: ${escolhido.quantidade}.`}
+              </p>
+            )}
+          </div>
+
+          <div>
+            <Label className="text-xs">Motivo / observação</Label>
+            <Textarea rows={2} value={nota} onChange={(e) => setNota(e.target.value)}
+              placeholder="Sobra da rota, produto perto do vencimento, repasse para outro vendedor..." />
+          </div>
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={fechar}>Cancelar</Button>
+          <Button onClick={salvar}
+            disabled={devolver.isPending || excede || !escolhido || quantidade <= 0}>
+            {devolver.isPending && <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />}
+            Devolver
           </Button>
         </DialogFooter>
       </DialogContent>
