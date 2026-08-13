@@ -21,6 +21,12 @@ export interface Produto {
    * que precisa aparecer, não algo para o vendedor preencher no olho.
    */
   sale_price: number | null;
+  /**
+   * Quando preenchido, este é o "gêmeo de bonificação" do produto apontado:
+   * mesmo item físico, entregue de graça. A tela trava 100% de desconto na
+   * linha, e o ESTOQUE baixa do pai — é a mesma garrafa da mesma prateleira.
+   */
+  bonificacao_de: string | null;
 }
 
 export function useProdutos() {
@@ -32,7 +38,7 @@ export function useProdutos() {
       // Mesma regra que a OP usa (category === "Produto Final").
       const { data, error } = await db
         .from("mrp_products")
-        .select("id, name, product_code, stock_unit, sale_price")
+        .select("id, name, product_code, stock_unit, sale_price, bonificacao_de")
         .eq("is_active", true)
         .eq("category", "Produto Final")
         .order("name");

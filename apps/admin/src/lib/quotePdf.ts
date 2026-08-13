@@ -23,7 +23,15 @@ interface QuoteItem {
   product_code?: string;
   quantity?: number;
   unit_price?: number;
+  /** Modelo ANTIGO de bonificação: quantidade extra na própria linha do produto
+   *  pago. Continua sendo lido porque o histórico está gravado assim. */
   bonus_quantity?: number;
+  /** Modelo NOVO: a linha inteira é bonificação — o "gêmeo" do catálogo,
+   *  entregue de graça a 100% de desconto.
+   *  ⚠️ Ela NÃO entra na base de rateio do desconto do pedido: já é grátis, e
+   *  mantê-la na base encolheria o fator de desconto, fazendo todas as outras
+   *  linhas receberem desconto a menos e o total deixar de fechar. */
+  is_bonificacao?: boolean;
 }
 
 type Endereco = Record<string, unknown> | null | undefined;
@@ -224,7 +232,10 @@ export async function generateQuotePdf(order: QuotePdfData, opts?: { download?: 
   // ── Itens ──────────────────────────────────────────────────────────────────
   y = Math.max(ly, ry) + 4;
   const items = (Array.isArray(order.items) ? order.items : []) as QuoteItem[];
-  const pagos = items.filter((it) => (it.name || it.product_code) && (it.quantity ?? 0) > 0);
+  const visiveis = items.filter((it) => (it.name || it.product_code) && (it.quantity ?? 0) > 0);
+  // A base do rateio é só o que é cobrado. Ver o comentário em QuoteItem.
+  const pagos = visiveis.filter((it) => !it.is_bonificacao);
+  const bonificados = visiveis.filter((it) => it.is_bonificacao);
 
   /* ── O desconto, linha a linha ──────────────────────────────────────────
    *
@@ -306,6 +317,23 @@ export async function generateQuotePdf(order: QuotePdfData, opts?: { download?: 
         : [`${nome} (bonificação)`, String(bonus), brl(0), brl(0)]);
       riscar.push(false);
     }
+  });
+
+  // ── Bonificação (modelo novo) ────────────────────────────────────────────
+  // Vai DEPOIS dos itens pagos, e não intercalada: no modelo novo ela é uma
+  // linha própria do pedido, sem dono — não existe "a bonificação da linha 2".
+  //
+  // ⚠️ Mostra o valor unitário CHEIO e o desconto de 100%, em vez de R$ 0,00
+  // seco. É o que dá sentido comercial ao brinde: o cliente vê o tamanho do
+  // que ganhou. Preço zero apagaria justamente o argumento de quem deu.
+  bonificados.forEach((it) => {
+    const qty = it.quantity ?? 0;
+    const unit = it.unit_price ?? 0;
+    const nome = it.name || it.product_code || "—";
+    body.push(temDesconto
+      ? [nome, String(qty), brl(unit), `- ${brl(qty * unit)}`, brl(0), brl(0)]
+      : [nome, String(qty), brl(unit), brl(0)]);
+    riscar.push(true);
   });
 
   const vazio = temDesconto ? ["Nenhum item", "", "", "", "", ""] : ["Nenhum item", "", "", ""];

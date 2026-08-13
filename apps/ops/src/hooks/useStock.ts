@@ -60,6 +60,12 @@ export function useStock() {
           .from("mrp_products")
           .select("id, product_code, name, category, stock_unit, safety_stock_qty")
           .eq("is_active", true)
+          // ⚠️ Fora o "gêmeo de bonificação": ele não tem saldo próprio, não é
+          // produzido e não entra no MRP — é um rótulo comercial que existe
+          // para a tela de venda e para a nota. Sem este filtro a grade ganha
+          // uma linha zerada por produto, e um dia alguém tenta transferir
+          // bonificação.
+          .is("bonificacao_de", null)
           .order("product_code"),
         db.from("warehouse_stock").select("product_id, quantity, warehouse:warehouses(code)"),
         db.from("ops_stock_min").select("product_id, min_qty, warehouse:warehouses(code)"),

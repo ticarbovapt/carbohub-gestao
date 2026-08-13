@@ -90,7 +90,36 @@ só existe lá. A divergência é intencional: copiar o do CRM por cima dos outr
 quebra o build deles e muda o que mostram. Edite os seis com a MESMA alteração
 mínima, em vez de sobrescrever.
 
-### RTM (Route to Market) — só no `apps/crm`, e por enquanto Fase 1
+### Bonificação é PRODUTO, não campo
+O switch "Tem bonificação" saiu do `/vender`. Cada Produto Final tem um
+**gêmeo** no catálogo (`CarboZé 100ml - bonificação`), ligado ao pai por
+`mrp_products.bonificacao_de`. Escolher o gêmeo aplica 100% de desconto,
+travado. Antes eram dois passos — somar a quantidade e depois abater o valor —
+e dois lugares de errar.
+
+1. **O estoque baixa do PAI.** `carbo_itens_para_estoque` resolve
+   `bonificacao_de`: é a mesma garrafa da mesma prateleira. Olhar o id do gêmeo
+   exigiria saldo de um SKU que nunca é produzido — e toda venda de pronta
+   entrega com bonificação seria recusada.
+2. **O gêmeo não é produto para o resto do sistema.** Sem saldo, sem produção,
+   fora do MRP. Filtrado com `.is("bonificacao_de", null)` no `useStock.ts` e
+   no `useMrpProducts.ts` do Ops, e na view `vendedor_estoque`. Sem isso a
+   grade ganha uma linha zerada por produto.
+3. **O preço do gêmeo ESPELHA o do pai** (trigger `trg_bonificacao_espelha_preco`).
+   Preço zero funcionaria, mas apagaria o que dá sentido comercial ao brinde:
+   o orçamento mostra `R$ 133,68 × 10 · −100% · R$ 0,00` e o cliente vê o
+   tamanho do que ganhou.
+4. **A linha de bonificação sai da base de rateio no `quotePdf.ts`.** Ela já é
+   grátis; mantê-la em `brutoTotal` encolheria o fator e TODAS as outras linhas
+   receberiam desconto a menos — o total deixaria de fechar.
+5. **`bonus_quantity` continua sendo lido.** O histórico foi gravado no modelo
+   antigo, e estorno de pedido velho tem de devolver o que saiu. No modelo novo
+   ele é sempre 0 e a marca é `is_bonificacao` no item — explícita, nunca
+   inferida de "total zero".
+6. **Serviço de descarbonização ficou fora**: não é produto de catálogo, não
+   tem gêmeo e não move estoque. O switch de bonificação dele permanece.
+
+### Estoque do vendedor / pronta entrega
 Base: o briefing de domínio "Carbo Core · Comercial NE · v1". As fases são
 ordenadas e **antecipar produz tela sem dado**. Fase 1 = registro de visita
 (check-in, conferência, check-out). Roteirização, curva ABC, sell-out e

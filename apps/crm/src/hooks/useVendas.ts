@@ -17,6 +17,7 @@ export type VendaStatus = "orcamento" | "pedido" | "cancelado";
 export type VendaTipo = "venda" | "promo";
 
 export interface VendaItemInput {
+  is_bonificacao?: boolean;
   produto: string; quantidade: number; preco_unitario: number; bonificacao?: number;
   product_id?: string | null; product_code?: string | null;
   // Desconto POR ITEM (dinheiro): tipo, valor digitado e R$ abatido na linha.
@@ -256,6 +257,9 @@ async function buildOrderFields(input: NovaVendaInput) {
         discount_amount: descLinha,
         total: round2(bruto - descLinha),
         product_id: i.product_id ?? null, product_code: i.product_code ?? null,
+        // Marca explícita, e não inferida de "total zero": inferir confundiria
+        // bonificação com item de brinde precificado a zero por outro motivo.
+        is_bonificacao: !!i.is_bonificacao,
       };
       // Itens de produto continuam EXATAMENTE como antes; serviço leva kind/modality e product_id nulo.
       return isService

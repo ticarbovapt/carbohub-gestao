@@ -323,7 +323,9 @@ export default function Vender() {
     let bruto = 0, desc = 0;
     for (const r of rows) {
       const g = r.qty * r.unitPrice;
-      const line = computeLineDiscount(g, { type: r.discType, value: r.discValue });
+      const line = ehBonificacao(r.productId)
+        ? { amount: g, net: 0 }
+        : computeLineDiscount(g, { type: r.discType, value: r.discValue });
       bruto += g;
       desc += line.amount;
     }
@@ -477,19 +479,35 @@ export default function Vender() {
       unitPriceStr: preco ? String(preco).replace(".", ",") : "",
     });
   }
+  /** A linha é bonificação quando o produto escolhido é um gêmeo.
+   *  ⚠️ A regra mora no PRODUTO, não numa flag da linha: assim ela sobrevive
+   *  a reabrir o orçamento, e um gêmeo escolhido por qualquer caminho já
+   *  entra com 100% — não há como salvar bonificação cobrada. */
+  const ehBonificacao = (productId: string) =>
+    !!produtos.find((p) => p.id === productId)?.bonificacao_de;
+
   const validItems = () =>
     rows.filter((r) => r.productId && r.qty > 0).map((r) => {
       const prod = produtos.find((p) => p.id === r.productId);
       const bruto = r.qty * r.unitPrice;
-      const line = computeLineDiscount(bruto, { type: r.discType, value: r.discValue });
+      const bonif = !!prod?.bonificacao_de;
+      // Bonificação: 100% de desconto, sempre. Não é o que o vendedor digitou —
+      // é o que o produto É. Calcular pelo desconto da linha deixaria uma
+      // brecha para salvar bonificação cobrada.
+      const line = bonif
+        ? { amount: bruto, net: 0 }
+        : computeLineDiscount(bruto, { type: r.discType, value: r.discValue });
       return {
         name: prod?.name ?? "Produto",
         product_id: r.productId,
         product_code: prod?.product_code ?? null,
-        quantity: r.qty, unit_price: r.unitPrice, bonus_quantity: r.hasBonus ? r.bonusQty : 0,
-        // Desconto da linha: tipo, valor digitado, R$ abatido e total já líquido.
-        discount_type: line.amount > 0 ? r.discType : "none",
-        discount_value: r.discValue,
+        quantity: r.qty, unit_price: r.unitPrice,
+        // ⚠️ Sempre 0 no modelo novo. O campo continua existindo porque o
+        // HISTÓRICO tem valor nele, e quem lê (estoque, PDF) precisa dos dois.
+        bonus_quantity: 0,
+        is_bonificacao: bonif,
+        discount_type: bonif ? "percent" : (line.amount > 0 ? r.discType : "none"),
+        discount_value: bonif ? 100 : r.discValue,
         discount_amount: line.amount,
         total: line.net,
       };
@@ -642,6 +660,7 @@ export default function Vender() {
         quantidade: i.quantity,
         preco_unitario: i.unit_price,
         bonificacao: i.bonus_quantity,
+        is_bonificacao: i.is_bonificacao,
         discount_type: i.discount_type,
         discount_value: i.discount_value,
         discount_amount: i.discount_amount,
@@ -1277,16 +1296,16 @@ export default function Vender() {
                   </div>
                 </div>
                 <div className="flex flex-wrap items-center gap-x-4 gap-y-3">
-                  <label className="flex items-center gap-2">
-                    <Switch checked={r.hasBonus} onCheckedChange={(v) => updateRow(r.id, { hasBonus: v })} />
-                    <span className="text-sm flex items-center gap-1"><Gift className="h-3.5 w-3.5 text-carbo-green" /> Tem bonificação</span>
-                  </label>
-                  {r.hasBonus && (
-                    <div className="flex items-center gap-2">
-                      <Label className="text-xs">Qtd bonificada</Label>
-                      <Input type="number" min={0} value={r.bonusQty} onChange={(e) => updateRow(r.id, { bonusQty: Number(e.target.value) })} className="w-24" />
-                    </div>
-                  )}
+                  {/* ⚠️ O switch "Tem bonificação" saiu daqui. Bonificação virou
+                      PRODUTO: escolhe-se "X - bonificação" na lista e pronto.
+                      Antes eram dois passos (somar a quantidade, depois abater
+                      o valor) e dois lugares de errar. */}
+                  {ehBonificacao(r.productId) ? (
+                    <span className="text-sm flex items-center gap-1.5 text-carbo-green">
+                      <Gift className="h-3.5 w-3.5" /> Bonificação — 100% de desconto aplicado
+                    </span>
+                  ) : (
+                  <>
                   {/* Desconto POR ITEM: toggle % | R$ + valor */}
                   <div className="flex items-center gap-2">
                     <span className="text-sm flex items-center gap-1"><Tag className="h-3.5 w-3.5 text-carbo-green" /> Desconto</span>
@@ -1303,6 +1322,8 @@ export default function Vender() {
                       value={r.discValue || ""} onChange={(e) => updateRow(r.id, { discValue: Number(e.target.value) })}
                       placeholder={r.discType === "percent" ? "ex.: 5" : "ex.: 100,00"} />
                   </div>
+                  </>
+                  )}
                 </div>
               </div>
             );
