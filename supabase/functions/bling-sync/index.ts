@@ -537,16 +537,26 @@ async function createBlingPedido(
       codigo,
     });
 
+    // ⚠️ Linha de BONIFICAÇÃO vai a ZERO, não pelo unit_price.
+    //
+    // O gêmeo de bonificação espelha o preço do PAI (para o orçamento mostrar
+    // ao cliente o tamanho do brinde), e o desconto de 100% mora na LINHA. Mas
+    // este payload só envia o desconto do PEDIDO (`pedidoPayload.desconto`) —
+    // desconto de linha não é enviado. Sem este zero explícito, a bonificação
+    // ia ao Bling a preço cheio e o cliente seria COBRADO pelo brinde.
+    const ehBonificacao = item.is_bonificacao === true;
+
     blingItems.push({
       ...(blingProductId
         ? { produto: { id: blingProductId } }
         : { descricao: item.name || "Produto" }
       ),
       quantidade: Number(item.quantity) || 1,
-      valor: Number(item.unit_price) || 0,
+      valor: ehBonificacao ? 0 : (Number(item.unit_price) || 0),
     });
 
-    // V3: bonus units go as a separate line at R$0 so they appear on the NF
+    // Modelo ANTIGO: unidades bonificadas na própria linha do produto pago.
+    // Continua aqui porque pedido do histórico pode ser reenviado ao Bling.
     const bonusQty = Number(item.bonus_quantity) || 0;
     if (bonusQty > 0) {
       blingItems.push({

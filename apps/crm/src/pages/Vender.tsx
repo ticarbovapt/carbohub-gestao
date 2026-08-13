@@ -499,6 +499,18 @@ export default function Vender() {
       const prod = produtos.find((p) => p.id === r.productId);
       const bruto = r.qty * r.unitPrice;
       const bonif = !!prod?.bonificacao_de;
+      // ⚠️ A linha de bonificação carrega a IDENTIDADE DO PAI (product_id e
+      // product_code), não a do gêmeo. É o mesmo SKU — a bonificação é uma
+      // marca sobre ele, não outro produto.
+      //
+      // Sem isto, tudo o que é a jusante recebe um código que não existe fora
+      // do nosso catálogo: o estoque precisa resolver o vínculo toda vez, e no
+      // Bling o `CZ100-BON` não casa com produto nenhum e a linha vira
+      // "descrição livre" — uma NF com produto sem cadastro.
+      //
+      // O NOME continua o do gêmeo ("... - bonificação"): nome é exibição,
+      // id é identidade. É o que faz o orçamento e a NF ficarem legíveis.
+      const pai = bonif ? produtos.find((p) => p.id === prod!.bonificacao_de) : null;
       // Bonificação: 100% de desconto, sempre. Não é o que o vendedor digitou —
       // é o que o produto É. Calcular pelo desconto da linha deixaria uma
       // brecha para salvar bonificação cobrada.
@@ -507,8 +519,8 @@ export default function Vender() {
         : computeLineDiscount(bruto, { type: r.discType, value: r.discValue });
       return {
         name: prod?.name ?? "Produto",
-        product_id: r.productId,
-        product_code: prod?.product_code ?? null,
+        product_id: pai?.id ?? r.productId,
+        product_code: pai?.product_code ?? prod?.product_code ?? null,
         quantity: r.qty, unit_price: r.unitPrice,
         // ⚠️ Sempre 0 no modelo novo. O campo continua existindo porque o
         // HISTÓRICO tem valor nele, e quem lê (estoque, PDF) precisa dos dois.
