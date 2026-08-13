@@ -4,7 +4,7 @@ import {
   DragOverlay, type DragStartEvent, type DragEndEvent,
 } from "@dnd-kit/core";
 import { toast } from "sonner";
-import { ShoppingBag, Loader2, User, Calendar, MapPin, Phone, Mail, Package, FileText, CreditCard, Truck, Boxes, Weight, Tag, Pencil, CheckCircle2 } from "lucide-react";
+import { ShoppingBag, Loader2, User, Calendar, MapPin, Phone, Mail, Package, FileText, CreditCard, Truck, Boxes, Weight, Tag, Pencil, CheckCircle2, Gift } from "lucide-react";
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -50,6 +50,34 @@ function resumoItens(items: PosVendaOrder["items"] | null | undefined): string {
   };
   if (items.length === 1) return parte(items[0]);
   return `${parte(items[0])} +${items.length - 1}`;
+}
+
+/**
+ * O pedido tem item bonificado?
+ *
+ * ⚠️ Serve à FÁBRICA, não ao comercial: item bonificado sai em caixa separada,
+ * com nota própria (natureza "Remessa em bonificação, doação ou brinde"). Sem
+ * este aviso o único sinal é o sufixo "- bonificação" no fim do nome do
+ * produto, dentro de um resumo que corta em duas linhas — ou seja, sinal
+ * nenhum. Quem separa embala tudo junto e a nota não fecha com o volume.
+ *
+ * Lê os DOIS modelos: `is_bonificacao` (linha própria, atual) e
+ * `bonus_quantity` (quantidade extra na linha paga, histórico).
+ */
+function itensBonificados(items: PosVendaOrder["items"] | null | undefined) {
+  if (!Array.isArray(items)) return [] as { nome: string; qtd: number }[];
+  return items
+    .map((i: any) => ({
+      nome: String(i?.produto ?? i?.name ?? "item"),
+      qtd: Number(i?.quantidade ?? i?.quantity ?? 0),
+      bonif: i?.is_bonificacao === true,
+      legado: Number(i?.bonificacao ?? i?.bonus_quantity ?? 0),
+    }))
+    .flatMap((i) =>
+      i.bonif ? [{ nome: i.nome, qtd: i.qtd }]
+      : i.legado > 0 ? [{ nome: i.nome, qtd: i.legado }]
+      : [],
+    );
 }
 
 /** "set/26" — mês devido da parcela. */
@@ -445,6 +473,18 @@ export default function PosVenda() {
                           </div>
                           {/* O QUE é o pedido. Antes o card só dizia quem e quanto —
                               a Separação tinha de abrir o detalhe para saber o item. */}
+                          {itensBonificados(o.items).length > 0 && (
+                            <div className="rounded-md border border-amber-400/50 bg-amber-50 dark:bg-amber-950/30 px-2 py-1">
+                              <p className="text-[11px] font-semibold text-amber-700 dark:text-amber-300 flex items-center gap-1">
+                                <Gift className="h-3 w-3 shrink-0" /> Caixa separada de bonificação
+                              </p>
+                              {itensBonificados(o.items).map((b, n) => (
+                                <p key={n} className="text-[11px] text-amber-700/90 dark:text-amber-300/90 truncate">
+                                  {b.nome} × {b.qtd}
+                                </p>
+                              ))}
+                            </div>
+                          )}
                           {resumoItens(o.items) && (
                             <p className="text-xs text-foreground/80 leading-snug line-clamp-2">{resumoItens(o.items)}</p>
                           )}
