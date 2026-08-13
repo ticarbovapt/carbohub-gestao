@@ -247,9 +247,17 @@ export function useCreateBlingPedido() {
   return useMutation({
     // `contact` = cadastro conferido/editado na tela de confirmação (só usado
     // quando o cliente não existe no Bling). Se ausente, o servidor monta do pedido.
-    mutationFn: async ({ orderId, contact }: { orderId: string; contact?: BlingContactToCreate | null }) => {
+    mutationFn: async ({ orderId, contact, conta }: {
+      orderId: string; contact?: BlingContactToCreate | null; conta?: 1 | 2;
+    }) => {
       const { data, error } = await supabase.functions.invoke("bling-sync", {
-        body: { entity: "create_order", order_id: orderId, ...(contact ? { contact } : {}) },
+        // ⚠️ `conta` explícita. O servidor tem default 1, mas mandar sempre
+        // evita que uma mudança de default do outro lado troque a empresa
+        // emitente sem ninguém perceber.
+        body: {
+          entity: "create_order", order_id: orderId, conta: conta ?? 1,
+          ...(contact ? { contact } : {}),
+        },
       });
       if (error) throw new Error(await extractFnError(error, "Erro ao criar pedido no Bling"));
       if (data && data.success === false) throw new Error(data.error || "Erro ao criar pedido no Bling");
@@ -276,9 +284,11 @@ export function useCreateBlingPedido() {
 /** Pré-visualiza o payload (dry-run) antes de enviar ao Bling. */
 export function usePreviewBlingPedido() {
   return useMutation({
-    mutationFn: async (orderId: string): Promise<BlingPreview> => {
+    mutationFn: async (
+      { orderId, conta }: { orderId: string; conta?: 1 | 2 },
+    ): Promise<BlingPreview> => {
       const { data, error } = await supabase.functions.invoke("bling-sync", {
-        body: { entity: "create_order", order_id: orderId, dry_run: true },
+        body: { entity: "create_order", order_id: orderId, dry_run: true, conta: conta ?? 1 },
       });
       if (error) throw new Error(await extractFnError(error, "Erro ao gerar pré-visualização"));
       if (data && data.success === false) throw new Error(data.error || "Erro ao gerar pré-visualização");

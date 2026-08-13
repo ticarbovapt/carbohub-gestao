@@ -55,11 +55,54 @@ interface BlingIntegration {
 // Refresh buffer: refresh proactively if token expires within 5 minutes
 const REFRESH_BUFFER_MS = 5 * 60 * 1000;
 
+// ─────────────────────────────────────────────────────────────────────────────
+// As DUAS contas Bling.
+//
+// Bling 1 = MATRIZ, Bling 2 = FILIAL SP. Cada uma tem token, catálogo de
+// produtos, cadastro de contatos e naturezas de operação PRÓPRIOS — e as duas
+// numeram do zero, então `bling_id` de uma não significa nada na outra. A
+// chave portável entre contas é o `codigo` do produto e o CNPJ do contato.
+//
+// ⚠️ Um mapa, e não `if (conta === 2)` espalhado: cada tabela esquecida seria
+// uma consulta feita no catálogo errado, e o sintoma é uma NF com o produto
+// (ou o cliente) de outra empresa.
+//
+// ⚠️ `refPrefix` é o que impede duplicata. A ponte do Bling 2 pula o que já
+// tem `external_ref = 'bling2-<id>'`; gravar `'bling-'` num pedido faturado em
+// SP o faria voltar como pedido NOVO, dobrando faturamento.
+// ─────────────────────────────────────────────────────────────────────────────
+type ContaBling = 1 | 2;
+
+const CONTAS: Record<ContaBling, {
+  nome: string; integration: string; envId: string; envSecret: string;
+  tbOrders: string; tbContacts: string; tbProducts: string;
+  refPrefix: string; naturezaKey: string;
+  colPedidoBonificacao: string; colNf: string; colChave: string; colNumero: string;
+}> = {
+  1: {
+    nome: "Matriz", integration: "bling_integration",
+    envId: "BLING_CLIENT_ID", envSecret: "BLING_CLIENT_SECRET",
+    tbOrders: "bling_orders", tbContacts: "bling_contacts", tbProducts: "bling_products",
+    refPrefix: "bling-", naturezaKey: "bling1_natureza_bonificacao_id",
+    colPedidoBonificacao: "bling_pedido_bonificacao_id",
+    colNf: "bling_nf_id", colChave: "nf_access_key", colNumero: "invoice_number",
+  },
+  2: {
+    nome: "Filial SP", integration: "bling2_integration",
+    envId: "BLING2_CLIENT_ID", envSecret: "BLING2_CLIENT_SECRET",
+    tbOrders: "bling2_orders", tbContacts: "bling2_contacts", tbProducts: "bling2_products",
+    refPrefix: "bling2-", naturezaKey: "bling2_natureza_bonificacao_id",
+    colPedidoBonificacao: "bling2_pedido_bonificacao_id",
+    colNf: "bling2_nf_id", colChave: "nf2_access_key", colNumero: "invoice2_number",
+  },
+};
+
 async function refreshBlingToken(
   supabaseAdmin: ReturnType<typeof createClient>,
   integration: any,
   blingClientId: string,
-  blingClientSecret: string
+  blingClientSecret: string,
+  conta: ContaBling = 1,
 ): Promise<{ token: string; error?: string }> {
   console.log("[bling-sync] Refreshing token for integration:", integration.id);
   const basicAuth = btoa(`${blingClientId}:${blingClientSecret}`);
@@ -81,7 +124,7 @@ async function refreshBlingToken(
     console.error("[bling-sync] Token refresh FAILED:", JSON.stringify(refreshData));
     // Deactivate integration
     await supabaseAdmin
-      .from("bling_integration")
+      .from(CONTAS[conta].integration)
       .update({ is_active: false })
       .eq("id", integration.id);
     return { token: "", error: `Token refresh failed: ${refreshData.error_description || refreshData.error || "unknown"}. Please reconnect to Bling.` };
@@ -90,7 +133,7 @@ async function refreshBlingToken(
   const expiresAt = new Date(Date.now() + (refreshData.expires_in || 21600) * 1000);
 
   await supabaseAdmin
-    .from("bling_integration")
+    .from(CONTAS[conta].integration)
     .update({
       access_token: refreshData.access_token,
       refresh_token: refreshData.refresh_token,
@@ -107,16 +150,17 @@ async function getValidToken(
   supabaseAdmin: ReturnType<typeof createClient>,
   blingClientId: string,
   blingClientSecret: string,
-  forceRefresh = false
+  forceRefresh = false,
+  conta: ContaBling = 1,
 ): Promise<{ token: string; error?: string }> {
   const { data: integration, error } = await supabaseAdmin
-    .from("bling_integration")
+    .from(CONTAS[conta].integration)
     .select("*")
     .eq("is_active", true)
     .single();
 
   if (error || !integration) {
-    return { token: "", error: "No active Bling integration. Please connect first." };
+    return { token: "", error: `Sem integração ativa com o Bling (${CONTAS[conta].nome}). Conecte a conta primeiro.` };
   }
 
   const expiresAt = new Date(integration.expires_at);
@@ -128,7 +172,7 @@ async function getValidToken(
   if (forceRefresh || isExpired || isExpiringSoon) {
     const reason = forceRefresh ? "forced (401 retry)" : isExpired ? "expired" : "expiring soon";
     console.log(`[bling-sync] Token needs refresh: ${reason}. Expires at: ${integration.expires_at}`);
-    return refreshBlingToken(supabaseAdmin, integration, blingClientId, blingClientSecret);
+    return refreshBlingToken(supabaseAdmin, integration, blingClientId, blingClientSecret, conta);
   }
 
   console.log("[bling-sync] Using existing token, expires at:", integration.expires_at);
@@ -412,7 +456,7 @@ async function createBlingPedido(
   if (order.external_ref?.startsWith("bling-")) {
     const blingOrderId = order.external_ref.replace("bling-", "");
     const { data: blingOrder } = await supabaseAdmin
-      .from("bling_orders")
+      .from(C.tbOrders)
       .select("contato_id")
       .eq("bling_id", Number(blingOrderId))
       .maybeSingle();
@@ -427,7 +471,7 @@ async function createBlingPedido(
     const docDigits = String(order.cnpj).replace(/\D/g, "");
     if (docDigits.length >= 11) {
       const { data: byDoc } = await supabaseAdmin
-        .from("bling_contacts")
+        .from(C.tbContacts)
         .select("bling_id, nome, cpf_cnpj")
         .in("cpf_cnpj", [order.cnpj, docDigits])
         .limit(1);
@@ -445,7 +489,7 @@ async function createBlingPedido(
       .trim();
     const term = baseName || order.customer_name;
     const { data: contacts } = await supabaseAdmin
-      .from("bling_contacts")
+      .from(C.tbContacts)
       .select("bling_id, nome")
       .ilike("nome", `%${term}%`)
       .limit(1);
@@ -488,7 +532,7 @@ async function createBlingPedido(
   // exato do Bling na NF, sem o vendedor precisar mudar nada.
   const officialCodigos = Object.values(LINHA_TO_BLING_CODIGO);
   const { data: officialProducts } = await supabaseAdmin
-    .from("bling_products")
+    .from(C.tbProducts)
     .select("bling_id, nome, codigo")
     .in("codigo", officialCodigos);
   const codigoToProduct = new Map<string, { bling_id: number; nome: string }>();
@@ -509,7 +553,7 @@ async function createBlingPedido(
 
     if (codigo) {
       const { data: prod } = await supabaseAdmin
-        .from("bling_products")
+        .from(C.tbProducts)
         .select("bling_id, nome")
         .eq("codigo", codigo)
         .maybeSingle();
@@ -702,7 +746,7 @@ async function createBlingPedido(
     pedidoPayload.contato = { id: blingContactId };
     // Cache local (best-effort) para casar próximos pedidos sem recriar.
     try {
-      await supabaseAdmin.from("bling_contacts").upsert({
+      await supabaseAdmin.from(C.tbContacts).upsert({
         bling_id: blingContactId,
         nome: contactToCreate.nome || order.customer_name || "",
         tipo_pessoa: contactToCreate.tipo || null,
@@ -725,9 +769,17 @@ async function createBlingPedido(
   const result = await blingPost(token, "/pedidos/vendas", pedidoPayload);
 
   // 6. Atualiza external_ref apenas se ainda não veio do Bling
-  if (result?.data?.id && !order.external_ref?.startsWith("bling-")) {
+  // ⚠️ O prefixo é o da CONTA. A ponte do Bling 2 pula o que já tem
+  // `external_ref = 'bling2-<id>'`; gravar 'bling-' aqui faria o pedido voltar
+  // como pedido NOVO (BLING2-…, valor cheio) e dobrar o faturamento.
+  //
+  // E grava `bling_conta` junto: sem ela, nada depois sabe onde consultar ou
+  // cancelar a nota — o external_ref sozinho é indistinguível entre as contas
+  // para o histórico já gravado.
+  if (result?.data?.id) {
     await supabaseAdmin.from("carboze_orders").update({
-      external_ref: `bling-${result.data.id}`,
+      external_ref: `${C.refPrefix}${result.data.id}`,
+      bling_conta: conta,
       updated_at: new Date().toISOString(),
     }).eq("id", orderId);
   }
@@ -748,15 +800,15 @@ async function createBlingPedido(
     const { data: cfg } = await supabaseAdmin
       .from("carbo_config_fiscal")
       .select("valor")
-      .eq("chave", "bling1_natureza_bonificacao_id")
+      .eq("chave", C.naturezaKey)
       .maybeSingle();
 
     const naturezaId = Number(cfg?.valor);
     if (!cfg?.valor || !Number.isFinite(naturezaId) || naturezaId <= 0) {
       throw new Error(
         "Pedido tem bonificação, mas a natureza de operação de bonificação não está " +
-        "configurada. Preencha `bling1_natureza_bonificacao_id` em carbo_config_fiscal " +
-        "com o ID da natureza \"Remessa em bonificação, doação ou brinde\" do Bling 1. " +
+        `configurada para ${C.nome}. Preencha \`${C.naturezaKey}\` em carbo_config_fiscal ` +
+        "com o ID da natureza \"Remessa em bonificação, doação ou brinde\" dessa conta. " +
         "O pedido PAGO já foi criado; só a remessa de bonificação faltou.",
       );
     }
@@ -807,7 +859,7 @@ async function createBlingPedido(
 
     if (resultBon?.data?.id) {
       await supabaseAdmin.from("carboze_orders").update({
-        bling_pedido_bonificacao_id: resultBon.data.id,
+        [C.colPedidoBonificacao]: resultBon.data.id,
         updated_at: new Date().toISOString(),
       }).eq("id", orderId);
     }
@@ -2454,6 +2506,10 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
     if (entity === "create_order") {
       const orderId = body.order_id as string | undefined;
+      // ⚠️ Conta explícita, com default 1. Nunca inferir: errar aqui emite a
+      // nota no CNPJ da empresa errada, e não há como desfazer sem carta de
+      // correção — ou cancelamento, se já circulou.
+      const conta: ContaBling = body.conta === 2 ? 2 : 1;
       if (!orderId) {
         return new Response(
           JSON.stringify({ success: false, error: "Missing order_id" }),
@@ -2464,7 +2520,23 @@ Deno.serve(async (req: Request): Promise<Response> => {
       // Contato conferido/editado na tela (opcional) — sanitizado dentro do createBlingPedido.
       const contactOverride = (body.contact && typeof body.contact === "object") ? body.contact : null;
       try {
-        const result = await createBlingPedido(supabaseAdmin, token, orderId, dryRun, contactOverride);
+        // Token da conta escolhida. O `token` do escopo externo é sempre o da
+        // matriz — usá-lo para faturar em SP autenticaria na empresa errada.
+        let tokenConta = token;
+        if (conta !== 1) {
+          const idEnv = Deno.env.get(CONTAS[conta].envId) ?? "";
+          const secretEnv = Deno.env.get(CONTAS[conta].envSecret) ?? "";
+          if (!idEnv || !secretEnv) {
+            throw new Error(
+              `As credenciais do Bling ${CONTAS[conta].nome} não estão configuradas no servidor ` +
+              `(${CONTAS[conta].envId} / ${CONTAS[conta].envSecret}).`,
+            );
+          }
+          const t2 = await getValidToken(supabaseAdmin, idEnv, secretEnv, false, conta);
+          if (!t2.token) throw new Error(t2.error || `Sem token válido para ${CONTAS[conta].nome}.`);
+          tokenConta = t2.token;
+        }
+        const result = await createBlingPedido(supabaseAdmin, tokenConta, orderId, dryRun, contactOverride, conta);
         return new Response(
           JSON.stringify(dryRun ? { success: true, ...result } : { success: true, data: result?.data || result }),
           { status: 200, headers: { "Content-Type": "application/json", ...corsHeaders } }

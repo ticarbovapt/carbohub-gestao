@@ -52,12 +52,16 @@ export function BlingConfirmDialog({
   const [data, setData] = useState<BlingPreview | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [form, setForm] = useState<ContactForm | null>(null);
+  // ⚠️ Em qual empresa a nota sai. Default MATRIZ — a filial é escolha
+  // explícita, porque errar aqui emite a nota no CNPJ errado e só se desfaz
+  // com cancelamento, depois de o documento já ter circulado.
+  const [conta, setConta] = useState<1 | 2>(1);
 
   useEffect(() => {
-    if (!order) { setData(null); setError(null); setForm(null); return; }
+    if (!order) { setData(null); setError(null); setForm(null); setConta(1); return; }
     let alive = true;
     setData(null); setError(null); setForm(null);
-    preview.mutateAsync(order.id)
+    preview.mutateAsync({ orderId: order.id, conta })
       .then((p) => {
         if (!alive) return;
         setData(p);
@@ -66,7 +70,7 @@ export function BlingConfirmDialog({
       .catch((e) => { if (alive) setError(e instanceof Error ? e.message : "Erro ao pré-visualizar"); });
     return () => { alive = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [order?.id]);
+  }, [order?.id, conta]);
 
   const willCreate = !!data && !data.contact_found && !!form;
   const set = (k: keyof ContactForm, v: string | number) => setForm((f) => (f ? { ...f, [k]: v } as ContactForm : f));
@@ -108,7 +112,7 @@ export function BlingConfirmDialog({
           ...(form.uf.trim() ? { uf: form.uf.trim() } : {}),
         } },
       } : null;
-      await createBling.mutateAsync({ orderId: order.id, contact });
+      await createBling.mutateAsync({ orderId: order.id, contact, conta });
       const url = "https://www.bling.com.br/vendas.php";
       if (win && !win.closed) win.location.href = url; else window.open(url, "_blank", "noopener");
       onOpenChange(false);
@@ -134,6 +138,32 @@ export function BlingConfirmDialog({
             criado no Bling até você clicar em <strong>Confirmar e criar</strong>.
           </DialogDescription>
         </DialogHeader>
+
+        {/* ── Em qual empresa a nota sai ──────────────────────────────────
+            Fica ANTES da pré-visualização e recarrega ela ao trocar: o
+            catálogo de produtos e o cadastro de clientes são de cada conta, e
+            um item que casa na matriz pode não existir na filial. Ver o aviso
+            de produto não casado logo abaixo. */}
+        <div className="rounded-lg border p-3 space-y-2">
+          <p className="text-xs font-medium">Emitir por</p>
+          <div className="grid grid-cols-2 gap-2">
+            {([[1, "Matriz"], [2, "Filial SP"]] as const).map(([v, label]) => (
+              <button key={v} type="button" onClick={() => setConta(v)}
+                disabled={createBling.isPending}
+                className={`rounded-md border px-3 py-2 text-sm transition ${
+                  conta === v ? "border-carbo-green bg-carbo-green/10 font-medium" : "hover:bg-muted"
+                }`}>
+                {label}
+              </button>
+            ))}
+          </div>
+          {conta === 2 && (
+            <p className="text-[11px] text-amber-600">
+              A nota sairá no CNPJ da <strong>filial SP</strong>. Confira antes de confirmar —
+              corrigir depois exige cancelamento.
+            </p>
+          )}
+        </div>
 
         {!data && !error && (
           <div className="flex items-center justify-center gap-2 py-10 text-muted-foreground">
