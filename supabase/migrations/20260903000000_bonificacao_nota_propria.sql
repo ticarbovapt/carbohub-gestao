@@ -225,3 +225,37 @@ select chave, coalesce(valor, '(NÃO CONFIGURADO)') as valor from public.carbo_c
 -- (c) A guarda não pegou nada indevido? Tem de vir VAZIO enquanto a parte 2
 --     não existir — nenhum pedido de bonificação foi criado ainda.
 select * from public.carbo_remessas_bonificacao_ignoradas order by ignorado_em desc;
+
+
+-- ╔═══════════════════════════════════════════════════════════════════════╗
+-- ║ BLOCO 7 — a natureza é POR CONTA do Bling                             ║
+-- ╚═══════════════════════════════════════════════════════════════════════╝
+-- ⚠️ Acréscimo posterior, antes de a parte 2 existir.
+--
+-- Natureza de operação é CADASTRO, e cada conta Bling tem o seu: o id da
+-- "Remessa em bonificação" na matriz não é o mesmo da filial SP. Uma chave só
+-- funcionaria enquanto a emissão fosse só na conta 1 — e a emissão por conta
+-- está sendo pedida.
+--
+-- Descobrir isso depois significaria emitir a remessa de SP com o id da
+-- matriz: o Bling recusa (bom) ou aceita com a natureza errada (péssimo, e
+-- silencioso — a nota sai com imposto e ninguém olha o campo).
+--
+-- A chave antiga vira a da conta 1, para não perder o valor de quem já
+-- preencheu.
+
+update public.carbo_config_fiscal
+   set chave = 'bling1_natureza_bonificacao_id',
+       descricao = 'ID da natureza "Remessa em bonificação, doação ou brinde" no Bling 1 (MATRIZ).'
+ where chave = 'bling_natureza_bonificacao_id';
+
+insert into public.carbo_config_fiscal (chave, valor, descricao)
+values
+  ('bling1_natureza_bonificacao_id', null,
+   'ID da natureza "Remessa em bonificação, doação ou brinde" no Bling 1 (MATRIZ).'),
+  ('bling2_natureza_bonificacao_id', null,
+   'ID da natureza "Remessa em bonificação, doação ou brinde" no Bling 2 (FILIAL SP).')
+on conflict (chave) do nothing;
+
+-- Conferência: duas linhas, uma por conta.
+select chave, coalesce(valor, '(NÃO CONFIGURADO)') as valor from public.carbo_config_fiscal order by chave;
