@@ -329,3 +329,64 @@ export function useDevolucoesEmTransito() {
     },
   });
 }
+
+
+/** Mínimos cadastrados por caixa. `${warehouse_id}:${product_id}` → min_qty. */
+export function useMinimosCaixa() {
+  return useQuery({
+    queryKey: ["ops", "minimos-caixa"],
+    queryFn: async (): Promise<Record<string, number>> => {
+      const whs = await db.from("warehouses").select("id").eq("kind", "vendedor");
+      if (whs.error) throw whs.error;
+      const ids = ((whs.data ?? []) as { id: string }[]).map((w) => w.id);
+      if (ids.length === 0) return {};
+
+      const { data, error } = await db.from("ops_stock_min")
+        .select("warehouse_id, product_id, min_qty").in("warehouse_id", ids);
+      if (error) throw error;
+
+      const mapa: Record<string, number> = {};
+      for (const r of (data ?? []) as Record<string, any>[]) {
+        mapa[`${r.warehouse_id}:${r.product_id}`] = Number(r.min_qty) || 0;
+      }
+      return mapa;
+    },
+  });
+}
+
+/**
+ * Define o mínimo de um produto numa caixa.
+ *
+ * ⚠️ Grava por `warehouse_id`, não por `code`. O hook de mínimo dos hubs
+ * resolve o armazém pelo código — e o código da caixa é derivado do uuid do
+ * vendedor, justamente o acoplamento que a migração das caixas pede para
+ * evitar. Aqui o id já está em mãos.
+ *
+ * ⚠️ Mínimo ZERO apaga a linha em vez de gravar 0: a view de alerta faz INNER
+ * JOIN em ops_stock_min, então linha com 0 seria lida como "configurado, mas
+ * nunca dispara" — indistinguível de não configurado na tela, e ruído no banco.
+ */
+export function useSetMinimoCaixa() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (p: { warehouseId: string; productId: string; minQty: number }) => {
+      if (p.minQty <= 0) {
+        const { error } = await db.from("ops_stock_min").delete()
+          .eq("warehouse_id", p.warehouseId).eq("product_id", p.productId);
+        if (error) throw error;
+        return;
+      }
+      const { data: auth } = await db.auth.getUser();
+      const { error } = await db.from("ops_stock_min").upsert(
+        {
+          warehouse_id: p.warehouseId, product_id: p.productId,
+          min_qty: Math.round(p.minQty),
+          updated_by: auth?.user?.id ?? null, updated_at: new Date().toISOString(),
+        },
+        { onConflict: "product_id,warehouse_id" },
+      );
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["ops", "minimos-caixa"] }),
+  });
+}

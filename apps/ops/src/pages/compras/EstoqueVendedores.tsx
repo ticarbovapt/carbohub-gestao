@@ -13,7 +13,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import {
-  PackageCheck, Truck, Send, Loader2, ChevronDown, ChevronRight, Check, TriangleAlert, Pencil, Undo2,
+  PackageCheck, Truck, Send, Loader2, ChevronDown, ChevronRight, Check, TriangleAlert, Pencil, Undo2, Bell,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -21,6 +21,7 @@ import {
   useEnviosEmTransito, useConfirmarChegadaVendedor,
   useAjustarCaixa, MOTIVOS_AJUSTE,
   useDevolverDaCaixa, useDevolucoesEmTransito,
+  useMinimosCaixa, useSetMinimoCaixa,
   type CaixaVendedor,
 } from "@/hooks/useVendedorEstoque";
 
@@ -46,6 +47,7 @@ export default function EstoqueVendedores() {
   const { data: caixas, isLoading } = useVendedorEstoque();
   const { data: transito } = useEnviosEmTransito();
   const { data: voltando } = useDevolucoesEmTransito();
+  const { data: minimos } = useMinimosCaixa();
   const confirmar = useConfirmarChegadaVendedor();
   const [envioPara, setEnvioPara] = useState<CaixaVendedor | null>(null);
   const [devolverDe, setDevolverDe] = useState<CaixaVendedor | null>(null);
@@ -196,6 +198,7 @@ export default function EstoqueVendedores() {
                 onToggle={() => setAbertos((a) => ({ ...a, [c.warehouse_id]: !a[c.warehouse_id] }))}
                 onEnviar={() => setEnvioPara(c)}
                 onDevolver={() => setDevolverDe(c)}
+                minimos={minimos ?? {}}
                 onAjustar={(item) => setAjuste({ caixa: c, item })}
               />
             ))}
@@ -220,9 +223,10 @@ function Kpi({ label, valor }: { label: string; valor: number }) {
 }
 
 function Caixa({
-  c, soComSaldo, aberto, onToggle, onEnviar, onDevolver, onAjustar,
+  c, soComSaldo, aberto, minimos, onToggle, onEnviar, onDevolver, onAjustar,
 }: {
   c: CaixaVendedor; soComSaldo: boolean; aberto: boolean;
+  minimos: Record<string, number>;
   onToggle: () => void; onEnviar: () => void; onDevolver: () => void;
   onAjustar: (item: CaixaVendedor["itens"][number]) => void;
 }) {
@@ -277,6 +281,12 @@ function Caixa({
                       {i.product_code}
                     </span>
                     <span className="text-sm flex-1 min-w-0 truncate">{i.product_name}</span>
+                    <MinimoCelula
+                      warehouseId={c.warehouse_id}
+                      productId={i.product_id}
+                      minimo={minimos[`${c.warehouse_id}:${i.product_id}`] ?? 0}
+                      saldo={i.quantidade}
+                    />
                     <span className={`text-sm font-semibold tabular-nums ${
                       i.quantidade > 0 ? "" : "text-muted-foreground"}`}>
                       {i.quantidade} <span className="text-[11px] font-normal">{i.stock_unit ?? "un"}</span>
@@ -637,5 +647,70 @@ function DialogDevolver({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Mínimo do produto NESTA caixa.
+//
+// ⚠️ Editável direto na linha, sem diálogo: cadastrar mínimo é trabalho de
+// dezenas de repetições (produto × vendedor), e um modal por linha faria
+// ninguém cadastrar — e sem mínimo cadastrado o alerta simplesmente não existe.
+//
+// ⚠️ Vazio significa SEM ALERTA, e é o padrão. Alerta é opt-in: só os produtos
+// que o Ops decidiu que aquele vendedor precisa manter em mãos.
+// ─────────────────────────────────────────────────────────────────────────────
+function MinimoCelula({
+  warehouseId, productId, minimo, saldo,
+}: { warehouseId: string; productId: string; minimo: number; saldo: number }) {
+  const salvar = useSetMinimoCaixa();
+  const [editando, setEditando] = useState(false);
+  const [valor, setValor] = useState(String(minimo || ""));
+
+  const abaixo = minimo > 0 && saldo < minimo;
+
+  function confirmar() {
+    const n = Number(valor) || 0;
+    setEditando(false);
+    if (n === minimo) return;
+    salvar.mutate(
+      { warehouseId, productId, minQty: n },
+      {
+        onSuccess: () => toast.success(n > 0 ? `Mínimo definido: ${n}` : "Mínimo removido."),
+        onError: (e: Error) => { toast.error(e.message); setValor(String(minimo || "")); },
+      },
+    );
+  }
+
+  if (editando) {
+    return (
+      <Input
+        type="number" min={0} autoFocus className="h-7 w-16 text-xs"
+        value={valor}
+        onChange={(e) => setValor(e.target.value)}
+        onBlur={confirmar}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") confirmar();
+          if (e.key === "Escape") { setValor(String(minimo || "")); setEditando(false); }
+        }}
+      />
+    );
+  }
+
+  return (
+    <button
+      onClick={() => { setValor(String(minimo || "")); setEditando(true); }}
+      title={minimo > 0 ? `Mínimo ${minimo} — avisa quando ficar abaixo` : "Definir mínimo (sem mínimo = sem aviso)"}
+      className={`text-[11px] px-1.5 py-0.5 rounded border shrink-0 transition ${
+        abaixo
+          ? "border-amber-400 bg-amber-50 text-amber-700 dark:bg-amber-950/30 dark:text-amber-300"
+          : minimo > 0
+            ? "text-muted-foreground hover:bg-muted"
+            : "text-muted-foreground/50 border-dashed hover:bg-muted"
+      }`}
+    >
+      {abaixo && <Bell className="h-3 w-3 inline mr-0.5 -mt-0.5" />}
+      {minimo > 0 ? `mín ${minimo}` : "mín —"}
+    </button>
   );
 }
