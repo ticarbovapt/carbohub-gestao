@@ -7,7 +7,7 @@ import CRM from "./pages/CRM";
 import Pipelines from "./pages/Pipelines";
 import Vender from "./pages/Vender";
 import Chat from "./pages/Chat";
-import Pedidos from "./pages/Pedidos";
+import PedidosTravada from "./pages/PedidosTravada";
 import DashboardComercial from "./pages/DashboardComercial";
 import Vendas from "./pages/Vendas";
 import Metas from "./pages/Metas";
@@ -51,7 +51,12 @@ export default function App() {
         <Route path="/crm/:funnelType" element={<Navigate to="/crm/pipelines" replace />} />
         <Route path="/vender" element={<Vender />} />
         <Route path="/chat" element={<Chat />} />
-        <Route path="/pedidos" element={<Pedidos />} />
+        {/* ⚠️ /pedidos TRAVADA por enquanto. A rota continua existindo, e de
+            propósito: quem tem o link salvo precisa saber o que houve. Rota
+            apagada daria "página não encontrada", que faz a pessoa achar que
+            errou o endereço e procurar de novo. O componente Pedidos segue no
+            repositório — é destravar aqui quando for a hora. */}
+        <Route path="/pedidos" element={<PedidosTravada />} />
         <Route path="/compras" element={<RequisicaoCompra />} />
         <Route path="/pos-venda" element={<PosVenda />} />
         <Route path="/vendas" element={<Vendas />} />

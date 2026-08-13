@@ -21,6 +21,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Calendar } from "@/components/ui/calendar";
 import { ptBR } from "date-fns/locale";
 import { useAuth } from "@/contexts/AuthContext";
+import { appKeyAtual } from "@carbo/shell";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { generateQuotePdf } from "@/lib/quotePdf";
@@ -149,6 +150,24 @@ export default function Vender() {
    *  sabe quando o callback do useMemo executa. Já derrubou o /vender no ar. */
   const ehBonificacao = (productId: string) =>
     !!produtos.find((p) => p.id === productId)?.bonificacao_de;
+
+  /**
+   * Para onde ir depois de salvar — e se há para onde ir.
+   *
+   * O `/pedidos` do Sales está TRAVADO, então mandar qualquer app para lá seria
+   * jogar o vendedor numa tela sem acesso logo depois de fechar a venda.
+   *
+   * No Sales o equivalente é `/vendas`. Nos outros cinco apps não existe tela
+   * de acompanhamento do pedido: lá a venda só é confirmada, e a pessoa fica
+   * onde estava — mandá-la para uma rota que aquele app não tem daria 404 ou
+   * um redirecionamento silencioso para a home, que é pior que não navegar.
+   *
+   * ⚠️ `appKeyAtual()` devolve null fora de produção (localhost não distingue
+   * app), e null significa "não sei" — cai no caminho sem navegação, que é o
+   * seguro: não navegar nunca quebra, navegar para o lugar errado sim.
+   */
+  const destinoPedido = appKeyAtual() === "crm" ? "/vendas" : null;
+  const sairDaTela = () => { if (destinoPedido) navigate(destinoPedido); else navigate(-1); };
 
   // Modo edição: carrega o pedido cru (com o snapshot do formulário) para reabrir.
   const { data: editOrder } = useQuery({
@@ -771,7 +790,7 @@ export default function Vender() {
         notes: obsPublica || undefined, created_at: new Date().toISOString(), validityDays: 7,
       });
       toast.success(`Orçamento ${numero ?? ""} ${editId ? "atualizado" : "gerado"} e salvo!`);
-      if (editId) navigate("/pedidos"); else resetForm();
+      if (editId) { if (destinoPedido) navigate(destinoPedido); else navigate(-1); } else resetForm();
     } catch (e) {
       toast.error("Erro ao gerar/salvar orçamento: " + (e instanceof Error ? e.message : "tente de novo"));
     } finally { setGenerating(false); }
@@ -813,7 +832,7 @@ export default function Vender() {
       if (error) throw error;
       if ((out as { error?: string } | null)?.error) throw new Error((out as { error?: string }).error);
       toast.success(`Orçamento ${numero ?? ""} enviado para ${email}!`);
-      if (editId) navigate("/pedidos"); else resetForm();
+      if (editId) { if (destinoPedido) navigate(destinoPedido); else navigate(-1); } else resetForm();
     } catch (e) {
       toast.error("Erro ao enviar por e-mail: " + (e instanceof Error ? e.message : "tente de novo"));
     } finally { setEmailing(false); }
@@ -916,7 +935,9 @@ export default function Vender() {
         await createDescarbOSForSale(created.id, created.numero);
       }
       resetForm();
-      navigate("/pedidos");
+      // Sem destino (fora do Sales): fica na tela. O toast de sucesso acima já
+      // confirmou a venda — é a informação que a pessoa precisa.
+      if (destinoPedido) navigate(destinoPedido);
     } catch (e) {
       toast.error("Erro ao registrar venda: " + (e instanceof Error ? e.message : "tente de novo"));
     }
@@ -938,7 +959,7 @@ export default function Vender() {
               <>Editando o orçamento <b>{editNumero ?? "…"}</b> — ao salvar, ele vira a nova versão (mesmo número).</>
             )}
           </span>
-          <Button variant="ghost" size="sm" className="shrink-0" onClick={() => navigate("/pedidos")}>Sair</Button>
+          <Button variant="ghost" size="sm" className="shrink-0" onClick={sairDaTela}>Sair</Button>
         </div>
       )}
       {gestor && (
@@ -1850,7 +1871,7 @@ export default function Vender() {
           <p className="text-xl font-bold">{brl(orderTotal)}</p>
         </div>
         <div className="flex items-center gap-2 w-full sm:w-auto">
-          <Button variant="ghost" className="hidden sm:inline-flex" onClick={() => navigate("/pedidos")}>Cancelar</Button>
+          <Button variant="ghost" className="hidden sm:inline-flex" onClick={sairDaTela}>Cancelar</Button>
           <Button variant="outline" className="flex-1 sm:flex-none" onClick={handleQuote} disabled={generating || !podeSalvar || editandoVenda}>
             <FileText className="h-4 w-4 mr-1" /> {generating ? "Gerando..." : (editId ? (<><span className="hidden sm:inline">Salvar e&nbsp;</span>Gerar PDF</>) : (<><span className="hidden sm:inline">Gerar&nbsp;</span>Orçamento</>))}
           </Button>

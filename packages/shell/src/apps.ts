@@ -118,3 +118,30 @@ export function buildSwitcherApps(profile: SwitcherProfile | null | undefined, c
 
   return [{ ...HUB_HOME }, ...list];
 }
+
+/**
+ * Em qual app este código está rodando, resolvido pelo HOSTNAME.
+ *
+ * Existe porque telas replicadas (o `/vender` vive nos SEIS apps, byte a byte
+ * idêntico) às vezes precisam de destinos diferentes por app. Sem isto, a
+ * alternativa seria divergir o arquivo — e arquivo replicado que diverge é
+ * justamente o que este repositório já pagou caro várias vezes.
+ *
+ * ⚠️ Fora de produção o hostname é `localhost`, e aí não há como saber: cada
+ * app sobe numa porta, não num subdomínio. Devolve `null` nesse caso, e quem
+ * chama deve tratar `null` como "não sei" — nunca como "não é o app X".
+ */
+export function appKeyAtual(): AppKey | null {
+  if (typeof window === "undefined") return null;
+  const host = window.location.hostname;
+  const todos = [...HUB_APPS, ADMIN_APP];
+  for (const a of todos) {
+    try {
+      if (new URL(a.href).hostname === host) return a.key;
+    } catch {
+      // href inválido no catálogo não pode derrubar a tela de quem só queria
+      // saber onde está.
+    }
+  }
+  return null;
+}

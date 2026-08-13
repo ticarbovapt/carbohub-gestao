@@ -52,7 +52,6 @@ export function SalesShell() {
         { to: "/rtm/agenda", label: "Agenda de visitas", icon: CalendarCheck },
     ] },
     { label: "Pedidos", items: [
-        { to: "/pedidos", label: "Pedidos", icon: ClipboardList },
         // "meus pedidos" mentia para o gestor, que vê o quadro inteiro. O que a
         // tela é para os dois é rastreio — quem é dono de quê já aparece no card.
         { to: "/pos-venda", label: "Rastreio de venda", icon: ShoppingBag },
