@@ -142,8 +142,23 @@ export default function Pedidos() {
     () => vendedoresDir.map((v) => ({ id: v.id, name: v.full_name || "—", avulso: !v.is_vendedor })),
     [vendedoresDir],
   );
-  const clientes = useMemo(() => Array.from(new Set(orders.map((o) => o.customer_name))).sort(), [orders]);
-  const availableLinhas = useMemo(() => Array.from(new Set(orders.map((o) => o.linha))), [orders]);
+  // ⚠️ `filter(Boolean)` não é zelo: o Radix LANÇA em <SelectItem value="">,
+  // porque reserva a string vazia para limpar a seleção. Sem o filtro, UM
+  // pedido salvo sem nome de cliente (ou sem linha) derruba a página inteira —
+  // e foi exatamente o que aconteceu: /pedidos passou semanas fora do ar com
+  // "A <Select.Item /> must have a value prop that is not an empty string".
+  //
+  // O filtro fica AQUI, na origem da lista, e não no map do JSX: assim vale
+  // para qualquer uso futuro dela, e ninguém precisa lembrar da regra do Radix
+  // ao escrever o próximo dropdown.
+  const clientes = useMemo(
+    () => Array.from(new Set(orders.map((o) => o.customer_name).filter((n): n is string => !!n && n.trim() !== ""))).sort(),
+    [orders],
+  );
+  const availableLinhas = useMemo(
+    () => Array.from(new Set(orders.map((o) => o.linha).filter((l): l is string => !!l && l.trim() !== ""))),
+    [orders],
+  );
 
   const stats = useMemo(() => ({
     total: allOrders.length,
