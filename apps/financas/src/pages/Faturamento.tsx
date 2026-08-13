@@ -3,6 +3,8 @@ import { useSearchParams } from "react-router-dom";
 import {
   Receipt, FileText, ChevronLeft, ChevronRight, CheckCircle2, DollarSign, Store, Building2, Lock, Link2, Files, Package, Gift,
 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { NaturezaBonificacaoDialog } from "@/components/NaturezaBonificacaoDialog";
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
 import { CarboButton } from "@/components/ui/carbo-button";
 import { CarboKPI } from "@/components/ui/carbo-kpi";
@@ -90,6 +92,7 @@ const nfUnlocked = (o: FaturamentoOrder) => {
 };
 
 export default function Faturamento() {
+  const [naturezaOpen, setNaturezaOpen] = useState(false);
   const [month, setMonth] = useState(() => new Date());
   const [search, setSearch] = useState("");
   // Aba ativa persistida na URL (?tab=…), pra não voltar pro "sistema" a cada F5.
@@ -412,11 +415,20 @@ export default function Faturamento() {
   return (
     <div>
       <div className="space-y-6">
-        <CarboPageHeader
-          title="Faturamento"
-          description="Vendas do sistema prontas para faturar + pedidos criados direto no Bling (rastreabilidade)"
-          icon={Receipt}
-        />
+        <div className="flex items-start justify-between gap-3 flex-wrap">
+          <CarboPageHeader
+            title="Faturamento"
+            description="Vendas do sistema prontas para faturar + pedidos criados direto no Bling (rastreabilidade)"
+            icon={Receipt}
+          />
+          {/* Configuração feita UMA vez. Fica aqui, e não numa tela de ajustes
+              escondida, porque quem precisa dela é quem está olhando esta fila
+              e não conseguiu enviar um pedido com brinde. */}
+          <Button variant="outline" size="sm" className="gap-1.5"
+            onClick={() => setNaturezaOpen(true)}>
+            <Gift className="h-3.5 w-3.5" /> Natureza da bonificação
+          </Button>
+        </div>
 
         {/* KPIs */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -488,6 +500,7 @@ export default function Faturamento() {
       </div>
 
       <BlingConfirmDialog order={toBling} onOpenChange={(open) => { if (!open) setToBling(null); }} />
+      <NaturezaBonificacaoDialog open={naturezaOpen} onOpenChange={setNaturezaOpen} />
     </div>
   );
 }

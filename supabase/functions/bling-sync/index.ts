@@ -2419,6 +2419,39 @@ Deno.serve(async (req: Request): Promise<Response> => {
     }
 
     // ── Ação pontual: criar pedido no Bling (não é sync em loop) ─────────────
+    // ── Listar naturezas de operação ────────────────────────────────────────
+    //
+    // Existe para ninguém ter de caçar um id no painel do Bling. A natureza de
+    // bonificação precisa ser configurada uma vez, e o número dela não está em
+    // lugar óbvio — o caminho manual é abrir o cadastro e ler a URL.
+    //
+    // ⚠️ Só LISTA. A escolha é de gente: casar por nome ("contém bonificação")
+    // seria adivinhar qual natureza fiscal usar, e errar aqui emite nota errada
+    // em silêncio. Listar e deixar a pessoa apontar custa um clique e não tem
+    // esse risco.
+    if (entity === "naturezas") {
+      try {
+        const r = await blingFetch(token, "/naturezas-operacoes", 1, 100);
+        const lista = (r?.data || []).map((n: any) => ({
+          id: n.id,
+          descricao: n.descricao || n.nome || "(sem descrição)",
+          padrao: n.padrao ?? null,
+          situacao: n.situacao ?? null,
+        }));
+        return new Response(
+          JSON.stringify({ success: true, naturezas: lista }),
+          { status: 200, headers: { "Content-Type": "application/json", ...corsHeaders } },
+        );
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        console.error("[bling-sync] naturezas error:", msg);
+        return new Response(
+          JSON.stringify({ success: false, error: msg }),
+          { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } },
+        );
+      }
+    }
+
     if (entity === "create_order") {
       const orderId = body.order_id as string | undefined;
       if (!orderId) {
