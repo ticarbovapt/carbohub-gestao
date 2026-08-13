@@ -12,6 +12,28 @@ export interface FaturamentoItem extends OrderItem {
   discount_type?: string;   // 'percent' | 'value' | 'none'
   discount_value?: number;  // número digitado (% ou R$)
   discount_amount?: number; // R$ abatido na linha
+  /** Linha de bonificação (produto entregue de graça). */
+  is_bonificacao?: boolean;
+}
+
+/**
+ * O pedido tem item bonificado?
+ *
+ * ⚠️ Enquanto o fluxo de DUAS notas não existir, isto BLOQUEIA o envio ao
+ * Bling. Hoje o `bling-sync` cria um pedido só, e a bonificação sairia dentro
+ * da nota paga — mas a natureza dela é "Remessa em bonificação, doação ou
+ * brinde", que é outro pedido no Bling (natureza é do pedido, não da nota).
+ * Emitir junto produz um documento fiscal errado, e nota emitida errada se
+ * corrige com cancelamento e retrabalho no contador — bem mais caro que um
+ * botão travado.
+ *
+ * Lê os DOIS modelos: `is_bonificacao` (linha própria, atual) e
+ * `bonus_quantity` (quantidade extra na linha paga, histórico).
+ */
+export function temBonificacao(items: FaturamentoItem[] | null | undefined): boolean {
+  return (items ?? []).some(
+    (i) => i.is_bonificacao === true || (Number(i.bonus_quantity) || 0) > 0,
+  );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

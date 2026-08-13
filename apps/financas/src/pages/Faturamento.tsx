@@ -1,7 +1,7 @@
 import { Fragment, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import {
-  Receipt, FileText, ChevronLeft, ChevronRight, CheckCircle2, DollarSign, Store, Building2, Lock, Link2, Files, Package,
+  Receipt, FileText, ChevronLeft, ChevronRight, CheckCircle2, DollarSign, Store, Building2, Lock, Link2, Files, Package, Gift,
 } from "lucide-react";
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
 import { CarboButton } from "@/components/ui/carbo-button";
@@ -16,6 +16,7 @@ import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
   useFaturamento,
+  temBonificacao,
   type FaturamentoOrder,
 } from "@/hooks/useFaturamento";
 import { BlingConfirmDialog } from "@/components/faturamento/BlingConfirmDialog";
@@ -207,6 +208,15 @@ export default function Faturamento() {
                     <CarboTableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                       {hasNF ? (
                         <span className="text-muted-foreground text-sm">Faturado</span>
+                      ) : temBonificacao(o.items) ? (
+                        // ⚠️ Travado até existir o fluxo de duas notas. Ver
+                        // temBonificacao() em useFaturamento.ts para o porquê.
+                        <span
+                          className="inline-flex items-center gap-1.5 text-xs text-amber-600"
+                          title="Este pedido tem item bonificado. A bonificação precisa de nota própria (natureza 'Remessa em bonificação, doação ou brinde'), e esse fluxo ainda não existe no sistema. Emita as duas notas direto no Bling por enquanto."
+                        >
+                          <Gift className="h-3 w-3" /> Bonificação — emitir no Bling
+                        </span>
                       ) : nfUnlocked(o) ? (
                         <div className="flex justify-end">
                           <CarboButton size="sm" onClick={() => setToBling(o)}>
