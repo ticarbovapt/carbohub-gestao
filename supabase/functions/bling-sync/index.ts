@@ -478,7 +478,7 @@ async function createBlingPedido(
 
   // 3. Montar itens — tenta encontrar o produto no Bling pelo código
   const rawItems: any[] = Array.isArray(order.items) ? order.items : [];
-  const blingItems = [];
+  let blingItems: any[] = [];
   const itemsSummary: Array<{ name: string; matched: boolean; codigo: string }> = [];
 
   // Fallback por LINHA: a venda pode ter sido digitada com o nome livre
@@ -553,6 +553,9 @@ async function createBlingPedido(
       ),
       quantidade: Number(item.quantity) || 1,
       valor: ehBonificacao ? 0 : (Number(item.unit_price) || 0),
+      // Marca interna, removida antes do POST — só serve para separar os dois
+      // pedidos logo abaixo.
+      __bonificacao: ehBonificacao,
     });
 
     // Modelo ANTIGO: unidades bonificadas na própria linha do produto pago.
@@ -570,7 +573,17 @@ async function createBlingPedido(
     }
   }
 
-  if (blingItems.length === 0) {
+  // ⚠️ As linhas de bonificação NÃO vão no pedido pago.
+  //
+  // A natureza de operação é propriedade do PEDIDO no Bling, não da nota. A
+  // bonificação precisa da natureza "Remessa em bonificação, doação ou brinde",
+  // que não gera imposto; na natureza normal, desconto de 100% AINDA gera. Por
+  // isso são dois pedidos e duas notas — misturar sai caro, literalmente.
+  const itensBonificacao = blingItems.filter((i: any) => i.__bonificacao);
+  blingItems = blingItems.filter((i: any) => !i.__bonificacao);
+  for (const i of [...blingItems, ...itensBonificacao]) delete (i as any).__bonificacao;
+
+  if (blingItems.length === 0 && itensBonificacao.length === 0) {
     const msg = "O pedido não possui itens para enviar ao Bling.";
     if (!dryRun) throw new Error(msg);
     warnings.push(msg);
@@ -717,6 +730,87 @@ async function createBlingPedido(
       external_ref: `bling-${result.data.id}`,
       updated_at: new Date().toISOString(),
     }).eq("id", orderId);
+  }
+
+  // ── 7. O SEGUNDO pedido: a remessa de bonificação ────────────────────────
+  //
+  // Mesmo contato, mesmo endereço, MESMO ENVIO. O que muda é a natureza da
+  // operação — e é ela que faz a nota sair sem imposto sobre o brinde.
+  //
+  // ⚠️ Sem frete e sem desconto neste pedido. É um envio só: repetir o frete
+  // aqui cobraria o transporte duas vezes, e desconto sobre valor zero não
+  // significa nada.
+  if (itensBonificacao.length > 0) {
+    // ⚠️ FECHA quando a natureza não está configurada. Criar a remessa com a
+    // natureza padrão emitiria a nota COM imposto — exatamente o que este
+    // fluxo existe para evitar, e de forma silenciosa: a nota sai, ninguém
+    // olha o campo, e a conta aparece no fim do mês.
+    const { data: cfg } = await supabaseAdmin
+      .from("carbo_config_fiscal")
+      .select("valor")
+      .eq("chave", "bling1_natureza_bonificacao_id")
+      .maybeSingle();
+
+    const naturezaId = Number(cfg?.valor);
+    if (!cfg?.valor || !Number.isFinite(naturezaId) || naturezaId <= 0) {
+      throw new Error(
+        "Pedido tem bonificação, mas a natureza de operação de bonificação não está " +
+        "configurada. Preencha `bling1_natureza_bonificacao_id` em carbo_config_fiscal " +
+        "com o ID da natureza \"Remessa em bonificação, doação ou brinde\" do Bling 1. " +
+        "O pedido PAGO já foi criado; só a remessa de bonificação faltou.",
+      );
+    }
+
+    // ⚠️ O sufixo -BON na observação faz três coisas de uma vez:
+    //   1. o regex do casamento de NF acha `V2026070015` DENTRO dele sem
+    //      alteração nenhuma — o vínculo existente continua funcionando;
+    //   2. diz qual das duas notas é qual, na hora de gravar nas colunas;
+    //   3. é a marca que o gatilho do banco usa para NÃO reimportar este
+    //      pedido como um pedido novo de R$ 0,00 na esteira.
+    const obsBonificacao = [
+      `${order.order_number}-BON`,
+      "REMESSA EM BONIFICACAO — nao cobrar",
+      order.vendedor_name ? `Vendedor: ${order.vendedor_name}` : "",
+    ].filter(Boolean).join(" — ");
+
+    const payloadBonificacao: Record<string, any> = {
+      contato: { id: blingContactId },
+      itens: itensBonificacao,
+      data: order.sale_date || order.created_at.substring(0, 10),
+      naturezaOperacao: { id: naturezaId },
+      observacoes: obsBonificacao,
+    };
+
+    // Endereço de entrega vai junto (é o mesmo destino), mas SEM valor de
+    // frete: o transporte já foi cobrado no pedido pago.
+    if (hasDelivery) {
+      payloadBonificacao.transporte = {
+        etiqueta: {
+          nome: order.customer_name || "",
+          endereco: ship.endereco,
+          numero: ship.numero,
+          complemento: ship.complemento,
+          bairro: ship.bairro,
+          municipio: ship.municipio,
+          uf: ship.uf,
+          cep: ship.cep,
+        },
+      };
+    }
+
+    if (dryRun) {
+      return { ...result, bonificacao_preview: payloadBonificacao };
+    }
+
+    console.log(`[bling-sync] Creating BONIFICACAO pedido for ${order.order_number}`);
+    const resultBon = await blingPost(token, "/pedidos/vendas", payloadBonificacao);
+
+    if (resultBon?.data?.id) {
+      await supabaseAdmin.from("carboze_orders").update({
+        bling_pedido_bonificacao_id: resultBon.data.id,
+        updated_at: new Date().toISOString(),
+      }).eq("id", orderId);
+    }
   }
 
   return result;
@@ -1535,12 +1629,23 @@ async function matchNFesToOrders(
       updated_at: new Date().toISOString(),
     }).eq("id", nf.id);
 
-    // Denormaliza no pedido os campos da NF para acesso rápido
-    await supabaseAdmin.from("carboze_orders").update({
-      bling_nf_id:   nf.bling_id,
-      nf_access_key: nf.chave_acesso || null,
-      invoice_number: nf.numero || null,
-    }).eq("id", order.id);
+    // ⚠️ Qual das duas notas é esta?
+    //
+    // O pedido de bonificação leva `<numero>-BON` na observação, e a NF herda
+    // essa observação. Sem esta distinção as duas notas cairiam nas MESMAS
+    // colunas e a segunda processada sobrescreveria a primeira — qual delas
+    // ficaria registrada dependeria da ordem em que o sync as encontrasse.
+    const ehNotaBonificacao = new RegExp(`${orderNumber}-BON`, "i").test(obs);
+
+    // A regra de qual coluna preencher mora no BANCO (carbo_vincula_nf), perto
+    // das colunas que ela governa.
+    await supabaseAdmin.rpc("carbo_vincula_nf", {
+      p_order_id: order.id,
+      p_nf_id: nf.bling_id,
+      p_chave: nf.chave_acesso || null,
+      p_numero: nf.numero || null,
+      p_eh_bonificacao: ehNotaBonificacao,
+    });
 
     matched++;
   }

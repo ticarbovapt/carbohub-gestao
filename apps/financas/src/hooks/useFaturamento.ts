@@ -30,6 +30,22 @@ export interface FaturamentoItem extends OrderItem {
  * Lê os DOIS modelos: `is_bonificacao` (linha própria, atual) e
  * `bonus_quantity` (quantidade extra na linha paga, histórico).
  */
+/**
+ * O pedido ainda tem nota faltando?
+ *
+ * Com bonificação são DUAS: a do pedido pago e a remessa de brinde. Enquanto
+ * qualquer uma faltar, o pedido continua na fila — foi assim que a nota de
+ * bonificação deixaria de existir sem deixar rastro.
+ */
+export function faltaAlgumaNF(o: {
+  bling_nf_id: number | null;
+  bling_nf_bonificacao_id: number | null;
+  items: FaturamentoItem[];
+}): boolean {
+  if (!o.bling_nf_id) return true;
+  return temBonificacao(o.items) && !o.bling_nf_bonificacao_id;
+}
+
 export function temBonificacao(items: FaturamentoItem[] | null | undefined): boolean {
   return (items ?? []).some(
     (i) => i.is_bonificacao === true || (Number(i.bonus_quantity) || 0) > 0,
@@ -99,6 +115,8 @@ export interface FaturamentoOrder {
   general_notes: string | null;
   // NF linkage
   bling_nf_id: number | null;
+  bling_nf_bonificacao_id: number | null;
+  invoice_bonificacao_number: string | null;
   nf_access_key: string | null;
   invoice_number: string | null;
   // Situação da nota NO BLING. Sem isto a tela pintava toda NF de verde e
@@ -135,7 +153,12 @@ export function useFaturamento({ month, search = "", showAll = false }: Faturame
         .order("created_at", { ascending: false });
 
       if (!showAll) {
-        query = query.is("bling_nf_id", null);
+        // ⚠️ Pedido com bonificação precisa de DUAS notas. Filtrar só por
+        // `bling_nf_id is null` tirava o pedido da fila assim que a PRIMEIRA
+        // chegasse — a de bonificação ficaria sem ser emitida e ninguém veria.
+        // Por isso o filtro do banco só derruba o caso simples; o caso com
+        // bonificação é resolvido no cliente, por `faltaAlgumaNF`.
+        query = query.or("bling_nf_id.is.null,bling_nf_bonificacao_id.is.null");
       }
 
       if (term) {

@@ -17,6 +17,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
   useFaturamento,
   temBonificacao,
+  faltaAlgumaNF,
   type FaturamentoOrder,
 } from "@/hooks/useFaturamento";
 import { BlingConfirmDialog } from "@/components/faturamento/BlingConfirmDialog";
@@ -160,7 +161,7 @@ export default function Faturamento() {
         </CarboTableHeader>
         <CarboTableBody>
           {rows.map((o) => {
-            const hasNF = !!o.bling_nf_id;
+            const hasNF = !faltaAlgumaNF(o);
             const colSpan = showAction ? 7 : 6;
             // Financeiro defensivo: pedidos antigos podem não ter subtotal/discount.
             const itemsBruto = o.items.reduce((s, it) => s + num(it.quantity) * num(it.unit_price), 0);
@@ -208,19 +209,14 @@ export default function Faturamento() {
                     <CarboTableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                       {hasNF ? (
                         <span className="text-muted-foreground text-sm">Faturado</span>
-                      ) : temBonificacao(o.items) ? (
-                        // ⚠️ Travado até existir o fluxo de duas notas. Ver
-                        // temBonificacao() em useFaturamento.ts para o porquê.
-                        <span
-                          className="inline-flex items-center gap-1.5 text-xs text-amber-600"
-                          title="Este pedido tem item bonificado. A bonificação precisa de nota própria (natureza 'Remessa em bonificação, doação ou brinde'), e esse fluxo ainda não existe no sistema. Emita as duas notas direto no Bling por enquanto."
-                        >
-                          <Gift className="h-3 w-3" /> Bonificação — emitir no Bling
-                        </span>
                       ) : nfUnlocked(o) ? (
                         <div className="flex justify-end">
-                          <CarboButton size="sm" onClick={() => setToBling(o)}>
-                            <Receipt className="h-3.5 w-3.5 mr-1" /> Criar no Bling
+                          <CarboButton size="sm" onClick={() => setToBling(o)}
+                            title={temBonificacao(o.items)
+                              ? "Este pedido tem bonificação: serão criados DOIS pedidos no Bling — o pago e a remessa de brinde, com natureza própria."
+                              : undefined}>
+                            <Receipt className="h-3.5 w-3.5 mr-1" />
+                            {temBonificacao(o.items) ? "Criar no Bling (2 notas)" : "Criar no Bling"}
                           </CarboButton>
                         </div>
                       ) : (
