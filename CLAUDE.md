@@ -50,6 +50,49 @@ Duas armadilhas já pagas, não repita:
    `isManager(profile, fnMap)` — a mesma expressão. O alias `isGestor` existe nos
    seis só para a tela poder ser idêntica. Não duplique a regra.
 
+### RTM (Route to Market) — só no `apps/crm`, e por enquanto Fase 1
+Base: o briefing de domínio "Carbo Core · Comercial NE · v1". As fases são
+ordenadas e **antecipar produz tela sem dado**. Fase 1 = registro de visita
+(check-in, conferência, check-out). Roteirização, curva ABC, sell-out e
+previsão são fases 3 a 6 — não implemente por conta própria.
+
+```
+supabase/migrations/20260896000000_rtm_fase1_visita.sql   tabelas, RPCs, views, RLS
+supabase/migrations/20260897000000_rtm_fotos_bucket.sql   bucket privado (rode em BLOCOS)
+apps/crm/src/lib/rtmFila.ts      a fila offline (IndexedDB)
+apps/crm/src/lib/rtmFoto.ts      compressão na captura
+apps/crm/src/hooks/useRtm.ts     leitura do banco — NUNCA escrita
+apps/crm/src/pages/rtm/          Agenda.tsx · Visita.tsx
+```
+
+⚠️ **Arquivo de RTM não é replicado nos seis apps.** A visita é do vendedor em
+campo, e o Sales é o app dele. Copiar para admin/ops criaria a sétima cópia de
+um fluxo que ainda vai mudar toda semana.
+
+Cinco decisões que custam caro se forem desfeitas sem entender:
+1. **Geo SINALIZA, nunca bloqueia.** A distância do check-in até o PDV é
+   gravada e exibida; não impede nada. GPS erra, posto tem cobertura de bomba,
+   e boa parte das coordenadas veio de geocodificação de endereço — o erro mais
+   provável é do CADASTRO. Sistema que acusa vendedor honesto é desinstalado.
+2. **A escrita passa SÓ pela fila local.** `useRtm.ts` lê; quem grava é o
+   `rtmFila.ts`. Dois caminhos de escrita criariam duas verdades sobre a mesma
+   visita, e a que vale é a do bolso de quem está no PDV.
+3. **A fila enfileira a VISITA, não cada ação.** Os passos são encadeados
+   (fechar exige foto e checklist no servidor; foto exige o id da visita). Cada
+   passo é idempotente, e o `abrir` devolve a visita já fechada quando houve
+   reenvio — sem essa checagem o retry bate no trigger de congelamento e falha
+   para sempre.
+4. **Visita fechada é imutável, e a regra está no BANCO** (trigger, e sem
+   policy de DELETE em nenhuma tabela de registro). Correção é linha nova com
+   `ajuste_de_id`. Imutabilidade que mora no front é imutabilidade que o
+   próximo app esquece de copiar.
+5. **Motivo é lista fechada** (`rtm_motivos`), e o checklist é tabela
+   (`rtm_checklist_itens`), não enum — item de campanha entra com INSERT, sem
+   deploy. Desative, nunca apague: visita antiga aponta para a linha.
+
+⚠️ Etapa nova de conferência entra em `rtm_checklist_itens`. Motivo novo entra
+em `rtm_motivos`. Nenhum dos dois em código.
+
 ### `lib/quotePdf.ts` — o PDF do orçamento, nos seis
 Byte a byte idêntico nos **seis** apps. Fonte da verdade = `apps/crm`. A raiz
 está fora: o `controle` tem outro template, mais simples e antigo, sem desconto

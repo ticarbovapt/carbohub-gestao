@@ -3,6 +3,7 @@ import { Outlet, useNavigate } from "react-router-dom";
 import {
   KanbanSquare, ClipboardList, TrendingUp, Target, BarChart3, LayoutDashboard,
   Wind, CalendarDays, MapPinned, Map, Share2, ShoppingCart, ShoppingBag, MessagesSquare, MapPin,
+  CalendarCheck,
 } from "lucide-react";
 import { ChatBadge, ChatProvider } from "@carbo/chat";
 import { Sidebar, type ShellNavSection } from "@carbo/shell";
@@ -48,6 +49,7 @@ export function SalesShell() {
         { to: "/vendas", label: "Vendas", icon: TrendingUp },
         { to: "/metas", label: "Metas de Vendedores", icon: Target },
         { to: "/pdvs", label: "Pontos de Venda", icon: MapPin },
+        { to: "/rtm/agenda", label: "Agenda de visitas", icon: CalendarCheck },
     ] },
     { label: "Pedidos", items: [
         { to: "/pedidos", label: "Pedidos", icon: ClipboardList },

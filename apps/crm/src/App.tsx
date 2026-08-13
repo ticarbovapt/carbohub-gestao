@@ -22,6 +22,8 @@ import MapaTerritorial from "./pages/territorio/MapaTerritorial";
 import NetworkMap from "./pages/territorio/NetworkMap";
 import TerritoryExpansion from "./pages/territorio/TerritoryExpansion";
 import Pdvs from "./pages/Pdvs";
+import RtmAgenda from "./pages/rtm/Agenda";
+import RtmVisita from "./pages/rtm/Visita";
 import { isCarbohubDomain, goToHubLogin } from "@/lib/sso";
 
 // Login é ÚNICO no Hub: /login direto em produção é redirecionado pra lá.
@@ -55,6 +57,12 @@ export default function App() {
         <Route path="/metas" element={<Metas />} />
         <Route path="/comercial" element={<DashboardComercial />} />
         <Route path="/pdvs" element={<Pdvs />} />
+
+        {/* RTM · Fase 1 — registro de visita. A visita fica FORA da agenda de
+            propósito: em campo o vendedor precisa de uma URL que abra direto
+            no que ele está fazendo, sem passar pela lista. */}
+        <Route path="/rtm/agenda" element={<RtmAgenda />} />
+        <Route path="/rtm/visita" element={<RtmVisita />} />
         {/* Descarbonização — acompanhamento (pra onde o "+ Nova Descarbonização" leva) */}
         <Route path="/descarbonizacao/os" element={<DescOrdensServico />} />
         <Route path="/descarbonizacao/agendamentos" element={<DescAgendamentos />} />
