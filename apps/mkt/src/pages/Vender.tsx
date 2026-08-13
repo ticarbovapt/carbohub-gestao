@@ -137,6 +137,18 @@ export default function Vender() {
   const [searchParams] = useSearchParams();
   const editId = searchParams.get("edit");
   const { data: produtos = [] } = useProdutos();
+  /** A linha é bonificação quando o produto escolhido é um gêmeo.
+   *  ⚠️ A regra mora no PRODUTO, não numa flag da linha: assim ela sobrevive
+   *  a reabrir o orçamento, e um gêmeo escolhido por qualquer caminho já
+   *  entra com 100% — não há como salvar bonificação cobrada.
+   *
+   *  ⚠️ Declarado AQUI, logo depois de `produtos`, e não junto do validItems:
+   *  os useMemo de total rodam DURANTE o render e chamam esta função. Declarada
+   *  lá embaixo, ela cai na zona morta do `const` e a tela inteira morre com
+   *  "Cannot access before initialization" — que o tsc não pega, porque não
+   *  sabe quando o callback do useMemo executa. Já derrubou o /vender no ar. */
+  const ehBonificacao = (productId: string) =>
+    !!produtos.find((p) => p.id === productId)?.bonificacao_de;
 
   // Modo edição: carrega o pedido cru (com o snapshot do formulário) para reabrir.
   const { data: editOrder } = useQuery({
@@ -227,22 +239,6 @@ export default function Vender() {
   // A caixa é a de QUEM VENDE, não a de quem digita: o gestor pode lançar por
   // outro vendedor, e nesse caso o produto sai da caixa dele.
   const { data: meuEstoque } = useMeuEstoque(vendedorId || profile?.id || null);
-  // Itens que a caixa não cobre. Some quantidade + bonificação porque o produto
-  // bonificado também sai da prateleira — é a mesma conta do banco.
-  const faltaNaCaixa = useMemo(() => {
-    if (modalidade !== "pronta_entrega") return [];
-    const pedido = new Map<string, { nome: string; qtd: number }>();
-    for (const i of validItems()) {
-      if (!i.product_id) continue;
-      const a = pedido.get(i.product_id) ?? { nome: i.name, qtd: 0 };
-      a.qtd += (i.quantity || 0) + (i.bonus_quantity || 0);
-      pedido.set(i.product_id, a);
-    }
-    const saldo = meuEstoque?.saldo ?? {};
-    return [...pedido.entries()]
-      .map(([id, a]) => ({ id, nome: a.nome, pedido: a.qtd, tem: saldo[id] ?? 0 }))
-      .filter((x) => x.pedido > x.tem);
-  }, [modalidade, rows, meuEstoque]);
   const [dateOpen, setDateOpen] = useState(false);
   // Previsão de execução da descarbonização (serviço) — independente da entrega.
   const [executionDate, setExecutionDate] = useState("");
@@ -479,13 +475,6 @@ export default function Vender() {
       unitPriceStr: preco ? String(preco).replace(".", ",") : "",
     });
   }
-  /** A linha é bonificação quando o produto escolhido é um gêmeo.
-   *  ⚠️ A regra mora no PRODUTO, não numa flag da linha: assim ela sobrevive
-   *  a reabrir o orçamento, e um gêmeo escolhido por qualquer caminho já
-   *  entra com 100% — não há como salvar bonificação cobrada. */
-  const ehBonificacao = (productId: string) =>
-    !!produtos.find((p) => p.id === productId)?.bonificacao_de;
-
   const validItems = () =>
     rows.filter((r) => r.productId && r.qty > 0).map((r) => {
       const prod = produtos.find((p) => p.id === r.productId);
@@ -512,6 +501,27 @@ export default function Vender() {
         total: line.net,
       };
     });
+
+  // Itens que a caixa não cobre. Some quantidade + bonificação porque o produto
+  // bonificado também sai da prateleira — é a mesma conta do banco.
+  //
+  // ⚠️ Depende de `validItems`, então mora DEPOIS dele. Ver a nota no
+  // `ehBonificacao`: useMemo roda no render e não perdoa ordem de declaração.
+  const faltaNaCaixa = useMemo(() => {
+    if (modalidade !== "pronta_entrega") return [];
+    const pedido = new Map<string, { nome: string; qtd: number }>();
+    for (const i of validItems()) {
+      if (!i.product_id) continue;
+      const a = pedido.get(i.product_id) ?? { nome: i.name, qtd: 0 };
+      a.qtd += (i.quantity || 0) + (i.bonus_quantity || 0);
+      pedido.set(i.product_id, a);
+    }
+    const saldo = meuEstoque?.saldo ?? {};
+    return [...pedido.entries()]
+      .map(([id, a]) => ({ id, nome: a.nome, pedido: a.qtd, tem: saldo[id] ?? 0 }))
+      .filter((x) => x.pedido > x.tem);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [modalidade, rows, meuEstoque, produtos]);
 
   // Itens de serviço válidos (com modalidade e qtd). Preço fixo da modalidade.
   const validServiceItems = () =>

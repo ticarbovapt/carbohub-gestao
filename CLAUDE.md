@@ -434,3 +434,17 @@ Após o deploy, informar que a nova tela aparece no `/role-matrix` no grupo corr
 ## Migrações
 - Sempre criar arquivo em `supabase/migrations/` com timestamp sequencial
 - Passar o SQL para o usuário rodar no Supabase SQL Editor quando necessário
+
+### ⚠️ TDZ no `Vender.tsx`: `useMemo` roda no render
+Derrubou o `/vender` em produção nos seis apps (`Cannot access '$i' before
+initialization`). O callback de `useMemo`/`useCallback` executa **durante o
+render**, então qualquer `const` que ele chame precisa estar declarado ACIMA.
+
+O `tsc` **não pega**: ele não sabe quando o callback roda. O `npm run build`
+também não — esbuild não checa nada disso. Passou por typecheck e por seis
+builds antes de quebrar na tela.
+
+Ao mexer no `Vender.tsx`, rode a checagem: para cada `useMemo`/`useCallback`,
+confira se algum identificador usado no corpo é um `const` declarado depois.
+`ehBonificacao` fica logo após `useProdutos()` por esse motivo, e
+`faltaNaCaixa` fica depois de `validItems`.
