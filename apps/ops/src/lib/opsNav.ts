@@ -60,6 +60,7 @@ export const OPS_GROUPS: OpsNavGroup[] = [
     label: "Suprimentos",
     items: [
       { path: "/suprimentos", label: "Suprimentos", icon: PackagePlus, from: "/suprimentos", ready: true },
+      { path: "/suprimentos/vendedores", label: "Estoque dos Vendedores", icon: PackageCheck, from: "/suprimentos/vendedores", ready: true },
     ],
   },
   {

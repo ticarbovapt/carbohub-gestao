@@ -16,6 +16,7 @@ import Lotes from "./pages/producao/Lotes";
 import FornecedoresMrp from "./pages/producao/FornecedoresMrp";
 import RequisicaoCompra from "./pages/compras/RequisicaoCompra";
 import Suprimentos from "./pages/compras/Suprimentos";
+import EstoqueVendedores from "./pages/compras/EstoqueVendedores";
 import Logistica from "./pages/logistica/Logistica";
 import PosVenda from "./pages/logistica/PosVenda";
 import Recorrencias from "./pages/comercial/Recorrencias";
@@ -58,6 +59,10 @@ export default function App() {
             canonizador da tela redireciona para o endereço completo. Mesmo
             desenho de /logistica e /logistica/:aba. */}
         <Route path="/suprimentos" element={<Suprimentos />} />
+        {/* Caixa física de cada vendedor. Fora da grade de Suprimentos de
+            propósito: lá é uma coluna por hub, e quinze vendedores tornariam
+            a grade ilegível. */}
+        <Route path="/suprimentos/vendedores" element={<EstoqueVendedores />} />
         <Route path="/suprimentos/:hub/:aba" element={<Suprimentos />} />
         <Route path="/suprimentos/:hub" element={<Suprimentos />} />
 
