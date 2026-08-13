@@ -2483,7 +2483,25 @@ Deno.serve(async (req: Request): Promise<Response> => {
     // esse risco.
     if (entity === "naturezas") {
       try {
-        const r = await blingFetch(token, "/naturezas-operacoes", 1, 100);
+        // ⚠️ Token da conta pedida. Listar as naturezas da matriz e salvar como
+        // se fossem da filial gravaria um id que não existe lá — e o erro só
+        // apareceria na primeira emissão com brinde, já com o pedido pago
+        // criado.
+        const contaNat: ContaBling = body.conta === 2 ? 2 : 1;
+        let tokenNat = token;
+        if (contaNat !== 1) {
+          const idEnv = Deno.env.get(CONTAS[contaNat].envId) ?? "";
+          const secretEnv = Deno.env.get(CONTAS[contaNat].envSecret) ?? "";
+          if (!idEnv || !secretEnv) {
+            throw new Error(
+              `As credenciais do Bling ${CONTAS[contaNat].nome} não estão configuradas no servidor.`,
+            );
+          }
+          const t2 = await getValidToken(supabaseAdmin, idEnv, secretEnv, false, contaNat);
+          if (!t2.token) throw new Error(t2.error || `Sem token válido para ${CONTAS[contaNat].nome}.`);
+          tokenNat = t2.token;
+        }
+        const r = await blingFetch(tokenNat, "/naturezas-operacoes", 1, 100);
         const lista = (r?.data || []).map((n: any) => ({
           id: n.id,
           descricao: n.descricao || n.nome || "(sem descrição)",

@@ -38,12 +38,20 @@ export interface FaturamentoItem extends OrderItem {
  * bonificação deixaria de existir sem deixar rastro.
  */
 export function faltaAlgumaNF(o: {
+  bling_conta?: number | null;
   bling_nf_id: number | null;
   bling_nf_bonificacao_id: number | null;
+  bling2_nf_id?: number | null;
+  bling2_nf_bonificacao_id?: number | null;
   items: FaturamentoItem[];
 }): boolean {
-  if (!o.bling_nf_id) return true;
-  return temBonificacao(o.items) && !o.bling_nf_bonificacao_id;
+  // ⚠️ A nota mora em colunas diferentes conforme a conta. Olhar só as da
+  // matriz manteria todo pedido faturado em SP na fila para sempre.
+  const naFilial = o.bling_conta === 2;
+  const nf    = naFilial ? o.bling2_nf_id : o.bling_nf_id;
+  const nfBon = naFilial ? o.bling2_nf_bonificacao_id : o.bling_nf_bonificacao_id;
+  if (!nf) return true;
+  return temBonificacao(o.items) && !nfBon;
 }
 
 export function temBonificacao(items: FaturamentoItem[] | null | undefined): boolean {
@@ -117,6 +125,12 @@ export interface FaturamentoOrder {
   bling_nf_id: number | null;
   bling_nf_bonificacao_id: number | null;
   invoice_bonificacao_number: string | null;
+  /** Filial SP: colunas próprias porque os dois Blings numeram do zero e
+   *  reaproveitar bling_nf_id faria id de uma casar com nota real da outra. */
+  bling_conta: number | null;
+  bling2_nf_id: number | null;
+  bling2_nf_bonificacao_id: number | null;
+  invoice2_number: string | null;
   nf_access_key: string | null;
   invoice_number: string | null;
   // Situação da nota NO BLING. Sem isto a tela pintava toda NF de verde e
@@ -158,7 +172,13 @@ export function useFaturamento({ month, search = "", showAll = false }: Faturame
         // chegasse — a de bonificação ficaria sem ser emitida e ninguém veria.
         // Por isso o filtro do banco só derruba o caso simples; o caso com
         // bonificação é resolvido no cliente, por `faltaAlgumaNF`.
-        query = query.or("bling_nf_id.is.null,bling_nf_bonificacao_id.is.null");
+        // O filtro do banco é grosseiro de propósito (derruba só o caso
+        // simples e barato); quem decide de verdade é `faltaAlgumaNF` no
+        // cliente, que sabe de qual conta é o pedido.
+        query = query.or(
+          "bling_nf_id.is.null,bling_nf_bonificacao_id.is.null," +
+          "bling2_nf_id.is.null,bling2_nf_bonificacao_id.is.null",
+        );
       }
 
       if (term) {

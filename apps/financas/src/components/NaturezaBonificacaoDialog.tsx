@@ -40,12 +40,17 @@ export function NaturezaBonificacaoDialog({
 }: { open: boolean; onOpenChange: (v: boolean) => void }) {
   const qc = useQueryClient();
   const [busca, setBusca] = useState("");
+  // ⚠️ Natureza é cadastro de CADA conta: o id da matriz não existe na filial.
+  // Configurar uma e supor a outra emitiria a remessa com natureza inválida —
+  // ou, pior, com uma natureza que existe mas é outra coisa.
+  const [conta, setConta] = useState<1 | 2>(1);
+  const chave = conta === 1 ? "bling1_natureza_bonificacao_id" : "bling2_natureza_bonificacao_id";
 
   const { data: atual } = useQuery({
-    queryKey: ["config-fiscal", "natureza-bonificacao"],
+    queryKey: ["config-fiscal", "natureza-bonificacao", conta],
     queryFn: async (): Promise<string | null> => {
       const { data, error } = await db.from("carbo_config_fiscal")
-        .select("valor").eq("chave", "bling1_natureza_bonificacao_id").maybeSingle();
+        .select("valor").eq("chave", chave).maybeSingle();
       if (error) throw error;
       return data?.valor ?? null;
     },
@@ -53,12 +58,12 @@ export function NaturezaBonificacaoDialog({
 
   const { data: naturezas, isLoading, error } = useQuery({
     enabled: open,
-    queryKey: ["bling", "naturezas"],
+    queryKey: ["bling", "naturezas", conta],
     // Cadastro fiscal muda raramente; buscar a cada abertura é chamada de API à toa.
     staleTime: 10 * 60_000,
     queryFn: async (): Promise<Natureza[]> => {
       const { data, error } = await db.functions.invoke("bling-sync", {
-        body: { entity: "naturezas" },
+        body: { entity: "naturezas", conta },
       });
       if (error) throw new Error("Não consegui falar com o Bling. Tente de novo.");
       if (data?.success === false) throw new Error(data.error || "Erro ao listar naturezas");
@@ -70,7 +75,7 @@ export function NaturezaBonificacaoDialog({
     mutationFn: async (id: number) => {
       const { error } = await db.from("carbo_config_fiscal")
         .update({ valor: String(id), updated_at: new Date().toISOString() })
-        .eq("chave", "bling1_natureza_bonificacao_id");
+        .eq("chave", chave);
       if (error) throw error;
     },
     onSuccess: () => {
@@ -98,6 +103,17 @@ export function NaturezaBonificacaoDialog({
           normalmente <strong>"Remessa em bonificação, doação ou brinde"</strong>.
           É ela que faz a nota sair sem imposto sobre o produto dado.
         </p>
+
+        <div className="grid grid-cols-2 gap-2">
+          {([[1, "Matriz"], [2, "Filial SP"]] as const).map(([v, label]) => (
+            <button key={v} type="button" onClick={() => setConta(v)}
+              className={`rounded-md border px-3 py-2 text-sm transition ${
+                conta === v ? "border-carbo-green bg-carbo-green/10 font-medium" : "hover:bg-muted"
+              }`}>
+              {label}
+            </button>
+          ))}
+        </div>
 
         <Input placeholder="Filtrar..." value={busca} onChange={(e) => setBusca(e.target.value)}
           className="h-9" />

@@ -448,3 +448,27 @@ Ao mexer no `Vender.tsx`, rode a checagem: para cada `useMemo`/`useCallback`,
 confira se algum identificador usado no corpo é um `const` declarado depois.
 `ehBonificacao` fica logo após `useProdutos()` por esse motivo, e
 `faltaNaCaixa` fica depois de `validItems`.
+
+### Duas contas Bling na emissão — matriz e filial SP
+`bling-sync` emite nas DUAS contas. O mapa `CONTAS` (no topo da função) resolve
+tabela de apoio, token, natureza e colunas de destino por conta. Bling 1 =
+matriz, Bling 2 = filial SP.
+
+1. **Um mapa, nunca `if (conta === 2)` espalhado.** Cada conta tem catálogo de
+   produtos, cadastro de contatos e naturezas próprios, e as duas numeram do
+   zero — `bling_id` de uma não significa nada na outra. Tabela esquecida = NF
+   com o produto (ou o cliente) de outra empresa.
+2. **`external_ref` leva o prefixo da conta** (`bling-` / `bling2-`). É o que
+   impede a ponte do Bling 2 de reimportar o pedido faturado em SP como pedido
+   NOVO, com valor cheio — duplicaria faturamento dentro do cron, sem log.
+   O gatilho `carbo_bloqueia_remessa_bonificacao` é o cinto disso.
+3. **A NF da filial vai para colunas PRÓPRIAS** (`bling2_nf_id` etc.), nunca em
+   `bling_nf_id`. Já foi tentado e revertido: `carbo_vendas_metrica` junta
+   `bling_nfe` por esse id, e um id da conta 2 casaria com nota real da conta 1
+   — nota cancelada de uma empresa derrubando venda da outra.
+4. **O casamento da filial é por ID EXATO**, não regex: as notas da conta 2
+   chegam com observação vazia. Caminho: `external_ref` → `bling2_orders` →
+   `nf_bling_id` → `bling2_nfe` (`carbo_vincula_nf_filial`, cron 5 min).
+   Depende do `bling2-order-details-10min`, que é quem traz `raw_detalhe`.
+5. **A conta é sempre EXPLÍCITA**, no front e no servidor. Errar emite no CNPJ
+   errado, e só se desfaz com cancelamento depois de o documento circular.
