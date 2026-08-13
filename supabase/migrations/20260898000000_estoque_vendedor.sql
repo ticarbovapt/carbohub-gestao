@@ -4,6 +4,19 @@
 -- Cada vendedor passa a ter um estoque físico próprio: produzido em Natal,
 -- transferido para ele, vendido a pronta entrega.
 --
+-- ⚠️ RODE EM BLOCOS SEPARADOS. A primeira versão deste arquivo rodava tudo
+-- numa transação e deu `deadlock detected` na cara do usuário. O motivo:
+-- criar o trigger em `public.profiles` pede AccessExclusiveLock numa tabela
+-- que TODA requisição de TODOS os apps lê, e a mesma transação também
+-- alterava `public.warehouses`. Outro processo segurava warehouses e queria
+-- profiles; os dois ficaram se esperando.
+--
+-- A regra que os blocos abaixo respeitam: nenhuma transação segura lock
+-- exclusivo em duas tabelas quentes ao mesmo tempo. É a mesma lição do bucket
+-- do RTM (storage.objects) — e a segunda vez que ela aparece neste projeto.
+--
+-- Todos os blocos são idempotentes: deu deadlock, rode aquele bloco de novo.
+--
 -- ── Por que a caixa do vendedor é um `warehouse` ──────────────────────────
 --
 -- A tentação é uma tabela nova (`vendedor_estoque`). Custaria caro: saldo,
@@ -15,39 +28,30 @@
 --
 -- Sendo warehouse, "produzido em Natal e transferido para ele" já está pronto:
 -- `ops_transfer_register` sai do HUB-RN, confere saldo, debita e registra o
--- movimento; `ops_transfer_confirm` credita o destino. Nenhuma linha de SQL
--- nova para o fluxo principal.
+-- movimento; `ops_transfer_confirm` credita o destino.
 --
--- ⚠️ E as caixas ficam FORA da lista `HUBS` do front, de propósito. Ela tem
--- cinco entradas e vira uma coluna cada na grade de Suprimentos; quinze
--- vendedores ali dentro tornariam a tela ilegível. Já foi verificado que o
--- `useStock.ts` ignora código desconhecido (`if (!hubId) continue`) nas três
--- passagens — saldo, mínimos e exceções —, então criar estas linhas NÃO mexe
--- na tela que está no ar.
+-- ⚠️ E as caixas ficam FORA da lista `HUBS` do front, de propósito. Ela vira
+-- uma coluna cada na grade de Suprimentos; quinze vendedores ali dentro
+-- tornariam a tela ilegível. Já foi verificado que o `useStock.ts` ignora
+-- código desconhecido (`if (!hubId) continue`) nas três passagens — saldo,
+-- mínimos e exceções —, então criar estas linhas NÃO mexe na tela no ar.
 --
 -- ── Uma caixa por vendedor ────────────────────────────────────────────────
 --
 -- Não duas (carro e depósito). Ninguém pediu a separação, e ela custa uma
 -- decisão em toda venda: "saiu de qual?". Se um dia precisar, basta remover o
--- índice único abaixo — o resto do desenho aguenta.
+-- índice único do BLOCO 2.
 -- ═══════════════════════════════════════════════════════════════════════════
 
 
--- ── 1. As colunas ──────────────────────────────────────────────────────────
+-- ╔═══════════════════════════════════════════════════════════════════════╗
+-- ║ BLOCO 1 — colunas e constraints em `warehouses`                       ║
+-- ╚═══════════════════════════════════════════════════════════════════════╝
+-- Uma tabela só, lock curto. `warehouses` é pequena e o ALTER não reescreve.
 
 alter table public.warehouses
   add column if not exists kind text not null default 'hub',
   add column if not exists owner_id uuid references public.profiles(id) on delete restrict;
-
-do $$
-begin
-  if not exists (
-    select 1 from pg_constraint where conname = 'warehouses_kind_check'
-  ) then
-    alter table public.warehouses
-      add constraint warehouses_kind_check check (kind in ('hub', 'vendedor'));
-  end if;
-end $$;
 
 comment on column public.warehouses.kind is
   'hub = galpão da empresa (aparece na grade de Suprimentos). vendedor = caixa física de um vendedor, fora da grade de propósito.';
@@ -56,15 +60,18 @@ comment on column public.warehouses.owner_id is
 
 -- ⚠️ ON DELETE RESTRICT, não CASCADE. Apagar o perfil não pode levar junto a
 -- caixa: ela tem saldo, histórico de movimento e transferências apontando para
--- ela. Vendedor que sai da empresa tem a caixa ZERADA e desativada — o
--- histórico dele continua explicável.
+-- ela. Vendedor que sai tem a caixa ZERADA e desativada — o histórico dele
+-- continua explicável.
 
--- Coerência entre os dois campos: hub não tem dono, caixa de vendedor tem.
 do $$
 begin
-  if not exists (
-    select 1 from pg_constraint where conname = 'warehouses_owner_coerente'
-  ) then
+  if not exists (select 1 from pg_constraint where conname = 'warehouses_kind_check') then
+    alter table public.warehouses
+      add constraint warehouses_kind_check check (kind in ('hub', 'vendedor'));
+  end if;
+
+  -- Coerência entre os dois campos: hub não tem dono, caixa de vendedor tem.
+  if not exists (select 1 from pg_constraint where conname = 'warehouses_owner_coerente') then
     alter table public.warehouses
       add constraint warehouses_owner_coerente check (
         (kind = 'vendedor' and owner_id is not null)
@@ -73,24 +80,30 @@ begin
   end if;
 end $$;
 
--- Uma caixa por vendedor. Índice parcial porque os hubs têm owner_id nulo e
+
+-- ╔═══════════════════════════════════════════════════════════════════════╗
+-- ║ BLOCO 2 — índices                                                     ║
+-- ╚═══════════════════════════════════════════════════════════════════════╝
+-- Uma caixa por vendedor. Índice PARCIAL porque os hubs têm owner_id nulo e
 -- um unique comum deixaria passar só um deles.
+
 create unique index if not exists uq_warehouse_owner
   on public.warehouses (owner_id) where kind = 'vendedor';
 
 create index if not exists idx_warehouses_kind on public.warehouses (kind);
 
 
--- ── 2. Criar a caixa ───────────────────────────────────────────────────────
---
--- Em função, e não num INSERT solto, porque isto roda em três momentos: agora
--- (carga), quando alguém vira vendedor (trigger) e quando o Ops criar pela
+-- ╔═══════════════════════════════════════════════════════════════════════╗
+-- ║ BLOCO 3 — criar a caixa (função)                                      ║
+-- ╚═══════════════════════════════════════════════════════════════════════╝
+-- Em função, e não num INSERT solto, porque isto roda em três momentos: a
+-- carga do BLOCO 6, o trigger do BLOCO 5, e o dia em que o Ops criar pela
 -- tela. Três cópias da mesma regra divergiriam no formato do código.
 --
--- O `code` é derivado do id e não do nome: nome muda (casamento, correção de
+-- O `code` deriva do id e NÃO do nome: nome muda (casamento, correção de
 -- digitação) e o código é o que `ops_transfer_register` usa para achar o
--- destino. Código que muda é transferência que quebra.
--- O NOME é que carrega a legibilidade, e esse pode mudar à vontade.
+-- destino. Código que muda é transferência que quebra. Quem carrega a
+-- legibilidade é o `name`, e esse pode mudar à vontade.
 
 create or replace function public.carbo_estoque_vendedor_criar(p_profile uuid)
 returns uuid
@@ -132,15 +145,11 @@ revoke all on function public.carbo_estoque_vendedor_criar(uuid) from public;
 grant execute on function public.carbo_estoque_vendedor_criar(uuid) to authenticated;
 
 
--- ── 3. Virou vendedor, ganha caixa ─────────────────────────────────────────
---
--- Sem isto a caixa só existe para quem era vendedor no dia desta migração, e
--- o vendedor novo descobre o problema tentando vender a pronta entrega — que
--- é o pior momento possível para descobrir.
---
--- ⚠️ Só CRIA. Desmarcar `is_vendedor` não apaga nem desativa a caixa: ela pode
--- ter saldo, e some com o saldo seria destruir estoque físico por causa de um
--- checkbox. Quem desativa é gente, olhando o que tem dentro.
+-- ╔═══════════════════════════════════════════════════════════════════════╗
+-- ║ BLOCO 4 — função do trigger                                           ║
+-- ╚═══════════════════════════════════════════════════════════════════════╝
+-- Separada do CREATE TRIGGER de propósito: criar função não trava tabela
+-- nenhuma. Só o bloco seguinte encosta em `profiles`.
 
 create or replace function public.carbo_profile_vendedor_estoque()
 returns trigger
@@ -156,17 +165,45 @@ begin
 end;
 $$;
 
+
+-- ╔═══════════════════════════════════════════════════════════════════════╗
+-- ║ BLOCO 5 — o trigger em `profiles`  ⚠️ SOZINHO                         ║
+-- ╚═══════════════════════════════════════════════════════════════════════╝
+-- Este é o bloco que causou o deadlock quando estava junto dos outros.
+--
+-- `profiles` é lida por toda requisição de todos os apps. CREATE TRIGGER pede
+-- AccessExclusiveLock, que espera TODOS os leitores atuais terminarem — e,
+-- enquanto espera, bloqueia todo leitor NOVO que chegar. Numa tabela desse
+-- movimento isso é o login de todo mundo parando.
+--
+-- Por isso o lock_timeout: se não conseguir o lock em 5 s, ele DESISTE em vez
+-- de formar fila. Falhar aqui é barato — é só rodar de novo. Formar fila em
+-- `profiles` não é.
+--
+-- Sem este trigger a caixa só existe para quem era vendedor no dia da carga, e
+-- o vendedor novo descobre o problema tentando vender a pronta entrega — o
+-- pior momento possível.
+--
+-- ⚠️ Só CRIA. Desmarcar `is_vendedor` não apaga nem desativa a caixa: ela pode
+-- ter saldo, e sumir com o saldo seria destruir estoque físico por causa de um
+-- checkbox. Quem desativa é gente, olhando o que tem dentro.
+
+set lock_timeout = '5s';
+
 drop trigger if exists trg_profile_vendedor_estoque on public.profiles;
 create trigger trg_profile_vendedor_estoque
   after insert or update of is_vendedor on public.profiles
   for each row execute function public.carbo_profile_vendedor_estoque();
 
+reset lock_timeout;
 
--- ── 4. Carga: uma caixa para cada vendedor de hoje ─────────────────────────
---
--- Caixa vazia não custa nada — é uma linha em `warehouses` com zero saldo.
--- Adivinhar quem trabalha pronta entrega custaria uma reunião, e errar para
--- menos deixa alguém sem conseguir vender.
+
+-- ╔═══════════════════════════════════════════════════════════════════════╗
+-- ║ BLOCO 6 — carga: uma caixa para cada vendedor de hoje                 ║
+-- ╚═══════════════════════════════════════════════════════════════════════╝
+-- Caixa vazia não custa nada — é uma linha com zero saldo. Adivinhar quem
+-- trabalha pronta entrega custaria uma reunião, e errar para menos deixa
+-- alguém sem conseguir vender.
 
 do $$
 declare r record;
@@ -177,8 +214,9 @@ begin
 end $$;
 
 
--- ── 5. Leitura ─────────────────────────────────────────────────────────────
---
+-- ╔═══════════════════════════════════════════════════════════════════════╗
+-- ║ BLOCO 7 — leitura                                                     ║
+-- ╚═══════════════════════════════════════════════════════════════════════╝
 -- `security_invoker` para a RLS de quem consulta continuar valendo dentro da
 -- view — sem isso ela viraria um furo por onde qualquer autenticado leria o
 -- que a policy da tabela nega.
@@ -217,7 +255,9 @@ comment on view public.vendedor_estoque is
 grant select on public.vendedor_estoque to authenticated;
 
 
--- ── 6. Conferência ─────────────────────────────────────────────────────────
+-- ╔═══════════════════════════════════════════════════════════════════════╗
+-- ║ BLOCO 8 — conferência                                                 ║
+-- ╚═══════════════════════════════════════════════════════════════════════╝
 
 -- (a) As caixas nasceram? Uma por vendedor, com nome legível.
 select w.code, w.name, p.full_name, w.is_active
