@@ -354,13 +354,38 @@ grant select on public.carbo_carrinho_pipeline to authenticated;
 -- Origem 1: a etapa da esteira.        Origem 2: `saiu_entrega`, do rastreio.
 -- Origem 3: a régua de recompra.       Origem 4: os três passos do carrinho.
 --
--- ⚠️ Duas colunas NOVAS no fim (`link_carrinho`, `produtos`) e nenhuma
--- reordenada: `create or replace view` só aceita ACRESCENTAR no fim. Mover ou
--- renomear obriga a DROP, e esta view é lida pelo `kanban-n8n` a cada minuto.
+-- ⚠️ DROP + CREATE, e não `create or replace`. Duas razões, e a segunda só
+-- apareceu na hora de rodar:
 --
--- ⚠️ E uma CORREÇÃO que não é do carrinho, explicada no fim do bloco.
+--   1. `valor` mudaria de numeric(12,2) para numeric — o UNION de
+--      `bling2_esteira.total` (12,2) com `nuvemshop_carrinhos.total` (14,2)
+--      resolve para numeric sem precisão. Resolvido com cast na saída, mas...
+--
+--   2. ...o banco de produção recusou com
+--
+--          42P16: cannot change name of view column "transportadora"
+--                 to "link_nota"
+--
+--      A tradução disso é: a view VIVA não tem `link_nota`. A migração
+--      20260895 (o PDF da nota) nunca foi aplicada lá — provavelmente porque
+--      ELA também era um `create or replace` que acrescentava coluna no MEIO
+--      da lista, e falhou do mesmo jeito, em silêncio, para quem rodou.
+--
+-- ⚠️ A lição que fica: `create or replace view` só aceita ACRESCENTAR no FIM.
+-- Coluna nova no meio, renomeada, reordenada ou com outro tipo exige DROP —
+-- e é a terceira vez que este projeto tropeça nisso (`carbo_vendas_metrica`,
+-- `bling2_esteira`, e agora aqui). Ao acrescentar campo a uma view existente,
+-- ponha no fim ou já escreva DROP.
+--
+-- Derrubar esta é seguro: nada no banco depende dela (nenhuma função a
+-- retorna, nenhuma view a consulta). Quem lê é o `kanban-n8n`, por PostgREST,
+-- e a janela entre o drop e o create é de milissegundos dentro da transação.
+--
+-- ⚠️ E há uma CORREÇÃO que não é do carrinho, explicada no fim do bloco.
 
-create or replace view public.carbo_msg_fila
+drop view if exists public.carbo_msg_fila;
+
+create view public.carbo_msg_fila
 with (security_invoker = true) as
 with cfg as (
   select minutos_1, horas_2, horas_3, valor_minimo, inicio_em
@@ -509,6 +534,12 @@ where not exists (
     and v.status <> 'pendente'
 )
   and nullif(trim(coalesce(b.cliente_fone, '')), '') is not null;
+
+-- ⚠️ O DROP levou os grants junto. Sem esta linha o `kanban-n8n` continua
+-- funcionando (service_role ignora grant) e a TELA quebra em silêncio: o
+-- contador "na fila" de /ecommerce/mensagens passa a dar erro de permissão,
+-- que é o tipo de falha que ninguém liga ao SQL que rodou ontem.
+grant select on public.carbo_msg_fila to authenticated;
 
 comment on view public.carbo_msg_fila is
   'O que está esperando aviso, de QUATRO origens: etapa da esteira, saiu_entrega (rastreio), régua de recompra e os três passos da recuperação de carrinho. A função de envio só troca as variáveis e entrega ao n8n. ⚠️ Linha `pendente` em carbo_msg_envios CONTINUA na fila de propósito: é assim que o atraso_min do template funciona.';
