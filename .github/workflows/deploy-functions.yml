@@ -82,5 +82,10 @@ jobs:
           dep ml-auth --no-verify-jwt
           dep nuvemshop-auth --no-verify-jwt
           dep nuvemshop-lgpd --no-verify-jwt
+          # ⚠️ Esta lista é MANUAL: função que não aparece aqui simplesmente
+          # nunca sobe, e o sintoma é a migração rodar, o cron marcar
+          # `succeeded` e a tabela continuar vazia — sem erro em lugar nenhum.
+          # Chamada pelo pg_cron, que manda X-Cron-Secret e nenhum Authorization.
+          dep nuvemshop-carrinhos --no-verify-jwt
           dep ai-chat
           dep text-enhancer
