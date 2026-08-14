@@ -91,6 +91,10 @@ export interface FaturamentoOrder {
   vendedor_id: string | null;
   vendedor_name: string | null;
   external_ref: string | null;
+  /** 'online' = marketplace (Nuvemshop, Meli, Amazon…). Vem da ponte do Bling 2
+   *  e é o que separa a fila de faturamento do time da do e-commerce. */
+  segmento: string | null;
+  source_file: string | null;
   // Observação importada do pedido do Bling. Quando um pedido BLING-… traz aqui
   // o nº de uma venda do sistema (V…), ele é o MESMO pedido — a tela o esconde
   // pra não duplicar (a NF casa com a venda do sistema).

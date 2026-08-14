@@ -1,7 +1,7 @@
 import { Fragment, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import {
-  Receipt, FileText, ChevronLeft, ChevronRight, CheckCircle2, DollarSign, Store, Building2, Lock, Link2, Files, Package, Gift,
+  Receipt, FileText, ChevronLeft, ChevronRight, CheckCircle2, DollarSign, Store, Building2, Lock, Link2, Files, Package, Gift, Globe,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { NaturezaBonificacaoDialog } from "@/components/NaturezaBonificacaoDialog";
@@ -64,6 +64,20 @@ const isBling = (o: FaturamentoOrder) =>
 // IMPORTANTE: a checagem é pelo NÚMERO ser BLING-… (não por "ser do Bling"),
 // porque uma venda do sistema (V…) enviada ao Bling também fica com external_ref
 // "bling-…" e tem o próprio V… na observação — ela NÃO pode ser escondida.
+/**
+ * Venda de marketplace (Nuvemshop, Meli, Amazon…).
+ *
+ * ⚠️ Separada das outras porque a origem é OUTRA e o tratamento também: nota de
+ * marketplace é emitida pela plataforma ou em lote, não uma a uma por quem
+ * fatura. Misturadas na aba do Bling elas afogam as vendas do time — que são
+ * as que alguém precisa olhar hoje.
+ *
+ * O corte é por `segmento`, gravado pela ponte do Bling 2 (loja ≠ 0 e não
+ * ignorada), e não por prefixo de número: venda direta da conta 2 também
+ * chega como BLING2-… e NÃO é online.
+ */
+const isOnline = (o: FaturamentoOrder) => (o.segmento ?? "") === "online";
+
 const SYSTEM_CODE_RE = /V\d{10}/i;
 const isBlingDupOfSystem = (o: FaturamentoOrder) =>
   (o.order_number ?? "").toUpperCase().startsWith("BLING-") &&
@@ -97,7 +111,7 @@ export default function Faturamento() {
   const [search, setSearch] = useState("");
   // Aba ativa persistida na URL (?tab=…), pra não voltar pro "sistema" a cada F5.
   const [searchParams, setSearchParams] = useSearchParams();
-  const VALID_TABS = ["sistema", "bling", "vincular", "todas"];
+  const VALID_TABS = ["sistema", "bling", "online", "vincular", "todas"];
   const rawTab = searchParams.get("tab") || "sistema";
   const activeTab = VALID_TABS.includes(rawTab) ? rawTab : "sistema";
   const setActiveTab = (v: string) =>
@@ -117,17 +131,22 @@ export default function Faturamento() {
   // Remove os pedidos do Bling que são duplicata de uma venda do sistema (V… na
   // observação) — some da lista, some dos KPIs, some da contagem das abas.
   const list = useMemo(() => (orders ?? []).filter((o) => !isBlingDupOfSystem(o)), [orders]);
-  const sistema = useMemo(() => list.filter((o) => !isBling(o)), [list]);
-  const bling = useMemo(() => list.filter(isBling), [list]);
+  const sistema = useMemo(() => list.filter((o) => !isBling(o) && !isOnline(o)), [list]);
+  // ⚠️ `!isOnline` também aqui: pedido de marketplace vem com external_ref
+  // bling2-… e cairia na aba do Bling, que é justamente o que polui.
+  const bling = useMemo(() => list.filter((o) => isBling(o) && !isOnline(o)), [list]);
+  const online = useMemo(() => list.filter(isOnline), [list]);
   const soma = (rows: FaturamentoOrder[]) => rows.reduce((s, o) => s + Number(o.total || 0), 0);
 
   // Paginação (20/pág) das abas sistema e Bling — página na URL (persiste no F5).
   const [pSist, setPSist] = useUrlPage("psist");
   const [pBling, setPBling] = useUrlPage("pbling");
+  const [pOnline, setPOnline] = useUrlPage("ponline");
   const sistPag = paginate(sistema, pSist);
   const blingPag = paginate(bling, pBling);
+  const onlinePag = paginate(online, pOnline);
   // Nova busca/mês → volta pra página 1 das listas paginadas.
-  const resetPages = () => { setPSist(1); setPBling(1); };
+  const resetPages = () => { setPSist(1); setPBling(1); setPOnline(1); };
 
   const changeMonth = (delta: number) => {
     resetPages();
@@ -460,6 +479,7 @@ export default function Faturamento() {
           <TabsList>
             <TabsTrigger value="sistema" className="gap-2"><Building2 className="h-4 w-4" /> Vendas do sistema ({sistema.length})</TabsTrigger>
             <TabsTrigger value="bling" className="gap-2"><Store className="h-4 w-4" /> Do Bling ({bling.length})</TabsTrigger>
+            <TabsTrigger value="online" className="gap-2"><Globe className="h-4 w-4" /> NF Online ({online.length})</TabsTrigger>
             <TabsTrigger value="vincular" className="gap-2"><Link2 className="h-4 w-4" /> Vincular NFs</TabsTrigger>
             <TabsTrigger value="todas" className="gap-2"><Files className="h-4 w-4" /> Todas as NFs</TabsTrigger>
           </TabsList>
@@ -473,6 +493,19 @@ export default function Faturamento() {
               Fluxo: <strong>Criar no Bling</strong> envia o pedido pro Bling (o nº <code>V…</code> vai na observação) e abre o Bling
               pra você conferir e emitir a NF-e. A sincronização casa a NF ao pedido pela observação — o pedido continua aqui como
               <strong> Faturado</strong> (com a NF pra baixar). Desligue <em>“Mostrar já faturados”</em> pra ver só os pendentes.
+            </p>
+          </TabsContent>
+
+          <TabsContent value="online" className="mt-4">
+            <CarboCard><CarboCardContent className="pt-6">
+              <Tabela rows={onlinePag.slice} showAction={false} />
+              <Pager page={onlinePag.safePage} pageCount={onlinePag.pageCount} total={online.length} onPage={setPOnline} />
+            </CarboCardContent></CarboCard>
+            <p className="text-xs text-muted-foreground mt-3">
+              Vendas de <strong>marketplace</strong> (Nuvemshop, Mercado Livre, Amazon…).
+              A nota delas é emitida pela plataforma ou em lote — não uma a uma
+              por aqui. Ficam separadas para não afogar as vendas do time, que
+              são as que precisam de ação.
             </p>
           </TabsContent>
 

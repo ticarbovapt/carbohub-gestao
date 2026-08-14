@@ -22,6 +22,28 @@ const fmtDate = (s: string | null) => {
   return d.length === 3 ? `${d[2]}/${d[1]}/${d[0]}` : s;
 };
 
+/**
+ * Sinais para quem está escolhendo o pedido.
+ *
+ * ⚠️ Isto existe porque dois vínculos errados foram encontrados em produção:
+ * notas de setembro e novembro de 2025 grudadas em pedidos de junho de 2026.
+ * Nos dois casos o VALOR batia exato — e era só o que a tela mostrava. A data
+ * denunciava, mas não estava à vista.
+ *
+ * Nota emitida meses antes do pedido não é a nota daquele pedido. A tela não
+ * bloqueia (pode haver caso legítimo de emissão adiantada), mas para de
+ * esconder.
+ */
+const DIAS_SUSPEITO = 45;
+
+function distanciaEmDias(a: string | null, b: string | null): number | null {
+  if (!a || !b) return null;
+  const d1 = new Date(a.slice(0, 10)).getTime();
+  const d2 = new Date(b.slice(0, 10)).getTime();
+  if (Number.isNaN(d1) || Number.isNaN(d2)) return null;
+  return Math.round((d1 - d2) / 86400000);
+}
+
 // Diálogo de vínculo manual: escolhe o pedido (sem NF) pra casar com a NF.
 function LinkDialog({ nfe, onClose }: { nfe: OrphanNFe | null; onClose: () => void }) {
   const [search, setSearch] = useState("");
@@ -51,6 +73,23 @@ function LinkDialog({ nfe, onClose }: { nfe: OrphanNFe | null; onClose: () => vo
                     <p className="font-mono text-xs font-bold">{o.order_number}</p>
                     <p className="text-xs truncate">{o.customer_name || "—"}</p>
                     <p className="text-[11px] text-muted-foreground">{fmtBRL(o.total)} · {fmtDate(o.created_at)}</p>
+                    {(() => {
+                      const dias = distanciaEmDias(nfe?.data_emissao ?? null, o.created_at);
+                      const valorBate = Math.abs((o.total ?? 0) - (nfe?.valor_total ?? 0)) < 0.01;
+                      return (
+                        <div className="flex flex-wrap gap-1.5 mt-0.5">
+                          <span className={`text-[10px] px-1.5 py-0.5 rounded ${
+                            valorBate ? "bg-emerald-500/15 text-emerald-600" : "bg-amber-500/15 text-amber-600"}`}>
+                            {valorBate ? "valor bate" : `valor difere (NF ${fmtBRL(nfe?.valor_total ?? 0)})`}
+                          </span>
+                          {dias !== null && Math.abs(dias) > DIAS_SUSPEITO && (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-500/15 text-red-600">
+                              ⚠️ NF {dias > 0 ? `${dias}d depois` : `${Math.abs(dias)}d antes`} do pedido
+                            </span>
+                          )}
+                        </div>
+                      );
+                    })()}
                   </div>
                   <CarboButton
                     size="sm"
