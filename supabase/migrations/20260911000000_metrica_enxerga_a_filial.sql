@@ -1,60 +1,63 @@
 -- ═══════════════════════════════════════════════════════════════════════════
 -- A métrica passa a enxergar a nota da FILIAL
 --
--- Caso concreto: o pedido V2026070028 (CENTRO AUTOMOTIVO ZAP, R$ 16.800) foi
--- faturado no Bling 2 antes da integração existir. A nota é real, o dinheiro
--- entrou — e a tela mostra "Não conta · Aguardando emissão da NF".
+-- Caso concreto: V2026070028 (CENTRO AUTOMOTIVO ZAP, R$ 16.800) foi faturado
+-- no Bling 2 antes da integração existir. A nota é real, o dinheiro entrou —
+-- e a tela mostra "Não conta · Aguardando emissão da NF".
 --
--- Não é o pedido que está errado. É a régua:
+-- Não é o pedido que está errado. É a régua: `carbo_vendas_metrica` só junta
+-- `bling_nfe`, o espelho da MATRIZ. Nota da filial vive em `bling2_nfe` e não
+-- tinha caminho até a view.
 --
---     left join public.bling_nfe n on n.bling_id = o.bling_nf_id
+-- ⚠️ A correção NÃO é gravar o id da conta 2 em `bling_nf_id`. Já foi tentado e
+-- revertido neste projeto: os dois Blings numeram do zero, e um id da conta 2
+-- pode casar com nota REAL da conta 1 — nota cancelada de uma empresa
+-- derrubando venda da outra.
 --
--- `carbo_vendas_metrica` só junta `bling_nfe`, que é o espelho da MATRIZ.
--- Nota emitida na filial vive em `bling2_nfe` e não tem caminho até aqui, então
--- o pedido cai em `motivo_fora = 'aguardando_nf'` para sempre.
+-- ═══════════════════════════════════════════════════════════════════════════
+-- ⚠️ POR QUE ESTE ARQUIVO É UM BLOCO SÓ, E NÃO UM `CREATE OR REPLACE`
 --
--- ⚠️ A correção NÃO é gravar o id da conta 2 em `bling_nf_id`. Isso já foi
--- tentado e revertido neste projeto: os dois Blings numeram do zero, e um id da
--- conta 2 pode casar com uma nota REAL da conta 1 — nota cancelada de uma
--- empresa derrubando venda da outra. A migração que reverteu aquilo ainda
--- limpou os valores gravados por engano.
+-- A primeira tentativa foi `create or replace view` e o Postgres recusou:
 --
--- A correção é a view juntar as DUAS, cada uma pela sua coluna.
+--     42P16: cannot change name of view column "nf_numero"
+--            to "shipment_quote_value"
 --
--- ⚠️ RODE EM BLOCOS.
+-- A view começa com `o.*`, e `*` é expandido NO MOMENTO DA CRIAÇÃO — vira uma
+-- lista fixa de colunas. As colunas que este projeto acrescentou a
+-- `carboze_orders` depois (bling_conta, bling2_nf_id, nf2_access_key,
+-- invoice2_number, bling2_pedido_id…) entram no meio dessa lista e empurram as
+-- calculadas para outra posição. `CREATE OR REPLACE VIEW` só aceita ACRESCENTAR
+-- colunas no fim; renomear ou reordenar, não.
+--
+-- Ou seja: toda vez que `carboze_orders` ganhar coluna, esta view precisa ser
+-- DERRUBADA e recriada. Não é defeito da migração — é como `*` funciona.
+--
+-- E derrubar exige cuidado: DUAS funções declaram `returns setof
+-- carbo_vendas_metrica`, então dependem do TIPO da view e travam o DROP.
+-- `DROP ... CASCADE` resolveria, mas apagaria as duas em silêncio e a busca
+-- global do Sales pararia de existir sem ninguém saber por quê.
+--
+-- Por isso: dropa as duas explicitamente, recria a view, recria as duas.
+-- Tudo numa transação — se algo falhar no meio, nada fica pela metade.
 -- ═══════════════════════════════════════════════════════════════════════════
 
+begin;
 
--- ╔═══════════════════════════════════════════════════════════════════════╗
--- ║ BLOCO 1 — antes: quanto está fora por causa disso                     ║
--- ╚═══════════════════════════════════════════════════════════════════════╝
--- Rode ANTES de aplicar, e guarde o número. É com ele que você confere depois
--- se o faturamento subiu exatamente o esperado — e não mais que isso.
+-- ── 1. As dependentes saem (recriadas idênticas no passo 3) ───────────────
+drop function if exists public.carbo_vendas_busca(text, integer);
+drop function if exists public.carbo_pdv_pedidos(text);
 
-select count(*) as pedidos_fora, sum(total) as valor_fora
-from public.carbo_vendas_metrica
-where not conta_metrica and motivo_fora = 'aguardando_nf';
+-- ── 2. A view ─────────────────────────────────────────────────────────────
+drop view if exists public.carbo_vendas_metrica;
 
-
--- ╔═══════════════════════════════════════════════════════════════════════╗
--- ║ BLOCO 2 — a view enxerga as duas contas                               ║
--- ╚═══════════════════════════════════════════════════════════════════════╝
--- Mudanças, e SÓ estas três:
---   • join novo em `bling2_nfe` por `o.bling2_nf_id`
---   • `nf_valida` / `nf_invalida` passam a considerar a nota que existir
---   • `conta_metrica` e `motivo_fora` idem
---
--- Todo o resto do corpo é igual. Pedido da matriz não muda de comportamento:
--- `bling2_nf_id` é nulo nele, o join não casa, e a regra fica sendo a de antes.
-
-create or replace view public.carbo_vendas_metrica
+create view public.carbo_vendas_metrica
 with (security_invoker = true) as
 select
   o.*,
   -- Número e situação da nota que ESTE pedido tem, seja de qual conta for.
-  -- coalesce e não "n2 quando conta=2": pedido antigo faturado manualmente na
-  -- filial não tem `bling_conta` preenchido, e é justamente o caso que
-  -- motivou esta migração.
+  -- ⚠️ coalesce, e não "n2 quando bling_conta = 2": pedido antigo faturado
+  -- manualmente na filial não tem `bling_conta` preenchido — e é exatamente o
+  -- caso que motivou esta migração.
   coalesce(n.numero,   n2.numero)   as nf_numero,
   coalesce(n.situacao, n2.situacao) as nf_situacao,
 
@@ -95,136 +98,120 @@ left join public.bling_nfe  n  on n.bling_id  = o.bling_nf_id
 left join public.bling2_nfe n2 on n2.bling_id = o.bling2_nf_id;   -- ⬅ novo
 
 comment on view public.carbo_vendas_metrica is
-  'Fonte ÚNICA de "esta venda conta". Junta os DOIS espelhos de NF, cada um pela sua coluna (bling_nf_id → bling_nfe, bling2_nf_id → bling2_nfe). Nunca gravar id da conta 2 em bling_nf_id: os dois Blings numeram do zero e o id colidiria com nota real da outra empresa.';
+  'Fonte ÚNICA de "esta venda conta". Junta os DOIS espelhos de NF, cada um pela sua coluna (bling_nf_id → bling_nfe, bling2_nf_id → bling2_nfe). Nunca gravar id da conta 2 em bling_nf_id: os dois Blings numeram do zero e o id colidiria com nota real da outra empresa. ⚠️ Começa com o.* — ganhar coluna em carboze_orders obriga a DROP + recreate desta view e das duas funções que a retornam.';
 
 grant select on public.carbo_vendas_metrica to authenticated;
 
+-- ── 3. As dependentes voltam, IDÊNTICAS ao que eram ───────────────────────
+-- Corpo copiado de 20260828000000 e 20260814200000, sem alteração nenhuma.
 
--- ╔═══════════════════════════════════════════════════════════════════════╗
--- ║ BLOCO 3 — vincular uma NF da filial a um pedido                       ║
--- ╚═══════════════════════════════════════════════════════════════════════╝
--- Para o caso legado: nota emitida na filial ANTES da integração, sem
--- `external_ref` nem `bling_conta` — a rotina automática
--- (`carbo_vincula_nf_filial`) não alcança, porque ela parte do id do pedido
--- que nós criamos.
---
--- ⚠️ Vínculo MANUAL, feito por gente. Casar automaticamente por CNPJ + valor +
--- data seria heurística: cliente que compra o mesmo valor duas vezes no mês
--- geraria vínculo errado sem ninguém perceber, e o erro é no faturamento.
--- A tela sugere; a pessoa confirma.
---
--- ⚠️ Recusa se a nota já estiver em OUTRO pedido. Duas vendas apontando para a
--- mesma nota dobram o faturamento do mês — e é o tipo de erro que ninguém
--- procura, porque cada linha isolada parece certa.
-
-create or replace function public.carbo_vincula_nf2_manual(
-  p_order_id uuid,
-  p_nf_bling_id bigint
-) returns void
+create function public.carbo_vendas_busca(
+  p_termo text,
+  p_limit integer default 300
+) returns setof public.carbo_vendas_metrica
 language plpgsql
-security definer
+stable
+security invoker
 set search_path = public
 as $$
 declare
-  v_nf   record;
-  v_dono text;
+  v_raw    text    := coalesce(p_termo, '');
+  v_trim   text    := btrim(v_raw);
+  v_exato  boolean := v_raw <> '' and v_raw ~ '\s$';
+  v_tokens text[];
+  v_n      integer;
 begin
-  if not public.carbo_pode_mexer_estoque() then
-    raise exception 'Você não tem permissão para vincular notas.'
-      using errcode = 'insufficient_privilege';
+  if v_trim = '' then
+    return;
   end if;
 
-  select bling_id, numero, chave_acesso, situacao
-    into v_nf
-    from public.bling2_nfe where bling_id = p_nf_bling_id;
-  if not found then
-    raise exception 'NF % não encontrada no espelho da filial.', p_nf_bling_id
-      using errcode = 'no_data_found';
-  end if;
+  v_tokens := regexp_split_to_array(lower(v_trim), '\s+');
+  v_n := array_length(v_tokens, 1);
 
-  if not public.bling2_nf_e_valida(v_nf.situacao) then
-    raise exception 'Esta NF está como "%" e não conta como documento válido.', v_nf.situacao
-      using errcode = 'check_violation';
-  end if;
+  return query
+  select o.*
+  from public.carbo_vendas_metrica o
+  cross join lateral (
+    select
+      lower(concat_ws(' ',
+        o.customer_name, o.order_number, o.delivery_city, o.delivery_state,
+        o.customer_email, o.delivery_address, o.customer_ie
+      )) as txt,
+      concat_ws(' ',
+        regexp_replace(coalesce(o.cnpj, ''),           '\D', '', 'g'),
+        regexp_replace(coalesce(o.customer_phone, ''), '\D', '', 'g'),
+        regexp_replace(coalesce(o.delivery_zip, ''),   '\D', '', 'g'),
+        regexp_replace(coalesce(o.customer_ie, ''),    '\D', '', 'g')
+      ) as dig
+  ) b
+  where o.excluir_metricas <> true
+    and not exists (
+      select 1
+      from unnest(v_tokens) with ordinality as t(tok, ord)
+      where not (
+        (
+          length(regexp_replace(t.tok, '\D', '', 'g')) >= 3
+          and b.dig like '%' || regexp_replace(t.tok, '\D', '', 'g') || '%'
+        )
+        or
+        b.txt ~ (
+          '\m'
+          || regexp_replace(t.tok, '([.^$*+?()\[\]{}|\\-])', '\\\1', 'g')
+          || case when v_exato and t.ord = v_n then '\M' else '' end
+        )
+      )
+    )
+  order by coalesce(o.sale_date, o.created_at::date) desc, o.created_at desc
+  limit greatest(coalesce(p_limit, 300), 1);
+end $$;
 
-  select order_number into v_dono
-    from public.carboze_orders
-   where bling2_nf_id = p_nf_bling_id and id <> p_order_id
-   limit 1;
-  if v_dono is not null then
-    raise exception 'Esta NF já está vinculada ao pedido %.', v_dono
-      using errcode = 'unique_violation';
-  end if;
+comment on function public.carbo_vendas_busca is
+  'Busca global em carbo_vendas_metrica (traz conta_metrica/motivo_fora junto). Casa por início de palavra (todas as palavras digitadas); espaço no fim exige palavra inteira; número 3+ dígitos casa em qualquer posição de CNPJ/CPF, telefone, CEP e IE. SECURITY INVOKER: respeita a RLS de quem chama.';
 
-  update public.carboze_orders
-     set bling2_nf_id    = v_nf.bling_id,
-         nf2_access_key  = v_nf.chave_acesso,
-         invoice2_number = v_nf.numero,
-         -- Marca a conta, que é o que faz o resto do sistema saber onde
-         -- consultar ou cancelar essa nota depois.
-         bling_conta     = coalesce(bling_conta, 2),
-         updated_at      = now()
-   where id = p_order_id;
+grant execute on function public.carbo_vendas_busca(text, integer) to authenticated;
 
-  if not found then
-    raise exception 'Pedido % não encontrado.', p_order_id using errcode = 'no_data_found';
-  end if;
-end;
+
+create function public.carbo_pdv_pedidos(p_cnpj text)
+returns setof public.carbo_vendas_metrica
+language sql
+stable
+security invoker
+set search_path = public
+as $$
+  select v.*
+  from public.carbo_vendas_metrica v
+  where regexp_replace(coalesce(v.cnpj, ''), '\D', '', 'g')
+      = regexp_replace(coalesce(p_cnpj, ''), '\D', '', 'g')
+    and length(regexp_replace(coalesce(p_cnpj, ''), '\D', '', 'g')) >= 11
+  order by coalesce(v.sale_date, v.created_at::date) desc, v.created_at desc
+  limit 200;
 $$;
 
-revoke all on function public.carbo_vincula_nf2_manual(uuid, bigint) from public, anon;
-grant execute on function public.carbo_vincula_nf2_manual(uuid, bigint) to authenticated;
+comment on function public.carbo_pdv_pedidos is
+  'Pedidos de um PDV, casando por CNPJ só-dígitos dos dois lados. SECURITY INVOKER: respeita a RLS.';
+
+grant execute on function public.carbo_pdv_pedidos(text) to authenticated;
+
+commit;
 
 
--- ╔═══════════════════════════════════════════════════════════════════════╗
--- ║ BLOCO 4 — as notas da filial ainda sem dono                           ║
--- ╚═══════════════════════════════════════════════════════════════════════╝
--- `bling2_nfe` não tem coluna `order_id` (é espelho puro, por decisão de
--- projeto). Então "órfã" aqui é: nota válida que nenhum pedido referencia.
+-- ═══════════════════════════════════════════════════════════════════════════
+-- CONFERÊNCIA — rode DEPOIS do commit acima
+-- ═══════════════════════════════════════════════════════════════════════════
 
-create or replace view public.bling2_nfe_orfas
-with (security_invoker = true) as
-select nf.bling_id, nf.numero, nf.serie, nf.chave_acesso, nf.data_emissao,
-       nf.contato_nome, nf.contato_cnpj, nf.valor_total, nf.situacao,
-       nf.informacoes_adicionais
-from public.bling2_nfe nf
-where public.bling2_nf_e_valida(nf.situacao)
-  and not exists (
-    select 1 from public.carboze_orders o where o.bling2_nf_id = nf.bling_id
-  );
+-- (a) As duas funções voltaram? Tem de trazer DUAS linhas.
+select p.oid::regprocedure as assinatura
+from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+where n.nspname = 'public'
+  and p.proname in ('carbo_vendas_busca', 'carbo_pdv_pedidos');
 
-grant select on public.bling2_nfe_orfas to authenticated;
+-- (b) A busca global do Sales continua funcionando?
+select order_number, customer_name, total, conta_metrica, motivo_fora
+from public.carbo_vendas_busca('zap', 5);
 
-comment on view public.bling2_nfe_orfas is
-  'NFs válidas da FILIAL que nenhum pedido reivindicou. Alimenta a aba Vincular NFs do Finanças. bling2_nfe não tem order_id de propósito — o vínculo mora no pedido.';
-
-
--- ╔═══════════════════════════════════════════════════════════════════════╗
--- ║ BLOCO 5 — conferência                                                 ║
--- ╚═══════════════════════════════════════════════════════════════════════╝
-
--- (a) DEPOIS da mudança: quanto continua fora. Compare com o BLOCO 1 —
---     a diferença é exatamente o que a filial destravou.
+-- (c) O número de referência. Deve continuar 21 / 59.323,40 POR ENQUANTO:
+--     a view aprendeu a olhar bling2_nf_id, mas nenhum pedido tem essa coluna
+--     preenchida ainda. O ganho vem do vínculo, não daqui.
 select count(*) as pedidos_fora, sum(total) as valor_fora
 from public.carbo_vendas_metrica
 where not conta_metrica and motivo_fora = 'aguardando_nf';
-
--- (b) O pedido do caso concreto. Enquanto a NF não for vinculada, ele
---     continua fora — a view só passou a SABER olhar, o vínculo é o passo
---     seguinte, na tela.
-select order_number, customer_name, total, status, nf_numero, nf_situacao,
-       conta_metrica, motivo_fora, bling_conta, bling2_nf_id
-from public.carbo_vendas_metrica
-where order_number = 'V2026070028';
-
--- (c) Quantas notas da filial estão sem dono, e quanto somam.
-select count(*) as notas_orfas, sum(valor_total) as valor
-from public.bling2_nfe_orfas;
-
--- (d) Candidatas para o pedido acima (mesmo CNPJ ou nome parecido).
---     ⚠️ Isto é SUGESTÃO para olho humano, não vínculo automático.
-select bling_id, numero, data_emissao, contato_nome, valor_total, situacao
-from public.bling2_nfe_orfas
-where contato_nome ilike '%ZAP%'
-order by data_emissao desc
-limit 20;
