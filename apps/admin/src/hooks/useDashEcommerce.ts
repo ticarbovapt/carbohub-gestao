@@ -47,7 +47,13 @@ export interface EcommerceDailySale {
 export interface EcommerceMetrics {
   platform: EcommercePlatform;
   totalOrders: number;
+  // ⚠️ Pedidos que viraram VENDA (paid|shipped|delivered). Já era calculado
+  // desde sempre — servia só de divisor do ticket médio e nunca chegava à tela.
+  // Era exatamente o número que faltava: "18 pedidos" na tela e 16 vendas de
+  // verdade, sem nenhum lugar mostrando o 16.
+  saleOrders: number;
   totalUnitsSold: number;
+  saleUnits: number;         // unidades só dos pedidos que viraram venda
   totalQuantityRaw: number;  // sum(quantity) sem multiplicador — usado na verificação de integridade
   totalRevenue: number;      // receita realizada (paid|shipped|delivered)
   netRevenue: number;        // idem — mantido para os consumidores existentes
@@ -71,6 +77,7 @@ export interface EcommerceMetrics {
 export interface ComparativoMetrics {
   platform: EcommercePlatform;
   totalOrders: number;
+  saleOrders: number;
   totalUnitsSold: number;
   totalRevenue: number;
   avgTicket: number;
@@ -255,6 +262,7 @@ function buildMetrics(
 
   const saleRows         = rows.filter(r => isSale(r.status));
   const saleOrders       = contarPedidos(saleRows);
+  const saleUnits        = saleRows.reduce((s, r) => s + displayUnits(r), 0);
   const sumTotal         = (rs: DBOrder[]) => rs.reduce((s, r) => s + Number(r.total), 0);
 
   const totalRevenue     = sumTotal(saleRows);
@@ -323,7 +331,9 @@ function buildMetrics(
   return {
     platform,
     totalOrders,
+    saleOrders,
     totalUnitsSold,
+    saleUnits,
     totalQuantityRaw,
     totalRevenue:     Math.round(totalRevenue * 100) / 100,
     netRevenue:       Math.round(netRevenue * 100) / 100,
@@ -366,7 +376,8 @@ function getRateForDate(history: CommissionRate[], platform: EcommercePlatform, 
 function emptyMetrics(platform: EcommercePlatform): EcommerceMetrics {
   return {
     platform,
-    totalOrders: 0, totalUnitsSold: 0, totalQuantityRaw: 0, totalRevenue: 0, netRevenue: 0,
+    totalOrders: 0, saleOrders: 0, totalUnitsSold: 0, saleUnits: 0, totalQuantityRaw: 0,
+    totalRevenue: 0, netRevenue: 0,
     cancelledRevenue: 0, pendingRevenue: 0, avgTicket: 0,
     cancelledOrders: 0, cancellationRate: 0, pendingOrders: 0, paidOrders: 0, shippedOrders: 0, deliveredOrders: 0,
     commissionTotal: 0, topProduct: null,
@@ -651,6 +662,7 @@ export function useEcommerceComparativo(
           return {
             platform:        m.platform,
             totalOrders:     m.totalOrders,
+            saleOrders:      m.saleOrders,
             totalUnitsSold:  m.totalUnitsSold,
             totalRevenue:    m.totalRevenue,
             avgTicket:       m.avgTicket,

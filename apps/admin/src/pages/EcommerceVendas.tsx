@@ -128,6 +128,76 @@ function MetricCard({
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Funil de status — o que aconteceu com os pedidos que chegaram
+//
+// ⚠️ Existe porque a tela mostrava "18 pedidos" no cartão principal enquanto a
+// receita ao lado só contava os 16 que viraram venda. Quem bate o olho lê 18 e
+// vai embora. Os dois números são certos; o que faltava era o lugar onde eles
+// se encontram.
+//
+// A regra de leitura é a soma fechar na vertical: vendas + aguardando pagamento
+// + cancelados = recebidos, e o trio de dentro (aguardando envio, em transporte,
+// entregues) = vendas. Isso diz sozinho, sem legenda, que a receita vem dos três
+// de dentro — hoje isso só está escrito em `SALE_STATUSES`, dentro do hook.
+//
+// ⚠️ Cada valor em R$ aparece UMA vez, na etapa dele. Antes "A Receber" e o
+// rodapé de "Pedidos Pendentes" imprimiam o mesmo `pendingRevenue` em dois
+// cartões diferentes, e quem via procurava a diferença que não existe.
+// ─────────────────────────────────────────────────────────────────────────────
+
+function FunilEtapa({
+  label, valor, dinheiro, cor, forte, recuada,
+}: {
+  label: string; valor: number; dinheiro?: string;
+  cor: string; forte?: boolean; recuada?: boolean;
+}) {
+  return (
+    <div className={cn("flex items-baseline gap-2 py-1", recuada && "pl-4")}>
+      <span className="h-2 w-2 rounded-full shrink-0 self-center" style={{ background: cor }} />
+      <span className={cn("text-xs", forte ? "font-semibold" : "text-muted-foreground")}>{label}</span>
+      <span className="flex-1 border-b border-dashed border-border/60 mx-1" />
+      <span className={cn("tabular-nums", forte ? "text-sm font-bold" : "text-sm")}>{fmtNum(valor)}</span>
+      {dinheiro && (
+        <span className="text-xs text-muted-foreground tabular-nums w-24 text-right shrink-0">{dinheiro}</span>
+      )}
+    </div>
+  );
+}
+
+function FunilStatus({ m, cor }: { m: EcommerceMetrics; cor: string }) {
+  return (
+    <Card className="rounded-2xl border-0 shadow-sm">
+      <CardHeader className="pt-5 px-5 pb-2 flex flex-row items-center gap-2">
+        <ShoppingCart className="h-4 w-4 text-muted-foreground" />
+        <CardTitle className="text-sm font-semibold">O que aconteceu com os pedidos</CardTitle>
+        <span className="ml-auto text-xs text-muted-foreground">
+          {fmtNum(m.totalOrders)} recebidos no período
+        </span>
+      </CardHeader>
+      <CardContent className="px-5 pb-5">
+        <FunilEtapa
+          label="Vendas (pagas)" valor={m.saleOrders} dinheiro={fmtBRL(m.totalRevenue)}
+          cor={cor} forte
+        />
+        <FunilEtapa label="Aguardando envio"  valor={m.paidOrders}      cor="#38bdf8" recuada />
+        <FunilEtapa label="Em transporte"     valor={m.shippedOrders}   cor="#f59e0b" recuada />
+        <FunilEtapa label="Entregues"         valor={m.deliveredOrders} cor="#22c55e" recuada />
+        <div className="my-2 border-t border-border/50" />
+        <FunilEtapa
+          label="Aguardando pagamento" valor={m.pendingOrders} dinheiro={fmtBRL(m.pendingRevenue)}
+          cor="#a78bfa"
+        />
+        <FunilEtapa
+          label={`Cancelados${m.totalOrders > 0 ? ` · ${m.cancellationRate.toFixed(1)}%` : ""}`}
+          valor={m.cancelledOrders} dinheiro={fmtBRL(m.cancelledRevenue)}
+          cor="#f43f5e"
+        />
+      </CardContent>
+    </Card>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Commission card — editable rate with history
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -301,7 +371,7 @@ function ReconciliacaoPanel({
       fmt: fmtNum,
     },
     {
-      label: "Receita",
+      label: "Faturamento",
       rawVal: raw.saleRevenue,
       sysVal: m.totalRevenue,
       fmt: fmtBRL,
@@ -319,7 +389,13 @@ function ReconciliacaoPanel({
       <CardHeader className="pt-5 px-5 pb-3 flex flex-row items-center gap-2">
         <BarChart3 className="h-4 w-4 text-violet-500" />
         <CardTitle className="text-sm font-semibold">Verificação de Integridade</CardTitle>
-        <span className="ml-auto text-xs text-muted-foreground">Caminho 1 (Raw DB) vs Caminho 2 (Sistema)</span>
+        {/* ⚠️ "Caminho 1 / Caminho 2" era vocabulário de implementação: descreve
+            como o número é buscado, não de onde ele vem. Quem lê a tela precisa
+            saber que um lado é a soma crua no banco e o outro é o que os
+            cartões acima mostram — é a divergência entre os dois que importa. */}
+        <span className="ml-auto text-xs text-muted-foreground">
+          soma direta no banco vs. o que esta tela mostra
+        </span>
       </CardHeader>
       <CardContent className="p-0 pb-4">
         <div className="overflow-x-auto">
@@ -327,8 +403,8 @@ function ReconciliacaoPanel({
             <thead>
               <tr className="border-y border-border/50 bg-muted/30 text-muted-foreground text-xs">
                 <th className="text-left px-5 py-2 font-medium">Métrica</th>
-                <th className="text-right px-4 py-2 font-medium">Caminho 1 — Raw DB</th>
-                <th className="text-right px-4 py-2 font-medium">Caminho 2 — Sistema</th>
+                <th className="text-right px-4 py-2 font-medium">Direto no banco</th>
+                <th className="text-right px-4 py-2 font-medium">Nesta tela</th>
                 <th className="text-center px-5 py-2 font-medium">Diferença</th>
               </tr>
             </thead>
@@ -396,68 +472,57 @@ function PlatformView({ platform, period, custom }: { platform: EcommercePlatfor
         </div>
       )}
 
-      {/* KPIs — linha 1: pedidos e receita */}
+      {/* ── KPIs ──────────────────────────────────────────────────────────────
+          ⚠️ O cartão da frente agora é VENDAS, não "Pedidos". Ele traz junto
+          quantos pedidos chegaram, para que os dois números apareçam na mesma
+          frase em vez de em cartões distantes que não fecham entre si.
+
+          Sumiram daqui, de propósito, quatro cartões que eram repetição:
+          "Taxa de Cancelamento" (era o rodapé de Cancelamentos virado cartão),
+          "Pedidos Pendentes" (imprimia o mesmo R$ de "A Receber") e
+          "Em Transporte"/"Entregues"/"A enviar" — os três são etapas do funil e
+          agora vivem lá, onde a soma deles fecha com as vendas. */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <MetricCard
-          label="Pedidos" value={fmtNum(m.totalOrders)}
+          label="Vendas" value={fmtNum(m.saleOrders)}
+          sub={`de ${fmtNum(m.totalOrders)} pedidos recebidos`}
           icon={<ShoppingCart className="h-4 w-4" />} accent={cfg.color}
         />
         <MetricCard
-          label="Receita Realizada" value={fmtBRL(m.totalRevenue)}
-          sub="pagos, enviados e entregues"
+          label="Faturamento" value={fmtBRL(m.totalRevenue)}
+          sub={`ticket ${fmtBRL(m.avgTicket)} por venda`}
           icon={<TrendingUp className="h-4 w-4" />} accent={cfg.color}
         />
         <MetricCard
           label="A Receber" value={fmtBRL(m.pendingRevenue)}
-          sub="pedidos ainda não pagos"
+          sub={`${fmtNum(m.pendingOrders)} pedido(s) aguardando pagamento`}
           icon={<Wallet className="h-4 w-4" />} accent="#a78bfa"
         />
         <CommissionCard platform={platform} commissionTotal={m.commissionTotal} netRevenue={m.netRevenue} />
       </div>
 
-      {/* KPIs — linha 2: unidades e status */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <MetricCard
-          label="Unidades Reais Vendidas" value={fmtNum(m.totalUnitsSold)}
-          sub="considera multiplicador de pack"
-          icon={<Boxes className="h-4 w-4" />} accent={cfg.color}
-        />
-        <MetricCard
-          label="Ticket Médio" value={fmtBRL(m.avgTicket)}
-          icon={<Package className="h-4 w-4" />} accent={cfg.color}
-        />
-        <MetricCard
-          label="Em Transporte" value={fmtNum(m.shippedOrders)}
-          icon={<Clock className="h-4 w-4" />} accent="#f59e0b"
-        />
-        <MetricCard
-          label="Entregues" value={fmtNum(m.deliveredOrders)}
-          icon={<CheckCircle2 className="h-4 w-4" />} accent="#22c55e"
-        />
-      </div>
-
-      {/* KPIs — linha 3: cancelamentos e pendentes */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <MetricCard
-          label="Cancelamentos" value={fmtNum(m.cancelledOrders)}
-          sub={`${fmtBRL(m.cancelledRevenue)}${m.totalOrders > 0 ? ` · ${pct(m.cancelledOrders, m.totalOrders)} dos pedidos` : ""}`}
-          icon={<XCircle className="h-4 w-4" />} accent="#f59e0b"
-        />
-        <MetricCard
-          label="Taxa de Cancelamento" value={`${m.cancellationRate.toFixed(1)}%`}
-          sub={`${fmtNum(m.cancelledOrders)} de ${fmtNum(m.totalOrders)} pedidos`}
-          icon={<Percent className="h-4 w-4" />} accent="#f43f5e"
-        />
-        <MetricCard
-          label="Pedidos Pendentes" value={fmtNum(m.pendingOrders)}
-          sub={`${fmtBRL(m.pendingRevenue)} aguardando pagamento`}
-          icon={<Hourglass className="h-4 w-4" />} accent="#a78bfa"
-        />
-        <MetricCard
-          label="A enviar" value={fmtNum(m.paidOrders)}
-          sub="pago, aguardando despacho"
-          icon={<Package className="h-4 w-4" />} accent="#38bdf8"
-        />
+      {/* Unidades + o funil, lado a lado.
+          ⚠️ "Unidades vendidas" passou a usar `saleUnits`: o cartão antigo dizia
+          "reais vendidas" mas somava cancelado e não pago junto — a única métrica
+          da tela que usava a palavra "vendidas" sobre base bruta. O total geral
+          continua visível no rodapé, porque é ele que casa com "Qtd. packs" na
+          verificação de integridade. */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+        <div className="grid grid-cols-2 lg:grid-cols-1 gap-3">
+          <MetricCard
+            label="Unidades Vendidas" value={fmtNum(m.saleUnits)}
+            sub={`frascos, já com multiplicador de pack · ${fmtNum(m.totalUnitsSold)} contando não pagos e cancelados`}
+            icon={<Boxes className="h-4 w-4" />} accent={cfg.color}
+          />
+          <MetricCard
+            label="Cancelados" value={fmtNum(m.cancelledOrders)}
+            sub={`${fmtBRL(m.cancelledRevenue)}${m.totalOrders > 0 ? ` · ${m.cancellationRate.toFixed(1)}% dos pedidos` : ""}`}
+            icon={<XCircle className="h-4 w-4" />} accent="#f43f5e"
+          />
+        </div>
+        <div className="lg:col-span-2">
+          <FunilStatus m={m} cor={cfg.color} />
+        </div>
       </div>
 
       {/* Produto destaque */}
@@ -477,7 +542,12 @@ function PlatformView({ platform, period, custom }: { platform: EcommercePlatfor
           <div className="text-right shrink-0">
             <p className="text-lg font-bold">{fmtBRL(m.topProduct.revenue)}</p>
             <p className="text-xs text-muted-foreground">
-              {fmtNum(m.topProduct.orders)} {m.topProduct.orders === 1 ? "pedido" : "pedidos"} · {fmtNum(m.topProduct.units_sold)} un.
+              {/* ⚠️ `orders` aqui é linha de item, não pedido: o mesmo campo já
+                  aparece na tabela abaixo com o nome certo, "Qtd. packs".
+                  Chamá-lo de "pedido" num lugar e de "pack" no outro fazia a
+                  mesma variável virar dois substantivos, e nenhum dos dois era
+                  pedido de verdade. */}
+              {fmtNum(m.topProduct.orders)} {m.topProduct.orders === 1 ? "pack" : "packs"} · {fmtNum(m.topProduct.units_sold)} un.
             </p>
           </div>
         </div>
@@ -593,27 +663,44 @@ function ComparativoView({ period }: { period: EcommercePeriod }) {
   // ── Agregados do período ────────────────────────────────────────────────────
   const totalRevenue = data.reduce((s, c) => s + c.totalRevenue, 0);
   const totalOrders  = data.reduce((s, c) => s + c.totalOrders, 0);
+  const totalSales   = data.reduce((s, c) => s + c.saleOrders, 0);
   const totalUnits   = data.reduce((s, c) => s + c.totalUnitsSold, 0);
   const totalCancel  = data.reduce((s, c) => s + c.cancelledOrders, 0);
-  const overallTicket = totalOrders > 0 ? totalRevenue / totalOrders : 0;
+  // ⚠️ Divide pelas VENDAS, não por todos os pedidos. Com `totalOrders` o
+  // rodapé da tabela imprimia um ticket menor que o de TODAS as linhas acima
+  // dele — cada linha usa `avgTicket`, que sempre dividiu pelas vendas. Duas
+  // réguas na mesma tabela, e a errada era a do total.
+  const overallTicket = totalSales > 0 ? totalRevenue / totalSales : 0;
 
-  // ── Líderes (entre as que tiveram pedidos) ──────────────────────────────────
-  const cancelRate = (c: ComparativoMetrics) => c.totalOrders > 0 ? c.cancelledOrders / c.totalOrders : 0;
+  // ── Líder em receita (entre as que tiveram pedidos) ─────────────────────────
+  // ⚠️ Os cartões "Maior ticket médio" e "Menor cancelamento" saíram: com duas
+  // ou três plataformas eles não comparam nada que a tabela abaixo não mostre, e
+  // "menor cancelamento" premiava empate em 0% pela ordem do array — o vencedor
+  // mudava conforme a ordem de seleção, não conforme o desempenho.
   const withOrders = data.filter(c => c.totalOrders > 0);
   const leaderRevenue = [...withOrders].sort((a, b) => b.totalRevenue - a.totalRevenue)[0];
-  const leaderTicket  = [...withOrders].sort((a, b) => b.avgTicket - a.avgTicket)[0];
-  const leaderLowCancel = [...withOrders].sort((a, b) => cancelRate(a) - cancelRate(b))[0];
 
   // ── Dados de gráficos ───────────────────────────────────────────────────────
   const pieData = withOrders
     .map(c => ({ name: PMAP[c.platform].label, value: c.totalRevenue, color: PMAP[c.platform].color }))
     .filter(d => d.value > 0);
 
-  const maxDays = Math.max(0, ...data.map(c => c.dailySales.length));
   const evoKey  = metric === "orders" ? "orders" : metric === "units" ? "units" : "revenue";
-  const lineData = Array.from({ length: maxDays }, (_, i) => {
-    const entry: Record<string, number | string> = { label: data[0]?.dailySales[i]?.label ?? "" };
-    data.forEach(c => { entry[c.platform] = c.dailySales[i]?.[evoKey] ?? 0; });
+  // ⚠️ Alinhado por DATA, não por posição no array. Antes o ponto `i` de cada
+  // plataforma era empilhado no mesmo X e o rótulo saía de `data[0]` — se uma
+  // plataforma não vendeu no dia 1, ela não tem esse dia na série, e todos os
+  // valores dela apareciam deslocados um dia para a esquerda, sob a data de
+  // outra plataforma. O gráfico ficava plausível e errado.
+  const diasSet = new Set<string>();
+  data.forEach(c => c.dailySales.forEach(d => diasSet.add(d.date)));
+  const dias = [...diasSet].sort();
+  const rotulo = new Map<string, string>();
+  data.forEach(c => c.dailySales.forEach(d => rotulo.set(d.date, d.label)));
+  const lineData = dias.map(dia => {
+    const entry: Record<string, number | string> = { label: rotulo.get(dia) ?? dia };
+    data.forEach(c => {
+      entry[c.platform] = c.dailySales.find(d => d.date === dia)?.[evoKey] ?? 0;
+    });
     return entry;
   });
   const evoFmt = (v: number) => metric === "revenue" ? fmtBRL(v) : fmtNum(v);
@@ -665,27 +752,25 @@ function ComparativoView({ period }: { period: EcommercePeriod }) {
       {anyConnected && (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           <MetricCard
-            label="Receita total" value={fmtBRL(totalRevenue)}
-            sub={`${fmtNum(totalOrders)} pedidos · ${fmtNum(totalUnits)} un · ticket ${fmtBRL(overallTicket)}`}
+            label="Vendas" value={fmtNum(totalSales)}
+            sub={`de ${fmtNum(totalOrders)} pedidos recebidos`}
+            icon={<ShoppingCart className="h-4 w-4" />} accent="#22c55e"
+          />
+          <MetricCard
+            label="Faturamento" value={fmtBRL(totalRevenue)}
+            sub={`ticket ${fmtBRL(overallTicket)} por venda`}
             icon={<Wallet className="h-4 w-4" />} accent="#22c55e"
           />
           <MetricCard
-            label="Líder em receita"
+            label="Unidades" value={fmtNum(totalUnits)}
+            sub="frascos, já com multiplicador de pack"
+            icon={<Boxes className="h-4 w-4" />} accent="#38bdf8"
+          />
+          <MetricCard
+            label="Líder em faturamento"
             value={leaderRevenue ? `${PMAP[leaderRevenue.platform].emoji} ${PMAP[leaderRevenue.platform].label}` : "—"}
             sub={leaderRevenue ? `${fmtBRL(leaderRevenue.totalRevenue)} · ${pct(leaderRevenue.totalRevenue, totalRevenue)} do total` : undefined}
             icon={<Trophy className="h-4 w-4" />} accent={leaderRevenue ? PMAP[leaderRevenue.platform].color : "#94a3b8"}
-          />
-          <MetricCard
-            label="Maior ticket médio"
-            value={leaderTicket ? `${PMAP[leaderTicket.platform].emoji} ${PMAP[leaderTicket.platform].label}` : "—"}
-            sub={leaderTicket ? `${fmtBRL(leaderTicket.avgTicket)} por pedido` : undefined}
-            icon={<Receipt className="h-4 w-4" />} accent={leaderTicket ? PMAP[leaderTicket.platform].color : "#94a3b8"}
-          />
-          <MetricCard
-            label="Menor cancelamento"
-            value={leaderLowCancel ? `${PMAP[leaderLowCancel.platform].emoji} ${PMAP[leaderLowCancel.platform].label}` : "—"}
-            sub={leaderLowCancel ? `${pct(leaderLowCancel.cancelledOrders, leaderLowCancel.totalOrders)} dos pedidos` : undefined}
-            icon={<CheckCircle2 className="h-4 w-4" />} accent="#22c55e"
           />
         </div>
       )}
@@ -701,9 +786,14 @@ function ComparativoView({ period }: { period: EcommercePeriod }) {
               <thead>
                 <tr className="border-y border-border/50 bg-muted/30 text-muted-foreground text-xs">
                   <th className="text-left px-5 py-2.5 font-medium">Plataforma</th>
-                  <th className="text-right px-4 py-2.5 font-medium">Pedidos</th>
+                  {/* ⚠️ Duas colunas onde havia uma. "Pedidos" sozinho contava
+                      cancelado e não pago junto, e era esse número que o dono
+                      lia como venda. Agora o que chegou e o que virou venda
+                      ficam lado a lado, e a diferença entre eles é visível. */}
+                  <th className="text-right px-4 py-2.5 font-medium">Vendas</th>
+                  <th className="text-right px-4 py-2.5 font-medium">Recebidos</th>
                   <th className="text-right px-4 py-2.5 font-medium">Unidades</th>
-                  <th className="text-left px-4 py-2.5 font-medium">Receita · participação</th>
+                  <th className="text-left px-4 py-2.5 font-medium">Faturamento · participação</th>
                   <th className="text-right px-4 py-2.5 font-medium">Ticket médio</th>
                   <th className="text-right px-5 py-2.5 font-medium">Cancel.</th>
                 </tr>
@@ -721,8 +811,9 @@ function ComparativoView({ period }: { period: EcommercePeriod }) {
                           {isLeader && <Trophy className="h-3.5 w-3.5 text-amber-500" />}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-right tabular-nums">{fmtNum(c.totalOrders)}</td>
-                      <td className="px-4 py-3 text-right tabular-nums font-semibold">{fmtNum(c.totalUnitsSold)}</td>
+                      <td className="px-4 py-3 text-right tabular-nums font-semibold">{fmtNum(c.saleOrders)}</td>
+                      <td className="px-4 py-3 text-right tabular-nums text-muted-foreground">{fmtNum(c.totalOrders)}</td>
+                      <td className="px-4 py-3 text-right tabular-nums">{fmtNum(c.totalUnitsSold)}</td>
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-2">
                           <span className="tabular-nums w-20 shrink-0">{fmtBRL(c.totalRevenue)}</span>
@@ -746,7 +837,8 @@ function ComparativoView({ period }: { period: EcommercePeriod }) {
               <tfoot>
                 <tr className="border-t-2 border-border/60 bg-muted/20 font-semibold">
                   <td className="px-5 py-3">Total</td>
-                  <td className="px-4 py-3 text-right tabular-nums">{fmtNum(totalOrders)}</td>
+                  <td className="px-4 py-3 text-right tabular-nums">{fmtNum(totalSales)}</td>
+                  <td className="px-4 py-3 text-right tabular-nums text-muted-foreground">{fmtNum(totalOrders)}</td>
                   <td className="px-4 py-3 text-right tabular-nums">{fmtNum(totalUnits)}</td>
                   <td className="px-4 py-3 tabular-nums">{fmtBRL(totalRevenue)}</td>
                   <td className="px-4 py-3 text-right tabular-nums">{fmtBRL(overallTicket)}</td>
