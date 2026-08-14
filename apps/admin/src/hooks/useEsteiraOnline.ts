@@ -313,7 +313,12 @@ export function useRecompraConfig() {
 
 export type ColunaCarrinho =
   | "aberto" | "msg1" | "msg2" | "msg3"
-  | "recuperado" | "perdido" | "sem_telefone" | "historico" | "ignorado";
+  | "recuperado" | "perdido" | "sem_telefone"
+  // As três que ficam FORA do quadro: nenhuma delas vai receber mensagem.
+  // `duplicado` é tentativa anterior da mesma pessoa — quem erra o cartão e
+  // tenta de novo cria um checkout novo, e sem essa separação receberia a
+  // mesma mensagem duas ou três vezes, em minutos, sobre a mesma compra.
+  | "historico" | "ignorado" | "duplicado";
 
 export interface CarrinhoRow {
   checkout_id: number;
@@ -332,6 +337,8 @@ export interface CarrinhoRow {
   msg3_em: string | null;
   recuperado: boolean;
   tem_telefone: boolean;
+  /** Existe carrinho MAIS NOVO do mesmo contato (e-mail ou telefone). */
+  tem_mais_novo: boolean;
   minutos_parado: number;
   /** Quando a próxima mensagem vence. null = não há próxima. */
   proxima_em: string | null;

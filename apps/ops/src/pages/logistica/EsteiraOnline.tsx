@@ -1093,7 +1093,9 @@ export default function EsteiraOnline() {
   }, [carrinhos]);
 
   const foraDaRegua = useMemo(
-    () => carrinhos.filter((r) => r.coluna === "historico" || r.coluna === "ignorado"),
+    () => carrinhos.filter((r) => r.coluna === "historico"
+                               || r.coluna === "ignorado"
+                               || r.coluna === "duplicado"),
     [carrinhos],
   );
 
@@ -1452,10 +1454,12 @@ export default function EsteiraOnline() {
                 {brl(foraDaRegua.reduce((s, r) => s + (r.total || 0), 0))}
               </summary>
               <p className="mt-2 text-[11px] text-muted-foreground">
-                Carrinhos abandonados <strong>antes</strong> desta pipeline existir
-                {cfgCarrinho && ` (marco zero: ${new Date(cfgCarrinho.inicio_em).toLocaleDateString("pt-BR")})`}
-                {" "}ou abaixo do valor mínimo. Não recebem mensagem automática — perseguir
-                esta base é uma campanha à parte.
+                Nenhum destes recebe mensagem automática. São três casos:
+                abandonados <strong>antes</strong> desta pipeline existir
+                {cfgCarrinho && ` (marco zero: ${new Date(cfgCarrinho.inicio_em).toLocaleDateString("pt-BR")})`},
+                abaixo do valor mínimo, ou <strong>tentativa anterior</strong> da mesma
+                pessoa — quem erra o cartão e refaz o checkout cria um carrinho novo, e
+                só o mais recente é perseguido. Ofertar a esta base é campanha à parte.
               </p>
               <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-3 xl:grid-cols-5">
                 {foraDaRegua.slice(0, 30).map((r) => (

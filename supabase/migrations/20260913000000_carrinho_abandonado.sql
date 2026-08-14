@@ -101,6 +101,9 @@ create index if not exists nuvemshop_carrinhos_abandono_idx
   on public.nuvemshop_carrinhos (abandonado_em desc);
 create index if not exists nuvemshop_carrinhos_abertos_idx
   on public.nuvemshop_carrinhos (abandonado_em) where completado_em is null;
+-- Para a busca de "existe carrinho mais novo do mesmo contato" na pipeline.
+create index if not exists nuvemshop_carrinhos_email_idx
+  on public.nuvemshop_carrinhos (lower(trim(email)));
 
 alter table public.nuvemshop_carrinhos enable row level security;
 
@@ -267,6 +270,18 @@ base as (
   select
     c.*,
     e.msg1_em, e.msg2_em, e.msg3_em,
+    -- ⚠️ MEDIDO NA LOJA REAL: o `/checkouts` devolve SÓ os abandonados. Num
+    -- ensaio com 22 carrinhos, `completed_at` veio nulo em todos os 22 — o
+    -- checkout concluído simplesmente sai da listagem, e a nossa linha congela
+    -- com `completado_em` nulo para sempre.
+    --
+    -- Ou seja: o cruzamento por e-mail abaixo NÃO é rede de segurança, é o
+    -- ÚNICO detector de recuperação que existe. Se `ecommerce_orders.
+    -- cliente_email` deixar de ser preenchido nos pedidos da Nuvemshop, esta
+    -- pipeline passa a perseguir quem já comprou — e ninguém vai ligar uma
+    -- coisa à outra. `completado_em` fica no código porque é barato e porque a
+    -- plataforma pode mudar; não porque ele funciona hoje.
+    --
     -- ⚠️ OBSERVAÇÃO, não atribuição — mesma ressalva da régua de recompra.
     -- A view enxerga que houve pedido do mesmo e-mail depois do abandono. Não
     -- que ele aconteceu POR CAUSA da mensagem: a pessoa pode ter voltado
@@ -285,7 +300,38 @@ base as (
         and o.ordered_at >= c.abandonado_em
     )) as recuperado,
     nullif(trim(coalesce(c.telefone, '')), '') is not null as tem_telefone,
-    c.abandonado_em < (select inicio_em from cfg) as antes_do_marco
+    c.abandonado_em < (select inicio_em from cfg) as antes_do_marco,
+
+    -- ⚠️ A MESMA pessoa pode abandonar vários carrinhos, e quase sempre é isso
+    -- que acontece: quem erra o cartão tenta de novo, e cada tentativa cria um
+    -- checkout novo com id novo. Sem esta trava, ela receberia duas ou três
+    -- vezes "esqueceu algo no carrinho?" — em minutos, sobre a mesma compra.
+    --
+    -- Nenhum outro erro desta pipeline queima o número tão rápido quanto esse,
+    -- porque ele não parece automação mal calibrada: parece perseguição.
+    --
+    -- Regra: só o carrinho MAIS NOVO de cada contato é perseguido. O anterior
+    -- não some da tela (vai para o bloco "fora da régua", com o motivo), mas
+    -- nunca entra na fila.
+    --
+    -- Casa por e-mail OU por telefone só-dígitos, porque a pessoa pode digitar
+    -- um e-mail diferente na segunda tentativa e o telefone continuar o mesmo —
+    -- ou o contrário. Exigir os dois iguais deixaria passar justamente o caso
+    -- comum de quem está refazendo o cadastro no susto.
+    exists (
+      select 1 from public.nuvemshop_carrinhos c2
+      where c2.checkout_id <> c.checkout_id
+        and c2.abandonado_em > c.abandonado_em
+        and c2.completado_em is null
+        and (
+          (nullif(lower(trim(c2.email)), '') is not null
+           and nullif(lower(trim(c2.email)), '') = nullif(lower(trim(c.email)), ''))
+          or
+          (nullif(regexp_replace(coalesce(c2.telefone, ''), '\D', '', 'g'), '') is not null
+           and regexp_replace(coalesce(c2.telefone, ''), '\D', '', 'g')
+             = regexp_replace(coalesce(c.telefone, ''), '\D', '', 'g'))
+        )
+    ) as tem_mais_novo
   from public.nuvemshop_carrinhos c
   left join envios e on e.checkout_id = c.checkout_id
 )
@@ -323,6 +369,8 @@ select
     -- Antes do marco zero: importado, nunca perseguido. Fica visível para
     -- campanha deliberada, fora do automático — igual ao histórico da recompra.
     when b.antes_do_marco                 then 'historico'
+    -- Tentativa anterior da mesma pessoa. Só o carrinho mais novo é perseguido.
+    when b.tem_mais_novo                  then 'duplicado'
     -- Abaixo do valor mínimo: não vale o crédito nem o incômodo.
     when b.total < (select valor_minimo from cfg) then 'ignorado'
     -- ⚠️ Sem telefone é coluna PRÓPRIA, não um carrinho aberto qualquer.
@@ -338,7 +386,13 @@ select
     when b.msg2_em is not null            then 'msg2'
     when b.msg1_em is not null            then 'msg1'
     else                                       'aberto'
-  end as coluna
+  end as coluna,
+  -- ⚠️ NO FIM da lista, e não junto de `tem_telefone`, onde ele pertenceria por
+  -- assunto. `create or replace view` só aceita acrescentar coluna no FIM, e a
+  -- `carbo_msg_fila` depende desta view — derrubá-la exigiria CASCADE, que
+  -- levaria a fila junto em silêncio. Legibilidade perde para não repetir o
+  -- 42P16 pela quarta vez neste projeto.
+  b.tem_mais_novo
 from base b;
 
 comment on view public.carbo_carrinho_pipeline is
