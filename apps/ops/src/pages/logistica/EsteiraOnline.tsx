@@ -1442,10 +1442,37 @@ export default function EsteiraOnline() {
             })}
           </div>
 
-          {/* ⚠️ Fora da régua: anteriores ao marco zero e abaixo do valor
-              mínimo. Fechado e fora do quadro pelo mesmo motivo do histórico da
-              recompra — nenhum deles vai receber mensagem, e deixá-los entre os
-              abertos faria a coluna de trabalho parecer maior do que é. */}
+          {/* ⚠️ O quadro inteiro vazio COM carrinhos no banco é a leitura errada
+              mais provável desta tela — "não está aparecendo os carrinhos" foi
+              literalmente a primeira reação de quem abriu. Seis colunas dizendo
+              "ninguém aqui" enquanto 21 existem parece defeito, e não é: é o
+              marco zero fazendo o trabalho dele.
+
+              A faixa embaixo já mostrava o número, mas fechada e no rodapé ela
+              lê como legenda. Este aviso ocupa o vazio do quadro, que é para
+              onde a pessoa está olhando. */}
+          {porColunaCarrinho.get("aberto")?.length === 0 && foraDaRegua.length > 0 && (
+            <div className="shrink-0 rounded-xl border border-dashed bg-muted/20 p-4 text-center">
+              <p className="text-xs font-medium">
+                As colunas estão vazias porque os {foraDaRegua.length} carrinhos já
+                sincronizados são <strong>anteriores ao marco zero</strong>
+                {cfgCarrinho && ` (${new Date(cfgCarrinho.inicio_em).toLocaleString("pt-BR", {
+                  day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit",
+                })})`}.
+              </p>
+              <p className="mt-1 text-[11px] text-muted-foreground">
+                Eles estão logo abaixo, em "fora da régua", e não recebem mensagem — é o que
+                impede o disparo em massa ao ligar a função. O quadro enche sozinho com o
+                próximo carrinho abandonado a partir de agora.
+              </p>
+            </div>
+          )}
+
+          {/* ⚠️ Fora da régua: anteriores ao marco zero, abaixo do valor mínimo
+              e tentativa anterior da mesma pessoa. Fechado e fora do quadro pelo
+              mesmo motivo do histórico da recompra — nenhum deles vai receber
+              mensagem, e deixá-los entre os abertos faria a coluna de trabalho
+              parecer maior do que é. */}
           {foraDaRegua.length > 0 && (
             <details className="shrink-0 rounded-xl border p-3">
               <summary className="flex cursor-pointer items-center gap-1.5 text-xs font-medium">
