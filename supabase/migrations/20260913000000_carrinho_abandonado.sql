@@ -449,7 +449,18 @@ select
   split_part(trim(b.cliente), ' ', 1)              as primeiro_nome,
   coalesce(b.pedido_codigo, b.pedido_loja, b.pedido_numero, '') as pedido,
   b.canal,
-  b.total                                          as valor,
+  -- ⚠️ O cast NÃO é enfeite. `bling2_esteira.total` é numeric(12,2) e
+  -- `nuvemshop_carrinhos.total` é numeric(14,2); o UNION resolve os dois para
+  -- `numeric` SEM precisão, e aí o Postgres recusa:
+  --
+  --     42P16: cannot change data type of view column "valor"
+  --            from numeric(12,2) to numeric
+  --
+  -- `create or replace view` não muda tipo de coluna que já existe — mesma
+  -- família de armadilha do `o.*` na `carbo_vendas_metrica`, e igualmente
+  -- invisível até a hora de rodar. Fixar o tipo na SAÍDA resolve sem depender
+  -- de as duas tabelas concordarem para sempre.
+  b.total::numeric(12,2)                           as valor,
   b.nf_numero                                      as nf,
   b.nf_pdf                                         as link_nota,
   b.transportadora,
