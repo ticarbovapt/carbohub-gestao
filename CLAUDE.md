@@ -305,6 +305,48 @@ qualquer um dos cinco, copie para o outro app na mesma tarefa.
 A tela não calcula etapa: quem calcula é a view `public.bling2_esteira`. Regra
 nova entra lá, e as duas telas mudam juntas.
 
+**Três pipelines no mesmo seletor**, e cada uma tem a SUA view de coluna:
+
+```
+Da venda à entrega        bling2_esteira            anda em minutos
+Régua de recompra         carbo_recompra_pipeline   anda em dias
+Recuperação de carrinho   carbo_carrinho_pipeline   anda em horas
+```
+
+A terceira só existe na **loja própria**: ML e Amazon fazem a própria
+recuperação e não expõem o contato de quem abandonou. `nuvemshop_carrinhos` é
+espelho de `/checkouts`, escrito só pela função `nuvemshop-carrinhos`.
+
+⚠️ Três travas, e nenhuma é decoração — desfazer qualquer uma manda WhatsApp
+para quem não pediu:
+1. **Marco zero por DATA** (`carbo_carrinho_config.inicio_em`), não por marcação
+   linha a linha: a tabela nasce vazia e a enxurrada viria na primeira rodada do
+   sync, depois da migração.
+2. **O relógio de cada passo começa no passo ANTERIOR** (1ª conta do abandono,
+   2ª da 1ª, 3ª da 2ª). Contando todas do abandono, um carrinho que aparecesse
+   já velho teria as três janelas vencidas juntas e a pessoa receberia três
+   mensagens seguidas.
+3. **`recuperado` é a primeira condição do CASE**, e o cruzamento é frouxo de
+   propósito (qualquer pedido do mesmo e-mail depois do abandono). Falso
+   positivo custa uma recuperação perdida; falso negativo manda "esqueceu algo?"
+   para quem já pagou.
+
+⚠️ `sem_telefone` é **coluna própria**, não um carrinho aberto qualquer: ele
+nunca avança sozinho, e escondê-lo faria a conta de recuperação parecer melhor
+do que é. É também a medida do que a loja perde por não pedir o telefone antes
+do fim do checkout.
+
+**A `carbo_msg_fila` tem QUATRO origens**: etapa da esteira, `saiu_entrega` (do
+rastreio), régua de recompra, e os três passos do carrinho. Ela ganhou
+`prioridade` — serviço (0) antes de comercial (1) — porque o `kanban-n8n` pega
+20 por rodada, e uma manhã de carrinhos abandonados empurraria o "saiu para
+entrega" para meia hora depois.
+
+⚠️ Os envios do carrinho vão para `carbo_msg_envios` com `bling_id` = id do
+**checkout**. Não colide: a chave é (bling_id, etapa) e as etapas `carrinho_*`
+são exclusivas desta pipeline. É o oposto do erro do `bling_nf_id`, onde duas
+coisas disputavam a MESMA coluna com o MESMO significado.
+
 ⚠️ A **primeira** coluna ("Pago") é a exceção: ela NÃO vem da `bling2_esteira`,
 e sim de `ecommerce_aguardando_bling`, que lê a plataforma direto. Existe porque
 a esteira só enxerga pedido `situacao_id in (9,12)` — Atendido — e pedido novo
@@ -329,8 +371,16 @@ bling2-order-details-10min   3-59/10 * * * *  order_details  ← sem ele não h�
 bling2-bridge                */2 * * * *      SQL puro, banco→banco
 ecommerce-sync-5min          */5 * * * *      envio/entrega da plataforma
 rastreio-sync-5min           */5 * * * *      rede de segurança do webhook
+nuvemshop-carrinhos-15min    4-59/15 * * * *  checkouts abandonados
 kanban-n8n-1min              * * * * *        o disparo ao cliente
+bling2-nfe-recheck-20min     7-59/20 * * * *  nota cancelada some da listagem
 ```
+
+⚠️ **O carrinho é de 15 min, não de 1.** A menor janela dessa pipeline é de 60
+min; sincronizar de minuto em minuto só gastaria cota de API relendo carrinho
+que não mudou, e 15 min sobre uma janela de 60 não muda nada para quem recebe.
+Minuto :04 para não empilhar com o `order_details` (:03) nem com o `nfe_recheck`
+(:07).
 
 ⚠️ **`order_details` é fase separada e não pode entrar no job de 1 min.** Ela é
 uma chamada de API por pedido (teto 60, ~70 s); em cada minuto as rodadas se

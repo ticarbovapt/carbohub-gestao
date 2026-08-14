@@ -296,6 +296,111 @@ export function useRecompraConfig() {
   });
 }
 
+/* ─── Recuperação de carrinho ───────────────────────────────────────────────
+ *
+ * Terceira pipeline. As outras duas falam com quem JÁ comprou; esta fala com
+ * quem quase comprou — encheu o carrinho, chegou no checkout e não terminou.
+ *
+ * ⚠️ Só a loja própria (Nuvemshop). Mercado Livre e Amazon fazem a própria
+ * recuperação e não expõem o contato de quem abandonou — nem poderiam, o
+ * comprador é cliente DELES até o pedido existir. Não é limitação da
+ * implementação: é de onde o dado existe.
+ *
+ * A coluna é CALCULADA pela view `carbo_carrinho_pipeline`, como nas outras
+ * duas. Nada se arrasta: um card movido à mão mentiria na rodada seguinte do
+ * sync.
+ */
+
+export type ColunaCarrinho =
+  | "aberto" | "msg1" | "msg2" | "msg3"
+  | "recuperado" | "perdido" | "sem_telefone" | "historico" | "ignorado";
+
+export interface CarrinhoRow {
+  checkout_id: number;
+  abandonado_em: string;
+  completado_em: string | null;
+  cliente: string | null;
+  telefone: string | null;
+  email: string | null;
+  total: number;
+  itens: number;
+  produtos: string | null;
+  /** A URL que RESTAURA o carrinho. É a peça central da mensagem. */
+  link: string | null;
+  msg1_em: string | null;
+  msg2_em: string | null;
+  msg3_em: string | null;
+  recuperado: boolean;
+  tem_telefone: boolean;
+  minutos_parado: number;
+  /** Quando a próxima mensagem vence. null = não há próxima. */
+  proxima_em: string | null;
+  coluna: ColunaCarrinho;
+}
+
+/** As colunas do quadro, na ordem do fluxo.
+ *
+ * ⚠️ `sem_telefone` ESTÁ aqui, e as outras três de fora (`historico`,
+ * `ignorado`, e nada mais) não. O carrinho sem telefone é a única exceção que
+ * merece coluna: ele é trabalho real e possível — dá para mandar e-mail, dá
+ * para ligar — e é o número que mede quanto a loja perde por não pedir o
+ * telefone antes do fim do checkout. Escondê-lo faria a conta de recuperação
+ * parecer melhor do que é. */
+export const COLUNAS_CARRINHO: Array<{ key: ColunaCarrinho; label: string; descricao: string; color: string }> = [
+  { key: "aberto",       label: "Abandonado",   descricao: "ainda dentro da 1ª janela",        color: "#f59e0b" },
+  { key: "msg1",         label: "1ª mensagem",  descricao: "lembrete enviado",                 color: "#0ea5e9" },
+  { key: "msg2",         label: "2ª mensagem",  descricao: "segunda tentativa",                color: "#6366f1" },
+  { key: "msg3",         label: "3ª mensagem",  descricao: "última — depois desta, não insiste", color: "#9333ea" },
+  { key: "recuperado",   label: "Recuperado",   descricao: "voltou e comprou",                 color: "#10b981" },
+  { key: "perdido",      label: "Perdido",      descricao: "não voltou — base de campanha",    color: "#64748b" },
+  { key: "sem_telefone", label: "Sem telefone", descricao: "só e-mail — não dá para avisar",   color: "#f43f5e" },
+];
+
+export function useCarrinhoPipeline() {
+  return useQuery({
+    queryKey: ["carrinho-pipeline"],
+    queryFn: async (): Promise<CarrinhoRow[]> => {
+      const { data, error } = await (supabase as any)
+        .from("carbo_carrinho_pipeline")
+        .select("*")
+        .order("abandonado_em", { ascending: false })
+        .limit(1000);
+      if (error) throw error;
+      return (data ?? []) as CarrinhoRow[];
+    },
+    // O sync do carrinho roda de 15 em 15 min, e a janela mais curta é de 1 h.
+    // Recarregar no ritmo da esteira de entrega (10 s) seria consulta à toa —
+    // mas 5 min é curto o bastante para o "vence em 40 min" do card não mentir.
+    refetchInterval: 60_000,
+  });
+}
+
+/** Os ajustes das janelas, para a tela poder dizer QUAL régua está valendo em
+ *  vez de deixar os números implícitos. */
+export interface CarrinhoConfig {
+  minutos_1: number;
+  horas_2: number;
+  horas_3: number;
+  horas_desistir: number;
+  valor_minimo: number;
+  inicio_em: string;
+}
+
+export function useCarrinhoConfig() {
+  return useQuery({
+    queryKey: ["carrinho-config"],
+    queryFn: async (): Promise<CarrinhoConfig | null> => {
+      const { data, error } = await (supabase as any)
+        .from("carbo_carrinho_config")
+        .select("minutos_1, horas_2, horas_3, horas_desistir, valor_minimo, inicio_em")
+        .maybeSingle();
+      if (error) throw error;
+      return (data ?? null) as CarrinhoConfig | null;
+    },
+    staleTime: 5 * 60_000,
+  });
+}
+
 /* ─── Fonte parada ──────────────────────────────────────────────────────────
  *
  * Os dois espelhos do Bling ficaram 25 horas sem gravar e ninguém percebeu:

@@ -43,6 +43,9 @@ const NOME_ETAPA: Record<EtapaMsg, string> = {
   saiu_entrega: "Saiu para entrega",
   entregue:     "Entregue",
   recompra:     "Recompra",
+  carrinho_1:   "Carrinho — 1ª",
+  carrinho_2:   "Carrinho — 2ª",
+  carrinho_3:   "Carrinho — 3ª",
 };
 
 const QUANDO: Record<EtapaMsg, string> = {
@@ -55,12 +58,25 @@ const QUANDO: Record<EtapaMsg, string> = {
   // A única que não é etapa da esteira: dispara pela régua da segunda
   // pipeline, contando dias a partir do carimbo de entrega.
   recompra:     "dias após a entrega, para o cliente repor — ver a régua de recompra",
+  // ⚠️ As três únicas que não falam com cliente: falam com quem AINDA NÃO
+  // comprou. E as janelas são encadeadas — a 2ª conta a partir da 1ª, não do
+  // abandono. Escrito assim porque "24h depois" seria lido como 24h depois do
+  // abandono, e aí um carrinho velho pareceria dever três mensagens de uma vez.
+  carrinho_1:   "1 hora após o carrinho ser abandonado na loja própria",
+  carrinho_2:   "algumas horas após a 1ª mensagem — não após o abandono",
+  carrinho_3:   "a última, contada a partir da 2ª — depois dela o sistema não insiste",
 };
 
 /** Etapa que não é coluna da esteira. O aviso explica de onde ela vem, senão
  *  alguém procura essa coluna no quadro e não acha. */
 const FORA_DO_QUADRO: Partial<Record<EtapaMsg, string>> = {
   saiu_entrega: "Não é coluna da esteira — vem do rastreio da transportadora.",
+  // ⚠️ O aviso importa mais aqui do que no `saiu_entrega`: estas três vão para
+  // quem NÃO é cliente, sem pedido nenhum para justificar o contato. Quem liga
+  // o texto precisa saber disso antes de clicar, não depois.
+  carrinho_1: "Vai para quem NÃO comprou — só da loja própria. Ver a pipeline de recuperação de carrinho.",
+  carrinho_2: "Vai para quem NÃO comprou — só da loja própria. Ver a pipeline de recuperação de carrinho.",
+  carrinho_3: "Vai para quem NÃO comprou — só da loja própria. Ver a pipeline de recuperação de carrinho.",
 };
 
 function Editor({ t }: { t: TemplateMsg }) {

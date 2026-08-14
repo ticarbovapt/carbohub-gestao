@@ -11,7 +11,8 @@ import { supabase } from "@/integrations/supabase/client";
 
 export type EtapaMsg =
   | "confirmado" | "nf_emitida" | "etiqueta" | "em_transito" | "saiu_entrega" | "entregue"
-  | "recompra";
+  | "recompra"
+  | "carrinho_1" | "carrinho_2" | "carrinho_3";
 
 export interface TemplateMsg {
   etapa: EtapaMsg;
@@ -42,10 +43,15 @@ export interface EnvioMsg {
  * no banco tem duas origens por causa disso. */
 export const ORDEM_ETAPAS: EtapaMsg[] =
   ["confirmado", "nf_emitida", "etiqueta", "em_transito", "saiu_entrega", "entregue",
-   // ⚠️ `recompra` fecha a lista porque é a única que não pertence à entrega:
-   // ela dispara DIAS depois, pela régua da segunda pipeline, contando a
+   // ⚠️ `recompra` vem depois da entrega porque é a única que não pertence a
+   // ela: dispara DIAS depois, pela régua da segunda pipeline, contando a
    // partir do carimbo de entrega — não pela etapa da esteira.
-   "recompra"];
+   "recompra",
+   // ⚠️ As três de carrinho fecham a lista, e vêm por último apesar de
+   // acontecerem ANTES de tudo no tempo do cliente. A ordem aqui é a do fluxo
+   // do PEDIDO, e o carrinho abandonado é o fluxo de um pedido que não
+   // existiu — encaixá-lo no começo faria parecer que toda venda passa por ele.
+   "carrinho_1", "carrinho_2", "carrinho_3"];
 
 /**
  * A que GRUPO cada mensagem pertence.
@@ -56,22 +62,28 @@ export const ORDEM_ETAPAS: EtapaMsg[] =
  *   entrega   serviço. O cliente QUER receber, responder ali é atendimento.
  *   recompra  comercial. Pode ser ignorada, pode incomodar, e quem responde
  *             está comprando.
+ *   carrinho  comercial, e a mais delicada das três: vai para quem NÃO é
+ *             cliente ainda, sem pedido para justificar o contato. Sai pelo
+ *             mesmo número comercial da recompra, nunca pelo de serviço.
  *
  * Empilhar a recompra no fim da lista de entrega, como estava, fazia parecer
  * que ela era a sétima etapa do mesmo fluxo. Não é: ela dispara dias depois da
- * entrega, pela régua da segunda pipeline, e sai por outro número.
+ * entrega, pela régua da segunda pipeline, e sai por outro número. O carrinho
+ * está um passo além disso: ele nem chegou a ser pedido.
  */
-export type GrupoMsg = "entrega" | "recompra";
+export type GrupoMsg = "entrega" | "recompra" | "carrinho";
 
 export const GRUPO_DA_ETAPA: Record<EtapaMsg, GrupoMsg> = {
   confirmado: "entrega", nf_emitida: "entrega", etiqueta: "entrega",
   em_transito: "entrega", saiu_entrega: "entrega", entregue: "entrega",
   recompra: "recompra",
+  carrinho_1: "carrinho", carrinho_2: "carrinho", carrinho_3: "carrinho",
 };
 
 export const GRUPOS: Array<{ id: GrupoMsg; label: string; descricao: string }> = [
   { id: "entrega",  label: "Da venda à entrega", descricao: "avisos de serviço, do pedido à entrega" },
   { id: "recompra", label: "Recompra",           descricao: "oferta comercial, dias depois da entrega" },
+  { id: "carrinho", label: "Carrinho abandonado", descricao: "só da loja própria — os três passos, encadeados" },
 ];
 
 /** As variáveis que os textos aceitam. A lista é a mesma da view
@@ -91,6 +103,11 @@ export const VARIAVEIS: Array<{ chave: string; descricao: string }> = [
   { chave: "previsao",       descricao: "Previsão de entrega (qui., 14/08)" },
   { chave: "cidade",         descricao: "Cidade de entrega" },
   { chave: "uf",             descricao: "UF de entrega" },
+  // ⚠️ Só existem nas três mensagens de carrinho. Nas outras etapas ficam
+  // vazias — e, pela regra do `montar()`, a linha inteira que só tiver elas é
+  // REMOVIDA em vez de sair em branco.
+  { chave: "link_carrinho",  descricao: "Link que restaura o carrinho (só carrinho abandonado)" },
+  { chave: "produtos",       descricao: "O que estava no carrinho (só carrinho abandonado)" },
 ];
 
 export function useTemplatesMsg() {
@@ -208,4 +225,6 @@ export const EXEMPLO: Record<string, string> = {
   previsao: "qui., 14/08",
   cidade: "Parnamirim",
   uf: "RN",
+  link_carrinho: "https://loja.grupocarbo.com.br/checkout/v3/cart/9f2a1c",
+  produtos: "CarboZé 100ml ×2 · Kit 5 unidades ×1",
 };

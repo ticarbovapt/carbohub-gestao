@@ -55,6 +55,9 @@ interface LinhaFila {
   link_nota: string | null;
   cidade: string | null; uf: string | null;
   link_rastreio: string | null; previsao: string | null;
+  /** Recuperação de carrinho. `link_carrinho` é a URL que RESTAURA o carrinho —
+   *  sem ela a mensagem vira só um lembrete de que a pessoa desistiu. */
+  link_carrinho: string | null; produtos: string | null;
 }
 
 const brl = (v: number | null) =>
@@ -117,6 +120,8 @@ function variaveis(l: LinhaFila): Record<string, string> {
     previsao:       dataCurta(l.previsao),
     cidade:         l.cidade ?? "",
     uf:             l.uf ?? "",
+    link_carrinho:  l.link_carrinho ?? "",
+    produtos:       l.produtos ?? "",
   };
 }
 
@@ -170,9 +175,16 @@ Deno.serve(async (req: Request) => {
   // `sync-meta`, que passou 719 rodadas assim antes de alguém notar.
   //
   // Sem nada a enviar, não há configuração faltando: há nada a fazer.
+  // ⚠️ Ordenado por prioridade: SERVIÇO antes de COMERCIAL.
+  //
+  // O teto é por rodada, e a fila passou a ter quatro origens. Sem ordem, uma
+  // manhã de carrinhos abandonados consome as rodadas e empurra o "seu pedido
+  // saiu para entrega" para depois — o cliente que está esperando encomenda
+  // pagando a conta de uma campanha. Quem classifica é a view (`prioridade`).
   const { data: fila, error } = await supabase
     .from("carbo_msg_fila")
     .select("*")
+    .order("prioridade", { ascending: true })
     .limit(TETO);
   if (error) return json({ error: `fila: ${error.message}` }, 500);
   if (!fila?.length) return json({ ok: true, fila: 0, nota: "nada a avisar" });

@@ -3,7 +3,7 @@ import { Link, useLocation, useSearchParams } from "react-router-dom";
 import {
   Truck, Package, FileText, CheckCircle2, ShoppingCart, Copy, XCircle, Loader2, MapPin, Phone,
   CalendarClock, ExternalLink, MessageSquare, AlertTriangle, Clock, Box, User, Hash, Search,
-  Settings2, Link2, BellRing, BellOff, Repeat2,
+  Settings2, Link2, BellRing, BellOff, Repeat2, ShoppingBag, Mail, Timer,
 } from "lucide-react";
 import { toast } from "sonner";
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
@@ -15,9 +15,11 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import {
   useEsteiraOnline, useRastreios, useEcommerceAguardando, useFontesSaude,
   useAvisosDoPedido, useRecompraPipeline, useRecompraConfig,
-  ETAPAS, COLUNAS_RECOMPRA,
+  useCarrinhoPipeline, useCarrinhoConfig,
+  ETAPAS, COLUNAS_RECOMPRA, COLUNAS_CARRINHO,
   type EsteiraRow, type EtapaEsteira, type RastreioCard, type AguardandoRow,
   type RecompraRow, type ColunaRecompra,
+  type CarrinhoRow, type ColunaCarrinho,
 } from "@/hooks/useEsteiraOnline";
 import { useTemplatesMsg, ORDEM_ETAPAS, type EnvioMsg, type EtapaMsg } from "@/hooks/useMensagensCliente";
 import { DatePickerInput } from "@/components/ui/date-picker-input";
@@ -830,6 +832,82 @@ function CardRecompra({ row, cor }: { row: RecompraRow; cor: string }) {
   );
 }
 
+// ── Card da recuperação de carrinho ─────────────────────────────────────────
+//
+// Diferente dos outros dois de novo, porque aqui não existe pedido: não há NF,
+// nem rastreio, nem número que a pessoa reconheça. O que existe é o que ela
+// escolheu, quanto tempo faz, e por onde dá para falar com ela.
+//
+// ⚠️ O produto aparece no card, e não só na mensagem. Sem ele o quadro vira uma
+// lista de valores anônimos — e a primeira pergunta de quem olha ("o que essa
+// gente estava comprando?") exigiria abrir a loja para responder.
+function CardCarrinho({ row, cor }: { row: CarrinhoRow; cor: string }) {
+  const min = row.minutos_parado;
+  const idade = min < 60 ? `há ${Math.max(1, Math.round(min))} min`
+              : min < 60 * 48 ? `há ${Math.floor(min / 60)}h`
+              : `há ${Math.floor(min / 1440)}d`;
+
+  // Quanto falta para a próxima mensagem. Negativo = já venceu e está na fila
+  // esperando a próxima rodada do envio.
+  const faltam = row.proxima_em
+    ? Math.round((new Date(row.proxima_em).getTime() - Date.now()) / 60000)
+    : null;
+  const proxima = faltam === null ? null
+    : faltam <= 0 ? "na fila"
+    : faltam < 60 ? `em ${faltam} min`
+    : `em ${Math.round(faltam / 60)}h`;
+
+  return (
+    <div className="relative rounded-lg border bg-card px-3 py-2.5 pl-3.5">
+      <span className="absolute left-0 top-2 bottom-2 w-[3px] rounded-full" style={{ background: cor }} />
+
+      <div className="flex items-baseline gap-2">
+        <span className="min-w-0 flex-1 truncate text-[13px] font-semibold leading-tight">
+          {row.cliente ?? row.email ?? "sem identificação"}
+        </span>
+        <span className="shrink-0 text-[13px] font-semibold tabular-nums">{brl(row.total)}</span>
+      </div>
+
+      {row.produtos && (
+        <p className="mt-1 truncate text-[11px] leading-4 text-muted-foreground">{row.produtos}</p>
+      )}
+
+      <div className="mt-1 flex items-baseline gap-2 text-[11px] leading-4 text-muted-foreground">
+        <span className="min-w-0 flex-1 truncate">{idade}</span>
+        {proxima && (
+          <span className="flex shrink-0 items-center gap-1 tabular-nums">
+            <Timer className="h-3 w-3" />{proxima}
+          </span>
+        )}
+      </div>
+
+      {/* ⚠️ Telefone e e-mail juntos, e o telefone SEMPRE primeiro, mesmo
+          ausente. É ele que decide se este card é trabalho ou só estatística —
+          a pipeline inteira depende de haver um número, e omitir a ausência
+          faria a coluna "sem telefone" parecer arbitrária. */}
+      <div className="mt-1 flex items-center gap-2 text-[10px] leading-4 text-muted-foreground/70">
+        <Phone className="h-3 w-3 shrink-0" />
+        <span className="min-w-0 shrink truncate">
+          {row.telefone ?? <span className="text-rose-500">sem telefone</span>}
+        </span>
+        {row.email && (
+          <>
+            <Mail className="h-3 w-3 shrink-0" />
+            <span className="min-w-0 flex-1 truncate">{row.email}</span>
+          </>
+        )}
+      </div>
+
+      {row.link && (
+        <a href={row.link} target="_blank" rel="noreferrer"
+           className="mt-1.5 inline-flex items-center gap-1 text-[10px] text-sky-500 hover:underline">
+          <ExternalLink className="h-3 w-3" />abrir o carrinho
+        </a>
+      )}
+    </div>
+  );
+}
+
 export default function EsteiraOnline() {
   /* ── Período: atalho OU intervalo livre ────────────────────────────────
    *
@@ -848,15 +926,21 @@ export default function EsteiraOnline() {
     d.setDate(d.getDate() - n);
     return d.toISOString().slice(0, 10);
   };
-  /* Duas pipelines na mesma tela.
+  /* Três pipelines na mesma tela, e a ordem no seletor é a do tempo do cliente
+   * ao contrário — de propósito, porque é a ordem de importância operacional.
    *
-   * "entrega" é o quadro de sempre (da venda à entrega). "recompra" é a régua
-   * do que vem DEPOIS: o cliente recebeu, descansa, é ofertado, volta ou não.
+   *   entrega    o quadro de sempre: da venda à entrega. Anda em minutos.
+   *   recompra   o que vem DEPOIS: recebeu, descansa, é ofertado, volta ou não.
+   *              Anda em dias.
+   *   carrinho   o que vem ANTES: encheu o carrinho e não terminou. Anda em
+   *              horas, e só existe na loja própria — ML e Amazon fazem a
+   *              própria recuperação e não entregam o contato de quem abandonou.
    *
-   * São quadros de naturezas diferentes — um anda em minutos, o outro em dias —
-   * e por isso não cabem lado a lado: dividir a largura faria os dois ficarem
-   * apertados para servir a duas perguntas que ninguém faz ao mesmo tempo. */
-  const [pipeline, setPipeline] = useState<"entrega" | "recompra">("entrega");
+   * São quadros de naturezas diferentes e por isso não cabem lado a lado:
+   * dividir a largura faria os três ficarem apertados para servir a perguntas
+   * que ninguém faz ao mesmo tempo. */
+  type Pipeline = "entrega" | "recompra" | "carrinho";
+  const [pipeline, setPipeline] = useState<Pipeline>("entrega");
   const [filtroAviso, setFiltroAviso] = useState("all");
   const [periodo, setPeriodo] = useState("30");
   const [de, setDe]   = useState(() => menosDias(30));
@@ -897,6 +981,8 @@ export default function EsteiraOnline() {
   const { data: aguardando } = useEcommerceAguardando();
   const { data: recompra = [] } = useRecompraPipeline();
   const { data: cfgRecompra } = useRecompraConfig();
+  const { data: carrinhos = [] } = useCarrinhoPipeline();
+  const { data: cfgCarrinho } = useCarrinhoConfig();
   const { data: fontes } = useFontesSaude();
   const paradas = (fontes ?? []).filter((f) => f.atrasada);
 
@@ -994,6 +1080,44 @@ export default function EsteiraOnline() {
     () => recompra.filter((r) => r.coluna === "historico"),
     [recompra],
   );
+
+  // Carrinho: mesma ideia. `historico` (anterior ao marco zero) e `ignorado`
+  // (abaixo do valor mínimo) ficam FORA do quadro — nenhum dos dois é etapa, os
+  // dois são "nunca vai ser perseguido", e misturá-los com os abertos faria a
+  // coluna de trabalho parecer maior do que é.
+  const porColunaCarrinho = useMemo(() => {
+    const m = new Map<ColunaCarrinho, CarrinhoRow[]>();
+    for (const c of COLUNAS_CARRINHO) m.set(c.key, []);
+    for (const r of carrinhos) m.get(r.coluna)?.push(r);
+    return m;
+  }, [carrinhos]);
+
+  const foraDaRegua = useMemo(
+    () => carrinhos.filter((r) => r.coluna === "historico" || r.coluna === "ignorado"),
+    [carrinhos],
+  );
+
+  /* Os números do topo, quando o quadro é o do carrinho.
+   *
+   * ⚠️ Trocados junto com o quadro, e não deixados como estavam. "247 em
+   * andamento · R$ 33.649 em trânsito" sobre uma tela de carrinhos abandonados
+   * é a mesma armadilha do dashboard de vendas: o número está certo, é de outra
+   * coisa, e quem bate o olho não tem como saber disso.
+   *
+   * "Em perseguição" é a soma do que ainda pode virar venda (aberto + as três
+   * mensagens). Recuperado e perdido ficam fora: um já virou, o outro não vira
+   * mais. */
+  const carrinhoResumo = useMemo(() => {
+    const ativos = carrinhos.filter(
+      (r) => r.coluna === "aberto" || r.coluna === "msg1"
+          || r.coluna === "msg2"   || r.coluna === "msg3");
+    return {
+      ativos: ativos.length,
+      valor: ativos.reduce((s, r) => s + (r.total || 0), 0),
+      recuperados: carrinhos.filter((r) => r.coluna === "recuperado").length,
+      semFone: carrinhos.filter((r) => r.coluna === "sem_telefone").length,
+    };
+  }, [carrinhos]);
 
   const pagos = useMemo(() => {
     let r = aguardando ?? [];
@@ -1100,24 +1224,43 @@ export default function EsteiraOnline() {
                 <Settings2 className="h-3.5 w-3.5" /> Mensagens ao cliente
               </Link>
             </Button>
-            <Indicador icon={ShoppingCart} cor="text-blue-500"
-                       rotulo="em andamento" valor={String(emAndamento.length)} />
-            <Indicador icon={Package} cor="text-carbo-green"
-                       rotulo="em trânsito"
-                       valor={brl(emAndamento.reduce((s, r) => s + (r.total || 0), 0))} />
-            <Indicador icon={CheckCircle2} cor="text-emerald-500"
-                       rotulo="entregues" valor={String(porEtapa.get("entregue")?.length ?? 0)} />
-            <Indicador icon={AlertTriangle} cor="text-amber-500"
-                       rotulo="precisam de atenção" valor={String(problemas)} />
-            {/* ⚠️ Contador informativo, não alarme — por isso fica em cinza.
-                Pedido sem telefone não entra na fila de avisos e não deixa
-                registro: some, em vez de falhar. No Mercado Livre a ausência é
-                permanente (a plataforma não expõe o número do comprador), então
-                este número nunca vai a zero — e é justamente por isso que ele
-                precisa estar escrito em algum lugar. Sem ele, "o cliente do ML
-                nunca recebe mensagem" é uma pergunta sem resposta. */}
-            <Indicador icon={Phone} cor="text-muted-foreground"
-                       rotulo="sem telefone" valor={String(semTelefone)} />
+            {pipeline === "carrinho" ? (
+              <>
+                <Indicador icon={ShoppingBag} cor="text-amber-500"
+                           rotulo="em perseguição" valor={String(carrinhoResumo.ativos)} />
+                <Indicador icon={Package} cor="text-carbo-green"
+                           rotulo="parados no carrinho" valor={brl(carrinhoResumo.valor)} />
+                <Indicador icon={CheckCircle2} cor="text-emerald-500"
+                           rotulo="recuperados" valor={String(carrinhoResumo.recuperados)} />
+                {/* Aqui a ausência de telefone não é detalhe: é a taxa de perda
+                    da pipeline inteira. Cada um destes é um carrinho que nunca
+                    vai avançar, e o número mede o custo de a loja não pedir o
+                    telefone antes do fim do checkout. */}
+                <Indicador icon={Phone} cor="text-rose-500"
+                           rotulo="sem telefone" valor={String(carrinhoResumo.semFone)} />
+              </>
+            ) : (
+              <>
+                <Indicador icon={ShoppingCart} cor="text-blue-500"
+                           rotulo="em andamento" valor={String(emAndamento.length)} />
+                <Indicador icon={Package} cor="text-carbo-green"
+                           rotulo="em trânsito"
+                           valor={brl(emAndamento.reduce((s, r) => s + (r.total || 0), 0))} />
+                <Indicador icon={CheckCircle2} cor="text-emerald-500"
+                           rotulo="entregues" valor={String(porEtapa.get("entregue")?.length ?? 0)} />
+                <Indicador icon={AlertTriangle} cor="text-amber-500"
+                           rotulo="precisam de atenção" valor={String(problemas)} />
+                {/* ⚠️ Contador informativo, não alarme — por isso fica em cinza.
+                    Pedido sem telefone não entra na fila de avisos e não deixa
+                    registro: some, em vez de falhar. No Mercado Livre a ausência é
+                    permanente (a plataforma não expõe o número do comprador), então
+                    este número nunca vai a zero — e é justamente por isso que ele
+                    precisa estar escrito em algum lugar. Sem ele, "o cliente do ML
+                    nunca recebe mensagem" é uma pergunta sem resposta. */}
+                <Indicador icon={Phone} cor="text-muted-foreground"
+                           rotulo="sem telefone" valor={String(semTelefone)} />
+              </>
+            )}
           </div>
         }
       />
@@ -1126,11 +1269,12 @@ export default function EsteiraOnline() {
           ele troca o quadro inteiro, e um controle desse peso misturado aos
           filtros pareceria mais um filtro. */}
       <div className="flex shrink-0 flex-wrap items-center gap-2">
-        <Select value={pipeline} onValueChange={(v) => setPipeline(v as "entrega" | "recompra")}>
-          <SelectTrigger className="h-9 w-52"><SelectValue /></SelectTrigger>
+        <Select value={pipeline} onValueChange={(v) => setPipeline(v as Pipeline)}>
+          <SelectTrigger className="h-9 w-56"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="entrega">Da venda à entrega</SelectItem>
             <SelectItem value="recompra">Régua de recompra</SelectItem>
+            <SelectItem value="carrinho">Recuperação de carrinho</SelectItem>
           </SelectContent>
         </Select>
         {pipeline === "recompra" && cfgRecompra && (
@@ -1139,9 +1283,21 @@ export default function EsteiraOnline() {
             {" "}desiste {cfgRecompra.dias_para_desistir} dias após a oferta
           </span>
         )}
+        {/* ⚠️ As três janelas escritas na tela, com o "após" de cada uma. O
+            encadeamento (a 2ª conta da 1ª, não do abandono) é justamente o que
+            impede um carrinho velho de receber três mensagens seguidas — e é
+            invisível se a régua não estiver dita em algum lugar. */}
+        {pipeline === "carrinho" && cfgCarrinho && (
+          <span className="text-[11px] text-muted-foreground">
+            1ª {cfgCarrinho.minutos_1} min após o abandono ·
+            {" "}2ª {cfgCarrinho.horas_2}h após a 1ª ·
+            {" "}3ª {cfgCarrinho.horas_3}h após a 2ª
+            {cfgCarrinho.valor_minimo > 0 && ` · mínimo ${brl(cfgCarrinho.valor_minimo)}`}
+          </span>
+        )}
       </div>
 
-      <div className={`flex flex-wrap items-center gap-2 ${pipeline === "recompra" ? "hidden" : ""}`}>
+      <div className={`flex flex-wrap items-center gap-2 ${pipeline !== "entrega" ? "hidden" : ""}`}>
         <div className="relative max-w-xs flex-1">
           <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
           <Input value={busca} onChange={(e) => setBusca(e.target.value)}
@@ -1242,7 +1398,88 @@ export default function EsteiraOnline() {
       )}
 
       {/* ── Quadro da régua de recompra ─────────────────────────────────── */}
-      {pipeline === "recompra" ? (
+      {/* ── Quadro da recuperação de carrinho ───────────────────────────── */}
+      {pipeline === "carrinho" ? (
+        <>
+          <div className="flex min-h-0 flex-1 items-start justify-center gap-3 overflow-x-auto overscroll-x-contain pb-2">
+            {COLUNAS_CARRINHO.map((col) => {
+              const cards = porColunaCarrinho.get(col.key) ?? [];
+              const valor = cards.reduce((s, r) => s + (r.total || 0), 0);
+              return (
+                <div key={col.key}
+                     className="flex max-h-full min-w-[240px] max-w-[400px] shrink-0 grow basis-0 flex-col overflow-hidden rounded-xl border bg-muted/20">
+                  <div className="shrink-0 border-b bg-muted/40 px-3 py-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="flex min-w-0 items-center gap-1.5">
+                        <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: col.color }} />
+                        <span className="truncate text-xs font-semibold">{col.label}</span>
+                      </span>
+                      <span className="shrink-0 rounded bg-background px-1.5 text-[11px] font-medium tabular-nums">
+                        {cards.length}
+                      </span>
+                    </div>
+                    <div className="mt-0.5 flex items-center justify-between gap-2">
+                      <span className="truncate text-[10px] leading-tight text-muted-foreground">{col.descricao}</span>
+                      {cards.length > 0 && (
+                        <span className="shrink-0 text-[10px] font-medium tabular-nums text-muted-foreground">
+                          {brl(valor)}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="min-h-0 flex-1 space-y-1.5 overflow-y-auto overscroll-contain p-2">
+                    {cards.map((r) => (
+                      <CardCarrinho key={r.checkout_id} row={r} cor={col.color} />
+                    ))}
+                    {cards.length === 0 && (
+                      <p className="px-2 py-4 text-center text-[11px] text-muted-foreground/60">ninguém aqui</p>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* ⚠️ Fora da régua: anteriores ao marco zero e abaixo do valor
+              mínimo. Fechado e fora do quadro pelo mesmo motivo do histórico da
+              recompra — nenhum deles vai receber mensagem, e deixá-los entre os
+              abertos faria a coluna de trabalho parecer maior do que é. */}
+          {foraDaRegua.length > 0 && (
+            <details className="shrink-0 rounded-xl border p-3">
+              <summary className="flex cursor-pointer items-center gap-1.5 text-xs font-medium">
+                <Clock className="h-3.5 w-3.5 text-muted-foreground" />
+                {foraDaRegua.length} fora da régua —{" "}
+                {brl(foraDaRegua.reduce((s, r) => s + (r.total || 0), 0))}
+              </summary>
+              <p className="mt-2 text-[11px] text-muted-foreground">
+                Carrinhos abandonados <strong>antes</strong> desta pipeline existir
+                {cfgCarrinho && ` (marco zero: ${new Date(cfgCarrinho.inicio_em).toLocaleDateString("pt-BR")})`}
+                {" "}ou abaixo do valor mínimo. Não recebem mensagem automática — perseguir
+                esta base é uma campanha à parte.
+              </p>
+              <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-3 xl:grid-cols-5">
+                {foraDaRegua.slice(0, 30).map((r) => (
+                  <CardCarrinho key={r.checkout_id} row={r} cor="#64748b" />
+                ))}
+              </div>
+              {foraDaRegua.length > 30 && (
+                <p className="mt-2 text-[11px] text-muted-foreground">
+                  mostrando 30 de {foraDaRegua.length}
+                </p>
+              )}
+            </details>
+          )}
+
+          <p className="flex shrink-0 items-center gap-1.5 text-[11px] text-muted-foreground">
+            <ShoppingBag className="h-3 w-3 shrink-0" />
+            Só a loja própria: Mercado Livre e Amazon fazem a própria recuperação e não
+            entregam o contato de quem abandonou. As janelas são <strong>encadeadas</strong> —
+            a 2ª conta a partir da 1ª, não do abandono —, e{" "}
+            <strong>Recuperado</strong> é observação: o sistema vê que houve pedido do mesmo
+            e-mail depois do abandono, não que ele veio da mensagem.
+          </p>
+        </>
+      ) : pipeline === "recompra" ? (
         <>
           <div className="flex min-h-0 flex-1 items-start justify-center gap-3 overflow-x-auto overscroll-x-contain pb-2">
             {COLUNAS_RECOMPRA.map((col) => {
