@@ -1130,7 +1130,24 @@ async function syncNfeRecheck(admin: Admin, token: string, logId: string): Promi
     .gt("nf_bling_id", 0)
     .limit(3000);
 
-  const ids = [...new Set(semvalorSeguro(alvo).map((o: any) => Number(o.nf_bling_id)))];
+  // ⚠️ Também as notas que um PEDIDO NOSSO reivindicou.
+  //
+  // O alvo acima parte de `bling2_orders`, ou seja: só alcança nota que tem
+  // pedido espelhado. Nota emitida avulsa na filial — ou vinculada à mão a uma
+  // venda antiga — fica FORA, e é justamente a que mais precisa de
+  // reconferência: ela CONTA no faturamento (carbo_vendas_metrica junta por
+  // bling2_nf_id) e, sem passar por aqui, um cancelamento no Bling nunca
+  // chegaria ao sistema. A venda seguiria contada para sempre.
+  const { data: vinculadas } = await admin
+    .from("carboze_orders")
+    .select("bling2_nf_id")
+    .not("bling2_nf_id", "is", null)
+    .limit(3000);
+
+  const ids = [...new Set([
+    ...semvalorSeguro(alvo).map((o: any) => Number(o.nf_bling_id)),
+    ...semvalorSeguro(vinculadas).map((o: any) => Number(o.bling2_nf_id)),
+  ].filter((n) => Number.isFinite(n) && n > 0))];
   if (!ids.length) {
     await fecharLog(admin, logId, { synced: 0, failed: 0 });
     return { synced: 0, failed: 0 };
