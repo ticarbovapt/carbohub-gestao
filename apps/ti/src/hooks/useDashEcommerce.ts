@@ -636,13 +636,20 @@ export function useEcommerceComparativo(
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    const from = getRangeStart(period).toISOString();
+    // ⚠️ Faltava o TETO: filtro sem limite superior termina AGORA, então
+    // "ontem" trazia ontem MAIS hoje. Ver a correção completa no apps/admin.
+    // Esta cópia não tem consumidor hoje — corrigida para que um copiar-colar
+    // futuro não ressuscite o defeito.
+    const r    = getRange(period);
+    const from = new Date(`${r.from}T00:00:00`).toISOString();
+    const to   = new Date(`${r.to}T23:59:59.999`).toISOString();
 
     supabase
       .from("ecommerce_orders" as never)
       .select("platform,order_id,quantity,units_real,total,status,ordered_at")
       .in("platform", platforms)
       .gte("ordered_at", from)
+      .lte("ordered_at", to)
       .then(({ data: rows }) => {
         if (cancelled) return;
         const allRows = (rows ?? []) as DBOrder[];

@@ -638,7 +638,8 @@ export function useCommissionRates(platform: EcommercePlatform) {
 
 export function useEcommerceComparativo(
   platforms: EcommercePlatform[],
-  period: EcommercePeriod
+  period: EcommercePeriod,
+  custom?: EcommerceCustom,
 ): { data: ComparativoMetrics[]; isLoading: boolean } {
   const [data, setData]         = useState<ComparativoMetrics[]>([]);
   const [isLoading, setLoading] = useState(true);
@@ -647,13 +648,30 @@ export function useEcommerceComparativo(
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    const from = getRangeStart(period).toISOString();
+    // ⚠️ Par início/FIM, igual ao `fetchOrders`. Antes era só
+    // `getRangeStart(period)` com um `gte` solto, sem teto — e um filtro sem
+    // teto sempre termina AGORA.
+    //
+    // Enquanto todo período acabava hoje, isso passava despercebido: "7 dias" e
+    // "este mês" terminam hoje mesmo, então a falta do limite não mudava nada.
+    // "Ontem" é o único que tem fim no passado — e virava ontem MAIS hoje, dois
+    // dias somados num seletor que diz um. "Hoje" continuava certo pelo mesmo
+    // motivo que escondia o defeito, o que fez a tela parecer confiável
+    // justamente onde ela não era.
+    //
+    // ⚠️ E `custom` agora chega aqui. Sem ele, escolher "Por período…" no
+    // Comparativo caía no default de 30 dias, em silêncio: o seletor mostrava
+    // as datas escolhidas e a tabela respondia outra pergunta.
+    const r    = getRange(period, custom);
+    const from = new Date(`${r.from}T00:00:00`).toISOString();
+    const to   = new Date(`${r.to}T23:59:59.999`).toISOString();
 
     supabase
       .from("ecommerce_orders" as never)
       .select("platform,order_id,quantity,units_real,total,status,ordered_at")
       .in("platform", platforms)
       .gte("ordered_at", from)
+      .lte("ordered_at", to)
       .then(({ data: rows }) => {
         if (cancelled) return;
         const allRows = (rows ?? []) as DBOrder[];
@@ -674,7 +692,7 @@ export function useEcommerceComparativo(
         setLoading(false);
       });
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [platformsKey, period]);
+  }, [platformsKey, period, custom?.from, custom?.to]);
 
   return { data, isLoading };
 }
@@ -687,21 +705,36 @@ export interface MonthlyMetrics {
   month: string;
   label: string;
   platform: EcommercePlatform;
+  /** Pedidos que chegaram, em qualquer status. */
   totalOrders: number;
+  /** Destes, os que viraram venda. É o número que vale. */
+  saleOrders: number;
+  /** Faturamento: só paid|shipped|delivered. */
   totalRevenue: number;
+  pendingRevenue: number;
+  cancelledRevenue: number;
   totalUnitsSold: number;
+  saleUnits: number;
   cancelledOrders: number;
+  pendingOrders: number;
   cancellationRate: number;
   avgTicket: number;
 }
 
 interface MonthlyRPCRow {
-  platform:         string;
-  month_str:        string;
-  total_orders:     number;
-  total_units:      number;
-  total_revenue:    number;
-  cancelled_orders: number;
+  platform:          string;
+  month_str:         string;
+  total_orders:      number;
+  sale_orders:       number;
+  total_units:       number;
+  sale_units:        number;
+  /** ⚠️ Desde a 20260914 é FATURAMENTO (paid|shipped|delivered). Antes somava
+   *  cancelado e pendente junto — e a tela chamava isso de receita do mês. */
+  total_revenue:     number;
+  pending_revenue:   number;
+  cancelled_revenue: number;
+  cancelled_orders:  number;
+  pending_orders:    number;
 }
 
 export function useEcommerceHistoricoMensal(
@@ -730,20 +763,29 @@ export function useEcommerceHistoricoMensal(
 
         const MN = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
         const result: MonthlyMetrics[] = ((rows ?? []) as MonthlyRPCRow[]).map(r => {
-          const [y, m]  = r.month_str.split("-");
-          const orders  = Number(r.total_orders);
-          const revenue = Number(r.total_revenue);
+          const [y, m]   = r.month_str.split("-");
+          const orders   = Number(r.total_orders);
+          const vendas   = Number(r.sale_orders);
+          const revenue  = Number(r.total_revenue);
           const cancelled = Number(r.cancelled_orders);
           return {
             month:           r.month_str,
             label:           `${MN[parseInt(m) - 1]}/${y.slice(2)}`,
             platform:        r.platform as EcommercePlatform,
             totalOrders:     orders,
+            saleOrders:      vendas,
             totalRevenue:    revenue,
+            pendingRevenue:  Number(r.pending_revenue),
+            cancelledRevenue: Number(r.cancelled_revenue),
             totalUnitsSold:  Number(r.total_units),
+            saleUnits:       Number(r.sale_units),
             cancelledOrders: cancelled,
+            pendingOrders:   Number(r.pending_orders),
             cancellationRate: orders > 0 ? Math.round((cancelled / orders) * 1000) / 10 : 0,
-            avgTicket:        orders > 0 ? Math.round((revenue / orders) * 100) / 100 : 0,
+            // ⚠️ Ticket divide o faturamento pelas VENDAS, não por todos os
+            // pedidos. Com `orders` no denominador, um mês com muito PIX não
+            // pago mostrava ticket baixo sem nada ter acontecido com o preço.
+            avgTicket:        vendas > 0 ? Math.round((revenue / vendas) * 100) / 100 : 0,
           };
         }).sort((a, b) => a.month.localeCompare(b.month));
 

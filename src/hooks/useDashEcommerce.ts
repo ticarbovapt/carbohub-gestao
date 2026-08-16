@@ -636,13 +636,26 @@ export function useEcommerceComparativo(
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    const from = getRangeStart(period).toISOString();
+    // ⚠️ Correção mínima no `controle` congelado: faltava o TETO.
+    //
+    // Era só `getRangeStart(period)` com um `gte` solto, e filtro sem teto
+    // termina AGORA. Enquanto todo período acabava hoje isso não aparecia —
+    // "ontem" é o único com fim no passado, e virava ontem MAIS hoje, dois dias
+    // somados num seletor que diz um.
+    //
+    // A versão completa desta correção está no `apps/admin` (a tela nova), que
+    // também passou a receber o intervalo livre. Aqui vai só o limite superior:
+    // é o bastante para o número parar de mentir, e mexe no mínimo possível.
+    const r    = getRange(period);
+    const from = new Date(`${r.from}T00:00:00`).toISOString();
+    const to   = new Date(`${r.to}T23:59:59.999`).toISOString();
 
     supabase
       .from("ecommerce_orders" as never)
       .select("platform,order_id,quantity,units_real,total,status,ordered_at")
       .in("platform", platforms)
       .gte("ordered_at", from)
+      .lte("ordered_at", to)
       .then(({ data: rows }) => {
         if (cancelled) return;
         const allRows = (rows ?? []) as DBOrder[];

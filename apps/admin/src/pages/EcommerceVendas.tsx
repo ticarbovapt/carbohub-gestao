@@ -647,11 +647,11 @@ function PlatformView({ platform, period, custom }: { platform: EcommercePlatfor
 // Comparativo
 // ─────────────────────────────────────────────────────────────────────────────
 
-function ComparativoView({ period }: { period: EcommercePeriod }) {
+function ComparativoView({ period, custom }: { period: EcommercePeriod; custom?: EcommerceCustom }) {
   const [selected, setSelected] = useState<EcommercePlatform[]>(["mercadolivre", "amazon", "nuvemshop"]);
   const [metric, setMetric] = useState<"orders" | "units" | "revenue">("revenue");
   const valid = selected.length >= 2 ? selected : (["mercadolivre", "amazon"] as EcommercePlatform[]);
-  const { data } = useEcommerceComparativo(valid, period);
+  const { data } = useEcommerceComparativo(valid, period, custom);
 
   const toggle = (p: EcommercePlatform) => setSelected(prev => {
     if (prev.includes(p)) return prev.length <= 2 ? prev : prev.filter(x => x !== p);
@@ -1012,8 +1012,12 @@ function HistoricoMensalView() {
     for (const p of selected) {
       const m = data.find(d => d.month === month && d.platform === p);
       entry[`${p}_receita`]  = m?.totalRevenue   ?? 0;
-      entry[`${p}_pedidos`]  = m?.totalOrders     ?? 0;
-      entry[`${p}_unidades`] = m?.totalUnitsSold  ?? 0;
+      // ⚠️ A série de barras passa a plotar VENDAS, não pedidos recebidos: ela
+      // fica ao lado do gráfico de faturamento, e duas barras que não falam da
+      // mesma coisa lado a lado é o convite para dividir uma pela outra e achar
+      // um ticket que não existe.
+      entry[`${p}_pedidos`]  = m?.saleOrders      ?? 0;
+      entry[`${p}_unidades`] = m?.saleUnits       ?? 0;
       entry[`${p}_ticket`]   = m?.avgTicket        ?? 0;
       entry[`${p}_cancel`]   = m?.cancellationRate ?? 0;
     }
@@ -1025,17 +1029,22 @@ function HistoricoMensalView() {
   // Aggregate KPIs
   const totalReceita    = data.reduce((s, d) => s + d.totalRevenue,   0);
   const totalPedidos    = data.reduce((s, d) => s + d.totalOrders,    0);
-  const totalUnidades   = data.reduce((s, d) => s + d.totalUnitsSold, 0);
+  const totalVendas     = data.reduce((s, d) => s + d.saleOrders,     0);
+  const totalUnidades   = data.reduce((s, d) => s + d.saleUnits,      0);
   const totalCancelados = data.reduce((s, d) => s + d.cancelledOrders, 0);
-  const avgTicketGeral  = totalPedidos > 0 ? totalReceita / totalPedidos : 0;
+  const totalPendente   = data.reduce((s, d) => s + d.pendingRevenue, 0);
+  const totalCanceladoValor = data.reduce((s, d) => s + d.cancelledRevenue, 0);
+  // ⚠️ Denominador = VENDAS. Com todos os pedidos, um mês de muito PIX não pago
+  // mostrava ticket baixo sem nada ter acontecido com o preço.
+  const avgTicketGeral  = totalVendas  > 0 ? totalReceita / totalVendas : 0;
   const cancelRateGeral = totalPedidos > 0 ? (totalCancelados / totalPedidos) * 100 : 0;
 
   // Per-platform aggregates
   const byPlatform = selected.map(p => {
     const rows     = data.filter(d => d.platform === p);
     const receita  = rows.reduce((s, r) => s + r.totalRevenue,   0);
-    const pedidos  = rows.reduce((s, r) => s + r.totalOrders,    0);
-    const unidades = rows.reduce((s, r) => s + r.totalUnitsSold, 0);
+    const pedidos  = rows.reduce((s, r) => s + r.saleOrders,     0);
+    const unidades = rows.reduce((s, r) => s + r.saleUnits,      0);
     return { platform: p, receita, pedidos, unidades, pct: totalReceita > 0 ? (receita / totalReceita) * 100 : 0 };
   });
 
@@ -1132,10 +1141,13 @@ function HistoricoMensalView() {
             <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2 px-0.5">
               Resumo · {getMonthLabel(fromMonth)} → {getMonthLabel(toMonth)}
             </p>
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-              {/* Receita Total */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-3">
+              {/* ⚠️ Faturamento, não "receita total". Até a 20260914 este número
+                  somava pedido cancelado e PIX não pago junto — e chamava isso
+                  de receita do mês. Agora é só o pago, e o que saiu daqui está
+                  escrito embaixo em vez de sumir. */}
               <div className="col-span-2 sm:col-span-1 rounded-xl border bg-card p-4" style={{ borderLeftColor: "#22c55e", borderLeftWidth: 3 }}>
-                <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Receita Total</p>
+                <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Faturamento</p>
                 <p className="text-xl font-bold mt-1 leading-none">{fmtBRL(totalReceita)}</p>
                 {momChange !== null && (
                   <p className={cn("text-xs font-semibold mt-1", momChange >= 0 ? "text-green-500" : "text-red-500")}>
@@ -1143,15 +1155,25 @@ function HistoricoMensalView() {
                   </p>
                 )}
               </div>
-              {/* Pedidos */}
+              {/* Vendas — e quantos pedidos chegaram, na mesma frase */}
               <div className="rounded-xl border bg-card p-4" style={{ borderLeftColor: "#3b82f6", borderLeftWidth: 3 }}>
-                <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Pedidos</p>
-                <p className="text-xl font-bold mt-1 leading-none">{fmtNum(totalPedidos)}</p>
-                <p className="text-xs text-muted-foreground mt-1">{allMonths.length} meses</p>
+                <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Vendas</p>
+                <p className="text-xl font-bold mt-1 leading-none">{fmtNum(totalVendas)}</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  de {fmtNum(totalPedidos)} pedidos recebidos
+                </p>
               </div>
-              {/* Unidades */}
+              {/* Não entrou — o que saiu do faturamento, dito em vez de omitido */}
+              <div className="rounded-xl border bg-card p-4" style={{ borderLeftColor: "#a78bfa", borderLeftWidth: 3 }}>
+                <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Não entrou</p>
+                <p className="text-xl font-bold mt-1 leading-none">{fmtBRL(totalPendente + totalCanceladoValor)}</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {fmtBRL(totalPendente)} a receber · {fmtBRL(totalCanceladoValor)} cancelado
+                </p>
+              </div>
+              {/* Unidades — só das vendas, para casar com o faturamento acima */}
               <div className="rounded-xl border bg-card p-4" style={{ borderLeftColor: "#8b5cf6", borderLeftWidth: 3 }}>
-                <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Unidades</p>
+                <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Unidades Vendidas</p>
                 <p className="text-xl font-bold mt-1 leading-none">{fmtNum(totalUnidades)}</p>
               </div>
               {/* Ticket médio */}
@@ -1198,16 +1220,16 @@ function HistoricoMensalView() {
                             {mom >= 0 ? "▲" : "▼"}{Math.abs(mom).toFixed(1)}% último mês
                           </span>
                         )}
-                        <Badge variant="outline" className="text-xs">{pctReceita.toFixed(0)}% receita</Badge>
+                        <Badge variant="outline" className="text-xs">{pctReceita.toFixed(0)}% do faturamento</Badge>
                       </div>
                     </div>
                     <div className="grid grid-cols-3 gap-3 mb-3">
                       <div>
-                        <p className="text-xs text-muted-foreground mb-0.5">Receita</p>
+                        <p className="text-xs text-muted-foreground mb-0.5">Faturamento</p>
                         <p className="font-bold text-sm">{fmtBRL(receita)}</p>
                       </div>
                       <div>
-                        <p className="text-xs text-muted-foreground mb-0.5">Pedidos</p>
+                        <p className="text-xs text-muted-foreground mb-0.5">Vendas</p>
                         <p className="font-bold text-sm">{fmtNum(pedidos)}</p>
                       </div>
                       <div>
@@ -1228,7 +1250,7 @@ function HistoricoMensalView() {
           {/* ── Receita Mensal ── */}
           <Card className="rounded-2xl border-0 shadow-sm">
             <CardHeader className="pb-1 pt-5 px-5">
-              <CardTitle className="text-sm font-semibold">Receita Mensal por Plataforma</CardTitle>
+              <CardTitle className="text-sm font-semibold">Faturamento Mensal por Plataforma</CardTitle>
             </CardHeader>
             <CardContent className="px-2 pb-4">
               <ResponsiveContainer width="100%" height={300}>
@@ -1256,7 +1278,7 @@ function HistoricoMensalView() {
           {/* ── Pedidos Mensais ── */}
           <Card className="rounded-2xl border-0 shadow-sm">
             <CardHeader className="pb-1 pt-5 px-5">
-              <CardTitle className="text-sm font-semibold">Pedidos Mensais por Plataforma</CardTitle>
+              <CardTitle className="text-sm font-semibold">Vendas Mensais por Plataforma</CardTitle>
             </CardHeader>
             <CardContent className="px-2 pb-4">
               <ResponsiveContainer width="100%" height={250}>
@@ -1266,7 +1288,7 @@ function HistoricoMensalView() {
                   <YAxis tick={{ fontSize: 10 }} axisLine={false} tickLine={false} width={38} />
                   <Tooltip
                     contentStyle={{ background: "var(--background)", border: "1px solid var(--border)", borderRadius: 10, fontSize: 12 }}
-                    formatter={(v: number, name: string) => [fmtNum(v) + " pedidos", PMAP[name.replace("_pedidos","") as EcommercePlatform]?.label ?? name]}
+                    formatter={(v: number, name: string) => [fmtNum(v) + " vendas", PMAP[name.replace("_pedidos","") as EcommercePlatform]?.label ?? name]}
                     cursor={{ fill: "var(--muted)", opacity: 0.3 }}
                   />
                   <Legend iconType="square" iconSize={10}
@@ -1578,7 +1600,7 @@ export default function EcommerceVendas() {
         {active === "historico" ? (
           <HistoricoMensalView />
         ) : active === "comparativo" ? (
-          <ComparativoView period={period} />
+          <ComparativoView period={period} custom={custom} />
         ) : (
           <PlatformView platform={active as EcommercePlatform} period={period} custom={custom} />
         )}
