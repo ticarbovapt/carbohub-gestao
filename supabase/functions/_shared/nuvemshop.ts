@@ -255,7 +255,9 @@ export async function fetchNuvemshopOrder(
   return res.json();
 }
 
-/** Lista pedidos criados a partir de `since` (usado pelo sync; paginado). */
+/** Lista pedidos ALTERADOS a partir de `since` (usado pelo sync; paginado).
+ *  ⚠️ Alterados, não criados — ver o comentário do parâmetro lá dentro. O nome
+ *  ficou `...Since` para não quebrar o chamador; o que ele significa mudou. */
 export async function fetchNuvemshopOrdersSince(
   accessToken: string, storeId: string, since: Date,
 ): Promise<any[]> {
@@ -264,8 +266,24 @@ export async function fetchNuvemshopOrdersSince(
   const MAX_PAGES = 10; // teto de segurança (até 500 pedidos por sync)
 
   while (page <= MAX_PAGES) {
+    // ⚠️ `updated_at_min`, NÃO `created_at_min`.
+    //
+    // Era por data de CRIAÇÃO, e isso fazia o sync não ser rede de segurança de
+    // nada: ele roda de 5 em 5 minutos, então buscava só o que nasceu nos
+    // últimos 5 minutos. Pedido criado ontem e despachado hoje NUNCA mais era
+    // lido — a única coisa que atualizava status era o webhook, e webhook
+    // perdido congelava o pedido em `paid` para sempre.
+    //
+    // Medido: 89 pedidos da Nuvemshop presos em "NF emitida" na esteira, alguns
+    // de 29 dias, todos com a plataforma dizendo `paid`. Não estavam atrasados
+    // nem cancelados — o sistema simplesmente nunca perguntou de novo.
+    //
+    // Por data de ATUALIZAÇÃO o sync passa a pegar as duas coisas: pedido novo
+    // (que nasce com `updated_at` preenchido) e pedido velho que mudou de
+    // estado. É o que a `rastreio-sync` já fazia e o que o comentário desta
+    // aqui prometia sem cumprir.
     const params = new URLSearchParams({
-      created_at_min: since.toISOString(),
+      updated_at_min: since.toISOString(),
       per_page:       "50",
       page:           String(page),
     });

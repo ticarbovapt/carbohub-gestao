@@ -572,6 +572,17 @@ async function pullNuvemshop(): Promise<Record<string, unknown>[]> {
   const { accessToken, storeId, lastSyncedAt } = creds;
 
   // Sincroniza desde o último checkpoint, com teto de 30 dias.
+  //
+  // ⚠️ O checkpoint agora vale sobre a data de ATUALIZAÇÃO do pedido, não a de
+  // criação. É o que transforma esta função em rede de segurança do webhook:
+  // pedido que mudou de estado volta na varredura, mesmo tendo sido criado
+  // semanas atrás. Antes, webhook perdido = pedido congelado para sempre.
+  //
+  // Para forçar uma varredura ampla (recuperar o que ficou para trás), recue o
+  // checkpoint no banco e chame a função:
+  //
+  //   update public.system_tokens set last_synced_at = now() - interval '30 days'
+  //   where id = 'nuvemshop';
   const maxLookback = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
   const since = lastSyncedAt < maxLookback ? maxLookback : lastSyncedAt;
 
