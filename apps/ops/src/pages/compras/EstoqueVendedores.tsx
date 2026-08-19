@@ -44,7 +44,17 @@ import {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export default function EstoqueVendedores() {
-  const { data: caixas, isLoading } = useVendedorEstoque();
+  // ⚠️ `error` é lido, e não pode deixar de ser.
+  //
+  // Antes só `data` e `isLoading` vinham daqui. Consulta que falha devolve
+  // `data: undefined`, o `?? []` transformava isso em lista vazia, e a tela
+  // afirmava "Nenhum vendedor tem caixa ainda" — uma frase sobre o DADO, dita
+  // justamente quando não se sabe nada sobre o dado.
+  //
+  // Custou meia hora de diagnóstico: a tela vazia parecia falta de cadastro
+  // enquanto o banco tinha 10 caixas. Falha e ausência não podem ter a mesma
+  // cara — é a mesma lição do quadro de carrinhos abandonados.
+  const { data: caixas, isLoading, error } = useVendedorEstoque();
   const { data: transito } = useEnviosEmTransito();
   const { data: voltando } = useDevolucoesEmTransito();
   const { data: minimos } = useMinimosCaixa();
@@ -176,6 +186,25 @@ export default function EstoqueVendedores() {
           <div className="flex items-center justify-center py-16 text-muted-foreground gap-2">
             <Loader2 className="h-5 w-5 animate-spin" /> Carregando caixas...
           </div>
+        ) : error ? (
+          /* ⚠️ Estado PRÓPRIO. Não dá para dizer "não tem caixa" quando a
+             consulta nem chegou a responder — e a mensagem do Postgres é o que
+             distingue "sem permissão" de "view não existe" de "rede caiu". Sem
+             ela, os três viram a mesma tela muda. */
+          <CarboCard>
+            <CarboCardContent className="py-10 text-center space-y-2">
+              <TriangleAlert className="h-8 w-8 mx-auto text-destructive" />
+              <p className="text-sm font-medium">Não consegui carregar as caixas.</p>
+              <p className="text-xs text-muted-foreground max-w-md mx-auto">
+                Isto <strong>não</strong> quer dizer que não existem caixas — quer dizer
+                que a consulta falhou. Se a mensagem abaixo fala em permissão, provavelmente
+                falta a liberação do Carbo Ops no seu perfil.
+              </p>
+              <p className="text-[11px] font-mono text-destructive/80 max-w-md mx-auto break-words">
+                {(error as Error).message}
+              </p>
+            </CarboCardContent>
+          </CarboCard>
         ) : lista.length === 0 ? (
           <CarboCard>
             <CarboCardContent className="py-10 text-center space-y-2">
