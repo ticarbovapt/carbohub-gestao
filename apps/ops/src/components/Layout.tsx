@@ -53,7 +53,10 @@ export function Layout() {
         { to: OPS_HOME.path, label: OPS_HOME.label, icon: OPS_HOME.icon, end: true },
         { to: "/chat", label: "Carbo Chat", icon: MessagesSquare, badge: <ChatBadge /> },
     ] },
-    { label: "Produção", items: ["/producao/dashboard", "/producao/ordens", "/producao/produtos", "/producao/skus", "/producao/lotes", "/producao/fornecedores"].map(it) },
+    // ⚠️ Este é o SEGUNDO lugar do menu do Ops, e esquecê-lo deixa a tela
+    // invisível sem erro nenhum. Produtos/SKUs/Lotes/Fornecedores viraram abas
+    // dentro de /producao/mrp — uma linha só aqui.
+    { label: "Produção", items: ["/producao/dashboard", "/producao/ordens", "/producao/mrp"].map(it) },
     { label: "Suprimentos", items: ["/suprimentos", "/suprimentos/vendedores", "/compras"].map(it) },
     { label: "Logística", items: ["/logistica", "/logistica/pos-venda", "/logistica/recorrencias", "/logistica/esteira", "/logistica/viagens"].map(it) },
     { label: "Operação de Campo", items: ["/campo/os", "/campo/agendamentos", "/campo/maquinas", "/campo/alertas"].map(it) },

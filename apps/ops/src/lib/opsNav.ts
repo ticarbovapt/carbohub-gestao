@@ -46,10 +46,15 @@ export const OPS_GROUPS: OpsNavGroup[] = [
     items: [
       { path: "/producao/ordens", label: "Ordens de Produção", icon: Factory, from: "/production-orders", ready: true },
       { path: "/producao/dashboard", label: "Dashboard de Produção", icon: BarChart3, from: "/dashboards/producao", ready: true },
-      { path: "/producao/produtos", label: "Produtos (MRP)", icon: Package, from: "/mrp/products", ready: true },
-      { path: "/producao/skus", label: "SKUs", icon: Boxes, from: "/skus", ready: true },
-      { path: "/producao/lotes", label: "Lotes", icon: Layers, from: "/lots", ready: true },
-      { path: "/producao/fornecedores", label: "Fornecedores", icon: Building2, from: "/mrp/suppliers", ready: true },
+      // ⚠️ UMA entrada para as quatro telas de cadastro (Produtos, SKUs, Lotes,
+      // Fornecedores). Elas viraram abas dentro de `/producao/mrp/:aba` — as
+      // telas não mudaram, só deixaram de ocupar quatro linhas da sidebar para
+      // responder à mesma pergunta ("o que existe no cadastro").
+      //
+      // Os caminhos antigos continuam vivos como redirect no App.tsx: link
+      // colado no chat e favorito de quem já usava não podem morrer por causa
+      // de uma reorganização de menu.
+      { path: "/producao/mrp", label: "MRP", icon: Package, from: "/mrp/products", ready: true },
     ],
   },
   {

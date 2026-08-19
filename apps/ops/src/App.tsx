@@ -10,10 +10,8 @@ import Vender from "./pages/Vender";
 import Chat from "./pages/Chat";
 import OrdensProducao from "./pages/producao/OrdensProducao";
 import DashboardProducao from "./pages/producao/DashboardProducao";
-import ProdutosMrp from "./pages/producao/ProdutosMrp";
-import Skus from "./pages/producao/Skus";
-import Lotes from "./pages/producao/Lotes";
-import FornecedoresMrp from "./pages/producao/FornecedoresMrp";
+// As quatro telas do MRP entram pela casca de abas, que é quem as monta.
+import Mrp from "./pages/producao/Mrp";
 import RequisicaoCompra from "./pages/compras/RequisicaoCompra";
 import Suprimentos from "./pages/compras/Suprimentos";
 import EstoqueVendedores from "./pages/compras/EstoqueVendedores";
@@ -46,10 +44,19 @@ export default function App() {
         {/* Produção */}
         <Route path="/producao/ordens" element={<OrdensProducao />} />
         <Route path="/producao/dashboard" element={<DashboardProducao />} />
-        <Route path="/producao/produtos" element={<ProdutosMrp />} />
-        <Route path="/producao/skus" element={<Skus />} />
-        <Route path="/producao/lotes" element={<Lotes />} />
-        <Route path="/producao/fornecedores" element={<FornecedoresMrp />} />
+        {/* MRP: Produtos, SKUs, Lotes e Fornecedores viraram abas da mesma
+            tela. A aba é segmento da URL, como em /logistica/:aba. */}
+        <Route path="/producao/mrp/:aba" element={<Mrp />} />
+        <Route path="/producao/mrp" element={<Mrp />} />
+        {/* ⚠️ Os caminhos antigos NÃO somem: viram redirect. Eles estão em
+            favorito, em link colado no chat e em conversa antiga — e uma
+            reorganização de menu que quebra endereço que já circulou custa
+            mais do que a reorganização vale. `replace` para o voltar do
+            navegador não cair de novo no redirect. */}
+        <Route path="/producao/produtos"     element={<Navigate to="/producao/mrp/produtos"     replace />} />
+        <Route path="/producao/skus"         element={<Navigate to="/producao/mrp/skus"         replace />} />
+        <Route path="/producao/lotes"        element={<Navigate to="/producao/mrp/lotes"        replace />} />
+        <Route path="/producao/fornecedores" element={<Navigate to="/producao/mrp/fornecedores" replace />} />
 
 
         {/* Compras & Suprimentos */}
