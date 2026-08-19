@@ -85,6 +85,49 @@ const dataHora = (s: string | null) => {
   return d ? d.toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : "—";
 };
 
+/**
+ * Dias desde o pedido. Número cru, para as contas — o `idade()` abaixo é para
+ * a tela.
+ */
+const diasDe = (s: string | null): number | null => {
+  const d = paraData(s);
+  if (!d) return null;
+  const dias = Math.floor((Date.now() - d.getTime()) / 86_400_000);
+  return dias < 0 ? null : dias;
+};
+
+/**
+ * Quantos dias uma etapa intermediária pode durar antes de virar caso de gente.
+ *
+ * ⚠️ Medido, não chutado. A distribuição real da coluna "NF emitida" era
+ * 43 pedidos com 0-3 dias, 33 com 4-7, 13 com 8-14 e 7 com 15+. A forma decai,
+ * ou seja: a esteira ANDA, e o que existe é uma cauda. O corte em 7 separa o
+ * fluxo normal (76 pedidos) da cauda que ninguém estava vendo (20).
+ */
+const DIAS_EMPACADO = 7;
+
+/**
+ * Parado tempo demais na MESMA etapa.
+ *
+ * ⚠️ Existe porque a tela media atraso de TRANSPORTADORA e nunca mediu tempo
+ * parado. Um pedido com a nota emitida há 29 dias e nenhuma etiqueta não
+ * disparava nada: sem rastreio, não há previsão para estourar; com status da
+ * plataforma, o outro sinal também não acende. Ele ficava no meio da coluna,
+ * indistinguível de um pedido de ontem.
+ *
+ * As etapas terminais ficam de fora: "entregue" acabou, e "em trânsito" já tem
+ * o atraso da transportadora, que é uma medida melhor do que a idade do pedido.
+ *
+ * ⚠️ Conta a partir da data do PEDIDO, não da entrada na etapa — a esteira é
+ * uma view calculada e não guarda histórico de transição. É aproximação, e por
+ * isso o corte é generoso: serve para achar a cauda, não para cobrar SLA.
+ */
+const empacado = (r: EsteiraRow): boolean => {
+  if (r.etapa === "cancelado" || r.etapa === "entregue" || r.etapa === "em_transito") return false;
+  const d = diasDe(r.data_pedido);
+  return d != null && d > DIAS_EMPACADO;
+};
+
 /** "há 3d" — idade do pedido. Para logística, tempo parado é o sintoma; um
  *  pedido de ontem e um de três semanas na mesma coluna não são o mesmo caso. */
 const idade = (s: string | null): string | null => {
@@ -239,6 +282,7 @@ function Card({ row, rastreio, cor, sinal, onClick }: {
 }) {
   const atrasado = rastreio?.atrasado && !rastreio?.entregue_em;
   const travado = !row.tem_status_da_plataforma && row.etapa !== "entregue" && row.etapa !== "cancelado";
+  const parado = empacado(row);
   const quando = idade(row.data_pedido);
   const contexto = [
     row.canal,
@@ -287,7 +331,15 @@ function Card({ row, rastreio, cor, sinal, onClick }: {
             um sexto dele. Como o chip só aparece quando há o que dizer, na
             maior parte do tempo esta linha continua exatamente como era. */}
         <ChipAviso sinal={sinal} />
-        {quando && <span className="shrink-0 tabular-nums">{quando}</span>}
+        {/* ⚠️ A idade fica ÂMBAR quando o pedido está empacado. O texto já
+            estava aqui ("há 29d") e passava batido em cinza, do lado de um "há
+            2d" idêntico — a informação existia e não comunicava nada. Cor é o
+            que separa a cauda do fluxo normal sem custar um pixel a mais. */}
+        {quando && (
+          <span className={`shrink-0 tabular-nums ${parado ? "font-semibold text-amber-500" : ""}`}>
+            {quando}
+          </span>
+        )}
       </div>
 
       {/* Onde está e quando chega — a razão de a tela existir, e por isso o
@@ -1141,12 +1193,15 @@ export default function EsteiraOnline() {
   const { data: mapaRastreio } = useRastreios(codigos);
   const rastreioDe = (c: string | null) => (c ? mapaRastreio?.get(c) : undefined);
 
-  /** Problema = atrasado ou parado por falta de vínculo. É a fila que precisa
-   *  de gente, não de paciência — por isso ganha um filtro próprio. */
+  /** Problema = atrasado, parado por falta de vínculo, ou EMPACADO na etapa.
+   *  É a fila que precisa de gente, não de paciência — por isso ganha um
+   *  filtro próprio. */
   const ehProblema = (r: EsteiraRow) => {
     if (r.etapa === "cancelado" || r.etapa === "entregue") return false;
     const t = rastreioDe(r.rastreio);
-    return Boolean(t?.atrasado && !t?.entregue_em) || !r.tem_status_da_plataforma;
+    return Boolean(t?.atrasado && !t?.entregue_em)
+      || !r.tem_status_da_plataforma
+      || empacado(r);
   };
 
   const visiveis = useMemo(
