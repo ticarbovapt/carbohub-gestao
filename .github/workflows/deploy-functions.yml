@@ -87,5 +87,8 @@ jobs:
           # `succeeded` e a tabela continuar vazia — sem erro em lugar nenhum.
           # Chamada pelo pg_cron, que manda X-Cron-Secret e nenhum Authorization.
           dep nuvemshop-carrinhos --no-verify-jwt
+          # Fase 1 da integração do Melhor Envio: espelha os envios sem passar
+          # pelo Bling. Só GET, chamada pelo pg_cron (X-Cron-Secret, sem JWT).
+          dep melhor-envio-envios --no-verify-jwt
           dep ai-chat
           dep text-enhancer
