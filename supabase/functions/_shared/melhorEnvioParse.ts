@@ -121,7 +121,12 @@ export interface LinhaEnvioME {
   raw: unknown;
 }
 
-export function paraLinha(o: any, agora = new Date()): LinhaEnvioME {
+export function paraLinha(o: any, quando?: Date): LinhaEnvioME {
+  // ⚠️ Cinto de segurança contra `.map(paraLinha)`: o `map` passa o índice no
+  // segundo argumento, e um `Date` com valor numérico não tem `toISOString`.
+  // Já derrubou a função uma vez, com 500 sem corpo. O chamador certo é
+  // `(o) => paraLinha(o)`, mas depender só de disciplina aqui é caro demais.
+  const agora = quando instanceof Date ? quando : new Date();
   const d = destinatario(o);
   const p = pedidoDaLoja(o);
   const chaveNf = txt(o?.invoice?.key);

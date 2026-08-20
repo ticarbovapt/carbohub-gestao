@@ -124,7 +124,16 @@ Deno.serve(async (req: Request) => {
     await dormir(PAUSA_MS);
   }
 
-  const linhas = brutos.map(paraLinha).filter((l) => l.me_id !== "");
+  // ⚠️ `(o) => paraLinha(o)`, NUNCA `.map(paraLinha)`.
+  //
+  // `Array.map` passa TRÊS argumentos (valor, índice, array). Passar a função
+  // direto entrega o ÍNDICE no segundo parâmetro — que aqui é o `agora: Date`.
+  // O primeiro elemento recebe `0`, e `agora.toISOString()` estoura.
+  //
+  // Custou um 500 genérico ("Internal Server Error", sem corpo): a promessa
+  // rejeita fora do nosso try, então nem o JSON de erro sai. Parece função que
+  // não subiu.
+  const linhas = brutos.map((o) => paraLinha(o)).filter((l) => l.me_id !== "");
 
   const ativos = linhas.filter((l) => !l.cancelado_em && !l.expirado_em);
   const resumo = {

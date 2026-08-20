@@ -188,3 +188,30 @@ describe("helpers", () => {
     expect(num("209.40")).toBe(209.4);
   });
 });
+
+/**
+ * ⚠️ REGRESSÃO — o bug que derrubou a função em produção.
+ *
+ * `brutos.map(paraLinha)` entrega TRÊS argumentos: (valor, índice, array). O
+ * índice caía no segundo parâmetro, que era `agora = new Date()`. O primeiro
+ * elemento recebia `0`, e `agora.toISOString()` estourava — a promessa
+ * rejeitava fora do try, e o runtime devolvia "Internal Server Error" sem
+ * corpo. Parecia função que não subiu.
+ *
+ * Os testes acima não pegaram porque todos chamam `paraLinha(envio)` com um
+ * argumento só. Este chama do jeito errado de propósito.
+ */
+describe("paraLinha via Array.map (regressão)", () => {
+  it("sobrevive ao índice caindo no segundo argumento", () => {
+    const linhas = [envioBase, { ...envioBase, id: 992 }].map(paraLinha);
+    expect(linhas).toHaveLength(2);
+    expect(linhas[0].me_id).toBe("991");
+    expect(() => new Date(linhas[0].atualizado_em).toISOString()).not.toThrow();
+    expect(new Date(linhas[0].atualizado_em).getFullYear()).toBeGreaterThan(2000);
+  });
+
+  it("aceita a data injetada quando ela é mesmo uma Date", () => {
+    const d = new Date("2026-01-02T03:04:05.000Z");
+    expect(paraLinha(envioBase, d).atualizado_em).toBe(d.toISOString());
+  });
+});
