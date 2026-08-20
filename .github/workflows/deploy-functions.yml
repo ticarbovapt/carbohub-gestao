@@ -90,5 +90,8 @@ jobs:
           # Fase 1 da integração do Melhor Envio: espelha os envios sem passar
           # pelo Bling. Só GET, chamada pelo pg_cron (X-Cron-Secret, sem JWT).
           dep melhor-envio-envios --no-verify-jwt
+          # Fase 3: a UNICA que escreve na loja. Nasce desligada e em dry-run
+          # (carbo_fulfill_config); publicar nao liga nada.
+          dep nuvemshop-fulfill --no-verify-jwt
           dep ai-chat
           dep text-enhancer
