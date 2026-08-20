@@ -76,16 +76,38 @@ export interface EsteiraRow {
   /** O número que o CLIENTE vê (CZAAAAMMXXXX). Não substitui o do Bling: a
    *  operação fala com o Bling pelo `pedido_numero`, e com o cliente por este. */
   pedido_codigo: string | null;
+  /** ⚠️ De onde veio o rastreio: `bling`, `melhorenvio` ou `plataforma`.
+   *
+   *  Existe para ninguém mais ler ausência de informação como ausência de
+   *  envio. Foi exatamente esse erro de leitura que fez 79 pedidos parecerem
+   *  parados — a etiqueta existia, só não passava pelo Bling. */
+  rastreio_origem: "bling" | "melhorenvio" | "plataforma" | null;
+  /** Situação da etiqueta no Melhor Envio: gerado, postado, entregue,
+   *  vencido, cancelado, pago, rascunho. */
+  me_situacao: string | null;
+  me_gerado_em: string | null;
+  /** ⚠️ Etiqueta tem validade. Vencida sem uso, o dinheiro do frete foi. */
+  me_expirado_em: string | null;
 }
 
 /** As colunas do quadro, na ordem do fluxo. `cancelado` fica fora: não é etapa
  *  da esteira, é saída dela — aparece num contador à parte. */
 export const ETAPAS: Array<{ key: EtapaEsteira; label: string; descricao: string; color: string }> = [
   { key: "confirmado",  label: "Confirmado",   descricao: "pedido atendido no Bling",           color: "#9333ea" },
-  { key: "nf_emitida",  label: "NF emitida",   descricao: "nota autorizada",                    color: "#14b8a6" },
-  { key: "etiqueta",    label: "Etiqueta",     descricao: "rastreio gerado, aguardando coleta", color: "#0ea5e9" },
-  { key: "em_transito", label: "Em trânsito",  descricao: "a plataforma confirmou o envio",     color: "#06b6d4" },
-  { key: "entregue",    label: "Entregue",     descricao: "a plataforma confirmou a entrega",   color: "#10b981" },
+  // ⚠️ "Sem etiqueta", e não mais "NF emitida".
+  //
+  // O rótulo antigo descrevia o que JÁ ACONTECEU (a nota saiu) numa coluna cuja
+  // única pergunta é o que FALTA. E ele escondia o problema: enquanto a esteira
+  // só enxergava a etiqueta que passava pelo Bling, 89 pedidos moravam aqui —
+  // 79 deles com etiqueta gerada, paga e às vezes postada, invisível.
+  //
+  // Com o Melhor Envio como fonte, o que sobra nesta coluna é o caso real:
+  // nota emitida e nenhuma etiqueta em lugar nenhum. Aí o nome tem de dizer
+  // isso, porque agora é trabalho de gente, não cegueira de sistema.
+  { key: "nf_emitida",  label: "Sem etiqueta", descricao: "nota emitida, nenhuma etiqueta ainda", color: "#f59e0b" },
+  { key: "etiqueta",    label: "Etiqueta",     descricao: "gerada, aguardando postagem",        color: "#0ea5e9" },
+  { key: "em_transito", label: "Em trânsito",  descricao: "postado — a caminho",                color: "#06b6d4" },
+  { key: "entregue",    label: "Entregue",     descricao: "entrega confirmada",                 color: "#10b981" },
 ];
 
 /**

@@ -183,6 +183,51 @@ function BotaoCopiar({ texto, oque, className = "", truncar = false }: {
   );
 }
 
+/**
+ * De onde veio o rastreio.
+ *
+ * ⚠️ Só aparece quando NÃO é o Bling. O Bling é a origem esperada e dizê-lo em
+ * todo card seria ruído; o que precisa de nome é a exceção — a etiqueta que
+ * nasceu no painel do Melhor Envio e por isso ficou invisível durante semanas.
+ */
+function ChipOrigem({ origem }: { origem: EsteiraRow["rastreio_origem"] }) {
+  if (!origem || origem === "bling") return null;
+  const rotulo = origem === "melhorenvio" ? "Melhor Envio" : "plataforma";
+  return (
+    <span className="shrink-0 rounded bg-muted px-1 text-[9px] leading-4 text-muted-foreground">
+      via {rotulo}
+    </span>
+  );
+}
+
+/**
+ * Etiqueta perto de vencer, ou já vencida.
+ *
+ * ⚠️ Etiqueta do Melhor Envio expira, e o frete pago vai junto. Vencida, ela
+ * ainda tem `generated_at` — por isso a view usa a SITUAÇÃO e não a data, e por
+ * isso o card precisa gritar antes: depois de vencer, não há o que fazer além
+ * de comprar de novo.
+ */
+function ChipValidade({ row }: { row: EsteiraRow }) {
+  if (row.me_situacao === "vencido") {
+    return (
+      <span className="flex shrink-0 items-center gap-1 text-[10px] font-medium leading-4 text-red-500">
+        <AlertTriangle className="h-3 w-3" /> etiqueta vencida
+      </span>
+    );
+  }
+  if (row.me_situacao !== "gerado" || !row.me_expirado_em) return null;
+  const dias = Math.floor(
+    (new Date(row.me_expirado_em).getTime() - Date.now()) / 86_400_000);
+  if (dias > 3) return null;
+  return (
+    <span className="flex shrink-0 items-center gap-1 text-[10px] font-medium leading-4 text-amber-500">
+      <Clock className="h-3 w-3" />
+      {dias <= 0 ? "vence hoje" : `vence em ${dias}d`}
+    </span>
+  );
+}
+
 /** Chip da previsão. Vermelho só quando atrasado — cor reservada ao problema. */
 function ChipPrevisao({ r }: { r?: RastreioCard }) {
   if (!r) return null;
@@ -330,6 +375,7 @@ function Card({ row, rastreio, cor, sinal, onClick }: {
             própria: o card tem orçamento de ~100px e uma linha nova custaria
             um sexto dele. Como o chip só aparece quando há o que dizer, na
             maior parte do tempo esta linha continua exatamente como era. */}
+        <ChipOrigem origem={row.rastreio_origem} />
         <ChipAviso sinal={sinal} />
         {/* ⚠️ A idade fica ÂMBAR quando o pedido está empacado. O texto já
             estava aqui ("há 29d") e passava batido em cinza, do lado de um "há
@@ -345,9 +391,10 @@ function Card({ row, rastreio, cor, sinal, onClick }: {
       {/* Onde está e quando chega — a razão de a tela existir, e por isso o
           único bloco em `text-foreground`. A transportadora desce para
           metadado: ela não muda decisão nenhuma no relance. */}
-      {(row.transportadora || rastreio) && (
+      {(row.transportadora || rastreio || row.me_situacao) && (
         <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-border/50 pt-2">
           <ChipPrevisao r={rastreio} />
+          <ChipValidade row={row} />
           {rastreio?.eventos?.[0] && (
             <span className="flex min-w-0 items-center gap-1 text-xs font-medium leading-4">
               <MapPin className="h-3 w-3 shrink-0 text-muted-foreground" />
@@ -1199,8 +1246,14 @@ export default function EsteiraOnline() {
   const ehProblema = (r: EsteiraRow) => {
     if (r.etapa === "cancelado" || r.etapa === "entregue") return false;
     const t = rastreioDe(r.rastreio);
+    // ⚠️ Etiqueta vencida é problema mesmo com o pedido "andando": o frete foi
+    // pago e perdido, e ninguém descobre isso olhando a coluna.
+    const validade = r.me_situacao === "vencido"
+      || (r.me_situacao === "gerado" && r.me_expirado_em
+          && new Date(r.me_expirado_em).getTime() - Date.now() < 3 * 86_400_000);
     return Boolean(t?.atrasado && !t?.entregue_em)
       || !r.tem_status_da_plataforma
+      || Boolean(validade)
       || empacado(r);
   };
 
