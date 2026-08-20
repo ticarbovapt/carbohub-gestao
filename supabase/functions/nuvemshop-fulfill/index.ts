@@ -138,7 +138,27 @@ Deno.serve(async (req: Request) => {
 
     if (jaEnviado(pedido)) {
       jaEstavam++;
-      // ⚠️ `ignorado`, não `erro`. A loja já sabe — o objetivo está cumprido, e
+      // ⚠️ NO ENSAIO, NÃO GRAVA. Custou uma lição: a primeira versão escrevia
+      // `ignorado` aqui mesmo em dry-run, e a fila exclui todo pedido que TENHA
+      // linha — o ensaio consumiu as seis vagas que ele deveria só observar.
+      //
+      // Eu já tinha tomado esse cuidado no caminho do POST e não no deste. É o
+      // erro de proteger a porta da frente e deixar a dos fundos aberta: o
+      // efeito colateral não estava onde eu estava olhando.
+      if (dryRun) {
+        resultados.push({
+          pedido_loja: l.pedido_loja, cliente: l.cliente,
+          decisao: "pularia — a loja já registra o envio",
+          estado_na_loja: {
+            shipping_status: pedido?.shipping_status ?? null,
+            status: pedido?.status ?? null,
+            fulfillments: Array.isArray(pedido?.fulfillments)
+              ? pedido.fulfillments.length : null,
+          },
+        });
+        continue;
+      }
+      // `ignorado`, não `erro`. A loja já sabe — o objetivo está cumprido, e
       // registrar isso é o que impede a fila de reapresentar o mesmo pedido
       // para sempre.
       await supabase.from("carbo_fulfill_log").upsert({
@@ -214,6 +234,9 @@ Deno.serve(async (req: Request) => {
   const resumo = {
     ok: true, ativo, dry_run: dryRun, fila: fila.length,
     marcados, ja_estavam: jaEstavam, ensaiados, erros,
+    // ⚠️ No ensaio, `faria` traz TAMBÉM os que seriam pulados, com o estado
+    // que a loja devolveu. Sem isso, "ja_estavam: 6" e uma lista vazia não
+    // dizem POR QUE foram pulados — que é justamente o que se quer saber.
     ...(dryRun ? { faria: resultados } : { resultados }),
   };
   console.log("[nuvemshop-fulfill]", JSON.stringify({ ...resumo, faria: undefined }));
