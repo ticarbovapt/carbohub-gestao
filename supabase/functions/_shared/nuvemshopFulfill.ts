@@ -11,29 +11,42 @@
 /**
  * O pedido já está enviado (ou não deve ser tocado) na loja?
  *
- * ⚠️ Três caminhos dizem SIM, e os três precisam existir:
+ * ⚠️ `shipping_status` DECIDE quando existe. O `fulfillments[]` é só rede para
+ * quando ele não vem.
  *
- *   shipping_status   o campo clássico
- *   fulfillments[]    a Nuvemshop mais nova registra o despacho aqui, e o
- *                     `shipping_status` pode continuar vazio. Olhar só o
- *                     primeiro deixaria passar o pedido já enviado pela
- *                     interface nova — e o cliente receberia o segundo e-mail.
- *   status cancelled  cancelado não é "enviado", mas também NÃO pode ser
- *                     marcado: seria escrever por cima de uma decisão do
- *                     cliente.
+ * A primeira versão tratava `fulfillments` não-vazio como "enviado", e isso
+ * estava errado de um jeito que travava a integração inteira: MEDIDO em
+ * produção, seis pedidos com `shipping_status: "unshipped"` tinham o array
+ * preenchido. A Nuvemshop o preenche quando o MÉTODO DE FRETE é escolhido, não
+ * quando a mercadoria sai.
  *
- * A ausência de dado conta como SIM em quem chama (GET que falha pula a
- * escrita). Na dúvida sobre o estado, não escrever é o erro barato.
+ * O efeito era silencioso e total: `jaEnviado()` devolvia sempre `true`, todo
+ * pedido virava "a loja já registra o envio", e nenhum cliente jamais receberia
+ * o rastreio. Uma automação que nunca faz nada e não dá erro.
+ *
+ * ── A assimetria que rege esta função ────────────────────────────────────────
+ *
+ *   errar para `true`   custa uma marcação perdida — a rodada seguinte tenta
+ *   errar para `false`  custa um cliente recebendo DOIS e-mails de rastreio
+ *
+ * Por isso o cancelado devolve `true` (não é "enviado", mas não pode ser
+ * tocado: seria escrever por cima de uma decisão do cliente), e por isso quem
+ * chama pula a escrita quando o GET falha.
+ *
+ * ⚠️ Mas "na dúvida, true" tem limite, e este caso é o limite: uma regra que
+ * devolve `true` para TUDO não é conservadora, é quebrada.
  */
 export function jaEnviado(pedido: any): boolean {
-  const ship = String(pedido?.shipping_status ?? "").toLowerCase();
-  if (ship === "fulfilled" || ship === "shipped" || ship === "delivered") return true;
-
-  const f = pedido?.fulfillments;
-  if (Array.isArray(f) && f.length > 0) return true;
-
   const st = String(pedido?.status ?? "").toLowerCase();
   if (st === "cancelled" || st === "canceled") return true;
 
-  return false;
+  const ship = String(pedido?.shipping_status ?? "").trim().toLowerCase();
+  if (ship) {
+    // O campo existe: ele é a resposta, e nada mais opina.
+    return ship === "fulfilled" || ship === "shipped" || ship === "delivered";
+  }
+
+  // Sem `shipping_status`: aí sim o array vale como sinal.
+  const f = pedido?.fulfillments;
+  return Array.isArray(f) && f.length > 0;
 }

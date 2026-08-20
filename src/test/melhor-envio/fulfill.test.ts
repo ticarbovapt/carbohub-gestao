@@ -37,12 +37,37 @@ describe("jaEnviado", () => {
    * Olhar só o primeiro campo deixaria passar o pedido enviado pela interface
    * nova — e o cliente receberia o segundo e-mail.
    */
-  it("fulfillments preenchido é enviado, mesmo sem shipping_status", () => {
+  it("fulfillments vale como sinal quando shipping_status não vem", () => {
     expect(jaEnviado({ shipping_status: null, fulfillments: [{ id: 1 }] })).toBe(true);
   });
 
   it("fulfillments vazio não é enviado", () => {
     expect(jaEnviado({ shipping_status: "unpacked", fulfillments: [] })).toBe(false);
+  });
+
+  /**
+   * ⚠️ REGRESSÃO — o caso real que travava a integração inteira.
+   *
+   * Seis pedidos em producao vieram com `shipping_status: "unshipped"` E o
+   * array `fulfillments` preenchido. A Nuvemshop o preenche quando o METODO DE
+   * FRETE e escolhido, nao quando a mercadoria sai.
+   *
+   * A versao antiga olhava o array primeiro e devolvia `true` para os seis:
+   * todo pedido virava "a loja ja registra o envio", nenhum cliente receberia
+   * rastreio, e nada dava erro. Uma automacao que nunca faz nada.
+   *
+   * Quando `shipping_status` existe, ele decide — e ponto.
+   */
+  it("unshipped com fulfillments preenchido NÃO está enviado", () => {
+    expect(jaEnviado({
+      shipping_status: "unshipped",
+      fulfillments: [{ id: 1, shipping_option: "Jadlog .Package" }],
+    })).toBe(false);
+  });
+
+  it("shipping_status vence o fulfillments nos dois sentidos", () => {
+    expect(jaEnviado({ shipping_status: "shipped", fulfillments: [] })).toBe(true);
+    expect(jaEnviado({ shipping_status: "unshipped", fulfillments: [{}, {}] })).toBe(false);
   });
 
   /** Cancelado não é "enviado", mas também NÃO pode ser marcado: seria
@@ -58,6 +83,12 @@ describe("jaEnviado", () => {
     expect(jaEnviado({
       status: "open", payment_status: "paid", shipping_status: "unpacked",
     })).toBe(false);
+  });
+
+  it("o cancelado vence até o shipping_status", () => {
+    // Cancelado nao pode ser tocado nem que diga "shipped": marcar seria
+    // escrever por cima de uma decisao do cliente.
+    expect(jaEnviado({ status: "cancelled", shipping_status: "unshipped" })).toBe(true);
   });
 
   it("pedido vazio não está enviado", () => {
