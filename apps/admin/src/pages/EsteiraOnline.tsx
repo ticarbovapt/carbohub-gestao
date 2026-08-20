@@ -14,7 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   useEsteiraOnline, useRastreios, useEcommerceAguardando, useFontesSaude,
-  useAvisosDoPedido, useRecompraPipeline, useRecompraConfig,
+  useAvisosDoPedido, useRecompraPipeline, useRecompraConfig, useEsteiraTravadosAntigos,
   useCarrinhoPipeline, useCarrinhoConfig,
   ETAPAS, COLUNAS_RECOMPRA, COLUNAS_CARRINHO,
   type EsteiraRow, type EtapaEsteira, type RastreioCard, type AguardandoRow,
@@ -1092,6 +1092,8 @@ export default function EsteiraOnline() {
   const { pathname } = useLocation();
   const { data, isLoading, error } = useEsteiraOnline(de, ate);
   const { data: aguardando } = useEcommerceAguardando();
+  // Pedido travado ANTES do período escolhido. Ver useEsteiraTravadosAntigos.
+  const { data: travadosAntigos = [] } = useEsteiraTravadosAntigos(de);
   const { data: recompra = [] } = useRecompraPipeline();
   const { data: cfgRecompra } = useRecompraConfig();
   const { data: carrinhos = [] } = useCarrinhoPipeline();
@@ -1825,6 +1827,38 @@ export default function EsteiraOnline() {
           ternário e vazavam para a régua de recompra — um bloco de cancelados
           e um rodapé sobre a coluna "Pago" numa tela que não tem nem uma coisa
           nem outra. */}
+      {/* ⚠️ O que ficou FORA da janela e continua travado.
+          O pedido do Edmilson (18/07, etiqueta expirada) sumiu da tela quando
+          passou dos 30 dias — e um pedido travado não fica menos travado por
+          envelhecer. Fechado por padrão para não competir com o quadro, mas
+          com a contagem sempre visível. */}
+      {pipeline === "entrega" && travadosAntigos.length > 0 && (
+        <details className="shrink-0 rounded-xl border border-amber-500/30 bg-amber-500/5 p-3">
+          <summary className="flex cursor-pointer items-center gap-1.5 text-xs font-medium">
+            <AlertTriangle className="h-3.5 w-3.5 text-amber-500" />
+            {travadosAntigos.length} travados antes do período —{" "}
+            {brl(travadosAntigos.reduce((s, r) => s + (r.total || 0), 0))}
+          </summary>
+          <p className="mt-2 text-[11px] text-muted-foreground">
+            Pedidos anteriores a {de.split("-").reverse().join("/")} que ainda não
+            chegaram a "Entregue". Ficam fora do quadro por causa do filtro de
+            período — e são justamente os que esperam há mais tempo.
+          </p>
+          <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-3 xl:grid-cols-4">
+            {travadosAntigos.slice(0, 40).map((r) => (
+              <Card key={r.bling_id} row={r} rastreio={rastreioDe(r.rastreio)}
+                    cor={ETAPAS.find((e) => e.key === r.etapa)?.color ?? "#64748b"}
+                    sinal={null} onClick={() => abrirCard(r)} />
+            ))}
+          </div>
+          {travadosAntigos.length > 40 && (
+            <p className="mt-2 text-[11px] text-muted-foreground">
+              mostrando 40 de {travadosAntigos.length}
+            </p>
+          )}
+        </details>
+      )}
+
       {pipeline === "entrega" && cancelados.length > 0 && (
         <details className="shrink-0 rounded-xl border p-3">
           <summary className="flex cursor-pointer items-center gap-1.5 text-xs font-medium">

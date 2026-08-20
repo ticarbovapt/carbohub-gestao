@@ -144,6 +144,43 @@ export function useEsteiraOnline(de: string, ate: string) {
   });
 }
 
+/* ─── O ponto cego da janela ────────────────────────────────────────────────
+ *
+ * ⚠️ A esteira filtra por período, e isso esconde exatamente o que mais importa.
+ *
+ * O caso que revelou: o pedido do Edmilson (18/07, R$ 59,90, etiqueta expirada
+ * sem postagem) saiu da janela de 30 dias e ficou invisível. Um pedido travado
+ * não fica menos travado por envelhecer — fica MAIS. E o filtro de data, que
+ * existe para a tela não pesar, tirava da vista justamente o caso pior.
+ *
+ * A solução não é remover o filtro (a coluna "Entregue" com um ano de histórico
+ * seria ilegível), e sim abrir uma exceção estreita: pedido em etapa NÃO
+ * terminal, anterior ao início do período, continua alcançável — num bloco à
+ * parte, para não se misturar com o que está dentro da janela.
+ */
+
+export function useEsteiraTravadosAntigos(de: string) {
+  return useQuery({
+    queryKey: ["esteira-travados-antigos", de],
+    enabled: Boolean(de),
+    queryFn: async (): Promise<EsteiraRow[]> => {
+      const { data, error } = await (supabase as any)
+        .from("bling2_esteira")
+        .select("*")
+        .lt("data_pedido", de)
+        // Terminais ficam de fora: entregue acabou, cancelado saiu. O que sobra
+        // é o que ainda espera alguma coisa — e espera há mais tempo que a
+        // janela inteira.
+        .not("etapa", "in", "(entregue,cancelado)")
+        .order("data_pedido", { ascending: true })
+        .limit(200);
+      if (error) throw error;
+      return (data ?? []) as EsteiraRow[];
+    },
+    refetchInterval: 60_000,
+  });
+}
+
 /* ─── Pago, antes do Bling ──────────────────────────────────────────────────
  *
  * A esteira do Bling só mostra pedido ATENDIDO (`situacao_id in (9,12)`), e
