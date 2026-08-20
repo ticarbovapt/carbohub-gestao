@@ -209,6 +209,20 @@ function ChipOrigem({ origem }: { origem: EsteiraRow["rastreio_origem"] }) {
  * de comprar de novo.
  */
 function ChipValidade({ row }: { row: EsteiraRow }) {
+  // ⚠️ "Sem etiqueta" tem dois significados MUITO diferentes, e a coluna os
+  // empilhava: pedido de hoje com o envio já montado no Melhor Envio (só falta
+  // pagar) e pedido de três semanas que ninguém tocou.
+  //
+  // Medido nos 10 que sobraram: 3 estavam em preparação e 7 eram abandono real.
+  // Sem esta distinção, quem olha a coluna trata os dois como o mesmo trabalho —
+  // e o de hoje ainda não é trabalho nenhum.
+  if (row.me_situacao === "rascunho" || row.me_situacao === "pago") {
+    return (
+      <span className="shrink-0 rounded bg-sky-500/10 px-1 text-[10px] leading-4 text-sky-500">
+        etiqueta em preparação
+      </span>
+    );
+  }
   if (row.me_situacao === "vencido") {
     return (
       <span className="flex shrink-0 items-center gap-1 text-[10px] font-medium leading-4 text-red-500">
