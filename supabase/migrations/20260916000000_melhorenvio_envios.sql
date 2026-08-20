@@ -93,13 +93,21 @@ create table if not exists public.melhorenvio_envios (
   prazo_dias        integer,
   url_rastreio      text,
 
-  -- As duas portas EXATAS de conciliação, quando existem.
-  -- ⚠️ Nenhuma das duas é garantida: etiqueta avulsa (fora do "Minhas Vendas")
-  -- não carrega o pedido da loja, e boa parte dos envios sai com declaração de
-  -- conteúdo em vez de NF-e — então `nf_chave` vem vazia. Quantos têm cada uma
-  -- é justamente o que esta fase vai medir.
+  -- As portas EXATAS de conciliação.
+  --
+  -- ⚠️ MEDIDO em produção (328 envios), e uma previsão se inverteu: esperava-se
+  -- que a NF fosse pouco confiável, porque muito envio sai com declaração de
+  -- conteúdo. O real é 306 de 320 com `invoice.key` — 96%. A NF NÃO é o
+  -- fallback: é a porta principal. `pedido_loja` sozinho resolve 11.
   pedido_loja       text,
-  pedido_loja_raw   text,                      -- a etiqueta/tag como o ME mostra
+  pedido_loja_raw   text,   -- as tags como o ME as mostra, para diagnóstico
+  -- ⚠️ As tags da integração, medidas em produção (ver BLOCO 1-B):
+  --   mi:reference_code   → o número do pedido no Bling
+  --   mi:reference_link   → o ID INTERNO do Bling, dentro da URL
+  --   mi:marketplace_code → o número do pedido na loja
+  -- `bling_id_ref` é a melhor porta que existe: exata, direta, sem casar nada.
+  bling_numero      text,
+  bling_id_ref      bigint,
   nf_chave          text,
   nf_numero         text,
 
@@ -144,6 +152,10 @@ create index if not exists melhorenvio_envios_doc_idx
   on public.melhorenvio_envios (destinatario_doc) where destinatario_doc is not null;
 create index if not exists melhorenvio_envios_pedido_idx
   on public.melhorenvio_envios (pedido_loja) where pedido_loja is not null;
+create index if not exists melhorenvio_envios_blingref_idx
+  on public.melhorenvio_envios (bling_id_ref) where bling_id_ref is not null;
+create index if not exists melhorenvio_envios_nf_idx
+  on public.melhorenvio_envios (nf_chave) where nf_chave is not null;
 -- Os códigos, para o casamento pelo que o Bling guardou.
 create index if not exists melhorenvio_envios_tracking_idx
   on public.melhorenvio_envios (tracking) where tracking is not null;

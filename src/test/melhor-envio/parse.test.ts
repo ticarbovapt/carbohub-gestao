@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   paraLinha, pedidoDaLoja, destinatario, digitos, data, num, situacaoME,
+  blingIdDoLink, urlRastreio,
 } from "../../../supabase/functions/_shared/melhorEnvioParse";
 
 /**
@@ -213,5 +214,77 @@ describe("paraLinha via Array.map (regressão)", () => {
   it("aceita a data injetada quando ela é mesmo uma Date", () => {
     const d = new Date("2026-01-02T03:04:05.000Z");
     expect(paraLinha(envioBase, d).atualizado_em).toBe(d.toISOString());
+  });
+});
+
+/**
+ * ⚠️ O formato REAL das tags, medido em produção.
+ *
+ * O valor está em `url`, não em `tag`. A primeira versão lia a CHAVE e
+ * devolvia "mi:reference_code" como se fosse o número do pedido — e o nome do
+ * campo é o que enganou: só uma das quatro entradas contém uma URL de verdade.
+ */
+const TAGS_REAIS = [
+  { tag: "mi:reference_code",   url: "423" },
+  { tag: "mi:reference_link",   url: "https://www.bling.com.br/vendas.php#edit/26653104669" },
+  { tag: "mi:marketplace_code", url: "486" },
+  { tag: "mi:client_id",        url: "489" },
+];
+
+describe("tags da integração (formato real)", () => {
+  it("lê o número da loja de mi:marketplace_code", () => {
+    expect(pedidoDaLoja({ tags: TAGS_REAIS }).numero).toBe("486");
+  });
+
+  it("extrai o id interno do Bling do link", () => {
+    expect(blingIdDoLink("https://www.bling.com.br/vendas.php#edit/26653104669"))
+      .toBe("26653104669");
+  });
+
+  it("não confunde o link com número de pedido", () => {
+    // O link tem "#edit/26653104669": o `#` está lá, e a heurística do "#NNN"
+    // NÃO pode capturá-lo — daria um número de pedido que não existe.
+    expect(pedidoDaLoja({ tags: TAGS_REAIS }).numero).not.toBe("26653104669");
+  });
+
+  it("guarda as três portas no mesmo envio", () => {
+    const l = paraLinha({ ...envioBase, tags: TAGS_REAIS });
+    expect(l.pedido_loja).toBe("486");
+    expect(l.bling_numero).toBe("423");
+    expect(l.bling_id_ref).toBe("26653104669");
+  });
+
+  it("ainda aceita o #471 de quem gera pelo Minhas Vendas", () => {
+    expect(pedidoDaLoja({ tags: [{ tag: "CarboZé #471", url: null }] }).numero).toBe("471");
+  });
+
+  it("devolve null sem tag nenhuma", () => {
+    expect(pedidoDaLoja({ id: 1 }).numero).toBeNull();
+  });
+});
+
+describe("urlRastreio", () => {
+  /** ⚠️ O `tracking_link` vem SEM o código. Guardar como veio daria um link
+   *  para página vazia na mão do cliente. */
+  it("junta a base com o código", () => {
+    expect(urlRastreio("https://www.melhorrastreio.com.br/rastreio/", "AD820288115BR"))
+      .toBe("https://www.melhorrastreio.com.br/rastreio/AD820288115BR");
+  });
+
+  it("acrescenta a barra quando falta", () => {
+    expect(urlRastreio("https://x/r", "AB1")).toBe("https://x/r/AB1");
+  });
+
+  it("meio link é pior que link nenhum", () => {
+    expect(urlRastreio("https://x/r/", null)).toBeNull();
+    expect(urlRastreio(null, "AB1")).toBeNull();
+  });
+
+  it("usa o self_tracking quando não há tracking", () => {
+    const l = paraLinha({
+      tracking: null, self_tracking: "ME262CFVP55BR",
+      service: { company: { tracking_link: "https://x/r/" } },
+    });
+    expect(l.url_rastreio).toBe("https://x/r/ME262CFVP55BR");
   });
 });

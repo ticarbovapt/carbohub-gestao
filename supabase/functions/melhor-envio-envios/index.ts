@@ -145,6 +145,9 @@ Deno.serve(async (req: Request) => {
     // ⚠️ Estes quatro são o objetivo da Fase 1: eles decidem quanto da Fase 2
     // é casamento automático e quanto é confirmação humana.
     com_pedido_loja: ativos.filter((l) => l.pedido_loja).length,
+    // ⚠️ A porta EXATA: o id interno do Bling, vindo do link da tag. Quando ela
+    // existe, não há casamento nem ambiguidade — é o mesmo id da esteira.
+    com_bling_id:    ativos.filter((l) => l.bling_id_ref).length,
     com_nf:          ativos.filter((l) => l.nf_chave).length,
     com_cpf:         ativos.filter((l) => l.destinatario_doc).length,
     sem_porta_nenhuma: ativos.filter(
