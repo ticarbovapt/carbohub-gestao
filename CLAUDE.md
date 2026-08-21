@@ -359,6 +359,59 @@ seria apertar o gatilho de um envio em massa de WhatsApp.
 erro nenhum: o registro em `src/lib/opsNav.ts` **e** a lista de caminhos do
 grupo em `src/components/Layout.tsx`. Já aconteceu antes.
 
+### Melhor Envio — a etiqueta que nunca voltou para o Bling
+Etiqueta comprada DIRETO no painel do Melhor Envio não volta para o Bling: o
+card ficava em "NF emitida" com a encomenda já a caminho (79 pedidos assim). O
+espelho `melhorenvio_envios` fecha o buraco, e a `bling2_esteira` passou a ler
+dele — **sem tirar o Bling do lugar**: o Bling vence quando tem o dado, o ME
+preenche o silêncio.
+
+```
+supabase/migrations/20260916000000_melhorenvio_envios.sql       espelho + envio vigente
+supabase/migrations/20260918000000_melhorenvio_conciliacao.sql  as 4 portas (RECONSTITUÍDA)
+supabase/migrations/20260919000000_esteira_ve_o_melhor_envio.sql  a view (RECONSTITUÍDA)
+supabase/functions/_shared/melhorEnvioParse.ts                  puro, testado
+```
+
+1. **Sem vínculo, o card NÃO anda.** `melhorenvio_envio_vigente` casa por
+   `bling_id`, e quem preenche é `carbo_melhorenvio_conciliar()` (cron 5 min,
+   SQL puro). Envio `ambiguo`/`sem_match` fica invisível para a esteira — e não
+   existe tela para resolver isso: mede-se por consulta.
+2. **`melhorenvio_envio_vigente`, nunca a tabela crua.** Etiqueta cancelada e
+   refeita gera `me_id` novo; sem a view, o envio cancelado moveria o card.
+3. **`situacao = 'gerado'`, não `gerado_em is not null`.** Etiqueta vencida
+   continua tendo `generated_at` e prometeria um envio que não vai acontecer.
+4. ⚠️ **Fases 2 e 4 rodaram pelo SQL Editor e ficaram FORA do repositório** por
+   um dia. Os arquivos `20260918`/`20260919` são reconstituição. SQL entregue no
+   chat vira arquivo na MESMA tarefa — repo que não descreve a produção é a
+   mesma doença do arquivo replicado que ninguém sabe que precisa ser copiado.
+5. ⚠️ **`CREATE OR REPLACE VIEW` sem `WITH` APAGA as reloptions.** Ele aplica
+   `AT_ReplaceRelOptions`, e lista vazia substitui. Foi assim que a
+   `bling2_esteira` perdeu o `security_invoker = true` e passou a rodar com os
+   privilégios do dono, RLS ignorada, com o `grant to authenticated` intacto —
+   ou seja, lojista e licenciado (mesma tabela `profiles`) lendo a esteira
+   inteira da Carbo pelo PostgREST. **Toda republicação de view repete a
+   cláusula.** Confira com `select relname, reloptions from pg_class`.
+
+### Shopee — canal novo, e a esteira só anda até a etiqueta
+`bling2_lojas.bling_id = 206191275`. O cadastro **não é cosmético**: é ele que
+faz a ponte marcar `segmento = 'online'`.
+
+1. **A Shopee não passa pelo Melhor Envio** (logística própria, SPX). O
+   `rastreio-sync` corta o canal na `montarFila()` — sem isso o código entra na
+   fila, não é encontrado e grava um erro no card de hora em hora, para sempre.
+   Mesmo caso da Mandaê.
+2. **Sem integração de plataforma, não há `ecommerce_orders` da Shopee** — o
+   CTE `plataforma` não casa, `tem_status_da_plataforma` é falso e o card
+   **para em "etiqueta"**: nada o leva a em trânsito ou entregue. Enquanto a
+   integração não existir, esse avanço é manual.
+3. **Pedido Shopee ainda não Atendido é invisível.** A coluna "Pago" vem de
+   `ecommerce_aguardando_bling`, que lê a plataforma — e a Shopee não está lá.
+4. ⚠️ **A `carbo_msg_fila` não filtra canal**: pedido Shopee entra na fila de
+   WhatsApp como qualquer outro. A Shopee intermedia o contato do comprador —
+   confira se o telefone é real antes de deixar um template ativo alcançar o
+   canal.
+
 ### Cadência das automações — a esteira dispara mensagem, então ela é ao vivo
 Enquanto a esteira era painel para olhar, meia hora de atraso não custava nada.
 Desde que cada mudança de etapa manda WhatsApp para o cliente, custa: "saiu para
@@ -374,6 +427,8 @@ rastreio-sync-5min           */5 * * * *      rede de segurança do webhook
 nuvemshop-carrinhos-15min    4-59/15 * * * *  checkouts abandonados
 kanban-n8n-1min              * * * * *        o disparo ao cliente
 bling2-nfe-recheck-20min     7-59/20 * * * *  nota cancelada some da listagem
+melhor-envio-envios-15min    6-59/15 * * * *  espelho das etiquetas do painel
+melhorenvio-conciliar-5min   */5 * * * *      SQL puro — sem vínculo, card parado
 ```
 
 ⚠️ **O carrinho é de 15 min, não de 1.** A menor janela dessa pipeline é de 60
