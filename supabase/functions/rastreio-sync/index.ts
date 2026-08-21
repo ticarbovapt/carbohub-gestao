@@ -292,6 +292,15 @@ async function montarFila(alvos?: string[]): Promise<ItemFila[]> {
     // Mercado Envios é do `ecommerce-sync`. O canal é o nome da loja no Bling.
     if (/mercado\s*livre|mercadolivre|meli/i.test(String(o.canal ?? ""))) continue;
     if (/amazon/i.test(String(o.canal ?? ""))) continue;
+    // ⚠️ Shopee tem logística própria (SPX / Shopee Xpress) e não passa pelo
+    // Melhor Envio. Sem este corte, o código dela entra na fila, é procurado
+    // lá, não é encontrado, e grava um erro no card — de hora em hora, para
+    // sempre. É o mesmo caso da Mandaê logo abaixo, e o mesmo custo: uma
+    // mensagem de erro que não é erro, que ensina a equipe a ignorar o sinal.
+    //
+    // Entrou ANTES da primeira venda da Shopee chegar a ter rastreio, e não
+    // depois de alguém estranhar o card vermelho.
+    if (/shopee/i.test(String(o.canal ?? ""))) continue;
     // Mandaê tem API própria e não passa pelo Melhor Envio. Sem este corte
     // ela entra na fila toda hora, gasta uma busca e falha — 48 chamadas por
     // dia que nunca podem dar certo, e um erro no card que não é erro.
