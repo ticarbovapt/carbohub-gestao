@@ -37,7 +37,7 @@ describe("jaEnviado", () => {
    * Olhar só o primeiro campo deixaria passar o pedido enviado pela interface
    * nova — e o cliente receberia o segundo e-mail.
    */
-  it("fulfillments vale como sinal quando shipping_status não vem", () => {
+  it("fulfillments sozinho já basta", () => {
     expect(jaEnviado({ shipping_status: null, fulfillments: [{ id: 1 }] })).toBe(true);
   });
 
@@ -58,16 +58,35 @@ describe("jaEnviado", () => {
    *
    * Quando `shipping_status` existe, ele decide — e ponto.
    */
-  it("unshipped com fulfillments preenchido NÃO está enviado", () => {
+  /**
+   * ⚠️ O CASO REAL, verificado no painel — e o teste que existe para eu não
+   * repetir o erro de ida e volta que cometi aqui.
+   *
+   * Seis pedidos vieram do GET com `shipping_status: "unshipped"` e
+   * `fulfillments` preenchido. Concluí que o array era lixo e reescrevi para o
+   * `shipping_status` decidir. Aí o painel foi conferido no pedido #330:
+   * **"Enviada"**.
+   *
+   * Ou seja: os seis ESTÃO enviados, o array estava certo, e o
+   * `shipping_status` e que fica preso em "unshipped" depois do despacho.
+   *
+   * A reescrita teria mandado e-mail duplicado se a fila nao estivesse vazia.
+   */
+  it("unshipped com fulfillments preenchido ESTÁ enviado (painel: #330)", () => {
     expect(jaEnviado({
       shipping_status: "unshipped",
-      fulfillments: [{ id: 1, shipping_option: "Jadlog .Package" }],
-    })).toBe(false);
+      fulfillments: [{ id: 1, shipping_option: "Correios PAC" }],
+    })).toBe(true);
   });
 
-  it("shipping_status vence o fulfillments nos dois sentidos", () => {
+  it("qualquer sinal positivo basta", () => {
     expect(jaEnviado({ shipping_status: "shipped", fulfillments: [] })).toBe(true);
-    expect(jaEnviado({ shipping_status: "unshipped", fulfillments: [{}, {}] })).toBe(false);
+    expect(jaEnviado({ shipping_status: "unshipped", fulfillments: [{}] })).toBe(true);
+  });
+
+  /** Ausência de positivo é o único "não". */
+  it("unshipped SEM fulfillments não está enviado", () => {
+    expect(jaEnviado({ shipping_status: "unshipped", fulfillments: [] })).toBe(false);
   });
 
   /** Cancelado não é "enviado", mas também NÃO pode ser marcado: seria
