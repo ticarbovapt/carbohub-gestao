@@ -162,6 +162,23 @@ Deno.serve(async (req: Request) => {
               wa_id: acao.waId, nome: acao.nome, last_inbound_at: acao.quando,
             }, { onConflict: "wa_id" });
             if (e2) throw new Error(`contato ${acao.waId}: ${e2.message}`);
+
+            // ⚠️ A CONVERSA. Número da Cloud API não aparece na Caixa de
+            // Entrada do Business Suite, e a Cloud API não tem endpoint de
+            // histórico: o que não for gravado aqui existe só no celular do
+            // cliente. Três dos seis templates pedem resposta em texto.
+            //
+            // Grava DEPOIS do contato porque a janela de 24 h é a parte
+            // urgente: se esta escrita falhar, o atendimento ainda sabe que
+            // pode responder, e a falha aparece no corpo da resposta.
+            const { error: e2b } = await supabase.from("carbo_wa_mensagens").upsert({
+              wamid: acao.wamid, wa_id: acao.waId, direcao: "entrada",
+              tipo: acao.formato, texto: acao.texto,
+              midia_id: acao.midiaId, midia_mime: acao.midiaMime,
+              responde_a: acao.respondeA, ocorrido_em: acao.quando,
+              payload: acao.payload,
+            }, { onConflict: "wamid" });
+            if (e2b) throw new Error(`mensagem ${acao.wamid}: ${e2b.message}`);
             inbound++;
           } else if (acao.tipo === "template") {
             const novo = statusDeTemplate(acao.evento);

@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   interpretar, chaveDoEvento, assinaturaConfere, statusDeTemplate,
+  conteudoDaMensagem,
 } from "../../../supabase/functions/_shared/metaWebhook.ts";
 
 // Payloads no formato real da Meta: entry[].changes[].value.{statuses,messages}
@@ -82,9 +83,34 @@ describe("interpretar — mensagem do cliente", () => {
     expect(a).toMatchObject({ tipo: "inbound", waId: "5519991948368", nome: "Washington" });
   });
 
-  it("⚠️ NÃO carrega o conteúdo da mensagem", () => {
+  // ⚠️ Este teste era o OPOSTO até a Fase 3: ele garantia que o conteúdo NÃO
+  // era carregado. A decisão mudou porque a premissa era falsa — a Caixa de
+  // Entrada do Business Suite não aceita número da Cloud API, e a Cloud API não
+  // tem endpoint de histórico. O que não for gravado existe só no celular do
+  // cliente, e três dos seis templates pedem resposta em texto.
+  it("carrega o conteúdo — não há outro lugar onde ele exista", () => {
     const [a] = interpretar(INBOUND);
-    expect(JSON.stringify(a)).not.toContain("obrigado");
+    if (a.tipo === "inbound") {
+      expect(a.texto).toBe("chegou hoje, obrigado");
+      expect(a.wamid).toBe("wamid.IN1");
+      expect(a.formato).toBe("text");
+    }
+  });
+
+  it("⚠️ `context.id` liga a resposta ao pedido, não a um recado solto", () => {
+    const [a] = interpretar({
+      field: "messages",
+      value: { messages: [{ from: "5519991948368", id: "wamid.IN2",
+                            timestamp: "1755902400", type: "text",
+                            text: { body: "chegou quebrado" },
+                            context: { id: "wamid.NOSSA123" } }] },
+    });
+    if (a.tipo === "inbound") expect(a.respondeA).toBe("wamid.NOSSA123");
+  });
+
+  it("sem context, respondeA é nulo — a view cai no último aviso enviado", () => {
+    const [a] = interpretar(INBOUND);
+    if (a.tipo === "inbound") expect(a.respondeA).toBeNull();
   });
 
   it("resposta de botão de template também abre a janela", () => {
@@ -204,5 +230,82 @@ describe("statusDeTemplate", () => {
     // Um valor fora do CHECK faria o update falhar e derrubar a rodada inteira.
     expect(statusDeTemplate("FLAGGED_FOR_SOMETHING_NEW")).toBeNull();
     expect(statusDeTemplate("")).toBeNull();
+  });
+});
+
+describe("conteudoDaMensagem", () => {
+  it("texto simples", () => {
+    expect(conteudoDaMensagem({ type: "text", text: { body: "oi" } }))
+      .toMatchObject({ formato: "text", texto: "oi" });
+  });
+
+  it("botão de template devolve o RÓTULO — é o que a pessoa viu e tocou", () => {
+    expect(conteudoDaMensagem({ type: "button", button: { text: "Acompanhar pedido" } }))
+      .toMatchObject({ texto: "Acompanhar pedido" });
+  });
+
+  it("botão interativo, das duas formas", () => {
+    expect(conteudoDaMensagem({
+      type: "interactive", interactive: { button_reply: { title: "Sim" } },
+    })).toMatchObject({ texto: "Sim" });
+    expect(conteudoDaMensagem({
+      type: "interactive", interactive: { list_reply: { title: "Opção 2" } },
+    })).toMatchObject({ texto: "Opção 2" });
+  });
+
+  it("imagem guarda o id e o mime, e a legenda vira texto", () => {
+    expect(conteudoDaMensagem({
+      type: "image", image: { id: "1234", mime_type: "image/jpeg", caption: "chegou assim" },
+    })).toEqual({ formato: "image", texto: "chegou assim",
+                  midiaId: "1234", midiaMime: "image/jpeg" });
+  });
+
+  it("⚠️ a mídia NÃO é baixada: só o id, e ele é o suficiente para buscar depois", () => {
+    const r = conteudoDaMensagem({ type: "audio", audio: { id: "a1", mime_type: "audio/ogg" } });
+    expect(r.midiaId).toBe("a1");
+    expect(r.texto).toBeNull();
+  });
+
+  it("documento sem legenda usa o nome do arquivo, que é o que aparece na conversa", () => {
+    expect(conteudoDaMensagem({
+      type: "document", document: { id: "d1", filename: "comprovante.pdf" },
+    })).toMatchObject({ texto: "comprovante.pdf" });
+  });
+
+  it("reação vira o emoji", () => {
+    expect(conteudoDaMensagem({ type: "reaction", reaction: { emoji: "👍" } }))
+      .toMatchObject({ texto: "👍" });
+  });
+
+  it("localização prefere o nome ao par de coordenadas", () => {
+    expect(conteudoDaMensagem({
+      type: "location", location: { latitude: -5.8, longitude: -35.2, name: "Casa" },
+    })).toMatchObject({ texto: "Casa" });
+    expect(conteudoDaMensagem({
+      type: "location", location: { latitude: -5.8, longitude: -35.2 },
+    })).toMatchObject({ texto: "-5.8, -35.2" });
+  });
+
+  it("⚠️ tipo desconhecido NÃO some: vira linha com o formato e sem texto", () => {
+    // A linha é gravada com o payload cru. Mensagem de cliente que desaparece
+    // porque o parser não conhecia o formato é a pior falha possível aqui: não
+    // deixa rastro, e o cliente acha que foi ignorado.
+    const r = conteudoDaMensagem({ type: "order", order: { catalog_id: "x" } });
+    expect(r.formato).toBe("order");
+    expect(r.texto).toBeNull();
+  });
+
+  it("mensagem sem tipo vira 'unknown' em vez de explodir", () => {
+    expect(conteudoDaMensagem({}).formato).toBe("unknown");
+    expect(conteudoDaMensagem(null).formato).toBe("unknown");
+  });
+
+  it("tipo desconhecido continua gerando ação de inbound", () => {
+    const [a] = interpretar({
+      field: "messages",
+      value: { messages: [{ from: "55849", id: "wamid.X", timestamp: "1755902400",
+                            type: "order", order: {} }] },
+    });
+    expect(a?.tipo).toBe("inbound");
   });
 });

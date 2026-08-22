@@ -18,7 +18,10 @@ export type Acao =
   | { tipo: "status"; wamid: string; status: string; quando: string;
       codigo: number | null; detalhe: string | null; chave: string }
   | { tipo: "inbound"; waId: string; nome: string | null; quando: string;
-      chave: string }
+      chave: string; wamid: string; formato: string; texto: string | null;
+      midiaId: string | null; midiaMime: string | null; respondeA: string | null;
+      // deno-lint-ignore no-explicit-any
+      payload: any }
   | { tipo: "template"; nome: string; evento: string; motivo: string | null;
       chave: string };
 
@@ -53,6 +56,63 @@ export function assinaturaConfere(esperada: string, recebida: string): boolean {
   let diferenca = 0;
   for (let i = 0; i < a.length; i++) diferenca |= a.charCodeAt(i) ^ b.charCodeAt(i);
   return diferenca === 0;
+}
+
+/**
+ * O que a pessoa disse, por tipo de mensagem.
+ *
+ * ⚠️ Tipo desconhecido devolve texto nulo e NÃO joga a mensagem fora — a linha
+ * é gravada com o payload cru. A Meta acrescenta tipos (reação, pedido,
+ * localização, e o que vier), e uma mensagem de cliente que some porque o
+ * parser não conhecia o formato é a pior falha possível aqui: ela não deixa
+ * rastro nenhum, e o cliente acha que foi ignorado.
+ *
+ * Mídia NÃO é baixada: guarda-se o id. O arquivo tem validade na Meta, e
+ * baixar é outra decisão (storage, custo, LGPD) que não pode atrasar a captura
+ * do texto, que é o que se perde para sempre.
+ */
+// deno-lint-ignore no-explicit-any
+export function conteudoDaMensagem(msg: any): {
+  formato: string; texto: string | null;
+  midiaId: string | null; midiaMime: string | null;
+} {
+  const formato = String(msg?.type ?? "unknown");
+  const vazio = { formato, texto: null, midiaId: null, midiaMime: null };
+
+  switch (formato) {
+    case "text":
+      return { ...vazio, texto: msg?.text?.body ?? null };
+    // Resposta de botão de TEMPLATE. O que interessa é o rótulo — é o que a
+    // pessoa viu e tocou.
+    case "button":
+      return { ...vazio, texto: msg?.button?.text ?? null };
+    case "interactive":
+      return { ...vazio,
+        texto: msg?.interactive?.button_reply?.title
+            ?? msg?.interactive?.list_reply?.title ?? null };
+    case "reaction":
+      return { ...vazio, texto: msg?.reaction?.emoji ?? null };
+    case "location": {
+      const l = msg?.location ?? {};
+      const nome = l.name ?? l.address ?? null;
+      const coord = (l.latitude != null && l.longitude != null)
+        ? `${l.latitude}, ${l.longitude}` : null;
+      return { ...vazio, texto: nome ?? coord };
+    }
+    case "image": case "video": case "document": case "audio": case "sticker": {
+      const m = msg?.[formato] ?? {};
+      return {
+        formato,
+        // A legenda é texto de verdade; o nome do arquivo, no documento, é o
+        // que a pessoa vê na conversa.
+        texto: m.caption ?? m.filename ?? null,
+        midiaId: m.id ?? null,
+        midiaMime: m.mime_type ?? null,
+      };
+    }
+    default:
+      return vazio;
+  }
 }
 
 /** Segundos do epoch (como a Meta manda) para ISO. */
@@ -93,20 +153,35 @@ export function interpretar(change: any): Acao[] {
       });
     }
 
-    // Mensagem do cliente: o que importa aqui é que ela ABRE a janela de 24 h.
-    // O conteúdo não é guardado — ele vive no Inbox do Gerenciador. Quando a
-    // conversa precisar aparecer numa tela nossa, isso é uma tabela nova, e
-    // não um campo pendurado neste caminho.
+    // Mensagem do cliente. Ela faz duas coisas: abre a janela de 24 h e É a
+    // conversa.
+    //
+    // ⚠️ O conteúdo é GRAVADO, e isto corrige uma decisão anterior. A Fase 3
+    // não guardava, no entendimento de que as mensagens viveriam na Caixa de
+    // Entrada do Business Suite — que NÃO aceita número da Cloud API. Como a
+    // Cloud API também não tem endpoint de histórico, o que não for gravado
+    // aqui existe só no celular do cliente. E três dos seis templates pedem
+    // resposta em texto.
     const perfil = valor?.contacts?.[0]?.profile?.name ?? null;
     for (const msg of valor.messages ?? []) {
       const waId = String(msg?.from ?? "");
       const id = String(msg?.id ?? "");
       if (!waId || !id) continue;
+      const conteudo = conteudoDaMensagem(msg);
       acoes.push({
         tipo: "inbound", waId,
         nome: perfil ? String(perfil) : null,
         quando: paraIso(msg?.timestamp),
         chave: chaveDoEvento("inbound", id),
+        wamid: id,
+        formato: conteudo.formato,
+        texto: conteudo.texto,
+        midiaId: conteudo.midiaId,
+        midiaMime: conteudo.midiaMime,
+        // `context.id` é o wamid da NOSSA mensagem que ela respondeu — o que
+        // liga "chegou quebrado" a um pedido em vez de a um recado solto.
+        respondeA: msg?.context?.id ? String(msg.context.id) : null,
+        payload: msg,
       });
     }
   }
