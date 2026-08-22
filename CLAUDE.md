@@ -450,6 +450,46 @@ minuto :00). O raciocínio era correto na época; a grade acima é a atual. Ao
 mudar agendamento, marque a migração antiga como superada em vez de deixar duas
 explicações vivas.
 
+### WhatsApp: a esteira vai pela Meta, o comercial fica na Evolution
+O transporte é propriedade da **etapa** (`carbo_msg_templates.canal_envio`), não
+do sistema. As seis da esteira (`confirmado`, `nf_emitida`, `etiqueta`,
+`em_transito`, `saiu_entrega`, `entregue`) vão pela Cloud API oficial; recompra
+e os três passos do carrinho seguem na Evolution, pelo n8n.
+
+```
+WABA ID          1777955220017913   gestão de templates
+Phone Number ID  1255756280958635   ENVIO   ⚠️ os dois NÃO se trocam
+Graph API        v25.0 · pt_BR · categoria UTILITY
+```
+
+1. **A redação sai do nosso banco.** Aprovado o template, o texto é o da Meta.
+   `carbo_msg_templates.texto` vira espelho de conferência nas etapas `meta` —
+   editar na tela não muda o que sai. Sem isso a tela mostra uma coisa e o
+   cliente recebe outra, que é a doença do `quotePdf.ts` no `mkt`.
+2. ⚠️ **"Variável vazia apaga a linha" MORREU.** Era boa no texto livre; a Meta
+   recusa parâmetro vazio (132000) e não aceita `\n`, tab ou 4+ espaços
+   (132007). A substituta é `meta_variaveis`: com `fallback` manda a reserva,
+   **sem `fallback` SEGURA o envio** até o dado existir. O padrão é o seguro.
+   `rastreio` não tem fallback — botão apontando para URL sem código é pior que
+   esperar dez minutos.
+3. **O botão é POSICIONAL mesmo com o corpo nomeado** (`index: "0"`), e o
+   parâmetro é só o **sufixo** do código, nunca a URL inteira.
+4. ⚠️ **O PDF da NF não vai mais junto.** Os seis foram aprovados com
+   `header: null`, e header se declara na APROVAÇÃO. Recuperar isso é template
+   novo com header DOCUMENT e fila de aprovação de novo.
+5. **`meta_status` é TRAVA, não informação.** A fila não entrega etapa `meta`
+   sem `APPROVED` — ligar `ativo` cedo produz nada, em vez de uma rajada de
+   132001. Mesmo padrão do "ausência FECHA" do `CRON_SECRET`.
+6. **O envio vai DIRETO para o Graph API**, sem passar pelo n8n: o ganho da API
+   oficial é o `wamid` e o webhook `sent → delivered → read → failed`. Pelo n8n
+   o wamid fica lá e "enviado" continua significando "o POST foi aceito" — o
+   mesmo sinal fraco do `pg_cron` marcando `succeeded`.
+7. **O status só ANDA** (`carbo_msg_status_meta`). A Meta reentrega e não
+   garante ordem; um `delivered` atrasado não pode rebaixar um `read`. `failed`
+   é a única exceção, e mesmo ela não vence uma entrega já registrada.
+8. **Guarde o `wa_id` que a Meta devolve**, não só o número que mandamos: no
+   Brasil o 9º dígito varia por DDD e por idade do cadastro.
+
 ### Segredo de função: FECHE quando ele não existe
 Padrão obrigatório em toda edge function chamada por máquina:
 
