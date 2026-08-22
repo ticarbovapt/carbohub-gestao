@@ -20,8 +20,9 @@ import {
 // Reexporta para a tela continuar importando de um lugar só.
 export {
   JANELA_MS, janelaAberta, faltaDaJanela, agruparConversas,
+  msDaJanela, nivelDaJanela, fracaoDaJanela,
 } from "@/lib/conversas";
-export type { Conversa, MensagemConversa } from "@/lib/conversas";
+export type { Conversa, MensagemConversa, NivelJanela } from "@/lib/conversas";
 
 export function useConversas(dias = 30) {
   return useQuery({

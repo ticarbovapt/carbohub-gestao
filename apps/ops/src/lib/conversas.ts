@@ -128,3 +128,48 @@ export function agruparConversas(
     return new Date(b.ultima_em).getTime() - new Date(a.ultima_em).getTime();
   });
 }
+
+/**
+ * Milissegundos que faltam da janela. Negativo ou zero = fechada.
+ *
+ * ⚠️ Existe ao lado de `faltaDaJanela` porque aquela devolve TEXTO e devolve
+ * vazio quando já fechou — serve para mostrar, não para decidir. A cor e a
+ * barra dependem de quão perto do fim está, e isso é número. As duas fazem a
+ * mesma conta; quem decide se está aberta continua sendo `janelaAberta`.
+ */
+export function msDaJanela(janela_ate: string | null): number {
+  if (!janela_ate) return 0;
+  return new Date(janela_ate).getTime() - Date.now();
+}
+
+/**
+ * O relógio da janela em forma de INTENSIDADE.
+ *
+ * ⚠️ `23h59` e `12 min` tinham exatamente a mesma aparência, e é aqui que a
+ * tela precisa gritar: janela fechada não tem segunda chance — a Meta recusa
+ * texto livre com 131047 e nenhum dos seis templates da esteira serve para
+ * responder dúvida.
+ *
+ * Os cortes são de OPERAÇÃO, não de estatística: acima de 6 h dá para responder
+ * depois do almoço; abaixo de 1 h é agora.
+ *
+ * ⚠️ E existe UM só. A lista da esquerda e o cabeçalho da conversa mostram a
+ * mesma urgência; dois cortes diferentes fariam a mesma conversa parecer
+ * tranquila num lugar e urgente no outro.
+ */
+export type NivelJanela = "folgada" | "apertando" | "urgente" | "fechada";
+
+export function nivelDaJanela(janela_ate: string | null): NivelJanela {
+  const ms = msDaJanela(janela_ate);
+  if (ms <= 0) return "fechada";
+  if (ms <= 3_600_000) return "urgente";
+  if (ms <= 6 * 3_600_000) return "apertando";
+  return "folgada";
+}
+
+/** Quanto da janela ainda resta, de 0 a 1 — a largura da barrinha.
+ *  Preso em [0,1] porque `janela_ate` vem do banco e um relógio adiantado no
+ *  navegador produziria barra maior que a caixa. */
+export function fracaoDaJanela(janela_ate: string | null): number {
+  return Math.max(0, Math.min(1, msDaJanela(janela_ate) / JANELA_MS));
+}

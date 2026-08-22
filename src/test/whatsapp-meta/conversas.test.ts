@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import {
-  agruparConversas, janelaAberta, faltaDaJanela,
+  agruparConversas, janelaAberta, faltaDaJanela, nivelDaJanela, fracaoDaJanela,
   type MensagemConversa,
 } from "../../../apps/admin/src/lib/conversas";
 
@@ -143,5 +143,46 @@ describe("agruparConversas", () => {
 
   it("lista vazia não explode", () => {
     expect(agruparConversas([], {})).toEqual([]);
+  });
+});
+
+describe("nivelDaJanela / fracaoDaJanela", () => {
+  it("os cortes são de operação: 6h e 1h", () => {
+    congelar();
+    // Acima de 6 h dá para responder depois do almoço.
+    expect(nivelDaJanela("2026-08-23T20:00:00Z")).toBe("folgada");
+    // Entre 1 h e 6 h: aperta.
+    expect(nivelDaJanela("2026-08-23T16:00:00Z")).toBe("apertando");
+    // Menos de 1 h é agora.
+    expect(nivelDaJanela("2026-08-23T12:30:00Z")).toBe("urgente");
+    expect(nivelDaJanela("2026-08-23T11:00:00Z")).toBe("fechada");
+  });
+
+  it("⚠️ nunca escreveu é FECHADA, não folgada", () => {
+    // Um null lido como folgada pintaria de verde uma conversa em que não dá
+    // para responder — o oposto exato do que o sinal serve para dizer.
+    expect(nivelDaJanela(null)).toBe("fechada");
+  });
+
+  it("a fração fica presa em [0,1] mesmo com relógio adiantado", () => {
+    congelar();
+    // Janela terminando daqui a 48 h: impossível, mas um relógio errado no
+    // navegador produz isso — e a barra não pode passar da caixa.
+    expect(fracaoDaJanela("2026-08-25T12:00:00Z")).toBe(1);
+    expect(fracaoDaJanela("2026-08-22T12:00:00Z")).toBe(0);
+    expect(fracaoDaJanela(null)).toBe(0);
+  });
+
+  it("metade da janela dá meia barra", () => {
+    congelar();
+    expect(fracaoDaJanela("2026-08-24T00:00:00Z")).toBeCloseTo(0.5, 2);
+  });
+
+  it("o nível concorda com janelaAberta — uma régua só", () => {
+    congelar();
+    for (const t of ["2026-08-23T20:00:00Z", "2026-08-23T12:30:00Z",
+                     "2026-08-23T11:00:00Z", null]) {
+      expect(nivelDaJanela(t) === "fechada").toBe(!janelaAberta(t));
+    }
   });
 });
