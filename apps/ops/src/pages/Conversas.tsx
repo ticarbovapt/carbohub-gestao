@@ -226,10 +226,15 @@ function Balao({ m, primeira, ultima }: {
   const desconhecida = !m.texto && !anexo && !automatica;
   const IconeAnexo = ICONE_MIDIA[m.tipo] ?? File;
 
-  // ⚠️ O aviso da esteira é mostrado pelo TÍTULO da etapa, não por uma cópia do
-  // texto aprovado: a redação mora na Meta, e reproduzi-la aqui criaria uma
-  // segunda versão para divergir. Quem atende precisa saber QUE foi avisado e
-  // de quê — o texto exato está no Gerenciador.
+  // ⚠️ O aviso mostra a MENSAGEM que o cliente recebeu, não o nome do template.
+  // Ela é reconstruída no banco a partir do corpo aprovado + os parâmetros que
+  // foram enviados — a mesma substituição que a Meta faz, não uma segunda
+  // redação. Quem atende precisa conferir QUAL código de rastreio foi mandado;
+  // saber apenas que "houve um aviso" faz perguntar ao cliente uma informação
+  // que nós mesmos mandamos.
+  //
+  // O contorno tracejado e o rótulo continuam: a pessoa tem de distinguir o que
+  // saiu por sistema do que alguém digitou.
   if (automatica) {
     return (
       <div className={`flex justify-end ${primeira ? "mt-3 first:mt-0" : "mt-0.5"}`}>
@@ -237,7 +242,19 @@ function Balao({ m, primeira, ultima }: {
           <p className="flex items-center gap-1.5 text-[10px] font-medium text-muted-foreground">
             <Megaphone className="h-3 w-3" /> aviso automático da esteira
           </p>
-          <p className="mt-0.5 text-[13px] leading-relaxed">{m.texto}</p>
+          <p className="mt-1 whitespace-pre-wrap break-words text-[13px] leading-relaxed">
+            {m.texto}
+          </p>
+          {/* O botão não faz parte do corpo, mas faz parte do que o cliente
+              recebeu — e é justamente o código que o atendimento vai conferir. */}
+          {m.botao_rastreio && (
+            <p className="mt-1.5 flex items-center gap-1 rounded-md border bg-background/40 px-2 py-1
+                          text-[10px] text-muted-foreground">
+              <ArrowUpRight className="h-3 w-3 shrink-0" />
+              <span>botão <strong className="text-foreground">Acompanhar pedido</strong> →</span>
+              <span className="truncate font-mono">{m.botao_rastreio}</span>
+            </p>
+          )}
           <p className="mt-1 text-right text-[10px] leading-none text-muted-foreground/70">
             {soHora(m.ocorrido_em)}
           </p>

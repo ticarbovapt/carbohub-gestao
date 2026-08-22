@@ -41,6 +41,10 @@ export interface MensagemConversa {
    *  mas a tela precisa dizer qual dos dois — aproximação que se passa por
    *  certeza é como alguém responde sobre o pedido errado. */
   vinculo_exato: boolean;
+  /** O sufixo do botão URL que foi enviado — o código de rastreio. A base
+   *  (rastreio.carboze.com.br/rastreio/) está no template aprovado, não aqui.
+   *  Null nos templates sem botão e em toda mensagem que não é da esteira. */
+  botao_rastreio: string | null;
 }
 
 export interface Conversa {

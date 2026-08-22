@@ -16,7 +16,7 @@ const msg = (p: Partial<MensagemConversa>): MensagemConversa => ({
   wamid: "wamid.X", wa_id: "5584987346304", cliente: "Padilha",
   direcao: "entrada", tipo: "text", texto: "oi", midia_id: null,
   ocorrido_em: "2026-08-23T11:00:00Z", bling_id: null, sobre_a_etapa: null,
-  vinculo_exato: false, ...p,
+  vinculo_exato: false, botao_rastreio: null, ...p,
 });
 
 describe("janelaAberta / faltaDaJanela", () => {
