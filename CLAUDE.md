@@ -425,7 +425,8 @@ bling2-bridge                */2 * * * *      SQL puro, banco→banco
 ecommerce-sync-5min          */5 * * * *      envio/entrega da plataforma
 rastreio-sync-5min           */5 * * * *      rede de segurança do webhook
 nuvemshop-carrinhos-15min    4-59/15 * * * *  checkouts abandonados
-kanban-n8n-1min              * * * * *        o disparo ao cliente
+kanban-n8n-1min              * * * * *        Evolution: recompra e carrinho
+whatsapp-meta-1min           * * * * *        Meta oficial: as seis da esteira
 bling2-nfe-recheck-20min     7-59/20 * * * *  nota cancelada some da listagem
 melhor-envio-envios-15min    6-59/15 * * * *  espelho das etiquetas do painel
 melhorenvio-conciliar-5min   */5 * * * *      SQL puro — sem vínculo, card parado

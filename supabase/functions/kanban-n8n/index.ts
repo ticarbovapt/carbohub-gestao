@@ -181,9 +181,18 @@ Deno.serve(async (req: Request) => {
   // manhã de carrinhos abandonados consome as rodadas e empurra o "seu pedido
   // saiu para entrega" para depois — o cliente que está esperando encomenda
   // pagando a conta de uma campanha. Quem classifica é a view (`prioridade`).
+  // ⚠️ SÓ o que sai pela Evolution. As seis etapas da esteira passaram a falar
+  // pela Cloud API oficial e são atendidas pelo `whatsapp-meta`.
+  //
+  // Sem este filtro as duas funções disputariam as mesmas linhas: a que
+  // chegasse primeiro mandaria o aviso da esteira pelo n8n — texto livre, sem
+  // template aprovado, sem wamid — e a outra encontraria a linha já gravada e
+  // não faria nada. O cliente receberia a mensagem certa pelo caminho errado, e
+  // o registro diria que estava tudo bem.
   const { data: fila, error } = await supabase
     .from("carbo_msg_fila")
     .select("*")
+    .eq("canal_envio", "evolution")
     .order("prioridade", { ascending: true })
     .limit(TETO);
   if (error) return json({ error: `fila: ${error.message}` }, 500);

@@ -75,6 +75,11 @@ jobs:
           # Aviso ao cliente a cada movimentação da esteira. Chamada pelo
           # pg_cron, que manda só o X-Cron-Secret e nenhum Authorization.
           dep kanban-n8n --no-verify-jwt
+          # A esteira da compra à entrega, pela Cloud API oficial da Meta.
+          # Chamada pelo pg_cron (X-Cron-Secret, sem Authorization). Nasce sem
+          # efeito: a fila só entrega etapa `meta` com template APPROVED e o
+          # `ativo` de cada template continua false.
+          dep whatsapp-meta --no-verify-jwt
           # Evolution (QR / desconectar). SEM --no-verify-jwt de propósito:
           # é chamada pelo NAVEGADOR, por gente logada, e derrubar o WhatsApp
           # da empresa não pode depender de um segredo que anda na URL.

@@ -207,6 +207,18 @@ where etapa = 'entregue';
 update public.carbo_msg_templates set canal_envio = 'evolution'
 where etapa in ('recompra','carrinho_1','carrinho_2','carrinho_3');
 
+-- ⚠️ E `meta_status` NULL nelas: "não se aplica", não "esperando aprovação".
+-- O `default 'PENDING'` da coluna carimbou as dez linhas, e quem abrisse esta
+-- tabela daqui a três meses leria que os templates do carrinho aguardam a Meta
+-- — eles nem vão para lá. A trava não muda: ela só olha `meta_status` quando
+-- `canal_envio = 'meta'`.
+alter table public.carbo_msg_templates
+  alter column meta_status drop not null;
+
+update public.carbo_msg_templates
+set meta_status = null
+where canal_envio = 'evolution';
+
 
 -- ╔═══════════════════════════════════════════════════════════════════════╗
 -- ║ BLOCO 3 — o registro passa a saber o que aconteceu DEPOIS do envio    ║
