@@ -182,8 +182,31 @@ Deno.serve(async (req: Request) => {
   const resultados: unknown[] = [];
   let enviados = 0, falhas = 0, adiados = 0, semFone = 0, segurados = 0;
 
+  // ── O número que o WhatsApp usa, não o que está no cadastro ─────────────
+  //
+  // ⚠️ Medido no primeiro teste: mandamos 5584987346304 e a Meta respondeu
+  // `wa_id: 558487346304` — o mesmo assinante, sem o 9. No Brasil o 9º dígito
+  // varia por DDD e por idade do cadastro, e a Meta normalmente resolve — mas
+  // quando não resolve o retorno é 131026 ("número não tem WhatsApp") para um
+  // número que tem, e a mensagem se perde com cara de cadastro errado.
+  //
+  // Então: se já falamos com esta pessoa antes, usamos o número que a PLATAFORMA
+  // confirmou. Uma consulta para a rodada inteira, não uma por mensagem.
+  const numeros = (fila as LinhaFila[])
+    .map((l) => normalizarBR(l.telefone)).filter((n): n is string => !!n);
+  const conhecidos = new Map<string, string>();
+  if (numeros.length) {
+    const { data: antigos } = await supabase
+      .from("carbo_msg_envios").select("telefone,wa_id")
+      .in("telefone", numeros).not("wa_id", "is", null);
+    for (const a of antigos ?? []) {
+      if (a.telefone && a.wa_id) conhecidos.set(String(a.telefone), String(a.wa_id));
+    }
+  }
+
   for (const l of fila as LinhaFila[]) {
-    const numero = normalizarBR(l.telefone);
+    const normalizado = normalizarBR(l.telefone);
+    const numero = normalizado ? (conhecidos.get(normalizado) ?? normalizado) : null;
 
     if (!numero) {
       semFone++;
@@ -221,7 +244,7 @@ Deno.serve(async (req: Request) => {
         await supabase.from("carbo_msg_envios").upsert({
           bling_id: l.bling_id, etapa: l.etapa, status: "pendente", canal: "meta",
           motivo: `esperando: ${montado.faltando.join(", ")}`,
-          telefone: numero,
+          telefone: normalizado,
         });
       }
       resultados.push({ bling_id: l.bling_id, etapa: l.etapa,
@@ -237,7 +260,7 @@ Deno.serve(async (req: Request) => {
         adiados++;
         await supabase.from("carbo_msg_envios").upsert({
           bling_id: l.bling_id, etapa: l.etapa, status: "pendente", canal: "meta",
-          motivo: `aguardando ${l.atraso_min} min do template`, telefone: numero,
+          motivo: `aguardando ${l.atraso_min} min do template`, telefone: normalizado,
         });
         continue;
       }
@@ -257,7 +280,7 @@ Deno.serve(async (req: Request) => {
     // ── Grava a intenção ANTES de chamar ────────────────────────────────────
     await supabase.from("carbo_msg_envios").upsert({
       bling_id: l.bling_id, etapa: l.etapa, status: "erro", canal: "meta",
-      motivo: "envio iniciado", telefone: numero, payload: montado.body,
+      motivo: "envio iniciado", telefone: normalizado, payload: montado.body,
     });
 
     try {
@@ -277,7 +300,7 @@ Deno.serve(async (req: Request) => {
         // código. `erro` fica para o que nem chegou lá.
         status: ok ? "enviado" : "falhou",
         motivo: ok ? null : `meta ${codigo ?? status}`,
-        telefone: numero, wamid, wa_id: waId,
+        telefone: normalizado, wamid, wa_id: waId,
         erro_codigo: ok ? null : codigo,
         erro_detalhe: ok ? null : detalheDoErro(resposta),
         payload: montado.body, resposta,
@@ -292,7 +315,7 @@ Deno.serve(async (req: Request) => {
       await supabase.from("carbo_msg_envios").upsert({
         bling_id: l.bling_id, etapa: l.etapa, status: "erro", canal: "meta",
         motivo: String((e as Error)?.message ?? e).slice(0, 300),
-        telefone: numero, payload: montado.body,
+        telefone: normalizado, payload: montado.body,
         enviado_em: new Date().toISOString(),
       });
     }
