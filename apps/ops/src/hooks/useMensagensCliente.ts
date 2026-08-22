@@ -14,6 +14,18 @@ export type EtapaMsg =
   | "recompra"
   | "carrinho_1" | "carrinho_2" | "carrinho_3";
 
+/** Uma variável do corpo do template aprovado na Meta.
+ *
+ * ⚠️ SEM `fallback` a variável é obrigatória: a Meta recusa parâmetro vazio
+ * (132000), então o envio ESPERA o dado em vez de mandar a mensagem torta. É a
+ * substituta da regra "linha com variável vazia é removida", que valia no
+ * texto livre e não vale mais nas seis etapas da esteira. */
+export interface VarMeta {
+  nome: string;
+  de: string;
+  fallback?: string;
+}
+
 export interface TemplateMsg {
   etapa: EtapaMsg;
   /** Instância da Evolution por onde a mensagem sai. null = a padrão. */
@@ -23,6 +35,15 @@ export interface TemplateMsg {
   texto: string;
   atraso_min: number;
   atualizado_em: string;
+  /** Por onde ESTA etapa sai. As seis da esteira vão pela Cloud API oficial. */
+  canal_envio: "evolution" | "meta";
+  /** ⚠️ Nas etapas `meta`, é ESTE template que o cliente recebe — não o
+   *  `texto` acima, que passa a ser espelho de conferência. */
+  meta_template_nome: string | null;
+  meta_status: string | null;
+  meta_variaveis: VarMeta[] | null;
+  /** Coluna que alimenta o botão de rastreio. null = template sem botão. */
+  meta_botao_url_de: string | null;
 }
 
 export interface EnvioMsg {
@@ -32,8 +53,13 @@ export interface EnvioMsg {
   enviado_em: string | null;
   telefone: string | null;
   mensagem: string | null;
-  status: "pendente" | "enviado" | "erro" | "ignorado";
+  /** ⚠️ `enviado` significa coisas diferentes por canal: na Evolution é "o n8n
+   *  aceitou"; na Meta é "a Meta aceitou", e os três seguintes vêm do webhook.
+   *  `falhou` traz o código da Meta em `erro_codigo`. */
+  status: "pendente" | "enviado" | "erro" | "ignorado" | "entregue" | "lido" | "falhou";
   motivo: string | null;
+  canal?: string | null;
+  erro_codigo?: number | null;
 }
 
 /** Ordem do fluxo, não a alfabética — é a ordem em que o cliente recebe.
@@ -131,8 +157,14 @@ export function useSalvarTemplate() {
     mutationFn: async (t: Partial<TemplateMsg> & { etapa: EtapaMsg }) => {
       const { error } = await (supabase as any)
         .from("carbo_msg_templates")
+        // ⚠️ Nas etapas da Meta o `texto` NÃO é enviado no update. A redação
+        // mora na Meta desde a aprovação, e gravar aqui criaria uma tela que
+        // mostra uma coisa enquanto o cliente recebe outra — a mesma doença que
+        // fez o quotePdf.ts do `mkt` divergir por meses sem dar erro. A tela já
+        // trava o campo; isto é o cinto.
         .update({
-          ativo: t.ativo, titulo: t.titulo, texto: t.texto,
+          ativo: t.ativo, titulo: t.titulo,
+          ...(t.canal_envio === "meta" ? {} : { texto: t.texto }),
           atraso_min: t.atraso_min, atualizado_em: new Date().toISOString(),
         })
         .eq("etapa", t.etapa);
@@ -197,6 +229,37 @@ export function montarPreview(texto: string, vars: Record<string, string>): stri
     .trim();
 }
 
+/**
+ * Pré-visualização das etapas da META, com a regra da Meta.
+ *
+ * ⚠️ É o OPOSTO do `montarPreview`: lá, linha com variável vazia some; aqui,
+ * variável obrigatória vazia SEGURA o envio inteiro. Mostrar o preview do jeito
+ * antigo faria a tela prometer uma mensagem que a Meta recusaria.
+ */
+export function montarPreviewMeta(
+  texto: string,
+  vars: Record<string, string>,
+  meta: VarMeta[] | null,
+  botaoDe: string | null,
+): { texto: string; faltando: string[] } {
+  const faltando: string[] = [];
+  const valores: Record<string, string> = {};
+
+  for (const v of meta ?? []) {
+    const valor = (vars[v.de] ?? "").trim();
+    if (valor) { valores[v.nome] = valor; continue; }
+    const reserva = (v.fallback ?? "").trim();
+    if (reserva) valores[v.nome] = reserva;
+    else faltando.push(v.nome);
+  }
+  if (botaoDe && !(vars[botaoDe] ?? "").trim()) faltando.push(`botão (${botaoDe})`);
+
+  return {
+    texto: texto.replace(/\{\{\s*(\w+)\s*\}\}/g, (_, k) => valores[k] ?? `{{${k}}}`),
+    faltando,
+  };
+}
+
 /** Exemplo realista para a pré-visualização — dados de um pedido de verdade
  *  desta operação, não "João da Silva". */
 /**
@@ -222,9 +285,23 @@ export const EXEMPLO: Record<string, string> = {
   rastreio: "ME262BTONG0BR",
   link_rastreio: "https://www.melhorrastreio.com.br/rastreio/ME262BTONG0BR",
   link_nota: "https://bling.com.br/nfe/danfe/000199.pdf",
+  // ⚠️ Formato da Evolution. Nas etapas da Meta a previsão sai DD/MM/AAAA,
+  // porque foi assim que o template foi aprovado — ver EXEMPLO_META.
   previsao: "qui., 14/08",
   cidade: "Parnamirim",
   uf: "RN",
   link_carrinho: "https://loja.grupocarbo.com.br/checkout/v3/cart/9f2a1c",
   produtos: "CarboZé 100ml ×2 · Kit 5 unidades ×1",
+};
+
+/**
+ * O mesmo exemplo, no formato que as etapas da META recebem.
+ *
+ * ⚠️ Difere em UM campo, e o campo importa: a previsão. O template foi aprovado
+ * com `26/08/2026`, e o envio formata assim. Um preview em "qui., 14/08" faria
+ * a tela conferir um formato que o cliente nunca vê.
+ */
+export const EXEMPLO_META: Record<string, string> = {
+  ...EXEMPLO,
+  previsao: "26/08/2026",
 };

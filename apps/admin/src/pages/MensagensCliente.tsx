@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import {
   MessageSquare, Save, Loader2, CheckCircle2, XCircle, Clock, AlertTriangle, Send, Eye,
-  ArrowLeft,
+  ArrowLeft, Lock,
 } from "lucide-react";
 import { toast } from "sonner";
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
@@ -15,7 +15,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { ConexaoWhatsApp } from "@/components/ConexaoWhatsApp";
 import {
   useTemplatesMsg, useSalvarTemplate, useEnviosMsg, useFilaMsg,
-  montarPreview, VARIAVEIS, EXEMPLO,
+  montarPreview, montarPreviewMeta, VARIAVEIS, EXEMPLO, EXEMPLO_META,
   type TemplateMsg, type EtapaMsg,
   GRUPOS, GRUPO_DA_ETAPA, type GrupoMsg,
 } from "@/hooks/useMensagensCliente";
@@ -84,12 +84,27 @@ function Editor({ t }: { t: TemplateMsg }) {
   const [rascunho, setRascunho] = useState(t);
   useEffect(() => setRascunho(t), [t]);
 
+  /** ⚠️ Nas seis etapas da esteira a redação mora na META, não aqui. O campo
+   *  vira espelho de conferência: editar não muda o que o cliente recebe. */
+  const daMeta = t.canal_envio === "meta";
+
   const mudou =
-    rascunho.texto !== t.texto ||
+    (!daMeta && rascunho.texto !== t.texto) ||
     rascunho.ativo !== t.ativo ||
     rascunho.atraso_min !== t.atraso_min;
 
-  const preview = useMemo(() => montarPreview(rascunho.texto, EXEMPLO), [rascunho.texto]);
+  // ⚠️ Duas regras opostas, uma por canal. Na Evolution, linha com variável
+  // vazia SOME; na Meta, variável obrigatória vazia SEGURA o envio inteiro.
+  // Usar a mesma prévia nos dois faria a tela prometer uma mensagem que a Meta
+  // recusaria — e o único sintoma seria o cliente não receber.
+  const previewMeta = useMemo(
+    () => montarPreviewMeta(t.texto, EXEMPLO_META, t.meta_variaveis, t.meta_botao_url_de),
+    [t.texto, t.meta_variaveis, t.meta_botao_url_de],
+  );
+  const previewEvolution = useMemo(
+    () => montarPreview(rascunho.texto, EXEMPLO), [rascunho.texto],
+  );
+  const preview = daMeta ? previewMeta.texto : previewEvolution;
 
   /** Variável escrita errada não some calada: ela aparece aqui, e o texto sai
    *  com o marcador cru para o cliente se ninguém corrigir. */
@@ -127,24 +142,81 @@ function Editor({ t }: { t: TemplateMsg }) {
 
         <div className="mt-3 grid gap-3 lg:grid-cols-2">
           <div className="min-w-0">
+            {daMeta && (
+              <div className="mb-2 rounded-md border border-sky-500/30 bg-sky-500/5 p-2.5">
+                <p className="flex items-start gap-1.5 text-[11px] text-sky-500">
+                  <Lock className="mt-px h-3 w-3 shrink-0" />
+                  <span>
+                    Texto aprovado pela Meta — <strong>editar aqui não muda o que o
+                    cliente recebe</strong>. A redação é a do template
+                    <code className="mx-1 rounded bg-muted px-1 font-mono text-[10px]">
+                      {t.meta_template_nome}
+                    </code>
+                    no Gerenciador do WhatsApp. Mudar o texto exige um template novo
+                    e nova aprovação.
+                  </span>
+                </p>
+                <p className="mt-1.5 text-[10px] text-muted-foreground">
+                  Status na Meta:{" "}
+                  <strong className={t.meta_status === "APPROVED" ? "text-emerald-500" : "text-amber-500"}>
+                    {t.meta_status ?? "—"}
+                  </strong>
+                  {t.meta_status !== "APPROVED" && " — enquanto não estiver APPROVED, nada é enviado."}
+                </p>
+              </div>
+            )}
+
             <Textarea
-              value={rascunho.texto}
+              value={daMeta ? t.texto : rascunho.texto}
               onChange={(e) => setRascunho((r) => ({ ...r, texto: e.target.value }))}
+              readOnly={daMeta}
               rows={9}
-              className="resize-y font-mono text-xs leading-relaxed"
+              className={`resize-y font-mono text-xs leading-relaxed${
+                daMeta ? " cursor-default bg-muted/40 text-muted-foreground" : ""}`}
             />
 
-            <div className="mt-2 flex flex-wrap gap-1">
-              {VARIAVEIS.map((v) => (
-                <button key={v.chave} type="button" title={v.descricao}
-                        onClick={() => inserir(v.chave)}
-                        className="rounded border px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground transition-colors hover:border-carbo-green/50 hover:text-foreground">
-                  {`{{${v.chave}}}`}
-                </button>
-              ))}
-            </div>
+            {daMeta ? (
+              <div className="mt-2 space-y-1.5">
+                <div className="flex flex-wrap gap-1">
+                  {(t.meta_variaveis ?? []).map((v) => (
+                    <span key={v.nome}
+                          title={v.fallback
+                            ? `Sem valor, manda "${v.fallback}"`
+                            : "Obrigatória — sem valor, o envio ESPERA o dado"}
+                          className={`rounded border px-1.5 py-0.5 font-mono text-[10px] ${
+                            v.fallback
+                              ? "text-muted-foreground"
+                              : "border-amber-500/40 text-amber-500"}`}>
+                      {`{{${v.nome}}}`}{v.fallback ? "" : " *"}
+                    </span>
+                  ))}
+                </div>
+                <p className="text-[10px] text-muted-foreground">
+                  <span className="text-amber-500">*</span> obrigatória: sem o dado, a
+                  mensagem <strong>espera</strong> em vez de sair incompleta — a Meta
+                  recusa parâmetro vazio. As demais têm texto de reserva.
+                </p>
+                {t.meta_botao_url_de && (
+                  <p className="text-[10px] text-muted-foreground">
+                    Botão <strong>Acompanhar pedido</strong> →{" "}
+                    <code className="font-mono">rastreio.carboze.com.br/rastreio/</code>
+                    + o código de rastreio.
+                  </p>
+                )}
+              </div>
+            ) : (
+              <div className="mt-2 flex flex-wrap gap-1">
+                {VARIAVEIS.map((v) => (
+                  <button key={v.chave} type="button" title={v.descricao}
+                          onClick={() => inserir(v.chave)}
+                          className="rounded border px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground transition-colors hover:border-carbo-green/50 hover:text-foreground">
+                    {`{{${v.chave}}}`}
+                  </button>
+                ))}
+              </div>
+            )}
 
-            {desconhecidas.length > 0 && (
+            {!daMeta && desconhecidas.length > 0 && (
               <p className="mt-2 flex items-start gap-1.5 text-[11px] text-amber-500">
                 <AlertTriangle className="mt-px h-3 w-3 shrink-0" />
                 Variável que não existe: {desconhecidas.map((d) => `{{${d}}}`).join(", ")} —
@@ -177,10 +249,26 @@ function Editor({ t }: { t: TemplateMsg }) {
                 {preview || <span className="text-muted-foreground">mensagem vazia</span>}
               </p>
             </div>
-            <p className="mt-1.5 text-[10px] text-muted-foreground">
-              Linha cuja variável está vazia é removida — pedido sem link de rastreio
-              não manda “Acompanhe aqui:” seguido de nada.
-            </p>
+            {daMeta ? (
+              previewMeta.faltando.length > 0 ? (
+                <p className="mt-1.5 flex items-start gap-1.5 text-[10px] text-amber-500">
+                  <AlertTriangle className="mt-px h-3 w-3 shrink-0" />
+                  Sem {previewMeta.faltando.join(", ")}, a mensagem espera — ela não
+                  sai incompleta.
+                </p>
+              ) : (
+                <p className="mt-1.5 text-[10px] text-muted-foreground">
+                  Variável obrigatória sem valor <strong>segura</strong> o envio até o
+                  dado existir; as demais usam o texto de reserva. A Meta recusa
+                  parâmetro vazio, então não existe “sair sem essa linha”.
+                </p>
+              )
+            ) : (
+              <p className="mt-1.5 text-[10px] text-muted-foreground">
+                Linha cuja variável está vazia é removida — pedido sem link de rastreio
+                não manda “Acompanhe aqui:” seguido de nada.
+              </p>
+            )}
           </div>
         </div>
 
