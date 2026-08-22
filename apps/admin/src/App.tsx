@@ -11,6 +11,7 @@ import EcommerceVendas from "./pages/EcommerceVendas";
 import EcommerceMetas from "./pages/EcommerceMetas";
 import EsteiraOnline from "./pages/EsteiraOnline";
 import MensagensCliente from "./pages/MensagensCliente";
+import Conversas from "./pages/Conversas";
 import MapaConquista from "./pages/MapaConquista";
 import MetaConfig from "./pages/MetaConfig";
 import Vender from "./pages/Vender";
@@ -59,6 +60,7 @@ export default function App() {
         <Route path="/ecommerce/metas" element={<EcommerceMetas />} />
         <Route path="/ecommerce/esteira" element={<EsteiraOnline />} />
         <Route path="/ecommerce/mensagens" element={<MensagensCliente />} />
+        <Route path="/ecommerce/conversas" element={<Conversas />} />
         <Route path="/metas/configurar" element={<MetaConfig />} />
         <Route path="/vender" element={<Vender />} />
         <Route path="/ultimo-acesso" element={<UltimoAcesso />} />

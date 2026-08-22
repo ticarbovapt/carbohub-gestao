@@ -84,6 +84,12 @@ jobs:
           # o painel dela não deixa mandar header. Quem autentica é a assinatura
           # X-Hub-Signature-256, conferida por dentro.
           dep whatsapp-meta-webhook --no-verify-jwt
+          # Resposta em texto livre, no atendimento. SEM --no-verify-jwt de
+          # proposito: quem chama e o NAVEGADOR, por gente logada, e escrever
+          # pelo numero da CarboZe nao pode depender de um segredo que anda na
+          # URL. A funcao ainda confere se o perfil tem interface interna --
+          # o portal de lojas usa a mesma tabela profiles.
+          dep whatsapp-responder
           # Evolution (QR / desconectar). SEM --no-verify-jwt de propósito:
           # é chamada pelo NAVEGADOR, por gente logada, e derrubar o WhatsApp
           # da empresa não pode depender de um segredo que anda na URL.

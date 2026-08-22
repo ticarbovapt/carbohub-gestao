@@ -4,7 +4,7 @@ import {
   Plane, ClipboardList, Calendar, Cog, Bell, Target, ShoppingBag,
   Repeat,
   type LucideIcon,
-  PackageCheck,
+  PackageCheck, MessagesSquare,
 } from "lucide-react";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -82,6 +82,7 @@ export const OPS_GROUPS: OpsNavGroup[] = [
       { path: "/logistica/recorrencias", label: "Vendas de Recorrência", icon: Repeat, from: "carboze_orders", ready: true },
       // Espelho da tela do admin — arquivos byte a byte idênticos aos de lá.
       { path: "/logistica/esteira", label: "Esteira do On-line", icon: PackageCheck, from: "bling2_esteira", ready: true },
+      { path: "/logistica/conversas", label: "Conversas", icon: MessagesSquare, from: "carbo_wa_conversas", ready: true },
       { path: "/logistica", label: "Logística", icon: Truck, from: "/logistics", ready: true, end: true },
       { path: "/logistica/viagens", label: "Viagens & PC", icon: Plane, from: "/viagens", ready: true },
     ],

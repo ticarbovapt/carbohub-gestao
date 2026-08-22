@@ -65,6 +65,7 @@ export function Layout() {
     { label: "E-commerce", items: [
         { to: "/ecommerce/vendas-online", label: "Vendas Online", icon: Globe },
         { to: "/ecommerce/esteira", label: "Esteira do On-line", icon: Truck },
+        { to: "/ecommerce/conversas", label: "Conversas", icon: MessagesSquare },
         { to: "/ecommerce/metas", label: "Acompanhamento de Metas", icon: Target },
     ] },
     { label: "Configurações", items: [

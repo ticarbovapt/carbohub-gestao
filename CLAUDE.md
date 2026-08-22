@@ -491,6 +491,43 @@ Graph API        v25.0 · pt_BR · categoria UTILITY
 8. **Guarde o `wa_id` que a Meta devolve**, não só o número que mandamos: no
    Brasil o 9º dígito varia por DDD e por idade do cadastro.
 
+### Conversas do WhatsApp — a tela é o único lugar onde elas existem
+Número da **Cloud API não aparece na Caixa de Entrada do Meta Business Suite**
+(aquela tela só aceita número do aplicativo WhatsApp Business), e a Cloud API
+**não tem endpoint de histórico**. O que o webhook não gravar existe só no
+celular do cliente.
+
+```
+carbo_wa_mensagens    o conteúdo, por wamid
+carbo_wa_conversas    a mensagem já ligada ao pedido de que trata
+apps/*/src/lib/conversas.ts     as REGRAS (puras, testadas)
+apps/*/src/hooks/useConversas.ts   só IO
+apps/admin/src/pages/Conversas.tsx  /ecommerce/conversas · no Ops /logistica/conversas
+supabase/functions/whatsapp-responder    texto livre, chamado pelo NAVEGADOR
+```
+
+1. **A janela de 24 h é a regra central**, não um detalhe: texto livre só passa
+   enquanto ela está aberta, e ela abre quando o **cliente** escreve. Fechada, a
+   Meta recusa com 131047 e nenhum dos seis templates da esteira serve para
+   responder dúvida. Por isso o relógio aparece em cada linha da lista, e o
+   campo de resposta **some** quando fecha — deixá-lo ali para falhar no clique
+   faria a pessoa escrever a resposta inteira antes de descobrir.
+2. **Agrupa por `wa_id`, não por pedido.** A janela é da PESSOA: quem tem dois
+   pedidos abertos tem uma conversa só.
+3. **`vinculo_exato` não é enfeite.** O pedido vem do `context.id` da resposta
+   (exato) ou, na falta, do último aviso enviado àquele número (aproximado).
+   Aproximação que se passa por certeza é como alguém responde sobre o pedido
+   errado.
+4. **Só grava o que SAIU.** Tentativa que falhou não vira balão na tela — quem
+   atende responderia como se já tivesse dito aquilo.
+5. **`whatsapp-responder` sobe SEM `--no-verify-jwt`**, como a
+   `evolution-instancia`: quem chama é gente logada. E confere `interface
+   interna` no perfil — sem isso um lojista logado escreveria pelo número da
+   CarboZé, porque o portal usa a MESMA tabela `profiles`.
+6. ⚠️ **`carbo_e_time_interno()`** guarda `carbo_wa_mensagens` e
+   `carbo_wa_contatos`. A lista de interfaces é a mesma do `notify_time_interno`
+   — duas listas divergem, e divergir aqui ABRE acesso em vez de fechar.
+
 ### Segredo de função: FECHE quando ele não existe
 Padrão obrigatório em toda edge function chamada por máquina:
 
