@@ -113,6 +113,7 @@ Deno.serve(async (req: Request) => {
   }
 
   let status = 0, inbound = 0, templates = 0, repetidos = 0;
+  const falhas: Array<{ chave: string; motivo: string }> = [];
 
   for (const entry of payload?.entry ?? []) {
     for (const change of entry?.changes ?? []) {
@@ -129,34 +130,49 @@ Deno.serve(async (req: Request) => {
           // cujo status nunca chegou.
           if (erroChave.code === "23505") { repetidos++; continue; }
           console.error("[webhook] não consegui registrar a chave", acao.chave, erroChave);
+          falhas.push({ chave: acao.chave, motivo: `chave: ${erroChave.message}` });
           continue;
         }
 
         try {
+          // ⚠️ TODA escrita daqui tem o erro conferido.
+          //
+          // O supabase-js NÃO lança: ele devolve `{ error }`. Um `await` sem
+          // conferir o retorno engole a falha inteira — e como a chave do
+          // evento já foi gravada, o evento fica marcado como tratado sem ter
+          // sido, sem uma linha de log em lugar nenhum.
+          //
+          // No caminho do inbound isso seria a janela de 24 h nunca abrir: o
+          // cliente responde, o registro diz que foi processado, e o
+          // atendimento leva 131047 ao responder em texto livre sem nada
+          // explicando por quê.
           if (acao.tipo === "status") {
             // A regra do "só anda para a frente" mora no BANCO, não aqui: ela
             // precisa valer para qualquer caminho que venha a escrever status,
             // e uma regra de ordenação no front é uma regra que o próximo
             // caminho esquece de copiar.
-            await supabase.rpc("carbo_msg_status_meta", {
+            const { error: e1 } = await supabase.rpc("carbo_msg_status_meta", {
               p_wamid: acao.wamid, p_status: acao.status, p_quando: acao.quando,
               p_erro_codigo: acao.codigo, p_erro_detalhe: acao.detalhe,
             });
+            if (e1) throw new Error(`status: ${e1.message}`);
             status++;
           } else if (acao.tipo === "inbound") {
-            await supabase.from("carbo_wa_contatos").upsert({
+            const { error: e2 } = await supabase.from("carbo_wa_contatos").upsert({
               wa_id: acao.waId, nome: acao.nome, last_inbound_at: acao.quando,
             }, { onConflict: "wa_id" });
+            if (e2) throw new Error(`contato ${acao.waId}: ${e2.message}`);
             inbound++;
           } else if (acao.tipo === "template") {
             const novo = statusDeTemplate(acao.evento);
             // Evento desconhecido não vira status inventado: o CHECK recusaria
             // e a rodada falharia por causa de um nome novo da Meta.
             if (novo) {
-              await supabase.from("carbo_msg_templates").update({
+              const { error: e3 } = await supabase.from("carbo_msg_templates").update({
                 meta_status: novo, meta_status_em: new Date().toISOString(),
                 meta_motivo_recusa: acao.motivo,
               }).eq("meta_template_nome", acao.nome);
+              if (e3) throw new Error(`template ${acao.nome}: ${e3.message}`);
               templates++;
               console.log(`[webhook] template ${acao.nome} → ${novo}`);
             }
@@ -164,14 +180,24 @@ Deno.serve(async (req: Request) => {
         } catch (e) {
           // ⚠️ A chave já foi gravada, então este evento não volta. É o mesmo
           // trade do envio: perder um aviso é melhor que aplicá-lo duas vezes.
-          // O log é o que permite achar depois.
-          console.error("[webhook] falha ao aplicar", acao.chave, e);
+          //
+          // Por isso a falha NÃO fica só no log: ela volta no corpo da
+          // resposta. A Meta ignora o corpo, mas quem estiver testando pelo
+          // painel dela — ou pelo `net.http_post` — lê o motivo na hora, em vez
+          // de precisar abrir o painel de logs para descobrir que houve falha.
+          const motivo = String((e as Error)?.message ?? e).slice(0, 300);
+          console.error("[webhook] falha ao aplicar", acao.chave, motivo);
+          falhas.push({ chave: acao.chave, motivo });
         }
       }
     }
   }
 
-  const resumo = { ok: true, status, inbound, templates, repetidos };
+  const resumo = {
+    ok: falhas.length === 0,
+    status, inbound, templates, repetidos,
+    ...(falhas.length ? { falhas } : {}),
+  };
   if (status || inbound || templates) console.log("[webhook]", JSON.stringify(resumo));
   return json(resumo);
 });
