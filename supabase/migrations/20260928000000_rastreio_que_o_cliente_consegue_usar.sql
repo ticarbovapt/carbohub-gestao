@@ -41,6 +41,22 @@
 -- só a MENSAGEM. O quadro pode mostrar o que sabe; o cliente só recebe o que
 -- consegue usar.
 --
+-- ── ⚠️ E um segundo defeito, da mesma família ────────────────────────────
+--
+-- O MESMO cliente recebeu dois números para o mesmo pedido:
+--
+--     "Recebemos seu pedido 536"                    (confirmado, 19:43)
+--     "a nota fiscal do seu pedido CZ2026080353"    (nf_emitida, 19:44)
+--
+-- `pedido` era `coalesce(pedido_codigo, pedido_loja, pedido_numero)`, e o
+-- código `CZ…` só é gerado pelo cron de 2 min DEPOIS de o pedido virar
+-- Atendido. O `confirmado` saiu antes e pegou o número cru da loja.
+--
+-- Como a esteira só enxerga pedido Atendido, o código sempre chega — no máximo
+-- dois minutos depois. Então exigir o `pedido_codigo` custa esses dois minutos
+-- e devolve o que o número existe para dar: UMA identidade, que o cliente pode
+-- repetir de volta e a equipe reconhece.
+--
 -- ⚠️ RODE EM BLOCOS.
 -- ═══════════════════════════════════════════════════════════════════════════
 
@@ -276,8 +292,13 @@ select
   t.meta_variaveis,
   t.meta_botao_url_de,
   t.meta_status,
-  -- Coluna nova, no fim.
-  b.rastreio_transportadora
+  -- Colunas novas, no fim.
+  b.rastreio_transportadora,
+  -- ⚠️ O código do pedido SEM fallback. A coluna `pedido` acima mantém o
+  -- coalesce porque as etapas da Evolution dependem dele; as da Meta passam a
+  -- ler daqui, e esperam os dois minutos do cron em vez de mandar o número cru
+  -- da loja numa mensagem e o código na seguinte.
+  b.pedido_codigo
 from base b
 join public.carbo_msg_templates t on t.etapa = b.etapa and t.ativo
 left join public.rastreio_card r on r.codigo = b.rastreio
@@ -308,7 +329,7 @@ grant select on public.carbo_msg_fila to authenticated;
 update public.carbo_msg_templates set
   meta_variaveis = '[
     {"nome":"primeiro_nome","de":"primeiro_nome","fallback":"tudo bem"},
-    {"nome":"pedido","de":"pedido"},
+    {"nome":"pedido","de":"pedido_codigo"},
     {"nome":"transportadora","de":"transportadora","fallback":"transportadora"},
     {"nome":"rastreio","de":"rastreio_transportadora"}
   ]'::jsonb,
@@ -318,7 +339,7 @@ where etapa = 'etiqueta';
 update public.carbo_msg_templates set
   meta_variaveis = '[
     {"nome":"primeiro_nome","de":"primeiro_nome","fallback":"tudo bem"},
-    {"nome":"pedido","de":"pedido"},
+    {"nome":"pedido","de":"pedido_codigo"},
     {"nome":"transportadora","de":"transportadora","fallback":"transportadora"},
     {"nome":"rastreio","de":"rastreio_transportadora"},
     {"nome":"previsao","de":"previsao","fallback":"a confirmar"}
@@ -329,12 +350,34 @@ where etapa = 'em_transito';
 update public.carbo_msg_templates set
   meta_variaveis = '[
     {"nome":"primeiro_nome","de":"primeiro_nome","fallback":"tudo bem"},
-    {"nome":"pedido","de":"pedido"},
+    {"nome":"pedido","de":"pedido_codigo"},
     {"nome":"rastreio","de":"rastreio_transportadora"}
   ]'::jsonb,
   meta_botao_url_de = 'rastreio_transportadora'
 where etapa = 'saiu_entrega';
 
+
+update public.carbo_msg_templates set
+  meta_variaveis = '[
+    {"nome":"primeiro_nome","de":"primeiro_nome","fallback":"tudo bem"},
+    {"nome":"pedido","de":"pedido_codigo"}
+  ]'::jsonb
+where etapa = 'confirmado';
+
+update public.carbo_msg_templates set
+  meta_variaveis = '[
+    {"nome":"primeiro_nome","de":"primeiro_nome","fallback":"tudo bem"},
+    {"nome":"pedido","de":"pedido_codigo"},
+    {"nome":"nf","de":"nf"}
+  ]'::jsonb
+where etapa = 'nf_emitida';
+
+update public.carbo_msg_templates set
+  meta_variaveis = '[
+    {"nome":"primeiro_nome","de":"primeiro_nome","fallback":"tudo bem"},
+    {"nome":"pedido","de":"pedido_codigo"}
+  ]'::jsonb
+where etapa = 'entregue';
 
 -- ╔═══════════════════════════════════════════════════════════════════════╗
 -- ║ BLOCO 4 — conferência                                                 ║
