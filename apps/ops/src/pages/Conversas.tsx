@@ -4,6 +4,7 @@ import {
   MessagesSquare, Send, Loader2, AlertTriangle, Clock, ArrowLeft, Lock, Paperclip,
   Image as ImageIcon, Video, Mic, FileText, MapPin, User, File, HelpCircle,
   Search, SearchX, X, Package, ArrowUpRight, CornerDownLeft, Megaphone,
+  BellRing, BellOff, Check,
 } from "lucide-react";
 import { toast } from "sonner";
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
@@ -15,6 +16,7 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   useConversas, useConversasAoVivo, useResponder, janelaAberta, faltaDaJanela,
   nivelDaJanela, fracaoDaJanela, type NivelJanela,
+  useNotificaveis, useMarcarNotificado,
   type Conversa, type MensagemConversa,
 } from "@/hooks/useConversas";
 
@@ -519,6 +521,110 @@ function Conversa({ c }: { c: Conversa }) {
   );
 }
 
+/**
+ * Quem recebe o aviso de mensagem nova.
+ *
+ * ⚠️ A lista NASCE VAZIA e ninguém é avisado até alguém marcar. É a mesma
+ * escolha do `meta_status` e do `CRON_SECRET`: a ausência fecha. O contrário —
+ * avisar todo mundo por padrão — foi o que estava no ar por algumas horas hoje,
+ * e vira ruído no dia em que os clientes começarem a responder de verdade.
+ * Aviso ruidoso treina a equipe a ignorar o sininho, que é o oposto do que ele
+ * existe para fazer.
+ */
+function QuemRecebe({ aoFechar }: { aoFechar: () => void }) {
+  const { data: pessoas, isLoading, error } = useNotificaveis();
+  const marcar = useMarcarNotificado();
+  const [busca, setBusca] = useState("");
+
+  const lista = pessoas ?? [];
+  const ligados = lista.filter((p) => p.recebe).length;
+  const filtradas = useMemo(() => {
+    const alvo = normalizar(busca.trim());
+    if (!alvo) return lista;
+    return lista.filter((p) => normalizar(p.full_name ?? "").includes(alvo));
+  }, [lista, busca]);
+
+  return (
+    <CarboCard className="mb-3">
+      <CarboCardContent className="p-4">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0">
+            <h3 className="flex items-center gap-2 text-sm font-semibold">
+              <BellRing className="h-4 w-4" /> Quem recebe o aviso
+            </h3>
+            <p className="mt-0.5 max-w-xl text-[11px] text-muted-foreground">
+              Toast e sininho quando um cliente responde, em qualquer app.
+              {ligados === 0
+                ? " Ninguém está marcado — hoje o aviso não sai para pessoa nenhuma."
+                : ` ${ligados} ${ligados === 1 ? "pessoa marcada" : "pessoas marcadas"}.`}
+            </p>
+            <p className="mt-0.5 text-[10px] text-muted-foreground/70">
+              Só aparece quem tem acesso interno. Lojista e licenciado não podem ser
+              marcados.
+            </p>
+          </div>
+          <Button size="sm" variant="outline" className="h-8 gap-1.5" onClick={aoFechar}>
+            <X className="h-3.5 w-3.5" /> Fechar
+          </Button>
+        </div>
+
+        {error && (
+          <p className="mt-3 flex items-start gap-1.5 text-xs text-red-500">
+            <AlertTriangle className="mt-px h-3.5 w-3.5 shrink-0" />
+            Não consegui carregar: {(error as Error).message}
+          </p>
+        )}
+
+        {!error && (
+          <>
+            <div className="relative mt-3 max-w-xs">
+              <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+              <Input value={busca} onChange={(e) => setBusca(e.target.value)}
+                     placeholder="Buscar pessoa…" className="h-8 pl-7 text-xs" />
+            </div>
+
+            {isLoading ? (
+              <p className="mt-3 text-xs text-muted-foreground">Carregando…</p>
+            ) : (
+              <div className="mt-3 grid gap-1 sm:grid-cols-2 lg:grid-cols-3">
+                {filtradas.map((p) => (
+                  <button
+                    key={p.user_id} type="button"
+                    disabled={marcar.isPending}
+                    onClick={() => marcar.mutate(
+                      { user_id: p.user_id, recebe: !p.recebe },
+                      { onError: (e) => toast.error((e as Error).message) },
+                    )}
+                    className={`flex items-center gap-2 rounded-md border p-2 text-left transition-colors disabled:opacity-60 ${
+                      p.recebe ? "border-carbo-green/50 bg-carbo-green/5"
+                               : "border-transparent hover:border-border hover:bg-muted/40"}`}>
+                    <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded border ${
+                      p.recebe ? "border-carbo-green/50 bg-carbo-green/20 text-emerald-500"
+                               : "border-border"}`}>
+                      {p.recebe && <Check className="h-3 w-3" />}
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-xs font-medium">
+                        {p.full_name ?? "sem nome"}
+                      </span>
+                      <span className="block truncate text-[10px] text-muted-foreground">
+                        {p.recebe ? "recebe o aviso" : "não recebe"}
+                      </span>
+                    </span>
+                  </button>
+                ))}
+                {filtradas.length === 0 && (
+                  <p className="text-xs text-muted-foreground">Ninguém com esse nome.</p>
+                )}
+              </div>
+            )}
+          </>
+        )}
+      </CarboCardContent>
+    </CarboCard>
+  );
+}
+
 export default function Conversas() {
   const [params] = useSearchParams();
   const voltar = params.get("voltar") || "/ecommerce/mensagens";
@@ -545,6 +651,9 @@ export default function Conversas() {
      fechar a conversa que já está aberta na direita. */
   const [busca, setBusca] = useState("");
   const [filtro, setFiltro] = useState<FiltroConversa>("todas");
+  const [verQuemRecebe, setVerQuemRecebe] = useState(false);
+  const { data: notificaveis } = useNotificaveis();
+  const quantosRecebem = (notificaveis ?? []).filter((p) => p.recebe).length;
 
   const contagens = useMemo(() => ({
     todas: lista.length,
@@ -592,12 +701,24 @@ export default function Conversas() {
                 {esperando - urgentes} com a janela já fechada
               </span>
             )}
+            {/* ⚠️ Zero recebendo não é um detalhe de configuração: é ninguém
+                sendo avisado enquanto a janela de 24 h corre. Por isso o estado
+                aparece no botão, e em âmbar quando é zero. */}
+            <Button size="sm" variant="outline"
+                    className={`h-8 gap-1.5 ${quantosRecebem === 0 ? "text-amber-500" : ""}`}
+                    onClick={() => setVerQuemRecebe((v) => !v)}>
+              {quantosRecebem === 0
+                ? <><BellOff className="h-3.5 w-3.5" /> Ninguém recebe aviso</>
+                : <><BellRing className="h-3.5 w-3.5" /> {quantosRecebem} recebem aviso</>}
+            </Button>
             <Button asChild size="sm" variant="outline" className="h-8 gap-1.5">
               <Link to={voltar}><ArrowLeft className="h-3.5 w-3.5" /> Voltar</Link>
             </Button>
           </div>
         }
       />
+
+      {verQuemRecebe && <QuemRecebe aoFechar={() => setVerQuemRecebe(false)} />}
 
       {/* ⚠️ Erro e vazio são coisas diferentes, e mostrá-los igual já custou
           caro nesta base: a tela de estoque dos vendedores dizia "ninguém tem

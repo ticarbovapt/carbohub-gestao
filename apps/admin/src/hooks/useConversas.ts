@@ -129,3 +129,56 @@ export function useResponder() {
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["wa-conversas"] }); },
   });
 }
+
+// ─── Quem recebe o aviso de mensagem nova ────────────────────────────────────
+
+export interface Notificavel {
+  user_id: string;
+  full_name: string | null;
+  allowed_interfaces: string[] | null;
+  recebe: boolean;
+  marcado_em: string | null;
+}
+
+/**
+ * Quem PODE receber o aviso, e quem de fato recebe.
+ *
+ * ⚠️ A view só devolve time interno. Lojista e licenciado não aparecem aqui nem
+ * podem ser marcados — eles compartilham a tabela `profiles`, e a conversa dos
+ * clientes da Carbo não é deles.
+ */
+export function useNotificaveis() {
+  return useQuery({
+    queryKey: ["wa-notificaveis"],
+    queryFn: async (): Promise<Notificavel[]> => {
+      const { data, error } = await (supabase as any)
+        .from("carbo_wa_notificaveis").select("*");
+      if (error) throw error;
+      return [...((data ?? []) as Notificavel[])].sort((a, b) => {
+        // Quem recebe primeiro: a pergunta que a tela responde é "quem está
+        // sendo avisado?", não "quem existe?".
+        if (a.recebe !== b.recebe) return a.recebe ? -1 : 1;
+        return (a.full_name ?? "").localeCompare(b.full_name ?? "", "pt-BR");
+      });
+    },
+  });
+}
+
+export function useMarcarNotificado() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ user_id, recebe }: { user_id: string; recebe: boolean }) => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error("Sessão expirada. Faça login novamente.");
+
+      // ⚠️ Upsert, e o registro FICA quando se desliga. Apagar a linha perderia
+      // quem já esteve marcado, e religar exigiria redescobrir a lista.
+      const { error } = await (supabase as any)
+        .from("carbo_wa_notificados")
+        .upsert({ user_id, ativo: recebe, criado_por: session.user.id },
+                { onConflict: "user_id" });
+      if (error) throw error;
+    },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["wa-notificaveis"] }); },
+  });
+}
