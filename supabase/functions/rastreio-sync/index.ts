@@ -62,8 +62,13 @@ function mapaStatus(s: string): StatusRastreio | null {
   switch ((s ?? "").toLowerCase()) {
     case "pending":
     case "released":    return null;          // ainda não saiu: não é rastreio
-    case "posted":
-    case "generated":   return "postado";
+    case "posted":      return "postado";
+    // ⚠️ `generated` NÃO é postado. Etiqueta gerada é papel impresso; a
+    // encomenda pode ficar dias na prateleira — no caso que revelou isto, seis.
+    // A lista de marcos logo abaixo já tratava `generated_at` como sem status;
+    // aqui dizia o contrário, e duas regras opostas na mesma função é uma
+    // esperando o próximo consumidor para causar estrago.
+    case "generated":   return null;
     case "in_transit":
     case "transit":     return "em_transito";
     case "out_for_delivery": return "saiu_entrega";
