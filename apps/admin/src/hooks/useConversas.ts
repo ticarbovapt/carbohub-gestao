@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import {
@@ -46,11 +47,60 @@ export function useConversas(dias = 30) {
       }
       return agruparConversas((msgs ?? []) as MensagemConversa[], janelas);
     },
-    // A janela anda sozinha, então a tela precisa reavaliar mesmo sem mensagem
-    // nova: uma conversa respondível vira não-respondível pela passagem do
-    // tempo, e o botão tem de sumir antes de alguém escrever para o vazio.
+    // ⚠️ CONTINUA existindo mesmo com o Realtime abaixo, e não é redundância:
+    // são duas coisas diferentes. O Realtime traz mensagem NOVA; este intervalo
+    // reavalia a passagem do TEMPO — uma conversa respondível vira
+    // não-respondível sozinha, sem evento nenhum, e o botão tem de sumir antes
+    // de alguém escrever para o vazio.
+    //
+    // E é a rede de segurança do Realtime: WebSocket que cai reconecta em
+    // silêncio, e sem o intervalo a tela ficaria parada parecendo vazia.
     refetchInterval: 30_000,
   });
+}
+
+/**
+ * A conversa ao vivo.
+ *
+ * ⚠️ Duas tabelas, porque a linha do tempo tem duas origens: `carbo_wa_mensagens`
+ * (o que o cliente escreveu e o que o atendimento digitou) e `carbo_msg_envios`
+ * (os avisos da esteira, escritos por OUTRA função). Ouvir só a primeira faria
+ * o balão do "saiu para entrega" aparecer 30 s atrasado — e quem estivesse
+ * conversando responderia sem saber que o sistema acabou de avisar a mesma
+ * coisa.
+ *
+ * Não traz o dado do evento: só invalida. O payload do Realtime é a linha CRUA
+ * da tabela, e a tela lê uma view que junta as duas origens e resolve o pedido.
+ * Montar o objeto a partir do evento seria uma segunda versão da mesma regra —
+ * exatamente o erro que fez a notificação de venda online julgar sozinha e dar
+ * três toasts por pedido antigo depois de um F5.
+ */
+export function useConversasAoVivo() {
+  const qc = useQueryClient();
+  const canal = useRef<ReturnType<typeof supabase.channel> | null>(null);
+
+  useEffect(() => {
+    if (canal.current) {
+      supabase.removeChannel(canal.current);
+      canal.current = null;
+    }
+    const invalidar = () => qc.invalidateQueries({ queryKey: ["wa-conversas"] });
+
+    canal.current = supabase
+      .channel("wa-conversas")
+      .on("postgres_changes" as never,
+          { event: "*", schema: "public", table: "carbo_wa_mensagens" }, invalidar)
+      // UPDATE também: o status do envio (enviado → entregue → lido) muda a
+      // linha sem inserir nada.
+      .on("postgres_changes" as never,
+          { event: "*", schema: "public", table: "carbo_msg_envios" }, invalidar)
+      .subscribe();
+
+    return () => {
+      if (canal.current) supabase.removeChannel(canal.current);
+      canal.current = null;
+    };
+  }, [qc]);
 }
 
 export function useResponder() {

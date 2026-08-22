@@ -86,6 +86,14 @@ export function useLiveNotifications() {
           // useEcommerceNotifications. Bug e demais notificações são só
           // sininho (bell), sem barulho.
           if (n?.type === "finance_rc_pendente" || n?.type === "finance_oc_nova") { playDing(); toast(n?.title ?? "Financeiro", { description: n?.body ?? undefined }); }
+          // ⚠️ Resposta do cliente no WhatsApp oficial: toast SEM som.
+          //
+          // Sem som porque este projeto já pagou por barulho demais — a moedinha
+          // sintetizada que tocava fora do `sfxVenda.ts` fez todo mundo achar
+          // que o MP3 da venda estava errado. Com toast, porém, porque o
+          // sininho sozinho não interrompe: a janela de 24h corre, e uma
+          // pergunta que ninguém viu a tempo não tem segunda chance.
+          if (n?.type === "wa_inbound") { toast(n?.title ?? "Mensagem no WhatsApp", { description: n?.body ?? undefined }); }
         },
       )
       .subscribe();

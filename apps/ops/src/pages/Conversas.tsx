@@ -13,7 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import {
-  useConversas, useResponder, janelaAberta, faltaDaJanela,
+  useConversas, useConversasAoVivo, useResponder, janelaAberta, faltaDaJanela,
   nivelDaJanela, fracaoDaJanela, type NivelJanela,
   type Conversa, type MensagemConversa,
 } from "@/hooks/useConversas";
@@ -526,6 +526,8 @@ export default function Conversas() {
   // ⚠️ Antes de qualquer coisa que leia a hora: é o que faz o relógio da janela
   // andar sem F5 e sem depender da rede.
   useRelogio();
+  // E a mensagem nova chega sozinha, sem esperar o intervalo de 30 s.
+  useConversasAoVivo();
 
   const { data: conversas, isLoading, error } = useConversas();
   const [aberta, setAberta] = useState<string | null>(null);
