@@ -80,6 +80,10 @@ jobs:
           # efeito: a fila só entrega etapa `meta` com template APPROVED e o
           # `ativo` de cada template continua false.
           dep whatsapp-meta --no-verify-jwt
+          # Webhook da Meta: quem chama é ELA, sem JWT. E sem X-Cron-Secret —
+          # o painel dela não deixa mandar header. Quem autentica é a assinatura
+          # X-Hub-Signature-256, conferida por dentro.
+          dep whatsapp-meta-webhook --no-verify-jwt
           # Evolution (QR / desconectar). SEM --no-verify-jwt de propósito:
           # é chamada pelo NAVEGADOR, por gente logada, e derrubar o WhatsApp
           # da empresa não pode depender de um segredo que anda na URL.
