@@ -121,6 +121,43 @@ Deno.serve(async (req: Request) => {
   // que se compara o que sai daqui com os exemplos aprovados na Meta.
   const ensaio = url.searchParams.get("ensaio") === "1";
 
+  // ── Teste de fumaça ─────────────────────────────────────────────────────
+  //
+  // ⚠️ O ensaio para ANTES de falar com a Meta — de propósito, para não gastar
+  // mensagem nem depender do token. O efeito colateral é que ele não prova o
+  // token, e um token errado só apareceria no primeiro envio a um cliente.
+  //
+  // Este modo manda `hello_world` (o template que a Meta já entrega aprovado em
+  // toda conta) para um número escolhido, sem tocar na fila nem no log. É a
+  // única coisa aqui que envia sem passar pela `carbo_msg_fila`, e por isso é
+  // limitada a ESSE template: mesmo com o segredo em mãos, o mais que se
+  // consegue é um "Hello World".
+  const teste = url.searchParams.get("teste");
+  if (teste) {
+    const numero = normalizarBR(teste);
+    if (!numero) return json({ error: `número inválido: ${teste}` }, 400);
+    if (!TOKEN) {
+      return json({
+        error: "Falta o secret WHATSAPP_ACCESS_TOKEN.",
+        como_resolver: "Supabase > Edge Functions > Secrets > WHATSAPP_ACCESS_TOKEN.",
+      }, 500);
+    }
+    const r = await enviar({
+      messaging_product: "whatsapp", recipient_type: "individual",
+      to: numero, type: "template",
+      template: { name: "hello_world", language: { code: "en_US" } },
+    });
+    const ok = r.status >= 200 && r.status < 300;
+    return json({
+      ok, teste: numero, status: r.status,
+      wamid: r.json?.messages?.[0]?.id ?? null,
+      // O wa_id é a informação que interessa aqui: se ele voltar diferente do
+      // que mandamos, é o 9º dígito, e é ELE que vale nos próximos envios.
+      wa_id: r.json?.contacts?.[0]?.wa_id ?? null,
+      ...(ok ? {} : { erro: detalheDoErro(r.json), codigo: r.json?.error?.code ?? null }),
+    }, ok ? 200 : 502);
+  }
+
   // ⚠️ A fila vem ANTES da checagem do token, de propósito. Sem nada a enviar,
   // não há configuração faltando: há nada a fazer. Ao contrário, isto devolveria
   // 500 a cada minuto por falta de um secret que ainda não é necessário — 1440
