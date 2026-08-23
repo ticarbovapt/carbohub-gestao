@@ -6,7 +6,7 @@ import {
   File as FileIcon, HelpCircle,
   Search, SearchX, X, Package, ArrowUpRight, CornerDownLeft, Megaphone,
   BellRing, BellOff, Check, CheckCheck, Inbox, Undo2, Sparkles,
-  CalendarClock, Trash2, Square, Play, Download,
+  CalendarClock, Trash2, Square, Play, Pause, Download,
 } from "lucide-react";
 import { toast } from "sonner";
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
@@ -212,6 +212,95 @@ const NOME_MIDIA: Record<string, string> = {
 };
 
 /**
+ * O nome do arquivo que o próprio sistema gerou ao gravar.
+ *
+ * ⚠️ Ele foi parar no campo de texto da mensagem (é o que sobrou quando não há
+ * legenda), e aparecia embaixo do player como se fosse algo que alguém
+ * escreveu. `audio-1787495498124.ogg` não diz nada a ninguém.
+ */
+const ehNomeDeGravacao = (t: string) => /^audio-\d+\.(ogg|m4a|webm|mp4)$/i.test(t.trim());
+
+/** mm:ss — e `--:--` enquanto a duração não veio, em vez de "NaN:NaN". */
+function relogioDoAudio(s: number): string {
+  if (!Number.isFinite(s) || s < 0) return "--:--";
+  const m = Math.floor(s / 60);
+  return `${m}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
+}
+
+/**
+ * O reprodutor de áudio.
+ *
+ * ⚠️ O `<audio controls>` nativo não serve aqui, e não é questão de gosto: ele
+ * tem largura mínima própria e o balão se ajusta ao conteúdo — num áudio sem
+ * legenda o balão fica estreito, o controle nativo encolhe até virar aquele
+ * retângulo com três pontinhos e a barra some. A pessoa via um player que não
+ * dava para clicar.
+ *
+ * Este tem o tamanho que precisa ter: botão grande de tocar, barra que dá para
+ * arrastar, e o tempo do lado — a gramática que quem usa WhatsApp já conhece.
+ *
+ * ⚠️ A duração pode chegar `Infinity` em arquivo gravado ao vivo (o cabeçalho
+ * é escrito antes de o áudio terminar). Por isso ela é relida no
+ * `durationchange` e no fim, e o relógio mostra `--:--` em vez de `NaN`
+ * enquanto não sabe.
+ */
+function Reprodutor({ url }: { url: string }) {
+  const ref = useRef<HTMLAudioElement | null>(null);
+  const [tocando, setTocando] = useState(false);
+  const [agora, setAgora] = useState(0);
+  const [total, setTotal] = useState(NaN);
+
+  const duracao = (a: HTMLAudioElement) => {
+    if (Number.isFinite(a.duration) && a.duration > 0) setTotal(a.duration);
+  };
+
+  return (
+    <div className="mb-1.5 flex w-[15rem] items-center gap-2 rounded-md border
+                    bg-background/40 px-2 py-1.5 sm:w-[17rem]">
+      <button type="button" aria-label={tocando ? "Pausar" : "Tocar"}
+              onClick={() => {
+                const a = ref.current;
+                if (!a) return;
+                if (a.paused) { void a.play(); } else { a.pause(); }
+              }}
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full
+                         bg-carbo-green/20 text-carbo-green hover:bg-carbo-green/30">
+        {tocando ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+      </button>
+
+      <div className="min-w-0 flex-1">
+        <input type="range" min={0} max={Number.isFinite(total) ? total : 0} step={0.05}
+               value={agora}
+               onChange={(e) => {
+                 const a = ref.current;
+                 if (a) { a.currentTime = Number(e.target.value); setAgora(a.currentTime); }
+               }}
+               className="h-1 w-full cursor-pointer accent-carbo-green"
+               aria-label="Posição do áudio" />
+        <p className="mt-0.5 text-[10px] leading-none text-muted-foreground">
+          {relogioDoAudio(agora)} / {relogioDoAudio(total)}
+        </p>
+      </div>
+
+      <audio ref={ref} src={url} preload="metadata"
+             onPlay={() => setTocando(true)}
+             onPause={() => setTocando(false)}
+             onLoadedMetadata={(e) => duracao(e.currentTarget)}
+             onDurationChange={(e) => duracao(e.currentTarget)}
+             onTimeUpdate={(e) => setAgora(e.currentTarget.currentTime)}
+             onEnded={(e) => {
+               duracao(e.currentTarget);
+               setTocando(false);
+               // Volta ao início: parar no fim faz o próximo clique parecer
+               // que não funcionou.
+               e.currentTarget.currentTime = 0;
+               setAgora(0);
+             }} />
+    </div>
+  );
+}
+
+/**
  * O anexo — e agora ele ABRE.
  *
  * ⚠️ Carrega no clique, não sozinho. O arquivo está na Meta e sai de lá em duas
@@ -243,11 +332,7 @@ function Anexo({ mediaId, tipo, nome, Icone }: {
         </a>
       );
     }
-    if (som) {
-      // O player nativo basta: dá play, barra e velocidade sem trazer
-      // biblioteca nenhuma para dentro do bundle.
-      return <audio controls src={data.url} className="mb-1.5 h-9 w-full max-w-[16rem]" />;
-    }
+    if (som) return <Reprodutor url={data.url} />;
     return (
       <a href={data.url} download={nome || `${rotulo}`} target="_blank" rel="noreferrer"
          className="mb-1.5 flex items-center gap-2 rounded-md border bg-background/40 px-2 py-1.5
@@ -367,12 +452,15 @@ function Balao({ m, primeira, ultima }: {
                  nome={m.texto ?? null} Icone={IconeAnexo} />
         )}
 
-        {m.texto ? (
+        {m.texto && !ehNomeDeGravacao(m.texto) ? (
           <p className="whitespace-pre-wrap break-words text-[13px] leading-relaxed">
             {m.texto}
           </p>
         ) : anexo ? (
-          <p className="text-[11px] italic text-muted-foreground">sem legenda</p>
+          /* ⚠️ Nada aqui. Antes vinha "sem legenda" em itálico — informação que
+             não é informação: áudio quase nunca tem legenda, e a linha aparecia
+             em todo balão de voz repetindo o óbvio. O player já diz o que é. */
+          null
         ) : (
           <p className="flex items-start gap-1.5 text-[11px] leading-relaxed text-amber-500">
             <HelpCircle className="mt-px h-3 w-3 shrink-0" />

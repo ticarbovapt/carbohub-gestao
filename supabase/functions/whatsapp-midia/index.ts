@@ -202,7 +202,10 @@ Deno.serve(async (req: Request) => {
     // baixar e armazenar é outra decisão (storage, custo, LGPD).
     const { error: erroGrava } = await supabase.from("carbo_wa_mensagens").upsert({
       wamid, wa_id: waId, direcao: "saida", tipo: veredito.tipo,
-      texto: legenda || nomeUpload || null,
+      // ⚠️ Áudio sem legenda grava NULO, não o nome do arquivo. O nome é nosso
+      // (`audio-1787495498124.ogg`) e apareceria na conversa como se alguém o
+      // tivesse escrito. Documento é o contrário: ali o nome é o conteúdo.
+      texto: legenda || (veredito.tipo === "audio" ? null : nomeUpload) || null,
       midia_id: mediaId, midia_mime: veredito.mime,
       ocorrido_em: new Date().toISOString(),
       payload: { por: perfil?.full_name ?? user.email ?? user.id, ...payload },
