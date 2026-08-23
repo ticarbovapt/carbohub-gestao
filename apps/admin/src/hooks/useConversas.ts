@@ -265,7 +265,10 @@ export function useAgendadas(wa_id: string | null) {
       if (error) throw error;
       return (data ?? []) as Agendada[];
     },
-    refetchInterval: 60_000,
+    // Rede de segurança do Realtime (WebSocket cai em silêncio), não o
+    // mecanismo: o que tira a tarja "Agendada para…" no instante do envio é o
+    // evento da `carbo_wa_agendadas`, publicada na 20260932.
+    refetchInterval: 30_000,
   });
 }
 
@@ -315,6 +318,59 @@ export function useCancelarAgendada() {
  * E NÃO usa `functions.invoke`: ele serializa o corpo como JSON e o `FormData`
  * chegaria vazio do outro lado.
  */
+/**
+ * Baixa a mídia que o cliente mandou.
+ *
+ * ⚠️ O navegador não consegue sozinho. O webhook guarda o `media_id`; o arquivo
+ * fica na Meta e sai de lá em DUAS chamadas que exigem o nosso token — pôr o
+ * token no front seria entregar a conta do WhatsApp a quem abrir o DevTools.
+ * Por isso a ponte é uma edge function.
+ *
+ * ⚠️ `enabled` só liga no CLIQUE. Uma conversa com quinze áudios dispararia
+ * quinze pares de chamadas ao Graph a cada abertura da tela — e a Realtime
+ * reabre a lista sozinha o tempo todo.
+ *
+ * O `objectURL` é revogado na saída: sem isso cada reabertura de conversa deixa
+ * um blob preso na memória da aba, que fica aberta o dia inteiro no atendimento.
+ */
+export function useMidia(media_id: string | null, ligado: boolean) {
+  const q = useQuery({
+    queryKey: ["wa-midia", media_id],
+    enabled: !!media_id && ligado,
+    // A URL de origem da Meta expira em minutos, mas o blob já baixado não —
+    // ele vale enquanto a aba viver. Rebaixar seria pagar duas vezes.
+    staleTime: Infinity,
+    gcTime: 10 * 60_000,
+    retry: false,
+    queryFn: async (): Promise<{ url: string; mime: string }> => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error("Sessão expirada. Faça login novamente.");
+
+      const res = await fetch(`${FUNCTIONS_URL}/whatsapp-midia-baixar`, {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${session.access_token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ media_id }),
+      });
+      if (!res.ok) {
+        // A função responde JSON no erro e bytes no sucesso — ler como JSON
+        // aqui é o que traz a frase da retenção de 30 dias em vez de "502".
+        const corpo = await res.json().catch(() => null);
+        throw new Error(corpo?.detalhe || corpo?.error || `Falhou (${res.status})`);
+      }
+      const blob = await res.blob();
+      return { url: URL.createObjectURL(blob), mime: blob.type };
+    },
+  });
+
+  const url = q.data?.url;
+  useEffect(() => () => { if (url) URL.revokeObjectURL(url); }, [url]);
+
+  return q;
+}
+
 export function useEnviarMidia() {
   const qc = useQueryClient();
   return useMutation({
