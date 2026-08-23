@@ -371,12 +371,35 @@ function Anexo({ mediaId, tipo, nome, Icone }: {
   mediaId: string; tipo: string; nome: string | null;
   Icone: typeof Paperclip;
 }) {
-  const [abrir, setAbrir] = useState(false);
-  const { data, isFetching, error } = useMidia(mediaId, abrir);
-
   const rotulo = NOME_MIDIA[tipo] ?? tipo;
   const imagem = tipo === "image" || tipo === "sticker";
   const som = tipo === "audio" || tipo === "voice" || tipo === "ptt";
+
+  /**
+   * ⚠️ IMAGEM carrega sozinha; áudio e documento esperam o clique.
+   *
+   * Não é inconsistência — é o que cada um É. Uma foto que exige clique para
+   * aparecer não é uma foto: quem atende olha a conversa para VER o que o
+   * cliente mandou (o rótulo do produto, o print do erro), e "toque para abrir"
+   * esconde justamente o conteúdo. Áudio ninguém escuta de relance, e baixar
+   * todos ao abrir a tela gastaria chamadas ao Graph por nada.
+   *
+   * O custo de carregar sozinha é pago uma vez: a busca é GET com cache de um
+   * dia no navegador, então reabrir a conversa e dar F5 não rebaixam.
+   */
+  const [abrir, setAbrir] = useState(imagem);
+  const { data, isFetching, error } = useMidia(mediaId, abrir);
+
+  // Enquanto a foto vem, um retângulo do tamanho dela evita o pulo do layout
+  // que joga a conversa para cima no meio da leitura.
+  if (imagem && !data && isFetching) {
+    return (
+      <div className="mb-1.5 flex h-32 w-48 items-center justify-center rounded-md
+                      border border-dashed bg-background/40">
+        <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
 
   if (data) {
     if (imagem) {
@@ -613,17 +636,19 @@ function Conversa({ c }: { c: Conversa }) {
   const apagarNota = useApagarNota();
   const [recado, setRecado] = useState("");
   const [aba, setAba] = useState<"responder" | "nota">("responder");
-  const [previa, setPrevia] = useState<{ arquivo: File; url: string } | null>(null);
+  const [previa, setPrevia] = useState<{ arquivo: File; url: string; som: boolean } | null>(null);
+  const [legendaPrevia, setLegendaPrevia] = useState("");
 
   // O objectURL da prévia é revogado ao trocar ou sair: sem isso cada gravação
   // descartada deixa um blob preso na aba, que fica aberta o dia inteiro.
   useEffect(() => () => { if (previa) URL.revokeObjectURL(previa.url); }, [previa]);
 
-  const descartarPrevia = () => setPrevia(null);
+  const descartarPrevia = () => { setPrevia(null); setLegendaPrevia(""); };
   const enviarPrevia = () => {
     if (!previa) return;
-    mandarArquivo(previa.arquivo);
+    mandarArquivo(previa.arquivo, previa.som ? undefined : legendaPrevia);
     setPrevia(null);
+    setLegendaPrevia("");
   };
 
   const anotarAgora = () => {
@@ -665,9 +690,9 @@ function Conversa({ c }: { c: Conversa }) {
 
   useEffect(() => { fim.current?.scrollIntoView({ block: "end" }); }, [c.mensagens.length]);
 
-  const mandarArquivo = (arquivo: File) => {
-    enviarMidia.mutate({ wa_id: c.wa_id, arquivo, legenda: texto.trim() || undefined }, {
-      onSuccess: () => { setTexto(""); toast.success("Enviado"); },
+  const mandarArquivo = (arquivo: File, legenda?: string) => {
+    enviarMidia.mutate({ wa_id: c.wa_id, arquivo, legenda: legenda?.trim() || undefined }, {
+      onSuccess: () => { toast.success("Enviado"); },
       onError: (e) => toast.error((e as Error).message),
     });
   };
@@ -698,6 +723,7 @@ function Conversa({ c }: { c: Conversa }) {
         setPrevia({
           arquivo: new File([blob], `audio-${Date.now()}.${ext}`, { type: formato }),
           url: URL.createObjectURL(blob),
+          som: true,
         });
       };
       rec.start();
@@ -925,9 +951,36 @@ function Conversa({ c }: { c: Conversa }) {
           <div className="mb-2 flex flex-wrap items-center gap-2 rounded-lg border
                           border-carbo-green/40 bg-carbo-green/5 p-2">
             <p className="w-full text-[10px] font-medium text-muted-foreground">
-              Ouça antes de mandar — ainda não foi enviado.
+              {previa.som
+                ? "Ouça antes de mandar — ainda não foi enviado."
+                : "Confira antes de mandar — ainda não foi enviado."}
             </p>
-            <Reprodutor url={previa.url} />
+            {previa.som ? (
+              <Reprodutor url={previa.url} />
+            ) : previa.arquivo.type.startsWith("image/") ? (
+              <img src={previa.url} alt="prévia"
+                   className="max-h-32 w-auto rounded-md border object-contain" />
+            ) : (
+              <p className="flex items-center gap-2 rounded-md border bg-background/40
+                            px-2 py-1.5 text-[11px] font-medium">
+                <FileText className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                <span className="max-w-[14rem] truncate">{previa.arquivo.name}</span>
+              </p>
+            )}
+            {/* ⚠️ A legenda vive AQUI, não no campo de resposta: ela pertence à
+                foto ("é este o rótulo?"), e sai junto, num balão só. Antes o
+                texto que estivesse escrito na resposta ia como legenda sem
+                ninguém pedir — e uma frase começada para outra coisa saía
+                grudada num arquivo.
+                Áudio não tem: a Meta IGNORA legenda em áudio, em silêncio, e
+                oferecer um campo que some faria quem atende achar que disse
+                algo que o cliente nunca leu. */}
+            {!previa.som && (
+              <Input value={legendaPrevia} onChange={(e) => setLegendaPrevia(e.target.value)}
+                     placeholder="Legenda (opcional)" maxLength={1024}
+                     className="h-8 w-full text-xs sm:w-64"
+                     onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); enviarPrevia(); } }} />
+            )}
             <div className="ml-auto flex items-center gap-2">
               <Button size="sm" variant="ghost" className="h-8 gap-1.5"
                       disabled={enviarMidia.isPending} onClick={descartarPrevia}>
@@ -938,7 +991,7 @@ function Conversa({ c }: { c: Conversa }) {
                 {enviarMidia.isPending
                   ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
                   : <Send className="h-3.5 w-3.5" />}
-                Enviar áudio
+                {previa.som ? "Enviar áudio" : "Enviar arquivo"}
               </Button>
             </div>
           </div>
@@ -1038,11 +1091,16 @@ function Conversa({ c }: { c: Conversa }) {
                        onChange={(e) => {
                          const f = e.target.files?.[0];
                          e.target.value = "";
-                         if (f) mandarArquivo(f);
+                         // ⚠️ Também passa pela prévia. Escolher arquivo erra
+                         // igual a gravar: é um clique numa lista de nomes
+                         // parecidos, e o print errado sai antes de a pessoa
+                         // ver o que mandou. Só o `image (1).png` na conversa
+                         // já contou essa história.
+                         if (f) setPrevia({ arquivo: f, url: URL.createObjectURL(f), som: false });
                        }} />
                 <Button size="sm" variant="outline" className="h-8 w-8 p-0"
                         title="Enviar foto ou documento"
-                        disabled={enviarMidia.isPending || gravando}
+                        disabled={enviarMidia.isPending || gravando || !!previa}
                         onClick={() => arquivoRef.current?.click()}>
                   {enviarMidia.isPending
                     ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
