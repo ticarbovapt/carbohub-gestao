@@ -104,6 +104,12 @@ export function useConversasAoVivo() {
       // diferentes, e a segunda responderia o que a primeira já respondeu.
       .on("postgres_changes" as never,
           { event: "*", schema: "public", table: "carbo_wa_resolvidas" }, invalidar)
+      // O agendamento que dispara vira mensagem, mas o que FALHA não vira nada
+      // — sem ouvir a tabela, a falha só apareceria no próximo minuto do
+      // refetch da lista de agendadas.
+      .on("postgres_changes" as never,
+          { event: "*", schema: "public", table: "carbo_wa_agendadas" },
+          () => { qc.invalidateQueries({ queryKey: ["wa-agendadas"] }); invalidar(); })
       .subscribe();
 
     return () => {
@@ -223,5 +229,76 @@ export function useMarcarNotificado() {
       if (error) throw error;
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["wa-notificaveis"] }); },
+  });
+}
+
+// ─── Mensagens agendadas ─────────────────────────────────────────────────────
+
+export interface Agendada {
+  id: string;
+  wa_id: string;
+  texto: string;
+  enviar_em: string;
+  status: "pendente" | "enviado" | "cancelado" | "falhou";
+  motivo: string | null;
+  erro_codigo: number | null;
+  criado_em: string;
+}
+
+/**
+ * O que está marcado para sair, e o que falhou.
+ *
+ * ⚠️ Traz `falhou` junto com `pendente` de propósito. Quem agendou foi embora
+ * achando que estava resolvido — a falha não aparece na cara de ninguém como
+ * num envio manual. Se ela não estiver na tela, não está em lugar nenhum.
+ */
+export function useAgendadas(wa_id: string | null) {
+  return useQuery({
+    queryKey: ["wa-agendadas", wa_id],
+    enabled: !!wa_id,
+    queryFn: async (): Promise<Agendada[]> => {
+      const { data, error } = await (supabase as any)
+        .from("carbo_wa_agendadas").select("*")
+        .eq("wa_id", wa_id)
+        .in("status", ["pendente", "falhou"])
+        .order("enviar_em", { ascending: true });
+      if (error) throw error;
+      return (data ?? []) as Agendada[];
+    },
+    refetchInterval: 60_000,
+  });
+}
+
+export function useAgendar() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ wa_id, texto, enviar_em }:
+                       { wa_id: string; texto: string; enviar_em: string }) => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error("Sessão expirada. Faça login novamente.");
+
+      const { error } = await (supabase as any).from("carbo_wa_agendadas")
+        .insert({ wa_id, texto, enviar_em, criado_por: session.user.id });
+      if (error) throw error;
+    },
+    onSuccess: (_d, v) => {
+      qc.invalidateQueries({ queryKey: ["wa-agendadas", v.wa_id] });
+    },
+  });
+}
+
+export function useCancelarAgendada() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id }: { id: string; wa_id: string }) => {
+      // ⚠️ `cancelado`, não DELETE: a linha é o registro de que alguém pensou
+      // em dizer aquilo e desistiu. Apagar some com a intenção junto.
+      const { error } = await (supabase as any).from("carbo_wa_agendadas")
+        .update({ status: "cancelado" }).eq("id", id).eq("status", "pendente");
+      if (error) throw error;
+    },
+    onSuccess: (_d, v) => {
+      qc.invalidateQueries({ queryKey: ["wa-agendadas", v.wa_id] });
+    },
   });
 }

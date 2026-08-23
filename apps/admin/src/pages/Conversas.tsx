@@ -5,6 +5,7 @@ import {
   Image as ImageIcon, Video, Mic, FileText, MapPin, User, File, HelpCircle,
   Search, SearchX, X, Package, ArrowUpRight, CornerDownLeft, Megaphone,
   BellRing, BellOff, Check, CheckCheck, Inbox, Undo2, Sparkles,
+  CalendarClock, Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
@@ -17,6 +18,7 @@ import {
   useConversas, useConversasAoVivo, useResponder, janelaAberta, faltaDaJanela,
   nivelDaJanela, fracaoDaJanela, type NivelJanela,
   useNotificaveis, useMarcarNotificado, useResolverConversa,
+  useAgendadas, useAgendar, useCancelarAgendada,
   type Conversa, type MensagemConversa, type EstadoConversa,
 } from "@/hooks/useConversas";
 
@@ -334,9 +336,28 @@ function Balao({ m, primeira, ultima }: {
   );
 }
 
+/** `datetime-local` fala em hora LOCAL sem fuso, e o banco em ISO com fuso.
+ *  ⚠️ Converter na mão com `toISOString()` daria 3 h de diferença: o navegador
+ *  está em Brasília e o ISO sai em UTC. `Date` interpreta a string sem fuso
+ *  como local, então construir e serializar resolve — mas só se a string vier
+ *  no formato exato do input. */
+const paraIso = (local: string) => new Date(local).toISOString();
+
+/** O contrário, para preencher o input com um horário calculado. */
+function paraInput(d: Date): string {
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`
+       + `T${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+
 function Conversa({ c }: { c: Conversa }) {
   const responder = useResponder();
   const resolver = useResolverConversa();
+  const { data: agendadas } = useAgendadas(c.wa_id);
+  const agendar = useAgendar();
+  const cancelarAgendada = useCancelarAgendada();
+  const [verAgendar, setVerAgendar] = useState(false);
+  const [quando, setQuando] = useState("");
   const [texto, setTexto] = useState("");
   const fim = useRef<HTMLDivElement>(null);
   const aberta = janelaAberta(c.janela_ate);
@@ -524,6 +545,48 @@ function Conversa({ c }: { c: Conversa }) {
           <div ref={fim} />
         </div>
 
+        {/* ⚠️ Os agendamentos ficam VISÍVEIS o tempo todo, inclusive os que
+            falharam. Quem agendou foi embora achando que estava resolvido — a
+            falha não aparece na cara de ninguém como num envio manual. Se não
+            estiver aqui, não está em lugar nenhum. */}
+        {!!agendadas?.length && (
+          <div className="space-y-1">
+            {agendadas.map((a) => (
+              <div key={a.id}
+                   className={`flex flex-wrap items-center gap-2 rounded-md border px-2.5 py-1.5 ${
+                     a.status === "falhou"
+                       ? "border-red-500/30 bg-red-500/5"
+                       : "border-sky-500/25 bg-sky-500/5"}`}>
+                {a.status === "falhou"
+                  ? <AlertTriangle className="h-3 w-3 shrink-0 text-red-500" />
+                  : <CalendarClock className="h-3 w-3 shrink-0 text-sky-500" />}
+                <span className={`text-[11px] font-medium ${
+                  a.status === "falhou" ? "text-red-500" : "text-sky-500"}`}>
+                  {a.status === "falhou"
+                    ? "Não foi enviada"
+                    : `Agendada para ${hora(a.enviar_em)}`}
+                </span>
+                <span className="min-w-0 flex-1 truncate text-[11px] text-muted-foreground">
+                  “{a.texto}”
+                </span>
+                {a.status === "falhou" && a.motivo && (
+                  <span className="w-full text-[10px] text-muted-foreground">{a.motivo}</span>
+                )}
+                {a.status === "pendente" && (
+                  <Button size="sm" variant="ghost"
+                          className="h-6 gap-1 px-2 text-[11px] text-muted-foreground"
+                          disabled={cancelarAgendada.isPending}
+                          onClick={() => cancelarAgendada.mutate({ id: a.id, wa_id: c.wa_id }, {
+                            onError: (e) => toast.error((e as Error).message),
+                          })}>
+                    <Trash2 className="h-3 w-3" /> Cancelar
+                  </Button>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+
         {aberta ? (
           <div className={`rounded-lg border bg-muted/40 p-2 transition-colors ${
                             responder.isPending ? "opacity-70" : ""}`}>
@@ -553,6 +616,21 @@ function Conversa({ c }: { c: Conversa }) {
                     {texto.length}/4096
                   </span>
                 )}
+                {/* ⚠️ Agendar só existe com texto escrito: um agendamento
+                    vazio não é nada, e o botão aceso sem conteúdo convida ao
+                    clique que não faz nada. */}
+                <Button size="sm" variant="outline" className="h-8 gap-1.5"
+                        disabled={!texto.trim() || agendar.isPending}
+                        onClick={() => {
+                          // Sugestão de horário: uma hora à frente, ou o fim da
+                          // janela quando falta menos que isso.
+                          const daquiUmaHora = Date.now() + 3_600_000;
+                          const limite = c.janela_ate ? new Date(c.janela_ate).getTime() : 0;
+                          setQuando(paraInput(new Date(Math.min(daquiUmaHora, limite - 60_000))));
+                          setVerAgendar((v) => !v);
+                        }}>
+                  <CalendarClock className="h-3.5 w-3.5" /> Agendar
+                </Button>
                 <Button size="sm" className="h-8 gap-1.5"
                         disabled={!texto.trim() || responder.isPending} onClick={enviar}>
                   {responder.isPending
@@ -562,6 +640,45 @@ function Conversa({ c }: { c: Conversa }) {
                 </Button>
               </div>
             </div>
+
+            {verAgendar && (
+              <div className="mt-2 flex flex-wrap items-center gap-2 border-t pt-2">
+                <span className="text-[11px] text-muted-foreground">enviar em</span>
+                <Input type="datetime-local" value={quando}
+                       onChange={(e) => setQuando(e.target.value)}
+                       /* ⚠️ O `max` é o fim da janela, não uma data qualquer.
+                          Depois dela a Meta recusa com 131047, e um agendamento
+                          que nasce condenado é pior que nenhum: quem marcou vai
+                          embora achando que está resolvido. */
+                       min={paraInput(new Date(Date.now() + 60_000))}
+                       max={c.janela_ate ? paraInput(new Date(new Date(c.janela_ate).getTime() - 60_000)) : undefined}
+                       className="h-8 w-[13rem] text-xs" />
+                <Button size="sm" className="h-8 gap-1.5"
+                        disabled={!quando || agendar.isPending}
+                        onClick={() => {
+                          const iso = paraIso(quando);
+                          if (c.janela_ate && new Date(iso) >= new Date(c.janela_ate)) {
+                            toast.error("Esse horário já está fora da janela de 24 h.");
+                            return;
+                          }
+                          agendar.mutate({ wa_id: c.wa_id, texto: texto.trim(), enviar_em: iso }, {
+                            onSuccess: () => {
+                              setTexto(""); setVerAgendar(false);
+                              toast.success(`Agendada para ${hora(iso)}`);
+                            },
+                            onError: (e) => toast.error((e as Error).message),
+                          });
+                        }}>
+                  {agendar.isPending
+                    ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    : <CalendarClock className="h-3.5 w-3.5" />}
+                  Confirmar
+                </Button>
+                <span className="text-[10px] text-muted-foreground">
+                  no máximo até {c.janela_ate ? hora(c.janela_ate) : "—"}, quando a janela fecha
+                </span>
+              </div>
+            )}
           </div>
         ) : (
           /* ⚠️ Sem campo de texto quando a janela fechou. Deixá-lo ali, para

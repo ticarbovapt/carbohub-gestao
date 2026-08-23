@@ -90,6 +90,11 @@ jobs:
           # URL. A funcao ainda confere se o perfil tem interface interna --
           # o portal de lojas usa a mesma tabela profiles.
           dep whatsapp-responder
+          # Mensagens agendadas. Chamada pelo pg_cron (X-Cron-Secret, sem JWT).
+          # Confere a janela de 24h no INSTANTE do envio -- entre agendar e
+          # disparar passam horas, e mandar as cegas depois de esperar e pior
+          # que nao ter agendado.
+          dep whatsapp-agendadas --no-verify-jwt
           # Evolution (QR / desconectar). SEM --no-verify-jwt de propósito:
           # é chamada pelo NAVEGADOR, por gente logada, e derrubar o WhatsApp
           # da empresa não pode depender de um segredo que anda na URL.
