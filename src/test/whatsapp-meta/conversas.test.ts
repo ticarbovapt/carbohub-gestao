@@ -17,7 +17,8 @@ const msg = (p: Partial<MensagemConversa>): MensagemConversa => ({
   wamid: "wamid.X", wa_id: "5584987346304", cliente: "Padilha",
   direcao: "entrada", tipo: "text", texto: "oi", midia_id: null,
   ocorrido_em: "2026-08-23T11:00:00Z", bling_id: null, sobre_a_etapa: null,
-  vinculo_exato: false, botao_rastreio: null, ...p,
+  vinculo_exato: false, botao_rastreio: null,
+  cliente_pedido: null, nome_whatsapp: null, ...p,
 });
 
 describe("janelaAberta / faltaDaJanela", () => {
@@ -127,9 +128,12 @@ describe("agruparConversas", () => {
   });
 
   it("o nome vem da primeira mensagem que tiver um", () => {
+    // ⚠️ Passou a ler `nome_whatsapp`/`cliente_pedido` em vez do antigo campo
+    // `cliente` da mensagem: agora são dois nomes com significados diferentes,
+    // e "o nome" sozinho deixou de existir.
     const r = agruparConversas([
-      msg({ wamid: "a", cliente: null, ocorrido_em: "2026-08-23T09:00:00Z" }),
-      msg({ wamid: "b", cliente: "Padilha", ocorrido_em: "2026-08-23T10:00:00Z" }),
+      msg({ wamid: "a", nome_whatsapp: null, ocorrido_em: "2026-08-23T09:00:00Z" }),
+      msg({ wamid: "b", nome_whatsapp: "Padilha", ocorrido_em: "2026-08-23T10:00:00Z" }),
     ], {});
     expect(r[0].cliente).toBe("Padilha");
   });
@@ -289,5 +293,54 @@ describe("agruparConversas — o estado da conversa", () => {
       msg({ wamid: "2", direcao: "saida",   ocorrido_em: "2026-08-23T09:30:00Z" }),
     ], {});
     expect(r[0].parece_encerrada).toBe(false);
+  });
+});
+
+describe("agruparConversas — os dois nomes", () => {
+  it("⚠️ o nome do PEDIDO vem na frente: existe antes de a pessoa responder", () => {
+    const r = agruparConversas([
+      msg({ cliente_pedido: "Ataide Ferreira", nome_whatsapp: null }),
+    ], {});
+    expect(r[0].cliente).toBe("Ataide Ferreira");
+    // Sem nome de WhatsApp não há segunda linha para mostrar.
+    expect(r[0].nome_whatsapp).toBeNull();
+  });
+
+  it("nomes diferentes: o do WhatsApp vira a linha discreta", () => {
+    const r = agruparConversas([
+      msg({ cliente_pedido: "Mauro Silva", nome_whatsapp: "advmauro166" }),
+    ], {});
+    expect(r[0].cliente).toBe("Mauro Silva");
+    expect(r[0].nome_whatsapp).toBe("advmauro166");
+  });
+
+  it("⚠️ nomes iguais NÃO repetem a linha — seria ruído", () => {
+    const r = agruparConversas([
+      msg({ cliente_pedido: "Ricardo Benvenuto", nome_whatsapp: "ricardo benvenuto" }),
+    ], {});
+    expect(r[0].cliente).toBe("Ricardo Benvenuto");
+    expect(r[0].nome_whatsapp).toBeNull();
+  });
+
+  it("só o do WhatsApp: ele vira o principal, sem segunda linha", () => {
+    // Quem escreveu sem nunca ter comprado — o número vira canal de entrada.
+    const r = agruparConversas([
+      msg({ cliente_pedido: null, nome_whatsapp: "Padilha" }),
+    ], {});
+    expect(r[0].cliente).toBe("Padilha");
+    expect(r[0].nome_whatsapp).toBeNull();
+  });
+
+  it("sem nome nenhum continua nulo — a tela cai no número", () => {
+    const r = agruparConversas([msg({})], {});
+    expect(r[0].cliente).toBeNull();
+  });
+
+  it("pega o nome da primeira mensagem que tiver, não da última", () => {
+    const r = agruparConversas([
+      msg({ wamid: "a", cliente_pedido: null, ocorrido_em: "2026-08-23T09:00:00Z" }),
+      msg({ wamid: "b", cliente_pedido: "Ataide", ocorrido_em: "2026-08-23T10:00:00Z" }),
+    ], {});
+    expect(r[0].cliente).toBe("Ataide");
   });
 });

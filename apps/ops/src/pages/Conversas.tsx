@@ -383,6 +383,15 @@ function Conversa({ c }: { c: Conversa }) {
                 {c.cliente ?? c.wa_id}
               </h3>
 
+              {/* ⚠️ O nome do WhatsApp em linha própria, e só quando difere do
+                  cadastro. Alguém que conhece o cliente como "advmauro166" não
+                  o encontra por "Mauro Silva" — e vice-versa. */}
+              {c.nome_whatsapp && (
+                <p className="truncate text-[10px] leading-tight text-muted-foreground/70">
+                  no WhatsApp: {c.nome_whatsapp}
+                </p>
+              )}
+
               {/* O número é identificador, não título: monoespaçado e mais
                   apagado que o nome. Antes os dois tinham o mesmo peso. */}
               <div className="mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5
@@ -739,8 +748,10 @@ export default function Conversas() {
       if (filtro === "pendentes" && c.estado !== "precisa_resposta") return false;
       if (filtro === "aberta" && !janelaAberta(c.janela_ate)) return false;
       if (!termo) return true;
-      const nome = normalizar(c.cliente ?? "");
-      if (alvoTexto && nome.includes(alvoTexto)) return true;
+      // ⚠️ Os DOIS nomes: quem procura pelo que viu no WhatsApp tem de achar,
+      // e quem procura pelo do cadastro também.
+      const nomes = normalizar(`${c.cliente ?? ""} ${c.nome_whatsapp ?? ""}`);
+      if (alvoTexto && nomes.includes(alvoTexto)) return true;
       // Número só casa com número: sem isso, um termo com letras viraria string
       // vazia de dígitos e casaria com TODO mundo.
       if (alvoNumero && soDigitos(c.wa_id).includes(alvoNumero)) return true;
@@ -930,6 +941,12 @@ export default function Conversas() {
                                 {hora(c.ultima_em)}
                               </span>
                             </div>
+
+                            {c.nome_whatsapp && (
+                              <p className="truncate text-[10px] leading-tight text-muted-foreground/60">
+                                no WhatsApp: {c.nome_whatsapp}
+                              </p>
+                            )}
 
                             <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
                               {c.ultima_direcao === "saida" && (

@@ -41,6 +41,12 @@ export interface MensagemConversa {
    *  mas a tela precisa dizer qual dos dois — aproximação que se passa por
    *  certeza é como alguém responde sobre o pedido errado. */
   vinculo_exato: boolean;
+  /** O nome do CADASTRO. Existe desde o primeiro aviso, muito antes de a pessoa
+   *  responder — é ele que tira a lista de "vinte números soltos". */
+  cliente_pedido: string | null;
+  /** O nome que a PESSOA escolheu no perfil do WhatsApp. Só existe depois que
+   *  ela escreve, e diverge do cadastro com frequência (apelido, empresa). */
+  nome_whatsapp: string | null;
   /** O sufixo do botão URL que foi enviado — o código de rastreio. A base
    *  (rastreio.carboze.com.br/rastreio/) está no template aprovado, não aqui.
    *  Null nos templates sem botão e em toda mensagem que não é da esteira. */
@@ -68,6 +74,10 @@ export interface Conversa {
   aguardando: number;
   /** Quando a janela fecha. `null` = o cliente nunca escreveu. */
   janela_ate: string | null;
+  /** ⚠️ Segundo nome, mostrado numa linha discreta QUANDO diferente do
+   *  principal. Quem procura pelo nome que viu no WhatsApp precisa achar; quem
+   *  procura pelo do pedido também. */
+  nome_whatsapp: string | null;
   bling_id: number | null;
   sobre_a_etapa: string | null;
   mensagens: MensagemConversa[];
@@ -203,9 +213,20 @@ export function agruparConversas(
     // pessoa, mas o assunto é o do último contato.
     const comPedido = [...ordenadas].reverse().find((m) => m.bling_id != null);
 
+    // ⚠️ O nome do PEDIDO na frente. Ele existe desde o primeiro aviso; o do
+    // WhatsApp só depois que a pessoa escreve, e é ele que hoje deixa vinte
+    // linhas como número puro.
+    const doPedido = ordenadas.find((m) => m.cliente_pedido)?.cliente_pedido ?? null;
+    const doWhats = ordenadas.find((m) => m.nome_whatsapp)?.nome_whatsapp ?? null;
+
     conversas.push({
       wa_id,
-      cliente: ordenadas.find((m) => m.cliente)?.cliente ?? null,
+      cliente: doPedido ?? doWhats,
+      // Só vale mostrar o segundo quando ele diz alguma coisa a mais.
+      nome_whatsapp:
+        doWhats && doPedido &&
+        doWhats.trim().toLowerCase() !== doPedido.trim().toLowerCase()
+          ? doWhats : null,
       ultima_em: ultima.ocorrido_em,
       ultima_texto: ultima.texto,
       ultima_direcao: ultima.direcao,
