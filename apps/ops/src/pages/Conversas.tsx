@@ -4,7 +4,7 @@ import {
   MessagesSquare, Send, Loader2, AlertTriangle, Clock, ArrowLeft, Lock, Paperclip,
   Image as ImageIcon, Video, Mic, FileText, MapPin, User, File, HelpCircle,
   Search, SearchX, X, Package, ArrowUpRight, CornerDownLeft, Megaphone,
-  BellRing, BellOff, Check,
+  BellRing, BellOff, Check, CheckCheck, Inbox, Undo2, Sparkles,
 } from "lucide-react";
 import { toast } from "sonner";
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
@@ -16,8 +16,8 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   useConversas, useConversasAoVivo, useResponder, janelaAberta, faltaDaJanela,
   nivelDaJanela, fracaoDaJanela, type NivelJanela,
-  useNotificaveis, useMarcarNotificado,
-  type Conversa, type MensagemConversa,
+  useNotificaveis, useMarcarNotificado, useResolverConversa,
+  type Conversa, type MensagemConversa, type EstadoConversa,
 } from "@/hooks/useConversas";
 
 /**
@@ -122,12 +122,25 @@ const normalizar = (s: string) =>
  *  Comparar só os dígitos evita que "(84) 99999" não ache "5584999999999". */
 const soDigitos = (s: string) => s.replace(/\D/g, "");
 
-type FiltroConversa = "todas" | "esperando" | "aberta";
+type FiltroConversa = "pendentes" | "todas" | "aberta";
 const FILTROS: { id: FiltroConversa; rotulo: string }[] = [
-  { id: "todas", rotulo: "Todas" },
-  { id: "esperando", rotulo: "Esperando" },
+  { id: "pendentes", rotulo: "Pendentes" },
   { id: "aberta", rotulo: "Janela aberta" },
+  { id: "todas", rotulo: "Todas" },
 ];
+
+/** Como cada estado se apresenta. Um lugar só — o cabeçalho de grupo, o chip da
+ *  linha e a cor do avatar contam a mesma história. */
+const ESTADO: Record<EstadoConversa, { rotulo: string; grupo: string; cor: string }> = {
+  precisa_resposta: { rotulo: "sem resposta", grupo: "Precisam de resposta", cor: "text-amber-500" },
+  resolvida:        { rotulo: "resolvida",    grupo: "Resolvidas",           cor: "text-emerald-500" },
+  sem_pendencia:    { rotulo: "",             grupo: "Sem pendência",        cor: "text-muted-foreground" },
+};
+
+/** ⚠️ A ordem dos grupos é a da urgência, não a alfabética. "Sem pendência" é
+ *  quase toda a lista (um aviso da esteira que ninguém respondeu) e fica por
+ *  último: ela é histórico, não trabalho. */
+const ORDEM_GRUPOS: EstadoConversa[] = ["precisa_resposta", "resolvida", "sem_pendencia"];
 
 // ─── A linha do tempo da conversa ────────────────────────────────────────────
 
@@ -323,6 +336,7 @@ function Balao({ m, primeira, ultima }: {
 
 function Conversa({ c }: { c: Conversa }) {
   const responder = useResponder();
+  const resolver = useResolverConversa();
   const [texto, setTexto] = useState("");
   const fim = useRef<HTMLDivElement>(null);
   const aberta = janelaAberta(c.janela_ate);
@@ -409,9 +423,37 @@ function Conversa({ c }: { c: Conversa }) {
             </div>
           </div>
 
+          <div className="flex shrink-0 flex-col items-end gap-1.5">
+          {/* ⚠️ Resolver é o botão mais usado desta tela: a maioria das
+              respostas é "Ok recebido", e sem ele a única forma de tirar a
+              conversa da fila seria mandar um "de nada" ao cliente. */}
+          {c.estado === "precisa_resposta" ? (
+            <Button size="sm" variant="outline"
+                    className="h-8 gap-1.5 text-emerald-500"
+                    disabled={resolver.isPending}
+                    onClick={() => resolver.mutate({ wa_id: c.wa_id, resolver: true }, {
+                      onSuccess: () => toast.success("Conversa marcada como resolvida"),
+                      onError: (e) => toast.error((e as Error).message),
+                    })}>
+              {resolver.isPending
+                ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                : <CheckCheck className="h-3.5 w-3.5" />}
+              Marcar resolvida
+            </Button>
+          ) : c.estado === "resolvida" ? (
+            <Button size="sm" variant="ghost"
+                    className="h-8 gap-1.5 text-[11px] text-muted-foreground"
+                    disabled={resolver.isPending}
+                    onClick={() => resolver.mutate({ wa_id: c.wa_id, resolver: false }, {
+                      onError: (e) => toast.error((e as Error).message),
+                    })}>
+              <Undo2 className="h-3.5 w-3.5" /> Reabrir
+            </Button>
+          ) : null}
+
           {/* O relógio: badge + barra. A barra é a informação que o texto não
               dava — "23h59" e "12 min" liam-se igual. */}
-          <div className="w-[9.5rem] shrink-0">
+          <div className="w-[9.5rem]">
             {aberta ? (
               <>
                 <CarboBadge variant="secondary"
@@ -435,7 +477,31 @@ function Conversa({ c }: { c: Conversa }) {
               </CarboBadge>
             )}
           </div>
+          </div>
         </div>
+
+        {/* ⚠️ SUGESTÃO, e ela diz que é sugestão. A última mensagem parece só um
+            agradecimento — mas quem decide é quem lê. Esconder sozinho seria
+            arriscar sumir com uma pergunta de verdade; não dizer nada deixaria a
+            pessoa abrir vinte conversas para ler vinte "ok". */}
+        {c.parece_encerrada && (
+          <div className="-mt-1 flex flex-wrap items-center gap-2 rounded-md border
+                          border-emerald-500/20 bg-carbo-green/5 px-2.5 py-1.5">
+            <Sparkles className="h-3 w-3 shrink-0 text-emerald-500" />
+            <span className="text-[11px] text-muted-foreground">
+              A última mensagem parece só um agradecimento — provavelmente não
+              precisa de resposta.
+            </span>
+            <Button size="sm" variant="ghost"
+                    className="ml-auto h-6 gap-1 px-2 text-[11px] text-emerald-500"
+                    disabled={resolver.isPending}
+                    onClick={() => resolver.mutate({ wa_id: c.wa_id, resolver: true }, {
+                      onError: (e) => toast.error((e as Error).message),
+                    })}>
+              <CheckCheck className="h-3 w-3" /> Resolver
+            </Button>
+          </div>
+        )}
 
         {/* `space-y` saiu: o espaçamento agora é do BLOCO (no próprio balão),
             porque mensagem colada e mensagem nova precisam de distâncias
@@ -650,14 +716,18 @@ export default function Conversas() {
      `agruparConversas`. E `atual` sai da lista COMPLETA — filtrar não pode
      fechar a conversa que já está aberta na direita. */
   const [busca, setBusca] = useState("");
-  const [filtro, setFiltro] = useState<FiltroConversa>("todas");
+  /* ⚠️ Abre em "Pendentes", não em "Todas". Com 22 conversas e 2 pendências,
+     "Todas" faz a pessoa procurar o trabalho no meio do histórico — e a caixa
+     de entrada existe para mostrar o trabalho. O contador ao lado de cada
+     filtro diz o que há nos outros, então nada fica escondido. */
+  const [filtro, setFiltro] = useState<FiltroConversa>("pendentes");
   const [verQuemRecebe, setVerQuemRecebe] = useState(false);
   const { data: notificaveis } = useNotificaveis();
   const quantosRecebem = (notificaveis ?? []).filter((p) => p.recebe).length;
 
   const contagens = useMemo(() => ({
     todas: lista.length,
-    esperando: lista.filter((c) => c.aguardando > 0).length,
+    pendentes: lista.filter((c) => c.estado === "precisa_resposta").length,
     aberta: lista.filter((c) => janelaAberta(c.janela_ate)).length,
   }), [lista]);
 
@@ -666,7 +736,7 @@ export default function Conversas() {
     const alvoTexto = normalizar(termo);
     const alvoNumero = soDigitos(termo);
     return lista.filter((c) => {
-      if (filtro === "esperando" && c.aguardando === 0) return false;
+      if (filtro === "pendentes" && c.estado !== "precisa_resposta") return false;
       if (filtro === "aberta" && !janelaAberta(c.janela_ate)) return false;
       if (!termo) return true;
       const nome = normalizar(c.cliente ?? "");
@@ -680,8 +750,9 @@ export default function Conversas() {
 
   /* O cabeçalho é o placar da caixa INTEIRA, não da lista filtrada: um filtro na
      coluna não pode fazer o número de urgências parecer menor. */
-  const esperando = lista.filter((c) => c.aguardando > 0).length;
-  const urgentes = lista.filter((c) => c.aguardando > 0 && janelaAberta(c.janela_ate)).length;
+  const esperando = lista.filter((c) => c.estado === "precisa_resposta").length;
+  const urgentes = lista.filter(
+    (c) => c.estado === "precisa_resposta" && janelaAberta(c.janela_ate)).length;
 
   return (
     <div className="space-y-4 p-4 md:p-6">
@@ -812,7 +883,24 @@ export default function Conversas() {
                     )}
                   </div>
                 ) : (
-                  filtradas.map((c) => {
+                  /* ⚠️ Agrupado por ESTADO, não uma lista corrida. Com 22
+                     conversas dá para varrer; com 200, a pendência se perde no
+                     meio dos avisos que ninguém respondeu. O cabeçalho de grupo
+                     é o que faz a lista ter tamanho legível para sempre. */
+                  ORDEM_GRUPOS.flatMap((estado) => {
+                    const doGrupo = filtradas.filter((c) => c.estado === estado);
+                    if (!doGrupo.length) return [];
+                    return [
+                      <p key={`g-${estado}`}
+                         className="sticky top-0 z-10 bg-background/95 px-1 pb-1 pt-2 text-[10px]
+                                    font-semibold uppercase tracking-wide text-muted-foreground
+                                    backdrop-blur first:pt-0">
+                        {ESTADO[estado].grupo}
+                        <span className="ml-1 font-normal text-muted-foreground/60">
+                          {doGrupo.length}
+                        </span>
+                      </p>,
+                      ...doGrupo.map((c) => {
                     const nivelC = nivelDaJanela(c.janela_ate);
                     const tomC = TOM_JANELA[nivelC];
                     const abertoC = janelaAberta(c.janela_ate);
@@ -871,11 +959,18 @@ export default function Conversas() {
                               {/* O número sozinho não dizia de que era. Com a
                                   palavra, some a dúvida entre "3 mensagens" e
                                   "pedido nº 3". */}
-                              {c.aguardando > 0 && (
+                              {c.estado === "precisa_resposta" && (
                                 <CarboBadge variant="secondary"
                                             className={`shrink-0 gap-1 px-1.5 py-0 text-[10px] font-medium ${
                                               abertoC ? "text-amber-500" : "text-muted-foreground"}`}>
+                                  {c.parece_encerrada && <Sparkles className="h-2.5 w-2.5" />}
                                   {c.aguardando} sem resposta
+                                </CarboBadge>
+                              )}
+                              {c.estado === "resolvida" && (
+                                <CarboBadge variant="secondary"
+                                            className="shrink-0 gap-1 px-1.5 py-0 text-[10px] text-emerald-500">
+                                  <CheckCheck className="h-2.5 w-2.5" /> resolvida
                                 </CarboBadge>
                               )}
                             </div>
@@ -883,6 +978,8 @@ export default function Conversas() {
                         </div>
                       </button>
                     );
+                  }),
+                    ];
                   })
                 )}
               </div>

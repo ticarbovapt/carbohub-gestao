@@ -47,6 +47,17 @@ export interface MensagemConversa {
   botao_rastreio: string | null;
 }
 
+/**
+ * O estado da conversa para quem atende.
+ *
+ * ⚠️ Três, e não dois. "Tem mensagem do cliente" e "precisa de resposta" são
+ * coisas diferentes — metade das respostas é "Ok recebido", o cliente
+ * ENCERRANDO a conversa. Tratar as duas como uma faz a pendência de verdade se
+ * perder no meio dos agradecimentos, com a janela de 24 h correndo em cima
+ * justamente dela.
+ */
+export type EstadoConversa = "precisa_resposta" | "resolvida" | "sem_pendencia";
+
 export interface Conversa {
   wa_id: string;
   cliente: string | null;
@@ -60,6 +71,14 @@ export interface Conversa {
   bling_id: number | null;
   sobre_a_etapa: string | null;
   mensagens: MensagemConversa[];
+  estado: EstadoConversa;
+  /** Quando alguém marcou como tratada. Null = nunca foi marcada. */
+  resolvido_ate: string | null;
+  /** ⚠️ SUGESTÃO, não decisão. A última mensagem do cliente parece só um
+   *  agradecimento — a tela oferece resolver com um clique, e não resolve
+   *  sozinha. Aproximação que se passa por certeza é como uma pergunta de
+   *  verdade some da fila. */
+  parece_encerrada: boolean;
 }
 
 export function janelaAberta(janela_ate: string | null): boolean {
@@ -77,6 +96,64 @@ export function faltaDaJanela(janela_ate: string | null): string {
 }
 
 /**
+ * A última mensagem do cliente é só um "ok"?
+ *
+ * ⚠️ Serve para SUGERIR, nunca para esconder. O método é subtrativo: tira do
+ * texto todas as palavras de encerramento conhecidas e vê se sobrou alguma
+ * coisa. "Ok recebido" fica vazio; "Ok mas não chegou" sobra "mas nao chegou",
+ * e não é encerramento.
+ *
+ * Assim um agradecimento com uma pergunta grudada NUNCA passa por
+ * agradecimento — que é o erro que não se pode cometer aqui. O contrário
+ * (deixar de sugerir) custa um clique.
+ */
+const ENCERRAMENTOS = [
+  "ok", "okay", "oki", "blz", "beleza", "certo", "combinado", "fechado",
+  "obrigado", "obrigada", "obg", "vlw", "valeu", "grato", "grata",
+  "recebi", "recebido", "chegou", "entendi", "perfeito", "otimo", "excelente",
+  "show", "top", "joia", "tudo", "bem", "bom", "boa", "sim", "isso", "eh",
+  "de", "nada", "ate", "mais", "abraco", "bs", "abs", "att",
+];
+
+/** ⚠️ Emoji de aprovação é encerramento; emoji qualquer NÃO é. `👍` sozinho é
+ *  um "ok"; `🤔` sozinho é uma dúvida, e sugerir fechar ali seria o erro que
+ *  esta função não pode cometer. Por isso a lista é explícita, e o que não
+ *  está nela não vira sugestão. */
+const EMOJI_OK = ["👍", "👌", "🙏", "✅", "❤️", "❤", "💚", "😊", "🙂", "😉", "🤝", "👏", "🚀"];
+
+export function pareceEncerramento(texto: string | null): boolean {
+  if (!texto) return false;
+  const t = texto.trim();
+  // Pergunta explícita nunca é encerramento, por mais curta que seja.
+  if (t.includes("?")) return false;
+  // Texto longo raramente é só um "ok", e o custo de errar cresce com o
+  // tamanho: uma reclamação de três linhas não pode virar sugestão de fechar.
+  if (t.length > 60) return false;
+
+  // Tira os emoji de aprovação ANTES de limpar, guardando que existiam: é o que
+  // distingue "só um joinha" de "só um símbolo qualquer".
+  let base = t;
+  let temEmojiOk = false;
+  for (const e of EMOJI_OK) {
+    if (base.includes(e)) { temEmojiOk = true; base = base.split(e).join(" "); }
+  }
+
+  const limpo = base
+    .toLowerCase()
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    // Emoji, pontuação e símbolos somem: 👍 e "!!!" são encerramento tanto
+    // quanto "ok".
+    .replace(/[^a-z0-9\s]/g, " ")
+    .split(/\s+/)
+    .filter(Boolean);
+
+  // Sobrou nada: vale como encerramento só se o que havia era emoji de
+  // aprovação.
+  if (!limpo.length) return temEmojiOk;
+  return limpo.every((palavra) => ENCERRAMENTOS.includes(palavra));
+}
+
+/**
  * Agrupa as mensagens por pessoa.
  *
  * ⚠️ Agrupar por `wa_id` e não por pedido é deliberado: a janela é da PESSOA.
@@ -86,6 +163,7 @@ export function faltaDaJanela(janela_ate: string | null): string {
 export function agruparConversas(
   linhas: MensagemConversa[],
   janelas: Record<string, string | null>,
+  resolvidos: Record<string, string> = {},
 ): Conversa[] {
   const porPessoa = new Map<string, MensagemConversa[]>();
   for (const l of linhas) {
@@ -99,12 +177,27 @@ export function agruparConversas(
       (a, b) => new Date(a.ocorrido_em).getTime() - new Date(b.ocorrido_em).getTime());
     const ultima = ordenadas[ordenadas.length - 1];
 
-    // Quantas do cliente vieram DEPOIS da nossa última resposta. Zero quando a
-    // última palavra é nossa.
+    // ⚠️ DOIS cortes, e vale o mais recente: a nossa última resposta e a marca
+    // de "resolvida". Sem o segundo, "Ok obrigado" ficaria pendente para sempre
+    // — a única forma de zerar seria responder um "de nada" ao cliente.
     const ultimaNossa = [...ordenadas].reverse().find((m) => m.direcao === "saida");
-    const corte = ultimaNossa ? new Date(ultimaNossa.ocorrido_em).getTime() : 0;
-    const aguardando = ordenadas.filter(
-      (m) => m.direcao === "entrada" && new Date(m.ocorrido_em).getTime() > corte).length;
+    const corteResposta = ultimaNossa ? new Date(ultimaNossa.ocorrido_em).getTime() : 0;
+    const resolvidoAte = resolvidos[wa_id] ?? null;
+    const corteResolvido = resolvidoAte ? new Date(resolvidoAte).getTime() : 0;
+    const corte = Math.max(corteResposta, corteResolvido);
+
+    const pendentes = ordenadas.filter(
+      (m) => m.direcao === "entrada" && new Date(m.ocorrido_em).getTime() > corte);
+    const aguardando = pendentes.length;
+
+    const estado: EstadoConversa =
+      aguardando > 0 ? "precisa_resposta"
+      : corteResolvido >= corteResposta && corteResolvido > 0 ? "resolvida"
+      : "sem_pendencia";
+
+    // A sugestão olha só a ÚLTIMA pendente: é ela que a pessoa vai ler ao abrir.
+    const parece_encerrada =
+      aguardando > 0 && pareceEncerramento(pendentes[pendentes.length - 1].texto);
 
     // O pedido vem da mensagem mais recente que tenha um — a conversa é da
     // pessoa, mas o assunto é o do último contato.
@@ -121,6 +214,9 @@ export function agruparConversas(
       bling_id: comPedido?.bling_id ?? null,
       sobre_a_etapa: comPedido?.sobre_a_etapa ?? null,
       mensagens: ordenadas,
+      estado,
+      resolvido_ate: resolvidoAte,
+      parece_encerrada,
     });
   }
 

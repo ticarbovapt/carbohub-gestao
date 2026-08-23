@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import {
   agruparConversas, janelaAberta, faltaDaJanela, nivelDaJanela, fracaoDaJanela,
+  pareceEncerramento,
   type MensagemConversa,
 } from "../../../apps/admin/src/lib/conversas";
 
@@ -184,5 +185,109 @@ describe("nivelDaJanela / fracaoDaJanela", () => {
                      "2026-08-23T11:00:00Z", null]) {
       expect(nivelDaJanela(t) === "fechada").toBe(!janelaAberta(t));
     }
+  });
+});
+
+describe("pareceEncerramento", () => {
+  it("reconhece os 'ok' mais comuns", () => {
+    for (const t of ["ok", "Ok", "OK!", "blz", "beleza", "obrigado", "Obg",
+                     "vlw", "valeu", "certo", "entendi", "perfeito",
+                     "Ok recebido", "Ok obrigado", "recebi obrigado",
+                     "tudo certo", "show", "top", "👍", "ok 👍", "de nada"]) {
+      expect(pareceEncerramento(t)).toBe(true);
+    }
+  });
+
+  it("⚠️ agradecimento COM pergunta grudada nunca é encerramento", () => {
+    // É o erro que não se pode cometer: sumir com uma pergunta de verdade.
+    expect(pareceEncerramento("Ok mas não chegou")).toBe(false);
+    expect(pareceEncerramento("obrigado, e o prazo?")).toBe(false);
+    expect(pareceEncerramento("ok?")).toBe(false);
+  });
+
+  it("pergunta explícita nunca passa, por mais curta que seja", () => {
+    expect(pareceEncerramento("?")).toBe(false);
+    expect(pareceEncerramento("blz?")).toBe(false);
+  });
+
+  it("texto longo não vira sugestão de fechar", () => {
+    // Uma reclamação de três linhas pode até começar com "ok".
+    expect(pareceEncerramento(
+      "ok, mas eu queria entender por que demorou tanto para postar, "
+      + "porque eu comprei faz mais de uma semana")).toBe(false);
+  });
+
+  it("reclamação curta não é encerramento", () => {
+    expect(pareceEncerramento("não chegou")).toBe(false);
+    expect(pareceEncerramento("veio quebrado")).toBe(false);
+    expect(pareceEncerramento("quero cancelar")).toBe(false);
+  });
+
+  it("vazio e nulo não são encerramento", () => {
+    expect(pareceEncerramento(null)).toBe(false);
+    expect(pareceEncerramento("")).toBe(false);
+    // Só emoji desconhecido: sobrou nada de texto, mas também não há palavra
+    // conhecida — não sugere.
+    expect(pareceEncerramento("🤔")).toBe(false);
+  });
+});
+
+describe("agruparConversas — o estado da conversa", () => {
+  it("mensagem do cliente sem resposta nossa: precisa_resposta", () => {
+    const r = agruparConversas([msg({ wamid: "1" })], {});
+    expect(r[0].estado).toBe("precisa_resposta");
+  });
+
+  it("nossa palavra por último: sem_pendencia", () => {
+    const r = agruparConversas([
+      msg({ wamid: "1", direcao: "entrada", ocorrido_em: "2026-08-23T09:00:00Z" }),
+      msg({ wamid: "2", direcao: "saida",   ocorrido_em: "2026-08-23T09:30:00Z" }),
+    ], {});
+    expect(r[0].estado).toBe("sem_pendencia");
+  });
+
+  it("⚠️ marcar resolvida zera a pendência SEM precisar responder o cliente", () => {
+    // É o caso do "Ok obrigado": sem isto, a única forma de tirar da fila seria
+    // mandar um "de nada".
+    const r = agruparConversas(
+      [msg({ wamid: "1", texto: "Ok obrigado", ocorrido_em: "2026-08-23T09:00:00Z" })],
+      {}, { "5584987346304": "2026-08-23T09:30:00Z" });
+    expect(r[0].aguardando).toBe(0);
+    expect(r[0].estado).toBe("resolvida");
+  });
+
+  it("⚠️ mensagem DEPOIS da marca reabre sozinha", () => {
+    // É por isso que a marca é uma data e não um booleano.
+    const r = agruparConversas([
+      msg({ wamid: "1", ocorrido_em: "2026-08-23T09:00:00Z" }),
+      msg({ wamid: "2", ocorrido_em: "2026-08-23T11:00:00Z", texto: "e o prazo?" }),
+    ], {}, { "5584987346304": "2026-08-23T10:00:00Z" });
+    expect(r[0].aguardando).toBe(1);
+    expect(r[0].estado).toBe("precisa_resposta");
+  });
+
+  it("vale o corte mais recente entre resposta e marca", () => {
+    const r = agruparConversas([
+      msg({ wamid: "1", direcao: "entrada", ocorrido_em: "2026-08-23T09:00:00Z" }),
+      msg({ wamid: "2", direcao: "saida",   ocorrido_em: "2026-08-23T11:00:00Z" }),
+    ], {}, { "5584987346304": "2026-08-23T10:00:00Z" });
+    // A resposta é mais recente que a marca: sem pendência de qualquer jeito.
+    expect(r[0].estado).toBe("sem_pendencia");
+  });
+
+  it("a sugestão olha a ÚLTIMA pendente, não a primeira", () => {
+    const r = agruparConversas([
+      msg({ wamid: "1", texto: "e o meu pedido?", ocorrido_em: "2026-08-23T09:00:00Z" }),
+      msg({ wamid: "2", texto: "ok obrigado",    ocorrido_em: "2026-08-23T09:05:00Z" }),
+    ], {});
+    expect(r[0].parece_encerrada).toBe(true);
+  });
+
+  it("sem pendência não sugere nada", () => {
+    const r = agruparConversas([
+      msg({ wamid: "1", direcao: "entrada", texto: "ok", ocorrido_em: "2026-08-23T09:00:00Z" }),
+      msg({ wamid: "2", direcao: "saida",   ocorrido_em: "2026-08-23T09:30:00Z" }),
+    ], {});
+    expect(r[0].parece_encerrada).toBe(false);
   });
 });

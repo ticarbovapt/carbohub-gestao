@@ -23,7 +23,8 @@ export {
   JANELA_MS, janelaAberta, faltaDaJanela, agruparConversas,
   msDaJanela, nivelDaJanela, fracaoDaJanela,
 } from "@/lib/conversas";
-export type { Conversa, MensagemConversa, NivelJanela } from "@/lib/conversas";
+export { pareceEncerramento } from "@/lib/conversas";
+export type { Conversa, MensagemConversa, NivelJanela, EstadoConversa } from "@/lib/conversas";
 
 export function useConversas(dias = 30) {
   return useQuery({
@@ -31,12 +32,14 @@ export function useConversas(dias = 30) {
     queryFn: async (): Promise<Conversa[]> => {
       const desde = new Date(Date.now() - dias * 86_400_000).toISOString();
 
-      const [{ data: msgs, error }, { data: contatos }] = await Promise.all([
-        (supabase as any).from("carbo_wa_conversas")
-          .select("*").gte("ocorrido_em", desde).order("ocorrido_em", { ascending: false })
-          .limit(1000),
-        (supabase as any).from("carbo_wa_contatos").select("wa_id,last_inbound_at"),
-      ]);
+      const [{ data: msgs, error }, { data: contatos }, { data: resolvidas }] =
+        await Promise.all([
+          (supabase as any).from("carbo_wa_conversas")
+            .select("*").gte("ocorrido_em", desde).order("ocorrido_em", { ascending: false })
+            .limit(1000),
+          (supabase as any).from("carbo_wa_contatos").select("wa_id,last_inbound_at"),
+          (supabase as any).from("carbo_wa_resolvidas").select("wa_id,resolvido_ate"),
+        ]);
       if (error) throw error;
 
       const janelas: Record<string, string | null> = {};
@@ -45,7 +48,10 @@ export function useConversas(dias = 30) {
           ? new Date(new Date(c.last_inbound_at).getTime() + JANELA_MS).toISOString()
           : null;
       }
-      return agruparConversas((msgs ?? []) as MensagemConversa[], janelas);
+      const resolvidos: Record<string, string> = {};
+      for (const r of resolvidas ?? []) resolvidos[r.wa_id] = r.resolvido_ate;
+
+      return agruparConversas((msgs ?? []) as MensagemConversa[], janelas, resolvidos);
     },
     // ⚠️ CONTINUA existindo mesmo com o Realtime abaixo, e não é redundância:
     // são duas coisas diferentes. O Realtime traz mensagem NOVA; este intervalo
@@ -94,6 +100,10 @@ export function useConversasAoVivo() {
       // linha sem inserir nada.
       .on("postgres_changes" as never,
           { event: "*", schema: "public", table: "carbo_msg_envios" }, invalidar)
+      // ⚠️ E a marca de resolvida: sem ela, duas pessoas atendendo veriam filas
+      // diferentes, e a segunda responderia o que a primeira já respondeu.
+      .on("postgres_changes" as never,
+          { event: "*", schema: "public", table: "carbo_wa_resolvidas" }, invalidar)
       .subscribe();
 
     return () => {
@@ -125,6 +135,39 @@ export function useResponder() {
         throw new Error(corpo?.detalhe || corpo?.error || res.error.message || "Falhou");
       }
       return res.data;
+    },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["wa-conversas"] }); },
+  });
+}
+
+/**
+ * Marca a conversa como tratada ATÉ AGORA.
+ *
+ * ⚠️ Grava a hora, não um "true". Mensagem que o cliente mandar depois reabre a
+ * conversa sozinha — com booleano, alguém marcaria hoje e a pergunta de amanhã
+ * ficaria escondida atrás da marca.
+ */
+export function useResolverConversa() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ wa_id, resolver }: { wa_id: string; resolver: boolean }) => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error("Sessão expirada. Faça login novamente.");
+
+      if (!resolver) {
+        // Reabrir é apagar a marca: sem ela, o corte volta a ser só a nossa
+        // última resposta, que é o comportamento original.
+        const { error } = await (supabase as any)
+          .from("carbo_wa_resolvidas").delete().eq("wa_id", wa_id);
+        if (error) throw error;
+        return;
+      }
+      const { error } = await (supabase as any)
+        .from("carbo_wa_resolvidas")
+        .upsert({ wa_id, resolvido_ate: new Date().toISOString(),
+                  por: session.user.id, em: new Date().toISOString() },
+                { onConflict: "wa_id" });
+      if (error) throw error;
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["wa-conversas"] }); },
   });
