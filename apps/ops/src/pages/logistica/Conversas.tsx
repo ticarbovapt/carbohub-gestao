@@ -383,12 +383,34 @@ function Balao({ m, primeira, ultima }: {
           </p>
         )}
 
+        {/* ⚠️ O fracasso do envio aparece SEMPRE, e não só na última do bloco.
+            Aceitar não é entregar: a Meta devolve `wamid`, o balão nasce igual
+            ao que deu certo, e o `failed` chega depois pelo webhook. Sem esta
+            linha quem atendeu vai embora achando que respondeu. */}
+        {nossa && m.status === "falhou" && (
+          <p className="mt-1 flex items-start gap-1 text-[10px] leading-tight text-red-500">
+            <AlertTriangle className="mt-px h-3 w-3 shrink-0" />
+            <span>
+              não chegou ao cliente
+              {m.erro_codigo ? ` (erro ${m.erro_codigo})` : ""}
+              {m.erro_detalhe ? ` — ${m.erro_detalhe}` : ""}
+            </span>
+          </p>
+        )}
+
         {/* O horário só na ÚLTIMA do bloco: repetido em cada balão ele vira
             carimbo e some da vista justamente quando importa. */}
         {ultima && (
           <p className={`mt-1 text-[10px] leading-none text-muted-foreground/70 ${
             nossa ? "text-right" : ""}`}>
             {soHora(m.ocorrido_em)}
+            {/* Um tique para enviado, dois para entregue/lido — a mesma
+                gramática do WhatsApp, para não haver um segundo idioma. */}
+            {nossa && m.status === "enviado" && <Check className="ml-1 inline h-3 w-3" />}
+            {nossa && (m.status === "entregue" || m.status === "lido") && (
+              <CheckCheck className={`ml-1 inline h-3 w-3 ${
+                m.status === "lido" ? "text-sky-400" : ""}`} />
+            )}
           </p>
         )}
         {desconhecida && <span className="sr-only">{hora(m.ocorrido_em)}</span>}

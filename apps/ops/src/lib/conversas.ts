@@ -51,6 +51,14 @@ export interface MensagemConversa {
    *  (rastreio.carboze.com.br/rastreio/) está no template aprovado, não aqui.
    *  Null nos templates sem botão e em toda mensagem que não é da esteira. */
   botao_rastreio: string | null;
+  /** ⚠️ O que a Meta disse DEPOIS de aceitar o envio. Aceitar não é entregar: o
+   *  áudio que ninguém recebeu voltou com `falhou` pelo webhook, e enquanto
+   *  isso não chegava à tela o balão ficava idêntico ao que deu certo — quem
+   *  atendeu ia embora achando que respondeu. Null = ainda sem status (e toda
+   *  mensagem de entrada é assim). */
+  status?: string | null;
+  erro_codigo?: number | null;
+  erro_detalhe?: string | null;
 }
 
 /**
