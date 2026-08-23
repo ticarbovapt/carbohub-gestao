@@ -149,7 +149,7 @@ select
   -- coluna que a MENSAGEM olha; a `rastreio` acima continua com o fallback,
   -- porque a esteira e o `rastreio-sync` precisam enxergar o envio antes disso.
   coalesce(nullif(bo.raw_detalhe -> 'transporte' -> 'volumes' -> 0 ->> 'codigoRastreamento', ''),
-           me.tracking)                           as rastreio_transportadora
+           mev.tracking)                          as rastreio_transportadora
 from public.bling2_orders bo
 left join public.bling2_nfe      nf on nf.bling_id = bo.nf_bling_id
 left join public.bling2_contacts c  on c.bling_id  = bo.contato_id
@@ -160,33 +160,19 @@ left join public.rastreio_envios r
        on r.codigo = nullif(bo.raw_detalhe -> 'transporte' -> 'volumes' -> 0 ->> 'codigoRastreamento', '')
 left join public.carbo_pedido_codigo pc on pc.bling_id = bo.bling_id
 left join public.melhorenvio_envio_vigente me on me.bling_id = bo.bling_id
+-- ⚠️ De volta na TABELA para pegar o `tracking` cru. A `melhorenvio_envio_vigente`
+-- só expõe o `codigo` já resolvido (com o fallback para o self_tracking), e é
+-- justamente a resolução que estamos desfazendo aqui. Juntar pelo `me_id` da
+-- vigente garante que é o MESMO envio que ela elegeu — não o mais recente da
+-- tabela, que pode ser um cancelado.
+--
+-- Reescrever a vigente seria o caminho óbvio e não é possível: `create or
+-- replace view` não deixa remover coluna, e derrubá-la exigiria CASCADE, que
+-- levaria a esteira junto.
+left join public.melhorenvio_envios mev on mev.me_id = me.me_id
 where bo.situacao_id in (9, 12);
 
 grant select on public.bling2_esteira to authenticated;
-
-
--- ⚠️ `melhorenvio_envio_vigente` precisa expor o `tracking` cru. Ela hoje só
--- devolve o `codigo` já resolvido, e é justamente a resolução que estamos
--- desfazendo aqui.
-
-create or replace view public.melhorenvio_envio_vigente
-with (security_invoker = true) as
-select distinct on (e.bling_id)
-  e.bling_id, e.me_id,
-  coalesce(e.tracking, e.self_tracking)      as codigo,
-  e.url_rastreio, e.transportadora, e.servico,
-  e.gerado_em, e.pago_em, e.postado_em, e.entregue_em,
-  e.cancelado_em, e.expirado_em,
-  public.melhorenvio_situacao(e.cancelado_em, e.expirado_em, e.entregue_em,
-                              e.postado_em, e.gerado_em, e.pago_em) as situacao,
-  e.vinculo_status, e.vinculo_via,
-  -- Coluna nova, no fim: o código DA TRANSPORTADORA, sem fallback.
-  e.tracking
-from public.melhorenvio_envios e
-where e.ativo
-order by e.bling_id, e.postado_em desc nulls last, e.gerado_em desc nulls last, e.criado_em_me desc;
-
-grant select on public.melhorenvio_envio_vigente to authenticated;
 
 
 -- ╔═══════════════════════════════════════════════════════════════════════╗
