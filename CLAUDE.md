@@ -532,7 +532,12 @@ supabase/functions/whatsapp-responder    texto livre, chamado pelo NAVEGADOR
    enquanto a tela viva seguia com a versão antiga. Não deu erro em lugar
    nenhum: o app compila, builda e sobe, mostrando código de ontem. Confira o
    import do `App.tsx` antes de copiar, sempre.
-7. ⚠️ **`carbo_e_time_interno()`** guarda `carbo_wa_mensagens` e
+7. **Recado interno mora em OUTRA TABELA** (`carbo_wa_notas`), não numa coluna
+   `interna` em `carbo_wa_mensagens`. É isso — e não a cor âmbar na tela — que
+   garante que ele nunca chegue ao cliente: nenhum caminho de envio lê essa
+   tabela, então não há SELECT futuro que possa esquecer o filtro. Ele também
+   funciona com a janela FECHADA, que é quando anotar mais importa.
+8. ⚠️ **`carbo_e_time_interno()`** guarda `carbo_wa_mensagens` e
    `carbo_wa_contatos`. A lista de interfaces é a mesma do `notify_time_interno`
    — duas listas divergem, e divergir aqui ABRE acesso em vez de fechar.
 

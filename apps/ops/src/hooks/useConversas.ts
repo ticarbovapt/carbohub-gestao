@@ -110,6 +110,12 @@ export function useConversasAoVivo() {
       .on("postgres_changes" as never,
           { event: "*", schema: "public", table: "carbo_wa_agendadas" },
           () => { qc.invalidateQueries({ queryKey: ["wa-agendadas"] }); invalidar(); })
+      // ⚠️ E o recado interno: duas pessoas atendendo é o caso normal, e o
+      // recado existe justamente para uma avisar a outra. Chegar 30 s depois é
+      // chegar depois da resposta.
+      .on("postgres_changes" as never,
+          { event: "*", schema: "public", table: "carbo_wa_notas" },
+          () => qc.invalidateQueries({ queryKey: ["wa-notas"] }))
       .subscribe();
 
     return () => {
@@ -306,6 +312,78 @@ export function useCancelarAgendada() {
   });
 }
 
+// ─── Recado interno ──────────────────────────────────────────────────────────
+
+export interface Nota {
+  id: string;
+  wa_id: string;
+  texto: string;
+  autor: string | null;
+  autor_nome: string | null;
+  criado_em: string;
+}
+
+/**
+ * Os recados internos de uma conversa.
+ *
+ * ⚠️ Tabela SEPARADA das mensagens, e é isso que garante o sigilo — não a cor
+ * na tela. Nenhum caminho de envio lê `carbo_wa_notas`; se o recado morasse em
+ * `carbo_wa_mensagens` com uma coluna `interna`, o sigilo dependeria de todo
+ * SELECT futuro lembrar do filtro.
+ */
+export function useNotas(wa_id: string | null) {
+  return useQuery({
+    queryKey: ["wa-notas", wa_id],
+    enabled: !!wa_id,
+    queryFn: async (): Promise<Nota[]> => {
+      const { data, error } = await (supabase as any)
+        .from("carbo_wa_notas").select("*")
+        .eq("wa_id", wa_id).is("apagada_em", null)
+        .order("criado_em", { ascending: true });
+      if (error) throw error;
+      return (data ?? []) as Nota[];
+    },
+  });
+}
+
+export function useAnotar() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ wa_id, texto }: { wa_id: string; texto: string }) => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error("Sessão expirada. Faça login novamente.");
+
+      // O nome é COPIADO para a linha: quem escreveu continua sendo quem
+      // escreveu depois de sair da empresa ou ter o perfil desativado.
+      const { data: perfil } = await (supabase as any)
+        .from("profiles").select("full_name").eq("id", session.user.id).maybeSingle();
+
+      const { error } = await (supabase as any).from("carbo_wa_notas").insert({
+        wa_id, texto: texto.trim(), autor: session.user.id,
+        autor_nome: perfil?.full_name ?? session.user.email ?? null,
+      });
+      if (error) throw error;
+    },
+    onSuccess: (_d, v) => { qc.invalidateQueries({ queryKey: ["wa-notas", v.wa_id] }); },
+  });
+}
+
+export function useApagarNota() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id }: { id: string; wa_id: string }) => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error("Sessão expirada. Faça login novamente.");
+      // ⚠️ Marca, não apaga: o recado é registro de quem sabia o quê e quando.
+      const { error } = await (supabase as any).from("carbo_wa_notas")
+        .update({ apagada_em: new Date().toISOString(), apagada_por: session.user.id })
+        .eq("id", id).is("apagada_em", null);
+      if (error) throw error;
+    },
+    onSuccess: (_d, v) => { qc.invalidateQueries({ queryKey: ["wa-notas", v.wa_id] }); },
+  });
+}
+
 // ─── Foto, documento e áudio ─────────────────────────────────────────────────
 
 /**
@@ -346,14 +424,14 @@ export function useMidia(media_id: string | null, ligado: boolean) {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error("Sessão expirada. Faça login novamente.");
 
-      const res = await fetch(`${FUNCTIONS_URL}/whatsapp-midia-baixar`, {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${session.access_token}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ media_id }),
-      });
+      // ⚠️ GET, e o id vai na URL. Com POST o navegador NÃO guarda a resposta
+      // no cache de HTTP — o `Cache-Control` da função era ignorado e cada F5
+      // baixava o mesmo áudio da Meta de novo, gastando duas chamadas ao Graph
+      // por escuta. Em GET a mesma URL responde do disco.
+      const res = await fetch(
+        `${FUNCTIONS_URL}/whatsapp-midia-baixar?media_id=${encodeURIComponent(media_id!)}`,
+        { headers: { "Authorization": `Bearer ${session.access_token}` } },
+      );
       if (!res.ok) {
         // A função responde JSON no erro e bytes no sucesso — ler como JSON
         // aqui é o que traz a frase da retenção de 30 dias em vez de "502".

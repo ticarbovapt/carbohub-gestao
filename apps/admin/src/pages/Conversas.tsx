@@ -6,7 +6,7 @@ import {
   File as FileIcon, HelpCircle,
   Search, SearchX, X, Package, ArrowUpRight, CornerDownLeft, Megaphone,
   BellRing, BellOff, Check, CheckCheck, Inbox, Undo2, Sparkles,
-  CalendarClock, Trash2, Square, Play, Pause, Download,
+  CalendarClock, Trash2, Square, Play, Pause, Download, StickyNote, EyeOff,
 } from "lucide-react";
 import { toast } from "sonner";
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
@@ -20,6 +20,7 @@ import {
   nivelDaJanela, fracaoDaJanela, type NivelJanela,
   useNotificaveis, useMarcarNotificado, useResolverConversa,
   useAgendadas, useAgendar, useCancelarAgendada, useEnviarMidia, useMidia,
+  useNotas, useAnotar, useApagarNota, type Nota,
   type Conversa, type MensagemConversa, type EstadoConversa,
 } from "@/hooks/useConversas";
 
@@ -164,7 +165,8 @@ const mesmoBloco = (a?: MensagemConversa, b?: MensagemConversa) =>
 
 type LinhaDaConversa =
   | { kind: "dia"; chave: string; rotulo: string }
-  | { kind: "msg"; m: MensagemConversa; primeira: boolean; ultima: boolean };
+  | { kind: "msg"; m: MensagemConversa; primeira: boolean; ultima: boolean }
+  | { kind: "nota"; n: Nota };
 
 /**
  * Intercala separadores de dia e marca começo/fim de cada bloco.
@@ -174,9 +176,22 @@ type LinhaDaConversa =
  * some com linha ou muda ordem — quem ordena é o `lib/conversas.ts`, e ter duas
  * ordenações seria ter duas verdades sobre a mesma conversa.
  */
-function montarLinhaDoTempo(msgs: MensagemConversa[]): LinhaDaConversa[] {
+function montarLinhaDoTempo(msgs: MensagemConversa[], notas: Nota[] = []): LinhaDaConversa[] {
   const linhas: LinhaDaConversa[] = [];
+
+  /* ⚠️ O recado entra NA HORA em que foi escrito, não no fim da lista. Ele
+     quase sempre comenta a mensagem logo acima ("esse já teve dois estornos"),
+     e jogado no rodapé perde a única coisa que o torna útil: o lugar. */
+  let iNota = 0;
+  const notasAte = (quando: string) => {
+    while (iNota < notas.length && notas[iNota].criado_em <= quando) {
+      linhas.push({ kind: "nota", n: notas[iNota] });
+      iNota++;
+    }
+  };
+
   msgs.forEach((m, i) => {
+    notasAte(m.ocorrido_em);
     const ant = msgs[i - 1];
     const prox = msgs[i + 1];
     if (!ant || diaEmSP(ant.ocorrido_em) !== diaEmSP(m.ocorrido_em)) {
@@ -192,6 +207,9 @@ function montarLinhaDoTempo(msgs: MensagemConversa[]): LinhaDaConversa[] {
       ultima: !mesmoBloco(m, prox),
     });
   });
+  // Os recados escritos depois da última mensagem — o caso comum de quem anota
+  // ao terminar o atendimento.
+  while (iNota < notas.length) { linhas.push({ kind: "nota", n: notas[iNota] }); iNota++; }
   return linhas;
 }
 
@@ -219,6 +237,43 @@ const NOME_MIDIA: Record<string, string> = {
  * escreveu. `audio-1787495498124.ogg` não diz nada a ninguém.
  */
 const ehNomeDeGravacao = (t: string) => /^audio-\d+\.(ogg|m4a|webm|mp4)$/i.test(t.trim());
+
+/**
+ * O recado interno.
+ *
+ * ⚠️ Ele NÃO pode parecer um balão. Balão é o que o cliente vê ou viu; recado é
+ * o contrário disso, e a distinção não pode depender de ler o texto. Por isso
+ * ele fica no meio, sem lado, com moldura tracejada âmbar e o olho cortado
+ * dizendo "só o time vê" — a mesma lógica do contorno tracejado do aviso
+ * automático, que existe para ninguém confundir sistema com gente.
+ */
+function Recado({ n, apagar }: { n: Nota; apagar: () => void }) {
+  return (
+    <div className="my-3 flex justify-center">
+      <div className="group w-[92%] rounded-lg border border-dashed border-amber-500/40
+                      bg-amber-500/5 px-3 py-2 sm:w-[80%]">
+        <p className="flex items-center gap-1.5 text-[10px] font-medium text-amber-500/90">
+          <StickyNote className="h-3 w-3" />
+          recado interno
+          <EyeOff className="h-3 w-3" />
+          <span className="text-muted-foreground">só o time vê</span>
+          <button type="button" onClick={apagar}
+                  className="ml-auto opacity-0 transition-opacity group-hover:opacity-100
+                             hover:text-red-500"
+                  aria-label="Apagar recado">
+            <Trash2 className="h-3 w-3" />
+          </button>
+        </p>
+        <p className="mt-1 whitespace-pre-wrap break-words text-[13px] leading-relaxed">
+          {n.texto}
+        </p>
+        <p className="mt-1 text-[10px] leading-none text-muted-foreground/70">
+          {n.autor_nome ?? "alguém do time"} · {hora(n.criado_em)}
+        </p>
+      </div>
+    </div>
+  );
+}
 
 /** mm:ss — e `--:--` enquanto a duração não veio, em vez de "NaN:NaN". */
 function relogioDoAudio(s: number): string {
@@ -553,6 +608,11 @@ function formatoDeAudio(): string | null {
 
 function Conversa({ c }: { c: Conversa }) {
   const responder = useResponder();
+  const notas = useNotas(c.wa_id);
+  const anotar = useAnotar();
+  const apagarNota = useApagarNota();
+  const [recado, setRecado] = useState("");
+  const [anotando, setAnotando] = useState(false);
   const resolver = useResolverConversa();
   const { data: agendadas } = useAgendadas(c.wa_id);
   const agendar = useAgendar();
@@ -779,10 +839,13 @@ function Conversa({ c }: { c: Conversa }) {
             porque mensagem colada e mensagem nova precisam de distâncias
             diferentes — um `space-y` único achatava as duas no mesmo valor. */}
         <div className="min-h-0 flex-1 overflow-y-auto px-0.5 pb-1 pr-1">
-          {montarLinhaDoTempo(c.mensagens).map((l) =>
+          {montarLinhaDoTempo(c.mensagens, notas.data ?? []).map((l) =>
             l.kind === "dia"
               ? <SeparadorDeDia key={l.chave} rotulo={l.rotulo} />
-              : <Balao key={l.m.wamid} m={l.m} primeira={l.primeira} ultima={l.ultima} />,
+              : l.kind === "nota"
+                ? <Recado key={l.n.id} n={l.n}
+                          apagar={() => apagarNota.mutate({ id: l.n.id, wa_id: c.wa_id })} />
+                : <Balao key={l.m.wamid} m={l.m} primeira={l.primeira} ultima={l.ultima} />,
           )}
           <div ref={fim} />
         </div>
@@ -827,6 +890,63 @@ function Conversa({ c }: { c: Conversa }) {
               </div>
             ))}
           </div>
+        )}
+
+        {/* ⚠️ O recado interno fica FORA do `aberta ?`. Ele não passa pela Meta,
+            então a janela de 24 h não tem nada a ver com ele — e é justamente
+            na conversa fechada que anotar mais importa: é o que sobra para
+            registrar o combinado quando não dá para responder. */}
+        {anotando ? (
+          <div className="mb-2 rounded-lg border border-dashed border-amber-500/40
+                          bg-amber-500/5 p-2">
+            <Textarea
+              value={recado} onChange={(e) => setRecado(e.target.value)}
+              placeholder="Recado para o time — o cliente não vê." rows={2} maxLength={2000}
+              autoFocus
+              className="resize-y border-0 bg-transparent px-1 py-0.5 text-xs shadow-none
+                         focus-visible:ring-0 focus-visible:ring-offset-0"
+              onKeyDown={(e) => {
+                if (e.key === "Escape") { setAnotando(false); setRecado(""); }
+                if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+                  e.preventDefault();
+                  if (recado.trim()) {
+                    anotar.mutate({ wa_id: c.wa_id, texto: recado },
+                      { onSuccess: () => { setRecado(""); setAnotando(false); },
+                        onError: (err) => toast.error((err as Error).message) });
+                  }
+                }
+              }}
+            />
+            <div className="mt-1.5 flex items-center justify-between gap-2 border-t
+                            border-amber-500/20 pt-1.5">
+              <p className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
+                <EyeOff className="h-3 w-3" /> só o time vê — não vai para o WhatsApp
+              </p>
+              <div className="flex items-center gap-2">
+                <Button size="sm" variant="ghost" className="h-8"
+                        onClick={() => { setAnotando(false); setRecado(""); }}>
+                  Cancelar
+                </Button>
+                <Button size="sm" className="h-8 gap-1.5"
+                        disabled={!recado.trim() || anotar.isPending}
+                        onClick={() => anotar.mutate({ wa_id: c.wa_id, texto: recado },
+                          { onSuccess: () => { setRecado(""); setAnotando(false); },
+                            onError: (err) => toast.error((err as Error).message) })}>
+                  {anotar.isPending
+                    ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    : <StickyNote className="h-3.5 w-3.5" />}
+                  Anotar
+                </Button>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <Button size="sm" variant="outline"
+                  className="mb-2 h-8 gap-1.5 self-start border-dashed text-[11px]
+                             text-muted-foreground"
+                  onClick={() => setAnotando(true)}>
+            <StickyNote className="h-3.5 w-3.5" /> Recado interno
+          </Button>
         )}
 
         {aberta ? (

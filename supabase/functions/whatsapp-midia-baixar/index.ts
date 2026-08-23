@@ -39,7 +39,7 @@ function cors(req: Request) {
   const origin = req.headers.get("origin") || "";
   return {
     "Access-Control-Allow-Origin": ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0],
-    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
     "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
     "Vary": "Origin",
   };
@@ -63,7 +63,9 @@ Deno.serve(async (req: Request) => {
     new Response(JSON.stringify(b, null, 2),
                  { status: s, headers: { "Content-Type": "application/json", ...base } });
 
-  if (req.method !== "POST") return json({ error: "método não suportado" }, 405);
+  if (req.method !== "POST" && req.method !== "GET") {
+    return json({ error: "método não suportado" }, 405);
+  }
 
   // ── Quem está pedindo ───────────────────────────────────────────────────
   const auth = req.headers.get("authorization") ?? "";
@@ -80,8 +82,13 @@ Deno.serve(async (req: Request) => {
 
   if (!TOKEN) return json({ error: "WHATSAPP_ACCESS_TOKEN não está configurado." }, 500);
 
-  const corpo = await req.json().catch(() => ({}));
-  const mediaId = String(corpo?.media_id ?? "").trim();
+  // ⚠️ GET é o caminho principal, e não é estilo: resposta de POST o navegador
+  // NÃO guarda no cache de HTTP, então o `Cache-Control` abaixo era ignorado e
+  // cada F5 rebaixava o mesmo áudio da Meta — duas chamadas ao Graph por
+  // escuta. Em GET a mesma URL responde do disco do navegador.
+  const mediaId = req.method === "GET"
+    ? String(new URL(req.url).searchParams.get("media_id") ?? "").trim()
+    : String((await req.json().catch(() => ({})))?.media_id ?? "").trim();
   if (!mediaId) return json({ error: "media_id ausente" }, 400);
 
   // ⚠️ O id tem de ser de uma mensagem NOSSA. Sem esta checagem, quem tem
@@ -125,9 +132,12 @@ Deno.serve(async (req: Request) => {
       headers: {
         ...base,
         "Content-Type": mime,
-        // Só o navegador de quem pediu guarda, e por pouco tempo: a URL de
-        // origem expira e o conteúdo é de cliente.
-        "Cache-Control": "private, max-age=300",
+        // ⚠️ `private`: o conteúdo é de cliente e não pode ficar em cache
+        // compartilhado. `immutable` porque o `media_id` aponta sempre para o
+        // mesmo arquivo — o que expira é o id (uns 30 dias na Meta), não o
+        // conteúdo. Um dia de cache poupa o download a cada F5 sem prometer
+        // mais do que a Meta guarda.
+        "Cache-Control": "private, max-age=86400, immutable",
       },
     });
   } catch (e) {
