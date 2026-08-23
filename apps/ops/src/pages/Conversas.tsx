@@ -2,10 +2,11 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import {
   MessagesSquare, Send, Loader2, AlertTriangle, Clock, ArrowLeft, Lock, Paperclip,
-  Image as ImageIcon, Video, Mic, FileText, MapPin, User, File, HelpCircle,
+  Image as ImageIcon, Video, Mic, FileText, MapPin, User,
+  File as FileIcon, HelpCircle,
   Search, SearchX, X, Package, ArrowUpRight, CornerDownLeft, Megaphone,
   BellRing, BellOff, Check, CheckCheck, Inbox, Undo2, Sparkles,
-  CalendarClock, Trash2,
+  CalendarClock, Trash2, Square, Play,
 } from "lucide-react";
 import { toast } from "sonner";
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
@@ -18,7 +19,7 @@ import {
   useConversas, useConversasAoVivo, useResponder, janelaAberta, faltaDaJanela,
   nivelDaJanela, fracaoDaJanela, type NivelJanela,
   useNotificaveis, useMarcarNotificado, useResolverConversa,
-  useAgendadas, useAgendar, useCancelarAgendada,
+  useAgendadas, useAgendar, useCancelarAgendada, useEnviarMidia,
   type Conversa, type MensagemConversa, type EstadoConversa,
 } from "@/hooks/useConversas";
 
@@ -194,8 +195,10 @@ function montarLinhaDoTempo(msgs: MensagemConversa[]): LinhaDaConversa[] {
   return linhas;
 }
 
-/** O ícone diz o que chegou antes de a pessoa ler o rótulo. `File` é o padrão
- *  porque tipo novo da Meta não pode virar quadrado vazio. */
+/** O ícone diz o que chegou antes de a pessoa ler o rótulo. `FileIcon` é o
+ *  padrão porque tipo novo da Meta não pode virar quadrado vazio.
+ *  ⚠️ Importado com apelido: `File` sem apelido sombreia o construtor do
+ *  navegador, e a gravação de áudio precisa dele. */
 const ICONE_MIDIA: Record<string, typeof Paperclip> = {
   image: ImageIcon, sticker: ImageIcon, video: Video,
   audio: Mic, voice: Mic, ptt: Mic,
@@ -241,7 +244,7 @@ function Balao({ m, primeira, ultima }: {
   const nossa = m.direcao === "saida";
   const anexo = !!m.midia_id;
   const desconhecida = !m.texto && !anexo && !automatica;
-  const IconeAnexo = ICONE_MIDIA[m.tipo] ?? File;
+  const IconeAnexo = ICONE_MIDIA[m.tipo] ?? FileIcon;
 
   // ⚠️ O aviso mostra a MENSAGEM que o cliente recebeu, não o nome do template.
   // Ela é reconstruída no banco a partir do corpo aprovado + os parâmetros que
@@ -350,12 +353,42 @@ function paraInput(d: Date): string {
        + `T${p(d.getHours())}:${p(d.getMinutes())}`;
 }
 
+/**
+ * Gravação de áudio no navegador.
+ *
+ * ⚠️ O formato é uma aposta que o navegador faz por nós. A Meta aceita
+ * `audio/ogg` SÓ com codec opus; o Firefox grava ogg/opus e o Chrome grava
+ * `audio/webm;codecs=opus` — mesmo codec, contêiner que ela não aceita.
+ *
+ * Por isso a preferência é explícita: pede ogg primeiro e só cai no webm se o
+ * navegador não souber gravá-lo. No Chrome isso significa que o envio vai ser
+ * recusado — e a recusa vem com a frase certa, do `metaMidia.ts`, em vez de um
+ * código da Meta.
+ */
+const FORMATOS_AUDIO = [
+  "audio/ogg;codecs=opus",
+  "audio/ogg",
+  "audio/mp4",
+  "audio/webm;codecs=opus",
+  "audio/webm",
+];
+
+function formatoDeAudio(): string | null {
+  if (typeof MediaRecorder === "undefined") return null;
+  return FORMATOS_AUDIO.find((f) => MediaRecorder.isTypeSupported(f)) ?? null;
+}
+
 function Conversa({ c }: { c: Conversa }) {
   const responder = useResponder();
   const resolver = useResolverConversa();
   const { data: agendadas } = useAgendadas(c.wa_id);
   const agendar = useAgendar();
   const cancelarAgendada = useCancelarAgendada();
+  const enviarMidia = useEnviarMidia();
+  const arquivoRef = useRef<HTMLInputElement>(null);
+  const [gravando, setGravando] = useState(false);
+  const gravadorRef = useRef<MediaRecorder | null>(null);
+  const pedacosRef = useRef<BlobPart[]>([]);
   const [verAgendar, setVerAgendar] = useState(false);
   const [quando, setQuando] = useState("");
   const [texto, setTexto] = useState("");
@@ -378,6 +411,42 @@ function Conversa({ c }: { c: Conversa }) {
   const perto = texto.length >= 3_500;
 
   useEffect(() => { fim.current?.scrollIntoView({ block: "end" }); }, [c.mensagens.length]);
+
+  const mandarArquivo = (arquivo: File) => {
+    enviarMidia.mutate({ wa_id: c.wa_id, arquivo, legenda: texto.trim() || undefined }, {
+      onSuccess: () => { setTexto(""); toast.success("Enviado"); },
+      onError: (e) => toast.error((e as Error).message),
+    });
+  };
+
+  const gravar = async () => {
+    if (gravando) { gravadorRef.current?.stop(); return; }
+    const formato = formatoDeAudio();
+    if (!formato) { toast.error("Este navegador não grava áudio."); return; }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const rec = new MediaRecorder(stream, { mimeType: formato });
+      pedacosRef.current = [];
+      rec.ondataavailable = (e) => { if (e.data.size) pedacosRef.current.push(e.data); };
+      rec.onstop = () => {
+        // ⚠️ Solta o microfone. Sem isto o navegador continua mostrando a luz
+        // de gravação e a aba fica com o áudio "em uso" para sempre.
+        stream.getTracks().forEach((t) => t.stop());
+        setGravando(false);
+        const blob = new Blob(pedacosRef.current, { type: formato });
+        if (!blob.size) return;
+        const ext = formato.includes("ogg") ? "ogg" : formato.includes("mp4") ? "m4a" : "webm";
+        mandarArquivo(new File([blob], `audio-${Date.now()}.${ext}`, { type: formato }));
+      };
+      rec.start();
+      gravadorRef.current = rec;
+      setGravando(true);
+    } catch {
+      // Permissão negada é o caso comum, e "erro ao gravar" não diria o que
+      // fazer a respeito.
+      toast.error("Não consegui acessar o microfone. Verifique a permissão do navegador.");
+    }
+  };
 
   const enviar = () => {
     const t = texto.trim();
@@ -616,6 +685,34 @@ function Conversa({ c }: { c: Conversa }) {
                     {texto.length}/4096
                   </span>
                 )}
+                {/* Anexo e microfone: a janela está aberta, então o WhatsApp
+                    inteiro está disponível — limitar a atendimento a texto é
+                    desperdiçar o canal. */}
+                <input ref={arquivoRef} type="file" className="hidden"
+                       accept="image/jpeg,image/png,application/pdf,text/plain"
+                       onChange={(e) => {
+                         const f = e.target.files?.[0];
+                         e.target.value = "";
+                         if (f) mandarArquivo(f);
+                       }} />
+                <Button size="sm" variant="outline" className="h-8 w-8 p-0"
+                        title="Enviar foto ou documento"
+                        disabled={enviarMidia.isPending || gravando}
+                        onClick={() => arquivoRef.current?.click()}>
+                  {enviarMidia.isPending
+                    ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    : <Paperclip className="h-3.5 w-3.5" />}
+                </Button>
+                <Button size="sm" variant="outline"
+                        className={`h-8 gap-1.5 ${gravando ? "border-red-500/50 text-red-500" : "w-8 p-0"}`}
+                        title={gravando ? "Parar e enviar" : "Gravar áudio"}
+                        disabled={enviarMidia.isPending}
+                        onClick={gravar}>
+                  {gravando
+                    ? <><Square className="h-3.5 w-3.5 fill-current" /> Parar</>
+                    : <Mic className="h-3.5 w-3.5" />}
+                </Button>
+
                 {/* ⚠️ Agendar só existe com texto escrito: um agendamento
                     vazio não é nada, e o botão aceso sem conteúdo convida ao
                     clique que não faz nada. */}

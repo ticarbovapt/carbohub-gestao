@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { supabase, FUNCTIONS_URL } from "@/integrations/supabase/client";
 import {
   JANELA_MS, agruparConversas,
   type Conversa, type MensagemConversa,
@@ -300,5 +300,45 @@ export function useCancelarAgendada() {
     onSuccess: (_d, v) => {
       qc.invalidateQueries({ queryKey: ["wa-agendadas", v.wa_id] });
     },
+  });
+}
+
+// ─── Foto, documento e áudio ─────────────────────────────────────────────────
+
+/**
+ * Envia um arquivo pelo WhatsApp.
+ *
+ * ⚠️ `multipart`, não JSON com base64. Base64 cresce o arquivo em um terço e
+ * uma foto de celular já chega perto do teto de 5 MB da Meta — o que passaria
+ * no navegador seria recusado lá, com um erro que não explica o motivo.
+ *
+ * E NÃO usa `functions.invoke`: ele serializa o corpo como JSON e o `FormData`
+ * chegaria vazio do outro lado.
+ */
+export function useEnviarMidia() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ wa_id, arquivo, legenda }:
+                       { wa_id: string; arquivo: File; legenda?: string }) => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error("Sessão expirada. Faça login novamente.");
+
+      const form = new FormData();
+      form.append("wa_id", wa_id);
+      form.append("arquivo", arquivo, arquivo.name || "arquivo");
+      if (legenda?.trim()) form.append("legenda", legenda.trim());
+
+      const res = await fetch(`${FUNCTIONS_URL}/whatsapp-midia`, {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${session.access_token}` },
+        body: form,
+      });
+      const corpo = await res.json().catch(() => null);
+      if (!res.ok) {
+        throw new Error(corpo?.detalhe || corpo?.error || `Falhou (${res.status})`);
+      }
+      return corpo;
+    },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["wa-conversas"] }); },
   });
 }

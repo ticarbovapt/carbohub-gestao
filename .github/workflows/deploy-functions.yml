@@ -95,6 +95,9 @@ jobs:
           # disparar passam horas, e mandar as cegas depois de esperar e pior
           # que nao ter agendado.
           dep whatsapp-agendadas --no-verify-jwt
+          # Foto, documento e audio no atendimento. SEM --no-verify-jwt, como o
+          # whatsapp-responder: quem chama e o navegador, por gente logada.
+          dep whatsapp-midia
           # Evolution (QR / desconectar). SEM --no-verify-jwt de propósito:
           # é chamada pelo NAVEGADOR, por gente logada, e derrubar o WhatsApp
           # da empresa não pode depender de um segredo que anda na URL.
