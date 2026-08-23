@@ -612,7 +612,27 @@ function Conversa({ c }: { c: Conversa }) {
   const anotar = useAnotar();
   const apagarNota = useApagarNota();
   const [recado, setRecado] = useState("");
-  const [anotando, setAnotando] = useState(false);
+  const [aba, setAba] = useState<"responder" | "nota">("responder");
+  const [previa, setPrevia] = useState<{ arquivo: File; url: string } | null>(null);
+
+  // O objectURL da prévia é revogado ao trocar ou sair: sem isso cada gravação
+  // descartada deixa um blob preso na aba, que fica aberta o dia inteiro.
+  useEffect(() => () => { if (previa) URL.revokeObjectURL(previa.url); }, [previa]);
+
+  const descartarPrevia = () => setPrevia(null);
+  const enviarPrevia = () => {
+    if (!previa) return;
+    mandarArquivo(previa.arquivo);
+    setPrevia(null);
+  };
+
+  const anotarAgora = () => {
+    if (!recado.trim()) return;
+    anotar.mutate({ wa_id: c.wa_id, texto: recado }, {
+      onSuccess: () => { setRecado(""); setAba("responder"); toast.success("Anotado"); },
+      onError: (e) => toast.error((e as Error).message),
+    });
+  };
   const resolver = useResolverConversa();
   const { data: agendadas } = useAgendadas(c.wa_id);
   const agendar = useAgendar();
@@ -669,7 +689,16 @@ function Conversa({ c }: { c: Conversa }) {
         const blob = new Blob(pedacosRef.current, { type: formato });
         if (!blob.size) return;
         const ext = formato.includes("ogg") ? "ogg" : formato.includes("mp4") ? "m4a" : "webm";
-        mandarArquivo(new File([blob], `audio-${Date.now()}.${ext}`, { type: formato }));
+
+        // ⚠️ Parar NÃO envia. Antes o áudio saía no instante em que a pessoa
+        // soltava o botão — e áudio é a única coisa que não dá para reler antes
+        // de mandar: quem grava não sabe se ficou baixo, se cortou o começo ou
+        // se o cachorro latiu no meio. Aqui ele fica em prévia até alguém
+        // decidir. Descartar é o caminho barato; "desenviar" não existe.
+        setPrevia({
+          arquivo: new File([blob], `audio-${Date.now()}.${ext}`, { type: formato }),
+          url: URL.createObjectURL(blob),
+        });
       };
       rec.start();
       gravadorRef.current = rec;
@@ -892,64 +921,87 @@ function Conversa({ c }: { c: Conversa }) {
           </div>
         )}
 
-        {/* ⚠️ O recado interno fica FORA do `aberta ?`. Ele não passa pela Meta,
-            então a janela de 24 h não tem nada a ver com ele — e é justamente
-            na conversa fechada que anotar mais importa: é o que sobra para
-            registrar o combinado quando não dá para responder. */}
-        {anotando ? (
-          <div className="mb-2 rounded-lg border border-dashed border-amber-500/40
+        {previa && (
+          <div className="mb-2 flex flex-wrap items-center gap-2 rounded-lg border
+                          border-carbo-green/40 bg-carbo-green/5 p-2">
+            <p className="w-full text-[10px] font-medium text-muted-foreground">
+              Ouça antes de mandar — ainda não foi enviado.
+            </p>
+            <Reprodutor url={previa.url} />
+            <div className="ml-auto flex items-center gap-2">
+              <Button size="sm" variant="ghost" className="h-8 gap-1.5"
+                      disabled={enviarMidia.isPending} onClick={descartarPrevia}>
+                <Trash2 className="h-3.5 w-3.5" /> Descartar
+              </Button>
+              <Button size="sm" className="h-8 gap-1.5"
+                      disabled={enviarMidia.isPending} onClick={enviarPrevia}>
+                {enviarMidia.isPending
+                  ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  : <Send className="h-3.5 w-3.5" />}
+                Enviar áudio
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {/* ⚠️ ABA, não botão solto no meio da conversa.
+            O recado interno é um MODO de escrever, não uma ação avulsa — é o
+            mesmo campo, com outro destino. Como botão flutuante ele não dizia
+            o que ia acontecer ao ser clicado, e ficava boiando entre a
+            conversa e o campo de resposta sem pertencer a nenhum dos dois.
+            Em aba, a pergunta "isso vai para o cliente?" é respondida ANTES de
+            escrever, que é quando importa. */}
+        <div className="mb-1.5 flex items-center gap-1">
+          {([
+            { id: "responder", rotulo: "Responder" },
+            { id: "nota", rotulo: "Recado interno" },
+          ] as const).map((t) => (
+            <button key={t.id} type="button" onClick={() => setAba(t.id)}
+                    className={`flex items-center gap-1.5 rounded-t-md border-b-2 px-2.5 py-1
+                                text-[11px] font-medium transition-colors ${
+                      aba === t.id
+                        ? t.id === "nota"
+                          ? "border-amber-500 text-amber-500"
+                          : "border-carbo-green text-foreground"
+                        : "border-transparent text-muted-foreground hover:text-foreground"}`}>
+              {t.id === "nota" && <EyeOff className="h-3 w-3" />}
+              {t.rotulo}
+            </button>
+          ))}
+        </div>
+
+        {aba === "nota" ? (
+          /* ⚠️ O recado NÃO depende da janela de 24 h: ele não passa pela Meta.
+             E é justamente na conversa fechada que anotar mais importa — é o
+             que sobra para registrar o combinado quando não dá para responder. */
+          <div className="rounded-lg border border-dashed border-amber-500/40
                           bg-amber-500/5 p-2">
             <Textarea
               value={recado} onChange={(e) => setRecado(e.target.value)}
-              placeholder="Recado para o time — o cliente não vê." rows={2} maxLength={2000}
-              autoFocus
+              placeholder="Recado para o time — o cliente não vê." rows={3} maxLength={2000}
               className="resize-y border-0 bg-transparent px-1 py-0.5 text-xs shadow-none
                          focus-visible:ring-0 focus-visible:ring-offset-0"
               onKeyDown={(e) => {
-                if (e.key === "Escape") { setAnotando(false); setRecado(""); }
-                if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
-                  e.preventDefault();
-                  if (recado.trim()) {
-                    anotar.mutate({ wa_id: c.wa_id, texto: recado },
-                      { onSuccess: () => { setRecado(""); setAnotando(false); },
-                        onError: (err) => toast.error((err as Error).message) });
-                  }
-                }
+                if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); anotarAgora(); }
               }}
             />
             <div className="mt-1.5 flex items-center justify-between gap-2 border-t
                             border-amber-500/20 pt-1.5">
               <p className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
-                <EyeOff className="h-3 w-3" /> só o time vê — não vai para o WhatsApp
+                <EyeOff className="h-3 w-3 shrink-0" />
+                só o time vê — não vai para o WhatsApp
               </p>
-              <div className="flex items-center gap-2">
-                <Button size="sm" variant="ghost" className="h-8"
-                        onClick={() => { setAnotando(false); setRecado(""); }}>
-                  Cancelar
-                </Button>
-                <Button size="sm" className="h-8 gap-1.5"
-                        disabled={!recado.trim() || anotar.isPending}
-                        onClick={() => anotar.mutate({ wa_id: c.wa_id, texto: recado },
-                          { onSuccess: () => { setRecado(""); setAnotando(false); },
-                            onError: (err) => toast.error((err as Error).message) })}>
-                  {anotar.isPending
-                    ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                    : <StickyNote className="h-3.5 w-3.5" />}
-                  Anotar
-                </Button>
-              </div>
+              <Button size="sm" className="h-8 gap-1.5"
+                      disabled={!recado.trim() || anotar.isPending}
+                      onClick={anotarAgora}>
+                {anotar.isPending
+                  ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  : <StickyNote className="h-3.5 w-3.5" />}
+                Anotar
+              </Button>
             </div>
           </div>
-        ) : (
-          <Button size="sm" variant="outline"
-                  className="mb-2 h-8 gap-1.5 self-start border-dashed text-[11px]
-                             text-muted-foreground"
-                  onClick={() => setAnotando(true)}>
-            <StickyNote className="h-3.5 w-3.5" /> Recado interno
-          </Button>
-        )}
-
-        {aberta ? (
+        ) : aberta ? (
           <div className={`rounded-lg border bg-muted/40 p-2 transition-colors ${
                             responder.isPending ? "opacity-70" : ""}`}>
             <Textarea
@@ -998,8 +1050,9 @@ function Conversa({ c }: { c: Conversa }) {
                 </Button>
                 <Button size="sm" variant="outline"
                         className={`h-8 gap-1.5 ${gravando ? "border-red-500/50 text-red-500" : "w-8 p-0"}`}
-                        title={gravando ? "Parar e enviar" : "Gravar áudio"}
-                        disabled={enviarMidia.isPending}
+                        // ⚠️ "Parar", não "Parar e enviar": parar leva à prévia.
+                        title={gravando ? "Parar" : "Gravar áudio"}
+                        disabled={enviarMidia.isPending || !!previa}
                         onClick={gravar}>
                   {gravando
                     ? <><Square className="h-3.5 w-3.5 fill-current" /> Parar</>
