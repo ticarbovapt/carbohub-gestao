@@ -62,6 +62,10 @@ export interface Veredito {
   /** Mime já normalizado — sem o `;codecs=...` que o navegador acrescenta. */
   mime?: string;
   erro?: string;
+  /** ⚠️ webm/opus PASSA, mas só depois de trocar de contêiner. O `whatsapp-midia`
+   *  remuxa para ogg antes de subir (`webmParaOgg.ts`), e `mime` já vem
+   *  `audio/ogg` — declarar webm à Meta é 131053 na certa. */
+  remuxar?: boolean;
 }
 
 /**
@@ -80,13 +84,29 @@ export function conferirMidia(mime: string, tamanho: number, nome?: string): Ver
   const regra = REGRAS[base];
 
   if (!regra) {
-    // ⚠️ O webm merece frase própria: é o que o Chrome grava por padrão, então
-    // é o erro que mais vai aparecer, e "tipo não suportado" não diria o que
-    // fazer com ele.
-    if (base === "audio/webm" || base === "video/webm") {
+    // ⚠️ webm de ÁUDIO passa: o Chrome não sabe gravar ogg, e webm/opus carrega
+    // exatamente o mesmo codec que a Meta aceita — só o contêiner muda. O
+    // `whatsapp-midia` reempacota (remux, sem recodificar) e sobe como ogg.
+    //
+    // O contrário — mandar como está — é o 131053 que já pagamos com o mp4:
+    // "uploaded with mimetype as audio/mp4, however on processing it is of type
+    // application/octet-stream".
+    if (base === "audio/webm") {
+      if (!Number.isFinite(tamanho) || tamanho <= 0) {
+        return { ok: false, erro: "Arquivo vazio." };
+      }
+      if (tamanho > 16 * MB) {
+        return { ok: false, erro: `O limite do WhatsApp para áudio é 16 MB`
+                                + ` e este arquivo tem ${humano(tamanho)}.` };
+      }
+      return { ok: true, tipo: "audio", mime: "audio/ogg", remuxar: true };
+    }
+    // Vídeo webm continua fora: ali o codec é VP8/VP9, e trocar de contêiner
+    // não faria a Meta aceitar — seria recodificar de verdade.
+    if (base === "video/webm") {
       return {
         ok: false,
-        erro: "O WhatsApp não aceita webm. Grave em ogg/opus ou envie um mp3.",
+        erro: "O WhatsApp não aceita vídeo webm. Envie um mp4.",
       };
     }
     return {

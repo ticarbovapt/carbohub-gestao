@@ -35,13 +35,27 @@ describe("conferirMidia — o que a Meta aceita", () => {
       .toMatchObject({ ok: true, tipo: "audio", mime: "audio/ogg" });
   });
 
-  it("⚠️ RECUSA webm com a frase que diz o que fazer", () => {
-    // É o que o Chrome grava por padrão, então é o erro que mais vai aparecer —
-    // "tipo não suportado" não diria o que fazer com ele.
+  it("⚠️ ACEITA webm de áudio, mas marcado para remux — e o mime já sai ogg", () => {
+    // Mudou por medição: antes recusávamos, e o Chrome caía no `audio/mp4`, que
+    // a Meta aceita no upload e depois recusa na entrega com 131053. Como
+    // webm/opus e ogg/opus carregam o MESMO codec, o servidor troca só o
+    // contêiner (`webmParaOgg.ts`).
+    //
+    // ⚠️ O `mime` tem de sair `audio/ogg`: declarar webm à Meta é o 131053 de
+    // volta, agora com outro nome.
     const r = conferirMidia("audio/webm;codecs=opus", 200_000);
+    expect(r).toMatchObject({ ok: true, tipo: "audio", mime: "audio/ogg", remuxar: true });
+  });
+
+  it("⚠️ vídeo webm continua RECUSADO — ali trocar de contêiner não resolve", () => {
+    // O codec é VP8/VP9; aceitar seria prometer uma conversão que não existe.
+    const r = conferirMidia("video/webm", 2 * MB);
     expect(r.ok).toBe(false);
-    expect(r.erro).toContain("webm");
-    expect(r.erro).toContain("ogg");
+    expect(r.erro).toContain("mp4");
+  });
+
+  it("webm gigante é recusado pelo tamanho, não pelo tipo", () => {
+    expect(conferirMidia("audio/webm;codecs=opus", 20 * MB).ok).toBe(false);
   });
 
   it("⚠️ recusa gif: comum no mundo, fora da lista dela", () => {

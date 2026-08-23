@@ -440,17 +440,22 @@ function paraInput(d: Date): string {
  * `audio/ogg` SÓ com codec opus; o Firefox grava ogg/opus e o Chrome grava
  * `audio/webm;codecs=opus` — mesmo codec, contêiner que ela não aceita.
  *
- * Por isso a preferência é explícita: pede ogg primeiro e só cai no webm se o
- * navegador não souber gravá-lo. No Chrome isso significa que o envio vai ser
- * recusado — e a recusa vem com a frase certa, do `metaMidia.ts`, em vez de um
- * código da Meta.
+ * Por isso a preferência é explícita: ogg primeiro, webm em seguida — o webm é
+ * reempacotado como ogg no servidor (`webmParaOgg.ts`), mesmo codec, sem perda.
+ *
+ * ⚠️ O `audio/mp4` ficou por ÚLTIMO, e por medição: o mp4 do MediaRecorder é
+ * fragmentado e a Meta o recusa com 131053 — "uploaded with mimetype as
+ * audio/mp4, however on processing it is of type application/octet-stream".
+ * Ele estava antes do webm nesta lista e era exatamente por isso que o áudio
+ * saía da tela e nunca chegava ao cliente. E não há remux que o salve: ali o
+ * codec é AAC, não Opus.
  */
 const FORMATOS_AUDIO = [
   "audio/ogg;codecs=opus",
   "audio/ogg",
-  "audio/mp4",
   "audio/webm;codecs=opus",
   "audio/webm",
+  "audio/mp4",
 ];
 
 function formatoDeAudio(): string | null {

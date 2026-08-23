@@ -26,6 +26,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { detalheDoErro } from "../_shared/metaTemplate.ts";
 import { conferirMidia, corpoDaMidia } from "../_shared/metaMidia.ts";
+import { webmParaOgg } from "../_shared/webmParaOgg.ts";
 
 // deno-lint-ignore-file no-explicit-any
 
@@ -117,11 +118,41 @@ Deno.serve(async (req: Request) => {
     }, 409);
   }
 
-  // ── 4. Sobe o arquivo ───────────────────────────────────────────────────
+  // ── 4. Troca a embalagem, quando é preciso ──────────────────────────────
+  //
+  // ⚠️ O Chrome não grava ogg. Grava webm/opus (mesmo codec, outro contêiner) ou
+  // mp4 — e o mp4 dele a Meta recusa com 131053: "uploaded with mimetype as
+  // audio/mp4, however on processing it is of type application/octet-stream".
+  // Medido em produção, duas vezes, com o balão parecendo enviado nas duas.
+  //
+  // O remux tira os pacotes Opus do webm e os põe num Ogg, byte a byte iguais.
+  // Não é conversão: não há ffmpeg aqui, e não há perda.
+  let corpoArquivo: Blob = arquivo;
+  let nomeUpload = arquivo.name || "arquivo";
+
+  if (veredito.remuxar) {
+    const bruto = new Uint8Array(await arquivo.arrayBuffer());
+    const r = webmParaOgg(bruto);
+    if (!r.ok || !r.ogg) {
+      return json({ error: "falha_no_audio", detalhe: r.erro ?? "não consegui reempacotar o áudio." }, 400);
+    }
+    // Duração zero seria arquivo montado sem áudio dentro — o defeito que passa
+    // por sucesso. Melhor recusar aqui que mandar silêncio ao cliente.
+    if (!r.duracao || r.duracao < 0.1) {
+      return json({ error: "falha_no_audio",
+                    detalhe: "a gravação saiu vazia — tente segurar o botão um instante a mais." }, 400);
+    }
+    corpoArquivo = new Blob([r.ogg], { type: "audio/ogg" });
+    nomeUpload = (arquivo.name || "audio").replace(/\.[^.]+$/, "") + ".ogg";
+    console.log("[midia] remux webm→ogg", { pacotes: r.pacotes, duracao: r.duracao,
+                                            de: arquivo.size, para: r.ogg.length });
+  }
+
+  // ── 5. Sobe o arquivo ───────────────────────────────────────────────────
   const upload = new FormData();
   upload.append("messaging_product", "whatsapp");
   upload.append("type", veredito.mime!);
-  upload.append("file", arquivo, arquivo.name || "arquivo");
+  upload.append("file", corpoArquivo, nomeUpload);
 
   let mediaId: string | null = null;
   try {
@@ -146,8 +177,8 @@ Deno.serve(async (req: Request) => {
     return json({ error: "falha_no_upload", detalhe: String((e as Error)?.message ?? e) }, 502);
   }
 
-  // ── 5. Manda ────────────────────────────────────────────────────────────
-  const payload = corpoDaMidia(waId, veredito.tipo!, mediaId, legenda, arquivo.name);
+  // ── 6. Manda ────────────────────────────────────────────────────────────
+  const payload = corpoDaMidia(waId, veredito.tipo!, mediaId, legenda, nomeUpload);
 
   let resposta: any = null, status = 0;
   try {
@@ -171,7 +202,7 @@ Deno.serve(async (req: Request) => {
     // baixar e armazenar é outra decisão (storage, custo, LGPD).
     const { error: erroGrava } = await supabase.from("carbo_wa_mensagens").upsert({
       wamid, wa_id: waId, direcao: "saida", tipo: veredito.tipo,
-      texto: legenda || arquivo.name || null,
+      texto: legenda || nomeUpload || null,
       midia_id: mediaId, midia_mime: veredito.mime,
       ocorrido_em: new Date().toISOString(),
       payload: { por: perfil?.full_name ?? user.email ?? user.id, ...payload },
