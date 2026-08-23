@@ -502,7 +502,8 @@ carbo_wa_mensagens    o conteúdo, por wamid
 carbo_wa_conversas    a mensagem já ligada ao pedido de que trata
 apps/*/src/lib/conversas.ts     as REGRAS (puras, testadas)
 apps/*/src/hooks/useConversas.ts   só IO
-apps/admin/src/pages/Conversas.tsx  /ecommerce/conversas · no Ops /logistica/conversas
+apps/admin/src/pages/Conversas.tsx  /ecommerce/conversas
+apps/ops/src/pages/Conversas.tsx    ⚠️ a ROTA é /logistica/conversas, o ARQUIVO não
 supabase/functions/whatsapp-responder    texto livre, chamado pelo NAVEGADOR
 ```
 
@@ -524,7 +525,14 @@ supabase/functions/whatsapp-responder    texto livre, chamado pelo NAVEGADOR
    `evolution-instancia`: quem chama é gente logada. E confere `interface
    interna` no perfil — sem isso um lojista logado escreveria pelo número da
    CarboZé, porque o portal usa a MESMA tabela `profiles`.
-6. ⚠️ **`carbo_e_time_interno()`** guarda `carbo_wa_mensagens` e
+6. ⚠️ **No Ops o arquivo é `pages/Conversas.tsx`, não `pages/logistica/`.** A
+   rota é `/logistica/conversas` e o resto da logística mora naquela pasta, o
+   que torna o engano natural — e ele custou meio dia: três commits foram
+   copiados para um `pages/logistica/Conversas.tsx` que **ninguém importa**,
+   enquanto a tela viva seguia com a versão antiga. Não deu erro em lugar
+   nenhum: o app compila, builda e sobe, mostrando código de ontem. Confira o
+   import do `App.tsx` antes de copiar, sempre.
+7. ⚠️ **`carbo_e_time_interno()`** guarda `carbo_wa_mensagens` e
    `carbo_wa_contatos`. A lista de interfaces é a mesma do `notify_time_interno`
    — duas listas divergem, e divergir aqui ABRE acesso em vez de fechar.
 

@@ -6,7 +6,7 @@ import {
   File as FileIcon, HelpCircle,
   Search, SearchX, X, Package, ArrowUpRight, CornerDownLeft, Megaphone,
   BellRing, BellOff, Check, CheckCheck, Inbox, Undo2, Sparkles,
-  CalendarClock, Trash2, Square, Play,
+  CalendarClock, Trash2, Square, Play, Download,
 } from "lucide-react";
 import { toast } from "sonner";
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
@@ -19,7 +19,7 @@ import {
   useConversas, useConversasAoVivo, useResponder, janelaAberta, faltaDaJanela,
   nivelDaJanela, fracaoDaJanela, type NivelJanela,
   useNotificaveis, useMarcarNotificado, useResolverConversa,
-  useAgendadas, useAgendar, useCancelarAgendada, useEnviarMidia,
+  useAgendadas, useAgendar, useCancelarAgendada, useEnviarMidia, useMidia,
   type Conversa, type MensagemConversa, type EstadoConversa,
 } from "@/hooks/useConversas";
 
@@ -211,6 +211,75 @@ const NOME_MIDIA: Record<string, string> = {
   document: "Documento", location: "Localização", contacts: "Contato",
 };
 
+/**
+ * O anexo — e agora ele ABRE.
+ *
+ * ⚠️ Carrega no clique, não sozinho. O arquivo está na Meta e sai de lá em duas
+ * chamadas com o nosso token (a ponte é a `whatsapp-midia-baixar`); uma conversa
+ * com quinze áudios abriria trinta chamadas ao Graph toda vez que a Realtime
+ * reabrisse a lista — e ela reabre o tempo todo.
+ *
+ * ⚠️ E a falha aparece com a FRASE. O 404 aqui é quase sempre a retenção de ~30
+ * dias da Meta, e "não foi possível baixar" faria alguém procurar bug onde não
+ * há: o arquivo simplesmente não existe mais lá.
+ */
+function Anexo({ mediaId, tipo, nome, Icone }: {
+  mediaId: string; tipo: string; nome: string | null;
+  Icone: typeof Paperclip;
+}) {
+  const [abrir, setAbrir] = useState(false);
+  const { data, isFetching, error } = useMidia(mediaId, abrir);
+
+  const rotulo = NOME_MIDIA[tipo] ?? tipo;
+  const imagem = tipo === "image" || tipo === "sticker";
+  const som = tipo === "audio" || tipo === "voice" || tipo === "ptt";
+
+  if (data) {
+    if (imagem) {
+      return (
+        <a href={data.url} target="_blank" rel="noreferrer" className="mb-1.5 block">
+          <img src={data.url} alt={rotulo}
+               className="max-h-64 w-auto rounded-md border object-contain" />
+        </a>
+      );
+    }
+    if (som) {
+      // O player nativo basta: dá play, barra e velocidade sem trazer
+      // biblioteca nenhuma para dentro do bundle.
+      return <audio controls src={data.url} className="mb-1.5 h-9 w-full max-w-[16rem]" />;
+    }
+    return (
+      <a href={data.url} download={nome || `${rotulo}`} target="_blank" rel="noreferrer"
+         className="mb-1.5 flex items-center gap-2 rounded-md border bg-background/40 px-2 py-1.5
+                    text-[11px] font-medium hover:bg-background/70">
+        <Download className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+        <span className="truncate">{nome || rotulo}</span>
+      </a>
+    );
+  }
+
+  return (
+    <button type="button" onClick={() => setAbrir(true)} disabled={isFetching}
+            className="mb-1.5 flex w-full items-center gap-2 rounded-md border border-dashed
+                       bg-background/40 px-2 py-1.5 text-left hover:bg-background/70
+                       disabled:opacity-60">
+      <Icone className="h-4 w-4 shrink-0 text-muted-foreground" />
+      <div className="min-w-0">
+        <p className="flex items-center gap-1 text-[11px] font-medium leading-tight">
+          {rotulo}
+          <Paperclip className="h-2.5 w-2.5 text-muted-foreground" />
+        </p>
+        <p className={`truncate text-[10px] leading-tight ${
+          error ? "text-amber-500" : "text-muted-foreground"}`}>
+          {isFetching ? "baixando…"
+            : error ? (error as Error).message
+            : som ? "toque para ouvir" : "toque para abrir"}
+        </p>
+      </div>
+    </button>
+  );
+}
+
 /** Separador de dia, grudado no topo enquanto se rola aquele dia: numa conversa
  *  longa, quem chega no meio precisa saber "de quando é isto?" sem subir. */
 function SeparadorDeDia({ rotulo }: { rotulo: string }) {
@@ -294,19 +363,8 @@ function Balao({ m, primeira, ultima }: {
           : `border bg-muted/40 ${ultima ? "rounded-bl-sm" : ""}`}`}>
 
         {anexo && (
-          <div className="mb-1.5 flex items-center gap-2 rounded-md border border-dashed
-                          bg-background/40 px-2 py-1.5">
-            <IconeAnexo className="h-4 w-4 shrink-0 text-muted-foreground" />
-            <div className="min-w-0">
-              <p className="flex items-center gap-1 text-[11px] font-medium leading-tight">
-                {NOME_MIDIA[m.tipo] ?? m.tipo}
-                <Paperclip className="h-2.5 w-2.5 text-muted-foreground" />
-              </p>
-              <p className="truncate text-[10px] leading-tight text-muted-foreground">
-                arquivo não baixado — só o id ficou guardado
-              </p>
-            </div>
-          </div>
+          <Anexo mediaId={m.midia_id!} tipo={m.tipo}
+                 nome={m.texto ?? null} Icone={IconeAnexo} />
         )}
 
         {m.texto ? (
@@ -325,12 +383,34 @@ function Balao({ m, primeira, ultima }: {
           </p>
         )}
 
+        {/* ⚠️ O fracasso do envio aparece SEMPRE, e não só na última do bloco.
+            Aceitar não é entregar: a Meta devolve `wamid`, o balão nasce igual
+            ao que deu certo, e o `failed` chega depois pelo webhook. Sem esta
+            linha quem atendeu vai embora achando que respondeu. */}
+        {nossa && m.status === "falhou" && (
+          <p className="mt-1 flex items-start gap-1 text-[10px] leading-tight text-red-500">
+            <AlertTriangle className="mt-px h-3 w-3 shrink-0" />
+            <span>
+              não chegou ao cliente
+              {m.erro_codigo ? ` (erro ${m.erro_codigo})` : ""}
+              {m.erro_detalhe ? ` — ${m.erro_detalhe}` : ""}
+            </span>
+          </p>
+        )}
+
         {/* O horário só na ÚLTIMA do bloco: repetido em cada balão ele vira
             carimbo e some da vista justamente quando importa. */}
         {ultima && (
           <p className={`mt-1 text-[10px] leading-none text-muted-foreground/70 ${
             nossa ? "text-right" : ""}`}>
             {soHora(m.ocorrido_em)}
+            {/* Um tique para enviado, dois para entregue/lido — a mesma
+                gramática do WhatsApp, para não haver um segundo idioma. */}
+            {nossa && m.status === "enviado" && <Check className="ml-1 inline h-3 w-3" />}
+            {nossa && (m.status === "entregue" || m.status === "lido") && (
+              <CheckCheck className={`ml-1 inline h-3 w-3 ${
+                m.status === "lido" ? "text-sky-400" : ""}`} />
+            )}
           </p>
         )}
         {desconhecida && <span className="sr-only">{hora(m.ocorrido_em)}</span>}
@@ -360,17 +440,22 @@ function paraInput(d: Date): string {
  * `audio/ogg` SÓ com codec opus; o Firefox grava ogg/opus e o Chrome grava
  * `audio/webm;codecs=opus` — mesmo codec, contêiner que ela não aceita.
  *
- * Por isso a preferência é explícita: pede ogg primeiro e só cai no webm se o
- * navegador não souber gravá-lo. No Chrome isso significa que o envio vai ser
- * recusado — e a recusa vem com a frase certa, do `metaMidia.ts`, em vez de um
- * código da Meta.
+ * Por isso a preferência é explícita: ogg primeiro, webm em seguida — o webm é
+ * reempacotado como ogg no servidor (`webmParaOgg.ts`), mesmo codec, sem perda.
+ *
+ * ⚠️ O `audio/mp4` ficou por ÚLTIMO, e por medição: o mp4 do MediaRecorder é
+ * fragmentado e a Meta o recusa com 131053 — "uploaded with mimetype as
+ * audio/mp4, however on processing it is of type application/octet-stream".
+ * Ele estava antes do webm nesta lista e era exatamente por isso que o áudio
+ * saía da tela e nunca chegava ao cliente. E não há remux que o salve: ali o
+ * codec é AAC, não Opus.
  */
 const FORMATOS_AUDIO = [
   "audio/ogg;codecs=opus",
   "audio/ogg",
-  "audio/mp4",
   "audio/webm;codecs=opus",
   "audio/webm",
+  "audio/mp4",
 ];
 
 function formatoDeAudio(): string | null {
@@ -915,8 +1000,30 @@ function QuemRecebe({ aoFechar }: { aoFechar: () => void }) {
 }
 
 export default function Conversas() {
-  const [params] = useSearchParams();
+  const [params, setParams] = useSearchParams();
   const voltar = params.get("voltar") || "/ecommerce/mensagens";
+
+  /**
+   * ⚠️ A conversa aberta mora na URL, não no estado do componente.
+   *
+   * Com estado, todo F5 devolvia a pessoa para a primeira conversa da lista —
+   * e num atendimento se dá F5 o tempo todo (para conferir se chegou resposta,
+   * porque a aba ficou horas aberta, porque alguém mandou o link). Perder o
+   * lugar a cada recarga é perder o fio da conversa que se estava lendo.
+   *
+   * E vira endereço: dá para mandar `?de=5584...` para outra pessoa do time e
+   * ela abre exatamente a mesma conversa.
+   *
+   * `replace` e não `push`: cada clique na lista não pode virar um passo no
+   * histórico, senão o botão Voltar do navegador percorre vinte conversas
+   * antes de sair da tela.
+   */
+  const aberta = params.get("de");
+  const abrir = (wa_id: string) => {
+    const p = new URLSearchParams(params);
+    p.set("de", wa_id);
+    setParams(p, { replace: true });
+  };
 
   // ⚠️ Antes de qualquer coisa que leia a hora: é o que faz o relógio da janela
   // andar sem F5 e sem depender da rede.
@@ -925,7 +1032,6 @@ export default function Conversas() {
   useConversasAoVivo();
 
   const { data: conversas, isLoading, error } = useConversas();
-  const [aberta, setAberta] = useState<string | null>(null);
 
   const lista = conversas ?? [];
   const atual = useMemo(
@@ -1132,7 +1238,7 @@ export default function Conversas() {
                     const selecionada = atual?.wa_id === c.wa_id;
 
                     return (
-                      <button key={c.wa_id} type="button" onClick={() => setAberta(c.wa_id)}
+                      <button key={c.wa_id} type="button" onClick={() => abrir(c.wa_id)}
                               className={`w-full rounded-md border p-2 text-left transition-colors ${
                                 selecionada ? "border-carbo-green/50 bg-carbo-green/5"
                                             : "border-transparent hover:border-border hover:bg-muted/40"}`}>

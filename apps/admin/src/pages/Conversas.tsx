@@ -1000,8 +1000,30 @@ function QuemRecebe({ aoFechar }: { aoFechar: () => void }) {
 }
 
 export default function Conversas() {
-  const [params] = useSearchParams();
+  const [params, setParams] = useSearchParams();
   const voltar = params.get("voltar") || "/ecommerce/mensagens";
+
+  /**
+   * ⚠️ A conversa aberta mora na URL, não no estado do componente.
+   *
+   * Com estado, todo F5 devolvia a pessoa para a primeira conversa da lista —
+   * e num atendimento se dá F5 o tempo todo (para conferir se chegou resposta,
+   * porque a aba ficou horas aberta, porque alguém mandou o link). Perder o
+   * lugar a cada recarga é perder o fio da conversa que se estava lendo.
+   *
+   * E vira endereço: dá para mandar `?de=5584...` para outra pessoa do time e
+   * ela abre exatamente a mesma conversa.
+   *
+   * `replace` e não `push`: cada clique na lista não pode virar um passo no
+   * histórico, senão o botão Voltar do navegador percorre vinte conversas
+   * antes de sair da tela.
+   */
+  const aberta = params.get("de");
+  const abrir = (wa_id: string) => {
+    const p = new URLSearchParams(params);
+    p.set("de", wa_id);
+    setParams(p, { replace: true });
+  };
 
   // ⚠️ Antes de qualquer coisa que leia a hora: é o que faz o relógio da janela
   // andar sem F5 e sem depender da rede.
@@ -1010,7 +1032,6 @@ export default function Conversas() {
   useConversasAoVivo();
 
   const { data: conversas, isLoading, error } = useConversas();
-  const [aberta, setAberta] = useState<string | null>(null);
 
   const lista = conversas ?? [];
   const atual = useMemo(
@@ -1217,7 +1238,7 @@ export default function Conversas() {
                     const selecionada = atual?.wa_id === c.wa_id;
 
                     return (
-                      <button key={c.wa_id} type="button" onClick={() => setAberta(c.wa_id)}
+                      <button key={c.wa_id} type="button" onClick={() => abrir(c.wa_id)}
                               className={`w-full rounded-md border p-2 text-left transition-colors ${
                                 selecionada ? "border-carbo-green/50 bg-carbo-green/5"
                                             : "border-transparent hover:border-border hover:bg-muted/40"}`}>
