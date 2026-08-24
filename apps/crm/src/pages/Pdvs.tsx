@@ -272,11 +272,17 @@ export default function Pdvs() {
             title="Pontos de Venda"
             description="Cadastro dos PDVs. Venda para CNPJ daqui entra automaticamente como canal Revenda."
           />
-          {isGestor && (
-            <Button className="gap-2 shrink-0" onClick={abrirNovo}>
-              <Plus className="h-4 w-4" /> Novo PDV
-            </Button>
-          )}
+          {/* ⚠️ Cadastrar PDV é de QUALQUER pessoa do time, não só da gestão.
+              Quem descobre a loja nova é quem está na rua — e o caminho antigo
+              ("manda o CNPJ no grupo e alguém cadastra") perde o cliente entre
+              a visita e o cadastro.
+
+              O botão só aparecia para gestor E a RLS só deixava gestor escrever:
+              esconder sem liberar o banco seria trocar um botão inútil por um
+              erro no clique. Os dois mudaram juntos (migração 20260940). */}
+          <Button className="gap-2 shrink-0" onClick={abrirNovo}>
+            <Plus className="h-4 w-4" /> Novo PDV
+          </Button>
         </div>
 
         {/* Erro visível — falha de consulta não pode virar lista vazia. */}
