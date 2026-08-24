@@ -1,8 +1,8 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import {
   agruparConversas, janelaAberta, faltaDaJanela, nivelDaJanela, fracaoDaJanela,
-  pareceEncerramento,
-  type MensagemConversa,
+  pareceEncerramento, statusEfetivo, foiReaberta,
+  type MensagemConversa, type Atendimento, type StatusAtendimento,
 } from "../../../apps/admin/src/lib/conversas";
 
 const AGORA = new Date("2026-08-23T12:00:00Z").getTime();
@@ -342,5 +342,74 @@ describe("agruparConversas — os dois nomes", () => {
       msg({ wamid: "b", cliente_pedido: "Ataide", ocorrido_em: "2026-08-23T10:00:00Z" }),
     ], {});
     expect(r[0].cliente).toBe("Ataide");
+  });
+});
+
+// ─── Status de atendimento ───────────────────────────────────────────────────
+
+describe("statusEfetivo — a intenção do time, corrigida pela realidade", () => {
+  const at = (status: StatusAtendimento, desde: string): Atendimento =>
+    ({ wa_id: "5584", status, desde, responsavel: null, responsavel_nome: null });
+
+  it("sem atendimento: sai da realidade, e só", () => {
+    // ⚠️ Marcar tudo como "aberto" encheria a fila de conversa que ninguém
+    // precisa abrir — 36 linhas gritando, que é o mesmo que nenhuma.
+    expect(statusEfetivo(null, "2026-08-24T10:00:00Z", 2, false)).toBe("aberto");
+    expect(statusEfetivo(null, "2026-08-24T10:00:00Z", 0, false)).toBe(null);
+    expect(statusEfetivo(undefined, null, 0, false)).toBe(null);
+  });
+
+  it("⚠️ gente nossa falou por último → em atendimento, sem ninguém clicar", () => {
+    expect(statusEfetivo(null, "2026-08-24T09:00:00Z", 0, true)).toBe("em_atendimento");
+  });
+
+  it("⚠️ aviso da esteira NÃO é atendimento", () => {
+    // Só saiu "nota fiscal emitida" e o cliente nunca respondeu: a fila do time
+    // encheria de trabalho que não existe.
+    expect(statusEfetivo(null, null, 0, false)).toBe(null);
+  });
+
+  it("⚠️ resolvido REABRE quando o cliente escreve depois", () => {
+    const a = at("resolvido", "2026-08-24T10:00:00Z");
+    expect(statusEfetivo(a, "2026-08-24T11:00:00Z", 1, false)).toBe("aberto");
+    expect(statusEfetivo(a, "2026-08-24T09:00:00Z", 0, false)).toBe("resolvido");
+  });
+
+  it("⚠️ aguardando também reabre — os dois significam 'não estou nisso'", () => {
+    const a = at("aguardando", "2026-08-24T10:00:00Z");
+    expect(statusEfetivo(a, "2026-08-24T10:00:01Z", 1, false)).toBe("aberto");
+    expect(statusEfetivo(a, "2026-08-24T10:00:00Z", 0, false)).toBe("aguardando");
+  });
+
+  it("⚠️ pergunta pendente vence status guardado — sempre", () => {
+    // Com "aberto" e "em atendimento" DERIVADOS, um status antigo gravado na
+    // tabela não segura a fila: se o cliente perguntou e ninguém respondeu, a
+    // conversa está aberta. É a diferença entre uma fila que se mantém sozinha
+    // e uma que depende de alguém lembrar de atualizar etiqueta.
+    const a = at("em_atendimento", "2026-08-24T10:00:00Z");
+    expect(statusEfetivo(a, "2026-08-24T12:00:00Z", 3, true)).toBe("aberto");
+    // Respondida por gente e sem pendência: em atendimento, sem clique nenhum.
+    expect(statusEfetivo(a, "2026-08-24T12:00:00Z", 0, true)).toBe("em_atendimento");
+  });
+
+  it("⚠️ foiReaberta DIZ que reabriu — reabertura silenciosa gera desconfiança", () => {
+    // Quem marcou resolvido precisa ver POR QUE a conversa voltou, senão
+    // parece que o sistema desfez o trabalho dele.
+    const a = at("resolvido", "2026-08-24T10:00:00Z");
+    expect(foiReaberta(a, "2026-08-24T11:00:00Z")).toBe(true);
+    expect(foiReaberta(a, "2026-08-24T09:00:00Z")).toBe(false);
+    expect(foiReaberta(at("em_atendimento", "2026-08-24T10:00:00Z"), "2026-08-24T11:00:00Z"))
+      .toBe(false);
+    expect(foiReaberta(null, "2026-08-24T11:00:00Z")).toBe(false);
+  });
+
+  it("conversa sem nenhuma mensagem de entrada não reabre nada", () => {
+    expect(statusEfetivo(at("resolvido", "2026-08-24T10:00:00Z"), null, 0, false)).toBe("resolvido");
+  });
+
+  it("empate no instante exato não reabre", () => {
+    // Estritamente MAIOR: a mensagem que gerou a decisão não pode desfazê-la.
+    const a = at("resolvido", "2026-08-24T10:00:00Z");
+    expect(statusEfetivo(a, "2026-08-24T10:00:00Z", 0, false)).toBe("resolvido");
   });
 });

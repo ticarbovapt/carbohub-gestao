@@ -70,6 +70,109 @@ export interface MensagemConversa {
  * perder no meio dos agradecimentos, com a janela de 24 h correndo em cima
  * justamente dela.
  */
+/**
+ * O status de atendimento da conversa.
+ *
+ * ⚠️ DOIS deles são calculados e DOIS são clicados, e essa divisão é a decisão
+ * mais importante desta tela:
+ *
+ *   aberto          cliente falou por último  → sai da conversa, ninguém clica
+ *   em_atendimento  gente nossa falou por último → idem
+ *   aguardando      esperando o cliente ou outro setor → decisão humana
+ *   resolvido       encerrado até o cliente voltar     → decisão humana
+ *
+ * Deixar "aberto" e "em atendimento" na mão de alguém cria a doença conhecida
+ * dessas ferramentas: o status manual briga com a realidade, e quem lê a fila
+ * passa a não confiar nela. Ninguém mantém etiqueta à mão a cada mensagem que
+ * chega — mas o sistema sabe, sem falhar, quem falou por último.
+ *
+ * E o contrário também vale: "estou esperando o cliente mandar o comprovante"
+ * não está escrito em lugar nenhum da conversa. Isso só uma pessoa sabe, e por
+ * isso esses dois são clicados.
+ */
+export type StatusAtendimento = "aberto" | "em_atendimento" | "aguardando" | "resolvido";
+
+export interface Atendimento {
+  wa_id: string;
+  status: StatusAtendimento;
+  /** Quando a decisão foi tomada — é com isto que a reabertura é comparada. */
+  desde: string;
+  responsavel: string | null;
+  responsavel_nome: string | null;
+}
+
+export interface TagConversa {
+  id: string;
+  nome: string;
+  cor: string;
+}
+
+/**
+ * O status que VALE agora.
+ *
+ * ⚠️ `aguardando` e `resolvido` REABREM quando o cliente escreve depois da
+ * decisão. Os dois significam "não estou mexendo nisso agora", e uma pergunta
+ * nova não pode ficar escondida atrás de uma decisão de ontem. É a mesma regra
+ * que fez `resolvido_ate` ser data e não booleano.
+ *
+ * ⚠️ `em_atendimento` NÃO reabre: ele significa que alguém está cuidando, e
+ * mensagem nova do cliente é justamente o que se espera durante um
+ * atendimento. Rebaixá-lo para "aberto" tiraria a conversa da mão de quem está
+ * nela e faria outra pessoa responder por cima.
+ *
+ * Sem atendimento registrado, o status sai da realidade: há pergunta pendente
+ * → `aberto`; não há → `null`, que a tela mostra como conversa sem pendência.
+ * Marcar tudo como "aberto" encheria a fila de conversa que ninguém precisa
+ * abrir, que é o mesmo que não ter fila.
+ */
+export function statusEfetivo(
+  at: Atendimento | null | undefined,
+  ultimaEntradaEm: string | null,
+  aguardando: number,
+  respondidaPorGente: boolean,
+): StatusAtendimento | null {
+  // ── Primeiro a decisão humana, se ainda valer ────────────────────────────
+  //
+  // ⚠️ `aguardando` e `resolvido` REABREM quando o cliente escreve depois delas.
+  // Os dois significam "não estou mexendo nisso agora", e uma pergunta nova não
+  // pode ficar escondida atrás de uma decisão de ontem. É a mesma regra que fez
+  // `resolvido_ate` ser data e não booleano.
+  if (at && (at.status === "aguardando" || at.status === "resolvido")) {
+    const reabriu = !!ultimaEntradaEm &&
+      new Date(ultimaEntradaEm).getTime() > new Date(at.desde).getTime();
+    if (!reabriu) return at.status;
+  }
+
+  // ── O resto sai da conversa, não de um clique ────────────────────────────
+  //
+  // Cliente falou por último → aberto. Gente nossa falou por último → em
+  // atendimento. Ninguém precisa manter isso à mão, e por isso ele nunca fica
+  // desatualizado.
+  if (aguardando > 0) return "aberto";
+
+  // ⚠️ Aviso automático da esteira NÃO é atendimento. Uma conversa em que só
+  // saiu o "nota fiscal emitida" e o cliente nunca respondeu viraria
+  // "em atendimento" sem ninguém ter atendido — e a fila do time encheria de
+  // trabalho que não existe.
+  return respondidaPorGente ? "em_atendimento" : null;
+}
+
+/**
+ * A conversa foi REABERTA pelo cliente?
+ *
+ * ⚠️ Existe para a tela poder DIZER isso. Reabertura silenciosa é a queixa
+ * clássica dessas ferramentas: quem marcou resolvido acha que o sistema desfez
+ * o trabalho dele. O comportamento está certo; o que faltava era o aviso.
+ */
+export function foiReaberta(
+  at: Atendimento | null | undefined,
+  ultimaEntradaEm: string | null,
+): boolean {
+  if (!at || (at.status !== "aguardando" && at.status !== "resolvido")) return false;
+  return !!ultimaEntradaEm &&
+    new Date(ultimaEntradaEm).getTime() > new Date(at.desde).getTime();
+}
+
 export type EstadoConversa = "precisa_resposta" | "resolvida" | "sem_pendencia";
 
 export interface Conversa {
@@ -97,6 +200,17 @@ export interface Conversa {
    *  sozinha. Aproximação que se passa por certeza é como uma pergunta de
    *  verdade some da fila. */
   parece_encerrada: boolean;
+  /** O que o time decidiu — já com a reabertura aplicada. Null = sem status. */
+  status: StatusAtendimento | null;
+  responsavel: string | null;
+  responsavel_nome: string | null;
+  tags: TagConversa[];
+  /** A última mensagem DO CLIENTE. É ela que reabre `aguardando`/`resolvido`. */
+  ultima_entrada_em: string | null;
+  /** ⚠️ O cliente escreveu depois de alguém marcar aguardando/resolvido. A tela
+   *  DIZ isso — reabertura silenciosa faz quem marcou achar que o sistema
+   *  desfez o trabalho dele. */
+  reaberta: boolean;
 }
 
 export function janelaAberta(janela_ate: string | null): boolean {
@@ -182,6 +296,8 @@ export function agruparConversas(
   linhas: MensagemConversa[],
   janelas: Record<string, string | null>,
   resolvidos: Record<string, string> = {},
+  atendimentos: Record<string, Atendimento> = {},
+  tagsPorConversa: Record<string, TagConversa[]> = {},
 ): Conversa[] {
   const porPessoa = new Map<string, MensagemConversa[]>();
   for (const l of linhas) {
@@ -203,6 +319,12 @@ export function agruparConversas(
     const resolvidoAte = resolvidos[wa_id] ?? null;
     const corteResolvido = resolvidoAte ? new Date(resolvidoAte).getTime() : 0;
     const corte = Math.max(corteResposta, corteResolvido);
+
+    // A última do CLIENTE — é ela que reabre `aguardando` e `resolvido`, e ela
+    // existe mesmo quando já foi respondida (então não dá para reusar
+    // `pendentes`, que só olha o que veio depois do corte).
+    const ultimaEntrada = [...ordenadas].reverse().find((m) => m.direcao === "entrada");
+    const ultimaEntradaEm = ultimaEntrada?.ocorrido_em ?? null;
 
     const pendentes = ordenadas.filter(
       (m) => m.direcao === "entrada" && new Date(m.ocorrido_em).getTime() > corte);
@@ -246,6 +368,18 @@ export function agruparConversas(
       estado,
       resolvido_ate: resolvidoAte,
       parece_encerrada,
+      // ⚠️ `respondidaPorGente` olha o TIPO: aviso automático da esteira não é
+      // atendimento, e sem essa distinção toda conversa que recebeu um
+      // "nota fiscal emitida" apareceria como "em atendimento" sem ninguém ter
+      // atendido.
+      status: statusEfetivo(
+        atendimentos[wa_id], ultimaEntradaEm, aguardando,
+        !!ultimaNossa && ultimaNossa.tipo !== "template"),
+      reaberta: foiReaberta(atendimentos[wa_id], ultimaEntradaEm),
+      responsavel: atendimentos[wa_id]?.responsavel ?? null,
+      responsavel_nome: atendimentos[wa_id]?.responsavel_nome ?? null,
+      tags: tagsPorConversa[wa_id] ?? [],
+      ultima_entrada_em: ultimaEntradaEm,
     });
   }
 

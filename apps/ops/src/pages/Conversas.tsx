@@ -5,7 +5,7 @@ import {
   Image as ImageIcon, Video, Mic, FileText, MapPin, User,
   File as FileIcon, HelpCircle,
   Search, SearchX, X, Package, ArrowUpRight, CornerDownLeft, Megaphone,
-  BellRing, BellOff, Check, CheckCheck, Inbox, Undo2, Sparkles,
+  BellRing, BellOff, Check, CheckCheck, Inbox, Undo2, Sparkles, UserCheck, Tag as TagIcon, Plus,
   CalendarClock, Trash2, Square, Play, Pause, Download, StickyNote, EyeOff,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -15,12 +15,16 @@ import { CarboBadge } from "@/components/ui/carbo-badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { useAuth } from "@/contexts/AuthContext";
 import {
   useConversas, useConversasAoVivo, useResponder, janelaAberta, faltaDaJanela,
   nivelDaJanela, fracaoDaJanela, type NivelJanela,
   useNotificaveis, useMarcarNotificado, useResolverConversa,
   useAgendadas, useAgendar, useCancelarAgendada, useEnviarMidia, useMidia,
   useNotas, useAnotar, useApagarNota, type Nota,
+  useDefinirStatus, useDefinirResponsavel, useAtendentes,
+  useTags, useCriarTag, useMarcarTag,
+  type StatusAtendimento, type TagConversa,
   type Conversa, type MensagemConversa, type EstadoConversa,
 } from "@/hooks/useConversas";
 
@@ -126,12 +130,55 @@ const normalizar = (s: string) =>
  *  Comparar só os dígitos evita que "(84) 99999" não ache "5584999999999". */
 const soDigitos = (s: string) => s.replace(/\D/g, "");
 
-type FiltroConversa = "pendentes" | "todas" | "aberta";
+/**
+ * As abas da caixa de entrada.
+ *
+ * ⚠️ FIXAS e visíveis, não escondidas atrás de um menu. Filtro dentro de menu é
+ * filtro que ninguém usa e — pior — que fica ligado sem a pessoa perceber, e aí
+ * a conversa "sumiu do sistema".
+ *
+ * As três primeiras são as que abrem o turno de trabalho: o que ninguém
+ * respondeu, o que é meu, e o que não é de ninguém. "Todas" significa TODAS,
+ * inclusive resolvidas — a queixa clássica dessas ferramentas é a conversa que
+ * some até da aba que promete mostrar tudo.
+ */
+type FiltroConversa = "pendentes" | "minhas" | "sem_dono" | "aberta" | "todas";
 const FILTROS: { id: FiltroConversa; rotulo: string }[] = [
-  { id: "pendentes", rotulo: "Pendentes" },
+  { id: "pendentes", rotulo: "Não respondidas" },
+  { id: "minhas", rotulo: "Minhas" },
+  { id: "sem_dono", rotulo: "Sem responsável" },
   { id: "aberta", rotulo: "Janela aberta" },
   { id: "todas", rotulo: "Todas" },
 ];
+
+/** Como cada status se mostra. Um lugar só — chip da linha, cabeçalho de grupo
+ *  e painel da direita contam a mesma história. */
+const STATUS: Record<StatusAtendimento, { rotulo: string; grupo: string; classe: string }> = {
+  aberto:         { rotulo: "Aberto",         grupo: "Abertas — ninguém respondeu",
+                    classe: "border-amber-500/40 bg-amber-500/10 text-amber-500" },
+  em_atendimento: { rotulo: "Em atendimento", grupo: "Em atendimento",
+                    classe: "border-sky-500/40 bg-sky-500/10 text-sky-400" },
+  aguardando:     { rotulo: "Aguardando",     grupo: "Aguardando o cliente",
+                    classe: "border-violet-500/40 bg-violet-500/10 text-violet-400" },
+  resolvido:      { rotulo: "Resolvido",      grupo: "Resolvidas",
+                    classe: "border-emerald-500/40 bg-emerald-500/10 text-emerald-500" },
+};
+
+/** ⚠️ A ordem é a da urgência. "Sem pendência" (status nulo) fica por último:
+ *  é histórico, não trabalho. */
+const ORDEM_STATUS: (StatusAtendimento | null)[] =
+  ["aberto", "em_atendimento", "aguardando", "resolvido", null];
+
+/** A cor da etiqueta sai de uma paleta fechada, não de hexadecimal livre: cor
+ *  solta produz etiqueta ilegível no tema escuro e ninguém percebe. */
+const COR_TAG: Record<string, string> = {
+  cinza:    "border-muted-foreground/30 bg-muted/50 text-muted-foreground",
+  verde:    "border-emerald-500/40 bg-emerald-500/10 text-emerald-500",
+  azul:     "border-sky-500/40 bg-sky-500/10 text-sky-400",
+  ambar:    "border-amber-500/40 bg-amber-500/10 text-amber-500",
+  vermelho: "border-red-500/40 bg-red-500/10 text-red-500",
+  roxo:     "border-violet-500/40 bg-violet-500/10 text-violet-400",
+};
 
 /** Como cada estado se apresenta. Um lugar só — o cabeçalho de grupo, o chip da
  *  linha e a cor do avatar contam a mesma história. */
@@ -930,6 +977,20 @@ function Conversa({ c }: { c: Conversa }) {
           </div>
         )}
 
+        {/* ⚠️ A reabertura é DITA, não silenciosa.
+            Quem marcou "resolvido" e vê a conversa de volta na fila sente que o
+            sistema desfez o trabalho dele — é a queixa clássica dessas
+            ferramentas. O comportamento está certo; o que faltava era o motivo
+            aparecer. */}
+        {c.reaberta && (
+          <p className="flex items-center gap-1.5 rounded-md border border-amber-500/30
+                        bg-amber-500/5 px-2 py-1.5 text-[11px] text-amber-500">
+            <Undo2 className="h-3 w-3 shrink-0" />
+            Reaberta — o cliente escreveu de novo
+            {c.ultima_entrada_em ? ` às ${soHora(c.ultima_entrada_em)}` : ""}.
+          </p>
+        )}
+
         {/* `space-y` saiu: o espaçamento agora é do BLOCO (no próprio balão),
             porque mensagem colada e mensagem nova precisam de distâncias
             diferentes — um `space-y` único achatava as duas no mesmo valor. */}
@@ -1363,7 +1424,198 @@ function QuemRecebe({ aoFechar }: { aoFechar: () => void }) {
   );
 }
 
+/**
+ * O painel do contato — o que o time sabe sobre esta conversa.
+ *
+ * ⚠️ A ordem não é estética: identidade → ações → etiquetas → pedido. Quem abre
+ * o painel está fazendo uma destas três coisas, nesta frequência: conferir com
+ * quem está falando, mudar o estado do atendimento, ou achar o pedido. Campo de
+ * cadastro bonito no topo empurraria as ações para baixo da dobra.
+ *
+ * ⚠️ E o telefone fica GRANDE e selecionável. Ele é o que se copia para procurar
+ * no Bling, e um número em cinza de 10px vira erro de digitação.
+ */
+function PainelContato({ c, meuId }: { c: Conversa; meuId: string | null }) {
+  const definirStatus = useDefinirStatus();
+  const definirResponsavel = useDefinirResponsavel();
+  const marcarTag = useMarcarTag();
+  const criarTag = useCriarTag();
+  const { data: atendentes } = useAtendentes();
+  const { data: tags } = useTags();
+  const [novaTag, setNovaTag] = useState("");
+  const [verTags, setVerTags] = useState(false);
+
+  const minhas = new Set(c.tags.map((t) => t.id));
+  const souEu = !!meuId && c.responsavel === meuId;
+
+  return (
+    <CarboCard className="hidden min-h-0 xl:flex xl:flex-col">
+      <CarboCardContent className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4">
+
+        {/* ── Identidade ───────────────────────────────────────────────── */}
+        <div className="flex flex-col items-center gap-1.5 text-center">
+          <span className="flex h-14 w-14 items-center justify-center rounded-full
+                           border border-carbo-green/30 bg-carbo-green/5 text-lg
+                           font-semibold text-carbo-green">
+            {inicialDe(c.cliente, c.wa_id)}
+          </span>
+          <p className="text-sm font-semibold leading-tight">{c.cliente ?? "Sem nome"}</p>
+          {c.nome_whatsapp && (
+            <p className="text-[11px] leading-tight text-muted-foreground">
+              no WhatsApp: {c.nome_whatsapp}
+            </p>
+          )}
+          {/* `select-all` para o clique triplo pegar o número inteiro. */}
+          <p className="select-all font-mono text-[13px] tabular-nums text-foreground">
+            {c.wa_id}
+          </p>
+        </div>
+
+        {/* ── Ações ────────────────────────────────────────────────────── */}
+        <div className="space-y-2 border-t pt-3">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+            Atendimento
+          </p>
+
+          {/* ⚠️ Só DOIS botões, e são os dois status que uma pessoa decide.
+              "Aberto" e "Em atendimento" não têm botão de propósito: eles saem
+              de quem falou por último, e um botão para eles seria um jeito de
+              mentir para a própria fila. */}
+          <div className="flex gap-1.5">
+            <Button size="sm" variant={c.status === "aguardando" ? "default" : "outline"}
+                    className="h-8 flex-1 gap-1.5 text-[11px]"
+                    disabled={definirStatus.isPending}
+                    onClick={() => definirStatus.mutate(
+                      { wa_id: c.wa_id, status: c.status === "aguardando" ? "aberto" : "aguardando" },
+                      { onError: (e) => toast.error((e as Error).message) })}>
+              <Clock className="h-3.5 w-3.5" />
+              {c.status === "aguardando" ? "Retomar" : "Aguardando"}
+            </Button>
+            <Button size="sm" variant={c.status === "resolvido" ? "default" : "outline"}
+                    className="h-8 flex-1 gap-1.5 text-[11px]"
+                    disabled={definirStatus.isPending}
+                    onClick={() => definirStatus.mutate(
+                      { wa_id: c.wa_id, status: c.status === "resolvido" ? "aberto" : "resolvido" },
+                      { onError: (e) => toast.error((e as Error).message) })}>
+              {c.status === "resolvido"
+                ? <><Undo2 className="h-3.5 w-3.5" /> Reabrir</>
+                : <><CheckCheck className="h-3.5 w-3.5" /> Resolver</>}
+            </Button>
+          </div>
+
+          {/* ── Responsável ───────────────────────────────────────────── */}
+          <div className="space-y-1">
+            <p className="text-[10px] text-muted-foreground">Responsável</p>
+            <select
+              value={c.responsavel ?? ""}
+              onChange={(e) => {
+                const id = e.target.value || null;
+                const nome = (atendentes ?? []).find((a) => a.user_id === id)?.full_name ?? null;
+                definirResponsavel.mutate({ wa_id: c.wa_id, user_id: id, nome },
+                  { onError: (err) => toast.error((err as Error).message) });
+              }}
+              className="h-8 w-full rounded-md border bg-background px-2 text-xs">
+              <option value="">— sem responsável —</option>
+              {(atendentes ?? []).map((a) => (
+                <option key={a.user_id} value={a.user_id}>{a.full_name ?? a.user_id}</option>
+              ))}
+            </select>
+            {/* ⚠️ Atalho para assumir. Em time pequeno, puxar da fila é o
+                modelo certo — rodízio automático atribui conversa para quem
+                está almoçando, e ninguém mais mexe porque "já tem dono". */}
+            {!souEu && (
+              <Button size="sm" variant="ghost" className="h-7 w-full gap-1.5 text-[11px]"
+                      disabled={definirStatus.isPending}
+                      onClick={() => definirStatus.mutate(
+                        { wa_id: c.wa_id, status: "em_atendimento", assumir: true },
+                        { onError: (e) => toast.error((e as Error).message) })}>
+                <UserCheck className="h-3.5 w-3.5" /> Assumir esta conversa
+              </Button>
+            )}
+          </div>
+        </div>
+
+        {/* ── Etiquetas ────────────────────────────────────────────────── */}
+        <div className="space-y-2 border-t pt-3">
+          <p className="flex items-center gap-1.5 text-[10px] font-semibold uppercase
+                        tracking-wide text-muted-foreground">
+            <TagIcon className="h-3 w-3" /> Etiquetas
+          </p>
+
+          <div className="flex flex-wrap gap-1.5">
+            {c.tags.map((t) => (
+              <button key={t.id} type="button"
+                      title="Tirar esta etiqueta"
+                      onClick={() => marcarTag.mutate({ wa_id: c.wa_id, tag_id: t.id, marcar: false })}
+                      className={`inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5
+                                  text-[11px] ${COR_TAG[t.cor] ?? COR_TAG.cinza}`}>
+                {t.nome} <X className="h-2.5 w-2.5" />
+              </button>
+            ))}
+            <button type="button" onClick={() => setVerTags((v) => !v)}
+                    className="inline-flex items-center gap-1 rounded-md border border-dashed
+                               px-1.5 py-0.5 text-[11px] text-muted-foreground hover:text-foreground">
+              <Plus className="h-2.5 w-2.5" /> etiqueta
+            </button>
+          </div>
+
+          {verTags && (
+            <div className="space-y-1.5 rounded-md border bg-muted/30 p-2">
+              {(tags ?? []).filter((t) => !minhas.has(t.id)).map((t) => (
+                <button key={t.id} type="button"
+                        onClick={() => marcarTag.mutate({ wa_id: c.wa_id, tag_id: t.id, marcar: true })}
+                        className="flex w-full items-center gap-1.5 rounded px-1 py-0.5
+                                   text-left text-[11px] hover:bg-muted/60">
+                  <span className={`h-2 w-2 rounded-full border ${COR_TAG[t.cor] ?? COR_TAG.cinza}`} />
+                  {t.nome}
+                </button>
+              ))}
+              <div className="flex gap-1 pt-1">
+                <Input value={novaTag} onChange={(e) => setNovaTag(e.target.value)}
+                       placeholder="Nova etiqueta" className="h-7 text-[11px]"
+                       onKeyDown={(e) => {
+                         if (e.key !== "Enter" || !novaTag.trim()) return;
+                         e.preventDefault();
+                         criarTag.mutate({ nome: novaTag, cor: "cinza" }, {
+                           onSuccess: (t) => {
+                             setNovaTag("");
+                             marcarTag.mutate({ wa_id: c.wa_id, tag_id: t.id, marcar: true });
+                           },
+                           onError: (err) => toast.error((err as Error).message),
+                         });
+                       }} />
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* ── O pedido ─────────────────────────────────────────────────── */}
+        {c.bling_id && (
+          <div className="space-y-1.5 border-t pt-3">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+              Pedido
+            </p>
+            <Link to={`/ecommerce/esteira?pedido=${c.bling_id}`}
+                  className="flex items-center gap-1.5 text-[11px] text-carbo-green hover:underline">
+              <Package className="h-3.5 w-3.5" /> #{c.bling_id}
+              <ArrowUpRight className="h-3 w-3" />
+            </Link>
+            {c.sobre_a_etapa && (
+              <p className="text-[11px] text-muted-foreground">
+                {NOME_ETAPA[c.sobre_a_etapa] ?? c.sobre_a_etapa}
+              </p>
+            )}
+          </div>
+        )}
+      </CarboCardContent>
+    </CarboCard>
+  );
+}
+
 export default function Conversas() {
+  // Quem sou eu — é o que faz a aba "Minhas" significar alguma coisa.
+  const { user } = useAuth();
+  const meuId = user?.id ?? null;
   const [params, setParams] = useSearchParams();
   const voltar = params.get("voltar") || "/ecommerce/mensagens";
 
@@ -1420,16 +1672,22 @@ export default function Conversas() {
 
   const contagens = useMemo(() => ({
     todas: lista.length,
-    pendentes: lista.filter((c) => c.estado === "precisa_resposta").length,
+    pendentes: lista.filter((c) => c.status === "aberto").length,
+    minhas: lista.filter((c) => c.responsavel && c.responsavel === meuId).length,
+    sem_dono: lista.filter((c) => !c.responsavel && c.status !== "resolvido").length,
     aberta: lista.filter((c) => janelaAberta(c.janela_ate)).length,
-  }), [lista]);
+  }), [lista, meuId]);
 
   const filtradas = useMemo(() => {
     const termo = busca.trim();
     const alvoTexto = normalizar(termo);
     const alvoNumero = soDigitos(termo);
     return lista.filter((c) => {
-      if (filtro === "pendentes" && c.estado !== "precisa_resposta") return false;
+      if (filtro === "pendentes" && c.status !== "aberto") return false;
+      if (filtro === "minhas" && c.responsavel !== meuId) return false;
+      // ⚠️ Resolvida sem dono não é trabalho parado: ela sairia como "ninguém
+      // pegou" e encheria a aba de conversa encerrada.
+      if (filtro === "sem_dono" && (c.responsavel || c.status === "resolvido")) return false;
       if (filtro === "aberta" && !janelaAberta(c.janela_ate)) return false;
       if (!termo) return true;
       // ⚠️ Os DOIS nomes: quem procura pelo que viu no WhatsApp tem de achar,
@@ -1441,7 +1699,7 @@ export default function Conversas() {
       if (alvoNumero && soDigitos(c.wa_id).includes(alvoNumero)) return true;
       return false;
     });
-  }, [lista, busca, filtro]);
+  }, [lista, busca, filtro, meuId]);
 
   /* O cabeçalho é o placar da caixa INTEIRA, não da lista filtrada: um filtro na
      coluna não pode fazer o número de urgências parecer menor. */
@@ -1514,8 +1772,11 @@ export default function Conversas() {
         </CarboCard>
       )}
 
+      {/* ⚠️ Três colunas a partir do XL, duas no lg: o painel do contato é o
+          primeiro a sair quando falta espaço — sem ele dá para atender, sem a
+          conversa não. */}
       {lista.length > 0 && (
-        <div className="grid gap-3 lg:h-[calc(100vh-13rem)] lg:grid-cols-[20rem_1fr]">
+        <div className="grid gap-3 lg:h-[calc(100vh-13rem)] lg:grid-cols-[20rem_1fr] xl:grid-cols-[20rem_1fr_19rem]">
           <CarboCard className="min-h-0 overflow-hidden">
             <CarboCardContent className="flex h-full min-h-0 flex-col gap-0 p-0">
               {/* Busca e filtro ficam FORA da área que rola: com 40 conversas,
@@ -1582,15 +1843,15 @@ export default function Conversas() {
                      conversas dá para varrer; com 200, a pendência se perde no
                      meio dos avisos que ninguém respondeu. O cabeçalho de grupo
                      é o que faz a lista ter tamanho legível para sempre. */
-                  ORDEM_GRUPOS.flatMap((estado) => {
-                    const doGrupo = filtradas.filter((c) => c.estado === estado);
+                  ORDEM_STATUS.flatMap((estado) => {
+                    const doGrupo = filtradas.filter((c) => c.status === estado);
                     if (!doGrupo.length) return [];
                     return [
-                      <p key={`g-${estado}`}
+                      <p key={`g-${estado ?? "sem"}`}
                          className="sticky top-0 z-10 bg-background/95 px-1 pb-1 pt-2 text-[10px]
                                     font-semibold uppercase tracking-wide text-muted-foreground
                                     backdrop-blur first:pt-0">
-                        {ESTADO[estado].grupo}
+                        {estado ? STATUS[estado].grupo : "Sem pendência"}
                         <span className="ml-1 font-normal text-muted-foreground/60">
                           {doGrupo.length}
                         </span>
@@ -1657,6 +1918,46 @@ export default function Conversas() {
                                 </span>
                               )}
 
+                              {/* ── Status ────────────────────────────────
+                                  Ele responde "em que pé está?", que é a
+                                  pergunta que a lista existe para responder.
+                                  Aberto e Em atendimento saem de quem falou por
+                                  último; Aguardando e Resolvido são decisão de
+                                  gente. */}
+                              {c.status && (
+                                <span className={`inline-flex items-center rounded-md border px-1.5 py-0.5
+                                                  text-[10px] font-medium ${STATUS[c.status].classe}`}>
+                                  {STATUS[c.status].rotulo}
+                                </span>
+                              )}
+
+                              {/* ⚠️ O responsável no PRIMEIRO nome. A lista é de
+                                  varredura; nome completo empurraria o resto
+                                  para fora da linha. */}
+                              {c.responsavel_nome && (
+                                <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground">
+                                  <UserCheck className="h-3 w-3" />
+                                  {c.responsavel_nome.split(" ")[0]}
+                                </span>
+                              )}
+
+                              {/* ⚠️ No máximo DUAS etiquetas + "+N". Uma conversa
+                                  com seis tags quebraria a linha e empurraria o
+                                  relógio para fora da vista — e o relógio é o
+                                  que não pode sumir. */}
+                              {c.tags.slice(0, 2).map((t) => (
+                                <span key={t.id}
+                                      className={`inline-flex max-w-[7rem] items-center truncate rounded-md
+                                                  border px-1.5 py-0.5 text-[10px] ${COR_TAG[t.cor] ?? COR_TAG.cinza}`}>
+                                  {t.nome}
+                                </span>
+                              ))}
+                              {c.tags.length > 2 && (
+                                <span className="text-[10px] text-muted-foreground/70">
+                                  +{c.tags.length - 2}
+                                </span>
+                              )}
+
                               {/* O número sozinho não dizia de que era. Com a
                                   palavra, some a dúvida entre "3 mensagens" e
                                   "pedido nº 3". */}
@@ -1688,6 +1989,7 @@ export default function Conversas() {
           </CarboCard>
 
           {atual && <Conversa key={atual.wa_id} c={atual} />}
+          {atual && <PainelContato key={`p-${atual.wa_id}`} c={atual} meuId={meuId} />}
         </div>
       )}
     </div>

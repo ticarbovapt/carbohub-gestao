@@ -3,7 +3,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase, FUNCTIONS_URL } from "@/integrations/supabase/client";
 import {
   JANELA_MS, agruparConversas,
-  type Conversa, type MensagemConversa,
+  type Conversa, type MensagemConversa, type Atendimento,
+  type TagConversa, type StatusAtendimento,
 } from "@/lib/conversas";
 
 /**
@@ -23,7 +24,8 @@ export {
   JANELA_MS, janelaAberta, faltaDaJanela, agruparConversas,
   msDaJanela, nivelDaJanela, fracaoDaJanela,
 } from "@/lib/conversas";
-export { pareceEncerramento } from "@/lib/conversas";
+export { pareceEncerramento, statusEfetivo } from "@/lib/conversas";
+export type { StatusAtendimento, Atendimento, TagConversa } from "@/lib/conversas";
 export type { Conversa, MensagemConversa, NivelJanela, EstadoConversa } from "@/lib/conversas";
 
 export function useConversas(dias = 30) {
@@ -32,13 +34,17 @@ export function useConversas(dias = 30) {
     queryFn: async (): Promise<Conversa[]> => {
       const desde = new Date(Date.now() - dias * 86_400_000).toISOString();
 
-      const [{ data: msgs, error }, { data: contatos }, { data: resolvidas }] =
+      const [{ data: msgs, error }, { data: contatos }, { data: atend }, { data: vinculos }] =
         await Promise.all([
           (supabase as any).from("carbo_wa_conversas")
             .select("*").gte("ocorrido_em", desde).order("ocorrido_em", { ascending: false })
             .limit(1000),
           (supabase as any).from("carbo_wa_contatos").select("wa_id,last_inbound_at"),
-          (supabase as any).from("carbo_wa_resolvidas").select("wa_id,resolvido_ate"),
+          (supabase as any).from("carbo_wa_atendimento").select("*"),
+          // A tag vem junto do vínculo: a lista da esquerda precisa das etiquetas
+          // para filtrar, e uma consulta por conversa seriam 36 idas ao banco.
+          (supabase as any).from("carbo_wa_conversa_tag")
+            .select("wa_id, carbo_wa_tags(id, nome, cor, ativo)"),
         ]);
       if (error) throw error;
 
@@ -48,10 +54,28 @@ export function useConversas(dias = 30) {
           ? new Date(new Date(c.last_inbound_at).getTime() + JANELA_MS).toISOString()
           : null;
       }
+      // ⚠️ `resolvido_ate` continua alimentando o corte de "pendente" do
+      // `agruparConversas` — mas agora ele sai do ATENDIMENTO, não da tabela
+      // antiga. Duas fontes para a mesma marca seria a divergência de sempre.
       const resolvidos: Record<string, string> = {};
-      for (const r of resolvidas ?? []) resolvidos[r.wa_id] = r.resolvido_ate;
+      const atendimentos: Record<string, Atendimento> = {};
+      for (const a of atend ?? []) {
+        atendimentos[a.wa_id] = {
+          wa_id: a.wa_id, status: a.status, desde: a.desde,
+          responsavel: a.responsavel, responsavel_nome: a.responsavel_nome,
+        };
+        if (a.status === "resolvido") resolvidos[a.wa_id] = a.desde;
+      }
 
-      return agruparConversas((msgs ?? []) as MensagemConversa[], janelas, resolvidos);
+      const tagsPorConversa: Record<string, TagConversa[]> = {};
+      for (const v of (vinculos ?? []) as any[]) {
+        const t = v.carbo_wa_tags;
+        if (!t || t.ativo === false) continue;   // tag desativada some da tela
+        (tagsPorConversa[v.wa_id] ??= []).push({ id: t.id, nome: t.nome, cor: t.cor });
+      }
+
+      return agruparConversas((msgs ?? []) as MensagemConversa[], janelas,
+                              resolvidos, atendimentos, tagsPorConversa);
     },
     // ⚠️ CONTINUA existindo mesmo com o Realtime abaixo, e não é redundância:
     // são duas coisas diferentes. O Realtime traz mensagem NOVA; este intervalo
@@ -116,6 +140,16 @@ export function useConversasAoVivo() {
       .on("postgres_changes" as never,
           { event: "*", schema: "public", table: "carbo_wa_notas" },
           () => qc.invalidateQueries({ queryKey: ["wa-notas"] }))
+      // Status, responsável e etiqueta: duas pessoas na mesma fila é o caso
+      // normal, e sem isto a segunda assume uma conversa que a primeira pegou
+      // vinte segundos atrás.
+      .on("postgres_changes" as never,
+          { event: "*", schema: "public", table: "carbo_wa_atendimento" }, invalidar)
+      .on("postgres_changes" as never,
+          { event: "*", schema: "public", table: "carbo_wa_conversa_tag" }, invalidar)
+      .on("postgres_changes" as never,
+          { event: "*", schema: "public", table: "carbo_wa_tags" },
+          () => { qc.invalidateQueries({ queryKey: ["wa-tags"] }); invalidar(); })
       .subscribe();
 
     return () => {
@@ -179,6 +213,142 @@ export function useResolverConversa() {
         .upsert({ wa_id, resolvido_ate: new Date().toISOString(),
                   por: session.user.id, em: new Date().toISOString() },
                 { onConflict: "wa_id" });
+      if (error) throw error;
+    },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["wa-conversas"] }); },
+  });
+}
+
+// ─── Status, responsável e tags ──────────────────────────────────────────────
+
+/**
+ * Muda o status da conversa.
+ *
+ * ⚠️ `desde` é REESCRITO a cada mudança, e é isso que faz a reabertura
+ * funcionar: marcar "aguardando" hoje não pode ser desfeito por uma mensagem de
+ * ontem que já estava lá.
+ */
+export function useDefinirStatus() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ wa_id, status, assumir }:
+                       { wa_id: string; status: StatusAtendimento; assumir?: boolean }) => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error("Sessão expirada. Faça login novamente.");
+
+      const linha: Record<string, unknown> = {
+        wa_id, status,
+        desde: new Date().toISOString(),
+        atualizado_em: new Date().toISOString(),
+        atualizado_por: session.user.id,
+      };
+
+      // Assumir junto com "em atendimento": são a mesma ação na cabeça de quem
+      // clica, e deixar em dois passos produz conversa em atendimento sem dono.
+      if (assumir) {
+        const { data: perfil } = await (supabase as any)
+          .from("profiles").select("full_name").eq("id", session.user.id).maybeSingle();
+        linha.responsavel = session.user.id;
+        linha.responsavel_nome = perfil?.full_name ?? session.user.email ?? null;
+      }
+
+      const { error } = await (supabase as any)
+        .from("carbo_wa_atendimento").upsert(linha, { onConflict: "wa_id" });
+      if (error) throw error;
+    },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["wa-conversas"] }); },
+  });
+}
+
+/** Passa a conversa para outra pessoa — ou tira o dono (null). */
+export function useDefinirResponsavel() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ wa_id, user_id, nome }:
+                       { wa_id: string; user_id: string | null; nome: string | null }) => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error("Sessão expirada. Faça login novamente.");
+
+      // ⚠️ NÃO mexe em `desde`: trocar o responsável não é decidir de novo
+      // sobre a conversa, e reescrever a data desfaria uma reabertura pendente.
+      const { error } = await (supabase as any).from("carbo_wa_atendimento")
+        .upsert({ wa_id, responsavel: user_id, responsavel_nome: nome,
+                  atualizado_em: new Date().toISOString(),
+                  atualizado_por: session.user.id },
+                { onConflict: "wa_id" });
+      if (error) throw error;
+    },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["wa-conversas"] }); },
+  });
+}
+
+export function useAtendentes() {
+  return useQuery({
+    queryKey: ["wa-atendentes"],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from("carbo_wa_atendentes").select("user_id, full_name");
+      if (error) throw error;
+      return (data ?? []) as { user_id: string; full_name: string | null }[];
+    },
+    staleTime: 5 * 60_000,
+  });
+}
+
+/** As etiquetas existentes — só as ativas, que são as ofertáveis. */
+export function useTags() {
+  return useQuery({
+    queryKey: ["wa-tags"],
+    queryFn: async (): Promise<TagConversa[]> => {
+      const { data, error } = await (supabase as any)
+        .from("carbo_wa_tags").select("id, nome, cor").eq("ativo", true).order("nome");
+      if (error) throw error;
+      return (data ?? []) as TagConversa[];
+    },
+    staleTime: 60_000,
+  });
+}
+
+export function useCriarTag() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ nome, cor }: { nome: string; cor: string }) => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error("Sessão expirada. Faça login novamente.");
+      const { data, error } = await (supabase as any).from("carbo_wa_tags")
+        .insert({ nome: nome.trim(), cor, criado_por: session.user.id })
+        .select("id, nome, cor").single();
+      if (error) {
+        // 23505 = já existe uma com esse nome. Dizer isso é melhor que "erro".
+        throw new Error(error.code === "23505"
+          ? "Já existe uma etiqueta com esse nome."
+          : error.message);
+      }
+      return data as TagConversa;
+    },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["wa-tags"] }); },
+  });
+}
+
+export function useMarcarTag() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ wa_id, tag_id, marcar }:
+                       { wa_id: string; tag_id: string; marcar: boolean }) => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error("Sessão expirada. Faça login novamente.");
+
+      if (!marcar) {
+        // ⚠️ Aqui DELETE é certo: tirar etiqueta errada é operação do dia, e
+        // guardar o vínculo desfeito não serve a ninguém. O que não se apaga é
+        // a TAG (vira `ativo = false`), porque conversa antiga aponta para ela.
+        const { error } = await (supabase as any).from("carbo_wa_conversa_tag")
+          .delete().eq("wa_id", wa_id).eq("tag_id", tag_id);
+        if (error) throw error;
+        return;
+      }
+      const { error } = await (supabase as any).from("carbo_wa_conversa_tag")
+        .upsert({ wa_id, tag_id, por: session.user.id }, { onConflict: "wa_id,tag_id" });
       if (error) throw error;
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["wa-conversas"] }); },

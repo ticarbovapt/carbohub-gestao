@@ -580,7 +580,22 @@ supabase/functions/whatsapp-responder    texto livre, chamado pelo NAVEGADOR
    garante que ele nunca chegue ao cliente: nenhum caminho de envio lê essa
    tabela, então não há SELECT futuro que possa esquecer o filtro. Ele também
    funciona com a janela FECHADA, que é quando anotar mais importa.
-8. ⚠️ **`carbo_e_time_interno()`** guarda `carbo_wa_mensagens` e
+8. **Status: DOIS calculados, DOIS clicados.** `aberto` e `em_atendimento` saem
+   de quem falou por último (`statusEfetivo`, em `lib/conversas.ts`); só
+   `aguardando` e `resolvido` são decisão humana, e os dois REABREM quando o
+   cliente escreve depois. Dar botão para os dois primeiros criaria a doença
+   conhecida dessas ferramentas — status manual brigando com a realidade, e
+   fila em que ninguém confia. ⚠️ Aviso automático da esteira NÃO conta como
+   atendimento: sem essa distinção toda conversa que recebeu "nota fiscal
+   emitida" apareceria como "em atendimento" sem ninguém ter atendido.
+9. **Reabertura é DITA na tela** (`foiReaberta` → faixa âmbar). Reabrir em
+   silêncio faz quem marcou resolvido achar que o sistema desfez o trabalho
+   dele — o comportamento está certo, o que faltava era o motivo aparecer.
+10. **Etiqueta é TABELA** (`carbo_wa_tags` + `carbo_wa_conversa_tag`), com cor
+   de paleta fechada. Texto livre viraria "orçamento", "Orçamento" e "orcamento"
+   na mesma semana e o filtro passaria a mentir; enum exigiria migração por tag
+   nova, e aí ninguém cria tag. Desative, nunca apague.
+11. ⚠️ **`carbo_e_time_interno()`** guarda `carbo_wa_mensagens` e
    `carbo_wa_contatos`. A lista de interfaces é a mesma do `notify_time_interno`
    — duas listas divergem, e divergir aqui ABRE acesso em vez de fechar.
 
