@@ -162,6 +162,43 @@ Cinco decisões que custam caro se forem desfeitas sem entender:
 ⚠️ Etapa nova de conferência entra em `rtm_checklist_itens`. Motivo novo entra
 em `rtm_motivos`. Nenhum dos dois em código.
 
+### Cadastro de PDV — a chave é o CNPJ, e o nome NÃO é chave
+O cadastro nasceu de planilha (`20260814000000_pdvs_carga.sql`) e continua sendo
+atualizado por planilha. Três regras que já custaram caro:
+
+1. **Casar por `regexp_replace(cnpj, '\D', '', 'g')`, nos DOIS lados.** A
+   planilha traz o documento em formatos diferentes — uma linha veio
+   `42.431.461.0001.69`, com pontos no lugar de `/` e `-`. Comparar o texto
+   formatado deixa o PDV de fora **sem erro**.
+2. **Nome não identifica PDV.** Cada CNPJ é uma filial independente dentro da
+   mesma rede (Posto Amigo tem 6, Via Diesel 2, Postos RCM 19), e a planilha
+   renomeia: o banco tem `Posto RF Afogados`, ela escreve `Postos RCM
+   (Afogados)`. Casar por nome mistura endereço de filial. Os PDVs **sem
+   documento** são a única exceção — e mesmo eles só quando o nome bate com
+   exatamente UMA linha; batendo com duas, a migração não escolhe e **não
+   insere**, senão criaria a terceira cópia e enterraria a ambiguidade.
+3. ⚠️ **A comparação de nome é sem acento e minúscula.** A carga de agosto
+   gravou tudo em ASCII (`Posto Sao Francisco`, `Alem Mar`); `name = 'Posto São
+   Francisco'` não casa nada, e não casar passa calado — foi assim que esse PDV
+   ficou sem abertura, sem dono e sem mix na `20260816`. Hoje existe
+   `public.carbo_nome_chave(text)` para isso.
+
+**Importar planilha nunca sobrescreve com vazio** (`coalesce(planilha, banco)`
+campo a campo): cinco linhas chegam sem endereço, e gravar o vazio por cima
+apaga cadastro bom. `legal_name` só PREENCHE o que está nulo — a razão social
+boa é a da nota fiscal (`carboze_orders.customer_name`), não a da planilha.
+
+**PDV novo entra como `'registered'`, nunca `'active'`**: é o status criado para
+"existe na planilha e ainda não vende". Marcar de ativo infla a contagem de PDVs
+ativos, que é o número que a diretoria olha.
+
+⚠️ **Conferência de importação compara com a FOTO do antes.** A
+`20260941000000_pdvs_enderecos.sql` guarda `cidade_antes`/`rua_antes` na tabela
+de staging antes do UPDATE; sem isso o relatório compararia a planilha com o
+que ela mesma acabou de gravar e diria sempre "nada mudou" — um relatório que
+só sabe concordar consigo mesmo. Foi ele que expôs a troca conhecida entre
+Cidade Nova e Cidade das Rosas, e `AMG Garage` cadastrada em Barueri.
+
 ### `lib/quotePdf.ts` — o PDF do orçamento, nos seis
 Byte a byte idêntico nos **seis** apps. Fonte da verdade = `apps/crm`. A raiz
 está fora: o `controle` tem outro template, mais simples e antigo, sem desconto
