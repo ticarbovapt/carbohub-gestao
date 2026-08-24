@@ -182,6 +182,62 @@ export function useRtmAgenda(de: string, ate: string, vendedorId?: string | null
   });
 }
 
+export interface RtmDiaResumo {
+  planejadas: number; pendentes: number; em_andamento: number;
+  concluidas: number; nao_cumpridas: number; canceladas: number;
+}
+
+/**
+ * A carga de cada dia — o que o calendário desenha.
+ *
+ * ⚠️ Lê a view AGREGADA, não a agenda inteira. Somar no navegador exigiria
+ * baixar ~42 dias de linhas completas (nome, endereço, coordenadas, contato)
+ * para mostrar 42 numerais, num celular em 3G na estrada.
+ *
+ * ⚠️ E o intervalo é o da GRADE, não o do mês: a grade de agosto começa em
+ * 27/jul e termina em 6/set. Pedindo 01–31, as células vizinhas voltam sem dado
+ * e a PRIMEIRA LINHA do calendário mente, mostrando vazio onde há visita.
+ */
+export function useRtmAgendaDia(
+  de: string, ate: string, vendedorId?: string | null, ativo = true,
+) {
+  return useQuery({
+    queryKey: ["rtm", "agenda-dia", de, ate, vendedorId ?? "todos"],
+    // Não paga a consulta do mês quem nunca abre o calendário — que é a maioria.
+    enabled: ativo,
+    // A carga do mês não muda a cada segundo, e no celular cada refetch conta.
+    staleTime: 60_000,
+    queryFn: async (): Promise<Map<string, RtmDiaResumo>> => {
+      let q = db.from("rtm_agenda_dia").select("*")
+        .gte("data_prevista", de).lte("data_prevista", ate);
+      if (vendedorId) q = q.eq("vendedor_id", vendedorId);
+      const { data, error } = await q;
+      if (error) throw error;
+
+      // Soma entre vendedores quando o gestor olha o time inteiro.
+      const mapa = new Map<string, RtmDiaResumo>();
+      for (const l of (data ?? []) as (RtmDiaResumo & { data_prevista: string })[]) {
+        const atual = mapa.get(l.data_prevista);
+        if (!atual) {
+          mapa.set(l.data_prevista, {
+            planejadas: Number(l.planejadas), pendentes: Number(l.pendentes),
+            em_andamento: Number(l.em_andamento), concluidas: Number(l.concluidas),
+            nao_cumpridas: Number(l.nao_cumpridas), canceladas: Number(l.canceladas),
+          });
+        } else {
+          atual.planejadas += Number(l.planejadas);
+          atual.pendentes += Number(l.pendentes);
+          atual.em_andamento += Number(l.em_andamento);
+          atual.concluidas += Number(l.concluidas);
+          atual.nao_cumpridas += Number(l.nao_cumpridas);
+          atual.canceladas += Number(l.canceladas);
+        }
+      }
+      return mapa;
+    },
+  });
+}
+
 export function useRtmVisitas(de: string, ate: string, vendedorId?: string | null) {
   return useQuery({
     queryKey: ["rtm", "visitas", de, ate, vendedorId ?? "todos"],
@@ -221,6 +277,9 @@ export function usePlanejarVisita() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["rtm", "agenda"] });
+      // ⚠️ O calendário também. Sem esta linha, agendar uma visita não muda o
+      // numeral da célula — e a pessoa agenda de novo, achando que não salvou.
+      qc.invalidateQueries({ queryKey: ["rtm", "agenda-dia"] });
       toast.success("Visita agendada.");
     },
     onError: (e: { message?: string }) => {
@@ -247,6 +306,9 @@ export function useCancelarPlanejada() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["rtm", "agenda"] });
+      // ⚠️ O calendário também. Sem esta linha, agendar uma visita não muda o
+      // numeral da célula — e a pessoa agenda de novo, achando que não salvou.
+      qc.invalidateQueries({ queryKey: ["rtm", "agenda-dia"] });
       toast.success("Visita cancelada.");
     },
     onError: (e: { message?: string }) => toast.error("Não deu para cancelar: " + (e?.message ?? "")),

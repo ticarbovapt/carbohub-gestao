@@ -106,6 +106,10 @@ export interface RtmVisitaLocal {
   estado: "rascunho" | "enviando" | "pronta" | "erro";
   erro: string | null;
   tentativas: number;
+  /** Quando a última tentativa falhou — é daqui que sai o recuo progressivo.
+   *  Sem isso, uma visita recusada em definitivo bate na API a cada 45 s para
+   *  sempre, gastando bateria e franquia de quem está na estrada. */
+  ultimo_erro_em?: string;
   atualizado_em: string;
 }
 
@@ -255,21 +259,77 @@ let rodando = false;
 /** Roda o encadeamento completo de todas as visitas pendentes. Seguro chamar a
  *  qualquer momento e de qualquer lugar: reentrância é barrada, e cada passo é
  *  idempotente. */
+/**
+ * Preenche a coordenada do check-in DEPOIS que ela chega.
+ *
+ * ⚠️ O check-in não espera o GPS — eram até 8 s de espera na porta do posto,
+ * debaixo da cobertura de bomba, que é exatamente onde ele demora o máximo.
+ * A pessoa via um spinner e tocava de novo, gerando dois check-ins.
+ *
+ * A coordenada entra quando chegar, e só se a visita ainda não subiu: depois
+ * do `abrir`, quem manda é o servidor, e o gatilho de distância já disparou.
+ */
+export async function rtmCompletarLocal(clientUuid: string, geo: RtmGeo): Promise<void> {
+  const v = await rtmLer(clientUuid);
+  if (!v || v.visita_id) return;      // já subiu: não reescreve o que o servidor tem
+  if (v.geo_checkin?.lat != null) return;
+  v.geo_checkin = geo;
+  await gravar(v);
+}
+
+/** Quando a última sincronização deu certo.
+ *
+ *  ⚠️ `navigator.onLine` mente dentro do posto: ele diz que a INTERFACE está
+ *  conectada, não que a internet responde. Um carimbo de sucesso real é o que
+ *  deixa a tela dizer "sem enviar há 22 min" em vez de um "online" que não
+ *  significa nada. */
+const CHAVE_SUCESSO = "rtm:ultimo_sucesso";
+function marcarSucesso() {
+  try { localStorage.setItem(CHAVE_SUCESSO, new Date().toISOString()); } catch { /* modo privado */ }
+}
+export function rtmUltimoSucesso(): string | null {
+  try { return localStorage.getItem(CHAVE_SUCESSO); } catch { return null; }
+}
+
 export async function rtmSincronizar(): Promise<void> {
   if (rodando) return;
   if (typeof navigator !== "undefined" && navigator.onLine === false) return;
   rodando = true;
   try {
-    const todas = await rtmLerTodas();
+    // ⚠️ ORDEM CRONOLÓGICA, não a do `getAll()`.
+    //
+    // A chave do IndexedDB é o `client_uuid`, que é aleatório — então a ordem de
+    // envio era SORTEADA. Numa manhã sem sinal com três PDVs, se a terceira
+    // visita subisse primeiro, o `rtm_abrir_visita` bateria na trava de "visita
+    // em aberto" e ela iria para erro, tentando de novo a cada 45 s até que as
+    // anteriores passassem. O servidor está certo; era a fila que embaralhava.
+    const todas = (await rtmLerTodas()).sort(
+      (a, b) => (a.ts_dispositivo_checkin ?? "").localeCompare(b.ts_dispositivo_checkin ?? ""));
+
     for (const v of todas) {
       if (v.estado === "pronta") continue;
+
+      // ⚠️ Recuo progressivo. `tentativas` era incrementado e nunca lido: uma
+      // visita recusada em definitivo batia na API a cada 45 s para sempre,
+      // gastando bateria e franquia de quem está na estrada.
+      if (v.estado === "erro" && v.tentativas > 0 && v.ultimo_erro_em) {
+        const espera = Math.min(45_000 * 2 ** Math.min(v.tentativas, 5), 15 * 60_000);
+        if (Date.now() - new Date(v.ultimo_erro_em).getTime() < espera) continue;
+      }
+
       try {
         await sincronizarUma(v);
+        marcarSucesso();
       } catch (e) {
         v.estado = "erro";
         v.tentativas += 1;
         v.erro = (e as { message?: string })?.message ?? "falha ao sincronizar";
+        v.ultimo_erro_em = new Date().toISOString();
         await gravar(v);
+
+        // ⚠️ Trava de visita aberta PARA o laço: as seguintes vão falhar pelo
+        // mesmo motivo, e insistir só queima rede em pé, no meio da rua.
+        if (/visita em aberto/i.test(v.erro)) break;
       }
     }
   } finally {
@@ -406,6 +466,12 @@ export function rtmIniciarSincronizacao() {
     if (document.visibilityState === "visible") void rtmSincronizar();
   });
   window.setInterval(() => void rtmSincronizar(), 45_000);
+
+  // ⚠️ Pede armazenamento PERSISTENTE. Doze visitas com foto são dezenas de MB
+  // no IndexedDB, e sem isto o navegador pode despejar tudo sob pressão de
+  // espaço — o dia inteiro de trabalho some sem erro nenhum. É uma chamada.
+  void navigator.storage?.persist?.().catch(() => { /* navegador sem suporte */ });
+
   void rtmSincronizar();
 }
 
