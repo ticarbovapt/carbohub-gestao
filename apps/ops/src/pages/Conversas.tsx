@@ -6,7 +6,8 @@ import {
   File as FileIcon, HelpCircle,
   Search, SearchX, X, Package, ArrowUpRight, CornerDownLeft, Megaphone,
   BellRing, BellOff, Check, CheckCheck, Inbox, Undo2, Sparkles, UserCheck, Tag as TagIcon, Plus,
-  CalendarClock, Trash2, Square, Play, Pause, Download, StickyNote, EyeOff,
+  CalendarClock, Trash2, Square, Play, Pause, Download, StickyNote, EyeOff, Copy,
+  type LucideIcon,
 } from "lucide-react";
 import { toast } from "sonner";
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
@@ -179,19 +180,6 @@ const COR_TAG: Record<string, string> = {
   vermelho: "border-red-500/40 bg-red-500/10 text-red-500",
   roxo:     "border-violet-500/40 bg-violet-500/10 text-violet-400",
 };
-
-/** Como cada estado se apresenta. Um lugar só — o cabeçalho de grupo, o chip da
- *  linha e a cor do avatar contam a mesma história. */
-const ESTADO: Record<EstadoConversa, { rotulo: string; grupo: string; cor: string }> = {
-  precisa_resposta: { rotulo: "sem resposta", grupo: "Precisam de resposta", cor: "text-amber-500" },
-  resolvida:        { rotulo: "resolvida",    grupo: "Resolvidas",           cor: "text-emerald-500" },
-  sem_pendencia:    { rotulo: "",             grupo: "Sem pendência",        cor: "text-muted-foreground" },
-};
-
-/** ⚠️ A ordem dos grupos é a da urgência, não a alfabética. "Sem pendência" é
- *  quase toda a lista (um aviso da esteira que ninguém respondeu) e fica por
- *  último: ela é histórico, não trabalho. */
-const ORDEM_GRUPOS: EstadoConversa[] = ["precisa_resposta", "resolvida", "sem_pendencia"];
 
 // ─── A linha do tempo da conversa ────────────────────────────────────────────
 
@@ -1424,16 +1412,37 @@ function QuemRecebe({ aoFechar }: { aoFechar: () => void }) {
   );
 }
 
+/** Rótulo + conteúdo de uma seção do painel.
+ *  Um lugar só decide divisória e espaçamento — antes cada bloco repetia
+ *  `space-y-2 border-t pt-3` na mão, e três cópias de um espaçamento divergem
+ *  como qualquer outra cópia. */
+function SecaoPainel({ titulo, icone: Icone, children }: {
+  titulo: string; icone: LucideIcon; children: React.ReactNode;
+}) {
+  return (
+    <div className="space-y-2">
+      <p className="flex items-center gap-1.5 px-0.5 text-[10px] font-semibold
+                    uppercase tracking-wide text-muted-foreground">
+        <Icone className="h-3 w-3" /> {titulo}
+      </p>
+      {children}
+    </div>
+  );
+}
+
 /**
  * O painel do contato — o que o time sabe sobre esta conversa.
  *
- * ⚠️ A ordem não é estética: identidade → ações → etiquetas → pedido. Quem abre
- * o painel está fazendo uma destas três coisas, nesta frequência: conferir com
- * quem está falando, mudar o estado do atendimento, ou achar o pedido. Campo de
- * cadastro bonito no topo empurraria as ações para baixo da dobra.
+ * ⚠️ A ordem não é estética: identidade → atendimento → etiquetas → pedido. Quem
+ * abre o painel está fazendo uma destas três coisas, nesta frequência: conferir
+ * com quem está falando, mudar o estado do atendimento, ou achar o pedido. Campo
+ * de cadastro bonito no topo empurraria as ações para baixo da dobra — e o
+ * PEDIDO fica por último de propósito: ele leva para OUTRA rota, e o que leva
+ * embora não pode ficar no caminho de quem ainda está atendendo.
  *
  * ⚠️ E o telefone fica GRANDE e selecionável. Ele é o que se copia para procurar
- * no Bling, e um número em cinza de 10px vira erro de digitação.
+ * no Bling, e um número em cinza de 10px vira erro de digitação. Ele também NÃO
+ * é formatado: máscara com espaços sobrevive à cópia e vira busca que não acha.
  */
 function PainelContato({ c, meuId }: { c: Conversa; meuId: string | null }) {
   const definirStatus = useDefinirStatus();
@@ -1447,166 +1456,260 @@ function PainelContato({ c, meuId }: { c: Conversa; meuId: string | null }) {
 
   const minhas = new Set(c.tags.map((t) => t.id));
   const souEu = !!meuId && c.responsavel === meuId;
+  const disponiveis = (tags ?? []).filter((t) => !minhas.has(t.id));
+
+  /* ⚠️ Só quando ACRESCENTA. Imprimir o mesmo nome duas vezes gasta uma linha e
+     faz o painel parecer com defeito. */
+  const outroNome =
+    c.nome_whatsapp && c.nome_whatsapp !== c.cliente ? c.nome_whatsapp : null;
+
+  const criar = () => {
+    if (!novaTag.trim()) return;
+    criarTag.mutate({ nome: novaTag, cor: "cinza" }, {
+      onSuccess: (t) => {
+        setNovaTag("");
+        marcarTag.mutate({ wa_id: c.wa_id, tag_id: t.id, marcar: true });
+      },
+      onError: (err) => toast.error((err as Error).message),
+    });
+  };
+
+  /* Copiar COMPLEMENTA a seleção, não substitui: sem HTTPS ou sem permissão a
+     API falha calada, e o `select-all` continua sendo o caminho. */
+  const copiarNumero = () => {
+    navigator.clipboard?.writeText(c.wa_id)
+      .then(() => toast.success("Número copiado"))
+      .catch(() => toast.error("Não consegui copiar — selecione e copie à mão."));
+  };
 
   return (
     <CarboCard className="hidden min-h-0 xl:flex xl:flex-col">
-      <CarboCardContent className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4">
+      <CarboCardContent className="min-h-0 flex-1 space-y-4 overflow-y-auto p-0">
 
-        {/* ── Identidade ───────────────────────────────────────────────── */}
-        <div className="flex flex-col items-center gap-1.5 text-center">
-          <span className="flex h-14 w-14 items-center justify-center rounded-full
-                           border border-carbo-green/30 bg-carbo-green/5 text-lg
-                           font-semibold text-carbo-green">
+        {/* ── Identidade ──────────────────────────────────────────────────
+            ⚠️ `sticky`: o painel rola quando a conversa tem muitas etiquetas, e
+            o número é justamente o que se quer alcançar em qualquer ponto da
+            rolagem. */}
+        <div className="sticky top-0 z-10 flex flex-col items-center gap-2 border-b
+                        border-border bg-background/95 px-4 pb-4 pt-4 text-center
+                        backdrop-blur">
+          <span className="flex h-16 w-16 items-center justify-center rounded-full
+                           border border-carbo-green/30 bg-carbo-green/5 text-xl
+                           font-semibold text-carbo-green ring-1 ring-carbo-green/20">
             {inicialDe(c.cliente, c.wa_id)}
           </span>
-          <p className="text-sm font-semibold leading-tight">{c.cliente ?? "Sem nome"}</p>
-          {c.nome_whatsapp && (
-            <p className="text-[11px] leading-tight text-muted-foreground">
-              no WhatsApp: {c.nome_whatsapp}
+
+          <div className="space-y-0.5">
+            <p className="text-[15px] font-semibold leading-tight">
+              {c.cliente ?? "Sem nome"}
             </p>
-          )}
-          {/* `select-all` para o clique triplo pegar o número inteiro. */}
-          <p className="select-all font-mono text-[13px] tabular-nums text-foreground">
-            {c.wa_id}
-          </p>
-        </div>
-
-        {/* ── Ações ────────────────────────────────────────────────────── */}
-        <div className="space-y-2 border-t pt-3">
-          <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-            Atendimento
-          </p>
-
-          {/* ⚠️ Só DOIS botões, e são os dois status que uma pessoa decide.
-              "Aberto" e "Em atendimento" não têm botão de propósito: eles saem
-              de quem falou por último, e um botão para eles seria um jeito de
-              mentir para a própria fila. */}
-          <div className="flex gap-1.5">
-            <Button size="sm" variant={c.status === "aguardando" ? "default" : "outline"}
-                    className="h-8 flex-1 gap-1.5 text-[11px]"
-                    disabled={definirStatus.isPending}
-                    onClick={() => definirStatus.mutate(
-                      { wa_id: c.wa_id, status: c.status === "aguardando" ? "aberto" : "aguardando" },
-                      { onError: (e) => toast.error((e as Error).message) })}>
-              <Clock className="h-3.5 w-3.5" />
-              {c.status === "aguardando" ? "Retomar" : "Aguardando"}
-            </Button>
-            <Button size="sm" variant={c.status === "resolvido" ? "default" : "outline"}
-                    className="h-8 flex-1 gap-1.5 text-[11px]"
-                    disabled={definirStatus.isPending}
-                    onClick={() => definirStatus.mutate(
-                      { wa_id: c.wa_id, status: c.status === "resolvido" ? "aberto" : "resolvido" },
-                      { onError: (e) => toast.error((e as Error).message) })}>
-              {c.status === "resolvido"
-                ? <><Undo2 className="h-3.5 w-3.5" /> Reabrir</>
-                : <><CheckCheck className="h-3.5 w-3.5" /> Resolver</>}
-            </Button>
-          </div>
-
-          {/* ── Responsável ───────────────────────────────────────────── */}
-          <div className="space-y-1">
-            <p className="text-[10px] text-muted-foreground">Responsável</p>
-            <select
-              value={c.responsavel ?? ""}
-              onChange={(e) => {
-                const id = e.target.value || null;
-                const nome = (atendentes ?? []).find((a) => a.user_id === id)?.full_name ?? null;
-                definirResponsavel.mutate({ wa_id: c.wa_id, user_id: id, nome },
-                  { onError: (err) => toast.error((err as Error).message) });
-              }}
-              className="h-8 w-full rounded-md border bg-background px-2 text-xs">
-              <option value="">— sem responsável —</option>
-              {(atendentes ?? []).map((a) => (
-                <option key={a.user_id} value={a.user_id}>{a.full_name ?? a.user_id}</option>
-              ))}
-            </select>
-            {/* ⚠️ Atalho para assumir. Em time pequeno, puxar da fila é o
-                modelo certo — rodízio automático atribui conversa para quem
-                está almoçando, e ninguém mais mexe porque "já tem dono". */}
-            {!souEu && (
-              <Button size="sm" variant="ghost" className="h-7 w-full gap-1.5 text-[11px]"
-                      disabled={definirStatus.isPending}
-                      onClick={() => definirStatus.mutate(
-                        { wa_id: c.wa_id, status: "em_atendimento", assumir: true },
-                        { onError: (e) => toast.error((e as Error).message) })}>
-                <UserCheck className="h-3.5 w-3.5" /> Assumir esta conversa
-              </Button>
-            )}
-          </div>
-        </div>
-
-        {/* ── Etiquetas ────────────────────────────────────────────────── */}
-        <div className="space-y-2 border-t pt-3">
-          <p className="flex items-center gap-1.5 text-[10px] font-semibold uppercase
-                        tracking-wide text-muted-foreground">
-            <TagIcon className="h-3 w-3" /> Etiquetas
-          </p>
-
-          <div className="flex flex-wrap gap-1.5">
-            {c.tags.map((t) => (
-              <button key={t.id} type="button"
-                      title="Tirar esta etiqueta"
-                      onClick={() => marcarTag.mutate({ wa_id: c.wa_id, tag_id: t.id, marcar: false })}
-                      className={`inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5
-                                  text-[11px] ${COR_TAG[t.cor] ?? COR_TAG.cinza}`}>
-                {t.nome} <X className="h-2.5 w-2.5" />
-              </button>
-            ))}
-            <button type="button" onClick={() => setVerTags((v) => !v)}
-                    className="inline-flex items-center gap-1 rounded-md border border-dashed
-                               px-1.5 py-0.5 text-[11px] text-muted-foreground hover:text-foreground">
-              <Plus className="h-2.5 w-2.5" /> etiqueta
-            </button>
-          </div>
-
-          {verTags && (
-            <div className="space-y-1.5 rounded-md border bg-muted/30 p-2">
-              {(tags ?? []).filter((t) => !minhas.has(t.id)).map((t) => (
-                <button key={t.id} type="button"
-                        onClick={() => marcarTag.mutate({ wa_id: c.wa_id, tag_id: t.id, marcar: true })}
-                        className="flex w-full items-center gap-1.5 rounded px-1 py-0.5
-                                   text-left text-[11px] hover:bg-muted/60">
-                  <span className={`h-2 w-2 rounded-full border ${COR_TAG[t.cor] ?? COR_TAG.cinza}`} />
-                  {t.nome}
-                </button>
-              ))}
-              <div className="flex gap-1 pt-1">
-                <Input value={novaTag} onChange={(e) => setNovaTag(e.target.value)}
-                       placeholder="Nova etiqueta" className="h-7 text-[11px]"
-                       onKeyDown={(e) => {
-                         if (e.key !== "Enter" || !novaTag.trim()) return;
-                         e.preventDefault();
-                         criarTag.mutate({ nome: novaTag, cor: "cinza" }, {
-                           onSuccess: (t) => {
-                             setNovaTag("");
-                             marcarTag.mutate({ wa_id: c.wa_id, tag_id: t.id, marcar: true });
-                           },
-                           onError: (err) => toast.error((err as Error).message),
-                         });
-                       }} />
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* ── O pedido ─────────────────────────────────────────────────── */}
-        {c.bling_id && (
-          <div className="space-y-1.5 border-t pt-3">
-            <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-              Pedido
-            </p>
-            <Link to={`/ecommerce/esteira?pedido=${c.bling_id}`}
-                  className="flex items-center gap-1.5 text-[11px] text-carbo-green hover:underline">
-              <Package className="h-3.5 w-3.5" /> #{c.bling_id}
-              <ArrowUpRight className="h-3 w-3" />
-            </Link>
-            {c.sobre_a_etapa && (
-              <p className="text-[11px] text-muted-foreground">
-                {NOME_ETAPA[c.sobre_a_etapa] ?? c.sobre_a_etapa}
+            {outroNome && (
+              <p className="text-[11px] leading-tight text-muted-foreground">
+                no WhatsApp: {outroNome}
               </p>
             )}
           </div>
-        )}
+
+          {/* O telefone como OBJETO de cópia: pílula + botão. Sem máscara, porque
+              é ele que se cola na busca do ERP. */}
+          <div className="flex items-center gap-1 rounded-md border border-border
+                          bg-muted/40 px-2 py-1">
+            <span className="select-all font-mono text-[15px] tracking-tight
+                             tabular-nums text-foreground">
+              {c.wa_id}
+            </span>
+            <button type="button" onClick={copiarNumero} title="Copiar número"
+                    aria-label="Copiar número"
+                    className="rounded-sm p-1 text-muted-foreground transition-colors
+                               hover:text-carbo-green">
+              <Copy className="h-3.5 w-3.5" />
+            </button>
+          </div>
+
+          {/* O status é INFORMAÇÃO e mora junto da identidade — colado aqui, ele
+              faz os dois botões abaixo lerem como "mudar isto". */}
+          {c.status && (
+            <span className={`inline-flex items-center rounded-md border px-2 py-0.5
+                              text-[10px] font-medium ${STATUS[c.status].classe}`}>
+              {STATUS[c.status].rotulo}
+            </span>
+          )}
+        </div>
+
+        <div className="space-y-4 px-4 pb-4">
+
+          <SecaoPainel titulo="Atendimento" icone={UserCheck}>
+            <div className="space-y-2.5 rounded-lg border border-border bg-muted/40 p-3">
+
+              {/* ⚠️ Só DOIS botões, e são os dois status que uma pessoa decide.
+                  "Aberto" e "Em atendimento" não têm botão de propósito: eles saem
+                  de quem falou por último, e um botão para eles seria um jeito de
+                  mentir para a própria fila. */}
+              <div className="grid grid-cols-2 gap-1.5">
+                <Button size="sm" variant={c.status === "aguardando" ? "default" : "outline"}
+                        className="h-9 w-full gap-1.5 text-[11px]"
+                        disabled={definirStatus.isPending}
+                        onClick={() => definirStatus.mutate(
+                          { wa_id: c.wa_id, status: c.status === "aguardando" ? "aberto" : "aguardando" },
+                          { onError: (e) => toast.error((e as Error).message) })}>
+                  <Clock className="h-3.5 w-3.5" />
+                  {c.status === "aguardando" ? "Retomar" : "Aguardando"}
+                </Button>
+                <Button size="sm" variant={c.status === "resolvido" ? "default" : "outline"}
+                        className="h-9 w-full gap-1.5 text-[11px]"
+                        disabled={definirStatus.isPending}
+                        onClick={() => definirStatus.mutate(
+                          { wa_id: c.wa_id, status: c.status === "resolvido" ? "aberto" : "resolvido" },
+                          { onError: (e) => toast.error((e as Error).message) })}>
+                  {c.status === "resolvido"
+                    ? <><Undo2 className="h-3.5 w-3.5" /> Reabrir</>
+                    : <><CheckCheck className="h-3.5 w-3.5" /> Resolver</>}
+                </Button>
+              </div>
+
+              <div className="space-y-1.5">
+                <p className="text-[10px] font-medium uppercase tracking-wide
+                              text-muted-foreground">
+                  Responsável
+                </p>
+                {/* `h-9` igual à dos botões acima: as três caixas alinhadas é
+                    metade da sensação de bloco organizado. */}
+                <select
+                  value={c.responsavel ?? ""}
+                  onChange={(e) => {
+                    const id = e.target.value || null;
+                    const nome = (atendentes ?? []).find((a) => a.user_id === id)?.full_name ?? null;
+                    definirResponsavel.mutate({ wa_id: c.wa_id, user_id: id, nome },
+                      { onError: (err) => toast.error((err as Error).message) });
+                  }}
+                  className="h-9 w-full rounded-md border border-border bg-background
+                             px-2 text-xs text-foreground">
+                  <option value="">— sem responsável —</option>
+                  {(atendentes ?? []).map((a) => (
+                    <option key={a.user_id} value={a.user_id}>{a.full_name ?? a.user_id}</option>
+                  ))}
+                </select>
+
+                {/* ⚠️ Em time pequeno, puxar da fila é o modelo certo — rodízio
+                    automático atribui conversa para quem está almoçando, e ninguém
+                    mais mexe porque "já tem dono". Quando JÁ sou eu, o lugar não
+                    fica vazio: o buraco de 28px era o que fazia o cartão parecer
+                    desmontado. */}
+                {souEu ? (
+                  <p className="flex items-center justify-center gap-1.5 rounded-md
+                                border border-carbo-green/30 bg-carbo-green/5 py-1.5
+                                text-[11px] font-medium text-carbo-green">
+                    <Check className="h-3.5 w-3.5" /> Você é o responsável
+                  </p>
+                ) : (
+                  <Button size="sm" variant="ghost"
+                          className="h-8 w-full gap-1.5 text-[11px] text-carbo-green
+                                     hover:text-carbo-green"
+                          disabled={definirStatus.isPending}
+                          onClick={() => definirStatus.mutate(
+                            { wa_id: c.wa_id, status: "em_atendimento", assumir: true },
+                            { onError: (e) => toast.error((e as Error).message) })}>
+                    <UserCheck className="h-3.5 w-3.5" /> Assumir esta conversa
+                  </Button>
+                )}
+              </div>
+            </div>
+          </SecaoPainel>
+
+          {/* Chips no repouso; formulário só sob demanda. O `X` aparece no hover
+              para a área ler como informação, e não como uma fileira de botões de
+              excluir. */}
+          <SecaoPainel titulo="Etiquetas" icone={TagIcon}>
+            <div className="flex flex-wrap gap-1.5">
+              {c.tags.map((t) => (
+                <button key={t.id} type="button" title="Tirar esta etiqueta"
+                        onClick={() => marcarTag.mutate({ wa_id: c.wa_id, tag_id: t.id, marcar: false })}
+                        className={`group inline-flex items-center gap-1 rounded-md border
+                                    px-2 py-1 text-[11px] font-medium transition-opacity
+                                    hover:opacity-80 ${COR_TAG[t.cor] ?? COR_TAG.cinza}`}>
+                  {t.nome}
+                  <X className="h-2.5 w-2.5 opacity-0 transition-opacity group-hover:opacity-100" />
+                </button>
+              ))}
+              <button type="button" onClick={() => setVerTags((v) => !v)}
+                      aria-expanded={verTags}
+                      className={`inline-flex items-center gap-1 rounded-md border border-dashed
+                                  border-border px-2 py-1 text-[11px] transition-colors ${
+                        verTags ? "bg-muted/60 text-foreground"
+                                : "text-muted-foreground hover:bg-muted/40 hover:text-foreground"}`}>
+                <Plus className="h-2.5 w-2.5" /> etiqueta
+              </button>
+            </div>
+
+            {verTags && (
+              <div className="space-y-2 rounded-md border border-border bg-background/60 p-2">
+                {disponiveis.length > 0 ? (
+                  <div className="space-y-0.5">
+                    {disponiveis.map((t) => (
+                      <button key={t.id} type="button"
+                              onClick={() => marcarTag.mutate({ wa_id: c.wa_id, tag_id: t.id, marcar: true })}
+                              className="flex w-full items-center gap-2 rounded px-1.5 py-1
+                                         text-left text-[11px] transition-colors hover:bg-muted/60">
+                        <span className={`h-2.5 w-2.5 shrink-0 rounded-full border
+                                          ${COR_TAG[t.cor] ?? COR_TAG.cinza}`} />
+                        <span className="truncate">{t.nome}</span>
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  /* Dizer que acabou é melhor que mostrar só o campo de criar e
+                     deixar a pessoa achar que a lista não carregou. */
+                  <p className="px-1 py-0.5 text-[10px] text-muted-foreground">
+                    Todas as etiquetas já estão nesta conversa.
+                  </p>
+                )}
+
+                {/* ⚠️ Botão ao lado do campo. Só Enter é affordance invisível:
+                    quem não sabe, não cria — e aí ninguém cria etiqueta. */}
+                <div className="flex items-center gap-1 border-t border-border pt-2">
+                  <Input value={novaTag} onChange={(e) => setNovaTag(e.target.value)}
+                         placeholder="Nova etiqueta"
+                         className="h-8 flex-1 border-border text-[11px]"
+                         onKeyDown={(e) => {
+                           if (e.key !== "Enter") return;
+                           e.preventDefault();
+                           criar();
+                         }} />
+                  <Button size="sm" variant="outline" className="h-8 shrink-0 px-2 text-[11px]"
+                          disabled={!novaTag.trim() || criarTag.isPending}
+                          onClick={criar}>
+                    Criar
+                  </Button>
+                </div>
+              </div>
+            )}
+          </SecaoPainel>
+
+          {/* Por último porque é SAÍDA da tela: no topo, um link para outra rota é
+              convite a abandonar o atendimento antes de terminá-lo. */}
+          {c.bling_id && (
+            <SecaoPainel titulo="Pedido" icone={Package}>
+              <Link to={`/ecommerce/esteira?pedido=${c.bling_id}`}
+                    className="flex items-center gap-2.5 rounded-lg border border-border
+                               bg-muted/40 p-3 transition-colors hover:border-carbo-green/40
+                               hover:bg-carbo-green/5">
+                <Package className="h-4 w-4 shrink-0 text-carbo-green" />
+                <span className="min-w-0 flex-1">
+                  <span className="block font-mono text-[13px] font-semibold tabular-nums
+                                   text-carbo-green">
+                    #{c.bling_id}
+                  </span>
+                  {c.sobre_a_etapa && (
+                    <span className="block truncate text-[11px] text-muted-foreground">
+                      {NOME_ETAPA[c.sobre_a_etapa] ?? c.sobre_a_etapa}
+                    </span>
+                  )}
+                </span>
+                <ArrowUpRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+              </Link>
+            </SecaoPainel>
+          )}
+        </div>
       </CarboCardContent>
     </CarboCard>
   );
@@ -1784,31 +1887,72 @@ export default function Conversas() {
                   encontra na hora em que precisa dele. */}
               <div className="shrink-0 space-y-2 border-b p-2">
                 <div className="relative">
-                  <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                  <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5
+                                     -translate-y-1/2 text-muted-foreground" />
                   <Input value={busca} onChange={(e) => setBusca(e.target.value)}
                          placeholder="Buscar por nome ou número…"
-                         className="h-8 pl-7 pr-7 text-xs" />
+                         className="h-9 border-border bg-muted/40 pl-8 pr-8 text-xs
+                                    placeholder:text-muted-foreground/70" />
                   {busca && (
                     <button type="button" onClick={() => setBusca("")} aria-label="Limpar busca"
-                            className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded-sm p-0.5 text-muted-foreground transition-colors hover:text-foreground">
+                            className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded-sm p-1
+                                       text-muted-foreground transition-colors hover:text-foreground">
                       <X className="h-3.5 w-3.5" />
                     </button>
                   )}
                 </div>
 
-                <div className="flex items-center gap-1">
+                {/* ⚠️ O escopo da busca DITO em texto. Os contadores das abas são
+                    da caixa inteira — se obedecessem à busca, cada tecla mexeria
+                    nos cinco números e o contador deixaria de ser placar. Com
+                    busca ativa a aba pode dizer "3" e a lista mostrar zero; sem
+                    esta linha isso parece defeito. */}
+                {busca.trim() && (
+                  <p className="px-0.5 text-[10px] leading-none text-muted-foreground">
+                    {filtradas.length} de {lista.length} com “{busca.trim()}”
+                  </p>
+                )}
+
+                {/* ⚠️ Grade de 2 colunas, não uma fila de 5. Em 20rem cada aba de
+                    uma fila fica com ~58px e "Não respondidas" quebra em duas
+                    linhas com o contador órfão embaixo. Aqui cada célula tem
+                    ~148px: nada quebra, nada é abreviado e nada fica escondido
+                    atrás de menu — filtro escondido fica ligado sem a pessoa
+                    perceber, e aí "a conversa sumiu do sistema".
+
+                    "Todas" ocupa a linha inteira por SIGNIFICADO, não por sobra:
+                    ela não é a quinta irmã, é a saída — mostra tudo, inclusive
+                    resolvidas. */}
+                <div className="grid grid-cols-2 gap-1">
                   {FILTROS.map((f) => {
                     const ativo = filtro === f.id;
+                    const n = contagens[f.id];
+                    // Pendentes é a única aba que mede trabalho parado: fica âmbar
+                    // mesmo inativa, na mesma cor do placar do cabeçalho da página.
+                    const alerta = f.id === "pendentes" && n > 0 && !ativo;
                     return (
-                      <button key={f.id} type="button" onClick={() => setFiltro(f.id)}
-                              className={`flex-1 rounded-md border px-1.5 py-1 text-[10px] font-medium transition-colors ${
-                                ativo ? "border-carbo-green/50 bg-carbo-green/5 text-foreground"
-                                      : "border-transparent text-muted-foreground hover:bg-muted/40"}`}>
-                        {f.rotulo}
-                        {/* A contagem fica do lado do rótulo para o filtro dizer,
-                            antes do clique, se vale a pena clicar. */}
-                        <span className={ativo ? "ml-1 text-muted-foreground" : "ml-1 text-muted-foreground/60"}>
-                          {contagens[f.id]}
+                      <button key={f.id} type="button" aria-pressed={ativo}
+                              onClick={() => setFiltro(f.id)}
+                              className={`flex items-center justify-between gap-1.5 rounded-md border
+                                          px-2 py-1.5 text-[11px] font-medium leading-none
+                                          transition-colors ${f.id === "todas" ? "col-span-2" : ""} ${
+                                ativo
+                                  ? "border-carbo-green/40 bg-carbo-green/10 text-foreground"
+                                  : "border-border/60 bg-muted/40 hover:bg-muted/70 hover:text-foreground " +
+                                    (alerta ? "text-amber-500" : "text-muted-foreground")}`}>
+                        <span className="truncate">{f.rotulo}</span>
+                        {/* `tabular-nums` + largura mínima: sem isso, 9 → 10
+                            empurra o rótulo e a grade "respira" a cada mensagem
+                            que chega pelo Realtime. Zero fica APAGADO — número em
+                            destaque numa aba vazia convida ao clique que não leva
+                            a lugar nenhum. */}
+                        <span className={`min-w-[1.5rem] shrink-0 rounded px-1 py-0.5 text-center
+                                          text-[10px] font-semibold tabular-nums ${
+                          n === 0 ? "text-muted-foreground/40"
+                          : ativo ? "bg-carbo-green/20 text-carbo-green"
+                          : alerta ? "bg-amber-500/10 text-amber-500"
+                          : "bg-background text-muted-foreground"}`}>
+                          {n}
                         </span>
                       </button>
                     );
@@ -1816,7 +1960,7 @@ export default function Conversas() {
                 </div>
               </div>
 
-              <div className="max-h-[20rem] min-h-0 flex-1 space-y-1 overflow-y-auto p-2 lg:max-h-none">
+              <div className="max-h-[20rem] min-h-0 flex-1 overflow-y-auto p-0 lg:max-h-none">
                 {/* ⚠️ "Nada casou com a busca" é diferente de "não há conversa".
                     O segundo vive fora daqui; este só precisa mostrar a saída —
                     senão a lista some e parece que os dados sumiram. */}
@@ -1848,11 +1992,24 @@ export default function Conversas() {
                     if (!doGrupo.length) return [];
                     return [
                       <p key={`g-${estado ?? "sem"}`}
-                         className="sticky top-0 z-10 bg-background/95 px-1 pb-1 pt-2 text-[10px]
-                                    font-semibold uppercase tracking-wide text-muted-foreground
-                                    backdrop-blur first:pt-0">
-                        {estado ? STATUS[estado].grupo : "Sem pendência"}
-                        <span className="ml-1 font-normal text-muted-foreground/60">
+                         /* Sticky continua: com 36 linhas, quem rola no meio precisa
+                            saber em que grupo está sem subir. */
+                         className="sticky top-0 z-10 flex items-baseline justify-between gap-2
+                                    border-b border-border/60 bg-background/95 px-3 pb-1.5 pt-3
+                                    backdrop-blur first:pt-2">
+                        {/* ⚠️ Sem negrito e mais apagado que a prévia: é placa de
+                            seção, não conteúdo. Competir com o nome do cliente
+                            inverteria a hierarquia da coluna inteira. E o
+                            espacejamento existe porque caixa alta em 10px sem ele
+                            fecha as letras e vira borrão. */}
+                        <span className="min-w-0 truncate text-[10px] font-medium uppercase
+                                         tracking-[0.08em] text-muted-foreground/60">
+                          {estado ? STATUS[estado].grupo : "Sem pendência"}
+                        </span>
+                        {/* A contagem à DIREITA, na mesma coluna do trilho das linhas:
+                            empilhadas, elas viram o placar da caixa sem nenhum
+                            elemento novo. Colada no rótulo, lia-se como título. */}
+                        <span className="shrink-0 text-[10px] tabular-nums text-muted-foreground/40">
                           {doGrupo.length}
                         </span>
                       </p>,
@@ -1861,121 +2018,140 @@ export default function Conversas() {
                     const tomC = TOM_JANELA[nivelC];
                     const abertoC = janelaAberta(c.janela_ate);
                     const selecionada = atual?.wa_id === c.wa_id;
+                    /* "Não respondida" engrossa nome e prévia — a mesma gramática
+                       do WhatsApp. Sai de `aguardando`, que já é a conta do banco. */
+                    const naoRespondida = c.aguardando > 0;
+                    /* ⚠️ O segundo nome só aparece com BUSCA ativa: é ele que
+                       explica por que a linha casou (a busca olha os dois nomes).
+                       Fora da busca era uma terceira linha permanente para um dado
+                       que o cabeçalho da conversa já mostra. */
+                    const mostrarApelido = !!busca.trim() && !!c.nome_whatsapp;
+                    const temRodape = mostrarApelido || c.tags.length > 0 || !!c.responsavel_nome;
 
                     return (
                       <button key={c.wa_id} type="button" onClick={() => abrir(c.wa_id)}
-                              className={`w-full rounded-md border p-2 text-left transition-colors ${
-                                selecionada ? "border-carbo-green/50 bg-carbo-green/5"
-                                            : "border-transparent hover:border-border hover:bg-muted/40"}`}>
-                        <div className="flex items-start gap-2">
-                          {/* A borda do avatar repete o sinal do relógio, para a
-                              urgência ser visível na varredura vertical. */}
-                          <span className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full border text-[11px] font-semibold ${tomC.borda} ${tomC.fundo} ${tomC.texto}`}>
+                              className={`relative w-full border-b border-border/60 px-3 py-2.5 text-left
+                                          transition-colors last:border-b-0 ${
+                                selecionada
+                                  ? "bg-muted/60 before:absolute before:inset-y-0 before:left-0 before:w-[3px] before:bg-carbo-green before:content-['']"
+                                  : "hover:bg-muted/30"}`}>
+                        <div className="flex items-start gap-3">
+
+                          {/* Avatar NEUTRO. A borda colorida por nível saiu: era a
+                              segunda cópia do relógio, que muda de cor logo ao lado. */}
+                          <span className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center
+                                           rounded-full border border-border bg-muted/60
+                                           text-[13px] font-semibold uppercase text-muted-foreground">
                             {inicialDe(c.cliente, c.wa_id)}
                           </span>
 
                           <div className="min-w-0 flex-1">
-                            <div className="flex items-baseline justify-between gap-2">
-                              {/* O nome é o que se procura: única coisa em peso
-                                  normal de leitura. Prévia e horário descem um
-                                  degrau cada. */}
-                              <span className="truncate text-[13px] font-semibold leading-tight">
+                            {/* ── Nome + relógio ──────────────────────────────
+                                O relógio fica COLADO no nome de propósito: não é o
+                                que se procura na varredura, é o que muda a decisão
+                                depois de achar a conversa. */}
+                            <div className="flex items-center gap-1.5">
+                              <span className={`min-w-0 truncate text-[13px] leading-tight ${
+                                naoRespondida ? "font-semibold text-foreground"
+                                              : "font-medium text-foreground/90"}`}>
                                 {c.cliente ?? c.wa_id}
                               </span>
-                              <span className="shrink-0 text-[10px] tabular-nums text-muted-foreground/70">
-                                {hora(c.ultima_em)}
-                              </span>
-                            </div>
 
-                            {c.nome_whatsapp && (
-                              <p className="truncate text-[10px] leading-tight text-muted-foreground/60">
-                                no WhatsApp: {c.nome_whatsapp}
-                              </p>
-                            )}
-
-                            <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
-                              {c.ultima_direcao === "saida" && (
-                                <span className="text-muted-foreground/60">você: </span>
-                              )}
-                              {c.ultima_texto ?? "(arquivo)"}
-                            </p>
-
-                            <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-                              {/* ── O relógio ──────────────────────────────
-                                  Fora da janela a Meta recusa texto livre e não
-                                  há template que responda dúvida. Por isso é uma
-                                  pastilha com ícone, e não o fim de uma terceira
-                                  linha cinza. Fechada fica APAGADA de propósito:
-                                  chamar atenção para o que não tem ação treina a
-                                  pessoa a ignorar cor. */}
                               {abertoC ? (
-                                <span className={`inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[11px] font-semibold tabular-nums ${tomC.borda} ${tomC.fundo} ${tomC.texto}`}>
-                                  <Clock className="h-3 w-3" /> {faltaDaJanela(c.janela_ate)}
+                                /* ⚠️ `folgada` fica CINZA, não verde: trinta relógios
+                                   verdes ensinam a ignorar a cor justamente antes de
+                                   ela ficar vermelha. Os cortes continuam sendo os do
+                                   `nivelDaJanela` — muda o destaque, não a regra. */
+                                <span title={`Janela de 24 h fecha em ${faltaDaJanela(c.janela_ate)}`}
+                                      className={`shrink-0 text-[10px] leading-none tabular-nums ${
+                                        nivelC === "folgada" ? "text-muted-foreground/70"
+                                                             : `${tomC.texto} font-semibold`}`}>
+                                  {faltaDaJanela(c.janela_ate)}
                                 </span>
                               ) : (
-                                <span className="inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[10px] text-muted-foreground">
-                                  <Lock className="h-3 w-3" /> janela fechada
-                                </span>
-                              )}
-
-                              {/* ── Status ────────────────────────────────
-                                  Ele responde "em que pé está?", que é a
-                                  pergunta que a lista existe para responder.
-                                  Aberto e Em atendimento saem de quem falou por
-                                  último; Aguardando e Resolvido são decisão de
-                                  gente. */}
-                              {c.status && (
-                                <span className={`inline-flex items-center rounded-md border px-1.5 py-0.5
-                                                  text-[10px] font-medium ${STATUS[c.status].classe}`}>
-                                  {STATUS[c.status].rotulo}
-                                </span>
-                              )}
-
-                              {/* ⚠️ O responsável no PRIMEIRO nome. A lista é de
-                                  varredura; nome completo empurraria o resto
-                                  para fora da linha. */}
-                              {c.responsavel_nome && (
-                                <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground">
-                                  <UserCheck className="h-3 w-3" />
-                                  {c.responsavel_nome.split(" ")[0]}
-                                </span>
-                              )}
-
-                              {/* ⚠️ No máximo DUAS etiquetas + "+N". Uma conversa
-                                  com seis tags quebraria a linha e empurraria o
-                                  relógio para fora da vista — e o relógio é o
-                                  que não pode sumir. */}
-                              {c.tags.slice(0, 2).map((t) => (
-                                <span key={t.id}
-                                      className={`inline-flex max-w-[7rem] items-center truncate rounded-md
-                                                  border px-1.5 py-0.5 text-[10px] ${COR_TAG[t.cor] ?? COR_TAG.cinza}`}>
-                                  {t.nome}
-                                </span>
-                              ))}
-                              {c.tags.length > 2 && (
-                                <span className="text-[10px] text-muted-foreground/70">
-                                  +{c.tags.length - 2}
-                                </span>
-                              )}
-
-                              {/* O número sozinho não dizia de que era. Com a
-                                  palavra, some a dúvida entre "3 mensagens" e
-                                  "pedido nº 3". */}
-                              {c.estado === "precisa_resposta" && (
-                                <CarboBadge variant="secondary"
-                                            className={`shrink-0 gap-1 px-1.5 py-0 text-[10px] font-medium ${
-                                              abertoC ? "text-amber-500" : "text-muted-foreground"}`}>
-                                  {c.parece_encerrada && <Sparkles className="h-2.5 w-2.5" />}
-                                  {c.aguardando} sem resposta
-                                </CarboBadge>
-                              )}
-                              {c.estado === "resolvida" && (
-                                <CarboBadge variant="secondary"
-                                            className="shrink-0 gap-1 px-1.5 py-0 text-[10px] text-emerald-500">
-                                  <CheckCheck className="h-2.5 w-2.5" /> resolvida
-                                </CarboBadge>
+                                /* Fechada: cadeado, não pastilha. Pastilha grande em
+                                   dois terços das linhas destacava justamente onde não
+                                   há ação possível. */
+                                <Lock className="h-3 w-3 shrink-0 text-muted-foreground/50"
+                                      aria-label="Janela de 24 h fechada" />
                               )}
                             </div>
+
+                            {/* Prévia. `truncate` mora no span interno: num flex ele
+                                não funciona no contêiner. */}
+                            <p className={`mt-0.5 flex min-w-0 items-center gap-1 text-xs leading-snug ${
+                              naoRespondida ? "text-foreground/75" : "text-muted-foreground"}`}>
+                              {c.parece_encerrada && (
+                                <Sparkles className="h-3 w-3 shrink-0 text-emerald-500"
+                                          aria-label="Parece só um agradecimento" />
+                              )}
+                              {c.ultima_direcao === "saida" && (
+                                <span className="shrink-0 text-muted-foreground/60">você:</span>
+                              )}
+                              <span className="truncate">{c.ultima_texto ?? "(arquivo)"}</span>
+                            </p>
+
+                            {/* Qualificadores: a linha some inteira quando não há
+                                nenhum, e é isso que deixa a lista com duas alturas só. */}
+                            {temRodape && (
+                              <div className="mt-1 flex min-w-0 items-center gap-1.5 overflow-hidden">
+                                {mostrarApelido && (
+                                  <span className="min-w-0 truncate text-[10px] text-muted-foreground/60">
+                                    no WhatsApp: {c.nome_whatsapp}
+                                  </span>
+                                )}
+                                {c.tags.slice(0, 1).map((t) => (
+                                  <span key={t.id}
+                                        className={`max-w-[6.5rem] shrink-0 truncate rounded-full border
+                                                    px-1.5 py-px text-[9px] leading-[14px] ${
+                                          COR_TAG[t.cor] ?? COR_TAG.cinza}`}>
+                                    {t.nome}
+                                  </span>
+                                ))}
+                                {c.tags.length > 1 && (
+                                  <span className="shrink-0 text-[9px] text-muted-foreground/60">
+                                    +{c.tags.length - 1}
+                                  </span>
+                                )}
+                                {c.responsavel_nome && (
+                                  <span className="flex shrink-0 items-center gap-0.5 text-[10px] text-muted-foreground/70">
+                                    <UserCheck className="h-3 w-3" />
+                                    {c.responsavel_nome.split(" ")[0]}
+                                  </span>
+                                )}
+                              </div>
+                            )}
+                          </div>
+
+                          {/* ── Trilho direito ──────────────────────────────
+                              Status em caixa alta, hora embaixo, contador. Coluna
+                              FIXA em todas as linhas: estado se compara alinhado; no
+                              meio do fluxo obriga a reler linha a linha. */}
+                          <div className="flex shrink-0 flex-col items-end gap-1 pt-0.5">
+                            {c.status && (
+                              <span className={`whitespace-nowrap rounded-full border px-1.5 py-px
+                                                text-[9px] font-semibold uppercase tracking-wide ${
+                                STATUS[c.status].classe}`}>
+                                {STATUS[c.status].rotulo}
+                              </span>
+                            )}
+
+                            <span className="text-[10px] leading-none tabular-nums text-muted-foreground/60">
+                              {hora(c.ultima_em)}
+                            </span>
+
+                            {/* ⚠️ O contador substitui o "N sem resposta" E o badge
+                                "✓ resolvida": círculo cheio embaixo da hora é a
+                                gramática que já se lê sem legenda, e o grupo mais o
+                                badge de status já nomeiam o estado. Três sinais para
+                                o mesmo fato era o que deixava a linha ilegível. */}
+                            {naoRespondida && (
+                              <span className="flex h-[1.1rem] min-w-[1.1rem] items-center justify-center
+                                               rounded-full bg-amber-500 px-1 text-[10px] font-semibold
+                                               leading-none tabular-nums text-background">
+                                {c.aguardando}
+                              </span>
+                            )}
                           </div>
                         </div>
                       </button>
