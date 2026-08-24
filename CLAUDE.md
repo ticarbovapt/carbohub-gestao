@@ -412,6 +412,49 @@ faz a ponte marcar `segmento = 'online'`.
    confira se o telefone é real antes de deixar um template ativo alcançar o
    canal.
 
+### Bling 2 pode parar SEM deixar log — e o cron nem percebe
+Aconteceu: 15 h de espelho parado, `pg_cron` marcando `succeeded` o tempo todo,
+`bling2_sync_log` sem uma linha sequer no período. A causa foi
+`bling2_integration.is_active = false` com UMA linha só na tabela.
+
+1. **Sem integração ativa, a função desiste ANTES de abrir o log.** Por isso não
+   há erro para ler: o silêncio é o sintoma. Comece o diagnóstico por
+   `select is_active, expires_at from bling2_integration`, não pelo log.
+2. ⚠️ **`bling2-auth` desativa a conexão antiga na ENTRADA do fluxo.** Uma
+   reconexão iniciada em `/integracoes/bling2` e não concluída deixa exatamente
+   este estado — desativada, sem nova no lugar. O sistema não distingue
+   "reconectando" de "desconectado".
+3. **Reativar a linha é o teste barato**: `update bling2_integration set
+   is_active = true`. Se o `refresh_token` ainda valer (duram muito mais que as
+   6 h do access token), o cron do minuto seguinte volta a logar. Se ele
+   morreu, o `refreshToken` desativa de novo e diz o motivo no log — e aí só
+   reconectando pelo OAuth até o fim.
+4. **O `order_details` para junto e do mesmo jeito** (mudo, sem log). Depois de
+   religar, confira `items is null or raw_detalhe is null`: sem `raw_detalhe`
+   não há `nf_bling_id` e o pedido fica preso em "Confirmado". Ele drena 60 por
+   rodada de 10 min — espere UMA rodada antes de concluir que não drenou.
+5. **A fila de mensagens NÃO acumula rajada**: `carbo_msg_fila` é view do estado
+   ATUAL, uma etapa por pedido. Pedido que andou três etapas na queda gera uma
+   mensagem, não três — e `saiu_entrega` exige entrega em aberto.
+6. ⚠️ **O alarme de `fontes_saude` é PASSIVO**: alguém precisa abrir a esteira.
+   Para uma fonte que dispara WhatsApp, 15 h é muito — ligar isso no sininho
+   continua pendente.
+
+### Mercado Livre não tem telefone — e a esteira não avisa esses clientes
+Medido: **91 de 93** pedidos do ML sem `cliente_fone` (97,8%). Amazon tem em
+todos os 11; Nuvemshop, 3 de 397. Os poucos do ML que têm são exceções sem
+motivo conhecido — o ML anonimiza o contato do comprador.
+
+⚠️ A `carbo_msg_fila` exige `cliente_fone` não vazio, então esses pedidos
+**saem da fila em silêncio**: andam na esteira, o card fica normal, e o cliente
+não recebe aviso nenhum. São ~18% dos pedidos.
+
+Consequência para quem lê o painel: **"avisos enviados" mede menos operação do
+que parece** — praticamente só a loja própria. Buscar telefone no ML foi
+descartado (não existe no dado). O que resta é tornar a ausência VISÍVEL, como o
+`sem_telefone` do carrinho abandonado — pendente, e é decisão de tela, não de
+integração.
+
 ### Cadência das automações — a esteira dispara mensagem, então ela é ao vivo
 Enquanto a esteira era painel para olhar, meia hora de atraso não custava nada.
 Desde que cada mudança de etapa manda WhatsApp para o cliente, custa: "saiu para
