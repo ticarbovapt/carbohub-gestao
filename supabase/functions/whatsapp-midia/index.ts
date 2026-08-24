@@ -205,7 +205,11 @@ Deno.serve(async (req: Request) => {
       // ⚠️ Áudio sem legenda grava NULO, não o nome do arquivo. O nome é nosso
       // (`audio-1787495498124.ogg`) e apareceria na conversa como se alguém o
       // tivesse escrito. Documento é o contrário: ali o nome é o conteúdo.
-      texto: legenda || (veredito.tipo === "audio" ? null : nomeUpload) || null,
+      // ⚠️ Só DOCUMENTO guarda o nome como texto da mensagem: ali o nome é o
+      // conteúdo ("NF-000515.pdf"). Em foto e áudio o nome é nosso
+      // (`print-1787…png`) e apareceria na conversa como se alguém o tivesse
+      // escrito — ruído embaixo da própria imagem.
+      texto: legenda || (veredito.tipo === "document" ? nomeUpload : null) || null,
       midia_id: mediaId, midia_mime: veredito.mime,
       ocorrido_em: new Date().toISOString(),
       payload: { por: perfil?.full_name ?? user.email ?? user.id, ...payload },

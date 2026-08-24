@@ -644,6 +644,7 @@ function Conversa({ c }: { c: Conversa }) {
   useEffect(() => () => { if (previa) URL.revokeObjectURL(previa.url); }, [previa]);
 
   const descartarPrevia = () => { setPrevia(null); setLegendaPrevia(""); };
+
   const enviarPrevia = () => {
     if (!previa) return;
     mandarArquivo(previa.arquivo, previa.som ? undefined : legendaPrevia);
@@ -672,6 +673,45 @@ function Conversa({ c }: { c: Conversa }) {
   const [texto, setTexto] = useState("");
   const fim = useRef<HTMLDivElement>(null);
   const aberta = janelaAberta(c.janela_ate);
+
+  /**
+   * Ctrl+V com print na área de transferência.
+   *
+   * ⚠️ O ouvinte é do DOCUMENTO, não do campo de texto, e é de propósito: quem
+   * acabou de recortar a tela clica na conversa e cola — não vai primeiro
+   * posicionar o cursor dentro da caixa de resposta. Preso ao campo, o atalho
+   * funcionaria só para quem já sabia que precisava focar nele.
+   *
+   * ⚠️ E ele só INTERCEPTA quando há imagem: colar texto continua colando
+   * texto, no lugar onde o cursor está. Chamar `preventDefault()` sempre
+   * roubaria o Ctrl+V da tela inteira — inclusive o de copiar um código de
+   * rastreio para dentro da resposta.
+   *
+   * A imagem cai na MESMA prévia do anexo e da gravação: nada sai antes de
+   * alguém olhar. Print errado é o mais fácil de mandar sem querer, porque a
+   * área de transferência guarda o que foi recortado há dez minutos.
+   */
+  useEffect(() => {
+    if (!aberta) return;                       // janela fechada: não há o que enviar
+    const colar = (e: ClipboardEvent) => {
+      const itens = Array.from(e.clipboardData?.items ?? []);
+      const img = itens.find((i) => i.kind === "file" && i.type.startsWith("image/"));
+      if (!img) return;                        // texto segue o caminho normal
+      const arquivo = img.getAsFile();
+      if (!arquivo) return;
+      e.preventDefault();
+      if (previa) { toast.error("Envie ou descarte o anexo atual antes de colar outro."); return; }
+
+      // ⚠️ Nome próprio. O que vem da área de transferência costuma chegar como
+      // "image.png", e três prints na mesma conversa ficariam indistinguíveis
+      // para quem for procurar depois.
+      const ext = (arquivo.type.split("/")[1] || "png").replace("jpeg", "jpg");
+      const comNome = new File([arquivo], `print-${Date.now()}.${ext}`, { type: arquivo.type });
+      setPrevia({ arquivo: comNome, url: URL.createObjectURL(comNome), som: false });
+    };
+    document.addEventListener("paste", colar);
+    return () => document.removeEventListener("paste", colar);
+  }, [aberta, previa]);
   const nivel = nivelDaJanela(c.janela_ate);
   const tom = TOM_JANELA[nivel];
   const fracao = fracaoDaJanela(c.janela_ate);
@@ -1075,6 +1115,11 @@ function Conversa({ c }: { c: Conversa }) {
                   <CornerDownLeft className="inline h-2.5 w-2.5" />
                 </kbd>
                 <span>envia</span>
+                <span className="mx-1 text-muted-foreground/40">·</span>
+                <kbd className="rounded border bg-background px-1 py-px font-sans text-[10px]">⌘/Ctrl</kbd>
+                <span aria-hidden="true">+</span>
+                <kbd className="rounded border bg-background px-1 py-px font-sans text-[10px]">V</kbd>
+                <span>cola print</span>
               </div>
               <div className="flex items-center gap-2">
                 {perto && (
