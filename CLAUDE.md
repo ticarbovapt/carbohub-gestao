@@ -393,6 +393,27 @@ supabase/functions/_shared/melhorEnvioParse.ts                  puro, testado
    inteira da Carbo pelo PostgREST. **Toda republicação de view repete a
    cláusula.** Confira com `select relname, reloptions from pg_class`.
 
+### ⚠️ `security_invoker` na esteira tem OUTRO lado: quem opera precisa ler
+Fechar o vazamento da `bling2_esteira` (view sem `security_invoker` roda com os
+privilégios do dono e ignora RLS) fez aparecer o problema oposto: as quatro
+tabelas que ela lê — `bling2_orders`, `bling2_nfe`, `bling2_contacts`,
+`bling2_lojas` — nasceram com leitura só para **admin/CEO/gestor**.
+
+Sintoma: em qualquer outro perfil a esteira mostrava **tudo travado na primeira
+coluna**. Não era a tela: a view voltava vazia, e a única coluna com card era a
+"Pago", que vem de `ecommerce_aguardando_bling` (lê `ecommerce_orders`, aberta a
+qualquer autenticado).
+
+A correção (migração `20260936`) é política de leitura **somada**, com
+`carbo_e_time_interno()` — policies de SELECT combinam com OR, então gestor não
+perde nada. ⚠️ Voltar para `using (true)` reabriria o vazamento inteiro: o
+portal de lojas e o de licenciados usam a MESMA tabela `profiles`.
+
+⚠️ Continuam abertas a qualquer autenticado, e é a mesma família de furo:
+`melhorenvio_envios`, `rastreio_envios`, `carbo_pedido_codigo`. Não foram
+fechadas porque a página pública de rastreio pode ler daí — cliente sem
+rastreio é pior que o vazamento. Medir a origem das leituras antes de fechar.
+
 ### Shopee — canal novo, e a esteira só anda até a etiqueta
 `bling2_lojas.bling_id = 206191275`. O cadastro **não é cosmético**: é ele que
 faz a ponte marcar `segmento = 'online'`.
