@@ -7,9 +7,10 @@ import { Badge } from "@/components/ui/badge";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { PackageCheck, Truck, Loader2, Search, PackageX, Undo2 } from "lucide-react";
+import { PackageCheck, Truck, Loader2, Search, PackageX, Undo2, Check } from "lucide-react";
+import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
-import { useMeuEstoque, useACaminho, useSaindoDaMinhaCaixa } from "@/hooks/useMeuEstoque";
+import { useMeuEstoque, useACaminho, useSaindoDaMinhaCaixa, useAceitarChegada } from "@/hooks/useMeuEstoque";
 import { useVendedoresDir } from "@/hooks/useVendas";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -33,6 +34,12 @@ export default function MeuEstoque() {
   const { data: vendedores } = useVendedoresDir();
   const { data: estoque, isLoading } = useMeuEstoque(alvo || profile?.id);
   const { data: aCaminho } = useACaminho(alvo || profile?.id);
+  const aceitar = useAceitarChegada();
+  // ⚠️ Só o DONO aceita pela tela dele. `alvo` existe para a gestão espiar a
+  // caixa de outro vendedor — e nesse modo o botão some. Quem confirma a
+  // chegada é quem está com a caixa na mão; a gestão tem o botão no Ops, que
+  // é onde a decisão dela fica registrada como dela.
+  const souODono = !alvo || alvo === profile?.id;
   const { data: saindo } = useSaindoDaMinhaCaixa(alvo || profile?.id);
   const [busca, setBusca] = useState("");
   const [soComSaldo, setSoComSaldo] = useState(true);
@@ -109,20 +116,44 @@ export default function MeuEstoque() {
                   </div>
                   <div className="divide-y">
                     {(aCaminho ?? []).map((t) => (
-                      <div key={t.id} className="py-1.5">
-                        <p className="text-sm">
-                          <strong>{t.quantidade}</strong> × {t.product_code}
-                        </p>
-                        <p className="text-[11px] text-muted-foreground">
-                          Enviado em {new Date(t.enviado_em).toLocaleDateString("pt-BR")}
-                          {t.notes ? ` · ${t.notes}` : ""}
-                        </p>
+                      <div key={t.id} className="py-2 flex items-center gap-3">
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm">
+                            <strong>{t.quantidade}</strong> × {t.product_code}
+                          </p>
+                          <p className="text-[11px] text-muted-foreground">
+                            Enviado em {new Date(t.enviado_em).toLocaleDateString("pt-BR")}
+                            {t.notes ? ` · ${t.notes}` : ""}
+                          </p>
+                        </div>
+                        {/* ⚠️ O BOTÃO QUE FALTAVA. A tela mandava "avise o time
+                            de Operações" — quem estava com a caixa na mão
+                            dependia de outra pessoa clicar, e o saldo ficava
+                            preso. Medido: 5 envios parados, o mais antigo há 7
+                            dias. Quem aceitou fica gravado em executed_by. */}
+                        {souODono && (
+                          <Button size="sm" className="h-9 shrink-0 gap-1.5"
+                            disabled={aceitar.isPending}
+                            onClick={() => {
+                              aceitar.mutate(t.id, {
+                                onSuccess: () => toast.success(`${t.quantidade} × ${t.product_code} no seu estoque.`),
+                                onError: (e: unknown) =>
+                                  toast.error(e instanceof Error ? e.message : "Não deu para confirmar."),
+                              });
+                            }}>
+                            {aceitar.isPending
+                              ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              : <Check className="h-3.5 w-3.5" />}
+                            Recebi
+                          </Button>
+                        )}
                       </div>
                     ))}
                   </div>
                   <p className="text-[11px] text-muted-foreground pt-1">
-                    Recebeu? Avise o time de Operações para confirmar a chegada —
-                    o saldo só entra aqui depois disso.
+                    {souODono
+                      ? "Confirme só o que estiver fisicamente com você — o aceite fica registrado no seu nome."
+                      : "Só o dono da caixa (ou a gestão, pelo Ops) confirma a chegada."}
                   </p>
                 </CarboCardContent>
               </CarboCard>

@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -21,7 +21,11 @@ import { supabase } from "@/integrations/supabase/client";
 // verdade = apps/crm.
 // ─────────────────────────────────────────────────────────────────────────────
 
-const db = supabase as unknown as { from: (t: string) => any };
+const db = supabase as unknown as {
+  from: (t: string) => any;
+  rpc: (fn: string, args?: Record<string, unknown>) => Promise<{ data: any; error: any }>;
+  auth: { getUser: () => Promise<{ data: { user: { id: string } | null } }> };
+};
 
 export interface ItemMeuEstoque {
   product_id: string;
@@ -156,6 +160,42 @@ export function useSaindoDaMinhaCaixa(vendedorId?: string | null) {
         enviado_em: t.created_at as string,
         notes: (t.notes as string) ?? null,
       }));
+    },
+  });
+}
+
+
+/**
+ * O vendedor aceita a chegada da própria caixa.
+ *
+ * ⚠️ ISTO NÃO EXISTIA, e a tela dizia "avise o time de Operações para confirmar
+ * a chegada" — ou seja, quem estava com a caixa na mão dependia de outra pessoa
+ * clicar. Medido em 25/08/2026: 5 envios presos em `approved`, o mais antigo há
+ * 7 dias, com o saldo debitado da origem e nunca creditado no destino.
+ *
+ * ⚠️ Quem autoriza é o BANCO, não esta função. O `ops_transfer_confirm` recusa
+ * quando o destino é caixa de vendedor e quem chama não é o dono nem a gestão
+ * (migração 20260944). A regra mora lá de propósito: esta tela existe só no
+ * CRM, e o Ops chama a MESMA RPC — duas cópias da regra divergiriam, e divergir
+ * aqui deixaria alguém creditar a caixa de outro.
+ */
+export function useAceitarChegada() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (transferId: string) => {
+      const { data: auth } = await db.auth.getUser();
+      const { error } = await db.rpc("ops_transfer_confirm", {
+        p_transfer_id: transferId,
+        p_user: auth?.user?.id ?? null,
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      // As três mudam juntas: o saldo entra, o "a caminho" sai da lista, e a
+      // tela de venda passa a poder vender aquilo.
+      qc.invalidateQueries({ queryKey: ["meu_estoque"] });
+      qc.invalidateQueries({ queryKey: ["meu_estoque_transito"] });
+      qc.invalidateQueries({ queryKey: ["meu_estoque_saindo"] });
     },
   });
 }
