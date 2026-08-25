@@ -45,7 +45,12 @@ async function hmacSHA256(key: string, message: string): Promise<string> {
 
 async function validateMercadoLivre(req: Request, body: string): Promise<boolean> {
   const secret = Deno.env.get("ML_WEBHOOK_SECRET");
-  if (!secret) return true; // skip validation if secret not configured
+  // ⚠️ Ausência FECHA. Era `return true`, e como `ML_WEBHOOK_SECRET` não
+  // aparece em nenhum outro ponto do projeto, este endpoint estava aberto.
+  if (!secret) {
+    console.error("[mercadolivre] ML_WEBHOOK_SECRET não configurado — recusando.");
+    return false;
+  }
   const xSig = req.headers.get("x-signature") ?? "";
   // ML sends: ts=<timestamp>,v1=<hmac>
   const parts = Object.fromEntries(xSig.split(",").map(s => s.split("=")));
@@ -54,19 +59,61 @@ async function validateMercadoLivre(req: Request, body: string): Promise<boolean
   return expected === parts.v1;
 }
 
-async function validateAmazon(req: Request, body: string): Promise<boolean> {
-  // Amazon SP-API uses SNS signature — validate topic ARN as minimum check
-  const topicArn = Deno.env.get("AMAZON_SNS_TOPIC_ARN");
-  if (!topicArn) return true;
-  try {
-    const msg = JSON.parse(body);
-    return msg.TopicArn === topicArn;
-  } catch { return false; }
+/**
+ * ⚠️ A versão anterior não validava NADA, nem com o ARN configurado.
+ *
+ *     const msg = JSON.parse(body);
+ *     return msg.TopicArn === topicArn;
+ *
+ * `TopicArn` é um campo do CORPO — escrito por quem faz a requisição. Conferir
+ * o corpo contra si mesmo é conferir a assinatura de um documento com a
+ * assinatura que está no próprio documento. E `if (!topicArn) return true`
+ * deixava a porta escancarada quando a variável não existia, que é o estado
+ * atual: `AMAZON_SNS_TOPIC_ARN` não aparece em nenhum outro lugar do projeto.
+ *
+ * O que isso permite, concretamente: um POST anônimo em
+ * `/ecommerce-webhook/amazon` com um `AmazonOrderId` real e `OrderStatus:
+ * Shipped` grava `shipped` em `ecommerce_orders` → o gatilho preenche
+ * `platform_order_number` → o CTE `plataforma` da esteira dá `avanco = 2` → o
+ * card vai para `em_transito` → a `carbo_msg_fila` manda "seu pedido está a
+ * caminho" no WhatsApp de um cliente de verdade. De quebra, `shipped` passa na
+ * lista branca de venda e toca o som de venda para todo o time interno.
+ *
+ * ── Por que segredo na URL e não assinatura SNS ──────────────────────────
+ *
+ * Validar SNS de verdade exige buscar o `SigningCertURL`, extrair a chave
+ * pública de um X.509 e verificar RSA sobre a string canônica. Sem biblioteca
+ * de terceiro numa edge function, isso é código criptográfico escrito à mão
+ * que eu não teria como testar contra um payload real da Amazon — e
+ * criptografia não testada que RECUSA é pior que a ausência dela, porque
+ * derruba o canal em silêncio.
+ *
+ * O segredo na URL registrada no SNS é o mesmo padrão que o resto do projeto
+ * usa, é conferível numa linha, e fecha exatamente o buraco: só quem tem o
+ * segredo consegue fazer a função escrever.
+ */
+async function validateAmazon(req: Request, _body: string): Promise<boolean> {
+  const segredo = Deno.env.get("AMAZON_WEBHOOK_SECRET") ?? "";
+  if (!segredo) {
+    console.error(
+      "[amazon] AMAZON_WEBHOOK_SECRET não configurado. " +
+      "Cadastre o secret e registre a URL no SNS com ?secret=<valor>.",
+    );
+    return false;   // ⚠️ ausência FECHA
+  }
+  const url = new URL(req.url);
+  const informado = req.headers.get("X-Webhook-Secret") ?? url.searchParams.get("secret");
+  return informado === segredo;
 }
 
 async function validateTikTok(req: Request, body: string): Promise<boolean> {
   const secret = Deno.env.get("TIKTOK_APP_SECRET");
-  if (!secret) return true;
+  // ⚠️ Ausência FECHA. O TikTok não está em uso; se um dia entrar, o secret é
+  // parte de ligar o canal, não um detalhe a lembrar depois.
+  if (!secret) {
+    console.error("[tiktok] TIKTOK_APP_SECRET não configurado — recusando.");
+    return false;
+  }
   const timestamp = req.headers.get("x-tts-timestamp") ?? "";
   const received  = req.headers.get("x-tts-signature") ?? "";
   const expected  = await hmacSHA256(secret, timestamp + body);
@@ -117,7 +164,13 @@ async function validateShopee(req: Request, body: string): Promise<boolean> {
 async function validateNuvemshop(req: Request, body: string): Promise<boolean> {
   // Nuvemshop assina o corpo com HMAC-SHA256 usando o client_secret do app.
   const secret = Deno.env.get("NUVEMSHOP_CLIENT_SECRET");
-  if (!secret) return true; // sem secret configurado → não bloqueia (ainda em setup)
+  // ⚠️ Ausência FECHA. O "ainda em setup" do comentário antigo virou permanente
+  // — é assim que provisório vira definitivo. Este é o de MENOR risco dos três:
+  // o mesmo secret é usado pelo `nuvemshop-auth`, então ele existe.
+  if (!secret) {
+    console.error("[nuvemshop] NUVEMSHOP_CLIENT_SECRET não configurado — recusando.");
+    return false;
+  }
   const received = req.headers.get("x-linkedstore-hmac-sha256") ?? "";
   const expected = await hmacSHA256(secret, body);
   return received === expected;
@@ -333,10 +386,36 @@ Deno.serve(async (req: Request) => {
     nuvemshop:    validateNuvemshop,
   };
 
+  // ── Modo de observação ────────────────────────────────────────────────────
+  //
+  // ⚠️ Existe para tornar possível FECHAR sem apagar um canal por engano.
+  //
+  // Três validadores ainda têm `if (!secret) return true` — ausência ABRE, que
+  // é o oposto da regra da casa. Virar as três de uma vez às cegas é apostar
+  // que os segredos estão cadastrados em produção; errar significa recusar
+  // pedido de verdade, e o sintoma seria "as vendas pararam de aparecer" sem
+  // erro em lugar nenhum.
+  //
+  // Com `WEBHOOK_OBSERVAR=1` a recusa é REGISTRADA e a requisição passa. Roda-se
+  // assim por um dia, lê-se o log, e só então tira-se a variável. Depois de
+  // tirada, recusa é recusa.
+  //
+  // ⚠️ O padrão é FECHADO: a variável precisa ser cadastrada de propósito para
+  // afrouxar, e some quando alguém a remove. Nunca o contrário.
+  const OBSERVAR = Deno.env.get("WEBHOOK_OBSERVAR") === "1";
+
   const valid = await validators[platform](req, body);
   if (!valid) {
-    console.error(`[${platform}] Invalid signature`);
-    return new Response("Unauthorized", { status: 401 });
+    if (OBSERVAR) {
+      // Um formato fácil de achar no log: `grep RECUSARIA`.
+      console.error(
+        `[${platform}] RECUSARIA (WEBHOOK_OBSERVAR=1, passando assim mesmo) ` +
+        `— corpo: ${body.slice(0, 400)}`,
+      );
+    } else {
+      console.error(`[${platform}] recusado: assinatura/segredo inválido ou ausente`);
+      return new Response("Unauthorized", { status: 401 });
+    }
   }
 
   let parsed: unknown;
@@ -378,19 +457,45 @@ Deno.serve(async (req: Request) => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
-// ⚠️ PENDENTE, e registrado para não virar folclore
+// ⚠️ COMO LIGAR ISTO SEM DERRUBAR UM CANAL
 // ═══════════════════════════════════════════════════════════════════════════
 //
-// `validateMercadoLivre`, `validateAmazon` e `validateNuvemshop` ainda usam
-// `if (!secret) return true` — ou seja, sem o segredo configurado elas ACEITAM
-// qualquer POST. É a mesma falha que a `validateShopee` tinha, e é o inverso do
-// padrão obrigatório do CLAUDE.md.
+// Os cinco validadores agora FECHAM quando o segredo não existe. Antes, três
+// deles (`mercadolivre`, `amazon`, `nuvemshop`) tinham `if (!secret) return
+// true` — sem segredo configurado, aceitavam qualquer POST.
 //
-// Não foram trocadas junto por um motivo concreto: as três recebem tráfego real
-// AGORA. Se o segredo não estiver configurado em produção (que é justamente o
-// cenário em que o bug importa), virar a chave para "fecha" derruba a entrada
-// de pedido das lojas que estão vendendo — trocar um buraco de segurança por
-// uma loja parada é piorar o problema.
+// Isso não foi trocado antes por um motivo concreto e correto: os três recebem
+// tráfego real. Se o segredo não estiver cadastrado em produção — que é
+// justamente o cenário em que o buraco existe —, fechar derruba a entrada de
+// pedido das lojas que estão vendendo. Trocar falha de segurança por loja
+// parada é piorar o problema.
 //
-// Antes de virar, MEDIR se cada segredo existe em produção. A Shopee pôde ser
-// trocada hoje porque ainda não recebe nada: fechar não quebra o que não existe.
+// O `WEBHOOK_OBSERVAR` existe para desfazer esse impasse:
+//
+//   1. Cadastre `WEBHOOK_OBSERVAR=1` nos secrets e faça o deploy.
+//      Nada é recusado. Toda recusa que ACONTECERIA vira uma linha de log
+//      começando com `RECUSARIA`, com os primeiros 400 caracteres do corpo.
+//
+//   2. Deixe rodar um dia inteiro e leia os logs:
+//        · nenhuma linha `RECUSARIA`  → todos os segredos estão certos, pode
+//          seguir para o passo 3 sem risco;
+//        · linhas de uma plataforma   → o segredo dela falta ou está errado.
+//          Cadastre/corrija ANTES de fechar, senão os pedidos dela param.
+//
+//   3. REMOVA `WEBHOOK_OBSERVAR` e faça deploy de novo. A partir daí recusa é
+//      recusa, e um POST forjado não escreve mais nada.
+//
+// ⚠️ Não deixe o passo 1 virar permanente. O "ainda em setup" do comentário
+// antigo do `validateNuvemshop` ficou no ar por meses — é assim que provisório
+// vira definitivo. Se `WEBHOOK_OBSERVAR` estiver cadastrado, a porta está
+// aberta, com a diferença de que agora ela avisa.
+//
+// ── Sobre a Amazon, em particular ────────────────────────────────────────
+//
+// A validação dela NÃO é assinatura SNS: é segredo na URL registrada no painel
+// do SNS (`?secret=<valor>` ou o header `X-Webhook-Secret`). Cadastre
+// `AMAZON_WEBHOOK_SECRET` e registre a URL com ele. Verificar a assinatura SNS
+// de verdade exigiria buscar o certificado, extrair a chave pública do X.509 e
+// conferir RSA sobre a string canônica — código criptográfico à mão, sem teste
+// contra payload real. O que estava lá antes conferia o `TopicArn` do CORPO,
+// que é escrito por quem chama: não validava nada.
