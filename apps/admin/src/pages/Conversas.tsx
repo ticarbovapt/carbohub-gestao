@@ -20,7 +20,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import {
   useConversas, useConversasAoVivo, useResponder, janelaAberta, faltaDaJanela,
   nivelDaJanela, fracaoDaJanela, type NivelJanela,
-  useNotificaveis, useMarcarNotificado, useResolverConversa,
+  useNotificaveis, useMarcarNotificado,
   useAgendadas, useAgendar, useCancelarAgendada, useEnviarMidia, useMidia,
   useNotas, useAnotar, useApagarNota, type Nota,
   useDefinirStatus, useDefinirResponsavel, useAtendentes,
@@ -694,7 +694,19 @@ function Conversa({ c }: { c: Conversa }) {
       onError: (e) => toast.error((e as Error).message),
     });
   };
-  const resolver = useResolverConversa();
+  // ⚠️ RESOLVER PASSA PELO STATUS, não pela tabela antiga.
+  //
+  // `useResolverConversa` escreve em `carbo_wa_resolvidas`, e a migração
+  // 20260935 mudou a FONTE DA VERDADE para `carbo_wa_atendimento` — o
+  // `useConversas` deixou de ler a tabela antiga e o comentário dele diz isso
+  // com todas as letras ("agora ele sai do ATENDIMENTO, não da tabela antiga").
+  //
+  // O lado da LEITURA migrou; estes três botões não. Resultado: o toast subia
+  // ("Conversa marcada como resolvida"), a linha era gravada, e a conversa
+  // continuava aberta — porque ninguém mais lia onde ela foi gravada. Meia
+  // migração é o modo de falha mais caro deste projeto: não dá erro, dá tela
+  // que discorda de si mesma.
+  const resolver = useDefinirStatus();
   const { data: agendadas } = useAgendadas(c.wa_id);
   const agendar = useAgendar();
   const cancelarAgendada = useCancelarAgendada();
@@ -893,7 +905,7 @@ function Conversa({ c }: { c: Conversa }) {
             <Button size="sm" variant="outline"
                     className="h-8 gap-1.5 text-emerald-500"
                     disabled={resolver.isPending}
-                    onClick={() => resolver.mutate({ wa_id: c.wa_id, resolver: true }, {
+                    onClick={() => resolver.mutate({ wa_id: c.wa_id, status: "resolvido" }, {
                       onSuccess: () => toast.success("Conversa marcada como resolvida"),
                       onError: (e) => toast.error((e as Error).message),
                     })}>
@@ -906,7 +918,11 @@ function Conversa({ c }: { c: Conversa }) {
             <Button size="sm" variant="ghost"
                     className="h-8 gap-1.5 text-[11px] text-muted-foreground"
                     disabled={resolver.isPending}
-                    onClick={() => resolver.mutate({ wa_id: c.wa_id, resolver: false }, {
+                    /* ⚠️ Reabrir é voltar para "aberto", e não apagar a linha.
+                       `aberto` não entra no ramo de decisão humana do
+                       `statusEfetivo`, então o status volta a ser DERIVADO de
+                       quem falou por último — que é o comportamento original. */
+                    onClick={() => resolver.mutate({ wa_id: c.wa_id, status: "aberto" }, {
                       onError: (e) => toast.error((e as Error).message),
                     })}>
               <Undo2 className="h-3.5 w-3.5" /> Reabrir
@@ -957,7 +973,7 @@ function Conversa({ c }: { c: Conversa }) {
             <Button size="sm" variant="ghost"
                     className="ml-auto h-6 gap-1 px-2 text-[11px] text-emerald-500"
                     disabled={resolver.isPending}
-                    onClick={() => resolver.mutate({ wa_id: c.wa_id, resolver: true }, {
+                    onClick={() => resolver.mutate({ wa_id: c.wa_id, status: "resolvido" }, {
                       onError: (e) => toast.error((e as Error).message),
                     })}>
               <CheckCheck className="h-3 w-3" /> Resolver

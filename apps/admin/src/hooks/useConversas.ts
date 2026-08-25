@@ -186,38 +186,21 @@ export function useResponder() {
   });
 }
 
-/**
- * Marca a conversa como tratada ATÉ AGORA.
- *
- * ⚠️ Grava a hora, não um "true". Mensagem que o cliente mandar depois reabre a
- * conversa sozinha — com booleano, alguém marcaria hoje e a pergunta de amanhã
- * ficaria escondida atrás da marca.
- */
-export function useResolverConversa() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async ({ wa_id, resolver }: { wa_id: string; resolver: boolean }) => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) throw new Error("Sessão expirada. Faça login novamente.");
-
-      if (!resolver) {
-        // Reabrir é apagar a marca: sem ela, o corte volta a ser só a nossa
-        // última resposta, que é o comportamento original.
-        const { error } = await (supabase as any)
-          .from("carbo_wa_resolvidas").delete().eq("wa_id", wa_id);
-        if (error) throw error;
-        return;
-      }
-      const { error } = await (supabase as any)
-        .from("carbo_wa_resolvidas")
-        .upsert({ wa_id, resolvido_ate: new Date().toISOString(),
-                  por: session.user.id, em: new Date().toISOString() },
-                { onConflict: "wa_id" });
-      if (error) throw error;
-    },
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["wa-conversas"] }); },
-  });
-}
+// ⚠️ `useResolverConversa` FOI REMOVIDA (25/08/2026).
+//
+// Ela gravava em `carbo_wa_resolvidas`, e a migração 20260935 mudou a fonte da
+// verdade para `carbo_wa_atendimento`. O lado da LEITURA migrou junto (ver o
+// comentário na `useConversas`, acima); os botões da tela não. Durante esse
+// intervalo o "Marcar resolvida" subia o toast de sucesso, gravava a linha, e a
+// conversa continuava aberta — porque ninguém mais lia onde ela era gravada.
+//
+// Quem resolve agora é a `useDefinirStatus` com `status: "resolvido"`, e
+// reabrir é `status: "aberto"` (que devolve a conversa ao status DERIVADO de
+// quem falou por último, em vez de apagar uma marca).
+//
+// A TABELA `carbo_wa_resolvidas` continua no banco, com o histórico de quem
+// resolveu o quê antes da mudança. Não foi apagada de propósito: é registro, e
+// ninguém escreve mais nela.
 
 // ─── Status, responsável e tags ──────────────────────────────────────────────
 
