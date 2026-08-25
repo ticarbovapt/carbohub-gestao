@@ -41,6 +41,10 @@ export interface MensagemConversa {
    *  mas a tela precisa dizer qual dos dois — aproximação que se passa por
    *  certeza é como alguém responde sobre o pedido errado. */
   vinculo_exato: boolean;
+  /** ⚠️ Quem CLICOU em enviar. Nulo em entrada (é o cliente) e em aviso
+   *  automático da esteira (é o sistema) — nos dois casos nulo é informação,
+   *  não falta de dado, e por isso a tela não escreve "—" no lugar. */
+  enviado_por_nome?: string | null;
   /** O nome do CADASTRO. Existe desde o primeiro aviso, muito antes de a pessoa
    *  responder — é ele que tira a lista de "vinte números soltos". */
   cliente_pedido: string | null;

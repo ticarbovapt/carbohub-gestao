@@ -212,6 +212,13 @@ Deno.serve(async (req: Request) => {
       texto: legenda || (veredito.tipo === "document" ? nomeUpload : null) || null,
       midia_id: mediaId, midia_mime: veredito.mime,
       ocorrido_em: new Date().toISOString(),
+      // ⚠️ AUTORIA EM COLUNA, não só no payload. O `payload.por` continua
+      // (histórico já gravado depende dele), mas quem a tela lê é a coluna:
+      // dado dentro de JSONB não aparece em lugar nenhum e não dá para filtrar.
+      // O id é a chave estável; o nome vai CONGELADO, porque nome muda e perfil
+      // é excluído — sem ele o histórico antigo viraria "—".
+      enviado_por: user.id,
+      enviado_por_nome: perfil?.full_name ?? user.email ?? null,
       payload: { por: perfil?.full_name ?? user.email ?? user.id, ...payload },
     }, { onConflict: "wamid" });
     if (erroGrava) console.error("[midia] enviou mas não gravou", wamid, erroGrava);

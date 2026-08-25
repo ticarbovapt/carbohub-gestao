@@ -604,6 +604,16 @@ function Balao({ m, primeira, ultima }: {
         {ultima && (
           <p className={`mt-1 text-[10px] leading-none text-muted-foreground/70 ${
             nossa ? "text-right" : ""}`}>
+            {/* ⚠️ QUEM ENVIOU, e só na saída de gente. O cliente NÃO vê isto —
+                é coluna interna, nenhum caminho de envio a lê. Fica junto do
+                horário porque é a mesma pergunta ("quando e por quem"), e na
+                ÚLTIMA do bloco pelo mesmo motivo do horário: repetido em cada
+                balão vira carimbo e some da vista.
+                Aviso automático da esteira não tem autor e não ganha rótulo —
+                escrever "sistema" ali seria dizer o óbvio em toda linha. */}
+            {nossa && m.enviado_por_nome && (
+              <span className="mr-1">{m.enviado_por_nome} ·</span>
+            )}
             {soHora(m.ocorrido_em)}
             {/* Um tique para enviado, dois para entregue/lido — a mesma
                 gramática do WhatsApp, para não haver um segundo idioma. */}

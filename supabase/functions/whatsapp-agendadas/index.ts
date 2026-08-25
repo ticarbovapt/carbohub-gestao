@@ -140,6 +140,12 @@ Deno.serve(async (req: Request) => {
       const { error: erroMsg } = await supabase.from("carbo_wa_mensagens").upsert({
         wamid, wa_id: a.wa_id, direcao: "saida", tipo: "text", texto: a.texto,
         ocorrido_em: new Date().toISOString(),
+        // ⚠️ O agendamento NÃO gravava autor nenhum — só `agendada_id`. Quem
+        // agendou às 18h de sexta e a mensagem saiu no sábado era, para a
+        // tela, ninguém. O autor sempre existiu em `carbo_wa_agendadas`; o que
+        // faltava era atravessar para a mensagem.
+        enviado_por: a.criado_por ?? null,
+        enviado_por_nome: a.criado_por_nome ?? null,
         payload: { agendada_id: a.id, ...payload },
       }, { onConflict: "wamid" });
       if (erroMsg) console.error("[agendadas] enviou mas não gravou", wamid, erroMsg);
