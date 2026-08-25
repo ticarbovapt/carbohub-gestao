@@ -63,6 +63,12 @@ verify_jwt = false
 [functions.nuvemshop-auth]
 verify_jwt = false
 
+# ⚠️ Quem chama o callback é a Shopee, que não tem JWT do Supabase. Com JWT
+# ligado ela leva 401 antes de o código rodar, e o sintoma é "o app não conecta"
+# sem log nenhum — a requisição não chega à função.
+[functions.shopee-auth]
+verify_jwt = false
+
 [functions.nuvemshop-lgpd]
 verify_jwt = false
 

@@ -70,15 +70,44 @@ async function validateTikTok(req: Request, body: string): Promise<boolean> {
   return expected === received;
 }
 
+/**
+ * ⚠️ AUSÊNCIA DE SEGREDO FECHA, não abre.
+ *
+ * Antes era `if (!key) return true` — sem `SHOPEE_PARTNER_KEY` configurada,
+ * QUALQUER POST nesta URL virava pedido no nosso banco. É o padrão que o
+ * CLAUDE.md marca como obrigatório e é o inverso do que estava aqui:
+ *
+ *     if (!SEGREDO || informado !== SEGREDO) return 401;   // certo
+ *     if (SEGREDO && informado !== SEGREDO) return 401;    // ERRADO
+ *
+ * O `CRON_SECRET` já sumiu uma vez neste projeto. Naquela vez a ausência
+ * TRAVOU tudo — 25 h de sincronismo morto, que é o modo seguro. Na forma acima
+ * ela abriria, e pedido falso entrando em `ecommerce_orders` alimenta a esteira,
+ * a fila de WhatsApp e o faturamento do painel.
+ *
+ * ⚠️ Só a Shopee foi trocada agora, de propósito. As outras três já recebem
+ * tráfego real: virar a chave nelas sem antes conferir se o secret existe em
+ * produção derrubaria a entrada de pedidos das lojas que estão vendendo. Medir
+ * primeiro, virar depois — está anotado no fim do arquivo.
+ */
 async function validateShopee(req: Request, body: string): Promise<boolean> {
   const key = Deno.env.get("SHOPEE_PARTNER_KEY");
-  if (!key) return true;
+  if (!key) {
+    console.error("[shopee] SHOPEE_PARTNER_KEY ausente no servidor — webhook RECUSADO.");
+    return false;
+  }
   const partnerId = Deno.env.get("SHOPEE_PARTNER_ID") ?? "";
+  // ⚠️ A Shopee assina a URL que ELA conhece — a que está cadastrada no painel
+  // do parceiro. `new URL(req.url).pathname` é o caminho como chegou aqui, e se
+  // houver proxy/rewrite no meio os dois divergem e a assinatura nunca bate.
   const path      = new URL(req.url).pathname;
   const timestamp = req.headers.get("x-shopee-timestamp") ?? "";
   const auth      = req.headers.get("Authorization") ?? "";
   const baseStr   = `${partnerId}${path}${timestamp}`;
   const expected  = await hmacSHA256(key, baseStr);
+  if (auth !== expected) {
+    console.warn(`[shopee] Assinatura não confere. path=${path} ts=${timestamp}`);
+  }
   return auth === expected;
 }
 
@@ -318,3 +347,21 @@ Deno.serve(async (req: Request) => {
     headers: { "Content-Type": "application/json" },
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ⚠️ PENDENTE, e registrado para não virar folclore
+// ═══════════════════════════════════════════════════════════════════════════
+//
+// `validateMercadoLivre`, `validateAmazon` e `validateNuvemshop` ainda usam
+// `if (!secret) return true` — ou seja, sem o segredo configurado elas ACEITAM
+// qualquer POST. É a mesma falha que a `validateShopee` tinha, e é o inverso do
+// padrão obrigatório do CLAUDE.md.
+//
+// Não foram trocadas junto por um motivo concreto: as três recebem tráfego real
+// AGORA. Se o segredo não estiver configurado em produção (que é justamente o
+// cenário em que o bug importa), virar a chave para "fecha" derruba a entrada
+// de pedido das lojas que estão vendendo — trocar um buraco de segurança por
+// uma loja parada é piorar o problema.
+//
+// Antes de virar, MEDIR se cada segredo existe em produção. A Shopee pôde ser
+// trocada hoje porque ainda não recebe nada: fechar não quebra o que não existe.
