@@ -266,15 +266,47 @@ let rodando = false;
  * debaixo da cobertura de bomba, que é exatamente onde ele demora o máximo.
  * A pessoa via um spinner e tocava de novo, gerando dois check-ins.
  *
- * A coordenada entra quando chegar, e só se a visita ainda não subiu: depois
- * do `abrir`, quem manda é o servidor, e o gatilho de distância já disparou.
+ * ⚠️ ANTES ESTA FUNÇÃO JOGAVA A COORDENADA FORA quando a visita já tinha subido
+ * (`if (v.visita_id) return`), com a justificativa de que "o gatilho de
+ * distância já disparou". A justificativa estava errada: o
+ * `trg_rtm_distancia` é `before insert OR UPDATE OF checkin_lat, checkin_lng`
+ * — atualizar depois recalcula a distância corretamente.
+ *
+ * O custo do engano foi medido: de 6 visitas registradas, 5 ficaram SEM
+ * coordenada, e a única que tinha era justamente a que ficou aberta e nunca
+ * subiu. Era uma corrida entre o GPS e a sincronização, e o GPS perdia quase
+ * sempre — sem erro, sem log, sem sintoma na tela.
+ *
+ * Agora, quando a visita já subiu, a coordenada vai para o servidor por UPDATE.
+ * Duas condições, e nenhuma é enfeite:
+ *   · `.is("checkin_lat", null)` — nunca sobrescreve coordenada já gravada;
+ *   · `.is("ts_checkout", null)` — visita FECHADA é imutável, e `checkin_lat`
+ *     está na lista do gatilho de congelamento. Tentar ali daria erro a cada
+ *     rodada da fila, para sempre. Correção de visita fechada é linha nova com
+ *     `ajuste_de_id`, não UPDATE.
  */
 export async function rtmCompletarLocal(clientUuid: string, geo: RtmGeo): Promise<void> {
   const v = await rtmLer(clientUuid);
-  if (!v || v.visita_id) return;      // já subiu: não reescreve o que o servidor tem
-  if (v.geo_checkin?.lat != null) return;
+  if (!v) return;
+  if (v.geo_checkin?.lat != null) return;   // já temos, de qualquer origem
+
   v.geo_checkin = geo;
   await gravar(v);
+
+  if (!v.visita_id || geo.lat == null) return;
+
+  // Já está no servidor: manda a coordenada para lá também. Falha aqui é
+  // silenciosa de propósito — é um complemento oportunista, e o vendedor não
+  // pode ser interrompido por causa dele. O registro local já guardou.
+  const { error } = await db.from("rtm_visitas")
+    .update({
+      checkin_lat: geo.lat, checkin_lng: geo.lng,
+      checkin_precisao_m: geo.precisao_m ?? null,
+    })
+    .eq("id", v.visita_id)
+    .is("checkin_lat", null)
+    .is("ts_checkout", null);
+  if (error) console.warn("[rtm] coordenada tardia não subiu:", error.message);
 }
 
 /** Quando a última sincronização deu certo.

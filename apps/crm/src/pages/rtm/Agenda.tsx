@@ -89,6 +89,16 @@ export default function RtmAgenda() {
 
   // Gestor começa vendo o time inteiro; vendedor só se vê (e a RLS confirma).
   const [vendedor, setVendedor] = useState<string>(() => (isGestor ? "todos" : (user?.id ?? "")));
+
+  // ⚠️ O inicializador do useState roda UMA vez, e o AuthContext pode não ter
+  // resolvido ainda. Sem esta correção o gestor ficava preso em `user?.id ?? ""`
+  // — e `""` é falsy no hook, então a query ia SEM filtro de vendedor enquanto
+  // a tela dizia "Sua agenda". Mostrava o time inteiro chamando de "sua".
+  useEffect(() => {
+    if (vendedor) return;
+    if (isGestor) setVendedor("todos");
+    else if (user?.id) setVendedor(user.id);
+  }, [isGestor, user?.id, vendedor]);
   const [novoOpen, setNovoOpen] = useState(false);
   const [iniciando, setIniciando] = useState<string | null>(null);
   const [filtroFalha, setFiltroFalha] = useState(false);
@@ -147,12 +157,21 @@ export default function RtmAgenda() {
     () => resumirMes(porDia ?? new Map(), hoje, (d) => isSameMonth(doDia(d), base)),
     [porDia, dia, hoje]);
 
-  const semNada = !isLoading && !isError && janela.length === 0
-    && (visao !== "mes" || (porDia?.size ?? 0) === 0);
+  // ⚠️ DOIS vazios independentes, um por visão. Antes era um só, misturando as
+  // duas fontes — e um vendedor com nada hoje mas 4 visitas amanhã caía no
+  // ramo "Sua agenda está vazia", que é uma afirmação que a tela não podia
+  // fazer: a janela tinha carga, só não no dia âncora.
+  const vazioRoteiro = !isLoading && !isError && janela.length === 0;
+  const vazioMes = !isLoading && !isError && (porDia?.size ?? 0) === 0;
 
   const visiveis = filtroFalha
     ? linhas.filter((l) => l.situacao === "nao_cumprida")
     : linhas;
+
+  // O filtro é do DIA que estava na tela. Carregá-lo para o próximo dia (ou
+  // para outro vendedor) esconderia visitas sem que ninguém tivesse pedido —
+  // e a lista curta pareceria agenda curta.
+  useEffect(() => { setFiltroFalha(false); }, [dia, vendedor]);
 
   // "Sem enviar há X" em vez de um "online" que não significa nada: dentro do
   // posto o `navigator.onLine` diz que a INTERFACE está conectada, não que a
@@ -198,8 +217,11 @@ export default function RtmAgenda() {
   }
 
   return (
-    <div className="p-4 md:p-6">
-      <div className="space-y-4 max-w-[1200px] mx-auto">
+    <div className="p-3 md:p-6">
+      {/* ⚠️ 900px, não 1200. A largura maior existia para caber calendário e
+          lista lado a lado — arranjo que este arquivo acabou de abandonar.
+          Linha de texto de 1200px numa lista é leitura ruim em qualquer tela. */}
+      <div className="space-y-3 max-w-[900px] mx-auto pb-24">
         <div className="flex items-start justify-between gap-3 flex-wrap">
           <CarboPageHeader
             title="Agenda de visitas"
@@ -212,7 +234,7 @@ export default function RtmAgenda() {
                 polegar de quem segura o celular com a mesma mão erra. */}
             <div role="tablist" aria-label="Visão da agenda"
                  className="inline-flex rounded-lg border bg-muted/40 p-0.5">
-              {([["lista", "Lista", List], ["mes", "Mês", CalendarRange]] as const).map(([v, rot, Icone]) => (
+              {([["lista", "Roteiro", List], ["mes", "Mês", CalendarRange]] as const).map(([v, rot, Icone]) => (
                 <button key={v} role="tab" aria-selected={visao === v} onClick={() => setVisao(v)}
                   className={`inline-flex items-center gap-1.5 h-9 px-3 rounded-md text-sm font-medium transition-colors ${
                     visao === v ? "bg-background shadow-sm" : "text-muted-foreground"}`}>
@@ -221,15 +243,25 @@ export default function RtmAgenda() {
               ))}
             </div>
 
-            {/* No mês a grade É o seletor de data — o input vira redundante. */}
-            {visao === "lista" && (
-              <Input type="date" value={dia} onChange={(e) => setDia(e.target.value || diaLocal())}
-                className="w-[150px] h-9" />
-            )}
+            {/* ⚠️ "Agendar" some do topo no celular e reaparece no fim da lista.
+                Agendar é tarefa de fim de tarde sentado, não de PDV — no topo
+                ele disputava a linha com o seletor, a data e o filtro, e os
+                quatro ficavam apertados em 360px. */}
+            <Button size="sm" className="h-9 gap-1.5 hidden sm:inline-flex"
+                    onClick={() => setNovoOpen(true)}>
+              <Plus className="h-4 w-4" /> Agendar
+            </Button>
+          </div>
+        </div>
+
+        {/* Filtros. Só no Roteiro: no Mês a grade É o seletor de data. */}
+        {visao === "lista" && (
+          <div className="flex items-center gap-2 flex-wrap">
+            <Input type="date" value={dia} onChange={(e) => setDia(e.target.value || diaLocal())}
+              className="w-[150px] h-9" />
             {dia !== hoje && (
               <Button size="sm" variant="ghost" className="h-9" onClick={() => setDia(hoje)}>Hoje</Button>
             )}
-
             {isGestor && (
               <Select value={vendedor} onValueChange={setVendedor}>
                 <SelectTrigger className="w-[180px] h-9"><SelectValue /></SelectTrigger>
@@ -241,11 +273,30 @@ export default function RtmAgenda() {
                 </SelectContent>
               </Select>
             )}
-            <Button size="sm" className="h-9 gap-1.5" onClick={() => setNovoOpen(true)}>
-              <Plus className="h-4 w-4" /> Agendar
-            </Button>
           </div>
-        </div>
+        )}
+
+        {/* ⚠️ VISITA EM ANDAMENTO É O PRIMEIRO ELEMENTO, e é `sticky`. Com uma
+            visita aberta, qualquer outro toque nesta tela é erro — a `iniciar()`
+            recusa e redireciona para cá de qualquer jeito. Ela aparece nas DUAS
+            visões: no calendário não há botão de continuar, e continuar é a
+            única coisa que importa nessa hora. */}
+        {emAndamento && (
+          <button
+            onClick={() => navigate(`/rtm/visita?v=${emAndamento.client_uuid}`)}
+            className="sticky top-0 z-30 w-full flex items-center gap-3 rounded-lg border-2
+                       border-blue-400 bg-blue-50 dark:bg-blue-950/40 px-3 py-2.5 text-left shadow-sm"
+          >
+            <Play className="h-4 w-4 text-blue-600 shrink-0" />
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold truncate">Visita em andamento · {emAndamento.pdv_nome}</p>
+              <p className="text-xs text-muted-foreground">
+                Check-in às {hora(emAndamento.ts_dispositivo_checkin)} — toque para continuar
+              </p>
+            </div>
+            <ChevronRight className="h-4 w-4 shrink-0 text-blue-600" />
+          </button>
+        )}
 
         {/* ── Estado da conexão e da fila ───────────────────────────────────
             Fica no topo e não some: o vendedor precisa saber que a visita está
@@ -285,57 +336,6 @@ export default function RtmAgenda() {
           </div>
         ))}
 
-        {emAndamento && (
-          <button
-            onClick={() => navigate(`/rtm/visita?v=${emAndamento.client_uuid}`)}
-            className="w-full flex items-center gap-3 rounded-lg border-2 border-blue-400 bg-blue-50 dark:bg-blue-950/40 px-3 py-2.5 text-left"
-          >
-            <Play className="h-4 w-4 text-blue-600 shrink-0" />
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold truncate">Visita em andamento · {emAndamento.pdv_nome}</p>
-              <p className="text-xs text-muted-foreground">
-                Check-in às {hora(emAndamento.ts_dispositivo_checkin)} — toque para continuar
-              </p>
-            </div>
-          </button>
-        )}
-
-        {/* ── Os quatro números, com o RECORTE dito ───────────────────────────
-            Eles mudam de dia para mês conforme a visão. Quatro números sem
-            legenda de período são quatro números em que ninguém confia. */}
-        <div className="space-y-1.5">
-          <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
-            {visao === "mes"
-              ? format(base, "MMMM 'de' yyyy", { locale: ptBR })
-              : dia === hoje ? "Hoje" : rotuloDia(dia)}
-          </p>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-            {visao === "mes" ? (
-              <>
-                <Resumo label="Planejadas" valor={resumoMes.planejadas} />
-                <Resumo label="Concluídas" valor={resumoMes.concluidas} />
-                <Resumo label="Não cumpridas" valor={resumoMes.naoCumpridas}
-                  alerta={resumoMes.naoCumpridas > 0} />
-                {/* ⚠️ "até hoje": sobre o mês inteiro, no dia 3 a aderência diria
-                    10% porque 27 dias não aconteceram — e um indicador sempre
-                    vermelho ensina a ignorar a faixa toda. */}
-                <Resumo label="Aderência (até hoje)"
-                  valor={resumoMes.aderencia === null ? "—" : `${resumoMes.aderencia}%`} />
-              </>
-            ) : (
-              <>
-                <Resumo label="Planejadas" valor={linhas.length} />
-                <Resumo label="Concluídas" valor={resumo.concluida} />
-                {/* O número mais importante da tela agora leva a algum lugar. */}
-                <Resumo label="Não cumpridas" valor={resumo.nao_cumprida}
-                  alerta={resumo.nao_cumprida > 0} ativo={filtroFalha}
-                  onClick={() => setFiltroFalha((v) => !v)} />
-                <Resumo label="Aderência" valor={aderencia === null ? "—" : `${aderencia}%`} />
-              </>
-            )}
-          </div>
-        </div>
-
         {isLoading ? (
           <div className="flex items-center justify-center py-16 text-muted-foreground gap-2">
             <Loader2 className="h-5 w-5 animate-spin" /> Carregando agenda...
@@ -358,10 +358,49 @@ export default function RtmAgenda() {
             </CarboCardContent>
           </CarboCard>
 
-        ) : semNada ? (
+        /* ═══ VISÃO MÊS — a grade e mais nada ═══════════════════════════════
+           ⚠️ EXCLUSIVA. Antes as duas visões usavam `hidden lg:block` como
+           estado inativo, e a partir de 1024px o `lg:block` vencia o `hidden`:
+           calendário e lista apareciam JUNTOS, qualquer que fosse a escolha, e
+           o seletor virava decoração. Pior: a query da grade só é habilitada no
+           modo mês, então o calendário que aparecia ao lado da lista vinha SEM
+           DADO — 42 células em branco com visitas no banco. Não era só feio,
+           era falso. */
+        ) : visao === "mes" ? (
+          <div className="space-y-3">
+            {/* No Mês os quatro números SÃO o assunto — aqui eles ganham
+                tamanho. No Roteiro viram uma linha (ver abaixo). */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+              <Resumo label="Planejadas no mês" valor={resumoMes.planejadas} />
+              <Resumo label="Concluídas" valor={resumoMes.concluidas} />
+              <Resumo label="Não cumpridas" valor={resumoMes.naoCumpridas}
+                alerta={resumoMes.naoCumpridas > 0} />
+              {/* ⚠️ "até hoje": sobre o mês inteiro, no dia 3 a aderência diria
+                  10% porque 27 dias não aconteceram — e um indicador sempre
+                  vermelho ensina a ignorar a faixa toda. */}
+              <Resumo label="Aderência (até hoje)"
+                valor={resumoMes.aderencia === null ? "—" : `${resumoMes.aderencia}%`} />
+            </div>
+
+            <MesGrade
+              base={base} dias={gradeDias} dia={dia} hoje={hoje} porDia={porDia}
+              onMover={(n) => setDia(chaveDia(addMonths(base, n)))}
+              onEscolher={(d) => { setDia(d); setVisao("lista"); }}
+            />
+            {vazioMes && (
+              <p className="text-center text-xs text-muted-foreground py-2">
+                Nenhuma visita planejada em {format(base, "MMMM", { locale: ptBR })}.{" "}
+                <button className="underline underline-offset-2 font-medium text-foreground"
+                        onClick={() => setNovoOpen(true)}>Agendar</button>
+              </p>
+            )}
+          </div>
+
+        /* ═══ VISÃO ROTEIRO — a lista e mais nada ═══════════════════════════ */
+        ) : vazioRoteiro ? (
           /* ⚠️ O texto NÃO afirma "você nunca planejou": a tela só sabe que a
-             janela e a grade voltaram vazias. Afirmação que a tela não pode
-             provar é o mesmo erro do vínculo aproximado que se passa por exato. */
+             janela voltou vazia. Afirmação que a tela não pode provar é o mesmo
+             erro do vínculo aproximado que se passa por exato. */
           <CarboCard>
             <CarboCardContent className="py-10 text-center space-y-2">
               <CalendarDays className="h-8 w-8 mx-auto text-muted-foreground" />
@@ -380,31 +419,21 @@ export default function RtmAgenda() {
           </CarboCard>
 
         ) : (
-          <div className="lg:grid lg:grid-cols-[380px_1fr] lg:gap-4 lg:items-start">
-            {/* A partir do lg as duas aparecem juntas: é a tela do gestor, que
-                quer ver o mês e o dia ao mesmo tempo. */}
-            <div className={visao === "mes" ? "block" : "hidden lg:block"}>
-              <MesGrade
-                base={base} dias={gradeDias} dia={dia} hoje={hoje} porDia={porDia}
-                onMover={(n) => setDia(chaveDia(addMonths(base, n)))}
-                onEscolher={(d) => { setDia(d); setVisao("lista"); }}
-              />
-              {visao === "mes" && resumoMes.planejadas === 0 && (
-                <p className="text-center text-xs text-muted-foreground py-3">
-                  Nenhuma visita planejada em {format(base, "MMMM", { locale: ptBR })}.{" "}
-                  <button className="underline" onClick={() => setNovoOpen(true)}>Agendar</button>
-                </p>
-              )}
-            </div>
+          <div className="space-y-3">
+            {/* Faixa de dias: os 7 saem da janela que JÁ está em memória, sem
+                request novo. Trocar de dia no picker nativo do celular custa
+                três toques, e o vendedor anda ±1 dia. */}
+            <FaixaDeDias base={base} dia={dia} hoje={hoje} onEscolher={setDia} />
 
-            <div className={`${visao === "lista" ? "block" : "hidden lg:block"} space-y-4`}>
+            <div className="space-y-4">
               {/* ⚠️ ATRASADAS PRIMEIRO, e só quando o âncora é hoje. É o único
                   registro do que deixou de acontecer, e numa lista que começa em
                   "hoje" a visita de terça só reaparece se alguém voltar o
                   seletor de data para terça. Ninguém volta. */}
               {grupos.atrasadas.length > 0 && dia === hoje && (
                 <section className="space-y-2">
-                  <CabecalhoGrupo titulo="Atrasadas" qtd={grupos.atrasadas.length}
+                  <CabecalhoGrupo titulo="Atrasadas" qtd={grupos.atrasadas.length} tom="alerta"
+                    comBanner={!!emAndamento}
                     aberto={abertoAtraso} onToggle={() => setAbertoAtraso((v) => !v)} />
                   {abertoAtraso && grupos.atrasadas.map((l) => (
                     <div key={l.planejada_id} className="space-y-1">
@@ -424,29 +453,33 @@ export default function RtmAgenda() {
               <section className="space-y-2">
                 <CabecalhoGrupo titulo={dia === hoje ? "Hoje" : rotuloDia(dia)}
                   qtd={linhas.length} aberto />
+                {/* ⚠️ Dia vazio é UMA LINHA, não um pôster de 200px. O cartão
+                    grande com ícone e parágrafo ficava entre o vendedor e o
+                    botão de Check-in da visita atrasada logo acima — ensinar a
+                    filosofia da aderência a quem está de pé no posto custa a
+                    dobra inteira. O pôster continua existindo, mas só quando
+                    NÃO há nada em lugar nenhum (`vazioRoteiro`). */}
                 {linhas.length === 0 ? (
-                  <CarboCard>
-                    <CarboCardContent className="py-10 text-center space-y-2">
-                      <CalendarDays className="h-8 w-8 mx-auto text-muted-foreground" />
-                      <p className="text-sm font-medium">Nada planejado para este dia.</p>
-                      <p className="text-xs text-muted-foreground max-w-sm mx-auto">
-                        A visita precisa estar na agenda antes do dia — é o que permite
-                        medir o que deixou de acontecer, não só o que aconteceu.
-                      </p>
-                      <div className="flex items-center justify-center gap-2 pt-1 flex-wrap">
-                        <Button size="sm" variant="outline" onClick={() => setNovoOpen(true)}>
-                          <Plus className="h-4 w-4 mr-1.5" /> Agendar visita
-                        </Button>
-                        {/* O dia vazio só assusta quando não se sabe que o plano
-                            continua depois. */}
-                        {grupos.proximos.length > 0 && (
-                          <Button size="sm" variant="ghost" onClick={() => setDia(grupos.proximos[0][0])}>
-                            Ir para {rotuloDia(grupos.proximos[0][0])} · {grupos.proximos[0][1].length} PDVs
-                          </Button>
-                        )}
-                      </div>
-                    </CarboCardContent>
-                  </CarboCard>
+                  <p className="px-1 py-2 text-sm text-muted-foreground">
+                    Nada planejado para {dia === hoje ? "hoje" : "este dia"}.{" "}
+                    {grupos.proximos.length > 0 && (
+                      <button className="underline underline-offset-2 font-medium text-foreground"
+                              onClick={() => setDia(grupos.proximos[0][0])}>
+                        Próximo: {rotuloDia(grupos.proximos[0][0])} · {grupos.proximos[0][1].length} PDVs
+                      </button>
+                    )}
+                  </p>
+                ) : visiveis.length === 0 ? (
+                  /* ⚠️ Filtro ligado sem resultado renderizava NADA — nem lista,
+                     nem aviso. A pessoa via a seção sumir e concluía que a
+                     agenda tinha esvaziado sozinha. */
+                  <p className="px-1 py-2 text-sm text-muted-foreground">
+                    Nenhuma não cumprida neste dia.{" "}
+                    <button className="underline underline-offset-2 font-medium text-foreground"
+                            onClick={() => setFiltroFalha(false)}>
+                      Ver as {linhas.length}
+                    </button>
+                  </p>
                 ) : visiveis.map((l) => (
                   <LinhaAgenda key={l.planejada_id} l={l}
                     podeIniciar={l.situacao === "pendente" || l.situacao === "nao_cumprida"}
@@ -457,6 +490,32 @@ export default function RtmAgenda() {
                     onCancelar={() => setCancelando(l)} />
                 ))}
               </section>
+
+              {/* ── O resumo do dia, DEPOIS da lista e em uma linha ───────────
+                  ⚠️ Quatro cartões de 56px dizendo 0, 0, 0, — consumiam a dobra
+                  inteira para informar que NADA aconteceu ainda, empurrando a
+                  única visita executável para baixo dela. A mesma informação
+                  cabe aqui, e o número que importa (não cumpridas) mantém o
+                  âmbar e continua sendo o filtro. */}
+              {linhas.length > 0 && (
+                <div className="flex items-center gap-2 flex-wrap pt-1 text-xs text-muted-foreground">
+                  <span className="tabular-nums">{resumo.concluida} de {linhas.length} feitas</span>
+                  <span aria-hidden>·</span>
+                  <button onClick={() => setFiltroFalha((v) => !v)}
+                    aria-pressed={filtroFalha}
+                    className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 transition-colors ${
+                      filtroFalha ? "border-amber-500 ring-1 ring-amber-500 text-amber-700 dark:text-amber-300"
+                      : resumo.nao_cumprida > 0
+                        ? "border-amber-300 bg-amber-50 text-amber-800 dark:bg-amber-950/30 dark:text-amber-300"
+                        : "border-border"}`}>
+                    <CircleAlert className="h-3 w-3" /> {resumo.nao_cumprida} não cumprida(s)
+                  </button>
+                  <span aria-hidden>·</span>
+                  {/* Aderência `null` continua "—": zero visitas planejadas não
+                      é 0% de aderência, é ausência de medida. */}
+                  <span>aderência {aderencia === null ? "—" : `${aderencia}%`}</span>
+                </div>
+              )}
 
               {/* PRÓXIMOS DIAS — a pergunta do fim da tarde ("amanhã começo por
                   onde?") hoje exigia trocar a data e perder o dia da tela. */}
@@ -469,10 +528,18 @@ export default function RtmAgenda() {
                     <LinhaAgenda key={l.planejada_id} l={l} podeIniciar={false}
                       meu={l.vendedor_id === user?.id} iniciando={false}
                       onIniciar={() => {}}
-                      onAbrir={() => navigate(`/rtm/visita?v=${l.visita_id}&ver=1`)} />
+                      onAbrir={() => navigate(`/rtm/visita?v=${l.visita_id}&ver=1`)}
+                      onCancelar={() => setCancelando(l)} />
                   ))}
                 </section>
               ))}
+
+              {/* No celular "Agendar" mora aqui, no fim — ver o comentário do
+                  cabeçalho. Em sm+ ele já está no topo e este some. */}
+              <Button variant="outline" className="w-full h-11 sm:hidden"
+                      onClick={() => setNovoOpen(true)}>
+                <Plus className="h-4 w-4 mr-1.5" /> Agendar visita
+              </Button>
             </div>
           </div>
         )}
@@ -529,21 +596,71 @@ function DialogCancelar({ linha, onFechar }: {
   );
 }
 
-/** Cabeçalho de grupo da lista. Colapsável quando há `onToggle`. */
-function CabecalhoGrupo({ titulo, qtd, aberto, onToggle }: {
+/**
+ * Cabeçalho de grupo da lista. Colapsável quando há `onToggle`.
+ *
+ * ⚠️ `comBanner` desloca o `sticky`. A faixa de visita em andamento também é
+ * `sticky top-0`; com os dois no mesmo topo eles se sobrepõem e o título do
+ * grupo some por baixo da faixa azul ao rolar.
+ *
+ * ⚠️ `tom="alerta"` existe porque "Atrasadas" e "Hoje" tinham tipografia
+ * idêntica — e a primeira é dívida, a segunda é agenda. Ler as duas com o mesmo
+ * peso é não ler a diferença.
+ */
+function CabecalhoGrupo({ titulo, qtd, aberto, onToggle, tom, comBanner }: {
   titulo: string; qtd: number; aberto: boolean; onToggle?: () => void;
+  tom?: "alerta"; comBanner?: boolean;
 }) {
   const Tag = onToggle ? "button" : "div";
   return (
     <Tag onClick={onToggle}
-      className="sticky top-0 z-10 w-full flex items-center gap-2 bg-background/95 backdrop-blur
-                 py-1.5 text-left border-b">
+      className={`sticky ${comBanner ? "top-[56px]" : "top-0"} z-10 w-full flex items-center gap-2
+                 bg-background/95 backdrop-blur py-1.5 text-left border-b`}>
       {onToggle && (
         <ChevronRight className={`h-4 w-4 shrink-0 transition-transform ${aberto ? "rotate-90" : ""}`} />
       )}
-      <span className="text-xs font-semibold uppercase tracking-wide capitalize">{titulo}</span>
-      <Badge variant="outline" className="text-[10px] ml-auto">{qtd}</Badge>
+      <span className={`text-xs font-semibold uppercase tracking-wide capitalize ${
+        tom === "alerta" ? "text-amber-700 dark:text-amber-400" : ""}`}>{titulo}</span>
+      <Badge variant="outline" className={`text-[10px] ml-auto ${
+        tom === "alerta" ? "border-amber-400 text-amber-700 dark:text-amber-400" : ""}`}>{qtd}</Badge>
     </Tag>
+  );
+}
+
+/**
+ * A faixa de 7 dias que substitui o seletor de data no celular.
+ *
+ * ⚠️ Os dias saem da JANELA que já está em memória (`subDays(base, recuo)` …
+ * `addDays(base, avanco)`), então andar um dia não custa request nenhum. Era o
+ * ponto mais caro da tela em 3G: o picker nativo são três toques e um
+ * round-trip para ver "amanhã".
+ */
+function FaixaDeDias({ base, dia, hoje, onEscolher }: {
+  base: Date; dia: string; hoje: string; onEscolher: (d: string) => void;
+}) {
+  const dias = eachDayOfInterval({ start: subDays(base, 3), end: addDays(base, 3) });
+  return (
+    <div className="flex gap-1 overflow-x-auto -mx-3 px-3 pb-1 md:mx-0 md:px-0
+                    [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      {dias.map((d) => {
+        const k = chaveDia(d);
+        return (
+          <button key={k} onClick={() => onEscolher(k)}
+            aria-current={k === dia ? "date" : undefined}
+            className={`shrink-0 min-w-[52px] h-14 rounded-lg border flex flex-col items-center
+                        justify-center gap-0.5 transition-colors ${
+              k === dia ? "border-primary ring-1 ring-primary bg-primary/5"
+                        : "border-border hover:bg-muted/40"}`}>
+            <span className="text-[10px] uppercase text-muted-foreground">
+              {format(d, "EEE", { locale: ptBR })}
+            </span>
+            <span className={`text-sm tabular-nums ${k === hoje ? "font-bold text-primary" : ""}`}>
+              {format(d, "d")}
+            </span>
+          </button>
+        );
+      })}
+    </div>
   );
 }
 
@@ -665,10 +782,23 @@ function LinhaAgenda({
   onIniciar: () => void; onAbrir: () => void; onCancelar?: () => void;
 }) {
   const temCoord = l.pdv_lat != null && l.pdv_lng != null;
+  const endereco = [l.endereco, [l.cidade, l.uf].filter(Boolean).join("/")]
+    .filter(Boolean).join(" · ");
+
+  // ⚠️ ROTA POR COORDENADA **OU** POR ENDEREÇO. Antes o botão só existia com
+  // `pdv_lat/pdv_lng` — e essas colunas estão vazias em TODOS os 79 PDVs, então
+  // a função mais usada da tela em campo simplesmente nunca aparecia. Com o
+  // endereço importado da planilha, 70 dos 79 passam a ter rota.
+  //
+  // A coordenada vence quando existe: ela é medida, o endereço é texto que o
+  // mapa ainda vai interpretar. Mas texto que o mapa interpreta é infinitamente
+  // melhor que botão ausente.
+  const destino = temCoord ? `${l.pdv_lat},${l.pdv_lng}` : (endereco || null);
+
   return (
     <CarboCard>
       <CarboCardContent className="p-3">
-        <div className="flex items-start gap-3">
+        <div className="sm:flex sm:items-start sm:gap-3">
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
               <p className="font-semibold text-sm truncate">{l.pdv_nome}</p>
@@ -679,8 +809,8 @@ function LinhaAgenda({
                 <Badge variant="outline" className="text-[10px]">roteiro</Badge>
               )}
             </div>
-            <p className="text-xs text-muted-foreground mt-0.5 truncate">
-              {[l.endereco, l.cidade, l.uf].filter(Boolean).join(" · ") || "Sem endereço cadastrado"}
+            <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2" title={endereco}>
+              {endereco || "Sem endereço cadastrado"}
             </p>
             {!meu && l.vendedor_nome && (
               <p className="text-[11px] text-muted-foreground mt-0.5">{l.vendedor_nome}</p>
@@ -709,22 +839,31 @@ function LinhaAgenda({
             )}
           </div>
 
-          <div className="flex flex-col gap-1.5 shrink-0">
+          {/* ⚠️ AÇÕES EMPILHAM NO CELULAR, em linha de 44px. Numa coluna à
+              direita, quatro botões roubavam ~180px de uma tela de 360 e o nome
+              do PDV truncava em "Posto São Fra…" — e o cadastro tem seis filiais
+              do Posto Amigo e dezenove Postos RCM. Truncar o nome aqui é não
+              distinguir uma filial da outra. */}
+          <div className="mt-2.5 flex items-stretch gap-1.5
+                          sm:mt-0 sm:flex-col sm:w-auto sm:shrink-0">
             {podeIniciar && meu && (
-              <Button size="sm" className="h-9 gap-1.5" onClick={onIniciar} disabled={iniciando}>
+              <Button className="flex-1 sm:flex-none h-11 sm:h-9 gap-1.5"
+                      onClick={onIniciar} disabled={iniciando}>
                 {iniciando ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />}
                 Check-in
               </Button>
             )}
             {(l.situacao === "concluida" || l.situacao === "em_andamento") && l.visita_id && (
-              <Button size="sm" variant="outline" className="h-9" onClick={onAbrir}>Ver</Button>
+              <Button variant="outline" className="flex-1 sm:flex-none h-11 sm:h-9"
+                      onClick={onAbrir}>Ver</Button>
             )}
-            {temCoord && (
+            {destino && (
               // Abre o app de mapas do celular. É a função mais usada da tela
               // em campo e não depende de nada nosso.
               <a
-                className="inline-flex items-center justify-center gap-1 h-9 px-2.5 rounded-md border text-xs"
-                href={`https://www.google.com/maps/dir/?api=1&destination=${l.pdv_lat},${l.pdv_lng}`}
+                className="flex-1 sm:flex-none inline-flex items-center justify-center gap-1
+                           h-11 sm:h-9 px-2.5 rounded-md border text-xs"
+                href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(destino)}`}
                 target="_blank" rel="noreferrer"
               >
                 <Navigation className="h-3.5 w-3.5" /> Rota
@@ -734,27 +873,30 @@ function LinhaAgenda({
                 são o que se toca com o polegar antes de descer do carro. */}
             {l.contact_phone && (
               <a
-                className="inline-flex items-center justify-center gap-1 h-9 px-2.5 rounded-md border text-xs"
+                className="flex-1 sm:flex-none inline-flex items-center justify-center gap-1
+                           h-11 sm:h-9 px-2.5 rounded-md border text-xs"
                 href={`tel:${l.contact_phone.replace(/\D/g, "")}`}
               >
                 <Phone className="h-3.5 w-3.5" /> Ligar
               </a>
             )}
-            {/* ⚠️ CANCELAR existia como hook (`useCancelarPlanejada`) e nunca foi
-                ligado a botão nenhum. Não é cosmético: a view marca como
-                `nao_cumprida` toda planejada de dia passado sem visita, e a
-                aderência tira as canceladas do denominador. Sem este botão,
-                "o cliente pediu para remarcar" conta como falha de execução do
-                vendedor — o indicador de gestão nasce errado por falta de um
-                diálogo. */}
-            {podeIniciar && meu && onCancelar && (
-              <Button size="sm" variant="ghost" className="h-9 gap-1.5 text-muted-foreground"
-                      onClick={onCancelar}>
-                <Ban className="h-3.5 w-3.5" /> Cancelar
-              </Button>
-            )}
           </div>
         </div>
+
+        {/* ⚠️ CANCELAR vira link, e continua existindo. Não é cosmético que ele
+            exista: a view marca como `nao_cumprida` toda planejada de dia
+            passado sem visita, e a aderência tira as canceladas do denominador
+            — sem ele, "o cliente pediu para remarcar" conta como falha do
+            vendedor. Mas é a ação mais rara e a mais destrutiva do cartão, e
+            com 44px de altura tinha o mesmo peso do Check-in: um toque errado
+            abria um diálogo que exige digitar motivo. */}
+        {podeIniciar && meu && onCancelar && (
+          <button onClick={onCancelar}
+            className="mt-2 inline-flex items-center gap-1 text-[11px] text-muted-foreground
+                       underline underline-offset-2">
+            <Ban className="h-3 w-3" /> Não vai acontecer
+          </button>
+        )}
       </CarboCardContent>
     </CarboCard>
   );
@@ -776,20 +918,42 @@ function DialogAgendar({
   const [obs, setObs] = useState("");
   const [busca, setBusca] = useState("");
 
+  // ⚠️ O DIÁLOGO É MONTADO JUNTO COM A PÁGINA, então `useState(dia)` congelava
+  // o dia da PRIMEIRA renderização. Trocar o dia na tela e clicar em "Agendar"
+  // abria o diálogo com a data antiga — e gravava a visita no dia errado, sem
+  // erro nenhum. Mesma coisa com o vendedor: se o AuthContext ainda não tinha
+  // resolvido, `vendedor_id` ia vazio e o insert falhava com erro do Postgres.
+  // Sincroniza na ABERTURA, não a cada render, senão o campo não poderia ser
+  // editado dentro do próprio diálogo.
+  useEffect(() => {
+    if (!open) return;
+    setData(dia);
+    if (!vendedorId && user?.id) setVendedorId(user.id);
+  }, [open, dia, user?.id]);
+
   const lista = useMemo(() => {
     const t = busca.trim().toLowerCase();
+    const dig = busca.replace(/\D/g, "");
     // PDV inativo fica de fora: agendar visita a ponto fechado é ruído puro.
     const ativos = (pdvs ?? []).filter((p) => p.status !== "inactive");
     if (!t) return ativos.slice(0, 50);
+    // A RUA entra na busca. Montar roteiro é agrupar por proximidade, e sem
+    // isso "Olavo Lacerda" — onde ficam quatro PDVs em Parnamirim — não acha
+    // nada. Buscar por CEP também: é o jeito mais curto de dizer "aquela rua".
     return ativos.filter((p) =>
       p.name.toLowerCase().includes(t) ||
       (p.address_city ?? "").toLowerCase().includes(t) ||
-      p.pdv_code.toLowerCase().includes(t),
+      (p.address_street ?? "").toLowerCase().includes(t) ||
+      p.pdv_code.toLowerCase().includes(t) ||
+      (dig.length >= 3 && (p.address_zip ?? "").replace(/\D/g, "").includes(dig)),
     ).slice(0, 50);
   }, [pdvs, busca]);
 
   function salvar() {
     if (!pdvId) { toast.error("Escolha o PDV."); return; }
+    // ⚠️ Sem vendedor o insert quebra na FK e o vendedor lê um erro do Postgres
+    // achando que o sistema caiu. É o auth que ainda não resolveu.
+    if (!vendedorId) { toast.error("Aguarde carregar seu usuário e tente de novo."); return; }
     planejar.mutate(
       { pdv_id: pdvId, vendedor_id: vendedorId, data_prevista: data, observacao: obs.trim() || null },
       { onSuccess: () => { onOpenChange(false); setPdvId(""); setObs(""); setBusca(""); } },
@@ -822,7 +986,7 @@ function DialogAgendar({
 
           <div>
             <Label className="text-xs">Ponto de venda</Label>
-            <Input placeholder="Buscar por nome, cidade ou código..." value={busca}
+            <Input placeholder="Buscar por nome, endereço, cidade, CEP ou código..." value={busca}
               onChange={(e) => setBusca(e.target.value)} className="h-9 mb-1.5" />
             <div className="max-h-52 overflow-y-auto rounded-md border divide-y">
               {lista.length === 0 && (
@@ -835,10 +999,14 @@ function DialogAgendar({
                   {pdvId === p.id
                     ? <Check className="h-3.5 w-3.5 text-primary shrink-0" />
                     : <MapPin className="h-3.5 w-3.5 text-muted-foreground shrink-0" />}
+                  {/* A RUA aparece aqui. Sem ela, as seis filiais do Posto
+                      Amigo e os dezenove Postos RCM só se distinguem pelo
+                      código — e quem monta roteiro escolhe pelo endereço. */}
                   <span className="flex-1 min-w-0">
                     <span className="block truncate">{p.name}</span>
                     <span className="block text-[11px] text-muted-foreground truncate">
-                      {[p.address_city, p.address_state].filter(Boolean).join("/")} · {p.pdv_code}
+                      {[p.address_street, [p.address_city, p.address_state].filter(Boolean).join("/"), p.pdv_code]
+                        .filter(Boolean).join(" · ")}
                     </span>
                   </span>
                 </button>
