@@ -28,7 +28,11 @@ export interface EventoRastreio {
 
 export interface EnvioRastreio {
   codigo: string;
-  fonte: "mercadolivre" | "melhorenvio" | "desconhecida";
+  /** ⚠️ Valor novo aqui exige valor novo no CHECK de `rastreio_envios.fonte`
+   *  (migração), NESTA ordem. O tipo aceitar e o banco recusar é INSERT
+   *  falhando calado — mesma armadilha do `segmento = 'online'` na ponte do
+   *  Bling 2. `shopee` entrou pela 20260943. */
+  fonte: "mercadolivre" | "melhorenvio" | "shopee" | "desconhecida";
   bling_id?: number | null;
   fonte_id?: string | null;
   transportadora?: string | null;

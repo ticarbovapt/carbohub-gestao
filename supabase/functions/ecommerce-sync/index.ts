@@ -5,6 +5,8 @@ import {
 import {
   gravarRastreio, type EventoRastreio, type StatusRastreio,
 } from "../_shared/rastreio.ts";
+import { getShopeeCreds, chamarShopee } from "../_shared/shopee.ts";
+import { mapearPedido, lerRastreio } from "../_shared/shopeePedido.ts";
 
 const supabase = createClient(
   Deno.env.get("SUPABASE_URL")!,
@@ -557,13 +559,152 @@ async function pullTikTok(since: Date): Promise<Record<string, unknown>[]> {
   return [];
 }
 
-async function pullShopee(since: Date): Promise<Record<string, unknown>[]> {
-  // TODO: implement Shopee Open Platform GET /api/v2/order/get_order_list with HMAC-SHA256 signing
-  // Requires: partner_id, partner_key, access_token, shop_id
-  const partnerId = Deno.env.get("SHOPEE_PARTNER_ID");
-  if (!partnerId) { console.warn("[shopee] Credentials not configured — skipping sync"); return []; }
-  console.warn("[shopee] Shopee API integration pending — add implementation when credentials are ready");
-  return [];
+/**
+ * Shopee — pedidos e rastreio.
+ *
+ * ⚠️ A JANELA DA SHOPEE É DE 15 DIAS, no máximo, por chamada. As outras
+ * plataformas aceitam "desde o checkpoint" e pronto; aqui, pedir 30 dias de uma
+ * vez devolve erro de parâmetro, não uma lista menor. Por isso o laço fatia a
+ * janela — e por isso o teto de recuperação é 30 dias em duas fatias, não uma.
+ *
+ * ⚠️ E o filtro é por `update_time`, não `create_time`. É o que transforma esta
+ * função em rede de segurança do webhook: pedido que MUDOU de estado volta na
+ * varredura, mesmo tendo sido criado semanas atrás. Filtrando por criação, um
+ * webhook perdido congela o pedido para sempre — foi a lição do `bling-sync`.
+ */
+const SHOPEE_JANELA_DIAS = 15;
+const SHOPEE_MAX_DETALHE = 50;   // teto do get_order_detail por chamada
+
+async function pullShopee(_since: Date): Promise<Record<string, unknown>[]> {
+  const creds = await getShopeeCreds(supabase);
+  if (!creds) return [];
+
+  const maxLookback = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+  const desde = creds.lastSyncedAt < maxLookback ? maxLookback : creds.lastSyncedAt;
+  console.log(`[shopee] Sincronizando desde ${desde.toISOString()}`);
+
+  // ── 1. Lista de order_sn, em fatias de 15 dias ────────────────────────────
+  const sns: string[] = [];
+  let inicio = Math.floor(desde.getTime() / 1000);
+  const fim = Math.floor(Date.now() / 1000);
+
+  while (inicio < fim) {
+    const ate = Math.min(inicio + SHOPEE_JANELA_DIAS * 86400, fim);
+    let cursor = "";
+    do {
+      const r = await chamarShopee(creds, "/api/v2/order/get_order_list", {
+        time_range_field: "update_time",
+        time_from: String(inicio),
+        time_to: String(ate),
+        page_size: "100",
+        ...(cursor ? { cursor } : {}),
+      });
+      const resp = (r.response ?? {}) as Record<string, unknown>;
+      const lista = Array.isArray(resp.order_list) ? resp.order_list as Record<string, unknown>[] : [];
+      for (const o of lista) if (o.order_sn) sns.push(String(o.order_sn));
+      cursor = resp.more ? String(resp.next_cursor ?? "") : "";
+    } while (cursor);
+    inicio = ate;
+  }
+
+  if (sns.length === 0) {
+    console.log("[shopee] Nenhum pedido novo.");
+    await supabase.from("system_tokens")
+      .update({ last_synced_at: new Date().toISOString() }).eq("id", "shopee");
+    return [];
+  }
+  console.log(`[shopee] ${sns.length} pedido(s) na janela.`);
+
+  // ── 2. Detalhe, em lotes de 50 ────────────────────────────────────────────
+  const linhas: Record<string, unknown>[] = [];
+  const avisos: string[] = [];
+  const pedidos: Record<string, unknown>[] = [];
+
+  for (let i = 0; i < sns.length; i += SHOPEE_MAX_DETALHE) {
+    const lote = sns.slice(i, i + SHOPEE_MAX_DETALHE);
+    const r = await chamarShopee(creds, "/api/v2/order/get_order_detail", {
+      order_sn_list: lote.join(","),
+      response_optional_fields: "item_list,total_amount,order_status,create_time,update_time,recipient_address,package_list",
+    });
+    const resp = (r.response ?? {}) as Record<string, unknown>;
+    const lista = Array.isArray(resp.order_list) ? resp.order_list as Record<string, unknown>[] : [];
+    for (const p of lista) {
+      pedidos.push(p);
+      const { linhas: ls, avisos: as } = mapearPedido(p, "cron");
+      linhas.push(...ls);
+      avisos.push(...as);
+    }
+  }
+
+  // ⚠️ Os avisos são LOGADOS, não engolidos. Campo com nome errado devolve
+  // undefined, vira 0, e o pedido entra com valor zero sem erro nenhum. Na
+  // primeira venda real, é este log que diz se o mapeamento está certo.
+  if (avisos.length) console.warn(`[shopee] ${avisos.length} aviso(s):`, avisos.slice(0, 20));
+
+  // ── 3. Rastreio (escopo logistics) ────────────────────────────────────────
+  // ⚠️ Só para pedido que JÁ saiu. Pedir tracking de pedido não enviado devolve
+  // erro por pedido e gastaria uma chamada de API por rodada, para sempre.
+  await gravarRastreioShopee(creds, pedidos);
+
+  await supabase.from("system_tokens")
+    .update({ last_synced_at: new Date().toISOString() }).eq("id", "shopee");
+
+  return linhas as unknown as Record<string, unknown>[];
+}
+
+/**
+ * Rastreio da Shopee → `rastreio_envios` / `rastreio_eventos`.
+ *
+ * ⚠️ A Shopee usa logística PRÓPRIA (SPX) e não passa pelo Melhor Envio. O
+ * `rastreio-sync` corta este canal na `montarFila()` de propósito — sem o
+ * corte, o código entra na fila, não é encontrado e grava um erro no card de
+ * hora em hora, para sempre. Esse corte CONTINUA valendo: quem traz o rastreio
+ * da Shopee é esta função, direto da API dela.
+ */
+async function gravarRastreioShopee(
+  creds: Awaited<ReturnType<typeof getShopeeCreds>>,
+  pedidos: Record<string, unknown>[],
+): Promise<void> {
+  if (!creds) return;
+  const enviados = pedidos.filter((p) => {
+    const s = String(p.order_status ?? "").toUpperCase();
+    return s === "SHIPPED" || s === "COMPLETED" || s === "TO_CONFIRM_RECEIVE" || s === "TO_RETURN";
+  });
+  if (enviados.length === 0) return;
+
+  for (const p of enviados) {
+    const sn = String(p.order_sn ?? "");
+    if (!sn) continue;
+    try {
+      const t = await chamarShopee(creds, "/api/v2/logistics/get_tracking_number", { order_sn: sn });
+      const codigo = ((t.response ?? {}) as Record<string, unknown>).tracking_number;
+
+      let info: Record<string, unknown> | null = null;
+      if (codigo) {
+        const i = await chamarShopee(creds, "/api/v2/logistics/get_tracking_info", { order_sn: sn });
+        info = (i.response ?? null) as Record<string, unknown> | null;
+      }
+
+      const r = lerRastreio(codigo as string | null, info);
+      // Sem código não há chave: gravar linha vazia criaria envio fantasma.
+      if (!r) continue;
+
+      await gravarRastreio(supabase, {
+        codigo: r.codigo,
+        // ⚠️ 'shopee' precisou entrar no CHECK de `rastreio_envios.fonte`
+        // (migração 20260943). Valor novo num CHECK é INSERT falhando — mesma
+        // armadilha do `segmento = 'online'` na ponte do Bling 2.
+        fonte: "shopee",
+        fonte_id: sn,
+        transportadora: String((p.shipping_carrier as string) ?? "Shopee SPX"),
+        status: r.status,
+        raw: { order_sn: sn, tracking: info },
+      }, r.eventos);
+    } catch (e) {
+      // Falha de um pedido não derruba a rodada dos outros.
+      console.warn(`[shopee] rastreio de ${sn} falhou:`, (e as Error).message);
+    }
+  }
 }
 
 async function pullNuvemshop(): Promise<Record<string, unknown>[]> {
