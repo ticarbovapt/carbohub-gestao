@@ -99,8 +99,40 @@ delete from public.rtm_visita_planejada;
 -- acessíveis por URL assinada para quem tivesse guardado o caminho. Storage e
 -- tabela são dois sistemas; só o `on delete cascade` do Postgres não alcança o
 -- segundo.
-
-delete from storage.objects where bucket_id = 'rtm-visitas';
+--
+-- ⚠️ E NÃO DÁ PARA APAGAR POR SQL. Testado em 25/08/2026:
+--
+--     ERROR: 42501: Direct deletion from storage tables is not allowed.
+--            Use the Storage API instead.
+--     CONTEXT: PL/pgSQL function storage.protect_delete()
+--
+-- O Supabase passou a proteger `storage.objects` com um gatilho, justamente
+-- para impedir o inverso do problema acima: linha apagada com o arquivo vivo.
+-- A remoção tem de passar pela Storage API, que apaga os dois lados juntos.
+--
+-- O SELECT continua permitido — só o DELETE é barrado. Para ver o que sobrou:
+--
+--     select name,
+--            (storage.foldername(name))[1] as dono_uuid,
+--            round((metadata->>'size')::numeric / 1024) as kb,
+--            created_at
+--     from storage.objects
+--     where bucket_id = 'rtm-visitas'
+--     order by created_at;
+--
+-- Caminho A (o curto): painel do Supabase → Storage → bucket `rtm-visitas` →
+-- entrar na pasta do UUID → selecionar → Delete. O painel usa a service role e
+-- apaga independentemente de quem enviou.
+--
+-- Caminho B (console do navegador): só funciona para o DONO dos arquivos. A
+-- policy `rtm_fotos_delete` da migração 20260897 autoriza apenas
+-- `(storage.foldername(name))[1] = auth.uid()` — gestor LÊ mas não apaga, e
+-- isso é intencional: apagar foto serve para corrigir dedo na lente antes de
+-- fechar a visita, não para gestão mexer em evidência de terceiro.
+--
+--     const { data } = await supabase.storage.from('rtm-visitas').list(DONO_UUID);
+--     await supabase.storage.from('rtm-visitas')
+--       .remove(data.map(f => `${DONO_UUID}/${f.name}`));
 
 
 -- ╔═══════════════════════════════════════════════════════════════════════╗
