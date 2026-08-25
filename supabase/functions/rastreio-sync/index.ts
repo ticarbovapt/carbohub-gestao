@@ -333,6 +333,66 @@ async function montarFila(alvos?: string[]): Promise<ItemFila[]> {
   // ser rápida — o Melhor Envio está esperando o 200.
   if (alvos?.length) { reprocessados = 0; return fila; }
 
+  // ── Repescagem: entregue que NUNCA teve trajeto ─────────────────────────
+  //
+  // ⚠️ O buraco de entrada, não de manutenção.
+  //
+  // A esteira marca `entregue` a partir do `me.entregue_em` — o carimbo do
+  // Melhor Envio — sem depender de evento de transportadora. Quando o ME
+  // informa a entrega antes de o rastreio ter criado a linha, o pedido NASCE
+  // entregue: nunca existiu rodada em que ele estivesse numa etapa anterior,
+  // então ele jamais entrou na fila acima (que exclui entregue), e
+  // `rastreio_envios` nunca ganhou linha.
+  //
+  // Medido em 25/08/2026: 233 envios entregues segundo o ME, 140 SEM LINHA
+  // NENHUMA — e ZERO com linha e sem status. Quando a linha existe, o sync
+  // sempre consegue o trajeto; o buraco era só a entrada.
+  //
+  // Custo para o cliente: ele clica no link de rastreio e não vê trajeto
+  // nenhum, porque não há histórico gravado.
+  //
+  // ⚠️ CONSULTA SEPARADA E LIMITADA, não `.neq("etapa","entregue")` removido
+  // da principal. A consulta de cima tem `.limit(500)` sem ordenação — com os
+  // entregues dentro dela, eles empurrariam para fora os cards ATIVOS, que são
+  // os que têm prazo. Aqui eles entram por uma porta própria, com teto próprio,
+  // e drenam em algumas rodadas sem disputar espaço com quem está em trânsito.
+  const REPESCAGEM = 20;
+  const { data: entregues } = await supabase
+    .from("bling2_esteira")
+    .select("bling_id,rastreio,nf_chave,transportadora,servico,canal")
+    .eq("etapa", "entregue")
+    .not("rastreio", "is", null)
+    .limit(200);
+
+  // ⚠️ Um mesmo código pode aparecer em dois cards (pedido desdobrado em duas
+  // notas com a mesma etiqueta). Sem este conjunto ele entraria duas vezes na
+  // mesma rodada e gastaria duas buscas para gravar a mesma linha.
+  const repescadosAgora = new Set<string>();
+  let repescados = 0;
+  for (const o of entregues ?? []) {
+    if (repescados >= REPESCAGEM) break;
+    const codigo = String(o.rastreio ?? "").trim();
+    if (!codigo || conhecidos.has(codigo)) continue;   // já tem linha: não mexe
+    if (repescadosAgora.has(codigo)) continue;
+    // Os mesmos cortes de canal da fila principal. Sem eles, um entregue da
+    // Shopee entraria aqui e falharia de rodada em rodada, para sempre.
+    if (/mercado\s*livre|mercadolivre|meli/i.test(String(o.canal ?? ""))) continue;
+    if (/amazon/i.test(String(o.canal ?? ""))) continue;
+    if (/shopee/i.test(String(o.canal ?? ""))) continue;
+    if (/mandae|mandaê/i.test(String(o.transportadora ?? ""))) continue;
+    fila.push({
+      codigo,
+      bling_id: o.bling_id ?? null,
+      nf_chave: o.nf_chave ?? null,
+      transportadora: o.transportadora ?? null,
+      servico: o.servico ?? null,
+      fonte_id: null,
+    });
+    repescadosAgora.add(codigo);
+    repescados += 1;
+  }
+  if (repescados) console.log(`[rastreio-sync] repescagem: ${repescados} entregue(s) sem trajeto`);
+
   // ── Auto-cura ────────────────────────────────────────────────────────────
   //
   // A fila acima vem da esteira, que exclui entregue e cancelado. Isso é certo
