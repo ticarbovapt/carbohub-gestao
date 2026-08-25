@@ -505,6 +505,60 @@ export function rtmIniciarSincronizacao() {
   void navigator.storage?.persist?.().catch(() => { /* navegador sem suporte */ });
 
   void rtmSincronizar();
+  instalarConsole();
+}
+
+/**
+ * `__rtmFila` no console — ver e limpar o que está guardado no aparelho.
+ *
+ * ⚠️ Existe porque a fila é offline-first e o aparelho VENCE o banco: se
+ * alguém apagar visitas no servidor enquanto um celular ainda tem a visita na
+ * fila, a sincronização (a cada 45 s) tenta reenviá-la. E como ela carrega o
+ * `visita_planejada_id` de um agendamento que não existe mais, a FK recusa e a
+ * visita fica presa em erro, a cada 45 segundos, sem ninguém saber por quê.
+ *
+ * Sem uma forma de limpar o aparelho, a única saída seria ensinar alguém a
+ * abrir o DevTools e apagar o IndexedDB à mão. Mesmo padrão do `__somVenda`,
+ * que existe pelo mesmo motivo: falha silenciosa precisa de uma alavanca.
+ */
+function instalarConsole() {
+  (window as unknown as Record<string, unknown>).__rtmFila = {
+    async estado() {
+      const todas = await rtmLerTodas();
+      console.table(todas.map((v) => ({
+        pdv: v.pdv_nome, estado: v.estado, visita_id: v.visita_id ?? "—",
+        fotos: v.fotos?.length ?? 0, erro: v.erro ?? "", atualizado: v.atualizado_em,
+      })));
+      return { total: todas.length, ultimo_sucesso: rtmUltimoSucesso() };
+    },
+    /**
+     * Apaga a fila LOCAL. Não toca no servidor — o que já subiu continua lá.
+     *
+     * ⚠️ RECUSA quando há visita que nunca subiu. Essa visita só existe neste
+     * aparelho: apagá-la é a única forma de perder de verdade o registro de
+     * alguém que esteve no PDV. Quem quiser mesmo usa `forcar()`.
+     */
+    async limpar() {
+      const todas = await rtmLerTodas();
+      const naoSubiram = todas.filter((v) => !v.visita_id).length;
+      if (naoSubiram > 0) {
+        console.warn(
+          `[rtm] ${naoSubiram} visita(s) NUNCA subiram para o servidor. ` +
+          "Apagar aqui perde o registro delas. Use __rtmFila.forcar() se for isso mesmo.",
+        );
+        return { apagadas: 0, nao_subiram: naoSubiram };
+      }
+      for (const v of todas) await rtmApagar(v.client_uuid);
+      avisar();
+      return { apagadas: todas.length };
+    },
+    async forcar() {
+      const todas = await rtmLerTodas();
+      for (const v of todas) await rtmApagar(v.client_uuid);
+      avisar();
+      return { apagadas: todas.length };
+    },
+  };
 }
 
 /** Limpa as visitas já sincronizadas há mais de um dia. As fotos são o peso

@@ -65,6 +65,12 @@ export interface RtmAgendaRow {
   ts_checkout: string | null;
   resultado: string | null;
   situacao: RtmSituacaoAgenda;
+  /** Quem CRIOU o agendamento — não é o mesmo que `vendedor_id`, que é quem
+   *  vai visitar. Nulo nos agendamentos anteriores à migração 20260942: a
+   *  coluna existia e ninguém escrevia nela, então não há o que recuperar. */
+  criado_por: string | null;
+  criado_por_nome: string | null;
+  agendado_em: string | null;
 }
 
 export interface RtmVisitaCard {

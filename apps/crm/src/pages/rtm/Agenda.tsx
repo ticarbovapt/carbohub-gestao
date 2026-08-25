@@ -815,6 +815,18 @@ function LinhaAgenda({
             {!meu && l.vendedor_nome && (
               <p className="text-[11px] text-muted-foreground mt-0.5">{l.vendedor_nome}</p>
             )}
+            {/* ⚠️ QUEM AGENDOU, e só quando não é o próprio vendedor. Gestor
+                planeja rota de terceiro, e uma visita que o vendedor não
+                reconhece precisa ter a quem perguntar — a aderência dele é
+                cobrada em cima desse plano. Quando é ele mesmo, dizer o nome
+                dele de volta é ruído. Nulo nos agendamentos antigos: a coluna
+                existia e ninguém escrevia nela, então a linha some em vez de
+                mostrar "—", que pareceria defeito da tela. */}
+            {l.criado_por_nome && l.criado_por !== l.vendedor_id && (
+              <p className="text-[11px] text-muted-foreground mt-0.5">
+                agendado por {l.criado_por_nome}
+              </p>
+            )}
 
             {l.situacao === "concluida" && (
               <p className="text-xs mt-1">
