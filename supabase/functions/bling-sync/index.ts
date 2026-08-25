@@ -1,4 +1,5 @@
 // bling-sync v3 — Phase 2: stock + vendedores
+import { telefoneParaBling } from "../_shared/telefoneBling.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.39.3";
 
 const ALLOWED_ORIGINS = [
@@ -326,7 +327,7 @@ function extractOrderAddress(order: any): {
   };
 }
 
-function buildContactPayload(order: any): { payload: Record<string, any> | null; error?: string } {
+function buildContactPayload(order: any): { payload: Record<string, any> | null; error?: string; aviso?: string } {
   const doc = onlyDigits(order.cnpj);
   if (doc.length !== 11 && doc.length !== 14) {
     return {
@@ -353,6 +354,7 @@ function buildContactPayload(order: any): { payload: Record<string, any> | null;
 
   // Endereço em campos separados (faturamento estruturado ou entrega revertida).
   const endereco = extractOrderAddress(order);
+  const fone = telefoneParaBling(order.customer_phone);
 
   const payload: Record<string, any> = {
     nome: order.customer_name || "",
@@ -362,7 +364,12 @@ function buildContactPayload(order: any): { payload: Record<string, any> | null;
     indicadorIe,
     ...(ie ? { ie } : {}),
     ...(email ? { email } : {}),
-    ...(order.customer_phone ? { telefone: String(order.customer_phone) } : {}),
+    // ⚠️ NORMALIZADO, nunca cru. Telefone inválido faz o Bling recusar o
+    // CONTATO INTEIRO — e sem contato não há pedido. Um campo sem efeito
+    // fiscal nenhum travava o faturamento de R$ 15.200 (BILL AUTOPECAS,
+    // 25/08/2026, telefone "0843215585"). Impossível de consertar é omitido e
+    // vira aviso na tela; o Bling aceita contato sem telefone.
+    ...(fone.valor ? { telefone: fone.valor } : {}),
   };
 
   // Só inclui endereço se houver algo útil (evita objeto vazio).
@@ -378,13 +385,13 @@ function buildContactPayload(order: any): { payload: Record<string, any> | null;
     payload.endereco = { geral };
   }
 
-  return { payload };
+  return { payload, aviso: fone.aviso ?? undefined };
 }
 
 // ── sanitizeContactPayload: valida/normaliza o contato EDITADO na tela antes de
 // mandar ao Bling. Whitelist de campos + coerção de tipos (nunca confia no que
 // chega do cliente). Retorna erro se o documento for inválido.
-function sanitizeContactPayload(input: any): { payload: Record<string, any> | null; error?: string } {
+function sanitizeContactPayload(input: any): { payload: Record<string, any> | null; error?: string; aviso?: string } {
   if (!input || typeof input !== "object") return { payload: null, error: "Dados do cliente ausentes." };
   const doc = onlyDigits(input.numeroDocumento);
   if (doc.length !== 11 && doc.length !== 14) {
@@ -394,6 +401,7 @@ function sanitizeContactPayload(input: any): { payload: Record<string, any> | nu
   const ie = String(input.ie ?? "").trim();
   const indRaw = Number(input.indicadorIe);
   const indicadorIe = [1, 2, 9].includes(indRaw) ? indRaw : (ie ? 1 : 9);
+  const fone = telefoneParaBling(input.telefone);
 
   const payload: Record<string, any> = {
     nome: String(input.nome ?? "").trim(),
@@ -403,7 +411,9 @@ function sanitizeContactPayload(input: any): { payload: Record<string, any> | nu
     indicadorIe,
     ...(ie ? { ie } : {}),
     ...(input.email ? { email: String(input.email).trim() } : {}),
-    ...(input.telefone ? { telefone: String(input.telefone).trim() } : {}),
+    // Mesma normalização do caminho automático — ver a nota lá. A tela deixa
+    // editar o telefone, e o que a pessoa digita passa pelo mesmo crivo.
+    ...(fone.valor ? { telefone: fone.valor } : {}),
   };
 
   const g = input?.endereco?.geral;
@@ -420,7 +430,7 @@ function sanitizeContactPayload(input: any): { payload: Record<string, any> | nu
   }
 
   if (!payload.nome) return { payload: null, error: "Nome do cliente é obrigatório." };
-  return { payload };
+  return { payload, aviso: fone.aviso ?? undefined };
 }
 
 // ── createBlingPedido: cria um pedido de venda no Bling a partir de um carboze_order
@@ -509,9 +519,14 @@ async function createBlingPedido(
   if (!blingContactId) {
     // Se o financeiro editou o cadastro na tela de confirmação, usa o que ele
     // conferiu/ajustou (sanitizado); senão monta a partir do pedido.
-    const { payload: cPayload, error: cErr } = contactOverride
+    const { payload: cPayload, error: cErr, aviso: cAviso } = contactOverride
       ? sanitizeContactPayload(contactOverride)
       : buildContactPayload(order);
+    // ⚠️ Telefone descartado vira AVISO, nunca silêncio. Sumir com o dado
+    // calado é como o cadastro do Bling fica errado sem ninguém saber — e o
+    // aviso aparece ANTES do clique, junto com os outros dois que a tela já
+    // mostra (cliente novo, forma de pagamento).
+    if (cAviso) warnings.push(cAviso);
     if (cErr) {
       // Sem documento válido não dá para cadastrar — erro claro.
       if (!dryRun) throw new Error(cErr);
