@@ -70,8 +70,13 @@ const ABAS = [
   { id: "transito",        label: "Em Trânsito",         icon: Truck,           hubs: ["sp"] },
   { id: "mapeamento",      label: "Mapeamento SKU",      icon: Link2,           hubs: ["sp"] },
   { id: "vendas-transito", label: "Remessas",            icon: Truck,           hubs: ["spv"] },
-  { id: "envios-sp",       label: "Envios para SP",      icon: Send,            hubs: ["rn"] },
-  { id: "recebimento",     label: "Recebimento",         icon: ArrowDownToLine, hubs: ["rn"] },
+  // ⚠️ Sem `hubs`: envio e recebimento passaram a valer em TODOS os estoques.
+  // Enquanto só Natal enviava, restringir a "rn" descrevia a realidade. Agora
+  // qualquer estoque envia para qualquer outro, e o CD SP precisa da aba de
+  // recebimento para aceitar o que Natal mandou — sem ela o saldo fica preso
+  // em trânsito e ninguém sabe onde clicar.
+  { id: "envios-sp",       label: "Envios",              icon: Send },
+  { id: "recebimento",     label: "Recebimento",         icon: ArrowDownToLine },
   { id: "notas",           label: "Notas Fiscais",       icon: FileText,        hubs: ["rn"] },
   { id: "politica",        label: "Política de Estoque", icon: Settings2 },
 ] as const;
@@ -192,8 +197,19 @@ export default function Suprimentos() {
   const { data: products = [] } = useStock();
   const { data: transfers = [] } = useStockTransfers();
 
-  // Transferências por direção
-  const enviosSP = useMemo(() => transfers.filter((t) => t.fromCode === "HUB-RN"), [transfers]);
+  // Transferências por direção, RELATIVAS ao estoque aberto.
+  //
+  // ⚠️ Antes eram três listas com o código escrito na mão ("HUB-RN",
+  // "HUB-SP"...). Com cinco estoques e as caixas dos vendedores, isso viraria
+  // uma constante por par — e cada par novo exigiria mexer aqui. As duas
+  // listas abaixo respondem sempre a mesma pergunta: o que SAI daqui e o que
+  // CHEGA aqui.
+  const enviosDaqui = useMemo(
+    () => transfers.filter((t) => t.fromCode === HUB_CODE[hub]), [transfers, hub]);
+  const chegandoAqui = useMemo(
+    () => transfers.filter((t) => t.toCode === HUB_CODE[hub]), [transfers, hub]);
+  // Mantidas para as abas próprias do CD SP e do CD SP Vendas, que existiam
+  // antes e continuam fazendo sentido do ponto de vista de quem opera lá.
   const transitoSP = useMemo(() => transfers.filter((t) => t.toCode === "HUB-SP"), [transfers]);
   const remessasVendas = useMemo(() => transfers.filter((t) => t.toCode === "HUB-SP-VENDAS"), [transfers]);
 
@@ -246,7 +262,9 @@ export default function Suprimentos() {
   };
 
   // Card de transferência (envio/remessa) com ações opcionais de chegada/estorno.
-  const TransferCard = ({ t, withActions }: { t: Transfer; withActions: boolean }) => {
+  const TransferCard = ({ t, withActions, mostrarOrigem, mostrarDestino }: {
+    t: Transfer; withActions: boolean; mostrarOrigem?: boolean; mostrarDestino?: boolean;
+  }) => {
     const done = t.status === "entregue", cancelled = t.status === "estornado";
     return (
       <CarboCard key={t.id}><CarboCardContent className="py-4">
@@ -256,7 +274,29 @@ export default function Suprimentos() {
           </div>
           <div className="flex-1 min-w-0">
             <p className="font-semibold text-sm">{t.produto}</p>
-            <p className="text-xs text-muted-foreground mt-0.5">Enviado em {fmtDate(t.enviado)}{t.nota ? ` · ${t.nota}` : ""}</p>
+            {/* ⚠️ De onde veio / para onde vai, escrito. Com cinco estoques e as
+                caixas dos vendedores, um card que só diz "enviado em" não
+                responde a primeira pergunta de quem olha. */}
+            {(mostrarOrigem || mostrarDestino) && (
+              <p className="text-xs text-foreground/80 mt-0.5">
+                {mostrarOrigem ? <>de <strong>{t.fromNome || t.fromCode}</strong></>
+                               : <>para <strong>{t.toNome || t.toCode}</strong></>}
+              </p>
+            )}
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Enviado em {fmtDate(t.enviado)}
+              {t.registradoPor ? ` por ${t.registradoPor}` : ""}
+              {t.nota ? ` · ${t.nota}` : ""}
+            </p>
+            {/* QUEM DEU O ACEITE. É o registro que transfere a responsabilidade
+                sobre a mercadoria — e ele existia no banco desde a 20260710310000
+                sem nunca aparecer em tela nenhuma. */}
+            {t.status === "entregue" && (
+              <p className="text-xs text-carbo-green mt-0.5">
+                Aceito {t.aceitoEm ? `em ${fmtDate(t.aceitoEm)}` : ""}
+                {t.aceitoPor ? ` por ${t.aceitoPor}` : " — autor não registrado"}
+              </p>
+            )}
           </div>
           <div className="text-right shrink-0">
             <p className="font-bold text-xl">{t.qtd.toLocaleString("pt-BR")} <span className="text-xs font-normal text-muted-foreground">{t.unidade}</span></p>
@@ -264,7 +304,7 @@ export default function Suprimentos() {
           </div>
           {withActions && t.status === "em_transito" && (
             <div className="flex flex-col gap-1.5 shrink-0">
-              <Button size="sm" variant="outline" className="gap-1.5 border-green-500/30 text-carbo-green hover:bg-green-500/10" onClick={() => setRemessaConfirm({ action: "confirmar", id: t.id, produto: t.produto })}><CheckCircle className="h-4 w-4" /> Confirmar chegada</Button>
+              <Button size="sm" variant="outline" className="gap-1.5 border-green-500/30 text-carbo-green hover:bg-green-500/10" onClick={() => setRemessaConfirm({ action: "confirmar", id: t.id, produto: t.produto })}><CheckCircle className="h-4 w-4" /> Aceitar recebimento</Button>
               <Button size="sm" variant="outline" className="gap-1.5 border-destructive/40 text-destructive hover:bg-destructive/10" onClick={() => setRemessaConfirm({ action: "estornar", id: t.id, produto: t.produto })}><XCircle className="h-4 w-4" /> Não chegou / Estornar</Button>
             </div>
           )}
@@ -299,7 +339,11 @@ export default function Suprimentos() {
           <Button variant={isVendas ? "default" : "outline"} size="sm" className={cn("gap-2", isVendas && "bg-carbo-blue hover:bg-carbo-blue/90 text-white")} onClick={() => changeHub("spv")}><Users className="h-4 w-4" /> CD SP Vendas</Button>
           <Button variant={isBling ? "default" : "outline"} size="sm" className={cn("gap-2", isBling && "bg-carbo-blue hover:bg-carbo-blue/90 text-white")} onClick={() => changeHub("bling")}><Cloud className="h-4 w-4" /> CD Bling</Button>
           <Button variant={isEsc ? "default" : "outline"} size="sm" className={cn("gap-2", isEsc && "bg-carbo-blue hover:bg-carbo-blue/90 text-white")} onClick={() => changeHub("esc")}><Building2 className="h-4 w-4" /> Escritório</Button>
-          {isRN && <Button size="sm" variant="outline" className="gap-2 ml-auto border-blue-500/30 text-blue-400 hover:bg-blue-500/10" onClick={() => setEnvioOpen(true)}><Send className="h-4 w-4" /> Registrar Envio para CD SP</Button>}
+          {/* ⚠️ Em TODOS os estoques, não só em Natal — e a origem do diálogo é
+              o estoque da aba. O CD Bling fica de fora: o saldo dele vem da
+              integração, e um envio manual dali criaria um número que a
+              próxima sincronização apaga sem avisar. */}
+          {!isBling && <Button size="sm" variant="outline" className="gap-2 ml-auto border-blue-500/30 text-blue-400 hover:bg-blue-500/10" onClick={() => setEnvioOpen(true)}><Send className="h-4 w-4" /> Registrar Envio</Button>}
         </div>
 
         {/* Alerta reposição — SP */}
@@ -470,23 +514,41 @@ export default function Suprimentos() {
             )}
           </TabsContent>
 
-          {/* Envios para SP — Hub Natal (lista; ação acontece no destino) */}
+          {/* ENVIOS — o que SAI deste estoque.
+              ⚠️ Sem ação de confirmar aqui: quem aceita é o destino. Botão de
+              "confirmar chegada" na tela de quem enviou é como o saldo entra
+              numa prateleira que ninguém conferiu. O estorno continua sendo de
+              quem enviou, porque é ele que descobre que a carga não saiu. */}
           <TabsContent value="envios-sp" className="mt-4 space-y-4">
-            {enviosSP.length === 0 ? <CarboEmptyState title="Nenhum envio registrado" description='Use "Registrar Envio para CD SP".' /> : (
+            {enviosDaqui.length === 0 ? <CarboEmptyState title="Nenhum envio registrado" description='Use "Registrar Envio" no topo da tela.' /> : (
             <>
             <div className="flex items-center gap-5 px-1 flex-wrap text-sm">
-              <span className="flex items-center gap-1.5 text-blue-400 font-medium"><Truck className="h-4 w-4" /> {enviosSP.filter((e) => e.status === "em_transito").length} em trânsito</span>
-              <span className="flex items-center gap-1.5 text-muted-foreground font-medium"><CheckCircle className="h-4 w-4 text-carbo-green" /> {enviosSP.filter((e) => e.status === "entregue").length} entregues no CD SP</span>
-              <span className="flex items-center gap-1.5 text-muted-foreground font-medium"><XCircle className="h-4 w-4 text-destructive" /> {enviosSP.filter((e) => e.status === "estornado").length} estornados</span>
+              <span className="flex items-center gap-1.5 text-blue-400 font-medium"><Truck className="h-4 w-4" /> {enviosDaqui.filter((e) => e.status === "em_transito").length} em trânsito</span>
+              <span className="flex items-center gap-1.5 text-muted-foreground font-medium"><CheckCircle className="h-4 w-4 text-carbo-green" /> {enviosDaqui.filter((e) => e.status === "entregue").length} entregues</span>
+              <span className="flex items-center gap-1.5 text-muted-foreground font-medium"><XCircle className="h-4 w-4 text-destructive" /> {enviosDaqui.filter((e) => e.status === "estornado").length} estornados</span>
             </div>
-            {enviosSP.map((e) => <TransferCard key={e.id} t={e} withActions={false} />)}
+            {enviosDaqui.map((e) => <TransferCard key={e.id} t={e} withActions={false} mostrarDestino />)}
             </>
             )}
           </TabsContent>
 
-          {/* Recebimento — Hub Natal (próxima fase) */}
-          <TabsContent value="recebimento" className="mt-4">
-            <CarboEmptyState title="Nenhum registro" description="Conferência de recebimento de OC entra na próxima fase." />
+          {/* RECEBIMENTO — o que CHEGA neste estoque, e o aceite.
+              ⚠️ É esta aba que credita o saldo. Antes ela era um placeholder de
+              "próxima fase" e o aceite só existia nas abas do CD SP — ou seja,
+              um envio para o Escritório ou para a caixa de um vendedor não
+              tinha onde ser aceito e ficaria em trânsito para sempre. */}
+          <TabsContent value="recebimento" className="mt-4 space-y-4">
+            {chegandoAqui.length === 0 ? (
+              <CarboEmptyState title="Nada chegando" description="Envios de outros estoques para cá aparecem aqui, esperando o aceite." />
+            ) : (
+              <>
+                <div className="flex items-center gap-5 px-1 flex-wrap text-sm">
+                  <span className="flex items-center gap-1.5 text-blue-400 font-medium"><Truck className="h-4 w-4" /> {chegandoAqui.filter((t) => t.status === "em_transito").length} aguardando aceite</span>
+                  <span className="flex items-center gap-1.5 text-muted-foreground font-medium"><CheckCircle className="h-4 w-4 text-carbo-green" /> {chegandoAqui.filter((t) => t.status === "entregue").length} recebidos</span>
+                </div>
+                {chegandoAqui.map((t) => <TransferCard key={t.id} t={t} withActions mostrarOrigem />)}
+              </>
+            )}
           </TabsContent>
 
           {/* Notas Fiscais de entrada — Hub Natal (próxima fase) */}
@@ -550,7 +612,7 @@ export default function Suprimentos() {
         hubLabel={stockHub.label}
         currentMin={minTarget?.current ?? 0}
       />
-      <CDSPRegistrarEnvioDialog open={envioOpen} onOpenChange={setEnvioOpen} />
+      <CDSPRegistrarEnvioDialog open={envioOpen} onOpenChange={setEnvioOpen} origemInicial={HUB_CODE[hub]} />
       <RemessaConfirmDialog
         action={remessaConfirm?.action ?? null}
         transferId={remessaConfirm?.id ?? null}

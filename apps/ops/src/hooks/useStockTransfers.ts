@@ -31,10 +31,21 @@ export interface Transfer {
   qtd: number;
   unidade: string;
   fromCode: string;
+  fromNome: string;
   toCode: string;
+  toNome: string;
+  /** 'hub' | 'vendedor' — a caixa do vendedor tem regra de aceite própria. */
+  toKind: string;
+  toDonoId: string | null;
   enviado: string;       // created_at ISO
   nota: string | null;
   status: TransferStatus;
+  /** ⚠️ Quem registrou e quem ACEITOU. As duas colunas existiam no banco desde
+   *  a 20260710310000 e nunca apareceram em tela nenhuma — envio sem autor é
+   *  envio que ninguém responde por. */
+  registradoPor: string | null;
+  aceitoPor: string | null;
+  aceitoEm: string | null;
 }
 
 const RAW_TO_STATUS = (raw: string): TransferStatus =>
@@ -44,39 +55,53 @@ export function useStockTransfers() {
   return useQuery({
     queryKey: ["ops", "stock-transfers"],
     queryFn: async (): Promise<Transfer[]> => {
-      const [transfers, warehouses, products] = await Promise.all([
-        db
-          .from("stock_transfers")
-          .select("id, product_id, product_code, quantity, status, notes, created_at, from_hub, to_hub")
-          .order("created_at", { ascending: false }),
-        db.from("warehouses").select("id, code"),
-        db.from("mrp_products").select("id, name, stock_unit"),
-      ]);
-      if (transfers.error) throw transfers.error;
-      if (warehouses.error) throw warehouses.error;
-      if (products.error) throw products.error;
+      // ⚠️ UMA consulta à view `carbo_transferencias`, não três tabelas + dois
+      // `Map` no navegador. A junção mora no banco (migração 20260944) porque
+      // ela precisa dos mesmos nomes na tela de envio e na de recebimento —
+      // duas montagens da mesma junção divergem sem dar erro.
+      const { data, error } = await db
+        .from("carbo_transferencias")
+        .select("*")
+        .order("enviado_em", { ascending: false });
+      if (error) throw error;
 
-      const codeById = new Map<string, string>();
-      for (const w of warehouses.data ?? []) codeById.set(w.id, w.code);
-      const prodById = new Map<string, { name: string; unit: string }>();
-      for (const p of products.data ?? []) prodById.set(p.id, { name: p.name ?? "", unit: p.stock_unit ?? "un" });
+      return (data ?? []).map((t: Record<string, unknown>) => ({
+        id: t.id as string,
+        product_id: t.product_id as string,
+        produto: (t.produto as string) ?? "—",
+        product_code: (t.product_code as string) ?? "",
+        qtd: Number(t.qtd) || 0,
+        unidade: (t.unidade as string) ?? "un",
+        fromCode: (t.origem_code as string) ?? "",
+        fromNome: (t.origem_nome as string) ?? "",
+        toCode: (t.destino_code as string) ?? "",
+        toNome: (t.destino_nome as string) ?? "",
+        toKind: (t.destino_kind as string) ?? "hub",
+        toDonoId: (t.destino_dono_id as string) ?? null,
+        enviado: t.enviado_em as string,
+        nota: (t.notes as string) ?? null,
+        status: RAW_TO_STATUS((t.status as string) ?? "approved"),
+        registradoPor: (t.registrado_por_nome as string) ?? null,
+        aceitoPor: (t.aceito_por_nome as string) ?? null,
+        aceitoEm: (t.aceito_em as string) ?? null,
+      }));
+    },
+  });
+}
 
-      return (transfers.data ?? []).map((t: Record<string, unknown>) => {
-        const p = prodById.get(t.product_id as string);
-        return {
-          id: t.id as string,
-          product_id: t.product_id as string,
-          produto: p?.name ?? "—",
-          product_code: (t.product_code as string) ?? "",
-          qtd: Number(t.quantity) || 0,
-          unidade: p?.unit ?? "un",
-          fromCode: codeById.get(t.from_hub as string) ?? "",
-          toCode: codeById.get(t.to_hub as string) ?? "",
-          enviado: t.created_at as string,
-          nota: (t.notes as string) ?? null,
-          status: RAW_TO_STATUS((t.status as string) ?? "approved"),
-        };
-      });
+/** Os estoques que podem ser origem ou destino: hubs + caixas de vendedor. */
+export interface EstoqueOpcao {
+  id: string; code: string; name: string; kind: string;
+  owner_id: string | null; dono_nome: string | null;
+}
+
+export function useEstoques() {
+  return useQuery({
+    queryKey: ["ops", "estoques"],
+    queryFn: async (): Promise<EstoqueOpcao[]> => {
+      const { data, error } = await db.from("carbo_estoques").select("*").order("kind").order("name");
+      if (error) throw error;
+      return (data ?? []) as EstoqueOpcao[];
     },
   });
 }
@@ -84,7 +109,10 @@ export function useStockTransfers() {
 export interface RegisterEnvioArgs {
   productId: string;
   productCode: string;
-  toCode: string;          // HUB-SP | HUB-SP-VENDAS
+  /** ⚠️ Código do warehouse de ORIGEM. Era fixo em HUB-RN dentro da RPC até a
+   *  migração 20260944 — a tela não podia escolher porque o banco não deixava. */
+  fromCode: string;
+  toCode: string;
   quantity: number;
   notes?: string;
 }
@@ -92,13 +120,15 @@ export interface RegisterEnvioArgs {
 export function useRegisterEnvio() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ productId, productCode, toCode, quantity, notes }: RegisterEnvioArgs) => {
+    mutationFn: async ({ productId, productCode, fromCode, toCode, quantity, notes }: RegisterEnvioArgs) => {
       if (!Number.isFinite(quantity) || quantity <= 0) throw new Error("Quantidade inválida.");
+      if (fromCode === toCode) throw new Error("Origem e destino são o mesmo estoque.");
       const { data: auth } = await db.auth.getUser();
-      // Débito do RN + registro + movimento numa transação única no banco.
+      // Débito da origem + registro + movimento numa transação única no banco.
       const rr = await db.rpc("ops_transfer_register", {
         p_product_id: productId,
         p_product_code: productCode,
+        p_from_code: fromCode,
         p_to_code: toCode,
         p_qty: quantity,
         p_notes: notes || null,
@@ -109,6 +139,7 @@ export function useRegisterEnvio() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["ops", "stock-transfers"] });
       qc.invalidateQueries({ queryKey: ["ops", "stock"] });
+      qc.invalidateQueries({ queryKey: ["ops", "vendedor-estoque"] });
     },
   });
 }
@@ -125,6 +156,7 @@ export function useConfirmChegada() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["ops", "stock-transfers"] });
       qc.invalidateQueries({ queryKey: ["ops", "stock"] });
+      qc.invalidateQueries({ queryKey: ["ops", "vendedor-estoque"] });
     },
   });
 }
@@ -141,6 +173,7 @@ export function useEstornarEnvio() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["ops", "stock-transfers"] });
       qc.invalidateQueries({ queryKey: ["ops", "stock"] });
+      qc.invalidateQueries({ queryKey: ["ops", "vendedor-estoque"] });
     },
   });
 }
