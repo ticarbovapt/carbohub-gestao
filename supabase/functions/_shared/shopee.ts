@@ -124,9 +124,20 @@ export async function getShopeeCreds(
 
   return {
     accessToken, shopId, partnerId, partnerKey,
+    // ⚠️ PRIMEIRA CONEXÃO OLHA 30 DIAS PARA TRÁS, não 24 h.
+    //
+    // O `shopee-auth` cria a linha em `system_tokens` sem `last_synced_at`, e
+    // com 24 h a primeira rodada ignoraria tudo que a loja vendeu antes de
+    // ontem. Já existe um pedido Shopee de 21/08 importado pelo Bling
+    // (2608210JRNF666) que cairia fora dessa janela por 3 dias — e o sintoma
+    // seria "conectou e não veio nada", que se parece com integração quebrada.
+    //
+    // 30 dias é o mesmo teto que o `pullShopee` aplica de qualquer forma
+    // (`maxLookback`), então isto não amplia o alcance máximo: só faz a
+    // primeira rodada usá-lo. Rodadas seguintes andam pelo checkpoint.
     lastSyncedAt: data.last_synced_at
       ? new Date(data.last_synced_at)
-      : new Date(Date.now() - 24 * 60 * 60 * 1000),
+      : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
   };
 }
 
