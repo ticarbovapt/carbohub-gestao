@@ -230,6 +230,27 @@ function ChipValidade({ row }: { row: EsteiraRow }) {
       </span>
     );
   }
+  // ⚠️ Cancelada NÃO tinha ramo aqui, e é a pior das mortas: o card pode estar
+  // em "em trânsito" (o carimbo de postagem é fato) enquanto o código já não
+  // vale na transportadora. Sem este chip, era um card de aparência normal.
+  // O aviso de "saiu para entrega" desses ficou travado no banco (20260947);
+  // aqui é a metade visível da mesma decisão.
+  if (row.me_situacao === "cancelado") {
+    return (
+      <span className="flex shrink-0 items-center gap-1 text-[10px] font-medium leading-4 text-red-500">
+        <AlertTriangle className="h-3 w-3" /> etiqueta cancelada
+      </span>
+    );
+  }
+  // Morta por outro motivo que não vencimento nem cancelamento — não deveria
+  // acontecer, e se acontecer é melhor aparecer do que passar como normal.
+  if (row.me_tem_ativo === false) {
+    return (
+      <span className="flex shrink-0 items-center gap-1 text-[10px] font-medium leading-4 text-red-500">
+        <AlertTriangle className="h-3 w-3" /> sem etiqueta ativa
+      </span>
+    );
+  }
   if (row.me_situacao !== "gerado" || !row.me_expirado_em) return null;
   const dias = Math.floor(
     (new Date(row.me_expirado_em).getTime() - Date.now()) / 86_400_000);
@@ -1264,7 +1285,13 @@ export default function EsteiraOnline() {
     const t = rastreioDe(r.rastreio);
     // ⚠️ Etiqueta vencida é problema mesmo com o pedido "andando": o frete foi
     // pago e perdido, e ninguém descobre isso olhando a coluna.
-    const validade = r.me_situacao === "vencido"
+    // ⚠️ `me_tem_ativo === false` cobre vencida E cancelada de uma vez, e é a
+    // única leitura que não depende de adivinhar a palavra: quando a etiqueta
+    // morta tem carimbo de postagem, `me_situacao` devolve "postado" e a
+    // vencida se disfarça de envio normal.
+    const validade = r.me_tem_ativo === false
+      || r.me_situacao === "vencido"
+      || r.me_situacao === "cancelado"
       || (r.me_situacao === "gerado" && r.me_expirado_em
           && new Date(r.me_expirado_em).getTime() - Date.now() < 3 * 86_400_000);
     return Boolean(t?.atrasado && !t?.entregue_em)

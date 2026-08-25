@@ -757,8 +757,43 @@ async function pullNuvemshop(): Promise<Record<string, unknown>[]> {
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
+const SEGREDO = Deno.env.get("CRON_SECRET") ?? "";
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok");
+
+  // ── Portaria ──────────────────────────────────────────────────────────────
+  //
+  // ⚠️ Esta função subia SEM nenhuma verificação (`verify_jwt = false` no
+  // config.toml e `--no-verify-jwt` no deploy, e nada lendo segredo aqui
+  // dentro). Qualquer um na internet podia chamá-la em laço.
+  //
+  // O estrago não é vazamento — é DESLIGAR as integrações: cada rodada gasta
+  // cota de API do Mercado Livre, da Amazon e da Shopee, e na Shopee o
+  // `renovar()` roda com REFRESH TOKEN ROTATIVO. Duas renovações concorrentes
+  // invalidam a conexão, e o conserto é refazer o OAuth à mão.
+  //
+  // ⚠️ Ausência de segredo FECHA. A forma errada (`if (SEGREDO && ...)`) abre a
+  // porta justamente quando o secret some — e este projeto já perdeu o
+  // CRON_SECRET uma vez, com 25 h de sincronismo morto e `pg_cron` marcando
+  // `succeeded` o tempo todo.
+  //
+  // 401 e 500 são separados de propósito: 401 é problema de quem chama, 500 é
+  // problema nosso. Um 401 para os dois faz falha de configuração se disfarçar
+  // de chamada indevida — foi esse disfarce que já custou um dia de diagnóstico.
+  const url = new URL(req.url);
+  const informado = req.headers.get("X-Cron-Secret") ?? url.searchParams.get("secret");
+  if (!SEGREDO) {
+    console.error("[ecommerce-sync] CRON_SECRET não configurado — recusando por precaução.");
+    return new Response(JSON.stringify({
+      error: "CRON_SECRET não está configurado neste projeto.",
+      como_resolver: "Supabase > Edge Functions > Secrets: criar CRON_SECRET.",
+    }), { status: 500, headers: { "Content-Type": "application/json" } });
+  }
+  if (informado !== SEGREDO) {
+    return new Response(JSON.stringify({ error: "segredo inválido ou ausente" }),
+      { status: 401, headers: { "Content-Type": "application/json" } });
+  }
 
   // since is now managed per-platform inside each puller via last_synced_at
   const since = new Date(Date.now() - 2 * 60 * 60 * 1000); // kept for Amazon/TikTok/Shopee stubs

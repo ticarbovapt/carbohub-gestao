@@ -88,6 +88,18 @@ export interface EsteiraRow {
   me_gerado_em: string | null;
   /** ⚠️ Etiqueta tem validade. Vencida sem uso, o dinheiro do frete foi. */
   me_expirado_em: string | null;
+  /** ⚠️ A etiqueta eleita para este pedido está VIVA?
+   *
+   *  `false` = o pedido não tem nenhuma etiqueta ativa e o que se vê é o último
+   *  estado morto (vencida ou cancelada). `null` = não há envio no Melhor Envio
+   *  nenhum (etiqueta do Bling, marketplace, retirada) — que é MUITO diferente
+   *  de `false` e não deve virar alerta.
+   *
+   *  Não dá para deduzir isso de `me_situacao`: quando a etiqueta morta tem
+   *  carimbo de postagem, a situação devolve "postado" e ela se disfarça de
+   *  envio normal. Foi assim que seis etiquetas vencidas (R$ 688,10 de frete)
+   *  só apareceram quando alguém montou planilha à mão. */
+  me_tem_ativo: boolean | null;
 }
 
 /** As colunas do quadro, na ordem do fluxo. `cancelado` fica fora: não é etapa

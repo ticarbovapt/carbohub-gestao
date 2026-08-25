@@ -4,6 +4,9 @@ import { encodeHex } from "https://deno.land/std@0.208.0/encoding/hex.ts";
 import {
   getNuvemshopCreds, fetchNuvemshopOrder, mapNuvemshopOrder, enrichUnitsReal,
 } from "../_shared/nuvemshop.ts";
+// ⚠️ A tradução de status da Shopee vive em UM lugar só. Este arquivo tinha a
+// sua própria tabela, e ela discordava da canônica justamente em `PROCESSED`.
+import { statusDaShopee } from "../_shared/shopeePedido.ts";
 
 const supabase = createClient(
   Deno.env.get("SUPABASE_URL")!,
@@ -251,9 +254,23 @@ function normalizeShopee(body: unknown, platform: Platform): NormalizedOrder[] {
       raw:          body,
     }];
   }
-  return items.map((item) => ({
+  return items.map((item, i) => ({
     platform,
-    order_id:     `${orderId}-${item.item_id}`,
+    // ⚠️ O MESMO sufixo do `ecommerce-sync` (`_shared/shopeePedido.ts`):
+    // `item_id-model_id`. Antes aqui era só `item_id`, e chave diferente para o
+    // mesmo item significa DUAS LINHAS em `ecommerce_orders` — o webhook grava
+    // uma, o cron grava outra, e o upsert `(platform, order_id)` não deduplica
+    // porque as chaves não coincidem.
+    //
+    // A contagem de pedidos até sobreviveria (`ecommerce_pedido_raiz` colapsa
+    // as duas na mesma raiz), mas RECEITA e UNIDADES somam linha a linha:
+    // faturamento dobrado da Shopee, sem erro nenhum. É exatamente o furo que a
+    // 20260855 fechou, reaberto por um caminho que ninguém comparou.
+    //
+    // E o `model_id` no sufixo não é detalhe: o mesmo produto em duas variações
+    // (tamanho, cor) tem `item_id` igual e `model_id` diferente — só com
+    // `item_id` as duas variações colidiriam numa linha só.
+    order_id:     `${orderId}-${item.item_id ?? i}-${item.model_id ?? 0}`,
     product_sku:  String(item.item_sku ?? ""),
     product_name: String(item.item_name ?? ""),
     quantity:     Number(item.model_quantity_purchased ?? 1),
@@ -266,12 +283,24 @@ function normalizeShopee(body: unknown, platform: Platform): NormalizedOrder[] {
   }));
 }
 
+/**
+ * ⚠️ DELEGA para a regra única, em `_shared/shopeePedido.ts`.
+ *
+ * Havia duas tabelas de status para a MESMA plataforma, e elas discordavam no
+ * ponto mais caro: aqui `PROCESSED` virava `shipped`; lá, `paid`. `PROCESSED`
+ * é pago com a etiqueta ainda não coletada — anunciar "seu pedido está a
+ * caminho" nesse momento é mentira no celular do cliente.
+ *
+ * Pior: com as duas linhas duplicadas do defeito acima, o CTE `plataforma` da
+ * esteira usa `max(avanco)` — o otimista ganhava sempre, e o card avançava
+ * pela linha errada.
+ *
+ * Esta tabela também ignorava `RETRY_SHIP`, `INVOICE_PENDING`,
+ * `TO_CONFIRM_RECEIVE` e `TO_RETURN`, que caíam no `pending` do default: um
+ * pedido ENTREGUE aguardando confirmação do comprador voltava a "pendente".
+ */
 function normalizeShopeeStatus(s: string): string {
-  const map: Record<string, string> = {
-    UNPAID: "pending", READY_TO_SHIP: "pending", PROCESSED: "shipped",
-    SHIPPED: "shipped", COMPLETED: "delivered", CANCELLED: "cancelled", IN_CANCEL: "cancelled",
-  };
-  return map[s.toUpperCase()] ?? "pending";
+  return statusDaShopee(s);
 }
 
 // ─── Main handler ─────────────────────────────────────────────────────────────
