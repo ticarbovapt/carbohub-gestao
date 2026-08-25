@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import {
   Store, Search, Plus, Pencil, PauseCircle, PlayCircle, XCircle,
   ShoppingCart, AlertTriangle, FileText, Package, ArrowUp, ArrowDown, ChevronsUpDown,
+  MapPin,
 } from "lucide-react";
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
 import { CarboCard, CarboCardContent } from "@/components/ui/carbo-card";
@@ -48,6 +49,41 @@ const fmtDoc = (d?: string | null) => {
 
 const fmtData = (d?: string | null) =>
   d ? new Date(d + "T12:00:00").toLocaleDateString("pt-BR") : "—";
+
+const fmtCep = (d?: string | null) => {
+  const s = (d ?? "").replace(/\D/g, "");
+  return s.length === 8 ? `${s.slice(0, 5)}-${s.slice(5)}` : (d ?? "");
+};
+
+/**
+ * O endereço numa linha só, do mais específico para o mais geral.
+ *
+ * ⚠️ Cada parte só entra se existir. A planilha de agosto trouxe 5 PDVs sem
+ * rua e 1 sem cidade nenhuma; concatenar cego produziria ", /RN - CEP: " —
+ * pontuação sem conteúdo, que parece defeito da tela e não falta de cadastro.
+ */
+const enderecoLinha = (p: {
+  address_street?: string | null; address_city?: string | null;
+  address_state?: string | null; address_zip?: string | null;
+}) => {
+  const cidadeUf = [p.address_city, p.address_state].filter(Boolean).join("/");
+  const cep = fmtCep(p.address_zip);
+  return [p.address_street, cidadeUf, cep && `CEP ${cep}`].filter(Boolean).join(" · ");
+};
+
+/**
+ * O link do mapa usa o TEXTO do endereço, não latitude/longitude.
+ *
+ * ⚠️ De propósito: boa parte das coordenadas do cadastro veio de
+ * geocodificação do próprio endereço, então mandar o par lat/lng seria repetir
+ * o palpite de alguém com cara de precisão. O texto deixa o mapa errar por
+ * conta própria — e quem está no carro vê o endereço escrito e percebe.
+ * Sem rua não há link: um mapa apontando só para "Natal" não ajuda ninguém.
+ */
+const linkMapa = (p: Parameters<typeof enderecoLinha>[0]) =>
+  p.address_street
+    ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(enderecoLinha(p))}`
+    : null;
 
 /** Ordem fixa do catálogo — não depender da ordem das chaves do JSON. */
 const PRODUTOS: PdvProduto[] = ["10ml", "100ml", "1l"];
@@ -168,16 +204,26 @@ export default function Pdvs() {
       if (fUf !== "all" && p.address_state !== fUf) return false;
       if (fDono !== "all" && (p.owner_seller_name ?? "") !== fDono) return false;
       if (!t) return true;
-      // Busca por nome comercial, razão social, cidade, CNPJ e dono — a razão
+      // Busca por nome comercial, razão social, endereço, CNPJ e dono — a razão
       // social entra porque quase nunca é igual ao nome comercial, e o dono
       // porque "quais são os pontos do Márcio" é a pergunta mais comum aqui.
+      //
+      // ⚠️ A rua entra na busca junto com a cidade. Sem isso, procurar por
+      // "Olavo Lacerda" (onde ficam 4 PDVs em Parnamirim) não acha nada, e a
+      // pessoa conclui que o endereço não está cadastrado.
       return (
         p.name.toLowerCase().includes(t) ||
         (p.legal_name ?? "").toLowerCase().includes(t) ||
         (p.address_city ?? "").toLowerCase().includes(t) ||
+        (p.address_street ?? "").toLowerCase().includes(t) ||
         (p.pdv_code ?? "").toLowerCase().includes(t) ||
         (p.owner_seller_name ?? "").toLowerCase().includes(t) ||
-        (dig.length >= 3 && p.cnpj_digits.includes(dig))
+        // CEP e CNPJ compartilham a busca por dígitos: 8 dígitos é CEP,
+        // 14 é CNPJ, e o `includes` resolve os dois sem campo separado.
+        (dig.length >= 3 && (
+          p.cnpj_digits.includes(dig) ||
+          (p.address_zip ?? "").replace(/\D/g, "").includes(dig)
+        ))
       );
     });
   }, [pdvs, busca, fStatus, fUf, fDono]);
@@ -320,7 +366,7 @@ export default function Pdvs() {
         <div className="flex flex-wrap gap-2">
           <div className="relative flex-1 min-w-[240px]">
             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-            <Input className="pl-8" placeholder="Nome, razão social, CNPJ, cidade ou código…"
+            <Input className="pl-8" placeholder="Nome, razão social, CNPJ, endereço, CEP ou código…"
               value={busca} onChange={(e) => setBusca(e.target.value)} />
           </div>
           <Select value={fUf} onValueChange={setFUf}>
@@ -405,8 +451,20 @@ export default function Pdvs() {
                           ? <span className="text-amber-500" title="Sem documento — não classifica venda automaticamente">sem documento</span>
                           : fmtDoc(p.cnpj)}
                       </td>
-                      <td className="px-3 py-2 text-xs whitespace-nowrap">
-                        {[p.address_city, p.address_state].filter(Boolean).join("/") || "—"}
+                      {/* Cidade/UF em cima, rua embaixo. A rua é `truncate` com
+                          `title`: endereço completo tem 60+ caracteres e, solto
+                          numa célula, empurraria Mix e Comprado para fora da
+                          tela — que é o oposto de mostrar mais informação. */}
+                      <td className="px-3 py-2 text-xs max-w-[220px]">
+                        <p className="whitespace-nowrap">
+                          {[p.address_city, p.address_state].filter(Boolean).join("/") || "—"}
+                        </p>
+                        {p.address_street && (
+                          <p className="truncate text-[11px] text-muted-foreground"
+                             title={enderecoLinha(p)}>
+                            {p.address_street}
+                          </p>
+                        )}
                       </td>
                       <td className="px-3 py-2 text-xs whitespace-nowrap">
                         {p.owner_seller_name ?? <span className="text-muted-foreground">—</span>}
@@ -682,6 +740,41 @@ function PdvDetalhe({ pdv, onClose }: { pdv: PdvRow | null; onClose: () => void 
               <p className="text-sm font-semibold tabular-nums truncate" title={v}>{v}</p>
             </div>
           ))}
+        </div>
+
+        {/* Endereço — vem da planilha do comercial e vai alimentar a
+            roteirização de visita. Fica ANTES do mix porque quem abre este
+            card no celular normalmente está indo até lá. */}
+        <div className="min-w-0">
+          <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            <MapPin className="inline h-3.5 w-3.5 mr-1" /> Endereço
+          </p>
+          {pdv.address_street || pdv.address_city ? (
+            <div className="rounded-lg border bg-card px-3 py-2 flex items-start justify-between gap-3">
+              <div className="min-w-0 text-sm">
+                {pdv.address_street && <p className="break-words">{pdv.address_street}</p>}
+                <p className="text-xs text-muted-foreground">
+                  {[[pdv.address_city, pdv.address_state].filter(Boolean).join("/"),
+                    pdv.address_zip && `CEP ${fmtCep(pdv.address_zip)}`]
+                    .filter(Boolean).join(" · ") || "cidade não cadastrada"}
+                </p>
+              </div>
+              {linkMapa(pdv) && (
+                <a href={linkMapa(pdv)!} target="_blank" rel="noopener noreferrer"
+                   className="shrink-0 text-xs text-carbo-green hover:underline whitespace-nowrap">
+                  Abrir no mapa
+                </a>
+              )}
+            </div>
+          ) : (
+            /* ⚠️ Diz que FALTA, em vez de esconder a seção. Sumir daria a
+               entender que a tela não guarda endereço — e aí ninguém preenche.
+               São 5 PDVs assim, todos herdados da planilha sem o dado. */
+            <div className="rounded-lg border border-dashed px-3 py-2 text-xs text-muted-foreground">
+              Endereço não cadastrado. Edite o PDV para preencher — ele é o que
+              a agenda de visitas usa para localizar o ponto.
+            </div>
+          )}
         </div>
 
         {/* Mix — o que este ponto revende e por quanto. */}
