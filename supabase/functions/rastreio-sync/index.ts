@@ -46,8 +46,12 @@ let TOKEN = "";
 const AMBIENTE = Deno.env.get("MELHOR_ENVIO_ENV") ?? "sandbox";
 const BASE = MELHOR_ENVIO_BASE();
 
-// Teto por rodada. O cron roda de hora em hora; 60 códigos cobrem a fila
-// inteira de hoje com folga e mantêm a execução longe do limite de tempo.
+// Teto por rodada. ⚠️ O comentário antigo dizia "o cron roda de hora em hora" —
+// não roda mais desde a 20260880: são */5. A conta de custo de API que
+// justificou este 60 foi feita para 24 rodadas/dia e hoje são 288. O número
+// continua defensável (cabe no tempo da função), mas a JUSTIFICATIVA mudou, e
+// comentário que explica um mundo que não existe mais manda o próximo
+// diagnóstico para o lugar errado.
 const TETO = 60;
 
 const cabecalhos = () => ({
@@ -215,13 +219,33 @@ async function mapearPedidosME(paginas = 10): Promise<{
  * Como o id encontrado vai para `fonte_id`, cada envio paga esse custo UMA vez
  * na vida: nas rodadas seguintes ele já é conhecido.
  */
-async function buscarPedidoME(codigo: string): Promise<string | null> {
+/**
+ * ⚠️ O retorno distingue TRÊS coisas, e a distinção não é preciosismo.
+ *
+ * Antes esta função devolvia `null` para "não existe" E para "a API recusou".
+ * Quem chama grava, no `null`, a linha de erro "pedido não encontrado no Melhor
+ * Envio (etiqueta comprada em outra conta?)" — e essa linha é DEFINITIVA: a
+ * auto-cura exclui `%não encontrado%` de propósito, e a repescagem pula quem já
+ * tem linha. Ou seja, uma janela de 401/429/5xx marcava a fila inteira daquela
+ * rodada como "de outra conta", para sempre, sem ninguém para reabrir.
+ *
+ * Um julgamento que nunca aconteceu não pode virar veredito permanente.
+ */
+type BuscaME =
+  | { tipo: "achado"; id: string }
+  | { tipo: "nao_existe" }
+  | { tipo: "falhou" };
+
+async function buscarPedidoME(codigo: string): Promise<BuscaME> {
   try {
     const res = await fetch(
       `${BASE}/api/v2/me/orders?q=${encodeURIComponent(codigo)}`,
       { headers: cabecalhos() },
     );
-    if (!res.ok) { console.error("[rastreio-sync] busca", codigo, res.status); return null; }
+    if (!res.ok) {
+      console.error("[rastreio-sync] busca", codigo, res.status);
+      return { tipo: "falhou" };
+    }
     const json = await res.json();
     const lista = Array.isArray(json?.data) ? json.data : Array.isArray(json) ? json : [];
     const alvo = codigo.trim().toUpperCase();
@@ -229,10 +253,10 @@ async function buscarPedidoME(codigo: string): Promise<string | null> {
     const achado = lista.find((o: any) =>
       [o?.tracking, o?.self_tracking, o?.protocol, o?.invoice?.key]
         .some((v) => String(v ?? "").trim().toUpperCase() === alvo)) ?? lista[0];
-    return achado?.id ? String(achado.id) : null;
+    return achado?.id ? { tipo: "achado", id: String(achado.id) } : { tipo: "nao_existe" };
   } catch (e) {
     console.error("[rastreio-sync] busca", codigo, "falhou:", e);
-    return null;
+    return { tipo: "falhou" };
   }
 }
 
@@ -357,12 +381,32 @@ async function montarFila(alvos?: string[]): Promise<ItemFila[]> {
   // os que têm prazo. Aqui eles entram por uma porta própria, com teto próprio,
   // e drenam em algumas rodadas sem disputar espaço com quem está em trânsito.
   const REPESCAGEM = 20;
+  // ⚠️ A fatia tem de conter a POPULAÇÃO INTEIRA, não uma amostra.
+  //
+  // A primeira versão pedia `.limit(200)`. O limite é aplicado no BANCO, antes
+  // do filtro `conhecidos.has(codigo)`, que roda aqui em JS — então pular quem
+  // já tem linha NÃO libera vaga na fatia. Quando os 200 trazidos estivessem
+  // todos resolvidos, a repescagem devolveria 0 para sempre e o resto ficaria
+  // inalcançável. E `LIMIT` sem `ORDER BY` no Postgres não tem ordem definida:
+  // qual pedaço da população cabia dependia do plano do momento.
+  //
+  // Com ordem explícita e teto folgado, o filtro em JS enxerga todo mundo.
+  const LIMITE_VARREDURA = 2000;
   const { data: entregues } = await supabase
     .from("bling2_esteira")
-    .select("bling_id,rastreio,nf_chave,transportadora,servico,canal")
+    .select("bling_id,rastreio,nf_chave,transportadora,servico,canal,data_pedido")
     .eq("etapa", "entregue")
     .not("rastreio", "is", null)
-    .limit(200);
+    .order("data_pedido", { ascending: false })
+    .limit(LIMITE_VARREDURA);
+  // Se um dia a população encostar no teto, o sintoma volta — e agora ele grita
+  // em vez de sumir.
+  if ((entregues?.length ?? 0) >= LIMITE_VARREDURA) {
+    console.error(
+      `[rastreio-sync] ⚠️ repescagem varreu ${LIMITE_VARREDURA} entregues (teto). ` +
+      `Há entregues fora da varredura — suba LIMITE_VARREDURA ou filtre no banco.`,
+    );
+  }
 
   // ⚠️ Um mesmo código pode aparecer em dois cards (pedido desdobrado em duas
   // notas com a mesma etiqueta). Sem este conjunto ele entraria duas vezes na
@@ -503,7 +547,11 @@ Deno.serve(async (req: Request) => {
       const { mapa, exemplo, total } = await mapearPedidosME();
       const alvo = diagnostico.trim().toUpperCase();
       const idListagem = mapa.get(alvo) ?? null;
-      const id = idListagem ?? await buscarPedidoME(diagnostico);
+      // ⚠️ `buscarPedidoME` devolve o motivo, não só o id — e no diagnóstico o
+      // motivo é metade da resposta: "não existe" e "a API recusou" pedem
+      // providências opostas.
+      const busca = idListagem ? null : await buscarPedidoME(diagnostico);
+      const id = idListagem ?? (busca?.tipo === "achado" ? busca.id : null);
       const bruto = id ? await consultarRastreio([id]) : null;
       const d = id && bruto ? (bruto as Record<string, unknown>)[id] : null;
       return json({
@@ -511,7 +559,11 @@ Deno.serve(async (req: Request) => {
         codigo: diagnostico,
         pedido_melhor_envio: id,
         achou_pedido: Boolean(id),
-        achou_como: idListagem ? "listagem" : id ? "busca individual" : "não achou",
+        achou_como: idListagem
+          ? "listagem"
+          : busca?.tipo === "achado" ? "busca individual"
+          : busca?.tipo === "falhou" ? "⚠️ a API do Melhor Envio recusou — NÃO é 'não existe'"
+          : "não achou",
         envios_na_listagem: total,
         codigos_vistos_na_listagem: mapa.size,
         // Quando `achou_pedido` é false, a pergunta seguinte é sempre "então
@@ -557,17 +609,32 @@ Deno.serve(async (req: Request) => {
     let buscasRestantes = 15;
 
     const porId = new Map<string, ItemFila>();
+    // ⚠️ Adiados NÃO são erro: são os que a rodada não teve orçamento (ou fôlego
+    // de API) para julgar. Eles voltam inteiros na próxima, porque não ganham
+    // linha. Contar quantos são é o que impede este número de virar silêncio.
+    let adiados = 0;
     for (const item of fila) {
       let id = item.fonte_id
         ?? porCodigo.get(item.codigo.toUpperCase())
         ?? (item.nf_chave ? porCodigo.get(item.nf_chave.toUpperCase()) : null)
         ?? null;
       // A listagem não cobre a cauda: aí vale pagar a busca individual.
+      // `julgado` só é true quando a API respondeu e disse que não existe.
+      let julgado = false;
       if (!id && buscasRestantes > 0) {
         buscasRestantes--;
-        id = await buscarPedidoME(item.codigo);
+        const r = await buscarPedidoME(item.codigo);
+        if (r.tipo === "achado") id = r.id;
+        else if (r.tipo === "nao_existe") julgado = true;
+        // "falhou" cai fora dos dois: nem id, nem julgamento.
       }
       if (!id) {
+        // ⚠️ Sem julgamento, NÃO grava. A linha de erro é definitiva (a
+        // auto-cura exclui "não encontrado" e a repescagem pula quem tem
+        // linha), então gravá-la sem ter procurado é condenar à revelia.
+        // Orçamento esgotado e API fora do ar produzem o mesmo `!id` que o
+        // "realmente não existe" — e só o último merece o veredito.
+        if (!julgado) { adiados++; continue; }
         await gravarRastreio(supabase, {
           codigo: item.codigo, fonte: "melhorenvio", bling_id: item.bling_id,
           transportadora: item.transportadora, servico: item.servico,
@@ -578,6 +645,7 @@ Deno.serve(async (req: Request) => {
       }
       porId.set(id, { ...item, fonte_id: id });
     }
+    if (adiados) console.log(`[rastreio-sync] adiados sem julgar: ${adiados}`);
     if (!porId.size) return json({ ok: true, fila: fila.length, rastreados: 0, nota: "nenhum pedido casou no Melhor Envio" });
 
     const bruto = await consultarRastreio([...porId.keys()]);
