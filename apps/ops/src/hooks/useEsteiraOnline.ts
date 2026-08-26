@@ -193,6 +193,49 @@ export function useEsteiraTravadosAntigos(de: string) {
   });
 }
 
+/* ─── Parado além do limite da etapa ────────────────────────────────────────
+ *
+ * ⚠️ A conta NÃO é refeita aqui. Ela mora na view `carbo_esteira_parados`,
+ * porque quem também precisa dela é a função que manda o alerta para o sininho
+ * — e duas implementações da mesma regra divergem calado. É a doença do
+ * `pedidoRaiz` (front × banco) e a do `quotePdf.ts` do mkt.
+ *
+ * O relógio é POR ETAPA: `nf_emitida` conta da emissão da NF, `etiqueta` conta
+ * de quando a etiqueta foi gerada, `em_transito` conta da postagem. Contar da
+ * data do pedido misturaria demora de faturamento com demora de expedição, e
+ * um pedido faturado ontem (porque o cliente atrasou o pagamento) apareceria
+ * como problema de logística.
+ *
+ * Os limiares vêm de `carbo_esteira_limite`, tabela — a operação ajusta sem
+ * deploy, e limiar que não cabe na realidade vira alerta ignorado.
+ */
+
+export interface ParadoRow {
+  bling_id: number;
+  etapa: string;
+  dias_parado: number;
+  limite_dias: number;
+  etiqueta_morta: boolean;
+  diagnostico: string;
+}
+
+export function useEsteiraParados() {
+  return useQuery({
+    queryKey: ["esteira-parados"],
+    queryFn: async (): Promise<Map<number, ParadoRow>> => {
+      const { data, error } = await (supabase as any)
+        .from("carbo_esteira_parados")
+        .select("bling_id,etapa,dias_parado,limite_dias,etiqueta_morta,diagnostico")
+        .limit(500);
+      if (error) throw error;
+      return new Map((data ?? []).map((r: ParadoRow) => [Number(r.bling_id), r]));
+    },
+    // Parado é problema de DIAS. Recarregar de minuto em minuto não descobriria
+    // nada mais cedo e só gastaria consulta.
+    refetchInterval: 10 * 60_000,
+  });
+}
+
 /* ─── Pago, antes do Bling ──────────────────────────────────────────────────
  *
  * A esteira do Bling só mostra pedido ATENDIDO (`situacao_id in (9,12)`), e

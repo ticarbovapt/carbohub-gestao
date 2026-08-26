@@ -13,11 +13,13 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
-  useEsteiraOnline, useRastreios, useEcommerceAguardando, useFontesSaude,
+  useEsteiraOnline,
+  useEsteiraParados, useRastreios, useEcommerceAguardando, useFontesSaude,
   useAvisosDoPedido, useRecompraPipeline, useRecompraConfig, useEsteiraTravadosAntigos,
   useCarrinhoPipeline, useCarrinhoConfig,
   ETAPAS, COLUNAS_RECOMPRA, COLUNAS_CARRINHO,
   type EsteiraRow, type EtapaEsteira, type RastreioCard, type AguardandoRow,
+  type ParadoRow,
   type RecompraRow, type ColunaRecompra,
   type CarrinhoRow, type ColunaCarrinho,
 } from "@/hooks/useEsteiraOnline";
@@ -263,6 +265,26 @@ function ChipValidade({ row }: { row: EsteiraRow }) {
   );
 }
 
+/**
+ * Chip de "parado há N dias".
+ *
+ * ⚠️ Só aparece quando a view diz que passou do limite DAQUELA etapa. Um card
+ * de dez dias em trânsito é normal; um de dez dias com NF emitida e nenhuma
+ * etiqueta é R$ parado na prateleira. Mostrar a idade de todo mundo faria o
+ * número virar decoração — que é o oposto do que ele existe para ser.
+ */
+function ChipParado({ p }: { p?: ParadoRow }) {
+  if (!p) return null;
+  return (
+    <span
+      title={p.diagnostico}
+      className="flex shrink-0 items-center gap-1 text-[10px] font-medium leading-4 text-red-500"
+    >
+      <AlertTriangle className="h-3 w-3" /> parado há {p.dias_parado}d
+    </span>
+  );
+}
+
 /** Chip da previsão. Vermelho só quando atrasado — cor reservada ao problema. */
 function ChipPrevisao({ r }: { r?: RastreioCard }) {
   if (!r) return null;
@@ -357,8 +379,14 @@ function ChipAviso({ sinal }: { sinal: Sinal }) {
 // (20px de altura para exibir uma palavra) → texto puro na linha de contexto, e
 // as três linhas do bloco de envio → `flex-wrap`, que junta o que couber lado a
 // lado quando a coluna é larga.
-function Card({ row, rastreio, cor, sinal, onClick }: {
-  row: EsteiraRow; rastreio?: RastreioCard; cor: string; sinal: Sinal; onClick: () => void;
+function Card({ row, rastreio, cor, sinal, parada, onClick }: {
+  row: EsteiraRow; rastreio?: RastreioCard; cor: string; sinal: Sinal;
+  // ⚠️ Vem da view `carbo_esteira_parados`, não de conta feita aqui. A mesma
+  // linha alimenta o alerta do sininho — recalcular no navegador criaria duas
+  // verdades sobre o mesmo pedido, e a que o time veria não seria a que
+  // dispara o aviso.
+  parada?: ParadoRow;
+  onClick: () => void;
 }) {
   const atrasado = rastreio?.atrasado && !rastreio?.entregue_em;
   const travado = !row.tem_status_da_plataforma && row.etapa !== "entregue" && row.etapa !== "cancelado";
@@ -430,6 +458,7 @@ function Card({ row, rastreio, cor, sinal, onClick }: {
         <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-border/50 pt-2">
           <ChipPrevisao r={rastreio} />
           <ChipValidade row={row} />
+          <ChipParado p={parada} />
           {rastreio?.eventos?.[0] && (
             <span className="flex min-w-0 items-center gap-1 text-xs font-medium leading-4">
               <MapPin className="h-3 w-3 shrink-0 text-muted-foreground" />
@@ -1113,6 +1142,7 @@ export default function EsteiraOnline() {
   const { pathname } = useLocation();
   const { data, isLoading, error } = useEsteiraOnline(de, ate);
   const { data: aguardando } = useEcommerceAguardando();
+  const { data: parados = new Map<number, ParadoRow>() } = useEsteiraParados();
   // Pedido travado ANTES do período escolhido. Ver useEsteiraTravadosAntigos.
   const { data: travadosAntigos = [] } = useEsteiraTravadosAntigos(de);
   const { data: recompra = [] } = useRecompraPipeline();
@@ -1837,7 +1867,7 @@ export default function EsteiraOnline() {
 
                 <div className="min-h-0 flex-1 space-y-1.5 overflow-y-auto overscroll-contain p-2">
                   {cards.map((r) => (
-                    <Card key={r.bling_id} row={r} rastreio={rastreioDe(r.rastreio)}
+                    <Card key={r.bling_id} row={r} rastreio={rastreioDe(r.rastreio)} parada={parados.get(r.bling_id)}
                           cor={etapa.color} sinal={sinalDe(r)} onClick={() => abrirCard(r)} />
                   ))}
                   {cards.length === 0 && (
@@ -1873,7 +1903,7 @@ export default function EsteiraOnline() {
           </p>
           <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-3 xl:grid-cols-4">
             {travadosAntigos.slice(0, 40).map((r) => (
-              <Card key={r.bling_id} row={r} rastreio={rastreioDe(r.rastreio)}
+              <Card key={r.bling_id} row={r} rastreio={rastreioDe(r.rastreio)} parada={parados.get(r.bling_id)}
                     cor={ETAPAS.find((e) => e.key === r.etapa)?.color ?? "#64748b"}
                     sinal={null} onClick={() => abrirCard(r)} />
             ))}
@@ -1894,7 +1924,7 @@ export default function EsteiraOnline() {
           </summary>
           <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-3 xl:grid-cols-5">
             {cancelados.map((r) => (
-              <Card key={r.bling_id} row={r} rastreio={rastreioDe(r.rastreio)}
+              <Card key={r.bling_id} row={r} rastreio={rastreioDe(r.rastreio)} parada={parados.get(r.bling_id)}
                     cor="#ef4444" sinal={null} onClick={() => abrirCard(r)} />
             ))}
           </div>
