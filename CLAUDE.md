@@ -406,6 +406,75 @@ seria apertar o gatilho de um envio em massa de WhatsApp.
 erro nenhum: o registro em `src/lib/opsNav.ts` **e** a lista de caminhos do
 grupo em `src/components/Layout.tsx`. Já aconteceu antes.
 
+### ⚠️ Push em `main` DEPLOYA as edge functions — não existe "só commitei"
+`.github/workflows/deploy-functions.yml` roda em `push: [main]`. Toda função da
+lista `dep` sobe, em sequência, com 3 tentativas. Função que **não** está na
+lista nunca sobe — a lista é manual.
+
+Consequência que já custou 20 h: o `ecommerce-sync` ganhou portaria de
+`CRON_SECRET` num commit, foi ao ar no push, e o cron só recebeu a chave no dia
+seguinte. No meio disso ele levou **401 a cada 5 min**, e o `pg_cron` marcou
+`succeeded` o tempo todo — porque o sucesso dele é ter POSTADO.
+
+**Mudança que fecha uma porta e mudança que entrega a chave têm de ir no MESMO
+push, com a chave primeiro.** E antes de afirmar "está deployado" ou "não
+está", olhe `cron.job_run_details` e os runs do Actions — não a sua memória do
+que você mandou.
+
+### `SUPABASE_ACCESS_TOKEN` mora no GitHub, não no Supabase
+Três coisas com nomes parecidos, e confundi-las custa tempo:
+
+```
+Supabase → Edge Functions → Secrets   CRON_SECRET, NUVEMSHOP_CLIENT_SECRET…
+                                      o que as funções leem RODANDO
+GitHub → Settings → Secrets           SUPABASE_ACCESS_TOKEN, SUPABASE_PROJECT_ID
+                                      o que o workflow usa para DEPLOYAR
+```
+
+O deploy não depende de token na sessão do Claude: o Actions já faz.
+
+### Conciliação do Melhor Envio — a fronteira do espelho
+O espelho do Bling 2 começa em **12/06/2026**. As quatro portas da
+`carbo_melhorenvio_conciliar()` partem de `bling2_orders`, então envio de pedido
+da MATRIZ (Bling 1) nunca vincula — não é defeito, é fronteira. Esses ficam
+`vinculo_status = 'ignorado'`, `vinculo_via = 'fora_do_espelho_bling2'`, e por
+isso **`orfaos_reais` mede trabalho de verdade**: órfão novo é sinal.
+
+⚠️ **Documento também não é chave.** Um CPF serviu a vários destinatários
+(etiqueta de "Peterson Oliveira" com o CPF que no Bling é de "Pablo Chacon", com
+9 pedidos). Foi o `count(distinct bling_id) = 1` da porta 4 que impediu ligar
+uma etiqueta de junho a um pedido de agosto de outra pessoa — e vínculo errado
+dispara fulfillment da Nuvemshop e WhatsApp para o cliente trocado. Afrouxar
+comparação sem apertar unicidade troca "não casa nunca" por "casa errado".
+
+⚠️ **`insurance_value` ≠ `total` do pedido.** A porta 4 comparava o valor
+declarado do conteúdo com o total COM frete: **0 acertos em 36**. Aceita os dois
+valores agora, com unicidade sobre o conjunto.
+
+⚠️ **CHECK: pergunte ao BANCO, não à migração que criou a tabela.** Afirmei que
+a porta 1 nunca gravara porque `'bling_id_ref'` faltava no CHECK — a `20260918`
+já o acrescenta, e produção tinha 391 envios casados por ela. Use
+`pg_get_constraintdef`, não a definição de nascimento.
+
+### Etiqueta morta na esteira — a tela mostra, a MENSAGEM não promete
+A `20260946` tirou `and e.ativo` da `melhorenvio_envio_vigente` (etiqueta vencida
+parou de sumir). Mas a `bling2_esteira` decide etapa por **carimbo cru**, então a
+etiqueta morta passou a poder mover o card — inclusive para `em_transito`, que
+dispara "saiu para entrega" com código cancelado.
+
+A regra que ficou (`20260947`): **o CASE continua lendo carimbo** — postagem é
+fato e não deixa de ser verdade porque a etiqueta foi cancelada depois. Quem cede
+é a fila: `carbo_msg_fila` segura `em_transito` quando a etiqueta eleita está
+`cancelado`. Mostrar na tela se desfaz; anunciar, não. **Vencida não é travada**
+— etiqueta com `postado_em` foi usada.
+
+`me_tem_ativo` na esteira separa "não vai sair e ninguém refez" (`false`) de
+"pedido sem envio no ME" (`null`) — e os dois **não** são a mesma coisa.
+
+⚠️ **Toda migração que MOVE card grava `'ignorado'` em `carbo_msg_envios` ANTES
+de republicar a view.** A `20260946` esqueceu; deu sorte porque a população
+exposta era pequena. A `carbo_msg_fila` não tem data de corte em lugar nenhum.
+
 ### Melhor Envio — a etiqueta que nunca voltou para o Bling
 Etiqueta comprada DIRETO no painel do Melhor Envio não volta para o Bling: o
 card ficava em "NF emitida" com a encomenda já a caminho (79 pedidos assim). O
