@@ -534,6 +534,49 @@ async function createBlingPedido(
       warnings.push(cErr);
     } else {
       contactToCreate = cPayload;
+
+      // ── ⚠️ O e-mail é chave NO BLING, e não é nossa ──────────────────────
+      //
+      // Caso real (27/08/2026): uma venda foi criada com o e-mail de outra
+      // pessoa — de propósito, porque era ela quem precisava receber a nota. O
+      // Bling não criou contato novo: reaproveitou o contato que já tinha
+      // aquele e-mail e o RENOMEOU. O resultado foi um pedido antigo da Shopee,
+      // de "Lucas Padilha Barbosa", passando a exibir "Miramon" no card.
+      //
+      // E o estrago não é o nome na tela: os dois pedidos passam a apontar para
+      // UM contato só. Nome, documento, endereço e telefone daquele cadastro
+      // viram os do último — e é desse cadastro que sai a NF. Nota fiscal com
+      // destinatário trocado é problema fiscal, não de interface.
+      //
+      // Não dá para mudar a regra do Bling. Dá para não pisar nela: se o
+      // e-mail já pertence a um contato de OUTRO documento, ele não vai no
+      // cadastro. O documento é a chave — o e-mail é um campo de contato, e
+      // tratá-lo como identidade é a mesma confusão do "nome não é chave" dos
+      // PDVs e do CPF que servia a vários destinatários no Melhor Envio.
+      const emailNovo = String(contactToCreate.email || "").trim().toLowerCase();
+      const docNovo = String(contactToCreate.numeroDocumento || "").replace(/\D/g, "");
+      if (emailNovo) {
+        const { data: donos } = await supabaseAdmin
+          .from(C.tbContacts)
+          .select("bling_id, nome, cpf_cnpj, email")
+          .ilike("email", emailNovo)
+          .limit(5);
+        const conflito = (donos ?? []).find(
+          (d: any) => String(d.cpf_cnpj || "").replace(/\D/g, "") !== docNovo,
+        );
+        if (conflito) {
+          delete contactToCreate.email;
+          warnings.push(
+            `⚠️ O e-mail "${emailNovo}" já está no cadastro de "${conflito.nome}" ` +
+            `(documento ${conflito.cpf_cnpj || "sem documento"}) no ${C.nome}. ` +
+            `Mandá-lo aqui faria o Bling REAPROVEITAR aquele contato e renomeá-lo — ` +
+            `os dois clientes passariam a dividir um cadastro só, e a NF sairia com o ` +
+            `destinatário trocado. O cliente será cadastrado SEM e-mail; ajuste no ` +
+            `painel do Bling depois, se precisar.`,
+          );
+        }
+      }
+
       warnings.push(
         `Cliente "${order.customer_name}" não encontrado no Bling — será CADASTRADO ` +
         `com os dados${contactOverride ? " conferidos" : " do pedido"} ao confirmar.`,
