@@ -1,5 +1,6 @@
 // bling-sync v3 — Phase 2: stock + vendedores
 import { telefoneParaBling } from "../_shared/telefoneBling.ts";
+import { totalDaVenda, repartirParcelas, somaParcelas } from "../_shared/blingParcelas.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.39.3";
 
 const ALLOWED_ORIGINS = [
@@ -709,26 +710,77 @@ async function createBlingPedido(
   // "Condição de pagamento" e o campo "Forma" da parcela). Best-effort: se a
   // forma não existir no Bling, o pedido segue sem parcela (com aviso).
   const pagInfo = parsePaymentTerms(order.payment_terms || "");
-  const paymentSummary: { escolhido: string | null; forma_bling: string | null; parcelas: number } = {
+  const paymentSummary: {
+    escolhido: string | null; forma_bling: string | null; parcelas: number;
+    // ⚠️ O total que as parcelas somam. Vai para a pré-visualização porque é
+    // exatamente o número que o Bling confere — vê-lo antes de clicar é o que
+    // transforma o erro 400 numa conferência.
+    total_da_venda?: number;
+  } = {
     escolhido: order.payment_terms || null,
     forma_bling: null,
     parcelas: 0,
   };
-  if (pagInfo.forma && Number(order.total) > 0) {
+  // ⚠️ O total das parcelas sai do PAYLOAD, não de `order.total`.
+  //
+  // O Bling recusa a venda inteira quando os dois não batem:
+  //
+  //     VALIDATION_ERROR — code 22
+  //     "O somatório do valor das parcelas difere do total da venda"
+  //
+  // E eles NÃO são a mesma conta. O total da venda no Bling é
+  // `totalProdutos − desconto + frete` (é a forma da resposta dele, visível na
+  // importação lá embaixo), enquanto `order.total` é o total do PEDIDO no nosso
+  // banco. Três coisas fazem os dois divergirem:
+  //
+  //   1. o frete vai no payload (`transporte.frete`) e entra no total do Bling;
+  //   2. o desconto do pedido idem;
+  //   3. ⚠️ e principalmente: quando há BONIFICAÇÃO, as linhas do brinde saem
+  //      deste pedido e vão para o segundo (a remessa) — mas `order.total`
+  //      continua sendo o do pedido inteiro. Foi assim que o erro apareceu:
+  //      só nos pedidos que geram duas notas.
+  //
+  // Derivar do que estamos mandando torna a divergência impossível por
+  // construção, em vez de depender de as duas contas coincidirem.
+  const totalVenda = totalDaVenda(
+    blingItems, pedidoPayload.desconto?.valor, pedidoPayload.transporte?.frete);
+
+  // ⚠️ A divergência vira AVISO, não silêncio. Se ela aparecer sem bonificação
+  // no pedido, é sinal de que `order.total` está errado no nosso banco — e isso
+  // é problema maior que o pagamento, porque é o número que a operação lê.
+  if (Math.abs(totalVenda - Number(order.total || 0)) >= 0.01) {
+    warnings.push(
+      `Total do pedido no sistema (R$ ${Number(order.total || 0).toFixed(2)}) difere do ` +
+      `total desta nota (R$ ${totalVenda.toFixed(2)})` +
+      (itensBonificacao.length > 0
+        ? " — esperado, porque a bonificação vai numa remessa separada."
+        : " — CONFIRA: sem bonificação os dois deveriam bater."),
+    );
+  }
+
+  if (pagInfo.forma && totalVenda > 0) {
     const formaBling = await resolveBlingFormaPagamento(token, pagInfo.forma);
     if (formaBling) {
       const base = order.sale_date || (order.created_at || "").substring(0, 10);
       const sched = pagInfo.schedule.length ? pagInfo.schedule : [0];
-      const total = Number(order.total);
+      const total = totalVenda;
       const n = sched.length;
-      const each = Math.floor((total / n) * 100) / 100;
-      pedidoPayload.parcelas = sched.map((days, i) => ({
-        dataVencimento: addCalendarDays(base, days),
-        valor: i === n - 1 ? Math.round((total - each * (n - 1)) * 100) / 100 : each,
-        formaPagamento: { id: formaBling.id },
-      }));
+      pedidoPayload.parcelas = repartirParcelas(
+        total, sched.map((days) => addCalendarDays(base, days)), formaBling.id);
+
+      // ⚠️ Cinto: confere ANTES de mandar. A aritmética é testada, mas um total
+      // que não fecha aqui vira um 400 do Bling que trava o faturamento — e a
+      // mensagem dele não diz qual pedido nem por quê.
+      const soma = somaParcelas(pedidoPayload.parcelas);
+      if (Math.abs(soma - total) >= 0.01) {
+        throw new Error(
+          `Erro interno nas parcelas: elas somam R$ ${soma.toFixed(2)} e a venda ` +
+          `é R$ ${total.toFixed(2)}. O Bling recusaria o pedido inteiro (code 22).`,
+        );
+      }
       paymentSummary.forma_bling = formaBling.descricao;
       paymentSummary.parcelas = n;
+      paymentSummary.total_da_venda = total;
     } else {
       warnings.push(`Forma de pagamento "${order.payment_terms}" não encontrada no catálogo de formas do Bling — o pedido irá sem parcela definida.`);
     }
