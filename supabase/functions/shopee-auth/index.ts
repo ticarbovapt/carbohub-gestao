@@ -175,8 +175,12 @@ Deno.serve(async (req: Request) => {
     // verdade ela nem chegou a gerar o link. Quem abre não tem como saber qual
     // dos dois parâmetros faltava.
     if (url.searchParams.get("generate_auth_url") || url.searchParams.get("ir")) {
-      const partnerId  = Deno.env.get("SHOPEE_PARTNER_ID");
-      const partnerKey = Deno.env.get("SHOPEE_PARTNER_KEY");
+      // ⚠️ `.trim()` nos dois. Chave colada do painel vem com \n ou espaço com
+      // frequência, e o HMAC muda inteiro por causa de um byte invisível — o
+      // erro que a Shopee devolve é "Wrong sign", que aponta para a chave
+      // errada e não para o espaço em branco.
+      const partnerId  = (Deno.env.get("SHOPEE_PARTNER_ID") ?? "").trim();
+      const partnerKey = (Deno.env.get("SHOPEE_PARTNER_KEY") ?? "").trim();
       if (!partnerId || !partnerKey) {
         return json({ ok: false, error: "SHOPEE_PARTNER_ID/SHOPEE_PARTNER_KEY não configurados." }, 500);
       }
@@ -195,6 +199,34 @@ Deno.serve(async (req: Request) => {
         return new Response(null, { status: 302, headers: { Location: authUrl } });
       }
       return json({ ok: true, authUrl, redirect: REDIRECT(), sandbox: host() === SHOPEE_HOST_SANDBOX });
+    }
+
+    // ── 1b) Diagnóstico ────────────────────────────────────────────────────
+    //
+    // ⚠️ NUNCA devolve a chave. Devolve o que permite COMPARAR com o painel da
+    // Shopee sem ninguém copiar segredo para lugar nenhum: tamanho, os quatro
+    // primeiros caracteres, e se sobrou espaço em branco na ponta.
+    //
+    // Existe porque "Wrong sign" tem três causas que produzem a MESMA
+    // mensagem — chave de teste com partner de produção, espaço colado junto,
+    // e host trocado — e nenhuma delas dá para distinguir olhando o erro.
+    if (url.searchParams.get("diagnostico")) {
+      const idBruto  = Deno.env.get("SHOPEE_PARTNER_ID") ?? "";
+      const keyBruta = Deno.env.get("SHOPEE_PARTNER_KEY") ?? "";
+      return json({
+        ok: true,
+        partner_id: idBruto.trim(),
+        partner_id_tem_espaco: idBruto !== idBruto.trim(),
+        chave_tamanho: keyBruta.trim().length,
+        chave_comeca_com: keyBruta.trim().slice(0, 4),
+        chave_tem_espaco: keyBruta !== keyBruta.trim(),
+        sandbox: host() === SHOPEE_HOST_SANDBOX,
+        host: host(),
+        redirect: REDIRECT(),
+        // O par tem de ser do MESMO ambiente: partner de produção com chave de
+        // produção. Cruzar os dois é a causa mais comum de "Wrong sign".
+        lembrete: "Confira no painel: o partner_id acima é o Live ou o Test? A chave cadastrada tem de ser a DO MESMO.",
+      });
     }
 
     // ── 2) Status ───────────────────────────────────────────────────────────
