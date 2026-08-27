@@ -214,7 +214,7 @@ async function blingPost(token: string, endpoint: string, body: unknown, _retrie
 // "Boleto faturado (30/60/90)", "Cartão de crédito 3x", "Cartão de débito").
 // Aqui devolvemos a forma canônica + o cronograma de parcelas (offsets em dias).
 const normDiacritics = (s: string) =>
-  (s || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+  (s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
 
 function parsePaymentTerms(termsRaw: string): { forma: string | null; schedule: number[] } {
   const t = normDiacritics(termsRaw).trim();
@@ -493,6 +493,39 @@ async function createBlingPedido(
         .limit(1);
       blingContactId = byDoc?.[0]?.bling_id || null;
       if (blingContactId) contactSource = `CNPJ/CPF ${order.cnpj}`;
+
+      // ── ⚠️ Mesmo documento, OUTRO nome ──────────────────────────────────
+      //
+      // Caso real (27/08/2026): uma venda em nome de "Miramon" foi enviada com
+      // o CPF 12041277432, que no Bling pertence a "Lucas Padilha Barbosa". O
+      // Bling casa o contato pelo DOCUMENTO e RENOMEIA o cadastro — Lucas virou
+      // Miramon, e todos os pedidos antigos dele passaram a exibir o nome novo,
+      // inclusive uma compra da Shopee de duas semanas antes.
+      //
+      // Não é só o card: é o cadastro de onde sai a NF. Nota com o CPF de um e
+      // o nome de outro é problema fiscal.
+      //
+      // Aqui não dá para decidir sozinho qual dos dois nomes é o certo — pode
+      // ser correção legítima de cadastro (casamento, razão social nova) ou
+      // pode ser documento digitado errado. Quem sabe é quem está na tela. Por
+      // isso AVISA, e avisa antes do clique.
+      const nomeCadastro = String(byDoc?.[0]?.nome || "").trim();
+      const nomePedido = String(order.customer_name || "").trim();
+      // Reusa o normalizador que já existe no arquivo — comparar nome sem
+      // tirar acento e caixa acusaria "José" contra "Jose" como pessoas
+      // diferentes, e o aviso viraria ruído no primeiro dia.
+      const chave = (s: string) => normDiacritics(s).replace(/\s+/g, " ").trim();
+      if (blingContactId && nomeCadastro && nomePedido &&
+          chave(nomeCadastro) !== chave(nomePedido)) {
+        warnings.push(
+          `⚠️ O documento ${order.cnpj} já está no ${C.nome} em nome de ` +
+          `"${nomeCadastro}", e este pedido é de "${nomePedido}". O Bling casa o ` +
+          `contato pelo DOCUMENTO: seguir assim RENOMEIA o cadastro de ` +
+          `"${nomeCadastro}" para "${nomePedido}", e todos os pedidos antigos dele ` +
+          `passam a exibir o nome novo. Se o documento estiver errado, corrija ` +
+          `ANTES de confirmar.`,
+        );
+      }
     }
   }
 
