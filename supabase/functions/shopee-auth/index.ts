@@ -85,8 +85,11 @@ interface RespostaToken {
  * quem vem de outra API e resulta em `error_sign`.
  */
 async function trocarCode(code: string, shopId: string): Promise<RespostaToken> {
-  const partnerId  = Deno.env.get("SHOPEE_PARTNER_ID");
-  const partnerKey = Deno.env.get("SHOPEE_PARTNER_KEY");
+  // ⚠️ `.trim()`: chave colada do painel vem com espaço ou \n com frequência,
+  // e um byte invisível muda o HMAC inteiro. O erro da Shopee é "Wrong sign",
+  // que aponta para a chave errada e nunca para o espaço em branco.
+  const partnerId  = (Deno.env.get("SHOPEE_PARTNER_ID") ?? "").trim() || undefined;
+  const partnerKey = (Deno.env.get("SHOPEE_PARTNER_KEY") ?? "").trim() || undefined;
   // ⚠️ Ausência FECHA, e com 500 explícito: é problema NOSSO de configuração,
   // não chamada indevida. Um 401 aqui faria a falha se disfarçar de tentativa
   // de invasão — foi esse disfarce que custou o dia de diagnóstico do

@@ -141,12 +141,12 @@ async function validateTikTok(req: Request, body: string): Promise<boolean> {
  * primeiro, virar depois — está anotado no fim do arquivo.
  */
 async function validateShopee(req: Request, body: string): Promise<boolean> {
-  const key = Deno.env.get("SHOPEE_PARTNER_KEY");
+  const key = (Deno.env.get("SHOPEE_PARTNER_KEY") ?? "").trim() || undefined;
   if (!key) {
     console.error("[shopee] SHOPEE_PARTNER_KEY ausente no servidor — webhook RECUSADO.");
     return false;
   }
-  const partnerId = Deno.env.get("SHOPEE_PARTNER_ID") ?? "";
+  const partnerId = (Deno.env.get("SHOPEE_PARTNER_ID") ?? "").trim();
   // ⚠️ A Shopee assina a URL que ELA conhece — a que está cadastrada no painel
   // do parceiro. `new URL(req.url).pathname` é o caminho como chegou aqui, e se
   // houver proxy/rewrite no meio os dois divergem e a assinatura nunca bate.

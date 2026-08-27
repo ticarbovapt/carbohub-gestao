@@ -75,8 +75,11 @@ export async function getShopeeCreds(
   // deno-lint-ignore no-explicit-any
   supabase: any,
 ): Promise<CredsShopee | null> {
-  const partnerId  = Deno.env.get("SHOPEE_PARTNER_ID");
-  const partnerKey = Deno.env.get("SHOPEE_PARTNER_KEY");
+  // ⚠️ `.trim()`: chave colada do painel vem com espaço ou \n com frequência,
+  // e um byte invisível muda o HMAC inteiro. O erro da Shopee é "Wrong sign",
+  // que aponta para a chave errada e nunca para o espaço em branco.
+  const partnerId  = (Deno.env.get("SHOPEE_PARTNER_ID") ?? "").trim() || undefined;
+  const partnerKey = (Deno.env.get("SHOPEE_PARTNER_KEY") ?? "").trim() || undefined;
   if (!partnerId || !partnerKey) {
     console.warn("[shopee] SHOPEE_PARTNER_ID/KEY não configurados — pulando.");
     return null;
