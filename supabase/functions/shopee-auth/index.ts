@@ -169,7 +169,12 @@ Deno.serve(async (req: Request) => {
 
   try {
     // ── 1) URL de autorização, para o botão "Conectar" ──────────────────────
-    if (url.searchParams.get("generate_auth_url")) {
+    // ⚠️ `ir` sozinho TAMBÉM entra aqui. Na primeira versão ele estava dentro
+    // deste bloco, então `?ir=1` puro caía na rota de status e devolvia
+    // `no_token` — parecendo que a função não tinha o que autorizar, quando na
+    // verdade ela nem chegou a gerar o link. Quem abre não tem como saber qual
+    // dos dois parâmetros faltava.
+    if (url.searchParams.get("generate_auth_url") || url.searchParams.get("ir")) {
       const partnerId  = Deno.env.get("SHOPEE_PARTNER_ID");
       const partnerKey = Deno.env.get("SHOPEE_PARTNER_KEY");
       if (!partnerId || !partnerKey) {
