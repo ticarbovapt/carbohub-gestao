@@ -109,6 +109,17 @@ jobs:
           dep ml-auth --no-verify-jwt
           dep nuvemshop-auth --no-verify-jwt
           dep nuvemshop-lgpd --no-verify-jwt
+          # Shopee. ⚠️ Estava no repo e no config.toml desde que foi escrita, e
+          # NUNCA subiu — porque não estava nesta lista. O sintoma foi
+          # silencioso e circular: sem a função não há OAuth, sem OAuth não há
+          # credencial em `system_tokens`, sem credencial o `pullShopee` volta
+          # vazio na primeira linha, e sem linha em `ecommerce_orders` o card
+          # da Shopee para em "etiqueta" para sempre. Nenhum erro em ponto
+          # nenhum do caminho.
+          #
+          # `--no-verify-jwt` porque a Shopee chama o callback do OAuth direto,
+          # sem Authorization; a própria função confere a assinatura HMAC.
+          dep shopee-auth --no-verify-jwt
           # ⚠️ Esta lista é MANUAL: função que não aparece aqui simplesmente
           # nunca sobe, e o sintoma é a migração rodar, o cron marcar
           # `succeeded` e a tabela continuar vazia — sem erro em lugar nenhum.
