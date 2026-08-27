@@ -83,6 +83,30 @@ export const ALL_PLATFORMS: MetaPlatform[] = [
   "mercadolivre", "nuvemshop", "amazon", "shopee",
 ];
 
+/**
+ * ⚠️ MARCO ZERO da regra "Total Geral = soma das plataformas".
+ *
+ * De agosto/2026 em diante o total é DERIVADO da soma. Antes disso vale a linha
+ * gravada com `platform IS NULL` — o número que foi acompanhado na época.
+ *
+ * O corte existe porque medimos, e dois meses fechados divergiam nas DUAS
+ * direções:
+ *
+ *   jul/2026   total gravado  70.000  ·  soma dos canais 140.000
+ *   mai/2026   total gravado 300.000  ·  soma dos canais 140.000
+ *
+ * Sem o corte, julho ficaria duas vezes mais difícil e MAIO PASSARIA A PARECER
+ * BOM — um mês fechado com 300k de meta exibiria 140k. Mudar a régua depois do
+ * jogo não é corrigir inconsistência; é apagar o que a diretoria acompanhou.
+ *
+ * É o mesmo padrão do `carbo_carrinho_config.inicio_em`: marco zero por DATA, e
+ * não marcação linha a linha.
+ *
+ * Para passar a valer em todo o histórico, mova esta data para o passado — a
+ * regra é uma só e está aqui.
+ */
+export const TOTAL_E_SOMA_DESDE = "2026-08";
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Smart color helper
 // actualPct vs expectedPct with ±15% yellow band
@@ -298,7 +322,14 @@ export function useMetaStats(month: Date): {
   // teve meta por canal. Sem essa reserva, um mês antigo em que só existia meta
   // total passaria a exibir R$ 0 — e com meta zero o mês inteiro vira "sem meta
   // definida", tendo batido 120%. Reescrever o passado não estava no pedido.
-  const totalTarget = totalFromPlatforms || getTarget(null);
+  // ⚠️ Antes do marco, o gravado manda; do marco em diante, a soma.
+  // A reserva continua valendo nos dois lados: mês sem meta por canal cai no
+  // gravado (senão exibiria R$ 0 e o mês inteiro viraria "sem meta definida"),
+  // e mês antigo sem linha total cai na soma.
+  const mesCorrente = format(month, "yyyy-MM");
+  const totalTarget = mesCorrente >= TOTAL_E_SOMA_DESDE
+    ? (totalFromPlatforms || getTarget(null))
+    : (getTarget(null) || totalFromPlatforms);
   const totalActual = getActual(null);
   const actualPctTotal = totalTarget > 0 ? (totalActual / totalTarget) * 100 : 0;
   const projectedEOMTotal = dayOfMonth > 0 ? (totalActual / dayOfMonth) * daysInMonth : 0;
@@ -393,8 +424,12 @@ export function useMetaMonthlyHistory(platform: MetaPlatform = null) {
             soma[m] = (soma[m] || 0) + Number(t.target_amount || 0);
           }
         }
+        // ⚠️ O MESMO corte do card, senão o gráfico de Histórico e o número do
+        // topo contariam histórias diferentes sobre o mesmo mês.
         for (const m of new Set([...Object.keys(soma), ...Object.keys(legado)])) {
-          targetMap[m] = soma[m] || legado[m] || 0;
+          targetMap[m] = m >= TOTAL_E_SOMA_DESDE
+            ? (soma[m] || legado[m] || 0)
+            : (legado[m] || soma[m] || 0);
         }
       }
 
