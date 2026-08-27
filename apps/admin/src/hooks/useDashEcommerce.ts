@@ -446,17 +446,43 @@ export function useEcommerceRawCheck(
 async function statusDaConexao(
   platform: EcommercePlatform,
 ): Promise<{ conectado: boolean; minutos: number | null }> {
-  const { data } = await supabase
+  // ⚠️ DUAS consultas, e a segunda pode falhar sem derrubar a primeira.
+  //
+  // Front e migração não sobem juntos: o deploy da tela é instantâneo no push,
+  // a migração é rodada à mão depois. Pedir uma coluna que ainda não existe faz
+  // o PostgREST devolver ERRO — e um `select` com erro devolve `data: null`,
+  // que aqui virava "não conectado" para TODAS as plataformas de uma vez.
+  //
+  // Aconteceu em 27/08/2026: a tela subiu antes da 20260954 e o painel inteiro
+  // passou a dizer "Aguardando integração" com todos os tokens válidos. O
+  // sintoma era exatamente o oposto do que o selo existe para mostrar.
+  //
+  // A pergunta essencial ("tem token?") fica isolada e nunca depende da coluna
+  // nova; a métrica de atraso é um extra que degrada para `null`.
+  const { data: base } = await supabase
     .from("platform_connection_status" as never)
-    .select("is_connected, minutos_sem_sincronizar")
+    .select("is_connected")
+    .eq("platform", platform)
+    .maybeSingle() as { data: { is_connected: boolean } | null };
+
+  let minutos: number | null = null;
+  const { data: extra, error: erroExtra } = await supabase
+    .from("platform_connection_status" as never)
+    .select("minutos_sem_sincronizar")
     .eq("platform", platform)
     .maybeSingle() as {
-      data: { is_connected: boolean; minutos_sem_sincronizar: number | null } | null;
+      data: { minutos_sem_sincronizar: number | null } | null;
+      error: { message: string } | null;
     };
-  return {
-    conectado: data?.is_connected === true,
-    minutos: data?.minutos_sem_sincronizar ?? null,
-  };
+  if (erroExtra) {
+    // Coluna ainda não existe (migração pendente). Não é falha de conexão, e
+    // não pode ser lida como uma.
+    console.warn("[useDashEcommerce] minutos_sem_sincronizar indisponível:", erroExtra.message);
+  } else {
+    minutos = extra?.minutos_sem_sincronizar ?? null;
+  }
+
+  return { conectado: base?.is_connected === true, minutos };
 }
 
 /** O sync roda a cada 5 min. Uma hora sem trazer dado é anomalia, não folga. */
