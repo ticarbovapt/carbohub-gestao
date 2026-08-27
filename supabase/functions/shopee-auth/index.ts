@@ -176,6 +176,19 @@ Deno.serve(async (req: Request) => {
         return json({ ok: false, error: "SHOPEE_PARTNER_ID/SHOPEE_PARTNER_KEY não configurados." }, 500);
       }
       const authUrl = await urlDeAutorizacao(host(), partnerId, partnerKey, REDIRECT());
+
+      // ⚠️ `ir=1` leva DIRETO para a Shopee, em vez de devolver o link.
+      //
+      // A assinatura carrega um `timestamp` e a Shopee recusa link velho — na
+      // prática, poucos minutos. Devolver JSON obriga a copiar e colar, e a
+      // corrida entre gerar e abrir é vencida pelo relógio com facilidade: o
+      // erro que aparece é de assinatura inválida, que faz parecer que a chave
+      // está errada quando o problema é só a idade do link.
+      //
+      // Com o 302 o link nasce e é usado no mesmo instante.
+      if (url.searchParams.get("ir")) {
+        return new Response(null, { status: 302, headers: { Location: authUrl } });
+      }
       return json({ ok: true, authUrl, redirect: REDIRECT(), sandbox: host() === SHOPEE_HOST_SANDBOX });
     }
 

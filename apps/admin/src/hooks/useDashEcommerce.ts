@@ -72,6 +72,10 @@ export interface EcommerceMetrics {
   products: EcommerceProduct[];
   dailySales: EcommerceDailySale[];
   isConnected: boolean;
+  /** ⚠️ Minutos desde a última rodada que TROUXE dado. `null` = nunca
+   *  sincronizou. Conectado com este número alto é o estado que engana:
+   *  o token está válido e não está entrando nada. */
+  minutosSemSincronizar?: number | null;
 }
 
 export interface ComparativoMetrics {
@@ -430,14 +434,33 @@ export function useEcommerceRawCheck(
 // PATH 2 — System hook (full business logic + real-time)
 // ─────────────────────────────────────────────────────────────────────────────
 
-async function isConnectedViaToken(platform: EcommercePlatform): Promise<boolean> {
+/**
+ * ⚠️ "Conectado" e "sincronizando" são perguntas DIFERENTES.
+ *
+ * `is_connected` responde só "existe token e ele não venceu". Em 26/08/2026 o
+ * `ecommerce-sync` passou ~20 h tomando 401 do próprio cron com todos os
+ * tokens válidos — o selo teria dito "Conectado" o tempo todo enquanto nada
+ * entrava. Por isso a segunda metade: quando foi a última vez que a rodada
+ * trouxe dado.
+ */
+async function statusDaConexao(
+  platform: EcommercePlatform,
+): Promise<{ conectado: boolean; minutos: number | null }> {
   const { data } = await supabase
     .from("platform_connection_status" as never)
-    .select("is_connected")
+    .select("is_connected, minutos_sem_sincronizar")
     .eq("platform", platform)
-    .maybeSingle() as { data: { is_connected: boolean } | null };
-  return data?.is_connected === true;
+    .maybeSingle() as {
+      data: { is_connected: boolean; minutos_sem_sincronizar: number | null } | null;
+    };
+  return {
+    conectado: data?.is_connected === true,
+    minutos: data?.minutos_sem_sincronizar ?? null,
+  };
 }
+
+/** O sync roda a cada 5 min. Uma hora sem trazer dado é anomalia, não folga. */
+export const MINUTOS_ATE_ALERTAR = 60;
 
 async function fetchOrders(
   platform: EcommercePlatform,
@@ -465,7 +488,7 @@ async function fetchOrders(
       .eq("platform", platform)
       .gte("ordered_at", from)
       .lte("ordered_at", to),
-    isConnectedViaToken(platform),
+    statusDaConexao(platform),
     supabase
       .from("platform_commission_rates" as never)
       .select("id,platform,rate,valid_from,created_at")
@@ -478,8 +501,11 @@ async function fetchOrders(
   const rows        = (data ?? []) as DBOrder[];
   const rateHistory = (rateData ?? []) as CommissionRate[];
 
-  if (rows.length === 0 && !connected) return emptyMetrics(platform);
-  if (rows.length === 0) return { ...emptyMetrics(platform), isConnected: true };
+  if (rows.length === 0 && !connected.conectado) return emptyMetrics(platform);
+  if (rows.length === 0) {
+    return { ...emptyMetrics(platform), isConnected: true,
+             minutosSemSincronizar: connected.minutos };
+  }
 
   // Fetch display multipliers — display_units_per_pack (visual only) wins over units_per_kit.
   // units_per_kit stays untouched for the stock trigger.
@@ -507,7 +533,9 @@ async function fetchOrders(
     }
   }
 
-  return { ...buildMetrics(platform, rows, rateHistory, skuMappings), isConnected: connected };
+  return { ...buildMetrics(platform, rows, rateHistory, skuMappings),
+           isConnected: connected.conectado,
+           minutosSemSincronizar: connected.minutos };
 }
 
 const PLATFORM_LABEL: Record<EcommercePlatform, string> = {
