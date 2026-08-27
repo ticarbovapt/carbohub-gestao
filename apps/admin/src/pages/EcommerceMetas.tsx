@@ -55,12 +55,7 @@ function barColor(revenue: number, target: number) {
 }
 
 // Formata string de dígitos brutos → "R$ 150.000"
-function formatBRLInput(raw: string): string {
-  const digits = raw.replace(/\D/g, "");
-  if (!digits) return "";
-  const num = parseInt(digits, 10);
-  return num.toLocaleString("pt-BR", { style: "currency", currency: "BRL", minimumFractionDigits: 0, maximumFractionDigits: 0 });
-}
+// (`formatBRLInput` saiu junto: só o diálogo removido o usava.)
 
 // Delta badge vs mês anterior
 function DeltaBadge({ current, prev }: { current: number; prev: number }) {
@@ -126,7 +121,12 @@ function PlatformCard({
             </div>
           </div>
           <div className="flex items-center gap-1.5">
-            <CarboBadge variant={colors.badge} size="sm">{fmtPct(stats.actualPct)}</CarboBadge>
+            {/* ⚠️ Sem meta, o percentual é 0% de nada — lê como fracasso de um
+                canal que ninguém mediu ainda. Ausência de meta é um ESTADO, não
+                um zero. */}
+            <CarboBadge variant={stats.target > 0 ? colors.badge : "secondary"} size="sm">
+              {stats.target > 0 ? fmtPct(stats.actualPct) : "—"}
+            </CarboBadge>
           </div>
         </div>
 
@@ -154,7 +154,12 @@ function PlatformCard({
           <div className="rounded-lg p-2 bg-muted/30 text-center">
             <p className="text-[10px] text-muted-foreground">Faltam</p>
             <p className="text-sm font-bold tabular-nums">
-              {stats.remaining > 0 ? fmtBRL(stats.remaining) : "✓ Batida"}
+              {/* ⚠️ `remaining` é max(0, target - actual): com target 0 ele dá 0,
+                  e a tela anunciava "✓ Batida" para um canal SEM META. Um canal
+                  recém-ligado nascia comemorando. */}
+              {stats.target <= 0
+                ? "—"
+                : stats.remaining > 0 ? fmtBRL(stats.remaining) : "✓ Batida"}
             </p>
           </div>
         </div>
@@ -181,11 +186,21 @@ const TOOLTIP_STYLE = {
 type ChartTab    = "daily" | "cumulative" | "history";
 type ChartFilter = "all" | MetaPlatform;
 
+// ⚠️ DERIVADA de ALL_PLATFORMS, não escrita à mão.
+//
+// Era uma segunda lista com emoji e label copiados. Canal novo entrava nos
+// cards e não no filtro do gráfico: ele existia na tela e não dava para
+// isolá-lo — e o "Total" passava a incluir vendas que ninguém conseguia ver
+// separadas. É a mesma divergência silenciosa do quotePdf.ts no mkt.
+const ROTULO_CURTO: Record<string, string> = { mercadolivre: "ML" };
+
 const FILTER_OPTIONS: { value: ChartFilter; emoji: string; label: string }[] = [
-  { value: "all",          emoji: "🎯", label: "Total"     },
-  { value: "mercadolivre", emoji: "🛒", label: "ML"        },
-  { value: "nuvemshop",    emoji: "🛍️", label: "Nuvemshop" },
-  { value: "amazon",       emoji: "📦", label: "Amazon"    },
+  { value: "all", emoji: "🎯", label: "Total" },
+  ...(ALL_PLATFORMS.filter(Boolean) as string[]).map((id) => ({
+    value: id as ChartFilter,
+    emoji: PLATFORM_META[id]?.emoji ?? "•",
+    label: ROTULO_CURTO[id] ?? PLATFORM_META[id]?.label ?? id,
+  })),
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -509,60 +524,10 @@ function ChartsSection({ month, totalTarget, platformStats }: {
 // Edit target dialog
 // ─────────────────────────────────────────────────────────────────────────────
 
-function EditTargetDialog({ open, onClose, month, platform, currentTarget }: {
-  open: boolean; onClose: () => void;
-  month: Date; platform: MetaPlatform; currentTarget: number;
-}) {
-  const [digits, setDigits] = useState(String(currentTarget > 0 ? currentTarget : ""));
-  const upsert = useUpsertMetaTarget();
-  const meta = platform ? PLATFORM_META[platform] : { label: "Total Geral", emoji: "🎯", color: "#22c55e" };
-
-  const numericValue = parseInt(digits.replace(/\D/g, "") || "0", 10);
-  const displayValue = formatBRLInput(digits);
-
-  const handleSave = async () => {
-    if (numericValue < 0) return;
-    await upsert.mutateAsync({ month, platform, target_amount: numericValue });
-    onClose();
-  };
-
-  return (
-    <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-sm">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <span>{meta.emoji}</span> Meta {meta.label}
-          </DialogTitle>
-          <DialogDescription>{format(month, "MMMM 'de' yyyy", { locale: ptBR })}</DialogDescription>
-        </DialogHeader>
-        <div className="space-y-3 py-2">
-          <p className="text-sm text-muted-foreground">Meta de faturamento</p>
-          <Input
-            type="text" inputMode="numeric"
-            value={displayValue}
-            onChange={(e) => setDigits(e.target.value.replace(/\D/g, ""))}
-            className="text-2xl font-bold tracking-wide"
-            placeholder="R$ 0" autoFocus
-          />
-          {numericValue > 0 && (
-            <p className="text-xs text-muted-foreground text-right">
-              {numericValue.toLocaleString("pt-BR")} unidades monetárias
-            </p>
-          )}
-        </div>
-        <div className="flex justify-end gap-2">
-          <Button variant="outline" onClick={onClose}>Cancelar</Button>
-          <Button onClick={handleSave} disabled={upsert.isPending}>Salvar</Button>
-        </div>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Main page
-// ─────────────────────────────────────────────────────────────────────────────
-
+// ⚠️ `EditTargetDialog` REMOVIDO: estava definido e nunca renderizado
+// (grep de `<EditTargetDialog` = zero). Era a segunda porta de escrita de
+// meta, gravando `platform: null` — justamente o que deixou de existir. Código
+// morto que grava é o que volta a ser ligado por engano seis meses depois.
 export default function EcommerceMetas() {
   const [month, setMonth]       = useState(() => startOfMonth(new Date()));
 
@@ -742,13 +707,13 @@ export default function EcommerceMetas() {
             Por Plataforma
           </h2>
           {isLoading ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
               {ALL_PLATFORMS.map((p) => (
                 <div key={String(p)} className="h-52 rounded-xl bg-muted/40 animate-pulse" />
               ))}
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
               {platformStats.map((stats) => (
                 <PlatformCard
                   key={String(stats.platform)}

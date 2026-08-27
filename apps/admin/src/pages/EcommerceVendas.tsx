@@ -1500,8 +1500,15 @@ export default function EcommerceVendas() {
   const [custom, setCustom] = useState<EcommerceCustom>({});
   const [active, setActive] = useState<ActiveView>(() => {
     const saved = localStorage.getItem(TAB_KEY) as ActiveView | null;
-    // "lps" (Vindi) foi descontinuado → cai em mercadolivre. tiktok/shopee desabilitados também.
-    if (!saved || saved === ("lps" as ActiveView) || saved === "tiktok" || saved === "shopee") return "mercadolivre";
+    // ⚠️ A lista sai de PLATFORMS, não é escrita aqui. A versão anterior tinha
+    // "shopee" fixa nesta linha: quando a aba foi habilitada, quem a escolhia e
+    // voltava à tela caía no Mercado Livre — a aba funcionava e não "colava",
+    // sem erro nenhum. Aba desabilitada volta a valer sozinha por esta regra.
+    // "lps" (Vindi) foi descontinuado e não está mais em PLATFORMS.
+    const desabilitada = PLATFORMS.some((p) => p.id === saved && p.disabled);
+    const conhecida = ACTIVE_PLATFORMS.some((p) => p.id === saved)
+      || saved === "comparativo" || saved === "historico";
+    if (!saved || desabilitada || !conhecida) return "mercadolivre";
     return saved;
   });
 

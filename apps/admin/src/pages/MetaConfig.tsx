@@ -95,7 +95,10 @@ export default function MetaConfigPage() {
 
   const monthStr  = month.toISOString().slice(0, 10);
 
-  const { totalStats, platformStats } = useMetaStats(month);
+  // ⚠️ `isLoading` renomeado: o `isLoading` da aba Vendedores já ocupa o nome,
+  // e descartá-lo aqui era o que fazia a tela escrever "Não definida" para meta
+  // que existe, enquanto os alvos ainda estavam em voo.
+  const { totalStats, platformStats, isLoading: ecoLoading } = useMetaStats(month);
   const today      = new Date();
   const isCurrentMonth =
     month.getFullYear() === today.getFullYear() &&
@@ -191,23 +194,31 @@ export default function MetaConfigPage() {
         </div>
 
         {/* ── Tab: Vendedores ─────────────────────────────────────────────── */}
+        {/* ⚠️ O seletor de mês vale para as DUAS abas.
+            Ele vivia dentro do bloco `tab === "vendedores"`, e a aba E-commerce
+            usava o mesmo estado `month` SEM MOSTRÁ-LO e sem poder mudá-lo. Dava
+            para gravar a meta de agosto achando que era a de setembro — o mês
+            só aparecia no subtítulo do diálogo, depois do clique. */}
+        <div className="flex items-center gap-1 bg-muted/40 rounded-lg px-2 py-1.5 w-fit">
+          <Button variant="ghost" size="icon" className="h-7 w-7"
+            aria-label="Mês anterior"
+            onClick={() => setMonth(m => startOfMonth(subMonths(m, 1)))}>
+            <ChevronLeft className="h-4 w-4" />
+          </Button>
+          <span className="text-sm font-semibold w-32 text-center capitalize">
+            {format(month, "MMM 'de' yyyy", { locale: ptBR })}
+          </span>
+          <Button variant="ghost" size="icon" className="h-7 w-7"
+            aria-label="Próximo mês"
+            onClick={() => setMonth(m => startOfMonth(addMonths(m, 1)))}
+            disabled={isCurrentMonth}>
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+        </div>
+
         {tab === "vendedores" && (
           <>
-            <div className="flex items-center justify-between gap-3 flex-wrap">
-              <div className="flex items-center gap-1 bg-muted/40 rounded-lg px-2 py-1.5">
-                <Button variant="ghost" size="icon" className="h-7 w-7"
-                  onClick={() => setMonth(m => startOfMonth(subMonths(m, 1)))}>
-                  <ChevronLeft className="h-4 w-4" />
-                </Button>
-                <span className="text-sm font-semibold w-32 text-center capitalize">
-                  {format(month, "MMM 'de' yyyy", { locale: ptBR })}
-                </span>
-                <Button variant="ghost" size="icon" className="h-7 w-7"
-                  onClick={() => setMonth(m => startOfMonth(addMonths(m, 1)))}
-                  disabled={isCurrentMonth}>
-                  <ChevronRight className="h-4 w-4" />
-                </Button>
-              </div>
+            <div className="flex items-center justify-end gap-3 flex-wrap">
               <Button size="sm" className="gap-1.5 bg-carbo-green hover:bg-carbo-green/90 text-white"
                 onClick={openNew}>
                 <Plus className="h-4 w-4" /> Meta padrão
@@ -285,41 +296,71 @@ export default function MetaConfigPage() {
         {/* ── Tab: E-commerce ─────────────────────────────────────────────── */}
         {tab === "ecommerce" && (
           <div className="space-y-3">
-            {/* Meta total */}
-            <CarboCard>
-              <CarboCardContent className="p-3 flex items-center gap-3">
-                <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-sm">🎯 Total Geral</p>
-                  <p className="text-xs text-muted-foreground">
-                    Meta: {totalStats.target > 0 ? fmtBRL(totalStats.target) : "Não definida"}
-                  </p>
-                </div>
-                <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0"
-                  onClick={() => setEcoDialog({ platform: null, target: totalStats.target })}>
-                  <Settings className="h-3.5 w-3.5" />
-                </Button>
-              </CarboCardContent>
-            </CarboCard>
+            {/* ⚠️ A regra, escrita na tela. Sem esta frase, quem procurar a
+                engrenagem do Total Geral vai achar que ela quebrou. */}
+            <div className="rounded-lg bg-muted/30 border border-border px-3 py-2 text-xs text-muted-foreground">
+              O <strong className="text-foreground">Total Geral</strong> é a{" "}
+              <strong className="text-foreground">soma</strong> das metas por plataforma.
+              Não existe meta total separada — para subir o total, suba a meta de algum canal.
+            </div>
 
-            {/* Por plataforma */}
-            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-1">Por plataforma</p>
-            {platformStats.map(stats => (
-              <CarboCard key={String(stats.platform)}>
-                <CarboCardContent className="p-3 flex items-center gap-3">
-                  <span className="text-lg shrink-0">{stats.emoji}</span>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-semibold text-sm">{stats.label}</p>
-                    <p className="text-xs text-muted-foreground">
-                      Meta: {stats.target > 0 ? fmtBRL(stats.target) : "Não definida"} · Real: {fmtBRL(stats.actual)} ({stats.actualPct.toFixed(0)}%)
-                    </p>
-                  </div>
-                  <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0"
-                    onClick={() => setEcoDialog({ platform: stats.platform, target: stats.target })}>
-                    <Settings className="h-3.5 w-3.5" />
-                  </Button>
-                </CarboCardContent>
-              </CarboCard>
-            ))}
+            {/* ⚠️ Enquanto carrega, NÃO diga "Não definida".
+                Antes o `isLoading` do hook era descartado: com os alvos ainda em
+                voo, `getTarget` devolvia 0 e a tela escrevia "Meta: Não definida"
+                para metas que existem — numa tela de configuração, isso convida
+                a redigitar por cima do que já estava certo. */}
+            {ecoLoading ? (
+              <div className="space-y-2">
+                {[0, 1, 2, 3].map(i => (
+                  <div key={i} className="h-14 rounded-xl bg-muted/40 animate-pulse" />
+                ))}
+              </div>
+            ) : (
+              <>
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-1">Por plataforma</p>
+                {platformStats.map(stats => (
+                  <CarboCard key={String(stats.platform)}>
+                    <CarboCardContent className="p-3 flex items-center gap-3">
+                      <span className="text-lg shrink-0">{stats.emoji}</span>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-semibold text-sm">{stats.label}</p>
+                        <p className="text-xs text-muted-foreground">
+                          Meta: {stats.target > 0 ? fmtBRL(stats.target) : "Não definida"}
+                          {" · "}Real: {fmtBRL(stats.actual)}
+                          {/* ⚠️ "(0%)" só aparece quando existe meta. Sem meta,
+                              0% é 0% de nada — e lê como fracasso de um canal
+                              que ninguém mediu ainda. */}
+                          {stats.target > 0 && ` (${stats.actualPct.toFixed(0)}%)`}
+                        </p>
+                      </div>
+                      <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0"
+                        aria-label={`Editar meta de ${stats.label}`}
+                        onClick={() => setEcoDialog({ platform: stats.platform, target: stats.target })}>
+                        <Settings className="h-3.5 w-3.5" />
+                      </Button>
+                    </CarboCardContent>
+                  </CarboCard>
+                ))}
+
+                {/* ⚠️ O total vem DEPOIS da lista e SEM engrenagem: ele é o
+                    resultado da edição, não um campo. No topo e com botão, ele
+                    voltava a parecer algo que se preenche primeiro — e gravava
+                    um número que o sistema passou a ignorar. */}
+                <CarboCard className="border-carbo-green/40">
+                  <CarboCardContent className="p-3 flex items-center gap-3">
+                    <span className="text-lg shrink-0">🎯</span>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-semibold text-sm">Total Geral</p>
+                      <p className="text-xs text-muted-foreground">
+                        {totalStats.target > 0
+                          ? `${fmtBRL(totalStats.target)} · soma de ${platformStats.filter(p => p.target > 0).length} de ${platformStats.length} plataformas`
+                          : "Nenhuma meta definida por plataforma"}
+                      </p>
+                    </div>
+                  </CarboCardContent>
+                </CarboCard>
+              </>
+            )}
           </div>
         )}
       </div>

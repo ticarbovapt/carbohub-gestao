@@ -30,7 +30,7 @@ const VENDA_STATUSES = ["paid", "shipped", "delivered"];
 // Types
 // ─────────────────────────────────────────────────────────────────────────────
 
-export type MetaPlatform = "mercadolivre" | "nuvemshop" | "amazon" | null;
+export type MetaPlatform = "mercadolivre" | "nuvemshop" | "amazon" | "shopee" | null;
 
 export interface MetaEcommerce {
   id: string;
@@ -67,11 +67,20 @@ export const PLATFORM_META: Record<
   mercadolivre: { label: "Mercado Livre", emoji: "🛒", color: "#FFD700" },
   nuvemshop:    { label: "Nuvemshop",     emoji: "🛍️", color: "#2D9CDB" },
   amazon:       { label: "Amazon",        emoji: "📦", color: "#FF9900" },
+  // ⚠️ Mesmo emoji e mesmo hex da tela de Vendas Online
+  // (EcommerceVendas.tsx). Duas telas do mesmo sistema com cores
+  // diferentes para a mesma marca é a divergência silenciosa que este
+  // repo já pagou no quotePdf.ts do mkt.
+  shopee:       { label: "Shopee",        emoji: "🧡", color: "#EE4D2D" },
 };
 
-// Os 3 canais reais de venda online (mesma ordem da tela Vendas Online).
+// Os canais reais de venda online, na mesma ordem da tela Vendas Online.
+// ⚠️ Esta é a ÚNICA lista. Havia uma segunda escrita à mão no cálculo do
+// total do mês, e as duas já estavam prestes a divergir: a Shopee entraria
+// numa e não na outra, e o card do topo mostraria menos que os gráficos —
+// sem erro em lugar nenhum.
 export const ALL_PLATFORMS: MetaPlatform[] = [
-  "mercadolivre", "nuvemshop", "amazon",
+  "mercadolivre", "nuvemshop", "amazon", "shopee",
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -140,8 +149,11 @@ export function useMetaActuals(month: Date) {
         platformRevenue[o.platform] = (platformRevenue[o.platform] || 0) + Number(o.total || 0);
       }
 
-      // Total = soma dos 3 canais reais de venda online (ML + Nuvemshop + Amazon).
-      const total = ["mercadolivre", "nuvemshop", "amazon"].reduce(
+      // Total = soma dos canais reais, lida de ALL_PLATFORMS.
+      // ⚠️ Era uma lista literal aqui, ao lado de ALL_PLATFORMS. Acrescentar
+      // canal num lugar e esquecer o outro fazia a META somar a plataforma
+      // nova e o REALIZADO não — o percentual mentiria sem nada quebrar.
+      const total = (ALL_PLATFORMS.filter(Boolean) as string[]).reduce(
         (a, p) => a + (platformRevenue[p] || 0),
         0
       );
@@ -175,9 +187,13 @@ export function useMetaDailyActuals(month: Date, platform: MetaPlatform = null) 
         .lte("ordered_at", end)
         .in("status", VENDA_STATUSES);
 
-      if (platform !== null) {
-        query = query.eq("platform", platform);
-      }
+      // ⚠️ `null` = Total, e Total é a soma dos canais REAIS — não "tudo que
+      // houver na tabela". Sem o `.in`, um canal fora da lista (TikTok, ou um
+      // valor gravado por engano) entraria no gráfico Total e não no card do
+      // topo, e os dois números do mesmo mês discordariam.
+      query = platform !== null
+        ? query.eq("platform", platform)
+        : query.in("platform", ALL_PLATFORMS.filter(Boolean) as string[]);
 
       const { data: orders, error } = await query;
       if (error) throw error;
@@ -262,12 +278,27 @@ export function useMetaStats(month: Date): {
     };
   };
 
-  // If no total target is set, derive it from the sum of platform targets
+  // ⚠️ O Total Geral É a soma das metas por plataforma. Não existe meta total
+  // separada.
+  //
+  // Antes era `getTarget(null) || totalFromPlatforms` — a linha gravada com
+  // `platform IS NULL` VENCIA a soma. Dava para definir 15k + 80k + 5k por
+  // canal e uma meta geral de 200k, e a tela mostrava 200k: um número que
+  // ninguém tinha como bater e que não correspondia a pedido nenhum feito aos
+  // canais. Hoje elas coincidem por coincidência, não por regra.
+  //
+  // Derivar elimina a possibilidade de discordarem. Quem quer subir a meta
+  // geral sobe a de algum canal — que é a decisão que alguém precisa tomar de
+  // qualquer forma.
   const totalFromPlatforms = ALL_PLATFORMS.reduce(
     (sum, p) => sum + getTarget(p),
     0
   );
-  const totalTarget = getTarget(null) || totalFromPlatforms;
+  // ⚠️ A soma VENCE; a linha legada `platform IS NULL` cobre o mês que nunca
+  // teve meta por canal. Sem essa reserva, um mês antigo em que só existia meta
+  // total passaria a exibir R$ 0 — e com meta zero o mês inteiro vira "sem meta
+  // definida", tendo batido 120%. Reescrever o passado não estava no pedido.
+  const totalTarget = totalFromPlatforms || getTarget(null);
   const totalActual = getActual(null);
   const actualPctTotal = totalTarget > 0 ? (totalActual / totalTarget) * 100 : 0;
   const projectedEOMTotal = dayOfMonth > 0 ? (totalActual / dayOfMonth) * daysInMonth : 0;
@@ -326,18 +357,45 @@ export function useMetaMonthlyHistory(platform: MetaPlatform = null) {
         if (m) dayMap[m] = (dayMap[m] || 0) + Number(o.total || 0);
       }
 
-      // Busca todas as metas cadastradas para essa plataforma
+      // Busca as metas. ⚠️ No Total, SOMA as plataformas — e usa a linha
+      // `platform IS NULL` só como reserva.
+      //
+      // A linha nula é LEGADO: de meses em que só existia meta total. Ignorá-la
+      // apagaria a linha tracejada de meta do gráfico Histórico naqueles meses,
+      // desenhando um degrau para zero que lê como "a meta despencou".
+      //
+      // A precedência é o inverso da regra antiga: a soma vence quando existe,
+      // o gravado cobre o mês que nunca teve meta por canal. Assim o histórico
+      // continua contando a verdade de cada mês, e nada é apagado.
       let targetsQuery = (supabase as any)
         .from("meta_ecommerce")
-        .select("month, target_amount");
-      targetsQuery = platform === null
-        ? targetsQuery.is("platform", null)
-        : targetsQuery.eq("platform", platform);
+        .select("month, platform, target_amount");
+      if (platform !== null) targetsQuery = targetsQuery.eq("platform", platform);
       const { data: targets } = await targetsQuery;
+
       const targetMap: Record<string, number> = {};
-      for (const t of targets || []) {
-        const m = t.month?.slice(0, 7);
-        if (m) targetMap[m] = Number(t.target_amount || 0);
+      if (platform !== null) {
+        for (const t of targets || []) {
+          const m = t.month?.slice(0, 7);
+          if (m) targetMap[m] = Number(t.target_amount || 0);
+        }
+      } else {
+        const soma: Record<string, number> = {};
+        const legado: Record<string, number> = {};
+        const reais = new Set(ALL_PLATFORMS.filter(Boolean) as string[]);
+        for (const t of targets || []) {
+          const m = t.month?.slice(0, 7);
+          if (!m) continue;
+          if (t.platform == null) legado[m] = Number(t.target_amount || 0);
+          // ⚠️ Só canais REAIS entram na soma: meta gravada para um canal fora
+          // da lista não pode inflar o total do mês.
+          else if (reais.has(String(t.platform))) {
+            soma[m] = (soma[m] || 0) + Number(t.target_amount || 0);
+          }
+        }
+        for (const m of new Set([...Object.keys(soma), ...Object.keys(legado)])) {
+          targetMap[m] = soma[m] || legado[m] || 0;
+        }
       }
 
       const monthLabel = (m: string) => {
@@ -373,6 +431,21 @@ export function useUpsertMetaTarget() {
       platform: MetaPlatform;
       target_amount: number;
     }) => {
+      // ⚠️ A meta TOTAL não se grava mais — ela é derivada da soma.
+      //
+      // O caminho continuava aberto sem chamador na tela do admin, e há OUTRA
+      // tela (a da raiz/controle) que ainda o chama. Campo que aceita, salva,
+      // dá toast de sucesso e não muda nada é a pior forma de erro: quem usou
+      // acredita que definiu a meta.
+      //
+      // A recusa mora aqui, na entrada da mutation, e não em cada tela — pelo
+      // mesmo motivo que a regra de estoque mora na RPC e não no /vender, que
+      // existe em seis cópias.
+      if (platform === null) {
+        throw new Error(
+          "A meta total é a soma das metas por plataforma — grave por plataforma.",
+        );
+      }
       const { data: userData } = await supabase.auth.getUser();
       const monthStr = startOfMonth(month).toISOString().slice(0, 10);
       const now = new Date().toISOString();
