@@ -406,6 +406,30 @@ seria apertar o gatilho de um envio em massa de WhatsApp.
 erro nenhum: o registro em `src/lib/opsNav.ts` **e** a lista de caminhos do
 grupo em `src/components/Layout.tsx`. Já aconteceu antes.
 
+### Alerta no sininho é MULTIPLICADO por 30 — conte antes de ligar
+`notify_time_interno` faz fan-out para todo o time interno. Uma notificação por
+pedido parecia razoável até a primeira rodada: **70 pedidos × 30 pessoas =
+2.100 linhas** em `notifications`, e 70 itens não lidos no sininho de cada um.
+
+Isso não é alerta — é o que ensina o time a fechar o sininho sem ler, e aí
+nenhum aviso funciona, nem o novo nem o de venda online, que mora no mesmo sino.
+
+A regra que ficou (`20260952`): **um RESUMO por dia** (quantos, quanto, o mais
+antigo), e notificação individual **só quando ela nomeia uma ação** — etiqueta
+morta pede "comprar outra"; "parado há 4 dias" só descreve um estado e pertence
+ao resumo. **Sem nada parado, não manda nada**: aviso diário de rotina treina a
+pessoa a ignorar.
+
+⚠️ **Limiar se MEDE, não se supõe.** Escolhi 3 dias para "etiqueta comprada e
+não postada" por raciocínio; a distribuição real tinha ~40 pedidos com 3-4 dias
+— etiqueta gerada na sexta é postada na segunda. Com 7 sobraram 6, e os 6 eram
+reais. Limiar que dispara no fluxo normal é ruído com custo extra.
+
+Os limiares moram em `carbo_esteira_limite` (tabela) e o relógio é **por
+etapa**: `nf_emitida` conta da emissão da NF, `etiqueta` de quando foi gerada,
+`em_transito` da postagem. Contar da data do pedido mistura demora de
+faturamento com demora de expedição.
+
 ### ⚠️ Push em `main` DEPLOYA as edge functions — não existe "só commitei"
 `.github/workflows/deploy-functions.yml` roda em `push: [main]`. Toda função da
 lista `dep` sobe, em sequência, com 3 tentativas. Função que **não** está na
