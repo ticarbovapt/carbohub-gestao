@@ -523,15 +523,58 @@ async function upsertContato(admin: Admin, c: any): Promise<void> {
  * estourar e as seguintes se atropelarem.
  */
 async function buscarContatosNovos(
-  admin: Admin, token: string, contatoIds: number[],
+  admin: Admin, token: string, vistos: Array<{ id: number; nome: string }>,
 ): Promise<number> {
-  const ids = [...new Set(contatoIds.filter((n) => Number.isFinite(n) && n > 0))];
+  const porId = new Map<number, string>();
+  for (const v of vistos) {
+    if (Number.isFinite(v?.id) && v.id > 0) porId.set(v.id, v.nome ?? "");
+  }
+  const ids = [...porId.keys()];
   if (!ids.length) return 0;
 
   const { data: existentes } = await admin
-    .from("bling2_contacts").select("bling_id").in("bling_id", ids);
-  const conhecidos = new Set((existentes ?? []).map((r: { bling_id: number }) => r.bling_id));
-  const faltando = ids.filter((id) => !conhecidos.has(id));
+    .from("bling2_contacts").select("bling_id, nome").in("bling_id", ids);
+  const conhecidos = new Map<number, string>(
+    (existentes ?? []).map((r: { bling_id: number; nome: string | null }) =>
+      [Number(r.bling_id), String(r.nome ?? "")]));
+
+  // ── ⚠️ RENOMEADO no Bling também precisa voltar ────────────────────────
+  //
+  // Até aqui o espelho buscava o contato UMA VEZ na vida: `faltando` era só
+  // "não está na tabela". O cadastro congelava no estado em que foi visto pela
+  // primeira vez, e nada no sistema o atualizava — a fase `contacts` completa
+  // não está no cron incremental.
+  //
+  // Caso real (27/08/2026): o contato 18342124332 estava como "Lucas Padilha
+  // Barbosa" no espelho e como "Miramon Amorin De Sousa Amorin De Sousa" no
+  // pedido. Os dois vinham do mesmo lugar — a diferença era só a IDADE do
+  // dado. Quem olhava o card via um nome; quem olhava o cadastro via outro; e
+  // não havia como saber qual dos dois era o de hoje.
+  //
+  // ⚠️ Isso não é cosmético: `bling2_contacts` é a fonte de `cliente_doc` e
+  // `cliente_fone` da esteira, e o telefone é o que a `carbo_msg_fila` usa
+  // para mandar WhatsApp. Cadastro congelado manda mensagem para o número
+  // antigo depois que o cliente corrigiu.
+  //
+  // O nome do pedido é a sonda: ele vem fresco a cada rodada, então basta
+  // compará-los. Refetch só de quem realmente divergiu — não de todos.
+  const desatualizados = ids.filter((id) => {
+    const noEspelho = conhecidos.get(id);
+    if (noEspelho === undefined) return false;               // ausente = novo
+    const noPedido = (porId.get(id) ?? "").trim();
+    return noPedido !== "" && noPedido !== noEspelho.trim();
+  });
+  if (desatualizados.length) {
+    console.warn(
+      `[bling2-sync] ${desatualizados.length} contato(s) renomeado(s) no Bling: ` +
+      desatualizados.map((id) => `${id} "${conhecidos.get(id)}" → "${porId.get(id)}"`).join(" | "),
+    );
+  }
+
+  const novos = ids.filter((id) => !conhecidos.has(id));
+  // Renomeado antes de novo: ele é dado ERRADO em uso, enquanto o novo é
+  // apenas dado ausente — e ausente já se comporta como ausente na tela.
+  const faltando = [...desatualizados, ...novos];
   if (!faltando.length) return 0;
 
   // Teto por rodada: cabe no minuto e não atropela a rodada seguinte.
@@ -699,7 +742,7 @@ async function syncOrdersRecente(admin: Admin, token: string, logId: string): Pr
   let synced = 0, failed = 0, primeiroLote = true;
   const lojas = new Map<number, number | null>();
   // Quem comprou nesta janela. O cadastro deles é buscado no fim da rodada.
-  const contatos: number[] = [];
+  const contatos: Array<{ id: number; nome: string }> = [];
 
   await paginar(token, `/pedidos/vendas?dataInicial=${corte}`, async (pedidos) => {
     if (primeiroLote) {
@@ -708,7 +751,10 @@ async function syncOrdersRecente(admin: Admin, token: string, logId: string): Pr
     }
     for (const o of pedidos) {
       anotarLoja(lojas, o);
-      if (o?.contato?.id) contatos.push(Number(o.contato.id));
+      // ⚠️ O NOME vem junto. É ele que revela contato renomeado no Bling: o
+      // pedido carrega o nome ATUAL, o espelho carrega o de quando foi visto a
+      // primeira vez. Sem esta comparação a divergência é invisível.
+      if (o?.contato?.id) contatos.push({ id: Number(o.contato.id), nome: String(o.contato?.nome ?? "") });
       try { await upsertPedidoDaLista(admin, o); synced++; }
       catch (e) { console.error("[bling2-sync] pedido recente falhou:", e); failed++; }
     }
