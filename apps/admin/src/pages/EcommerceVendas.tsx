@@ -741,14 +741,28 @@ function PlatformView({ platform, period, custom }: { platform: EcommercePlatfor
 // ─────────────────────────────────────────────────────────────────────────────
 
 function ComparativoView({ period, custom }: { period: EcommercePeriod; custom?: EcommerceCustom }) {
-  const [selected, setSelected] = useState<EcommercePlatform[]>(["mercadolivre", "amazon", "nuvemshop"]);
+  // ⚠️ Abre com TODAS marcadas e DERIVADO de `ACTIVE_PLATFORMS`, não com uma
+  // lista escrita à mão. A lista antiga era `["mercadolivre","amazon","nuvemshop"]`
+  // fixa: canal novo nascia desmarcado e ninguém percebia que faltava — foi
+  // assim com a Shopee e teria sido de novo com a PayT.
+  const [selected, setSelected] = useState<EcommercePlatform[]>(
+    () => ACTIVE_PLATFORMS.map((p) => p.id),
+  );
   const [metric, setMetric] = useState<"orders" | "units" | "revenue">("revenue");
-  const valid = selected.length >= 2 ? selected : (["mercadolivre", "amazon"] as EcommercePlatform[]);
-  const { data } = useEcommerceComparativo(valid, period, custom);
 
+  // ⚠️ Sem fallback silencioso. Antes, com menos de 2 marcadas, a tela trocava a
+  // seleção por `["mercadolivre","amazon"]` por baixo do pano — mostrava dados
+  // de plataformas que a pessoa tinha DESMARCADO, sem dizer nada. Como o toggle
+  // impede desmarcar a última, `selected` nunca fica vazio.
+  const { data } = useEcommerceComparativo(selected, period, custom);
+
+  // ⚠️ Sem teto. O antigo era `prev.length >= 4`, e com cinco plataformas a
+  // quinta simplesmente não entrava — o clique não fazia nada e nada explicava
+  // por quê. O piso de 1 fica: comparativo sem nenhuma plataforma é gráfico
+  // vazio, e desmarcar a última seria um beco sem saída.
   const toggle = (p: EcommercePlatform) => setSelected(prev => {
-    if (prev.includes(p)) return prev.length <= 2 ? prev : prev.filter(x => x !== p);
-    return prev.length >= 4 ? prev : [...prev, p];
+    if (prev.includes(p)) return prev.length <= 1 ? prev : prev.filter(x => x !== p);
+    return [...prev, p];
   });
 
   const anyConnected = data.some(c => c.totalOrders > 0);
@@ -802,10 +816,9 @@ function ComparativoView({ period, custom }: { period: EcommercePeriod; custom?:
     <div className="space-y-5">
       {/* Platform selector */}
       <Card className="rounded-2xl border-0 shadow-sm">
-        <CardHeader className="pb-2 pt-5 px-5">
-          <CardTitle className="text-sm font-semibold">Selecionar plataformas (2 a 3)</CardTitle>
-        </CardHeader>
-        <CardContent className="px-5 pb-5">
+        {/* Sem cabeçalho: o "(2 a 3)" descrevia um limite que não existe mais, e
+            os próprios botões já dizem o que fazem. */}
+        <CardContent className="px-5 pt-5 pb-5">
           <div className="flex flex-wrap gap-2">
             {ACTIVE_PLATFORMS.map(p => {
               const on = selected.includes(p.id);
@@ -1003,7 +1016,7 @@ function ComparativoView({ period, custom }: { period: EcommercePeriod; custom?:
               <ResponsiveContainer width="100%" height={240}>
                 <AreaChart data={lineData} margin={{ top: 8, right: 16, left: 8, bottom: 0 }}>
                   <defs>
-                    {valid.map(p => (
+                    {selected.map(p => (
                       <linearGradient key={p} id={`grad-${p}`} x1="0" y1="0" x2="0" y2="1">
                         <stop offset="0%" stopColor={PMAP[p].color} stopOpacity={0.35} />
                         <stop offset="100%" stopColor={PMAP[p].color} stopOpacity={0.02} />
@@ -1022,7 +1035,7 @@ function ComparativoView({ period, custom }: { period: EcommercePeriod; custom?:
                     cursor={{ stroke: "var(--muted-foreground)", strokeOpacity: 0.3 }}
                   />
                   <Legend iconType="circle" iconSize={9} formatter={v => PMAP[v as EcommercePlatform]?.label ?? v} />
-                  {valid.map(p => (
+                  {selected.map(p => (
                     <Area
                       key={p} type="monotone" dataKey={p} name={p}
                       stroke={PMAP[p].color} strokeWidth={2}
@@ -1087,7 +1100,10 @@ function HistoricoMensalView() {
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
   })();
 
-  const [selected, setSelected]   = useState<EcommercePlatform[]>(["mercadolivre", "amazon"]);
+  // Mesma decisão do Comparativo: abre com todas e derivado da lista ativa.
+  const [selected, setSelected]   = useState<EcommercePlatform[]>(
+    () => ACTIVE_PLATFORMS.map((p) => p.id),
+  );
   const [fromMonth, setFromMonth] = useState(def3ago);
   const [toMonth,   setToMonth]   = useState(curMonthStr);
 
