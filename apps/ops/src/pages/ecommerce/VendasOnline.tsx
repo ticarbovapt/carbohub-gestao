@@ -11,26 +11,24 @@ import {
   AlertCircle, BarChart3, Calendar, Percent, Wallet, Receipt, Trophy, Hourglass,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import {
+  ECOM_PLATFORMS, ECOM_PLATFORMS_ATIVAS,
+  type EcomPlatform, type EcomPlatformId,
+} from "./platforms";
 
 // PORT VISUAL FIEL ao Controle (/dashboards/ecommerce/vendas-online → DashEcommerceVendas).
 // TODO: ligar em <integrações de e-commerce ML/Amazon/Nuvemshop> (Supabase) na fase de lógica.
 
-type Platform = "mercadolivre" | "amazon" | "nuvemshop" | "tiktok" | "shopee";
+// ⚠️ A lista de plataformas mora em `./platforms.ts` e é UMA só. Esta tela
+// tinha a sua própria cópia, ao lado da de lá — e as duas já divergiam (a
+// Shopee estava só aqui). Canal novo entra lá, e as telas de meta do Ops o
+// recebem junto.
+type Platform = EcomPlatformId;
 type Period = "today" | "7d" | "30d" | "month";
 
-interface PlatformConfig {
-  id: Platform; label: string; color: string;
-  textClass: string; bgClass: string; borderClass: string; emoji: string; disabled?: boolean;
-}
-const PLATFORMS: PlatformConfig[] = [
-  { id: "mercadolivre", label: "Mercado Livre", color: "#FFD700", textClass: "text-yellow-600 dark:text-yellow-300", bgClass: "bg-yellow-500/10", borderClass: "border-yellow-500/50", emoji: "🛒" },
-  { id: "amazon", label: "Amazon", color: "#FF9900", textClass: "text-orange-600 dark:text-orange-300", bgClass: "bg-orange-500/10", borderClass: "border-orange-500/50", emoji: "📦" },
-  { id: "nuvemshop", label: "Nuvemshop", color: "#2D7FF9", textClass: "text-blue-600 dark:text-blue-300", bgClass: "bg-blue-500/10", borderClass: "border-blue-500/50", emoji: "🏪" },
-  { id: "tiktok", label: "TikTok Shop", color: "#FF0050", textClass: "text-pink-600 dark:text-pink-300", bgClass: "bg-pink-500/10", borderClass: "border-pink-500/50", emoji: "🎵", disabled: true },
-  { id: "shopee", label: "Shopee", color: "#EE4D2D", textClass: "text-red-600 dark:text-red-300", bgClass: "bg-red-500/10", borderClass: "border-red-500/50", emoji: "🧡", disabled: true },
-];
-const ACTIVE_PLATFORMS = PLATFORMS.filter((p) => !p.disabled);
-const PMAP = Object.fromEntries(PLATFORMS.map((p) => [p.id, p])) as Record<Platform, PlatformConfig>;
+const PLATFORMS = ECOM_PLATFORMS;
+const ACTIVE_PLATFORMS = ECOM_PLATFORMS_ATIVAS;
+const PMAP = Object.fromEntries(PLATFORMS.map((p) => [p.id, p])) as Record<Platform, EcomPlatform>;
 
 const fmtBRL = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
 const fmtNum = (v: number) => v.toLocaleString("pt-BR");
@@ -56,13 +54,11 @@ const emptyMetrics = (): Metrics => ({
   totalUnitsSold: 0, avgTicket: 0, shippedOrders: 0, deliveredOrders: 0, cancelledOrders: 0,
   cancellationRate: 0, pendingOrders: 0, paidOrders: 0, topProduct: null, dailySales: [], products: [],
 });
-const METRICS: Record<Platform, Metrics> = {
-  mercadolivre: emptyMetrics(),
-  amazon: emptyMetrics(),
-  nuvemshop: emptyMetrics(),
-  tiktok: emptyMetrics(),
-  shopee: emptyMetrics(),
-};
+// Uma entrada por plataforma, derivada da lista — a versão escrita à mão era
+// mais uma cópia para esquecer de atualizar.
+const METRICS = Object.fromEntries(
+  PLATFORMS.map((p) => [p.id, emptyMetrics()]),
+) as Record<Platform, Metrics>;
 
 function MetricCard({ label, value, sub, icon, accent }: { label: string; value: string; sub?: string; icon: React.ReactNode; accent: string }) {
   return (
@@ -352,7 +348,10 @@ function HistoricoMensalView() {
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
         <MetricCard label="Receita Total (6 meses)" value={fmtBRL(totalReceita)} icon={<Wallet className="h-4 w-4" />} accent="#22c55e" />
         <MetricCard label="Melhor mês" value="—" icon={<TrendingUp className="h-4 w-4" />} accent="#3b82f6" />
-        <MetricCard label="Plataformas ativas" value={String(ACTIVE_PLATFORMS.length)} sub="ML · Amazon · Nuvemshop" icon={<BarChart3 className="h-4 w-4" />} accent="#a78bfa" />
+        {/* ⚠️ O rótulo sai de ACTIVE_PLATFORMS, não de uma lista escrita à mão:
+            era "ML · Amazon · Nuvemshop" fixo ao lado de um número derivado, e
+            os dois já discordavam assim que um canal entrava ou saía. */}
+        <MetricCard label="Plataformas ativas" value={String(ACTIVE_PLATFORMS.length)} sub={ACTIVE_PLATFORMS.map((p) => p.label).join(" · ")} icon={<BarChart3 className="h-4 w-4" />} accent="#a78bfa" />
       </div>
       <Card className="rounded-2xl border-0 shadow-sm">
         <CardHeader className="pb-1 pt-5 px-5"><CardTitle className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Receita Mensal por Plataforma</CardTitle></CardHeader>

@@ -66,11 +66,18 @@ const PLATFORMS: PlatformConfig[] = [
     emoji: "🏪",
   },
   {
-    id: "tiktok", label: "TikTok Shop",
-    color: "#FF0050", gradient: "from-pink-600 to-rose-400",
-    textClass: "text-pink-600 dark:text-pink-300",
-    bgClass: "bg-pink-500/10", borderClass: "border-pink-500/50",
-    emoji: "🎵", disabled: true,
+    // PayT — checkout próprio, vende os MESMOS produtos da loja própria.
+    // ⚠️ Nasce ATIVA (sem `disabled`), ao contrário do TikTok Shop que ocupava
+    // este lugar e nunca foi integrado.
+    // Cor escolhida por MEDIDA, não por gosto: verde-azulado (teal) é o único
+    // ponto do círculo cromático livre entre o amarelo do ML (#FFD700), o
+    // laranja da Amazon (#FF9900), o azul da Nuvemshop (#2D7FF9) e o
+    // laranja-avermelhado da Shopee (#EE4D2D).
+    id: "payt", label: "PayT",
+    color: "#14B8A6", gradient: "from-teal-500 to-emerald-400",
+    textClass: "text-teal-600 dark:text-teal-300",
+    bgClass: "bg-teal-500/10", borderClass: "border-teal-500/50",
+    emoji: "💳",
   },
   {
     id: "shopee", label: "Shopee",
@@ -225,6 +232,11 @@ function CommissionCard({ platform, commissionTotal, netRevenue }: {
     if (ok) { setNewRate(""); }
   };
 
+  // ⚠️ Sem taxa cadastrada e sem padrão MEDIDO (PLATFORM_FEE_DEFAULT = null), o
+  // cartão diz que não sabe. Antes qualquer plataforma caía num número padrão,
+  // e um chute impresso com duas casas decimais é indistinguível de medição —
+  // "R$ 0,00 de comissão" seria lido como "esta plataforma não cobra".
+  const semTaxa = currentRate == null;
   const revenueAfterFee = netRevenue - commissionTotal;
 
   return (
@@ -240,8 +252,12 @@ function CommissionCard({ platform, commissionTotal, netRevenue }: {
             <Receipt className="h-4 w-4 text-slate-400" />
           </div>
         </div>
-        <p className="text-xl font-bold leading-none">{fmtBRL(commissionTotal)}</p>
-        <p className="text-xs text-muted-foreground">taxa: {(currentRate * 100).toFixed(2)}% · clique para gerenciar</p>
+        <p className="text-xl font-bold leading-none">{semTaxa ? "—" : fmtBRL(commissionTotal)}</p>
+        <p className="text-xs text-muted-foreground">
+          {semTaxa
+            ? "taxa não cadastrada · clique para cadastrar"
+            : `taxa: ${(currentRate * 100).toFixed(2)}% · clique para gerenciar`}
+        </p>
       </div>
 
       <Dialog open={open} onOpenChange={setOpen}>
@@ -264,11 +280,15 @@ function CommissionCard({ platform, commissionTotal, netRevenue }: {
             </div>
             <div className="rounded-lg bg-red-500/10 p-3 text-center">
               <p className="text-xs text-muted-foreground mb-1">Comissão</p>
-              <p className="text-sm font-bold text-red-500">− {fmtBRL(commissionTotal)}</p>
+              <p className="text-sm font-bold text-red-500">
+                {semTaxa ? "—" : `− ${fmtBRL(commissionTotal)}`}
+              </p>
             </div>
             <div className="rounded-lg bg-green-500/10 p-3 text-center">
               <p className="text-xs text-muted-foreground mb-1">Após Comissão</p>
-              <p className="text-sm font-bold text-green-600">{fmtBRL(revenueAfterFee)}</p>
+              <p className="text-sm font-bold text-green-600">
+                {semTaxa ? "—" : fmtBRL(revenueAfterFee)}
+              </p>
             </div>
           </div>
 
@@ -281,7 +301,12 @@ function CommissionCard({ platform, commissionTotal, netRevenue }: {
               <div className="flex flex-col gap-1">
                 <label className="text-xs text-muted-foreground">Taxa (%)</label>
                 <div className="flex items-center gap-1">
-                  <Input className="h-8 text-sm" placeholder={`${(currentRate * 100).toFixed(2)}`} value={newRate} onChange={e => setNewRate(e.target.value)} />
+                  <Input
+                    className="h-8 text-sm"
+                    placeholder={semTaxa ? "0,00" : `${(currentRate * 100).toFixed(2)}`}
+                    value={newRate}
+                    onChange={e => setNewRate(e.target.value)}
+                  />
                   <span className="text-sm text-muted-foreground">%</span>
                 </div>
               </div>
@@ -591,6 +616,13 @@ function PlatformView({ platform, period, custom }: { platform: EcommercePlatfor
             </CardTitle>
           </CardHeader>
           <CardContent className="px-2 pb-4">
+            {/* Eixos vazios não dizem nada — um canal recém-ligado precisa ler
+                "ainda não vendeu", não um gráfico em branco. */}
+            {m.dailySales.length === 0 ? (
+              <div className="h-[220px] flex items-center justify-center text-sm text-muted-foreground">
+                Nenhuma venda ainda no período selecionado.
+              </div>
+            ) : (
             <ResponsiveContainer width="100%" height={220}>
               <BarChart data={m.dailySales} margin={{ top: 4, right: 12, left: -10, bottom: 0 }} barCategoryGap="25%" barGap={2}>
                 <CartesianGrid strokeDasharray="3 3" className="stroke-border/50" vertical={false} />
@@ -606,6 +638,7 @@ function PlatformView({ platform, period, custom }: { platform: EcommercePlatfor
                 <Bar dataKey="units"  name="units"  fill="#818cf8"  radius={[4, 4, 0, 0]} maxBarSize={28} />
               </BarChart>
             </ResponsiveContainer>
+            )}
           </CardContent>
         </Card>
       )}
@@ -632,6 +665,17 @@ function PlatformView({ platform, period, custom }: { platform: EcommercePlatfor
                 </tr>
               </thead>
               <tbody className="divide-y divide-border/30">
+                {/* ⚠️ Canal ATIVO e ainda sem venda é estado NORMAL — a PayT
+                    entrou assim. Sem esta linha a tabela ficava só cabeçalho e
+                    um rodapé de zeros, que lê como falha de carregamento em vez
+                    de "ainda não vendeu". */}
+                {m.products.length === 0 && (
+                  <tr>
+                    <td colSpan={6} className="px-5 py-8 text-center text-sm text-muted-foreground">
+                      Nenhuma venda ainda no período selecionado.
+                    </td>
+                  </tr>
+                )}
                 {m.products.map(p => (
                   <tr key={p.id} className="hover:bg-muted/20 transition-colors">
                     <td className="px-5 py-3 font-medium">{p.name}</td>

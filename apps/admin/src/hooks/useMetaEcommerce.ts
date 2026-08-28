@@ -30,7 +30,7 @@ const VENDA_STATUSES = ["paid", "shipped", "delivered"];
 // Types
 // ─────────────────────────────────────────────────────────────────────────────
 
-export type MetaPlatform = "mercadolivre" | "nuvemshop" | "amazon" | "shopee" | null;
+export type MetaPlatform = "mercadolivre" | "nuvemshop" | "amazon" | "shopee" | "payt" | null;
 
 export interface MetaEcommerce {
   id: string;
@@ -72,6 +72,7 @@ export const PLATFORM_META: Record<
   // diferentes para a mesma marca é a divergência silenciosa que este
   // repo já pagou no quotePdf.ts do mkt.
   shopee:       { label: "Shopee",        emoji: "🧡", color: "#EE4D2D" },
+  payt:         { label: "PayT",          emoji: "💳", color: "#14B8A6" },
 };
 
 // Os canais reais de venda online, na mesma ordem da tela Vendas Online.
@@ -79,8 +80,13 @@ export const PLATFORM_META: Record<
 // total do mês, e as duas já estavam prestes a divergir: a Shopee entraria
 // numa e não na outra, e o card do topo mostraria menos que os gráficos —
 // sem erro em lugar nenhum.
+//
+// ⚠️ Canal NOVO entrando aqui não reescreve mês fechado: o total é a soma de
+// `getTarget(p)` e de `platformRevenue[p]`, e um canal sem linha em
+// `meta_ecommerce` e sem pedido em `ecommerce_orders` soma 0 nos dois lados.
+// A PayT entrou em 28/08/2026 e, por isso, nenhum mês anterior mudou de número.
 export const ALL_PLATFORMS: MetaPlatform[] = [
-  "mercadolivre", "nuvemshop", "amazon", "shopee",
+  "mercadolivre", "nuvemshop", "amazon", "shopee", "payt",
 ];
 
 /**
@@ -192,8 +198,8 @@ export function useMetaActuals(month: Date) {
 // Daily revenue breakdown for the current month (chart)
 // ─────────────────────────────────────────────────────────────────────────────
 
-// platform = null → total dos 3 canais (ML + Nuvemshop + Amazon)
-// platform = "mercadolivre" | "nuvemshop" | "amazon" → filtra ecommerce_orders
+// platform = null → total dos canais de ALL_PLATFORMS (a lista, nunca uma cópia
+// escrita aqui); qualquer outro valor filtra `ecommerce_orders` por ele.
 export function useMetaDailyActuals(month: Date, platform: MetaPlatform = null) {
   const start = startOfMonth(month).toISOString();
   const end   = endOfMonth(month).toISOString();
@@ -212,9 +218,10 @@ export function useMetaDailyActuals(month: Date, platform: MetaPlatform = null) 
         .in("status", VENDA_STATUSES);
 
       // ⚠️ `null` = Total, e Total é a soma dos canais REAIS — não "tudo que
-      // houver na tabela". Sem o `.in`, um canal fora da lista (TikTok, ou um
-      // valor gravado por engano) entraria no gráfico Total e não no card do
-      // topo, e os dois números do mesmo mês discordariam.
+      // houver na tabela". Sem o `.in`, um canal fora da lista (um valor
+      // gravado por engano, ou um canal que ainda não foi promovido a real)
+      // entraria no gráfico Total e não no card do topo, e os dois números do
+      // mesmo mês discordariam.
       query = platform !== null
         ? query.eq("platform", platform)
         : query.in("platform", ALL_PLATFORMS.filter(Boolean) as string[]);
@@ -374,7 +381,14 @@ export function useMetaMonthlyHistory(platform: MetaPlatform = null) {
     queryFn: async () => {
       const dayMap: Record<string, number> = {};
 
-      // Histórico dos 3 canais (ecommerce_orders); null = total dos 3.
+      // Histórico dos canais (ecommerce_orders).
+      // ⚠️ PRÉ-EXISTENTE, não mexido aqui: com `platform = null` esta consulta
+      // NÃO filtra por ALL_PLATFORMS — soma tudo que houver na tabela, ao
+      // contrário de `useMetaActuals` e `useMetaDailyActuals`, que filtram. As
+      // metas abaixo já respeitam a lista (`reais`), então canal fora dela
+      // aparece na receita e não na meta. Hoje isso não muda número nenhum
+      // (todo canal gravado está na lista); passa a mudar no dia em que alguém
+      // gravar um canal que não é venda online.
       let query = (supabase as any)
         .from("ecommerce_orders")
         .select("total, ordered_at")

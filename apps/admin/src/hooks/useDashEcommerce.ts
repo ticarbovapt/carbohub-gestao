@@ -17,7 +17,7 @@ import {
 // Types
 // ─────────────────────────────────────────────────────────────────────────────
 
-export type EcommercePlatform = "mercadolivre" | "amazon" | "nuvemshop" | "tiktok" | "shopee";
+export type EcommercePlatform = "mercadolivre" | "amazon" | "nuvemshop" | "payt" | "shopee";
 export type EcommercePeriod   =
   | "today" | "yesterday" | "7d" | "30d" | "month" | "custom";
 
@@ -219,8 +219,10 @@ export function pedidoRaiz(platform: string, orderId: string | null | undefined)
     const m = id.match(RAIZ_AMAZON);
     return m ? m[0] : id;
   }
-  // ML, Nuvemshop, Shopee, TikTok: número do pedido puro, sufixo do item depois
-  // do primeiro hífen.
+  // ML, Nuvemshop, Shopee, PayT: número do pedido puro, sufixo do item depois
+  // do primeiro hífen. ⚠️ Espelha o `else split_part(...)` de
+  // public.ecommerce_pedido_raiz — plataforma nova cai aqui por padrão, e só
+  // sai daqui se o número dela tiver hífen próprio, como o da Amazon.
   const corte = id.indexOf("-");
   return corte > 0 ? id.slice(0, corte) : id;
 };
@@ -381,12 +383,26 @@ function buildMetrics(
   };
 }
 
-export const PLATFORM_FEE_DEFAULT: Record<EcommercePlatform, number> = {
+/**
+ * Taxa de comissão presumida enquanto ninguém cadastrou uma em
+ * `platform_commission_rates`.
+ *
+ * ⚠️ `null` = NÃO MEDIDA, e é diferente de `0`. O zero da Nuvemshop é uma
+ * decisão ("loja própria, não há comissão de marketplace"); `null` é a ausência
+ * de informação, e ela precisa aparecer como ausência na tela — número chutado
+ * que se passa por medição é a doença que este repo já pagou várias vezes.
+ *
+ * A `shopee: 0.12` entrou como CHUTE e continua sem medição — é o precedente
+ * que a PayT não deve repetir. Cadastre a taxa real pelo cartão "Comissão da
+ * Plataforma" (ela vale a partir da data informada) em vez de escrever um
+ * número aqui.
+ */
+export const PLATFORM_FEE_DEFAULT: Record<EcommercePlatform, number | null> = {
   mercadolivre: 0.16,
   amazon:       0.15,
   nuvemshop:    0,      // loja própria — sem comissão de marketplace
-  tiktok:       0.06,
-  shopee:       0.12,
+  payt:         null,   // ⚠️ NÃO MEDIDA — checkout próprio, taxa ainda desconhecida
+  shopee:       0.12,   // ⚠️ CHUTE não medido (herdado) — confirmar com o extrato
 };
 
 function getRateForDate(history: CommissionRate[], platform: EcommercePlatform, date: string): number {
@@ -394,7 +410,9 @@ function getRateForDate(history: CommissionRate[], platform: EcommercePlatform, 
   const match = history
     .filter(r => r.valid_from <= day)
     .sort((a, b) => b.valid_from.localeCompare(a.valid_from))[0];
-  return match?.rate ?? PLATFORM_FEE_DEFAULT[platform];
+  // Sem taxa cadastrada e sem padrão medido, a comissão é 0 — e a TELA diz que
+  // não há taxa, em vez de imprimir "R$ 0,00 de comissão" como se fosse medido.
+  return match?.rate ?? PLATFORM_FEE_DEFAULT[platform] ?? 0;
 }
 
 function emptyMetrics(platform: EcommercePlatform): EcommerceMetrics {
@@ -595,7 +613,7 @@ const PLATFORM_LABEL: Record<EcommercePlatform, string> = {
   mercadolivre: "Mercado Livre",
   amazon:       "Amazon",
   nuvemshop:    "Nuvemshop",
-  tiktok:       "TikTok Shop",
+  payt:         "PayT",
   shopee:       "Shopee",
 };
 
@@ -708,7 +726,9 @@ export function useCommissionRates(platform: EcommercePlatform) {
     return true;
   };
 
-  const currentRate = history[0]?.rate ?? PLATFORM_FEE_DEFAULT[platform];
+  /** ⚠️ `null` = nenhuma taxa cadastrada E nenhum padrão medido. Quem exibe
+   *  precisa DIZER isso; imprimir 0% faria a ausência parecer medição. */
+  const currentRate: number | null = history[0]?.rate ?? PLATFORM_FEE_DEFAULT[platform];
 
   return { history, currentRate, saveRate, saving };
 }

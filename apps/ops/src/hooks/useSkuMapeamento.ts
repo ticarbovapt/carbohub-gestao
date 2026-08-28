@@ -23,13 +23,23 @@ const db = supabase as unknown as { from: (t: string) => any };
 
 /** Plataformas aceitas pelo CHECK `sku_platform_valida` da tabela.
  *  ⚠️ Valor fora desta lista é INSERT falhando — e um mapa cadastrado com
- *  plataforma que não existe em `ecommerce_orders` nunca casa e nunca reclama. */
+ *  plataforma que não existe em `ecommerce_orders` nunca casa e nunca reclama.
+ *
+ *  ⚠️ A PayT só pode entrar AQUI depois da migração
+ *  `20260962000000_payt_no_lugar_do_tiktok.sql`, que a acrescenta aos DOIS
+ *  CHECKs (`sku_platform_valida` e `ecommerce_orders_platform_check`). Front
+ *  aceitando e banco recusando é INSERT falhando calado.
+ *
+ *  O TikTok Shop saiu da lista (nunca foi integrado; a PayT tomou o lugar dele
+ *  nas telas). Ele continua no CHECK do banco de propósito — remover valor de
+ *  CHECK quebra a migração se alguma linha histórica ainda o usar, e
+ *  `rotuloPlataforma` já degrada para o valor cru. */
 export const PLATAFORMAS = [
   { value: "mercadolivre", label: "Mercado Livre" },
   { value: "amazon", label: "Amazon" },
   { value: "nuvemshop", label: "Nuvemshop" },
   { value: "shopee", label: "Shopee" },
-  { value: "tiktok", label: "TikTok Shop" },
+  { value: "payt", label: "PayT" },
 ] as const;
 
 /** Radix Select não aceita `value=""` — sentinela para `platform = null`. */

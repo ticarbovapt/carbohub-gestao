@@ -14,7 +14,7 @@ import {
   useSetMetaDefault, useRemoveMetaDefault, useSetMetaMes, useRemoveMetaMes,
   type MetaVendedor,
 } from "@/hooks/useMetas";
-import { ECOM_PLATFORMS, brl } from "../ecommerce/platforms";
+import { ECOM_PLATFORMS_ATIVAS, brl } from "../ecommerce/platforms";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Configurar Metas (Carbo Ops). Vendedores: meta PADRÃO com vigência (a partir do
@@ -111,7 +111,7 @@ export default function MetasVendedoresConfig() {
   const onlyDigits = (s: string) => s.replace(/\D/g, "");
   const fmtEcom = (raw: string) => { const d = onlyDigits(raw); return d ? Number(d).toLocaleString("pt-BR") : ""; };
   const [ecom, setEcom] = useState<Record<string, string>>({});
-  const ecomTotal = ECOM_PLATFORMS.reduce((s, p) => s + Number(onlyDigits(ecom[p.id] || "0")), 0);
+  const ecomTotal = ECOM_PLATFORMS_ATIVAS.reduce((s, p) => s + Number(onlyDigits(ecom[p.id] || "0")), 0);
 
   const MonthNav = () => (
     <div className="flex items-center gap-1 bg-muted/40 rounded-lg px-2 py-1.5">
@@ -223,7 +223,7 @@ export default function MetasVendedoresConfig() {
           <>
             <div className="flex items-center justify-end"><MonthNav /></div>
             <div className="space-y-3">
-              {ECOM_PLATFORMS.map((p) => (
+              {ECOM_PLATFORMS_ATIVAS.map((p) => (
                 <CarboCard key={p.id}>
                   <CarboCardContent className="p-4 flex items-center gap-4">
                     <div className="h-11 w-11 rounded-xl flex items-center justify-center text-xl shrink-0" style={{ background: p.color + "20" }}>{p.emoji}</div>

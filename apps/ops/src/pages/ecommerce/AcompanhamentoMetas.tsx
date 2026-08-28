@@ -3,7 +3,7 @@ import { CarboCard, CarboCardContent } from "@/components/ui/carbo-card";
 import { CarboBadge } from "@/components/ui/carbo-badge";
 import { Button } from "@/components/ui/button";
 import { Target, ChevronLeft, ChevronRight } from "lucide-react";
-import { ECOM_PLATFORMS, brl } from "./platforms";
+import { ECOM_PLATFORMS_ATIVAS, brl } from "./platforms";
 
 // TODO: ligar em <tabela de metas/faturamento de e-commerce> (Supabase) na fase de lógica.
 // Mostra faturamento/pedidos por plataforma + geral, e o andamento vs a meta.
@@ -17,7 +17,7 @@ const variant = (p: number): "success" | "warning" | "destructive" => (p >= 100 
 const barColor = (p: number) => (p >= 100 ? "bg-success" : p >= 70 ? "bg-warning" : "bg-destructive");
 
 export default function AcompanhamentoMetas() {
-  const linhas = ECOM_PLATFORMS.map((p) => ({ plat: p, d: DADOS[p.id] ?? emptyLinha(p.id) }));
+  const linhas = ECOM_PLATFORMS_ATIVAS.map((p) => ({ plat: p, d: DADOS[p.id] ?? emptyLinha(p.id) }));
   const metaTotal = linhas.reduce((s, l) => s + l.d.meta, 0);
   const realTotal = linhas.reduce((s, l) => s + l.d.realizado, 0);
   const pedTotal = linhas.reduce((s, l) => s + l.d.pedidos, 0);
