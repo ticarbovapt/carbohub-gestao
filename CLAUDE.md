@@ -31,7 +31,8 @@ divergir aqui tira a opção da tela de alguém sem dar erro. Tipo novo entra aq
 `apps/ti` e copie para os outros cinco — eles devem continuar idênticos.
 
 ### Tela `/vender` — o CRM é a base, os outros copiam
-O `pages/Vender.tsx` existe nos **seis** apps e deve ser byte a byte idêntico.
+O `pages/Vender.tsx` existe nos **sete** apps (⚠️ `atendimento` entrou em
+28/08/2026) e deve ser byte a byte idêntico.
 A raiz (`controle`) está fora — ela tem `/orders/new`, outra tela, congelada.
 
 **Fonte da verdade = `apps/crm`** (o app do Sales). Edite lá e copie para
@@ -84,9 +85,10 @@ apps/*/src/hooks/useMeuEstoque.ts                         saldo do vendedor (nos
    apps — na tela seriam seis cópias para divergir. A tela só avisa antes do
    clique; quem recusa é a RPC.
 
-⚠️ **`useVendas.ts` NÃO é idêntico nos seis.** O CRM filtra venda de
-marketplace da tela do vendedor (`FILTRO_VENDA_DO_TIME`), e `lib/vendaDoTime.ts`
-só existe lá. A divergência é intencional: copiar o do CRM por cima dos outros
+⚠️ **`useVendas.ts` E `useCarbozeVendas.ts` NÃO são idênticos nos sete.** O CRM
+filtra venda de marketplace da tela do vendedor (`FILTRO_VENDA_DO_TIME`), e
+`lib/vendaDoTime.ts` só existe lá — os **dois** hooks o importam, não só o
+primeiro (medido ao criar o `atendimento`). A divergência é intencional: copiar o do CRM por cima dos outros
 quebra o build deles e muda o que mostram. Edite os seis com a MESMA alteração
 mínima, em vez de sobrescrever.
 
@@ -920,6 +922,46 @@ esse disfarce que custou o dia de diagnóstico.
 3. **Congelamento do `controle`:** raiz só recebe correção crítica. Funcionalidade nova vai pros apps novos.
 4. **Mudança em `packages/`** → avise que afeta vários apps antes de aplicar.
 5. **Cada app é autossuficiente.** `apps/crm` tem build/lockfile próprio; NÃO mexer no `package.json` da raiz (3 lockfiles frágeis — risco ao deploy do controle).
+
+### App novo no hub — os QUATRO lugares que precisam aprender a interface
+Criar a pasta do app é a parte fácil. O que faz um app existir é a flag em
+`profiles.allowed_interfaces` (ex.: `carbo_atendimento`) ser reconhecida em
+quatro lugares — e **cada um falha calado de um jeito diferente**:
+
+```
+apps/{admin,ti,<novo>}/src/lib/interfaces.ts   a caixinha na tela do Admin
+packages/shell/src/apps.ts                     o seletor de apps
+carbohub-landing/src/lib/apps.ts               o azulejo do Hub (OUTRO repo)
+carbo_interface_e_interna()  (migração)        quem é "time interno"
+```
+
+1. **Sem o `interfaces.ts`**, ninguém consegue liberar o acesso a ninguém: o app
+   sobe e fica inacessível. ⚠️ As cópias do `admin` e do `ti` **já estavam
+   divergentes** — a do `ti` não tinha `carbo_ti`, então pelo app do TI não dava
+   para liberar o próprio TI. Mesma doença do `quotePdf.ts` do `mkt`.
+2. **Sem `INTERFACE_TO_APPS`** (nos dois repos), a resolução é ESTRITA: a pessoa
+   tem a flag e o app não aparece no switcher nem no Hub. Sem erro.
+3. ⚠️ **Sem entrar em `carbo_interface_e_interna`**, quem só tem aquele app não
+   recebe notificação nenhuma **e é barrado pela RLS** em `carbo_wa_mensagens`,
+   `sku_product_mappings`, `carbo_canal_estoque` e outras — a tela abre e volta
+   **vazia**. Mesmo sintoma da `bling2_esteira`.
+4. ⚠️ **A lista de internos também vivia COPIADA em TypeScript** nas três edge
+   functions do WhatsApp (`whatsapp-responder`, `-midia`, `-midia-baixar`), com
+   um comentário dizendo que duplicar ali era "inevitável (o SQL não alcança
+   daqui)". Não era: elas têm cliente com service role e o Postgres responde por
+   RPC. Hoje as três usam `_shared/interfacesInternas.ts`, que pergunta ao banco
+   e **só nega** quando cai na rede local — rede que abre transforma falha de
+   rede em porta destrancada.
+
+**A cor do app aparece em quatro lugares** (acento do app, chip do
+`interfaces.ts` nas três cópias, `packages/shell`, azulejo do Hub) e os quatro
+têm de concordar. Escolha por MEDIDA, não por gosto: laranja `#F97316` foi
+descartado no `atendimento` porque o Ops já é âmbar `#F59E0B` e, lado a lado no
+switcher, são a mesma cor a um metro.
+
+⚠️ **`ProtectedRoute` tem de barrar `profile == null`, não só a flag ausente.**
+O portal de lojas e o de licenciados usam a MESMA tabela `profiles`. O
+`apps/atendimento` cobre; os outros seis testam só a flag — pendente.
 
 ### Modelo de acesso dos sistemas novos (NÃO usar Role Matrix)
 - Sem matriz tela-a-tela. Nível decide: **gestor** (vê tudo + botões de gestão) vs **membro** (próprio escopo).
