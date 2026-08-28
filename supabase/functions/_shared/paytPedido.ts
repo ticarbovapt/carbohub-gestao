@@ -162,11 +162,21 @@ export function linhasDaPayt(body: unknown): { linhas: LinhaPayt[]; motivo: stri
     // 20260855 fechou. E colocá-lo só na primeira linha faria a soma por
     // produto mentir.
     //
-    // O preço é o que a divergência custa: no fixture de cartão o produto sai
-    // por 223,92 e a transação fecha em 212,72 (desconto do pedido). A soma das
-    // linhas fica ACIMA do cobrado quando há desconto de pedido. Ratear exigiria
-    // uma regra de arredondamento que ninguém validou; o valor real está no log
-    // cru, e a conciliação é passo próprio.
+    // ⚠️⚠️ E há um motivo MAIOR, medido no postback real da nossa conta:
+    // `total_price` inclui os JUROS DO PARCELAMENTO.
+    //
+    //     total_price                296616  = 12 × 24718 (installment_price)
+    //     price_without_installments 233331  = o valor dos produtos
+    //     soma das nossas linhas     233331  ✅
+    //
+    // Usá-lo como faturamento inflaria a receita em 27% naquele pedido, e o erro
+    // cresce com o número de parcelas. Ninguém desconfiaria: o número só ficaria
+    // bom demais. A soma das linhas bate EXATO com o valor dos produtos.
+    //
+    // Sobra a divergência menor, do desconto de pedido (no fixture de cartão o
+    // produto sai por 223,92 e a transação fecha em 212,72). Ratear exigiria uma
+    // regra de arredondamento que ninguém validou; o valor real está no log cru,
+    // e a conciliação é passo próprio.
     total: reais(it.precoCent) * it.qtd,
     status: st,
     ordered_at: quando,

@@ -178,6 +178,55 @@ describe("PayT · upsell é pedido próprio", () => {
   });
 });
 
+describe("PayT · o payload REAL da conta da Carbo", () => {
+  // ⚠️ Este é o postback de teste disparado da NOSSA conta, não da conta de
+  // demonstração dos outros fixtures. Ele revelou uma armadilha que os 15
+  // genéricos não tinham. A `integration_key` foi REDIGIDA: chave real não
+  // entra em repositório.
+  const bruto = { ...fx("conta_real_teste"), test: false };
+  const { linhas } = linhasDaPayt(bruto);
+
+  it("kit agrupado + 2 order bumps = 3 linhas, não 5", () => {
+    // `product.items[]` tem 2 componentes do kit; eles NÃO viram linha.
+    expect(bruto.product.items).toHaveLength(2);
+    expect(bruto.order_bumps).toHaveLength(2);
+    expect(linhas).toHaveLength(3);
+  });
+
+  // ⚠️⚠️ A ARMADILHA, e ela vale dinheiro:
+  //
+  //     transaction.total_price          296616   = 12 × 24718 (installment_price)
+  //     transaction.price_without_...    233331   = o valor dos produtos
+  //     soma das nossas linhas           233331   ✅
+  //
+  // `total_price` é o que o CLIENTE paga PARCELADO — inclui os juros do
+  // financiamento. Usá-lo como faturamento inflaria a receita em 27% neste
+  // pedido, e o erro cresce com o número de parcelas. Ninguém desconfiaria:
+  // o número só ficaria "bom demais".
+  //
+  // NÃO troque o total da linha por `total_price`.
+  it("a soma das linhas bate com o valor dos PRODUTOS, não com o parcelado", () => {
+    const somaDasLinhas = Math.round(linhas.reduce((s, l) => s + l.total, 0) * 100);
+    expect(somaDasLinhas).toBe(bruto.transaction.price_without_installments);
+    expect(somaDasLinhas).not.toBe(bruto.transaction.total_price);
+  });
+
+  it("total_price realmente é o parcelado, e não o valor da venda", () => {
+    const t = bruto.transaction;
+    expect(t.installments * t.installment_price).toBe(t.total_price);
+    expect(t.total_price).toBeGreaterThan(t.price_without_installments);
+  });
+
+  // O SKU da PayT é um hash interno, não um código legível como o "124" da
+  // Nuvemshop. Isso não é problema — é o que o mapa de SKU existe para resolver
+  // —, mas confirma que a PayT precisa de cadastro próprio em
+  // `sku_product_mappings`, e que ele não pode ser adivinhado.
+  it("o SKU vem preenchido, em formato de hash", () => {
+    expect(linhas.every((l) => (l.product_sku ?? "").length > 0)).toBe(true);
+    expect(linhas[0].product_sku).toBe("793269e47eb75");
+  });
+});
+
 describe("PayT · os 15 payloads reais, em bloco", () => {
   const todos = [
     "bankslip", "cancelled", "cart_recovered", "credit_card", "lost_cart",

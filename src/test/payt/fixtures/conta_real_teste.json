@@ -1,0 +1,176 @@
+{
+  "link": {
+    "url": "https://payt.site/YoMCA71",
+    "title": "Checkout teste",
+    "sources": {
+      "utm_id": "CampanhaIDLink",
+      "utm_term": "CampanhaTermLink",
+      "utm_medium": "CampanhaMediumLink",
+      "utm_source": "CampanhaSourceLink",
+      "utm_content": "CampanhaContentLink",
+      "utm_campaign": "CampanhaNomeLink"
+    },
+    "available_coupons": [
+      {
+        "code": "bd4bmSz9QnWU",
+        "amount": "10.00",
+        "method": "percentage",
+        "min_price": "5.00",
+        "expires_at": null
+      },
+      {
+        "code": "DONTGO",
+        "amount": "10.00",
+        "method": "percentage",
+        "min_price": 0,
+        "expires_at": null
+      }
+    ]
+  },
+  "test": true,
+  "type": "order",
+  "origin": {
+    "url": "https://app.payt.com.br/admin/clientes/7RD6XA/edit",
+    "code": "LJV33L",
+    "name": "campanha Teste"
+  },
+  "status": "paid",
+  "cart_id": "26DM9XD",
+  "product": {
+    "sku": "793269e47eb75",
+    "code": "4O9J39",
+    "name": "Produto Agrupado",
+    "type": "grouped",
+    "items": [
+      {
+        "sku": "2c26392e0a73c",
+        "code": "R28BKV",
+        "name": "Produto Digital Membros",
+        "type": "digital",
+        "price": 99933,
+        "quantity": 1
+      },
+      {
+        "sku": "444d2d5275152",
+        "code": "45PK73",
+        "name": "Produto Fisico Frasco",
+        "type": "physical",
+        "price": 33366,
+        "quantity": 1
+      }
+    ],
+    "price": 133299,
+    "quantity": 1
+  },
+  "customer": {
+    "doc": "12345678909",
+    "url": "https://app.payt.com.br/admin/clientes/M5PJMA/edit",
+    "code": "M5PJMA",
+    "name": "Solaire of Astora M Walter White",
+    "email": "yoda@testsuser.com",
+    "phone": "11999999999",
+    "fake_email": false,
+    "billing_address": {
+      "city": "Taboão da Serra",
+      "estate": "SP",
+      "street": "Rua Francisco Andugar Espinosa",
+      "country": "BR",
+      "zipcode": "06763060",
+      "district": "Chácara Agrindus",
+      "complement": "",
+      "street_number": "999"
+    }
+  },
+  "shipping": {
+    "price": 0,
+    "status": "waiting_code",
+    "service": "custom",
+    "address": {
+      "city": "Taboão da Serra",
+      "estate": "SP",
+      "street": "Rua Francisco Andugar Espinosa",
+      "country": "BR",
+      "zipcode": "06763060",
+      "district": "Chácara Agrindus",
+      "complement": "",
+      "street_number": "999"
+    }
+  },
+  "tangible": true,
+  "seller_id": "LYK2ZA",
+  "commission": [
+    {
+      "name": "PAYT TECNOLOGIA E EDUCACAO DIGITAL LTDA",
+      "type": "platform",
+      "email": "contato@payt.com.br",
+      "amount": 14226
+    },
+    {
+      "name": "Produtor CNPJ",
+      "type": "producer",
+      "email": "produtor@testpayt.com",
+      "amount": 142419
+    },
+    {
+      "name": "Afiliado LTDA",
+      "type": "affiliation",
+      "email": "afiliad@testpayt.com",
+      "amount": 76686
+    }
+  ],
+  "started_at": "2024-11-22 15:20:28",
+  "updated_at": "2024-11-22 15:20:45",
+  "order_bumps": [
+    {
+      "code": "R3A674",
+      "name": "Produto Order Bump",
+      "product": {
+        "sku": "33a62cc11db57",
+        "code": "R6DAPD",
+        "name": "Ebook 1",
+        "type": "digital",
+        "price": 66633,
+        "quantity": 1
+      }
+    },
+    {
+      "code": "47ZMAL",
+      "name": "OBump | Produto 2",
+      "product": {
+        "sku": "1f6f3cfd2c67c",
+        "code": "LX9BQZ",
+        "name": "Fisico (Auto)",
+        "type": "physical",
+        "price": 33399,
+        "quantity": 1
+      }
+    }
+  ],
+  "transaction": {
+    "paid_at": "2024-11-22 15:20:45",
+    "pix_url": "https://checkout.payt.com.br/qr-pix/YMG6O7",
+    "pix_code": "000123456014br.gov.bcb.000123456",
+    "quantity": 1,
+    "modifiers": [
+      {
+        "name": "amostra",
+        "amount": 4800,
+        "method": "fixed",
+        "reason": "coupon"
+      }
+    ],
+    "created_at": "2024-11-22 15:20:45",
+    "expires_at": "2024-11-22 16:21:42",
+    "updated_at": "2024-11-22 15:20:45",
+    "total_price": 296616,
+    "bankslip_url": "https://www.payt.com.br/meu_boleto_000123456",
+    "installments": 12,
+    "bankslip_code": "237933802960600500012345603299110001231231",
+    "payment_method": "credit_card",
+    "payment_status": "paid",
+    "installment_price": 24718,
+    "price_without_installments": 233331
+  },
+  "transaction_id": "PAYTS2",
+  "integration_key": "CHAVE_REDIGIDA_NAO_E_A_REAL"
+}
