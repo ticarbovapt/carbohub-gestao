@@ -27,6 +27,7 @@ import { useStockMovements } from "@/hooks/useStockMovements";
 import { useStockMovementStats } from "@/hooks/useStockMovementStats";
 import { useStockTransfers, type Transfer } from "@/hooks/useStockTransfers";
 import { MinStockDialog } from "@/components/estoque/MinStockDialog";
+import { SkuMapeamento } from "@/components/suprimentos/SkuMapeamento";
 
 
 // É a versão EDITÁVEL do estoque (gestores). A versão somente leitura vive em Estoque.
@@ -91,8 +92,6 @@ const abaValeNoHub = (abaId: string, hub: HubId) => {
 const PERIODOS = [{ v: "7d", label: "Últimos 7 dias" }, { v: "30d", label: "Últimos 30 dias" }, { v: "mes", label: "Este mês" }];
 const fmtDate = (iso: string) => (iso ? new Date(iso).toLocaleDateString("pt-BR") : "—");
 
-// Mapeamento SKU plataforma → produto interno. // TODO: ligar em sku_product_mappings (fase futura)
-const SKU_MAP: { sku: string; produto: string }[] = [];
 
 export default function Suprimentos() {
   // A URL manda. Valor inválido cai no padrão em silêncio (com `replace`), sem
@@ -473,30 +472,9 @@ export default function Suprimentos() {
             )}
           </TabsContent>
 
-          {/* Mapeamento SKU (SP) */}
+          {/* Mapeamento SKU (SP) — cadastro real em `sku_product_mappings` */}
           <TabsContent value="mapeamento" className="mt-4 space-y-4">
-            <div className="flex items-start gap-2 px-4 py-3 rounded-lg bg-blue-500/10 border border-blue-500/20">
-              <Info className="h-4 w-4 text-blue-400 shrink-0 mt-0.5" />
-              <div className="text-sm">
-                <p className="font-medium mb-0.5">Como funciona o mapeamento</p>
-                <p className="text-xs text-muted-foreground">
-                  O sistema deduz o estoque CD SP combinando o SKU da plataforma com o <strong className="text-foreground">código interno do produto</strong> (1 vendido = 1 deduzido).
-                  Use mapeamentos explícitos para kits ou quando o SKU da plataforma for diferente do código interno.
-                </p>
-              </div>
-            </div>
-            {SKU_MAP.length === 0 ? <CarboEmptyState title="Nenhum mapeamento" description="Mapeamentos de SKU entram na próxima fase." /> : (
-              <div className="grid gap-2 md:grid-cols-2">
-                {SKU_MAP.map((m) => (
-                  <div key={m.sku} className="flex items-center gap-2 rounded-lg border bg-card px-3 py-2">
-                    <code className="text-xs font-mono text-carbo-green font-semibold shrink-0">{m.sku}</code>
-                    <span className="text-muted-foreground shrink-0">→</span>
-                    <span className="text-sm truncate">{m.produto}</span>
-                    <span className="ml-auto text-[10px] text-muted-foreground shrink-0">× 1 un</span>
-                  </div>
-                ))}
-              </div>
-            )}
+            <SkuMapeamento />
           </TabsContent>
 
           {/* Remessas — CD SP Vendas */}
