@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { Outlet, useNavigate } from "react-router-dom";
-import { MessagesSquare, LayoutDashboard, MessageCircle } from "lucide-react";
+import { MessagesSquare, LayoutDashboard, MessageCircle, PackageSearch, Send } from "lucide-react";
 import { TopBar } from "@/components/TopBar";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useAccessPing } from "@/hooks/useAccessPing";
@@ -59,6 +59,8 @@ export function Layout() {
         // tem endpoint de historico. O que o webhook nao gravar so existe no
         // celular do cliente.
         { to: "/conversas", label: "Conversas", icon: MessageCircle },
+        { to: "/ecommerce/esteira", label: "Esteira do On-line", icon: PackageSearch },
+        { to: "/ecommerce/mensagens", label: "Mensagens ao Cliente", icon: Send },
     ] },
   ];
 

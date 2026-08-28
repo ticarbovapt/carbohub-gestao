@@ -470,16 +470,31 @@ quando a operação online passou a rodar na conta 2: pedido ATENDIDO
   pedido de `cancelled`. Mesma lição do `bling-sync`, onde venda cancelada
   ressuscitava a cada rodada.
 
-### Esteira do On-line — admin manda, Ops espelha
-**Cinco** arquivos byte a byte idênticos entre `admin` e `ops`, não dois. Fonte
-da verdade = `apps/admin`; no Ops as páginas moram em `pages/logistica/` e a
-rota é `/logistica/esteira`.
+### Esteira do On-line — admin manda, Ops e Atendimento espelham
+**Cinco** arquivos byte a byte idênticos, agora em **três** apps. Fonte da
+verdade = `apps/admin`. No Ops as páginas moram em `pages/logistica/` e a rota
+da esteira é `/logistica/esteira`; no Atendimento (28/08/2026) as páginas ficam
+em `pages/` e as rotas repetem as do admin.
 
 ```
 pages/EsteiraOnline.tsx          hooks/useEsteiraOnline.ts
 pages/MensagensCliente.tsx       hooks/useMensagensCliente.ts
 components/ConexaoWhatsApp.tsx
 ```
+
+⚠️ **A ROTA faz parte do espelho, porque os links moram DENTRO do arquivo.**
+O `EsteiraOnline` linka para `/ecommerce/mensagens` e o `Conversas` linka para
+`/ecommerce/esteira` — caminhos escritos no código. Montar a mesma tela noutro
+caminho não dá erro: o link cai no catch-all e a **home** aparece no lugar do
+pedido. Foi o que aconteceu no Ops, onde a esteira virou `/logistica/esteira` e
+o chip "ver pedido" das Conversas **nunca funcionou**. O próprio Ops já
+contornava isso em `/ecommerce/mensagens`, que ele manteve igual ao admin.
+Por isso o Atendimento monta as duas em `/ecommerce/...` — nome estranho para o
+app, e ainda assim melhor que link morto.
+
+⚠️ **Conversas do WhatsApp mudou de casa** (28/08/2026): saiu do `admin` e do
+`ops`, existe SÓ em `apps/atendimento` (`/conversas`). Não é mais arquivo
+replicado — se voltar a ser, volta a precisar de lista.
 
 ⚠️ Os três últimos entraram sem serem registrados aqui, e ficaram meses fora de
 qualquer lista — que é **exatamente** como o `useVendas` divergiu: um arquivo
@@ -841,12 +856,20 @@ celular do cliente.
 ```
 carbo_wa_mensagens    o conteúdo, por wamid
 carbo_wa_conversas    a mensagem já ligada ao pedido de que trata
-apps/*/src/lib/conversas.ts     as REGRAS (puras, testadas)
-apps/*/src/hooks/useConversas.ts   só IO
-apps/admin/src/pages/Conversas.tsx  /ecommerce/conversas
-apps/ops/src/pages/Conversas.tsx    ⚠️ a ROTA é /logistica/conversas, o ARQUIVO não
-supabase/functions/whatsapp-responder    texto livre, chamado pelo NAVEGADOR
+apps/atendimento/src/lib/conversas.ts      as REGRAS (puras)
+apps/atendimento/src/hooks/useConversas.ts só IO
+apps/atendimento/src/pages/Conversas.tsx   /conversas
+supabase/functions/whatsapp-responder      texto livre, chamado pelo NAVEGADOR
 ```
+
+⚠️ **Mora num app SÓ, desde 28/08/2026.** Estava replicada em `admin` e `ops`
+(duas cópias idênticas) e foi movida inteira para o `apps/atendimento` — página,
+hook e lib. Não é mais arquivo replicado, e não deve voltar a ser: quem atende
+tem o app dele.
+
+⚠️ `FUNCTIONS_URL` precisa existir no `client.ts` do app que hospedar a tela. O
+`useConversas` o usa para foto, documento e áudio: `functions.invoke` serializa
+o corpo como JSON e o `FormData` chegaria vazio do outro lado.
 
 1. **A janela de 24 h é a regra central**, não um detalhe: texto livre só passa
    enquanto ela está aberta, e ela abre quando o **cliente** escreve. Fechada, a
