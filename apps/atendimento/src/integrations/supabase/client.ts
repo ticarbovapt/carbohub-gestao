@@ -13,6 +13,18 @@ const SUPABASE_URL =
 const SUPABASE_PUBLISHABLE_KEY =
   (import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string | undefined) || DEFAULT_SUPABASE_ANON_KEY;
 
+/** Base das edge functions.
+ *
+ * ⚠️ Existe porque `supabase.functions.invoke` serializa o corpo como JSON, e
+ * upload de arquivo precisa de `multipart/form-data` — pelo invoke o FormData
+ * chegaria vazio do outro lado. Ler `(supabase as any).supabaseUrl` funcionaria
+ * hoje, mas é propriedade interna da biblioteca: exportar daqui é o mesmo dado
+ * sem depender do que a próxima versão dela resolva esconder.
+ *
+ * Veio junto com a tela de Conversas, portada do `admin` em 28/08/2026 — o
+ * `useConversas` a usa para enviar foto, documento e áudio ao cliente. */
+export const FUNCTIONS_URL = `${SUPABASE_URL}/functions/v1`;
+
 // SSO: sessão num cookie .carbohub.com.br (lib/sso.ts), storageKey IDÊNTICO ao
 // Hub/CRM/Ops → login único entre os subdomínios.
 export const supabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {

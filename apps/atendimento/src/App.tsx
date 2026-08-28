@@ -7,6 +7,7 @@ import BugReports from "./pages/BugReports";
 import Profile from "./pages/Profile";
 import Vender from "./pages/Vender";
 import Chat from "./pages/Chat";
+import Conversas from "./pages/Conversas";
 import { isCarbohubDomain, goToHubLogin } from "@/lib/sso";
 
 // Login é ÚNICO no Hub: /login direto em produção é redirecionado pra lá.
@@ -28,6 +29,7 @@ export default function App() {
         <Route path="/bugs" element={<BugReports />} />
         <Route path="/vender" element={<Vender />} />
         <Route path="/chat" element={<Chat />} />
+        <Route path="/conversas" element={<Conversas />} />
         <Route path="/perfil" element={<Profile />} />
         {/* Rota desconhecida → volta pra visão geral */}
         <Route path="*" element={<Navigate to="/" replace />} />

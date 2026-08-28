@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { Outlet, useNavigate } from "react-router-dom";
-import { MessagesSquare, LayoutDashboard } from "lucide-react";
+import { MessagesSquare, LayoutDashboard, MessageCircle } from "lucide-react";
 import { TopBar } from "@/components/TopBar";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useAccessPing } from "@/hooks/useAccessPing";
@@ -51,6 +51,14 @@ export function Layout() {
     { items: [
         { to: "/", label: "Visão geral", icon: LayoutDashboard, end: true },
         { to: "/chat", label: "Carbo Chat", icon: MessagesSquare, badge: <ChatBadge /> },
+    ] },
+    { label: "Cliente", items: [
+        // A tela de Conversas do WhatsApp, portada do admin/ops em 28/08/2026.
+        // ⚠️ Ela e o UNICO lugar onde essas mensagens existem: o numero da Cloud
+        // API nao aparece na Caixa de Entrada do Meta Business Suite e a API nao
+        // tem endpoint de historico. O que o webhook nao gravar so existe no
+        // celular do cliente.
+        { to: "/conversas", label: "Conversas", icon: MessageCircle },
     ] },
   ];
 
