@@ -561,7 +561,9 @@ function PlatformView({ platform, period, custom }: { platform: EcommercePlatfor
           <div className="flex-1 min-w-0">
             <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-0.5">Produto mais vendido</p>
             <p className="font-bold truncate">{m.topProduct.name}</p>
-            <p className="text-xs text-muted-foreground font-mono">{m.topProduct.sku}</p>
+            <p className="text-xs text-muted-foreground font-mono">
+              {m.topProduct.sku ?? "sem SKU"}
+            </p>
           </div>
           <div className="text-right shrink-0">
             <p className="text-lg font-bold">{fmtBRL(m.topProduct.revenue)}</p>
@@ -633,10 +635,27 @@ function PlatformView({ platform, period, custom }: { platform: EcommercePlatfor
                 {m.products.map(p => (
                   <tr key={p.id} className="hover:bg-muted/20 transition-colors">
                     <td className="px-5 py-3 font-medium">{p.name}</td>
-                    <td className="px-4 py-3 text-muted-foreground font-mono text-xs">{p.sku}</td>
+                    {/* ⚠️ SKU ausente é DITO, não preenchido com o nome do
+                        produto: um nome na coluna SKU faz a linha parecer
+                        cadastrada e esconde o que falta fazer. */}
+                    <td className="px-4 py-3 font-mono text-xs">
+                      {p.sku
+                        ? <span className="text-muted-foreground">{p.sku}</span>
+                        : <span className="text-amber-600 dark:text-amber-500 not-italic" title="A plataforma não enviou SKU nesta linha (a Shopee grava nulo). Sem SKU não há como resolver o multiplicador.">sem SKU</span>}
+                    </td>
                     <td className="px-4 py-3 text-right">{fmtNum(p.orders)}</td>
                     <td className="px-4 py-3 text-center">
-                      <Badge variant="outline" className="text-xs font-mono px-2">×{p.units_per_pack}</Badge>
+                      {p.units_per_pack !== null ? (
+                        <Badge variant="outline" className="text-xs font-mono px-2">×{p.units_per_pack}</Badge>
+                      ) : (
+                        <Badge
+                          variant="outline"
+                          className="text-xs font-mono px-2 border-amber-500/60 text-amber-600 dark:text-amber-500"
+                          title={p.sku
+                            ? `SKU "${p.sku}" sem cadastro ativo em sku_product_mappings para esta plataforma — as unidades abaixo são o número cru da plataforma.`
+                            : "Sem SKU não há multiplicador — as unidades abaixo são o número cru da plataforma."}
+                        >×?</Badge>
+                      )}
                     </td>
                     <td className="px-4 py-3 text-right font-semibold">{fmtNum(p.units_sold)}</td>
                     <td className="px-5 py-3 text-right">{fmtBRL(p.revenue)}</td>
@@ -646,7 +665,13 @@ function PlatformView({ platform, period, custom }: { platform: EcommercePlatfor
               <tfoot>
                 <tr className="border-t border-border font-semibold bg-muted/20">
                   <td className="px-5 py-3" colSpan={2}>Total</td>
-                  <td className="px-4 py-3 text-right">{fmtNum(m.totalOrders)}</td>
+                  {/* ⚠️ A coluna é "Qtd. packs" — some as packs das linhas, não
+                      `totalOrders`, que conta PEDIDOS distintos. Um total que
+                      não é a soma da própria coluna faz duvidar da tabela
+                      inteira. */}
+                  <td className="px-4 py-3 text-right">
+                    {fmtNum(m.products.reduce((s, p) => s + p.orders, 0))}
+                  </td>
                   <td />
                   <td className="px-4 py-3 text-right" style={{ color: cfg.color }}>{fmtNum(m.totalUnitsSold)}</td>
                   <td className="px-5 py-3 text-right">{fmtBRL(m.totalRevenue)}</td>

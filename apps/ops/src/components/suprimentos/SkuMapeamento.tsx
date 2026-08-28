@@ -17,7 +17,7 @@ import {
   Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
 import {
-  PLATAFORMAS, TODAS_AS_PLATAFORMAS, pareceKit, rotuloPlataforma,
+  PLATAFORMAS, TODAS_AS_PLATAFORMAS, kitImplausivel, rotuloPlataforma,
   useAlternarMapeamento, useApagarMapeamento, useProdutosDoMapa, useSalvarMapeamento,
   useSkuMapeamentos, useSkusSemMapa,
   type SkuMapeamento as Mapeamento,
@@ -71,8 +71,10 @@ export function SkuMapeamento() {
     [produtos, form.product_id],
   );
   const fator = Number(form.unidades_por_venda);
-  // ⚠️ O aviso do KIT: destino tem de ser o frasco, não a caixa. Ver hook.
-  const avisoKit = pareceKit(produtoEscolhido) && fator > 1;
+  // ⚠️ Destino-KIT com fator 1 está CERTO (a LogHouse guarda kits fechados; o
+  // sachê avulso tem saldo zero). Só destino-KIT com fator > 1 é implausível.
+  // A regra mora no hook — ver `kitImplausivel`.
+  const avisoKit = kitImplausivel(produtoEscolhido, fator);
 
   const valido =
     form.platform_sku.trim().length > 0 &&
@@ -127,7 +129,9 @@ export function SkuMapeamento() {
           <p className="text-xs text-muted-foreground">
             Cada linha diz de qual produto sai a venda de um SKU da plataforma e{" "}
             <strong className="text-foreground">quantas unidades físicas</strong> saem da prateleira
-            por unidade vendida. Kit de 5 frascos = 5. Frasco avulso = 1.{" "}
+            por unidade vendida — do produto que está de fato na prateleira. Kit de 5 frascos
+            apontando para o frasco = 5. Frasco avulso = 1. Kit que o galpão guarda fechado (o
+            avulso nem tem saldo) aponta para o próprio kit = 1.{" "}
             <strong className="text-foreground">SKU sem mapa não erra: ele some</strong> — a venda
             simplesmente não deduziria nada.
           </p>
@@ -165,7 +169,7 @@ export function SkuMapeamento() {
             <div className="space-y-2">
               {mapas.map((m) => {
                 const p = m.produto;
-                const kitSuspeito = pareceKit(p) && m.unidades_por_venda > 1;
+                const kitSuspeito = kitImplausivel(p, m.unidades_por_venda);
                 // Legado que discorda do número atual — só conferência.
                 const legadoDiverge =
                   (m.units_per_kit != null && Number(m.units_per_kit) !== m.unidades_por_venda) ||
@@ -189,22 +193,41 @@ export function SkuMapeamento() {
                               {p?.name ?? "Produto não encontrado"}
                             </span>
                             {p?.product_code && <span>({p.product_code})</span>}
-                            <span className="ml-1 px-1.5 py-0.5 rounded bg-muted font-semibold text-foreground">
-                              1 venda = {m.unidades_por_venda} {p?.stock_unit ?? "un"}
+                            {/* ⚠️ O rótulo NOMEIA a coluna. Este número já foi
+                                confundido com `display_units_per_pack` numa
+                                conferência, e a discussão custou meio dia
+                                porque a tela mostrava "10" sem dizer de onde.
+                                Número na tela sem o nome da coluna é número
+                                que não dá para conferir contra o banco. */}
+                            <span
+                              className="ml-1 px-1.5 py-0.5 rounded bg-muted font-semibold text-foreground"
+                              title="Coluna `unidades_por_venda` de sku_product_mappings — é ela que multiplica a dedução"
+                            >
+                              1 venda = {m.unidades_por_venda} {p?.stock_unit ?? "un"}{" "}
+                              <span className="font-mono font-normal opacity-60">
+                                (unidades_por_venda)
+                              </span>
                             </span>
                           </div>
                           {kitSuspeito && (
                             <p className="flex items-start gap-1.5 text-[11px] text-amber-400">
                               <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-px" />
-                              O destino parece ser um KIT. Com fator {m.unidades_por_venda} isso baixa{" "}
-                              {m.unidades_por_venda} KITS, não {m.unidades_por_venda} frascos —
-                              confira se o produto certo não é o unitário.
+                              O destino é um KIT <strong>e</strong> o fator é {m.unidades_por_venda}:
+                              cada venda baixaria {m.unidades_por_venda} KITS, não{" "}
+                              {m.unidades_por_venda} unidades. Ou o destino é o item unitário (fator{" "}
+                              {m.unidades_por_venda}), ou o destino é o kit com fator 1 — os dois
+                              juntos multiplicam duas vezes.
                             </p>
                           )}
                           {legadoDiverge && (
                             <p className="text-[11px] text-muted-foreground">
-                              Campos legados divergem (kit {String(m.units_per_kit ?? "—")} · pack{" "}
-                              {String(m.display_units_per_pack ?? "—")}). Quem manda é o número acima.
+                              Legado divergente:{" "}
+                              <code className="font-mono">units_per_kit</code>{" "}
+                              {String(m.units_per_kit ?? "—")} ·{" "}
+                              <code className="font-mono">display_units_per_pack</code>{" "}
+                              {String(m.display_units_per_pack ?? "—")}. Quem manda na dedução é{" "}
+                              <code className="font-mono">unidades_por_venda</code>, o número acima —
+                              nenhum dos dois legados.
                             </p>
                           )}
                         </div>
@@ -261,7 +284,10 @@ export function SkuMapeamento() {
           <p className="text-xs text-muted-foreground">
             SKUs que já apareceram em vendas pagas/enviadas/entregues e não têm mapa ativo, do maior
             volume para o menor. Fonte: <code className="font-mono">carbo_estoque_ensaio</code> — a
-            view do ensaio, que não mexe em estoque nenhum.
+            view do ensaio, que não mexe em estoque nenhum. Linhas que chegaram{" "}
+            <strong className="text-foreground">sem SKU na origem</strong> aparecem aqui do mesmo
+            jeito, com o botão desabilitado: não dá para mapeá-las por SKU, e escondê-las tornaria
+            invisível justamente o caso que mais precisa de atenção.
           </p>
 
           {carregandoSemMapa ? (
@@ -270,28 +296,51 @@ export function SkuMapeamento() {
             <CarboEmptyState title="Nada pendente" description="Todo SKU vendido tem um mapa ativo." />
           ) : (
             <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 divide-y divide-amber-500/15">
-              {semMapa.map((s) => (
-                <div key={`${s.platform}::${s.product_sku}`} className="flex items-center gap-3 px-4 py-2.5 flex-wrap">
-                  <code className="text-sm font-mono font-semibold bg-muted px-1.5 py-0.5 rounded shrink-0">
-                    {s.product_sku}
-                  </code>
-                  <CarboBadge variant="secondary">{rotuloPlataforma(s.platform)}</CarboBadge>
-                  <span className="text-xs text-muted-foreground truncate max-w-[22rem]">
-                    {s.product_name ?? "—"}
-                  </span>
-                  <span className="text-xs text-muted-foreground flex items-center gap-1">
-                    <Boxes className="h-3.5 w-3.5" /> {s.packs} vendidos · {s.linhas} linha
-                    {s.linhas > 1 ? "s" : ""} · última {fmtData(s.ultima_venda)}
-                  </span>
-                  <Button
-                    size="sm"
-                    className="ml-auto gap-1.5"
-                    onClick={() => abrirDaLista(s.platform, s.product_sku)}
+              {semMapa.map((s) => {
+                // ⚠️ Venda que chegou SEM SKU na origem (a Shopee é assim hoje).
+                // Ela FICA na lista: não dá para mapear por SKU, e some da lista
+                // é exatamente o que já a tornava invisível. O botão explica.
+                const semSku = !s.product_sku;
+                return (
+                  <div
+                    key={`${s.platform}::${s.product_sku ?? " sem-sku"}`}
+                    className="flex items-center gap-3 px-4 py-2.5 flex-wrap"
                   >
-                    <Link2 className="h-3.5 w-3.5" /> Mapear
-                  </Button>
-                </div>
-              ))}
+                    {semSku ? (
+                      <span className="text-xs font-medium text-amber-400 shrink-0 flex items-center gap-1.5">
+                        <AlertTriangle className="h-3.5 w-3.5" />
+                        sem SKU na origem — não é possível mapear por SKU
+                      </span>
+                    ) : (
+                      <code className="text-sm font-mono font-semibold bg-muted px-1.5 py-0.5 rounded shrink-0">
+                        {s.product_sku}
+                      </code>
+                    )}
+                    <CarboBadge variant="secondary">{rotuloPlataforma(s.platform)}</CarboBadge>
+                    <span className="text-xs text-muted-foreground truncate max-w-[22rem]">
+                      {s.product_name ?? "—"}
+                    </span>
+                    <span className="text-xs text-muted-foreground flex items-center gap-1">
+                      <Boxes className="h-3.5 w-3.5" /> {s.packs} vendidos · {s.linhas} linha
+                      {s.linhas > 1 ? "s" : ""} · última {fmtData(s.ultima_venda)}
+                    </span>
+                    <Button
+                      size="sm"
+                      className="ml-auto gap-1.5"
+                      disabled={semSku}
+                      title={
+                        semSku
+                          ? "A venda chegou sem SKU do produto: o mapa é por SKU, então não há o que cadastrar aqui. " +
+                            "Corrija na origem (o canal precisa mandar o SKU) — enquanto isso, esta venda não deduz estoque."
+                          : undefined
+                      }
+                      onClick={() => s.product_sku && abrirDaLista(s.platform, s.product_sku)}
+                    >
+                      <Link2 className="h-3.5 w-3.5" /> Mapear
+                    </Button>
+                  </div>
+                );
+              })}
             </div>
           )}
         </TabsContent>
@@ -387,10 +436,12 @@ export function SkuMapeamento() {
               <div className="flex items-start gap-2 px-3 py-2.5 rounded-lg bg-amber-500/10 border border-amber-500/30">
                 <AlertTriangle className="h-4 w-4 text-amber-400 shrink-0 mt-0.5" />
                 <p className="text-xs text-amber-300/90">
-                  <strong>“{produtoEscolhido?.product_code}” parece ser um KIT.</strong> Com fator{" "}
-                  {fator}, cada venda baixaria {fator} KITS do estoque, não {fator} frascos. O destino
-                  deve ser o produto unitário. Se o cadastro estiver certo assim mesmo, pode salvar —
-                  isto é um aviso, não uma trava.
+                  <strong>“{produtoEscolhido?.product_code}” é um KIT e o fator é {fator}.</strong>{" "}
+                  Cada venda baixaria {fator} KITS do estoque, não {fator} unidades — o fator
+                  multiplica de novo o que o kit já agrupa. Escolha uma das duas: destino no item
+                  unitário com fator {fator}, ou destino no kit com fator 1 (é o cadastro certo
+                  quando o galpão guarda o kit fechado e o avulso tem saldo zero). Se estiver certo
+                  assim mesmo, pode salvar — isto é um aviso, não uma trava.
                 </p>
               </div>
             )}

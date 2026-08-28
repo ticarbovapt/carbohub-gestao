@@ -3,6 +3,15 @@ import { subDays, startOfMonth, format, startOfDay } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/components/ui/sonner";
+import {
+  COLUNAS_MAPA_SKU,
+  construirMapaUnidades,
+  fatorUnidades,
+  normalizarSku,
+  unidadesExibidas,
+  type MapaUnidades,
+  type SkuMappingRow,
+} from "@/lib/skuUnidades";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -29,8 +38,12 @@ export interface CommissionRate {
 export interface EcommerceProduct {
   id: string;
   name: string;
-  sku: string;
-  units_per_pack: number;
+  /** ⚠️ `null` = a plataforma não mandou SKU (Shopee). NUNCA cair no nome do
+   *  produto: um nome no lugar do SKU faz a linha parecer mapeável. */
+  sku: string | null;
+  /** `null` = multiplicador DESCONHECIDO (sem SKU, ou SKU sem cadastro em
+   *  `sku_product_mappings`). Não é o mesmo que ×1. */
+  units_per_pack: number | null;
   orders: number;
   units_sold: number;
   revenue: number;
@@ -235,18 +248,14 @@ function buildMetrics(
   platform: EcommercePlatform,
   rows: DBOrder[],
   rateHistory: CommissionRate[],
-  skuMappings: Map<string, number> = new Map(),
+  skuMappings: MapaUnidades = new Map(),
 ): EcommerceMetrics {
   if (rows.length === 0) return emptyMetrics(platform);
 
-  // Display units: use mapping factor when available, fall back to stored units_real
-  const displayUnits = (r: DBOrder): number => {
-    if (r.product_sku) {
-      const factor = skuMappings.get(r.product_sku);
-      if (factor !== undefined) return r.quantity * factor;
-    }
-    return r.units_real ?? r.quantity;
-  };
+  // Unidades que o cliente levou. A regra inteira mora em `lib/skuUnidades.ts`
+  // — inclusive a de não multiplicar `units_real` (a Nuvemshop já multiplicou
+  // na escrita) e a de tratar SKU ausente como fator DESCONHECIDO.
+  const displayUnits = (r: DBOrder): number => unidadesExibidas(skuMappings, r);
 
   // CONTAGENS = todos os pedidos. RECEITA = só os pedidos pagos (saleRows).
   // Antes as duas receitas usavam lista negra (`!== "cancelled"`), o que punha
@@ -283,13 +292,21 @@ function buildMetrics(
 
   // Group by product SKU — orders = sum(quantity), not count of rows.
   // A single order with qty=2 counts as 2 packs sold.
-  const skuMap = new Map<string, { name: string; orders: number; txns: number; units: number; revenue: number }>();
+  //
+  // ⚠️ Linha SEM SKU (a Shopee grava `product_sku` nulo) agrupa pelo NOME, mas
+  // guarda `sku: null`. Antes o nome era escrito na coluna SKU, e o produto
+  // aparecia como se estivesse cadastrado — inclusive com um "×1" inventado
+  // pela divisão `units / orders`. Ausência que se disfarça de dado é o que
+  // impede alguém de ir cadastrar o mapeamento que falta.
+  const skuMap = new Map<string, { name: string; sku: string | null; orders: number; txns: number; units: number; revenue: number }>();
   for (const r of rows) {
-    const key  = r.product_sku ?? r.product_name ?? "Sem SKU";
-    const name = r.product_name ?? r.product_sku ?? "Produto desconhecido";
-    const prev = skuMap.get(key) ?? { name, orders: 0, txns: 0, units: 0, revenue: 0 };
+    const sku  = normalizarSku(r.product_sku);
+    const name = r.product_name ?? sku ?? "Produto desconhecido";
+    const key  = sku ?? ` nome:${name}`;
+    const prev = skuMap.get(key) ?? { name, sku, orders: 0, txns: 0, units: 0, revenue: 0 };
     skuMap.set(key, {
       name,
+      sku,
       orders:  prev.orders  + r.quantity,         // packs sold
       txns:    prev.txns    + 1,                  // unique orders (kept for reference)
       units:   prev.units   + displayUnits(r),
@@ -299,11 +316,14 @@ function buildMetrics(
     });
   }
 
-  const products: EcommerceProduct[] = Array.from(skuMap.entries()).map(([sku, v], i) => ({
+  const products: EcommerceProduct[] = Array.from(skuMap.values()).map((v, i) => ({
     id:           `p-${i}`,
     name:         v.name,
-    sku,
-    units_per_pack: skuMappings.get(sku) ?? (v.orders > 0 ? Math.round(v.units / v.orders) : 1),
+    sku:          v.sku,
+    // Só o que o cadastro diz. `null` = desconhecido — nunca uma média
+    // arredondada de `units / orders`, que devolvia "×1" para SKU sem mapa e
+    // escondia exatamente o caso que precisa de ação.
+    units_per_pack: fatorUnidades(skuMappings, platform, v.sku),
     orders:       v.orders,   // packs sold = sum(quantity)
     units_sold:   v.units,
     revenue:      Math.round(v.revenue * 100) / 100,
@@ -488,6 +508,37 @@ async function statusDaConexao(
 /** O sync roda a cada 5 min. Uma hora sem trazer dado é anomalia, não folga. */
 export const MINUTOS_ATE_ALERTAR = 60;
 
+/**
+ * O mapa (plataforma, SKU) → unidades por pack, para estas linhas.
+ *
+ * ⚠️ É UMA função, chamada por TODOS os caminhos desta tela. O Comparativo
+ * rodava sem mapa nenhum — nem sequer trazia `product_sku` no `select` — e por
+ * isso somava `units_real` cru: o Mercado Livre mostrava 30 packs = 30
+ * unidades, enquanto a aba do próprio ML, com o mesmo dado, mostrava ×5. Duas
+ * telas, dois números, nenhum erro.
+ */
+async function carregarMapaUnidades(
+  rows: Pick<DBOrder, "product_sku">[],
+): Promise<MapaUnidades> {
+  const skus = [...new Set(rows.map(r => normalizarSku(r.product_sku)).filter(Boolean))] as string[];
+  if (skus.length === 0) return new Map();
+
+  const { data, error } = await supabase
+    .from("sku_product_mappings" as never)
+    .select(COLUNAS_MAPA_SKU)
+    .in("platform_sku", skus)
+    .eq("is_active", true) as { data: SkuMappingRow[] | null; error: { message: string } | null };
+
+  if (error) {
+    // Sem mapa, `unidadesExibidas` cai em `units_real ?? quantity` — número
+    // menor, nunca inflado. Mas ele NÃO pode passar calado: silêncio aqui é
+    // exatamente o defeito que esta correção fecha.
+    console.error("[useDashEcommerce] sku_product_mappings indisponível:", error.message);
+    return new Map();
+  }
+  return construirMapaUnidades(data ?? []);
+}
+
 async function fetchOrders(
   platform: EcommercePlatform,
   period: EcommercePeriod,
@@ -533,31 +584,7 @@ async function fetchOrders(
              minutosSemSincronizar: connected.minutos };
   }
 
-  // Fetch display multipliers — display_units_per_pack (visual only) wins over units_per_kit.
-  // units_per_kit stays untouched for the stock trigger.
-  const skus = [...new Set(rows.map(r => r.product_sku).filter(Boolean))] as string[];
-  const skuMappings = new Map<string, number>();
-  if (skus.length > 0) {
-    const { data: mData } = await supabase
-      .from("sku_product_mappings" as never)
-      .select("platform_sku, units_per_kit, display_units_per_pack, platform")
-      .in("platform_sku", skus)
-      .eq("is_active", true) as {
-        data: {
-          platform_sku: string;
-          units_per_kit: number;
-          display_units_per_pack: number | null;
-          platform: string | null;
-        }[] | null;
-      };
-    for (const m of mData ?? []) {
-      // Platform-specific entry wins over generic (platform=null)
-      if (!skuMappings.has(m.platform_sku) || m.platform === platform) {
-        // display_units_per_pack takes priority; fall back to units_per_kit
-        skuMappings.set(m.platform_sku, m.display_units_per_pack ?? m.units_per_kit ?? 1);
-      }
-    }
-  }
+  const skuMappings = await carregarMapaUnidades(rows);
 
   return { ...buildMetrics(platform, rows, rateHistory, skuMappings),
            isConnected: connected.conectado,
@@ -720,17 +747,23 @@ export function useEcommerceComparativo(
     const from = new Date(`${r.from}T00:00:00`).toISOString();
     const to   = new Date(`${r.to}T23:59:59.999`).toISOString();
 
+    // ⚠️ `product_sku` FAZ PARTE da conta. Sem ele no `select` não há como
+    // resolver o multiplicador, e a tabela caía em `units_real` — que só a
+    // Nuvemshop preenche multiplicado. Era daí que vinha "27 vendas / 30
+    // unidades" do Mercado Livre com kits de 5 e de 10 no meio.
     supabase
       .from("ecommerce_orders" as never)
-      .select("platform,order_id,quantity,units_real,total,status,ordered_at")
+      .select("platform,order_id,product_sku,quantity,units_real,total,status,ordered_at")
       .in("platform", platforms)
       .gte("ordered_at", from)
       .lte("ordered_at", to)
-      .then(({ data: rows }) => {
+      .then(async ({ data: rows }) => {
         if (cancelled) return;
         const allRows = (rows ?? []) as DBOrder[];
+        const mapa = await carregarMapaUnidades(allRows);
+        if (cancelled) return;
         const result: ComparativoMetrics[] = platforms.map(p => {
-          const m = buildMetrics(p, allRows.filter(r => r.platform === p), []);
+          const m = buildMetrics(p, allRows.filter(r => r.platform === p), [], mapa);
           return {
             platform:        m.platform,
             totalOrders:     m.totalOrders,
